@@ -11,7 +11,7 @@ Completed validation before public publication:
 - A ten-minute authenticated stream, graceful shutdown in about six seconds, save resume, and stream reconnection.
 - Upgrade from 0.1.0 to 0.2.0rc1 and rollback using the matching cold backup.
 
-The [public CI run](https://github.com/afk-sapien/pokesim-public/actions/runs/34522953662) passed Python 3.11 and 3.12 tests, package checks, and the container build. The [release workflow](https://github.com/afk-sapien/pokesim-public/actions/runs/34523267945) also passed and published v0.2.0rc2.
+The [public CI run](https://github.com/afk-sapien/PokiSim/actions/runs/34522953662) passed Python 3.11 and 3.12 tests, package checks, and the container build. The [release workflow](https://github.com/afk-sapien/PokiSim/actions/runs/34523267945) also passed and published v0.2.0rc2.
 
 A fresh installation cloned the public tag with Git credentials disabled and downloaded the image archive without authentication. Its SHA-256 and image ID matched the release manifest. Local data preparation, healthy gameplay, frame and feed endpoints, UID 10001, read-only root and ROM mounts, graceful shutdown, and checkpoint resume after restart all passed. This used a separate data directory and a privately supplied read-only ROM. The sanitized [installation report](docs/validation/public-install-0.2.0rc2.json) records the exact artifact.
 

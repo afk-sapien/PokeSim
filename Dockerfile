@@ -12,7 +12,7 @@ RUN uv sync --frozen --no-dev --no-editable \
 FROM python:3.12-slim-bookworm
 ARG VERSION=0.2.0rc2
 ARG REVISION=unknown
-LABEL org.opencontainers.image.source="https://github.com/afk-sapien/pokesim-public" \
+LABEL org.opencontainers.image.source="https://github.com/afk-sapien/PokiSim" \
       org.opencontainers.image.title="pokesim" \
       org.opencontainers.image.version=$VERSION \
       org.opencontainers.image.revision=$REVISION \
