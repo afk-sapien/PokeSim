@@ -1,0 +1,66 @@
+{
+  "release": "v0.2.0rc3",
+  "source_revision": "30cfb82f23701b35d09ea110274f0444101b4127",
+  "image": "sha256:e457c235f49e52dfd66f9bb2995eaa9053b7770d40f11de403ec6dcabb3b59ad",
+  "result": "champion_with_automatic_checkpoint_recovery",
+  "uninterrupted_campaign_pass": false,
+  "started_at": "2026-09-10T21:04:25.648934+00:00",
+  "champion_log_at": "2026-09-10T22:57:30.388Z",
+  "monitor_finished_at": "2026-09-10T22:58:08.788222+00:00",
+  "elapsed_to_detection_seconds": 6823.1,
+  "health_samples": 109,
+  "failed_health_samples": 0,
+  "automatic_reloads": 1,
+  "recovery": {
+    "at": "2026-09-10T22:54:39.846Z",
+    "reason": "battle never ended",
+    "threshold_seconds": 900
+  },
+  "checkpoint_verification": {
+    "checksum_valid": true,
+    "game_state_valid": true,
+    "hall_of_fame_count": 1,
+    "policy_records_champion": true
+  },
+  "container": {
+    "exit_code": 0,
+    "restarts": 0,
+    "oom_killed": false
+  },
+  "resources": {
+    "status": "champion",
+    "uninterrupted": false,
+    "final_frame": 7040530,
+    "final_reloads": 1,
+    "cpu_median_percent": 100.51,
+    "cpu_max_percent": 124.83,
+    "memory_first_mib": 62.4,
+    "memory_last_mib": 90.0,
+    "memory_max_mib": 90.0,
+    "data_first_bytes": 3068882,
+    "data_last_bytes": 82567881,
+    "viewer_groups": {
+      "0": {
+        "samples": 29,
+        "cpu_median_percent": 100.51,
+        "memory_median_mib": 68.5
+      },
+      "1": {
+        "samples": 51,
+        "cpu_median_percent": 100.49,
+        "memory_median_mib": 72.3
+      },
+      "4": {
+        "samples": 29,
+        "cpu_median_percent": 100.56,
+        "memory_median_mib": 78.8
+      }
+    }
+  },
+  "limitations": [
+    "An automatic checkpoint reload occurred. This is not an uninterrupted campaign pass.",
+    "The independent 48-hour soak remains running and is not a completed pass.",
+    "This exact rc3 image does not validate the rc5 policy fix or rc4 browser polling.",
+    "Raw ROMs, saves, game data, and logs remain private."
+  ]
+}
