@@ -21,7 +21,10 @@ for artifact in artifacts:
     else:
         with tarfile.open(artifact) as archive:
             names = {name.partition('/')[2] for name in archive.getnames()}
-        assert {'uv.lock', 'THIRD_PARTY_NOTICES.md'} <= names
+        assert {'uv.lock', 'THIRD_PARTY_NOTICES.md', 'RELEASE_STATUS.md',
+                'Dockerfile', '.dockerignore', '.env.example', 'compose.yaml',
+                'compose.build.yaml', 'compose.proxy.yaml', 'deploy/Caddyfile',
+                'deploy/proxy.env.example', 'docs/validation/public-install-0.2.0rc2.json'} <= names
     missing = required - names
     assert not missing, f'{artifact}: missing runtime files {missing}'
     for name in names:

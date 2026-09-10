@@ -8,3 +8,11 @@ include LICENSE
 recursive-include licenses *
 prune pokesim/data
 prune pokesim/web/static/sprites
+include RELEASE_STATUS.md
+include CHANGELOG.md
+include Dockerfile
+include .dockerignore
+include .env.example
+include compose*.yaml
+recursive-include deploy *
+recursive-include docs/validation *.json

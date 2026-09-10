@@ -70,6 +70,8 @@ def main():
     viewers = []
     previous_bytes = 0
     containers = []
+    sample = None
+    active_label = None
     try:
         for label, port, speed, seed in [('soak', 18950, 1, 13), ('campaign', 18951, 0, 7)]:
             data = root / label
@@ -111,6 +113,7 @@ def main():
             for label, details in report['runs'].items():
                 if details['status'] != 'running':
                     continue
+                active_label = label
                 name = details['container']
                 inspect = json.loads(docker('inspect', name))[0]
                 assert inspect['State']['Running'], f'{label} exited'
@@ -118,19 +121,21 @@ def main():
                 assert not inspect['State']['OOMKilled'], f'{label} exceeded its memory limit'
                 with urlopen(f'http://127.0.0.1:{details["port"]}/api/state', timeout=10) as response:
                     state = json.load(response)
+                details['latest'] = {key: state[key] for key in ('frame', 'uptime', 'reloads', 'game', 'strategy', 'health')}
+                details['latest']['container_health'] = inspect['State'].get('Health')
+                sample['runs'][label] = details['latest']
                 assert state['health']['ok'], f'{label} became unhealthy'
                 stats = json.loads(docker('stats', '--no-stream', '--format', '{{json .}}', name))
                 disk = sum(path.stat().st_size for path in (root / label).rglob('*') if path.is_file())
                 details['samples'] += 1
-                details['latest'] = {'frame': state['frame'], 'uptime': state['uptime'], 'reloads': state['reloads'],
-                                     'game': state['game'], 'strategy': state['strategy'],
-                                     'cpu_percent': stats['CPUPerc'], 'memory': stats['MemUsage'], 'data_bytes': disk}
+                details['latest'].update({'cpu_percent': stats['CPUPerc'], 'memory': stats['MemUsage'], 'data_bytes': disk})
                 sample['runs'][label] = details['latest']
                 if label == 'campaign' and state.get('strategy', {}).get('milestones', {}).get('champion'):
                     details['status'] = 'champion'
                     details['finished_at'] = now()
                     details['uninterrupted'] = state['reloads'] == 0
                     docker('stop', '--time', '20', name)
+            active_label = None
             with (root / 'samples.jsonl').open('a') as output:
                 output.write(json.dumps(sample) + '\n')
             assert shutil.disk_usage(root).free > 5 * 1024**3, 'Less than 5 GiB free disk space'
@@ -145,6 +150,10 @@ def main():
     except Exception as error:
         report['status'] = 'failed'
         report['failures'].append(str(error))
+        if sample is not None:
+            report['failed_sample'] = sample
+        if active_label is not None:
+            report['runs'][active_label]['status'] = 'failed'
         raise
     finally:
         for viewer in viewers:
@@ -155,6 +164,9 @@ def main():
                 (root / f'{name}.log').write_text(docker('logs', '--tail', '1000', name))
             except subprocess.CalledProcessError:
                 pass
+        for details in report['runs'].values():
+            if details['status'] == 'running':
+                details['status'] = 'stopped_after_failure'
         report['finished_at'] = now()
         write(root / 'status.json', report)
         print(json.dumps({key: report[key] for key in ('status', 'started_at', 'finished_at', 'failures')}), flush=True)

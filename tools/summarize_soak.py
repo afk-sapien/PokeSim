@@ -21,16 +21,23 @@ def main():
     parser.add_argument('directory', type=Path)
     args = parser.parse_args()
     status = json.loads((args.directory / 'status.json').read_text())
-    samples = [json.loads(line) for line in (args.directory / 'samples.jsonl').read_text().splitlines()]
+    sample_path = args.directory / 'samples.jsonl'
+    samples = [json.loads(line) for line in sample_path.read_text().splitlines()] if sample_path.exists() else []
     result = {key: status.get(key) for key in ('status', 'started_at', 'updated_at', 'finished_at', 'image', 'configuration', 'failures')}
+    result['failed_health'] = {label: point['health'] for label, point in status.get('failed_sample', {}).get('runs', {}).items()
+                               if 'health' in point and not point['health'].get('ok')}
     result['sample_count'] = len(samples)
     result['observed_seconds'] = samples[-1]['elapsed_seconds'] - samples[0]['elapsed_seconds'] if samples else 0
     result['runs'] = {}
     for label, run in status['runs'].items():
         points = [sample['runs'][label] for sample in samples if label in sample['runs']]
+        run_status = run['status']
+        if status['status'] == 'failed' and run_status == 'running':
+            run_status = 'not_completed'
         if not points:
+            result['runs'][label] = {'status': run_status, 'samples': 0}
             continue
-        result['runs'][label] = {'status': run['status'], 'uninterrupted': run.get('uninterrupted'),
+        result['runs'][label] = {'status': run_status, 'uninterrupted': run.get('uninterrupted'),
                                 'final_frame': points[-1]['frame'], 'final_reloads': points[-1]['reloads'],
                                 'cpu_median_percent': round(statistics.median(float(p['cpu_percent'].rstrip('%')) for p in points), 2),
                                 'cpu_max_percent': max(float(p['cpu_percent'].rstrip('%')) for p in points),

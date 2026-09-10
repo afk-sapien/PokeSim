@@ -17,10 +17,12 @@ A fresh installation cloned the public tag with Git credentials disabled and dow
 
 Private vulnerability reporting is enabled. The original development repository remains private, and this public repository has no imported private history.
 
-Still in progress:
+Endurance result and outstanding validation:
 
-- A 48-hour soak on the immutable 0.2.0rc1 image started September 10, 2026 at 18:38 UTC and is due September 12 at 18:38 UTC. It measures health, CPU, memory, disk usage, and streaming with zero, one, and four viewers.
-- A separate uninterrupted fresh-game campaign is running on that same candidate. Completion has not yet been established. Earlier Champion evidence came from a copied-save debugging campaign with code fixes and restarts.
+- The planned 48-hour run on image `sha256:789963c656dfe8f47ddc954773e6bd2dfbd1540331181017376d9ccc87a20318` started September 10, 2026 at 18:38:02 UTC and stopped at 20:13:52 UTC after the campaign reported unhealthy. Both isolated containers exited cleanly with zero container restarts and no out-of-memory kill. This is a failed endurance run, not a completed pass.
+- The fresh-game campaign log records Champion and Hall of Fame entry at 20:12:20 UTC. Later saved policy metadata also records completion. The monitor stopped before recording a successful campaign result, so this evidence does not establish a completed healthy campaign validation.
+- A Docker health probe received HTTP 503 at 20:12:58 UTC. The next probe succeeded at 20:13:29 UTC. The original harness discarded the failing API health details, so the exact cause cannot be established from that run alone. Raw logs and checkpoints are preserved privately.
+- A diagnostic replay from a copy of the pre-completion checkpoint reproduced two health failures. The worker stayed alive while activity aged to 30.9 and 32.7 seconds. Thread dumps repeatedly located the worker in collection candidate selection calling navigation route search. The diagnostic container also exceeded its 20-second shutdown allowance and was killed with exit code 137, without an out-of-memory kill. The planner stall still needs a runtime fix and replacement endurance validation. A resumed diagnostic replay does not count as a fresh uninterrupted campaign.
 - Independent installation reports and broader hardware testing are welcome.
 
 Known limits:
@@ -29,4 +31,13 @@ Known limits:
 - Linux amd64 and a clean Pokémon Red (USA, Europe) ROM are the current release targets. Blue, ARM, other games, and ROM hacks are not validated release targets.
 - Resource measurements are incomplete. The project does not yet publish minimum hardware requirements or long-term storage estimates.
 - The application has no built-in authentication. Use the documented proxy or a private network for remote access.
-- A running reliability test is not a completed pass. This beta is intended for early feedback, not a claim of production readiness.
+- The failed endurance run has not been replaced by a completed pass. This beta is intended for early feedback, not a claim of production readiness.
+
+Distribution audit, September 10, 2026:
+
+- The active repository is public `afk-sapien/PokeSim`. The previous repository is private and archived. The local active Git history contains only the reviewed public history.
+- Anonymous downloads through the canonical repository name passed manifest checksum checks. The inspected published image archive matches SHA-256 `123e9be0fee2f6aad913131fcd9ccec6e2ba398f3d9d8a4c564cc8f25ef6290f`.
+- Inspection of the public history, release Python packages, and all 11 published image layers found no Pokémon ROMs, game saves, generated Pokémon datasets, or project credentials. This is a scoped artifact audit, not a guarantee that all security defects have been found. The PyBoy dependency includes its own 32 KiB demo ROM, titled `DEFAULT-ROM`, which is not a Pokémon game.
+- The published Python source archive omitted the Docker build and Compose files referenced by its README. The source manifest and package check now include those files and the referenced validation documents. This correction will ship in a new release. For the existing beta, use the documented Git clone installation.
+- The endurance harness now preserves failing API health details and marks stopped runs instead of leaving their status as running. These tool changes do not repair the runtime planner stall.
+- The published `v0.2.0rc2` tag and downloadable binaries remain unchanged. Current documentation records the failure and limitations, and future runtime fixes require a new version.

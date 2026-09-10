@@ -4,11 +4,11 @@ A Pokémon Red adventure that plays itself on your server. Watch the game in you
 
 Game decisions run locally through a rule-based policy. No model service or API key is required.
 
-**Experimental beta:** the policy can get stuck, and a complete campaign is not guaranteed. The 48-hour reliability test and fresh-game campaign are still running. See [validation and known limits](RELEASE_STATUS.md).
+**Experimental beta:** the policy can get stuck, and a complete campaign is not guaranteed. The first endurance run stopped after about 96 minutes because the campaign health check failed. Its log recorded Hall of Fame entry before the failure, but the 48-hour reliability check remains incomplete. See [validation and known limits](RELEASE_STATUS.md).
 
 ## Install with Docker Compose
 
-The prebuilt release supports **Linux amd64** with Docker Engine and the Compose plugin. Supply your own clean Pokémon Red (USA, Europe) ROM. ROMs, sprites, and game datasets are not bundled. Blue and ARM do not yet have equivalent release validation.
+The prebuilt release supports **Linux amd64** with Docker Engine and the Compose plugin. Supply your own clean Pokémon Red (USA, Europe) ROM. Pokémon ROMs, sprites, and game datasets are not bundled. The PyBoy dependency includes its own small demo ROM, which cannot replace your Pokémon ROM. Blue and ARM do not yet have equivalent release validation.
 
 Clone the public release source:
 
@@ -73,7 +73,7 @@ Edit `.env`, then run `docker compose up -d --pull never`.
 | `EVENT_RETENTION_DAYS` | `0` | History retention, 0 keeps everything |
 | `KEEP_AUTOSAVES` | `20` | Recent autosave pairs to retain |
 
-Unlimited speed can use a full CPU core. Long-term memory, storage, and viewer bandwidth measurements are still in progress. No minimum hardware specification is established yet.
+Unlimited speed can use a full CPU core. Long-term memory, storage, and viewer bandwidth validation remains incomplete. No minimum hardware specification is established yet.
 
 ## Keep your adventure
 
