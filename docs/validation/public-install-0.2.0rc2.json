@@ -1,0 +1,20 @@
+{
+  "repository": "afk-sapien/pokesim-public",
+  "version": "0.2.0rc2",
+  "anonymous_download": true,
+  "anonymous_source_clone": true,
+  "archive_sha256": "123e9be0fee2f6aad913131fcd9ccec6e2ba398f3d9d8a4c564cc8f25ef6290f",
+  "source_revision": "5472eb3069b471f1d434388b4784eca95a0ff31a",
+  "image_id": "sha256:43d93a202451862f4d6e800399945d3b66597805414be144636186c595214d85",
+  "local_data_preparation": true,
+  "healthy_start": true,
+  "non_root": true,
+  "read_only_root": true,
+  "read_only_rom": true,
+  "frame_and_feed": true,
+  "shutdown_seconds": 0.53,
+  "restart_resumed": true,
+  "checkpoint_before_frame": 486,
+  "restored_frame": 510,
+  "passed": true
+}
