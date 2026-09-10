@@ -6,6 +6,7 @@ import zipfile
 required = {
     'pokesim/web/static/index.html',
     'pokesim/web/static/app.js',
+    'pokesim/web/static/screen.js',
     'pokesim/web/static/style.css',
     'pokesim/healthcheck.py',
     'pokesim/prepare_data.py',

@@ -1,5 +1,9 @@
 Experimental beta validation
 
+Version 0.2.0rc4 updates the browser viewer. Frames are downloaded and decoded sequentially at up to 10 per second, failed downloads retain the last good image, and hidden tabs suspend frame downloads. The emulator and backend behavior are unchanged from 0.2.0rc3. Four JavaScript controller tests pass alongside the 200 Python tests. Chromium and Firefox checks verified slow-frame handling, invalid-frame recovery, and one request at a time.
+
+The existing 48-hour run continues on the exact 0.2.0rc3 image below. It measures that backend and the MJPEG endpoint, not the new browser viewer. It has not completed yet.
+
 Version 0.2.0rc3 shares a bounded navigation search across collection candidates, removing repeated whole-world route searches from one policy decision. Health thresholds are unchanged. The source archive now includes the Docker and Compose files required by its installation instructions. The test harness preserves failing health evidence and recognizes the saved Hall of Fame count after the game leaves the ceremony.
 
 Current release validation:

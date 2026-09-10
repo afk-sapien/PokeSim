@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag, for example v0.2.0rc3
+        description: Existing version tag, for example v0.2.0rc4
         required: true
         type: string
 permissions:
@@ -57,6 +57,11 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write(f'image=pokesim:{version}\nversion={version}\nrevision={revision}\n')
           PY
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: node --test tests/screen.test.cjs
+      - run: node --check pokesim/web/static/screen.js
       - run: uv sync --locked --extra dev
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:

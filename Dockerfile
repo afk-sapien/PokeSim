@@ -10,7 +10,7 @@ RUN uv sync --frozen --no-dev --no-editable \
     && .venv/bin/python tools/bundle_dependency_sources.py /notices
 
 FROM python:3.12-slim-bookworm
-ARG VERSION=0.2.0rc3
+ARG VERSION=0.2.0rc4
 ARG REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/afk-sapien/PokeSim" \
       org.opencontainers.image.title="pokesim" \

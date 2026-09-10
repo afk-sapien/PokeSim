@@ -33,6 +33,8 @@ jobs:
       - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
       - run: uv run --locked pytest --ignore=tests/test_rom.py -q
       - run: node --check pokesim/web/static/app.js
+      - run: node --check pokesim/web/static/screen.js
+      - run: node --test tests/screen.test.cjs
       - run: uv build
       - run: python tools/check_package.py
   container:

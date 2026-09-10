@@ -25,7 +25,7 @@
 
       <section class="game-card" aria-labelledby="live-heading">
         <div class="game-heading"><div><span class="live-label"><i></i> LIVE NOW</span><h2 id="live-heading">Somewhere in Kanto</h2></div><button class="icon-button" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">⛶</button></div>
-        <div class="screen" id="screen"><img id="stream" src="/stream" alt="Live Pokémon Red game"><span class="screen-corner">POKÉMON RED · GAME BOY</span></div>
+        <div class="screen" id="screen"><img id="stream" alt="Live Pokémon Red game"><span class="screen-corner">POKÉMON RED · GAME BOY</span></div>
         <div class="game-caption"><span id="game-activity">The adventure is loading…</span><span id="coordinates">KANTO REGION</span></div>
         <div class="controls"><button id="take-control" class="primary-button">Take control</button><button id="pause" class="quiet-button">Ⅱ Freeze game</button><label class="speed-label" for="speed">AI pace <select id="speed"><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="16">16×</option><option value="0">Max</option></select></label><button id="save" class="quiet-button">↓ Save</button></div>
         <div class="controller"><div class="pad"><span></span><button data-b="up" aria-label="Move up">▲</button><span></span><button data-b="left" aria-label="Move left">◀</button><button data-b="down" aria-label="Move down">▼</button><button data-b="right" aria-label="Move right">▶</button></div><div class="action-buttons"><button data-b="b">B</button><button data-b="a">A</button><button data-b="start">Start</button><button data-b="select">Select</button></div><div class="control-help"><strong id="control-mode">AI is playing</strong><p id="control-hint">Press any game control to pause the AI and take over.</p><small>Arrows · Z / A · X / B · Enter / Start · Shift / Select</small></div></div>
@@ -54,6 +54,7 @@
 </main>
 <footer><span id="app-version"></span><a class="brand footer-brand" href="/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><button id="restart" class="restart-link">Restart run</button><a href="/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script src="/static/app.js?v=release-2"></script>
+<script src="/static/screen.js?v=1"></script>
+<script src="/static/app.js?v=screen-1"></script>
 </body>
 </html>

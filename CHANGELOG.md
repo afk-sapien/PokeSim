@@ -1,3 +1,11 @@
+0.2.0rc4, reliable game display
+
+- Load and decode one game image at a time, capped at 10 display frames per second independently of game speed.
+- Retain the last good image through request failures and invalid frames, with bounded timeouts and automatic recovery.
+- Stop hidden-tab frame downloads and remove competing MJPEG reconnect handlers.
+- Add browser-controller regression tests for serialization, decode failures, timeouts, and visibility changes.
+- Leave emulator behavior, game speed, save formats, and health checks unchanged.
+
 0.2.0rc3, planner reliability fix
 
 - Share one bounded navigation search across collection candidates to prevent repeated route searches from stalling emulation after the League.

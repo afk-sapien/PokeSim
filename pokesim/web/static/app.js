@@ -17,7 +17,6 @@ let eventRows = []
 let eventGeneration = 0
 let eventBusy = false
 let moreAvailable = true
-let streamRetry
 let toastTimer
 
 function toast(message, error = false) {
@@ -83,7 +82,7 @@ async function refreshState() {
     const response = await fetch('/api/state', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
     const state = await response.json()
-    if ($('#connection').classList.contains('is-offline')) $('#stream').src = `/stream?reconnect=${Date.now()}`
+    if ($('#connection').classList.contains('is-offline')) window.pokesimScreen?.reconnect()
     viewerOnly = Boolean(state.viewer_only)
     document.querySelectorAll('.controls, .controller, .wander-control, .wander-hint, label[for="adventure-pace"], #restart').forEach((element) => {
       element.hidden = viewerOnly
@@ -234,7 +233,6 @@ window.addEventListener('keydown', (event) => {
     }
   }
 })
-$('#stream').onerror = () => setTimeout(() => { $('#stream').src = `/stream?reconnect=${Date.now()}` }, 2000)
 refreshState()
 refreshEvents()
 setInterval(refreshState, 2000)
@@ -319,8 +317,3 @@ function renderCollectionEntries() {
 $('#adventure-pace').onchange = event => control(event.currentTarget, 'adventure_pace', event.target.value)
 $('#dex-search').oninput = renderCollectionEntries
 $('#dex-filter').onchange = renderCollectionEntries
-
-$('#stream').addEventListener('error', () => {
-  clearTimeout(streamRetry)
-  streamRetry = setTimeout(() => { $('#stream').src = `/stream?retry=${Date.now()}` }, 3000)
-})

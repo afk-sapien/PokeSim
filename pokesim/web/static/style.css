@@ -1253,3 +1253,15 @@ h1 { font-size:31px }
   .hunt-summary { grid-column: 1 / -1 }
   .collection-projects { grid-template-columns: 1fr }
 }
+
+.screen-status { position:absolute }
+.screen-status { left:50% }
+.screen-status { top:30px }
+.screen-status { transform:translateX(-50%) }
+.screen-status { padding:8px 12px }
+.screen-status { border-radius:6px }
+.screen-status { background:#161c19 }
+.screen-status { color:#f4f6ef }
+.screen-status { font:12px system-ui,sans-serif }
+.screen-status { text-align:center }
+.screen-status { max-width:90% }
