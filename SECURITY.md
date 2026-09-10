@@ -1,6 +1,6 @@
 Security and support policy
 
-Report a suspected vulnerability using [GitHub private vulnerability reporting](https://github.com/afk-sapien/PokiSim/security/advisories/new). Describe the affected release, deployment configuration, impact, and reproduction steps. Do not put security-sensitive details in a public issue. Never include ROMs, private saves, notification tokens, or passwords in a report.
+Report a suspected vulnerability using [GitHub private vulnerability reporting](https://github.com/afk-sapien/PokeSim/security/advisories/new). Describe the affected release, deployment configuration, impact, and reproduction steps. Do not put security-sensitive details in a public issue. Never include ROMs, private saves, notification tokens, or passwords in a report.
 
 The current 0.2.0 release-candidate line receives best-effort fixes. This is an experimental personal project with no guaranteed response time or stable-release support commitment. Keep deployments current and preserve backups before updating.
 

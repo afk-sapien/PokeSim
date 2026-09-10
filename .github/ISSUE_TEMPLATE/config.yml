@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Report a security vulnerability privately
-    url: https://github.com/afk-sapien/PokiSim/security/advisories/new
+    url: https://github.com/afk-sapien/PokeSim/security/advisories/new
     about: Keep security-sensitive reports out of public issues.

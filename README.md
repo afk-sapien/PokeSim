@@ -1,4 +1,4 @@
-# PokiSim
+# PokeSim
 
 A Pokémon Red adventure that plays itself on your server. Watch the game in your browser, follow the party and collection, take over the controls, and subscribe to an Atom feed of catches and milestones. Optional ntfy notifications bring those events to your phone.
 
@@ -13,7 +13,7 @@ The prebuilt release supports **Linux amd64** with Docker Engine and the Compose
 Clone the public release source:
 
 ```sh
-git clone --branch v0.2.0rc2 --depth 1 https://github.com/afk-sapien/PokiSim.git pokesim
+git clone --branch v0.2.0rc2 --depth 1 https://github.com/afk-sapien/PokeSim.git pokesim
 cd pokesim
 cp .env.example .env
 mkdir -p roms data
@@ -30,8 +30,8 @@ git -C .reference/pokered checkout a1a22aaf84d1675bcdbaeb194592379d586d838e
 Download the prebuilt image and verify its checksum. These public downloads require no GitHub account, token, or registry login:
 
 ```sh
-curl -fL --retry 3 -o image-linux-amd64.tar.gz https://github.com/afk-sapien/PokiSim/releases/download/v0.2.0rc2/image-linux-amd64.tar.gz
-curl -fL --retry 3 -o SHA256SUMS https://github.com/afk-sapien/PokiSim/releases/download/v0.2.0rc2/SHA256SUMS
+curl -fL --retry 3 -o image-linux-amd64.tar.gz https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc2/image-linux-amd64.tar.gz
+curl -fL --retry 3 -o SHA256SUMS https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc2/SHA256SUMS
 sha256sum --ignore-missing -c SHA256SUMS
 ```
 
@@ -44,7 +44,7 @@ docker compose up -d --pull never
 docker compose logs --tail=50 pokesim
 ```
 
-Open [localhost:8930](http://localhost:8930). The archive loads the exact image tag `pokesim:0.2.0rc2`. Releases are distributed as downloadable Docker archives, so there is no `docker compose pull` step. The [release page](https://github.com/afk-sapien/PokiSim/releases/tag/v0.2.0rc2) also provides source packages, Compose files, a dependency inventory, and a manifest with the image ID and source revision.
+Open [localhost:8930](http://localhost:8930). The archive loads the exact image tag `pokesim:0.2.0rc2`. Releases are distributed as downloadable Docker archives, so there is no `docker compose pull` step. The [release page](https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0rc2) also provides source packages, Compose files, a dependency inventory, and a manifest with the image ID and source revision.
 
 The setup command parses the pinned source checkout and writes verified game data into `./data`. It does not build or download a ROM. The runtime uses the local data afterward and does not require that source checkout or internet access unless notifications are enabled.
 
@@ -95,7 +95,7 @@ For native development, follow [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Feedback and licensing
 
-Please report installation problems and reproducible gameplay issues through [GitHub issues](https://github.com/afk-sapien/PokiSim/issues). Include the release version, operating system, architecture, ROM hash, and sanitized logs. Do not upload ROMs, saves, screenshots containing private details, or tokens. Security issues should use [private vulnerability reporting](https://github.com/afk-sapien/PokiSim/security/advisories/new).
+Please report installation problems and reproducible gameplay issues through [GitHub issues](https://github.com/afk-sapien/PokeSim/issues). Include the release version, operating system, architecture, ROM hash, and sanitized logs. Do not upload ROMs, saves, screenshots containing private details, or tokens. Security issues should use [private vulnerability reporting](https://github.com/afk-sapien/PokeSim/security/advisories/new).
 
 Original code is [MIT licensed](LICENSE). Game content is supplied locally and has separate rights. The dashboard uses an original neutral portrait by default. Optional user-supplied PNG portraits can go in `data/sprites/1.png` through `151.png`. They are never fetched automatically.
 

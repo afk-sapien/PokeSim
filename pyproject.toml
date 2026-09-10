@@ -20,8 +20,8 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/afk-sapien/PokiSim"
-Issues = "https://github.com/afk-sapien/PokiSim/issues"
+Repository = "https://github.com/afk-sapien/PokeSim"
+Issues = "https://github.com/afk-sapien/PokeSim/issues"
 
 [project.optional-dependencies]
 dev = ["pytest"]
