@@ -2,12 +2,15 @@ Experimental beta validation
 
 Version 0.2.0rc3 shares a bounded navigation search across collection candidates, removing repeated whole-world route searches from one policy decision. Health thresholds are unchanged. The source archive now includes the Docker and Compose files required by its installation instructions. The test harness preserves failing health evidence and recognizes the saved Hall of Fame count after the game leaves the ceremony.
 
-Current candidate validation:
+Current release validation:
 
 - 200 local tests passed in the locked Python 3.12 environment, including two tests with a privately supplied ROM. Package resource and content-exclusion checks, extracted source-document links, and JavaScript syntax checks passed.
 - A three-minute diagnostic replay of the copied pre-completion checkpoint completed with 60 healthy samples, maximum sampled activity age of 0.6 seconds, zero container restarts, and no out-of-memory kill. Shutdown completed in 0.89 seconds with exit code 0. The earlier replay reached 32.7 seconds of stale activity. Health thresholds were not relaxed.
 - A separate replay with stack tracing enabled exited with code 139 during a traceback dump. Its cause is unconfirmed. The replay without tracing completed normally. This limitation is retained in the [candidate replay report](docs/validation/planner-replay-0.2.0rc3.json), which identifies the exact development image and changed runtime file hashes.
-- This was a resumed diagnostic replay. It does not count as a fresh campaign or a 48-hour endurance pass. Published-artifact installation and replacement endurance validation are still required.
+- This was a resumed diagnostic replay. It does not count as a fresh campaign or a 48-hour endurance pass.
+- [Public CI](https://github.com/afk-sapien/PokeSim/actions/runs/34529764557) and the [release workflow](https://github.com/afk-sapien/PokeSim/actions/runs/34529764863) passed. An anonymous installation of the published `v0.2.0rc3` image passed checksum verification, local data preparation, healthy gameplay, frame and feed checks, non-root and read-only checks, graceful shutdown in 0.44 seconds, and checkpoint resume. The [installation report](docs/validation/public-install-0.2.0rc3.json) identifies the published artifact.
+- The published source archive was checked for the Docker and Compose files. All 11 image layers were inspected, with no new findings beyond the previously reviewed dependency demo ROM, system file, and scanner false positives. The changed runtime files match the tested candidate hashes.
+- A fresh 48-hour soak and a separate fresh-game campaign started September 10, 2026 at 21:04:25 UTC on published image `sha256:e457c235f49e52dfd66f9bb2995eaa9053b7770d40f11de403ec6dcabb3b59ad`. The soak is due September 12 at 21:04:25 UTC. Both began healthy. Completion is not yet established.
 
 Earlier release validation:
 

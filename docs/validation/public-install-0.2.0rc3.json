@@ -1,0 +1,20 @@
+{
+  "repository": "afk-sapien/PokeSim",
+  "version": "0.2.0rc3",
+  "anonymous_download": true,
+  "anonymous_source_clone": true,
+  "archive_sha256": "784c62e401e1829b50282fafa320ee7a66682c92a0c5de13ecc486e98469caa3",
+  "source_revision": "30cfb82f23701b35d09ea110274f0444101b4127",
+  "image_id": "sha256:e457c235f49e52dfd66f9bb2995eaa9053b7770d40f11de403ec6dcabb3b59ad",
+  "local_data_preparation": true,
+  "healthy_start": true,
+  "non_root": true,
+  "read_only_root": true,
+  "read_only_rom": true,
+  "frame_and_feed": true,
+  "shutdown_seconds": 0.44,
+  "restart_resumed": true,
+  "checkpoint_before_frame": 490,
+  "restored_frame": 514,
+  "passed": true
+}
