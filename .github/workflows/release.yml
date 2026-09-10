@@ -1,0 +1,105 @@
+name: Publish public release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag, for example v0.2.0rc2
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: publish-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+        with:
+          version: '0.9.7'
+      - name: Validate public release destination
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          import tomllib
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError
+          tag = os.environ['RELEASE_TAG']
+          assert re.fullmatch(r'v\d+\.\d+\.\d+(?:rc\d+)?', tag), 'Invalid release tag'
+          version = tomllib.load(open('pyproject.toml', 'rb'))['project']['version']
+          assert tag == 'v' + version, 'Tag must match package version'
+          repo = os.environ['GITHUB_REPOSITORY']
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'}
+          with urlopen(Request('https://api.github.com/repos/' + repo, headers=headers)) as response:
+              assert json.load(response)['visibility'] == 'public', 'This workflow publishes only reviewed public source'
+          try:
+              with urlopen(Request(f'https://api.github.com/repos/{repo}/releases/tags/{tag}', headers=headers)) as response:
+                  raise RuntimeError('This release already exists. Publish a new version.')
+          except HTTPError as error:
+              if error.code != 404:
+                  raise
+          revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'image=pokesim:{version}\nversion={version}\nrevision={revision}\n')
+          PY
+      - run: uv sync --locked --extra dev
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: pret/pokered
+          ref: a1a22aaf84d1675bcdbaeb194592379d586d838e
+          path: .reference/pokered
+          persist-credentials: false
+      - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
+      - run: uv run --locked pytest --ignore=tests/test_rom.py -q
+      - run: uv build
+      - run: python tools/check_package.py
+      - name: Build versioned image and release assets
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+          VERSION: ${{ steps.release.outputs.version }}
+          REVISION: ${{ steps.release.outputs.revision }}
+        run: |
+          docker build --build-arg VERSION="$VERSION" --build-arg REVISION="$REVISION" -t "$IMAGE" .
+          mkdir release
+          docker save "$IMAGE" | gzip > release/image-linux-amd64.tar.gz
+          cp dist/* release/
+          cp compose.yaml release/compose.yaml
+          cp .env.example release/env.example
+          docker run --rm --network none "$IMAGE" cat /usr/share/pokesim/python-dependencies.json > release/python-dependencies.json
+          docker image inspect "$IMAGE" --format '{{json .}}' > release/image-metadata.json
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          root = Path('release')
+          metadata = json.loads((root / 'image-metadata.json').read_text())
+          manifest = {'image': os.environ['IMAGE'], 'image_id': metadata['Id'], 'version': os.environ['VERSION'], 'revision': os.environ['REVISION'], 'platform': 'linux/amd64'}
+          manifest['files'] = {}
+          for path in sorted(root.iterdir()):
+              with path.open('rb') as stream:
+                  manifest['files'][path.name] = hashlib.file_digest(stream, 'sha256').hexdigest()
+          (root / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          (root / 'SHA256SUMS').write_text(''.join(f'{value}  {name}\n' for name, value in manifest['files'].items()))
+          PY
+      - name: Publish downloadable beta
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --prerelease --title "$RELEASE_TAG experimental self-hosting beta" --notes-file docs/release-notes.md release/*

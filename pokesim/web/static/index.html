@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f5f3ed">
+<meta name="description" content="Follow an autonomous Pokémon Red adventure through Kanto, one step at a time.">
+<title>pokesim · The Kanto journal</title>
+<link rel="stylesheet" href="/static/style.css?v=release-2">
+<link rel="alternate" type="application/atom+xml" title="pokesim events" href="/feed.xml">
+</head>
+<body>
+<a class="skip-link" href="#adventure">Skip to the adventure</a>
+<header class="topbar">
+  <a class="brand" href="/" aria-label="pokesim home"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition">RED VERSION</span></a>
+  <nav aria-label="Main navigation"><a class="nav-current" href="#adventure">Live adventure</a><a href="#collection">Collection</a><a href="#journal">Journal</a><a href="/feed.xml" class="feed-nav">Follow the feed ↗</a></nav>
+  <span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
+</header>
+<main id="adventure">
+  <section class="page-intro">
+    <div><p class="eyebrow"><span class="tiny-dot"></span> THE KANTO JOURNAL</p><h1>The Kanto adventure.</h1><p class="intro-copy">One trainer. A growing team. A whole region to explore.</p></div>
+    <div class="intro-note"><span class="note-number" id="playtime">00:00</span><span class="eyebrow">IN-GAME HOURS</span><span class="note-caption">Every step has a story.</span></div>
+  </section>
+  <section class="dashboard">
+
+      <section class="game-card" aria-labelledby="live-heading">
+        <div class="game-heading"><div><span class="live-label"><i></i> LIVE NOW</span><h2 id="live-heading">Somewhere in Kanto</h2></div><button class="icon-button" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">⛶</button></div>
+        <div class="screen" id="screen"><img id="stream" src="/stream" alt="Live Pokémon Red game"><span class="screen-corner">POKÉMON RED · GAME BOY</span></div>
+        <div class="game-caption"><span id="game-activity">The adventure is loading…</span><span id="coordinates">KANTO REGION</span></div>
+        <div class="controls"><button id="take-control" class="primary-button">Take control</button><button id="pause" class="quiet-button">Ⅱ Freeze game</button><label class="speed-label" for="speed">AI pace <select id="speed"><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="16">16×</option><option value="0">Max</option></select></label><button id="save" class="quiet-button">↓ Save</button></div>
+        <div class="controller"><div class="pad"><span></span><button data-b="up" aria-label="Move up">▲</button><span></span><button data-b="left" aria-label="Move left">◀</button><button data-b="down" aria-label="Move down">▼</button><button data-b="right" aria-label="Move right">▶</button></div><div class="action-buttons"><button data-b="b">B</button><button data-b="a">A</button><button data-b="start">Start</button><button data-b="select">Select</button></div><div class="control-help"><strong id="control-mode">AI is playing</strong><p id="control-hint">Press any game control to pause the AI and take over.</p><small>Arrows · Z / A · X / B · Enter / Start · Shift / Select</small></div></div>
+
+      </section>
+
+    <aside class="team-column" aria-label="Trainer and team">
+      <section class="trainer-card"><div class="trainer-avatar" aria-hidden="true">◈</div><div class="trainer-name"><p class="eyebrow">OUR TRAINER</p><h2 id="trainer-name">Getting ready</h2><span id="trainer-rival">A new story begins</span></div><span class="trainer-region">KANTO<br><b>001</b></span><div class="trainer-stats"><div><span class="eyebrow">POKÉDEX</span><strong id="dex-count">0 <small>/ 151</small></strong></div><div><span class="eyebrow">POCKET MONEY</span><strong id="money">₽0</strong></div><div><span class="eyebrow">PLACES VISITED</span><strong id="areas">0</strong></div></div></section>
+
+      <section class="objective-card" id="strategy-panel" aria-labelledby="objective-heading" hidden><div class="objective-icon" aria-hidden="true">↗</div><div class="objective-body"><p class="eyebrow" id="objective-heading">NOW</p><h2 id="objective">Finding the way forward</h2><p class="decision-label">Why</p><p id="decision"></p><div class="next-step"><span class="eyebrow">NEXT</span><strong id="next-objective">Finding the next milestone</strong></div><div class="objective-bottom"><span class="action-tag" id="action-tag">Exploring</span><span id="progress"></span></div><p class="expectation" id="expectation"></p></div></section>
+      <section class="badge-card" aria-labelledby="badge-heading"><div class="section-heading"><div><p class="eyebrow">THE ROAD TO THE LEAGUE</p><h2 id="badge-heading">The road to Champion</h2></div><span class="count-pill" id="badge-count">0 / 8</span></div><div class="badges" id="badges"></div><label class="wander-control" for="wander">Exploration <select id="wander"><option value="0">Focused</option><option value="0.12" selected>Curious</option><option value="0.3">Adventurous</option></select></label><p class="wander-hint">Goals pull the team forward. Curiosity leaves room for detours.</p><details class="journey-details"><summary>What comes next ↓</summary><ol id="journey"></ol></details></section>
+      <details class="bag-card"><summary><span><span aria-hidden="true">▤</span> Inside the bag</span><span id="bag-count">0 items</span></summary><div id="bag-items" class="bag-items"><p>A little room for future finds.</p></div></details>
+    </aside>
+      <section class="party-section" aria-labelledby="party-heading"><div class="section-heading"><div><p class="eyebrow">BETTER TOGETHER</p><h2 id="party-heading">The traveling party</h2></div><span class="count-pill" id="party-count">0 / 6</span></div><ul class="party" id="party"><li class="empty-party"><span aria-hidden="true">◌</span><h3>Every team starts somewhere.</h3><p>The first partner will appear here.</p></li></ul></section>
+    <section class="insight-card" aria-label="Team preparation and route"><div class="readiness"><div><strong id="readiness-label">Team readiness</strong><span id="personality"></span></div><progress id="readiness-meter" max="100" value="0" aria-label="Estimated matchup readiness"></progress><p id="readiness-concerns"></p><small>Matchup estimate, not a win probability</small><div id="readiness-members"></div></div><details class="route-details" open><summary>Route and recent decisions</summary><canvas id="route-map" width="560" height="260" role="img" aria-label="Current area with player, planned route, and doors"></canvas><p class="map-legend">Gold: player · Teal: route · White: doors</p><ol id="recovery-history"></ol></details></section>
+  </section>
+  <section class="collection-card" id="collection" aria-labelledby="collection-heading">
+    <div class="section-heading"><div><p class="eyebrow" id="collection-phase">THOROUGH ADVENTURE</p><h2 id="collection-heading">A growing collection.</h2></div><label for="adventure-pace">Adventure style <select id="adventure-pace"><option value="focused">Focused</option><option value="balanced">Balanced</option><option value="thorough" selected>Thorough</option></select></label></div>
+    <p class="collection-intro">Explore between badges, raise new partners, and keep collecting after the Champion. Adventure style changes activities. AI pace changes playback speed.</p>
+    <div class="collection-summary"><div><span class="eyebrow">REGISTERED</span><strong id="collection-caught">0 / 151</strong></div><div><span class="eyebrow">MORE POSSIBLE HERE</span><strong id="collection-available">0</strong></div><div class="hunt-summary"><span class="eyebrow">CURRENT PROJECT</span><strong id="collection-hunt">Watching for new discoveries</strong><small id="collection-budget"></small></div></div>
+    <div class="collection-projects"><div><h3>Growing toward something</h3><ul id="collection-evolutions"></ul></div><div><h3>Recent expeditions</h3><ul id="collection-history"></ul></div></div>
+    <details class="collection-dex"><summary>Explore the Pokédex</summary><div class="dex-tools"><label for="dex-search">Find a Pokémon <input id="dex-search" type="search" placeholder="Name or number"></label><label for="dex-filter">Show <select id="dex-filter"><option value="all">All Pokémon</option><option value="available">Possible here</option><option value="caught">Caught</option><option value="unavailable">Other requirements</option></select></label></div><p class="collection-note">Possible here includes future evolutions and choices. Trade, event, and other requirements are shown separately. Hunting routes are checked before travel.</p><div class="dex-grid" id="collection-entries"></div></details>
+    <details class="collection-boxes"><summary id="collection-box-summary">Storage boxes</summary><div class="box-grid" id="collection-boxes"></div></details>
+  </section>
+  <section class="journal" id="journal" aria-labelledby="journal-heading"><div class="journal-top"><div><p class="eyebrow">COLLECTING MEMORIES</p><h2 id="journal-heading">Notes from the road.</h2><p>The catches, close calls, and little victories along the way.</p></div><div class="journal-filters" role="group" aria-label="Filter the journal"><button data-filter="highlights" class="active" aria-pressed="true">Highlights</button><button data-filter="team" aria-pressed="false">The team</button><button data-filter="all" aria-pressed="false">Everything</button></div></div><div class="events" id="events"><p class="journal-empty">Opening the journal…</p></div><button id="load-more" class="load-more" hidden>Earlier in the adventure ↓</button></section>
+</main>
+<footer><span id="app-version"></span><a class="brand footer-brand" href="/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><button id="restart" class="restart-link">Restart run</button><a href="/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/pokesim-public" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script src="/static/app.js?v=release-2"></script>
+</body>
+</html>

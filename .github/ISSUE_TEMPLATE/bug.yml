@@ -1,0 +1,34 @@
+name: Bug report
+description: Report an installation, runtime, or gameplay problem
+title: '[Bug] '
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe expected behavior and steps to reproduce. Do not attach ROMs, saves, or secrets.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Release or commit
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Host OS and CPU architecture
+    validations:
+      required: true
+  - type: input
+    id: rom
+    attributes:
+      label: ROM SHA-1
+      description: Supply the hash only, never the ROM file.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs and settings
+      description: Remove tokens and private URLs before submitting.
+      render: text

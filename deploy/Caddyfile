@@ -1,0 +1,9 @@
+{$SITE_ADDRESS:localhost} {
+    basic_auth {
+        {$AUTH_USER} {$AUTH_HASH}
+    }
+    reverse_proxy pokesim:8000 {
+        flush_interval -1
+        stream_timeout 24h
+    }
+}

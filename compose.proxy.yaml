@@ -1,0 +1,34 @@
+services:
+  pokesim:
+    extends:
+      file: compose.yaml
+      service: pokesim
+    ports: !reset []
+    networks: [backend]
+  proxy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      AUTH_USER: ${AUTH_USER:?Set AUTH_USER in the proxy environment file}
+      AUTH_HASH: ${AUTH_HASH:?Set a password hash in the proxy environment file}
+    ports:
+      - "${PROXY_BIND_ADDRESS:-127.0.0.1}:${PROXY_HTTPS_PORT:-9443}:443"
+      - "${PROXY_BIND_ADDRESS:-127.0.0.1}:${PROXY_HTTP_PORT:-9080}:80"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - proxy-data:/data
+      - proxy-config:/config
+    networks: [backend, edge]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+networks:
+  backend:
+    internal: true
+  edge:
+volumes:
+  proxy-data:
+  proxy-config:

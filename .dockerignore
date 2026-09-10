@@ -1,0 +1,16 @@
+**
+!pyproject.toml
+!uv.lock
+!README.md
+!THIRD_PARTY_NOTICES.md
+!pokesim/
+!pokesim/**
+pokesim/**/__pycache__/
+pokesim/**/*.pyc
+!LICENSE
+!licenses/
+!licenses/**
+!tools/
+!tools/bundle_dependency_sources.py
+pokesim/data/
+pokesim/web/static/sprites/

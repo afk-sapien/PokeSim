@@ -1,0 +1,65 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+        with:
+          version: '0.9.7'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: uv sync --locked --extra dev
+      - name: Read user-content reference for tests only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: pret/pokered
+          ref: a1a22aaf84d1675bcdbaeb194592379d586d838e
+          path: .reference/pokered
+          persist-credentials: false
+      - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
+      - run: uv run --locked pytest --ignore=tests/test_rom.py -q
+      - run: node --check pokesim/web/static/app.js
+      - run: uv build
+      - run: python tools/check_package.py
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: docker compose config --quiet
+      - run: docker build -t pokesim:ci .
+      - name: Read user-content reference for tests only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: pret/pokered
+          ref: a1a22aaf84d1675bcdbaeb194592379d586d838e
+          path: .reference/pokered
+          persist-credentials: false
+      - name: Prepare local data outside the image
+        run: docker run --rm -v "$PWD/.reference/pokered:/source:ro" -v pokesim-ci-data:/data pokesim:ci python -m pokesim.prepare_data /source
+      - name: Verify installed runtime and non-root user
+        run: |
+          docker run --rm -i -v pokesim-ci-data:/data --entrypoint python pokesim:ci <<'PYCODE'
+          import os
+          import pyboy
+          import pokesim.strategy_data
+          import pokesim.web.app
+          import pokesim.healthcheck
+          assert os.getuid() != 0
+          from pathlib import Path
+          assert not (Path(pokesim.__file__).parent / 'data/strategy.json').exists()
+          assert Path('/usr/share/pokesim/sources/pyboy-2.7.0.tar.gz').is_file()
+          PYCODE

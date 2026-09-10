@@ -1,0 +1,63 @@
+services:
+  pokesim:
+    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc2}
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_PORT:-8930}:8000"
+    environment:
+      ROM_PATH: /roms/pokered.gb
+      DATA_DIR: /data
+      SPEED: ${SPEED:-1}
+      POLICY: ${POLICY:-strategic}
+      FAST_TEXT: ${FAST_TEXT:-1}
+      BATTLE_ANIMATIONS: ${BATTLE_ANIMATIONS:-1}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8930}
+      NTFY_URL: ${NTFY_URL:-}
+      NTFY_TOKEN: ${NTFY_TOKEN:-}
+      NTFY_MIN_PRIORITY: ${NTFY_MIN_PRIORITY:-2}
+      NTFY_MUTE: ${NTFY_MUTE:-}
+      FEED_TITLE: ${FEED_TITLE:-pokesim}
+      VIEWER_ONLY: ${VIEWER_ONLY:-0}
+      AUTOSAVE_SECONDS: ${AUTOSAVE_SECONDS:-60}
+      KEEP_AUTOSAVES: ${KEEP_AUTOSAVES:-20}
+      EVENT_RETENTION_DAYS: ${EVENT_RETENTION_DAYS:-0}
+    volumes:
+      - ${DATA_PATH:-./data}:/data
+      - type: bind
+        source: ${ROM_FILE:-./roms/pokered.gb}
+        target: /roms/pokered.gb
+        read_only: true
+        bind:
+          create_host_path: false
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    stop_grace_period: 30s
+
+  prepare-data:
+    profiles: [setup]
+    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc2}
+    command: [python, -m, pokesim.prepare_data, /source]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - ${DATA_PATH:-./data}:/data
+      - type: bind
+        source: ${POKERED_SOURCE:-./.reference/pokered}
+        target: /source
+        read_only: true
+        bind:
+          create_host_path: false
