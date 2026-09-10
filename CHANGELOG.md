@@ -1,3 +1,10 @@
+0.2.0rc5, storage withdrawal fix
+
+- Allow an evolution partner to be withdrawn from a full box when the party has space.
+- Stop selecting the source box again once it is already active.
+- Keep capacity handling for full parties and boxes without the requested partner.
+- Add four regression tests and verify the fix against a copied game checkpoint.
+
 0.2.0rc4, reliable game display
 
 - Load and decode one game image at a time, capped at 10 display frames per second independently of game speed.

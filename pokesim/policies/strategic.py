@@ -220,7 +220,12 @@ class StrategicPolicy(Policy):
                                  ((self.storage_map, 13, 4),), 'up', True)
         self.next_goal = self.goal.to_dict()
         league_rooms = {MAPS[n] for n in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM')}
-        if s.box_full and s.next_free_box is not None and s.map not in league_rooms:
+        withdrawing_partner = (
+            self.goal.key == 'party_collection' and len(s.party) < 6
+            and self.collection.project
+            and any(species == self.collection.project['parent'] for species, level in s.boxed_pokemon)
+        )
+        if s.box_full and not withdrawing_partner and s.next_free_box is not None and s.map not in league_rooms:
             self.storage_species = None
             self.storage_map = None
             targets = tuple((m, 13, 4) for m, w in WORLD.items()
@@ -481,7 +486,7 @@ class StrategicPolicy(Policy):
             self.menu_context = 'pc'
             target = s.next_free_box if self.goal.key == 'party_box' else self.collection.project.get('box') if self.goal.key == 'party_collection' and self.collection.project else None
             self.reason = 'Select a storage box with room for new catches'
-            return tap('b') if target is None else self._select(scr, target)
+            return tap('b') if target is None or target == s.active_box else self._select(scr, target)
         if kind == "pc":
             self.menu_context = 'pc'
             if not self.goal.key.startswith("party_"):

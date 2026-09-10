@@ -119,3 +119,56 @@ def test_seafoam_current_cannot_be_used_as_a_route_to_the_pc():
     nav.update_story(replace(s, event_flags=flags('EVENT_SEAFOAM3_BOULDER1_DOWN_HOLE',
                                                  'EVENT_SEAFOAM3_BOULDER2_DOWN_HOLE')))
     assert exit_tile not in nav.story_blocks
+
+
+def collection_with_full_box(party_size=5):
+    from pokesim.policies.collection import EVOS
+    p = StrategicPolicy(7)
+    p.collection.project = {'method': 'evolve', 'parent': 124, 'species': 125,
+                            'box': 0, 'evolution': EVOS[124][0], 'key': 'butterfree'}
+    p.collection.remaining = 36000
+    s = full_box(party=(mon(hp=100, max_hp=100, defense=100),) * party_size,
+                 boxed_pokemon=((124, 8),) + ((165, 3),) * 19, textbox=True)
+    p.observed_map = s.map
+    return p, s
+
+
+def test_full_source_box_allows_withdrawal_instead_of_switching_away():
+    p, s = collection_with_full_box()
+    memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'},
+                  (1, 1), top=(1, 1))
+    action = p.step(PolicyContext(s, 0, 0, memory))[0]
+    assert p.goal.key == 'party_collection'
+    assert p.pc_operation == 'withdraw'
+    assert action.button == 'a'
+    assert p._pc_target(s) == 0
+
+    s = replace(s, frame=s.frame + 100, party=s.party + (mon(species=124, level=8),),
+                boxed_pokemon=s.boxed_pokemon[1:], box_counts=(19,) + (0,) * 11)
+    action = p.step(PolicyContext(s, 0, 0, memory))[0]
+    assert p.goal.key == 'collect_train'
+    assert action.button == 'b'
+
+
+def test_full_party_still_makes_deposit_space_before_retrieving_partner():
+    p, s = collection_with_full_box(party_size=6)
+    memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'},
+                  (1, 1), top=(1, 1))
+    p.step(PolicyContext(s, 0, 0, memory))
+    assert p.goal.key == 'party_box'
+
+
+def test_full_box_without_requested_partner_still_switches_to_free_space():
+    p, s = collection_with_full_box()
+    s = replace(s, boxed_pokemon=((165, 3),) * 20)
+    memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'},
+                  (1, 1), top=(1, 1))
+    p.step(PolicyContext(s, 0, 0, memory))
+    assert p.goal.key == 'party_box'
+
+
+def test_collection_leaves_box_selector_when_source_box_is_already_active():
+    p, s = collection_with_full_box()
+    p.goal = p.collection.goal(s)
+    memory = bytearray(65536)
+    assert p._dispatch(s, Screen(memory), 'change_box', memory)[0].button == 'b'

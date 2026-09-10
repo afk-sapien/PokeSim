@@ -1,5 +1,9 @@
 Experimental beta validation
 
+Version 0.2.0rc5 fixes repeated switching between a full evolution source box and a box with free space. The capacity rule now permits withdrawal when the party has a free slot and the requested partner is in the active box. In an isolated replay of a private checkpoint with a seeded Metapod evolution objective, the previous policy switched boxes 41 times over 12,024 frames without withdrawing. The fixed policy withdrew Metapod after 468 frames without switching boxes. All 204 Python tests pass, including four new regressions covering withdrawal, full-party capacity handling, missing partners, and exiting the box selector. The save format is unchanged.
+
+The existing rc3 endurance run continues unchanged. It does not validate the rc5 policy fix or the rc4 browser polling behavior. No 48-hour pass is claimed for rc5.
+
 Version 0.2.0rc4 updates the browser viewer. Frames are downloaded and decoded sequentially at up to 10 per second, failed downloads retain the last good image, and hidden tabs suspend frame downloads. The emulator and backend behavior are unchanged from 0.2.0rc3. Four JavaScript controller tests pass alongside the 200 Python tests. Chromium and Firefox checks verified slow-frame handling, invalid-frame recovery, and one request at a time.
 
 The existing 48-hour run continues on the exact 0.2.0rc3 image below. It measures that backend and the MJPEG endpoint, not the new browser viewer. It has not completed yet.
