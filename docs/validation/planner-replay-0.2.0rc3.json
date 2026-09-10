@@ -1,0 +1,26 @@
+{
+  "image": "sha256:0e37a7791f0b1e14111637b7e2da41b6e3a911630a842b96abadd69b68fcc673",
+  "samples": 60,
+  "max_activity_age": 0.6,
+  "shutdown_seconds": 0.89,
+  "exit_code": 0,
+  "oom_killed": false,
+  "restarts": 0,
+  "first_frame": 5993396,
+  "last_frame": 6260724,
+  "unhealthy": [],
+  "version": "0.2.0rc3",
+  "test": "Three-minute replay from a copy of the earlier pre-completion checkpoint",
+  "fresh_campaign": false,
+  "source_files": {
+    "pokesim/policies/navigation.py": "e406a9615f3183bc71259c763a6c0111e676fe8e4465c6dc3569f01adc365bcd",
+    "pokesim/policies/collection.py": "05f05ed023f3489fdc80cb549ed8898eb8749cfcc11432e5ca955fdba8846790"
+  },
+  "prior_replay_max_activity_age_seconds": 32.7,
+  "stack_tracing": false,
+  "local_tests_passed": 200,
+  "instrumented_replay": {
+    "exit_code": 139,
+    "note": "A separate replay exited during a faulthandler traceback dump. Its cause is unconfirmed. The uninstrumented replay completed normally."
+  }
+}

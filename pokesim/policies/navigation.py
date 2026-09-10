@@ -265,6 +265,36 @@ class Navigator:
                 continue
             yield dr, target or FORCED.get((m, nx, ny), (m, nx, ny))
 
+    def distance_lookup(self, pos, frame, limit=60000):
+        """Share one bounded search across goals while navigation state stays unchanged."""
+        distances = {pos: 0}
+        queue = deque([pos])
+        expanded = 0
+
+        def nearest(goals):
+            nonlocal expanded
+            goals = frozenset(goals)
+            known = [distances[goal] for goal in goals if goal in distances]
+            if known:
+                return min(known)
+            if not goals:
+                return None
+            while queue and expanded < limit:
+                source = queue.popleft()
+                depth = distances[source] + 1
+                found = False
+                for _, target in self.neighbors(source, frame):
+                    if target not in distances:
+                        distances[target] = depth
+                        queue.append(target)
+                        found |= target in goals
+                expanded += 1
+                if found:
+                    return depth
+            return None
+
+        return nearest
+
     def route(self, pos, goals, frame, limit=60000):
         goals = frozenset(goals)
         if pos in goals:

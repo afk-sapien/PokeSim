@@ -25,6 +25,11 @@ def write(path, value):
     temporary.replace(path)
 
 
+def campaign_completed(state):
+    return bool(state.get('strategy', {}).get('milestones', {}).get('champion')
+                or (state.get('game') or {}).get('hall_of_fame_count', 0) > 0)
+
+
 class Viewer:
     def __init__(self, port):
         self.port = port
@@ -55,9 +60,12 @@ def main():
     parser.add_argument('--source', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--hours', type=float, default=48)
+    parser.add_argument('--name-prefix', default='pokesim-release', help='Unique prefix for the isolated test containers')
+    parser.add_argument('--base-port', type=int, default=18950, help='Two consecutive localhost ports for soak and campaign')
     args = parser.parse_args()
     assert args.image.startswith('sha256:'), 'Use the immutable loaded image ID'
     assert 0 < args.hours <= 72
+    assert 1024 <= args.base_port <= 65534
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     started = time.time()
@@ -73,13 +81,13 @@ def main():
     sample = None
     active_label = None
     try:
-        for label, port, speed, seed in [('soak', 18950, 1, 13), ('campaign', 18951, 0, 7)]:
+        for label, port, speed, seed in [('soak', args.base_port, 1, 13), ('campaign', args.base_port + 1, 0, 7)]:
             data = root / label
             data.mkdir()
             docker('run', '--rm', '--user', '0', '-v', f'{data}:/target', '--entrypoint', 'chown', args.image, '10001:10001', '/target')
             docker('run', '--rm', '--network', 'none', '--read-only', '-v', f'{data}:/data',
                    '-v', f'{args.source.resolve()}:/source:ro', args.image, 'python', '-m', 'pokesim.prepare_data', '/source')
-            name = f'pokesim-release-{label}'
+            name = f'{args.name_prefix}-{label}'
             docker('run', '-d', '--name', name, '--read-only', '--cap-drop', 'ALL',
                    '--security-opt', 'no-new-privileges:true', '--tmpfs', '/tmp:size=64m,mode=1777',
                    '--cpus', '2', '--memory', '1g', '--memory-swap', '1g',
@@ -100,7 +108,7 @@ def main():
             elapsed = sampled_at - started
             count = 0 if elapsed < 1800 else 1 if elapsed < 3600 else 4 if elapsed < 5400 else 1
             while len(viewers) < count:
-                viewers.append(Viewer(18950))
+                viewers.append(Viewer(args.base_port))
             while len(viewers) > count:
                 viewer = viewers.pop()
                 viewer.stop.set()
@@ -130,7 +138,7 @@ def main():
                 details['samples'] += 1
                 details['latest'].update({'cpu_percent': stats['CPUPerc'], 'memory': stats['MemUsage'], 'data_bytes': disk})
                 sample['runs'][label] = details['latest']
-                if label == 'campaign' and state.get('strategy', {}).get('milestones', {}).get('champion'):
+                if label == 'campaign' and campaign_completed(state):
                     details['status'] = 'champion'
                     details['finished_at'] = now()
                     details['uninterrupted'] = state['reloads'] == 0

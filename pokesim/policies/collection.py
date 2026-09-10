@@ -207,6 +207,7 @@ class Collection:
                 candidates.append((weight,{**project,'key':key}))
         sources = self.sources()
         searched = set()
+        distance_to = nav.distance_lookup((s.map, s.x, s.y), s.frame)
         for sid,rows in sources.items():
             if dex(sid) in s.owned:
                 continue
@@ -242,10 +243,9 @@ class Collection:
                 goal = self.project_goal(s,project)
                 if not goal or not goal.targets:
                     continue
-                start=(s.map,s.x,s.y)
-                if start not in goal.targets and nav.route(start,goal.targets,s.frame) is None:
+                distance = distance_to(goal.targets)
+                if distance is None:
                     continue
-                distance=len(nav.path)
                 if not self.completed_champion and (source['map'] != s.map or distance>60):
                     continue
                 add(project, (5 if mode in ('gift','fossil','static') else 1) / (1+distance/40))
@@ -283,7 +283,7 @@ class Collection:
                 unseen.append((m,target))
             rng.shuffle(unseen)
             for m,target in unseen[:8]:
-                if nav.route((s.map,s.x,s.y),(target,),s.frame) is not None:
+                if distance_to((target,)) is not None:
                     add({'method':'explore','map':m,'target':target},0.3)
                     break
             for rod,room in RODS.items():

@@ -85,8 +85,8 @@ Compose caps container logs at three files of 10 MB each. Monitor available disk
 
 ntfy is the optional outbound application integration. When enabled, it sends event titles, descriptions, priorities, screenshots, and links to the configured destination. Tokens stay in local settings. Without ntfy, the runtime does not require a model service or a notification account. Offline acceptance testing is tracked in the release status.
 
-**Moving from 0.1.0 to 0.2.0rc2**
+**Moving from 0.1.0 to 0.2.0rc3**
 
-Version 0.1.0 bundled game data in the image. Version 0.2.0rc2 reads a generated bundle from the data volume. Before upgrading, stop and back up the old installation. Prepare the source checkout from the README, select the new image, then run `docker compose --profile setup run --rm prepare-data` before starting the new app. This adds game data without replacing saves or the journal. The old PyBoy 2.7.0 checkpoints remain compatible.
+Version 0.1.0 bundled game data in the image. Version 0.2.0rc3 reads a generated bundle from the data volume. Before upgrading, stop and back up the old installation. Prepare the source checkout from the README, select the new image, then run `docker compose --profile setup run --rm prepare-data` before starting the new app. This adds game data without replacing saves or the journal. The old PyBoy 2.7.0 checkpoints remain compatible.
 
 For rollback, stop the new app and restore the complete pre-upgrade backup into a separate directory, then start the preserved 0.1.0 image against it. Do not rely on downgrading against a mutated data directory. Legacy bundled assets are for private regression testing only and are not part of the new release artifact.

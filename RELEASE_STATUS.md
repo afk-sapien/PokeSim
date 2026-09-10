@@ -1,5 +1,16 @@
 Experimental beta validation
 
+Version 0.2.0rc3 shares a bounded navigation search across collection candidates, removing repeated whole-world route searches from one policy decision. Health thresholds are unchanged. The source archive now includes the Docker and Compose files required by its installation instructions. The test harness preserves failing health evidence and recognizes the saved Hall of Fame count after the game leaves the ceremony.
+
+Current candidate validation:
+
+- 200 local tests passed in the locked Python 3.12 environment, including two tests with a privately supplied ROM. Package resource and content-exclusion checks, extracted source-document links, and JavaScript syntax checks passed.
+- A three-minute diagnostic replay of the copied pre-completion checkpoint completed with 60 healthy samples, maximum sampled activity age of 0.6 seconds, zero container restarts, and no out-of-memory kill. Shutdown completed in 0.89 seconds with exit code 0. The earlier replay reached 32.7 seconds of stale activity. Health thresholds were not relaxed.
+- A separate replay with stack tracing enabled exited with code 139 during a traceback dump. Its cause is unconfirmed. The replay without tracing completed normally. This limitation is retained in the [candidate replay report](docs/validation/planner-replay-0.2.0rc3.json), which identifies the exact development image and changed runtime file hashes.
+- This was a resumed diagnostic replay. It does not count as a fresh campaign or a 48-hour endurance pass. Published-artifact installation and replacement endurance validation are still required.
+
+Earlier release validation:
+
 Version 0.2.0rc2 is the first public source snapshot and downloadable Linux amd64 beta. It updates distribution metadata, installation instructions, and support links from the privately tested 0.2.0rc1 candidate. Gameplay and checkpoint behavior are unchanged. No prior private Git history is imported.
 
 Completed validation before public publication:
@@ -22,7 +33,7 @@ Endurance result and outstanding validation:
 - The planned 48-hour run on image `sha256:789963c656dfe8f47ddc954773e6bd2dfbd1540331181017376d9ccc87a20318` started September 10, 2026 at 18:38:02 UTC and stopped at 20:13:52 UTC after the campaign reported unhealthy. Both isolated containers exited cleanly with zero container restarts and no out-of-memory kill. This is a failed endurance run, not a completed pass.
 - The fresh-game campaign log records Champion and Hall of Fame entry at 20:12:20 UTC. Later saved policy metadata also records completion. The monitor stopped before recording a successful campaign result, so this evidence does not establish a completed healthy campaign validation.
 - A Docker health probe received HTTP 503 at 20:12:58 UTC. The next probe succeeded at 20:13:29 UTC. The original harness discarded the failing API health details, so the exact cause cannot be established from that run alone. Raw logs and checkpoints are preserved privately.
-- A diagnostic replay from a copy of the pre-completion checkpoint reproduced two health failures. The worker stayed alive while activity aged to 30.9 and 32.7 seconds. Thread dumps repeatedly located the worker in collection candidate selection calling navigation route search. The diagnostic container also exceeded its 20-second shutdown allowance and was killed with exit code 137, without an out-of-memory kill. The planner stall still needs a runtime fix and replacement endurance validation. A resumed diagnostic replay does not count as a fresh uninterrupted campaign.
+- A diagnostic replay from a copy of the pre-completion checkpoint reproduced two health failures. The worker stayed alive while activity aged to 30.9 and 32.7 seconds. Thread dumps repeatedly located the worker in collection candidate selection calling navigation route search. The diagnostic container also exceeded its 20-second shutdown allowance and was killed with exit code 137, without an out-of-memory kill. This reproduced the planner stall in the earlier image. Version 0.2.0rc3 addresses the repeated searches, with replacement endurance validation still required. A resumed diagnostic replay does not count as a fresh uninterrupted campaign.
 - Independent installation reports and broader hardware testing are welcome.
 
 Known limits:
@@ -38,6 +49,6 @@ Distribution audit, September 10, 2026:
 - The active repository is public `afk-sapien/PokeSim`. The previous repository is private and archived. The local active Git history contains only the reviewed public history.
 - Anonymous downloads through the canonical repository name passed manifest checksum checks. The inspected published image archive matches SHA-256 `123e9be0fee2f6aad913131fcd9ccec6e2ba398f3d9d8a4c564cc8f25ef6290f`.
 - Inspection of the public history, release Python packages, and all 11 published image layers found no Pokémon ROMs, game saves, generated Pokémon datasets, or project credentials. This is a scoped artifact audit, not a guarantee that all security defects have been found. The PyBoy dependency includes its own 32 KiB demo ROM, titled `DEFAULT-ROM`, which is not a Pokémon game.
-- The published Python source archive omitted the Docker build and Compose files referenced by its README. The source manifest and package check now include those files and the referenced validation documents. This correction will ship in a new release. For the existing beta, use the documented Git clone installation.
-- The endurance harness now preserves failing API health details and marks stopped runs instead of leaving their status as running. These tool changes do not repair the runtime planner stall.
+- The published Python source archive omitted the Docker build and Compose files referenced by its README. The source manifest and package check now include those files and the referenced validation documents. Version 0.2.0rc3 includes this correction. For the existing beta, use the documented Git clone installation.
+- The endurance harness now preserves failing API health details and marks stopped runs instead of leaving their status as running. The runtime fix is separate from these reporting changes.
 - The published `v0.2.0rc2` tag and downloadable binaries remain unchanged. Current documentation records the failure and limitations, and future runtime fixes require a new version.
