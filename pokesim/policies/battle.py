@@ -6,7 +6,7 @@ live battle stats, Generation I type categories, accuracy, and special effects.
 from dataclasses import dataclass
 
 from ..ram import PartyMon
-from ..strategy_data import ITEMS, MATCHUPS, MOVES, PRICES, SPECIES
+from ..strategy_data import ITEMS, MAPS, MATCHUPS, MOVES, PRICES, SPECIES
 
 W_BATTLE_MON = 0xD014
 W_ENEMY_MON = 0xCFE5
@@ -218,6 +218,10 @@ class Decision:
 
 
 def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, catch_attempts=0, required_move=None, collect_missing=False):
+    if (snapshot.in_battle == 1
+            and MAPS['POKEMON_TOWER_1F'] <= snapshot.map <= MAPS['POKEMON_TOWER_7F']
+            and not dict(snapshot.items).get(ITEMS['SILPH_SCOPE'])):
+        return Decision('run', reason='Leave the unidentified ghost until the Silph Scope is obtained')
     moves = ranked_moves(me, enemy, used_status)
     slot = moves[0][1] if moves else 0
     incoming = max((damage(mid, enemy, me) for mid in enemy.moves if mid), default=me.max_hp * 0.2)

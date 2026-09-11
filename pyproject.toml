@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pokesim"
-version = "0.2.0rc5"
+version = "0.2.0rc6"
 description = "A Pokémon Red that plays itself: headless emulator, live web view, event feed with screenshots"
 readme = "README.md"
 license = "MIT"

@@ -1,3 +1,9 @@
+0.2.0rc6, unidentified ghost encounters
+
+- Flee wild Pokémon Tower encounters before obtaining the Silph Scope.
+- Preserve normal decisions for trainers, identified ghosts, and battles outside the Tower.
+- Add ten regression cases and verify escape from a copied stalled checkpoint.
+
 0.2.0rc5, storage withdrawal fix
 
 - Allow an evolution partner to be withdrawn from a full box when the party has space.

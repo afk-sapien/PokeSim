@@ -1,0 +1,49 @@
+{
+  "candidate_version": "0.2.0rc6",
+  "observed_release": "0.2.0rc3",
+  "observed_image": "sha256:e457c235f49e52dfd66f9bb2995eaa9053b7770d40f11de403ec6dcabb3b59ad",
+  "observed_recoveries": [
+    {
+      "at": "2026-09-11T07:09:00.500Z",
+      "context": "trainer battle",
+      "specific_cause": "unconfirmed"
+    },
+    {
+      "at": "2026-09-11T07:25:08.933Z",
+      "context": "unidentified wild ghost"
+    },
+    {
+      "at": "2026-09-11T07:40:09.533Z",
+      "context": "unidentified wild ghost"
+    },
+    {
+      "at": "2026-09-11T07:55:10.033Z",
+      "context": "unidentified wild ghost"
+    }
+  ],
+  "guard": "900-second battle timeout",
+  "baseline_replay": {
+    "frames": 1818,
+    "escaped": false
+  },
+  "fixed_replay": {
+    "frames": 174,
+    "escaped": true,
+    "party_hp_unchanged": true,
+    "inventory_unchanged": true
+  },
+  "python_tests_passed": 214,
+  "new_regression_cases": 10,
+  "source_rule": {
+    "repository": "https://github.com/pret/pokered",
+    "revision": "a1a22aaf84d1675bcdbaeb194592379d586d838e",
+    "path": "engine/battle/core.asm",
+    "routine": "IsGhostBattle"
+  },
+  "limitations": [
+    "Bounded replay from a copied checkpoint, not a fresh campaign or endurance pass.",
+    "The trainer-battle timeout cause remains unconfirmed.",
+    "The ongoing rc3 soak was not modified and does not validate the correction.",
+    "Raw checkpoints, logs, and game data remain private."
+  ]
+}

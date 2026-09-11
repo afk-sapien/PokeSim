@@ -1,5 +1,11 @@
 Experimental beta validation
 
+Version 0.2.0rc6 fixes repeated attempts to fight unidentified wild ghosts in Pokémon Tower before obtaining the Silph Scope. The battle policy follows the original game condition for unidentified ghosts and chooses escape. Trainer battles, identified ghosts, and encounters outside the Tower keep normal battle decisions. All 214 Python tests passed, including ten new regression cases.
+
+The ongoing rc3 soak first recorded automatic checkpoint recoveries at 07:09, 07:25, 07:40, and 07:55 UTC on September 11 after the 900-second battle timeout. Service health and monitoring continuity remained intact. The first recovery was in a trainer battle and its specific cause has not been established. Later repeated recoveries occurred in an unidentified wild ghost encounter on Pokémon Tower 3F. A copied checkpoint remained in battle after 1,818 frames with the old policy. The corrected policy escaped in 174 frames with unchanged party HP and inventory. The [recovery report](docs/validation/ghost-recovery-0.2.0rc6.json) records this bounded check.
+
+The rc3 soak continues on its original image. It has automatic gameplay recoveries and cannot establish uninterrupted gameplay. It does not validate rc6, rc5, or the rc4 polling viewer. No completed 48-hour pass is claimed for rc6.
+
 Version 0.2.0rc5 fixes repeated switching between a full evolution source box and a box with free space. The capacity rule now permits withdrawal when the party has a free slot and the requested partner is in the active box. In an isolated replay of a private checkpoint with a seeded Metapod evolution objective, the previous policy switched boxes 41 times over 12,024 frames without withdrawing. The fixed policy withdrew Metapod after 468 frames without switching boxes. All 204 Python tests pass, including four new regressions covering withdrawal, full-party capacity handling, missing partners, and exiting the box selector. The save format is unchanged.
 
 The existing rc3 endurance run continues unchanged. It does not validate the rc5 policy fix or the rc4 browser polling behavior. No 48-hour pass is claimed for rc5.
