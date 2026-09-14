@@ -1,3 +1,9 @@
+0.2.0rc11, respect obstacles on remembered routes
+
+- Apply current solid-object positions to remembered navigation steps as well as newly planned steps.
+- Stop walking through a remembered Victory Road route when a boulder has returned to the path.
+- Allow the route again when the object moves away or is confirmed hidden.
+
 0.2.0rc10, verify training after PC transfers
 
 - Accept training progress in battle or after returning to the overworld, avoiding temporary level values during PC withdrawals.

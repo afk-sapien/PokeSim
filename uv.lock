@@ -441,7 +441,7 @@ wheels = [
 
 [[package]]
 name = "pokesim"
-version = "0.2.0rc10"
+version = "0.2.0rc11"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
