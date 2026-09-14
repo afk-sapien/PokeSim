@@ -1,0 +1,96 @@
+{
+  "edition": "red",
+  "label": "monitor-baseline",
+  "frames": 72006,
+  "wall_seconds": 38.97534517594613,
+  "initial_owned": 111,
+  "final_owned": 111,
+  "new_owned": [],
+  "initial_party": [
+    [
+      "Muk",
+      100,
+      1000000
+    ],
+    [
+      "Dragonite",
+      55,
+      213209
+    ],
+    [
+      "Rapidash",
+      80,
+      523596
+    ],
+    [
+      "Zapdos",
+      88,
+      867881
+    ],
+    [
+      "Venusaur",
+      100,
+      1059860
+    ],
+    [
+      "Lapras",
+      31,
+      39015
+    ]
+  ],
+  "final_party": [
+    [
+      "Muk",
+      100,
+      1000000
+    ],
+    [
+      "Dragonite",
+      55,
+      213209
+    ],
+    [
+      "Rapidash",
+      80,
+      523596
+    ],
+    [
+      "Zapdos",
+      88,
+      867881
+    ],
+    [
+      "Venusaur",
+      100,
+      1059860
+    ],
+    [
+      "Lapras",
+      31,
+      39015
+    ]
+  ],
+  "modes": {
+    "waiting for map transition": 60,
+    "following objective": 11920,
+    "dialogue": 41250,
+    "battle: run": 3240,
+    "exploring obstacle": 13760,
+    "overworld": 312,
+    "finding another approach": 1464
+  },
+  "history": [
+    "Will revisit: Ditto",
+    "Will revisit: Trainer",
+    "Will revisit: Moltres",
+    "Will revisit: Trainer",
+    "Will revisit: Trainer",
+    "Changed plan: Moltres. No encounter, training gain, or new route in two minutes"
+  ],
+  "recoveries": 8,
+  "checkpoint_sha256": "89a49c3dd0a063d28524996074ff73abc09971b995afb48787df3db9802998d3",
+  "final_goal": "Make room in storage",
+  "source_revision": "490f8e3",
+  "runtime_revision": "addfb736bd14818ac8a32357aac09ce24d7c382f",
+  "interpretation": "The copied live checkpoint made no party experience or Pok\u00e9dex progress in 72006 frames. Rewinds were disabled."
+}

@@ -210,3 +210,25 @@ are not part of the new pickup behavior.
 The user has authorized ongoing improvements and monitoring. A 30-minute task heartbeat
 compares health and actual project progress, investigates recurring failures on copied
 saves, and deploys validated fixes with backups. See [the operating plan](operations-monitor.md).
+
+
+## First monitoring followup
+
+Blue gained two live Pokédex entries after rc8 without save reloads. Red remained in
+Victory Road with exhausted attacking PP. A copied current save reproduced no party
+experience or dex progress over 72006 frames. Remembered navigation steps were crossing
+switch gates that had reset on reentry. The rc9 fix rejects those stale routes and uses
+the upper ladder when the lower boulder is inaccessible.
+
+The revised 432028-frame Red replay gained four levels, won two trainer battles, and
+collected TM Explosion. Its dex remained at 111 and it used 25 local policy recoveries.
+The Blue regression replay gained experience and won a trainer battle, with 13 local
+policy recoveries in 144020 frames. Neither replay enables save rewinds. See the
+[Red](validation/red-progress-0.2.0rc9.json) and
+[Blue](validation/blue-progress-0.2.0rc9.json) evidence.
+
+Next, check that the live Red run heals and resumes progress. Continue improving
+collection efficiency and audit training identity when multiple partners share a
+species. One replay credited a level-43 training project with a level-100 duplicate's
+completion. Journal level events remain separate evidence. Do not treat those director
+training totals as verified individual progress until the identity issue is corrected.
