@@ -15,6 +15,7 @@ POLICY = _env("POLICY", "strategic")
 FAST_TEXT = _env("FAST_TEXT", "1") == "1"                  # force text speed FAST via wOptions
 BATTLE_ANIMATIONS = _env("BATTLE_ANIMATIONS", "1") == "1"  # 0 = turn battle animations off (faster)
 SEED = int(_env("SEED", "0")) or None
+STARTER = _env("STARTER", "random").lower()
 NTFY_URL = _env("NTFY_URL", "")              # e.g. https://ntfy.example.com/pokesim, empty = off
 NTFY_TOKEN = _env("NTFY_TOKEN", "")
 NTFY_MIN_PRIORITY = int(_env("NTFY_MIN_PRIORITY", "2"))   # 1..5: only push events at or above this priority
@@ -59,6 +60,8 @@ def validate():
         raise ValueError("SPEED must be 0 for unlimited, or between 0.1 and 16")
     if POLICY not in {"strategic", "smart_random", "guided_random"}:
         raise ValueError("POLICY must be strategic, smart_random, or guided_random")
+    if STARTER not in {"random", "bulbasaur", "charmander", "squirtle"}:
+        raise ValueError("STARTER must be random, bulbasaur, charmander, or squirtle")
     for name in ("FAST_TEXT", "BATTLE_ANIMATIONS", "VIEWER_ONLY"):
         if _env(name, "0") not in {"0", "1"}:
             raise ValueError(f"{name} must be 0 or 1")

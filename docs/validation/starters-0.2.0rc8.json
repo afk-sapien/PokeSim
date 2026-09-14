@@ -1,0 +1,201 @@
+{
+  "candidate": "0.2.0rc8",
+  "edition": "red",
+  "pace": "thorough",
+  "scope": "Seed 1 opening and first gym validation. Not a full campaign or live endurance test.",
+  "reproduce": "STARTER=bulbasaur python -m pokesim.benchmark --rom roms/pokered.gb --policies strategic --seeds 1 --frames 864000 --target boulder --output data/bulbasaur-brock.json",
+  "notes": [
+    "Repeat with STARTER=charmander or STARTER=squirtle. Those runs used a 432000 frame budget.",
+    "The initial Bulbasaur run exhausted 432000 frames before Brock. A fresh replay with an 864000 frame budget reached the badge after 580238 frames.",
+    "All three final runs reached the badge without save reloads. In-game blackouts occurred and are recorded."
+  ],
+  "runs": [
+    {
+      "starter": "bulbasaur",
+      "seed": 1,
+      "frames": 432000,
+      "frame_budget": 432000,
+      "target": "boulder",
+      "success": false,
+      "milestones": {
+        "starter": 8204,
+        "parcel": 20644,
+        "pokedex": 36482
+      },
+      "blackouts": 1,
+      "recovery_reloads": 0,
+      "policy_recoveries": 18,
+      "rom_sha1": "ea9bcae617fdf159b045185467ae58b2e4a48b9a",
+      "pyboy": "2.7.0",
+      "policy_fingerprint": "bbd4b1e6b22ebbe15dd5451fc692795ac377197b83c20598df656e2a32cfe77f",
+      "final_party": [
+        {
+          "name": "Kakuna",
+          "level": 8,
+          "dex": 14
+        },
+        {
+          "name": "Rattata",
+          "level": 11,
+          "dex": 19
+        },
+        {
+          "name": "Bulbasaur",
+          "level": 12,
+          "dex": 1
+        },
+        {
+          "name": "Pidgey",
+          "level": 13,
+          "dex": 16
+        }
+      ]
+    },
+    {
+      "starter": "bulbasaur",
+      "seed": 1,
+      "frames": 580238,
+      "frame_budget": 864000,
+      "target": "boulder",
+      "success": true,
+      "milestones": {
+        "starter": 8204,
+        "parcel": 20644,
+        "pokedex": 36482,
+        "boulder": 580222
+      },
+      "blackouts": 1,
+      "recovery_reloads": 0,
+      "policy_recoveries": 29,
+      "rom_sha1": "ea9bcae617fdf159b045185467ae58b2e4a48b9a",
+      "pyboy": "2.7.0",
+      "policy_fingerprint": "bbd4b1e6b22ebbe15dd5451fc692795ac377197b83c20598df656e2a32cfe77f",
+      "final_party": [
+        {
+          "name": "Bulbasaur",
+          "level": 15,
+          "dex": 1
+        },
+        {
+          "name": "Rattata",
+          "level": 12,
+          "dex": 19
+        },
+        {
+          "name": "Beedrill",
+          "level": 11,
+          "dex": 15
+        },
+        {
+          "name": "Pidgey",
+          "level": 15,
+          "dex": 16
+        },
+        {
+          "name": "Pikachu",
+          "level": 3,
+          "dex": 25
+        }
+      ]
+    },
+    {
+      "starter": "charmander",
+      "seed": 1,
+      "frames": 411396,
+      "frame_budget": 432000,
+      "target": "boulder",
+      "success": true,
+      "milestones": {
+        "starter": 8042,
+        "parcel": 18490,
+        "pokedex": 25548,
+        "boulder": 411380
+      },
+      "blackouts": 1,
+      "recovery_reloads": 0,
+      "policy_recoveries": 18,
+      "rom_sha1": "ea9bcae617fdf159b045185467ae58b2e4a48b9a",
+      "pyboy": "2.7.0",
+      "policy_fingerprint": "bbd4b1e6b22ebbe15dd5451fc692795ac377197b83c20598df656e2a32cfe77f",
+      "final_party": [
+        {
+          "name": "Charmeleon",
+          "level": 16,
+          "dex": 5
+        },
+        {
+          "name": "Pidgey",
+          "level": 11,
+          "dex": 16
+        },
+        {
+          "name": "Rattata",
+          "level": 10,
+          "dex": 19
+        },
+        {
+          "name": "Metapod",
+          "level": 5,
+          "dex": 11
+        },
+        {
+          "name": "Kakuna",
+          "level": 8,
+          "dex": 14
+        }
+      ]
+    },
+    {
+      "starter": "squirtle",
+      "seed": 1,
+      "frames": 291724,
+      "frame_budget": 432000,
+      "target": "boulder",
+      "success": true,
+      "milestones": {
+        "starter": 8198,
+        "parcel": 20030,
+        "pokedex": 25546,
+        "boulder": 291708
+      },
+      "blackouts": 2,
+      "recovery_reloads": 0,
+      "policy_recoveries": 13,
+      "rom_sha1": "ea9bcae617fdf159b045185467ae58b2e4a48b9a",
+      "pyboy": "2.7.0",
+      "policy_fingerprint": "bbd4b1e6b22ebbe15dd5451fc692795ac377197b83c20598df656e2a32cfe77f",
+      "final_party": [
+        {
+          "name": "Squirtle",
+          "level": 15,
+          "dex": 7
+        },
+        {
+          "name": "Rattata",
+          "level": 6,
+          "dex": 19
+        },
+        {
+          "name": "Weedle",
+          "level": 6,
+          "dex": 13
+        },
+        {
+          "name": "Pidgey",
+          "level": 9,
+          "dex": 16
+        },
+        {
+          "name": "Pikachu",
+          "level": 3,
+          "dex": 25
+        },
+        {
+          "name": "Kakuna",
+          "level": 7,
+          "dex": 14
+        }
+      ]
+    }
+  ]
+}

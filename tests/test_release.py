@@ -197,7 +197,8 @@ def test_paused_worker_is_healthy_but_stalled_worker_is_not():
 
 
 @pytest.mark.parametrize('name,value', [('SPEED', float('nan')), ('STREAM_FPS', 0),
-                                      ('KEEP_AUTOSAVES', 0), ('PORT', 70000), ('POLICY', 'missing')])
+                                      ('KEEP_AUTOSAVES', 0), ('PORT', 70000), ('POLICY', 'missing'),
+                                      ('STARTER', 'pikachu')])
 def test_invalid_configuration_is_actionable(monkeypatch, name, value):
     monkeypatch.setattr(config, name, value)
     with pytest.raises(ValueError, match=name):

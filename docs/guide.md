@@ -33,7 +33,8 @@ Follow the current [installation instructions](../README.md) and [operations gui
 | `POLICY` | `strategic` | objective-driven play with verified menu actions, navigation, battle estimates, and resource management. `smart_random` and `guided_random` remain available as baselines |
 | `FAST_TEXT` | `1` | force the in-game text speed to FAST |
 | `BATTLE_ANIMATIONS` | `1` | `0` turns battle animations off (faster) |
-| `SEED` | random | RNG seed for the policy and random names |
+| `SEED` | random | RNG seed for the policy, starter choice, and random names |
+| `STARTER` | `random` | new strategic adventures choose among all three starters. Set `bulbasaur`, `charmander`, or `squirtle` for a fixed choice. Saved adventures retain their choice |
 | `NTFY_URL` / `NTFY_TOKEN` | off | push notable events (with screenshot) to an ntfy topic |
 | `NTFY_MIN_PRIORITY` | `2` | only push events at or above this priority (1–5, see below) |
 | `NTFY_MUTE` | | comma-separated event types never pushed, e.g. `map,blackout` |
@@ -106,6 +107,12 @@ nicknames fit the ten-character limit. Choices avoid repeats until their pool ru
 `SEED` makes the name sequence repeatable, and naming state is included in policy saves.
 Existing names are kept when resuming a game. Player and rival names are chosen on a new run.
 
+New strategic adventures also choose a random starter. The choice is saved before the
+Pokémon is received, so restoring a checkpoint does not reroll it. `STARTER` selects a
+fixed partner when desired. Checkpoints from older releases retain the previous
+Bulbasaur choice, with the actual starter family recognized when the party is observed.
+Changing this setting does not replace Pokémon in an existing save.
+
 The planner follows story flags for the starter, Oak’s parcel, and the Pokédex. It then
 prepares for each gym and follows prerequisites through all eight badges and the League.
 This includes Mt. Moon, Bill, the S.S. Anne, the Rocket hideout, Pokémon Tower,
@@ -123,6 +130,25 @@ the Hall of Fame. See [playtests](../RELEASE_STATUS.md) for the fixes and valida
 The policy also stops for occasional conversations and signs, with cooldowns and memory
 to prevent repeatedly talking to the same person. Puzzle planners handle mansion switches
 and Victory Road boulders. Live NPC positions and story changes update navigation.
+
+After the Champion, a persistent adventure director alternates collection, evolution,
+training, and exploration projects. Category selection favors collection and evolution,
+but avoids three consecutive projects of one category when alternatives are available.
+Urgent supply projects can take priority. Failures wait progressively longer before a
+retry, from about 17 simulated minutes to about 133 simulated minutes. Active deadlines,
+recent choices, and a bounded record of outcomes survive restarts.
+
+Training projects bring a unique partner out of storage when needed, give it the lead,
+and work toward its next ten-level milestone, up to level 100. Missing level evolutions
+take priority over general training for that partner. Training measures that partner's
+experience and levels, so unrelated battles and supply changes cannot hide a stalled
+project. A productive session can end before its target and rotate to another project.
+The current implementation does not train stat experience explicitly or search for
+better DVs. Trade requests will join the planner after coordinated live trading is ready.
+
+The collection status in `/api/state` includes `director` outcomes with completion or
+deferral reasons, retry times in simulated frames, and training gains. These records
+describe bounded projects, not a guarantee of Pokédex completion or indefinite progress.
 
 Navigation combines map geometry with observed movement. Learned edges store the actual
 button and destination, including doors, map connections, and ledges. Reverse movement is

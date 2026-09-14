@@ -1,4 +1,10 @@
-Unreleased, approved trade preparation
+0.2.0rc8 candidate, persistent postgame projects and varied starters
+
+- Choose a seeded random starter for new adventures, with a persisted choice and a fixed `STARTER` setting.
+- Rotate postgame collection, evolution, training, and exploration projects using persistent recent choices and outcomes.
+- Train party and stored partners toward level milestones, with progress measured for the selected partner.
+- Increase retry delays for repeated failures and bound the retained planning history.
+- Keep old checkpoint compatibility and retain existing Pokémon when configuration changes.
 
 - Register the received Pokémon and any trade evolution in the recipient's Pokédex when staging a save-based exchange. Verified on copied Red and Blue saves. Live trading remains disabled.
 
