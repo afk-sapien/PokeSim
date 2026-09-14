@@ -227,8 +227,25 @@ policy recoveries in 144020 frames. Neither replay enables save rewinds. See the
 [Red](validation/red-progress-0.2.0rc9.json) and
 [Blue](validation/blue-progress-0.2.0rc9.json) evidence.
 
-Next, check that the live Red run heals and resumes progress. Continue improving
-collection efficiency and audit training identity when multiple partners share a
-species. One replay credited a level-43 training project with a level-100 duplicate's
-completion. Journal level events remain separate evidence. Do not treat those director
-training totals as verified individual progress until the identity issue is corrected.
+The following heartbeat confirmed live Red had resumed gaining levels. Both games
+remained healthy with zero observed save reloads. Continue improving collection efficiency.
+
+## Training verification followup
+
+The suspected duplicate-species training error was traced to a transient PC withdrawal
+snapshot. The game briefly copied Graveler into a party slot while retaining that slot's
+previous level 100. Its actual level was 43. Release rc10 accepts training progress during
+battle or after returning to the overworld, so PC and party menu transitions cannot
+complete a project. Missing party entries also no longer reset the training idle timer.
+
+The reproduced withdrawal previously completed the level-50 project after 1662 frames.
+With the fix, the 72002-frame replay kept the project active, gained 8088 experience, and
+recorded the real level 44. A 144012-frame replay of Blue's current save also gained levels.
+All 383 tests passed. See [the transfer evidence](validation/training-transfer-0.2.0rc10.json).
+Historical director totals may contain incorrect completions and remain preserved.
+
+Next, monitor sustained live training and meaningful collection progress. New catches
+remain slow, especially on Red. Prioritize a copied-save investigation of repeated
+Moltres and Ditto objectives if those projects still fail to reach useful encounters.
+Avoid maintenance restarts when there is no verified material fix to deploy. Multi-day
+endurance and coordinated trading remain open.

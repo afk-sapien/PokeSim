@@ -11,10 +11,10 @@ The old https://pokesim.tynet.app address remains a Red alias. Each game retains
 ROM, saves, party, boxes, journal, and notification configuration. Red runs at speed 1,
 and Blue retains its existing unlimited speed setting.
 
-Both adventures run `pokesim:0.2.0rc9-8ca0271`, built from
-commit `8ca0271dd4f76d8fb74574efaa464b4bbf90ac43`. The image ID is
-`sha256:9f8b30140b478642f33d31eb02f3fca3d25cb870b479239125a9e187db0cde0b`.
-The exact source archive is unpacked at `/docker/pokesim/releases/0.2.0rc9-8ca0271`.
+Both adventures run `pokesim:0.2.0rc10-6a23720`, built from
+commit `6a23720ec5f6eb97fd581c0721cb51c5f64a1c44`. The image ID is
+`sha256:7fa97293dcd55397926c9f636f2ae0254dd5607e9f96ffef38e7a5a4c0758b79`.
+The exact source archive is unpacked at `/docker/pokesim/releases/0.2.0rc10-6a23720`.
 PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
 
 The release includes persistent playtime, the four-page interface, stall recovery,
@@ -43,6 +43,15 @@ for new log files. A root-owned log file can pass a root configuration check but
 the running service from reloading.
 
 ## Backups and rollback
+
+The rc10 deployment retains fresh cold backups:
+
+- Red: `/docker/pokesim/backups/20260914T211056Z-rc10/before.tar`
+- Blue: `/docker/pokesim-blue/backups/20260914T211200Z-rc10/before.tar`
+- Previous image: `pokesim:0.2.0rc9-8ca0271`.
+
+Both latest saves loaded successfully before startup. See the
+[rc10 deployment receipt](validation/release-0.2.0rc10.json).
 
 The rc9 deployment retains fresh cold backups:
 

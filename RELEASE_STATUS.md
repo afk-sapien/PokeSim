@@ -1,4 +1,38 @@
-# Current deployment: 0.2.0rc9
+# Current deployment: 0.2.0rc10
+
+Red and Blue run `pokesim:0.2.0rc10-6a23720`, built from tagged commit
+`6a23720ec5f6eb97fd581c0721cb51c5f64a1c44`. Each adventure has a fresh cold backup,
+and each latest autosave loaded successfully in the new image before startup. Both
+services are healthy. All 12 public endpoint checks passed. See the
+[deployment receipt](docs/validation/release-0.2.0rc10.json).
+
+The rc9 monitoring interval confirmed live level gains in both games with zero observed
+save reloads. Red also picked up Max Revive before this deployment. Memory stayed near
+112 MB per process. These observations do not establish multi-day endurance.
+
+Release rc10 fixes false training completion during PC withdrawal. The game briefly
+combines the new partner's species and experience with the previous party slot's level.
+Training now accepts progress during battle or after returning to the overworld. Missing
+party entries also no longer reset the training idle timer.
+
+Validation:
+
+- 383 tests passed, with one optional supplied-checkpoint test skipped. The lock resolves
+  offline, both packages built, and all 61 packaged runtime files match the committed code.
+- The baseline withdrawal incorrectly completed a level-50 Graveler project at frame 1662,
+  when the party slot briefly displayed level 100 with only 71833 experience.
+- With the fix, a 72002-frame replay kept that project active, gained 8088 experience,
+  and recorded the actual level 44. Blue's current-save replay also gained levels over
+  144012 frames. Both copied dex counts remained unchanged.
+- Replays disable rewinds and do not validate the live save-recovery guard. Red used seven
+  local policy recoveries and Blue used nine. Collection efficiency remains open.
+- The earlier duplicate-species hypothesis was incorrect. Historical director outcomes
+  remain preserved and may include inflated pre-rc10 training completions.
+
+See [the transfer regression evidence](docs/validation/training-transfer-0.2.0rc10.json)
+and [the monitoring plan](docs/operations-monitor.md).
+
+# Previous deployment: 0.2.0rc9
 
 Red and Blue run `pokesim:0.2.0rc9-8ca0271`, built from tagged commit
 `8ca0271dd4f76d8fb74574efaa464b4bbf90ac43`. Fresh cold backups retain both adventures.

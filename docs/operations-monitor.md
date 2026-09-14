@@ -47,6 +47,19 @@ through reset Victory Road gates. Its backups and startup checks are recorded in
 but Red stalled. Do not classify that interval as successful gameplay endurance.
 
 Next checks should confirm that live Red reaches healing and gains experience or journal
-milestones. Also audit the director's training identity for duplicate species. A copied
-replay credited an existing level-100 Graveler to a level-43 Graveler's project. Use
-journal level events and the selected individual until that accounting is corrected.
+milestones. The training-counter concern was subsequently traced to PC transfer timing, as described below.
+
+
+The second heartbeat confirmed live Red had resumed gaining levels. Red and Blue both
+had zero observed save reloads during the rc9 interval, and memory remained near 112 MB.
+Release rc10 fixes training completion during partial PC transfers. The duplicate-species
+hypothesis in earlier notes was incorrect. During withdrawal, a level-43 Graveler briefly
+had level 100 in RAM with its own experience before the game recalculated the party slot.
+The corrected replay records 8088 XP and one real level gained, without false completion.
+See `docs/validation/training-transfer-0.2.0rc10.json` and the rc10 deployment receipt.
+
+Preserve historical outcomes, but treat pre-rc10 director totals as potentially inflated.
+Next, compare actual partner XP and new journal milestones across samples. Investigate
+repeated Moltres and Ditto objectives if Red continues gaining levels without useful
+collecting encounters. Avoid restarts without a verified material fix, so the endurance
+record can grow. The first specific live trade remains unapproved and unexecuted.

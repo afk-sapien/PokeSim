@@ -1,0 +1,126 @@
+{
+  "revision": "6a23720ec5f6eb97fd581c0721cb51c5f64a1c44",
+  "image": "pokesim:0.2.0rc10-6a23720",
+  "receipts": {
+    "red": {
+      "edition": "red",
+      "backup": "/docker/pokesim/backups/20260914T211056Z-rc10/before.tar",
+      "image": "pokesim:0.2.0rc10-6a23720",
+      "image_id": "sha256:7fa97293dcd55397926c9f636f2ae0254dd5607e9f96ffef38e7a5a4c0758b79",
+      "revision": "6a23720ec5f6eb97fd581c0721cb51c5f64a1c44",
+      "timestamp": 1789420271.1676402,
+      "previous_image": "pokesim:0.2.0rc9-8ca0271",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.1,
+        "error": null
+      },
+      "owned": 111,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 7765,
+          "title": "Picked up Max Revive",
+          "ts": 1789420219.8182833,
+          "age_seconds": 51
+        }
+      }
+    },
+    "blue": {
+      "edition": "blue",
+      "backup": "/docker/pokesim-blue/backups/20260914T211200Z-rc10/before.tar",
+      "image": "pokesim:0.2.0rc10-6a23720",
+      "image_id": "sha256:7fa97293dcd55397926c9f636f2ae0254dd5607e9f96ffef38e7a5a4c0758b79",
+      "revision": "6a23720ec5f6eb97fd581c0721cb51c5f64a1c44",
+      "timestamp": 1789420326.8311872,
+      "previous_image": "pokesim:0.2.0rc9-8ca0271",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 115,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 2586,
+          "title": "Entered Safari Zone Center Rest House",
+          "ts": 1789420281.5597496,
+          "age_seconds": 45
+        }
+      }
+    }
+  },
+  "public_checks": [
+    {
+      "edition": "red",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/sprites/25.png",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/sprites/25.png",
+      "status": 200
+    }
+  ],
+  "validation": {
+    "pytest_passed": 383,
+    "pytest_skipped": 1,
+    "package_runtime_files_verified": 61
+  },
+  "endurance": "These maintenance restarts begin new endurance intervals. No multi-day pass is claimed."
+}
