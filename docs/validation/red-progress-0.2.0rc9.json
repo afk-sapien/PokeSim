@@ -489,5 +489,6 @@
     "Rewinds are disabled in this replay, so this does not validate the live recovery guard.",
     "Local policy recoveries are not save reloads.",
     "Director training totals require further validation when multiple partners share a species."
-  ]
+  ],
+  "followup": "The training counter concern was traced to a partial PC withdrawal snapshot, not a stronger duplicate. Fixed in rc10. Historical metrics are preserved."
 }
