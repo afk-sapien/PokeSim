@@ -73,6 +73,8 @@ def run(rom, checkpoint, frames):
                 'final_party': [(mon.name, mon.level, mon.experience) for mon in final.party],
                 'achievements': achievements, 'mode_frames': counts,
                 'history': policy.collection.history,
+                'director': policy.collection.director.state_dict(),
+                'active_project': policy.collection.project,
                 'policy_recoveries': policy.recoveries - metadata['policy_state'].get('recoveries', 0),
                 'checkpoint_sha256': hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
                 'policy_fingerprint': fingerprint, 'pyboy': version('pyboy'),

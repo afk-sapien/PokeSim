@@ -7,13 +7,14 @@ from .battle import (BALLS, CURES, HEALING, W_BATTLE_MON, W_ENEMY_MON, Decision,
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, boulder_task
-from .progression import Goal, healing_goal, journey, league_partner, milestones, story_goal
+from .progression import STARTERS, Goal, healing_goal, journey, league_partner, milestones, story_goal
 from .collection import CENTERS, Collection, LEAGUE
 from .awareness import ActionWatch
 from .team import development_candidate, potential, readiness, release_target, reserve_to_deposit, storage_headroom
 from ..screen import Screen, W_PLAYER_MON_NUMBER
 from ..ram import W_TILEMAP
 from ..strategy_data import DATA, ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
+from .. import config
 
 RELEASE_BUFFER = 5      # free storage slots kept available, so catching never stalls
 
@@ -57,7 +58,7 @@ def wait():
 class StrategicPolicy(Policy):
     name = "strategic"
 
-    def __init__(self, seed=None):
+    def __init__(self, seed=None, starter=None):
         self.seed = seed
         self.rng = random.Random(seed)
         self.naming = NamingController(seed)
@@ -74,6 +75,12 @@ class StrategicPolicy(Policy):
         self.interaction_count = 0
         self.collection = Collection()
         self.personality = self.rng.choice(('Sociable', 'Collector', 'Explorer'))
+        self.starter_setting = starter if starter is not None else config.STARTER
+        if self.starter_setting not in (*STARTERS, 'random'):
+            raise ValueError('Unknown starter choice')
+        # A separate draw preserves the existing naming and navigation sequences.
+        self.starter = random.Random(seed).choice(STARTERS) if self.starter_setting == 'random' else self.starter_setting
+        self.starter_confirmed = False
         self.history = []
         self.failures = {}
         self.readiness = {}
@@ -82,7 +89,7 @@ class StrategicPolicy(Policy):
         self.on_restore()
 
     def reset(self):
-        self.__init__(self.seed)
+        self.__init__(self.seed, self.starter_setting)
 
     def on_restore(self):
         self.collection.last_frame = None
@@ -146,6 +153,7 @@ class StrategicPolicy(Policy):
                 "exploration": self.exploration, "journey": self.journey,
                 "interactions": self.interaction_count,
                 "personality": self.personality, "next": self.next_goal,
+                "starter": self.starter, "starter_confirmed": self.starter_confirmed,
                 "readiness": self.readiness, "history": self.history[-8:],
                 "expectation": self.watch.expected['label'] if self.watch.expected else None,
                 "map": self.map_view,
@@ -156,7 +164,8 @@ class StrategicPolicy(Policy):
                 "recoveries": self.recoveries, "decisions": self.decisions,
                 "exploration": self.exploration, "naming": self.naming.state_dict(),
                 "interactions": list(self.interactions), "interaction_count": self.interaction_count,
-                "personality": self.personality, "history": self.history[-8:], "failures": self.failures}
+                "personality": self.personality, "history": self.history[-8:], "failures": self.failures,
+                "starter": self.starter, "starter_confirmed": self.starter_confirmed}
 
     def load_state_dict(self, data):
         if data.get("version") != 1:
@@ -167,6 +176,11 @@ class StrategicPolicy(Policy):
         self.interactions = {key: True for key in data.get("interactions", [])}
         self.interaction_count = data.get("interaction_count", len(self.interactions))
         self.personality = data.get('personality', self.personality)
+        # Earlier policies always chose Bulbasaur. Do not reroll an old lab checkpoint.
+        self.starter = data.get('starter', 'bulbasaur')
+        if self.starter not in STARTERS:
+            self.starter = 'bulbasaur'
+        self.starter_confirmed = bool(data.get('starter_confirmed', False))
         self.history = data.get('history', [])[-8:]
         self.failures = dict(list(data.get('failures', {}).items())[-128:])
         def tuples(value):
@@ -231,10 +245,15 @@ class StrategicPolicy(Policy):
         self.nav.update_story(s)
         if not s.in_battle and kind == "overworld":
             self.nav.update_live(s, mem)
-        self.goal = story_goal(s) if s.started else self.goal
+        if s.party and not self.starter_confirmed:
+            families = {STARTERS[(d - 1) // 3] for d in s.owned if 1 <= d <= 9}
+            if len(families) == 1:
+                self.starter = families.pop()
+            self.starter_confirmed = True
+        self.goal = story_goal(s, self.starter) if s.started else self.goal
         if self.collection.completed_champion and s.map not in LEAGUE:
-            self.goal = Goal('collect_plan', 'Plan the next Pokédex expedition',
-                             'Choose another collecting objective after a short planning interval')
+            self.goal = Goal('collect_plan', 'Plan the next adventure project',
+                             'Choose a collecting, evolution, training, or exploration objective')
         if self.collection.project and s.map not in LEAGUE:
             self.goal = self.collection.goal(s) or self.goal
         if self.storage_species:
@@ -743,11 +762,11 @@ class StrategicPolicy(Policy):
             if target is not None:
                 return self._use_item(s,ITEMS[project['evolution']['requirement']],target) or tap('b')
         if goal.key == 'collect_train' and project:
-            target = next((i for i,p in enumerate(s.party) if p.species==project['parent']),None)
+            target = self.collection.trainee(s, project)
             if target and s.party[target].hp:
                 self.order_species = s.party[target].species
                 self.order_stage = 'source'
-                self.intent = Decision('reorder',target,reason='Train a partner toward its next evolution')
+                self.intent = Decision('reorder',target,reason='Train a partner toward its next milestone')
                 self.intent_since = s.frame
                 return tap('start')
         if goal.key == 'collect_hunt' and project and pos in goal.targets:
@@ -963,7 +982,7 @@ class StrategicPolicy(Policy):
 
     def _release_target(self, snapshot):
         project = self.collection.project or {}
-        protected = {project['parent']} if project.get('method') == 'evolve' and project.get('parent') else set()
+        protected = set(project.get('family', [project['parent']])) if project.get('method') in ('evolve', 'train') and project.get('parent') else set()
         return release_target(snapshot, protected)
 
     def _pc_target(self, snapshot):

@@ -1,4 +1,34 @@
-# Current release work: 0.2.0rc7
+# Current development: 0.2.0rc8 candidate
+
+The next candidate adds persisted starter selection, postgame project rotation,
+training toward level milestones, and increasing retry delays for repeated failures.
+It includes the previously committed trade registration correction. Automatic trading
+and planner integration with external trade requests remain future work.
+
+The deployed Red and Blue services remain on `v0.2.0rc7`. This candidate has been
+validated on local copies and new adventures. See [the roadmap](docs/roadmap.md) for
+the larger progression plan. Multi-day live endurance remains outstanding.
+
+Candidate validation:
+
+- 368 Python tests passed, with one optional supplied-checkpoint test skipped.
+- The locked dependencies resolve offline. The rc8 source archive and wheel build and
+  pass the package resource and private-artifact checks. Existing rc7 artifacts are retained.
+- Two simulated hours on a copied Red checkpoint produced a Moltres catch, growing the
+  dex from 111 to 112, three trainer victories, and several level gains. The replay used
+  34 local policy recoveries. [Red evidence](docs/validation/red-progress-0.2.0rc8.json).
+- Two simulated hours on a copied Blue checkpoint produced level gains, a completed
+  League rematch, and travel to Cerulean Cave. The dex remained at 113 entries and the
+  replay used 36 local policy recoveries. [Blue evidence](docs/validation/blue-progress-0.2.0rc8.json).
+- Both copied-save replays disable rewinds, so their zero rewind counts do not validate
+  the live recovery guard. They demonstrate bounded gameplay progress only.
+- All three starters received the Pokédex in automated opening tests. Separate seed 1
+  runs with the default thorough pace earned Brock's badge with all three choices and
+  no save reloads. Bulbasaur required a longer frame budget. The runs had one, one, and
+  two blackouts for Bulbasaur, Charmander, and Squirtle respectively. These are first-gym
+  checks, not complete campaign passes. [Starter evidence](docs/validation/starters-0.2.0rc8.json).
+
+## Deployed release: 0.2.0rc7
 
 September 14, 2026. The current release consolidates the deployed four-page interface,
 Pokédex and PC views, persistent play clock, storage fixes, and the new expedition and

@@ -62,13 +62,17 @@ def milestones(snapshot):
     return out
 
 
-def story_goal(snapshot):
+STARTERS = ("bulbasaur", "charmander", "squirtle")
+
+
+def story_goal(snapshot, starter="bulbasaur"):
     flags = snapshot.event_flags
     has = lambda name: any(item == ITEMS[name] and qty for item, qty in snapshot.items)
     if not event_set(flags, "EVENT_FOLLOWED_OAK_INTO_LAB") and not snapshot.party:
         return at("meet_oak", "Meet Professor Oak", "A starter is needed before leaving town", "PALLET_TOWN", 10, 1)
     if not snapshot.party:
-        return at("starter", "Choose Bulbasaur", "Build an early team suited to the first gyms", "OAKS_LAB", 8, 4, "up")
+        return object_goal("starter", "Choose " + starter.title(),
+                           "Meet this adventure's first partner", "OAKS_LAB", starter.upper() + "_POKE_BALL")
     if not event_set(flags, "EVENT_GOT_POKEDEX"):
         if has("OAKS_PARCEL") or event_set(flags, "EVENT_GOT_OAKS_PARCEL"):
             return at("pokedex", "Deliver Oak’s parcel", "Obtain the Pokédex and open the northward route", "OAKS_LAB", 5, 3, "up")

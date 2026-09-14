@@ -5,6 +5,7 @@ import zipfile
 import tomllib
 
 required = {
+    'pokesim/policies/director.py',
     'pokesim/broker/app.py',
     'pokesim/broker/inventory.py',
     'pokesim/broker/negotiation.py',

@@ -1,6 +1,6 @@
 services:
   pokesim:
-    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc7}
+    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc8}
     restart: unless-stopped
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_PORT:-8930}:8000"
@@ -9,6 +9,8 @@ services:
       DATA_DIR: /data
       SPEED: ${SPEED:-1}
       POLICY: ${POLICY:-strategic}
+      STARTER: ${STARTER:-random}
+      SEED: ${SEED:-0}
       FAST_TEXT: ${FAST_TEXT:-1}
       BATTLE_ANIMATIONS: ${BATTLE_ANIMATIONS:-1}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8930}
@@ -45,7 +47,7 @@ services:
 
   prepare-data:
     profiles: [setup]
-    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc7}
+    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc8}
     command: [python, -m, pokesim.prepare_data, /source]
     network_mode: none
     read_only: true
