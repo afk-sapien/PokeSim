@@ -1,6 +1,6 @@
-0.2.0rc11, respect obstacles on remembered routes
+0.2.0rc11 candidate, respect obstacles on remembered routes
 
-- Apply current solid-object positions to remembered navigation steps as well as newly planned steps.
+- Apply observed solid-object positions to remembered steps on the current map. Preserve distant learned routes until fresh object positions are available.
 - Stop walking through a remembered Victory Road route when a boulder has returned to the path.
 - Allow the route again when the object moves away or is confirmed hidden.
 
