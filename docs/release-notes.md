@@ -1,11 +1,9 @@
-PokeSim 0.2.0rc6 is an experimental self-hosting beta for Linux amd64.
+PokeSim 0.2.0rc9 restores progress when remembered Victory Road routes cross reset puzzle gates. The navigator checks whether those passages are currently open and can take the upper ladder when reentry leaves the lower boulder inaccessible.
 
-Flee unidentified wild ghosts in Pokémon Tower before obtaining the Silph Scope. Previously, the policy could repeatedly attempt to fight an encounter the game does not allow it to fight. Trainer battles, identified ghosts, and battles outside the Tower keep normal decisions.
+A copied stalled Red save resumed healing and adventuring. Over 432028 frames, it gained four levels, defeated two trainers, and collected TM Explosion. Its Pokédex remained at 111. Local replanning still occurs, and multi-day endurance remains open.
 
-All 214 Python tests passed, including ten new regression cases. In an isolated replay of a copied stalled checkpoint, the old policy remained in battle after 1,818 frames. The corrected policy escaped in 174 frames without changing party HP or inventory. Save formats and service health thresholds are unchanged.
+All 380 regression tests passed, with one optional checkpoint test skipped. Both live adventures run the tagged revision with fresh cold backups and verified save compatibility. Existing Pokémon and save histories are preserved.
 
-This includes the earlier storage withdrawal and browser display fixes. Supply your own supported Pokémon Red ROM and prepare game data locally using the README. Pokémon ROMs, sprites, saves, and generated game datasets are excluded. PyBoy includes its own small demo ROM, which is not a Pokémon game.
+The release also includes rc8's persistent postgame projects, varied starters for new games, and confirmed ground-item pickups. Trading remains on the read-only proposal board pending coordinated execution and approval of the first specific exchange.
 
-This is still an early beta. The ongoing rc3 endurance run has automatic gameplay recoveries and does not establish uninterrupted gameplay. It continues on its original image and does not validate this release. One earlier trainer-battle timeout has not been explained by the ghost fix. No completed 48-hour pass is claimed for rc6. ARM, Blue, and ROM hacks are not validated release targets.
-
-See [installation instructions](https://github.com/afk-sapien/PokeSim/blob/main/README.md) and [validation results](https://github.com/afk-sapien/PokeSim/blob/main/RELEASE_STATUS.md).
+See [release status](../RELEASE_STATUS.md), [the roadmap](roadmap.md), and [deployment details](homeserver.md).

@@ -1,0 +1,324 @@
+{
+  "edition": "blue",
+  "frames": 144020,
+  "wall_seconds": 34.3,
+  "rewinds": 0,
+  "initial_owned": 112,
+  "final_owned": 112,
+  "new_owned": [],
+  "initial_party": [
+    [
+      "Graveler",
+      100,
+      1059860
+    ],
+    [
+      "Pidgeot",
+      70,
+      347568
+    ],
+    [
+      "Dragonite",
+      56,
+      225206
+    ],
+    [
+      "Haunter",
+      72,
+      377521
+    ],
+    [
+      "Snorlax",
+      78,
+      607124
+    ],
+    [
+      "Venusaur",
+      77,
+      469280
+    ]
+  ],
+  "final_party": [
+    [
+      "Graveler",
+      100,
+      1059860
+    ],
+    [
+      "Pidgeot",
+      70,
+      351847
+    ],
+    [
+      "Dragonite",
+      56,
+      225206
+    ],
+    [
+      "Haunter",
+      72,
+      377521
+    ],
+    [
+      "Snorlax",
+      78,
+      613031
+    ],
+    [
+      "Venusaur",
+      77,
+      472791
+    ]
+  ],
+  "initial_items": [
+    [
+      63,
+      1
+    ],
+    [
+      196,
+      1
+    ],
+    [
+      74,
+      1
+    ],
+    [
+      72,
+      1
+    ],
+    [
+      73,
+      1
+    ],
+    [
+      48,
+      1
+    ],
+    [
+      198,
+      1
+    ],
+    [
+      199,
+      1
+    ],
+    [
+      200,
+      1
+    ],
+    [
+      43,
+      1
+    ],
+    [
+      53,
+      5
+    ],
+    [
+      76,
+      1
+    ],
+    [
+      78,
+      1
+    ],
+    [
+      69,
+      1
+    ],
+    [
+      77,
+      1
+    ],
+    [
+      4,
+      7
+    ],
+    [
+      20,
+      2
+    ],
+    [
+      2,
+      6
+    ],
+    [
+      16,
+      3
+    ]
+  ],
+  "final_items": [
+    [
+      63,
+      1
+    ],
+    [
+      196,
+      1
+    ],
+    [
+      74,
+      1
+    ],
+    [
+      72,
+      1
+    ],
+    [
+      73,
+      1
+    ],
+    [
+      48,
+      1
+    ],
+    [
+      198,
+      1
+    ],
+    [
+      199,
+      1
+    ],
+    [
+      200,
+      1
+    ],
+    [
+      43,
+      1
+    ],
+    [
+      53,
+      5
+    ],
+    [
+      76,
+      1
+    ],
+    [
+      78,
+      1
+    ],
+    [
+      69,
+      1
+    ],
+    [
+      77,
+      1
+    ],
+    [
+      4,
+      7
+    ],
+    [
+      2,
+      6
+    ]
+  ],
+  "achievements": [
+    {
+      "frame": 29236,
+      "type": "trainer",
+      "title": "Defeated Cooltrainer M"
+    },
+    {
+      "frame": 91378,
+      "type": "faint",
+      "title": "FIZZ fainted"
+    }
+  ],
+  "mode_frames": {
+    "waiting for map transition": 3660,
+    "moving a boulder onto the switch": 12704,
+    "dialogue": 91314,
+    "battle: switch": 1584,
+    "party": 4338,
+    "party_action": 1296,
+    "battle: fight": 1116,
+    "moves": 1818,
+    "following objective": 18820,
+    "using Strength": 1008,
+    "waiting for the menu": 2352,
+    "pause": 918,
+    "overworld": 288,
+    "exploring obstacle": 1440,
+    "interacting": 272,
+    "yes_no": 90,
+    "battle": 144,
+    "battle: item": 126,
+    "list": 732
+  },
+  "history": [
+    "Completed: Trainer",
+    "Completed: Explore",
+    "Will revisit: Moltres",
+    "Will revisit: Trainer",
+    "Changed plan: Train. No encounter, training gain, or new route in two minutes",
+    "Will revisit: Moltres"
+  ],
+  "director": {
+    "recent": [
+      {
+        "category": "training",
+        "key": "train:144:30"
+      },
+      {
+        "category": "collection",
+        "key": "73:static:194:MOLTRES"
+      }
+    ],
+    "outcomes": [
+      {
+        "key": "train:144:30",
+        "category": "training",
+        "status": "deferred",
+        "reason": "No encounter, training gain, or new route in two minutes",
+        "elapsed": 57193564,
+        "retry_at": 57253564,
+        "target": 30,
+        "gains": {}
+      },
+      {
+        "key": "73:static:194:MOLTRES",
+        "category": "collection",
+        "status": "deferred",
+        "reason": "Expedition time budget reached",
+        "elapsed": 57233202,
+        "retry_at": 57293202,
+        "target": 73,
+        "gains": {}
+      }
+    ],
+    "failures": {
+      "train:144:30": 1,
+      "73:static:194:MOLTRES": 1
+    },
+    "completed": {}
+  },
+  "active_project": null,
+  "pickups": {
+    "active": null,
+    "completed": [],
+    "retry": {},
+    "next_scan": 57205836,
+    "history": [
+      "Pickup unavailable or detour budget reached: Full Heal",
+      "Pickup unavailable or detour budget reached: Max Revive"
+    ]
+  },
+  "policy_recoveries": 13,
+  "checkpoint_sha256": "d69a40c93c47e80b69461ed221a01be91f4694b1335db0a580c55b0141734d08",
+  "policy_fingerprint": "7f5e5843d65c6532b1c1408a7647cb53680f232ef6a6a72bae2c7d8286adcb65",
+  "pyboy": "2.7.0",
+  "final_goal": "Plan the next adventure project",
+  "final_map": "Victory Road 3F",
+  "source_revision": "8ca0271dd4f76d8fb74574efaa464b4bbf90ac43",
+  "limitations": [
+    "Rewinds are disabled in this replay, so this does not validate the live recovery guard.",
+    "Local policy recoveries are not save reloads.",
+    "Director training totals require further validation when multiple partners share a species."
+  ]
+}

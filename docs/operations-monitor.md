@@ -39,3 +39,14 @@ evidence before rolling back a faulty application change.
 Use `docs/homeserver.md` and the release receipts for current images and backup paths.
 Keep runtime artifacts and game data out of Git. Update the roadmap and release status
 when observations materially change what is complete or what should happen next.
+
+
+The first heartbeat deployed rc9 from `8ca0271` after reproducing Red's stale routes
+through reset Victory Road gates. Its backups and startup checks are recorded in
+`docs/validation/release-0.2.0rc9.json`. The rc8 live interval had no observed save reloads,
+but Red stalled. Do not classify that interval as successful gameplay endurance.
+
+Next checks should confirm that live Red reaches healing and gains experience or journal
+milestones. Also audit the director's training identity for duplicate species. A copied
+replay credited an existing level-100 Graveler to a level-43 Graveler's project. Use
+journal level events and the selected individual until that accounting is corrected.

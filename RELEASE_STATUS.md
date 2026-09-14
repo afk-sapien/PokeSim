@@ -1,6 +1,37 @@
-# Current deployment: 0.2.0rc8
+# Current deployment: 0.2.0rc9
 
-The next candidate adds persisted starter selection, postgame project rotation,
+Red and Blue run `pokesim:0.2.0rc9-8ca0271`, built from tagged commit
+`8ca0271dd4f76d8fb74574efaa464b4bbf90ac43`. Fresh cold backups retain both adventures.
+Each latest autosave loaded in the new image before startup. Both services are healthy,
+and all 12 public endpoint checks passed. See the
+[deployment receipt](docs/validation/release-0.2.0rc9.json).
+
+The first rc8 monitoring check found Blue progressing at 115 owned entries, with no
+save reloads. Red remained at 111 with exhausted attacking PP. Its copied checkpoint
+reproduced a route through reset Victory Road gates that the game no longer allowed.
+The fix rejects those remembered steps and takes a reachable ladder to the upper puzzle.
+
+Validation:
+
+- 380 tests passed, with one optional supplied-checkpoint test skipped. After the version
+  update, all 38 release and soak regressions passed. The lock resolves offline.
+- The source archive and wheel built successfully. All 61 packaged runtime files match
+  the committed source, and neither package includes private game artifacts.
+- Red's 432028-frame replay gained four levels, won two trainer battles, and collected
+  TM Explosion. Its dex stayed at 111. It used 25 local policy recoveries.
+- Blue's 144020-frame regression replay gained experience and won a trainer battle.
+  Its copied dex stayed at 112. It used 13 local policy recoveries.
+- These replays disable rewinds and do not validate the live save-recovery guard.
+  Collection efficiency and multi-day endurance remain open. The monitoring record also
+  identified a training identity issue involving duplicate species for followup.
+
+[Red evidence](docs/validation/red-progress-0.2.0rc9.json),
+[Blue evidence](docs/validation/blue-progress-0.2.0rc9.json), and
+[the stalled baseline](docs/validation/red-stall-baseline-0.2.0rc9.json).
+
+# Previous deployment: 0.2.0rc8
+
+The rc8 release added persisted starter selection, postgame project rotation,
 training toward level milestones, and increasing retry delays for repeated failures.
 It includes the previously committed trade registration correction. Automatic trading
 and planner integration with external trade requests remain future work.
