@@ -57,3 +57,29 @@ def test_party_disappearance_during_transfer_does_not_count_as_training_progress
     c.observe(replace(s, frame=120, party=()), training_ready=False)
     assert c.idle_frames == 120
     assert c.project['gains'] == {'experience': 0, 'levels': 0}
+
+
+def test_withdrawing_a_reserve_starts_a_fresh_idle_window_only_once():
+    c = Collection()
+    c.project = project()
+    c.remaining = 72000
+    absent = state(map=MAPS['INDIGO_PLATEAU_LOBBY'])
+    for frame in range(0, 6601, 120):
+        c.observe(replace(absent, frame=frame))
+    actual = replace(absent, frame=6720,
+                     party=(mon(species=sid(75), level=43, experience=71833),))
+    c.observe(actual, training_ready=False)
+    assert c.idle_frames == 6720
+    assert 'initial_experience' not in c.project
+    c.observe(replace(actual, frame=6840))
+    assert c.idle_frames == 120
+    assert c.remaining == 72000 - 6840
+    restored = Collection()
+    restored.load(json.loads(json.dumps(c.state_dict())))
+    restored.observe(replace(actual, frame=6840))
+    for frame in range(6960, 14041, 120):
+        snapshot = replace(actual, frame=frame, party=() if frame % 240 else actual.party)
+        restored.observe(snapshot, training_ready=bool(snapshot.party))
+    assert restored.project is None
+    assert restored.director.outcomes[-1]['status'] == 'deferred'
+    assert restored.director.outcomes[-1]['gains'] == {'experience': 0, 'levels': 0}

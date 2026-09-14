@@ -1,3 +1,8 @@
+0.2.0rc13, count reserve preparation once
+
+- Start a fresh training idle window when the selected partner first reaches a stable party snapshot.
+- Persist that milestone through reloads and keep the overall expedition deadline unchanged.
+
 0.2.0rc12, leave Seafoam through the ladders
 
 - Avoid Seafoam floor holes during routine navigation, including remembered steps that previously fell between floors.

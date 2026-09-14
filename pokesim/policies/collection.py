@@ -166,6 +166,10 @@ class Collection:
                 if trainee is not None:
                     mon = s.party[trainee]
                     project['parent'] = mon.species
+                    # Reaching the party is a one-time preparation milestone. Keep it
+                    # in the project so menu transitions and reloads cannot repeat it.
+                    if 'initial_experience' not in project:
+                        self.idle_frames = 0
                     baseline = project.setdefault('initial_experience', mon.experience)
                     gains = project.setdefault('gains', {})
                     gains['experience'] = max(gains.get('experience', 0), mon.experience - baseline)
