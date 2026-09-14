@@ -7,7 +7,7 @@ or months, alone or with several connected instances. Beating the Champion is th
 chapter. Collection, raising different teams, and useful exchanges should give each run
 longer projects with visible intermediate achievements.
 
-The deployed rc8 release adds starter variation
+Release rc8 introduced starter variation
 and the first persistent postgame director. The remaining long-term features below are
 planned. Guaranteed Pokédex completion, restart farming, and authentic link-cable
 emulation remain outside scope. Stat training and optional searches for better DVs are
@@ -122,10 +122,10 @@ swaps to meet a quota.
 
 ### Give new adventures different beginnings
 
-Replace the hard-coded Bulbasaur choice with a persisted, seeded random choice among
-Bulbasaur, Charmander, and Squirtle. Allow a fixed choice in configuration. Choose once
-per new adventure and retain it across reloads. Existing saves keep their actual starter.
-Validate the opening campaign with all three choices, including gym preparation.
+New adventures now make a persisted, seeded random choice among Bulbasaur, Charmander,
+and Squirtle, with a fixed choice available in configuration. Existing saves keep their
+actual starter. All three opening campaigns have passed through the first badge. Extend
+validation to later gyms and longer runs as the planner changes.
 
 For groups creating new runs together, optionally distribute starter choices across
 the group before repeating a choice. Variation in gifts, team preferences, and expedition
@@ -147,15 +147,21 @@ When useful goals are exhausted, report that honestly and offer low-activity mai
 or an owner-selected new adventure with the old record archived. Never silently reset
 the save or portray aimless movement as continuing progression.
 
-## Implementation order after the current release
+## Remaining implementation priorities
 
-1. Prove sustained collection progress and introduce the persistent goal director.
-2. Add random starter selection for new runs and verify all three opening campaigns.
-3. Complete the first approved live trade, then implement durable coordination and
-   owner-configured automatic exchanges with trade preparation objectives.
-4. Add reserve training, varied Hall of Fame teams, and visible stat-training milestones.
-5. Add optional quality hunting and broaden endurance and resource validation for
-   month-long operation. Storage limits and recovery work should begin before this stage.
+The persistent director, random starter selection, first-badge checks, reserve level
+training, and visible ground-item detours are implemented. Continue from that baseline:
+
+1. Prove sustained collection and training progress. Improve travel and maintenance
+   interruptions, while preserving productive live runs for endurance observation.
+2. Build and validate durable coordination for the first specifically approved live
+   trade. Then add trusted-peer automatic exchanges and trade preparation objectives.
+3. Extend reserve training with varied Hall of Fame teams and visible stat-training
+   milestones. Keep useful partial progress distinct from completed targets.
+4. Bound backup, image, journal, and checkpoint growth and validate upgrades and outages
+   over multi-day runs. This work should proceed alongside progression improvements.
+5. Add optional quality hunting after the ordinary adventure and trading paths are
+   reliable. Perfect DVs and guaranteed completion remain outside the required target.
 
 Improve encounter and NPC trade data, separate shop and PC state from the main policy,
 and consolidate reset bookkeeping as related changes require it. Existing serial-hook
@@ -293,3 +299,32 @@ The held rc11 experiment is preserved on `codex/held-navigation-candidate` and i
 from rc12. Next, watch Blue for renewed training and successful expeditions. Seafoam's
 Articuno boulder puzzle still needs explicit planning. Continue investigating collection
 budgets consumed by restocking and storage trips on Red.
+
+
+## Reserve preparation followup
+
+Release rc13 resets training idle time once when a selected partner first reaches a
+stable party snapshot. The persisted experience baseline prevents reloads and repeated
+PC transitions from repeating this milestone. The overall project deadline is unchanged.
+
+In the two-hour comparison from a fresh Red checkpoint, both versions gained six levels.
+The candidate also picked up two items and won six trainer battles, including a League
+rematch. Local recoveries fell from 38 to 33. Neither version caught a new species, and
+the initially selected Butterfree still failed to gain experience. Preparation was one
+contributor, not a complete explanation of slow collection. Blue's regression remained
+unchanged. All 387 tests passed. See
+[the comparison](validation/training-preparation-0.2.0rc13.json).
+
+Red received rc13 from `17cd997` with a cold backup and a successful current-save load.
+Blue stayed on rc12 and caught a level-25 Kangaskhan live in Safari Zone East, reaching
+116 registered entries. Both games remained healthy with zero save reloads. All 12
+public checks passed. See [the receipt](validation/release-0.2.0rc13.json).
+
+Next, preserve the live intervals while measuring actual training gains and new catches.
+Investigate repeated supply detours and arrival at chosen encounter areas if Red remains
+unproductive. The new reproduction is `data/operations/repros/red-preparation-20260914`.
+The first live trade remains unapproved and unexecuted.
+
+Filesystem use after the build and backup was 78.58 percent, with 22.71 GB free.
+No historical saves or backups were deleted. Continue watching storage growth and plan
+bounded backup and image retention before repeated releases consume the available space.

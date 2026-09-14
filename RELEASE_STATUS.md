@@ -1,13 +1,28 @@
-# Release rc13 prepared for Red
+# Current deployment: Red rc13, Blue rc12
 
-The reserve training timer now recognizes the partner first joining the party as a
-one-time preparation milestone. Reloads and repeated menu changes cannot repeat it.
-The overall expedition deadline remains bounded. All 387 tests pass, with one optional
-checkpoint test skipped. See [the copied-save comparison](docs/validation/training-preparation-0.2.0rc13.json).
+Red runs `pokesim:0.2.0rc13-17cd997` from tagged commit
+`17cd9973f3fbcfef2cfb3838f02f0d2e759b7b75`. Its current save loaded successfully
+before startup, and its party and 111 registered entries were preserved. Blue remains
+on rc12 without a restart. Both services are healthy and all 12 public checks passed.
+See [the deployment receipt](docs/validation/release-0.2.0rc13.json).
 
-The following deployment record remains current until the rc13 receipt is recorded.
+Reserve training now recognizes the partner first reaching a stable party snapshot as
+a one-time preparation milestone. This starts a fresh idle window, survives reloads,
+and retains the overall expedition deadline. All 387 tests passed, with one optional
+checkpoint test skipped. The 40 release checks passed, both packages built, and all
+61 packaged runtime files match the release commit.
 
-# Current deployment: Blue rc12, Red rc10
+The two-hour Red comparison gained six levels in each version. The candidate also
+picked up two items and won six trainer battles, including a League rematch. It used
+33 local policy recoveries versus 38 for the baseline. Neither run caught a new species.
+Blue's Seafoam regression was unchanged. See
+[the comparison](docs/validation/training-preparation-0.2.0rc13.json).
+
+Blue caught a level-25 Kangaskhan in the live Safari Zone, reaching 116 registered
+entries. Both live reload counters remain zero. Red's new release has only startup
+verification so far. Sustained collection and multi-day endurance remain open.
+
+# rc12 deployment record
 
 Blue runs `pokesim:0.2.0rc12-66b226f`, built from tagged commit
 `66b226f6d2a565c5281692a285d419d79fabaf2f`. It has a fresh cold backup, and its latest
@@ -37,7 +52,7 @@ Validation:
 See [the copied-save evidence](docs/validation/seafoam-exit-0.2.0rc12.json). Articuno's
 boulder puzzle solver, better collection budgeting, and multi-day endurance remain open.
 
-# rc10 release record, still running on Red
+# rc10 release record
 
 The rc10 rollout put both games on `pokesim:0.2.0rc10-6a23720`, built from tagged commit
 `6a23720ec5f6eb97fd581c0721cb51c5f64a1c44`. Each adventure has a fresh cold backup,
