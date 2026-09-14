@@ -32,6 +32,7 @@ from pyboy import PyBoy
 
 from ..checkpoints import CheckpointStore
 from ..policies.collection import EVOS
+from ..ram import W_DEX_OWNED, W_DEX_SEEN
 from ..strategy_data import SPECIES
 from . import boxes
 
@@ -67,6 +68,15 @@ def evolve_on_arrival(slot: boxes.Slot) -> tuple[boxes.Slot, int | None]:
     if slot.nick == in_game_name(slot.species):
         arrived = boxes.renamed(arrived, in_game_name(target))
     return arrived, slot.species
+
+
+def register_arrival(mem, *species):
+    """Register both the incoming species and any evolution in the recipient's Pokédex."""
+    for sid in species:
+        dex = SPECIES[sid]['dex']
+        byte, bit = divmod(dex - 1, 8)
+        for address in (W_DEX_OWNED, W_DEX_SEEN):
+            mem[address + byte] |= 1 << bit
 
 
 def _boot(rom: Path, state: Path, expect_sha1: str | None) -> PyBoy:
@@ -153,6 +163,7 @@ def perform(proposal: dict, sources: dict, outputs: dict | None = None) -> dict:
             want, arriving = proposal[role], held[other]
             landed, evolved_from = evolve_on_arrival(arriving)
             boxes.write_slot(machines[role].memory, int(want["box"]), int(want["position"]), landed)
+            register_arrival(machines[role].memory, arriving.species, landed.species)
             moved.append({"instance": want["instance"], "box": int(want["box"]),
                           "position": int(want["position"]),
                           "sent": {"species": held[role].species, "name": held[role].name,
