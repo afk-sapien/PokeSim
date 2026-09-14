@@ -200,7 +200,8 @@ class Navigator:
                 ts = current_world["tileset"]
                 if (ts, here, front) in PAIR_COLLISIONS or (ts, front, here) in PAIR_COLLISIONS:
                     continue
-            if (x + dx, y + dy) in static_objects or (q[0] == m and q[1:] in static_objects):
+            if self.live_map == m and ((x + dx, y + dy) in static_objects
+                                       or (q[0] == m and q[1:] in static_objects)):
                 continue
             if (m, x + dx, y + dy) in self.closed_passages or q in self.closed_passages:
                 continue
