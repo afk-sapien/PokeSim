@@ -1,0 +1,108 @@
+{
+  "revision": "addfb736bd14818ac8a32357aac09ce24d7c382f",
+  "image": "pokesim:0.2.0rc8-addfb73",
+  "receipts": {
+    "red": {
+      "edition": "red",
+      "backup": "/docker/pokesim/backups/20260914T194434Z-rc8/before.tar",
+      "image": "pokesim:0.2.0rc8-addfb73",
+      "image_id": "sha256:7a159d513a22e95a9bcddc8bd0ba5c845e1e584c5dbac907c426aedc28ad934c",
+      "revision": "addfb736bd14818ac8a32357aac09ce24d7c382f",
+      "timestamp": 1789415092.4454632,
+      "previous_image": "pokesim:0.2.0rc7-ca32f70",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 111,
+      "reloads": 0,
+      "progress": {
+        "state": "exploring",
+        "last_achievement": {
+          "id": 7752,
+          "title": "Defeated Tamer",
+          "ts": 1789414063.2812397,
+          "age_seconds": 1029
+        }
+      }
+    },
+    "blue": {
+      "edition": "blue",
+      "backup": "/docker/pokesim-blue/backups/20260914T194332Z-rc8/before.tar",
+      "image": "pokesim:0.2.0rc8-addfb73",
+      "image_id": "sha256:7a159d513a22e95a9bcddc8bd0ba5c845e1e584c5dbac907c426aedc28ad934c",
+      "revision": "addfb736bd14818ac8a32357aac09ce24d7c382f",
+      "timestamp": 1789415020.2219152,
+      "previous_image": "pokesim:0.2.0rc7-ca32f70",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 113,
+      "reloads": 0,
+      "progress": {
+        "state": "exploring",
+        "last_achievement": {
+          "id": 2422,
+          "title": "FIZZ grew to level 71",
+          "ts": 1789411342.651571,
+          "age_seconds": 3677
+        }
+      }
+    }
+  },
+  "public_checks": [
+    {
+      "url": "https://pokesim-red.tynet.app/",
+      "status": 200
+    },
+    {
+      "url": "https://pokesim-red.tynet.app/healthz",
+      "status": 200
+    },
+    {
+      "url": "https://pokesim-red.tynet.app/pokedex",
+      "status": 200
+    },
+    {
+      "url": "https://pokesim-red.tynet.app/pc",
+      "status": 200
+    },
+    {
+      "url": "https://pokesim-red.tynet.app/journal",
+      "status": 200
+    },
+    {
+      "url": "https://pokesim-red.tynet.app/sprites/25.png",
+      "status": 200
+    },
+    {
+      "url": "https://pokesim-blue.tynet.app/",
+      "status": 200
+    },
+    {
+      "url": "https://pokesim-blue.tynet.app/healthz",
+      "status": 200
+    },
+    {
+      "url": "https://pokesim-blue.tynet.app/pokedex",
+      "status": 200
+    },
+    {
+      "url": "https://pokesim-blue.tynet.app/pc",
+      "status": 200
+    },
+    {
+      "url": "https://pokesim-blue.tynet.app/journal",
+      "status": 200
+    },
+    {
+      "url": "https://pokesim-blue.tynet.app/sprites/25.png",
+      "status": 200
+    }
+  ]
+}

@@ -1,13 +1,16 @@
-# Current development: 0.2.0rc8 candidate
+# Current deployment: 0.2.0rc8
 
 The next candidate adds persisted starter selection, postgame project rotation,
 training toward level milestones, and increasing retry delays for repeated failures.
 It includes the previously committed trade registration correction. Automatic trading
 and planner integration with external trade requests remain future work.
 
-The deployed Red and Blue services remain on `v0.2.0rc7`. This candidate has been
-validated on local copies and new adventures. See [the roadmap](docs/roadmap.md) for
-the larger progression plan. Multi-day live endurance remains outstanding.
+Red and Blue now run image `pokesim:0.2.0rc8-addfb73`, built from commit
+`addfb736bd14818ac8a32357aac09ce24d7c382f`. Both latest saves loaded in the image before
+deployment, both services resumed with their existing parties and dex counts, and all
+12 public endpoint checks passed. Fresh cold backups retain the previous rc7 deployment.
+See [the deployment receipt](docs/validation/release-0.2.0rc8.json) and
+[monitoring process](docs/operations-monitor.md). Multi-day live endurance is outstanding.
 
 Candidate validation:
 
@@ -34,7 +37,7 @@ Candidate validation:
   two blackouts for Bulbasaur, Charmander, and Squirtle respectively. These are first-gym
   checks, not complete campaign passes. [Starter evidence](docs/validation/starters-0.2.0rc8.json).
 
-## Deployed release: 0.2.0rc7
+## Previous deployment: 0.2.0rc7
 
 September 14, 2026. The current release consolidates the deployed four-page interface,
 Pokédex and PC views, persistent play clock, storage fixes, and the new expedition and

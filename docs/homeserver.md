@@ -11,15 +11,18 @@ The old https://pokesim.tynet.app address remains a Red alias. Each game retains
 ROM, saves, party, boxes, journal, and notification configuration. Red runs at speed 1,
 and Blue retains its existing unlimited speed setting.
 
-Both adventures run `pokesim:0.2.0rc7-ca32f70`, built from release tag `v0.2.0rc7`
-and commit `ca32f704db74e794a9a6f4a03ba6ba15259f23e2`. The image ID is
-`sha256:21aaf503ad5965fc0c3aecb40471c2e0ca8aba58438f9f5c06508a81833103a3`.
-The exact source archive is unpacked at `/docker/pokesim/releases/0.2.0rc7-ca32f70`.
+Both adventures run `pokesim:0.2.0rc8-addfb73`, built from
+commit `addfb736bd14818ac8a32357aac09ce24d7c382f`. The image ID is
+`sha256:7a159d513a22e95a9bcddc8bd0ba5c845e1e584c5dbac907c426aedc28ad934c`.
+The exact source archive is unpacked at `/docker/pokesim/releases/0.2.0rc8-addfb73`.
 PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
 
 The release includes persistent playtime, the four-page interface, stall recovery,
 bounded collection objectives, and return paths through Victory Road. Live displays
 activity and the last achievement. Health and adventure progress are separate signals.
+The rc8 upgrade adds persistent postgame project rotation, level training, random
+starters for new adventures, and confirmed ground-item detours. Existing adventures
+retain their Pokémon and continue from their latest autosaves.
 
 The read-only trade board runs as `pokesim-broker` on
 [servarr port 8950](http://192.168.2.147:8950). Its compose directory is
@@ -40,6 +43,15 @@ for new log files. A root-owned log file can pass a root configuration check but
 the running service from reloading.
 
 ## Backups and rollback
+
+The rc8 deployment has fresh cold backups of both data directories and compose files:
+
+- Red: `/docker/pokesim/backups/20260914T194434Z-rc8/before.tar`
+- Blue: `/docker/pokesim-blue/backups/20260914T194332Z-rc8/before.tar`
+- Previous image: `pokesim:0.2.0rc7-ca32f70`.
+
+Both latest saves loaded successfully in the rc8 image before their live processes
+started. The deployment receipt is [release-0.2.0rc8.json](validation/release-0.2.0rc8.json).
 
 The final progress release has cold backups of both complete data directories and
 compose files:
@@ -85,6 +97,20 @@ Proxy changes should be reverted per host through Proxy Manager. Avoid restoring
 entire database over unrelated configuration changes.
 
 ## Verification
+
+The rc8 suite passes 378 tests with one optional supplied-checkpoint test skipped.
+Both live services resumed with eight badges and their existing dex counts, 111 for
+Red and 113 for Blue. Startup and subsequent samples were healthy with no save reloads.
+All 12 public page, health, and sprite checks passed across the two sites.
+
+Monitoring continues every 30 minutes through the task heartbeat. The private durable
+sample history lives at `data/operations/live-samples.json`. An initial sample caught
+Red's planned deployment downtime, before the post-deployment baseline. This is recorded
+as an interruption and is not an endurance failure after startup. See
+[operations-monitor.md](operations-monitor.md) for the monitoring and improvement process.
+No multi-day rc8 endurance pass is claimed yet.
+
+### Historical rc7 verification
 
 The release suite passes 350 tests, with one optional supplied-checkpoint test skipped.
 The browser controller test and package resource checks pass. Both copied saves loaded
