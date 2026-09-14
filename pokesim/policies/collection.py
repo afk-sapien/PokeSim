@@ -145,7 +145,7 @@ class Collection:
         self.progress_token = None
         return True
 
-    def observe(self,s, suspended=False):
+    def observe(self,s, suspended=False, training_ready=True):
         delta = max(0,min(120,s.frame - self.last_frame)) if self.last_frame is not None else 0
         self.last_frame = s.frame
         self.elapsed += delta
@@ -162,7 +162,7 @@ class Collection:
             token = (s.owned, s.badges, s.items, s.coins,
                      tuple(sorted((p.species, p.level, p.experience) for p in s.party)))
             if project['method'] == 'train':
-                trainee = self.trainee(s, project)
+                trainee = self.trainee(s, project) if training_ready else None
                 if trainee is not None:
                     mon = s.party[trainee]
                     project['parent'] = mon.species
@@ -176,7 +176,7 @@ class Collection:
             # First visits and completed battles count toward an expedition. Walking between
             # familiar maps, rearranging menus, and taking damage do not extend its deadline.
             self.idle_frames += delta
-            if ((self.progress_token is not None and token != self.progress_token)
+            if ((token is not None and self.progress_token is not None and token != self.progress_token)
                     or new_flags or s.map not in self.project_maps
                     or self.project['method'] in ('grass', 'surf', 'fish', 'safari') and self.was_in_battle and not s.in_battle):
                 self.idle_frames = 0

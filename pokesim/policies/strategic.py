@@ -216,7 +216,10 @@ class StrategicPolicy(Policy):
         frame = s.frame
         pos = (s.map, s.x, s.y)
         self.decisions += 1
-        self.collection.observe(s, suspended=self.pickups.active is not None)
+        # PC transfers briefly combine a new partner with the old slot's level.
+        # Accept training gains in battle or after returning to the overworld.
+        self.collection.observe(s, suspended=self.pickups.active is not None,
+                                training_ready=bool(s.in_battle) or kind == 'overworld')
         self.pickups.observe(s, self.collection.elapsed)
         if self.collection.completed_champion and s.map == MAPS['HALL_OF_FAME']:
             self.goal = Goal('collect_ceremony','Celebrate the Champion victory','Finish the ceremony and continue the saved adventure')
