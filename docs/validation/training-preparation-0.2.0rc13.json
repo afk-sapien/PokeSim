@@ -2413,5 +2413,6 @@
     "Local policy recoveries remain frequent, 33 with the candidate and 38 with the baseline. These replays disable save rewinds.",
     "The initially selected Butterfree still failed to gain experience. Travel, supply interruptions, and target selection need further work.",
     "This is a bounded copied-save comparison, not evidence of multi-day reliability."
-  ]
+  ],
+  "source_revision": "17cd9973f3fbcfef2cfb3838f02f0d2e759b7b75"
 }

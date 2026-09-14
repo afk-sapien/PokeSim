@@ -106,3 +106,32 @@ The first live trade remains unapproved and unexecuted.
 
 A followup at 166 seconds of Blue uptime confirmed a new live level-32 achievement.
 Both reload counters remained zero. Red's container start time was unchanged.
+
+
+## Reserve preparation followup
+
+Release rc13 resets training idle time once when a selected partner first reaches a
+stable party snapshot. The persisted experience baseline prevents reloads and repeated
+PC transitions from repeating this milestone. The overall project deadline is unchanged.
+
+In the two-hour comparison from a fresh Red checkpoint, both versions gained six levels.
+The candidate also picked up two items and won six trainer battles, including a League
+rematch. Local recoveries fell from 38 to 33. Neither version caught a new species, and
+the initially selected Butterfree still failed to gain experience. Preparation was one
+contributor, not a complete explanation of slow collection. Blue's regression remained
+unchanged. All 387 tests passed. See
+[the comparison](validation/training-preparation-0.2.0rc13.json).
+
+Red received rc13 from `17cd997` with a cold backup and a successful current-save load.
+Blue stayed on rc12 and caught a level-25 Kangaskhan live in Safari Zone East, reaching
+116 registered entries. Both games remained healthy with zero save reloads. All 12
+public checks passed. See [the receipt](validation/release-0.2.0rc13.json).
+
+Next, preserve the live intervals while measuring actual training gains and new catches.
+Investigate repeated supply detours and arrival at chosen encounter areas if Red remains
+unproductive. The new reproduction is `data/operations/repros/red-preparation-20260914`.
+The first live trade remains unapproved and unexecuted.
+
+Filesystem use after the build and backup was 78.58 percent, with 22.71 GB free.
+No historical saves or backups were deleted. Continue watching storage growth and plan
+bounded backup and image retention before repeated releases consume the available space.
