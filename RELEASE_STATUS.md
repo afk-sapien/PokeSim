@@ -6,12 +6,13 @@ Victory Road return-path fixes. PyBoy remains pinned to 2.7.0.
 
 Copied-save checks reproduce Blue's stale planning timestamp and Red's restricted
 Victory Road loop. The revised policy has produced new trainer victories in Red and
-resumed collecting in Blue. Final replay evidence and deployment receipt are recorded
-under `docs/validation` and in `docs/homeserver.md` when completed. Two simulated hours
+resumed collecting in Blue. Replay evidence and the deployment receipt are recorded under `docs/validation`
+and in `docs/homeserver.md`. The live release is tag `v0.2.0rc7`, commit `ca32f70`. Two simulated hours
 are a bounded regression check. Multi-day live endurance remains outstanding.
 
 The trade board is read-only. No live exchange has been approved or executed by this
-release. Historical release notes below describe earlier versions and their limits.
+release. A subsequent committed executor correction and copied-save trade rehearsal
+are documented in `docs/trade-review.md`. That correction is not active in the live games. Historical release notes below describe earlier versions and their limits.
 
 Experimental beta validation
 

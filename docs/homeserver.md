@@ -1,6 +1,6 @@
 # Homeserver deployment
 
-Updated September 13, 2026 (America/Los_Angeles).
+Updated September 14, 2026 (America/Los_Angeles).
 
 | Edition | URL | Container on `servarr` | Port | Data directory |
 | --- | --- | --- | --- | --- |
@@ -11,15 +11,22 @@ The old https://pokesim.tynet.app address remains a Red alias. Each game retains
 ROM, saves, party, boxes, journal, and notification configuration. Red runs at speed 1,
 and Blue retains its existing unlimited speed setting.
 
-Both instances run `pokesim:clock-20260913`, image ID
-`sha256:80446bb567d926c6847bcce6dac13d16636e855aa71ffdc384b86aab2e512416`.
-The Live clock now tracks persistent simulated playtime beyond the cartridge limit.
-Red migrated as a lower bound because its cartridge clock was already capped. Blue
-migrated from its still-running cartridge clock.
-The image was built from the current workspace, including the four-page navigation, team and goal on Live, all 151 Pokédex entries
-in one list, and the expanded funny nickname pool for new catches. PyBoy remains at version 2.7.0.
-Local game data and all 151 sprites are installed separately under each data directory.
-The app runs as UID and GID 10001, with matching ownership on those data directories.
+Both adventures run `pokesim:0.2.0rc7-ca32f70`, built from release tag `v0.2.0rc7`
+and commit `ca32f704db74e794a9a6f4a03ba6ba15259f23e2`. The image ID is
+`sha256:21aaf503ad5965fc0c3aecb40471c2e0ca8aba58438f9f5c06508a81833103a3`.
+The exact source archive is unpacked at `/docker/pokesim/releases/0.2.0rc7-ca32f70`.
+PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
+
+The release includes persistent playtime, the four-page interface, stall recovery,
+bounded collection objectives, and return paths through Victory Road. Live displays
+activity and the last achievement. Health and adventure progress are separate signals.
+
+The read-only trade board runs as `pokesim-broker` on
+[servarr port 8950](http://192.168.2.147:8950). Its compose directory is
+`/docker/pokesim-broker`, with a local `.env` setting the game-data path. It mounts only
+read-only game data and polls the two games through the host gateway. It has no ROM or
+save mounts and cannot execute trades. See [trade-review.md](trade-review.md) for the
+copied-save rehearsal and the still-required approval of a specific live exchange.
 
 ## Routing
 
@@ -33,6 +40,20 @@ for new log files. A root-owned log file can pass a root configuration check but
 the running service from reloading.
 
 ## Backups and rollback
+
+The final progress release has cold backups of both complete data directories and
+compose files:
+
+- Red: `/docker/pokesim/backups/20260914T184015Z-rc7-final/before.tar`
+- Blue: `/docker/pokesim-blue/backups/20260914T183932Z-rc7-final/before.tar`
+- Image before the final fallback: `pokesim:0.2.0rc7` at commit `ca76c83`.
+
+The first deployment of this release also retained the previous clock revision:
+
+- Red: `/docker/pokesim/backups/20260914T183341Z-rc7/before.tar`
+- Blue: `/docker/pokesim-blue/backups/20260914T183256Z-rc7/before.tar`
+- Image before this release: `pokesim:clock-20260913`.
+
 
 The app-clock revision has fresh cold backups:
 
@@ -64,6 +85,22 @@ Proxy changes should be reverted per host through Proxy Manager. Avoid restoring
 entire database over unrelated configuration changes.
 
 ## Verification
+
+The release suite passes 350 tests, with one optional supplied-checkpoint test skipped.
+The browser controller test and package resource checks pass. Both copied saves loaded
+in the release image with eight badges and six party members.
+
+Two simulated hours on the final policy produced five new trainer-victory events in Red.
+Blue's fresh plateau checkpoint returned to Viridian, with trainer victories and level
+gains. Both replays prohibit rewinds. They still record local policy recoveries, so these
+results do not prove that every objective succeeds or replace multi-day endurance.
+See the per-game progress records under `docs/validation`.
+
+Live observation passed the former ten-minute recovery interval for both games. Every
+sample remained healthy, both runs advanced frames and positions, and both reported
+zero save reloads. Blue produced a new level-up event after deployment. The observation
+record is `docs/validation/live-progress-0.2.0rc7.json`. Multi-day endurance remains open.
+
 
 Both copied saves loaded in the new image before deployment and retained eight badges
 and six party members. Both live containers resumed their existing autosaves and passed

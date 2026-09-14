@@ -60,3 +60,15 @@ and saves outside source releases. See [homeserver.md](homeserver.md) for the li
 Improve encounter and NPC trade data, separate shop and PC state from the main policy,
 and consolidate reset bookkeeping as related changes require it. Existing serial-hook
 experiments are research, not a prerequisite for the save-based exchange workflow.
+
+## September 14 delivery record
+
+Release `v0.2.0rc7` is committed and deployed to both games from commit `ca32f70`.
+The read-only board is connected. Two-hour copied-save replays show new trainer victories
+in Red and a successful return from Blue's Plateau position to Viridian with level gains
+and trainer victories. The original Blue checkpoint also caught Moltres in replay.
+
+One proposed exchange has been rehearsed on copies. Its Pokédex registration bug is fixed
+in a subsequent commit. The next trade step remains approval of specific participants,
+then coordinated execution using that corrected code. Automatic trading is disabled.
+Multi-day endurance and further collection improvement remain open.

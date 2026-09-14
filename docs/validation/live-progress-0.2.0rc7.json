@@ -1,0 +1,118 @@
+{
+  "release_revision": "ca32f704db74e794a9a6f4a03ba6ba15259f23e2",
+  "started_at": 1789411379.3134289,
+  "finished_at": 1789411860.1771016,
+  "runs": {
+    "red": {
+      "first": {
+        "uptime": 150,
+        "healthy": true,
+        "reloads": 0,
+        "stuck_seconds": 0,
+        "frame": 8316230,
+        "owned": 111,
+        "position": [
+          "Victory Road 2F",
+          20,
+          12
+        ],
+        "goal": "Plan the next Pok\u00e9dex expedition",
+        "activity": "dialogue",
+        "progress": {
+          "state": "exploring",
+          "last_achievement": {
+            "id": 7750,
+            "title": "SPROUT grew to level 88",
+            "ts": 1789409992.677842,
+            "age_seconds": 1386
+          }
+        }
+      },
+      "last": {
+        "uptime": 631,
+        "healthy": true,
+        "reloads": 0,
+        "stuck_seconds": 0,
+        "frame": 8345080,
+        "owned": 111,
+        "position": [
+          "Victory Road 2F",
+          15,
+          12
+        ],
+        "goal": "Plan the next Pok\u00e9dex expedition",
+        "activity": "dialogue",
+        "progress": {
+          "state": "exploring",
+          "last_achievement": {
+            "id": 7750,
+            "title": "SPROUT grew to level 88",
+            "ts": 1789409992.677842,
+            "age_seconds": 1867
+          }
+        }
+      },
+      "samples": 17,
+      "healthy_every_sample": true,
+      "maximum_reloads": 0,
+      "frames_advanced": 28850,
+      "distinct_positions": 11
+    },
+    "blue": {
+      "first": {
+        "uptime": 202,
+        "healthy": true,
+        "reloads": 0,
+        "stuck_seconds": 0,
+        "frame": 23529242,
+        "owned": 113,
+        "position": [
+          "Victory Road 2F",
+          15,
+          12
+        ],
+        "goal": "Plan the next Pok\u00e9dex expedition",
+        "activity": "dialogue",
+        "progress": {
+          "state": "making_progress",
+          "last_achievement": {
+            "id": 2422,
+            "title": "FIZZ grew to level 71",
+            "ts": 1789411342.6586602,
+            "age_seconds": 36
+          }
+        }
+      },
+      "last": {
+        "uptime": 683,
+        "healthy": true,
+        "reloads": 0,
+        "stuck_seconds": 0,
+        "frame": 23923152,
+        "owned": 113,
+        "position": [
+          "Victory Road 2F",
+          14,
+          12
+        ],
+        "goal": "Heal the party",
+        "activity": "overworld",
+        "progress": {
+          "state": "exploring",
+          "last_achievement": {
+            "id": 2422,
+            "title": "FIZZ grew to level 71",
+            "ts": 1789411342.6586602,
+            "age_seconds": 517
+          }
+        }
+      },
+      "samples": 17,
+      "healthy_every_sample": true,
+      "maximum_reloads": 0,
+      "frames_advanced": 393910,
+      "distinct_positions": 14
+    }
+  },
+  "limitation": "This covers the former ten-minute reload interval. Multi-day endurance remains unverified."
+}
