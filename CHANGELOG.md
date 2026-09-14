@@ -1,3 +1,7 @@
+Unreleased, approved trade preparation
+
+- Register the received Pokémon and any trade evolution in the recipient's Pokédex when staging a save-based exchange. Verified on copied Red and Blue saves. Live trading remains disabled.
+
 0.2.0rc7, continuing adventures and visible progress
 
 - Restore planner timing safely and replan stationary objectives without rewinding the game.

@@ -312,3 +312,14 @@ def test_a_real_campaign_state_keeps_its_boxes_consistent_after_a_write(tmp_path
     assert len(after) == len(before) == 240
     assert after[0][:3] == before[0][:3] and after[0][3] == "TRADED"
     assert after[1:] == before[1:]
+
+
+def test_trade_registration_keeps_existing_entries_and_records_both_evolution_stages():
+    from pokesim.ram import W_DEX_OWNED, W_DEX_SEEN, flag_bits
+    from pokesim.trade.execute import register_arrival
+    mem = Memory()
+    mem[W_DEX_OWNED] = 1
+    mem[W_DEX_SEEN] = 3
+    register_arrival(mem, HAUNTER, GENGAR)
+    assert set(flag_bits(bytes(mem[W_DEX_OWNED:W_DEX_OWNED + 19]))) == {1, 93, 94}
+    assert set(flag_bits(bytes(mem[W_DEX_SEEN:W_DEX_SEEN + 19]))) == {1, 2, 93, 94}
