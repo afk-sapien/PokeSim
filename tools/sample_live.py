@@ -35,7 +35,7 @@ for edition, name, port in [('red', 'pokesim', 8930), ('blue', 'pokesim-blue', 8
             'completed_projects': director.get('completed', {}),
             'recent_outcomes': director.get('outcomes', [])[-3:],
             'pickups': strategy.get('pickups', {}).get('history', []),
-            'party': [{key: mon.get(key) for key in ('dex', 'nick', 'level', 'experience')}
+            'party': [{key: mon.get(key) for key in ('dex', 'nick', 'level', 'experience', 'hp', 'max_hp', 'status', 'pp')}
                       for mon in game['party']],
         }
     except Exception as error:
