@@ -1,0 +1,141 @@
+{
+  "edition": "red",
+  "frames": 432000,
+  "wall_seconds": 174.47,
+  "rewinds": 0,
+  "initial_owned": 111,
+  "final_owned": 111,
+  "new_owned": [],
+  "initial_party": [
+    [
+      "Muk",
+      100,
+      1000000
+    ],
+    [
+      "Dragonite",
+      55,
+      210670
+    ],
+    [
+      "Rapidash",
+      80,
+      517812
+    ],
+    [
+      "Zapdos",
+      87,
+      840871
+    ],
+    [
+      "Venusaur",
+      100,
+      1059860
+    ],
+    [
+      "Lapras",
+      30,
+      34614
+    ]
+  ],
+  "final_party": [
+    [
+      "Muk",
+      100,
+      1000000
+    ],
+    [
+      "Dragonite",
+      55,
+      210670
+    ],
+    [
+      "Rapidash",
+      80,
+      517812
+    ],
+    [
+      "Zapdos",
+      87,
+      850628
+    ],
+    [
+      "Venusaur",
+      100,
+      1059860
+    ],
+    [
+      "Lapras",
+      30,
+      34614
+    ]
+  ],
+  "achievements": [
+    {
+      "frame": 23458,
+      "type": "trainer",
+      "title": "Defeated Pokemaniac"
+    },
+    {
+      "frame": 103012,
+      "type": "trainer",
+      "title": "Defeated Juggler"
+    },
+    {
+      "frame": 106178,
+      "type": "trainer",
+      "title": "Defeated Tamer"
+    },
+    {
+      "frame": 350702,
+      "type": "trainer",
+      "title": "Defeated Cooltrainer M"
+    },
+    {
+      "frame": 355852,
+      "type": "trainer",
+      "title": "Defeated Cooltrainer F"
+    }
+  ],
+  "mode_frames": {
+    "waiting for map transition": 11280,
+    "exploring obstacle": 13280,
+    "following objective": 42820,
+    "overworld": 1764,
+    "dialogue": 277542,
+    "battle: fight": 3780,
+    "moves": 9792,
+    "using Strength": 828,
+    "waiting for the menu": 1908,
+    "pause": 846,
+    "party": 9216,
+    "party_action": 2376,
+    "moving a boulder onto the switch": 43520,
+    "finding another approach": 686,
+    "talking to locals": 100,
+    "yes_no": 288,
+    "battle": 162,
+    "interacting": 690,
+    "battle: switch": 2988,
+    "battle: item": 72,
+    "list": 792,
+    "heal": 90,
+    "shop": 72,
+    "exploring between expeditions": 4720,
+    "planning the next expedition": 2388
+  },
+  "history": [
+    "Changed plan: Trainer. No encounter, training gain, or new route in two minutes",
+    "Changed plan: Moltres. No encounter, training gain, or new route in two minutes",
+    "Completed: Trainer",
+    "Completed: Trainer",
+    "Will revisit: Ditto",
+    "Changed plan: Moltres. No encounter, training gain, or new route in two minutes"
+  ],
+  "policy_recoveries": 33,
+  "checkpoint_sha256": "ec35dc5d25fc711eed8a64cd962aab667303d8d1cfdfb621bd44dac11416d1f2",
+  "policy_fingerprint": "af80b488b6940e203ac36e5f5d504a2347da8165a49f3daa34ed2572de8ca186",
+  "pyboy": "2.7.0",
+  "final_goal": "Plan the next Pok\u00e9dex expedition",
+  "final_map": "Victory Road 3F"
+}

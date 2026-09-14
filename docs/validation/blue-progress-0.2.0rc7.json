@@ -1,0 +1,161 @@
+{
+  "edition": "blue",
+  "frames": 432010,
+  "wall_seconds": 137.68,
+  "rewinds": 0,
+  "initial_owned": 113,
+  "final_owned": 113,
+  "new_owned": [],
+  "initial_party": [
+    [
+      "Graveler",
+      100,
+      1059860
+    ],
+    [
+      "Pidgeot",
+      70,
+      353335
+    ],
+    [
+      "Dragonite",
+      56,
+      225206
+    ],
+    [
+      "Haunter",
+      72,
+      377521
+    ],
+    [
+      "Snorlax",
+      78,
+      607610
+    ],
+    [
+      "Venusaur",
+      77,
+      473427
+    ]
+  ],
+  "final_party": [
+    [
+      "Graveler",
+      100,
+      1059860
+    ],
+    [
+      "Pidgeot",
+      70,
+      360292
+    ],
+    [
+      "Dragonite",
+      56,
+      227284
+    ],
+    [
+      "Haunter",
+      72,
+      381726
+    ],
+    [
+      "Snorlax",
+      79,
+      621859
+    ],
+    [
+      "Venusaur",
+      77,
+      484163
+    ]
+  ],
+  "achievements": [
+    {
+      "frame": 53964,
+      "type": "trainer",
+      "title": "Defeated Juggler"
+    },
+    {
+      "frame": 237118,
+      "type": "faint",
+      "title": "EMBER fainted"
+    },
+    {
+      "frame": 362520,
+      "type": "trainer",
+      "title": "Defeated Lorelei"
+    },
+    {
+      "frame": 377860,
+      "type": "trainer",
+      "title": "Defeated Bruno"
+    },
+    {
+      "frame": 384810,
+      "type": "trainer",
+      "title": "Defeated Agatha"
+    },
+    {
+      "frame": 393796,
+      "type": "level",
+      "title": "BOOTS grew to level 79"
+    },
+    {
+      "frame": 403642,
+      "type": "trainer",
+      "title": "Defeated Lance"
+    },
+    {
+      "frame": 414544,
+      "type": "trainer",
+      "title": "Defeated rival JULES"
+    }
+  ],
+  "mode_frames": {
+    "waiting for map transition": 8760,
+    "following objective": 46880,
+    "using Strength": 1584,
+    "waiting for the menu": 3948,
+    "pause": 1476,
+    "dialogue": 279228,
+    "party": 6894,
+    "party_action": 2286,
+    "overworld": 1584,
+    "exploring obstacle": 15860,
+    "battle: switch": 2988,
+    "battle: fight": 4806,
+    "moves": 7632,
+    "battle: item": 432,
+    "list": 4962,
+    "naming": 2670,
+    "moving a boulder onto the switch": 22496,
+    "interacting": 1378,
+    "pc_root": 312,
+    "pc": 144,
+    "yes_no": 918,
+    "talking to locals": 52,
+    "finding another approach": 992,
+    "battle": 126,
+    "battle: run": 1998,
+    "heal": 18,
+    "shop": 36,
+    "using an item": 162,
+    "item_action": 18,
+    "Hall of Fame ceremony": 11370
+  },
+  "history": [
+    "Will revisit: Trainer",
+    "Completed: Trainer",
+    "Completed: Moltres",
+    "Will revisit: Trainer",
+    "Completed: Trainer",
+    "Completed: Rematch"
+  ],
+  "policy_recoveries": 49,
+  "checkpoint_sha256": "580bec2e3d57bb65d5e6cec2299bd9119e8c8aaf8f10eeb1008cfed1257702ef",
+  "policy_fingerprint": "af80b488b6940e203ac36e5f5d504a2347da8165a49f3daa34ed2572de8ca186",
+  "pyboy": "2.7.0",
+  "final_goal": "Find Kangaskhan",
+  "final_map": "Viridian City"
+}
