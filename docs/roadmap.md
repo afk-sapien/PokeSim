@@ -249,3 +249,27 @@ remain slow, especially on Red. Prioritize a copied-save investigation of repeat
 Moltres and Ditto objectives if those projects still fail to reach useful encounters.
 Avoid maintenance restarts when there is no verified material fix to deploy. Multi-day
 endurance and coordinated trading remain open.
+
+
+## Navigation candidate held after comparison
+
+The third heartbeat confirmed ongoing live level gains, trainer victories, zero observed
+save reloads, and stable process memory. Collection counts remained at 111 for Red and
+115 for Blue. A copied Red checkpoint exposed remembered steps through a currently
+occupied boulder square. The local rc11 candidate checks observed object positions on
+the current map and preserves distant learned routes until fresh readings are available.
+
+The longer comparison did not establish overall benefit. Red made no new catches in
+either run, and rc10 produced more journal achievements. The candidate is committed
+and tested but is not deployed. The live release remains rc10. See
+[the candidate record](validation/navigation-candidate-0.2.0rc11.json).
+
+Collection trips still spend substantial time on supply and storage interruptions.
+A controlled Moltres objective was repeatedly replaced by restocking before reaching
+the encounter. Next, investigate maintenance budgeting and reaching the chosen location,
+using the saved reproductions. Preserve the live endurance interval until a fix shows
+clear overall benefit. Physical collision correctness alone was insufficient here.
+
+Monitoring now records filesystem space and the sizes of each game's data and backups.
+The initial measurement found about 25.6 GB free and 8.2 GB in these backup directories.
+No retention settings or historical files were changed.

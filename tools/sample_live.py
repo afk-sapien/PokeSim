@@ -8,6 +8,8 @@ import time
 
 REMOTE = r'''
 import json
+from pathlib import Path
+import shutil
 import subprocess
 import time
 import urllib.request
@@ -44,6 +46,17 @@ try:
     sample['resources'] = [json.loads(line) for line in raw.splitlines()]
 except Exception as error:
     sample['resource_error'] = str(error)
+try:
+    usage = shutil.disk_usage('/docker')
+    sample['disk'] = {'total_bytes': usage.total, 'used_bytes': usage.used,
+                      'free_bytes': usage.free, 'used_percent': round(100 * usage.used / usage.total, 2)}
+    directories = [path for root in ('/docker/pokesim', '/docker/pokesim-blue')
+                   for path in (root + '/data', root + '/backups') if Path(path).exists()]
+    sizes = subprocess.check_output(['du', '-sk', *directories], text=True, timeout=15)
+    sample['directory_bytes'] = {path: int(kib) * 1024 for kib, path in
+                                 (line.split('\t', 1) for line in sizes.splitlines())}
+except Exception as error:
+    sample['disk_error'] = str(error)
 print(json.dumps(sample))
 '''
 

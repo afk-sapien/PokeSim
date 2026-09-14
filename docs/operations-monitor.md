@@ -63,3 +63,25 @@ Next, compare actual partner XP and new journal milestones across samples. Inves
 repeated Moltres and Ditto objectives if Red continues gaining levels without useful
 collecting encounters. Avoid restarts without a verified material fix, so the endurance
 record can grow. The first specific live trade remains unapproved and unexecuted.
+
+
+The third heartbeat left both games on rc10. The local checkout now contains an untagged
+rc11 candidate at `6de8c1b`. It fixes remembered steps through currently observed solid
+objects, but a 432000-frame comparison did not improve overall progress. Do not deploy
+it without further work and stronger comparative evidence. The broader candidate image
+`pokesim:0.2.0rc11-54569f0` is unused and superseded locally. No rc11 live deployment exists.
+
+Preserved reproduction copies are under `data/operations/repros/red-navigation-20260914`
+and `data/operations/repros/blue-training-20260914`. Keep this private repro directory
+bounded to eight cases, retaining unresolved cases and removing only obsolete copies
+created by this monitoring workflow when necessary. Never prune original live saves.
+The comparison is `docs/validation/navigation-candidate-0.2.0rc11.json`.
+
+Next, investigate collection deadlines during maintenance and navigation to the selected
+encounter. Controlled Moltres testing showed restocking repeatedly overriding the trip.
+Existing training and trainer victories remain real progress, so avoid restarting the
+live games for a change that only improves a short navigation metric.
+
+The sampler also records filesystem capacity and each game's data and backup directory
+sizes. Watch their growth over time. The first reading was 76.46 percent filesystem use,
+25.6 GB free, roughly 1.19 GB of game data, and 8.23 GB of backups. No files were deleted.

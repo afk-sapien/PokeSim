@@ -32,6 +32,22 @@ Validation:
 See [the transfer regression evidence](docs/validation/training-transfer-0.2.0rc10.json)
 and [the monitoring plan](docs/operations-monitor.md).
 
+
+## Local rc11 candidate, not deployed
+
+Commit `6de8c1b` applies observed solid-object collisions to remembered steps on the
+current map. A saved Victory Road route demonstrably crossed an occupied boulder square.
+All 386 tests pass, but longer copied-save comparisons do not support deploying this
+candidate on its own. Red's dex stayed at 111 in both runs. The candidate used 42 local
+recoveries versus 43 for rc10, but produced fewer level gains, trainer victories, and
+pickups. Blue's comparison remained unchanged. The live games remain on rc10 so their
+endurance interval can continue.
+
+The rc11 packages are local candidate artifacts. No rc11 tag or deployment exists.
+An earlier, broader candidate image `pokesim:0.2.0rc11-54569f0` was built but is unused.
+It does not contain the final narrower candidate. Do not deploy that image.
+See [the comparison evidence](docs/validation/navigation-candidate-0.2.0rc11.json).
+
 # Previous deployment: 0.2.0rc9
 
 Red and Blue run `pokesim:0.2.0rc9-8ca0271`, built from tagged commit
