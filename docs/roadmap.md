@@ -195,7 +195,8 @@ evidence does not establish that all stalls are solved. See the
 [Red](validation/red-progress-0.2.0rc8.json) and
 [Blue](validation/blue-progress-0.2.0rc8.json) records.
 
-This candidate is not deployed. Coordinated automatic trades, external trade requests
+The rc8 changes are now deployed to both adventures from commit `addfb73`.
+Coordinated automatic trades, external trade requests
 as planner objectives, deliberate stat training, and multi-day endurance remain open.
 
 The next rc8 followup adds short detours for visible ground items during ordinary travel
@@ -205,3 +206,7 @@ Red checkpoint collected Max Revive and TM47 Explosion, with inventory changes a
 journal events verified in the [pickup record](validation/ground-pickups-0.2.0rc8.json).
 The earlier two-hour and first-gym evidence above predates this followup. Hidden items
 are not part of the new pickup behavior.
+
+The user has authorized ongoing improvements and monitoring. A 30-minute task heartbeat
+compares health and actual project progress, investigates recurring failures on copied
+saves, and deploys validated fixes with backups. See [the operating plan](operations-monitor.md).
