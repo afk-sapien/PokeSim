@@ -1,4 +1,10 @@
-0.2.0rc8 candidate, persistent postgame projects and varied starters
+0.2.0rc9, recover routes after Victory Road switches reset
+
+- Ignore remembered steps through currently closed puzzle gates.
+- Reach the upper puzzle by ladder when reentry leaves the lower boulder inaccessible.
+- Preserve existing saves, parties, and ongoing postgame projects.
+
+0.2.0rc8, persistent postgame projects and varied starters
 
 - Collect nearby reachable ground items during ordinary travel and collection expeditions, including caves. Verify collection, respect bag capacity, and preserve the original project during bounded detours.
 - Choose a seeded random starter for new adventures, with a persisted choice and a fixed `STARTER` setting.

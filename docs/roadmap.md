@@ -7,7 +7,7 @@ or months, alone or with several connected instances. Beating the Champion is th
 chapter. Collection, raising different teams, and useful exchanges should give each run
 longer projects with visible intermediate achievements.
 
-The deployed release starts this work. The local rc8 candidate adds starter variation
+The deployed rc8 release adds starter variation
 and the first persistent postgame director. The remaining long-term features below are
 planned. Guaranteed Pokédex completion, restart farming, and authentic link-cable
 emulation remain outside scope. Stat training and optional searches for better DVs are
@@ -163,7 +163,7 @@ experiments are research, not a prerequisite for the save-based exchange workflo
 
 ## September 14 delivery record
 
-Release `v0.2.0rc7` is committed and deployed to both games from commit `ca32f70`.
+Release `v0.2.0rc7` was committed and deployed to both games from commit `ca32f70`.
 The read-only board is connected. Two-hour copied-save replays show new trainer victories
 in Red and a successful return from Blue's Plateau position to Viridian with level gains
 and trainer victories. The original Blue checkpoint also caught Moltres in replay.
@@ -173,9 +173,9 @@ in a subsequent commit. The next trade step remains approval of specific partici
 then coordinated execution using that corrected code. Automatic trading is disabled.
 Multi-day endurance and further collection improvement remain open.
 
-## First postgame director candidate
+## First postgame director delivery
 
-The local `0.2.0rc8` candidate adds persisted category rotation, bounded outcome history,
+Release `0.2.0rc8` adds persisted category rotation, bounded outcome history,
 and increasing delays for repeated failures. Training projects use the existing party
 and storage controls and pursue the next ten-level milestone, up to level 100. Only
 the selected partner's gains extend a training session. A productive partial session
@@ -199,7 +199,7 @@ The rc8 changes are now deployed to both adventures from commit `addfb73`.
 Coordinated automatic trades, external trade requests
 as planner objectives, deliberate stat training, and multi-day endurance remain open.
 
-The next rc8 followup adds short detours for visible ground items during ordinary travel
+The deployed rc8 release includes short detours for visible ground items during ordinary travel
 and collection expeditions, including Victory Road. The detour preserves the original
 project, respects bag capacity, and records confirmed pickups in the journal. A copied
 Red checkpoint collected Max Revive and TM47 Explosion, with inventory changes and

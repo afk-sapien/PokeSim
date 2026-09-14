@@ -28,6 +28,7 @@ class Navigator:
         self.can_surf = False
         self.can_cut = False
         self.story_blocks = set()
+        self.closed_passages = set()
         self.live_map = None
         self.live_positions = []
 
@@ -40,6 +41,10 @@ class Navigator:
         can_strength = any(70 in p.moves for p in snapshot.party)
         self.tile_overrides = {(m, x, y): tile for m, w in WORLD.items() for flag, x, y, tile in w.get("opened_tiles", [])
                                if event_set(snapshot.event_flags, flag) or (m != snapshot.map and can_strength)}
+        # Puzzle switches reset on reentry. Old successful steps cannot reopen a gate.
+        self.closed_passages = {(m, x, y) for m, w in WORLD.items()
+                                for _, x, y, _ in w.get("opened_tiles", [])
+                                if self.active_tile(w, x, y) not in w["passable"]}
         self.can_surf = bool(snapshot.badges & 16 and any(57 in p.moves for p in snapshot.party))
         self.can_cut = bool(snapshot.badges & 2 and any(15 in p.moves for p in snapshot.party))
         drinks = {ITEMS[n] for n in ("FRESH_WATER", "SODA_POP", "LEMONADE")}
@@ -190,6 +195,8 @@ class Navigator:
                 ts = current_world["tileset"]
                 if (ts, here, front) in PAIR_COLLISIONS or (ts, front, here) in PAIR_COLLISIONS:
                     continue
+            if (m, x + dx, y + dy) in self.closed_passages or q in self.closed_passages:
+                continue
             q = FORCED.get((m, x + dx, y + dy), q)
             if q[0] != m and current_world:
                 # Older samples can pair the new map with the indoor coordinates.
