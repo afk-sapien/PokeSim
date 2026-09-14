@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f5f3ed">
+<meta name="description" content="Explore your boxes and inspect each Pokémon’s natural potential and training.">
+<title>A place for every partner. · pokesim</title>
+<link rel="stylesheet" href="/static/style.css?v=watch-2">
+<link rel="stylesheet" href="/static/pokedex.css?v=pages-1">
+<link rel="stylesheet" href="/static/pages.css?v=clock-1">
+<link rel="alternate" type="application/atom+xml" title="pokesim events" href="/feed.xml">
+</head>
+<body data-page="pc">
+<a class="skip-link" href="#main">Skip to a place for every partner.</a>
+<header class="topbar">
+<a class="brand" href="/" aria-label="pokesim home"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition" id="edition">KANTO</span></a>
+<nav aria-label="Main navigation"><a href="/">Live</a><a href="/pokedex">Pokédex</a><a href="/pc" class="nav-current" aria-current="page">PC</a><a href="/journal">Journal</a></nav>
+<span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
+</header>
+<main id="main" class="page-main">
+<section class="page-intro"><div><p class="eyebrow"><span class="tiny-dot"></span> SOMEONE'S PC</p><h1>A place for every partner.</h1><p class="intro-copy">Explore your boxes and inspect each Pokémon’s natural potential and training.</p></div></section>
+<section class="pc-overview" aria-label="Storage overview"><div><span class="eyebrow">IN STORAGE</span><strong id="pc-total">0 / 240</strong></div><div><span class="eyebrow">RECEIVING NEW CATCHES</span><strong id="pc-active">Box 1</strong></div><a href="/#team">View the traveling team ↗</a></section>
+<section class="pc-workspace" aria-label="PC storage">
+<aside class="pc-sidebar"><label class="mobile-box-control" for="mobile-box">Storage box<select id="mobile-box"></select></label><h2>Storage boxes</h2><div id="box-picker" class="box-picker" role="group" aria-label="Choose a storage box"></div></aside>
+<div class="pc-content"><div class="dex-toolbar"><label for="pc-search">Find <input id="pc-search" type="search" placeholder="Name or Pokédex number" autocomplete="off"></label><label for="pc-scope">In <select id="pc-scope"><option value="box">Selected box</option><option value="all">All boxes</option></select></label><span class="count-pill" id="pc-count">0 Pokémon</span></div>
+<div class="section-heading"><h2 id="pc-heading">Box 1</h2><span class="eyebrow" id="pc-note">Stored partners</span></div>
+<div id="pc-grid" class="pc-grid"><p class="dex-empty">Opening the PC…</p></div>
+<nav class="pagination" aria-label="PC result pages"><button id="pc-prev">← Previous</button><span id="pc-page" aria-live="polite"></span><button id="pc-next">Next →</button></nav>
+</div></section>
+</main>
+<dialog id="pc-detail" aria-labelledby="pc-detail-name"><button id="pc-close" class="close-detail" aria-label="Close Pokémon details">✕</button><div id="pc-detail-body"></div></dialog>
+<footer><span id="app-version"></span><a class="brand footer-brand" href="/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><a href="/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/static/pc.js?v=pages-1"></script>
+</body>
+</html>

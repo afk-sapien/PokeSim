@@ -1,3 +1,22 @@
+0.2.0rc7, continuing adventures and visible progress
+
+- Restore planner timing safely and replan stationary objectives without rewinding the game.
+- Clear the loose east-corridor boulder when returning through Victory Road.
+- Check every expedition's route and retire unproductive objectives with a retry cooldown.
+- Show Live activity and the last achievement with its age.
+- Keep playtime announcement history across checkpoint reloads.
+- Package the read-only trade board and save-based trade executor.
+- Consolidate the deployed Live, Pokédex, PC, journal, nickname, storage, and persistent clock work into a reproducible release.
+
+- Add a `/pokedex` page: all 151 entries with types, base stats, learnsets, evolution families, and Kanto locations, filtered by search, type, record, and availability.
+- Show the traveling party and every storage box, with each resident linked to its Pokédex entry.
+- Serve entry data from `/api/pokedex` and live records from `/api/pokedex/status`, and link out to Bulbapedia, Serebii, and Wikipedia.
+- Add sixteen tests covering the reference data, the live status shape, and the new endpoints.
+- Stop planning Pokédex projects that need the PC when storage cannot serve them: with a full party and every box full, the run no longer walks to a PC and cycles its menu.
+- Release spare stored duplicates to keep about five storage slots free, so an unattended run never runs out of room. One copy of every species always survives, the lowest-level duplicate goes first, and a current evolution project's partner is never released.
+- Answer a release confirmation only while a release is the active goal, and decline it otherwise.
+- Record releases in the journal at minimal priority.
+
 0.2.0rc6, unidentified ghost encounters
 
 - Flee wild Pokémon Tower encounters before obtaining the Silph Scope.

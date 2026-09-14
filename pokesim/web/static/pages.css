@@ -1,0 +1,388 @@
+/* Shared page layout and navigation. */
+.page-main { max-width:1320px }
+.page-main { margin:0 auto }
+.page-main { min-height:calc(100vh - 220px) }
+.topbar { min-height:76px }
+.topbar { height:auto }
+.topbar nav { gap:8px }
+.topbar nav a { padding:9px 13px }
+.topbar nav a { border-radius:9px }
+.topbar nav .nav-current { background:#e5eadf }
+.topbar nav .nav-current { color:#304b36 }
+.topbar nav .nav-current { font-weight:650 }
+.page-intro { padding:30px 0 }
+.page-intro h1 { font-size:36px }
+.page-intro .intro-copy { font-size:13px }
+.live-layout { display:grid }
+.live-layout { grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr) }
+.live-layout { gap:24px }
+.live-layout { align-items:start }
+.live-layout .game-card { grid-area:auto }
+.live-aside { display:grid }
+.live-aside { gap:20px }
+.live-aside .trainer-card,.live-aside .objective-card { grid-area:auto }
+.page-shortcuts { display:grid }
+.page-shortcuts { grid-template-columns:1fr 1fr }
+.page-shortcuts { gap:12px }
+.page-shortcuts a { border:1px solid #dcded3 }
+.page-shortcuts a { border-radius:16px }
+.page-shortcuts a { background:#fffef9 }
+.page-shortcuts a { padding:20px }
+.page-shortcuts strong { display:block }
+.page-shortcuts strong { margin:10px 0 }
+.page-shortcuts p { font-size:12px }
+.page-shortcuts p { color:#727b6b }
+.page-shortcuts a:hover { border-color:#8fa284 }
+[data-page="team"] .party { grid-template-columns:repeat(3,minmax(0,1fr)) }
+[data-page="team"] .party-section h2 { font-size:22px }
+[data-page="team"] .mon-main { padding:18px }
+[data-page="team"] .mon-title h3 { font-size:16px }
+[data-page="team"] .sprite-stage { width:76px }
+[data-page="team"] .sprite-stage { flex-shrink:0 }
+.team-support,.journey-layout { display:grid }
+.team-support,.journey-layout { grid-template-columns:1fr 1fr }
+.team-support,.journey-layout { gap:24px }
+.team-support { margin-top:24px }
+.support-card { padding:24px }
+.support-card { border:1px solid #dcded3 }
+.support-card { border-radius:18px }
+.support-card { background:#fffef9 }
+.support-card .readiness { border-top:0 }
+.support-card .readiness { padding:0 }
+.journey-layout .badge-card { grid-area:auto }
+.journey-layout .route-details { margin:0 }
+[data-page="journal"] .journal { border:0 }
+[data-page="journal"] .journal { margin:0 }
+[data-page="journal"] .journal { padding-top:0 }
+.pagination { display:flex }
+.pagination { justify-content:space-between }
+.pagination { align-items:center }
+.pagination { gap:16px }
+.pagination { margin:20px 0 }
+.pagination button { padding:10px 18px }
+.pagination button { border-radius:10px }
+.pagination span { font:12px ui-monospace,monospace }
+.pagination span { color:#697562 }
+button:disabled { cursor:default }
+button:disabled { opacity:.45 }
+.pc-overview { display:flex }
+.pc-overview { align-items:center }
+.pc-overview { gap:48px }
+.pc-overview { background:#e9eee2 }
+.pc-overview { padding:20px 28px }
+.pc-overview { border-radius:16px }
+.pc-overview { margin-bottom:24px }
+.pc-overview strong { display:block }
+.pc-overview strong { font-size:23px }
+.pc-overview strong { margin-top:6px }
+.pc-overview a { margin-left:auto }
+.pc-overview a { font-size:13px }
+.pc-workspace { display:grid }
+.pc-workspace { grid-template-columns:180px minmax(0,1fr) }
+.pc-workspace { gap:24px }
+.pc-sidebar h2 { font-size:16px }
+.pc-sidebar h2 { margin:8px 0 16px }
+.box-picker { display:grid }
+.box-picker { gap:7px }
+.box-picker button { display:flex }
+.box-picker button { justify-content:space-between }
+.box-picker button { gap:8px }
+.box-picker button { padding:12px 14px }
+.box-picker button { border-radius:10px }
+.box-picker button { text-align:left }
+.box-picker button small { color:#788372 }
+.box-picker button.selected { background:#304b36 }
+.box-picker button.selected { color:#fffef9 }
+.box-picker button.selected small { color:#d5dfce }
+.pc-grid { display:grid }
+.pc-grid { grid-template-columns:repeat(5,minmax(0,1fr)) }
+.pc-grid { gap:12px }
+.pc-mon { display:flex }
+.pc-mon { flex-direction:column }
+.pc-mon { align-items:center }
+.pc-mon { padding:16px 10px }
+.pc-mon { border-radius:14px }
+.pc-mon { min-width:0 }
+.pc-mon { background:#fffef9 }
+.pc-mon img { image-rendering:pixelated }
+.pc-mon strong { font-size:13px }
+.pc-mon strong { overflow-wrap:anywhere }
+.pc-mon small { font-size:11px }
+.pc-mon small { color:#7c8175 }
+.pc-mon .eyebrow { font-size:8px }
+#pc-detail { width:min(480px,calc(100% - 32px)) }
+#pc-detail { border:1px solid #d0d8c8 }
+#pc-detail { border-radius:20px }
+#pc-detail { background:#f5f3ed }
+#pc-detail { padding:28px }
+#pc-detail { color:#292c29 }
+#pc-detail { max-height:85vh }
+#pc-detail { overflow:auto }
+#pc-detail::backdrop { background:#192d2480 }
+#pc-close { display:block }
+#pc-close { padding:8px 12px }
+#pc-detail .pc-detail-head { text-align:center }
+.pc-detail-head img { image-rendering:pixelated }
+.pc-detail-head h2 { margin:8px 0 }
+.individual-stats { width:100% }
+.individual-stats { border-collapse:collapse }
+.individual-stats { margin:20px 0 12px }
+.individual-stats caption { text-align:left }
+.individual-stats caption { margin-bottom:12px }
+.individual-stats caption { font-weight:600 }
+.individual-stats th,.individual-stats td { padding:9px 5px }
+.individual-stats th,.individual-stats td { text-align:left }
+.individual-stats th,.individual-stats td { border-bottom:1px solid #dce1d4 }
+.individual-stats th,.individual-stats td { font-size:12px }
+#pc-detail .dex-open { display:block }
+#pc-detail .dex-open { margin-top:20px }
+.detail-backdrop { z-index:50 }
+.detail-panel { z-index:51 }
+@media (max-width:1400px) {
+.page-main { margin:0 40px }
+}
+@media (max-width:1150px) {
+.page-main { margin:0 26px }
+.topbar { flex-wrap:wrap }
+.topbar { gap:12px }
+.topbar { padding:14px 0 }
+.topbar nav { order:3 }
+.topbar nav { width:100% }
+.topbar nav { margin:0 }
+.topbar nav { justify-content:center }
+.connection { margin-left:auto }
+[data-page="team"] .party { grid-template-columns:repeat(2,minmax(0,1fr)) }
+.pc-grid { grid-template-columns:repeat(4,minmax(0,1fr)) }
+}
+@media (max-width:850px) {
+.live-layout,.team-support,.journey-layout { grid-template-columns:1fr }
+.page-intro h1 { font-size:30px }
+.live-aside .trainer-card { grid-template-columns:auto 1fr }
+.live-aside .trainer-stats { grid-column:1/-1 }
+.pc-workspace { grid-template-columns:1fr }
+.box-picker { grid-template-columns:repeat(4,minmax(0,1fr)) }
+.box-picker button { padding:10px }
+.pc-overview { gap:20px }
+.pc-overview a { max-width:120px }
+}
+@media (max-width:580px) {
+.page-main { margin:0 18px }
+.topbar nav { display:grid }
+.topbar nav { grid-template-columns:repeat(6,minmax(0,1fr)) }
+.topbar nav { gap:2px }
+.topbar nav a { padding:9px 2px }
+.topbar nav a { text-align:center }
+.topbar nav a { font-size:11px }
+.page-intro { padding:24px 0 }
+.page-intro h1 { font-size:28px }
+[data-page="team"] .party { grid-template-columns:1fr }
+.pc-grid { grid-template-columns:repeat(2,minmax(0,1fr)) }
+.box-picker { grid-template-columns:repeat(3,minmax(0,1fr)) }
+.pc-overview { flex-wrap:wrap }
+.pc-overview { padding:20px }
+.pc-overview a { max-width:none }
+.pc-overview a { width:100% }
+.pc-overview a { margin:0 }
+.page-shortcuts { grid-template-columns:1fr }
+[data-page="journey"] .collection-card>.section-heading { flex-wrap:wrap }
+.pagination { gap:8px }
+.pagination button { padding:10px 12px }
+}
+[data-page="pokedex"] .dex-summary { grid-template-columns:repeat(2,minmax(0,1fr)) }
+[data-page="pokedex"] .dex-summary>div { padding:18px 22px }
+@media (max-width:580px) {
+[data-page="pokedex"] .dex-summary { gap:12px }
+[data-page="pokedex"] .dex-summary>div { padding:14px }
+[data-page="pokedex"] .dex-summary strong { font-size:23px }
+[data-page="pokedex"] .dex-summary .eyebrow { font-size:8px }
+.dex-toolbar { display:grid }
+.dex-toolbar { grid-template-columns:repeat(2,minmax(0,1fr)) }
+.dex-toolbar { gap:12px }
+.dex-toolbar label { width:auto }
+.dex-toolbar label { flex-direction:column }
+.dex-toolbar label { align-items:stretch }
+.dex-toolbar input,.dex-toolbar select { min-width:0 }
+.dex-toolbar input,.dex-toolbar select { width:100% }
+.dex-toolbar .count-pill { grid-column:1/-1 }
+}
+.mobile-box-control { display:none }
+@media (max-width:580px) {
+.pc-sidebar h2,.box-picker { display:none }
+.mobile-box-control { display:flex }
+.mobile-box-control { align-items:center }
+.mobile-box-control { gap:12px }
+.mobile-box-control { font-size:12px }
+.mobile-box-control select { flex:1 }
+.mobile-box-control select { min-width:0 }
+.mobile-box-control select { padding:12px }
+.mobile-box-control select { border:1px solid #d0d5c8 }
+.mobile-box-control select { border-radius:10px }
+.mobile-box-control select { background:#fffef9 }
+.mobile-box-control select { color:#304b36 }
+}
+/* The live game, its goal, and all six partners share one view. */
+.watch-intro { padding:20px 0 }
+.watch-intro h1 { font-size:27px }
+.watch-intro .eyebrow { margin-bottom:7px }
+.watch-clock { display:grid }
+.watch-clock { gap:5px }
+.watch-clock { text-align:right }
+.watch-clock>span:first-child { font:20px ui-monospace,monospace }
+.watch-layout { display:grid }
+.watch-layout { grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) }
+.watch-layout { grid-template-areas:"game goal" "game team" }
+.watch-layout { grid-template-rows:auto 1fr }
+.watch-layout { gap:16px 24px }
+.watch-layout { align-items:start }
+.watch-layout .game-card { grid-area:game }
+.watch-layout .objective-card { grid-area:goal }
+.watch-layout .party-section { grid-area:team }
+.watch-layout .objective-card { padding:16px 20px }
+.watch-layout .objective-body h2 { font-size:18px }
+.watch-layout #decision { font-size:12px }
+.watch-layout #decision { line-height:1.5 }
+.watch-layout #decision { margin:6px 0 }
+.watch-next { display:flex }
+.watch-next { gap:8px }
+.watch-next { font-size:11px }
+.watch-next { margin-top:10px }
+.watch-next>span { flex-shrink:0 }
+.watch-next>span { color:#6c785f }
+.watch-next strong { font-weight:500 }
+.watch-layout .party { grid-template-columns:repeat(2,minmax(0,1fr)) }
+.watch-layout .mon-main { flex-direction:row }
+.watch-layout .mon-main { padding:10px }
+.watch-layout .mon-main { gap:9px }
+.watch-layout .sprite-stage { width:54px }
+.watch-layout .sprite-stage { height:88px }
+.watch-layout .sprite-stage { flex-shrink:0 }
+.watch-layout .sprite-stage img { width:72px }
+.watch-layout .sprite-stage img { height:72px }
+.watch-layout .mon-title { flex-wrap:wrap }
+.watch-layout .mon-title { gap:3px 8px }
+.watch-layout .mon-title h3 { font-size:13px }
+.watch-layout .mon-subtitle { margin:3px 0 6px }
+.watch-layout .mon-subtitle .type-tag { display:none }
+.watch-layout .mon-foot { font-size:8px }
+.watch-layout .xp-label { margin-top:5px }
+.watch-layout .screen img { max-width:400px }
+.manual-controls { border-top:1px solid #465046 }
+.manual-controls { margin:0 18px 10px }
+.manual-controls>summary { padding:12px 0 }
+.manual-controls>summary { color:#c6d0c0 }
+.manual-controls>summary { cursor:pointer }
+.manual-controls>summary { font-size:11px }
+.manual-controls .controller { padding:5px 0 10px }
+.watch-progress { display:flex }
+.watch-progress { align-items:center }
+.watch-progress { gap:24px }
+.watch-progress { margin:20px 0 14px }
+.watch-progress { padding:16px 20px }
+.watch-progress { border:1px solid #dce1d3 }
+.watch-progress { border-radius:14px }
+.watch-progress { background:#ecefe4 }
+.watch-trainer,.watch-stat { display:grid }
+.watch-trainer,.watch-stat { gap:5px }
+.watch-trainer strong { font-size:16px }
+.watch-trainer small { color:#6c785f }
+.watch-trainer small { font-size:10px }
+.watch-stat strong { font-size:16px }
+.watch-stat strong small { font-size:11px }
+.watch-badges { flex:1 }
+.watch-badges { min-width:0 }
+.watch-badge-label { display:flex }
+.watch-badge-label { align-items:center }
+.watch-badge-label { gap:10px }
+.watch-badge-label strong { font-size:11px }
+.watch-progress .badges { grid-template-columns:repeat(8,minmax(0,1fr)) }
+.watch-progress .badges { margin-top:7px }
+.watch-progress .badge { padding:0 }
+.watch-progress .badge-icon { width:23px }
+.watch-progress .badge-icon { height:23px }
+.watch-progress .badge-icon { font-size:19px }
+.watch-progress .badge>span:not(.badge-icon),.watch-progress .badge>small { display:none }
+.adventure-details { border:1px solid #dce1d3 }
+.adventure-details { border-radius:14px }
+.adventure-details { background:#fffef9 }
+.adventure-details>summary { padding:17px 20px }
+.adventure-details>summary { cursor:pointer }
+.adventure-details>summary { font-size:13px }
+.adventure-details>summary { font-weight:600 }
+.adventure-details>summary>span { margin-left:12px }
+.adventure-details>summary>span { color:#727b6b }
+.adventure-details>summary>span { font-weight:400 }
+.adventure-details>summary>span { font-size:11px }
+.adventure-content { padding:0 20px 20px }
+.adventure-content .collection-card { margin:0 }
+.adventure-content .collection-card { padding:20px 0 }
+.adventure-content .collection-card { border:0 }
+.adventure-content .collection-card { background:none }
+.adventure-content .collection-card h2 { font-size:21px }
+.adventure-content .collection-intro { display:none }
+.adventure-content .team-support { margin-top:0 }
+#team,#journey-progress,#collection { scroll-margin-top:20px }
+@media (max-width:1000px) {
+.watch-layout { grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr) }
+.watch-layout { gap:14px }
+.watch-layout .mon-main { flex-direction:column }
+.watch-layout .sprite-stage { width:100% }
+.watch-layout .sprite-stage { height:50px }
+.watch-layout .sprite-stage img { width:64px }
+.watch-layout .sprite-stage img { height:64px }
+.watch-progress { gap:16px }
+}
+@media (max-width:850px) {
+.watch-layout { grid-template-columns:1fr }
+.watch-layout { grid-template-areas:"game" "goal" "team" }
+.watch-layout .mon-main { flex-direction:row }
+.watch-layout .sprite-stage { width:64px }
+.watch-layout .sprite-stage { height:90px }
+.watch-progress { flex-wrap:wrap }
+.watch-badges { flex-basis:60% }
+.watch-stat { flex:1 }
+.watch-intro h1 { font-size:24px }
+}
+@media (max-width:580px) {
+.topbar nav { grid-template-columns:repeat(4,minmax(0,1fr)) }
+.topbar nav a { font-size:12px }
+.watch-intro h1 { font-size:21px }
+.watch-intro { gap:14px }
+.watch-clock { flex-shrink:0 }
+.watch-clock .eyebrow { font-size:7px }
+.watch-layout .mon-main { flex-direction:column }
+.watch-layout .sprite-stage { width:100% }
+.watch-layout .sprite-stage { height:56px }
+.watch-layout .mon-subtitle { font-size:9px }
+.watch-layout .party { gap:9px }
+.watch-progress { padding:15px }
+.watch-progress .eyebrow { font-size:8px }
+.adventure-details>summary>span { display:block }
+.adventure-details>summary>span { margin:6px 0 0 15px }
+.adventure-content { padding:0 15px 15px }
+.adventure-content .section-heading { flex-wrap:wrap }
+}
+.watch-layout .mon-main { padding:8px 10px }
+.watch-layout .sprite-stage { height:68px }
+.watch-layout .mon-info { min-width:0 }
+.watch-layout .mon-details summary { padding:5px 10px }
+.watch-layout .objective-card { padding:12px 18px }
+.watch-layout .objective-body h2 { margin:4px 0 6px }
+.watch-layout .screen img { max-width:340px }
+.watch-layout .party-section>.section-heading { margin-bottom:8px }
+.watch-layout .mon-subtitle .condition { font-size:8px }
+@media (max-width:1000px) and (min-width:851px) {
+.watch-layout .sprite-stage { height:48px }
+}
+@media (max-width:580px) {
+.watch-layout .sprite-stage { height:48px }
+}
+.watch-layout .sprite-stage { grid-template-columns:minmax(0,1fr) }
+.watch-intro { padding:14px 0 }
+.watch-layout { row-gap:12px }
+#clock-note { font-size:9px }
+#clock-note { color:#727b6b }
+#clock-note:empty { display:none }
+@media (max-width:580px) {
+#clock-note { max-width:100px }
+#clock-note { font-size:8px }
+}

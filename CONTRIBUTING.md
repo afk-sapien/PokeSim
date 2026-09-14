@@ -2,6 +2,8 @@ Contributing to pokesim
 
 This is an experimental self-hosting project. Original code is MIT licensed. Release artifacts exclude user-supplied game content. Keep changes focused and include the reason, affected behavior, and validation in each pull request.
 
+See the [code ownership and refactoring guide](docs/architecture.md) for module boundaries, persistence guarantees, and the next cleanup priorities.
+
 Prepare the pinned reference checkout described in the README, then install the locked environment:
 
 ```sh

@@ -1,14 +1,17 @@
 """SQLite event log + key/value run state + screenshot files."""
 from __future__ import annotations
 
-import hashlib
 import json
-import os
-import tempfile
+import logging
 import sqlite3
+import tempfile
 import threading
 import time
 from pathlib import Path
+
+from .checkpoints import CheckpointStore
+
+log = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -41,6 +44,7 @@ class Store:
                     pass
             except OSError as error:
                 raise OSError(f"DATA_DIR must be writable, including {d}. Check volume ownership.") from error
+        self.checkpoints = CheckpointStore(self.states)
         self.db = sqlite3.connect(self.dir / "pokesim.sqlite", check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
@@ -64,20 +68,31 @@ class Store:
     def add_event(self, ev, snapshot, shot_png: bytes | None, state_bytes: bytes | None) -> int:
         ts = time.time()
         with self.lock:
-            cur = self.db.execute(
-                "INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (?,?,?,?,?,?,?,?)",
-                (ts, ev.type, ev.title, ev.body, int(ev.notable), int(ev.priority), snapshot.map_name,
-                 "%d:%02d:%02d" % snapshot.playtime))
-            eid = cur.lastrowid
-            shot = state = None
-            if shot_png:
-                shot = f"{eid}.png"
-                (self.shots / shot).write_bytes(shot_png)
-            if state_bytes:
-                state = f"event-{eid}.state"
-                (self.states / state).write_bytes(state_bytes)
-            self.db.execute("UPDATE events SET shot=?, state=? WHERE id=?", (shot, state, eid))
-            self.db.commit()
+            attachments = []
+            try:
+                with self.db:
+                    cur = self.db.execute(
+                        "INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (?,?,?,?,?,?,?,?)",
+                        (ts, ev.type, ev.title, ev.body, int(ev.notable), int(ev.priority), snapshot.map_name,
+                         "%d:%02d:%02d" % snapshot.playtime))
+                    eid = cur.lastrowid
+                    shot = f"{eid}.png" if shot_png else None
+                    state = f"event-{eid}.state" if state_bytes else None
+                    for directory, name, data in (
+                        (self.shots, shot, shot_png), (self.states, state, state_bytes)
+                    ):
+                        if name:
+                            path = directory / name
+                            attachments.append(path)
+                            path.write_bytes(data)
+                    self.db.execute("UPDATE events SET shot=?, state=? WHERE id=?", (shot, state, eid))
+            except Exception:
+                for path in attachments:
+                    try:
+                        path.unlink(missing_ok=True)
+                    except OSError:
+                        log.exception("Cannot remove failed event attachment %s", path)
+                raise
         return eid
 
     def events(self, limit=50, notable_only=False, types=None, before=None, min_priority=None) -> list[dict]:
@@ -118,79 +133,40 @@ class Store:
         return json.loads(r["v"]) if r else default
 
     def set(self, k, v):
-        with self.lock:
+        with self.lock, self.db:
             self.db.execute("INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)", (k, json.dumps(v)))
-            self.db.commit()
 
     # --- save states ---
     def autosave_path(self) -> Path:
-        return self.states / f"auto-v1-{time.time_ns()}.state"
+        return self.checkpoints.autosave_path()
 
     def autosaves(self) -> list[Path]:
-        return sorted(self.states.glob("auto-*.state"), key=lambda p: p.stat().st_mtime_ns)
+        return self.checkpoints.autosaves()
 
     def latest_state(self) -> Path | None:
-        saves = self.autosaves()
-        return saves[-1] if saves else None
+        return self.checkpoints.latest_state()
 
     def prune_autosaves(self, keep: int):
-        for p in self.autosaves()[:-keep] if keep > 0 else []:
-            p.unlink(missing_ok=True)
-            p.with_suffix(".json").unlink(missing_ok=True)
+        self.checkpoints.prune_autosaves(keep)
 
     def state_path(self, name: str) -> Path | None:
-        if Path(name).name != name or "\\" in name or not name.endswith(".state"):
-            return None
-        p = self.states / name
-        return p if p.is_file() else None
+        return self.checkpoints.state_path(name)
 
-    @staticmethod
-    def atomic_write(path: Path, data: bytes):
-        """Publish a complete file only after its contents reach disk."""
-        fd, name = tempfile.mkstemp(prefix=".pending-", dir=path.parent)
-        temporary = Path(name)
-        try:
-            with os.fdopen(fd, "wb") as output:
-                output.write(data)
-                output.flush()
-                os.fsync(output.fileno())
-            os.replace(temporary, path)
-            directory = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory)
-            finally:
-                os.close(directory)
-        finally:
-            temporary.unlink(missing_ok=True)
+    atomic_write = staticmethod(CheckpointStore.atomic_write)
 
     def write_checkpoint(self, state: bytes, metadata: dict) -> Path:
-        path = self.autosave_path()
-        manifest = dict(metadata, format=1, sha256=hashlib.sha256(state).hexdigest())
-        self.atomic_write(path, state)
-        self.atomic_write(path.with_suffix(".json"), json.dumps(manifest).encode())
-        return path
+        return self.checkpoints.write_checkpoint(state, metadata)
 
     def checkpoint_metadata(self, path: Path) -> dict | None:
-        manifest = path.with_suffix(".json")
-        if not manifest.exists() and not path.name.startswith("auto-v1-"):
-            return None
-        data = json.loads(manifest.read_text())
-        if data.get("format") != 1:
-            raise ValueError("Unsupported checkpoint format")
-        if data.get("sha256") != hashlib.sha256(path.read_bytes()).hexdigest():
-            raise ValueError("Checkpoint checksum does not match")
-        if not isinstance(data.get("policy_state"), dict) or not isinstance(data.get("run_memory"), dict):
-            raise ValueError("Checkpoint memory is invalid")
-        return data
+        return self.checkpoints.checkpoint_metadata(path)
 
     def prune_events(self, days: int) -> int:
         if days <= 0:
             return 0
         cutoff = time.time() - days * 86400
-        with self.lock:
+        with self.lock, self.db:
             rows = self.db.execute("SELECT id, shot, state FROM events WHERE ts < ?", (cutoff,)).fetchall()
             self.db.execute("DELETE FROM events WHERE ts < ?", (cutoff,))
-            self.db.commit()
         for row in rows:
             for directory, name in ((self.shots, row["shot"]), (self.states, row["state"])):
                 if name and Path(name).name == name:

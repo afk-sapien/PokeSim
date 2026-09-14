@@ -11,10 +11,18 @@ DATA = load('collection.json')
 EVOS = {int(sid): rows for sid, rows in DATA['evolutions'].items()}
 PACE = {'focused': (0, 0), 'balanced': (3600, 18000), 'thorough': (10800, 12000)}
 CENTERS = tuple((m, 13, 4) for m, w in WORLD.items() if 'Pokecenter' in w['name'] and w['width'] == 14)
+CENTERS += ((MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8),)
 LEAGUE = {MAPS[n] for n in ('LORELEIS_ROOM','BRUNOS_ROOM','AGATHAS_ROOM','LANCES_ROOM','CHAMPIONS_ROOM','HALL_OF_FAME')}
 RODS = {'OLD_ROD': 'VERMILION_OLD_ROD_HOUSE', 'GOOD_ROD': 'FUCHSIA_GOOD_ROD_HOUSE', 'SUPER_ROD': 'ROUTE_12_SUPER_ROD_HOUSE'}
 TRADE_NPCS = {'ROUTE_2_TRADE_HOUSE':'SCIENTIST', 'VERMILION_TRADE_HOUSE':'LITTLE_GIRL',
               'ROUTE_18_GATE_2F':'YOUNGSTER', 'CERULEAN_TRADE_HOUSE':'GRANNY'}
+
+
+# Grass tile per tileset, from data/tilesets/tileset_headers.asm. A tileset with no grass tile
+# (CAVERN and the interiors, -1 upstream) has encounters on any walkable floor tile instead, which
+# is the fallback in tiles(). Leaving PLATEAU out of this meant Route 23 offered 981 encounter
+# tiles instead of its 44, so the run walked to a tile that could never produce a battle.
+GRASS_TILES = {'OVERWORLD': 0x52, 'FOREST': 0x20, 'PLATEAU': 0x45}
 
 
 def name(sid):
@@ -23,6 +31,11 @@ def name(sid):
 
 def dex(sid):
     return SPECIES.get(sid, {}).get('dex', 0)
+
+
+def storage_exchange_possible(s):
+    """Taking a Pokemon out needs a free party slot, or somewhere to deposit a reserve first."""
+    return len(s.party) < 6 or not s.box_full or s.next_free_box is not None
 
 
 def champion(s):
@@ -43,9 +56,11 @@ def tiles(source):
                         points.append((source['map'], x, y, direction))
         return tuple(points)
     water = (0x14,0x32,0x48)
+    grass = GRASS_TILES.get(w['tileset'])
     return tuple((source['map'],x,y,None) for y,row in enumerate(w['tiles']) for x,tile in enumerate(row)
-                 if (tile in water if mode == 'surf' else tile == (0x20 if w['tileset'] == 'FOREST' else 0x52)
-                     if w['tileset'] in ('OVERWORLD','FOREST') else tile in w['passable'] and tile not in water)
+                 if (tile in water if mode == 'surf'
+                     else tile == grass if grass is not None
+                     else tile in w['passable'] and tile not in water)
                  and not any(warp[:2] == [x,y] for warp in w['warps']))
 
 
@@ -65,9 +80,14 @@ class Collection:
         self.eevee_choice = 134
         self.history = []
         self.completed_champion = False
+        self.idle_frames = 0
+        self.project_maps = []
+        self.project_flags = []
+        self.progress_token = None
+        self.was_in_battle = False
 
     def state_dict(self):
-        return {k:getattr(self,k) for k in ('pace','project','remaining','cooldown','attempts','elapsed','eevee_choice','history','completed_champion')}
+        return {k:getattr(self,k) for k in ('pace','project','remaining','cooldown','attempts','elapsed','eevee_choice','history','completed_champion','idle_frames','project_maps','project_flags')}
 
     def load(self, data):
         for key in self.state_dict():
@@ -77,6 +97,29 @@ class Collection:
             self.pace = 'thorough'
         self.last_frame = None
         self.report_key = None
+        self.progress_token = None
+        self.was_in_battle = False
+        # A reload rewinds `elapsed` to the checkpoint's value while `last_choice` keeps the
+        # in-memory high-water mark. Left alone, the spacing guard in choose() would then hold
+        # for as long as the rewind and the planner would pick nothing at all.
+        self.last_choice = min(self.last_choice, self.elapsed - 600)
+
+    def abandon(self, reason):
+        if not self.project:
+            return False
+        project = self.project
+        label = name(project['species']) if project.get('species') else project['method'].title()
+        self.attempts[project.get('key', label)] = self.elapsed + 60000
+        self.history = (self.history + [f'Changed plan: {label}. {reason}'])[-6:]
+        self.project = None
+        self.remaining = 0
+        self.cooldown = 0
+        self.last_choice = self.elapsed - 600
+        self.idle_frames = 0
+        self.project_maps = []
+        self.project_flags = []
+        self.progress_token = None
+        return True
 
     def observe(self,s):
         delta = max(0,min(120,s.frame - self.last_frame)) if self.last_frame is not None else 0
@@ -86,6 +129,23 @@ class Collection:
         self.completed_champion |= champion(s)
         if self.project:
             self.remaining -= delta
+            if len(self.project_flags) != len(s.event_flags):
+                self.project_flags = list(s.event_flags)
+            new_flags = any(now & ~before for now, before in zip(s.event_flags, self.project_flags))
+            self.project_flags = [now | before for now, before in zip(s.event_flags, self.project_flags)]
+            token = (s.owned, s.badges, s.items, s.coins,
+                     tuple(sorted((p.species, p.level, p.experience) for p in s.party)))
+            # First visits and completed battles count toward an expedition. Walking between
+            # familiar maps, rearranging menus, and taking damage do not extend its deadline.
+            self.idle_frames += delta
+            if ((self.progress_token is not None and token != self.progress_token)
+                    or new_flags or s.map not in self.project_maps
+                    or self.project['method'] in ('grass', 'surf', 'fish', 'safari') and self.was_in_battle and not s.in_battle):
+                self.idle_frames = 0
+            if s.map not in self.project_maps:
+                self.project_maps.append(s.map)
+            self.progress_token = token
+            self.was_in_battle = bool(s.in_battle)
             target = self.project.get('species')
             item = self.project.get('item')
             finished = (target and dex(target) in s.owned) or (not target and item and any(i==ITEMS[item] for i,q in s.items if q))
@@ -104,6 +164,8 @@ class Collection:
                     self.attempts[self.project['key']] = self.elapsed + 60000
                 self.project = None
                 self.cooldown = 1200 if self.completed_champion else PACE[self.pace][1]
+            elif self.idle_frames >= 7200 and not s.in_battle:
+                self.abandon('No encounter, training gain, or new route in two minutes')
         key = (s.owned, s.items, s.stored_pokemon, tuple((p.species,p.level) for p in s.party), s.event_flags, s.hidden_objects, self.completed_champion, self.pace, self.version)
         if key != self.report_key:
             self.report_key = key
@@ -204,7 +266,9 @@ class Collection:
         def add(project,weight):
             key = str(project.get('species',0)) + ':' + project['method'] + ':' + str(project.get('map',0)) + ':' + str(project.get('fragment',''))
             if self.attempts.get(key,0) <= self.elapsed:
-                candidates.append((weight,{**project,'key':key}))
+                goal = self.goal(s, project)
+                if goal and goal.targets and distance_to(goal.targets) is not None:
+                    candidates.append((weight,{**project,'key':key}))
         sources = self.sources()
         searched = set()
         distance_to = nav.distance_lookup((s.map, s.x, s.y), s.frame)
@@ -233,6 +297,8 @@ class Collection:
                         continue
                 if mode in ('gift','fossil','trade','static') and not self.completed_champion and s.map != source['map']:
                     continue
+                if mode in ('gift','fossil') and len(s.party)>=6 and not storage_exchange_possible(s):
+                    continue
                 if mode == 'grass' and source.get('level',100) > max(p.level for p in s.party)+3:
                     continue
                 search_key = (sid,source['map'],mode,source.get('rod'))
@@ -259,7 +325,7 @@ class Collection:
                     continue
                 if evo['method']=='item' and not bag.get(ITEMS[evo['requirement']]) and evo['requirement']=='MOON_STONE':
                     continue
-                if box is not None and not self.completed_champion:
+                if box is not None and (not self.completed_champion or not storage_exchange_possible(s)):
                     continue
                 add({'species':evo['species'],'parent':sid,'method':'evolve','evolution':evo,'box':box},3)
         if self.completed_champion:
@@ -297,6 +363,10 @@ class Collection:
             return None
         self.project = rng.choices([p for w,p in candidates],weights=[w for w,p in candidates])[0]
         self.project['initial_owned'] = list(s.owned)
+        self.idle_frames = 0
+        self.project_maps = [s.map]
+        self.project_flags = list(s.event_flags)
+        self.progress_token = None
         self.remaining = 300000 if self.project['method']=='rematch' else 36000 if self.completed_champion else PACE[self.pace][0]
         nav.path.clear()
         return self.goal(s)
@@ -344,13 +414,15 @@ class Collection:
             return object_goal('collect_amber','Collect Old Amber','Revive Aerodactyl at the Cinnabar lab','MUSEUM_1F','SCIENTIST2')
         return None
 
-    def goal(self,s):
-        p=self.project
+    def goal(self,s,project=None):
+        p=self.project if project is None else project
         if not p:
             return None
         if p['method']=='evolve':
             index=next((i for i,mon in enumerate(s.party) if mon.species==p['parent']),None)
             if index is None:
+                if not storage_exchange_possible(s):
+                    return None
                 return Goal('party_collection','Withdraw an evolution partner','Keep the main battlers and bring a reserve out of storage',CENTERS,'up',True)
             evo=p['evolution']
             if evo['method']=='item':
@@ -366,5 +438,7 @@ class Collection:
             return Goal('collect_train','Train '+name(p['parent'])+' toward '+name(p['species']),
                         f'Work toward level {evo["requirement"]}, then resume other activities',tuple(set(options)))
         if p['method'] in ('gift','fossil') and len(s.party)>=6:
+            if not storage_exchange_possible(s):
+                return None
             return Goal('party_collection_space','Make room for a gift','Store a reserve before receiving a Pokémon',CENTERS,'up',True)
         return self.project_goal(s,p)

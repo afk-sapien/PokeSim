@@ -1,0 +1,19 @@
+services:
+  broker:
+    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc7}
+    container_name: pokesim-broker
+    restart: unless-stopped
+    command: ["uvicorn", "pokesim.broker.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8950:8000"
+    environment:
+      BROKER_INSTANCES: "red=http://host.docker.internal:8930,blue=http://host.docker.internal:8940"
+    volumes:
+      - "${GAME_DATA_DIR:?Set GAME_DATA_DIR to the prepared game-data directory}:/data/game-data:ro"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request\nassert urllib.request.urlopen('http://127.0.0.1:8000/api/proposals', timeout=15).status == 200"]
+      interval: 60s
+      timeout: 20s
+      start_period: 30s

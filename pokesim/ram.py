@@ -6,7 +6,7 @@ against the community RAM map and verified in-emulator (see tests/).
 from __future__ import annotations
 
 from .game_data import load
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 TABLES = load("tables.json")
@@ -118,10 +118,35 @@ class PartyMon:
     special: int = 1
     experience: int = 0
     max_pp: tuple[int, ...] = ()
+    dvs: tuple[int, ...] = ()
+    stat_exp: tuple[int, ...] = ()
 
     @property
     def name(self) -> str:
         return SPECIES_NAMES.get(self.species, f"#{self.species}")
+
+
+@dataclass(frozen=True)
+class StoredMon:
+    box: int
+    position: int
+    species: int
+    level: int
+    nick: str
+    moves: tuple[int, ...]
+    experience: int
+    dvs: tuple[int, ...]
+    stat_exp: tuple[int, ...]
+
+
+def individual_data(struct):
+    """Decode shared party/box fields, with stats ordered HP, Attack, Defense, Speed, Special."""
+    attack, defense = struct[27] >> 4, struct[27] & 15
+    speed, special = struct[28] >> 4, struct[28] & 15
+    hp = ((attack & 1) << 3) | ((defense & 1) << 2) | ((speed & 1) << 1) | (special & 1)
+    return {'moves': tuple(struct[8:12]), 'experience': int.from_bytes(struct[14:17], 'big'),
+            'dvs': (hp, attack, defense, speed, special),
+            'stat_exp': tuple(int.from_bytes(struct[i:i + 2], 'big') for i in range(17, 27, 2))}
 
 
 @dataclass(frozen=True)
@@ -155,6 +180,20 @@ class Snapshot:
     active_box: int = 0
     stored_pokemon: tuple[tuple[int, int, int, str], ...] = ()
     box_counts: tuple[int, ...] = ()
+    stored_details: tuple[StoredMon, ...] = ()
+
+    def storage_entries(self):
+        """Expose individual data while preserving legacy compact storage snapshots."""
+        if self.stored_details and self.stored_pokemon == tuple(
+                (mon.box, mon.species, mon.level, mon.nick) for mon in self.stored_details):
+            return [asdict(mon) for mon in self.stored_details]
+        positions, out = {}, []
+        for box, species, level, nick in self.stored_pokemon:
+            position = positions.get(box, 0)
+            positions[box] = position + 1
+            row = {'box': box, 'position': position, 'species': species, 'level': level, 'nick': nick}
+            out.append(row)
+        return out
 
     @property
     def box_full(self) -> bool:
@@ -218,6 +257,7 @@ class Snapshot:
                        "types": p.types, "moves": p.moves, "pp": p.pp, **party_details(p)} for p in self.party],
             "hall_of_fame_count": self.hall_of_fame_count, "coins": self.coins,
             "owned": len(self.owned), "seen": len(self.seen), "money": self.money,
+            "dex_owned": sorted(self.owned), "dex_seen": sorted(self.seen),
             "items": [{"id": i, "name": ITEM_NAMES.get(i, f"#{i}"), "qty": q} for i, q in self.items],
             "in_battle": self.in_battle, "enemy": SPECIES_NAMES.get(self.enemy_species) if self.in_battle else None,
             "enemy_level": self.enemy_level if self.in_battle else None,
@@ -229,9 +269,9 @@ class Snapshot:
             "storage": {"active_box": self.active_box + 1,
                         "count": len(self.boxed_pokemon), "capacity": BOX_CAPACITY,
                         "box_counts": self.box_counts, "can_catch": self.can_catch,
-                        "pokemon": [{"box": box + 1, "species": sid, "level": level, "nick": nick,
-                                     "name": SPECIES_NAMES.get(sid, "Unknown")}
-                                    for box, sid, level, nick in self.stored_pokemon]},
+                        "pokemon": [{**mon, "box": mon['box'] + 1, "position": mon['position'] + 1,
+                                     "name": SPECIES_NAMES.get(mon['species'], "Unknown")}
+                                    for mon in self.storage_entries()]},
         }
 
 
@@ -253,6 +293,10 @@ def read_box_counts(mem) -> tuple[int, ...]:
 
 
 def read_stored_pokemon(mem):
+    return tuple((mon.box, mon.species, mon.level, mon.nick) for mon in read_stored_details(mem))
+
+
+def read_stored_details(mem):
     counts = read_box_counts(mem)
     active = mem[W_CURRENT_BOX] & 0x7F
     out = []
@@ -265,13 +309,13 @@ def read_stored_pokemon(mem):
                 base = 0xA000 + (box % 6) * BOX_DATA_SIZE
                 get = lambda address: mem[2 + box // 6, address]
             try:
-                sid = get(base + 22 + i * 33)
-                level = get(base + 25 + i * 33)
+                struct = bytes(get(base + 22 + i * 33 + j) for j in range(33))
+                sid, level = struct[0], struct[3]
                 nick = decode_text(bytes(get(base + 902 + i * 11 + j) for j in range(11)))
             except TypeError:
                 break
             if sid in SPECIES_NAMES and 1 <= level <= 100:
-                out.append((box, sid, level, nick))
+                out.append(StoredMon(box, i, sid, level, nick, **individual_data(struct)))
     return tuple(out)
 
 
@@ -286,10 +330,10 @@ def read_snapshot(mem, frame: int) -> Snapshot:
         nick = decode_text(bytes(mem[W_PARTY_NICKS + i * 11:W_PARTY_NICKS + i * 11 + 11]))
         party.append(PartyMon(species=s[0], hp=(s[1] << 8) | s[2], max_hp=(s[0x22] << 8) | s[0x23],
                               level=s[0x21], nick=nick, status=s[4], types=(s[5], s[6]),
-                              moves=tuple(s[8:12]), pp=tuple(v & 0x3F for v in s[29:33]),
+                              pp=tuple(v & 0x3F for v in s[29:33]),
                               attack=int.from_bytes(s[36:38], "big"), defense=int.from_bytes(s[38:40], "big"),
                               speed=int.from_bytes(s[40:42], "big"), special=int.from_bytes(s[42:44], "big"),
-                              experience=int.from_bytes(s[14:17], "big"),
+                              **individual_data(s),
                               max_pp=tuple(MOVE_DATA.get(mid, {}).get("pp", 0) +
                                            min(7, MOVE_DATA.get(mid, {}).get("pp", 0) // 5) * (s[29 + j] >> 6)
                                            for j, mid in enumerate(s[8:12]))))
@@ -297,6 +341,7 @@ def read_snapshot(mem, frame: int) -> Snapshot:
     raw = bytes(mem[W_BAG_ITEMS:W_BAG_ITEMS + n_items * 2]) if n_items else b""
     items = tuple((raw[i], raw[i + 1]) for i in range(0, len(raw), 2) if raw[i] not in (0, 0xFF))
     in_battle = mem[W_IS_IN_BATTLE]
+    stored = read_stored_details(mem)
     return Snapshot(
         frame=frame,
         map=mem[W_CUR_MAP], x=mem[W_X], y=mem[W_Y],
@@ -322,7 +367,8 @@ def read_snapshot(mem, frame: int) -> Snapshot:
         hall_of_fame_count=mem[0xD5A2],
         coins=bcd(bytes(mem[0xD5A4:0xD5A6])),
         box_counts=read_box_counts(mem),
-        stored_pokemon=read_stored_pokemon(mem),
+        stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
+        stored_details=stored,
         hidden_objects=bytes(mem[W_TOGGLE_OBJECT_FLAGS:W_TOGGLE_OBJECT_FLAGS + 32]),
         event_flags=bytes(mem[W_EVENT_FLAGS:W_EVENT_FLAGS + 0x140]),
     )

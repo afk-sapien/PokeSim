@@ -178,3 +178,18 @@ def test_unrelated_party_replacement_is_not_an_evolution():
     prev=snap(party=(PartyMon(0x99,30,30,16,'BUDDY'),))
     cur=snap(party=(PartyMon(0x54,30,30,16,'BUDDY'),))
     assert 'evolve' not in types(diff(prev,cur,RunMemory()))
+
+def test_a_withdrawal_caught_mid_commit_is_not_reported_as_a_release():
+    # The box slot clears a few frames before the party grows, so the in-between snapshot looks
+    # like a release. The guard only lets it through if the population stays down afterwards.
+    mem = RunMemory(seen_maps={1})
+    prev = snap(stored_pokemon=((0, 0x54, 9, ''), (0, 0x99, 3, '')), box_counts=(2,) + (0,) * 11)
+    midway = snap(stored_pokemon=((0, 0x99, 3, ''),), box_counts=(1,) + (0,) * 11)
+    evs = diff(prev, midway, mem)
+    assert types(evs) == ['release']
+    landed = snap(party=midway.party + (PartyMon(0x54, 10, 10, 9, 'PIKA'),),
+                  stored_pokemon=midway.stored_pokemon, box_counts=(1,) + (0,) * 11)
+    assert not evs[0].still(landed), 'the party gained it, so nothing was released'
+
+    # A real release keeps the population down.
+    assert evs[0].still(midway)

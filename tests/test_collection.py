@@ -128,6 +128,21 @@ def test_training_withdraws_a_boxed_partner_before_evolution():
     assert c.goal(s).key=='collect_train'
 
 
+def test_collection_can_use_the_indigo_lobby_pc_for_withdrawals_and_gifts():
+    c = Collection()
+    s = state(map=MAPS['INDIGO_PLATEAU_LOBBY'], x=8, y=10)
+    c.project = {'method': 'evolve', 'parent': sid(10), 'species': sid(11),
+                 'box': 2, 'evolution': EVOS[sid(10)][0]}
+    target = (s.map, 15, 8)
+    nav = Navigator()
+    nav.update_story(s)
+    goal = c.goal(s)
+    assert nav.route((s.map, s.x, s.y), goal.targets, s.frame) is not None
+    assert nav.path[-1][2] == target
+    c.project = {'method': 'gift', 'species': sid(133)}
+    assert target in c.goal(replace(s, party=s.party * 6)).targets
+
+
 def test_stone_project_buys_then_uses_the_correct_stone():
     c=Collection()
     parent=sid(44)
@@ -262,3 +277,100 @@ def test_evolution_training_leaves_gym_without_competing_lead_swaps():
     s=replace(s,party=s.party[::-1])
     p._overworld(s,bytearray(65536))
     assert p.intent.kind=='reorder' and p.intent.index==1
+
+def test_grass_targets_use_the_tilesets_own_grass_tile():
+    # Route 23 is PLATEAU, whose grass tile is 0x45. Treating every walkable tile as grass sent the
+    # run to tiles that can never produce an encounter, and it wandered until the project expired.
+    from pokesim.policies.collection import tiles, GRASS_TILES
+    from pokesim.strategy_data import WORLD
+
+    route23 = MAPS['ROUTE_23']
+    world = WORLD[route23]
+    assert world['tileset'] == 'PLATEAU'
+    targets = tiles({'map': route23, 'method': 'grass'})
+    walkable = sum(1 for row in world['tiles'] for tile in row if tile in world['passable'])
+    assert len(targets) == sum(1 for row in world['tiles'] for tile in row if tile == GRASS_TILES['PLATEAU'])
+    assert 0 < len(targets) < walkable / 10
+    assert all(world['tiles'][y][x] == 0x45 for _, x, y, _ in targets)
+
+    # An overworld route is unchanged, and a cave still counts every floor tile because Generation I
+    # has encounters everywhere underground.
+    assert all(WORLD[MAPS['ROUTE_1']]['tiles'][y][x] == 0x52
+               for _, x, y, _ in tiles({'map': MAPS['ROUTE_1'], 'method': 'grass'}))
+    cave = MAPS['VICTORY_ROAD_2F']
+    assert WORLD[cave]['tileset'] not in GRASS_TILES
+    assert len(tiles({'map': cave, 'method': 'grass'})) > 100
+
+
+def test_reload_rewind_does_not_silence_the_planner():
+    """A reload restores an older `elapsed`; the in-memory spacing guard must rewind with it.
+
+    Otherwise `elapsed - last_choice` stays negative for as long as the rewind, choose() declines
+    to plan, the collect_plan goal waits, and the run stands still until the next reload rewinds
+    it again — a loop the live Blue run spent half an hour in on 2026-09-14.
+    """
+    c=Collection()
+    c.elapsed=2_000_000
+    c.last_choice=c.elapsed            # as if it had just planned
+    older=dict(c.state_dict(),elapsed=1_400_000)
+    c.load(older)
+    assert c.elapsed - c.last_choice >= 600
+
+
+def test_moving_between_familiar_maps_cannot_extend_a_failed_expedition():
+    c = Collection()
+    c.project = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}
+    c.remaining = 36000
+    for frame in range(0, 7500, 120):
+        c.observe(state(frame=frame, map=MAPS['ROUTE_1'] if frame % 240 else MAPS['ROUTE_2'], x=frame % 20))
+    assert c.project is None
+    assert c.attempts['ditto'] > c.elapsed
+    assert 'No encounter' in c.history[-1]
+
+
+def test_training_gains_keep_an_expedition_alive_and_idle_budget_survives_restore():
+    c = Collection()
+    c.project = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}
+    c.remaining = 36000
+    for frame in range(0, 9000, 120):
+        c.observe(state(frame=frame, party=(mon(experience=frame // 3000),)))
+    assert c.project is not None
+    saved = c.state_dict()
+    restored = Collection()
+    restored.load(saved)
+    assert restored.idle_frames == c.idle_frames
+    assert restored.project_maps == c.project_maps
+
+
+def test_stationary_recovery_abandons_project_without_losing_game_progress():
+    p = StrategicPolicy(7)
+    p.collection.project = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}
+    p.collection.elapsed = 10000
+    p.recover_stall(state(frame=300))
+    assert p.collection.project is None
+    assert p.collection.attempts['ditto'] > p.collection.elapsed
+    assert p.collection.elapsed - p.collection.last_choice >= 600
+    assert p.recoveries == 1
+
+
+def test_repeated_flags_do_not_count_as_fresh_expedition_progress():
+    c = Collection()
+    c.project = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}
+    c.remaining = 36000
+    for frame in range(0, 7800, 120):
+        events = flags('EVENT_GOT_POKEDEX', 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1') if frame % 240 else flags('EVENT_GOT_POKEDEX')
+        c.observe(state(frame=frame, event_flags=events, x=frame % 20))
+    assert c.project is None
+    assert c.attempts['ditto'] > c.elapsed
+
+
+def test_unreachable_evolution_and_trainer_candidates_are_not_selected():
+    from unittest.mock import Mock
+    c = Collection()
+    c.completed_champion = True
+    nav = Navigator()
+    nav.distance_lookup = Mock(return_value=lambda targets: None)
+    s = state(map=MAPS['VICTORY_ROAD_2F'], money=100000)
+    c.observe(s)
+    assert c.choose(s, nav, random.Random(2), Goal('collect_plan', 'Plan', 'Plan')) is None
+    assert c.project is None

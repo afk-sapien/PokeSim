@@ -237,11 +237,42 @@ out and enter a cooldown so one unsuccessful hunt cannot take over the adventure
 After the Champion, the simulator finishes the ceremony, continues the saved game,
 and looks for more collection projects. It can visit unexplored areas, meet unbeaten
 trainers, and undertake League rematches when funds run low. Captures, time budgets,
-and unfinished projects survive controller restarts. No Pokémon are released.
+and unfinished projects survive controller restarts.
 
-The Collection section shows the current project, registered entries, remaining
-possibilities, evolution targets, recent expeditions, and all twelve storage boxes.
-Its searchable Pokédex separates link-trade and event requirements from available
+When storage needs room, duplicate cleanup keeps the best individual of each species.
+It compares level, stat experience, move usefulness, and progress toward the next level
+before using DVs as a tie-breaker. A better boxed copy is retained alongside an established
+party member. Exact ties favor the party member, then the first stored copy. Older snapshots
+without individual stats retain the level-only selection rule. Protected species and the
+last copy of a species are never released. The trade broker uses the same spare selection.
+This does not add perfect-DV hunts or replace party members for small DV differences.
+
+The GUI has four pages:
+
+- **Live** (`/`): the game, current goal, all six party members, and badge progress together.
+  Expand a partner for moves and stats. Adventure details contains projects, routes, readiness,
+  the bag, and exploration settings. The gamepad opens when taking control.
+- **Pokédex** (`/pokedex`): all 151 species in one list, with search, filters, and individual records.
+- **PC** (`/pc`): one storage box at a time, search across boxes, and individual DVs and training.
+- **Journal** (`/journal`): event filters, highlights, and earlier moments.
+
+The PC box selector changes the view, not the game's active box. Keyboard game controls
+work only on Live. Old `/team` and `/journey` links return to the corresponding section on Live.
+The nickname pool gives new catches names such as TAXFRAUD, MEATWIFI, and SOUPCRIME through
+normal in-game naming. Names already assigned to existing Pokémon are preserved.
+
+The Live page's play clock is stored by the app and keeps counting beyond 255 hours.
+It counts 60 emulated frames as one second. Faster playback advances this clock faster,
+and pauses or server downtime add no time. Autosaves and clean shutdowns persist the
+clock. Loading an earlier save does not subtract time already spent playing, while
+Restart run starts a new clock. An abrupt failure can lose time since the last autosave.
+
+Existing runs start from their cartridge time. If the cartridge already reached 255 hours,
+the clock shows a `+` and a note because the earlier total is a lower bound. The app counts
+new time from that point. The cartridge display and older journal times stay unchanged.
+The state API exposes the app clock separately as `play_clock`.
+
+The searchable Pokédex separates link-trade and event requirements from available
 sources. “Possible here” includes future evolutions and choices, rather than claiming
 that every listed entry is immediately reachable or that all mutually exclusive
 choices can be collected in one save. The planner checks routes before hunts and
@@ -252,3 +283,26 @@ Collection source data is regenerated from a pret/pokered checkout with:
 ```sh
 python -m pokesim.prepare_data /path/to/pokered
 ```
+
+## Reproduce a stalled expedition
+
+Copy a live autosave and its matching JSON manifest into a scratch directory. Keep the
+original pair unchanged. Use the matching user-supplied ROM and PyBoy 2.7.0:
+
+```sh
+python tools/validate_progress.py --rom /path/to/pokered.gb --checkpoint /scratch/auto-v1-example.state --frames 432000 --output /scratch/progress.json
+```
+
+The replay restores policy state as well as game state. It advances two simulated hours
+without rewinds and reports new Pokédex entries, experience changes, journal achievements,
+policy recoveries, and input fingerprints. It does not claim to replace live endurance
+validation, whose guard timers use wall time.
+
+## Read-only proposals for a live pair
+
+Set `GAME_DATA_DIR` to a prepared game-data directory and run
+`docker compose -f deploy/compose.broker.yaml up -d`. The board is available on port 8950
+and polls Red on port 8930 and Blue on port 8940 through the host gateway. It mounts only
+read-only game data and has no access to saves or ROMs. It cannot execute an exchange.
+Each actual exchange requires approval of its specific participants before live saves
+are stopped, backed up, validated, and exchanged.

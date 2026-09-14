@@ -133,6 +133,25 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
                             (f" fighting a {SPECIES_NAMES.get(cur.enemy_species, '?')}." if cur.in_battle == 1 else "."),
                             priority=LOW, tags="skull", still=lambda s: s.all_fainted))
 
+    # --- storage releases ---
+    # A withdrawal also shrinks storage, so only count copies the party did not gain.
+    shrink = len(prev.stored_pokemon) - len(cur.stored_pokemon)
+    if prev.stored_pokemon and 0 < shrink <= 2:
+        gone = (Counter(species for box, species, level, nick in prev.stored_pokemon)
+                - Counter(species for box, species, level, nick in cur.stored_pokemon))
+        withdrawn = Counter(p.species for p in cur.party) - Counter(p.species for p in prev.party)
+        # A withdrawal clears the box slot a few frames before the party gains the Pokémon, so a
+        # snapshot landing in between looks exactly like a release. Only a real release keeps the
+        # combined party-and-storage population down on the next snapshot.
+        population = len(cur.party) + len(cur.stored_pokemon)
+        for species, count in sorted(gone.items()):
+            name = SPECIES_NAMES.get(species, f"#{species}")
+            for _ in range(max(0, count - withdrawn.get(species, 0))):
+                events.append(Event("release", f"Said goodbye to a spare {name}",
+                                    f"Storage was nearly full, so a duplicate {name} was let go on {cur.map_name}.",
+                                    priority=MINIMAL, tags="wave",
+                                    still=lambda s, n=population: len(s.party) + len(s.stored_pokemon) <= n))
+
     # --- trainer battles ---
     if prev.in_battle == 2 and cur.in_battle == 0 and not cur.all_fainted and prev.trainer_class is not None:
         tc = prev.trainer_class
