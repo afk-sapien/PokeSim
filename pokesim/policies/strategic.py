@@ -852,7 +852,15 @@ class StrategicPolicy(Policy):
                     self.reason = "Find legal pushes and keep room to walk around the boulder"
                     self.progress_frame = s.frame
                     return tap(direction, 16, 16)
-            if not following_route and s.map == MAPS["VICTORY_ROAD_2F"] and ready_to_climb(s):
+            upper_ladder = ((MAPS["VICTORY_ROAD_3F"], 23, 7),)
+            # Reentry can strand the party beyond the lower switch. Reach the upper
+            # puzzle by ladder when the lower boulder and the destination are inaccessible.
+            upper_detour = (task and not direction and pos not in goal.targets
+                            and s.map == MAPS["VICTORY_ROAD_2F"]
+                            and not event_set(s.event_flags, 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2')
+                            and self.nav.route(pos, goal.targets, s.frame) is None
+                            and self.nav.route(pos, upper_ladder, s.frame) is not None)
+            if not following_route and s.map == MAPS["VICTORY_ROAD_2F"] and (ready_to_climb(s) or upper_detour):
                 goal = Goal("victory_ascent", "Reach the upper boulder puzzle", "Climb to the third floor", ((MAPS["VICTORY_ROAD_3F"], 23, 7),))
             elif not following_route and s.map == MAPS["VICTORY_ROAD_3F"] and ready_to_drop(s):
                 goal = Goal("victory_drop", "Follow the boulder downstairs", "Drop through the hole to reach the final switch", ((MAPS["VICTORY_ROAD_2F"], 22, 16),))
