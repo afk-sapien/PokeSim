@@ -109,3 +109,21 @@ def test_postgame_policy_finishes_a_league_attempt_already_in_progress():
     p.observed_map = s.map
     p.step(PolicyContext(s, 0, 0, bytearray(65536)))
     assert p.goal.key == 'league_agatha'
+
+
+def test_empty_plateau_planner_returns_through_victory_road():
+    p, s = postgame_policy()
+    s = replace(s, map=MAPS['INDIGO_PLATEAU'], x=9, y=7)
+    p.observed_map = s.map
+    p.step(PolicyContext(s, 0, 0, bytearray(65536)))
+    assert p.goal.key == 'collect_passage'
+    assert p.goal.targets == ((MAPS['VICTORY_ROAD_3F'], 27, 15),)
+    assert p.mode != 'planning the next expedition'
+
+
+def test_empty_planner_leaves_the_isolated_east_patch_of_route_23():
+    p, s = postgame_policy()
+    s = replace(s, map=MAPS['ROUTE_23'], x=19, y=32)
+    p.observed_map = s.map
+    p.step(PolicyContext(s, 0, 0, bytearray(65536)))
+    assert p.goal.key == 'collect_passage'

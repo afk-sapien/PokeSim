@@ -675,7 +675,9 @@ class StrategicPolicy(Policy):
                 self.next_goal = goal.to_dict() if not goal.key.startswith(('collect_', 'party_collection')) else self.next_goal
                 goal = collection_goal
         if (goal.key == 'collect_plan' and
-                ((s.map == MAPS['VICTORY_ROAD_3F'] and s.x >= 24 and s.y >= 7)
+                (s.map == MAPS['INDIGO_PLATEAU']
+                 or (s.map == MAPS['ROUTE_23'] and (s.y < 32 or s.x >= 14 and s.y < 40))
+                 or (s.map == MAPS['VICTORY_ROAD_3F'] and s.x >= 24 and s.y >= 7)
                  or (s.map == MAPS['VICTORY_ROAD_2F'] and s.x >= 24 and s.y >= 7))):
             goal = Goal('collect_passage', 'Open a route back through Victory Road',
                         'Clear the east corridor boulder to reach more collecting locations',
