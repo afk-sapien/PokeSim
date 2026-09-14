@@ -39,6 +39,7 @@ def run(rom, checkpoint, frames):
     fingerprint = policy_fingerprint()
     counts = Counter()
     achievements = []
+    full_recovery = None
     pending = []
     try:
         with checkpoint.open('rb') as stream:
@@ -46,6 +47,10 @@ def run(rom, checkpoint, frames):
         first = previous = read_snapshot(pb.memory, frame)
         while frame - start < frames:
             snapshot = read_snapshot(pb.memory, frame)
+            if full_recovery is None and snapshot.party and all(
+                    mon.hp == mon.max_hp and not mon.status and mon.pp == mon.max_pp
+                    for mon in snapshot.party):
+                full_recovery = {'frame': frame - start, 'map': snapshot.map_name}
             events = [event for event in pending if event.still(snapshot)]
             new = diff(previous, snapshot, memory)
             pending = [event for event in new if event.still is not None]
@@ -69,6 +74,7 @@ def run(rom, checkpoint, frames):
                 'wall_seconds': round(time.monotonic() - wall, 2), 'rewinds': 0,
                 'initial_owned': len(first.owned), 'final_owned': len(final.owned),
                 'new_owned': sorted(final.owned - first.owned),
+                'first_fully_restored_party': full_recovery,
                 'initial_party': [(mon.name, mon.level, mon.experience) for mon in first.party],
                 'final_party': [(mon.name, mon.level, mon.experience) for mon in final.party],
                 'initial_items': list(first.items), 'final_items': list(final.items),

@@ -10,6 +10,12 @@ OPTIONAL_LIFTS = {MAPS["CELADON_MART_ELEVATOR"], MAPS["SILPH_CO_ELEVATOR"]}
 FORCED = {(m, x, y): (m, tx, ty) for m, w in WORLD.items() for x, y, tx, ty in w.get("forced_moves", [])}
 FORCED[(MAPS["VICTORY_ROAD_3F"], 23, 15)] = (MAPS["VICTORY_ROAD_2F"], 22, 16)
 LEDGES = {(dr, a, b) for dr, a, b in DATA["ledges"]}
+SEAFOAM_HOLES = {(MAPS[name], x, y) for name, points in (
+    ("SEAFOAM_ISLANDS_1F", ((17, 6), (24, 6))),
+    ("SEAFOAM_ISLANDS_B1F", ((18, 6), (23, 6))),
+    ("SEAFOAM_ISLANDS_B2F", ((19, 6), (22, 6))),
+    ("SEAFOAM_ISLANDS_B3F", ((3, 16), (6, 16))),
+) for x, y in points}
 
 
 class Navigator:
@@ -48,7 +54,8 @@ class Navigator:
         self.can_surf = bool(snapshot.badges & 16 and any(57 in p.moves for p in snapshot.party))
         self.can_cut = bool(snapshot.badges & 2 and any(15 in p.moves for p in snapshot.party))
         drinks = {ITEMS[n] for n in ("FRESH_WATER", "SODA_POP", "LEMONADE")}
-        self.story_blocks = set()
+        # Routine routes use ladders to avoid scripted falls and downstream currents.
+        self.story_blocks = set(SEAFOAM_HOLES)
         if not all(event_set(snapshot.event_flags, flag) for flag in
                    ('EVENT_SEAFOAM3_BOULDER1_DOWN_HOLE', 'EVENT_SEAFOAM3_BOULDER2_DOWN_HOLE')):
             # The current pushes the player away from these apparent exits.
@@ -185,11 +192,6 @@ class Navigator:
 
     def neighbors(self, pos, frame):
         m, x, y = pos
-        world = WORLD.get(m) if self.use_world else None
-        positions = self.live_positions if self.live_map == m else []
-        static_objects = {positions[i] if i < len(positions) else (o[0], o[1]) for i, o in enumerate((world or {}).get("objects", []))
-                          if o[3] == "STAY" and o[2] not in ("SPRITE_POKE_BALL", "SPRITE_OAK", "SPRITE_BLUE")
-                          and (m, o[0], o[1]) not in self.cleared_objects}
         observed = self.edges.get(pos, {})
         for dr, q in sorted(observed.items()):
             dx, dy = DIRS[dr]
@@ -200,10 +202,9 @@ class Navigator:
                 ts = current_world["tileset"]
                 if (ts, here, front) in PAIR_COLLISIONS or (ts, front, here) in PAIR_COLLISIONS:
                     continue
-            if self.live_map == m and ((x + dx, y + dy) in static_objects
-                                       or (q[0] == m and q[1:] in static_objects)):
-                continue
             if (m, x + dx, y + dy) in self.closed_passages or q in self.closed_passages:
+                continue
+            if (m, x + dx, y + dy) in SEAFOAM_HOLES:
                 continue
             q = FORCED.get((m, x + dx, y + dy), q)
             if q[0] != m and current_world:
@@ -227,6 +228,10 @@ class Navigator:
         if not world:
             return
         here = self.active_tile(world, x, y)
+        positions = self.live_positions if self.live_map == m else []
+        static_objects = {positions[i] if i < len(positions) else (o[0], o[1]) for i, o in enumerate(world["objects"])
+                          if o[3] == "STAY" and o[2] not in ("SPRITE_POKE_BALL", "SPRITE_OAK", "SPRITE_BLUE")
+                          and (m, o[0], o[1]) not in self.cleared_objects}
         for dr, (dx, dy) in DIRS.items():
             if dr in observed or self.blocked.get((pos, dr), 0) > frame:
                 continue

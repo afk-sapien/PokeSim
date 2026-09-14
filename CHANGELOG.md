@@ -1,3 +1,9 @@
+0.2.0rc12, leave Seafoam through the ladders
+
+- Avoid Seafoam floor holes during routine navigation, including remembered steps that previously fell between floors.
+- Route exhausted parties out of the fall-and-current loop to healing and resume the adventure.
+- Keep the held rc11 obstacle experiment out of this release.
+
 0.2.0rc11 candidate, respect obstacles on remembered routes
 
 - Apply observed solid-object positions to remembered steps on the current map. Preserve distant learned routes until fresh object positions are available.
