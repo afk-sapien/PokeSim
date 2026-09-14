@@ -273,3 +273,23 @@ clear overall benefit. Physical collision correctness alone was insufficient her
 Monitoring now records filesystem space and the sizes of each game's data and backups.
 The initial measurement found about 25.6 GB free and 8.2 GB in these backup directories.
 No retention settings or historical files were changed.
+
+
+## Seafoam recovery delivery
+
+The next heartbeat found Blue without a journal achievement for about 29 minutes.
+Its party had exhausted attacking PP. A copied save repeated falls from Seafoam B1F
+through B2F and B3F, followed by the current to B4F, while trying to reach healing.
+Release rc12 avoids the eight floor holes during routine travel and uses ladders.
+
+The corrected replay fully restored HP and PP at Fuchsia Pokémon Center after 7632
+frames, then picked up Full Restore and resumed gaining experience. Red's regression
+was unchanged. All 386 tests passed. Blue received rc12 with a cold backup and has
+already left Seafoam live. Red remains on rc10 so its active endurance interval continues.
+See [the evidence](validation/seafoam-exit-0.2.0rc12.json) and
+[deployment receipt](validation/release-0.2.0rc12.json).
+
+The held rc11 experiment is preserved on `codex/held-navigation-candidate` and is excluded
+from rc12. Next, watch Blue for renewed training and successful expeditions. Seafoam's
+Articuno boulder puzzle still needs explicit planning. Continue investigating collection
+budgets consumed by restocking and storage trips on Red.

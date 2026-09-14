@@ -65,7 +65,7 @@ collecting encounters. Avoid restarts without a verified material fix, so the en
 record can grow. The first specific live trade remains unapproved and unexecuted.
 
 
-The third heartbeat left both games on rc10. The local checkout now contains an untagged
+The third heartbeat left both games on rc10. At that time, the checkout contained an untagged
 rc11 candidate at `6de8c1b`. It fixes remembered steps through currently observed solid
 objects, but a 432000-frame comparison did not improve overall progress. Do not deploy
 it without further work and stronger comparative evidence. The broader candidate image
@@ -85,3 +85,24 @@ live games for a change that only improves a short navigation metric.
 The sampler also records filesystem capacity and each game's data and backup directory
 sizes. Watch their growth over time. The first reading was 76.46 percent filesystem use,
 25.6 GB free, roughly 1.19 GB of game data, and 8.23 GB of backups. No files were deleted.
+
+
+Current live versions after the Seafoam recovery delivery: Blue rc12 from `66b226f`,
+Red rc10 from `6a23720`. Blue alone was restarted with a cold backup. Red's endurance
+interval is continuous from its rc10 startup. The held rc11 experiment is excluded and
+preserved on `codex/held-navigation-candidate`. The primary checkout now contains rc12.
+
+Blue's copied save was trapped in repeated floor-hole falls and currents with depleted
+attacking PP. The corrected replay reached full HP and PP after 7632 frames at Fuchsia
+Pokémon Center. Live Blue subsequently left Seafoam and restored its main team's PP.
+The sampler now retains each partner's HP, maximum HP, status, and PP for future checks.
+See `docs/validation/seafoam-exit-0.2.0rc12.json` and the rc12 deployment receipt.
+
+The new private reproduction is `data/operations/repros/blue-seafoam-20260914`.
+Continue checking Blue's actual experience, catches, and expedition outcomes. Its
+Articuno puzzle remains unsupported. Red is still progressing through levels and
+trainer victories, so preserve that process while investigating maintenance budgeting.
+The first live trade remains unapproved and unexecuted.
+
+A followup at 166 seconds of Blue uptime confirmed a new live level-32 achievement.
+Both reload counters remained zero. Red's container start time was unchanged.

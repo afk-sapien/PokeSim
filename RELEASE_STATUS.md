@@ -1,6 +1,36 @@
-# Current deployment: 0.2.0rc10
+# Current deployment: Blue rc12, Red rc10
 
-Red and Blue run `pokesim:0.2.0rc10-6a23720`, built from tagged commit
+Blue runs `pokesim:0.2.0rc12-66b226f`, built from tagged commit
+`66b226f6d2a565c5281692a285d419d79fabaf2f`. It has a fresh cold backup, and its latest
+save loaded successfully before startup. Red continues on `pokesim:0.2.0rc10-6a23720`
+without a restart. Both services are healthy, and all 12 public endpoint checks passed.
+See [the deployment receipt](docs/validation/release-0.2.0rc12.json).
+
+Blue had exhausted its attacking PP while repeatedly falling through Seafoam floor
+holes and being swept downstairs by the current. Routine navigation now avoids those
+holes and uses the ladders, including when an old learned step records a fall. This
+release excludes the held rc11 obstacle experiment.
+
+Validation:
+
+- 386 tests passed, with one optional checkpoint test skipped. The 41 release and focused checks passed. The lock resolves offline, packages build, and all 61 packaged
+  runtime files match the committed source without private game artifacts.
+- The old copied Blue save made no experience or dex progress in 72026 frames.
+- The fix restored the whole party's HP and PP after 7632 frames at Fuchsia Pokémon
+  Center. Over 144014 frames it picked up Full Restore and gained a level. Its dex stayed
+  at 115, and it used two local policy recoveries. Rewinds were disabled.
+- Red's 180020-frame regression reproduced the baseline's mode totals and final party
+  exactly. No Red maintenance restart was needed for this active Blue failure.
+- The live Blue run has already left Seafoam and restored its main team's PP. The first
+  post-deployment sample placed it on Route 11 with zero save reloads. A later
+  sample recorded PEACH reaching level 32 in the live adventure.
+
+See [the copied-save evidence](docs/validation/seafoam-exit-0.2.0rc12.json). Articuno's
+boulder puzzle solver, better collection budgeting, and multi-day endurance remain open.
+
+# rc10 release record, still running on Red
+
+The rc10 rollout put both games on `pokesim:0.2.0rc10-6a23720`, built from tagged commit
 `6a23720ec5f6eb97fd581c0721cb51c5f64a1c44`. Each adventure has a fresh cold backup,
 and each latest autosave loaded successfully in the new image before startup. Both
 services are healthy. All 12 public endpoint checks passed. See the
@@ -33,15 +63,15 @@ See [the transfer regression evidence](docs/validation/training-transfer-0.2.0rc
 and [the monitoring plan](docs/operations-monitor.md).
 
 
-## Local rc11 candidate, not deployed
+## Held rc11 experiment, not deployed
 
 Commit `6de8c1b` applies observed solid-object collisions to remembered steps on the
 current map. A saved Victory Road route demonstrably crossed an occupied boulder square.
 All 386 tests pass, but longer copied-save comparisons do not support deploying this
 candidate on its own. Red's dex stayed at 111 in both runs. The candidate used 42 local
 recoveries versus 43 for rc10, but produced fewer level gains, trainer victories, and
-pickups. Blue's comparison remained unchanged. The live games remain on rc10 so their
-endurance interval can continue.
+pickups. Blue's comparison remained unchanged. Both games stayed on rc10 after that comparison. The later Seafoam fix was released
+separately as rc12. The experiment is retained on `codex/held-navigation-candidate`.
 
 The rc11 packages are local candidate artifacts. No rc11 tag or deployment exists.
 An earlier, broader candidate image `pokesim:0.2.0rc11-54569f0` was built but is unused.
