@@ -185,6 +185,11 @@ class Navigator:
 
     def neighbors(self, pos, frame):
         m, x, y = pos
+        world = WORLD.get(m) if self.use_world else None
+        positions = self.live_positions if self.live_map == m else []
+        static_objects = {positions[i] if i < len(positions) else (o[0], o[1]) for i, o in enumerate((world or {}).get("objects", []))
+                          if o[3] == "STAY" and o[2] not in ("SPRITE_POKE_BALL", "SPRITE_OAK", "SPRITE_BLUE")
+                          and (m, o[0], o[1]) not in self.cleared_objects}
         observed = self.edges.get(pos, {})
         for dr, q in sorted(observed.items()):
             dx, dy = DIRS[dr]
@@ -195,6 +200,8 @@ class Navigator:
                 ts = current_world["tileset"]
                 if (ts, here, front) in PAIR_COLLISIONS or (ts, front, here) in PAIR_COLLISIONS:
                     continue
+            if (x + dx, y + dy) in static_objects or (q[0] == m and q[1:] in static_objects):
+                continue
             if (m, x + dx, y + dy) in self.closed_passages or q in self.closed_passages:
                 continue
             q = FORCED.get((m, x + dx, y + dy), q)
@@ -219,10 +226,6 @@ class Navigator:
         if not world:
             return
         here = self.active_tile(world, x, y)
-        positions = self.live_positions if self.live_map == m else []
-        static_objects = {positions[i] if i < len(positions) else (o[0], o[1]) for i, o in enumerate(world["objects"])
-                          if o[3] == "STAY" and o[2] not in ("SPRITE_POKE_BALL", "SPRITE_OAK", "SPRITE_BLUE")
-                          and (m, o[0], o[1]) not in self.cleared_objects}
         for dr, (dx, dy) in DIRS.items():
             if dr in observed or self.blocked.get((pos, dr), 0) > frame:
                 continue
