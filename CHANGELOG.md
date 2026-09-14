@@ -1,5 +1,6 @@
 0.2.0rc8 candidate, persistent postgame projects and varied starters
 
+- Collect nearby reachable ground items during ordinary travel and collection expeditions, including caves. Verify collection, respect bag capacity, and preserve the original project during bounded detours.
 - Choose a seeded random starter for new adventures, with a persisted choice and a fixed `STARTER` setting.
 - Rotate postgame collection, evolution, training, and exploration projects using persistent recent choices and outcomes.
 - Train party and stored partners toward level milestones, with progress measured for the selected partner.

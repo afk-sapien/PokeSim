@@ -145,14 +145,14 @@ class Collection:
         self.progress_token = None
         return True
 
-    def observe(self,s):
+    def observe(self,s, suspended=False):
         delta = max(0,min(120,s.frame - self.last_frame)) if self.last_frame is not None else 0
         self.last_frame = s.frame
         self.elapsed += delta
         self.cooldown = max(0,self.cooldown-delta)
         self.completed_champion |= champion(s)
         self.attempts = {key: deadline for key, deadline in self.attempts.items() if deadline > self.elapsed}
-        if self.project:
+        if self.project and not suspended:
             project = self.project
             self.remaining -= delta
             if len(self.project_flags) != len(s.event_flags):

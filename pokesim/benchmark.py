@@ -20,7 +20,7 @@ from .screen import Screen, W_OPTIONS
 def policy_fingerprint():
     root = Path(__file__).parent
     paths = sorted((root / "policies").glob("*.py")) + [root / name for name in
-            ("screen.py", "ram.py", "strategy_data.py", "benchmark.py", "game_data.py")]
+            ("screen.py", "ram.py", "strategy_data.py", "benchmark.py", "game_data.py", "ground_items.py", "events.py")]
     digest = hashlib.sha256()
     for path in paths:
         digest.update(path.relative_to(root).as_posix().encode())

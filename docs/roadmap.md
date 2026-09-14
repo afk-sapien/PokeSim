@@ -197,3 +197,11 @@ evidence does not establish that all stalls are solved. See the
 
 This candidate is not deployed. Coordinated automatic trades, external trade requests
 as planner objectives, deliberate stat training, and multi-day endurance remain open.
+
+The next rc8 followup adds short detours for visible ground items during ordinary travel
+and collection expeditions, including Victory Road. The detour preserves the original
+project, respects bag capacity, and records confirmed pickups in the journal. A copied
+Red checkpoint collected Max Revive and TM47 Explosion, with inventory changes and
+journal events verified in the [pickup record](validation/ground-pickups-0.2.0rc8.json).
+The earlier two-hour and first-gym evidence above predates this followup. Hidden items
+are not part of the new pickup behavior.

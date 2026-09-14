@@ -11,9 +11,15 @@ the larger progression plan. Multi-day live endurance remains outstanding.
 
 Candidate validation:
 
-- 368 Python tests passed, with one optional supplied-checkpoint test skipped.
+- 378 Python tests passed, with one optional supplied-checkpoint test skipped.
 - The locked dependencies resolve offline. The rc8 source archive and wheel build and
   pass the package resource and private-artifact checks. Existing rc7 artifacts are retained.
+- The ground-item followup collected Max Revive and TM47 Explosion in an unmodified
+  copied Red checkpoint. Both inventory counts increased by one and both pickups
+  appeared as confirmed journal events. The 120000-frame replay disabled rewinds and
+  used three local policy recoveries. [Pickup evidence](docs/validation/ground-pickups-0.2.0rc8.json).
+- The longer postgame and first-gym records below were made at commit `d016ac4`, before
+  the ground-item followup. They do not validate the subsequent detours over those budgets.
 - Two simulated hours on a copied Red checkpoint produced a Moltres catch, growing the
   dex from 111 to 112, three trainer victories, and several level gains. The replay used
   34 local policy recoveries. [Red evidence](docs/validation/red-progress-0.2.0rc8.json).
