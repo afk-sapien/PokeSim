@@ -150,6 +150,20 @@ The collection status in `/api/state` includes `director` outcomes with completi
 deferral reasons, retry times in simulated frames, and training gains. These records
 describe bounded projects, not a guarantee of Pokédex completion or indefinite progress.
 
+Ground items have their own short detours, including during collection expeditions in
+caves. The planner checks nearby item balls, selects a reachable approach on the same
+map, and resumes its previous objective afterward. Healing, supplies, party management,
+and League battles retain priority. A detour pauses the original expedition's budget
+and lasts at most 30 simulated seconds before deferral. Failed pickups wait five
+simulated minutes before another attempt.
+
+Pickups require a free bag slot or room in an existing stack. A full stack is skipped,
+and TM pickups conservatively require a free slot. The game object's disappearance
+confirms collection, with completed pickups and retry times saved across restarts.
+These detours target visible item balls. Hidden items and balls containing Pokémon
+remain outside this pickup behavior. Item gains appear in the existing journal, and
+the strategy's `pickups` status records recent pickup outcomes.
+
 Navigation combines map geometry with observed movement. Learned edges store the actual
 button and destination, including doors, map connections, and ledges. Reverse movement is
 never inferred from a learned edge. Temporary obstacles expire, and map transitions settle

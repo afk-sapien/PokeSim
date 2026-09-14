@@ -4,6 +4,8 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from .game_data import load
+from .ground_items import ground_item
+from .strategy_data import DATA as STRATEGY_DATA, WORLD
 from pathlib import Path
 from typing import Callable
 
@@ -178,6 +180,20 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
         if i in KEY_ITEM_IDS and i not in prev_items:
             events.append(Event("item", f"Got the {ITEM_NAMES.get(i, f'item #{i}')}", f"On {cur.map_name}.",
                                 priority=HIGH, tags="key"))
+
+    # Ordinary ground pickups are useful journal milestones too. Object flags
+    # distinguish them from shopping, PC withdrawals, and failed bag-full prompts.
+    if prev.map == cur.map and len(prev.hidden_objects) == len(cur.hidden_objects):
+        for offset, (map_id, index) in enumerate(STRATEGY_DATA['toggle_objects']):
+            byte, bit = offset // 8, 1 << (offset % 8)
+            if (map_id != cur.map or byte >= len(cur.hidden_objects)
+                    or prev.hidden_objects[byte] & bit or not cur.hidden_objects[byte] & bit):
+                continue
+            item = ground_item(WORLD[map_id]['objects'][index])
+            if item and item['item'] not in KEY_ITEM_IDS:
+                events.append(Event('item', 'Picked up ' + item['name'], f'On {cur.map_name}.',
+                                    priority=MINIMAL,
+                                    still=lambda s, byte=byte, bit=bit: byte < len(s.hidden_objects) and bool(s.hidden_objects[byte] & bit)))
 
     # --- money ---
     for m in MONEY_MILESTONES:

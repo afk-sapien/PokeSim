@@ -6,6 +6,8 @@ import tomllib
 
 required = {
     'pokesim/policies/director.py',
+    'pokesim/policies/pickups.py',
+    'pokesim/ground_items.py',
     'pokesim/broker/app.py',
     'pokesim/broker/inventory.py',
     'pokesim/broker/negotiation.py',

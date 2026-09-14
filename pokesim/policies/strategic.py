@@ -6,6 +6,7 @@ from .battle import (BALLS, CURES, HEALING, W_BATTLE_MON, W_ENEMY_MON, Decision,
                      healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, shopping_item)
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
+from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, boulder_task
 from .progression import STARTERS, Goal, healing_goal, journey, league_partner, milestones, story_goal
 from .collection import CENTERS, Collection, LEAGUE
@@ -74,6 +75,7 @@ class StrategicPolicy(Policy):
         self.interactions = {}
         self.interaction_count = 0
         self.collection = Collection()
+        self.pickups = Pickups()
         self.personality = self.rng.choice(('Sociable', 'Collector', 'Explorer'))
         self.starter_setting = starter if starter is not None else config.STARTER
         if self.starter_setting not in (*STARTERS, 'random'):
@@ -154,6 +156,7 @@ class StrategicPolicy(Policy):
                 "interactions": self.interaction_count,
                 "personality": self.personality, "next": self.next_goal,
                 "starter": self.starter, "starter_confirmed": self.starter_confirmed,
+                "pickups": self.pickups.state_dict(),
                 "readiness": self.readiness, "history": self.history[-8:],
                 "expectation": self.watch.expected['label'] if self.watch.expected else None,
                 "map": self.map_view,
@@ -165,12 +168,14 @@ class StrategicPolicy(Policy):
                 "exploration": self.exploration, "naming": self.naming.state_dict(),
                 "interactions": list(self.interactions), "interaction_count": self.interaction_count,
                 "personality": self.personality, "history": self.history[-8:], "failures": self.failures,
-                "starter": self.starter, "starter_confirmed": self.starter_confirmed}
+                "starter": self.starter, "starter_confirmed": self.starter_confirmed,
+                "pickups": self.pickups.state_dict()}
 
     def load_state_dict(self, data):
         if data.get("version") != 1:
             return
         self.collection.load(data.get("collection", {}))
+        self.pickups.load(data.get('pickups', {}))
         self.nav.load_state_dict(data.get("navigation", {}))
         self.naming.load_state_dict(data.get("naming", {}))
         self.interactions = {key: True for key in data.get("interactions", [])}
@@ -211,7 +216,8 @@ class StrategicPolicy(Policy):
         frame = s.frame
         pos = (s.map, s.x, s.y)
         self.decisions += 1
-        self.collection.observe(s)
+        self.collection.observe(s, suspended=self.pickups.active is not None)
+        self.pickups.observe(s, self.collection.elapsed)
         if self.collection.completed_champion and s.map == MAPS['HALL_OF_FAME']:
             self.goal = Goal('collect_ceremony','Celebrate the Champion victory','Finish the ceremony and continue the saved adventure')
             self.mode = 'Hall of Fame ceremony'
@@ -256,6 +262,8 @@ class StrategicPolicy(Policy):
                              'Choose a collecting, evolution, training, or exploration objective')
         if self.collection.project and s.map not in LEAGUE:
             self.goal = self.collection.goal(s) or self.goal
+        if self.pickups.active and s.map not in LEAGUE:
+            self.goal = self.pickups.goal(self.pickups.active)
         if self.storage_species:
             if any(p.species == self.storage_species for p in s.party) or self.storage_map is None:
                 self.storage_species = None
@@ -688,11 +696,15 @@ class StrategicPolicy(Policy):
                     return tap("start")
         if goal.key == "thunder" and not event_set(s.event_flags, "EVENT_2ND_LOCK_OPENED"):
             goal = self._trash_goal(s)
-        if not self.heal_latch and not in_league and goal.key not in ('restock','party_box'):
+        if not self.heal_latch and not in_league and not self.pickups.active and goal.key not in ('restock','party_box'):
             collection_goal = self.collection.choose(s, self.nav, self.rng, goal)
             if collection_goal:
                 self.next_goal = goal.to_dict() if not goal.key.startswith(('collect_', 'party_collection')) else self.next_goal
                 goal = collection_goal
+        pickup = self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
+        if pickup and not self.heal_latch and not in_league:
+            self.next_goal = goal.to_dict()
+            goal = pickup
         if (goal.key == 'collect_plan' and
                 (s.map == MAPS['INDIGO_PLATEAU']
                  or (s.map == MAPS['ROUTE_23'] and (s.y < 32 or s.x >= 14 and s.y < 40))
@@ -805,8 +817,8 @@ class StrategicPolicy(Policy):
                 return tap("start")
         if s.map in VICTORY_MAPS:
             task = boulder_task(s)
-            following_route = (self.collection.project and goal.key.startswith('collect_')
-                                    and self.nav.route(pos, goal.targets, s.frame) is not None)
+            following_route = ((self.collection.project or self.pickups.active) and goal.key.startswith('collect_')
+                                    and (pos in goal.targets or self.nav.route(pos, goal.targets, s.frame) is not None))
             # Plan the push before reaching for Strength. A boulder in another section of the floor
             # is only reachable by ladder, so there is no push to make from here; activating
             # Strength first meant every step opened the menu, and crossing a map boundary clears
@@ -870,10 +882,10 @@ class StrategicPolicy(Policy):
                 social = None if goal.key.startswith(("collect_", "party_collection")) else self._purposeful_detour(s, mem, goal)
                 if social:
                     return social
-                social = self._social_interaction(s, mem)
+                social = None if goal.key == 'collect_pickup' else self._social_interaction(s, mem)
                 if social:
                     return social
-            curiosity = 0 if goal.key in ("heal", "restock") else self.exploration
+            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup") else self.exploration
             if s.map in MANSION_MAPS:
                 direction = self.mansion.route(s, goal.targets, self.nav)
                 if direction == "switch":
@@ -1018,6 +1030,8 @@ class StrategicPolicy(Policy):
         return tap("start")
 
     def _recover(self, snapshot):
+        if self.goal.key == 'collect_pickup':
+            self.pickups.defer(self.collection.elapsed, 'Pickup approach failed')
         self.recoveries += 1
         self.intent = None
         blocked = self.nav.blocked.copy()
@@ -1030,7 +1044,10 @@ class StrategicPolicy(Policy):
 
     def recover_stall(self, snapshot):
         """Change the plan in the current world before considering a save rewind."""
-        self.collection.abandon('The run was stationary too long')
+        if self.pickups.active:
+            self.pickups.defer(self.collection.elapsed, 'Pickup approach was stationary too long')
+        else:
+            self.collection.abandon('The run was stationary too long')
         self.collection.cooldown = 0
         self.collection.last_choice = self.collection.elapsed - 600
         self._remember_failure(snapshot, 'Stationary objective abandoned without reloading')
