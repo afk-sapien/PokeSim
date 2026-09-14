@@ -1,6 +1,9 @@
 """Opponent preparation and party development using observable team capabilities."""
+from dataclasses import asdict
+
 from .battle import HEALING, damage, effectiveness, ranked_moves
-from ..ram import PartyMon
+from ..duplicates import spare_entries
+from ..ram import BOX_CAPACITY, PartyMon
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, event_set
 
 OPPONENTS = {
@@ -18,6 +21,27 @@ def potential(species, teammates=()):
     data = SPECIES.get(species, {})
     covered = {t for p in teammates for t in p.types}
     return sum(data.get('stats', [0])) + 70 * len(set(data.get('types', [])) - covered)
+
+
+def storage_headroom(s):
+    """Free slots across every box."""
+    return sum(BOX_CAPACITY - count for count in s.box_counts)
+
+
+def spare_copies(s, protected=()):
+    """Boxed duplicates that can be given up, as (box, position, level).
+
+    Keep the best copy using level, training, moves, experience, then DVs. Party members stay
+    on the team and win exact ties. Species in `protected` are never offered.
+    """
+    return [(mon['box'], mon['position'], mon['level']) for mon in
+            spare_entries([asdict(mon) for mon in s.party], s.storage_entries(), protected)]
+
+
+def release_target(s, protected=()):
+    """The box and position of the duplicate to give up first: lowest level, earliest box."""
+    spare = spare_copies(s, protected)
+    return min(spare, key=lambda entry: (entry[2], entry[0], entry[1]))[:2] if spare else None
 
 
 def reserve_to_deposit(s):

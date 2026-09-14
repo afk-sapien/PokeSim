@@ -3,23 +3,19 @@ from __future__ import annotations
 import asyncio
 import html
 import math
-from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .. import config
 from ..policies.base import BUTTONS
+from .feed import iso_timestamp, render_feed
+from .pokedex import DEFAULT_VERSION, VERSIONS, live_status, reference
 
 STATIC = Path(__file__).parent / "static"
-FEED_TYPES_DEFAULT = None  # all notable
-
-
-def _iso(ts: float) -> str:
-    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class Control(BaseModel):
@@ -35,6 +31,40 @@ def create_app(emu, store) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def index():
         return (STATIC / "index.html").read_text()
+
+    @app.get("/pokedex", response_class=HTMLResponse)
+    def pokedex_page():
+        return (STATIC / "pokedex.html").read_text()
+
+    @app.get("/team", response_class=HTMLResponse)
+    def team_page():
+        return RedirectResponse("/#team", status_code=307)
+
+    @app.get("/journey", response_class=HTMLResponse)
+    def journey_page():
+        return RedirectResponse("/#journey-progress", status_code=307)
+
+    @app.get("/pc", response_class=HTMLResponse)
+    def pc_page():
+        return (STATIC / "pc.html").read_text()
+
+    @app.get("/journal", response_class=HTMLResponse)
+    def journal_page():
+        return (STATIC / "journal.html").read_text()
+
+    @app.get("/api/pokedex")
+    def pokedex_reference(version: str | None = Query(None)):
+        if version is None:
+            collection = (emu.status().get("strategy") or {}).get("collection") or {}
+            version = collection.get("version") or DEFAULT_VERSION
+        if version not in VERSIONS:
+            raise HTTPException(400, "Unknown game version")
+        return reference(version)
+
+    @app.get("/api/pokedex/status")
+    def pokedex_status():
+        status = emu.status()
+        return live_status(status.get("game"), (status.get("strategy") or {}).get("collection"))
 
     @app.get("/sprites/{dex}.png")
     def sprite(dex: int):
@@ -151,8 +181,8 @@ def create_app(emu, store) -> FastAPI:
         can_rewind = bool(ev["state"]) and not config.VIEWER_ONLY
         return f"""<!doctype html><html><head><meta charset="utf-8"><title>{html.escape(ev['title'])} · pokesim</title>
 <link rel="stylesheet" href="/static/style.css"></head><body class="event">
-<main><a href="/">&larr; live</a><h1>{html.escape(ev['title'])}</h1>
-<p class="meta">{_iso(ev['ts'])} &middot; {html.escape(ev['map'])} &middot; play time {ev['playtime']} &middot; {ev['type']} &middot; priority {ev['priority']}</p>
+<main><a href="/journal">Back to the journal</a><h1>{html.escape(ev['title'])}</h1>
+<p class="meta">{iso_timestamp(ev['ts'])} &middot; {html.escape(ev['map'])} &middot; play time {ev['playtime']} &middot; {ev['type']} &middot; priority {ev['priority']}</p>
 <p>{html.escape(ev['body'])}</p>
 {f'<img class="shot" src="{shot}" alt="">' if shot else ''}
 {f'<p><button onclick="fetch(&quot;/api/control&quot;,{{method:&quot;POST&quot;,headers:{{&quot;content-type&quot;:&quot;application/json&quot;}},body:JSON.stringify({{action:&quot;load_state&quot;,value:&quot;{ev["state"]}&quot;}})}}).then(()=>location.href=&quot;/&quot;)">Rewind the live game to this moment</button></p>' if can_rewind else ''}
@@ -162,38 +192,7 @@ def create_app(emu, store) -> FastAPI:
     def feed(types: str | None = None, all: int = 0, limit: int = Query(50, ge=1, le=200), min_priority: int | None = None):
         evs = store.events(limit=min(limit, 200), notable_only=not all and not min_priority,
                            types=types.split(",") if types else None, min_priority=min_priority)
-        base = config.PUBLIC_URL
-        updated = _iso(evs[0]["ts"]) if evs else _iso(0)
-        entries = []
-        for ev in evs:
-            link = f"{base}/events/{ev['id']}"
-            img = f"{base}/shots/{ev['shot']}" if ev["shot"] else None
-            content = html.escape(
-                (f'<p><img src="{img}" alt="" width="640" height="576"></p>' if img else "")
-                + f"<p>{html.escape(ev['body'])}</p>"
-                + f"<p><small>{html.escape(ev['map'])} · play time {ev['playtime']}</small></p>")
-            enclosure = f'<link rel="enclosure" type="image/png" href="{img}"/>' if img else ""
-            entries.append(f"""<entry>
-<title>{html.escape(ev['title'])}</title>
-<id>{link}</id>
-<link href="{link}"/>
-{enclosure}
-<updated>{_iso(ev['ts'])}</updated>
-<published>{_iso(ev['ts'])}</published>
-<category term="{ev['type']}"/>
-<category term="priority:{ev['priority']}"/>
-<content type="html">{content}</content>
-</entry>""")
-        xml = f"""<?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
-<title>{html.escape(config.FEED_TITLE)}</title>
-<subtitle>A Pokémon Red that plays itself</subtitle>
-<id>{base}/feed.xml</id>
-<link href="{base}/feed.xml" rel="self"/>
-<link href="{base}/"/>
-<updated>{updated}</updated>
-{''.join(entries)}
-</feed>"""
-        return Response(xml, media_type="application/atom+xml")
+        return Response(render_feed(evs, config.PUBLIC_URL, config.FEED_TITLE),
+                        media_type="application/atom+xml")
 
     return app

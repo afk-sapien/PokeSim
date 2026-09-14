@@ -8,18 +8,42 @@ from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, boulder_task
 from .progression import Goal, healing_goal, journey, league_partner, milestones, story_goal
-from .collection import Collection, LEAGUE
+from .collection import CENTERS, Collection, LEAGUE
 from .awareness import ActionWatch
-from .team import development_candidate, potential, readiness, reserve_to_deposit
+from .team import development_candidate, potential, readiness, release_target, reserve_to_deposit, storage_headroom
 from ..screen import Screen, W_PLAYER_MON_NUMBER
 from ..ram import W_TILEMAP
 from ..strategy_data import DATA, ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
+
+RELEASE_BUFFER = 5      # free storage slots kept available, so catching never stalls
 
 W_WALK_COUNTER = 0xCFC5
 W_FACING = 0xC109
 W_WHICH_POKEMON = 0xCF92
 W_MOVE_NUM = 0xD0E0
 FACING = {"down": 0, "up": 4, "left": 8, "right": 12}
+
+
+def ready_to_climb(snapshot):
+    """True once Victory Road 2F's own boulder is on its switch and 3F's work is outstanding.
+
+    The mirror of ready_to_drop. Without it the ascent overrides whatever the run actually came
+    here for — a standing encounter, an unbeaten trainer — with "climb to 3F", which cannot be
+    routed from the entrance pocket, so the run shuttles back out to Route 23 and returns.
+    """
+    return (event_set(snapshot.event_flags, "EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1")
+            and not event_set(snapshot.event_flags, "EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2"))
+
+
+def ready_to_drop(snapshot):
+    """True once Victory Road 3F's own boulder sits on its switch and 2F's still does not.
+
+    Without the first half the two Victory Road goals mirror each other — 2F sends the run up to
+    3F, 3F sends it straight back down — and it rides the ladder forever while everything else,
+    including healing a hurt party, is starved.
+    """
+    return (event_set(snapshot.event_flags, "EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2")
+            and not event_set(snapshot.event_flags, "EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2"))
 
 
 def tap(button, hold=6, gap=12):
@@ -208,6 +232,9 @@ class StrategicPolicy(Policy):
         if not s.in_battle and kind == "overworld":
             self.nav.update_live(s, mem)
         self.goal = story_goal(s) if s.started else self.goal
+        if self.collection.completed_champion and s.map not in LEAGUE:
+            self.goal = Goal('collect_plan', 'Plan the next Pokédex expedition',
+                             'Choose another collecting objective after a short planning interval')
         if self.collection.project and s.map not in LEAGUE:
             self.goal = self.collection.goal(s) or self.goal
         if self.storage_species:
@@ -225,14 +252,19 @@ class StrategicPolicy(Policy):
             and self.collection.project
             and any(species == self.collection.project['parent'] for species, level in s.boxed_pokemon)
         )
-        if s.box_full and not withdrawing_partner and s.next_free_box is not None and s.map not in league_rooms:
+        release = self._release_target(s) if storage_headroom(s) < RELEASE_BUFFER else None
+        if release and not withdrawing_partner and s.map not in league_rooms:
             self.storage_species = None
             self.storage_map = None
-            targets = tuple((m, 13, 4) for m, w in WORLD.items()
-                            if 'Pokecenter' in w['name'] and w['width'] == 14)
+            self.goal = Goal('party_release', 'Make room in storage',
+                             'Let a spare duplicate go so there is room for new catches',
+                             CENTERS, 'up', True)
+        elif s.box_full and not withdrawing_partner and s.next_free_box is not None and s.map not in league_rooms:
+            self.storage_species = None
+            self.storage_map = None
             self.goal = Goal('party_box', 'Make room for new catches',
                              f'Box {s.active_box + 1} is full. Visit a PC and switch to Box {s.next_free_box + 1}',
-                             targets, 'up', True)
+                             CENTERS, 'up', True)
         token = (s.badges, tuple((p.species, p.level, p.hp, p.status, p.moves, p.pp) for p in s.party), s.items)
         if s.party and token != self.assessment_token:
             self.readiness = readiness(s)
@@ -301,6 +333,15 @@ class StrategicPolicy(Policy):
         text = scr.text.upper()
         active = min(mem[W_PLAYER_MON_NUMBER], max(0, len(s.party) - 1))
         if kind == "yes_no":
+            # Match the confirmation itself, not the word RELEASE in the PC menu behind it.
+            if "GONE FOREVER" in text or "RELEASED" in text or "BYE BYE" in text:
+                return self._select(scr, 0 if self.goal.key == 'party_release' else 1)
+            if self.menu_context == 'pc' and self.goal.key.startswith('party_'):
+                # "When you change a POKéMON BOX, data will be saved. Is that okay?" The rule below
+                # reads the PC menu still drawn behind the prompt — CHANGE BOX, WITHDRAW PKMN — and
+                # answers no, so the goal reopens the menu forever. Storage work means yes.
+                self.reason = 'Confirm the storage prompt'
+                return self._select(scr, 0)
             if "CHANGE" in text and "MON" in text:
                 return self._select(scr, 1)
             if "ABANDON" in text or "STOP LEARNING" in text:
@@ -484,7 +525,9 @@ class StrategicPolicy(Policy):
             return self._select(scr, 0) if self.goal.key.startswith("party_") else tap("b")
         if kind == 'change_box':
             self.menu_context = 'pc'
-            target = s.next_free_box if self.goal.key == 'party_box' else self.collection.project.get('box') if self.goal.key == 'party_collection' and self.collection.project else None
+            release = self._release_target(s) if self.goal.key == 'party_release' else None
+            target = (release[0] if release else None) if self.goal.key == 'party_release' else \
+                s.next_free_box if self.goal.key == 'party_box' else self.collection.project.get('box') if self.goal.key == 'party_collection' and self.collection.project else None
             self.reason = 'Select a storage box with room for new catches'
             return tap('b') if target is None or target == s.active_box else self._select(scr, target)
         if kind == "pc":
@@ -493,6 +536,15 @@ class StrategicPolicy(Policy):
                 return tap("b")
             if scr.cursor and scr.cursor[0] == 10:
                 return self._select(scr, 0)
+            if self.goal.key == 'party_release':
+                release = self._release_target(s)
+                if release is None:
+                    return tap('b')
+                if release[0] != s.active_box:
+                    self.reason = 'Open the box holding the spare duplicate'
+                    return self._select(scr, 3)
+                self.reason = 'Let a spare duplicate go, keeping one of every species'
+                return self._select(scr, 2)
             if self.goal.key == 'party_box' or (self.goal.key == 'party_collection' and len(s.party)<6 and self.collection.project and self.collection.project.get('box') != s.active_box):
                 self.reason = 'Change the active storage box without releasing any Pokémon'
                 return self._select(scr, 3)
@@ -622,6 +674,16 @@ class StrategicPolicy(Policy):
             if collection_goal:
                 self.next_goal = goal.to_dict() if not goal.key.startswith(('collect_', 'party_collection')) else self.next_goal
                 goal = collection_goal
+        if (goal.key == 'collect_plan' and
+                ((s.map == MAPS['VICTORY_ROAD_3F'] and s.x >= 24 and s.y >= 7)
+                 or (s.map == MAPS['VICTORY_ROAD_2F'] and s.x >= 24 and s.y >= 7))):
+            goal = Goal('collect_passage', 'Open a route back through Victory Road',
+                        'Clear the east corridor boulder to reach more collecting locations',
+                        ((MAPS['VICTORY_ROAD_3F'], 27, 15),))
+        elif goal.key == 'collect_plan' and s.map in VICTORY_MAPS:
+            goal = Goal('collect_passage', 'Return to Kanto for another expedition',
+                        'Solve the remaining passage puzzles and leave through the southern entrance',
+                        ((MAPS['ROUTE_23'], 8, 138),))
         if s.map in (MAPS["ROCKET_HIDEOUT_ELEVATOR"], MAPS["CELADON_MART_ELEVATOR"], MAPS["SILPH_CO_ELEVATOR"]):
             rocket_lift = s.map == MAPS["ROCKET_HIDEOUT_ELEVATOR"]
             if self.elevator_exit and not rocket_lift:
@@ -641,9 +703,24 @@ class StrategicPolicy(Policy):
             self.next_goal = {'id': 'milestone', 'title': next_badge}
         self.reason = goal.reason
         if self.progress_goal != goal.key:
+            # This local navigation timer supplements the expedition's cumulative idle budget.
             self.progress_goal = goal.key
             self.progress_frame = s.frame
             self.goal_distance = None
+        if goal.key == 'collect_plan':
+            if 0 < self.collection.cooldown <= 1200:
+                self.mode = 'planning the next expedition'
+                self.watch.expected = None
+                return wait()
+            self.mode = 'exploring between expeditions'
+            self.watch.expected = None
+            options = [(dr, target) for dr, target in self.nav.neighbors(pos, s.frame)
+                       if target[0] not in LEAGUE]
+            if not options:
+                return wait()
+            direction = min(options, key=lambda option: self.nav.visits.get(option[1], 0))[0]
+            self.nav.issued(pos, direction, s.frame)
+            return tap(direction, 8, 12)
         if goal.key == "champion":
             self.mode = "continuing after the Champion"
             self.reason = "Finish the Hall of Fame ceremony and continue the saved adventure"
@@ -707,7 +784,26 @@ class StrategicPolicy(Policy):
                 return tap("start")
         if s.map in VICTORY_MAPS:
             task = boulder_task(s)
-            if task:
+            following_route = (self.collection.project and goal.key.startswith('collect_')
+                                    and self.nav.route(pos, goal.targets, s.frame) is not None)
+            # Plan the push before reaching for Strength. A boulder in another section of the floor
+            # is only reachable by ladder, so there is no push to make from here; activating
+            # Strength first meant every step opened the menu, and crossing a map boundary clears
+            # the flag again, so the run never fell through to the goal that climbs the ladder.
+            direction = self.boulders.route(s, self.nav, task) if task and not following_route else None
+            if (not direction and not following_route and s.map == MAPS['VICTORY_ROAD_2F']
+                    and event_set(s.event_flags, 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2')
+                    and not event_set(s.event_flags, 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2')):
+                # On the return journey the dropped boulder can be reached before the
+                # entrance switch. Do not insist on doing the two switches in story order.
+                task = ('BOULDER3', (9, 16))
+                direction = self.boulders.route(s, self.nav, task)
+            if not direction and not following_route and s.map == MAPS['VICTORY_ROAD_3F'] and s.x >= 24 and s.y >= 7:
+                # Returning from the Plateau enters the east corridor. Its loose boulder
+                # blocks the way west, before any of the switch puzzles can be reached.
+                task = ('BOULDER3', (22, 10))
+                direction = self.boulders.route(s, self.nav, task)
+            if task and direction:
                 if not mem[0xD728] & 1:
                     target = next((i for i, p in enumerate(s.party) if 70 in p.moves), None)
                     if target is not None:
@@ -718,15 +814,14 @@ class StrategicPolicy(Policy):
                         self.watch.begin('field', 'Wait for Strength to take effect', s,
                                          ActionWatch.value('field', s, '', mem[0xD700] | ((mem[0xD728] & 1) << 2)))
                         return tap("start")
-                direction = self.boulders.route(s, self.nav, task)
                 if direction:
                     self.mode = "moving a boulder onto the switch"
                     self.reason = "Find legal pushes and keep room to walk around the boulder"
                     self.progress_frame = s.frame
                     return tap(direction, 16, 16)
-            if s.map == MAPS["VICTORY_ROAD_2F"] and not event_set(s.event_flags, "EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2"):
+            if not following_route and s.map == MAPS["VICTORY_ROAD_2F"] and ready_to_climb(s):
                 goal = Goal("victory_ascent", "Reach the upper boulder puzzle", "Climb to the third floor", ((MAPS["VICTORY_ROAD_3F"], 23, 7),))
-            elif s.map == MAPS["VICTORY_ROAD_3F"] and not event_set(s.event_flags, "EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2"):
+            elif not following_route and s.map == MAPS["VICTORY_ROAD_3F"] and ready_to_drop(s):
                 goal = Goal("victory_drop", "Follow the boulder downstairs", "Drop through the hole to reach the final switch", ((MAPS["VICTORY_ROAD_2F"], 22, 16),))
         if pos in goal.targets:
             if goal.key == "snorlax":
@@ -775,6 +870,10 @@ class StrategicPolicy(Policy):
                 self.mode = "exploring obstacle"
                 self.reason = "The route is blocked or unknown, explore and learn a reachable path"
                 direction = self.nav.explore(pos, s.frame, self.rng)
+                # A Center that cannot be routed to is not worth insisting on: the run flees every
+                # battle while it holds the heal goal, so it can neither heal nor black out, and a
+                # blackout is itself the game's way back to a Center. Play on with who is standing.
+
             if s.frame - self.progress_frame > 2400:
                 return self._recover(s)
         dx, dy = DIRS[direction]
@@ -860,7 +959,15 @@ class StrategicPolicy(Policy):
             return item if item in stock and not dict(s.items).get(item) and s.money >= 2500 and len(s.items)<20 else None
         return shopping_item(s.items, stock, s.money, s.map == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=self.collection.pace!='focused' or self.collection.completed_champion)
 
+    def _release_target(self, snapshot):
+        project = self.collection.project or {}
+        protected = {project['parent']} if project.get('method') == 'evolve' and project.get('parent') else set()
+        return release_target(snapshot, protected)
+
     def _pc_target(self, snapshot):
+        if self.goal.key == 'party_release':
+            release = self._release_target(snapshot)
+            return release[1] if release and release[0] == snapshot.active_box else None
         if self.pc_operation == "deposit":
             return reserve_to_deposit(snapshot) if len(snapshot.party) >= 6 and not snapshot.box_full else None
         if self.goal.key == 'party_collection_space':
@@ -899,6 +1006,17 @@ class StrategicPolicy(Policy):
         self.progress_frame = snapshot.frame
         self.recovery_until = snapshot.frame + 180
         return self._recovery_step(snapshot)
+
+    def recover_stall(self, snapshot):
+        """Change the plan in the current world before considering a save rewind."""
+        self.collection.abandon('The run was stationary too long')
+        self.collection.cooldown = 0
+        self.collection.last_choice = self.collection.elapsed - 600
+        self._remember_failure(snapshot, 'Stationary objective abandoned without reloading')
+        self.on_restore()
+        self.recoveries += 1
+        self.recovery_until = snapshot.frame + 180
+        self.mode = 'finding another approach'
 
     def _recovery_step(self, snapshot):
         self.mode = "finding another approach"

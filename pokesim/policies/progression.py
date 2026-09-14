@@ -57,7 +57,8 @@ def milestones(snapshot):
            "pokedex": event_set(flags, "EVENT_GOT_POKEDEX")}
     for i, name in enumerate(("boulder", "cascade", "thunder", "rainbow", "soul", "marsh", "volcano", "earth")):
         out[name] = bool(snapshot.badges & (1 << i))
-    out["champion"] = snapshot.map == MAPS["HALL_OF_FAME"] or event_set(flags, "EVENT_BEAT_CHAMPION_RIVAL")
+    out["champion"] = (snapshot.hall_of_fame_count > 0 or snapshot.map == MAPS["HALL_OF_FAME"]
+                       or event_set(flags, "EVENT_BEAT_CHAMPION_RIVAL"))
     return out
 
 

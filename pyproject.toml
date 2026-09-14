@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pokesim"
-version = "0.2.0rc6"
+version = "0.2.0rc7"
 description = "A Pokémon Red that plays itself: headless emulator, live web view, event feed with screenshots"
 readme = "README.md"
 license = "MIT"
@@ -35,7 +35,7 @@ pythonpath = ["."]
 filterwarnings = ["ignore::UserWarning"]
 
 [tool.setuptools.package-data]
-pokesim = ["web/static/*"]
+pokesim = ["web/static/*", "broker/static/*"]
 
 [tool.setuptools.packages.find]
 include = ["pokesim*"]

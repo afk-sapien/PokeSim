@@ -52,6 +52,8 @@ Progress, policy memory, screenshots, and the journal live in `./data`. The cont
 
 ## Access and controls
 
+`/pokedex` browses all 151 Kanto entries with types, base stats, the level-up learnset, evolution family, and where each one can be found, next to what this run has registered and everyone waiting in the storage boxes. Entry data comes from your locally prepared game data; each entry also links out to Bulbapedia, Serebii, and Wikipedia. Portraits use the optional local pack described below and fall back to a neutral placeholder.
+
 The browser displays up to 10 frames per second independently of game speed. It waits for each image to download and decode before requesting another, retains the last good image during a connection failure, and retries automatically. Hidden tabs stop downloading game images. The `/stream` MJPEG endpoint remains available for other clients.
 
 The default port is accessible only on the Docker host. For remote access, use the [authenticated HTTPS proxy recipe](docs/proxy.md) or a private network. The app has no built-in authentication. Anyone who can reach an instance with controls enabled can control, reset, and rewind its game.

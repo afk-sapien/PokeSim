@@ -15,6 +15,7 @@ from pyboy import PyBoy
 
 from . import __version__, config
 from .events import RunMemory, diff
+from .play_clock import PlayClock
 from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext
 from .ram import Snapshot, read_snapshot
@@ -42,9 +43,12 @@ class Emulator:
         self.frame_jpeg: bytes = b""
         self.frame_seq = 0
         self.frame = 0
+        self.play_clock = PlayClock(store.get("play_clock", {}))
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
         self.mem = RunMemory.from_dict(store.get("run_memory", {}))
+        achievements = store.events(limit=1, types=('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map'))
+        self.last_achievement = achievements[0] if achievements else None
         self.policy.load_state_dict(store.get("policy_state", {}))
         self.commands: queue.Queue = queue.Queue()
         self.manual: queue.Queue = queue.Queue(maxsize=2)
@@ -113,13 +117,26 @@ class Emulator:
             "health": self.health(),
             "paused": self.paused, "speed": self.speed, "policy": self.policy.describe(),
             "manual_mode": self.manual_mode, "help_request": None,
+            "play_clock": self.play_clock.status(),
             "frame": self.frame, "uptime": int(time.time() - self.started_at),
             "stuck_seconds": int(time.time() - self.stuck_since), "rom": self.rom_note,
             "game": snap.to_dict() if snap else None,
             "areas_discovered": len(self.mem.seen_maps), "reloads": self.reloads,
             "glitched": bool(self.invalid_since),
             "strategy": self.policy.details(),
+            "progress": self.progress_status(),
         }
+
+    def progress_status(self):
+        achievement = getattr(self, 'last_achievement', None)
+        age = max(0, int(time.time() - achievement['ts'])) if achievement else None
+        mode = self.policy.details().get('action', '')
+        state = 'recovering' if (self.invalid_since or time.time() - self.last_reload < 30
+                                 or mode == 'finding another approach') else 'making_progress' if age is not None and age < 120 else 'exploring'
+        return {'state': state, 'last_achievement': {
+            'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
+            'age_seconds': age,
+        } if achievement else None}
 
     # ---------------- internals ----------------
     def health(self) -> dict:
@@ -156,14 +173,21 @@ class Emulator:
             self.pb.load_state(f)
         if metadata:
             self.policy.load_state_dict(metadata["policy_state"])
+            announced = getattr(self, 'mem', RunMemory()).playtime_milestones.copy()
+            announced.update(self.store.get('run_memory', {}).get('playtime_milestones', []))
             self.mem = RunMemory.from_dict(metadata["run_memory"])
+            self.mem.playtime_milestones.update(announced)
+            self.store.set('run_memory', self.mem.to_dict())
             self.frame = metadata.get("frame", self.frame)
         self.prev_snapshot = None
         self.pending = []
         self.stuck_since = time.time()
+        self.play_clock.restore(metadata.get("play_clock") if metadata else None)
         self.policy.on_restore()
         self.input_epoch += 1
         self.snapshot = read_snapshot(self.pb.memory, self.frame)
+        if self.snapshot.started:
+            self.play_clock.seed(self.snapshot.playtime_seconds)
 
     def _state_bytes(self) -> bytes:
         buf = io.BytesIO()
@@ -196,6 +220,7 @@ class Emulator:
             k = min(CHUNK, n)
             self.pb.tick(k, render=True)
             self.frame += k
+            self.play_clock.advance(k)
             n -= k
             self._publish_frame()
             if self.frame // SNAPSHOT_EVERY != (self.frame - k) // SNAPSHOT_EVERY:
@@ -217,6 +242,7 @@ class Emulator:
     def _observe(self):
         snap = read_snapshot(self.pb.memory, self.frame)
         if snap.started:
+            self.play_clock.seed(snap.playtime_seconds)
             self._enforce_options()
         new = diff(self.prev_snapshot, snap, self.mem)
         self.prev_snapshot = snap
@@ -253,6 +279,8 @@ class Emulator:
             if ev.notable and state is None:
                 state = self._state_bytes()
             eid = self.store.add_event(ev, snap, png, state if ev.notable else None)
+            if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map'):
+                self.last_achievement = {'id': eid, 'title': ev.title, 'ts': time.time()}
             log.info("event #%d %s p%d: %s", eid, ev.type, ev.priority, ev.title)
             if ev.notable and self.ntfy and self.ntfy.wants(ev):
                 self.ntfy.send(ev.title, ev.body, tags=ev.tags, priority=ev.priority, image=png,
@@ -269,6 +297,7 @@ class Emulator:
             self.pb.memory[W_OPTIONS] = want
 
     def _autosave(self):
+        self.store.set("play_clock", self.play_clock.state_dict())
         snap = self.snapshot
         if snap is not None and not snap.valid:
             log.warning("skipping autosave: game state looks glitched")
@@ -277,7 +306,7 @@ class Emulator:
             "app_version": __version__, "pyboy_version": version("pyboy"),
             "rom_sha1": self.rom_sha1, "policy": config.POLICY,
             "policy_state": self.policy.state_dict(), "run_memory": self.mem.to_dict(),
-            "frame": self.frame,
+            "frame": self.frame, "play_clock": self.play_clock.state_dict(),
         })
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
@@ -311,7 +340,14 @@ class Emulator:
         if self.invalid_since and now - self.invalid_since > 5:
             self._unstick(self.invalid_since, "game state glitched")
         elif config.STUCK_RELOAD_SECONDS and now - self.stuck_since > config.STUCK_RELOAD_SECONDS:
-            self._unstick(self.stuck_since, "stuck")
+            recover = getattr(self.policy, 'recover_stall', None)
+            if recover and self.snapshot and self.snapshot.valid and not self.snapshot.in_battle:
+                recover(self.snapshot)
+                self.stuck_since = now
+                self.input_epoch += 1
+                log.warning('stationary objective abandoned, replanning without a save reload')
+            else:
+                self._unstick(self.stuck_since, "stuck")
         elif self.battle_since and now - self.battle_since > config.BATTLE_TIMEOUT_SECONDS:
             self._unstick(self.battle_since, "battle never ended")
 
@@ -364,6 +400,10 @@ class Emulator:
                 p.unlink()
                 p.with_suffix(".json").unlink(missing_ok=True)
             self.mem = RunMemory()
+            self.last_achievement = None
+            self.play_clock = PlayClock()
+            self.store.set("play_clock", self.play_clock.state_dict())
+            self.snapshot = None
             self.store.set("run_memory", self.mem.to_dict())
             self.policy.reset()
             self.store.set("policy_state", {})
@@ -414,9 +454,11 @@ class Emulator:
                         nav.issued((before.map, before.x, before.y), act.button, self.frame)
                 if act.button is not None:
                     self.pb.button_press(act.button)
-                self._tick(act.hold)
-                if act.button is not None:
-                    self.pb.button_release(act.button)
+                try:
+                    self._tick(act.hold)
+                finally:
+                    if act.button is not None:
+                        self.pb.button_release(act.button)
                 self._tick(act.gap)
                 if nav:
                     after = read_snapshot(self.pb.memory, self.frame)

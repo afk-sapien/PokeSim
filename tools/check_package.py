@@ -2,17 +2,37 @@
 from pathlib import Path
 import tarfile
 import zipfile
+import tomllib
 
 required = {
+    'pokesim/broker/app.py',
+    'pokesim/broker/inventory.py',
+    'pokesim/broker/negotiation.py',
+    'pokesim/broker/static/board.css',
+    'pokesim/trade/execute.py',
+    'pokesim/trade/boxes.py',
+    'pokesim/duplicates.py',
+    'pokesim/play_clock.py',
     'pokesim/web/static/index.html',
+    'pokesim/web/static/journal.html',
+    'pokesim/web/static/pc.html',
+    'pokesim/web/static/pc.js',
+    'pokesim/web/static/pages.css',
     'pokesim/web/static/app.js',
     'pokesim/web/static/screen.js',
     'pokesim/web/static/style.css',
+    'pokesim/web/static/pokedex.html',
+    'pokesim/web/static/pokedex.js',
+    'pokesim/web/static/pokedex.css',
+    'pokesim/web/pokedex.py',
     'pokesim/healthcheck.py',
     'pokesim/prepare_data.py',
+    'pokesim/checkpoints.py',
+    'pokesim/web/feed.py',
     'pokesim/data_tools/strategy.py',
 }
-artifacts = list(Path('dist').glob('*.whl')) + list(Path('dist').glob('*.tar.gz'))
+release_version = tomllib.loads(Path('pyproject.toml').read_text())['project']['version']
+artifacts = list(Path('dist').glob(f'pokesim-{release_version}-*.whl')) + list(Path('dist').glob(f'pokesim-{release_version}.tar.gz'))
 if not artifacts:
     raise SystemExit('Build packages first with uv build')
 for artifact in artifacts:

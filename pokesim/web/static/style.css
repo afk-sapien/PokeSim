@@ -1265,3 +1265,11 @@ h1 { font-size:31px }
 .screen-status { font:12px system-ui,sans-serif }
 .screen-status { text-align:center }
 .screen-status { max-width:90% }
+.dex-open { margin-left: auto }
+.dex-open { align-self: center }
+.dex-open { padding: 8px 14px }
+.dex-open { border: 1px solid #d0d5c8 }
+.dex-open { border-radius: 10px }
+.dex-open { background: #f1f4e9 }
+.dex-open { font-size: 12px }
+.dex-open:hover { color: #6d8a4c }

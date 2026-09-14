@@ -102,7 +102,7 @@ def test_failed_atomic_write_leaves_previous_file_intact(store, monkeypatch):
     path.write_bytes(b'previous')
     def fail(source, destination):
         raise OSError('disk error')
-    monkeypatch.setattr('pokesim.store.os.replace', fail)
+    monkeypatch.setattr('pokesim.checkpoints.os.replace', fail)
     with pytest.raises(OSError):
         store.atomic_write(path, b'new')
     assert path.read_bytes() == b'previous'
@@ -124,6 +124,8 @@ def restore_emulator(store):
     emu.policy = Mock()
     emu.rom_sha1 = 'known-rom'
     emu.frame = 0
+    from pokesim.play_clock import PlayClock
+    emu.play_clock = PlayClock()
     emu.input_epoch = 0
     emu._boot = Mock(return_value=Mock())
     return emu

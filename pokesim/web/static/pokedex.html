@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f5f3ed">
+<meta name="description" content="Browse species, learn their moves, and find where to meet them.">
+<title>The Kanto Pokédex. · pokesim</title>
+<link rel="stylesheet" href="/static/style.css?v=watch-2">
+<link rel="stylesheet" href="/static/pokedex.css?v=pages-1">
+<link rel="stylesheet" href="/static/pages.css?v=clock-1">
+<link rel="alternate" type="application/atom+xml" title="pokesim events" href="/feed.xml">
+</head>
+<body data-page="pokedex">
+<a class="skip-link" href="#main">Skip to the kanto pokédex.</a>
+<header class="topbar">
+<a class="brand" href="/" aria-label="pokesim home"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition" id="edition">KANTO</span></a>
+<nav aria-label="Main navigation"><a href="/">Live</a><a href="/pokedex" class="nav-current" aria-current="page">Pokédex</a><a href="/pc">PC</a><a href="/journal">Journal</a></nav>
+<span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
+</header>
+<main id="main" class="page-main">
+<section class="page-intro"><div><p class="eyebrow"><span class="tiny-dot"></span> DISCOVERIES, ONE ENTRY AT A TIME</p><h1>The Kanto Pokédex.</h1><p class="intro-copy">Browse species, learn their moves, and find where to meet them.</p></div><div class="intro-note"><span class="note-number" id="dex-owned">0</span><span class="eyebrow">REGISTERED OF 151</span><span class="note-caption" id="dex-phase">Loading the records…</span></div></section>
+<section class="dex-summary" aria-label="Pokédex progress">
+    <div><span class="eyebrow">REGISTERED</span><strong id="sum-owned">0 <small>/ 151</small></strong><progress id="owned-meter" max="151" value="0" aria-label="Pokémon registered"></progress></div>
+    <div><span class="eyebrow">SEEN AT LEAST ONCE</span><strong id="sum-seen">0 <small>/ 151</small></strong><progress id="seen-meter" max="151" value="0" aria-label="Pokémon seen"></progress></div>
+  </section><section id="panel-dex" aria-label="Pokédex entries">
+    <div class="dex-toolbar">
+      <label for="search">Find <input id="search" type="search" placeholder="Name or number" autocomplete="off"></label>
+      <label for="type-filter">Type <select id="type-filter"><option value="all">Every type</option></select></label>
+      <label for="status-filter">Records <select id="status-filter">
+        <option value="all">Everyone</option>
+        <option value="caught">Registered</option>
+        <option value="seen">Seen, not caught</option>
+        <option value="unseen">Not met yet</option>
+        <option value="available">Possible in this run</option>
+        <option value="held">On the team or in a box</option>
+      </select></label>
+      <label for="sort">Order <select id="sort">
+        <option value="dex">Pokédex number</option>
+        <option value="name">Name</option>
+        <option value="total">Base stat total</option>
+        <option value="catch">Easiest to catch</option>
+      </select></label>
+      <span class="count-pill" id="result-count">151 Pokémon</span>
+    </div>
+    <div class="dex-grid" id="grid"><p class="dex-empty">Opening the Pokédex…</p></div>
+</section>
+</main>
+<div class="detail-backdrop" id="backdrop" hidden></div><aside class="detail-panel" id="detail" role="dialog" aria-modal="true" aria-labelledby="detail-name" hidden>
+  <div class="detail-nav"><button id="prev-mon" title="Previous Pokémon">←</button><button id="next-mon" title="Next Pokémon">→</button><button id="close-detail" class="close-detail" aria-label="Close">✕</button></div>
+  <div id="detail-body"></div>
+</aside>
+<footer><span id="app-version"></span><a class="brand footer-brand" href="/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><a href="/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/static/pokedex.js?v=watch-2"></script>
+</body>
+</html>

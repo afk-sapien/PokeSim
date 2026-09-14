@@ -1,3 +1,18 @@
+# Current release work: 0.2.0rc7
+
+September 14, 2026. The current release consolidates the deployed four-page interface,
+Pokédex and PC views, persistent play clock, storage fixes, and the new expedition and
+Victory Road return-path fixes. PyBoy remains pinned to 2.7.0.
+
+Copied-save checks reproduce Blue's stale planning timestamp and Red's restricted
+Victory Road loop. The revised policy has produced new trainer victories in Red and
+resumed collecting in Blue. Final replay evidence and deployment receipt are recorded
+under `docs/validation` and in `docs/homeserver.md` when completed. Two simulated hours
+are a bounded regression check. Multi-day live endurance remains outstanding.
+
+The trade board is read-only. No live exchange has been approved or executed by this
+release. Historical release notes below describe earlier versions and their limits.
+
 Experimental beta validation
 
 Version 0.2.0rc6 fixes repeated attempts to fight unidentified wild ghosts in Pokémon Tower before obtaining the Silph Scope. The battle policy follows the original game condition for unidentified ghosts and chooses escape. Trainer battles, identified ghosts, and encounters outside the Tower keep normal battle decisions. All 214 Python tests passed, including ten new regression cases.
