@@ -1,3 +1,12 @@
+# Release rc13 prepared for Red
+
+The reserve training timer now recognizes the partner first joining the party as a
+one-time preparation milestone. Reloads and repeated menu changes cannot repeat it.
+The overall expedition deadline remains bounded. All 387 tests pass, with one optional
+checkpoint test skipped. See [the copied-save comparison](docs/validation/training-preparation-0.2.0rc13.json).
+
+The following deployment record remains current until the rc13 receipt is recorded.
+
 # Current deployment: Blue rc12, Red rc10
 
 Blue runs `pokesim:0.2.0rc12-66b226f`, built from tagged commit

@@ -1,9 +1,5 @@
-PokeSim 0.2.0rc12 fixes routine travel out of Seafoam Islands. The navigator now avoids floor holes that trigger falls and currents, using the ladders to reach healing. Remembered fall steps are also rejected.
+PokeSim 0.2.0rc13 gives reserve training a fresh idle window when the selected partner first reaches a stable party snapshot. The milestone survives reloads and cannot repeat during PC menu transitions. The overall expedition deadline is unchanged.
 
-A copied stalled Blue save restored its entire party's HP and PP at Fuchsia Pokémon Center after 7632 frames. It then picked up Full Restore and resumed gaining experience. Red's replay behavior was unchanged. All 386 tests passed, with one optional checkpoint test skipped.
+In the same two-hour Red replay, both versions gained six levels. The candidate also picked up two items and won six trainer battles, including a League rematch. Local policy recoveries fell from 38 to 33. Neither version caught a new species, and collection efficiency remains open. Blue's Seafoam regression behavior was unchanged. All 387 tests passed, with one optional checkpoint test skipped.
 
-Blue is deployed on rc12 with a fresh cold backup and verified save compatibility. The live run has already left Seafoam. Red remains on rc10 without a maintenance restart. Both services and all 12 public endpoint checks passed.
-
-This release excludes the held rc11 obstacle experiment. It does not add Articuno's boulder puzzle solver. Collection efficiency and multi-day endurance remain open.
-
-See [release status](../RELEASE_STATUS.md), [the roadmap](roadmap.md), and [deployment details](homeserver.md).
+The release is prepared for Red. Blue remains on rc12 while its renewed live training continues. See [the validation record](validation/training-preparation-0.2.0rc13.json), [release status](../RELEASE_STATUS.md), and [deployment details](homeserver.md).
