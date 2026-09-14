@@ -1,3 +1,9 @@
+0.2.0rc10, verify training after PC transfers
+
+- Accept training progress in battle or after returning to the overworld, avoiding temporary level values during PC withdrawals.
+- Keep transfers and missing party entries from resetting the training idle timer.
+- Preserve project state across reloads and count subsequent experience and level gains normally.
+
 0.2.0rc9, recover routes after Victory Road switches reset
 
 - Ignore remembered steps through currently closed puzzle gates.
