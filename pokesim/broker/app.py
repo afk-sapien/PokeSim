@@ -1,12 +1,8 @@
-"""The trade board: a small read-only web view over two pokesim instances.
-
-Every request polls both instances with a GET and renders what they could exchange. There is no
-write path here at all — no POST to an instance, no file the broker owns. Executing a trade is a
-separate backend in a later milestone.
-"""
+"""Trade opportunities and completed exchanges for connected adventures."""
 from __future__ import annotations
 
 import html
+import json
 import os
 from pathlib import Path
 
@@ -14,7 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import inventory, negotiation
+from . import inventory, negotiation, routine
 
 STATIC = Path(__file__).parent / 'static'
 
@@ -73,11 +69,43 @@ def _proposal(proposal: dict) -> str:
         f'<p class="reason">{html.escape(proposal["reason"])}</p></article>')
 
 
-def render_board(inventories, proposals: list[dict], level_bar: int) -> str:
+def trading_status():
+    root = os.environ.get('BROKER_TRADING_DIR')
+    if not root:
+        return {'enabled': False, 'history': [], 'completed': 0}
+    try:
+        directory = Path(root)
+        policy = json.loads((directory / 'policy.json').read_text())
+        path = directory / 'status.json'
+        status = json.loads(path.read_text()) if path.exists() else {}
+        return {**status, 'enabled': policy.get('enabled', False),
+                'interval_seconds': policy.get('interval_seconds', 900)}
+    except (OSError, ValueError):
+        return {'enabled': False, 'history': [], 'completed': 0, 'error': 'Trading status unavailable'}
+
+
+def render_board(inventories, proposals: list[dict], level_bar: int, trading=None) -> str:
+    trading = trading or {'enabled': False}
+    automatic = trading.get('enabled', False)
+    heading = 'Partners between adventures.' if automatic else 'What these two could trade.'
+    note = 'Automatic exchanges between trusted peers.' if automatic else 'Read only. Nothing here is executed.'
+    intro = (f"Useful exchanges can happen every {trading.get('interval_seconds', 900) // 60} minutes, when both adventures are ready. "
+             'Active teams, current projects, last copies, and best retained partners are protected.' if automatic else
+             'Proposed exchanges between the two adventures. Each proposal shows what changes hands and what each run gains. Review last copies carefully. An exchange requires explicit approval.')
+    history = ''
+    activity = {'ready': 'Watching for the next exchange', 'waiting_for_overworld': 'Waiting for both adventures to finish their current activity', 'waiting_for_opportunity': 'Waiting for a useful exchange', 'retrying': 'Retrying after a trading interruption'}.get(trading.get('state'), 'Preparing automatic trading')
+    if automatic:
+        history = f'<section class="deals"><p>{activity}</p><h2>{trading.get("completed", 0)} completed exchanges</h2>'
+        for row in reversed(trading.get('history', [])[-10:]):
+            descriptions = [f"{m['instance'].title()} received {m['received']['nick']} ({m['received']['name']}, Lv. {m['received']['level']})" for m in row['moved']]
+            history += '<article class="deal"><p>' + html.escape('. '.join(descriptions)) + '</p><p class="reason">' + html.escape(row['reason']) + '</p></article>'
+        history += '</section>'
+
     runs = ''.join(_card(inv) for inv in inventories)
     deals = ''.join(_proposal(proposal) for proposal in proposals) or (
         '<p class="empty">Nothing to trade yet. Both runs need a spare the other is missing, '
-        f'or a Pokémon at level {level_bar} to pay for a premium target.</p>')
+        + (f'or a Pokémon at level {level_bar} to pay for a premium target.</p>' if not automatic else
+         'or an upgrade worth sharing. New catches and training create more opportunities.</p>'))
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -91,16 +119,16 @@ def render_board(inventories, proposals: list[dict], level_bar: int) -> str:
 <body>
 <header class="topbar">
   <span class="brand"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition">TRADE BROKER</span></span>
-  <p class="topbar-note">Read only. Nothing here is executed.</p>
+  <p class="topbar-note">{note}</p>
 </header>
 <main>
   <section class="page-intro">
     <p class="eyebrow">LINK CABLE</p>
-    <h1>What these two could trade.</h1>
-    <p class="intro-copy">Proposed exchanges between the two adventures. Each proposal shows what changes hands
-      and what each run gains. Review last copies carefully. An exchange requires explicit approval.</p>
+    <h1>{heading}</h1>
+    <p class="intro-copy">{intro}</p>
   </section>
   <section class="runs">{runs}</section>
+  {history}
   <section class="deals">
     <h2>{len(proposals)} proposal{"" if len(proposals) == 1 else "s"}</h2>
     {deals}
@@ -126,7 +154,8 @@ def create_app(read=inventory.read, urls: dict[str, str] | None = None, level_ba
     def api_proposals():
         inventories, deals = collect()
         return {'premium_level': bar, 'premium_dex': sorted(negotiation.premium_dex()),
-                'instances': [inv.summary() for inv in inventories], 'proposals': deals}
+                'instances': [inv.summary() for inv in inventories], 'proposals': deals,
+                'routine_proposals': routine.proposals(inventories), 'trading': trading_status()}
 
     @app.get('/sprites/{instance}/{dex}.png')
     def portrait(instance: str, dex: int):
@@ -142,6 +171,7 @@ def create_app(read=inventory.read, urls: dict[str, str] | None = None, level_ba
     @app.get('/', response_class=HTMLResponse)
     def board():
         inventories, deals = collect()
-        return render_board(inventories, deals, bar)
+        status = trading_status()
+        return render_board(inventories, routine.proposals(inventories) if status.get('enabled') else deals, bar, status)
 
     return app

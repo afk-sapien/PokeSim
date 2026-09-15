@@ -47,7 +47,7 @@ class Emulator:
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
         self.mem = RunMemory.from_dict(store.get("run_memory", {}))
-        achievements = store.events(limit=1, types=('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map'))
+        achievements = store.events(limit=1, types=('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'))
         self.last_achievement = achievements[0] if achievements else None
         self.policy.load_state_dict(store.get("policy_state", {}))
         self.commands: queue.Queue = queue.Queue()
@@ -162,6 +162,9 @@ class Emulator:
 
     def _load_state_file(self, path: Path):
         metadata = self.store.checkpoint_metadata(path)
+        barrier = self.store.get("trade_barrier")
+        if barrier and (metadata or {}).get("trade_id") != barrier:
+            raise ValueError("Checkpoint predates the latest completed trade")
         if metadata:
             if metadata.get("rom_sha1") != self.rom_sha1:
                 raise ValueError("Checkpoint was created with a different ROM")
@@ -279,7 +282,7 @@ class Emulator:
             if ev.notable and state is None:
                 state = self._state_bytes()
             eid = self.store.add_event(ev, snap, png, state if ev.notable else None)
-            if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map'):
+            if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'):
                 self.last_achievement = {'id': eid, 'title': ev.title, 'ts': time.time()}
             log.info("event #%d %s p%d: %s", eid, ev.type, ev.priority, ev.title)
             if ev.notable and self.ntfy and self.ntfy.wants(ev):
@@ -307,6 +310,7 @@ class Emulator:
             "rom_sha1": self.rom_sha1, "policy": config.POLICY,
             "policy_state": self.policy.state_dict(), "run_memory": self.mem.to_dict(),
             "frame": self.frame, "play_clock": self.play_clock.state_dict(),
+            "trade_id": self.store.get("trade_barrier"),
         })
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
@@ -401,6 +405,7 @@ class Emulator:
                 p.with_suffix(".json").unlink(missing_ok=True)
             self.mem = RunMemory()
             self.last_achievement = None
+            self.store.set("trade_barrier", None)
             self.play_clock = PlayClock()
             self.store.set("play_clock", self.play_clock.state_dict())
             self.snapshot = None

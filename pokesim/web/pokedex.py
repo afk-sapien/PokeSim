@@ -122,7 +122,9 @@ def live_status(game: dict | None, collection: dict | None = None) -> dict:
                      for row in (collection or {}).get("entries", [])],
             "phase": (collection or {}).get("phase", ""),
             "version": (collection or {}).get("version", DEFAULT_VERSION),
-            "hunting": ((collection or {}).get("hunt") or {}).get("species")}
+            "hunting": ((collection or {}).get("hunt") or {}).get("species"),
+            "protected_species": [value for key, value in ((collection or {}).get("hunt") or {}).items()
+                                  if key in ("species", "parent") and value]}
     if not game:
         return {"started": False, "owned": [], "seen": [], "party": [], "storage": None, **plan}
     dex_of = {sid: mon["dex"] for sid, mon in SPECIES.items()}

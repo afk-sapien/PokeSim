@@ -233,3 +233,12 @@ def test_stop_interrupts_long_tick_without_advancing_game():
     emu.pb = Mock()
     emu._tick(10000)
     emu.pb.tick.assert_not_called()
+
+
+def test_completed_trade_blocks_restore_of_an_older_inventory(store):
+    old = store.write_checkpoint(b'valid', metadata())
+    store.set('trade_barrier', '1234')
+    emu = restore_emulator(store)
+    with pytest.raises(ValueError, match='predates'):
+        emu._load_state_file(old)
+    emu.pb.load_state.assert_not_called()

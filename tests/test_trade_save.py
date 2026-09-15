@@ -323,3 +323,15 @@ def test_trade_registration_keeps_existing_entries_and_records_both_evolution_st
     register_arrival(mem, HAUNTER, GENGAR)
     assert set(flag_bits(bytes(mem[W_DEX_OWNED:W_DEX_OWNED + 19]))) == {1, 93, 94}
     assert set(flag_bits(bytes(mem[W_DEX_SEEN:W_DEX_SEEN + 19]))) == {1, 2, 93, 94}
+
+
+def test_same_species_and_level_cannot_substitute_a_different_individual():
+    from pokesim.trade.execute import _verify
+    mem = populate(Memory())
+    want = {'box': 1, 'position': 1, 'species': ABRA, 'level': 30, 'nick': 'OTHER'}
+    with pytest.raises(TradeError, match='nickname'):
+        _verify(mem, want, 'red')
+    want['nick'] = 'ROCKY'
+    want['dvs'] = [0, 0, 0, 0, 0]
+    with pytest.raises(TradeError, match='individual'):
+        _verify(mem, want, 'red')

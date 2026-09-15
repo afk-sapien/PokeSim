@@ -109,7 +109,7 @@ def test_unknown_version_is_rejected():
 def test_live_status_without_a_running_game():
     status = live_status(None)
     assert status == {'started': False, 'owned': [], 'seen': [], 'party': [], 'storage': None,
-                      'plan': [], 'phase': '', 'version': DEFAULT_VERSION, 'hunting': None}
+                      'plan': [], 'phase': '', 'version': DEFAULT_VERSION, 'hunting': None, 'protected_species': []}
 
 
 def test_live_status_reports_records_party_and_boxes():

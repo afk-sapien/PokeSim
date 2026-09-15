@@ -146,6 +146,11 @@ def create_app(emu, store) -> FastAPI:
         elif c.action == "load_state":
             if not isinstance(c.value, str) or not store.state_path(c.value):
                 raise HTTPException(400, "Save state does not exist")
+            barrier = store.get('trade_barrier')
+            if barrier:
+                metadata = store.checkpoint_metadata(store.state_path(c.value))
+                if (metadata or {}).get('trade_id') != barrier:
+                    raise HTTPException(409, 'This save predates the latest completed trade')
             emu.command("load_state", str(c.value))
         else:
             raise HTTPException(400, "unknown action")
@@ -178,7 +183,7 @@ def create_app(emu, store) -> FastAPI:
         if not ev:
             raise HTTPException(404)
         shot = f"/shots/{ev['shot']}" if ev["shot"] else ""
-        can_rewind = bool(ev["state"]) and not config.VIEWER_ONLY
+        can_rewind = bool(ev["state"]) and not config.VIEWER_ONLY and not store.get("trade_barrier")
         return f"""<!doctype html><html><head><meta charset="utf-8"><title>{html.escape(ev['title'])} · pokesim</title>
 <link rel="stylesheet" href="/static/style.css"></head><body class="event">
 <main><a href="/journal">Back to the journal</a><h1>{html.escape(ev['title'])}</h1>

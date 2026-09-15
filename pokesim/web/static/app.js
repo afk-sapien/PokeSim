@@ -161,7 +161,7 @@ async function refreshState() {
   }
 }
 
-const EVENT_LABELS = {badge: 'A BADGE TO REMEMBER', catch: 'A NEW FRIEND', evolve: 'GROWING TOGETHER', obtain: 'A NEW COMPANION', map: 'SOMEWHERE NEW', level: 'A LITTLE STRONGER', blackout: 'A FRESH START', champion: 'HALL OF FAME', item: 'A GOOD FIND', trainer: 'CHALLENGE ACCEPTED', seen: 'FIRST SIGHTING', playtime: 'TIME WELL SPENT'}
+const EVENT_LABELS = {trade: 'A PARTNER FROM AFAR', badge: 'A BADGE TO REMEMBER', catch: 'A NEW FRIEND', evolve: 'GROWING TOGETHER', obtain: 'A NEW COMPANION', map: 'SOMEWHERE NEW', level: 'A LITTLE STRONGER', blackout: 'A FRESH START', champion: 'HALL OF FAME', item: 'A GOOD FIND', trainer: 'CHALLENGE ACCEPTED', seen: 'FIRST SIGHTING', playtime: 'TIME WELL SPENT'}
 function renderEvents() {
   $('#events').innerHTML = eventRows.map((event) => {
     const date = new Date(event.ts * 1000)
@@ -178,7 +178,7 @@ async function refreshEvents(append = false) {
   const params = new URLSearchParams({limit: '8'})
   if (eventFilter === 'all') params.set('all', '1')
   if (eventFilter === 'team') {
-    params.set('types', 'catch,evolve,obtain,level')
+    params.set('types', 'catch,evolve,obtain,level,trade')
     params.set('all', '1')
   }
   if (append && eventRows.length) params.set('before', String(eventRows.at(-1).id))

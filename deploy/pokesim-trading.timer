@@ -1,0 +1,10 @@
+[Unit]
+Description=Check trusted PokeSim trade opportunities
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=60s
+Unit=pokesim-trading.service
+
+[Install]
+WantedBy=timers.target

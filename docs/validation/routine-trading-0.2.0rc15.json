@@ -1,0 +1,439 @@
+{
+  "copied_exchanges": [
+    {
+      "moved": [
+        {
+          "instance": "red",
+          "box": 2,
+          "position": 2,
+          "sent": {
+            "species": 41,
+            "name": "Machoke",
+            "level": 41,
+            "nick": "DIRTNAP"
+          },
+          "received": {
+            "species": 82,
+            "name": "Vulpix",
+            "level": 32,
+            "nick": "MOCHI",
+            "evolved_from": null
+          },
+          "owned_before": 113,
+          "owned_after": 114
+        },
+        {
+          "instance": "blue",
+          "box": 5,
+          "position": 12,
+          "sent": {
+            "species": 82,
+            "name": "Vulpix",
+            "level": 32,
+            "nick": "MOCHI"
+          },
+          "received": {
+            "species": 126,
+            "name": "Machamp",
+            "level": 41,
+            "nick": "DIRTNAP",
+            "evolved_from": 41
+          },
+          "owned_before": 116,
+          "owned_after": 117
+        }
+      ],
+      "reason": "Red registers Vulpix. Blue registers Machamp",
+      "price": "trusted exchange",
+      "status": "staged",
+      "id": "100001",
+      "proposal": {
+        "give": {
+          "instance": "red",
+          "dex": 67,
+          "species": 41,
+          "box": 2,
+          "position": 2,
+          "level": 41,
+          "nick": "DIRTNAP",
+          "name": "Machoke",
+          "dvs": [
+            13,
+            11,
+            11,
+            6,
+            13
+          ],
+          "stat_exp": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "take": {
+          "instance": "blue",
+          "dex": 37,
+          "species": 82,
+          "box": 5,
+          "position": 12,
+          "level": 32,
+          "nick": "MOCHI",
+          "name": "Vulpix",
+          "dvs": [
+            12,
+            13,
+            3,
+            2,
+            8
+          ],
+          "stat_exp": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "reason": "Red registers Vulpix. Blue registers Machamp",
+        "price": "trusted exchange",
+        "spends": {
+          "give": "spare",
+          "take": "spare"
+        }
+      },
+      "hashes": {
+        "red": "a282a3c97b04fd2b4c6f557a1cf9538e4b444bfede99c6cfcf78f6b1866c13f5",
+        "blue": "4536e98e2a302fcddd939d611e3d58fea7e5a1ed8991d3ffa97cd80e8b0d385e"
+      }
+    },
+    {
+      "moved": [
+        {
+          "instance": "red",
+          "box": 6,
+          "position": 12,
+          "sent": {
+            "species": 38,
+            "name": "Kadabra",
+            "level": 49,
+            "nick": "MUFFIN"
+          },
+          "received": {
+            "species": 126,
+            "name": "Machamp",
+            "level": 41,
+            "nick": "FRIDGEHAM",
+            "evolved_from": 41
+          },
+          "owned_before": 114,
+          "owned_after": 115
+        },
+        {
+          "instance": "blue",
+          "box": 1,
+          "position": 3,
+          "sent": {
+            "species": 41,
+            "name": "Machoke",
+            "level": 41,
+            "nick": "FRIDGEHAM"
+          },
+          "received": {
+            "species": 149,
+            "name": "Alakazam",
+            "level": 49,
+            "nick": "MUFFIN",
+            "evolved_from": 38
+          },
+          "owned_before": 117,
+          "owned_after": 118
+        }
+      ],
+      "reason": "Red registers Machamp. Blue registers Alakazam",
+      "price": "trusted exchange",
+      "status": "staged",
+      "id": "100002",
+      "proposal": {
+        "give": {
+          "instance": "red",
+          "dex": 64,
+          "species": 38,
+          "box": 6,
+          "position": 12,
+          "level": 49,
+          "nick": "MUFFIN",
+          "name": "Kadabra",
+          "dvs": [
+            1,
+            14,
+            0,
+            2,
+            15
+          ],
+          "stat_exp": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "take": {
+          "instance": "blue",
+          "dex": 67,
+          "species": 41,
+          "box": 1,
+          "position": 3,
+          "level": 41,
+          "nick": "FRIDGEHAM",
+          "name": "Machoke",
+          "dvs": [
+            7,
+            2,
+            7,
+            11,
+            5
+          ],
+          "stat_exp": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "reason": "Red registers Machamp. Blue registers Alakazam",
+        "price": "trusted exchange",
+        "spends": {
+          "give": "spare",
+          "take": "spare"
+        }
+      },
+      "hashes": {
+        "red": "876226f5c9361a4f2244727bad9841b96cf4b5fd4dc5031b570a77866690a4fd",
+        "blue": "7c635f8b3c5a83f35c4498f0d65c0e861e9aca2dd8e001d8972dea86b6eb8383"
+      }
+    },
+    {
+      "moved": [
+        {
+          "instance": "red",
+          "box": 6,
+          "position": 7,
+          "sent": {
+            "species": 150,
+            "name": "Pidgeotto",
+            "level": 28,
+            "nick": "CASHEW"
+          },
+          "received": {
+            "species": 149,
+            "name": "Alakazam",
+            "level": 49,
+            "nick": "BORKUS",
+            "evolved_from": 38
+          },
+          "owned_before": 115,
+          "owned_after": 116
+        },
+        {
+          "instance": "blue",
+          "box": 1,
+          "position": 5,
+          "sent": {
+            "species": 38,
+            "name": "Kadabra",
+            "level": 49,
+            "nick": "BORKUS"
+          },
+          "received": {
+            "species": 150,
+            "name": "Pidgeotto",
+            "level": 28,
+            "nick": "CASHEW",
+            "evolved_from": null
+          },
+          "owned_before": 118,
+          "owned_after": 118
+        }
+      ],
+      "reason": "Red registers Alakazam. Blue restores a missing collection partner",
+      "price": "trusted exchange",
+      "status": "staged",
+      "id": "100003",
+      "proposal": {
+        "give": {
+          "instance": "red",
+          "dex": 17,
+          "species": 150,
+          "box": 6,
+          "position": 7,
+          "level": 28,
+          "nick": "CASHEW",
+          "name": "Pidgeotto",
+          "dvs": [
+            1,
+            10,
+            14,
+            0,
+            15
+          ],
+          "stat_exp": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "take": {
+          "instance": "blue",
+          "dex": 64,
+          "species": 38,
+          "box": 1,
+          "position": 5,
+          "level": 49,
+          "nick": "BORKUS",
+          "name": "Kadabra",
+          "dvs": [
+            4,
+            2,
+            3,
+            0,
+            8
+          ],
+          "stat_exp": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "reason": "Red registers Alakazam. Blue restores a missing collection partner",
+        "price": "trusted exchange",
+        "spends": {
+          "give": "spare",
+          "take": "spare"
+        }
+      },
+      "hashes": {
+        "red": "443b01f4004f0f46d3b993c538a0d8ca18d5faecd303d80e2c0a54653098b4a9",
+        "blue": "3637657a76dbed5788e0839bf4c48a7d8712949d095da9523784143d3b7bd719"
+      }
+    },
+    {
+      "moved": [
+        {
+          "instance": "red",
+          "box": 10,
+          "position": 16,
+          "sent": {
+            "species": 37,
+            "name": "Slowpoke",
+            "level": 35,
+            "nick": "SCOUT"
+          },
+          "received": {
+            "species": 24,
+            "name": "Tentacool",
+            "level": 26,
+            "nick": "PUMPKIN",
+            "evolved_from": null
+          },
+          "owned_before": 116,
+          "owned_after": 116
+        },
+        {
+          "instance": "blue",
+          "box": 9,
+          "position": 12,
+          "sent": {
+            "species": 24,
+            "name": "Tentacool",
+            "level": 26,
+            "nick": "PUMPKIN"
+          },
+          "received": {
+            "species": 37,
+            "name": "Slowpoke",
+            "level": 35,
+            "nick": "SCOUT",
+            "evolved_from": null
+          },
+          "owned_before": 118,
+          "owned_after": 118
+        }
+      ],
+      "reason": "Red restores a missing collection partner. Blue gains a partner at least five levels stronger",
+      "price": "trusted exchange",
+      "status": "staged",
+      "id": "100004",
+      "proposal": {
+        "give": {
+          "instance": "red",
+          "dex": 79,
+          "species": 37,
+          "box": 10,
+          "position": 16,
+          "level": 35,
+          "nick": "SCOUT",
+          "name": "Slowpoke",
+          "dvs": [
+            10,
+            1,
+            4,
+            15,
+            12
+          ],
+          "stat_exp": [
+            2403,
+            4979,
+            3124,
+            6820,
+            4169
+          ]
+        },
+        "take": {
+          "instance": "blue",
+          "dex": 72,
+          "species": 24,
+          "box": 9,
+          "position": 12,
+          "level": 26,
+          "nick": "PUMPKIN",
+          "name": "Tentacool",
+          "dvs": [
+            2,
+            14,
+            8,
+            3,
+            4
+          ],
+          "stat_exp": [
+            1629,
+            3746,
+            2090,
+            5540,
+            2958
+          ]
+        },
+        "reason": "Red restores a missing collection partner. Blue gains a partner at least five levels stronger",
+        "price": "trusted exchange",
+        "spends": {
+          "give": "spare",
+          "take": "spare"
+        }
+      },
+      "hashes": {
+        "red": "f7a4537a65b981dc549fccec8fbf501752a5bb537b682b1554fe889da346c865",
+        "blue": "6fe227a98aba6b3417800a8c6025c5752ffa2df4d30ea293178214ed141cfe9a"
+      }
+    }
+  ],
+  "party_and_unrelated_slots_preserved": true,
+  "traded_and_subsequent_checkpoints_reloaded": true,
+  "journal_idempotence_verified": true
+}
