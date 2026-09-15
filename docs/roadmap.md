@@ -338,3 +338,12 @@ penalty despite recorded XP gains. The ordinary retry delay and idle deadline re
 All 388 tests pass, and the copied Red healing replay is unchanged. Both live processes
 continue on their existing releases for endurance observation. See
 [the evidence](validation/partial-training-20260915.json).
+
+
+## Bag capacity before broader pickup coverage
+
+Blue's full 20-slot bag now blocks new item types. Selling a battle booster merely
+replaced it with medicine in the copied-save trial, so that candidate is held. Add
+bounded PC storage for verified retired story items, preserving the items and required
+travel supplies, then test pickup success. Expired detour failures need a separate
+reproduction. See [the inventory evidence](validation/item-capacity-20260915.json).

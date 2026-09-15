@@ -180,3 +180,26 @@ its completed training count reached 18. Registered entries remained Red 111 and
 116. Storage was stable at 78.57 percent used, with 22.72 GB free. No deployment or
 new runtime change was needed for this check. Keep the partial-training accounting
 change queued and continue the existing live endurance intervals.
+
+
+## September 15 item capacity investigation
+
+The 03:24 UTC sample showed both games making level gains at unlimited speed, with
+zero save reloads and unchanged container start times. Inventory investigation found
+Blue carrying 20 item types, with no Nuggets or TMs eligible for existing cleanup.
+The copied save attempted no pickups over 144020 frames. Earlier expired Ultra Ball
+detours were not reproduced, so battle timing remains an unconfirmed explanation.
+
+A candidate allowing battle-booster sales sold X Accuracy and bought Full Restore,
+leaving the bag full again. It completed a League rematch but increased local policy
+recoveries from 6 to 26 and still attempted no pickups. All 389 candidate tests passed,
+but this does not establish a pickup improvement. The candidate was removed from the
+runtime checkout and preserved as a patch with the private reproduction. No deployment
+was performed. The existing queued partial-training fix remains the only pending
+runtime change. See [the comparison](validation/item-capacity-20260915.json).
+
+Next, investigate bounded PC item storage for verified retired story items. Preserve
+items instead of discarding them, and keep necessary keys, HMs, balls, medicine, and
+escape supplies available. Also reproduce the expired pickup detours independently.
+The sampler now records item contents and occupied bag slots. The private reproduction
+is `data/operations/repros/blue-item-capacity-20260915`, the sixth retained case.
