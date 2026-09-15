@@ -1,0 +1,172 @@
+{
+  "version": "0.2.0rc16",
+  "revision": "caa092bf76d3b73ce892575ece41480b5a455d80",
+  "deployments": [
+    {
+      "edition": "red",
+      "backup": "/docker/pokesim/backups/20260915T045935Z-rc16/before.tar",
+      "image": "pokesim:0.2.0rc16-caa092b",
+      "image_id": "sha256:9b0228d75ddfa4757c63a6dede3038ee47ab4e0570baa9bd5b608697f8b88d54",
+      "revision": "caa092bf76d3b73ce892575ece41480b5a455d80",
+      "timestamp": 1789448390.9907148,
+      "previous_image": "pokesim:0.2.0rc15-23652c2",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 113,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 8162,
+          "title": "NIMBUS grew to level 28",
+          "ts": 1789448372.9325137,
+          "age_seconds": 18
+        }
+      }
+    },
+    {
+      "edition": "blue",
+      "backup": "/docker/pokesim-blue/backups/20260915T045901Z-rc16/before.tar",
+      "image": "pokesim:0.2.0rc16-caa092b",
+      "image_id": "sha256:9b0228d75ddfa4757c63a6dede3038ee47ab4e0570baa9bd5b608697f8b88d54",
+      "revision": "caa092bf76d3b73ce892575ece41480b5a455d80",
+      "timestamp": 1789448349.041412,
+      "previous_image": "pokesim:0.2.0rc15-23652c2",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 116,
+      "reloads": 0,
+      "progress": {
+        "state": "exploring",
+        "last_achievement": {
+          "id": 3377,
+          "title": "TOAST grew to level 30",
+          "ts": 1789448205.2186549,
+          "age_seconds": 143
+        }
+      }
+    }
+  ],
+  "trading": {
+    "enabled": false,
+    "completed": 0,
+    "interval_seconds": 900,
+    "user": "10001:10001",
+    "docker_socket": false,
+    "privileged": false,
+    "cap_drop": [
+      "ALL"
+    ],
+    "approval_block": "Automatic approval review requires explicit approval of the first exchange and subsequent automatic policy under the earlier roadmap."
+  },
+  "validation": {
+    "python_passed": 406,
+    "python_skipped": 1,
+    "javascript_passed": 7,
+    "packages_verified": true,
+    "public_checks": [
+      {
+        "edition": "red",
+        "path": "/",
+        "status": 200
+      },
+      {
+        "edition": "red",
+        "path": "/healthz",
+        "status": 200
+      },
+      {
+        "edition": "red",
+        "path": "/pokedex",
+        "status": 200
+      },
+      {
+        "edition": "red",
+        "path": "/pc",
+        "status": 200
+      },
+      {
+        "edition": "red",
+        "path": "/journal",
+        "status": 200
+      },
+      {
+        "edition": "red",
+        "path": "/sprites/25.png",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/healthz",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/pokedex",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/pc",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/journal",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/sprites/25.png",
+        "status": 200
+      }
+    ],
+    "copied_exchanges": 5,
+    "crash_recovery_and_restart_holds_verified": true
+  },
+  "post_deployment": {
+    "red": {
+      "version": "0.2.0rc16",
+      "image": "pokesim:0.2.0rc16-caa092b",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "owned": 113,
+      "reloads": 0,
+      "started_at": "2026-09-15T04:59:48.782749019Z"
+    },
+    "blue": {
+      "version": "0.2.0rc16",
+      "image": "pokesim:0.2.0rc16-caa092b",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "owned": 116,
+      "reloads": 0,
+      "started_at": "2026-09-15T04:59:06.756964327Z"
+    }
+  }
+}

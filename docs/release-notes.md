@@ -3,3 +3,5 @@ PokeSim 0.2.0rc16 enables useful automatic trades between configured Red and Blu
 The coordinator uses authenticated trade controls and durable game holds. It runs under the games' ordinary UID without Docker or root access. Staged saves and journal records recover as a pair, and completed trades block restores of older inventories. The board shows completed exchanges and opportunities.
 
 Five copied-save exchanges were validated. The final rehearsal interrupted the coordinator after commitment, restarted both games, verified that their holds remained active, then recovered and released both adventures. See [automatic trading](automatic-trading.md).
+
+The release is deployed and tested. Live execution remains disabled pending explicit approval of the first exchange and the automatic policy, as required by automatic approval review. Both games continue at unlimited speed.

@@ -11,10 +11,10 @@ The old https://pokesim.tynet.app address remains a Red alias. Each game retains
 ROM, saves, party, boxes, journal, and notification configuration. Both games run at
 unlimited speed, with `SPEED=0` saved in their deployment configurations.
 
-Both games run `pokesim:0.2.0rc14-1473f1d` from tagged commit
-`1473f1daf16acf6f66ef8a9067bef0eda16fb5ff`. The image ID is
-`sha256:284bc68df9aa6e473d9001af548151a8976c92ee0690d559c3a1e26532322715`. The source archive is unpacked at
-`/docker/pokesim/releases/0.2.0rc14-1473f1d`.
+Both games run `pokesim:0.2.0rc16-caa092b` from tagged commit
+`caa092bf76d3b73ce892575ece41480b5a455d80`. The image ID is
+`sha256:9b0228d75ddfa4757c63a6dede3038ee47ab4e0570baa9bd5b608697f8b88d54`.
+The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc16-caa092b`.
 PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
 
 The release includes persistent playtime, the four-page interface, stall recovery,
@@ -24,12 +24,13 @@ The rc8 upgrade adds persistent postgame project rotation, level training, rando
 starters for new adventures, and confirmed ground-item detours. Existing adventures
 retain their Pokémon and continue from their latest autosaves.
 
-The read-only trade board runs as `pokesim-broker` on
-[servarr port 8950](http://192.168.2.147:8950). Its compose directory is
-`/docker/pokesim-broker`, with a local `.env` setting the game-data path. It mounts only
-read-only game data and polls the two games through the host gateway. It has no ROM or
-save mounts and cannot execute trades. See [trade-review.md](trade-review.md) for the
-copied-save rehearsal and the still-required approval of a specific live exchange.
+The trade board runs as `pokesim-broker` on
+[servarr port 8950](http://192.168.2.147:8950). It polls both games and mounts only game
+data and the coordinator's redacted public status read-only. It cannot access saves,
+ROMs, or peer tokens. The scoped coordinator is `pokesim-trading`, configured under
+`/docker/pokesim-trading`. It runs as UID 10001 with no Docker socket or root identity.
+Private peer credentials are configured, but the trading policy is disabled pending
+explicit first-exchange and automation approval. See [automatic trading](automatic-trading.md).
 
 ## Routing
 
@@ -43,6 +44,13 @@ for new log files. A root-owned log file can pass a root configuration check but
 the running service from reloading.
 
 ## Backups and rollback
+
+The rc16 deployment verified both current saves and retained these cold backups:
+
+- Red: `/docker/pokesim/backups/20260915T045935Z-rc16/before.tar`.
+- Blue: `/docker/pokesim-blue/backups/20260915T045901Z-rc16/before.tar`.
+
+See [the rc16 release receipt](validation/release-0.2.0rc16.json).
 
 The rc14 deployment updated both games after loading each latest save successfully:
 
@@ -141,7 +149,7 @@ entire database over unrelated configuration changes.
 
 ## Verification
 
-The current rc14 code passed 388 tests, with one optional checkpoint test skipped.
+The current rc16 code passed 406 tests, with one optional checkpoint test skipped.
 Red resumed with 111 registered entries. Blue remained running and reached 116 after
 catching Kangaskhan. Both services and all 12 public checks passed. No multi-day pass
 is claimed. The per-release receipts above preserve the exact validation and images.

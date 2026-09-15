@@ -1,8 +1,10 @@
 # Automatic trading between trusted adventures
 
-The owner requested common trading on the live Red and Blue pair. This authorizes
-routine automatic spare exchanges on those games. Earlier per-exchange review
-requirements are superseded for this policy. Other installations default to disabled.
+The owner requested common trading on the live Red and Blue pair. The implementation
+is deployed, but execution remains disabled. Automatic approval review still requires
+explicit approval of the first exchange and subsequent automatic policy because the
+earlier roadmap required a separately approved first trade. Other installations also
+default to disabled.
 
 The coordinator checks each minute and permits one useful exchange every 15 minutes.
 It waits for both games to reach unpaused, healthy overworld states. Authenticated
