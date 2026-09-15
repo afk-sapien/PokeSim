@@ -1,3 +1,11 @@
+Latest design discussion: consider an optional extended progression mode with earned
+starter or Eevee rewards for qualifying Championships, and Mew as a later milestone.
+A reward after every ordinary League rematch would be too easy for established teams.
+A possible qualification is at least three different team species from the previous
+rewarded roster plus a real-time cooldown. This is a proposal, not implemented policy.
+Keep the simple first-Champion Mew gift disabled on the live pair while this is decided.
+Completion would also need explicit treatment of unchosen fossils and missed legends.
+
 Current scope update, September 15: randomize fossil and Eevee evolution choices for
 new runs. Preserve choices already made in existing saves. Starter and Eevee supply
 farming, coordinated starter allocation, and network demand planning for those gifts

@@ -30,7 +30,9 @@ data and the coordinator's redacted public status read-only. It cannot access sa
 ROMs, or peer tokens. The scoped coordinator is `pokesim-trading`, configured under
 `/docker/pokesim-trading`. It runs as UID 10001 with no Docker socket or root identity.
 Private peer credentials are configured and the trading policy is enabled under the
-owner's explicit authorization for ongoing automatic exchanges. See [automatic trading](automatic-trading.md).
+owner's explicit authorization for ongoing automatic exchanges. Last-copy sharing is
+enabled for new Pokédex registrations. The optional Mew event remains disabled while
+the Championship reward design is discussed. See [automatic trading](automatic-trading.md).
 
 ## Routing
 

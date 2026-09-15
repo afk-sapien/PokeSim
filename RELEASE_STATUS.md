@@ -1,6 +1,6 @@
-# Release candidate rc17: varied choices, last-copy trades, and Mew
+# Current deployment: rc17, varied choices and last-copy trades
 
-The candidate adds persisted random fossil and Eevee evolution choices for new runs.
+The deployed release adds persisted random fossil and Eevee evolution choices for new runs.
 Existing choices remain intact. Optional last-copy trades require a new Pokédex entry
 for the recipient and continue protecting active parties and projects. An optional
 one-time postgame Mew event uses the existing scoped coordinator, backed-up checkpoints,
@@ -12,8 +12,18 @@ pair recovered a Mew distribution after an interruption following durable commit
 then completed a last-copy Hitmonchan and Hitmonlee trade. Repeated delivery and a
 pointless return exchange were rejected. Subsequent autosaves reloaded successfully.
 See [the rehearsal](docs/validation/choices-events-trading-0.2.0rc17.json).
+A subsequent copied gameplay check withdrew Mew, trained it from level 5 to level 12,
+and completed its training objective. See [the gameplay check](docs/validation/mew-training-0.2.0rc17.json).
 
-# Current deployment: rc16, automatic trading enabled
+Both games, the board, and the coordinator run `pokesim:0.2.0rc17-646b32b`, tagged commit
+`646b32b4be0f4671d32ded62963836e654af612f`. Both current saves loaded successfully after
+fresh cold backups. Red retained 116 registered entries and Blue retained 119. Both are
+healthy and unpaused at unlimited speed. All 12 public endpoint checks passed.
+Last-copy sharing is enabled and the board displays its proposals. The Mew event is
+supported but disabled while a harder Championship reward design is discussed.
+See [the release receipt](docs/validation/release-0.2.0rc17.json).
+
+# Previous deployment: rc16, automatic trading enabled
 
 Red, Blue, the board, and the coordinator use `pokesim:0.2.0rc16-caa092b`, tagged commit
 `caa092bf76d3b73ce892575ece41480b5a455d80`. Both adventures are healthy at unlimited
