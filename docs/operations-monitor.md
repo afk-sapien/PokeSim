@@ -483,3 +483,27 @@ Final free filesystem space is 19.48 GB, with
 Continue this endurance interval, monitor useful training and trade opportunities,
 and apply the documented image retention policy after future validated releases.
 See [the storage evidence](validation/release-storage-20260915.json).
+
+
+## September 15, 12:20 UTC automatic exchanges and reserve training
+
+The 31.98-minute interval preserved both rc22 starts, healthy workers, maximum speed,
+and zero save reloads or container restarts. Red reached 136 registrations and Blue
+reached 137. Two more automatic exchanges completed, bringing the total to twelve:
+Red registered Golem and Hitmonlee, while Blue registered Arcanine and Gengar. The latter
+exchange evolved PEBBLE during transfer. Both journals confirm each exchange. Blue also
+evolved a reward Charmander into Charmeleon in event 4010.
+
+Red's partial training outcomes include 9,282 XP and one Moltres level, 3,575 XP for
+Machamp, and 10,456 XP with two Persian levels. Blue completed two more training projects
+and an evolution project, including a five-level Eevee training milestone. The journal
+recorded 15 Red level events and 42 Blue level events during the inspected interval.
+All eleven Red and fifteen Blue Championship rewards are delivered. Both collections
+retain all four encounter legendaries, with no new legendary release messages. No new
+pickup event appeared during this interval.
+
+The coordinator is ready with no error. Its two new trades completed about 19.4 minutes
+apart. No trading intervention, runtime edit, or deployment was necessary. Free disk
+space remains stable at 19.46 GB. Preserve the current endurance interval and continue
+monitoring useful gains and exchange latency. No multi-day endurance milestone is
+claimed. See [the monitoring record](validation/monitor-20260915-1220.json).
