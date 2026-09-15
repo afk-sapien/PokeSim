@@ -75,6 +75,8 @@ uv run --python 3.12 --locked pokesim-desktop
 
 For a command available from any folder, install with `uv tool install --python 3.12 .`, then run `pokesim-desktop`. Docker and an always-on server are optional. First setup downloads verified reference data, then prepared games work offline.
 
+[Optional Numba acceleration](docs/desktop.md#optional-navigation-acceleration) can speed up repeated path searches at the cost of more memory and startup work. The normal installation uses the Python backend.
+
 The Library opens directly without a sign-in or owner key. Desktop launch and the default Docker port are local-only. For remote access, use an authenticated reverse proxy or a trusted private network. Anyone who can reach the Library can manage its adventures.
 
 Closing a browser tab keeps the games running. Use **Save and quit** to save and stop the application. Your computer must stay awake for games to advance.

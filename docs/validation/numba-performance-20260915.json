@@ -1,0 +1,378 @@
+{
+  "baseline_revision": "7e716d6",
+  "dependencies": {
+    "pyboy": "2.7.0",
+    "numpy": "2.5.3",
+    "numba": "0.67.0",
+    "llvmlite": "0.49.0"
+  },
+  "startup": {
+    "cold": {
+      "module_import_ms": 68.189568,
+      "kernel_initialize_wall_ms": 391.640103,
+      "kernel_initialize_cpu_ms": 391.520966,
+      "available": true,
+      "peak_rss_mib": 155.17578125,
+      "compiled_cache_files_before": 0,
+      "compiled_cache_files_after": 2
+    },
+    "disk": {
+      "module_import_ms": 73.318928,
+      "kernel_initialize_wall_ms": 267.170423,
+      "kernel_initialize_cpu_ms": 267.037224,
+      "available": true,
+      "peak_rss_mib": 147.1640625,
+      "compiled_cache_files_before": 2,
+      "compiled_cache_files_after": 2
+    }
+  },
+  "cases": [
+    {
+      "case": "slow Red navigation",
+      "decisions_per_run": 128,
+      "repeats": 3,
+      "warmups": 1,
+      "trace_frame_budget": 12000,
+      "trace_equivalent": true,
+      "trace_sha256": "e76e55095eaf58c873c211521d1765cb61fc89c054f85b8f01b8b17c9ab5c9f1",
+      "final_state_sha256": "54a92b2ec166b154d9e5cc61bbf0cc9e23222d3883dfd5d1712b4e04e5afd0ac",
+      "before": {
+        "aggregate": {
+          "decision_wall": {
+            "calls": 384,
+            "total_ms": 12159.847164,
+            "mean_ms": 31.66626865625,
+            "p95_ms": 79.884178,
+            "max_ms": 335.620257
+          },
+          "decision_cpu": {
+            "calls": 384,
+            "total_ms": 12152.465613,
+            "mean_ms": 31.6470458671875,
+            "p95_ms": 79.872355,
+            "max_ms": 335.603055
+          },
+          "route_wall": {
+            "calls": 264,
+            "total_ms": 11871.945116,
+            "mean_ms": 44.96948907575758,
+            "p95_ms": 79.160391,
+            "max_ms": 321.4255
+          },
+          "route_cpu": {
+            "calls": 264,
+            "total_ms": 11865.439161,
+            "mean_ms": 44.94484530681818,
+            "p95_ms": 79.161249,
+            "max_ms": 321.411444
+          }
+        },
+        "peak_rss_mib": 161.7890625,
+        "cache": {
+          "reachable_bytes_estimate": 22430123,
+          "numpy_owned_buffer_bytes": 0,
+          "numpy_header_bytes": 0,
+          "numpy_array_objects": 0,
+          "compiled_graph_nodes": 0,
+          "neighbor_cells": 33027,
+          "note": "Shared Python objects and NumPy owners counted once. Includes retained graph arrays, not temporary search buffers or compiler code. Not exclusive allocation size."
+        }
+      },
+      "after": {
+        "aggregate": {
+          "decision_wall": {
+            "calls": 384,
+            "total_ms": 6321.086663,
+            "mean_ms": 16.461163184895835,
+            "p95_ms": 58.848914,
+            "max_ms": 415.060478
+          },
+          "decision_cpu": {
+            "calls": 384,
+            "total_ms": 6318.156621,
+            "mean_ms": 16.4535328671875,
+            "p95_ms": 58.838048,
+            "max_ms": 415.040628
+          },
+          "route_wall": {
+            "calls": 264,
+            "total_ms": 6075.552353,
+            "mean_ms": 23.01345588257576,
+            "p95_ms": 58.412942,
+            "max_ms": 403.936955
+          },
+          "route_cpu": {
+            "calls": 264,
+            "total_ms": 6073.236023,
+            "mean_ms": 23.00468190530303,
+            "p95_ms": 58.414742,
+            "max_ms": 403.92068
+          }
+        },
+        "peak_rss_mib": 309.328125,
+        "cache": {
+          "reachable_bytes_estimate": 34204024,
+          "numpy_owned_buffer_bytes": 8912896,
+          "numpy_header_bytes": 368,
+          "numpy_array_objects": 3,
+          "compiled_graph_nodes": 33226,
+          "neighbor_cells": 33027,
+          "note": "Shared Python objects and NumPy owners counted once. Includes retained graph arrays, not temporary search buffers or compiler code. Not exclusive allocation size."
+        },
+        "jit_graph_route_calls_per_run": [
+          65,
+          65,
+          65
+        ],
+        "graph_route_errors_per_run": [
+          0,
+          0,
+          0
+        ]
+      },
+      "decision_time_ratio_before_over_after": 1.9236956890935761
+    },
+    {
+      "case": "short Blue navigation",
+      "decisions_per_run": 150,
+      "repeats": 3,
+      "warmups": 1,
+      "trace_frame_budget": 3000,
+      "trace_equivalent": true,
+      "trace_sha256": "b51d26ca7513fb07b228e3d88f23c77aec59ba3d69e0c42c0cd15d5cd039966b",
+      "final_state_sha256": "1add920b09d42d24c33a8d72f1142c07340224a1a84ed762bdd98806a455c901",
+      "before": {
+        "aggregate": {
+          "decision_wall": {
+            "calls": 450,
+            "total_ms": 1354.047645,
+            "mean_ms": 3.0089947666666665,
+            "p95_ms": 20.935679,
+            "max_ms": 57.678378
+          },
+          "decision_cpu": {
+            "calls": 450,
+            "total_ms": 1353.629806,
+            "mean_ms": 3.0080662355555554,
+            "p95_ms": 20.93425,
+            "max_ms": 57.676137
+          },
+          "route_wall": {
+            "calls": 312,
+            "total_ms": 1102.493719,
+            "mean_ms": 3.5336337147435897,
+            "p95_ms": 30.806879,
+            "max_ms": 50.667313
+          },
+          "route_cpu": {
+            "calls": 312,
+            "total_ms": 1102.539125,
+            "mean_ms": 3.5337792467948717,
+            "p95_ms": 30.808168,
+            "max_ms": 50.668616
+          }
+        },
+        "peak_rss_mib": 78.82421875,
+        "cache": {
+          "reachable_bytes_estimate": 7767032,
+          "numpy_owned_buffer_bytes": 0,
+          "numpy_header_bytes": 0,
+          "numpy_array_objects": 0,
+          "compiled_graph_nodes": 0,
+          "neighbor_cells": 3058,
+          "note": "Shared Python objects and NumPy owners counted once. Includes retained graph arrays, not temporary search buffers or compiler code. Not exclusive allocation size."
+        }
+      },
+      "after": {
+        "aggregate": {
+          "decision_wall": {
+            "calls": 450,
+            "total_ms": 1744.113824,
+            "mean_ms": 3.875808497777778,
+            "p95_ms": 21.550049,
+            "max_ms": 82.403536
+          },
+          "decision_cpu": {
+            "calls": 450,
+            "total_ms": 1743.360686,
+            "mean_ms": 3.874134857777778,
+            "p95_ms": 21.521806,
+            "max_ms": 82.401642
+          },
+          "route_wall": {
+            "calls": 312,
+            "total_ms": 1489.418342,
+            "mean_ms": 4.773776737179487,
+            "p95_ms": 51.132067,
+            "max_ms": 74.352645
+          },
+          "route_cpu": {
+            "calls": 312,
+            "total_ms": 1489.242394,
+            "mean_ms": 4.773212801282051,
+            "p95_ms": 51.133066,
+            "max_ms": 74.353105
+          }
+        },
+        "peak_rss_mib": 199.48046875,
+        "cache": {
+          "reachable_bytes_estimate": 8652753,
+          "numpy_owned_buffer_bytes": 557056,
+          "numpy_header_bytes": 368,
+          "numpy_array_objects": 3,
+          "compiled_graph_nodes": 3073,
+          "neighbor_cells": 3058,
+          "note": "Shared Python objects and NumPy owners counted once. Includes retained graph arrays, not temporary search buffers or compiler code. Not exclusive allocation size."
+        },
+        "jit_graph_route_calls_per_run": [
+          17,
+          17,
+          17
+        ],
+        "graph_route_errors_per_run": [
+          0,
+          0,
+          0
+        ]
+      },
+      "decision_time_ratio_before_over_after": 0.7763527966853614
+    },
+    {
+      "case": "Red without route calls",
+      "decisions_per_run": 113,
+      "repeats": 3,
+      "warmups": 1,
+      "trace_frame_budget": 3000,
+      "trace_equivalent": true,
+      "trace_sha256": "2bc7a7ff988218158dd25e867f44f2f5fdd99a3bae7a3cacd63f9eb078322143",
+      "final_state_sha256": "8dd9c97ef47febeb2301512082c5696c444d02504838fabaf4d9c9e333f85b44",
+      "before": {
+        "aggregate": {
+          "decision_wall": {
+            "calls": 339,
+            "total_ms": 18787.155846,
+            "mean_ms": 55.41933877876106,
+            "p95_ms": 107.001616,
+            "max_ms": 132.317966
+          },
+          "decision_cpu": {
+            "calls": 339,
+            "total_ms": 18784.691964,
+            "mean_ms": 55.41207069026549,
+            "p95_ms": 106.996108,
+            "max_ms": 132.316618
+          },
+          "route_wall": {
+            "calls": 0,
+            "total_ms": 0,
+            "mean_ms": null,
+            "p95_ms": null,
+            "max_ms": null
+          },
+          "route_cpu": {
+            "calls": 0,
+            "total_ms": 0,
+            "mean_ms": null,
+            "p95_ms": null,
+            "max_ms": null
+          }
+        },
+        "peak_rss_mib": 64.375,
+        "cache": {
+          "reachable_bytes_estimate": 616,
+          "numpy_owned_buffer_bytes": 0,
+          "numpy_header_bytes": 0,
+          "numpy_array_objects": 0,
+          "compiled_graph_nodes": 0,
+          "neighbor_cells": 0,
+          "note": "Shared Python objects and NumPy owners counted once. Includes retained graph arrays, not temporary search buffers or compiler code. Not exclusive allocation size."
+        }
+      },
+      "after": {
+        "aggregate": {
+          "decision_wall": {
+            "calls": 339,
+            "total_ms": 19068.643153,
+            "mean_ms": 56.24968481710914,
+            "p95_ms": 108.598073,
+            "max_ms": 170.842764
+          },
+          "decision_cpu": {
+            "calls": 339,
+            "total_ms": 19066.845425,
+            "mean_ms": 56.24438178466077,
+            "p95_ms": 108.597248,
+            "max_ms": 170.834299
+          },
+          "route_wall": {
+            "calls": 0,
+            "total_ms": 0,
+            "mean_ms": null,
+            "p95_ms": null,
+            "max_ms": null
+          },
+          "route_cpu": {
+            "calls": 0,
+            "total_ms": 0,
+            "mean_ms": null,
+            "p95_ms": null,
+            "max_ms": null
+          }
+        },
+        "peak_rss_mib": 77.015625,
+        "cache": {
+          "reachable_bytes_estimate": 672,
+          "numpy_owned_buffer_bytes": 0,
+          "numpy_header_bytes": 0,
+          "numpy_array_objects": 0,
+          "compiled_graph_nodes": 0,
+          "neighbor_cells": 0,
+          "note": "Shared Python objects and NumPy owners counted once. Includes retained graph arrays, not temporary search buffers or compiler code. Not exclusive allocation size."
+        },
+        "jit_graph_route_calls_per_run": [
+          0,
+          0,
+          0
+        ],
+        "graph_route_errors_per_run": [
+          0,
+          0,
+          0
+        ]
+      },
+      "decision_time_ratio_before_over_after": 0.9852382099375689
+    }
+  ],
+  "scope": "Same Python environment and exact captured decision inputs. Repeated timings exclude warmup and optional module import. Memory is benchmark process peak RSS, not a measured live-worker delta. Instrumentation imports the optional helper even on workloads with zero compiled searches.",
+  "timing_order": "Sequential baseline/candidate pairs after other test load completed",
+  "date": "2026-09-15",
+  "change": "Optional Numba breadth-first routing over lazily populated integer arrays",
+  "limitations": [
+    "Optional acceleration has only been measured locally on Linux x86-64.",
+    "Normal emulator startup prewarms the compiler, including in games that rarely route. The zero-route decision replay does not incur that startup cost.",
+    "Fresh graph construction may be slower even with a warmed compiler.",
+    "This is decision time, not overall application throughput."
+  ],
+  "validation": {
+    "numba_enabled": {
+      "passed": 720,
+      "skipped": 36
+    },
+    "numba_absent": {
+      "passed": 716,
+      "skipped": 40
+    },
+    "fresh_acceleration_wheel_smoke": "passed",
+    "package_resources_and_cache_exclusion": "passed"
+  },
+  "deployment": {
+    "healthy_games": 3,
+    "campaigns_preserved": true,
+    "frames_advanced": true,
+    "global_speed": 0,
+    "numba_version": "0.67.0",
+    "installed_kernel_available": true,
+    "compiler_loaded_in_all_workers": true,
+    "wheel_sha256": "83a9a56c1058c7ae242627be48e2f08348be600386e8c5839344569dda830c08"
+  }
+}

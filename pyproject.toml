@@ -25,6 +25,7 @@ Issues = "https://github.com/afk-sapien/PokeSim/issues"
 
 [project.optional-dependencies]
 dev = ["pytest"]
+acceleration = ["numba>=0.61,<0.68"]
 
 [project.scripts]
 pokesim = "pokesim.__main__:main"

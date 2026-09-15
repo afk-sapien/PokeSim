@@ -76,6 +76,10 @@ class Emulator:
         if hasattr(self.policy, "nav"):
             self.policy.nav.use_world = not self.rom_note.startswith("unverified")
         self.input_epoch = 0
+        if hasattr(self.policy, 'nav'):
+            # Pay optional compilation cost during startup, before gameplay begins.
+            from .policies.navigation_numba import kernel
+            kernel()
         self.pb = self._boot()
         self.thread = threading.Thread(target=self._run, name="emulator", daemon=True)
 

@@ -12,8 +12,11 @@ from dataclasses import asdict
 import gzip
 import hashlib
 import io
+import importlib
+from importlib.metadata import PackageNotFoundError, version
 import json
 import math
+import os
 from pathlib import Path
 import pickle
 import platform
@@ -46,26 +49,67 @@ def peak_rss_mib():
     return value / (1024 ** 2 if sys.platform == 'darwin' else 1024)
 
 
+def dependency_versions():
+    result = {}
+    for name in ('pyboy', 'numpy', 'numba', 'llvmlite'):
+        try:
+            result[name] = version(name)
+        except PackageNotFoundError:
+            result[name] = None
+    return result
+
+
+def numba_cache_state():
+    directory = os.environ.get('NUMBA_CACHE_DIR')
+    if not directory:
+        return {'directory': None, 'files': None}
+    path = Path(directory).resolve()
+    files = sorted(str(item.relative_to(path)) for item in path.rglob('*')
+                   if item.is_file() and item.suffix in {'.nbi', '.nbc'})
+    return {'directory': str(path), 'files': files}
+
+
 def cache_size(policy):
     nav = getattr(policy, 'nav', None)
-    names = ('_world_indices', '_graph_signature', '_map_signatures', '_neighbor_cache')
+    names = ('_world_indices', '_graph_signature', '_map_signatures', '_neighbor_cache', '_compiled_graph')
     roots = {name: getattr(nav, name) for name in names if hasattr(nav, name)}
     seen = set()
+    numpy = sys.modules.get('numpy')
+    numpy_arrays = numpy_bytes = numpy_headers = 0
 
     def size(value):
+        nonlocal numpy_arrays, numpy_bytes, numpy_headers
         if id(value) in seen:
             return 0
         seen.add(id(value))
         total = sys.getsizeof(value)
+        if numpy is not None and isinstance(value, numpy.ndarray):
+            numpy_arrays += 1
+            # Owned buffers are already included in ndarray.__sizeof__.
+            # Views account only for their header, then follow the shared owner.
+            owned = value.nbytes if value.flags.owndata else 0
+            numpy_bytes += owned
+            numpy_headers += total - owned
+            return total + (size(value.base) if value.base is not None else 0)
+        if isinstance(value, memoryview):
+            return total + size(value.obj)
         if isinstance(value, dict):
             return total + sum(size(key) + size(item) for key, item in value.items())
         if isinstance(value, (tuple, list, set, frozenset)):
             return total + sum(size(item) for item in value)
+        if type(value).__module__ == 'pokesim.policies.navigation_numba' and hasattr(value, '__dict__'):
+            # Dispatcher machine code and compiler internals belong to process RSS.
+            return total + size({key: item for key, item in vars(value).items() if key != 'run'})
         return total
 
-    return {'reachable_bytes_estimate': size(roots) if roots else 0,
+    total = size(roots) if roots else 0
+    graph = getattr(nav, '_compiled_graph', None)
+    return {'reachable_bytes_estimate': total,
+            'numpy_owned_buffer_bytes': numpy_bytes, 'numpy_header_bytes': numpy_headers,
+            'numpy_array_objects': numpy_arrays,
+            'compiled_graph_nodes': len(getattr(graph, 'positions', ())),
             'neighbor_cells': sum(len(rows) for rows in getattr(nav, '_neighbor_cache', {}).values()),
-            'note': 'Recursive Python object sizes with shared objects counted once. Not exclusive allocation size.'}
+            'note': 'Shared Python objects and NumPy owners counted once. Includes retained graph arrays, not temporary search buffers or compiler code. Not exclusive allocation size.'}
 
 
 def source_info(source):
@@ -106,11 +150,51 @@ class Timings:
         self.decision_cpu = []
         self.route_wall = []
         self.route_cpu = []
+        self.backend = {'requested': os.environ.get('POKESIM_NAVIGATION_BACKEND', 'auto'),
+                        'module_available': False, 'graph_route_calls': 0,
+                        'jit_graph_route_calls': 0, 'graph_route_errors': 0,
+                        'kernel_initializations': []}
 
     @contextmanager
     def routes(self):
         from pokesim.policies.navigation import Navigator
         original = Navigator.route
+        module = None
+        imported = time.perf_counter_ns()
+        try:
+            module = importlib.import_module('pokesim.policies.navigation_numba')
+        except ModuleNotFoundError as error:
+            if error.name != 'pokesim.policies.navigation_numba':
+                raise
+        self.backend['module_import_ms'] = (time.perf_counter_ns() - imported) / 1e6
+        if module is not None:
+            self.backend['module_available'] = True
+            original_graph_route, original_kernel = module.SearchGraph.route, module.kernel
+
+            def graph_route(graph, *args, **kwargs):
+                self.backend['graph_route_calls'] += 1
+                if getattr(graph.run, 'nopython_signatures', ()):
+                    self.backend['jit_graph_route_calls'] += 1
+                try:
+                    return original_graph_route(graph, *args, **kwargs)
+                except Exception:
+                    self.backend['graph_route_errors'] += 1
+                    raise
+
+            def initialize_kernel():
+                first = (getattr(module, '_kernel', None) is None
+                         and not getattr(module, '_unavailable', False)
+                         and os.environ.get('POKESIM_NAVIGATION_BACKEND') != 'python')
+                started = time.perf_counter_ns()
+                result = original_kernel()
+                if first:
+                    self.backend['kernel_initializations'].append({
+                        'wall_ms': (time.perf_counter_ns() - started) / 1e6,
+                        'available': result is not None,
+                        'nopython_signatures': [str(item) for item in getattr(result, 'nopython_signatures', ())]})
+                return result
+
+            module.SearchGraph.route, module.kernel = graph_route, initialize_kernel
 
         def measured(*args, **kwargs):
             wall, cpu = time.perf_counter_ns(), time.thread_time_ns()
@@ -125,6 +209,11 @@ class Timings:
             yield
         finally:
             Navigator.route = original
+            if module is not None:
+                module.SearchGraph.route, module.kernel = original_graph_route, original_kernel
+                self.backend['unavailable'] = bool(getattr(module, '_unavailable', False))
+                self.backend['nopython_signatures'] = [str(item) for item in getattr(
+                    getattr(module, '_kernel', None), 'nopython_signatures', ())]
 
     def step(self, policy, ctx):
         wall, cpu = time.perf_counter_ns(), time.thread_time_ns()
@@ -135,8 +224,11 @@ class Timings:
             self.decision_cpu.append((time.thread_time_ns() - cpu) / 1e6)
 
     def report(self):
-        return {name: summary(getattr(self, name)) for name in
-                ('decision_wall', 'decision_cpu', 'route_wall', 'route_cpu')}
+        return {**{name: summary(getattr(self, name)) for name in
+                ('decision_wall', 'decision_cpu', 'route_wall', 'route_cpu')},
+                'backend': self.backend,
+                'first_decision_wall_ms': self.decision_wall[0] if self.decision_wall else None,
+                'first_route_wall_ms': self.route_wall[0] if self.route_wall else None}
 
 
 def simulate(fixture_path, frames, capture):
@@ -241,6 +333,7 @@ def simulate(fixture_path, frames, capture):
 
 def replay(path, repeats, warmups, decisions):
     runs = []
+    warmup_runs = []
     pooled = Timings()
     fixture = json.loads(path.with_name('fixture.json').read_text())
     with tempfile.TemporaryDirectory(prefix='pokesim-decision-replay-') as temporary:
@@ -271,13 +364,34 @@ def replay(path, repeats, warmups, decisions):
                         raise ValueError(f'Policy modified the captured RAM at decision {number}')
             if trial >= warmups:
                 runs.append({**timings.report(), 'navigation_cache': cache_size(policy)})
-                for name in pooled.__dict__:
+                for name in ('decision_wall', 'decision_cpu', 'route_wall', 'route_cpu'):
                     getattr(pooled, name).extend(getattr(timings, name))
+            else:
+                warmup_runs.append({**timings.report(), 'navigation_cache': cache_size(policy)})
     return {'schema': 1, 'mode': 'decision-only', 'workload_sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
             'decisions_per_run': len(workload), 'repeats': repeats, 'warmups': warmups,
-            'trace_equivalent': True, 'runs': runs, 'aggregate': pooled.report(),
+            'trace_equivalent': True, 'runs': runs, 'warmup_runs': warmup_runs,
+            'aggregate': {key: value for key, value in pooled.report().items() if key in
+                          ('decision_wall', 'decision_cpu', 'route_wall', 'route_cpu')},
             'mean_run_decision_total_ms': statistics.mean(run['decision_wall']['total_ms'] for run in runs),
             'mean_run_route_total_ms': statistics.mean(run['route_wall']['total_ms'] for run in runs)}
+
+
+def startup(fixture_path):
+    fixture = json.loads(fixture_path.read_text())
+    with tempfile.TemporaryDirectory(prefix='pokesim-compiled-startup-') as temporary:
+        configure(fixture, Path(temporary))
+        imported = time.perf_counter_ns()
+        module = importlib.import_module('pokesim.policies.navigation_numba')
+        import_ms = (time.perf_counter_ns() - imported) / 1e6
+        started, cpu = time.perf_counter_ns(), time.thread_time_ns()
+        run = module.kernel()
+        return {'schema': 1, 'mode': 'kernel-startup', 'module_import_ms': import_ms,
+                'kernel_initialize_wall_ms': (time.perf_counter_ns() - started) / 1e6,
+                'kernel_initialize_cpu_ms': (time.thread_time_ns() - cpu) / 1e6,
+                'available': run is not None,
+                'nopython_signatures': [str(item) for item in getattr(run, 'nopython_signatures', ())],
+                'scope': 'Fresh-process source import and explicit kernel initialization, excluding interpreter startup and game simulation.'}
 
 
 def main():
@@ -291,6 +405,9 @@ def main():
         command.add_argument('--output', type=Path, required=True, help='New private directory outside the checkout')
         if mode == 'trace':
             command.add_argument('--compare', type=Path, required=True, help='Baseline capture result.json')
+    command = sub.add_parser('startup')
+    command.add_argument('fixture', type=Path)
+    command.add_argument('--output', type=Path, required=True)
     command = sub.add_parser('replay')
     command.add_argument('workload', type=Path)
     command.add_argument('--trust-local-workload', action='store_true', required=True)
@@ -308,11 +425,14 @@ def main():
         parser.error('Choose a new output directory')
     output.mkdir(parents=True, mode=0o700)
     source_before = source_info(source)
+    cache_before = numba_cache_state()
     if args.mode == 'replay':
         if args.repeats < 1 or args.warmups < 0 or args.decisions < 0:
             parser.error('Use positive repeats and nonnegative warmups')
         # These files contain Python objects. Never load workloads from another party.
         report = replay(args.workload, args.repeats, args.warmups, args.decisions)
+    elif args.mode == 'startup':
+        report = startup(args.fixture.resolve())
     else:
         if args.frames < 1:
             parser.error('Use a positive frame budget')
@@ -330,6 +450,9 @@ def main():
                            if baseline[key] != report[key]}
             report['trace_equivalent'] = not differences
             report['differences'] = differences
+    report['dependencies'] = dependency_versions()
+    report['numba_cache_before'] = cache_before
+    report['numba_cache_after'] = numba_cache_state()
     report['source'] = source_before
     report['source_unchanged'] = source_before == source_info(source)
     report['peak_rss_mib'] = peak_rss_mib()

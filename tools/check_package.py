@@ -5,6 +5,7 @@ import zipfile
 import tomllib
 
 required = {
+    'pokesim/policies/navigation_numba.py',
     'pokesim/app/manager.py',
     'pokesim/app/coordinator.py',
     'pokesim/app/supervisor.py',
@@ -84,7 +85,7 @@ for artifact in artifacts:
     assert not missing, f'{artifact}: missing runtime files {missing}'
     for name in names:
         path = Path(name)
-        assert path.suffix not in {'.gb', '.gbc', '.sav', '.state', '.sqlite'}, name
+        assert path.suffix not in {'.gb', '.gbc', '.sav', '.state', '.sqlite', '.nbi', '.nbc'}, name
         assert path.name != '.env', name
         assert not name.startswith(('pokesim/data/', 'pokesim/web/static/sprites/')), name
     print(f'{artifact.name}: runtime resources verified')

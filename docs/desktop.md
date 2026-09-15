@@ -87,6 +87,29 @@ Python 3.11 or newer is required. Python 3.12 is the recommended tested installa
 
 For an ordinary virtual environment, activate it and run `python -m pip install .` from the checkout. Start with `pokesim-desktop` or `python -m pokesim desktop`.
 
+### Optional navigation acceleration
+
+To try compiled pathfinding, install the optional extra from the checkout:
+
+```sh
+uv tool install --python 3.12 '.[acceleration]'
+```
+
+For an activated virtual environment, use `python -m pip install '.[acceleration]'`.
+For a checkout launched directly with uv, use
+`uv run --python 3.12 --locked --extra acceleration pokesim-desktop`.
+
+The extra installs Numba and enables a compiled search loop. It preserves the
+Python movement rules and route ordering. Compilation happens during game startup
+and is cached on disk when possible. Each game uses more memory, and cold searches
+can be slower even when repeated searches improve. See the
+[decision benchmark guide](decision-benchmark.md) for measured results.
+
+The ordinary installation continues to work without Numba. An unavailable or
+failing compiled backend falls back to Python. Set the environment variable
+`POKESIM_NAVIGATION_BACKEND=python` before launch to force the Python backend even
+when Numba is installed. Restart the application after changing this setting.
+
 The [Python install workflow](https://github.com/afk-sapien/PokeSim/actions/workflows/python-install.yml) builds and installs the wheel in a fresh environment on Windows x86-64, Intel macOS, Apple Silicon, and Linux x86-64 and ARM64. It checks the installed launcher and actual native worker processes using PyBoy's demonstration ROM. A successful run establishes validation for that platform. Other CPUs require compatible native dependencies and are not covered by this matrix.
 
 This overhaul is development work. Older public releases do not contain the new library. Install this checkout until a package release containing it is published.

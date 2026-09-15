@@ -41,6 +41,7 @@ class Navigator:
         self._graph_signature = None
         self._map_signatures = {}
         self._neighbor_cache = {}
+        self._compiled_graph = None
 
     def update_live(self, snapshot, memory):
         self.live_map = snapshot.map
@@ -397,6 +398,19 @@ class Navigator:
         self.target = goals
         self.path.clear()
         neighbors = self._search_neighbors(frame)
+        if getattr(self.neighbors, '__func__', None) is Navigator.neighbors:
+            from .navigation_numba import SearchGraph, disable, kernel
+            run = kernel()
+            if run is not None:
+                try:
+                    if self._compiled_graph is None or self._compiled_graph.signature is not self._graph_signature:
+                        self._compiled_graph = SearchGraph(run, self._graph_signature, DIRS)
+                    self.path.extend(self._compiled_graph.route(pos, goals, limit, neighbors, self._neighbor_cache))
+                    return self.path[0][1] if self.path else None
+                except Exception as error:
+                    disable(error)
+                    self._compiled_graph = None
+                    self.path.clear()
         prev = {pos: None}
         queue = deque([pos])
         found = None
