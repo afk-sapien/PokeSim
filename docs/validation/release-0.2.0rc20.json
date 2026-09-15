@@ -1,0 +1,497 @@
+{
+  "containers": {
+    "pokesim": {
+      "image": "pokesim:0.2.0rc20-39f409b",
+      "image_id": "sha256:d3df466ccbe4fe9366c22de85bded5d95f3cf96cf5d6709e571b22c9e680327d",
+      "started_at": "2026-09-15T08:48:58.078802863Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-blue": {
+      "image": "pokesim:0.2.0rc20-39f409b",
+      "image_id": "sha256:d3df466ccbe4fe9366c22de85bded5d95f3cf96cf5d6709e571b22c9e680327d",
+      "started_at": "2026-09-15T08:49:25.429057495Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-broker": {
+      "image": "pokesim:0.2.0rc20-39f409b",
+      "image_id": "sha256:d3df466ccbe4fe9366c22de85bded5d95f3cf96cf5d6709e571b22c9e680327d",
+      "started_at": "2026-09-15T08:49:29.357470474Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-trading": {
+      "image": "pokesim:0.2.0rc20-39f409b",
+      "image_id": "sha256:d3df466ccbe4fe9366c22de85bded5d95f3cf96cf5d6709e571b22c9e680327d",
+      "started_at": "2026-09-15T08:52:06.435758774Z",
+      "restarts": 0,
+      "health": null
+    }
+  },
+  "game_deployments": {
+    "red": {
+      "edition": "red",
+      "backup": "/docker/pokesim/backups/20260915T084848Z-rc20/before.tar",
+      "image": "pokesim:0.2.0rc20-39f409b",
+      "image_id": "sha256:d3df466ccbe4fe9366c22de85bded5d95f3cf96cf5d6709e571b22c9e680327d",
+      "revision": "39f409be5754b1ed7c6f44503a1e7047a1b514f8",
+      "timestamp": 1789462140.40791,
+      "previous_image": "pokesim:0.2.0rc19-1ba1fbb",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 122,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 8652,
+          "title": "PICKLES grew to level 21",
+          "ts": 1789462067.1342504,
+          "age_seconds": 73
+        }
+      }
+    },
+    "blue": {
+      "edition": "blue",
+      "backup": "/docker/pokesim-blue/backups/20260915T084920Z-rc20/before.tar",
+      "image": "pokesim:0.2.0rc20-39f409b",
+      "image_id": "sha256:d3df466ccbe4fe9366c22de85bded5d95f3cf96cf5d6709e571b22c9e680327d",
+      "revision": "39f409be5754b1ed7c6f44503a1e7047a1b514f8",
+      "timestamp": 1789462167.6253002,
+      "previous_image": "pokesim:0.2.0rc19-1ba1fbb",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 124,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 3757,
+          "title": "MUFFIN grew to level 34",
+          "ts": 1789462094.5701613,
+          "age_seconds": 73
+        }
+      }
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "league_rewards": true,
+    "allow_last_copies": true,
+    "mew_event": false,
+    "completed": 5,
+    "state": "ready",
+    "error": null,
+    "events": [
+      {
+        "id": "1789458870307022598",
+        "ts": 1789458870.3070238,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "blue",
+            "name": "Mew",
+            "species": 21,
+            "ordinal": 1,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789459594488151788",
+        "ts": 1789459594.4881527,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "red",
+            "name": "Bulbasaur",
+            "species": 153,
+            "ordinal": 1,
+            "level": 5,
+            "box": 1,
+            "position": 20
+          },
+          {
+            "instance": "blue",
+            "name": "Omanyte",
+            "species": 98,
+            "ordinal": 2,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789460078350906137",
+        "ts": 1789460078.3509073,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "blue",
+            "name": "Bulbasaur",
+            "species": 153,
+            "ordinal": 3,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789460383358783576",
+        "ts": 1789460383.3587842,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "red",
+            "name": "Bulbasaur",
+            "species": 153,
+            "ordinal": 2,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          },
+          {
+            "instance": "blue",
+            "name": "Omanyte",
+            "species": 98,
+            "ordinal": 4,
+            "level": 5,
+            "box": 3,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789461519172662327",
+        "ts": 1789461519.172664,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "red",
+            "name": "Squirtle",
+            "species": 177,
+            "ordinal": 3,
+            "level": 5,
+            "box": 3,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789461830462467052",
+        "ts": 1789461830.4624684,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "blue",
+            "name": "Omanyte",
+            "species": 98,
+            "ordinal": 5,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          }
+        ]
+      }
+    ]
+  },
+  "last_trade": [
+    {
+      "id": "1789461583518322019",
+      "ts": 1789461583.5183234,
+      "reason": "Red registers Sandshrew. Blue registers Scyther",
+      "moved": [
+        {
+          "instance": "red",
+          "box": 9,
+          "position": 19,
+          "sent": {
+            "species": 26,
+            "name": "Scyther",
+            "level": 25,
+            "nick": "WETLASAGNA"
+          },
+          "received": {
+            "species": 96,
+            "name": "Sandshrew",
+            "level": 18,
+            "nick": "PICKLES",
+            "evolved_from": null
+          },
+          "state": "/trading/transactions/1789461583518322019/after/red/auto-v1-trade-1789461583518322019.state",
+          "owned_before": 121,
+          "owned_after": 122
+        },
+        {
+          "instance": "blue",
+          "box": 7,
+          "position": 13,
+          "sent": {
+            "species": 96,
+            "name": "Sandshrew",
+            "level": 18,
+            "nick": "PICKLES"
+          },
+          "received": {
+            "species": 26,
+            "name": "Scyther",
+            "level": 25,
+            "nick": "WETLASAGNA",
+            "evolved_from": null
+          },
+          "state": "/trading/transactions/1789461583518322019/after/blue/auto-v1-trade-1789461583518322019.state",
+          "owned_before": 123,
+          "owned_after": 124
+        }
+      ]
+    }
+  ],
+  "runs": {
+    "red": {
+      "version": "0.2.0rc20",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.5,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "league_rewards": {
+        "earned": 3,
+        "delivered": 3,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {
+          "146": 1
+        }
+      },
+      "owned": 122,
+      "mewtwo_registered": true,
+      "objective": {
+        "id": "collect_static",
+        "title": "Collect Articuno",
+        "reason": "Visit a remaining source for the Pok\u00e9dex",
+        "targets": [
+          [
+            162,
+            6,
+            2
+          ],
+          [
+            162,
+            7,
+            1
+          ],
+          [
+            162,
+            6,
+            0
+          ],
+          [
+            162,
+            5,
+            1
+          ]
+        ],
+        "target_count": 4,
+        "facing": "up"
+      },
+      "project": {
+        "map": 162,
+        "method": "static",
+        "fragment": "ARTICUNO",
+        "flag": "EVENT_BEAT_ARTICUNO",
+        "species": 74,
+        "legendary": true,
+        "key": "legendary:74:162",
+        "supplies_prepared": true,
+        "closest_distance": 16
+      }
+    },
+    "blue": {
+      "version": "0.2.0rc20",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "league_rewards": {
+        "earned": 5,
+        "delivered": 5,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {}
+      },
+      "owned": 124,
+      "mewtwo_registered": true,
+      "objective": {
+        "id": "collect_static",
+        "title": "Collect Articuno",
+        "reason": "Visit a remaining source for the Pok\u00e9dex",
+        "targets": [
+          [
+            162,
+            6,
+            2
+          ],
+          [
+            162,
+            7,
+            1
+          ],
+          [
+            162,
+            6,
+            0
+          ],
+          [
+            162,
+            5,
+            1
+          ]
+        ],
+        "target_count": 4,
+        "facing": "up"
+      },
+      "project": {
+        "map": 162,
+        "method": "static",
+        "fragment": "ARTICUNO",
+        "flag": "EVENT_BEAT_ARTICUNO",
+        "species": 74,
+        "legendary": true,
+        "key": "legendary:74:162",
+        "supplies_prepared": true,
+        "closest_distance": 16
+      }
+    }
+  },
+  "version": "0.2.0rc20",
+  "source_tag": "v0.2.0rc20",
+  "source_revision": "39f409be5754b1ed7c6f44503a1e7047a1b514f8",
+  "public_checks": [
+    {
+      "edition": "red",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/sprites/25.png",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/sprites/25.png",
+      "status": 200
+    }
+  ],
+  "legendary_events": {
+    "red": [
+      {
+        "id": 8655,
+        "ts": 1789462272.7384543,
+        "type": "legendary_retry",
+        "title": "Moltres can be encountered again",
+        "body": "The next expedition will prepare capture supplies and storage before returning. No save was reloaded and no resources were refunded.",
+        "notable": 1,
+        "map": "Route 19",
+        "playtime": "255:00:00",
+        "shot": "8655.png",
+        "state": "event-8655.state",
+        "priority": 2
+      },
+      {
+        "id": 8653,
+        "ts": 1789462140.0629716,
+        "type": "legendary_retry",
+        "title": "Moltres will have another encounter",
+        "body": "The encounter ended without a catch. Leave the area and prepare another attempt. Used items, damage, and adventure progress are preserved.",
+        "notable": 1,
+        "map": "Route 2",
+        "playtime": "255:00:00",
+        "shot": "8653.png",
+        "state": "event-8653.state",
+        "priority": 2
+      }
+    ],
+    "blue": []
+  },
+  "coordinator_health_note": "The non-HTTP worker disables the inherited web-server probe in Compose. Its process is running, automatic exchanges and rewards are enabled, coordinator state is ready, and its public error is empty.",
+  "checks": {
+    "python_passed": 448,
+    "python_skipped": 1,
+    "javascript_files_passed": 2,
+    "package_resources": "passed",
+    "maximum_speed": true,
+    "recovery_rewinds": 0
+  }
+}
