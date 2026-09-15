@@ -1,4 +1,23 @@
-# Current deployment: rc21, complete Articuno's current puzzle
+# Release candidate rc22: accurate PC release messages
+
+The journal now recognizes withdrawals whose party entry appears before the box entry
+is removed. Recent arrivals are matched by species and nickname, survive checkpoint
+restart, expire after a bounded interval, and are canceled when the partner is deposited.
+The opposite write order confirms the matching individual's population instead of the
+whole collection. This changes journal detection only. Release and trading policies,
+Pokémon, resources, and historical journal records remain intact.
+
+A 72,022-frame copied Red replay previously reported two releases. The candidate retains
+the genuine Geodude release and suppresses the false Tentacruel release. CRICKET is in the
+party, and the game explicitly says it was taken out. Both replays used normal saved
+policy controls, the live observation cadence, maximum speed, and zero rewinds. See
+[the comparison](docs/validation/pc-release-events-0.2.0rc22.json).
+
+All 458 Python tests passed, with one optional test skipped. Both JavaScript test files
+passed. The full suite ran outside the sandbox after its local API client stalled
+inside the sandbox. Package builds and runtime resource checks passed.
+
+# Previous deployment: rc21, complete Articuno's current puzzle
 
 Articuno expeditions prepare the Seafoam boulder puzzle before using Surf. The planner
 clears space, pushes both designated boulders into their holes, and then returns to the

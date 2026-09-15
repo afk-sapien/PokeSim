@@ -53,15 +53,18 @@ class RunMemory:
     playtime_milestones: set[int] = field(default_factory=set)
 
     championships: int = 0
+    party_arrivals: list = field(default_factory=list)
 
     def to_dict(self):
         return {"seen_maps": sorted(self.seen_maps), "money_milestones": sorted(self.money_milestones),
-                "playtime_milestones": sorted(self.playtime_milestones), "championships": self.championships}
+                "playtime_milestones": sorted(self.playtime_milestones), "championships": self.championships,
+                "party_arrivals": [list(row) for row in self.party_arrivals]}
 
     @classmethod
     def from_dict(cls, d):
         return cls(set(d.get("seen_maps", [])), set(d.get("money_milestones", [])),
-                   set(d.get("playtime_milestones", [])), int(d.get("championships", 0)))
+                   set(d.get("playtime_milestones", [])), int(d.get("championships", 0)),
+                   [list(row) for row in d.get("party_arrivals", [])][-12:])
 
 
 def _mon_label(p) -> str:
@@ -138,23 +141,44 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
                             priority=LOW, tags="skull", still=lambda s: s.all_fainted))
 
     # --- storage releases ---
-    # A withdrawal also shrinks storage, so only count copies the party did not gain.
+    # PC withdrawal writes can span observations in either order. Remember recent
+    # party arrivals until their matching box entries disappear, including across saves.
+    mem.party_arrivals = [row for row in mem.party_arrivals if 0 <= cur.frame - row[0] <= 600]
+    departures = (Counter((p.species, p.nick) for p in prev.party)
+                  - Counter((p.species, p.nick) for p in cur.party))
+    for arrival in mem.party_arrivals:
+        key = (arrival[1], arrival[2])
+        returned = min(arrival[3], departures[key])
+        arrival[3] -= returned
+        departures[key] -= returned
+    arrivals = (Counter((p.species, p.nick) for p in cur.party)
+                - Counter((p.species, p.nick) for p in prev.party))
+    mem.party_arrivals.extend([cur.frame, species, nick, count]
+                             for (species, nick), count in arrivals.items())
+    mem.party_arrivals = mem.party_arrivals[-12:]
     shrink = len(prev.stored_pokemon) - len(cur.stored_pokemon)
     if prev.stored_pokemon and 0 < shrink <= 2:
-        gone = (Counter(species for box, species, level, nick in prev.stored_pokemon)
-                - Counter(species for box, species, level, nick in cur.stored_pokemon))
-        withdrawn = Counter(p.species for p in cur.party) - Counter(p.species for p in prev.party)
-        # A withdrawal clears the box slot a few frames before the party gains the Pokémon, so a
-        # snapshot landing in between looks exactly like a release. Only a real release keeps the
-        # combined party-and-storage population down on the next snapshot.
-        population = len(cur.party) + len(cur.stored_pokemon)
-        for species, count in sorted(gone.items()):
+        gone = (Counter((species, nick) for box, species, level, nick in prev.stored_pokemon)
+                - Counter((species, nick) for box, species, level, nick in cur.stored_pokemon))
+        for (species, nick), count in sorted(gone.items()):
+            for arrival in mem.party_arrivals:
+                if arrival[1:3] == [species, nick]:
+                    withdrawn = min(count, arrival[3])
+                    count -= withdrawn
+                    arrival[3] -= withdrawn
             name = SPECIES_NAMES.get(species, f"#{species}")
-            for _ in range(max(0, count - withdrawn.get(species, 0))):
+            # If the box clears first, confirm this individual's combined count on
+            # the next observation. Changes to unrelated partners cannot confirm it.
+            population = sum(p.species == species and p.nick == nick for p in cur.party)
+            population += sum(row[1] == species and row[3] == nick for row in cur.stored_pokemon)
+            for _ in range(count):
                 events.append(Event("release", f"Said goodbye to a spare {name}",
                                     f"Storage was nearly full, so a duplicate {name} was let go on {cur.map_name}.",
                                     priority=MINIMAL, tags="wave",
-                                    still=lambda s, n=population: len(s.party) + len(s.stored_pokemon) <= n))
+                                    still=lambda s, sp=species, label=nick, n=population:
+                                        sum(p.species == sp and p.nick == label for p in s.party)
+                                        + sum(row[1] == sp and row[3] == label for row in s.stored_pokemon) <= n))
+    mem.party_arrivals = [row for row in mem.party_arrivals if row[3]]
 
     # --- trainer battles ---
     if prev.in_battle == 2 and cur.in_battle == 0 and not cur.all_fainted and prev.trainer_class is not None:
