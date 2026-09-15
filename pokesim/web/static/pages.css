@@ -386,3 +386,26 @@ button:disabled { opacity:.45 }
 #clock-note { max-width:100px }
 #clock-note { font-size:8px }
 }
+
+.pc-content .dex-toolbar { align-items:flex-end }
+.pc-content .dex-toolbar label { flex-wrap:wrap }
+.pc-content .dex-toolbar input { min-width:0 }
+.pc-metrics { display:grid }
+.pc-metrics { gap:4px }
+.pc-metrics { width:100% }
+.pc-metrics { margin-top:12px }
+.pc-metrics { padding-top:9px }
+.pc-metrics { border-top:1px solid #e5e8df }
+.pc-metrics { font-size:10px }
+.pc-metrics { color:#66715e }
+.pc-metrics>span { display:flex }
+.pc-metrics>span { justify-content:space-between }
+.pc-metrics>span { gap:4px }
+.pc-metrics b { font-variant-numeric:tabular-nums }
+.pc-metrics b { color:#304b36 }
+.individual-stats tfoot { background:#e9eee2 }
+.individual-stats tfoot { font-weight:650 }
+@media (max-width:580px) {
+.pc-content .dex-toolbar label { width:100% }
+.pc-content .dex-toolbar select { flex:1 }
+}
