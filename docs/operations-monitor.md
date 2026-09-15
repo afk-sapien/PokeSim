@@ -600,3 +600,24 @@ paused or unhealthy peers, authentication rejection, conflicting holds, and unkn
 409 responses. All 478 Python tests passed, with one optional test skipped. Both
 JavaScript test files passed. See
 [the safe-point evidence](validation/trade-safe-points-0.2.0rc24.json).
+
+Only the coordinator was deployed as rc24 from `d99cdc2`, with a verified compressed
+cold backup of its private state and configuration. Game and board starts were
+unchanged. The first cycle hit the bounded retry timeout. The next scheduled cycle
+completed successfully, confirming that the timeout did not leave a stuck hold.
+At 14:54 UTC, a live reward transaction delivered Red's twentieth reward
+(Kabuto) and Blue's twenty-fourth (Mew). Both games resumed healthy with no holds,
+no active transaction, and zero recovery reloads. The coordinator reported ready
+with no error. Red had three pending rewards after another win, and Blue had one.
+See [the deployment receipt](validation/release-0.2.0rc24.json).
+
+The next scheduled cycle completed trade fifteen, registering Blastoise for Red and
+Gloom for Blue. It began 938.94 seconds after trade fourteen, about 15 minutes
+39 seconds against the configured 15-minute minimum. At 14:56 UTC Red had 141
+registrations and Blue had 143. Both games were healthy, unpaused, and still at their
+original rc22 starts with zero recovery reloads. This verifies one timely rc24 trade
+and one reward delivery. It is not yet a sustained frequency or multi-day endurance
+claim. Continue measuring safe-point timeout frequency, pending rewards, and useful
+trades while preserving the game processes. Free disk space was 18.28 GB after the
+new image and compressed backup. Retain rc20 through rc24 to cover the current
+services and their rollback images.
