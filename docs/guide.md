@@ -117,7 +117,7 @@ The planner follows story flags for the starter, Oak’s parcel, and the Pokéde
 prepares for each gym and follows prerequisites through all eight badges and the League.
 This includes Mt. Moon, Bill, the S.S. Anne, the Rocket hideout, Pokémon Tower,
 Silph Co., Safari Zone HMs, the mansion key, and each Elite Four member.
-The Exploration selector controls occasional weighted detours toward less-visited tiles.
+The automatic player occasionally takes weighted detours toward less-visited tiles.
 Goals still pull the player forward, with focused navigation for healing and supplies.
 Blocked objectives trigger short autonomous recovery attempts, followed by replanning.
 The policy never pauses the simulator or requests a human handoff. Only explicit user
@@ -253,13 +253,14 @@ To regenerate strategy data from a local checkout:
 python -m pokesim.prepare_data /path/to/pokered
 ```
 
-## Thorough Adventure and the collection journal
+## The ongoing adventure and collection journal
 
-Thorough Adventure is the default adventure style. It mixes bounded collecting and
-evolution projects into the badge journey, then continues with Pokédex expeditions
-after the Hall of Fame. The adventure style selector offers Focused, Balanced, and
-Thorough. It changes which activities the AI chooses, independently of playback
-speed. The selection persists across restarts.
+The automatic player mixes bounded collecting and evolution projects into the badge
+journey, then continues with Pokédex expeditions after the Hall of Fame. It chooses
+projects automatically. Playback speed changes how fast the game runs.
+
+Older saves still load with their active projects and progress intact. Saved adventure
+style and exploration preferences are ignored, so every run uses the same automatic activity selection.
 
 Missing species now matter even when they are too weak for the main battle team.
 The catcher prefers sleep or paralysis, avoids attacks with a high knockout risk,
@@ -291,7 +292,7 @@ The GUI has four pages:
 
 - **Live** (`/`): the game, current goal, all six party members, and badge progress together.
   Expand a partner for moves and stats. Adventure details contains projects, routes, readiness,
-  the bag, and exploration settings. The gamepad opens when taking control.
+  and the bag. The gamepad opens when taking control.
 - **Pokédex** (`/pokedex`): all 151 species in one list, with search, filters, and individual records.
 - **PC** (`/pc`): one storage box at a time, search across boxes, and individual DVs and training.
 - **Journal** (`/journal`): event filters, highlights, and earlier moments.

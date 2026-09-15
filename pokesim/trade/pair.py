@@ -11,6 +11,7 @@ from ..checkpoints import CheckpointStore
 from ..ram import read_snapshot
 from ..web.pokedex import live_status
 from . import boxes
+from . import preferences
 from .execute import _boot, perform, evolve_on_arrival
 
 
@@ -55,6 +56,8 @@ def stage(root, transaction):
         policy = json.loads((root / 'policy.json').read_text())
         protected += policy.get('protected_species', {}).get(name, [])
         payload = live_status(snapshot.to_dict())
+        with sqlite3.connect(data / 'pokesim.sqlite') as db:
+            payload = preferences.apply(payload, preferences.read(db))
         inv = inventory.normalise(name, '', payload, protected)
         inventories.append(inv)
         before[name] = snapshot, slots
@@ -115,6 +118,9 @@ def journal(root, transaction):
             db.execute('CREATE TABLE IF NOT EXISTS completed_trades (id TEXT PRIMARY KEY)')
             cursor = db.execute('INSERT OR IGNORE INTO completed_trades(id) VALUES (?)', (key,))
             if cursor.rowcount:
+                for side in result.get('proposal', {}).values():
+                    if isinstance(side, dict) and side.get('instance') == name and side.get('trade_key'):
+                        db.execute('DELETE FROM kv WHERE k=?', (preferences.PREFIX + side['trade_key'],))
                 db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', ('trade_barrier', json.dumps(transaction)))
                 db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'trade',?,?,1,4,'Trade exchange','')", (title, body))
 

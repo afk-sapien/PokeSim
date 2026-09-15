@@ -235,6 +235,18 @@ def test_stop_interrupts_long_tick_without_advancing_game():
     emu.pb.tick.assert_not_called()
 
 
+def test_final_save_failure_is_reported_to_the_launcher():
+    emu = Emulator.__new__(Emulator)
+    emu.stopping = True
+    emu.input_epoch = 0
+    emu.fatal_error = None
+    emu.pb = Mock()
+    emu._autosave = Mock(side_effect=OSError('disk full'))
+    emu._run()
+    assert 'final save failed' in emu.fatal_error
+    emu.pb.stop.assert_called_once_with(save=False)
+
+
 def test_completed_trade_blocks_restore_of_an_older_inventory(store):
     old = store.write_checkpoint(b'valid', metadata())
     store.set('trade_barrier', '1234')

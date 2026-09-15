@@ -31,10 +31,41 @@ def benefit(inv, incoming):
 
 
 def offers(inv, allow_last_copies):
-    if not allow_last_copies:
-        return inv.spares
     held = inv.held
-    return inv.spares + tuple(copy for copy in inv.tradeable if held[copy.species] == 1)
+    slots = inv.spare_slots
+    return inv.spares + tuple(copy for copy in inv.tradeable
+                             if (copy.box, copy.position) not in slots
+                             and ((held[copy.species] == 1 and allow_last_copies)
+                                  or (held[copy.species] > 1 and copy.trade_preference == 'offered')))
+
+
+def listings(inv, allow_last_copies=False):
+    eligible = {(mon.box, mon.position) for mon in offers(inv, allow_last_copies)}
+    tradeable = {(mon.box, mon.position) for mon in inv.tradeable}
+    rows = []
+    for mon in inv.stored:
+        slot = (mon.box, mon.position)
+        reason = ('Locked against trading and automatic release' if mon.trade_preference == 'locked' else
+                  'Withdrawn by you' if mon.trade_preference == 'withdrawn' else
+                  'Individual identity is ambiguous' if mon.trade_ambiguous else
+                  'Protected by the current project or trade policy' if slot not in tradeable else
+                  'Last copy is protected' if inv.held[mon.species] == 1 and not allow_last_copies else
+                  'Kept by automatic selection' if slot not in eligible else '')
+        rows.append({**mon.as_side(), 'preference': mon.trade_preference,
+                     'locked': mon.trade_preference == 'locked',
+                     'listed': slot in eligible, 'reason': reason,
+                     'can_offer': slot in tradeable and (inv.held[mon.species] > 1 or allow_last_copies)
+                     or mon.trade_preference == 'withdrawn',
+                     'editable': bool(mon.trade_key) and not mon.trade_ambiguous,
+                     'source': 'Selected by you' if mon.trade_preference == 'offered' else 'Automatic'})
+    for mon in inv.party:
+        rows.append({**mon, 'box': 0, 'position': mon.get('slot'), 'listed': False,
+                     'locked': mon.get('trade_preference') == 'locked',
+                     'preference': mon.get('trade_preference', 'auto'), 'source': 'Selected by you',
+                     'reason': 'Locked against trading and automatic release' if mon.get('trade_preference') == 'locked' else 'Active party is protected',
+                     'editable': bool(mon.get('trade_key'))
+                     and not mon.get('trade_ambiguous')})
+    return rows
 
 
 def proposals(inventories, limit=12, allow_last_copies=False):
@@ -42,26 +73,26 @@ def proposals(inventories, limit=12, allow_last_copies=False):
     candidates = []
     for i, us in enumerate(live):
         for peer in live[i + 1:]:
-            our_spares, their_spares = us.spare_slots, peer.spare_slots
             for give in offers(us, allow_last_copies):
                 for take in offers(peer, allow_last_copies):
                     mine, reason_mine = benefit(us, take)
                     theirs, reason_theirs = benefit(peer, give)
                     if not mine and not theirs:
                         continue
-                    last_give = (give.box, give.position) not in our_spares
-                    last_take = (take.box, take.position) not in their_spares
+                    last_give = us.held[give.species] == 1
+                    last_take = peer.held[take.species] == 1
                     # A unique partner can travel for a new registration, never for repeated
                     # restoration or quality upgrades after both peers already know it.
                     if (last_give and theirs < 100) or (last_take and mine < 100):
                         continue
-                    score = (mine + theirs, bool(mine and theirs),
+                    selected_by_user = sum(mon.trade_preference == 'offered' for mon in (give, take))
+                    score = (mine + theirs, bool(mine and theirs), selected_by_user,
                              -(last_give + last_take), -(give.level + take.level))
                     candidates.append((score, {'give': give.as_side(), 'take': take.as_side(),
                         'reason': '. '.join(r for r in [reason_mine, reason_theirs] if r),
                         'price': 'trusted exchange',
-                        'spends': {'give': 'last one' if last_give else 'spare',
-                                   'take': 'last one' if last_take else 'spare'}}))
+                        'spends': {'give': 'last one' if last_give else 'spare' if (give.box, give.position) in us.spare_slots else 'best copy',
+                                   'take': 'last one' if last_take else 'spare' if (take.box, take.position) in peer.spare_slots else 'best copy'}}))
     selected, claimed, outcomes = [], set(), set()
     for _, proposal in sorted(candidates, key=lambda row: row[0], reverse=True):
         sides = [proposal[k] for k in ['give', 'take']]

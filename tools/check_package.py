@@ -5,6 +5,13 @@ import zipfile
 import tomllib
 
 required = {
+    'pokesim/desktop.py',
+    'pokesim/desktop_setup.py',
+    'pokesim/desktop_check.py',
+    'pokesim/platform_io.py',
+    'pokesim/web/static/desktop.html',
+    'pokesim/web/static/desktop.js',
+    'pokesim/web/static/desktop.css',
     'pokesim/policies/director.py',
     'pokesim/policies/pickups.py',
     'pokesim/ground_items.py',

@@ -64,6 +64,7 @@ def party_details(mon):
         (label for bit, label in ((8, "Poisoned"), (16, "Burned"), (32, "Frozen"), (64, "Paralyzed"))
          if mon.status & bit), "Healthy")
     return {"dex": species.get("dex"), "experience": xp, "status_label": status,
+            **({'trainer_id': mon.trainer_id} if mon.trainer_id is not None else {}),
             "dvs": mon.dvs, "stat_exp": mon.stat_exp,
             "type_names": list(dict.fromkeys(TYPES.get(t, "Unknown") for t in mon.types)),
             "stats": {"Attack": mon.attack, "Defense": mon.defense, "Speed": mon.speed, "Special": mon.special},

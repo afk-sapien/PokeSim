@@ -1,4 +1,150 @@
 /* Shared page layout and navigation. */
+.partner-actions { display:flex }
+.partner-actions { flex-wrap:wrap }
+.partner-actions { gap:6px }
+.pc-lock-badge { display:inline-block }
+.pc-lock-badge { margin-left:6px }
+.pc-lock-badge { color:#52654b }
+.pc-lock-badge { font-size:11px }
+.pc-lock-badge { font-weight:500 }
+.view-switch { display:flex }
+.view-switch { flex-wrap:wrap }
+.view-switch { gap:6px }
+.view-switch { margin:0 0 24px }
+.view-switch { padding:5px }
+.view-switch { border:1px solid #dcded3 }
+.view-switch { border-radius:12px }
+.view-switch { width:fit-content }
+.view-switch { background:#eeeee5 }
+.view-switch button { border-color:transparent }
+.view-switch button { background:transparent }
+.view-switch button[aria-pressed="true"] { background:#304b36 }
+.view-switch button[aria-pressed="true"] { color:#fffef9 }
+.pc-workspace.pc-workspace-all { grid-template-columns:minmax(0,1fr) }
+.pc-grid.pc-list { grid-template-columns:minmax(0,1fr) }
+.pc-list-row { display:flex }
+.pc-list-row { align-items:center }
+.pc-list-row { gap:18px }
+.pc-list-row { background:#fffef9 }
+.pc-list-row { border:1px solid #dcded3 }
+.pc-list-row { border-radius:14px }
+.pc-list-row { padding:8px 18px 8px 6px }
+.pc-list .pc-mon { display:grid }
+.pc-list .pc-mon { grid-template-columns:64px minmax(120px,1fr) minmax(230px,1.5fr) }
+.pc-list .pc-mon { grid-template-rows:auto auto auto }
+.pc-list .pc-mon { flex:1 }
+.pc-list .pc-mon { border:0 }
+.pc-list .pc-mon { text-align:left }
+.pc-list .pc-mon { column-gap:14px }
+.pc-list .pc-mon img { grid-column:1 }
+.pc-list .pc-mon img { grid-row:1/4 }
+.pc-list .pc-mon img { width:64px }
+.pc-list .pc-mon img { height:64px }
+.pc-list .pc-mon>.eyebrow { grid-column:2 }
+.pc-list .pc-mon>strong { grid-column:2 }
+.pc-list .pc-mon>small { grid-column:2 }
+.pc-list .pc-mon .pc-metrics { grid-column:3 }
+.pc-list .pc-mon .pc-metrics { grid-row:1/4 }
+.pc-list .pc-mon .pc-metrics { display:flex }
+.pc-list .pc-mon .pc-metrics { flex-wrap:wrap }
+.pc-list .pc-mon .pc-metrics { gap:12px }
+.pc-list .pc-mon .pc-metrics { border:0 }
+.pc-list .pc-mon .pc-metrics { margin:0 }
+.pc-list .pc-mon .pc-metrics>span { display:flex }
+.pc-list .pc-mon .pc-metrics>span { flex-direction:column }
+.pc-list .pc-mon .pc-metrics>span { gap:2px }
+.pc-list-trade,.pc-trade-action,.trade-offer-action { display:flex }
+.pc-list-trade,.pc-trade-action,.trade-offer-action { flex-direction:column }
+.pc-list-trade,.pc-trade-action,.trade-offer-action { gap:8px }
+.pc-list-trade { max-width:180px }
+.trade-meta { color:#687461 }
+.trade-meta { font-size:12px }
+.pc-empty-slot { min-height:152px }
+.pc-empty-slot { padding:14px }
+.pc-empty-slot { background:#eeeee5 }
+.pc-empty-slot { border:1px dashed #d0d5c8 }
+.pc-empty-slot { border-radius:14px }
+.trade-overview { display:flex }
+.trade-overview { justify-content:space-between }
+.trade-overview { align-items:center }
+.trade-overview { gap:24px }
+.trade-overview { padding:24px 28px }
+.trade-overview { margin-bottom:24px }
+.trade-overview { background:#e9eee2 }
+.trade-overview { border-radius:16px }
+.trade-overview h2 { margin:8px 0 }
+.trade-overview p { color:#596650 }
+.trade-pc-link { font-size:13px }
+.trade-pc-link { white-space:nowrap }
+.trade-help { color:#687461 }
+.trade-help { margin:0 0 20px }
+.trade-help { font-size:13px }
+.trade-offer { display:flex }
+.trade-offer { align-items:center }
+.trade-offer { gap:20px }
+.trade-offer { padding:18px 22px }
+.trade-offer { margin-bottom:12px }
+.trade-offer { border:1px solid #dcded3 }
+.trade-offer { border-radius:14px }
+.trade-offer { background:#fffef9 }
+.trade-offer img,.trade-side img { image-rendering:pixelated }
+.trade-offer-name { flex:1 }
+.trade-offer-name p,.trade-offer-name small,.trade-side p,.trade-side small { color:#687461 }
+.trade-offer-name p,.trade-side p { font-size:13px }
+.trade-offer-action { align-items:flex-end }
+.trade-deal { padding:24px }
+.trade-deal { margin-bottom:18px }
+.trade-deal { border:1px solid #dcded3 }
+.trade-deal { border-radius:18px }
+.trade-deal { background:#fffef9 }
+.trade-deal time { font-size:12px }
+.trade-deal time { color:#687461 }
+.trade-swap { display:grid }
+.trade-swap { grid-template-columns:1fr auto 1fr }
+.trade-swap { align-items:center }
+.trade-swap { gap:24px }
+.trade-swap { margin:20px 0 }
+.trade-side { display:flex }
+.trade-side { align-items:center }
+.trade-side { gap:16px }
+.trade-side .eyebrow { margin-bottom:8px }
+.trade-arrow { font-size:24px }
+.trade-arrow { color:#687461 }
+.trade-reason { padding-top:16px }
+.trade-reason { border-top:1px solid #dcded3 }
+.trade-reason { font-size:13px }
+.trade-notice { padding:16px 20px }
+.trade-notice { margin-bottom:20px }
+.trade-notice { background:#eee7d5 }
+.trade-notice { border-radius:12px }
+@media (max-width:900px) {
+.pc-list-row { flex-wrap:wrap }
+.pc-list-trade { flex-direction:row }
+.pc-list-trade { align-items:center }
+.pc-list-trade { max-width:none }
+.pc-list-trade { width:100% }
+.pc-list-trade { justify-content:space-between }
+.pc-list-trade { padding:0 12px 8px }
+}
+@media (max-width:580px) {
+.pc-list .pc-mon { grid-template-columns:54px minmax(0,1fr) }
+.pc-list .pc-mon img { width:54px }
+.pc-list .pc-mon img { height:54px }
+.pc-list .pc-mon .pc-metrics { grid-column:1/-1 }
+.pc-list .pc-mon .pc-metrics { grid-row:4 }
+.pc-list .pc-mon .pc-metrics { margin-top:12px }
+.pc-list-row { gap:4px }
+.trade-overview { flex-direction:column }
+.trade-overview { align-items:flex-start }
+.trade-swap { grid-template-columns:minmax(0,1fr) }
+.trade-arrow { text-align:center }
+.trade-offer { flex-wrap:wrap }
+.trade-offer { padding:16px }
+.trade-offer-action { width:100% }
+.trade-offer-action { align-items:stretch }
+.trade-deal .section-heading { flex-wrap:wrap }
+.view-switch button { padding:10px }
+}
 .page-main { max-width:1320px }
 .page-main { margin:0 auto }
 .page-main { min-height:calc(100vh - 220px) }
@@ -343,7 +489,7 @@ button:disabled { opacity:.45 }
 .watch-intro h1 { font-size:24px }
 }
 @media (max-width:580px) {
-.topbar nav { grid-template-columns:repeat(4,minmax(0,1fr)) }
+.topbar nav { grid-template-columns:repeat(5,minmax(0,1fr)) }
 .topbar nav a { font-size:12px }
 .watch-intro h1 { font-size:21px }
 .watch-intro { gap:14px }

@@ -8,32 +8,34 @@
 <title>A place for every partner. · pokesim</title>
 <link rel="stylesheet" href="/static/style.css?v=watch-2">
 <link rel="stylesheet" href="/static/pokedex.css?v=pages-1">
-<link rel="stylesheet" href="/static/pages.css?v=pc-party-1">
+<link rel="stylesheet" href="/static/pages.css?v=locks-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="/feed.xml">
 </head>
 <body data-page="pc">
 <a class="skip-link" href="#main">Skip to a place for every partner.</a>
 <header class="topbar">
 <a class="brand" href="/" aria-label="pokesim home"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition" id="edition">KANTO</span></a>
-<nav aria-label="Main navigation"><a href="/">Live</a><a href="/pokedex">Pokédex</a><a href="/pc" class="nav-current" aria-current="page">PC</a><a href="/journal">Journal</a></nav>
+<nav aria-label="Main navigation"><a href="/">Live</a><a href="/pokedex">Pokédex</a><a href="/pc" class="nav-current" aria-current="page">PC</a><a href="/trading">Trading</a><a href="/journal">Journal</a></nav>
 <span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
 </header>
 <main id="main" class="page-main">
 <section class="page-intro"><div><p class="eyebrow"><span class="tiny-dot"></span> SOMEONE'S PC</p><h1>A place for every partner.</h1><p class="intro-copy">Explore your party and boxes and inspect each Pokémon’s natural potential and training.</p></div></section>
 <section class="pc-overview" aria-label="Storage overview"><div><span class="eyebrow">IN STORAGE</span><strong id="pc-total">0 / 240</strong></div><div><span class="eyebrow">RECEIVING NEW CATCHES</span><strong id="pc-active">Box 1</strong></div><button id="pc-strongest" class="pc-strongest">Find strongest everywhere ↗</button><a href="/#team">View the traveling team ↗</a></section>
-<section class="pc-workspace" aria-label="PC storage">
-<aside class="pc-sidebar"><label class="mobile-box-control" for="mobile-box">Party or box<select id="mobile-box"></select></label><h2>Party and boxes</h2><div id="box-picker" class="box-picker" role="group" aria-label="Choose party or a storage box"></div></aside>
-<div class="pc-content"><div class="dex-toolbar"><label for="pc-search">Find <input id="pc-search" type="search" placeholder="Name or Pokédex number" autocomplete="off"></label><label for="pc-scope">In <select id="pc-scope"><option value="box">Selected party or box</option><option value="all">Party + all boxes</option></select></label><label for="pc-sort">Sort by <select id="pc-sort"><option value="box">Location and slot</option><option value="power">Power (total stats)</option><option value="level">Level</option><option value="HP">Max HP</option><option value="Attack">Attack</option><option value="Defense">Defense</option><option value="Speed">Speed</option><option value="Special">Special</option><option value="dvs">Total DVs</option><option value="stat_exp">Total stat experience</option><option value="experience">Total experience</option><option value="dex">Pokédex number</option><option value="name">Species name</option><option value="nick">Nickname</option></select></label><label for="pc-order">Order <select id="pc-order"><option value="asc">Lowest first</option><option value="desc">Highest first</option></select></label><span class="count-pill" id="pc-count">0 Pokémon</span></div>
-<p class="pc-power-note">Power adds max HP, Attack, Defense, Speed, and Special at the current level. Species, DVs, and training all count. Open a Pokémon for the breakdown.</p>
+<div class="view-switch" role="group" aria-label="PC view"><button id="pc-boxes-view" aria-pressed="true">Boxes</button><button id="pc-all-view" aria-pressed="false">All Pokémon</button></div>
+<section id="pc-workspace" class="pc-workspace" aria-label="PC storage">
+<aside id="pc-sidebar" class="pc-sidebar"><label class="mobile-box-control" for="mobile-box">Party or box<select id="mobile-box"></select></label><h2>Party and boxes</h2><div id="box-picker" class="box-picker" role="group" aria-label="Choose party or a storage box"></div></aside>
+<div class="pc-content"><div class="dex-toolbar"><label for="pc-search">Find <input id="pc-search" type="search" placeholder="Name or Pokédex number" autocomplete="off"></label><input id="pc-scope" type="hidden" value="box"><label id="pc-sort-control" for="pc-sort">Sort by <select id="pc-sort"><option value="box">Location and slot</option><option value="power">Power (total stats)</option><option value="level">Level</option><option value="HP">Max HP</option><option value="Attack">Attack</option><option value="Defense">Defense</option><option value="Speed">Speed</option><option value="Special">Special</option><option value="dvs">Total DVs</option><option value="stat_exp">Total stat experience</option><option value="experience">Total experience</option><option value="dex">Pokédex number</option><option value="name">Species name</option><option value="nick">Nickname</option></select></label><label id="pc-order-control" for="pc-order">Order <select id="pc-order"><option value="asc">Lowest first</option><option value="desc">Highest first</option></select></label><span class="count-pill" id="pc-count">0 Pokémon</span></div>
+<p id="pc-power-note" class="pc-power-note">Power adds max HP, Attack, Defense, Speed, and Special at the current level. Species, DVs, and training all count. Open a Pokémon for the breakdown.</p>
 <div class="section-heading"><h2 id="pc-heading">Box 1</h2><span class="eyebrow" id="pc-note">Stored partners</span></div>
 <div id="pc-grid" class="pc-grid"><p class="dex-empty">Opening the PC…</p></div>
-<nav class="pagination" aria-label="PC result pages"><button id="pc-prev">← Previous</button><span id="pc-page" aria-live="polite"></span><button id="pc-next">Next →</button></nav>
+<nav id="pc-pagination" class="pagination" aria-label="PC result pages"><button id="pc-prev">← Previous</button><span id="pc-page" aria-live="polite"></span><button id="pc-next">Next →</button></nav>
 </div></section>
 </main>
-<dialog id="pc-detail" aria-labelledby="pc-detail-name"><button id="pc-close" class="close-detail" aria-label="Close Pokémon details">✕</button><div id="pc-detail-body"></div></dialog>
+<dialog id="pc-detail" aria-labelledby="pc-detail-name"><button id="pc-close" class="close-detail" aria-label="Close Pokémon details">✕</button><div id="pc-detail-body"></div><div id="pc-trade-action" class="pc-trade-action"></div></dialog>
 <footer><span id="app-version"></span><a class="brand footer-brand" href="/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><a href="/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="/static/pc.js?v=pc-party-1"></script>
+<script src="/static/trade-ui.js?v=locks-1"></script>
+<script src="/static/pc.js?v=locks-1"></script>
 </body>
 </html>

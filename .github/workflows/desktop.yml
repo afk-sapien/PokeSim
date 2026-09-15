@@ -1,0 +1,56 @@
+name: Desktop builds
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            label: linux-x86_64
+            executable: dist/desktop/PokeSim/PokeSim
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
+            executable: dist/desktop/PokeSim/PokeSim
+          - os: windows-latest
+            label: windows-x86_64
+            executable: dist/desktop/PokeSim/PokeSim.exe
+          - os: macos-15-intel
+            label: macos-x86_64
+            executable: dist/desktop/PokeSim.app/Contents/MacOS/PokeSim
+          - os: macos-15
+            label: macos-arm64
+            executable: dist/desktop/PokeSim.app/Contents/MacOS/PokeSim
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+        with:
+          version: '0.9.7'
+      - run: uv sync --locked --extra dev --extra desktop-build
+      - name: Prepare verified reference data for tests
+        run: uv run --locked python tools/prepare_desktop_test_data.py
+      - name: Test native service and launcher
+        run: uv run --locked pytest --ignore=tests/test_rom.py -q
+      - name: Build desktop application
+        run: uv run --locked python tools/build_desktop.py
+      - name: Smoke test bundled desktop launcher
+        run: uv run --locked python tools/smoke_desktop.py ${{ matrix.executable }}
+      - name: Check native emulator and reference setup inside the bundle
+        run: uv run --locked python tools/check_desktop_runtime.py ${{ matrix.executable }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pokesim-desktop-${{ matrix.label }}
+          path: |
+            dist/desktop/PokeSim-*.zip
+            dist/desktop/PokeSim-*.tar.gz
+            dist/desktop/PokeSim-*.sha256
+          if-no-files-found: error

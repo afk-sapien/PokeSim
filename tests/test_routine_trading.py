@@ -85,15 +85,11 @@ def test_last_copy_cannot_be_spent_for_a_quality_upgrade_alone():
     assert routine.proposals([red, blue], allow_last_copies=True) == []
 
 
-def test_board_explains_last_copy_sharing_and_event_gifts():
-    from pokesim.broker.app import render_board
+def test_listings_explain_last_copy_policy():
     red = inv('red', {MAGIKARP}, stored=[(MAGIKARP, 5)])
-    blue = inv('blue', {ZUBAT}, stored=[(ZUBAT, 8)])
-    deals = routine.proposals([red, blue], allow_last_copies=True)
-    page = render_board([red, blue], deals, 90, {
-        'enabled': True, 'allow_last_copies': True,
-        'events': [{'gifts': [{'instance': 'red'}]}],
-    })
-    assert 'LAST ONE' in page
-    assert 'A last boxed copy may travel' in page
-    assert 'Red received Mew (Lv. 5)' in page
+    blocked, = routine.listings(red)
+    assert not blocked['listed']
+    assert blocked['reason'] == 'Last copy is protected'
+    available, = routine.listings(red, allow_last_copies=True)
+    assert available['listed']
+    assert available['source'] == 'Automatic'

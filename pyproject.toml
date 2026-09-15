@@ -25,10 +25,12 @@ Issues = "https://github.com/afk-sapien/PokeSim/issues"
 
 [project.optional-dependencies]
 dev = ["pytest"]
+desktop-build = ["pyinstaller==6.16.0"]
 
 [project.scripts]
 pokesim = "pokesim.__main__:main"
 pokesim-prepare-data = "pokesim.prepare_data:main"
+pokesim-desktop = "pokesim.desktop:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

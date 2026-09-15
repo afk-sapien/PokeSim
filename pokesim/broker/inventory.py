@@ -40,6 +40,9 @@ class Copy:
 
     dvs: tuple[int, ...] = ()
     stat_exp: tuple[int, ...] = ()
+    trade_key: str | None = None
+    trade_preference: str = 'auto'
+    trade_ambiguous: bool = False
 
     @property
     def label(self) -> str:
@@ -48,7 +51,9 @@ class Copy:
     def as_side(self) -> dict:
         return {'instance': self.instance, 'dex': self.dex, 'species': self.species,
                 'box': self.box, 'position': self.position, 'level': self.level,
-                'nick': self.nick, 'name': self.name, **({'dvs': self.dvs, 'stat_exp': self.stat_exp} if self.dvs or self.stat_exp else {})}
+                'nick': self.nick, 'name': self.name,
+                **({'trade_key': self.trade_key} if self.trade_key else {}),
+                **({'dvs': self.dvs, 'stat_exp': self.stat_exp} if self.dvs or self.stat_exp else {})}
 
 
 @dataclass(frozen=True)
@@ -136,15 +141,21 @@ def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory
     to_copy = lambda mon: Copy(instance=instance, dex=mon.get('dex'), species=mon['species'],
                                box=mon['box'], position=mon['position'], level=mon['level'],
                                nick=mon.get('nick', ''), name=mon.get('name', ''),
-                               dvs=tuple(mon.get('dvs', ())), stat_exp=tuple(mon.get('stat_exp', ())))
+                               dvs=tuple(mon.get('dvs', ())), stat_exp=tuple(mon.get('stat_exp', ())),
+                               trade_key=mon.get('trade_key'), trade_preference=mon.get('trade_preference', 'auto'),
+                               trade_ambiguous=mon.get('trade_ambiguous', False))
     boxes = placed(stored)
+    available = [mon for mon in boxes if mon.get('trade_preference') not in ('withdrawn', 'locked')
+                 and not mon.get('trade_ambiguous')]
+    available_slots = {(mon['box'], mon['position']) for mon in available}
     return Inventory(
         instance=instance, url=url, started=True,
         player_name=payload.get('player_name', ''), version=payload.get('version', ''),
         phase=payload.get('phase', ''), owned=owned, seen=frozenset(payload.get('seen') or ()),
         party=tuple(party), stored=tuple(to_copy(mon) for mon in boxes),
-        spares=tuple(to_copy(mon) for mon in spare_entries(party, boxes, off_limits)),
-        tradeable=tuple(to_copy(mon) for mon in boxes if mon['species'] not in off_limits),
+        spares=tuple(to_copy(mon) for mon in spare_entries(party, boxes, off_limits)
+                     if (mon['box'], mon['position']) in available_slots),
+        tradeable=tuple(to_copy(mon) for mon in available if mon['species'] not in off_limits),
         hunting=hunting,
         missing=tuple(dex for dex in range(1, 152) if dex not in owned))
 

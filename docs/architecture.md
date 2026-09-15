@@ -2,6 +2,8 @@
 
 Keep game decisions separate from emulator I/O, persistence, and HTTP presentation.
 
+For the proposed application that manages several adventures in one desktop app or Docker container, see the [multi-adventure architecture and refactor plan](multi-adventure-app-plan.md). That document describes planned work and acceptance gates, not current runtime behavior.
+
 | Area | Owner | Boundary |
 | --- | --- | --- |
 | Emulator lifecycle and input | `pokesim/emulator.py` | Owns PyBoy and executes queued commands on the worker thread. Releases each pressed button even if a frame update fails. |

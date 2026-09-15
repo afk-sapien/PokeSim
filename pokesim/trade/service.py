@@ -1,6 +1,5 @@
 """Coordinate scoped, authenticated exchanges without host or Docker access."""
 import argparse
-import fcntl
 import hashlib
 import json
 import os
@@ -12,6 +11,8 @@ import time
 from urllib.error import HTTPError
 import urllib.request
 
+from ..platform_io import lock_file, sync_directory
+
 
 def atomic(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -22,11 +23,7 @@ def atomic(path, data):
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
-        fd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
+        sync_directory(path.parent)
     finally:
         Path(temporary).unlink(missing_ok=True)
 
@@ -116,11 +113,7 @@ class Coordinator:
             for path in active.get('targets', []):
                 target = Path(path)
                 target.unlink(missing_ok=True)
-                fd = os.open(target.parent, os.O_RDONLY)
-                try:
-                    os.fsync(fd)
-                finally:
-                    os.close(fd)
+                sync_directory(target.parent)
         if committed:
             for name in self.peers:
                 self.control(name, 'load', active['id'])
@@ -252,9 +245,9 @@ def main():
     parser.add_argument('--loop', action='store_true')
     args = parser.parse_args()
     args.root.mkdir(parents=True, exist_ok=True)
-    with (args.root / 'lock').open('w') as lock:
+    with (args.root / 'lock').open('a+b') as lock:
         try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            lock_file(lock)
         except BlockingIOError:
             return
         while True:
