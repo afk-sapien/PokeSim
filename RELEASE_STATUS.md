@@ -1,4 +1,4 @@
-# Coordinator candidate rc23: share safe points between rewards and trades
+# Current coordinator: rc23, share safe points between rewards and trades
 
 A persistent Championship reward backlog previously won every safe-point opportunity,
 preventing overdue trades from being considered. The coordinator now persists its last
@@ -11,8 +11,14 @@ The reproduced four-cycle backlog changes from four reward attempts to alternati
 reward and trade attempts across coordinator restarts. See
 [the scheduling regression](docs/validation/trade-fairness-0.2.0rc23.json).
 All 468 Python tests passed, with one optional test skipped, along with seven JavaScript
-checks. Packages passed runtime resource checks. The deployment target is the scoped coordinator only. Games and the board remain on
-rc22 so their endurance intervals continue.
+checks. Packages passed runtime resource checks. The scoped coordinator is deployed as `pokesim:0.2.0rc23-7ccf16e` from tagged commit
+`7ccf16eb342e137b35360870de75d307a987e331`. A private compressed cold backup of coordinator
+state and configuration passed integrity checks. Games and the board remain on rc22 with
+unchanged starts. Both games are healthy at maximum speed with zero recovery reloads.
+The initial preparation retry cleared on the next scheduled cycle. The coordinator now
+reports ordinary overworld waiting, no error, and a persisted reward turn. Monitor the
+next actual exchange before claiming a measured trade-frequency improvement. See
+[the deployment receipt](docs/validation/release-0.2.0rc23.json).
 
 # Current games and board: rc22, accurate PC release messages
 
@@ -33,12 +39,12 @@ All 458 Python tests passed, with one optional test skipped. Both JavaScript tes
 passed. The full suite ran outside the sandbox after its local API client stalled
 inside the sandbox. Package builds and runtime resource checks passed.
 
-Both games, the board, and coordinator now run `pokesim:0.2.0rc22-49403d7` from
+At the rc22 rollout, both games, the board, and coordinator used `pokesim:0.2.0rc22-49403d7` from
 `49403d76fd169b2c106d3de908807f48bfc1635f`. Fresh compressed cold backups passed integrity
 checks and both latest saves loaded successfully. All 12 public checks passed. Both
-games are healthy at maximum speed with zero recovery reloads and 132 registrations.
-Ten automatic trades have completed. All seven Red rewards and ten Blue rewards are
-delivered. The deployment starts new endurance intervals. See
+games resumed healthy at maximum speed with zero recovery reloads and 132 registrations.
+Ten automatic trades had completed. All seven Red rewards and ten Blue rewards were
+delivered. That deployment began new endurance intervals. See
 [the release receipt](docs/validation/release-0.2.0rc22.json).
 
 Release storage maintenance on September 15 preserved the rc22 live processes. All 26
@@ -46,8 +52,7 @@ legacy cold backups were losslessly compressed, saving 14.21 GB.
 Ten unused monitoring images were removed while retaining current rc22, two rollback
 images, the held experiment, and historical sources. Free disk space rose to
 19.48 GB. The Dockerfile now reuses stable layers across metadata changes,
-verified with two disposable builds and 39 focused checks. This packaging change applies
-to future builds. See [the storage record](docs/validation/release-storage-20260915.json).
+verified with two disposable builds and 39 focused checks. This packaging change was subsequently used by the rc23 coordinator build. See [the storage record](docs/validation/release-storage-20260915.json).
 
 # Previous deployment: rc21, complete Articuno's current puzzle
 

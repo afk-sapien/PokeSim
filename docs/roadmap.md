@@ -1,3 +1,10 @@
+Current exchange scheduling, September 15: coordinator rc23 prevents a constant
+Championship reward backlog from monopolizing safe points. An overdue useful trade gets
+the turn after a reward attempt. Reward delivery continues during trade cooldown and
+when no useful proposal exists or the board is unavailable. Persisted turn state survives
+coordinator restarts. The games remain on rc22 with unchanged starts. See
+[the regression](validation/trade-fairness-0.2.0rc23.json).
+
 Current release storage work, September 15: legacy cold backups are compressed with
 verified byte-for-byte restoration. Keep the current release and two successful rollback
 images, plus every container reference, the held experiment, and earlier legacy images.
