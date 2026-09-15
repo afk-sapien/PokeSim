@@ -37,6 +37,34 @@ The coordinator has no HTTP server, so its Compose file disables the image's inh
 web-server health probe. Monitor its public status and transaction records.
 See [automatic trading](automatic-trading.md).
 
+## Release storage retention
+
+Keep the current deployed release and the two most recent successful rollback images.
+Also retain every image referenced by a running or stopped container, any held experiment,
+and legacy images created before this monitoring workflow. Before removing an older
+monitoring image, verify its exact tag, source revision label, retained source directory,
+and all container references. Remove its tag without force. Do not use a global image,
+build-cache, or volume prune. The current retained release set is rc20, rc21, and rc22,
+with the held rc11 experiment also preserved. Older source archives remain available
+for rebuilding historical releases.
+
+Cold backups now use gzip compression. Historical `before.tar` paths in earlier receipts
+have been converted to `before.tar.gz` in the same directories. Every replacement was
+verified by comparing the decompressed SHA-256 with the original tar bytes before the
+original tar file was removed. No archived save contents were discarded. The current
+rc21 and rc22 backups were already compressed and were left intact.
+
+Use `python tools/compress_release_backups.py BACKUP_ROOT` to review legacy candidates.
+Add `--apply` to compress them individually with integrity verification. The tool only
+scans recognized release directories for `before.tar`, refuses existing compressed
+destinations, and preserves the source on failure. A leftover partial file after a
+process crash needs inspection before retrying. It never scans active game data.
+
+The Dockerfile now places changing version and revision metadata after the filesystem
+layers. Two validation builds with different revision labels produced identical layers
+and the same runtime settings as rc22. This packaging change applies to future builds.
+The live games were not redeployed for storage maintenance.
+
 ## Routing
 
 Nginx Proxy Manager on `proxy` (`192.168.2.140`) manages both routes. Host 55 serves Red

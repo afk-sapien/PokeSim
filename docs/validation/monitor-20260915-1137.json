@@ -1,0 +1,296 @@
+{
+  "from_ts": 1789470392.309356,
+  "to_ts": 1789472283.433715,
+  "minutes": 31.52,
+  "version": "0.2.0rc22",
+  "deployment_performed": false,
+  "runs": {
+    "red": {
+      "started_at": "2026-09-15T11:04:45.612766478Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 133,
+      "uptime": 1996,
+      "league_rewards": {
+        "earned": 9,
+        "delivered": 9,
+        "pending": 0
+      },
+      "start_unchanged": true,
+      "new_registrations": 1,
+      "completed_projects": {
+        "training": 1
+      },
+      "selected_training_outcomes": [
+        {
+          "key": "train:20:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 206478224,
+          "retry_at": 206538224,
+          "target": 40,
+          "gains": {
+            "experience": 8709,
+            "levels": 1
+          }
+        }
+      ],
+      "journal_evidence": {
+        "event_counts": {
+          "release": 29,
+          "obtain": 3,
+          "champion": 3,
+          "trainer": 15,
+          "level": 31,
+          "faint": 4
+        },
+        "legendary_releases": [],
+        "legendary_holdings": [
+          {
+            "name": "Zapdos",
+            "nick": "SPROUT",
+            "level": 100,
+            "box": null
+          },
+          {
+            "name": "Articuno",
+            "nick": "SOUPWIZARD",
+            "level": 51,
+            "box": 6
+          },
+          {
+            "name": "Moltres",
+            "nick": "BORKUS",
+            "level": 50,
+            "box": 7
+          },
+          {
+            "name": "Mewtwo",
+            "nick": "CORNWIZARD",
+            "level": 70,
+            "box": 9
+          }
+        ],
+        "milestones": [
+          {
+            "id": 8978,
+            "type": "obtain",
+            "title": "Received Mew for Championship #10",
+            "ts": 1789472623.0
+          },
+          {
+            "id": 8977,
+            "type": "champion",
+            "title": "Champion! League victory #10",
+            "ts": 1789472612.6964993
+          },
+          {
+            "id": 8942,
+            "type": "obtain",
+            "title": "Received Charmander for Championship #9",
+            "ts": 1789471714.0
+          },
+          {
+            "id": 8938,
+            "type": "obtain",
+            "title": "Received Omanyte for Championship #8",
+            "ts": 1789471651.0
+          },
+          {
+            "id": 8937,
+            "type": "champion",
+            "title": "Champion! League victory #9",
+            "ts": 1789471639.7623322
+          },
+          {
+            "id": 8915,
+            "type": "champion",
+            "title": "Champion! League victory #8",
+            "ts": 1789470815.5484407
+          }
+        ],
+        "league_rewards": {
+          "earned": 10,
+          "delivered": 10,
+          "pending": 0
+        }
+      }
+    },
+    "blue": {
+      "started_at": "2026-09-15T11:05:13.255250711Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 133,
+      "uptime": 1968,
+      "league_rewards": {
+        "earned": 13,
+        "delivered": 13,
+        "pending": 0
+      },
+      "start_unchanged": true,
+      "new_registrations": 1,
+      "completed_projects": {
+        "supplies": 1
+      },
+      "selected_training_outcomes": [
+        {
+          "key": "train:131:80",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 109603474,
+          "retry_at": 109663474,
+          "target": 80,
+          "gains": {
+            "experience": 13180,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:117:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 109713898,
+          "retry_at": 109773898,
+          "target": 40,
+          "gains": {
+            "experience": 4012,
+            "levels": 2
+          }
+        }
+      ],
+      "journal_evidence": {
+        "event_counts": {
+          "level": 27,
+          "release": 11,
+          "faint": 2,
+          "obtain": 3,
+          "champion": 3,
+          "trainer": 15
+        },
+        "legendary_releases": [],
+        "legendary_holdings": [
+          {
+            "name": "Moltres",
+            "nick": "CRABRAVE",
+            "level": 59,
+            "box": 3
+          },
+          {
+            "name": "Articuno",
+            "nick": "SPORKLORD",
+            "level": 50,
+            "box": 4
+          },
+          {
+            "name": "Mewtwo",
+            "nick": "YELLMAN",
+            "level": 72,
+            "box": 4
+          },
+          {
+            "name": "Zapdos",
+            "nick": "BEEFCHIEF",
+            "level": 54,
+            "box": 11
+          }
+        ],
+        "milestones": [
+          {
+            "id": 3975,
+            "type": "obtain",
+            "title": "Received Mew for Championship #13",
+            "ts": 1789472139.0
+          },
+          {
+            "id": 3972,
+            "type": "champion",
+            "title": "Champion! League victory #13",
+            "ts": 1789471994.8443508
+          },
+          {
+            "id": 3957,
+            "type": "obtain",
+            "title": "Received Aerodactyl for Championship #12",
+            "ts": 1789471651.0
+          },
+          {
+            "id": 3953,
+            "type": "champion",
+            "title": "Champion! League victory #12",
+            "ts": 1789471400.9325566
+          },
+          {
+            "id": 3935,
+            "type": "obtain",
+            "title": "Received Squirtle for Championship #11",
+            "ts": 1789470565.0
+          },
+          {
+            "id": 3934,
+            "type": "champion",
+            "title": "Champion! League victory #11",
+            "ts": 1789470491.724798
+          }
+        ],
+        "league_rewards": {
+          "earned": 13,
+          "delivered": 13,
+          "pending": 0
+        }
+      }
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 10,
+    "state": "waiting_for_overworld",
+    "error": null,
+    "last_check": 1789472260.3732285,
+    "last_trade": 1789470183.998649,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789465876216945575",
+        "ts": 1789465876.2169466,
+        "reason": "Red registers Victreebel. Blue registers Hitmonchan"
+      },
+      {
+        "id": "1789468422834050059",
+        "ts": 1789468422.8340511,
+        "reason": "Red registers Kangaskhan. Blue registers Wartortle"
+      },
+      {
+        "id": "1789470183998647267",
+        "ts": 1789470183.998649,
+        "reason": "Red registers Persian. Blue registers Electabuzz"
+      }
+    ]
+  },
+  "disk_before": {
+    "total_bytes": 134949060608,
+    "used_bytes": 123006898176,
+    "free_bytes": 5740945408,
+    "used_percent": 91.15
+  },
+  "completed_trade_delta": 0
+}

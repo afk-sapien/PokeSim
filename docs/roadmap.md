@@ -1,3 +1,10 @@
+Current release storage work, September 15: legacy cold backups are compressed with
+verified byte-for-byte restoration. Keep the current release and two successful rollback
+images, plus every container reference, the held experiment, and earlier legacy images.
+Remove only verified obsolete monitoring image tags with retained sources. The Dockerfile
+now preserves the stable filesystem layers across revision-label changes. These maintenance
+changes do not restart the games. See [the retention policy](homeserver.md#release-storage-retention).
+
 Current journal correction, September 15: rc22 recognizes PC withdrawals in either
 RAM write order. The copied-save replay suppresses a false Tentacruel release and keeps
 a genuine Geodude release. Saved arrival records are bounded and expire. Existing

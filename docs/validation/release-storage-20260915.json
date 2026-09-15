@@ -1,0 +1,457 @@
+{
+  "backup_conversions": [
+    {
+      "original": "/docker/pokesim/backups/20260914T183341Z-rc7/before.tar",
+      "compressed": "/docker/pokesim/backups/20260914T183341Z-rc7/before.tar.gz",
+      "original_bytes": 1003612160,
+      "compressed_bytes": 85171284,
+      "decompressed_sha256": "78cc5d720ec47d3f66a500a2c576e241b1fde81c859569ea4e9cfdd91cfc5162"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260914T184015Z-rc7-final/before.tar",
+      "compressed": "/docker/pokesim/backups/20260914T184015Z-rc7-final/before.tar.gz",
+      "original_bytes": 1003612160,
+      "compressed_bytes": 85159080,
+      "decompressed_sha256": "c9c4a6453565008fef93b5cbb97a8930ba46f51131298b1950b6dcce5b6d6544"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260914T194434Z-rc8/before.tar",
+      "compressed": "/docker/pokesim/backups/20260914T194434Z-rc8/before.tar.gz",
+      "original_bytes": 1003735040,
+      "compressed_bytes": 85182263,
+      "decompressed_sha256": "18a136f9adf926deb584000901a6353cbfc1b5d566918d46807306482ac549c4"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260914T202947Z-rc9/before.tar",
+      "compressed": "/docker/pokesim/backups/20260914T202947Z-rc9/before.tar.gz",
+      "original_bytes": 1003683840,
+      "compressed_bytes": 85148698,
+      "decompressed_sha256": "aa1d5198fd702606bbcbeff17594aebb2658b27a50ed537a9665c54893a25c3a"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260914T211056Z-rc10/before.tar",
+      "compressed": "/docker/pokesim/backups/20260914T211056Z-rc10/before.tar.gz",
+      "original_bytes": 1003970560,
+      "compressed_bytes": 85228063,
+      "decompressed_sha256": "3a113f18ea52c891254cd740d92e18b2537b36cb2685c0588688cb13b627208e"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260914T233110Z-rc13/before.tar",
+      "compressed": "/docker/pokesim/backups/20260914T233110Z-rc13/before.tar.gz",
+      "original_bytes": 1004707840,
+      "compressed_bytes": 85362596,
+      "decompressed_sha256": "0a8fba9aca93ef78ab9f127c659c451024001376e4d2d6757174daa40921e4fd"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260915T040744Z-rc14/before.tar",
+      "compressed": "/docker/pokesim/backups/20260915T040744Z-rc14/before.tar.gz",
+      "original_bytes": 1012736000,
+      "compressed_bytes": 86676784,
+      "decompressed_sha256": "8d717bf1c4f114d998ba03829985f0be0a887cbbbebc1c4c886148557f4ef468"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260915T044707Z-rc15/before.tar",
+      "compressed": "/docker/pokesim/backups/20260915T044707Z-rc15/before.tar.gz",
+      "original_bytes": 1015470080,
+      "compressed_bytes": 87168933,
+      "decompressed_sha256": "4fa4bf7c058d3009173f9fe84fa35ddbecf7168a5dfa0f61ee10bcd9e2fb7338"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260915T045935Z-rc16/before.tar",
+      "compressed": "/docker/pokesim/backups/20260915T045935Z-rc16/before.tar.gz",
+      "original_bytes": 1015869440,
+      "compressed_bytes": 87266421,
+      "decompressed_sha256": "e5b7949780d23864f4c9b449228e0d62f98f948ba36275c64eeff1d21c7e12e8"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260915T072856Z-rc17/before.tar",
+      "compressed": "/docker/pokesim/backups/20260915T072856Z-rc17/before.tar.gz",
+      "original_bytes": 1037424640,
+      "compressed_bytes": 89183794,
+      "decompressed_sha256": "d88aa1491bdfeda6eb23dea3ba231ecd843cee280b153a4276f910c67852ff1d"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260915T075115Z-rc18/before.tar",
+      "compressed": "/docker/pokesim/backups/20260915T075115Z-rc18/before.tar.gz",
+      "original_bytes": 1027962880,
+      "compressed_bytes": 89244945,
+      "decompressed_sha256": "b9411b4aa983607b4749921607b227af63677772ab94fadfb60249fd42c06766"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260915T082355Z-rc19/before.tar",
+      "compressed": "/docker/pokesim/backups/20260915T082355Z-rc19/before.tar.gz",
+      "original_bytes": 1041336320,
+      "compressed_bytes": 89791068,
+      "decompressed_sha256": "491caf65d04386cf8722c512a01f1c80cb716ede3e78b7dbade5b1f55de9d903"
+    },
+    {
+      "original": "/docker/pokesim/backups/20260915T084848Z-rc20/before.tar",
+      "compressed": "/docker/pokesim/backups/20260915T084848Z-rc20/before.tar.gz",
+      "original_bytes": 1043701760,
+      "compressed_bytes": 90119976,
+      "decompressed_sha256": "dca9aee89a27526d3159b891230a48a64e223ff9b9220b8b11e7cc509a204e56"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260914T183256Z-rc7/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260914T183256Z-rc7/before.tar.gz",
+      "original_bytes": 159959040,
+      "compressed_bytes": 19583406,
+      "decompressed_sha256": "f6e805825167b7833cee288bc8219abc7f16fe2494dce6a5322bcdb209b47ebb"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260914T183932Z-rc7-final/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260914T183932Z-rc7-final/before.tar.gz",
+      "original_bytes": 159979520,
+      "compressed_bytes": 19589293,
+      "decompressed_sha256": "cbce5f76ddeb902f21f325ab1daada23ca19b7a577c26ebcf0e38af69aa39123"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260914T194332Z-rc8/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260914T194332Z-rc8/before.tar.gz",
+      "original_bytes": 160184320,
+      "compressed_bytes": 19571181,
+      "decompressed_sha256": "5c0db24dccf163476c26410e00e01768475f31276da0673e4c4d0a73f6ac9fde"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260914T203028Z-rc9/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260914T203028Z-rc9/before.tar.gz",
+      "original_bytes": 163307520,
+      "compressed_bytes": 20032199,
+      "decompressed_sha256": "5614f1734fbbbbb2c6d860bbf5d2b58bff5b2c67ec7481c4a60be81cb18cb692"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260914T211200Z-rc10/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260914T211200Z-rc10/before.tar.gz",
+      "original_bytes": 168847360,
+      "compressed_bytes": 20755633,
+      "decompressed_sha256": "7c29450a29a088c1e2be4cbd72605d294f01a9a85f4ed71c2d3d87d20492e007"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260914T224357Z-rc12/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260914T224357Z-rc12/before.tar.gz",
+      "original_bytes": 175278080,
+      "compressed_bytes": 21657680,
+      "decompressed_sha256": "351641859a540fce45490a8ab84b0c04b85c796118599e948fb551cf4a669ac0"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260915T040653Z-rc14/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260915T040653Z-rc14/before.tar.gz",
+      "original_bytes": 192061440,
+      "compressed_bytes": 24425086,
+      "decompressed_sha256": "c3db3718d7bc4d4f326fbd07cb232772d75f1e9e204609c68e0751ff74f043ce"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260915T044513Z-rc15/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260915T044513Z-rc15/before.tar.gz",
+      "original_bytes": 194263040,
+      "compressed_bytes": 24765476,
+      "decompressed_sha256": "e9dec29b25f51e8ce9b1dfe4a75b7a05b70c1174a6e15e28eaef5fc31ef95f00"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260915T045901Z-rc16/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260915T045901Z-rc16/before.tar.gz",
+      "original_bytes": 194662400,
+      "compressed_bytes": 24858976,
+      "decompressed_sha256": "ca506e46c7787cfe8d323d35bfc645e8ea743cd39995c437ae2e4d9e41de6481"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260915T072929Z-rc17/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260915T072929Z-rc17/before.tar.gz",
+      "original_bytes": 213319680,
+      "compressed_bytes": 26317758,
+      "decompressed_sha256": "c700a82e2f2905cd80b5da9ac505623b64108b4b067a92d632443c672ea231ae"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260915T075145Z-rc18/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260915T075145Z-rc18/before.tar.gz",
+      "original_bytes": 204738560,
+      "compressed_bytes": 26310515,
+      "decompressed_sha256": "29725c2be81923cb3e55f443068db8c8df6de9e83ee274c78c50581f69e49f00"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260915T082445Z-rc19/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260915T082445Z-rc19/before.tar.gz",
+      "original_bytes": 218675200,
+      "compressed_bytes": 27001221,
+      "decompressed_sha256": "b8d18ace12fdfb4b6650fab806f8d673fc7059f7fa579171e417aece4506e039"
+    },
+    {
+      "original": "/docker/pokesim-blue/backups/20260915T084920Z-rc20/before.tar",
+      "compressed": "/docker/pokesim-blue/backups/20260915T084920Z-rc20/before.tar.gz",
+      "original_bytes": 220620800,
+      "compressed_bytes": 27250778,
+      "decompressed_sha256": "4e9801567210321fdd8ecb96bf84756bb32971627e835faf70d51ba63a4ebc6d"
+    }
+  ],
+  "compressed_original_bytes": 15643719680,
+  "compressed_final_bytes": 1432823107,
+  "archive_bytes_saved": 14210896573,
+  "image_retention": [
+    {
+      "removed_tag": "pokesim:0.2.0rc9-8ca0271",
+      "image_id": "sha256:9f8b30140b478642f33d31eb02f3fca3d25cb870b479239125a9e187db0cde0b",
+      "retained_source": "/docker/pokesim/releases/0.2.0rc9-8ca0271"
+    },
+    {
+      "removed_tag": "pokesim:0.2.0rc10-6a23720",
+      "image_id": "sha256:7fa97293dcd55397926c9f636f2ae0254dd5607e9f96ffef38e7a5a4c0758b79",
+      "retained_source": "/docker/pokesim/releases/0.2.0rc10-6a23720"
+    },
+    {
+      "removed_tag": "pokesim:0.2.0rc12-66b226f",
+      "image_id": "sha256:8d2e402895f59e9493269244f95d55db49c5d907a0291f4f2028415831ef1f11",
+      "retained_source": "/docker/pokesim/releases/0.2.0rc12-66b226f"
+    },
+    {
+      "removed_tag": "pokesim:0.2.0rc13-17cd997",
+      "image_id": "sha256:6da126690a9b7484af2b2f39b2c60a3c3e3da561f2118c268312bdcae11861a2",
+      "retained_source": "/docker/pokesim/releases/0.2.0rc13-17cd997"
+    },
+    {
+      "removed_tag": "pokesim:0.2.0rc14-1473f1d",
+      "image_id": "sha256:284bc68df9aa6e473d9001af548151a8976c92ee0690d559c3a1e26532322715",
+      "retained_source": "/docker/pokesim/releases/0.2.0rc14-1473f1d"
+    },
+    {
+      "removed_tag": "pokesim:0.2.0rc15-23652c2",
+      "image_id": "sha256:5645cae6c8f897c2138cf9c14bcdfe93a18b92351af7648eb5ae6602b5d786cb",
+      "retained_source": "/docker/pokesim/releases/0.2.0rc15-23652c2"
+    },
+    {
+      "removed_tag": "pokesim:0.2.0rc16-caa092b",
+      "image_id": "sha256:9b0228d75ddfa4757c63a6dede3038ee47ab4e0570baa9bd5b608697f8b88d54",
+      "retained_source": "/docker/pokesim/releases/0.2.0rc16-caa092b"
+    },
+    {
+      "removed_tag": "pokesim:0.2.0rc17-646b32b",
+      "image_id": "sha256:385799d78a52b738df07ec7e0ebe0e5b4ecf95a7e68135ce090edc36a26373a2",
+      "retained_source": "/docker/pokesim/releases/0.2.0rc17-646b32b"
+    },
+    {
+      "removed_tag": "pokesim:0.2.0rc18-2b7365b",
+      "image_id": "sha256:fe4cace9a935abc378b4fd6b73865b4931a3efa600879ccbc925d79cea1500bb",
+      "retained_source": "/docker/pokesim/releases/0.2.0rc18-2b7365b"
+    },
+    {
+      "removed_tag": "pokesim:0.2.0rc19-1ba1fbb",
+      "image_id": "sha256:0b07567965541558e06dc32cb18c6bea2d183b19762759796149a87a28cdbe37",
+      "retained_source": "/docker/pokesim/releases/0.2.0rc19-1ba1fbb"
+    },
+    {
+      "protected": [
+        "pokesim:0.2.0rc20-39f409b",
+        "pokesim:0.2.0rc21-339d9a0",
+        "pokesim:0.2.0rc22-49403d7",
+        "pokesim:0.2.0rc11-54569f0"
+      ],
+      "legacy_images": "preserved",
+      "volumes": "untouched",
+      "build_cache": "untouched"
+    }
+  ],
+  "cache_validation": {
+    "images": [
+      {
+        "Id": "sha256:8b2f6b069c81394926544a1dc4f84b1b8f2febb681c53411b26abd61e4f0859f",
+        "RepoTags": [
+          "pokesim-cache-check:1137-a"
+        ],
+        "Size": 591717548
+      },
+      {
+        "Id": "sha256:7a824c02e792be4d3a866763e5282d749891ef0258949bcd1c2e6a1288c73941",
+        "RepoTags": [
+          "pokesim-cache-check:1137-b"
+        ],
+        "Size": 591717548
+      }
+    ],
+    "identical_layers": [
+      "sha256:1d69a5fd31932841d7825ef4780c06f008eea65aaa9f3110fe09d5832ed5c7d8",
+      "sha256:32488c65fb2595aaf67371142ffe3ffdc39660ab83b4cfb35ebd9fdf751997ff",
+      "sha256:4a3d4f8d9fbb21dbb593489962d9f6a77bb0086315a5d3c66e67738fdf27029b",
+      "sha256:38ed9d88ee80c1d99e220af90592650b2b4126bd5bcfa2612df3fdeb42e8844c",
+      "sha256:64fe69bda0e2e88ada467032ab4e850ef0ec48c5ac260bddab9d01a791972d47",
+      "sha256:ceee5cbdb8a92b6640c79d850bfb32749acdfa1952be21ffcdd57d08d78b4964",
+      "sha256:df91bdf2b65600ce96297bcc548f76edad12872cc57decff2453734ea88f97e0",
+      "sha256:814a86acd9aab1189cd46ada06dc6f09a59c116791e25b7d32ba2fbce88c8f4a",
+      "sha256:330dd202863eda54a45c5c364c48fecff94eedefc930278ac9acba4ede86f989",
+      "sha256:104189cd5dc3eb03202fb441e8913208b84f7fea6bcfca1a09709f46c1e223ad",
+      "sha256:79f496ab006742b6755ea076d54c51b7781b5a9d4e7234bb57f7852d2ccf235e"
+    ],
+    "runtime_configuration_matches_live": true,
+    "import_smoke": "passed"
+  },
+  "dockerfile_sha256": "67c82274971ab5e0fcd4d6793457c5e4a5d6654eee848db6d9cca25d20c229a0",
+  "verification": {
+    "backup_archives": [
+      {
+        "path": "/docker/pokesim/backups/20260914T183341Z-rc7/before.tar.gz",
+        "bytes": 85171284
+      },
+      {
+        "path": "/docker/pokesim/backups/20260914T184015Z-rc7-final/before.tar.gz",
+        "bytes": 85159080
+      },
+      {
+        "path": "/docker/pokesim/backups/20260914T194434Z-rc8/before.tar.gz",
+        "bytes": 85182263
+      },
+      {
+        "path": "/docker/pokesim/backups/20260914T202947Z-rc9/before.tar.gz",
+        "bytes": 85148698
+      },
+      {
+        "path": "/docker/pokesim/backups/20260914T211056Z-rc10/before.tar.gz",
+        "bytes": 85228063
+      },
+      {
+        "path": "/docker/pokesim/backups/20260914T233110Z-rc13/before.tar.gz",
+        "bytes": 85362596
+      },
+      {
+        "path": "/docker/pokesim/backups/20260915T040744Z-rc14/before.tar.gz",
+        "bytes": 86676784
+      },
+      {
+        "path": "/docker/pokesim/backups/20260915T044707Z-rc15/before.tar.gz",
+        "bytes": 87168933
+      },
+      {
+        "path": "/docker/pokesim/backups/20260915T045935Z-rc16/before.tar.gz",
+        "bytes": 87266421
+      },
+      {
+        "path": "/docker/pokesim/backups/20260915T072856Z-rc17/before.tar.gz",
+        "bytes": 89183794
+      },
+      {
+        "path": "/docker/pokesim/backups/20260915T075115Z-rc18/before.tar.gz",
+        "bytes": 89244945
+      },
+      {
+        "path": "/docker/pokesim/backups/20260915T082355Z-rc19/before.tar.gz",
+        "bytes": 89791068
+      },
+      {
+        "path": "/docker/pokesim/backups/20260915T084848Z-rc20/before.tar.gz",
+        "bytes": 90119976
+      },
+      {
+        "path": "/docker/pokesim/backups/20260915T094206Z-rc21/before.tar.gz",
+        "bytes": 90173694
+      },
+      {
+        "path": "/docker/pokesim/backups/20260915T110422Z-rc22/before.tar.gz",
+        "bytes": 91287749
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260914T183256Z-rc7/before.tar.gz",
+        "bytes": 19583406
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260914T183932Z-rc7-final/before.tar.gz",
+        "bytes": 19589293
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260914T194332Z-rc8/before.tar.gz",
+        "bytes": 19571181
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260914T203028Z-rc9/before.tar.gz",
+        "bytes": 20032199
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260914T211200Z-rc10/before.tar.gz",
+        "bytes": 20755633
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260914T224357Z-rc12/before.tar.gz",
+        "bytes": 21657680
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260915T040653Z-rc14/before.tar.gz",
+        "bytes": 24425086
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260915T044513Z-rc15/before.tar.gz",
+        "bytes": 24765476
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260915T045901Z-rc16/before.tar.gz",
+        "bytes": 24858976
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260915T072929Z-rc17/before.tar.gz",
+        "bytes": 26317758
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260915T075145Z-rc18/before.tar.gz",
+        "bytes": 26310515
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260915T082445Z-rc19/before.tar.gz",
+        "bytes": 27001221
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260915T084920Z-rc20/before.tar.gz",
+        "bytes": 27250778
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260915T094253Z-rc21/before.tar.gz",
+        "bytes": 27388057
+      },
+      {
+        "path": "/docker/pokesim-blue/backups/20260915T110504Z-rc22/before.tar.gz",
+        "bytes": 28314786
+      }
+    ],
+    "retained_images": [
+      "pokesim:0.2.0rc20-39f409b",
+      "pokesim:0.2.0rc21-339d9a0",
+      "pokesim:0.2.0rc22-49403d7",
+      "pokesim:0.2.0rc11-54569f0"
+    ],
+    "validation_images_removed": true,
+    "containers": [
+      {
+        "name": "/pokesim",
+        "started_at": "2026-09-15T11:04:45.612766478Z",
+        "health": "healthy"
+      },
+      {
+        "name": "/pokesim-blue",
+        "started_at": "2026-09-15T11:05:13.255250711Z",
+        "health": "healthy"
+      },
+      {
+        "name": "/pokesim-broker",
+        "started_at": "2026-09-15T11:05:17.18415372Z",
+        "health": "healthy"
+      },
+      {
+        "name": "/pokesim-trading",
+        "started_at": "2026-09-15T11:05:17.624088029Z",
+        "health": null
+      }
+    ]
+  },
+  "disk_before": {
+    "total_bytes": 134949060608,
+    "used_bytes": 123006898176,
+    "free_bytes": 5740945408,
+    "used_percent": 91.15
+  },
+  "disk_after": {
+    "total_bytes": 134949060608,
+    "used_bytes": 109269471232,
+    "free_bytes": 19478372352,
+    "used_percent": 80.97
+  },
+  "tests": {
+    "passed": 39,
+    "scope": "Backup conversion guards and existing release checks"
+  },
+  "live_runtime": "0.2.0rc22-49403d7",
+  "games_restarted": false
+}
