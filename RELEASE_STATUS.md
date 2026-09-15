@@ -14,8 +14,8 @@ See [the copied-save comparison](docs/validation/articuno-current-0.2.0rc21.json
 
 The monitor now retains legendary retry state and the last four legendary outcomes.
 The homeserver guide reflects the current image, compressed backups, rewards, and coordinator settings.
-Red's Moltres path in Victory Road is still a separate unresolved route issue, with a
-fresh copied reproduction preserved. The live rc20 interval gained two automatic trades,
+Red's earlier Moltres path failure has a copied reproduction preserved. Its live
+expedition subsequently succeeded without another runtime change. The live rc20 interval gained two automatic trades,
 two Red registrations, and three Blue registrations without save reloads or restarts.
 
 Both games, the board, and coordinator run `pokesim:0.2.0rc21-339d9a0`, tagged commit
@@ -27,9 +27,15 @@ Both live games then caught Articuno, confirmed by Red event 8709 and Blue event
 Red reached 125 registrations and Blue reached 128. Both are healthy, unpaused, at maximum
 speed, with zero recovery reloads. Automatic trading remains enabled with seven completed
 exchanges and no coordinator error. Red's five Championship rewards and Blue's six are
-all delivered. This begins a new endurance interval. The monitor now prioritizes Red's
-remaining Moltres route and ongoing useful progress.
+all delivered. This begins a new endurance interval.
 See [the release receipt](docs/validation/release-0.2.0rc21.json).
+
+At the 10:20 UTC followup, Red had caught Moltres in event 8753 and both games held all
+three legendary birds and Mewtwo. Both reached 129 registrations with unchanged container
+starts and zero reloads. Eight automatic exchanges completed. All six Red rewards and
+eight Blue rewards were delivered. No further runtime change or deployment was needed.
+The monitor now follows continued progress, PC transfer journal accuracy, and storage growth.
+See [the followup record](docs/validation/monitor-20260915-1020.json).
 
 # Previous deployment: rc20, preserve missed legendary encounters
 

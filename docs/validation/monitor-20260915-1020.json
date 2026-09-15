@@ -1,0 +1,330 @@
+{
+  "sample_ts": 1789467638.6736495,
+  "detail_ts": 1789467737.1331499,
+  "version": "0.2.0rc21",
+  "runtime_changed": false,
+  "deployment_performed": false,
+  "runs": {
+    "red": {
+      "image": "pokesim:0.2.0rc21-339d9a0",
+      "started_at": "2026-09-15T09:42:28.368554994Z",
+      "uptime": 2288,
+      "restarts": 0,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.1,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 129,
+      "completed_projects": {
+        "exploration": 7,
+        "training": 18,
+        "supplies": 7,
+        "collection": 2,
+        "evolution": 1,
+        "legendary": 3
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {
+          "146": 1
+        }
+      },
+      "legendary_outcomes": [
+        {
+          "key": "legendary:73:194",
+          "category": "legendary",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 202893298,
+          "retry_at": 0,
+          "target": 73,
+          "gains": {}
+        }
+      ],
+      "registrations_since_articuno": 4,
+      "start_unchanged": true,
+      "league_rewards": {
+        "earned": 6,
+        "delivered": 6,
+        "pending": 0
+      },
+      "legendary_holdings": [
+        {
+          "dex": 145,
+          "species": 75,
+          "name": "Zapdos",
+          "nick": "SPROUT",
+          "level": 100,
+          "box": null
+        },
+        {
+          "dex": null,
+          "species": 74,
+          "name": "Articuno",
+          "nick": "SOUPWIZARD",
+          "level": 50,
+          "box": 3
+        },
+        {
+          "dex": null,
+          "species": 73,
+          "name": "Moltres",
+          "nick": "BORKUS",
+          "level": 50,
+          "box": 6
+        },
+        {
+          "dex": null,
+          "species": 131,
+          "name": "Mewtwo",
+          "nick": "CORNWIZARD",
+          "level": 70,
+          "box": 9
+        }
+      ],
+      "new_items": [
+        {
+          "id": 8730,
+          "ts": 1789466335.5238779,
+          "type": "item",
+          "title": "Picked up TM Mega Kick",
+          "body": "On Victory Road 2F."
+        },
+        {
+          "id": 8721,
+          "ts": 1789465797.4022448,
+          "type": "item",
+          "title": "Picked up Nugget",
+          "body": "On Safari Zone Center."
+        }
+      ],
+      "evolution_events": [
+        {
+          "id": 8728,
+          "ts": 1789466017.4533732,
+          "type": "evolve",
+          "title": "Squirtle evolved into Wartortle!",
+          "body": "Level 16, on Route 11."
+        },
+        {
+          "id": 8720,
+          "ts": 1789465789.6363494,
+          "type": "evolve",
+          "title": "BUBBLES evolved into Weepinbell!",
+          "body": "Level 21, on Route 15."
+        }
+      ],
+      "level_events": 13,
+      "selected_training_evidence": [
+        {
+          "id": 8736,
+          "ts": 1789466612.5703645,
+          "type": "level",
+          "title": "PEBBLE grew to level 40",
+          "body": ""
+        },
+        {
+          "id": 8735,
+          "ts": 1789466558.2560673,
+          "type": "level",
+          "title": "PEBBLE grew to level 39",
+          "body": ""
+        },
+        {
+          "id": 8716,
+          "ts": 1789465448.1234007,
+          "type": "level",
+          "title": "KIWI grew to level 34",
+          "body": ""
+        },
+        {
+          "id": 8715,
+          "ts": 1789465418.7064486,
+          "type": "level",
+          "title": "KIWI grew to level 33",
+          "body": ""
+        }
+      ]
+    },
+    "blue": {
+      "image": "pokesim:0.2.0rc21-339d9a0",
+      "started_at": "2026-09-15T09:43:02.613082089Z",
+      "uptime": 2254,
+      "restarts": 0,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 129,
+      "completed_projects": {
+        "training": 53,
+        "collection": 3,
+        "exploration": 38,
+        "supplies": 20,
+        "legendary": 2,
+        "evolution": 1
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {}
+      },
+      "legendary_outcomes": [
+        {
+          "key": "legendary:74:162",
+          "category": "legendary",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 105103624,
+          "retry_at": 0,
+          "target": 74,
+          "gains": {}
+        }
+      ],
+      "registrations_since_articuno": 1,
+      "start_unchanged": true,
+      "league_rewards": {
+        "earned": 8,
+        "delivered": 8,
+        "pending": 0
+      },
+      "legendary_holdings": [
+        {
+          "dex": null,
+          "species": 73,
+          "name": "Moltres",
+          "nick": "CRABRAVE",
+          "level": 59,
+          "box": 3
+        },
+        {
+          "dex": null,
+          "species": 74,
+          "name": "Articuno",
+          "nick": "SPORKLORD",
+          "level": 50,
+          "box": 4
+        },
+        {
+          "dex": null,
+          "species": 131,
+          "name": "Mewtwo",
+          "nick": "YELLMAN",
+          "level": 71,
+          "box": 4
+        },
+        {
+          "dex": null,
+          "species": 75,
+          "name": "Zapdos",
+          "nick": "BEEFCHIEF",
+          "level": 54,
+          "box": 11
+        }
+      ],
+      "new_items": [
+        {
+          "id": 3837,
+          "ts": 1789466585.1723518,
+          "type": "item",
+          "title": "Picked up Escape Rope",
+          "body": "On Pok\u00e9mon Tower 3F."
+        }
+      ],
+      "evolution_events": [],
+      "level_events": 13,
+      "selected_training_evidence": [
+        {
+          "id": 3843,
+          "ts": 1789467068.473905,
+          "type": "level",
+          "title": "CRABRAVE grew to level 59",
+          "body": ""
+        },
+        {
+          "id": 3841,
+          "ts": 1789466942.1267862,
+          "type": "level",
+          "title": "CRABRAVE grew to level 58",
+          "body": ""
+        },
+        {
+          "id": 3840,
+          "ts": 1789466815.6521122,
+          "type": "level",
+          "title": "CRABRAVE grew to level 57",
+          "body": ""
+        }
+      ]
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "allow_last_copies": true,
+    "league_rewards": true,
+    "mew_event": false,
+    "completed": 8,
+    "state": "ready",
+    "error": null,
+    "last_check": 1789467698.2003179,
+    "last_trade": 1789465876.2169466
+  },
+  "resources": [
+    {
+      "BlockIO": "2.47MB / 365MB",
+      "CPUPerc": "100.03%",
+      "Container": "pokesim",
+      "ID": "3d21a1c31bd6",
+      "MemPerc": "1.38%",
+      "MemUsage": "137.1MiB / 9.712GiB",
+      "Name": "pokesim",
+      "NetIO": "895kB / 34.9MB",
+      "PIDs": "11"
+    },
+    {
+      "BlockIO": "643kB / 281MB",
+      "CPUPerc": "126.77%",
+      "Container": "pokesim-blue",
+      "ID": "c296bbfd03a4",
+      "MemPerc": "1.28%",
+      "MemUsage": "127.1MiB / 9.712GiB",
+      "Name": "pokesim-blue",
+      "NetIO": "407kB / 19.1MB",
+      "PIDs": "11"
+    }
+  ],
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 122028462080,
+    "free_bytes": 6719381504,
+    "used_percent": 90.43
+  },
+  "directory_bytes": {
+    "/docker/pokesim/data": 1047363584,
+    "/docker/pokesim/backups": 15430029312,
+    "/docker/pokesim-blue/data": 218578944,
+    "/docker/pokesim-blue/backups": 2732138496
+  },
+  "moltres_catch": {
+    "id": 8753,
+    "ts": 1789467044.9410777,
+    "type": "catch",
+    "title": "Caught the legendary Moltres!",
+    "body": "A level 50 Moltres on Victory Road 2F. Pok\u00e9dex: 129 owned."
+  },
+  "notes": [
+    "No 24-hour endurance milestone has been reached.",
+    "The forced-target copied route failure remains preserved, but Red completed its ordinary live Moltres expedition without another runtime change.",
+    "Journal release entries for Mewtwo and Moltres conflict with retained individuals. Investigate PC transfer event confirmation on copies before treating those entries as actual releases.",
+    "No backups, images, original saves, or reproduction cases were deleted."
+  ]
+}

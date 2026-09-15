@@ -3,8 +3,9 @@ boulder puzzle before attempting Surf on B4F. It first clears room to push each
 required boulder into its designated hole, preserves completed drops across reentry,
 and avoids dropping the player into the holes. A copied Blue checkpoint that previously
 repeated the strong-current refusal caught Articuno after 17,646 frames with normal
-controls and zero rewinds. Red's separate Moltres route failure in Victory Road remains
-under investigation. See [the comparison](validation/articuno-current-0.2.0rc21.json).
+controls and zero rewinds. Red subsequently caught Moltres live on rc21, confirmed by event 8753. Both games now
+hold all three legendary birds and Mewtwo. The copied Victory Road routing edge case
+remains preserved, but no further route patch was needed for this live catch. See [the comparison](validation/articuno-current-0.2.0rc21.json).
 
 Current legendary recovery, September 15: failed Articuno, Zapdos, Moltres, and
 Mewtwo encounters can return. Clear only the finished-encounter and hidden-object bits
@@ -211,12 +212,13 @@ training, and visible ground-item detours are implemented. Continue from that ba
 
 1. Prove sustained collection and training progress. Improve travel and maintenance
    interruptions, while preserving productive live runs for endurance observation.
-2. Maintain automatic exchanges and verify useful last-copy sharing. Support the optional
-   postgame Mew distribution with recovery checks and one-time delivery records.
+2. Maintain automatic exchanges and verify useful last-copy sharing. Monitor repeatable
+   Championship rewards, durable delivery, and storage capacity. The older one-time Mew
+   distribution remains disabled.
 3. Extend reserve training with varied Hall of Fame teams and visible stat-training
    milestones. Keep useful partial progress distinct from completed targets.
-4. Bound backup, image, journal, and checkpoint growth and validate upgrades and outages
-   over multi-day runs. This work should proceed alongside progression improvements.
+4. Correct PC transfer journal messages that can falsely report releases. Bound backup,
+   image, journal, and checkpoint growth and validate upgrades and outages over multi-day runs. This work should proceed alongside progression improvements.
 5. Add optional quality hunting after the ordinary adventure and trading paths are
    reliable. Perfect DVs and guaranteed completion remain outside the required target.
 

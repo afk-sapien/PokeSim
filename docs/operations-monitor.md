@@ -375,3 +375,33 @@ All five Red rewards and six Blue rewards are delivered. The new cold backups pa
 compressed-stream integrity checks. See [the rc21 receipt](validation/release-0.2.0rc21.json).
 The rollout starts new endurance intervals. Continue with Red's Moltres route and avoid
 repeating notifications for the already confirmed Mewtwo and Articuno catches.
+
+
+## September 15, 10:20 UTC Moltres catch verified
+
+Red completed its ordinary live Moltres expedition on rc21, confirmed by catch event
+8753 at 10:10 UTC. Both runs now physically retain Articuno, Zapdos, Moltres, and
+Mewtwo. This supersedes the live Moltres blocker above. The forced-target copied
+route failure remains preserved as a navigation edge case, but it does not justify
+interrupting the successful adventures or claiming that a new route fix was deployed.
+
+Both rc21 container starts are unchanged after about 38 minutes, with healthy workers,
+maximum speed, and zero save reloads or container restarts. Both reached 129 registered
+entries, four more for Red and one more for Blue since their Articuno catches. The eighth
+automatic exchange registered Victreebel for Red and Hitmonchan for Blue. Red evolved
+Bellsprout and Squirtle, collected Nugget and TM Mega Kick, and recorded 13 level events.
+Blue collected Escape Rope and recorded 13 level events, including CRABRAVE reaching
+levels 57 through 59. Red's six and Blue's eight Championship rewards are all delivered.
+No runtime change or deployment was performed. See
+[the monitoring record](validation/monitor-20260915-1020.json).
+
+The journal appears to report some PC transfers as spare releases. For example, Red event
+8737 and Blue event 3818 report Mewtwo releases, while the same unique nicknamed
+Mewtwo remain in their boxes. Blue's reported Moltres release also precedes continued
+training of CRABRAVE, which remains stored at level 59. Investigate the event confirmation
+window on copied saves. Do not infer actual loss from these journal messages alone.
+
+Continue useful collection, training, pickup, reward, and trading checks. Prioritize
+accurate PC transfer reporting and bounded storage growth. Available filesystem space
+is 6.72 GB, with 90.43 percent used. No images, backups, or saves were removed. Preserve
+this live endurance interval and avoid repeating the confirmed legendary notifications.
