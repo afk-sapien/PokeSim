@@ -1,0 +1,114 @@
+{
+  "version": "0.2.0rc24",
+  "revision": "d99cdc2dfd9afc13fae042eb49aa6cdc001ce804",
+  "image": "pokesim:0.2.0rc24-d99cdc2",
+  "image_id": "sha256:9f4a98a9096d658db78ed2b77612ad7c1767aa210af8f0d8239fd4f79758b461",
+  "previous_image": "pokesim:0.2.0rc23-7ccf16e",
+  "backup": "/docker/pokesim-trading/backups/20260915T145218Z-rc24/before.tar.gz",
+  "timestamp": 1789483988.347601,
+  "games_and_board_unchanged": true,
+  "containers": [
+    {
+      "name": "/pokesim",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:04:45.612766478Z"
+    },
+    {
+      "name": "/pokesim-blue",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:05:13.255250711Z"
+    },
+    {
+      "name": "/pokesim-broker",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:05:17.18415372Z"
+    },
+    {
+      "name": "/pokesim-trading",
+      "image": "pokesim:0.2.0rc24-d99cdc2",
+      "started_at": "2026-09-15T14:53:08.13314758Z"
+    }
+  ],
+  "cold_backup_integrity_verified": true,
+  "python_tests": {
+    "passed": 478,
+    "skipped": 1
+  },
+  "javascript_test_files_passed": 2,
+  "package_resources_verified": true,
+  "followup": {
+    "ts": 1789484163.945229,
+    "trading": {
+      "enabled": true,
+      "interval_seconds": 900,
+      "completed": 15,
+      "state": "ready",
+      "error": null,
+      "last_check": 1789484143.389366,
+      "last_trade": 1789484130.1693544,
+      "last_operation": "trade",
+      "image": "pokesim:0.2.0rc24-d99cdc2",
+      "started_at": "2026-09-15T14:53:08.13314758Z",
+      "restarts": 0,
+      "running": true,
+      "opportunities": 12,
+      "recent_exchanges": [
+        {
+          "id": "1789479616230069694",
+          "ts": 1789479616.2300708,
+          "reason": "Red registers Jolteon. Blue registers Flareon"
+        },
+        {
+          "id": "1789483191226856226",
+          "ts": 1789483191.2268574,
+          "reason": "Red registers Charizard. Blue registers Kabuto"
+        },
+        {
+          "id": "1789484130169353495",
+          "ts": 1789484130.1693544,
+          "reason": "Red registers Blastoise. Blue registers Gloom"
+        }
+      ]
+    },
+    "runs": {
+      "red": {
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.4,
+          "error": null
+        },
+        "paused": false,
+        "speed": 0.0,
+        "reloads": 0,
+        "started_at": "2026-09-15T11:04:45.612766478Z",
+        "owned": 141,
+        "league_rewards": {
+          "earned": 23,
+          "delivered": 20,
+          "pending": 3
+        }
+      },
+      "blue": {
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.0,
+          "error": null
+        },
+        "paused": false,
+        "speed": 0.0,
+        "reloads": 0,
+        "started_at": "2026-09-15T11:05:13.255250711Z",
+        "owned": 143,
+        "league_rewards": {
+          "earned": 25,
+          "delivered": 24,
+          "pending": 1
+        }
+      }
+    },
+    "initial_retry_timeout_recovered": true,
+    "next_trade_interval_seconds": 938.94
+  }
+}

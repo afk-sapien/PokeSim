@@ -17,15 +17,15 @@ Both games and the board run `pokesim:0.2.0rc22-49403d7` from tagged commit
 The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc22-49403d7`.
 PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
 
-The scoped coordinator runs `pokesim:0.2.0rc23-7ccf16e` from tagged commit
-`7ccf16eb342e137b35360870de75d307a987e331`. Its image ID is
-`sha256:b6ca427508008cef31be183051f8547f0544e013ea14d1f41c356f0a45314065`.
-The source archive is `/docker/pokesim/releases/0.2.0rc23-7ccf16e`. This coordinator-only
-update alternates pending rewards with overdue useful trades at safe points. Games and
-the board retain their rc22 processes and endurance intervals. The private coordinator
-backup is `/docker/pokesim-trading/backups/20260915T133227Z-rc23/before.tar.gz`.
+The scoped coordinator runs `pokesim:0.2.0rc24-d99cdc2` from tagged commit
+`d99cdc2dfd9afc13fae042eb49aa6cdc001ce804`. Its image ID is
+`sha256:9f4a98a9096d658db78ed2b77612ad7c1767aa210af8f0d8239fd4f79758b461`.
+The source archive is `/docker/pokesim/releases/0.2.0rc24-d99cdc2`. This coordinator-only
+update lets each game prepare at its own safe point within a shared retry window.
+Games and the board retain their rc22 processes and endurance intervals. The private
+coordinator backup is `/docker/pokesim-trading/backups/20260915T145218Z-rc24/before.tar.gz`.
 It contains state and configuration and must not be published. See
-[the coordinator receipt](validation/release-0.2.0rc23.json).
+[the coordinator receipt](validation/release-0.2.0rc24.json).
 
 The release includes persistent playtime, the four-page interface, stall recovery,
 bounded collection objectives, and return paths through Victory Road. Live displays
@@ -54,7 +54,7 @@ Also retain every image referenced by a running or stopped container, any held e
 and legacy images created before this monitoring workflow. Before removing an older
 monitoring image, verify its exact tag, source revision label, retained source directory,
 and all container references. Remove its tag without force. Do not use a global image,
-build-cache, or volume prune. The current retained release set is rc20, rc21, rc22, and rc23,
+build-cache, or volume prune. The current retained release set is rc20, rc21, rc22, rc23, and rc24,
 covering both the games and the separately upgraded coordinator. The held rc11 experiment is also preserved. Older source archives remain available
 for rebuilding historical releases.
 

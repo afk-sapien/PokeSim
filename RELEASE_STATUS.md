@@ -1,4 +1,31 @@
-# Current coordinator: rc23, share safe points between rewards and trades
+# Current coordinator: rc24, independent safe points
+
+The coordinator previously required API samples to show both games outside battles
+and menus at the same instant. It now lets each available game prepare independently
+within one shared 15-second retry window. The game remains responsible for checking
+its actual state. Only the explicit overworld-wait response is retried. Timeout and
+other rejections use existing durable abort cleanup. In-flight requests retain the
+20-second transport timeout. Trade frequency policy and reward fairness are unchanged.
+
+A copied-save rehearsal completed a useful Sandshrew and Ekans exchange after Blue
+closed its menu with ordinary controls while Red held its checkpoint. Both games
+resumed and later saves reloaded. All 478 Python tests passed, with one optional test
+skipped. Both JavaScript test files and package resource checks passed. See
+[the safe-point evidence](docs/validation/trade-safe-points-0.2.0rc24.json).
+
+Only the coordinator was deployed as `pokesim:0.2.0rc24-d99cdc2`, with a verified private
+compressed cold backup. Games and the board retained their rc22 starts. See
+[the deployment receipt](docs/validation/release-0.2.0rc24.json).
+
+Before this deployment, rc23 had completed two new live trades and brought the total
+to fourteen. The most recent exchange registered Charizard in Red and Kabuto in Blue.
+Each game received four rewards in the last 36.85-minute comparison interval. The first rc24 trade registered Blastoise for Red and Gloom for Blue. It began
+15 minutes 39 seconds after the previous exchange, bringing the total to fifteen.
+Further monitoring will measure sustained exchange latency and reward backlog.
+The first retry timed out cleanly. The following scheduled cycle delivered Kabuto to
+Red and Mew to Blue, then cleared both holds. Games remained healthy with zero reloads.
+
+# Previous coordinator: rc23, share safe points between rewards and trades
 
 A persistent Championship reward backlog previously won every safe-point opportunity,
 preventing overdue trades from being considered. The coordinator now persists its last

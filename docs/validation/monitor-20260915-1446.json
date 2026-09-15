@@ -1,0 +1,176 @@
+{
+  "sample_ts": 1789483620.15846,
+  "comparison_ts": 1789481408.9510708,
+  "minutes": 36.85,
+  "runs": {
+    "red": {
+      "version": "0.2.0rc22",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:04:45.612766478Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.4,
+        "error": null
+      },
+      "speed": 0.0,
+      "reloads": 0,
+      "owned": 140,
+      "league_rewards": {
+        "earned": 22,
+        "delivered": 19,
+        "pending": 3
+      },
+      "completed_projects": {
+        "exploration": 7,
+        "training": 29,
+        "supplies": 11,
+        "collection": 2,
+        "evolution": 5,
+        "legendary": 3
+      },
+      "recent_outcomes": [
+        {
+          "key": "train:2:50",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 213430294,
+          "retry_at": 213490294,
+          "target": 50,
+          "gains": {
+            "experience": 13165,
+            "levels": 2
+          }
+        },
+        {
+          "key": "0:rematch:0:",
+          "category": "supplies",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 213603566,
+          "retry_at": 213663566,
+          "target": null,
+          "gains": {}
+        },
+        {
+          "key": "train:125:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 213716176,
+          "retry_at": 213776176,
+          "target": 40,
+          "gains": {
+            "experience": 3675,
+            "levels": 1
+          }
+        }
+      ],
+      "unchanged_start": true,
+      "new_registrations": 1,
+      "new_delivered_rewards": 4
+    },
+    "blue": {
+      "version": "0.2.0rc22",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:05:13.255250711Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "reloads": 0,
+      "owned": 142,
+      "league_rewards": {
+        "earned": 25,
+        "delivered": 23,
+        "pending": 2
+      },
+      "completed_projects": {
+        "training": 64,
+        "collection": 3,
+        "exploration": 38,
+        "supplies": 23,
+        "legendary": 2,
+        "evolution": 5
+      },
+      "recent_outcomes": [
+        {
+          "key": "train:1:60",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 117856612,
+          "retry_at": 117916612,
+          "target": 60,
+          "gains": {
+            "experience": 6229,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:171:50",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 117929832,
+          "retry_at": 117989832,
+          "target": 50,
+          "gains": {
+            "experience": 4261,
+            "levels": 0
+          }
+        },
+        {
+          "key": "0:rematch:0:",
+          "category": "supplies",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 118075288,
+          "retry_at": 118555288,
+          "target": null,
+          "gains": {}
+        }
+      ],
+      "unchanged_start": true,
+      "new_registrations": 1,
+      "new_delivered_rewards": 4
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 14,
+    "state": "waiting_for_overworld",
+    "error": null,
+    "last_check": 1789483617.6501892,
+    "last_trade": 1789483191.2268574,
+    "last_operation": "league_reward",
+    "image": "pokesim:0.2.0rc23-7ccf16e",
+    "started_at": "2026-09-15T13:35:12.244576901Z",
+    "restarts": 0,
+    "running": true,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789474694399464191",
+        "ts": 1789474694.3994656,
+        "reason": "Red registers Hitmonlee. Blue registers Gengar"
+      },
+      {
+        "id": "1789479616230069694",
+        "ts": 1789479616.2300708,
+        "reason": "Red registers Jolteon. Blue registers Flareon"
+      },
+      {
+        "id": "1789483191226856226",
+        "ts": 1789483191.2268574,
+        "reason": "Red registers Charizard. Blue registers Kabuto"
+      }
+    ]
+  },
+  "free_disk_bytes": 18864971776
+}
