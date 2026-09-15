@@ -2,6 +2,7 @@
 
 TRAINING_BUDGET = 180000
 TRAINING_LIMIT = 360000
+PROJECT_LIMIT = 540000
 TRAINING_EXTENSION = 18000
 TRAINING_IDLE = 7200
 PREPARATION_BUDGET = 36000
@@ -9,10 +10,13 @@ PREPARATION_IDLE = 18000
 
 
 def session(project):
-    return project.setdefault('training_session', {
+    clock = project.setdefault('training_session', {
         'phase': 'preparation', 'preparation_frames': 0, 'preparation_idle': 0,
+        'preparation_since_gain': 0,
         'active_frames': 0, 'active_idle': 0, 'routes': {},
     })
+    clock.setdefault('preparation_since_gain', clock['preparation_frames'])
+    return clock
 
 
 def observe(project, delta, remaining, active, gained=False, arrived=False):
@@ -24,16 +28,20 @@ def observe(project, delta, remaining, active, gained=False, arrived=False):
         remaining -= delta
     else:
         clock['preparation_frames'] += delta
+        clock['preparation_since_gain'] += delta
         clock['preparation_idle'] += delta
     if arrived:
         clock['preparation_idle'] = 0
     if gained:
         clock['active_idle'] = clock['preparation_idle'] = 0
+        clock['preparation_since_gain'] = 0
         clock['routes'].clear()
         remaining = max(remaining, TRAINING_EXTENSION)
     remaining = min(remaining, max(0, TRAINING_LIMIT - clock['active_frames']))
     reason = None
-    if clock['preparation_frames'] >= PREPARATION_BUDGET:
+    if clock['active_frames'] + clock['preparation_frames'] >= PROJECT_LIMIT:
+        reason = 'Training project time limit reached'
+    elif clock['preparation_since_gain'] >= PREPARATION_BUDGET:
         reason = 'Training preparation budget reached'
     elif not active and clock['preparation_idle'] >= PREPARATION_IDLE:
         reason = 'No training preparation progress in five game minutes'
@@ -66,5 +74,5 @@ def details(project, remaining):
     clock = session(project)
     return {'phase': clock['phase'], 'active_seconds': clock['active_frames'] // 60,
             'preparation_seconds': clock['preparation_frames'] // 60,
-            'preparation_remaining_seconds': max(0, PREPARATION_BUDGET - clock['preparation_frames']) // 60,
+            'preparation_remaining_seconds': max(0, PREPARATION_BUDGET - clock['preparation_since_gain']) // 60,
             'remaining_seconds': max(0, remaining) // 60}

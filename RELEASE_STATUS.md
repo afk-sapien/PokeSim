@@ -1,4 +1,25 @@
-# Candidate rc28: productive training sessions with bounded preparation
+# Candidate rc29: renew preparation only through real training gains
+
+The rc28 live follow-up found Red had gained 19,383 trainee XP and three levels,
+but its productive session ended because several healing trips exhausted the
+cumulative preparation allowance. Blue completed a two-level Porygon milestone.
+Both games remained healthy at maximum speed with zero recovery reloads.
+See [the live evidence](docs/validation/training-live-0.2.0rc28.json).
+
+rc29 keeps 50 active game minutes and the 100-minute active cap. Only new trainee
+XP renews the separate 10-minute preparation allowance, so repeated useful training
+and healing cycles can continue. Five preparation minutes without meaningful route
+progress and two active minutes without trainee XP still end unsuccessful work.
+A 150-minute combined cap bounds every project, including all preparation and healing.
+Restores, repeated XP readings, and other partners' gains do not renew allowances.
+
+The isolated release passed all 517 Python tests with one optional skip, both
+JavaScript test files, Live syntax, lockfile, and package checks. Final copied-save
+replays retained the rc28 continuity results with no rewinds. See
+[the rc29 comparison](docs/validation/training-continuity-0.2.0rc29.json).
+Deployment is pending.
+
+# Previous games: rc28, productive training sessions with bounded preparation
 
 Training gets 50 game minutes of active work, excluding PC setup, travel, healing,
 and pickup detours. New trainee XP can extend the remaining window to five minutes,
@@ -24,7 +45,15 @@ with higher-level partners, so this is a project-continuity comparison, not a cl
 of higher XP per battle. Both replays preserved registrations with zero rewinds.
 The private inputs and traces are continuity subcases within the existing Red partial
 training and Blue training reproduction directories. See
-[the comparison](docs/validation/training-continuity-0.2.0rc28.json). Deployment is pending.
+[the comparison](docs/validation/training-continuity-0.2.0rc28.json).
+
+Both games now run `pokesim:0.2.0rc28-bfba9fa` from tagged source
+`bfba9faa8c9f8f837675612b6ee47b3f5becf06f`. Each passed a verified compressed cold
+backup and saved-game load check, then resumed healthy at maximum speed with its
+existing registrations preserved. Red started at 2026-09-15T17:58:12.57887649Z and Blue at
+2026-09-15T17:59:28.091462413Z. The board retained its process and coordinator rc24 resumed.
+See the [Red receipt](docs/validation/release-0.2.0rc28-red.json) and
+[Blue receipt](docs/validation/release-0.2.0rc28-blue.json).
 
 # Previous games: rc27, include the party in PC rankings
 

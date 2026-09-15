@@ -130,3 +130,39 @@ def test_ready_nearby_partners_have_more_weight_than_distant_boxed_partners():
     weights = {p['parent']: w for w, p in rows}
     assert weights[sid(113)] > weights[sid(115)]
     assert c.remaining == training.TRAINING_BUDGET
+
+
+def test_productive_sessions_can_heal_repeatedly_without_spending_training_budget():
+    c = collection()
+    s = state(party=(mon(species=sid(113), level=65, experience=10000),))
+    c.observe(s)
+    frame = 0
+    for episode in range(4):
+        for _ in range(100):
+            frame += 120
+            c.observe(replace(s, frame=frame), training_active=False)
+        frame += 120
+        s = replace(s, party=(replace(s.party[0], experience=10500 + episode * 500),))
+        c.observe(replace(s, frame=frame), training_active=True)
+        assert c.project
+    clock = c.project['training_session']
+    assert clock['preparation_frames'] == 48000
+    assert clock['preparation_since_gain'] == 0
+    assert c.remaining == training.TRAINING_BUDGET - 480
+    assert c.project['gains']['experience'] == 2000
+    c.observe(replace(s, frame=frame + 120), training_active=False)
+    c.observe(replace(s, frame=frame + 240), training_active=True)
+    assert clock['preparation_since_gain'] == 120
+
+
+def test_real_gains_cannot_extend_the_hard_combined_project_limit():
+    c = collection()
+    s = state(party=(mon(species=sid(113), level=65, experience=10000),))
+    c.observe(s)
+    clock = c.project['training_session']
+    clock['active_frames'] = 100000
+    clock['preparation_frames'] = training.PROJECT_LIMIT - 100000 - 120
+    c.observe(replace(s, frame=120, party=(replace(s.party[0], experience=10500),)))
+    assert c.project is None
+    assert c.director.outcomes[-1]['reason'] == 'Training project time limit reached'
+    assert c.director.outcomes[-1]['status'] == 'advanced'

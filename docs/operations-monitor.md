@@ -831,3 +831,45 @@ running, enabled, and ready with 25 completed exchanges and no reported error. F
 disk space was 16,583,733,248 bytes. The existing monitor now tracks rc27 starts and
 retains the training-continuity investigation as the next policy priority. See
 [the follow-up evidence](validation/pc-party-0.2.0rc27.json).
+
+
+## September 15, preparation separated from productive training
+
+The user requested more impactful projects, with longer training and preparation
+excluded from its budget. rc28 implements separate persisted training and preparation
+clocks. Training begins at suitable encounter tiles or in battles under the training
+objective with a usable party. PC setup, travel, healing, and pickup detours consume
+the preparation budget. Training has 50 active game minutes, extends with new trainee
+XP, and caps at 100 active minutes. Preparation caps at 10 minutes cumulatively and
+five minutes without meaningful progress. Training still stops after two active
+minutes without trainee XP. Replans, coordinate changes, other party gains, and
+restores cannot refill budgets. Strictly shorter routes and first confirmed party
+arrival count toward preparation. Training targets are unchanged.
+
+Candidate weights include training distance and PC setup cost. Training avoids
+social interruptions and random route deviations. Live displays preparation versus
+training, and outcomes retain preparation and active frame totals. Legacy active
+projects migrate to the new clock once, with subsequent restores preserving it.
+All 515 Python tests passed with one optional skip, and both JavaScript test files,
+Live syntax, lockfile, and package checks passed.
+
+Same-checkpoint 216,000-frame comparisons showed Red replacing five abandoned
+training projects and zero trainee levels with one ongoing project and two levels.
+Blue completed a five-level Flareon target with the candidate and none with the
+baseline. Blue's baseline gained more raw XP with higher-level partners. This is
+evidence for continuity and completed goals, not an XP-per-battle benchmark. Both
+runs preserved registrations and used zero rewinds. Inherited cave recoveries still
+occurred. Inputs and full traces are continuity subcases inside the existing Red
+partial training and Blue training reproductions, keeping eight top-level cases.
+See [the comparison](validation/training-continuity-0.2.0rc28.json).
+
+The tagged release was deployed to both games after verified compressed cold backups
+and saved-game load checks. Coordinator guards found no active transaction or holds
+before each game was stopped. Red's previous interval ended at
+1283 seconds and Blue's at
+1265 seconds. New starts are
+2026-09-15T17:58:12.57887649Z and 2026-09-15T17:59:28.091462413Z, respectively.
+The board retained its process and coordinator rc24 resumed at
+2026-09-15T17:59:31.05231564Z. Both games resumed healthy at maximum speed with existing
+registrations. See the [Red receipt](validation/release-0.2.0rc28-red.json) and
+[Blue receipt](validation/release-0.2.0rc28-blue.json).

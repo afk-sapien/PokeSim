@@ -1,0 +1,441 @@
+{
+  "sampled_at": 1789495199.034938,
+  "runs": {
+    "red": {
+      "version": "0.2.0rc28",
+      "started_at": "2026-09-15T17:58:12.57887649Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 144,
+      "last_local_progress": {
+        "id": 9612,
+        "ts": 1789495140.5092194,
+        "type": "level",
+        "title": "SPROUT grew to level 46",
+        "age_seconds": 58
+      },
+      "project": {
+        "method": "train",
+        "parent": 93,
+        "family": [
+          93
+        ],
+        "box": 10,
+        "initial_level": 45,
+        "target_level": 50,
+        "key": "train:93:50",
+        "initial_experience": 92394,
+        "gains": {
+          "experience": 9778,
+          "levels": 1
+        },
+        "training_session": {
+          "phase": "training",
+          "preparation_frames": 6522,
+          "preparation_idle": 30,
+          "active_frames": 106500,
+          "active_idle": 1580,
+          "routes": {}
+        }
+      },
+      "recent_outcomes": [
+        {
+          "key": "0:rematch:0:",
+          "category": "supplies",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 222302164,
+          "retry_at": 222782164,
+          "target": null,
+          "gains": {}
+        },
+        {
+          "key": "train:189:30",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 222375594,
+          "retry_at": 222435594,
+          "target": 30,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        },
+        {
+          "key": "0:explore:225:",
+          "category": "exploration",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 222414796,
+          "retry_at": 222894796,
+          "target": null,
+          "gains": {}
+        }
+      ]
+    },
+    "blue": {
+      "version": "0.2.0rc28",
+      "started_at": "2026-09-15T17:59:28.091462413Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.4,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 144,
+      "last_local_progress": {
+        "id": 4625,
+        "ts": 1789495146.189013,
+        "type": "level",
+        "title": "BONKSAUCE grew to level 40",
+        "age_seconds": 52
+      },
+      "project": {
+        "method": "train",
+        "parent": 105,
+        "family": [
+          105
+        ],
+        "box": 10,
+        "initial_level": 40,
+        "target_level": 50,
+        "travel_distance": 189,
+        "key": "train:105:50",
+        "training_session": {
+          "phase": "preparation",
+          "preparation_frames": 14100,
+          "preparation_idle": 186,
+          "active_frames": 0,
+          "active_idle": 0,
+          "routes": {
+            "party_collection:174:15:8": 83,
+            "victory_drop:194:22:16": 1
+          }
+        }
+      },
+      "recent_outcomes": [
+        {
+          "key": "train:101:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 126882424,
+          "retry_at": 126942424,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "train:84:40",
+          "category": "training",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 126940146,
+          "retry_at": 0,
+          "target": 40,
+          "gains": {
+            "experience": 4110,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:11:50",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 126950708,
+          "retry_at": 127070708,
+          "target": 50,
+          "gains": {}
+        }
+      ]
+    }
+  },
+  "public_checks": [
+    {
+      "edition": "red",
+      "training": {
+        "phase": "preparation",
+        "active_seconds": 1796,
+        "preparation_seconds": 144,
+        "preparation_remaining_seconds": 455,
+        "remaining_seconds": 1203
+      },
+      "project": {
+        "method": "train",
+        "parent": 93,
+        "family": [
+          93
+        ],
+        "box": 10,
+        "initial_level": 45,
+        "target_level": 50,
+        "key": "train:93:50",
+        "initial_experience": 92394,
+        "gains": {
+          "experience": 9895,
+          "levels": 1
+        },
+        "training_session": {
+          "phase": "preparation",
+          "preparation_frames": 8654,
+          "preparation_idle": 166,
+          "active_frames": 107772,
+          "active_idle": 0,
+          "routes": {
+            "heal:81:3:3": 74
+          }
+        }
+      },
+      "recent_outcomes": [
+        {
+          "key": "0:rematch:0:",
+          "category": "supplies",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 222302164,
+          "retry_at": 222782164,
+          "target": null,
+          "gains": {}
+        },
+        {
+          "key": "train:189:30",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 222375594,
+          "retry_at": 222435594,
+          "target": 30,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        },
+        {
+          "key": "0:explore:225:",
+          "category": "exploration",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 222414796,
+          "retry_at": 222894796,
+          "target": null,
+          "gains": {}
+        }
+      ]
+    },
+    {
+      "edition": "blue",
+      "training": {
+        "phase": "preparation",
+        "active_seconds": 0,
+        "preparation_seconds": 244,
+        "preparation_remaining_seconds": 355,
+        "remaining_seconds": 3000
+      },
+      "project": {
+        "method": "train",
+        "parent": 105,
+        "family": [
+          105
+        ],
+        "box": 10,
+        "initial_level": 40,
+        "target_level": 50,
+        "travel_distance": 189,
+        "key": "train:105:50",
+        "training_session": {
+          "phase": "preparation",
+          "preparation_frames": 14666,
+          "preparation_idle": 752,
+          "active_frames": 0,
+          "active_idle": 0,
+          "routes": {
+            "party_collection:174:15:8": 83,
+            "victory_drop:194:22:16": 1
+          }
+        }
+      },
+      "recent_outcomes": [
+        {
+          "key": "train:101:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 126882424,
+          "retry_at": 126942424,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "train:84:40",
+          "category": "training",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 126940146,
+          "retry_at": 0,
+          "target": 40,
+          "gains": {
+            "experience": 4110,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:11:50",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 126950708,
+          "retry_at": 127070708,
+          "target": 50,
+          "gains": {}
+        }
+      ]
+    }
+  ],
+  "trading": {
+    "enabled": true,
+    "running": true,
+    "state": "ready",
+    "error": null,
+    "completed": 26,
+    "started_at": "2026-09-15T17:59:31.05231564Z"
+  },
+  "free_bytes": 16311959552,
+  "followup": {
+    "sampled_at": 1789495328.917445,
+    "runs": {
+      "red": {
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.2,
+          "error": null
+        },
+        "owned": 144,
+        "reloads": 0,
+        "last_local_progress": {
+          "id": 9615,
+          "ts": 1789495276.8960392,
+          "type": "level",
+          "title": "SPROUT grew to level 48",
+          "age_seconds": 52
+        },
+        "recent_outcomes": [
+          {
+            "key": "train:189:30",
+            "category": "training",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 222375594,
+            "retry_at": 222435594,
+            "target": 30,
+            "gains": {
+              "experience": 0,
+              "levels": 0
+            }
+          },
+          {
+            "key": "0:explore:225:",
+            "category": "exploration",
+            "status": "deferred",
+            "reason": "Expedition time budget reached",
+            "elapsed": 222414796,
+            "retry_at": 222894796,
+            "target": null,
+            "gains": {}
+          },
+          {
+            "key": "train:93:50",
+            "category": "training",
+            "status": "advanced",
+            "reason": "Training preparation budget reached",
+            "elapsed": 222632758,
+            "retry_at": 222692758,
+            "target": 50,
+            "gains": {
+              "experience": 19383,
+              "levels": 3
+            },
+            "timing": {
+              "preparation_frames": 36010,
+              "active_frames": 169572
+            }
+          }
+        ]
+      },
+      "blue": {
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.0,
+          "error": null
+        },
+        "owned": 144,
+        "reloads": 0,
+        "last_local_progress": {
+          "id": 4629,
+          "ts": 1789495328.0810587,
+          "type": "level",
+          "title": "MEATPOCKET grew to level 40",
+          "age_seconds": 1
+        },
+        "recent_outcomes": [
+          {
+            "key": "train:11:50",
+            "category": "training",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 126950708,
+            "retry_at": 127070708,
+            "target": 50,
+            "gains": {}
+          },
+          {
+            "key": "train:105:50",
+            "category": "training",
+            "status": "advanced",
+            "reason": "Training preparation budget reached",
+            "elapsed": 126996970,
+            "retry_at": 127056970,
+            "target": 50,
+            "gains": {
+              "experience": 747,
+              "levels": 0
+            },
+            "timing": {
+              "preparation_frames": 36002,
+              "active_frames": 10140
+            }
+          },
+          {
+            "key": "train:170:40",
+            "category": "training",
+            "status": "completed",
+            "reason": "Target reached",
+            "elapsed": 127072346,
+            "retry_at": 0,
+            "target": 40,
+            "gains": {
+              "experience": 7117,
+              "levels": 2
+            },
+            "timing": {
+              "preparation_frames": 10176,
+              "active_frames": 65200
+            }
+          }
+        ]
+      }
+    }
+  }
+}

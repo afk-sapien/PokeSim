@@ -24,7 +24,7 @@ COPY --from=build /notices /usr/share/pokesim
 COPY --from=build /app/pokesim /usr/share/pokesim/source/pokesim
 COPY pyproject.toml uv.lock LICENSE THIRD_PARTY_NOTICES.md /usr/share/pokesim/source/
 COPY licenses /usr/share/pokesim/licenses
-ARG VERSION=0.2.0rc28
+ARG VERSION=0.2.0rc29
 ARG REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/afk-sapien/PokeSim" \
       org.opencontainers.image.title="pokesim" \
