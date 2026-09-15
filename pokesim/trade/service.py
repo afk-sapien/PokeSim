@@ -67,9 +67,12 @@ class Coordinator:
                     raise ValueError('Both games must hold this prepared transaction')
         kind = (json.loads(self.active_path.read_text()).get('kind') if action == 'stage'
                 else self.result(transaction).get('kind'))
-        if kind == 'mew_event':
+        if kind in ('mew_event', 'league_reward'):
             from . import event
-            (event.stage if action == 'stage' else event.journal)(self.root, transaction)
+            if action == 'stage':
+                event.stage(self.root, transaction, league_rewards=kind == 'league_reward')
+            else:
+                event.journal(self.root, transaction)
         else:
             (pair.stage if action == 'stage' else pair.journal)(self.root, transaction)
 
@@ -108,14 +111,19 @@ class Coordinator:
                 self.control(name, 'abort', active['id'])
         status_path = self.root / 'public' / 'status.json'
         status = json.loads(status_path.read_text()) if status_path.exists() else {'history': [], 'completed': 0}
-        if committed and active.get('kind') == 'mew_event':
+        if committed and active.get('kind') in ('mew_event', 'league_reward'):
             result = self.result(active['id'])
             events = status.get('events', [])
             if not any(row['id'] == active['id'] for row in events):
                 events.append({'id': active['id'], 'ts': active['ts'], 'event': result['event'], 'gifts': result['gifts']})
                 status['events'] = events[-10:]
-                status['mew_recipients'] = sorted(set(status.get('mew_recipients', []))
-                                                | {gift['instance'] for gift in result['gifts']})
+                if active.get('kind') == 'mew_event':
+                    status['mew_recipients'] = sorted(set(status.get('mew_recipients', []))
+                                                    | {gift['instance'] for gift in result['gifts']})
+                else:
+                    totals = status.setdefault('league_rewards', {})
+                    for gift in result['gifts']:
+                        totals[gift['instance']] = max(totals.get(gift['instance'], 0), gift['ordinal'])
         elif committed and not any(row['id'] == active['id'] for row in status['history']):
             result = self.result(active['id'])
             row = {'id': active['id'], 'ts': active['ts'], 'reason': result['reason'], 'moved': result['moved']}
@@ -140,28 +148,39 @@ class Coordinator:
         status_path = self.root / 'public' / 'status.json'
         status = json.loads(status_path.read_text()) if status_path.exists() else {'history': [], 'completed': 0}
         interval = max(300, self.config.get('interval_seconds', 900))
-        if time.time() - status.get('last_trade', 0) < interval:
+        trade_cooling = time.time() - status.get('last_trade', 0) < interval
+        if trade_cooling and not self.config.get('league_rewards', False):
             return
         states = {name: request(peer) for name, peer in self.peers.items()}
+        reward_due = self.config.get('league_rewards', False) and any(
+            state.get('league_rewards', {}).get('pending', 0) > 0
+            and any(count < 20 for count in state.get('game', {}).get('storage', {}).get('box_counts', []))
+            for state in states.values())
+        if trade_cooling and not reward_due:
+            return
         if any(s.get('paused') or not safe(s) for s in states.values()):
             status.update(last_check=time.time(), state='waiting_for_overworld', error=None)
             write(status_path, status)
             return
         # Avoid holding both games when the fresh proposal board has nothing useful.
-        with urllib.request.urlopen(self.config['board_url'] + '/api/proposals', timeout=20) as response:
-            opportunities = json.load(response).get('routine_proposals', [])
+        opportunities = []
+        if not reward_due:
+            with urllib.request.urlopen(self.config['board_url'] + '/api/proposals', timeout=20) as response:
+                opportunities = json.load(response).get('routine_proposals', [])
         event_due = self.config.get('mew_event', False) and any(
             name not in status.get('mew_recipients', [])
             and 151 not in state.get('game', {}).get('dex_owned', [])
             and state.get('strategy', {}).get('milestones', {}).get('champion')
             and any(count < 20 for count in state.get('game', {}).get('storage', {}).get('box_counts', []))
             for name, state in states.items())
-        if not opportunities and not event_due:
+        if not opportunities and not event_due and not reward_due:
             status.update(last_check=time.time(), state='waiting_for_opportunity', error=None)
             write(status_path, status)
             return
         active = {'id': str(time.time_ns()), 'ts': time.time(), 'phase': 'preparing', 'prepared': [], 'targets': []}
-        if event_due:
+        if reward_due:
+            active['kind'] = 'league_reward'
+        elif event_due:
             active['kind'] = 'mew_event'
         write(self.active_path, active)
         try:

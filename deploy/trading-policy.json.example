@@ -2,6 +2,7 @@
   "enabled": false,
   "allow_last_copies": false,
   "mew_event": false,
+  "league_rewards": false,
   "interval_seconds": 900,
   "board_url": "http://host.docker.internal:8950",
   "protected_species": {"red": [], "blue": []},

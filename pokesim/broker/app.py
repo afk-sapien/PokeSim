@@ -81,6 +81,7 @@ def trading_status():
         return {**status, 'enabled': policy.get('enabled', False),
                 'allow_last_copies': policy.get('allow_last_copies', False),
                 'mew_event': policy.get('mew_event', False),
+                'league_rewards': policy.get('league_rewards', False),
                 'interval_seconds': policy.get('interval_seconds', 900)}
     except (OSError, ValueError):
         return {'enabled': False, 'history': [], 'completed': 0, 'error': 'Trading status unavailable'}
@@ -97,6 +98,8 @@ def render_board(inventories, proposals: list[dict], level_bar: int, trading=Non
     intro = (f"Useful exchanges can happen every {trading.get('interval_seconds', 900) // 60} minutes, when both adventures are ready. "
              + protection if automatic else
              'Proposed exchanges between the two adventures. Each proposal shows what changes hands and what each run gains. Review last copies carefully. An exchange requires explicit approval.')
+    if automatic and trading.get('league_rewards'):
+        intro += ' Every Championship earns a random level-5 starter, Eevee, fossil Pokémon, or Mew. Rewards wait safely for PC space.'
     history = ''
     activity = {'ready': 'Watching for the next exchange', 'waiting_for_overworld': 'Waiting for both adventures to finish their current activity', 'waiting_for_opportunity': 'Waiting for a useful exchange', 'retrying': 'Retrying after a trading interruption'}.get(trading.get('state'), 'Preparing automatic trading')
     if automatic:
@@ -105,8 +108,9 @@ def render_board(inventories, proposals: list[dict], level_bar: int, trading=Non
             descriptions = [f"{m['instance'].title()} received {m['received']['nick']} ({m['received']['name']}, Lv. {m['received']['level']})" for m in row['moved']]
             history += '<article class="deal"><p>' + html.escape('. '.join(descriptions)) + '</p><p class="reason">' + html.escape(row['reason']) + '</p></article>'
         for row in reversed(trading.get('events', [])[-10:]):
-            recipients = ', '.join(gift['instance'].title() for gift in row.get('gifts', []))
-            history += '<article class="deal"><p>' + html.escape(recipients + ' received Mew (Lv. 5)') + '</p><p class="reason">One-time postgame PokeSim event gift</p></article>'
+            descriptions = [f"{gift['instance'].title()} received {gift.get('name', 'Mew')} (Lv. {gift.get('level', 5)})" for gift in row.get('gifts', [])]
+            reason = 'Championship Pokémon reward' if row.get('event') == 'league-rewards-v1' else 'One-time postgame PokeSim event gift'
+            history += '<article class="deal"><p>' + html.escape('. '.join(descriptions)) + '</p><p class="reason">' + reason + '</p></article>'
         history += '</section>'
 
     runs = ''.join(_card(inv) for inv in inventories)

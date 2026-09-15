@@ -1,4 +1,27 @@
-# Current deployment: rc17, varied choices and last-copy trades
+# Release candidate rc18: repeatable Championship rewards
+
+Every newly observed League victory earns one uniformly random level-5 Bulbasaur,
+Charmander, Squirtle, Eevee, Omanyte, Kabuto, Aerodactyl, or Mew. Claims persist through
+rewinds and interrupted delivery. A full PC keeps the claim pending. The scoped
+coordinator delivers rewards without a roster requirement, reward cooldown, trade
+proposal, or individual approval. The first victory observed after upgrading begins
+the ledger. Earlier victories are not backfilled.
+
+League rematches remain postgame options even with plenty of money. The initial Eevee
+evolution remains random and persistent. Later Eevees can fill missing forms.
+The board displays rewards separately from exchanges. Existing saves and trading
+protections remain intact. The older one-time Mew policy should stay disabled.
+
+All 422 Python tests passed, with one optional test skipped. Both JavaScript test
+files passed. Built packages passed runtime resource verification.
+
+A copied pair each received six rewards, recovered a committed delivery after both
+emulators restarted, and reloaded subsequent checkpoints. All preexisting party and
+boxed Pokémon, items, badges, and registrations survived each delivery. A seventh
+claim remained pending when storage filled. See
+[the rehearsal](docs/validation/championship-rewards-0.2.0rc18.json).
+
+# Previous deployment: rc17, varied choices and last-copy trades
 
 The deployed release adds persisted random fossil and Eevee evolution choices for new runs.
 Existing choices remain intact. Optional last-copy trades require a new Pokédex entry

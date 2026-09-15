@@ -6,8 +6,10 @@ for routine fixes or deployments. Preserve existing adventures and record backup
 The user explicitly authorized live automatic trading on September 15, 2026 UTC.
 The scoped coordinator is enabled with a 15-minute minimum exchange interval. Last-copy
 sharing is enabled only for new recipient Pokédex entries. Active parties and current
-projects remain protected. The optional Mew gift remains disabled while the harder
-Championship reward design is discussed. Do not
+projects remain protected. Every newly observed Championship earns a random starter, Eevee, fossil Pokémon, or Mew.
+Monitor earned, delivered, and pending claims, PC capacity, and duplicate delivery prevention.
+There is no reward cooldown or roster qualification. Keep the older one-time Mew event
+disabled. Do not
 request individual trade approvals. Monitor completed trades, stuck holds, recovery,
 and prolonged waiting for opportunities. No automatic save resets.
 

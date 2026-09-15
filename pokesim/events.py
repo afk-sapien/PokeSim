@@ -52,14 +52,16 @@ class RunMemory:
     money_milestones: set[int] = field(default_factory=set)
     playtime_milestones: set[int] = field(default_factory=set)
 
+    championships: int = 0
+
     def to_dict(self):
         return {"seen_maps": sorted(self.seen_maps), "money_milestones": sorted(self.money_milestones),
-                "playtime_milestones": sorted(self.playtime_milestones)}
+                "playtime_milestones": sorted(self.playtime_milestones), "championships": self.championships}
 
     @classmethod
     def from_dict(cls, d):
         return cls(set(d.get("seen_maps", [])), set(d.get("money_milestones", [])),
-                   set(d.get("playtime_milestones", [])))
+                   set(d.get("playtime_milestones", [])), int(d.get("championships", 0)))
 
 
 def _mon_label(p) -> str:
@@ -163,14 +165,17 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
         prio = URGENT if tc in ELITE_FOUR else HIGH if tc in NOTABLE_TRAINERS else MINIMAL
         events.append(Event("trainer", f"Defeated {name}", f"On {cur.map_name}.", priority=prio, tags="crossed_swords"))
 
-    # --- new areas / hall of fame ---
+    # Count every completed League journey, independently of the cartridge's capped counter.
+    if cur.map == HALL_OF_FAME_MAP and prev.map != HALL_OF_FAME_MAP:
+        mem.championships += 1
+        events.append(Event("champion", f"Champion! League victory #{mem.championships}",
+                            f"Party: {', '.join(f'{_mon_label(p)} L{p.level}' for p in cur.party)}.",
+                            priority=URGENT, tags="crown"))
+
+    # --- new areas ---
     if cur.map not in mem.seen_maps:
         mem.seen_maps.add(cur.map)
-        if cur.map == HALL_OF_FAME_MAP:
-            events.append(Event("champion", "CHAMPION! Entered the Hall of Fame",
-                                f"Party: {', '.join(f'{_mon_label(p)} L{p.level}' for p in cur.party)}. "
-                                f"Play time {cur.playtime[0]}h.", priority=URGENT, tags="crown"))
-        else:
+        if cur.map != HALL_OF_FAME_MAP:
             events.append(Event("map", f"Entered {cur.map_name}", f"Area #{len(mem.seen_maps)} discovered.",
                                 priority=LOW, tags="world_map"))
 
