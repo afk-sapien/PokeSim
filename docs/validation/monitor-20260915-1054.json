@@ -1,0 +1,179 @@
+{
+  "version": "0.2.0rc21",
+  "from_ts": 1789467638.6736495,
+  "to_ts": 1789470171.5548751,
+  "minutes": 42.21,
+  "runs": {
+    "red": {
+      "started_at": "2026-09-15T09:42:28.368554994Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 131,
+      "uptime": 4821,
+      "league_rewards": {
+        "earned": 7,
+        "delivered": 7,
+        "pending": 0
+      },
+      "start_unchanged": true,
+      "new_registrations": 2,
+      "completed_projects": {
+        "training": 5,
+        "evolution": 1
+      },
+      "local_replanning": 133,
+      "recent_outcomes": [
+        {
+          "key": "0:explore:187:",
+          "category": "exploration",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 204982822,
+          "retry_at": 205462822,
+          "target": null,
+          "gains": {}
+        },
+        {
+          "key": "train:84:30",
+          "category": "training",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 205001980,
+          "retry_at": 0,
+          "target": 30,
+          "gains": {
+            "experience": 1140,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:7:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 205014164,
+          "retry_at": 205074164,
+          "target": 40,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        }
+      ]
+    },
+    "blue": {
+      "started_at": "2026-09-15T09:43:02.613082089Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 131,
+      "uptime": 4787,
+      "league_rewards": {
+        "earned": 10,
+        "delivered": 10,
+        "pending": 0
+      },
+      "start_unchanged": true,
+      "new_registrations": 2,
+      "completed_projects": {
+        "training": 2,
+        "supplies": 1
+      },
+      "local_replanning": 120,
+      "recent_outcomes": [
+        {
+          "key": "train:21:10",
+          "category": "training",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 108247902,
+          "retry_at": 0,
+          "target": 10,
+          "gains": {
+            "experience": 442,
+            "levels": 5
+          }
+        },
+        {
+          "key": "28:evolve:0:",
+          "category": "evolution",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 108285114,
+          "retry_at": 108765114,
+          "target": 28,
+          "gains": {}
+        },
+        {
+          "key": "train:145:50",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 108358316,
+          "retry_at": 108418316,
+          "target": 50,
+          "gains": {
+            "experience": 4026,
+            "levels": 0
+          }
+        }
+      ]
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 9,
+    "state": "waiting_for_overworld",
+    "error": null,
+    "last_check": 1789470122.373604,
+    "last_trade": 1789468422.8340511,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789463959333232082",
+        "ts": 1789463959.3332334,
+        "reason": "Red registers Pinsir. Blue registers Vileplume"
+      },
+      {
+        "id": "1789465876216945575",
+        "ts": 1789465876.2169466,
+        "reason": "Red registers Victreebel. Blue registers Hitmonchan"
+      },
+      {
+        "id": "1789468422834050059",
+        "ts": 1789468422.8340511,
+        "reason": "Red registers Kangaskhan. Blue registers Wartortle"
+      }
+    ]
+  },
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 122620014592,
+    "free_bytes": 6127828992,
+    "used_percent": 90.86
+  },
+  "directory_bytes": {
+    "/docker/pokesim/data": 1050656768,
+    "/docker/pokesim/backups": 15430029312,
+    "/docker/pokesim-blue/data": 222367744,
+    "/docker/pokesim-blue/backups": 2732138496
+  },
+  "completed_trade_delta": 1,
+  "note": "No multi-day endurance milestone reached. The subsequent validated rc22 deployment starts a new interval."
+}

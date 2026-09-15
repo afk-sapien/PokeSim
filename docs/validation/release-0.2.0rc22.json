@@ -1,0 +1,307 @@
+{
+  "containers": {
+    "pokesim": {
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "image_id": "sha256:676ae8b8ed8603348c78f7b4e896fe3756dab50cf892752120e8dbd2c9d2fe5b",
+      "started_at": "2026-09-15T11:04:45.612766478Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-blue": {
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "image_id": "sha256:676ae8b8ed8603348c78f7b4e896fe3756dab50cf892752120e8dbd2c9d2fe5b",
+      "started_at": "2026-09-15T11:05:13.255250711Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-broker": {
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "image_id": "sha256:676ae8b8ed8603348c78f7b4e896fe3756dab50cf892752120e8dbd2c9d2fe5b",
+      "started_at": "2026-09-15T11:05:17.18415372Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-trading": {
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "image_id": "sha256:676ae8b8ed8603348c78f7b4e896fe3756dab50cf892752120e8dbd2c9d2fe5b",
+      "started_at": "2026-09-15T11:05:17.624088029Z",
+      "restarts": 0,
+      "health": null
+    }
+  },
+  "game_deployments": {
+    "red": {
+      "edition": "red",
+      "backup": "/docker/pokesim/backups/20260915T110422Z-rc22/before.tar.gz",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "image_id": "sha256:676ae8b8ed8603348c78f7b4e896fe3756dab50cf892752120e8dbd2c9d2fe5b",
+      "revision": "49403d76fd169b2c106d3de908807f48bfc1635f",
+      "timestamp": 1789470288.0676363,
+      "previous_image": "pokesim:0.2.0rc21-339d9a0",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 132,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 8895,
+          "title": "PICKLES grew to level 41",
+          "ts": 1789470234.847272,
+          "age_seconds": 53
+        }
+      }
+    },
+    "blue": {
+      "edition": "blue",
+      "backup": "/docker/pokesim-blue/backups/20260915T110504Z-rc22/before.tar.gz",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "image_id": "sha256:676ae8b8ed8603348c78f7b4e896fe3756dab50cf892752120e8dbd2c9d2fe5b",
+      "revision": "49403d76fd169b2c106d3de908807f48bfc1635f",
+      "timestamp": 1789470315.460423,
+      "previous_image": "pokesim:0.2.0rc21-339d9a0",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 132,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 3925,
+          "title": "MISO grew to level 43",
+          "ts": 1789470269.0050313,
+          "age_seconds": 46
+        }
+      }
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "league_rewards": true,
+    "allow_last_copies": true,
+    "mew_event": false,
+    "completed": 10,
+    "state": "ready",
+    "error": null
+  },
+  "last_trade": [
+    {
+      "id": "1789470183998647267",
+      "ts": 1789470183.998649,
+      "reason": "Red registers Persian. Blue registers Electabuzz",
+      "moved": [
+        {
+          "instance": "red",
+          "box": 12,
+          "position": 16,
+          "sent": {
+            "species": 53,
+            "name": "Electabuzz",
+            "level": 33,
+            "nick": "BISCUIT"
+          },
+          "received": {
+            "species": 144,
+            "name": "Persian",
+            "level": 40,
+            "nick": "OLIVE",
+            "evolved_from": null
+          },
+          "state": "/trading/transactions/1789470183998647267/after/red/auto-v1-trade-1789470183998647267.state",
+          "owned_before": 131,
+          "owned_after": 132
+        },
+        {
+          "instance": "blue",
+          "box": 2,
+          "position": 12,
+          "sent": {
+            "species": 144,
+            "name": "Persian",
+            "level": 40,
+            "nick": "OLIVE"
+          },
+          "received": {
+            "species": 53,
+            "name": "Electabuzz",
+            "level": 33,
+            "nick": "BISCUIT",
+            "evolved_from": null
+          },
+          "state": "/trading/transactions/1789470183998647267/after/blue/auto-v1-trade-1789470183998647267.state",
+          "owned_before": 131,
+          "owned_after": 132
+        }
+      ]
+    }
+  ],
+  "runs": {
+    "red": {
+      "version": "0.2.0rc22",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "league_rewards": {
+        "earned": 7,
+        "delivered": 7,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {
+          "146": 1
+        }
+      },
+      "owned": 132,
+      "mewtwo_registered": true,
+      "objective": {
+        "id": "collect_plan",
+        "title": "Plan the next adventure project",
+        "reason": "Choose a collecting, evolution, training, or exploration objective",
+        "targets": [],
+        "target_count": 0,
+        "facing": null
+      },
+      "project": null
+    },
+    "blue": {
+      "version": "0.2.0rc22",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.6,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "league_rewards": {
+        "earned": 10,
+        "delivered": 10,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {}
+      },
+      "owned": 132,
+      "mewtwo_registered": true,
+      "objective": {
+        "id": "collect_rematch",
+        "title": "Return for a League rematch",
+        "reason": "Earn prize money and experience for collecting",
+        "targets": [
+          [
+            174,
+            8,
+            10
+          ]
+        ],
+        "target_count": 1,
+        "facing": null
+      },
+      "project": {
+        "method": "rematch",
+        "hof_count": 48,
+        "key": "0:rematch:0:"
+      }
+    }
+  },
+  "version": "0.2.0rc22",
+  "source_tag": "v0.2.0rc22",
+  "source_revision": "49403d76fd169b2c106d3de908807f48bfc1635f",
+  "public_checks": [
+    {
+      "edition": "red",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/sprites/25.png",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/sprites/25.png",
+      "status": 200
+    }
+  ],
+  "compressed_backups": {
+    "red": {
+      "path": "/docker/pokesim/backups/20260915T110422Z-rc22/before.tar.gz",
+      "compressed_bytes": 91287749,
+      "gzip_integrity": "passed"
+    },
+    "blue": {
+      "path": "/docker/pokesim-blue/backups/20260915T110504Z-rc22/before.tar.gz",
+      "compressed_bytes": 28314786,
+      "gzip_integrity": "passed"
+    }
+  },
+  "validation": {
+    "python_passed": 458,
+    "python_skipped": 1,
+    "javascript_passed": 7,
+    "package_resources": "passed"
+  }
+}
