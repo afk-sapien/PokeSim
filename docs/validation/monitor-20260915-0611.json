@@ -1,0 +1,79 @@
+{
+  "interval_minutes": 31.9,
+  "runs": {
+    "red": {
+      "same_container_start": true,
+      "healthy": true,
+      "speed": 0.0,
+      "reloads": 0,
+      "owned_before": 113,
+      "owned_after": 113,
+      "policy_recovery_delta": 82,
+      "completed_delta": {
+        "exploration": 0,
+        "training": 2,
+        "supplies": 0,
+        "collection": 0
+      },
+      "pickup_state": {
+        "active": null,
+        "retry": {},
+        "next_scan": 193478202,
+        "completed": [
+          "198:4",
+          "23:9",
+          "35:7"
+        ]
+      }
+    },
+    "blue": {
+      "same_container_start": true,
+      "healthy": true,
+      "speed": 0.0,
+      "reloads": 0,
+      "owned_before": 116,
+      "owned_after": 117,
+      "policy_recovery_delta": 88,
+      "completed_delta": {
+        "training": 2,
+        "collection": 1,
+        "exploration": 0,
+        "supplies": 1
+      },
+      "pickup_state": {
+        "active": null,
+        "retry": {},
+        "next_scan": 96123992,
+        "completed": [
+          "23:9",
+          "23:8",
+          "165:1",
+          "147:4",
+          "145:5",
+          "20:9",
+          "83:9"
+        ]
+      }
+    }
+  },
+  "blue_new_entry": {
+    "dex": 108,
+    "species": "Lickitung",
+    "journal_event": 3444,
+    "timestamp": 1789451065.5309699,
+    "map": "Route 18 Gate 2F",
+    "method": "in-game NPC trade"
+  },
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 112218824704,
+    "free_bytes": 16529018880,
+    "used_percent": 83.16
+  },
+  "active_pickup_capture": {
+    "poll_limit": 90,
+    "captured": false,
+    "live_paused": false,
+    "result": "No active pickup checkpoint appeared during the bounded observation window"
+  }
+}

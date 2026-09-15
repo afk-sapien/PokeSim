@@ -3,7 +3,8 @@
 Red, Blue, the board, and the coordinator use `pokesim:0.2.0rc16-caa092b`, tagged commit
 `caa092bf76d3b73ce892575ece41480b5a455d80`. Both adventures are healthy at unlimited
 speed, with zero observed save reloads. Fresh cold backups and current-save checks
-passed. Red has 113 registered entries and Blue has 116.
+passed. Red has 113 registered entries. Blue reached 117 through the Route 18 Gate NPC
+exchange for Lickitung, confirmed in journal event 3444 after deployment.
 
 The scoped coordinator runs as UID 10001 with all capabilities dropped and no Docker
 socket. Private tokens authorize only trade controls. It can stage, verify, journal,
