@@ -25,6 +25,14 @@ Ten automatic trades have completed. All seven Red rewards and ten Blue rewards 
 delivered. The deployment starts new endurance intervals. See
 [the release receipt](docs/validation/release-0.2.0rc22.json).
 
+Release storage maintenance on September 15 preserved the rc22 live processes. All 26
+legacy cold backups were losslessly compressed, saving 14.21 GB.
+Ten unused monitoring images were removed while retaining current rc22, two rollback
+images, the held experiment, and historical sources. Free disk space rose to
+19.48 GB. The Dockerfile now reuses stable layers across metadata changes,
+verified with two disposable builds and 39 focused checks. This packaging change applies
+to future builds. See [the storage record](docs/validation/release-storage-20260915.json).
+
 # Previous deployment: rc21, complete Articuno's current puzzle
 
 Articuno expeditions prepare the Seafoam boulder puzzle before using Surf. The planner

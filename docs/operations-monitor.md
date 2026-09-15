@@ -445,3 +445,41 @@ which invalidates that layer's cache for each release. Move metadata after stabl
 setup in a future candidate and validate packaging before deployment. Inventory image
 references and rollback needs before selecting a bounded retention policy. Continue
 checking PC journal accuracy and useful progress without unnecessary restarts.
+
+
+## September 15, 11:37 UTC release storage maintenance
+
+Both rc22 games retained their start times, healthy workers, maximum speed, and zero
+save reloads. Both initially reached 133 registrations. Red completed another training
+project, while Blue's partial training outcomes included 13,180 XP for Mewtwo and 4,012
+XP with two levels for Primeape. Both retained all four encounter legendaries, and no
+new legendary release messages appeared in the sampled rc22 journal. No new coordinated
+trade had completed at the first sample, with ten total and ordinary overworld waiting.
+See [the progress record](validation/monitor-20260915-1137.json).
+
+Converted all 26 legacy uncompressed cold backups to gzip, retaining every archived
+byte. Each replacement verified the decompressed SHA-256 against the source, checked
+for source changes, and synced the result before replacing the tar. Together they fell
+from 15.64 GB to 1.43 GB,
+saving 14.21 GB. The four already compressed rc21 and rc22
+backups were untouched. Historical receipt paths ending in `before.tar` now resolve to
+`before.tar.gz` in the same directory. No active saves or archived save contents were
+removed. The conversion manifest retains all hashes and old-to-new paths.
+
+Removed ten unused monitoring image tags from rc9 through rc19 after checking retained
+source archives, revision labels, aliases, and every container reference. Keep current
+rc22, rollback rc21 and rc20, the held rc11 image, and earlier legacy images. No global
+image, build-cache, or volume pruning was performed. See the ongoing retention policy
+in [homeserver.md](homeserver.md#release-storage-retention).
+
+Moved changing release metadata after stable Docker filesystem layers. Two disposable
+builds with different revision labels produced identical layers, passed import checks,
+and retained the live runtime configuration. Both probe image tags were removed.
+The 39 focused backup and release checks passed. This packaging change is committed
+for future builds. No runtime deployment or service restart was needed.
+
+Final free filesystem space is 19.48 GB, with
+80.97 percent used. Both games remain on rc22 with unchanged starts.
+Continue this endurance interval, monitor useful training and trade opportunities,
+and apply the documented image retention policy after future validated releases.
+See [the storage evidence](validation/release-storage-20260915.json).
