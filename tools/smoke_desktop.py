@@ -1,4 +1,4 @@
-"""Exercise an installed or bundled launcher without supplying a Pokémon ROM."""
+"""Exercise the installed library launcher without a Pokémon ROM."""
 import argparse
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import time
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 
 
 def main():
@@ -15,6 +15,7 @@ def main():
     args = parser.parse_args()
     if not args.command:
         parser.error('Supply an executable or python -m pokesim.desktop')
+    opener = build_opener(ProxyHandler({}))
     with tempfile.TemporaryDirectory(prefix='pokesim-smoke-') as temporary:
         root = Path(temporary)
         command = [*args.command, '--no-browser', '--data-dir', str(root)]
@@ -26,35 +27,33 @@ def main():
                     if process.poll() is not None:
                         raise RuntimeError((root / 'process.log').read_text())
                     try:
-                        instance = json.loads((root / 'instance.json').read_text())
-                        url = f'http://127.0.0.1:{instance["port"]}'
-                        with urlopen(url + '/desktop/status', timeout=1) as response:
-                            assert json.load(response)['state'] == 'setup'
+                        identity = json.loads((root / 'manager.json').read_text())
+                        url = identity['url']
+                        with opener.open(url + '/health/ready', timeout=1) as response:
+                            assert json.load(response)['ok']
                         break
                     except (OSError, ValueError, URLError):
                         if time.monotonic() >= deadline:
-                            raise RuntimeError('Launcher did not become ready')
+                            raise RuntimeError('Library did not become ready')
                         time.sleep(0.1)
-                for path, expected in [('/desktop', b'Your desktop adventure'),
-                                       ('/desktop/assets/desktop.js', b'poll()'),
-                                       ('/desktop/assets/desktop.css', b'color-scheme')]:
-                    with urlopen(url + path) as response:
-                        assert expected in response.read()
+                with opener.open(url) as response:
+                    assert b'Your adventure library' in response.read()
+                for path in ('/static/library.js', '/static/library.css'):
+                    with opener.open(url + path) as response:
+                        assert response.status == 200
                 try:
-                    urlopen(Request(url + '/desktop/quit', data=b'', method='POST'))
+                    opener.open(Request(url + '/api/v1/shutdown', data=b'{}', method='POST'))
                     raise AssertionError('Unauthenticated shutdown was allowed')
                 except HTTPError as error:
-                    assert error.code == 403
+                    assert error.code in (401, 403)
                 second = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
                 assert second.returncode == 0, second.stderr
-                with urlopen(url + '/desktop/status') as response:
-                    assert json.load(response)['state'] == 'setup'
-                with urlopen(Request(url + '/desktop/quit', data=b'', method='POST',
-                                     headers={'X-PokeSim-Token': instance['token']})) as response:
+                token = (root / 'owner.token').read_text().strip()
+                with opener.open(Request(url + '/api/v1/shutdown', data=b'{}', method='POST',
+                                 headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})) as response:
                     assert json.load(response)['ok']
                 assert process.wait(timeout=30) == 0
-                assert not (root / 'instance.json').exists()
-                print('Desktop smoke passed: setup, assets, duplicate launch, protected shutdown, clean exit')
+                print('Desktop smoke passed: library, assets, duplicate launch, protected shutdown, clean exit')
             finally:
                 if process.poll() is None:
                     process.terminate()

@@ -2,6 +2,3 @@ services:
   pokesim:
     image: pokesim:local
     build: .
-  prepare-data:
-    image: pokesim:local
-    build: .

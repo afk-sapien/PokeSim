@@ -2,20 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="pokesim-base" content="${game_base}">
+<meta name="pokesim-adventure" content="${adventure_id}">
+<script src="${game_base}/static/routes.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f5f3ed">
 <meta name="description" content="Browse species, learn their moves, and find where to meet them.">
 <title>The Kanto Pokédex. · pokesim</title>
-<link rel="stylesheet" href="/static/style.css?v=watch-2">
-<link rel="stylesheet" href="/static/pokedex.css?v=pages-1">
-<link rel="stylesheet" href="/static/pages.css?v=trading-1">
-<link rel="alternate" type="application/atom+xml" title="pokesim events" href="/feed.xml">
+<link rel="stylesheet" href="${game_base}/static/style.css?v=watch-2">
+<link rel="stylesheet" href="${game_base}/static/pokedex.css?v=pages-1">
+<link rel="stylesheet" href="${game_base}/static/pages.css?v=trading-1">
+<link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="pokedex">
 <a class="skip-link" href="#main">Skip to the kanto pokédex.</a>
 <header class="topbar">
-<a class="brand" href="/" aria-label="pokesim home"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition" id="edition">KANTO</span></a>
-<nav aria-label="Main navigation"><a href="/">Live</a><a href="/pokedex" class="nav-current" aria-current="page">Pokédex</a><a href="/pc">PC</a><a href="/trading">Trading</a><a href="/journal">Journal</a></nav>
+<a class="brand" href="${game_base}/" aria-label="pokesim home"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition" id="edition">KANTO</span></a>
+${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a><a href="${game_base}/pokedex" class="nav-current" aria-current="page">Pokédex</a><a href="${game_base}/pc">PC</a><a href="${game_base}/trading">Trading</a><a href="${game_base}/journal">Journal</a></nav>
 <span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
 </header>
 <main id="main" class="page-main">
@@ -50,9 +53,9 @@
   <div class="detail-nav"><button id="prev-mon" title="Previous Pokémon">←</button><button id="next-mon" title="Next Pokémon">→</button><button id="close-detail" class="close-detail" aria-label="Close">✕</button></div>
   <div id="detail-body"></div>
 </aside>
-<footer><span id="app-version"></span><a class="brand footer-brand" href="/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><a href="/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
+<footer><span id="app-version"></span><a class="brand footer-brand" href="${game_base}/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><a href="${game_base}/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="/static/pokedex.js?v=watch-2"></script>
+<script src="${game_base}/static/pokedex.js?v=watch-2"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-"""Entry point for bundled desktop applications."""
+"""Entry point for bundled application and supervised child processes."""
 from multiprocessing import freeze_support
 
 from pokesim.desktop import main

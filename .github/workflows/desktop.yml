@@ -42,9 +42,9 @@ jobs:
         run: uv run --locked pytest --ignore=tests/test_rom.py -q
       - name: Build desktop application
         run: uv run --locked python tools/build_desktop.py
-      - name: Smoke test bundled desktop launcher
+      - name: Smoke test bundled Adventure Library
         run: uv run --locked python tools/smoke_desktop.py ${{ matrix.executable }}
-      - name: Check native emulator and reference setup inside the bundle
+      - name: Check native emulator and two supervised workers inside the bundle
         run: uv run --locked python tools/check_desktop_runtime.py ${{ matrix.executable }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

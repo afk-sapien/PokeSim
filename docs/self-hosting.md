@@ -1,6 +1,64 @@
-# Self-hosting reference
+# Self-hosting PokeSim
 
-For the current source-build setup, start with [Run your own adventure](../README.md#run-your-own-adventure).
+## Current application
+
+One manager serves the browser, owns the library, and starts one child process per running adventure. Several Red or Blue games can run inside one container. Cable trading uses an additional temporary paired emulator process. Set capacity according to available CPU, memory, and storage.
+
+Build and start using the [README instructions](../README.md#in-one-docker-container). The container runs as UID and GID 10001, with a read-only root filesystem. Its `/data` volume contains the complete application. Reference setup writes verified shared assets there on first use.
+
+| Setting | Purpose |
+| --- | --- |
+| `DATA_PATH=./pokesim-app` | Persistent application folder containing all adventures |
+| `PUBLIC_URL=http://localhost:8930` | Exact browser address, including scheme and port |
+| `HTTP_PORT=8930` | Host port mapped to the manager |
+| `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
+| `POKESIM_IMAGE=pokesim:local` | Image built from this checkout |
+
+The configured public address is used for host and origin validation. A reverse proxy must preserve that Host value. Use HTTPS for remote access and keep the owner credential private. Find it in `/data/owner.token`, or the corresponding host folder. Worker credentials and private ports remain internal.
+
+The Compose service uses an init process to reap children and allows 90 seconds for orderly shutdown. Keep a single manager process per application folder. Do not add Uvicorn workers or share one application volume between containers.
+
+A native server uses the same application:
+
+```sh
+pokesim serve --data-dir /path/to/library --host 127.0.0.1 --port 8000
+```
+
+Start and stop adventures in the browser. A command-line client is also available while the manager is running:
+
+```sh
+pokesim adventures list --data-dir /path/to/library
+pokesim adventures create --data-dir /path/to/library --name "Red orchard" --rom /path/to/pokered.gb --start
+pokesim backup --data-dir /path/to/library
+```
+
+### Migration and recovery
+
+Stop both the source adventure and destination application. Back up the original files, then import into a fresh application root:
+
+```sh
+pokesim import /path/to/old-data --stopped --rom /path/to/pokered.gb --name "Original Red" --data-dir /path/to/library
+```
+
+For a container import, run the same command in a temporary container with the application volume, a stopped backup copy of the source folder, and the ROM mounted. The importer needs writable lock files in the source directory, while the ROM can remain read-only. It does not change source saves or database contents. Do not bind the old adventure folder directly as the new application root.
+
+An individually imported adventure with legacy trades remains playable, but its trading stays blocked until its peers are reconciled. Import the resolved Red and Blue pair together when the original coordinator evidence is available:
+
+```sh
+pokesim import-pair --red /path/to/old-red --blue /path/to/old-blue --red-rom /path/to/pokered.gb --blue-rom /path/to/pokeblue.gb --coordinator-root /path/to/old-trader --stopped --data-dir /path/to/library
+```
+
+Stop both legacy adventures, their coordinator, and the destination application first. The paired import verifies exact matching completion history, latest trade barriers, verified checkpoints, and retained coordinator evidence before registering either copied adventure. Missing or mismatched evidence fails the import and cannot be bypassed by clearing a protection flag. Source saves, databases, and coordinator evidence remain unchanged. The importer opens coordination lock files, so use writable backup copies when the originals must remain read-only. Keep those original services stopped after migration to avoid running duplicate ownership histories.
+
+The previous single-game Compose file remains at `compose.legacy.yaml` and its settings at `.env.legacy.example`. With the new image, its explicit `legacy` command continues to use environment configuration. Existing deployment examples under `deploy/` describe the legacy separate broker and trader. They are not components of the new managed application.
+
+Restore a complete backup into an empty application directory. Recovery needs the registry, adventure files, and interaction decisions together. If a trade had committed before a crash, recovery applies its recorded results instead of rerunning the cable exchange.
+
+### Validation boundary
+
+Native source launch depends on the availability of Python, PyBoy, and its native dependencies for the host. Docker packages those dependencies for a Linux target. Neither the manager nor the simulation protocol requires x86-64. The desktop workflow covers multiple OS and CPU targets, with actual passing results required before claiming support for a release.
+
+## Historical prebuilt release
 
 The prebuilt instructions below are pinned to the older **v0.2.0rc6** public archive. That release does not include every feature shown in the current README screenshots. Keep its source checkout, image, and configuration together.
 
@@ -94,4 +152,3 @@ docker compose -f compose.yaml -f compose.build.yaml up -d
 ```
 
 For native development, follow [CONTRIBUTING.md](../CONTRIBUTING.md).
-

@@ -2,9 +2,9 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const test = require('node:test')
 const vm = require('node:vm')
-const source = fs.readFileSync('pokesim/web/static/pc.js', 'utf8')
+const source = fs.readFileSync('pokesim/web/static/routes.js', 'utf8') + '\n{}\n' + fs.readFileSync('pokesim/web/static/pc.js', 'utf8')
 
-function pc(pokemon, search = '?scope=all', party = []) {
+function pc(pokemon, search = '?scope=all', party = [], base = '') {
   const elements = new Map()
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
@@ -15,7 +15,7 @@ function pc(pokemon, search = '?scope=all', party = []) {
   }
   let url
   const context = vm.createContext({
-    document: {querySelector: element, activeElement: null, hidden: false},
+    document: {querySelector: selector => selector.startsWith('meta[') ? {content: selector.includes('pokesim-base') ? base : ''} : element(selector), activeElement: null, hidden: false},
     location: {search}, URLSearchParams,
     history: {replaceState: (_, __, next) => { url = next }},
     fetch: async () => ({ok: true, json: async () => ({started: true, version: 'blue', party,
@@ -195,4 +195,12 @@ test('box and list modes have separate controls and preserve physical slots', as
   assert.equal(view.rows().length, 2)
   view.element('#pc-all-view').onclick()
   assert.equal(view.element('#pc-search').value, 'missing')
+})
+
+
+test('PC filters preserve the selected adventure address', async () => {
+  const view = pc([mon(1, 1, 20)], '?scope=all', [], '/games/second-red')
+  await view.ready()
+  view.sort('level')
+  assert.match(view.url(), /^\/games\/second-red\/pc\?/)
 })

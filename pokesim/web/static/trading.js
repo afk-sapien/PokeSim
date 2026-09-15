@@ -4,7 +4,7 @@ const query = new URLSearchParams(location.search)
 let view = ['block', 'opportunities', 'history'].includes(query.get('view')) ? query.get('view') : 'block'
 let signature = ''
 function sprite(mon) {
-  return `<img src="/sprites/${Number(mon.dex) || 0}.png" alt="" width="72" height="72" loading="lazy">`
+  return `<img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt="" width="72" height="72" loading="lazy">`
 }
 function side(mon, label) {
   return `<div class="trade-side">${mon.dex ? sprite(mon) : ''}<div><p class="eyebrow">${label}</p><h3>${esc(mon.nick || mon.name)}</h3><p>${esc(mon.name)} · Lv. ${Number(mon.level) || '?'}</p>${mon.evolved_from ? `<small>Evolved from ${esc(mon.evolved_from)}</small>` : ''}</div></div>`
@@ -24,7 +24,7 @@ function render(status) {
   $('#trade-connection-note').textContent = notice
   $('#trade-connection-note').hidden = !notice
   for (const button of document.querySelectorAll('#trade-tabs button')) button.setAttribute('aria-pressed', String(button.dataset.view === view))
-  history.replaceState(null, '', `/trading?view=${view}`)
+  history.replaceState(null, '', `${PokeSim.base}/trading?view=${view}`)
   const nextSignature = JSON.stringify([status, view])
   if (signature === nextSignature) return
   signature = nextSignature

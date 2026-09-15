@@ -6,6 +6,8 @@ import hmac
 import math
 import httpx
 from pathlib import Path
+import re
+from string import Template
 
 from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
@@ -33,38 +35,54 @@ class TradePreference(BaseModel):
     state: Literal['offered', 'withdrawn', 'auto', 'locked', 'unlocked']
 
 
-def create_app(emu, store) -> FastAPI:
+def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adventure_name: str = '') -> FastAPI:
+    if base_path and not re.fullmatch(r'/games/[A-Za-z0-9_-]+', base_path):
+        raise ValueError('Invalid adventure base path')
+    def page(name: str, **context):
+        navigation = ''
+        if base_path:
+            navigation = ('<a class="library-link" href="/">Library</a>'
+                          '<label class="adventure-select">Adventure '
+                          '<select id="adventure-switcher" aria-label="Switch adventure">'
+                          f'<option value="{html.escape(adventure_id, quote=True)}">'
+                          f'{html.escape(adventure_name or adventure_id)}</option></select></label>')
+        return Template((STATIC / name).read_text(encoding='utf-8')).substitute(
+            game_base=html.escape(base_path, quote=True),
+            adventure_id=html.escape(adventure_id, quote=True), library_nav=navigation, **context)
+
     app = FastAPI(title="pokesim")
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     app.mount("/shots", StaticFiles(directory=store.shots), name="shots")
 
     @app.get("/", response_class=HTMLResponse)
     def index():
-        return (STATIC / "index.html").read_text(encoding="utf-8")
+        return page('index.html')
 
     @app.get("/pokedex", response_class=HTMLResponse)
     def pokedex_page():
-        return (STATIC / "pokedex.html").read_text(encoding="utf-8")
+        return page('pokedex.html')
 
     @app.get("/team", response_class=HTMLResponse)
     def team_page():
-        return RedirectResponse("/#team", status_code=307)
+        return RedirectResponse(f"{base_path}/#team", status_code=307)
 
     @app.get("/journey", response_class=HTMLResponse)
     def journey_page():
-        return RedirectResponse("/#journey-progress", status_code=307)
+        return RedirectResponse(f"{base_path}/#journey-progress", status_code=307)
 
     @app.get("/pc", response_class=HTMLResponse)
     def pc_page():
-        return (STATIC / "pc.html").read_text(encoding="utf-8")
+        return page('pc.html')
 
     @app.get("/journal", response_class=HTMLResponse)
     def journal_page():
-        return (STATIC / "journal.html").read_text(encoding="utf-8")
+        return page('journal.html')
 
     @app.get('/trading', response_class=HTMLResponse)
     def trading_page():
-        return (STATIC / 'trading.html').read_text(encoding="utf-8")
+        if base_path:
+            return RedirectResponse('/trading', status_code=307)
+        return page('trading.html')
 
     @app.get("/api/pokedex")
     def pokedex_reference(version: str | None = Query(None)):
@@ -84,6 +102,14 @@ def create_app(emu, store) -> FastAPI:
     @app.get('/api/trading')
     def trading_status():
         payload = pokedex_status()
+        if base_path:
+            participant = getattr(app.state, 'participant', None)
+            if participant is not None:
+                payload = participant.runtime.call(participant.inventory)
+            result = trading.unavailable(payload, adventure_id, 'Managed by the Adventure Library. Choose connected adventures on its Trading page.')
+            result.update(connected=True, managed=True, trading={'managed': True})
+            return {**result, 'viewer_only': config.VIEWER_ONLY,
+                    'holding': bool(store.get('trade_hold'))}
         instance = config.TRADING_INSTANCE or payload['version']
         try:
             result = trading.perspective(payload, trading.board(), instance)
@@ -219,22 +245,24 @@ def create_app(emu, store) -> FastAPI:
         ev = store.event(eid)
         if not ev:
             raise HTTPException(404)
-        shot = f"/shots/{ev['shot']}" if ev["shot"] else ""
+        shot = f"{base_path}/shots/{ev['shot']}" if ev["shot"] else ""
         can_rewind = bool(ev["state"]) and not config.VIEWER_ONLY and not store.get("trade_barrier")
-        return f"""<!doctype html><html><head><meta charset="utf-8"><title>{html.escape(ev['title'])} · pokesim</title>
-<link rel="stylesheet" href="/static/style.css"></head><body class="event">
-<main><a href="/journal">Back to the journal</a><h1>{html.escape(ev['title'])}</h1>
-<p class="meta">{iso_timestamp(ev['ts'])} &middot; {html.escape(ev['map'])} &middot; play time {ev['playtime']} &middot; {ev['type']} &middot; priority {ev['priority']}</p>
-<p>{html.escape(ev['body'])}</p>
-{f'<img class="shot" src="{shot}" alt="">' if shot else ''}
-{f'<p><button onclick="fetch(&quot;/api/control&quot;,{{method:&quot;POST&quot;,headers:{{&quot;content-type&quot;:&quot;application/json&quot;}},body:JSON.stringify({{action:&quot;load_state&quot;,value:&quot;{ev["state"]}&quot;}})}}).then(()=>location.href=&quot;/&quot;)">Rewind the live game to this moment</button></p>' if can_rewind else ''}
-</main></body></html>"""
+        return page('event.html', title=html.escape(ev['title']),
+                    timestamp=iso_timestamp(ev['ts']), location=html.escape(ev['map']),
+                    playtime=html.escape(str(ev['playtime'])), event_type=html.escape(ev['type']),
+                    priority=ev['priority'], body=html.escape(ev['body']),
+                    screenshot=f'<img class="shot" src="{html.escape(shot, quote=True)}" alt="Game screen">' if shot else '',
+                    rewind=(f'<button id="rewind" data-state="{html.escape(ev["state"], quote=True)}">'
+                            'Rewind the live game to this moment</button>' if can_rewind else ''))
 
     @app.get("/feed.xml")
     def feed(types: str | None = None, all: int = 0, limit: int = Query(50, ge=1, le=200), min_priority: int | None = None):
         evs = store.events(limit=min(limit, 200), notable_only=not all and not min_priority,
                            types=types.split(",") if types else None, min_priority=min_priority)
-        return Response(render_feed(evs, config.PUBLIC_URL, config.FEED_TITLE),
+        public_base = config.PUBLIC_URL.rstrip('/')
+        if base_path and not public_base.endswith(base_path):
+            public_base += base_path
+        return Response(render_feed(evs, public_base, adventure_name or config.FEED_TITLE),
                         media_type="application/atom+xml")
 
     return app

@@ -61,7 +61,7 @@ function renderGrid() {
     return `<button class="dex-card ${state}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}">
       <span class="dex-num">#${num(entry.dex)}</span>
       ${entry.dex === hunting ? '<span class="hunt-flag" title="The current expedition">Hunting</span>' : ''}
-      <img loading="lazy" src="/sprites/${entry.dex}.png" alt="" width="72" height="72">
+      <img loading="lazy" src="${PokeSim.base}/sprites/${entry.dex}.png" alt="" width="72" height="72">
       <strong>${esc(entry.name)}</strong>
       <span class="card-types">${typeTags(entry.types)}</span>
       <span class="card-note">${esc(note)}</span>
@@ -76,7 +76,7 @@ function statRow(label, value) {
 
 function chip(step, direction) {
   return `<button class="evo-chip" data-dex="${step.dex}">
-    <img loading="lazy" src="/sprites/${step.dex}.png" alt="" width="44" height="44">
+    <img loading="lazy" src="${PokeSim.base}/sprites/${step.dex}.png" alt="" width="44" height="44">
     <span><strong>${esc(step.name)}</strong><small>${direction} · ${esc(step.label)}</small></span></button>`
 }
 
@@ -103,7 +103,7 @@ function renderDetail(dex, refresh = false) {
     <td><span class="type-tag ${typeClass(move.type)}">${esc(move.type)}</span></td><td>${move.power || 'N/A'}</td><td>${move.accuracy ?? 'N/A'}%</td><td>${move.pp ?? 'N/A'}</td></tr>`).join('')
   $('#detail-body').innerHTML = `
     <header class="detail-head ${typeClass(entry.types[0])}">
-      <img src="/sprites/${dex}.png" alt="${esc(entry.name)}" width="112" height="112">
+      <img src="${PokeSim.base}/sprites/${dex}.png" alt="${esc(entry.name)}" width="112" height="112">
       <div><span class="eyebrow">NO. ${num(dex)}${entry.dex === hunting ? ' · CURRENT EXPEDITION' : ''}</span>
         <h2 id="detail-name">${esc(entry.name)}</h2>
         <div class="detail-types">${typeTags(entry.types)}</div>
@@ -169,7 +169,7 @@ function renderHolders(status) {
 }
 
 async function loadReference() {
-  const response = await fetch('/api/pokedex')
+  const response = await PokeSim.fetch('/api/pokedex')
   if (!response.ok) throw new Error('The Pokédex could not be opened.')
   const data = await response.json()
   entries = data.entries
@@ -180,7 +180,7 @@ async function loadReference() {
 
 async function refreshStatus() {
   try {
-    const response = await fetch('/api/pokedex/status', {cache: 'no-store'})
+    const response = await PokeSim.fetch('/api/pokedex/status', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
     const status = await response.json()
     owned = new Set(status.owned || [])

@@ -9,6 +9,18 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def verify_private_files(folder):
+    for path in folder.rglob('*'):
+        if not path.is_file():
+            continue
+        demo = path.name == 'default_rom.gb' and path.parent.name == 'pyboy'
+        if (path.suffix.lower() in {'.gb', '.gbc'} and not demo
+                or path.suffix.lower() in {'.sav', '.state', '.sqlite'}
+                or path.name.endswith(('.sqlite-wal', '.sqlite-shm'))
+                or path.name in {'.env', 'owner.token', 'tables.json', 'strategy.json', 'collection.json'}):
+            raise RuntimeError(f'Private game data must not be bundled: {path}')
+
+
 def main():
     output = ROOT / 'dist' / 'desktop'
     work = ROOT / 'build' / 'desktop'
@@ -42,6 +54,8 @@ def main():
                '--collect-all', 'pyboy', '--collect-all', 'sdl2', '--collect-all', 'sdl2dll',
                '--exclude-module', 'pyboy.conftest', '--exclude-module', 'pytest',
                '--recursive-copy-metadata', 'pokesim', '--collect-submodules', 'uvicorn',
+               '--collect-submodules', 'pokesim.runtime', '--collect-submodules', 'pokesim.interactions',
+               '--collect-submodules', 'pokesim.app', '--hidden-import', 'pokesim.web.library',
                '--add-data', f'{notices}:notices']
     if sys.platform in {'win32', 'darwin'}:
         command.append('--windowed')
@@ -50,6 +64,7 @@ def main():
     command.append(str(ROOT / 'tools' / 'desktop_entry.py'))
     subprocess.run(command, cwd=ROOT, check=True)
     folder = output / ('PokeSim.app' if sys.platform == 'darwin' else 'PokeSim')
+    verify_private_files(folder)
     if sys.platform != 'darwin':
         shutil.copy2(ROOT / 'docs' / 'desktop.md', folder / 'README.md')
     name = f'PokeSim-{platform.system().lower()}-{platform.machine().lower()}'

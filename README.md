@@ -55,7 +55,7 @@ The PC lets you search your party and every storage box together, find your stro
 
 The automatic player balances the badge journey with collecting and evolution projects, then keeps exploring after the Champion. Playback speed changes how fast the game runs. You can also pick Bulbasaur, Charmander, or Squirtle for a new adventure in the server settings, or leave the starter as a surprise.
 
-Want two adventures growing together? Experimental Blue support and optional [automatic trading between trusted instances](docs/automatic-trading.md) let separately hosted games exchange Pokémon, including trade evolutions. Trading takes extra setup and is off by default.
+Keep several adventures in one library, including multiple Red and Blue games. Each has independent saves and controls. The application coordinates eligible games through real Cable Club trading, including game-driven trade evolution. See the [desktop and trading guide](docs/desktop.md).
 
 **Still an experimental beta.** Runs have reached the Hall of Fame, but the automatic player can get stuck. A complete campaign, all 151 registrations, and uninterrupted long-term progress are not guaranteed. See [current progress and known limits](RELEASE_STATUS.md).
 
@@ -65,7 +65,7 @@ Want two adventures growing together? Experimental Blue support and optional [au
 
 ### On your desktop
 
-The desktop launcher opens a local setup page in your browser. Choose your own clean **Pokémon Red (USA, Europe) ROM**, pick a starter, and let PokeSim prepare the adventure. Later launches resume your game. Blue support is experimental.
+Launch the Adventure Library, add your own clean **Pokémon Red or Blue (USA, Europe) ROM**, and create one or more named adventures. Start and stop each game independently. Your ROM stays on your computer.
 
 From this source checkout, install [uv](https://docs.astral.sh/uv/getting-started/installation/) and run:
 
@@ -73,71 +73,31 @@ From this source checkout, install [uv](https://docs.astral.sh/uv/getting-starte
 uv run --python 3.12 --locked pokesim-desktop
 ```
 
-For a persistent launch command, run `uv tool install --python 3.12 .` from the checkout, then launch with `pokesim-desktop` from any folder. Docker and a separate server are optional. First setup downloads verified reference data, then play works offline. Your ROM stays on your computer.
+For a command available from any folder, install with `uv tool install --python 3.12 .`, then run `pokesim-desktop`. Docker and an always-on server are optional. First setup downloads verified reference data, then prepared games work offline.
 
-Close a browser tab to leave the game running. Choose **Desktop → Save and quit** to stop it. Your computer must stay awake for the adventure to advance.
+Closing a browser tab keeps the games running. Use **Save and quit** to save and stop the application. Your computer must stay awake for games to advance.
 
-Standalone desktop builds bundle Python and dependencies. The desktop workflow builds Windows x86-64, macOS Intel and Apple Silicon, and Linux x86-64 and ARM64 downloads. These are new build targets, with platform validation determined by the workflow results. Older public releases do not contain the launcher. See the [desktop installation and download guide](docs/desktop.md) for build availability, save locations, and troubleshooting.
+Standalone builds bundle Python and dependencies. Windows x86-64, macOS Intel and Apple Silicon, and Linux x86-64 and ARM64 are packaging targets. Check each build's workflow result for its actual validation status. Older releases do not contain this new library. See the [desktop installation guide](docs/desktop.md) for downloads, data locations, import, and troubleshooting.
 
-### On an always-on server
+### In one Docker container
 
-The commands below describe the Linux server setup using **Docker Engine with Compose, Git, and your own ROM**. Linux x86-64 is the existing tested prebuilt-image target. This is a release validation boundary, not a requirement for all PokeSim installations. Docker Desktop can also provide Linux containers on Mac and Windows, with host-specific setup adjustments.
-
-A ROM is the game file you supply yourself. PokeSim does not include or download Pokémon ROMs.
-
-The steps below build the source you check out. The first build needs internet access and can take a few minutes. After setup, the adventure runs locally without internet access unless you enable notifications.
-
-### 1. Get PokeSim and add your game
+The server runs the same library and child-process architecture. One persistent application folder contains its independent adventures and shared assets. This is development source, so build this checkout rather than using an older public image.
 
 ```sh
 git clone https://github.com/afk-sapien/PokeSim.git pokesim
 cd pokesim
 cp .env.example .env
-sed -i 's/^POKESIM_IMAGE=.*/POKESIM_IMAGE=pokesim:local/' .env
-mkdir -p roms data
-sudo chown 10001:10001 data
-```
-
-Put your ROM at **`roms/pokered.gb`**. These steps are for a new installation. If you already have an adventure, [back it up before upgrading](docs/operations.md).
-
-### 2. Prepare the adventure and start it
-
-This one-time setup prepares the map and Pokédex information from a pinned reference checkout. It does not create a ROM.
-
-```sh
-git clone https://github.com/pret/pokered .reference/pokered
-git -C .reference/pokered checkout a1a22aaf84d1675bcdbaeb194592379d586d838e
+mkdir -p pokesim-app
+sudo chown 10001:10001 pokesim-app
 docker compose -f compose.yaml -f compose.build.yaml build
-docker compose --profile setup run --rm --pull never prepare-data
 docker compose up -d --pull never
 ```
 
-### 3. Open your window into Kanto
+Open [localhost:8930](http://localhost:8930). Sign in with the value in `pokesim-app/owner.token`, then create adventures in the Library. Setup accepts your own ROMs and prepares the pinned reference data. No ROMs are bundled or downloaded.
 
-On the same machine, open **[localhost:8930](http://localhost:8930)**. The adventure starts automatically and saves its progress in `data`. You can close the browser and come back later while the server keeps playing.
+The default port is reachable only on the host. For remote access, configure `PUBLIC_URL` to match the external address and use HTTPS. See [self-hosting](docs/self-hosting.md) for configuration and migration.
 
-For a server in another room, or access away from home, follow the [authenticated HTTPS setup](docs/proxy.md). The default address is only reachable on the server itself. PokeSim has no built-in login, so protect remote access before sharing a link. Anyone with access to enabled controls can change or restart the game.
-
-<details>
-<summary><strong>A few useful server settings</strong></summary>
-
-Edit `.env`, then run `docker compose up -d --pull never` to apply changes.
-
-| Setting | What it does |
-| --- | --- |
-| `STARTER=bulbasaur` | Choose `bulbasaur`, `charmander`, `squirtle`, or `random` for a new run. |
-| `SPEED=1` | Set the starting playback speed. `0` means unlimited. |
-| `VIEWER_ONLY=1` | Disable game controls for spectators. This does not add a login. |
-| `NTFY_URL=` | Add an ntfy topic URL for phone notifications. |
-| `PUBLIC_URL=http://localhost:8930` | Set the address used in feed and notification links. |
-| `HTTP_PORT=8930` | Choose the local browser port. |
-| `DATA_PATH=./data` | Choose where the adventure and journal live. Use a separate directory for each game. |
-
-Unlimited speed can use a full CPU core. Journal history and screenshots grow over time. Back up the complete data directory while the container is stopped. See [storage, backups, and maintenance](docs/operations.md) for the details.
-
-</details>
-
-Prefer a prebuilt image? The [prebuilt installation reference](docs/self-hosting.md) preserves the older v0.2.0rc6 download instructions. That release predates parts of the interface shown above.
+**Existing installations:** Stop and back up each old adventure before importing it into a fresh application folder. The original single-game launch is available as `pokesim legacy`, with its Compose configuration preserved in `compose.legacy.yaml`. Never attach the legacy trading coordinator and the new manager to the same adventures.
 
 ## Follow along or help it grow
 

@@ -33,5 +33,5 @@ LABEL org.opencontainers.image.source="https://github.com/afk-sapien/PokeSim" \
       org.opencontainers.image.licenses="MIT AND LGPL-3.0-only"
 USER 10001:10001
 EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD ["python", "-m", "pokesim.healthcheck"]
-CMD ["python", "-m", "pokesim"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD ["python", "-m", "pokesim.healthcheck", "--manager"]
+CMD ["python", "-m", "pokesim", "serve", "--data-dir", "/data", "--host", "0.0.0.0"]

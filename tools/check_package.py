@@ -5,6 +5,21 @@ import zipfile
 import tomllib
 
 required = {
+    'pokesim/app/manager.py',
+    'pokesim/app/coordinator.py',
+    'pokesim/app/supervisor.py',
+    'pokesim/app/cli.py',
+    'pokesim/runtime/worker.py',
+    'pokesim/runtime/simulation.py',
+    'pokesim/runtime/preparation.py',
+    'pokesim/runtime/reward_delivery.py',
+    'pokesim/runtime/participant.py',
+    'pokesim/interactions/link_worker.py',
+    'pokesim/interactions/cable_metadata.py',
+    'pokesim/web/library.py',
+    'pokesim/web/static/library.html',
+    'pokesim/web/static/library.js',
+    'pokesim/web/static/library.css',
     'pokesim/desktop.py',
     'pokesim/desktop_setup.py',
     'pokesim/desktop_check.py',
@@ -59,7 +74,7 @@ for artifact in artifacts:
         with tarfile.open(artifact) as archive:
             names = {name.partition('/')[2] for name in archive.getnames()}
         assert {'uv.lock', 'THIRD_PARTY_NOTICES.md', 'RELEASE_STATUS.md',
-                'Dockerfile', '.dockerignore', '.env.example', 'compose.yaml',
+                'Dockerfile', '.dockerignore', '.env.example', '.env.legacy.example', 'compose.yaml', 'compose.legacy.yaml',
                 'compose.build.yaml', 'compose.proxy.yaml', 'deploy/Caddyfile',
                 'deploy/proxy.env.example', 'docs/validation/public-install-0.2.0rc2.json'} <= names
     missing = required - names

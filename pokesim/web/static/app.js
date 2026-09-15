@@ -1,4 +1,4 @@
-if (location.pathname === '/' && location.hash === '#journal') location.replace('/journal')
+if (location.pathname === PokeSim.url('/') && location.hash === '#journal') location.replace(PokeSim.url('/journal'))
 const $ = (selector) => document.querySelector(selector)
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
 function set(selector, property, value) {
@@ -34,7 +34,7 @@ function toast(message, error = false) {
 
 async function post(action, value) {
   if (viewerOnly) throw new Error("This instance is view-only.")
-  const response = await fetch('/api/control', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({action, value})})
+  const response = await PokeSim.fetch('/api/control', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({action, value})})
   if (!response.ok) throw new Error('That action could not be sent. Please try again.')
   return response.json()
 }
@@ -74,7 +74,7 @@ function renderParty(party) {
     const dex = mon.dex ? `No. ${String(mon.dex).padStart(3, '0')}` : 'Partner'
     const status = mon.status_label || (mon.hp ? 'Healthy' : 'Fainted')
     const nextLevel = xp?.max_level ? 'A lifetime of experience' : `${fmt(xp?.remaining)} XP to Lv. ${mon.level + 1}`
-    const sprite = mon.dex ? `<img src="/sprites/${Number(mon.dex)}.png" alt="${esc(mon.name)} portrait" width="96" height="96">` : '<span class="unknown-sprite">?</span>'
+    const sprite = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png" alt="${esc(mon.name)} portrait" width="96" height="96">` : '<span class="unknown-sprite">?</span>'
     const moves = (mon.move_details || []).map((move) => `<div class="move"><span class="move-type ${typeClass(move.type)}" aria-hidden="true"></span><span>${esc(move.name)}</span><small class="${move.pp ? '' : 'depleted'}">${move.pp}/${move.max_pp} PP</small></div>`).join('')
     const stats = Object.entries(mon.stats || {}).map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${fmt(value)}</dd></div>`).join('')
     return `<li class="mon-card ${mon.hp ? '' : 'fainted'}"><div class="mon-main"><div class="sprite-stage ${typeClass(typeNames[0])}">${sprite}<span class="party-slot">${String(index + 1).padStart(2, '0')}</span></div><div class="mon-info"><div class="mon-title"><h3>${esc(name)}</h3><span class="level"><small>LV.</small> ${mon.level}</span></div><div class="mon-subtitle"><span>${dex}${name !== mon.name ? ` · ${esc(mon.name)}` : ''}</span>${types}${status !== 'Healthy' ? `<span class="condition">${esc(status)}</span>` : ''}</div><div class="meter-label"><span>HP <b class="${health}">${mon.hp > 0 ? '●' : '○'}</b></span><span><strong>${fmt(mon.hp)}</strong> / ${fmt(mon.max_hp)}</span></div><progress class="hp-meter ${health}" max="100" value="${hp}" aria-label="${esc(name)} health: ${mon.hp} of ${mon.max_hp}"></progress><div class="meter-label xp-label"><span>XP</span><span>${xp ? xp.max_level ? 'MAX LEVEL' : `${clamp(xp.percent)}%` : 'Unavailable'}</span></div><progress class="xp-meter" max="100" value="${clamp(xp?.percent)}" aria-label="${esc(name)} progress to next level"></progress></div></div><details class="mon-details" data-key="${key}" ${expanded.has(key) ? 'open' : ''}><summary><span>Moves & stats</span><span>＋</span></summary><div class="mon-extra"><div class="moves">${moves || '<p>No moves yet.</p>'}</div><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${nextLevel}</p>` : ''}</div></details></li>`
@@ -85,7 +85,7 @@ async function refreshState() {
   if (stateBusy) return
   stateBusy = true
   try {
-    const response = await fetch('/api/state', {cache: 'no-store'})
+    const response = await PokeSim.fetch('/api/state', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
     const state = await response.json()
     if ($('#connection').classList.contains('is-offline')) window.pokesimScreen?.reconnect()
@@ -164,7 +164,7 @@ const EVENT_LABELS = {trade: 'A PARTNER FROM AFAR', badge: 'A BADGE TO REMEMBER'
 function renderEvents() {
   $('#events').innerHTML = eventRows.map((event) => {
     const date = new Date(event.ts * 1000)
-    return `<a class="event-card event-${esc(event.type)}" href="/events/${event.id}"><div class="event-picture">${event.shot ? `<img loading="lazy" src="/shots/${encodeURIComponent(event.shot)}" alt="Game screen at ${esc(event.title)}" width="160" height="144">` : '<span aria-hidden="true">✧</span>'}<span class="event-label">${EVENT_LABELS[event.type] || 'FROM THE JOURNAL'}</span></div><div class="event-copy"><time datetime="${date.toISOString()}">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} · ${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</time><h3>${esc(event.title)}</h3><p>${esc(event.map)}<span aria-hidden="true">↗</span></p></div></a>`
+    return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-picture">${event.shot ? `<img loading="lazy" src="${PokeSim.base}/shots/${encodeURIComponent(event.shot)}" alt="Game screen at ${esc(event.title)}" width="160" height="144">` : '<span aria-hidden="true">✧</span>'}<span class="event-label">${EVENT_LABELS[event.type] || 'FROM THE JOURNAL'}</span></div><div class="event-copy"><time datetime="${date.toISOString()}">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} · ${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</time><h3>${esc(event.title)}</h3><p>${esc(event.map)}<span aria-hidden="true">↗</span></p></div></a>`
   }).join('') || '<div class="journal-empty"><span>✧</span><h3>The best pages are still unwritten.</h3><p>New moments will find their way here as the adventure unfolds.</p></div>'
   set('#load-more', 'hidden', !moreAvailable || !eventRows.length)
 }
@@ -182,7 +182,7 @@ async function refreshEvents(append = false) {
   }
   if (append && eventRows.length) params.set('before', String(eventRows.at(-1).id))
   try {
-    const response = await fetch(`/api/events?${params}`)
+    const response = await PokeSim.fetch(`/api/events?${params}`)
     if (!response.ok) throw new Error('Could not open the journal')
     const rows = await response.json()
     if (generation !== eventGeneration) return

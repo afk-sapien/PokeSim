@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f5f3ed">
+<title>Your adventures · PokeSim</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/library.css">
+<script src="/static/library.js" defer></script>
+</head>
+<body class="library" data-page="${page}" data-adventure="${adventure_id}">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">p.</span>PokeSim</a><nav aria-label="Application"><a href="/" data-nav="library">Library</a><a href="/trading" data-nav="trading">Trading</a><a href="/settings" data-nav="settings">Settings and backups</a></nav><span id="connection" role="status">Connecting</span></header>
+<main id="main" class="library-main">
+<p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
+<section id="signin" class="panel" hidden><p class="eyebrow">WELCOME TO POKESIM</p><h1>Open your library</h1><p>Enter the owner key shown by the launcher, or open its sign-in link.</p><form id="signin-form"><label>Owner key<input id="owner-key" type="password" autocomplete="off" required></label><button class="primary-button">Sign in</button></form></section>
+<div id="workspace" hidden>
+<section data-view="library">
+<div class="section-heading"><div><p class="eyebrow">A WORLD FOR EVERY ADVENTURE</p><h1>Your adventure library</h1><p>Start a new journey, or pick up where your team left off.</p></div><button class="primary-button" id="new-adventure" data-owner>+ New adventure</button></div>
+<div class="library-toolbar"><span id="running-summary"></span><label class="inline-label"><input type="checkbox" id="show-archived"> Show archived adventures</label></div>
+<div id="adventure-list" class="adventure-grid" aria-live="polite"></div>
+<section class="panel empty-state" id="empty" hidden><h2>Your first adventure starts here.</h2><p>Add a Red or Blue ROM, choose a starter, and give your adventure a name. You can use the same ROM for as many separate adventures as you like.</p><button id="empty-create" data-owner>Create an adventure</button></section>
+</section>
+<section data-view="stopped" hidden><p class="eyebrow">YOUR ADVENTURE</p><h1 id="stopped-title">Adventure</h1><div id="stopped-card" class="adventure-grid"></div><p class="section-note">Stopping an adventure keeps its saves. Start it to return to the live view, PC, and journal.</p><a class="text-link" href="/">Back to the library ↗</a></section>
+<section data-view="trading" hidden>
+<div class="section-heading"><div><p class="eyebrow">THE CABLE CLUB</p><h1>Adventures, connected</h1><p>Trades happen through the games' own Cable Club. Each adventure keeps its own team and saves.</p></div></div>
+<div class="settings-grid"><section class="panel"><h2>Trading group</h2><p>Select adventures that may trade with each other.</p><form id="participants-form"><label class="inline-label"><input type="checkbox" id="trading-enabled" data-owner> Enable automatic trading</label><div id="participants"></div><button class="primary-button" data-owner>Save trading group</button></form></section>
+<section class="panel"><h2>Current exchange</h2><div id="trade-active" role="status">Checking the Cable Club…</div><p class="section-note">An exchange holds only its two participants. Results are provisional until both saves are verified and accepted.</p></section></div>
+<section class="panel"><h2>Choose an exchange</h2><p>Select two running adventures and the Pokémon to exchange. Locks and protected partners remain in force.</p><form id="trade-form"><div class="trade-pair"><fieldset><legend>First adventure</legend><label>Adventure<select id="trade-left" required data-owner></select></label><label>Pokémon<select id="trade-left-key" required data-owner><option value="">Select an adventure first</option></select></label></fieldset><span class="pair-link" aria-hidden="true">↔</span><fieldset><legend>Second adventure</legend><label>Adventure<select id="trade-right" required data-owner></select></label><label>Pokémon<select id="trade-right-key" required data-owner><option value="">Select an adventure first</option></select></label></fieldset></div><button class="primary-button" data-owner>Start Cable Club trade</button></form></section>
+<section class="panel"><h2>Exchange history</h2><div id="trade-history">No exchanges yet.</div></section>
+</section>
+<section data-view="settings" hidden>
+<p class="eyebrow">MAKE YOURSELF AT HOME</p><h1>Settings and backups</h1>
+<div class="settings-grid"><section class="panel"><h2>Running adventures</h2><p>Choose how many adventures can run at once. Each running adventure uses its own emulator process.</p><form id="settings-form"><label>Maximum running adventures<input id="max-running" type="number" min="1" max="32" required data-owner></label><button class="primary-button" data-owner>Save settings</button></form></section>
+<section class="panel"><h2>Backups</h2><p>Create a consistent snapshot of this application and its adventures. Running adventures may briefly stop while their saves are collected.</p><button id="create-backup" data-owner>Create backup</button><div id="backups"></div></section>
+<section class="panel"><h2>Import an adventure</h2><p>Choose a PokeSim export or supported legacy adventure archive. Existing adventures keep their identities and saves.</p><form id="import-form"><label>Archive<input id="import-file" type="file" accept=".zip" required data-owner></label><button data-owner>Import archive</button></form></section>
+<section class="panel"><h2>Close PokeSim</h2><p>Closing this browser tab keeps adventures running. Save and quit stops all adventures and closes the application.</p><button id="quit" data-owner>Save and quit PokeSim</button></section></div>
+</section>
+</div>
+</main>
+<dialog id="create-dialog"><form id="create-form"><div class="dialog-heading"><h2>New adventure</h2><button type="button" data-close="create-dialog" aria-label="Close">×</button></div><label>Adventure name<input id="new-name" maxlength="80" required placeholder="Weekend Red"></label><label>Game ROM<select id="rom-select"><option value="">Add a ROM below</option></select></label><label>Or add a ROM<input id="rom-file" type="file" accept=".gb,.gbc"></label><p class="section-note">Your ROM stays in this application. Reusing it creates an independent adventure.</p><label>Starter<select id="starter"><option value="random">Surprise me</option><option value="charmander">Charmander</option><option value="bulbasaur">Bulbasaur</option><option value="squirtle">Squirtle</option></select></label><label class="inline-label"><input id="start-created" type="checkbox" checked> Start this adventure now</label><p id="create-progress" class="dialog-feedback" role="status"></p><button class="primary-button">Create adventure</button></form></dialog>
+<dialog id="adventure-settings"><form id="adventure-settings-form"><div class="dialog-heading"><h2>Adventure settings</h2><button type="button" data-close="adventure-settings" aria-label="Close">×</button></div><input id="settings-id" type="hidden"><label>Name<input id="settings-name" maxlength="80" required></label><label>AI pace<select id="settings-speed"><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="16">16×</option><option value="0">Max</option></select></label><label class="inline-label"><input id="settings-autostart" type="checkbox"> Start when PokeSim opens</label><label class="inline-label"><input id="settings-league-rewards" type="checkbox" data-owner> Enable custom League victory rewards</label><label class="inline-label"><input id="settings-mew-event" type="checkbox" data-owner> Enable the custom Mew event</label><p class="section-note">Custom rewards are optional. Stop this adventure to change them.</p><p class="section-note">The pace applies to this adventure. Other adventures keep their own settings.</p><p class="dialog-feedback" role="status"></p><button class="primary-button">Save adventure settings</button></form></dialog>
+</body>
+</html>

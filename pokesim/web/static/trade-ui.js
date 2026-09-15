@@ -26,7 +26,7 @@
     if (writing) return
     loading = true
     pending = (async () => { try {
-      const response = await fetch('/api/trading', {cache: 'no-store'})
+      const response = await PokeSim.fetch('/api/trading', {cache: 'no-store'})
       if (!response.ok) throw new Error('Trading is reconnecting.')
       status = await response.json()
     } catch (_) {
@@ -41,7 +41,7 @@
     button.disabled = true
     let message
     try {
-      const response = await fetch('/api/trading/preferences', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      const response = await PokeSim.fetch('/api/trading/preferences', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({key: button.dataset.tradeKey, state: button.dataset.tradeState})})
       const result = await response.json()
       if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not update this offer.')

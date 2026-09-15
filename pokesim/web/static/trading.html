@@ -2,33 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="pokesim-base" content="${game_base}">
+<meta name="pokesim-adventure" content="${adventure_id}">
+<script src="${game_base}/static/routes.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f5f3ed">
 <meta name="description" content="Your adventure’s trading block, automatic matches, and previous exchanges.">
 <title>Partners between adventures. · pokesim</title>
-<link rel="stylesheet" href="/static/style.css?v=watch-2">
-<link rel="stylesheet" href="/static/pokedex.css?v=pages-1">
-<link rel="stylesheet" href="/static/pages.css?v=locks-1">
-<link rel="alternate" type="application/atom+xml" title="pokesim events" href="/feed.xml">
+<link rel="stylesheet" href="${game_base}/static/style.css?v=watch-2">
+<link rel="stylesheet" href="${game_base}/static/pokedex.css?v=pages-1">
+<link rel="stylesheet" href="${game_base}/static/pages.css?v=locks-1">
+<link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
 <a class="skip-link" href="#main">Skip to trading.</a>
 <header class="topbar">
-<a class="brand" href="/" aria-label="pokesim home"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition" id="edition">KANTO</span></a>
-<nav aria-label="Main navigation"><a href="/">Live</a><a href="/pokedex">Pokédex</a><a href="/pc">PC</a><a href="/trading" class="nav-current" aria-current="page">Trading</a><a href="/journal">Journal</a></nav>
+<a class="brand" href="${game_base}/" aria-label="pokesim home"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition" id="edition">KANTO</span></a>
+${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a><a href="${game_base}/pokedex">Pokédex</a><a href="${game_base}/pc">PC</a><a href="${game_base}/trading" class="nav-current" aria-current="page">Trading</a><a href="${game_base}/journal">Journal</a></nav>
 <span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
 </header>
 <main id="main" class="page-main">
 <section class="page-intro"><div><p class="eyebrow"><span class="tiny-dot"></span> LINK CABLE</p><h1>Partners between adventures.</h1><p class="intro-copy">Offer a partner, discover a match, and let the adventures handle the exchange.</p></div></section>
-<section class="trade-overview" aria-label="Automatic trading status"><div><span class="eyebrow">AUTOMATIC TRADING</span><h2 id="trade-status">Connecting…</h2><p id="trade-activity">Checking on the other adventure.</p></div><a class="trade-pc-link" href="/pc?scope=all">Choose Pokémon in the PC ↗</a></section>
+<section class="trade-overview" aria-label="Automatic trading status"><div><span class="eyebrow">AUTOMATIC TRADING</span><h2 id="trade-status">Connecting…</h2><p id="trade-activity">Checking on the other adventure.</p></div><a class="trade-pc-link" href="${game_base}/pc?scope=all">Choose Pokémon in the PC ↗</a></section>
 <p id="trade-connection-note" class="trade-notice" role="status" hidden></p>
 <div id="trade-tabs" class="view-switch" role="group" aria-label="Trading view"><button data-view="block" aria-pressed="true">Trading block</button><button data-view="opportunities" aria-pressed="false">Opportunities</button><button data-view="history" aria-pressed="false">History</button></div>
 <section id="trade-content" aria-live="polite"><p class="dex-empty">Opening the trading room…</p></section>
 </main>
-<footer><span id="app-version"></span><a class="brand footer-brand" href="/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><a href="/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
+<footer><span id="app-version"></span><a class="brand footer-brand" href="${game_base}/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><a href="${game_base}/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="/static/trade-ui.js?v=locks-1"></script>
-<script src="/static/trading.js?v=1"></script>
+<script src="${game_base}/static/trade-ui.js?v=locks-1"></script>
+<script src="${game_base}/static/trading.js?v=1"></script>
 </body>
 </html>

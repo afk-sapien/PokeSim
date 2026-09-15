@@ -1,14 +1,23 @@
 """Container health probe using the Python standard library."""
 import os
-from urllib.request import urlopen
+import sys
+from urllib.parse import urlsplit
+from urllib.request import ProxyHandler, Request, build_opener
 
 
 def main():
-    port = int(os.environ.get("PORT", "8000"))
-    with urlopen(f"http://127.0.0.1:{port}/healthz", timeout=4) as response:
+    port = int(os.environ.get('PORT', '8000'))
+    managed = '--manager' in sys.argv[1:]
+    path = '/health/ready' if managed else '/healthz'
+    headers = {}
+    if managed:
+        public = os.environ.get('PUBLIC_URL', f'http://127.0.0.1:{port}')
+        headers['Host'] = urlsplit(public).netloc
+    request = Request(f'http://127.0.0.1:{port}{path}', headers=headers)
+    with build_opener(ProxyHandler({})).open(request, timeout=4) as response:
         if response.status != 200:
             raise SystemExit(1)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
