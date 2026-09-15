@@ -26,10 +26,10 @@ checks passed. All 12 public checks passed. Both games are healthy, unpaused, at
 speed, with zero recovery reloads since deployment. Automatic trading and Championship
 rewards remain enabled. Red retained two delivered rewards and Blue retained four.
 
-Red registered Mewtwo in the live game after deployment, reaching 120 registered entries.
-Blue, at 122 entries, selected `legendary:131:227` and was restocking for its Mewtwo trip
-at verification. The existing monitor now specifically follows these live expeditions
-and notifies on confirmed captures. This deployment begins a new endurance interval.
+Both live games caught level-70 Mewtwo after deployment. Red reached 120 registered
+entries, confirmed by journal event 8597. Blue reached 123, confirmed by event 3731.
+Both catches occurred in Cerulean Cave B1F with zero recovery reloads. The existing
+monitor now specifically follows legendary expeditions and confirmed captures. This deployment begins a new endurance interval.
 See [the release receipt](docs/validation/release-0.2.0rc19.json).
 
 # Previous deployment: rc18, repeatable Championship rewards
