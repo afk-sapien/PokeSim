@@ -794,3 +794,40 @@ its Power ranking and all-box controls in the browser. Free disk space was
 16,892,948,480 bytes. The existing monitoring automation now includes rc26 deployment
 identities and the training-churn investigation. See
 [the follow-up evidence](validation/pc-power-0.2.0rc26.json).
+
+
+## September 15, party included in PC comparisons
+
+The user requested that traveling partners appear beside boxes and participate in
+combined rankings. rc27 adds a Party selector, explicit party slot labels, and party
+membership in every combined sort, filter, and page. The API calculates party Power
+with the same unboosted formula as storage. Current HP and temporary battle effects
+do not alter that comparison. Existing all-box bookmarks continue working and now
+include party members. The strongest shortcut includes everyone.
+
+All 507 Python tests passed, with one optional skip. Both JavaScript test files and
+package checks passed. Regression tests cover party refreshes, bookmarks, details,
+all sorting fields, pagination, location selection, and unchanged source arrays.
+A browser preview showed the party's Zapdos at 1,547 Power, correctly above the boxed
+Mewtwo at 1,013. This release does not modify simulation decisions.
+
+Both games received the tagged release after verified compressed cold backups and
+saved-game loading checks. Coordinator guards confirmed no active transaction or
+holds before each game was stopped. Red's prior interval ended at
+876 seconds and Blue's at
+930 seconds. New starts are
+2026-09-15T17:36:20.348488252Z for Red and 2026-09-15T17:38:11.180666584Z for Blue.
+The board retained its process and the rc24 coordinator resumed at
+2026-09-15T17:38:13.488657589Z. Each game resumed healthy with existing registrations
+preserved and maximum speed. See the [Red receipt](validation/release-0.2.0rc27-red.json)
+and [Blue receipt](validation/release-0.2.0rc27-blue.json).
+
+Public checks confirmed both sites expose six party members and 234 boxed partners,
+all with valid calculated scores. The public Red combined view displayed 240 partners,
+with party members taking the top four Power positions. Both games were healthy,
+unpaused, at maximum speed, and at 144 registrations with zero recovery reloads.
+Red leveled Jolteon to 33 after deployment and Blue leveled PEACH to 41. Trading was
+running, enabled, and ready with 25 completed exchanges and no reported error. Free
+disk space was 16,583,733,248 bytes. The existing monitor now tracks rc27 starts and
+retains the training-continuity investigation as the next policy priority. See
+[the follow-up evidence](validation/pc-party-0.2.0rc27.json).

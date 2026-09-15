@@ -1,4 +1,4 @@
-# Candidate rc27: include the party in PC rankings
+# Current games: rc27, include the party in PC rankings
 
 The PC now has a Party section alongside its twelve boxes. The combined scope and
 strongest shortcut include every party and boxed Pokémon, with every existing sort,
@@ -9,8 +9,13 @@ bookmarks now include the party, and `box=party` bookmarks the party view.
 All 507 Python tests passed, with one optional skip. Both JavaScript test files,
 package and resource checks, and the lockfile check passed. Tests cover every combined
 sort, party changes on refresh, location selection, details, and source immutability.
-A browser preview confirmed all six party cards and their Power breakdowns. Deployment
-is pending. Earlier sections record prior releases.
+A browser preview confirmed all six party cards and their Power breakdowns.
+Both games now run `pokesim:0.2.0rc27-13ca863` after verified compressed cold backups
+and saved-game load checks. Each resumed healthy at maximum speed with existing
+registrations preserved. Red started at 2026-09-15T17:36:20.348488252Z and Blue at
+2026-09-15T17:38:11.180666584Z. The board retained its process and coordinator rc24 resumed.
+See the [Red receipt](docs/validation/release-0.2.0rc27-red.json) and
+[Blue receipt](docs/validation/release-0.2.0rc27-blue.json). Earlier sections record prior releases.
 
 # Previous games: rc26, find the strongest boxed Pokémon
 
