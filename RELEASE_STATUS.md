@@ -1,4 +1,4 @@
-# Candidate rc26: find the strongest boxed Pokémon
+# Current games: rc26, find the strongest boxed Pokémon
 
 Power sums the five calculated Gen I stats at the current level. It includes species
 base stats, DVs, and stat experience, with cartridge square-root rounding and caps.
@@ -11,9 +11,18 @@ files, package builds, resource checks, and the lockfile check passed. The local
 browser preview used a current Red snapshot with 234 boxed Pokémon. Mewtwo ranked
 first at 1,013, followed by Dragonite at 905. API tests cover every box, numeric tests
 cover rounding boundaries, and UI tests cover filtering, pagination, bookmarks,
-unavailable data, and details. Live deployment is pending.
+unavailable data, and details.
 
-# Current Red: rc25, retreat from a stalled healing trip
+Both games now run `pokesim:0.2.0rc26-b04057e` after verified compressed cold backups
+and current-save load checks. Both resumed healthy at maximum speed with 144
+registrations preserved. Red started at 17:21:16 UTC and Blue at 17:22:28 UTC on
+September 15. The board retained its rc22 process. The coordinator resumed its rc24
+image at 17:22:30 UTC. Both games now include the prior journal correction and
+bounded Victory Road retreat. See the [Red receipt](docs/validation/release-0.2.0rc26-red.json)
+and [Blue receipt](docs/validation/release-0.2.0rc26-blue.json). Earlier sections below
+are historical deployment records.
+
+# Previous Red: rc25, retreat from a stalled healing trip
 
 Red spent roughly 25 minutes failing to leave Victory Road with a depleted team.
 Recent trades masked the lack of local progress in its achievement display. A copied
@@ -35,7 +44,7 @@ The next live sample confirmed that Kangaskhan gained 15,961 XP and three levels
 Blue and the board retained their processes. The rc24 coordinator resumed after the
 short deployment stop. See [the deployment receipt](docs/validation/release-0.2.0rc25.json).
 
-# Journal correction deployed to Red, pending for Blue
+# Journal correction, now deployed to both games
 
 A short invalid party RAM write during withdrawal erased the event detector's valid
 comparison point. The copied Red replay reported a Wigglytuff release while PIXEL was
@@ -45,8 +54,8 @@ Longer invalid gaps expire the baseline. The replay suppresses the false release
 integration tests retain real release events. All 481 Python tests pass, with one optional
 skip. See [the comparison](docs/validation/pc-invalid-write-20260915.json).
 
-This correction is deployed to Red in rc25. Blue remains on rc22 and will receive it
-in its next necessary game release. The coordinator remains on rc24.
+This correction reached Red in rc25 and Blue in rc26. Both now run rc26.
+The coordinator remains on rc24.
 
 # Current coordinator: rc24, independent safe points
 

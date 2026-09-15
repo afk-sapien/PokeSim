@@ -1,0 +1,107 @@
+{
+  "sampled_at": 1789493169.2303848,
+  "runs": {
+    "red": {
+      "version": "0.2.0rc26",
+      "started_at": "2026-09-15T17:21:16.033180451Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 144,
+      "last_local_progress": {
+        "id": 9538,
+        "ts": 1789493096.5611143,
+        "type": "level",
+        "title": "Mew grew to level 39",
+        "age_seconds": 72
+      },
+      "league_rewards": {
+        "earned": 31,
+        "delivered": 31,
+        "pending": 0
+      }
+    },
+    "blue": {
+      "version": "0.2.0rc26",
+      "started_at": "2026-09-15T17:22:28.646316173Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 144,
+      "last_local_progress": {
+        "id": 4555,
+        "ts": 1789493116.0043495,
+        "type": "evolve",
+        "title": "Squirtle evolved into Wartortle!",
+        "age_seconds": 53
+      },
+      "league_rewards": {
+        "earned": 33,
+        "delivered": 33,
+        "pending": 0
+      }
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 24,
+    "state": "ready",
+    "error": null,
+    "last_check": 1789492697.3534064,
+    "last_trade": 1789492443.6516483,
+    "last_operation": "league_reward",
+    "image": "pokesim:0.2.0rc24-d99cdc2",
+    "started_at": "2026-09-15T17:22:30.947849825Z",
+    "restarts": 0,
+    "running": true,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789490586824375645",
+        "ts": 1789490586.8243766,
+        "reason": "Red registers Kabutops. Blue improves total DVs by at least four"
+      },
+      {
+        "id": "1789491528678897216",
+        "ts": 1789491528.678899,
+        "reason": "Red restores a missing collection partner. Blue improves total DVs by at least four"
+      },
+      {
+        "id": "1789492443651647505",
+        "ts": 1789492443.6516483,
+        "reason": "Red gains a partner at least five levels stronger. Blue improves total DVs by at least four"
+      }
+    ]
+  },
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 111854895104,
+    "free_bytes": 16892948480,
+    "used_percent": 82.89
+  },
+  "public_pc_checked": [
+    "red",
+    "blue"
+  ],
+  "tests": {
+    "python_passed": 506,
+    "python_skipped": 1,
+    "javascript_files_passed": 2,
+    "package_checks": true
+  },
+  "formula_source": "https://github.com/pret/pokered/blob/a1a22aaf84d1675bcdbaeb194592379d586d838e/home/move_mon.asm",
+  "power": "Calculated max HP + Attack + Defense + Speed + Special at current level"
+}
