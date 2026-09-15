@@ -30,6 +30,7 @@ for edition, name, port in [('red', 'pokesim', 8930), ('blue', 'pokesim-blue', 8
             'speed': state.get('speed'), 'paused': state.get('paused'),
             'reloads': state['reloads'], 'frame': state['frame'],
             'owned': game['owned'], 'position': [game['map_name'], game['x'], game['y']],
+            'bag_slots': len(game['items']), 'items': game['items'],
             'goal': strategy.get('objective'), 'activity': strategy.get('action'),
             'progress': state.get('progress'), 'project': collection.get('hunt'),
             'project_remaining': collection.get('remaining_seconds'),
