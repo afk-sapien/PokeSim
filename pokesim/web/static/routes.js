@@ -11,7 +11,7 @@
   async function session() {
     if (!sessionRequest) sessionRequest = fetch('/api/v1/session', {cache: 'no-store', credentials: 'same-origin'})
       .then(async response => {
-        if (!response.ok) throw new Error('Open the Library to sign in before changing this adventure.')
+        if (!response.ok) throw new Error('Could not connect to PokeSim. Try again in a moment.')
         const data = await response.json()
         csrf = data.csrf_token || ''
         return data
@@ -19,11 +19,21 @@
         throw error })
     return sessionRequest
   }
-  async function gameFetch(path, options = {}) {
+  async function gameFetch(path, options = {}, retried = false) {
     const method = (options.method || 'GET').toUpperCase()
     if (!base || ['GET', 'HEAD', 'OPTIONS'].includes(method)) return fetch(url(path), options)
     await session()
-    return fetch(url(path), {...options, credentials: 'same-origin', headers: {...options.headers, 'X-PokeSim-CSRF': csrf}})
+    const sentCsrf = csrf
+    const response = await fetch(url(path), {...options, credentials: 'same-origin', headers: {...options.headers, 'X-PokeSim-CSRF': sentCsrf}})
+    if (!retried && response.status === 403) {
+      let data = {}
+      try { data = await response.clone().json() } catch (_) {}
+      if (data.code === 'csrf_expired' || data.detail === 'Reload this page before making changes') {
+        if (csrf === sentCsrf) sessionRequest = null
+        return gameFetch(path, options, true)
+      }
+    }
+    return response
   }
   globalThis.PokeSim = {base, adventureId, url, fetch: gameFetch, session}
   if (!base || !adventureId) return

@@ -60,16 +60,6 @@ class Manager:
         self.tasks = set()
         self.sessions = {}
         self.session_lock = threading.Lock()
-        token_path = self.root / 'owner.token'
-        if not token_path.exists():
-            fd = os.open(token_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(fd, 'w') as output:
-                output.write(secrets.token_urlsafe(32))
-                output.flush()
-                os.fsync(output.fileno())
-        self.owner_token = token_path.read_text().strip()
-        if len(self.owner_token) < 32:
-            raise ValueError('Owner credential file is invalid')
         from .coordinator import Coordinator
         self.coordinator = Coordinator(self)
 
@@ -155,10 +145,7 @@ class Manager:
         task.add_done_callback(self.tasks.discard)
         return task
 
-    def auth(self, request):
-        authorization = request.headers.get('authorization', '')
-        if authorization.isascii() and hmac.compare_digest(authorization, 'Bearer ' + self.owner_token):
-            return {'role': 'owner', 'csrf_token': '', 'bearer': True}
+    def browser_session(self, request):
         session_id = request.cookies.get('pokesim_session', '')
         with self.session_lock:
             session = self.sessions.get(session_id)
@@ -220,18 +207,13 @@ def create_app(manager, shutdown=lambda: None):
         origin = request.headers.get('origin')
         if origin and origin != f'{expected.scheme}://{expected.netloc}':
             return JSONResponse({'detail': 'Requests must come from this PokeSim application'}, status_code=403)
-        public = request.url.path in {'/', '/trading', '/settings', '/api/v1/session', '/health/live', '/health/ready'} or request.url.path.startswith('/static/')
-        session = manager.auth(request)
-        if not public and session is None:
-            if request.url.path.startswith('/games/') and request.method == 'GET' and 'text/html' in request.headers.get('accept', ''):
-                from ..web.library import render_library
-                return HTMLResponse(render_library())
-            return JSONResponse({'detail': 'Sign in to your PokeSim application'}, status_code=401)
-        if request.method not in {'GET', 'HEAD', 'OPTIONS'} and request.url.path != '/api/v1/session':
-            if session is None or session.get('role') != 'owner':
-                return JSONResponse({'detail': 'Owner access is required'}, status_code=403)
+        changing = request.method not in {'GET', 'HEAD', 'OPTIONS'}
+        if request.headers.get('sec-fetch-site') == 'cross-site' and (changing or request.url.path == '/api/v1/session'):
+            return JSONResponse({'detail': 'Requests must come from this PokeSim application'}, status_code=403)
+        if changing:
+            session = manager.browser_session(request)
             csrf = request.headers.get('x-pokesim-csrf', '')
-            if not session.get('bearer') and (not csrf.isascii() or not hmac.compare_digest(csrf, session['csrf_token'])):
+            if session is None or not csrf.isascii() or not hmac.compare_digest(csrf, session['csrf_token']):
                 return JSONResponse({'detail': 'Reload this page before making changes'}, status_code=403)
         response = await call_next(request)
         response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -258,30 +240,22 @@ def create_app(manager, shutdown=lambda: None):
     def ready():
         return {'ok': not manager.closing, 'adventures': len(manager.registry.adventures())}
 
-    @app.post('/api/v1/session')
-    async def login(request: Request):
-        data = await json_body(request)
-        token = data.get('token', '')
-        if not isinstance(token, str) or not token.isascii() or not hmac.compare_digest(token, manager.owner_token):
-            raise HTTPException(401, 'The owner token is incorrect')
+    @app.get('/api/v1/session')
+    def session(request: Request):
+        current = manager.browser_session(request)
+        if current is not None:
+            return {'csrf_token': current['csrf_token'], 'role': current['role']}
         session_id = secrets.token_urlsafe(32)
-        session = {'csrf_token': secrets.token_urlsafe(32), 'role': 'owner', 'expires': time.time() + 86400}
+        current = {'csrf_token': secrets.token_urlsafe(32), 'role': 'owner', 'expires': time.time() + 86400}
         with manager.session_lock:
             manager.sessions = {key: value for key, value in manager.sessions.items() if value['expires'] > time.time()}
-            if len(manager.sessions) >= 100:
+            if len(manager.sessions) >= 1024:
                 raise HTTPException(429, 'Too many active browser sessions')
-            manager.sessions[session_id] = session
-        response = JSONResponse({'csrf_token': session['csrf_token'], 'role': 'owner'})
+            manager.sessions[session_id] = current
+        response = JSONResponse({'csrf_token': current['csrf_token'], 'role': current['role']})
         response.set_cookie('pokesim_session', session_id, httponly=True, samesite='strict',
                             secure=manager.public_url.startswith('https:'), max_age=86400)
         return response
-
-    @app.get('/api/v1/session')
-    def session(request: Request):
-        session = manager.auth(request)
-        if session is None:
-            raise HTTPException(401, 'Sign in with the owner token from your data folder')
-        return {'csrf_token': session['csrf_token'], 'role': session['role']}
 
     @app.get('/api/v1/adventures')
     def adventures():
@@ -585,7 +559,7 @@ def main(argv=None):
         except BlockingIOError:
             identity = json.loads((root / 'manager.json').read_text())
             if args.desktop and not args.no_browser:
-                webbrowser.open(identity['url'] + '/#token=' + (root / 'owner.token').read_text().strip())
+                webbrowser.open(identity['url'])
             return
         identity = {'url': public_url, 'application_id': manager.registry.setting('application_id')}
         CheckpointStore.atomic_write(manager.root / 'manager.json', json.dumps(identity).encode())
@@ -597,12 +571,11 @@ def main(argv=None):
             def open_browser():
                 for _ in range(200):
                     if server.started:
-                        webbrowser.open(public_url + '/#token=' + manager.owner_token)
+                        webbrowser.open(public_url)
                         return
                     time.sleep(0.05)
             threading.Thread(target=open_browser, daemon=True).start()
         log.info('PokeSim library: %s', public_url)
-        log.info('Owner credential: %s', manager.root / 'owner.token')
         try:
             server.run(sockets=[listener])
         finally:

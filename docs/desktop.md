@@ -19,7 +19,7 @@ uv tool install --python 3.12 .
 pokesim-desktop
 ```
 
-1. PokeSim opens your Adventure Library in the default browser and signs you in locally.
+1. PokeSim opens your Adventure Library directly in the default browser. No sign-in or owner key is needed.
 2. Choose **New adventure**, enter a name, select your own clean Pokémon Red or Blue (USA, Europe) ROM, and choose a starter.
 3. Setup verifies the ROM and downloads a small pinned reference archive to prepare maps and Pokédex information. ROMs are never downloaded.
 4. Start the adventure. Create another game whenever you want, including another copy of the same version.
@@ -33,7 +33,7 @@ Prepared adventures run offline. Adding another adventure can reuse an installed
 - Opening PokeSim twice reopens the same application. The application and each adventure have exclusive process locks.
 - A stopped adventure uses no emulator process. Starting it resumes from its saved checkpoint.
 - Keep the computer awake to advance the games. Sleeping or powered-off computers do not accumulate simulated progress.
-- Desktop launch uses an available loopback port. For access from another computer, follow [self-hosting](self-hosting.md).
+- Desktop launch uses an available loopback port, accessible only from your computer. The Library has no account or owner-key step. For remote access, use an authenticated reverse proxy or a trusted private network as described in [self-hosting](self-hosting.md). Anyone who can reach the Library can manage its adventures.
 
 ## Trading
 
@@ -53,7 +53,7 @@ Championship rewards and the one-time postgame Mew gift are separate optional cu
 | macOS | `~/Library/Application Support/PokeSim/library` |
 | Linux | `$XDG_DATA_HOME/pokesim/library`, or `~/.local/share/pokesim/library` |
 
-The application folder contains its registry, installed assets, all adventure directories, interaction recovery records, backups, and `owner.token`. Keep the owner credential private. It authorizes management of the application.
+The application folder contains its registry, installed assets, all adventure directories, interaction recovery records, and backups.
 
 Use **Settings and backups** for a consistent backup. The application coordinates saving before capturing the library. Alternatively, stop the application and copy its entire folder. Do not copy one participant's save files alone during a trade. Restore into an empty directory so an existing library cannot be overwritten accidentally.
 
@@ -83,7 +83,7 @@ This overhaul is development work. Older public releases do not contain the new 
 
 ## Troubleshooting
 
-- **No browser opens:** Run `pokesim-desktop --no-browser`, open the reported address, and sign in using the value in the application's `owner.token` file.
+- **No browser opens:** Run `pokesim-desktop --no-browser` and open the reported address. The Library opens directly.
 - **Reference setup fails:** Retry with internet access. For offline setup, pass `--reference-archive "/path/to/reference.zip"`. Use the pinned [reference ZIP](https://codeload.github.com/pret/pokered/zip/a1a22aaf84d1675bcdbaeb194592379d586d838e), with SHA-256 `d651b4495b353b1521b42494e635aae2ffe9c89c3609f8cf166975c0bc723fcc`.
 - **A game fails to start:** Inspect its error in the Library. Check available disk space and permissions. Other running games have independent processes.
 - **An interaction needs recovery:** Keep both adventures and the application's interaction records together. Restart the application so it can finish the recorded decision. Never manually reload an older checkpoint to bypass a committed trade.
@@ -99,6 +99,6 @@ uv run --locked python tools/check_package.py
 uv run --locked python tools/check_python_install.py
 ```
 
-The install check creates a temporary isolated environment, installs the built wheel and its dependencies, and launches the installed `pokesim-desktop` command outside the checkout. It verifies the Library, static assets, duplicate launch, authorization, and clean shutdown. It then launches two actual worker processes and checks private credentials, independent save files, and shutdown when their parent closes its pipe.
+The install check creates a temporary isolated environment, installs the built wheel and its dependencies, and launches the installed `pokesim-desktop` command outside the checkout. It verifies the Library, static assets, duplicate launch, CSRF protection, and clean shutdown. It then launches two actual worker processes and checks private credentials, independent save files, and shutdown when their parent closes its pipe.
 
 These checks need no Pokémon ROM. Reference preparation and dependency installation require network access unless their inputs are already cached. Private ROM gameplay and cable-trading tests remain separate qualification requirements for each platform. Packages exclude private ROMs, saves, generated datasets, and portrait packs.

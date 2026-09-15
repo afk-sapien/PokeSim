@@ -75,6 +75,8 @@ uv run --python 3.12 --locked pokesim-desktop
 
 For a command available from any folder, install with `uv tool install --python 3.12 .`, then run `pokesim-desktop`. Docker and an always-on server are optional. First setup downloads verified reference data, then prepared games work offline.
 
+The Library opens directly without a sign-in or owner key. Desktop launch and the default Docker port are local-only. For remote access, use an authenticated reverse proxy or a trusted private network. Anyone who can reach the Library can manage its adventures.
+
 Closing a browser tab keeps the games running. Use **Save and quit** to save and stop the application. Your computer must stay awake for games to advance.
 
 Python installation and Docker are the supported distribution paths. The Python install checks target Windows x86-64, macOS Intel and Apple Silicon, and Linux x86-64 and ARM64. Successful CI runs establish platform validation. Older releases do not contain this new library. See the [desktop installation guide](docs/desktop.md) for installation, data locations, import, and troubleshooting.
@@ -93,7 +95,7 @@ docker compose -f compose.yaml -f compose.build.yaml build
 docker compose up -d --pull never
 ```
 
-Open [localhost:8930](http://localhost:8930). Sign in with the value in `pokesim-app/owner.token`, then create adventures in the Library. Setup accepts your own ROMs and prepares the pinned reference data. No ROMs are bundled or downloaded.
+Open [localhost:8930](http://localhost:8930) and create adventures in the Library. No sign-in or owner key is required. Setup accepts your own ROMs and prepares the pinned reference data. No ROMs are bundled or downloaded.
 
 The default port is reachable only on the host. For remote access, configure `PUBLIC_URL` to match the external address and use HTTPS. See [self-hosting](docs/self-hosting.md) for configuration and migration.
 

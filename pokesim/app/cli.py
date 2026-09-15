@@ -60,19 +60,19 @@ class RunningApplication:
         root = Path(root)
         try:
             identity = json.loads((root / 'manager.json').read_text())
-            token = (root / 'owner.token').read_text().strip()
         except (OSError, ValueError) as error:
             raise ValueError('Start the PokeSim application for this data directory before using this command') from error
         address = urlsplit(identity.get('url', ''))
         if address.scheme not in {'http', 'https'} or not address.netloc or address.username or address.password:
             raise ValueError('The application address in manager.json is invalid')
         self.expected_application = identity['application_id']
-        self.client = httpx.Client(base_url=identity['url'].rstrip('/'), trust_env=False,
-                                   headers={'Authorization': 'Bearer ' + token}, timeout=300)
+        self.client = httpx.Client(base_url=identity['url'].rstrip('/'), trust_env=False, timeout=300)
         try:
             health = self.request('GET', '/health/live')
             if health.get('application_id') != self.expected_application:
                 raise ValueError('The running application does not match this data directory')
+            session = self.request('GET', '/api/v1/session')
+            self.client.headers['X-PokeSim-CSRF'] = session['csrf_token']
         except BaseException:
             self.client.close()
             raise

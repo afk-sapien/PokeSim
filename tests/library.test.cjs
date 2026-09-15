@@ -11,6 +11,7 @@ const settle = async () => {
 function library(options = {}) {
   const elements = new Map()
   const calls = []
+  let poll
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
       hidden: selector === '#workspace', value: '', checked: false, files: [], dataset: {}, textContent: '',
@@ -25,7 +26,7 @@ function library(options = {}) {
     document: {body: {dataset: {page: 'library', adventure: ''}}, querySelector: element,
       querySelectorAll: () => [], addEventListener() {}, hidden: false},
     location, history: {replaceState(_, __, path) { calls.push({path: 'history', next: path})
-      location.hash = '' }}, crypto, Uint8Array, URLSearchParams, setInterval() {},
+      location.hash = '' }}, crypto, Uint8Array, URLSearchParams, setInterval(callback) { poll = callback },
     fetch: async (path, opts = {}) => {
       calls.push({path, options: opts})
       if (options.respond) {
@@ -40,17 +41,18 @@ function library(options = {}) {
     },
   })
   vm.runInContext(source, context)
-  return {element, calls, context}
+  return {element, calls, context, poll}
 }
 
-test('owner bootstrap consumes fragment before sending token and clears it from the URL', async () => {
+test('library opens automatically with a GET session and never submits fragment credentials', async () => {
   const view = library({hash: '#token=secret-owner'})
   await settle()
-  assert.equal(view.calls[0].path, 'history')
-  const login = view.calls.find(call => call.path === '/api/v1/session' && call.options.method === 'POST')
-  assert.deepEqual(JSON.parse(login.options.body), {token: 'secret-owner'})
-  assert.equal(view.context.location.hash, '')
+  assert.equal(view.calls[0].path, '/api/v1/session')
+  assert.equal(view.calls[0].options.method, undefined)
+  assert.equal(view.calls.some(call => call.options?.body?.includes('secret-owner')), false)
   assert.equal(view.element('#workspace').hidden, false)
+  assert.equal(view.element('#connection').textContent, 'Connected')
+  assert.doesNotMatch(fs.readFileSync('pokesim/web/static/library.html', 'utf8'), /owner.key|sign.in/i)
 })
 
 test('create can reuse a ROM without starting and sends a stable-format idempotency key', async () => {
@@ -103,4 +105,62 @@ test('failed creation retains idempotency key for an identical retry and exposes
   const requests = view.calls.filter(call => call.path === '/api/v1/adventures' && call.options.method === 'POST')
   assert.equal(requests.length, 2)
   assert.equal(JSON.parse(requests[0].options.body).request_id, JSON.parse(requests[1].options.body).request_id)
+})
+
+test('expired CSRF renews the session and retries the exact creation once', async () => {
+  let sessions = 0
+  let attempts = 0
+  const view = library({respond: (path, options) => {
+    if (path === '/api/v1/session') return {ok: true, json: async () => ({csrf_token: `csrf-${++sessions}`, role: 'owner'})}
+    if (path === '/api/v1/adventures' && options.method === 'POST' && ++attempts === 1) {
+      return {ok: false, status: 403, json: async () => ({detail: 'Reload this page before making changes'})}
+    }
+  }})
+  await settle()
+  view.element('#new-name').value = 'Red'
+  view.element('#rom-select').value = 'rom'
+  view.element('#starter').value = 'random'
+  view.element('#create-form').onsubmit({preventDefault() {}})
+  await settle()
+  const requests = view.calls.filter(call => call.path === '/api/v1/adventures' && call.options.method === 'POST')
+  assert.equal(sessions, 2)
+  assert.equal(requests.length, 2)
+  assert.equal(requests[0].options.body, requests[1].options.body)
+  assert.equal(requests[0].options.headers['X-PokeSim-CSRF'], 'csrf-1')
+  assert.equal(requests[1].options.headers['X-PokeSim-CSRF'], 'csrf-2')
+})
+
+test('CSRF renewal is bounded and unrelated permission failures are not retried', async () => {
+  for (const detail of ['Reload this page before making changes', 'Origin is not allowed']) {
+    const view = library({respond: (path, options) => {
+      if (options.method === 'PATCH') return {ok: false, status: 403, json: async () => ({detail})}
+    }})
+    await settle()
+    view.element('#max-running').value = '4'
+    view.element('#settings-form').onsubmit({preventDefault() {}})
+    await settle()
+    assert.equal(view.calls.filter(call => call.options.method === 'PATCH').length, detail.startsWith('Reload') ? 2 : 1)
+    assert.equal(view.element('#notice').textContent, detail)
+  }
+})
+
+test('startup connection failure recovers automatically but shutdown stays closed', async () => {
+  let attempts = 0
+  const view = library({respond: path => {
+    if (path === '/api/v1/session' && ++attempts === 1) return {ok: false, status: 503, json: async () => ({detail: 'Starting up'})}
+  }})
+  await settle()
+  assert.equal(view.element('#workspace').hidden, true)
+  assert.equal(view.element('#connection').textContent, 'Reconnecting')
+  view.poll()
+  await settle()
+  assert.equal(view.element('#workspace').hidden, false)
+  assert.equal(view.element('#connection').textContent, 'Connected')
+  view.element('#quit').onclick()
+  await settle()
+  const count = view.calls.length
+  view.poll()
+  await settle()
+  assert.equal(view.calls.length, count)
+  assert.equal(view.element('#workspace').hidden, true)
 })

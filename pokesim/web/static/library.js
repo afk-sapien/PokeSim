@@ -8,6 +8,9 @@
   let adventures = []
   let busy = false
   let refreshing = false
+  let connecting = false
+  let closing = false
+  let sessionPending = null
   let participantsDirty = false
   const cardSignatures = new Map()
   let stoppedSignature = ''
@@ -24,15 +27,26 @@
   function permissions() {
     document.querySelectorAll('[data-owner]').forEach(element => { element.disabled = !owner || busy || element.hasAttribute('data-blocked') })
   }
-  async function api(path, options = {}) {
+  async function initializeSession() {
+    if (!sessionPending) sessionPending = api('/api/v1/session').then(session => {
+      csrf = session.csrf_token || ''
+      owner = session.role === 'owner'
+      permissions()
+    }).finally(() => { sessionPending = null })
+    return sessionPending
+  }
+  async function api(path, options = {}, retried = false) {
     const response = await fetch(path, {cache: 'no-store', credentials: 'same-origin', ...options,
       headers: {...options.headers, ...(options.method && options.method !== 'GET' ? {'X-PokeSim-CSRF': csrf} : {})}})
     let data
     try { data = await response.json() } catch (_) { data = {} }
     if (!response.ok) {
-      if (response.status === 401) { $('#signin').hidden = false
-        $('#workspace').hidden = true }
       const detail = data.detail || data.error || `Request failed (${response.status})`
+      const expired = response.status === 401 || (response.status === 403 && (data.code === 'csrf_expired' || detail === 'Reload this page before making changes'))
+      if (expired && path !== '/api/v1/session' && !retried) {
+        await initializeSession()
+        return api(path, options, true)
+      }
       throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
     }
     return data
@@ -155,7 +169,7 @@
       adventures = data.adventures || []
       renderAdventures()
       if (page === 'trading') await refreshTrades()
-      $('#connection').textContent = owner ? 'Owner' : 'Viewer'
+      $('#connection').textContent = 'Connected'
     } catch (error) { $('#connection').textContent = 'Reconnecting'
       notice(error.message, true) }
     finally { refreshing = false }
@@ -262,14 +276,12 @@
       notice('Import complete. Open the Library to see the adventure.') }) }
   $('#quit').onclick = () => act(async () => {
     await write('/api/v1/shutdown')
+    closing = true
     notice('PokeSim is saving and closing. You can close this tab.')
     $('#workspace').hidden = true
   })
   async function enter() {
-    const session = await api('/api/v1/session')
-    csrf = session.csrf_token || ''
-    owner = session.role === 'owner'
-    $('#signin').hidden = true
+    await initializeSession()
     $('#workspace').hidden = false
     document.querySelectorAll('[data-view]').forEach(section => { section.hidden = section.dataset.view !== page })
     document.querySelector(`[data-nav="${page}"]`)?.setAttribute('aria-current', 'page')
@@ -281,26 +293,22 @@
     permissions()
     await refresh()
   }
-  $('#signin-form').onsubmit = event => { event.preventDefault()
-    act(async () => {
-      await api('/api/v1/session', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({token: $('#owner-key').value})})
-      $('#owner-key').value = ''
-      await enter()
-    }) }
   async function boot() {
+    if (connecting || closing) return
+    connecting = true
     try {
-      const fragment = new URLSearchParams(location.hash.slice(1))
-      const token = fragment.get('token')
-      if (token) {
-        history.replaceState(null, '', location.pathname + location.search)
-        await api('/api/v1/session', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({token})})
-      }
+      notice('')
       await enter()
-    } catch (error) { $('#signin').hidden = false
-      $('#workspace').hidden = true
-      $('#connection').textContent = 'Sign in'
-      if (location.hash || error.message.includes('failed')) notice(error.message, true) }
+    } catch (error) { $('#workspace').hidden = true
+      $('#connection').textContent = 'Reconnecting'
+      notice(error.message, true) }
+    finally { connecting = false }
   }
   boot()
-  setInterval(() => { if (!document.hidden && !busy) refresh() }, 3000)
+  setInterval(() => {
+    if (!document.hidden && !busy && !closing) {
+      if ($('#workspace').hidden) boot()
+      else refresh()
+    }
+  }, 3000)
 })()

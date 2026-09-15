@@ -14,7 +14,7 @@ Build and start using the [README instructions](../README.md#in-one-docker-conta
 | `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
 | `POKESIM_IMAGE=pokesim:local` | Image built from this checkout |
 
-The configured public address is used for host and origin validation. A reverse proxy must preserve that Host value. Use HTTPS for remote access and keep the owner credential private. Find it in `/data/owner.token`, or the corresponding host folder. Worker credentials and private ports remain internal.
+The Library opens directly without a sign-in or owner key. Its default published port is local-only. Anyone who can reach the Library can manage adventures, so remote access belongs behind an authenticated HTTPS reverse proxy or on a trusted private network. Point an existing authenticated proxy at the manager and preserve the Host matching `PUBLIC_URL`, which must be the browser-facing address. The application checks Host and Origin and protects browser writes against cross-site requests. These protections do not authenticate remote users. Worker credentials and private ports remain internal.
 
 The Compose service uses an init process to reap children and allows 90 seconds for orderly shutdown. Keep a single manager process per application folder. Do not add Uvicorn workers or share one application volume between containers.
 
@@ -56,7 +56,7 @@ Restore a complete backup into an empty application directory. Recovery needs th
 
 ### Validation boundary
 
-Native source launch depends on the availability of Python, PyBoy, and its native dependencies for the host. Docker packages those dependencies for a Linux target. Neither the manager nor the simulation protocol requires x86-64. The desktop workflow covers multiple OS and CPU targets, with actual passing results required before claiming support for a release.
+Native source launch depends on the availability of Python, PyBoy, and its native dependencies for the host. Docker packages those dependencies for a Linux target. Neither the manager nor the simulation protocol requires x86-64. The Python install workflow covers multiple OS and CPU targets, with actual passing results required before claiming support for a release.
 
 ## Historical prebuilt release
 

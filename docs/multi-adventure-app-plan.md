@@ -353,7 +353,7 @@ Use private authenticated HTTP between manager and local adventure workers initi
 
 Link-session control uses a bounded versioned pipe protocol, with transaction-scoped file manifests for large artifacts. Serial byte and nybble queues remain inside the paired child process. They do not travel through browser routes or HTTP requests.
 
-The public manager is the only browser endpoint. It enforces authorization and proxies permitted game requests. Strip untrusted internal headers, supply the correct worker credential, apply deadlines, and propagate cancellation. Never accept an arbitrary worker URL from an ordinary browser request.
+The public manager is the only browser endpoint. It validates browser sessions, Host, Origin, and CSRF protection, and proxies permitted game requests. Strip untrusted internal headers, supply the correct worker credential, apply deadlines, and propagate cancellation. Never accept an arbitrary worker URL from an ordinary browser request.
 
 Proposed public routes:
 
@@ -382,11 +382,11 @@ Commands that change durable state need idempotency keys. A timed-out browser re
 
 ### Access
 
-Default desktop binding remains loopback. Bind inside Docker as required, but publish its port on host loopback by default. Remote access uses the documented authenticated HTTPS deployment.
+Default desktop binding remains loopback. Bind inside Docker as required, but publish its port on host loopback by default. Remote access uses an existing authenticated HTTPS reverse proxy or a trusted private network.
 
-Add application-level owner authorization for management operations before introducing uploads, creation, import, and shutdown endpoints. A practical first version is a generated owner bootstrap credential exchanged for an authenticated session. Server bootstrap can use a secret file. Require CSRF protection for browser mutations and validate host and origin consistently.
+Open the Library directly without an owner credential or sign-in step. The session endpoint creates a browser cookie and CSRF token automatically. Require the matching token for browser mutations and validate Host and Origin consistently. These checks prevent cross-site requests, but they do not identify users. Anyone who can reach the manager can manage its adventures.
 
-Keep authorization separate from transport so a reverse proxy or later account system can integrate without bypassing permissions. Viewer access, if enabled, cannot upload ROMs, spawn workers, stop the manager, or change trade permissions. Worker credentials and transaction commands are never sent to the browser.
+Keep remote authentication at the deployment boundary. A later account system can add application permissions, but the initial Library has one trusted management role. Worker credentials and transaction commands are never sent to the browser.
 
 This is a single-owner design. It does not isolate hostile users who can run arbitrary code under the same operating-system account.
 
@@ -564,7 +564,7 @@ The registry URL and tag above are illustrative. Preserve the actual chosen dist
 
 The image should run as the existing non-root user. Verify first-run volume ownership for both Docker named volumes and documented bind mounts. Do not fix permissions by recursively changing ownership of arbitrary imported directories.
 
-ROMs can be added through the authenticated UI. Optionally support a read-only import mount for owners who prefer it. Reference preparation runs as a managed setup job, eliminating the need for a separate setup service in the normal flow. Retain an offline archive option.
+ROMs can be added through the Library. Optionally support a read-only import mount for owners who prefer it. Reference preparation runs as a managed setup job, eliminating the need for a separate setup service in the normal flow. Retain an offline archive option.
 
 Run exactly one manager application worker. Multiple Uvicorn workers, production reload mode, or two containers against the same data root would otherwise create competing supervisors. Enforce the application lock and document this constraint. A reverse proxy can serve multiple browser clients without multiple manager processes.
 
@@ -698,12 +698,12 @@ Gate: three isolated adventures can start and stop through a CLI or API. Killing
 
 Work:
 
-- Add library, creation/setup, profile settings, and owner access.
+- Add library, creation/setup, profile settings, and automatic browser sessions with CSRF protection.
 - Scope existing pages and APIs by adventure ID through URL helpers.
 - Add the switcher, library navigation, stopped-state pages, and per-game failures.
 - Centralize background summaries and avoid full-rate rendering of every card.
 
-Gate: create three games through one browser address and control each independently. All game pages, images, feeds, and notification links point to the correct adventure. Viewer permissions cannot perform owner operations.
+Gate: create three games through one browser address and control each independently. All game pages, images, feeds, and notification links point to the correct adventure. Cross-site writes fail, and the local Library opens without a credential prompt.
 
 ### Phase 4: Unify installation and import
 

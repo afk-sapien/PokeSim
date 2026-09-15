@@ -4,13 +4,15 @@ const test = require('node:test')
 const vm = require('node:vm')
 const source = fs.readFileSync('pokesim/web/static/routes.js', 'utf8')
 
-function routes(base = '', id = '', authenticated = true) {
+function routes(base = '', id = '', authenticated = true, respond = null) {
   const calls = []
   const context = vm.createContext({document: {
     querySelector: name => ({content: name.includes('pokesim-base') ? base : id}),
     addEventListener() {},
   }, fetch: async (path, options = {}) => {
     calls.push({path, options})
+    const override = respond?.(path, options)
+    if (override) return override
     return {ok: path !== '/api/v1/session' || authenticated, json: async () => ({csrf_token: 'owner-csrf', role: 'owner'})}
   }})
   vm.runInContext(source, context)
@@ -45,9 +47,43 @@ test('managed mutations obtain a session and attach CSRF without changing payloa
 
 test('session failure cannot send an unauthenticated mutation', async () => {
   const view = routes('/games/a', 'a', false)
-  await assert.rejects(view.api.fetch('/api/control', {method: 'POST'}), /sign in/)
+  await assert.rejects(view.api.fetch('/api/control', {method: 'POST'}), /Could not connect/)
   assert.equal(view.calls.length, 1)
   assert.equal(view.calls[0].path, '/api/v1/session')
+})
+
+test('expired scoped writes renew the session and preserve the original request', async () => {
+  let sessions = 0
+  let attempts = 0
+  const view = routes('/games/a', 'a', true, (path, options) => {
+    if (path === '/api/v1/session') return {ok: true, json: async () => ({csrf_token: `csrf-${++sessions}`})}
+    if (++attempts === 1) return {ok: false, status: 403, clone: () => ({json: async () => ({detail: 'Reload this page before making changes'})})}
+  })
+  const options = {method: 'POST', body: '{"action":"pause"}'}
+  await view.api.fetch('/api/control', options)
+  const requests = view.calls.filter(call => call.path === '/games/a/api/control')
+  assert.equal(sessions, 2)
+  assert.equal(requests.length, 2)
+  assert.equal(requests[0].options.body, options.body)
+  assert.equal(requests[1].options.body, options.body)
+  assert.equal(requests[0].options.headers['X-PokeSim-CSRF'], 'csrf-1')
+  assert.equal(requests[1].options.headers['X-PokeSim-CSRF'], 'csrf-2')
+})
+
+test('scoped renewal is bounded and preserves forbidden response bodies for callers', async () => {
+  for (const detail of ['Reload this page before making changes', 'Origin is not allowed']) {
+    let attempts = 0
+    const response = {ok: false, status: 403, clone: () => ({json: async () => ({detail})}), json: async () => ({detail})}
+    const view = routes('/games/a', 'a', true, path => {
+      if (path !== '/api/v1/session') {
+        attempts += 1
+        return response
+      }
+    })
+    const result = await view.api.fetch('/api/control', {method: 'POST'})
+    assert.equal(attempts, detail.startsWith('Reload') ? 2 : 1)
+    assert.deepEqual(await result.json(), {detail})
+  }
 })
 
 test('standalone routes and controls remain at the root without manager requests', async () => {
