@@ -76,3 +76,5 @@ def validate():
     with ROM_PATH.open("rb") as rom:
         if not rom.read(1):
             raise ValueError("ROM_PATH points to an empty file")
+
+TRADE_TOKEN = _env("TRADE_TOKEN", "")

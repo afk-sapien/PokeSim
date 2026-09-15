@@ -1,3 +1,8 @@
+0.2.0rc16, scoped automatic trading
+
+- Coordinate trades through authenticated controls and durable game holds, without Docker access or a root service.
+- Recover holds across game restarts and load both committed inventories before releasing either adventure.
+
 0.2.0rc15, regular exchanges between trusted adventures
 
 - Enable useful spare exchanges for explicitly configured peers, including exclusives, trade evolutions, and meaningful training upgrades.

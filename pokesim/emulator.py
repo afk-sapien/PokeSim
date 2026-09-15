@@ -93,6 +93,7 @@ class Emulator:
         saves = self.store.autosaves()
         if saves:
             self._restore_first_valid(reversed(saves))
+        self.paused = bool(self.store.get("trade_hold"))
         self.thread.start()
 
     def stop(self):
@@ -299,7 +300,9 @@ class Emulator:
         if want != self.pb.memory[W_OPTIONS]:
             self.pb.memory[W_OPTIONS] = want
 
-    def _autosave(self):
+    def _autosave(self, trade_prepare=False):
+        if self.store.get("trade_hold") and not trade_prepare:
+            return
         self.store.set("play_clock", self.play_clock.state_dict())
         snap = self.snapshot
         if snap is not None and not snap.valid:
@@ -355,7 +358,80 @@ class Emulator:
         elif self.battle_since and now - self.battle_since > config.BATTLE_TIMEOUT_SECONDS:
             self._unstick(self.battle_since, "battle never ended")
 
+    def trade(self, action, transaction):
+        done, response = threading.Event(), {}
+        self.commands.put(('trade', (action, transaction, done, response)))
+        if not done.wait(15):
+            raise ValueError('Trade command is still pending, retry the same transaction')
+        if 'error' in response:
+            raise ValueError(response['error'])
+        return response['result']
+
+    def _trade(self, action, transaction):
+        hold = self.store.get('trade_hold')
+        if hold and hold['id'] != transaction:
+            raise ValueError('Another exchange holds this game')
+        if action == 'prepare':
+            if hold and hold.get('source'):
+                return hold
+            if not hold:
+                s = read_snapshot(self.pb.memory, self.frame)
+                if self.paused or not s.valid or not s.started or s.in_battle or s.textbox or s.start_menu:
+                    raise ValueError('Waiting for an unpaused overworld safe point')
+                self.paused = True
+                self.manual_mode = False
+                self.snapshot = s
+                hold = {'id': transaction, 'source': None, 'phase': 'preparing'}
+                self.store.set('trade_hold', hold)
+            self._autosave(trade_prepare=True)
+            hold.update(source=self.store.latest_state().name, phase='prepared')
+            self.store.set('trade_hold', hold)
+            return hold
+        if not hold:
+            if action in ('load', 'release') and self.store.get('trade_barrier') != transaction:
+                raise ValueError('This exchange has not committed')
+            return {'id': transaction, 'phase': 'released'}
+        if action == 'load':
+            if hold['phase'] != 'loaded':
+                path = self.store.state_path(f'auto-v1-trade-{transaction}.state')
+                if not path or self.store.get('trade_barrier') != transaction:
+                    raise ValueError('The committed checkpoint is not ready')
+                self._load_state_file(path)
+                events = self.store.events(limit=1, types=('trade',))
+                if events:
+                    self.last_achievement = events[0]
+                hold['phase'] = 'loaded'
+                self.store.set('trade_hold', hold)
+            return hold
+        if action == 'release':
+            if hold['phase'] != 'loaded':
+                raise ValueError('The exchanged inventory has not loaded')
+        elif action == 'abort':
+            if self.store.get('trade_barrier') == transaction:
+                raise ValueError('A committed exchange cannot be cancelled')
+            source = self.store.state_path(hold['source']) if hold.get('source') else self.store.latest_state()
+            if source:
+                self._load_state_file(source)
+        else:
+            raise ValueError('Unknown trade action')
+        self.store.set('trade_hold', None)
+        self.paused = False
+        self.policy.on_restore()
+        self.stuck_since = time.time()
+        return {'id': transaction, 'phase': 'released'}
+
     def _handle_command(self, name, arg) -> bool:
+        if name == 'trade':
+            action, transaction, done, response = arg
+            try:
+                response['result'] = self._trade(action, transaction)
+            except Exception as error:
+                response['error'] = str(error)
+            finally:
+                done.set()
+            return True
+        if getattr(self, 'store', None) and self.store.get('trade_hold') and name not in ('stop', 'speed', 'pause'):
+            return True
         if name == "stop":
             return False
         if name == "pause":

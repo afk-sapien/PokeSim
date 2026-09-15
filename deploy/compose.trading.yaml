@@ -1,18 +1,21 @@
 services:
   trading:
-    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc15}
+    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc16}
     container_name: pokesim-trading
     restart: unless-stopped
-    user: "0:0"
-    network_mode: host
+    user: "10001:10001"
     read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     tmpfs:
       - /tmp
-    command: ["python", "-u", "/coordinator/trade_daemon.py"]
+    command: ["python", "-u", "-m", "pokesim.trade.service", "--loop"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
-      - "${TRADING_SOURCE:?Set TRADING_SOURCE to the committed tools directory}:/coordinator:ro"
-      - "/usr/bin/docker:/usr/local/bin/docker:ro"
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - "/docker/pokesim-trading:/docker/pokesim-trading"
-      - "/docker/pokesim/data:/docker/pokesim/data"
-      - "/docker/pokesim-blue/data:/docker/pokesim-blue/data"
+      - "/docker/pokesim-trading/state:/trading"
+      - "/docker/pokesim/data:/pair/red"
+      - "/docker/pokesim-blue/data:/pair/blue"
+      - "/docker/pokesim/roms/pokered.gb:/roms/red.gb:ro"
+      - "/docker/pokesim-blue/roms/pokeblue.gb:/roms/blue.gb:ro"
+      - "/docker/pokesim/data/game-data:/data/game-data:ro"

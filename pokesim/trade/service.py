@@ -1,4 +1,4 @@
-"""Run one recoverable trusted trade for a configured pair of Docker instances."""
+"""Coordinate scoped, authenticated exchanges without host or Docker access."""
 import argparse
 import fcntl
 import hashlib
@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
-import subprocess
+import sqlite3
 import tempfile
 import time
 import urllib.request
@@ -42,10 +42,6 @@ def request(peer, action=None):
         return json.load(response)
 
 
-def run(*args):
-    return subprocess.run(args, check=True, capture_output=True, text=True, timeout=120).stdout
-
-
 def safe(state):
     game = state.get('game') or {}
     return bool(state.get('health', {}).get('ok') and game.get('party')
@@ -61,12 +57,23 @@ class Coordinator:
         self.active_path = root / 'active.json'
 
     def worker(self, action, transaction):
-        args = ['docker', 'run', '--rm', '--network', 'none', '--user', '0:0', '--read-only',
-                '--tmpfs', '/tmp:mode=1777', '-v', f'{self.root}:/trading',
-                '-v', f"{self.config['game_data']}:/data/game-data:ro"]
-        for name, peer in self.peers.items():
-            args += ['-v', f"{peer['data']}:/pair/{name}", '-v', f"{peer['rom']}:/roms/{name}.gb:ro"]
-        return run(*args, self.config['image'], 'python', '-m', 'pokesim.trade.pair', action, transaction)
+        from . import pair
+        if action == 'stage':
+            for peer in self.peers.values():
+                with sqlite3.connect(Path(peer['data']) / 'pokesim.sqlite') as db:
+                    row = db.execute("SELECT v FROM kv WHERE k='trade_hold'").fetchone()
+                hold = json.loads(row[0]) if row else None
+                if not hold or hold['id'] != transaction or hold['phase'] != 'prepared':
+                    raise ValueError('Both games must hold this prepared transaction')
+        (pair.stage if action == 'stage' else pair.journal)(self.root, transaction)
+
+    def control(self, name, action, transaction):
+        peer = self.peers[name]
+        data = json.dumps({'action': action, 'value': transaction}).encode()
+        req = urllib.request.Request(peer['url'] + '/api/trade', data=data,
+              headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + peer['token']})
+        with urllib.request.urlopen(req, timeout=20) as response:
+            return json.load(response)
 
     def result(self, transaction):
         return json.loads((self.root / 'transactions' / transaction / 'result.json').read_text())
@@ -85,22 +92,15 @@ class Coordinator:
                     os.fsync(fd)
                 finally:
                     os.close(fd)
-        for name in active.get('stopped', []):
-            run('docker', 'start', self.peers[name]['container'])
-        for name in active.get('paused', []):
-            if name not in active.get('stopped', []):
-                request(self.peers[name], 'resume')
-        for name in active.get('stopped', []):
-            for _ in range(30):
-                try:
-                    if request(self.peers[name]).get('health', {}).get('ok'):
-                        break
-                except (OSError, ValueError):
-                    pass
-                time.sleep(1)
-            else:
-                raise RuntimeError(f'{name} has not recovered after the exchange')
-        status_path = self.root / 'status.json'
+        if committed:
+            for name in self.peers:
+                self.control(name, 'load', active['id'])
+            for name in self.peers:
+                self.control(name, 'release', active['id'])
+        else:
+            for name in active.get('prepared', []):
+                self.control(name, 'abort', active['id'])
+        status_path = self.root / 'public' / 'status.json'
         status = json.loads(status_path.read_text()) if status_path.exists() else {'history': [], 'completed': 0}
         if committed and not any(row['id'] == active['id'] for row in status['history']):
             result = self.result(active['id'])
@@ -123,7 +123,7 @@ class Coordinator:
             return
         if not self.config.get('enabled', False):
             return
-        status_path = self.root / 'status.json'
+        status_path = self.root / 'public' / 'status.json'
         status = json.loads(status_path.read_text()) if status_path.exists() else {'history': [], 'completed': 0}
         interval = max(300, self.config.get('interval_seconds', 900))
         if time.time() - status.get('last_trade', 0) < interval:
@@ -133,35 +133,22 @@ class Coordinator:
             status.update(last_check=time.time(), state='waiting_for_overworld', error=None)
             write(status_path, status)
             return
-        for peer in self.peers.values():
-            image = run('docker', 'inspect', '--format', '{{.Config.Image}}', peer['container']).strip()
-            if image != self.config['image']:
-                raise RuntimeError('Both peers must use the configured trading release')
-        # Avoid stopping both games when the fresh proposal board has nothing useful.
+        # Avoid holding both games when the fresh proposal board has nothing useful.
         with urllib.request.urlopen(self.config['board_url'] + '/api/proposals', timeout=20) as response:
             opportunities = json.load(response).get('routine_proposals', [])
         if not opportunities:
             status.update(last_check=time.time(), state='waiting_for_opportunity', error=None)
             write(status_path, status)
             return
-        active = {'id': str(time.time_ns()), 'ts': time.time(), 'phase': 'preparing', 'paused': [], 'stopped': [], 'targets': []}
+        active = {'id': str(time.time_ns()), 'ts': time.time(), 'phase': 'preparing', 'prepared': [], 'targets': []}
         write(self.active_path, active)
         try:
-            for name, peer in self.peers.items():
-                active['paused'].append(name)
+            for name in self.peers:
+                active['prepared'].append(name)
                 write(self.active_path, active)
-                request(peer, 'pause')
-                for _ in range(30):
-                    state = request(peer)
-                    if state['paused']:
-                        break
-                    time.sleep(0.1)
-                if not state['paused'] or not safe(state):
-                    raise RuntimeError('A peer left the safe point before pausing')
-            for name, peer in self.peers.items():
-                active['stopped'].append(name)
-                write(self.active_path, active)
-                run('docker', 'stop', '-t', '30', peer['container'])
+                prepared = self.control(name, 'prepare', active['id'])
+                if prepared['phase'] != 'prepared':
+                    raise RuntimeError('The game has not reached a safe checkpoint')
             self.worker('stage', active['id'])
             result = self.result(active['id'])
             if result['status'] == 'staged':
@@ -175,8 +162,6 @@ class Coordinator:
                 write(self.active_path, active)
                 for source, target in pairs:
                     atomic(target, source.read_bytes())
-                    owner = target.parent.stat()
-                    os.chown(target, owner.st_uid, owner.st_gid)
                 active['phase'] = 'committed'
                 write(self.active_path, active)
             self.finish(active)
@@ -188,7 +173,8 @@ class Coordinator:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--root', type=Path, required=True)
+    parser.add_argument('--root', type=Path, default=Path('/trading'))
+    parser.add_argument('--loop', action='store_true')
     args = parser.parse_args()
     args.root.mkdir(parents=True, exist_ok=True)
     with (args.root / 'lock').open('w') as lock:
@@ -196,14 +182,20 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return
-        try:
-            Coordinator(args.root).cycle()
-        except Exception as error:
-            path = args.root / 'status.json'
-            status = json.loads(path.read_text()) if path.exists() else {'history': [], 'completed': 0}
-            status.update(last_check=time.time(), state='retrying', error=str(error))
-            write(path, status)
-            raise
+        while True:
+            try:
+                Coordinator(args.root).cycle()
+            except Exception as error:
+                path = args.root / 'public' / 'status.json'
+                status = json.loads(path.read_text()) if path.exists() else {'history': [], 'completed': 0}
+                status.update(last_check=time.time(), state='retrying', error=type(error).__name__)
+                write(path, status)
+                print(f'Trading will retry after {type(error).__name__}', flush=True)
+                if not args.loop:
+                    raise
+            if not args.loop:
+                return
+            time.sleep(60)
 
 
 if __name__ == '__main__':
