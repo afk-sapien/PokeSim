@@ -718,3 +718,35 @@ Cave, used one rope, and performed no rewinds or RAM edits. The witness is retai
 This fallback does not claim to solve every route or provide escape without supplies.
 All 490 Python tests passed, with one optional skip. Both JavaScript files and package
 checks passed. See [the comparison](validation/victory-escape-0.2.0rc25.json).
+
+Only Red was upgraded to rc25 from `a0c3398`. The coordinator stopped briefly, and a
+preflight confirmed no active transaction or peer hold. Red's compressed cold backup
+passed integrity checks and the new image loaded its latest save. Blue and the board
+kept their original starts. The coordinator resumed on rc24. Red's prior uninterrupted
+interval ended at 21,086 seconds, about five hours and fifty-one minutes. Its new start
+is 16:56:43 UTC. The coordinator's resumed start is 16:56:45 UTC. Do not count these
+as recovery reloads or merge Red's endurance intervals.
+
+At the first live follow-up, Red had left Victory Road, spent the one Escape Rope,
+and healed. It was on Route 9 with full party HP and restored PP, pursuing Kangaskhan
+training. Both games retained 144 registrations, healthy workers, and maximum speed.
+Red had thirty rewards earned and delivered, and Blue had thirty-two, with no pending
+claims. Trading remained enabled. See [the Red receipt](validation/release-0.2.0rc25.json).
+
+The monitor now records `last_local_progress` from catches, evolutions, levels, trainer
+wins, Championships, badges, and ground items separately from trades and reward gifts.
+This read-only field makes a recent exchange less likely to conceal a stalled local
+adventure. The field was verified against both live journals. Red now includes the
+previously validated journal correction. Blue remains on rc22 until its next necessary
+upgrade. Retain rc20 through rc25 for the current services and rollback coverage.
+
+The next live sample confirmed renewed local progress. Red's Kangaskhan, GRUNKLE,
+gained 15,961 XP and three levels, reaching level 48 in journal event 9489. It then
+continued through the Underground Path. The new local-progress timestamp advanced,
+independently of trades. Both games were healthy, unpaused, at maximum speed, and
+without recovery reloads. The final coordinator check found no active transaction.
+Blue retained its original start and continued training. Free disk space after the
+new image and backup was about 17.57 GB. The rc25 recovery and restored Red progress
+are verified live. Further monitoring should watch for recurring cave stalls when
+no Escape Rope is available, without treating the bounded fallback as a universal
+navigation repair.
