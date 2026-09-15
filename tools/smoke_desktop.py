@@ -14,7 +14,7 @@ def main():
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     if not args.command:
-        parser.error('Supply an executable or python -m pokesim.desktop')
+        parser.error('Supply pokesim-desktop or python -m pokesim.desktop')
     opener = build_opener(ProxyHandler({}))
     with tempfile.TemporaryDirectory(prefix='pokesim-smoke-') as temporary:
         root = Path(temporary)
@@ -53,7 +53,7 @@ def main():
                                  headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})) as response:
                     assert json.load(response)['ok']
                 assert process.wait(timeout=30) == 0
-                print('Desktop smoke passed: library, assets, duplicate launch, protected shutdown, clean exit')
+                print('Python launcher smoke passed: library, assets, duplicate launch, protected shutdown, clean exit')
             finally:
                 if process.poll() is None:
                     process.terminate()

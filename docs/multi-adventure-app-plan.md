@@ -6,7 +6,7 @@ Architecture and implementation plan. Prepared September 15, 2026 against the wo
 
 ## 1. Recommendation
 
-Build one PokeSim application that creates, runs, displays, and connects multiple adventures. Ship that application as both a desktop download and one Docker container. Give it one browser address and one persistent application data folder.
+Build one PokeSim application that creates, runs, displays, and connects multiple adventures. Distribute that application as a Python package and one Docker container. The Python package includes the desktop browser launcher. Give it one browser address and one persistent application data folder.
 
 Internally, use one manager process and one child process per running adventure. The manager contains the application API, process supervisor, library, and interaction coordinator. Each adventure child contains the existing emulator, its policies, its storage, and a private game API. During a trade, launch one temporary link-session child containing two PyBoy instances on isolated copies of the reserved adventures. Their cartridges execute the Cable Club trade. The ordinary adventure workers remain held until both results are durably accepted or the operation is aborted.
 
@@ -47,7 +47,7 @@ Required outcomes:
 - Preserve individual Pokémon protection and the existing transaction recovery guarantees.
 - Import existing desktop and server adventures through a controlled migration flow.
 - Explain waiting, stopped, failed, and recovery states clearly.
-- Test the packaged process model on Windows, Intel Mac, Apple Silicon, and Linux x86-64 and ARM64.
+- Test the installed Python process model on Windows, Intel Mac, Apple Silicon, and Linux x86-64 and ARM64.
 
 Designed for later, not implemented in this refactor:
 
@@ -58,7 +58,7 @@ Designed for later, not implemented in this refactor:
 - Automatic operating-system startup, a tray application, and automatic updates.
 - Multiple manager replicas, distributed consensus, and large-scale scheduling.
 
-Signing and notarization are distribution work alongside this plan. They are required for a polished downloadable release, but they do not dictate the runtime architecture.
+Standalone executable downloads, app bundles, signing, and notarization are outside this release scope. Python installation and Docker are the supported distribution paths.
 
 ## 3. User experience
 
@@ -122,7 +122,7 @@ Show the meaningful reason for no trade, such as no useful exchange, partner sto
 | `trade/pair.py` and `trade/execute.py` | Inventory conservation checks, provenance, and recovery requirements | Replace direct record mutation and manual evolution with cartridge-driven Cable Club execution |
 | Cable experiment at commit `705ec4d`, `tools/cable_club_spike.py` | Proven connection hooks, paired stepping, and cartridge-result checks | Extract a production transport, gameplay driver, isolated session worker, and bounded failure handling |
 | `trade/event.py` and `rewards.py` | Existing reward eligibility and duplicate prevention | Make single-adventure events independent of unrelated peers |
-| `desktop_setup.py` and build tools | ROM checks, verified setup, packaging | Shared assets and import workflows, bundled worker launch |
+| `desktop_setup.py` and build tools | ROM checks, verified setup, packaging | Shared assets and import workflows, installed Python worker launch |
 
 Specific constraints found in the current implementation:
 
@@ -305,7 +305,7 @@ Keep both the existing recognized ROM SHA-1 values and a catalog SHA-256 digest 
 
 ## 8. Worker launch and lifecycle
 
-Use an explicit child executable mode through `subprocess.Popen`. In source installations, invoke the selected interpreter and worker module. In packaged installations, invoke the bundled executable in worker mode. Dispatch that mode before browser opening or manager initialization.
+Use an explicit child executable mode through `subprocess.Popen`. In both source and installed Python environments, invoke the active interpreter and worker module. Dispatch that mode before browser opening or manager initialization.
 
 Pass arguments as an argument list with `shell=False`. Pass bootstrap settings and a short-lived worker credential through an inherited pipe rather than putting secrets in the command line. The child validates all bootstrap fields. It binds its private API to `127.0.0.1` on an available port and reports its protocol version, adventure ID, generation, and endpoint through a structured readiness message.
 
@@ -313,7 +313,7 @@ Apply the same launch, generation, parent-death, and process-tree cleanup rules 
 
 Keep lifecycle messages separate from log output. Continuously drain output pipes and bound in-memory log buffers so a verbose worker cannot block itself. Keep the parent pipe open for parent-death detection. A child losing its manager stops emulation, preserves any transaction hold, attempts a safe checkpoint, and exits.
 
-Explicit executable launch avoids depending on a platform's default multiprocessing start method. Bundled executables and inherited library paths still need dedicated tests, especially on Windows and macOS. Python and PyInstaller document important differences in process startup and frozen execution. [Python subprocess documentation](https://docs.python.org/3.12/library/subprocess.html), [PyInstaller process guidance](https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html)
+Explicit interpreter launch avoids depending on a platform's default multiprocessing start method. Test the installed wheel and its native dependencies on each supported platform, especially Windows and macOS. [Python subprocess documentation](https://docs.python.org/3.12/library/subprocess.html)
 
 ### State model
 
@@ -574,7 +574,7 @@ Container health reports manager liveness and readiness. One unhealthy game make
 
 `pokesim-desktop` becomes a thin adapter that selects the application directory, starts or discovers its manager, and opens the library. It should not import an emulator or mutate per-game globals.
 
-The packaged executable supports internal adventure-worker and link-session modes with no browser launch. It must be tested through the actual Windows executable and macOS app bundle, not only through `python -m` in CI. Preserve package symlinks, bundled certificates, dependency notices, and native libraries.
+The installed Python package supports internal adventure-worker and link-session modes with no browser launch. Test its console command and real child processes from a fresh wheel installation outside the checkout. Verify native dependencies on Windows, macOS, and Linux. No standalone build or signing pipeline is required.
 
 Proposed public commands:
 
@@ -645,7 +645,7 @@ Starting a second copy of a full backup creates a separate fork, not a high-avai
 
 ### Update and rollback
 
-Stop new interactions, preserve a consistent backup, stop all workers, apply explicit schema migrations, then recover before resuming normal work. All local workers use the manager's bundled release in the first version. Mixed worker versions are rejected unless compatibility is explicitly tested.
+Stop new interactions, preserve a consistent backup, stop all workers, apply explicit schema migrations, then recover before resuming normal work. All local workers use the manager's installed release in the first version. Mixed worker versions are rejected unless compatibility is explicitly tested.
 
 Rollback uses the matching pre-upgrade backup and previous executable or image. It is not simply replacing the binary against a database that has undergone an incompatible migration.
 
@@ -665,8 +665,8 @@ Work:
 - Capture representative private Red and Blue checkpoints and current trade recovery scenarios.
 - Preserve and reproduce cable experiment commit `705ec4d`, including normal roles, reversed roles, no-cable control, and restart validation. Keep fixtures separate from the production executor.
 - Probe the missing normal Club exit and policy-resume behavior early, and record the memory cost of two temporary emulators. Resolve any blocker in the proposed session boundary before completing the architecture extraction.
-- Build a minimal bundled manager that launches two fake workers, receives readiness, handles exit, and shuts them down.
-- Run that process smoke on every desktop target and inside the container.
+- Install a minimal Python manager that launches two fake workers, receives readiness, handles exit, and shuts them down.
+- Run that process smoke on every Python platform target and inside the container.
 - Confirm import paths, packaged child dispatch, pipe draining, parent-death behavior, and log handling.
 
 Gate: two packaged workers can start, stop, crash independently, and exit when their parent disappears. No orphan or recursive-launch behavior. This spike comes before committing to the process adapter. The cable baseline must also reproduce and the missing exit/resume behavior must have a demonstrated path. Document any unsupported pair or platform explicitly.
@@ -747,12 +747,12 @@ Gate: at least four adventures, including two Red and two Blue, complete useful 
 Work:
 
 - Run the cross-platform, fault, migration, resource, and endurance matrix.
-- Build signed/notarized desktop artifacts when the publisher credentials are available.
+- Build the wheel and source distribution, install the wheel in fresh native environments, and smoke test the Python launcher and worker processes.
 - Publish explicit supported-platform results and operational limits.
 - Deprecate separate local broker/coordinator deployment only after migration is proven.
 - Update README, architecture, desktop, operations, trading, and historical multi-game references together.
 
-Gate: the full acceptance scenario below passes on supported release targets. Documentation describes actual released behavior. Missing signing or platform evidence remains a release limitation, not a hidden success claim.
+Gate: the full acceptance scenario below passes on supported release targets. Documentation describes actual released behavior. Missing native Python platform evidence remains a release limitation and must be reported explicitly.
 
 ### Future phase: Remote participants
 
@@ -807,12 +807,12 @@ Test both participants independently at each boundary. Test restart while one ha
 ### Platform and packaging tests
 
 - Linux x86-64 and ARM64 container and source execution.
-- Windows x86-64 packaged execution.
-- Intel macOS and Apple Silicon packaged execution.
-- Actual bundled child launch and runtime checks, not only top-level imports.
+- Windows x86-64 installed Python execution.
+- Intel macOS and Apple Silicon installed Python execution.
+- Actual installed Python child launch and runtime checks, including isolation from the source checkout.
 - Unicode and space-containing paths, paths outside the source checkout, and read-only installation directories.
 - Local filesystem locks, atomic checkpoint behavior, and cleanup on each platform.
-- Browser-opening behavior from a packaged process.
+- Browser-opening behavior from the installed Python launcher.
 - Fresh first-run network preparation, offline prepared startup, and offline archive setup.
 
 Private ROM tests remain private. Use fake workers for supervisor faults, synthetic inventories for matching, and PyBoy's demo for distributable emulator packaging checks. Do not include ROMs or private saves in CI artifacts.
@@ -835,7 +835,7 @@ Run at least an overnight coordinated soak before beta release, including period
 8. Restart and verify the correct durable outcomes without repeated exchanges or lost participants.
 9. Stop and resume each adventure, then stop and resume the whole installation.
 10. Export a coherent backup and restore it into a separate installation directory under the documented identity rules.
-11. Repeat the user flow through the packaged desktop launcher.
+11. Repeat the user flow through the installed Python desktop launcher.
 
 No claim of successful completion should rest only on the number of unit tests. Retain reports for process behavior, migration, actual game preservation, and packaged-platform execution.
 
@@ -899,6 +899,6 @@ The refactor is complete when one installation can manage multiple independent a
 
 For a useful intermediate release, Phases 0–4 can ship a multi-adventure library with trading clearly unavailable in managed mode. That release must not imply the full coordinated milestone is complete. The full requested application includes Phases 5–7 as well.
 
-The next implementation task should be **Phase 0 followed by Phase 1**: reproduce and preserve the cable experiment, prove its exit/resume path and the bundled worker process model, then extract explicit settings and the shared runtime. That is the smallest foundation that reduces risk for every later phase.
+The next implementation task should be **Phase 0 followed by Phase 1**: reproduce and preserve the cable experiment, prove its exit/resume path and the installed Python worker process model, then extract explicit settings and the shared runtime. That is the smallest foundation that reduces risk for every later phase.
 
-No exact delivery estimate is assigned before the worker-packaging and interaction-recovery spikes. The experiment reduces uncertainty about whether real cartridge trading can work. Production gameplay coverage, cable hardening, and the interaction ownership rewrite remain the largest uncertainties. Estimate individual phases after those results rather than treating this as a small UI addition.
+No exact delivery estimate is assigned before the Python installation and interaction-recovery spikes. The experiment reduces uncertainty about whether real cartridge trading can work. Production gameplay coverage, cable hardening, and the interaction ownership rewrite remain the largest uncertainties. Estimate individual phases after those results rather than treating this as a small UI addition.

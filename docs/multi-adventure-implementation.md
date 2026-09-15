@@ -4,7 +4,7 @@ The implementation lives on `codex/multi-adventure-app`. It was developed in an 
 
 ## What now runs
 
-One application owns the Adventure Library and starts one private process per running adventure. Several adventures can use the same Red or Blue ROM while keeping separate saves, journals, settings, process locks, and runtime generations. Desktop and Docker use the same manager.
+One application owns the Adventure Library and starts one private process per running adventure. Several adventures can use the same Red or Blue ROM while keeping separate saves, journals, settings, process locks, and runtime generations. The Python desktop launcher and Docker use the same manager. Python packages and Docker are the supported distribution paths.
 
 The library supports ROM upload and reuse, adventure creation, start, save and stop, archive and restore, profile settings, a running-game limit, local trading groups, explicit trades, automatic useful exchanges, backups, and legacy import. Existing game pages use adventure-scoped routes and an adventure switcher. The manager authenticates its browser session, protects writes against cross-site requests, and authenticates all private worker routes.
 
@@ -68,15 +68,17 @@ Validated on Linux x86-64:
 - The complete manager flow with three real workers, a failure after durable commitment, manager restart recovery, exactly one history entry, and continued progress in the unrelated game.
 - Default species names changing correctly during real trade evolution while custom nicknames remain intact.
 - Source worker authentication and save on parent EOF.
-- Linux standalone Library startup and two native bundled workers with independent saves.
+- Linux Python launcher startup and two native workers with independent saves.
 - One non-root container with a read-only root filesystem, two private workers, scoped game routes, health checks, and clean shutdown.
 - Browser creation, ROM reuse, stopped pages, independent dashboards, and worker-limit errors.
 
-The final broad suite passed **696 Python tests**, with 10 legacy fixture tests explicitly skipped. A subsequent watchdog and backup check passed eight tests, including one additional watchdog regression. All **27 JavaScript tests** passed. The final frozen Linux application also completed a real cable exchange, and the wheel, source distribution, and Docker checks passed. See the [validation report](validation/multi-adventure-20260915.json) for evidence, artifact checksum, and qualification limits.
+The final broad suite passed **696 Python tests**, with 10 legacy fixture tests explicitly skipped. A subsequent watchdog and backup check passed eight tests, including one additional watchdog regression. All **27 JavaScript tests** passed. The wheel, source distribution, and Docker checks passed. The earlier standalone prototype also completed a real cable exchange, but standalone artifacts are no longer part of the release scope. See the [validation report](validation/multi-adventure-20260915.json) for evidence, artifact checksum, and qualification limits.
+
+The package-only follow-up passed 38 affected regressions and a fresh wheel install outside the checkout. Three new adventures then started from the beginning with separate starters and seeds, minute autosaves, and a shared automatic trading group. Their initial health, frames, saves, and early-game progress passed. A 24-hour observation run is in progress. See the [Python installation and fresh-game smoke record](validation/python-install-smoke-20260915.json). This newer distribution scope supersedes standalone release gates in the earlier historical report.
 
 ## Remaining release gates
 
-Windows, Intel macOS, Apple Silicon, and Linux ARM64 builds have CI definitions, but their successful execution is not established by Linux tests. Code signing and notarization require publisher credentials. An overnight coordinated soak and longer unattended operation remain release qualification work.
+Windows, Intel macOS, Apple Silicon, and Linux ARM64 Python install checks have CI definitions, but their successful execution is not established by Linux tests. Standalone downloads, signing, and notarization are outside the release scope. An overnight coordinated soak and longer unattended operation remain release qualification work.
 
 The first cable preparation target is Vermilion's Center. Games without a supported route wait or fail with a reason instead of being teleported. Remote installations, link battles, and hardware-cycle-accurate serial emulation remain outside this release.
 

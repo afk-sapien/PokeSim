@@ -1,21 +1,12 @@
-"""Check bundled imports and real child-process supervision using PyBoy's demo."""
+"""Check installed Python workers and real child-process supervision using PyBoy's demo."""
 import json
-import os
 from pathlib import Path
 import secrets
-import subprocess
 import sys
 import tempfile
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-
 
 def main():
-    if len(sys.argv) != 2:
-        raise SystemExit('Usage: check_desktop_runtime.py /path/to/PokeSim')
-    executable = str(Path(sys.argv[1]).resolve())
-    subprocess.run([executable, '--check-runtime'], check=True, timeout=180)
     import httpx
     import pyboy
     from pokesim.app.supervisor import Child
@@ -24,7 +15,7 @@ def main():
     for name in game_data.FILES:
         game_data.load(name, directory=reference)
     demo = Path(pyboy.__file__).with_name('default_rom.gb').resolve()
-    with tempfile.TemporaryDirectory(prefix='pokesim-bundled-workers-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='pokesim-python-workers-') as temporary:
         root = Path(temporary)
         children = []
         try:
@@ -35,7 +26,7 @@ def main():
                         'rom_path': str(demo), 'data_dir': str(root / str(number)),
                         'game_data_dir': str(reference),
                         'public_url': f'http://127.0.0.1:8000/games/demo-{number}'}}
-                child = Child(bootstrap, command=[executable, '--worker'])
+                child = Child(bootstrap, command=[sys.executable, '-m', 'pokesim.runtime.worker'])
                 children.append(child)
                 child.start(timeout=45)
                 with httpx.Client(trust_env=False, timeout=5) as client:
@@ -53,7 +44,7 @@ def main():
         finally:
             for child in children:
                 child.stop(timeout=5)
-    print('Bundled workers passed: two independent processes, private credentials, parent-loss saves and exit')
+    print('Installed Python workers passed: two independent processes, private credentials, parent-loss saves and exit')
 
 
 if __name__ == '__main__':

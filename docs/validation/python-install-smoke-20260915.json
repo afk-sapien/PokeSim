@@ -1,0 +1,112 @@
+{
+  "date": "2026-09-15",
+  "scope": "Python package and Docker distribution, with a fresh three-game smoke test",
+  "standalone_downloads": "Removed from supported delivery and release requirements",
+  "installation": {
+    "result": "passed",
+    "python": "3.12.3",
+    "package_version": "0.2.0rc30",
+    "module_path": "/home/ty/.local/share/pokesim/smoke-runtime/lib/python3.12/site-packages/pokesim/__init__.py",
+    "source_checkout_required": false
+  },
+  "regressions": {
+    "passed": 38,
+    "failed": 0
+  },
+  "isolated_wheel_checks": [
+    "Library startup",
+    "Static resources",
+    "Duplicate launcher handling",
+    "Protected shutdown",
+    "Two private native workers",
+    "Independent saves",
+    "Save and exit on parent EOF"
+  ],
+  "legacy_server": {
+    "host": "servarr",
+    "games_saved_and_stopped": [
+      "pokesim",
+      "pokesim-blue"
+    ],
+    "game_exit_codes": [
+      0,
+      0
+    ],
+    "coordinator_stopped": true,
+    "coordinator_exit_code": 137,
+    "coordinator_active_transaction": false,
+    "completed_legacy_trades_retained": 36,
+    "original_data_and_configuration_retained": true,
+    "public_proxy_unchanged": true
+  },
+  "local_service": "pokesim-smoke.service",
+  "url": "http://127.0.0.1:8991",
+  "data_dir": "/home/ty/.local/share/pokesim/smoke-20260915",
+  "initial_observation_seconds": 288,
+  "games": [
+    {
+      "id": "fa6fc93e5c244f80b7a15fa3c115d11b",
+      "name": "Red Sprout",
+      "frame": 137714,
+      "frame_change": 52544,
+      "generation_changed": false,
+      "map": "Route 1",
+      "owned": 4,
+      "badges": [],
+      "autosave_age_seconds": 46.7,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      }
+    },
+    {
+      "id": "541515be632d48ffb13520adf9823f41",
+      "name": "Blue Ripple",
+      "frame": 137478,
+      "frame_change": 52540,
+      "generation_changed": false,
+      "map": "Viridian Forest",
+      "owned": 5,
+      "badges": [],
+      "autosave_age_seconds": 46.1,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      }
+    },
+    {
+      "id": "b8a967c32afd409885392e9d2a74dcc4",
+      "name": "Red Ember",
+      "frame": 137212,
+      "frame_change": 52534,
+      "generation_changed": false,
+      "map": "Route 2",
+      "owned": 4,
+      "badges": [],
+      "autosave_age_seconds": 45.4,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      }
+    }
+  ],
+  "initial_concerns": [],
+  "automatic_trading": "Enabled for all three, no eligible exchange during the initial observation",
+  "follow_up": {
+    "automation_id": "monitor-fresh-pokesim-adventures",
+    "interval_minutes": 15,
+    "initial_duration_hours": 24,
+    "games_left_running": true
+  },
+  "limits": [
+    "Initial smoke check only, overnight results remain pending",
+    "Native Windows, macOS, and Linux ARM64 install checks are configured but not executed here",
+    "Rendered browser Library unavailable to the automation surface, API and actual game frames verified"
+  ]
+}

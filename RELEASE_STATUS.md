@@ -1,3 +1,21 @@
+# Multi-adventure distribution plan
+
+The multi-adventure application is distributed as a Python package and one Docker
+container. The Python package includes `pokesim-desktop`, which opens the Adventure
+Library in a browser. Standalone executable downloads and app bundles are outside
+the release scope.
+
+The native Python install matrix covers Windows x86-64, Intel macOS, Apple Silicon,
+and Linux x86-64 and ARM64. Each platform must pass a fresh wheel installation,
+Library startup, and two-worker supervision check before its support is considered
+validated. These checks use PyBoy's demonstration ROM. Private cartridge gameplay
+and real cable trading qualification remain separate requirements.
+
+See the [installation guide](docs/desktop.md) and
+[implementation report](docs/multi-adventure-implementation.md). Deployment entries
+below are historical release records and do not imply that the multi-adventure
+application has replaced those services.
+
 # Current Red: rc30, avoid distant shopping for optional supplies
 
 Red repeatedly crossed the Indigo Plateau boundary trying to restock with only

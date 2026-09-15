@@ -63,7 +63,7 @@ Keep several adventures in one library, including multiple Red and Blue games. E
 
 ## Run your own adventure
 
-### On your desktop
+### Python package on your desktop
 
 Launch the Adventure Library, add your own clean **Pokémon Red or Blue (USA, Europe) ROM**, and create one or more named adventures. Start and stop each game independently. Your ROM stays on your computer.
 
@@ -77,7 +77,7 @@ For a command available from any folder, install with `uv tool install --python 
 
 Closing a browser tab keeps the games running. Use **Save and quit** to save and stop the application. Your computer must stay awake for games to advance.
 
-Standalone builds bundle Python and dependencies. Windows x86-64, macOS Intel and Apple Silicon, and Linux x86-64 and ARM64 are packaging targets. Check each build's workflow result for its actual validation status. Older releases do not contain this new library. See the [desktop installation guide](docs/desktop.md) for downloads, data locations, import, and troubleshooting.
+Python installation and Docker are the supported distribution paths. The Python install checks target Windows x86-64, macOS Intel and Apple Silicon, and Linux x86-64 and ARM64. Successful CI runs establish platform validation. Older releases do not contain this new library. See the [desktop installation guide](docs/desktop.md) for installation, data locations, import, and troubleshooting.
 
 ### In one Docker container
 

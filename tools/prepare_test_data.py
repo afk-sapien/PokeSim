@@ -1,4 +1,4 @@
-"""Test the verified desktop data preparation path without Git or a ROM."""
+"""Test the verified application data preparation path without Git or a ROM."""
 from pathlib import Path
 import threading
 
