@@ -1,7 +1,20 @@
-# Release candidate: rc14
+# Current deployment: both games on rc14
 
-PC sorting and stat totals are ready for validation and deployment to both adventures.
-The release also includes the validated partial-training accounting fix described below.
+Both adventures run `pokesim:0.2.0rc14-1473f1d`, tagged commit
+`1473f1daf16acf6f66ef8a9067bef0eda16fb5ff`. PC now sorts across selected or all boxes
+by level, total DVs, total stat experience, experience, Pokédex number, species,
+nickname, or box order. Totals appear on every card and in the detail view.
+
+All 388 Python tests passed, with one optional test skipped. All three PC JavaScript
+tests and the screen suite passed. Packages built offline and runtime resources passed
+verification. All 12 public endpoint checks passed, and the six public PC assets match
+the tagged source. Browser checks verified rankings and the detail totals.
+
+Both latest saves loaded successfully before startup, with cold backups recorded.
+Red retained 112 registered entries and Blue retained 116. Both run at `SPEED=0`,
+with healthy workers and zero save reloads after startup. The release includes the
+previously queued partial-training accounting fix. These checks do not establish
+multi-day endurance. See [the release receipt](docs/validation/release-0.2.0rc14.json).
 
 # Previous deployment: Red rc13, Blue rc12
 
@@ -27,7 +40,7 @@ Blue caught a level-25 Kangaskhan in the live Safari Zone, reaching 116 register
 entries. Both live reload counters remain zero. Red's new release has only startup
 verification so far. Sustained collection and multi-day endurance remain open.
 
-## Validated followup awaiting a future release
+## Partial training accounting, included in rc14
 
 The idle-abandon path now records selected-partner experience as partial progress,
 matching the overall timeout path. A live project gained 524 XP but was incorrectly
@@ -37,8 +50,7 @@ is preserved. All 388 tests pass, with one optional test skipped.
 
 A 72028-frame replay matches the deployed baseline's gameplay, reaching full HP and PP
 after 10536 frames at Indigo Plateau and then training another reserve. The fix is
-committed for a later release. Red remains on rc13 and Blue on rc12 so their current
-live intervals can continue. See [the evidence](docs/validation/partial-training-20260915.json).
+included in rc14 on both live games. See [the evidence](docs/validation/partial-training-20260915.json).
 
 # rc12 deployment record
 

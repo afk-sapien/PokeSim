@@ -332,11 +332,10 @@ bounded backup and image retention before repeated releases consume the availabl
 
 ## Partial training accounting followup
 
-A validated change awaiting the next release keeps productive training marked as partial
+Release rc14 keeps productive training marked as partial
 progress when the idle guard ends a project. Previously this path escalated the failure
 penalty despite recorded XP gains. The ordinary retry delay and idle deadline remain.
-All 388 tests pass, and the copied Red healing replay is unchanged. Both live processes
-continue on their existing releases for endurance observation. See
+All 388 tests pass, and the copied Red healing replay is unchanged. Both live processes received this fix with the PC sorting release. See
 [the evidence](validation/partial-training-20260915.json).
 
 
@@ -347,3 +346,11 @@ replaced it with medicine in the copied-save trial, so that candidate is held. A
 bounded PC storage for verified retired story items, preserving the items and required
 travel supplies, then test pickup success. Expired detour failures need a separate
 reproduction. See [the inventory evidence](validation/item-capacity-20260915.json).
+
+
+## PC comparison tools delivered in rc14
+
+Both live sites now sort selected or all boxes before pagination by level, total DVs,
+total stat experience, total experience, Pokédex number, species, nickname, and box
+order. Cards show both stat totals, and details explain the five-stat sums. Sorting
+persists through refreshes and URLs. See [the release receipt](validation/release-0.2.0rc14.json).

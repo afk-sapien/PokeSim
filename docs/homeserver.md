@@ -11,16 +11,10 @@ The old https://pokesim.tynet.app address remains a Red alias. Each game retains
 ROM, saves, party, boxes, journal, and notification configuration. Both games run at
 unlimited speed, with `SPEED=0` saved in their deployment configurations.
 
-Blue runs `pokesim:0.2.0rc12-66b226f` from commit
-`66b226f6d2a565c5281692a285d419d79fabaf2f`. Its image ID is
-`sha256:8d2e402895f59e9493269244f95d55db49c5d907a0291f4f2028415831ef1f11`. The source archive is unpacked at
-`/docker/pokesim/releases/0.2.0rc12-66b226f`.
-
-Red runs `pokesim:0.2.0rc13-17cd997`, commit
-`17cd9973f3fbcfef2cfb3838f02f0d2e759b7b75`. Its image ID is
-`sha256:6da126690a9b7484af2b2f39b2c60a3c3e3da561f2118c268312bdcae11861a2`.
-The source archive is at `/docker/pokesim/releases/0.2.0rc13-17cd997`.
-Blue was not restarted during the reserve preparation fix deployment.
+Both games run `pokesim:0.2.0rc14-1473f1d` from tagged commit
+`1473f1daf16acf6f66ef8a9067bef0eda16fb5ff`. The image ID is
+`sha256:284bc68df9aa6e473d9001af548151a8976c92ee0690d559c3a1e26532322715`. The source archive is unpacked at
+`/docker/pokesim/releases/0.2.0rc14-1473f1d`.
 PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
 
 The release includes persistent playtime, the four-page interface, stall recovery,
@@ -49,6 +43,13 @@ for new log files. A root-owned log file can pass a root configuration check but
 the running service from reloading.
 
 ## Backups and rollback
+
+The rc14 deployment updated both games after loading each latest save successfully:
+
+- Red: `/docker/pokesim/backups/20260915T040744Z-rc14/before.tar`. Previous image: `pokesim:0.2.0rc13-17cd997`.
+- Blue: `/docker/pokesim-blue/backups/20260915T040653Z-rc14/before.tar`. Previous image: `pokesim:0.2.0rc12-66b226f`.
+
+See [the rc14 deployment receipt](validation/release-0.2.0rc14.json).
 
 The rc13 deployment updated Red only:
 
@@ -140,7 +141,7 @@ entire database over unrelated configuration changes.
 
 ## Verification
 
-The current rc13 code passed 387 tests, with one optional checkpoint test skipped.
+The current rc14 code passed 388 tests, with one optional checkpoint test skipped.
 Red resumed with 111 registered entries. Blue remained running and reached 116 after
 catching Kangaskhan. Both services and all 12 public checks passed. No multi-day pass
 is claimed. The per-release receipts above preserve the exact validation and images.
