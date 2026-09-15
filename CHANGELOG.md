@@ -1,3 +1,9 @@
+0.2.0rc15, regular exchanges between trusted adventures
+
+- Enable useful spare exchanges for explicitly configured peers, including exclusives, trade evolutions, and meaningful training upgrades.
+- Stage and verify both saves, journal completed exchanges, and recover interrupted transactions without repeating a swap.
+- Prevent restores from undoing one side of a completed exchange. Show trade history and opportunities on the board.
+
 0.2.0rc14, compare stored partners
 
 - Sort selected or all storage boxes by level, total DVs, total stat experience, total experience, Pokédex number, species, nickname, or box order.

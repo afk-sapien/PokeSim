@@ -1,3 +1,8 @@
+Current trading update: the owner has requested common trading. Release rc15 implements
+trusted automatic spare exchanges and supersedes the earlier per-exchange review
+milestone for this pair. See [automatic trading](automatic-trading.md). Trade request
+objectives that send an adventure to catch a peer's missing species remain future work.
+
 # Roadmap: adventures that last for months
 
 Updated September 14, 2026.

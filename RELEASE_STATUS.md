@@ -1,4 +1,10 @@
-# Current deployment: both games on rc14
+# Release candidate: rc15 trusted automatic trading
+
+The owner requested common trading between the live pair. Routine automatic exchanges
+are being enabled with spare-only selection, safe checkpoints, durable recovery, and
+trade history. See [the operating guide](docs/automatic-trading.md).
+
+# Previous deployment: both games on rc14
 
 Both adventures run `pokesim:0.2.0rc14-1473f1d`, tagged commit
 `1473f1daf16acf6f66ef8a9067bef0eda16fb5ff`. PC now sorts across selected or all boxes

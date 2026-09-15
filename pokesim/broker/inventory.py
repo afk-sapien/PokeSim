@@ -38,6 +38,9 @@ class Copy:
     nick: str
     name: str
 
+    dvs: tuple[int, ...] = ()
+    stat_exp: tuple[int, ...] = ()
+
     @property
     def label(self) -> str:
         return self.nick or self.name
@@ -45,7 +48,7 @@ class Copy:
     def as_side(self) -> dict:
         return {'instance': self.instance, 'dex': self.dex, 'species': self.species,
                 'box': self.box, 'position': self.position, 'level': self.level,
-                'nick': self.nick, 'name': self.name}
+                'nick': self.nick, 'name': self.name, **({'dvs': self.dvs, 'stat_exp': self.stat_exp} if self.dvs or self.stat_exp else {})}
 
 
 @dataclass(frozen=True)
@@ -129,10 +132,11 @@ def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory
               for mon in (payload.get('storage') or {}).get('pokemon') or ()]
     owned = frozenset(payload.get('owned') or ())
     hunting = payload.get('hunting')
-    off_limits = frozenset(protected) | ({hunting} if hunting else frozenset())
+    off_limits = frozenset(protected) | frozenset(payload.get('protected_species', ())) | ({hunting} if hunting else frozenset())
     to_copy = lambda mon: Copy(instance=instance, dex=mon.get('dex'), species=mon['species'],
                                box=mon['box'], position=mon['position'], level=mon['level'],
-                               nick=mon.get('nick', ''), name=mon.get('name', ''))
+                               nick=mon.get('nick', ''), name=mon.get('name', ''),
+                               dvs=tuple(mon.get('dvs', ())), stat_exp=tuple(mon.get('stat_exp', ())))
     boxes = placed(stored)
     return Inventory(
         instance=instance, url=url, started=True,

@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "interval_seconds": 900,
+  "image": "pokesim:0.2.0rc15",
+  "game_data": "/docker/pokesim/data/game-data",
+  "board_url": "http://127.0.0.1:8950",
+  "protected_species": {"red": [], "blue": []},
+  "peers": {
+    "red": {"container": "pokesim", "url": "http://127.0.0.1:8930", "data": "/docker/pokesim/data", "rom": "/docker/pokesim/roms/pokered.gb"},
+    "blue": {"container": "pokesim-blue", "url": "http://127.0.0.1:8940", "data": "/docker/pokesim-blue/data", "rom": "/docker/pokesim-blue/roms/pokeblue.gb"}
+  }
+}

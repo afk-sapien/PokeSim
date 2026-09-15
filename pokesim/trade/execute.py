@@ -32,7 +32,7 @@ from pyboy import PyBoy
 
 from ..checkpoints import CheckpointStore
 from ..policies.collection import EVOS
-from ..ram import W_DEX_OWNED, W_DEX_SEEN
+from ..ram import W_DEX_OWNED, W_DEX_SEEN, individual_data
 from ..strategy_data import SPECIES
 from . import boxes
 
@@ -114,6 +114,12 @@ def _verify(mem, want: dict, instance: str) -> boxes.Slot:
             f"{instance}: box {want['box']} position {want['position']} holds "
             f"{slot.name} level {slot.level}, not {want.get('name', want['species'])} "
             f"level {want['level']} — the run has moved on since the proposal")
+    if 'nick' in want and slot.nick != want['nick']:
+        raise TradeError(f'{instance}: the selected nickname changed')
+    stats = individual_data(slot.struct)
+    for field in ('dvs', 'stat_exp'):
+        if want.get(field) and tuple(want[field]) != stats[field]:
+            raise TradeError(f'{instance}: the selected individual changed')
     return slot
 
 
@@ -183,8 +189,8 @@ def perform(proposal: dict, sources: dict, outputs: dict | None = None) -> dict:
             name = proposal[role]["instance"]
             target = Path(outputs[name]) if outputs and name in outputs \
                 else _destination(states[role], manifests[role])
-            _publish(target, blobs[role], manifests[role])
             written.append(target)
+            _publish(target, blobs[role], manifests[role])
             moved[0 if role == "give" else 1]["state"] = str(target)
     except OSError as error:
         for path in written:                # a half-written pair is worse than no trade at all

@@ -1,3 +1,10 @@
+# Historical first-trade review
+
+The owner subsequently requested common trading. The rc15 trusted automatic policy
+supersedes per-exchange approval for eligible spare trades on this pair. This older
+last-copy proposal remains unexecuted because automatic trading protects last copies.
+See [automatic trading](automatic-trading.md) for current behavior.
+
 # First exchange ready for review
 
 September 14, 2026. No live exchange has been executed.
