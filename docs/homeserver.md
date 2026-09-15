@@ -11,10 +11,10 @@ The old https://pokesim.tynet.app address remains a Red alias. Each game retains
 ROM, saves, party, boxes, journal, and notification configuration. Both games run at
 unlimited speed, with `SPEED=0` saved in their deployment configurations.
 
-Both games, the board, and the coordinator run `pokesim:0.2.0rc20-39f409b` from tagged commit
-`39f409be5754b1ed7c6f44503a1e7047a1b514f8`. The image ID is
-`sha256:d3df466ccbe4fe9366c22de85bded5d95f3cf96cf5d6709e571b22c9e680327d`.
-The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc20-39f409b`.
+Both games, the board, and the coordinator run `pokesim:0.2.0rc21-339d9a0` from tagged commit
+`339d9a0d840f87a5b829955743d9124174d9ed8b`. The image ID is
+`sha256:031f62299dc26c4cf20bc38656c382a25ccbba0f7f4ea684bd803b822d3c0080`.
+The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc21-339d9a0`.
 PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
 
 The release includes persistent playtime, the four-page interface, stall recovery,
@@ -50,13 +50,13 @@ the running service from reloading.
 
 ## Backups and rollback
 
-The current rc20 deployment retained these cold backups and passed current-save load checks:
+The current rc21 deployment retained compressed cold backups and passed current-save load checks:
 
-- Red: `/docker/pokesim/backups/20260915T084848Z-rc20/before.tar`.
-- Blue: `/docker/pokesim-blue/backups/20260915T084920Z-rc20/before.tar`.
-- Previous image: `pokesim:0.2.0rc19-1ba1fbb`.
+- Red: `/docker/pokesim/backups/20260915T094206Z-rc21/before.tar.gz`.
+- Blue: `/docker/pokesim-blue/backups/20260915T094253Z-rc21/before.tar.gz`.
+- Previous image: `pokesim:0.2.0rc20-39f409b`.
 
-See [the rc20 release receipt](validation/release-0.2.0rc20.json). Older deployments below
+See [the rc21 release receipt](validation/release-0.2.0rc21.json). Older deployments below
 are historical records, not descriptions of the currently running services.
 
 The rc16 deployment verified both current saves and retained these cold backups:
@@ -163,9 +163,9 @@ entire database over unrelated configuration changes.
 
 ## Verification
 
-The current rc20 code passed 448 tests, with one optional checkpoint test skipped.
-Red resumed with 122 registered entries and Blue with 124. Both retained Mewtwo.
-Red's missed Moltres encounter was restored without a rewind. Both games and all 12
+The current rc21 code passed 453 tests, with one optional checkpoint test skipped.
+Red resumed with 124 registrations and Blue with 127. Both subsequently caught Articuno,
+reaching 125 and 128, and retained Mewtwo. Red's Moltres route remains under investigation. Both games and all 12
 public checks passed. No multi-day pass is claimed. The per-release receipts above
 preserve the exact validation and images.
 

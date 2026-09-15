@@ -1,0 +1,561 @@
+{
+  "containers": {
+    "pokesim": {
+      "image": "pokesim:0.2.0rc21-339d9a0",
+      "image_id": "sha256:031f62299dc26c4cf20bc38656c382a25ccbba0f7f4ea684bd803b822d3c0080",
+      "started_at": "2026-09-15T09:42:28.368554994Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-blue": {
+      "image": "pokesim:0.2.0rc21-339d9a0",
+      "image_id": "sha256:031f62299dc26c4cf20bc38656c382a25ccbba0f7f4ea684bd803b822d3c0080",
+      "started_at": "2026-09-15T09:43:02.613082089Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-broker": {
+      "image": "pokesim:0.2.0rc21-339d9a0",
+      "image_id": "sha256:031f62299dc26c4cf20bc38656c382a25ccbba0f7f4ea684bd803b822d3c0080",
+      "started_at": "2026-09-15T09:43:06.686328254Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-trading": {
+      "image": "pokesim:0.2.0rc21-339d9a0",
+      "image_id": "sha256:031f62299dc26c4cf20bc38656c382a25ccbba0f7f4ea684bd803b822d3c0080",
+      "started_at": "2026-09-15T09:43:07.130863959Z",
+      "restarts": 0,
+      "health": null
+    }
+  },
+  "game_deployments": {
+    "red": {
+      "edition": "red",
+      "backup": "/docker/pokesim/backups/20260915T094206Z-rc21/before.tar.gz",
+      "image": "pokesim:0.2.0rc21-339d9a0",
+      "image_id": "sha256:031f62299dc26c4cf20bc38656c382a25ccbba0f7f4ea684bd803b822d3c0080",
+      "revision": "339d9a0d840f87a5b829955743d9124174d9ed8b",
+      "timestamp": 1789465350.6555474,
+      "previous_image": "pokesim:0.2.0rc20-39f409b",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 124,
+      "reloads": 0,
+      "progress": {
+        "state": "exploring",
+        "last_achievement": {
+          "id": 8706,
+          "title": "Champion! League victory #5",
+          "ts": 1789465192.9435973,
+          "age_seconds": 157
+        }
+      }
+    },
+    "blue": {
+      "edition": "blue",
+      "backup": "/docker/pokesim-blue/backups/20260915T094253Z-rc21/before.tar.gz",
+      "image": "pokesim:0.2.0rc21-339d9a0",
+      "image_id": "sha256:031f62299dc26c4cf20bc38656c382a25ccbba0f7f4ea684bd803b822d3c0080",
+      "revision": "339d9a0d840f87a5b829955743d9124174d9ed8b",
+      "timestamp": 1789465384.81327,
+      "previous_image": "pokesim:0.2.0rc20-39f409b",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 127,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 3803,
+          "title": "Champion! League victory #6",
+          "ts": 1789465265.0119426,
+          "age_seconds": 119
+        }
+      }
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "league_rewards": true,
+    "allow_last_copies": true,
+    "mew_event": false,
+    "completed": 7,
+    "state": "ready",
+    "error": null,
+    "events": [
+      {
+        "id": "1789458870307022598",
+        "ts": 1789458870.3070238,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "blue",
+            "name": "Mew",
+            "species": 21,
+            "ordinal": 1,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789459594488151788",
+        "ts": 1789459594.4881527,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "red",
+            "name": "Bulbasaur",
+            "species": 153,
+            "ordinal": 1,
+            "level": 5,
+            "box": 1,
+            "position": 20
+          },
+          {
+            "instance": "blue",
+            "name": "Omanyte",
+            "species": 98,
+            "ordinal": 2,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789460078350906137",
+        "ts": 1789460078.3509073,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "blue",
+            "name": "Bulbasaur",
+            "species": 153,
+            "ordinal": 3,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789460383358783576",
+        "ts": 1789460383.3587842,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "red",
+            "name": "Bulbasaur",
+            "species": 153,
+            "ordinal": 2,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          },
+          {
+            "instance": "blue",
+            "name": "Omanyte",
+            "species": 98,
+            "ordinal": 4,
+            "level": 5,
+            "box": 3,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789461519172662327",
+        "ts": 1789461519.172664,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "red",
+            "name": "Squirtle",
+            "species": 177,
+            "ordinal": 3,
+            "level": 5,
+            "box": 3,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789461830462467052",
+        "ts": 1789461830.4624684,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "blue",
+            "name": "Omanyte",
+            "species": 98,
+            "ordinal": 5,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789464446106339439",
+        "ts": 1789464446.1063404,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "red",
+            "name": "Mew",
+            "species": 21,
+            "ordinal": 4,
+            "level": 5,
+            "box": 7,
+            "position": 19
+          }
+        ]
+      },
+      {
+        "id": "1789465388489213956",
+        "ts": 1789465388.4892154,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "red",
+            "name": "Bulbasaur",
+            "species": 153,
+            "ordinal": 5,
+            "level": 5,
+            "box": 11,
+            "position": 20
+          },
+          {
+            "instance": "blue",
+            "name": "Omanyte",
+            "species": 98,
+            "ordinal": 6,
+            "level": 5,
+            "box": 3,
+            "position": 20
+          }
+        ]
+      }
+    ]
+  },
+  "last_trade": [
+    {
+      "id": "1789463959333232082",
+      "ts": 1789463959.3332334,
+      "reason": "Red registers Pinsir. Blue registers Vileplume",
+      "moved": [
+        {
+          "instance": "red",
+          "box": 6,
+          "position": 14,
+          "sent": {
+            "species": 187,
+            "name": "Vileplume",
+            "level": 31,
+            "nick": "PEACH"
+          },
+          "received": {
+            "species": 29,
+            "name": "Pinsir",
+            "level": 32,
+            "nick": "CHEESEFEET",
+            "evolved_from": null
+          },
+          "state": "/trading/transactions/1789463959333232082/after/red/auto-v1-trade-1789463959333232082.state",
+          "owned_before": 123,
+          "owned_after": 124
+        },
+        {
+          "instance": "blue",
+          "box": 8,
+          "position": 16,
+          "sent": {
+            "species": 29,
+            "name": "Pinsir",
+            "level": 32,
+            "nick": "CHEESEFEET"
+          },
+          "received": {
+            "species": 187,
+            "name": "Vileplume",
+            "level": 31,
+            "nick": "PEACH",
+            "evolved_from": null
+          },
+          "state": "/trading/transactions/1789463959333232082/after/blue/auto-v1-trade-1789463959333232082.state",
+          "owned_before": 126,
+          "owned_after": 127
+        }
+      ]
+    }
+  ],
+  "runs": {
+    "red": {
+      "version": "0.2.0rc21",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "league_rewards": {
+        "earned": 5,
+        "delivered": 5,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {
+          "146": 1
+        }
+      },
+      "owned": 125,
+      "mewtwo_registered": true,
+      "objective": {
+        "id": "collect_train",
+        "title": "Train Porygon to level 40",
+        "reason": "Level 33 of 40. Raise a partner, then rotate projects",
+        "targets": [
+          [
+            18,
+            8,
+            2
+          ],
+          [
+            18,
+            8,
+            3
+          ],
+          [
+            18,
+            8,
+            4
+          ],
+          [
+            18,
+            8,
+            5
+          ],
+          [
+            18,
+            9,
+            2
+          ],
+          [
+            18,
+            9,
+            3
+          ],
+          [
+            18,
+            9,
+            4
+          ],
+          [
+            18,
+            9,
+            5
+          ]
+        ],
+        "target_count": 6352,
+        "facing": null
+      },
+      "project": {
+        "method": "train",
+        "parent": 170,
+        "family": [
+          170
+        ],
+        "box": 11,
+        "initial_level": 32,
+        "target_level": 40,
+        "key": "train:170:40",
+        "initial_experience": 34076,
+        "gains": {
+          "experience": 4359,
+          "levels": 1
+        }
+      }
+    },
+    "blue": {
+      "version": "0.2.0rc21",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "league_rewards": {
+        "earned": 6,
+        "delivered": 6,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {}
+      },
+      "owned": 128,
+      "mewtwo_registered": true,
+      "objective": {
+        "id": "collect_explore",
+        "title": "Explore Route16Gate2F",
+        "reason": "Visit an area that has not been explored",
+        "targets": [
+          [
+            187,
+            7,
+            6
+          ]
+        ],
+        "target_count": 1,
+        "facing": null
+      },
+      "project": {
+        "method": "explore",
+        "map": 187,
+        "target": [
+          187,
+          7,
+          6
+        ],
+        "key": "0:explore:187:"
+      }
+    }
+  },
+  "version": "0.2.0rc21",
+  "source_tag": "v0.2.0rc21",
+  "source_revision": "339d9a0d840f87a5b829955743d9124174d9ed8b",
+  "public_checks": [
+    {
+      "edition": "red",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/sprites/25.png",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/sprites/25.png",
+      "status": 200
+    }
+  ],
+  "compressed_backups": {
+    "red": {
+      "path": "/docker/pokesim/backups/20260915T094206Z-rc21/before.tar.gz",
+      "compressed_bytes": 90173694,
+      "gzip_integrity": "passed"
+    },
+    "blue": {
+      "path": "/docker/pokesim-blue/backups/20260915T094253Z-rc21/before.tar.gz",
+      "compressed_bytes": 27388057,
+      "gzip_integrity": "passed"
+    }
+  },
+  "validation": {
+    "python_passed": 453,
+    "python_skipped": 1,
+    "javascript_test_files_passed": 2,
+    "package_resources": "passed"
+  },
+  "live_articuno": {
+    "red": {
+      "registered": true,
+      "owned": 125,
+      "event": {
+        "id": 8709,
+        "ts": 1789465364.4526246,
+        "type": "catch",
+        "title": "Caught the legendary Articuno!",
+        "body": "A level 50 Articuno on Seafoam Islands B4F. Pok\u00e9dex: 125 owned.",
+        "notable": 1,
+        "map": "Seafoam Islands B4F",
+        "playtime": "255:00:00",
+        "shot": "8709.png",
+        "state": "event-8709.state",
+        "priority": 5
+      }
+    },
+    "blue": {
+      "registered": true,
+      "owned": 128,
+      "event": {
+        "id": 3806,
+        "ts": 1789465399.1894538,
+        "type": "catch",
+        "title": "Caught the legendary Articuno!",
+        "body": "A level 50 Articuno on Seafoam Islands B4F. Pok\u00e9dex: 128 owned.",
+        "notable": 1,
+        "priority": 5,
+        "map": "Seafoam Islands B4F",
+        "playtime": "255:00:00",
+        "shot": "3806.png",
+        "state": "event-3806.state"
+      }
+    }
+  }
+}
