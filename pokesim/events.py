@@ -191,7 +191,8 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
     if prev.map == cur.map and len(prev.hidden_objects) == len(cur.hidden_objects):
         for offset, (map_id, index) in enumerate(STRATEGY_DATA['toggle_objects']):
             byte, bit = offset // 8, 1 << (offset % 8)
-            if (map_id != cur.map or byte >= len(cur.hidden_objects)
+            if (map_id != cur.map or map_id not in WORLD or index >= len(WORLD[map_id]['objects'])
+                    or byte >= len(cur.hidden_objects)
                     or prev.hidden_objects[byte] & bit or not cur.hidden_objects[byte] & bit):
                 continue
             item = ground_item(WORLD[map_id]['objects'][index])

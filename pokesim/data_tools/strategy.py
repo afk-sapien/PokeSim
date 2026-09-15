@@ -189,9 +189,10 @@ def generate(src, revision):
         match = re.match(r"\s*toggleable_objects_for (\w+)", line)
         if match:
             toggle_map = maps[match[1]]
-        match = re.match(r"\s*toggle_object_state (\w+),", line)
+        match = re.match(r"\s*toggle_object_state (\$[\da-fA-F]+|\w+),", line)
         if match:
-            toggles.append([toggle_map, object_ids[match[1]]])
+            object_id = int(match[1][1:], 16) - 1 if match[1].startswith('$') else object_ids[match[1]]
+            toggles.append([toggle_map, object_id])
     pairs = [[ts, int(a, 16), int(b, 16)] for ts, a, b in re.findall(
         r"db (\w+), \$([\da-fA-F]+), \$([\da-fA-F]+)",
         read("data/tilesets/pair_collision_tile_ids.asm"))]

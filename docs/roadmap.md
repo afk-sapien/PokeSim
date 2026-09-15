@@ -1,3 +1,15 @@
+Current legendary recovery, September 15: failed Articuno, Zapdos, Moltres, and
+Mewtwo encounters can return. Clear only the finished-encounter and hidden-object bits
+after the player leaves the room and a persistent retry delay expires. Preserve spent
+items, damage, and all adventure progress. Existing missed encounters are eligible.
+Registered legendaries stay resolved after trading or release, so this cannot supply
+duplicate legendaries. Empty balls, full storage, and a 50-attempt capture budget cause
+retreat. New attempts prepare supplies and storage, with longer waits after failures.
+Only verified Red and Blue ROMs receive these automatic encounter repairs.
+
+The unused toggle-object entry now retains its position in both generated and older
+bundles. Its omission had shifted Mewtwo, Articuno, and late-map pickup visibility flags.
+
 Current Mewtwo work: legendary expeditions receive their own postgame priority,
 a longer bounded budget, and progress credit for approaching the target and finishing
 route battles. They buy Ultra Balls and Repels, lead with a strong partner, and reserve
@@ -19,8 +31,9 @@ when the run has plenty of money. The initial Eevee evolution keeps its random c
 Later Eevees can fill the other missing forms. This replaces the proposed harder
 Championship milestones and the disabled one-time Mew event on the live pair.
 The pool removes the starter, Eevee, fossil-choice, and Mew availability barriers.
-A Red and Blue pair can exchange version exclusives and trade evolutions, but missed
-unique legendary encounters can still prevent completion.
+A Red and Blue pair can exchange version exclusives and trade evolutions. Missed
+legendary encounters now have bounded recovery, while autonomous completion still
+depends on successful routing, training, supplies, and useful exchanges.
 
 Current scope update, September 15: randomize fossil and Eevee evolution choices for
 new runs. Preserve choices already made in existing saves. Starter and Eevee supply
@@ -48,7 +61,7 @@ and the first persistent postgame director. The remaining long-term features bel
 planned. Guaranteed Pokédex completion, restart farming, and authentic link-cable
 emulation remain outside scope. Stat training and optional searches for better DVs are
 now future goals. Perfect-DV completion is not a requirement for a successful adventure.
-Missing encounters and unchosen gifts must remain visible limitations.
+Encounter preparation, pending rewards, and acquisition requirements remain visible.
 
 ## 1. Break stalled objectives and recovery loops
 

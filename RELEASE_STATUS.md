@@ -1,4 +1,29 @@
-# Current deployment: rc19, complete legendary expeditions
+# Release rc20: preserve missed legendary encounters
+
+A failed Articuno, Zapdos, Moltres, or Mewtwo encounter now returns after leaving its
+room and a persistent retry delay. The repair clears only its encounter-finished and
+hidden-object bits. Spent items, damage, money, party, boxes, and adventure progress
+stay intact. Previously missed encounters are eligible. Registered legendaries remain
+resolved after trading or release. Only verified Red and Blue ROMs receive repairs.
+
+Empty balls, full storage, and a 50-attempt capture limit cause retreat. Planned
+legendary interactions require room and at least five Ultra Balls or a Master Ball.
+Shopping targets twenty Ultra Balls, with ordinary healing, storage, and objective
+backoff retained. Repeat failures wait longer. Repairs create journal entries and a
+fresh checkpoint. Pending delays and attempt counts survive checkpoint restarts.
+
+The game-data parser now preserves an unused numeric toggle-object entry. Existing
+verified bundles are normalized without changing their files. This fixes shifted
+visibility flags for Mewtwo, Articuno, and items in later maps.
+
+All 448 Python tests passed, with one optional test skipped. Both JavaScript test
+files passed. Copied saves reproduced both knockout and empty-ball failures, retained
+pending recovery through a restart, and continued without recovery rewinds. A guided
+return selected the restored Mewtwo after the normal retry wait, then ordinary policy
+navigation and battle controls caught it. The empty-ball run instead continued through
+League rematches. See [the replay evidence](docs/validation/legendary-recovery-0.2.0rc20.json).
+
+# Previous deployment: rc19, complete legendary expeditions
 
 Mewtwo remains a normal Cerulean Cave encounter. Legendary targets now have a distinct
 postgame priority and a longer bounded expedition budget. Route progress and completed

@@ -716,8 +716,9 @@ class StrategicPolicy(Policy):
                 self.stock_latch = False
                 if legendary:
                     self.collection.project['supplies_prepared'] = True
-                    if ball_count < 5 and not dict(s.items).get(ITEMS['MASTER_BALL']):
+                    if dict(s.items).get(ITEMS['ULTRA_BALL'], 0) < 5 and not dict(s.items).get(ITEMS['MASTER_BALL']):
                         self.collection.abandon('Need money or bag space for legendary capture supplies')
+                        goal = Goal('collect_plan', 'Plan another expedition', 'Earn supplies before another legendary attempt')
         if self.heal_latch:
             # Medicine is useful when no known route to a center can be followed.
             for target, mon in enumerate(s.party):
@@ -916,6 +917,12 @@ class StrategicPolicy(Policy):
             elif not following_route and s.map == MAPS["VICTORY_ROAD_3F"] and ready_to_drop(s):
                 goal = Goal("victory_drop", "Follow the boulder downstairs", "Drop through the hole to reach the final switch", ((MAPS["VICTORY_ROAD_2F"], 22, 16),))
         if pos in goal.targets:
+            if legendary_project(project) and goal.key == 'collect_static' and (
+                    not s.can_catch or not dict(s.items).get(ITEMS['MASTER_BALL'])
+                    and dict(s.items).get(ITEMS['ULTRA_BALL'], 0) < 5):
+                self.collection.abandon('Prepare capture supplies and storage before starting the legendary battle')
+                self.goal = Goal('collect_plan', 'Prepare another expedition', 'Make room and restock before returning')
+                return wait()
             if goal.key == "snorlax":
                 action = self._use_item(s, ITEMS["POKE_FLUTE"])
                 if action:

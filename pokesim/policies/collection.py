@@ -297,6 +297,9 @@ class Collection:
             rows = sources.get(sid,[])
             if status == 'unavailable' and any(r['method']=='static' for r in rows):
                 reason = 'Encounter already resolved, or area not unlocked yet'
+                if d in (144, 145, 146, 150) and any(
+                        r.get('flag') and event_set(s.event_flags, r['flag']) for r in rows):
+                    reason = 'Missed legendary encounter. Leave the area and prepare for its return'
             entries.append({'dex':d,'name':name(sid),'species':sid,'status':status,'reason':reason,
                             'methods':sorted({r['method'] for r in rows})})
         evos = []
