@@ -35,6 +35,12 @@ Prepared adventures run offline. Adding another adventure can reuse an installed
 - Keep the computer awake to advance the games. Sleeping or powered-off computers do not accumulate simulated progress.
 - Desktop launch uses an available loopback port, accessible only from your computer. The Library has no account or owner-key step. For remote access, use an authenticated reverse proxy or a trusted private network as described in [self-hosting](self-hosting.md). Anyone who can reach the Library can manage its adventures.
 
+## Simulation pace
+
+Set the pace for all adventures in Library Settings. The default and recommended pace is 1×, so adventures unfold gradually and produce fewer notifications per hour. The live screen and individual adventure settings do not change pace. Newly created and restarted adventures inherit the global setting, which also applies to new Cable Club sessions. A cable session already in progress finishes at its starting pace.
+
+The numbered choices go up to 16×, an application setting limit. Max removes deliberate waiting and runs as fast as the computer can handle. Its actual rate depends on gameplay, available CPU time, and the number of running adventures. Max is intended for testing. Taking manual control still runs that game at 1× until autonomous play resumes.
+
 ## Trading
 
 Trading is automatic across all eligible running adventures in the same library. New adventures join automatically. There are no groups to configure or exchanges to choose. Each adventure’s Trading page shows only its own current exchange and recent completed trades, with the adventure navigation kept in place. Its history remains available while stopped. The Library’s Trading page provides an overview across all adventures. Participation requires a compatible game and an eligible boxed Pokémon. Active party members and locked Pokémon are protected.

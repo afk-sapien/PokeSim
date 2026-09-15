@@ -104,3 +104,52 @@ def test_healthy_http_with_stalled_game_state_still_reaches_watchdog(supervisor,
     finally:
         supervisor.closed = original_closed
         child.stop = lambda: None
+
+
+def test_global_pace_applies_to_running_new_and_restarted_games(supervisor):
+    first, second = adventure(supervisor), adventure(supervisor)
+    supervisor.registry.update(first, settings={'speed': 8})
+    supervisor.start(first)
+    supervisor.start(second)
+    assert supervisor.children[first].bootstrap['settings']['speed'] == 1
+    received = {}
+    for aid in (first, second):
+        def request(method, path, data, timeout, aid=aid):
+            assert path == '/internal/speed'
+            received[aid] = data['speed']
+            return data
+        supervisor.children[aid].request = request
+    assert supervisor.set_speed(0) == []
+    assert received == {first: 0, second: 0}
+    supervisor.stop(first)
+    supervisor.registry.request_lifecycle(first, 'start', identifier())
+    supervisor.start(first)
+    assert supervisor.children[first].bootstrap['settings']['speed'] == 0
+    supervisor.stop(second)
+    third = adventure(supervisor)
+    supervisor.start(third)
+    assert supervisor.children[third].bootstrap['settings']['speed'] == 0
+
+
+def test_global_pace_retries_unavailable_worker_and_rejects_invalid_values(supervisor):
+    aid = adventure(supervisor)
+    supervisor.start(aid)
+    child = supervisor.children[aid]
+    def fail(*args, **kwargs):
+        raise RuntimeError('Worker reconnecting')
+    child.request = fail
+    assert supervisor.set_speed(4) == [aid]
+    assert supervisor.registry.setting('speed') == 4
+    calls = []
+    def request(method, path, data, timeout):
+        calls.append(data['speed'])
+        return data
+    child.request = request
+    supervisor.sync_speed(aid, child, 1)
+    assert calls == [4]
+    supervisor.sync_speed(aid, child, 4)
+    assert calls == [4]
+    for speed in (True, -1, 17, float('nan'), '0'):
+        with pytest.raises(ValueError):
+            supervisor.set_speed(speed)
+        assert supervisor.registry.setting('speed') == 4

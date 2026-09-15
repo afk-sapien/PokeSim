@@ -112,7 +112,6 @@ async function refreshState() {
     $('#connection').classList.remove('is-offline')
     set('#status', 'textContent', manualMode ? 'You’re in control' : paused ? 'Game frozen' : 'Adventure in progress')
     set('#pause', 'textContent', paused && !manualMode ? '▶ Unfreeze' : 'Ⅱ Freeze game')
-    if ($('#speed') && document.activeElement !== $('#speed')) $('#speed').value = String(state.speed)
     const progress = state.progress
     set('#progress-state', 'textContent', paused ? 'Paused' : ({exploring: 'Exploring', making_progress: 'Making progress', recovering: 'Recovering'}[progress?.state] || 'Exploring'))
     const achievement = progress?.last_achievement
@@ -200,7 +199,6 @@ async function refreshEvents(append = false) {
 
 if ($('#pause')) $('#pause').onclick = (event) => control(event.currentTarget, paused && !manualMode ? 'take_control' : 'pause')
 if ($('#take-control')) $('#take-control').onclick = (event) => control(event.currentTarget, manualMode ? 'resume' : 'take_control')
-if ($('#speed')) $('#speed').onchange = (event) => control(event.currentTarget, 'speed', Number(event.target.value))
 if ($('#save')) $('#save').onclick = (event) => control(event.currentTarget, 'save', undefined, 'Save requested. A little moment to come back to.')
 if ($('#restart')) $('#restart').onclick = (event) => {
   if (confirm('Start a fresh adventure from the beginning? Your event journal will be kept.')) control(event.currentTarget, 'restart', undefined, 'A new adventure is starting.')

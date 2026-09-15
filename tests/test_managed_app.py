@@ -158,3 +158,26 @@ def test_game_trading_stays_scoped_and_available_when_stopped(client):
     assert second['active'][0]['peer_name'] == 'Third Red'
     assert client.get('/trading').status_code == 200
     assert client.get('/games/' + 'f' * 32 + '/api/interactions').status_code == 404
+
+
+def test_pace_is_a_global_setting_and_rejects_per_adventure_edits(client):
+    client, manager = client
+    headers = login(client, manager)
+    assert client.get('/api/v1/settings').json()['speed'] == 1
+    for value in (0, 1, 16):
+        response = client.patch('/api/v1/settings', json={'speed': value}, headers=headers)
+        assert response.status_code == 200
+        assert response.json()['speed'] == value
+        assert manager.registry.setting('speed') == value
+    for value in (True, '0', -1, 17):
+        assert client.patch('/api/v1/settings', json={'speed': value}, headers=headers).status_code == 409
+    assert client.patch('/api/v1/settings', json={'speed': 4}).status_code == 403
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    game = manager.registry.create('Red', 'fixture-rom', {'speed': 8}, identifier())
+    route = '/api/v1/adventures/' + game['id']
+    response = client.patch(route, json={'settings': {'speed': 4}}, headers=headers)
+    assert response.status_code == 409
+    assert 'Library Settings' in response.text
+    response = client.patch(route, json={'settings': {'auto_start': True}}, headers=headers)
+    assert response.status_code == 200
+    assert 'speed' not in response.json()['settings']

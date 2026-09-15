@@ -77,12 +77,78 @@ test('settings mutations send only fields accepted by the manager', async () => 
   await settle()
   view.element('#settings-id').value = 'a'.repeat(32)
   view.element('#settings-name').value = 'Renamed adventure'
-  view.element('#settings-speed').value = '4'
   view.element('#settings-autostart').checked = true
   view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
   await settle()
   const request = view.calls.find(call => call.options?.method === 'PATCH')
-  assert.deepEqual(JSON.parse(request.options.body), {name: 'Renamed adventure', settings: {speed: 4, auto_start: true}})
+  assert.deepEqual(JSON.parse(request.options.body), {name: 'Renamed adventure', settings: {auto_start: true}})
+})
+
+test('global settings load and save simulation pace without overwriting edits during refresh', async () => {
+  const view = library({page: 'settings', respond: path => {
+    if (path === '/api/v1/settings') return {ok: true, json: async () => ({max_running: 3, speed: 1})}
+  }})
+  await settle()
+  assert.equal(view.element('#simulation-speed').value, '1')
+  assert.equal(view.element('#max-running').value, 3)
+  view.element('#simulation-speed').value = '0.5'
+  view.element('#max-running').value = '4'
+  view.element('#settings-form').oninput()
+  view.poll()
+  await settle()
+  assert.equal(view.element('#simulation-speed').value, '0.5')
+  assert.equal(view.element('#max-running').value, '4')
+  view.element('#settings-form').onsubmit({preventDefault() {}})
+  await settle()
+  const request = view.calls.find(call => call.path === '/api/v1/settings' && call.options.method === 'PATCH')
+  assert.deepEqual(JSON.parse(request.options.body), {max_running: 4, speed: 0.5})
+  assert.equal(request.options.headers['X-PokeSim-CSRF'], 'csrf')
+})
+
+test('global pace preserves unlimited zero and protects edits made while initial settings load', async () => {
+  let finishSettings
+  const view = library({page: 'settings', respond: (path, options) => {
+    if (path === '/api/v1/settings' && !options.method) return {ok: true, json: () => new Promise(resolve => { finishSettings = resolve })}
+  }})
+  await settle()
+  view.element('#simulation-speed').value = '0'
+  view.element('#max-running').value = '6'
+  view.element('#settings-form').onchange()
+  finishSettings({speed: 1, max_running: 3})
+  await settle()
+  assert.equal(view.element('#simulation-speed').value, '0')
+  assert.equal(view.element('#max-running').value, '6')
+  view.element('#settings-form').onsubmit({preventDefault() {}})
+  await settle()
+  const request = view.calls.find(call => call.path === '/api/v1/settings' && call.options.method === 'PATCH')
+  assert.deepEqual(JSON.parse(request.options.body), {max_running: 6, speed: 0})
+})
+
+test('saved settings explain when reconnecting adventures still need the new pace', async () => {
+  for (const pace_pending of [[], ['reconnecting-adventure']]) {
+    const view = library({page: 'settings', respond: path => {
+      if (path === '/api/v1/settings') return {ok: true, json: async () => ({max_running: 3, speed: 1, pace_pending})}
+    }})
+    await settle()
+    view.element('#settings-form').onsubmit({preventDefault() {}})
+    await settle()
+    assert.equal(view.element('#notice').textContent, pace_pending.length
+      ? 'Settings saved. The pace will apply to reconnecting adventures automatically.'
+      : 'Application settings saved.')
+  }
+})
+
+test('simulation pace appears only in global settings with a recommended default and testing maximum', async () => {
+  const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
+  const dashboard = fs.readFileSync('pokesim/web/static/index.html', 'utf8')
+  const app = fs.readFileSync('pokesim/web/static/app.js', 'utf8')
+  assert.match(html, /id="simulation-speed"/)
+  assert.match(html, /value="1" selected>1× \(recommended\)/)
+  assert.match(html, /value="0">Max \(testing\)/)
+  assert.doesNotMatch(html, /settings-speed|The pace applies to this adventure/)
+  assert.doesNotMatch(source, /settings-speed/)
+  assert.doesNotMatch(dashboard, /id="speed"|speed-label|AI pace/)
+  assert.doesNotMatch(app, /\$\('#speed'\)|control\([^\n]*'speed'/)
 })
 
 test('failed creation retains idempotency key for an identical retry and exposes the error in the dialog', async () => {

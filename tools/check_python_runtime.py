@@ -36,6 +36,15 @@ def main():
                     response.raise_for_status()
                     assert response.json()['adventure_id'] == bootstrap['adventure_id']
             assert children[0].process.pid != children[1].process.pid
+            for child in children:
+                for pace in (0, 1, 16):
+                    assert child.request('POST', '/internal/speed', {'speed': pace}) == {'speed': pace}
+                    assert child.request('GET', '/api/state')['speed'] == pace
+                with httpx.Client(trust_env=False, timeout=5) as client:
+                    assert client.post(child.url + '/internal/speed', json={'speed': 0}).status_code == 401
+                    response = client.post(child.url + '/api/control', json={'action': 'speed', 'value': 0},
+                        headers={'Authorization': 'Bearer ' + child.token})
+                    assert response.status_code == 409
             for number, child in enumerate(children):
                 child.process.stdin.close()
                 child.process.wait(timeout=30)

@@ -11,6 +11,7 @@
   let connecting = false
   let closing = false
   let sessionPending = null
+  let appSettingsDirty = false
   const cardSignatures = new Map()
   let stoppedSignature = ''
   const requests = new Map()
@@ -183,7 +184,6 @@
     if (button.dataset.action === 'settings') {
       $('#settings-id').value = game.id
       $('#settings-name').value = game.name
-      $('#settings-speed').value = String(game.settings?.speed ?? 1)
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
       for (const [field, setting] of [['league-rewards', 'league_rewards'], ['mew-event', 'mew_event']]) {
         const input = $(`#settings-${field}`)
@@ -222,13 +222,15 @@
       const game = adventures.find(item => item.id === $('#settings-id').value)
       const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked} : {}
       await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
-        settings: {speed: Number($('#settings-speed').value), auto_start: $('#settings-autostart').checked, ...rewards}}, 'PATCH')
+        settings: {auto_start: $('#settings-autostart').checked, ...rewards}}, 'PATCH')
       $('#adventure-settings').close()
       notice('Adventure settings saved.')
     }) }
+  $('#settings-form').oninput = () => { appSettingsDirty = true }
+  $('#settings-form').onchange = () => { appSettingsDirty = true }
   $('#settings-form').onsubmit = event => { event.preventDefault()
-    act(async () => { await write('/api/v1/settings', {max_running: Number($('#max-running').value)}, 'PATCH')
-      notice('Application settings saved.') }) }
+    act(async () => { const result = await write('/api/v1/settings', {max_running: Number($('#max-running').value), speed: Number($('#simulation-speed').value)}, 'PATCH')
+      notice(result.pace_pending?.length ? 'Settings saved. The pace will apply to reconnecting adventures automatically.' : 'Application settings saved.') }) }
   $('#create-backup').onclick = () => act(async () => {
     notice('Saving adventures and creating a backup…')
     await write('/api/v1/backups')
@@ -253,7 +255,10 @@
     document.querySelector(`[data-nav="${page}"]`)?.setAttribute('aria-current', 'page')
     if (page === 'settings' && owner) {
       const settings = await api('/api/v1/settings')
-      $('#max-running').value = settings.max_running
+      if (!appSettingsDirty) {
+        $('#max-running').value = settings.max_running
+        $('#simulation-speed').value = String(settings.speed ?? 1)
+      }
       await refreshBackups()
     }
     permissions()

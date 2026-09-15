@@ -155,6 +155,7 @@ class Coordinator:
         from ..interactions.link_worker import CableParticipant, CableSessionPlan
         left, right = row['plan']['participants']
         return asdict(CableSessionPlan(interaction_id=row['id'], attempt_id=row['plan']['attempt_id'],
+            speed=self.registry.setting('speed', 1),
             left=CableParticipant(**prepared[left]['source']), right=CableParticipant(**prepared[right]['source'])))
 
     def _run_cable(self, row, session_plan):

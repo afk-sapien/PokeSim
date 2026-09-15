@@ -10,7 +10,7 @@ import sys
 import threading
 from dataclasses import dataclass, field
 
-from .settings import SimulationSettings
+from .settings import SimulationSettings, validate_speed
 
 PROTOCOL = 1
 MAX_BOOTSTRAP = 65536
@@ -112,6 +112,20 @@ def serve(bootstrap, parent_stream, ready_stream):
                     'generation': bootstrap.generation, 'pid': os.getpid(),
                     'running': runtime.emulator.thread.is_alive(),
                     'error': runtime.emulator.fatal_error}
+
+        @app.post('/internal/speed')
+        def speed(data: dict):
+            from fastapi import HTTPException
+            try:
+                if set(data) != {'speed'}:
+                    raise ValueError('Set the global simulation pace')
+                value = validate_speed(data['speed'])
+            except ValueError as error:
+                raise HTTPException(400, str(error)) from error
+            def apply():
+                runtime.emulator._handle_command('speed', value)
+                return {'speed': runtime.emulator.speed}
+            return runtime.call(apply)
 
         @app.post('/internal/shutdown')
         def shutdown():

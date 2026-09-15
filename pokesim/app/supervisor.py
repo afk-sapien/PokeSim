@@ -17,6 +17,7 @@ import time
 import httpx
 
 from .registry import identifier
+from ..runtime.settings import validate_speed
 
 log = logging.getLogger(__name__)
 
@@ -174,6 +175,7 @@ class Supervisor:
                     raise ValueError('The running adventure limit has been reached. Stop a game or change Settings.')
                 generation = identifier()
                 settings = {**adventure['settings'],
+                            'speed': self.registry.setting('speed', 1),
                             'rom_path': str(self.assets.rom_path(adventure['rom_id'])),
                             'data_dir': str(self.registry.root / 'adventures' / aid),
                             'game_data_dir': str(self.assets.game_data_dir),
@@ -214,6 +216,35 @@ class Supervisor:
                     self.children.pop(aid, None)
             return self.registry.update(aid, state='stopped', error=None)
 
+    def set_speed(self, speed):
+        speed = validate_speed(speed)
+        with self.admission:
+            self.registry.set_setting('speed', speed)
+            with self.guard:
+                children = list(self.children.items())
+            pending = []
+            for aid, child in children:
+                try:
+                    self._apply_speed(child, speed)
+                except (RuntimeError, OSError, httpx.HTTPError):
+                    pending.append(aid)
+                    log.warning('Adventure %s will receive the global pace when it reconnects', aid)
+            return pending
+
+    @staticmethod
+    def _apply_speed(child, speed):
+        result = child.request('POST', '/internal/speed', {'speed': speed}, timeout=5)
+        if result.get('speed') != speed:
+            raise RuntimeError('Worker did not acknowledge the global pace')
+
+    def sync_speed(self, aid, child, actual):
+        with self.admission:
+            if self.closed.is_set() or self.children.get(aid) is not child:
+                return
+            speed = self.registry.setting('speed', 1)
+            if actual != speed:
+                self._apply_speed(child, speed)
+
     def run_monitor(self):
         self.thread = threading.Thread(target=self._monitor, name='adventure-supervisor', daemon=True)
         self.thread.start()
@@ -247,6 +278,7 @@ class Supervisor:
                 try:
                     child.request('GET', '/healthz', timeout=3)
                     status = child.request('GET', '/api/state', timeout=3)
+                    self.sync_speed(aid, child, status.get('speed'))
                     self.unhealthy_since.pop(aid, None)
                     game = status.get('game') or {}
                     summary = {'activity': game.get('map_name') or 'Adventure in progress',

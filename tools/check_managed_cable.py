@@ -56,7 +56,7 @@ def exercise(root, fixtures, roms, game_data, abort=False, progress=print):
             checked(len(inventory['offers']) > index, 'Fixtures need eligible boxed spares')
             choices[aid] = inventory['offers'][index]['trade_key']
             request(aid, 'prepare', {'plan_digest': plan_digest, 'selected_key': choices[aid]})
-            children[aid].request('POST', '/api/control', {'action': 'speed', 'value': 0})
+            children[aid].request('POST', '/internal/speed', {'speed': 0})
         prepared = {}
         deadline = time.monotonic() + 120
         while len(prepared) < 2:
@@ -100,7 +100,7 @@ def exercise(root, fixtures, roms, game_data, abort=False, progress=print):
             checked(request(aid, 'stage', payload)['phase'] == 'staged', 'Duplicate stage failed')
         if abort:
             for aid in children:
-                children[aid].request('POST', '/api/control', {'action': 'speed', 'value': 0.1})
+                children[aid].request('POST', '/internal/speed', {'speed': 0.1})
                 request(aid, 'abort')
                 checked(request(aid, 'abort')['phase'] == 'aborted', 'Duplicate abort failed')
             for aid in children:
@@ -121,7 +121,7 @@ def exercise(root, fixtures, roms, game_data, abort=False, progress=print):
                 checked(request(aid, 'apply', payload)['phase'] == 'applied', 'Duplicate apply failed')
             for aid in children:
                 apply(aid)
-                children[aid].request('POST', '/api/control', {'action': 'speed', 'value': 0.1})
+                children[aid].request('POST', '/internal/speed', {'speed': 0.1})
             children[A].stop()
             bootstraps[A]['generation'] = secrets.token_hex(8)
             start(A)

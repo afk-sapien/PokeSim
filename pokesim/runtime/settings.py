@@ -8,6 +8,12 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
+def validate_speed(value):
+    if type(value) not in (int, float) or not math.isfinite(value) or not (value == 0 or 0.1 <= value <= 16):
+        raise ValueError('Speed must be 0 for Max, or between 0.1 and 16')
+    return value
+
+
 @dataclass(frozen=True)
 class SimulationSettings:
     rom_path: str

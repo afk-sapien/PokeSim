@@ -23,10 +23,11 @@ def exercise_app(root, fixtures, roms, game_data, progress=print):
     report = {'status': 'running'}
     try:
         manager.registry.set_setting('max_running', 3)
+        manager.registry.set_setting('speed', 0.1)
         for index, edition in enumerate(('red', 'blue', 'red')):
             rom = Path(roms) / f'poke{edition}.gbc'
             asset = manager.assets.install_rom(rom.read_bytes())
-            settings = manager.validate_adventure_settings({'speed': 0.1, 'autosave_seconds': 3600})
+            settings = manager.validate_adventure_settings({'autosave_seconds': 3600})
             adventure = manager.registry.create(f'Integration {index}', asset['id'], settings, identifier())
             aid = adventure['id']
             ids.append(aid)
@@ -58,9 +59,9 @@ def exercise_app(root, fixtures, roms, game_data, progress=print):
                 raise RuntimeError('Injected unavailable participant after durable COMMIT')
             receipt = request(aid, operation, data, recovery)
             if operation == 'prepare' and receipt['phase'] == 'preparing':
-                manager.supervisor.child(aid).request('POST', '/api/control', {'action': 'speed', 'value': 0})
+                manager.supervisor.child(aid).request('POST', '/internal/speed', {'speed': 0})
             if operation == 'apply':
-                manager.supervisor.child(aid).request('POST', '/api/control', {'action': 'speed', 'value': 0.1})
+                manager.supervisor.child(aid).request('POST', '/internal/speed', {'speed': 0.1})
             return receipt
         manager.coordinator._request = inject_fault
         result = manager.coordinator.execute(row['id'])

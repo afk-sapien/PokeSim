@@ -8,7 +8,6 @@ import hmac
 import json
 import logging
 from logging.handlers import RotatingFileHandler
-import math
 import os
 from pathlib import Path
 import re
@@ -66,18 +65,15 @@ class Manager:
 
     @staticmethod
     def validate_adventure_settings(values):
-        allowed = {'starter', 'speed', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
+        allowed = {'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
                    'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards', 'mew_event'}
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError('Unsupported adventure settings')
-        result = {'starter': 'random', 'speed': 1, 'policy': 'strategic', 'auto_start': False, **values}
+        result = {'starter': 'random', 'policy': 'strategic', 'auto_start': False, **values}
         if result['starter'] not in {'random', 'bulbasaur', 'charmander', 'squirtle'}:
             raise ValueError('Choose a listed starter')
         if result['policy'] not in {'strategic', 'guided_random', 'smart_random'}:
             raise ValueError('Unknown adventure policy')
-        speed = result['speed']
-        if type(speed) not in (int, float) or not math.isfinite(speed) or not (speed == 0 or 0.1 <= speed <= 16):
-            raise ValueError('Speed must be zero or between 0.1 and 16')
         for name in ('auto_start', 'fast_text', 'battle_animations', 'viewer_only', 'league_rewards', 'mew_event'):
             if name in result and type(result[name]) is not bool:
                 raise ValueError(f'{name} must be a boolean')
@@ -351,27 +347,38 @@ def create_app(manager, shutdown=lambda: None):
             changes = data['settings']
             if not isinstance(changes, dict):
                 raise ValueError('Settings must be an object')
-            if adventure['state'] == 'running' and set(changes) - {'speed', 'auto_start'}:
+            if 'speed' in changes:
+                raise ValueError('Set the pace for all adventures in Library Settings')
+            if adventure['state'] == 'running' and set(changes) - {'auto_start'}:
                 raise ValueError('Stop the adventure before changing these settings')
-            values['settings'] = manager.validate_adventure_settings({**adventure['settings'], **changes})
-            if adventure['state'] == 'running' and 'speed' in changes:
-                await asyncio.to_thread(manager.supervisor.child(aid).request, 'POST', '/api/control',
-                                        {'action': 'speed', 'value': changes['speed']})
+            previous = {key: value for key, value in adventure['settings'].items() if key != 'speed'}
+            values['settings'] = manager.validate_adventure_settings({**previous, **changes})
         return manager.registry.update(aid, **values) if values else adventure
 
     @app.get('/api/v1/settings')
     def settings():
-        return {'max_running': manager.registry.setting('max_running', 2), 'data_dir': str(manager.root)}
+        return {'max_running': manager.registry.setting('max_running', 2),
+                'speed': manager.registry.setting('speed', 1), 'data_dir': str(manager.root)}
 
     @app.patch('/api/v1/settings')
     async def set_settings(request: Request):
         manager.check_available()
         data = await json_body(request)
-        maximum = data.get('max_running')
-        if set(data) != {'max_running'} or type(maximum) is not int or not 1 <= maximum <= 32:
-            raise ValueError('Running adventure limit must be between 1 and 32')
-        manager.registry.set_setting('max_running', maximum)
-        return settings()
+        if not data or set(data) - {'max_running', 'speed'}:
+            raise ValueError('Unsupported application settings')
+        if 'max_running' in data:
+            maximum = data['max_running']
+            if type(maximum) is not int or not 1 <= maximum <= 32:
+                raise ValueError('Running adventure limit must be between 1 and 32')
+        if 'speed' in data:
+            from ..runtime.settings import validate_speed
+            validate_speed(data['speed'])
+        pending = []
+        if 'speed' in data:
+            pending = await asyncio.to_thread(manager.supervisor.set_speed, data['speed'])
+        if 'max_running' in data:
+            manager.registry.set_setting('max_running', data['max_running'])
+        return {**settings(), 'pace_pending': pending}
 
     @app.get('/api/v1/interactions')
     def interactions():

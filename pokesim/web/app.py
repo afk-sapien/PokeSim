@@ -189,6 +189,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         elif c.action in ("pause", "resume", "take_control", "save", "restart"):
             emu.command(c.action)
         elif c.action == "speed":
+            if base_path:
+                raise HTTPException(409, "Set the pace for all adventures in Library Settings")
             try:
                 value = float(c.value)
             except (TypeError, ValueError):

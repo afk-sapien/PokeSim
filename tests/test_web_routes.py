@@ -96,3 +96,10 @@ def test_managed_local_offers_do_not_require_a_legacy_broker(tmp_path, monkeypat
     assert result['connected'] is True
     assert result['managed'] is True
     assert result['trading'] == {'managed': True, 'enabled': True}
+
+
+def test_managed_game_cannot_change_its_own_pace(tmp_path):
+    client = TestClient(app(tmp_path, base_path='/games/red-one', adventure_id='red-one'))
+    response = client.post('/api/control', json={'action': 'speed', 'value': 0})
+    assert response.status_code == 409
+    assert 'Library Settings' in response.text
