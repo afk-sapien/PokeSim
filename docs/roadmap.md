@@ -1,3 +1,9 @@
+Party inclusion deployed to both games, September 15: rc27 adds a Party section to
+the PC sidebar and mobile selector. The combined scope includes party and boxed
+Pokémon in all sorts and searches, with location labels and identical calculated
+Power. Existing all-box bookmarks include the party. This is a presentation change.
+Training continuity remains the next planner investigation described below.
+
 PC strength ranking deployed to both games, September 15: rc26 adds a Power sort across all boxes, a
 strongest-partners shortcut, individual stat sorts, and a five-stat breakdown. The
 score sums calculated max HP, Attack, Defense, Speed, and Special at the current

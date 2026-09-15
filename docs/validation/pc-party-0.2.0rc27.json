@@ -1,0 +1,78 @@
+{
+  "sampled_at": 1789493928.0144856,
+  "public_checks": [
+    {
+      "edition": "red",
+      "party": 6,
+      "boxed": 234,
+      "combined": 240,
+      "valid_scores": true
+    },
+    {
+      "edition": "blue",
+      "party": 6,
+      "boxed": 234,
+      "combined": 240,
+      "valid_scores": true
+    }
+  ],
+  "runs": {
+    "red": {
+      "version": "0.2.0rc27",
+      "started_at": "2026-09-15T17:36:20.348488252Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.4,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 144,
+      "last_local_progress": {
+        "id": 9571,
+        "ts": 1789493851.4474094,
+        "type": "level",
+        "title": "Jolteon grew to level 33",
+        "age_seconds": 76
+      }
+    },
+    "blue": {
+      "version": "0.2.0rc27",
+      "started_at": "2026-09-15T17:38:11.180666584Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 144,
+      "last_local_progress": {
+        "id": 4577,
+        "ts": 1789493923.474549,
+        "type": "level",
+        "title": "PEACH grew to level 41",
+        "age_seconds": 4
+      }
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "running": true,
+    "state": "ready",
+    "error": null,
+    "completed": 25,
+    "started_at": "2026-09-15T17:38:13.488657589Z"
+  },
+  "tests": {
+    "python_passed": 507,
+    "python_skipped": 1,
+    "javascript_files_passed": 2,
+    "package_checks": true
+  },
+  "free_bytes": 16583733248
+}

@@ -11,29 +11,30 @@ The old https://pokesim.tynet.app address remains a Red alias. Each game retains
 ROM, saves, party, boxes, journal, and notification configuration. Both games run at
 unlimited speed, with `SPEED=0` saved in their deployment configurations.
 
-Both games run `pokesim:0.2.0rc26-b04057e` from tagged commit
-`b04057e5d6a713c79b4e19612c581bc97744eae9`. The image ID is
-`sha256:03ba97779def533579122b7fe703947bd7a9ceb904abeccad44fe2cd65f42d3f`.
-The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc26-b04057e`.
+Both games run `pokesim:0.2.0rc27-13ca863` from tagged commit
+`13ca863366f89089f2bc3f031fae4cc0511ef014`. The image ID is
+`sha256:392db05bdb8732dee651075ccb14d57400e7f5003c9dcb3b6458a14730753468`.
+The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc27-13ca863`.
 PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
 
-The PC now ranks boxed Pokémon by calculated Power or individual stats, with a
-shortcut across all boxes. The release also brings the earlier transient PC journal
-correction and bounded Victory Road Escape Rope retreat to Blue. Both games passed
-current-save loading and resumed healthy at maximum speed with 144 registrations.
-Private verified cold backups are `/docker/pokesim/backups/20260915T172049Z-rc26/before.tar.gz`
-and `/docker/pokesim-blue/backups/20260915T172217Z-rc26/before.tar.gz`.
-Red's new endurance interval began at 17:21:16 UTC and Blue's at 17:22:28 UTC.
-The board remains on rc22 with its original 11:05:17 UTC start. The coordinator
-resumed its rc24 image at 17:22:30 UTC. See the [Red receipt](validation/release-0.2.0rc26-red.json)
-and [Blue receipt](validation/release-0.2.0rc26-blue.json).
+The PC includes the traveling party alongside all twelve boxes. Every sort and the
+strongest shortcut can compare the party with stored partners using identical
+calculated stats. Both games passed saved-game loading and resumed healthy at maximum
+speed with their existing registrations. Verified private cold backups are
+`/docker/pokesim/backups/20260915T173553Z-rc27/before.tar.gz` and
+`/docker/pokesim-blue/backups/20260915T173800Z-rc27/before.tar.gz`.
+Red's new endurance interval began at 2026-09-15T17:36:20.348488252Z and Blue's at
+2026-09-15T17:38:11.180666584Z. The board remains on rc22 with its original start.
+The rc24 coordinator resumed at 2026-09-15T17:38:13.488657589Z.
+See the [Red receipt](validation/release-0.2.0rc27-red.json) and
+[Blue receipt](validation/release-0.2.0rc27-blue.json).
 
 The scoped coordinator runs `pokesim:0.2.0rc24-d99cdc2` from tagged commit
 `d99cdc2dfd9afc13fae042eb49aa6cdc001ce804`. Its image ID is
 `sha256:9f4a98a9096d658db78ed2b77612ad7c1767aa210af8f0d8239fd4f79758b461`.
 The source archive is `/docker/pokesim/releases/0.2.0rc24-d99cdc2`. This coordinator-only
 update lets each game prepare at its own safe point within a shared retry window.
-At the coordinator rollout, games and the board retained their rc22 processes. Both games were subsequently upgraded to rc26 as described above. The private
+At the coordinator rollout, games and the board retained their rc22 processes. Both games were subsequently upgraded to rc27 as described above. The private
 coordinator backup is `/docker/pokesim-trading/backups/20260915T145218Z-rc24/before.tar.gz`.
 It contains state and configuration and must not be published. See
 [the coordinator receipt](validation/release-0.2.0rc24.json).
@@ -65,7 +66,7 @@ Also retain every image referenced by a running or stopped container, any held e
 and legacy images created before this monitoring workflow. Before removing an older
 monitoring image, verify its exact tag, source revision label, retained source directory,
 and all container references. Remove its tag without force. Do not use a global image,
-build-cache, or volume prune. The current retained release set is rc20, rc21, rc22, rc23, rc24, rc25, and rc26,
+build-cache, or volume prune. The current retained release set is rc20, rc21, rc22, rc23, rc24, rc25, rc26, and rc27,
 covering both the games and the separately upgraded coordinator. The held rc11 experiment is also preserved. Older source archives remain available
 for rebuilding historical releases.
 
