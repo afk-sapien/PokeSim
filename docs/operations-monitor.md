@@ -507,3 +507,28 @@ apart. No trading intervention, runtime edit, or deployment was necessary. Free 
 space remains stable at 19.46 GB. Preserve the current endurance interval and continue
 monitoring useful gains and exchange latency. No multi-day endurance milestone is
 claimed. See [the monitoring record](validation/monitor-20260915-1220.json).
+
+
+## September 15, 12:52 UTC reward evolution progress
+
+The 31.96-minute interval retained both rc22 starts, healthy workers, maximum speed,
+and zero save reloads or container restarts. Red reached 137 registrations after evolving
+its new Championship Eevee into Flareon in event 9066. Blue reached 139 after evolving
+Eevee into Jolteon in event 4068 and its Wartortle into Blastoise in event 4088. Red also
+picked up an Escape Rope in Pokémon Mansion, confirmed by event 9078.
+
+Red completed one training, one evolution, and two supply projects. Blue completed two
+training, two evolution, and one supply project. Partial training also gained real XP,
+including Blue's Porygon gaining 6,598 XP and two levels. The journal recorded 24 Red and
+35 Blue level events. Neither inspected journal contained a legendary release message.
+
+The automatic trade count remains twelve. The coordinator reports ordinary overworld
+waiting with no error. Each game has one newly earned Championship reward pending,
+with six free box slots each. Both were in battle at the detailed check, so this is a
+safe-point wait rather than a storage blockage. Red has fourteen earned and thirteen
+delivered rewards. Blue has seventeen earned and sixteen delivered. Verify delivery
+in the next interval, and investigate only if the wait persists without safe-point progress.
+
+No runtime change, manual trade cycle, or restart was needed. Disk space remains stable
+at 19.48 GB free. Continue the rc22 endurance interval. See
+[the monitoring record](validation/monitor-20260915-1252.json).
