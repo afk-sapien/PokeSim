@@ -49,3 +49,15 @@ def test_storage_api_enriches_all_boxes_without_mutating_snapshot():
     assert [row['power'] for row in rows] == [415, 800]
     assert rows[1]['box'] == 12 and rows[1]['position'] == 20
     assert all('power' not in row for row in pokemon)
+
+
+def test_party_and_box_use_identical_unboosted_strength_despite_damage():
+    mon = pikachu(name='Pikachu', nick='ACE', hp=1, max_hp=110, status_label='Paralyzed',
+                  experience={'total': 125000}, stats={'Attack': 999, 'Speed': 1})
+    result = live_status({'party': [mon], 'storage': {'pokemon': [pikachu()]}})
+    party = result['party'][0]
+    boxed = result['storage']['pokemon'][0]
+    assert party['power'] == boxed['power'] == 415
+    assert party['calculated_stats'] == boxed['calculated_stats']
+    assert party['slot'] == 1 and party['experience'] == 125000
+    assert mon['hp'] == 1 and mon['stats']['Attack'] == 999

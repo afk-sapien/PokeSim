@@ -122,7 +122,8 @@ def test_live_status_reports_records_party_and_boxes():
     assert status['owned'] == [1, 4] and status['seen'] == [1, 4, 25]
     assert status['party'][0] == {'dex': 1, 'species': 0x99, 'name': 'Bulbasaur', 'nick': 'BULBASAUR',
                                   'level': 5, 'hp': 20, 'max_hp': 22, 'status_label': 'Healthy', 'slot': 1,
-                                  'moves': (), 'dvs': (), 'stat_exp': (), 'experience': 0}
+                                  'moves': (), 'dvs': (), 'stat_exp': (), 'experience': 0,
+                                  'calculated_stats': None, 'power': None}
     assert status['storage']['pokemon'][0]['dex'] == 25
     assert list(status['storage']['box_counts']) == [1, 0]
     assert status['phase'] == 'Thorough adventure' and status['hunting'] == 0x54
