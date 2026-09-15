@@ -3,8 +3,9 @@
 Red, Blue, the board, and the coordinator use `pokesim:0.2.0rc16-caa092b`, tagged commit
 `caa092bf76d3b73ce892575ece41480b5a455d80`. Both adventures are healthy at unlimited
 speed, with zero observed save reloads. Fresh cold backups and current-save checks
-passed. Red has 113 registered entries. Blue reached 117 through the Route 18 Gate NPC
-exchange for Lickitung, confirmed in journal event 3444 after deployment.
+passed. Red has 115 registered entries and Blue has 118 after their first automatic
+exchange. Red received MOCHI the Vulpix and evolved it into Ninetales. Blue received
+DIRTNAP the Machoke, which evolved into Machamp during the exchange.
 
 The scoped coordinator runs as UID 10001 with all capabilities dropped and no Docker
 socket. Private tokens authorize only trade controls. It can stage, verify, journal,
@@ -20,11 +21,10 @@ All 12 public endpoint checks passed. See [the release receipt](docs/validation/
 
 The owner explicitly approved live automatic trading on September 15, 2026 UTC.
 Both private and public policies are enabled for useful spare exchanges every 15
-minutes. Individual trades need no further approval. The coordinator waits for both
-games to reach a safe overworld state before an exchange. The initial observation
-confirmed the enabled board and healthy unpaused games, with zero completed exchanges
-yet. One HTTP retry cleared without retaining a hold. See
-[the activation receipt](docs/validation/automatic-trading-enabled-20260915.json).
+minutes. Individual trades need no further approval. The first automatic exchange
+completed at 06:32 UTC. Both games journaled it exactly once, released their holds,
+and retained the trade marker in subsequent autosaves. Neither container restarted.
+See [the first live exchange record](docs/validation/monitor-20260915-0659.json).
 
 The earlier root coordinator proposal was rejected and replaced. No privileged
 coordinator was started. The currently deployed service has access only to the two
