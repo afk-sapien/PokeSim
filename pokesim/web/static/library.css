@@ -109,22 +109,8 @@
 .card-body .card-error { color:#963f32 }
 .empty-state { max-width:650px }
 .empty-state p { max-width:540px }
-.participant { padding:10px 0 }
-.participant small { display:block }
-.participant small { color:#64695e }
-.trade-pair { display:grid }
-.trade-pair { grid-template-columns:1fr auto 1fr }
-.trade-pair { gap:24px }
-.trade-pair fieldset { border:1px solid #dadcd2 }
-.trade-pair fieldset { border-radius:10px }
-.trade-pair fieldset { padding:20px }
-.trade-pair fieldset label { margin-bottom:16px }
-.pair-link { align-self:center }
-.pair-link { font-size:30px }
 .exchange { padding:16px 0 }
 .exchange { border-bottom:1px solid #deded5 }
-.exchange .state-pill { margin-left:14px }
-#signin { max-width:580px }
 @media(max-width:700px) {
 .library .topbar { height:auto }
 .library .topbar { min-height:88px }
@@ -138,8 +124,6 @@
 .library .section-heading { flex-direction:column }
 .library .library-toolbar { flex-wrap:wrap }
 .library .library-toolbar { gap:14px }
-.trade-pair { grid-template-columns:1fr }
-.pair-link { display:none }
 }
 
 .card-screen { display:grid }
@@ -149,3 +133,9 @@
 .card-screen img { height:128px }
 .card-screen img { width:auto }
 .card-screen img { image-rendering:pixelated }
+
+.exchange-heading { display:flex }
+.exchange-heading { flex-wrap:wrap }
+.exchange-heading { align-items:center }
+.exchange-heading { gap:12px }
+.exchange:last-child { border-bottom:0 }

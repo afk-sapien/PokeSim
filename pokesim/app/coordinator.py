@@ -32,7 +32,8 @@ class Coordinator:
         self.process = None
         self.process_guard = threading.Lock()
         self.previews = {}
-        self.last_message = 'Automatic trading is off.'
+        self.last_message = 'Your adventures will trade automatically when a useful exchange is ready.'
+        self.next_recovery_at = 0
         self.prepare_timeout = 900
         self.prepare_poll = 1
         self.session_timeout = 960
@@ -40,32 +41,16 @@ class Coordinator:
     def reserved(self, aid):
         return any(aid in row['plan']['participants'] for row in self.registry.transactions(unresolved=True))
 
-    def configure(self, data):
-        if not isinstance(data, dict) or set(data) != {'enabled', 'participants'} or type(data['enabled']) is not bool:
-            raise ValueError('Set enabled and a list of participating adventures')
-        ids = data['participants']
-        if not isinstance(ids, list) or any(not isinstance(aid, str) for aid in ids) or len(ids) != len(set(ids)):
-            raise ValueError('Participants must be a unique list of adventure IDs')
-        with self.guard:
-            for aid in ids:
-                game = self.registry.adventure(validate_id(aid))
-                if game['archived']:
-                    raise ValueError('Archived adventures cannot join the trading group')
-            previous = self.registry.setting('trading', {'participants': []})
-            if any(self.reserved(aid) for aid in set(previous['participants']) - set(ids)):
-                raise ValueError('Resolve current exchanges before removing their participants')
-            self.registry.set_setting('trading', {'enabled': data['enabled'], 'participants': ids})
-        return self.status()
-
     def status(self):
-        settings = self.registry.setting('trading', {'enabled': False, 'participants': []})
+        games = [game for game in self.registry.adventures() if not game['archived']]
         rows = self.registry.transactions()
         def public(row):
             return {**row, 'left_id': row['plan']['left_id'], 'right_id': row['plan']['right_id'],
                     'cancellable': row['decision'] is None and row['phase'] not in TERMINAL}
-        return {**settings, 'active': [public(row) for row in rows if row['phase'] not in TERMINAL],
+        return {'enabled': True, 'participants': [game['id'] for game in games],
+                'active': [public(row) for row in rows if row['phase'] not in TERMINAL],
                 'history': [public(row) for row in rows if row['phase'] in TERMINAL][:100],
-                'message': self.last_message if settings['enabled'] else 'Automatic trading is off.'}
+                'message': self.last_message}
 
     def _request(self, aid, operation, data=None, recovery=False):
         if self.closed.is_set():
@@ -370,10 +355,16 @@ class Coordinator:
         return 0
 
     def schedule_once(self):
-        if self.closed.is_set() or self.manager.suspended or self.registry.transactions(unresolved=True):
+        if self.closed.is_set() or self.manager.suspended or self.execution.locked():
             return None
-        settings = self.registry.setting('trading', {})
-        if not settings.get('enabled'):
+        pending = self.registry.transactions(unresolved=True)
+        if pending:
+            if pending[0]['phase'] != 'recovering':
+                return None
+            if time.monotonic() >= self.next_recovery_at:
+                self.next_recovery_at = time.monotonic() + 30
+                self.last_message = 'Finishing an interrupted trade. Your progress is saved.'
+                return self.recover_one(pending[0]['id'])
             return None
         history = self.registry.transactions()
         last = {}
@@ -381,9 +372,11 @@ class Coordinator:
             for aid in row['plan']['participants']:
                 last[aid] = max(last.get(aid, 0), row['updated_at'])
         inventories = []
-        for aid in sorted(settings.get('participants', []), key=lambda item: (last.get(item, 0), item)):
-            game = self.registry.adventure(aid)
-            if (game['state'] != 'running' or game['archived'] or (game.get('provenance') or {}).get('trading_blocked')
+        games = sorted(self.registry.adventures(), key=lambda game: (last.get(game['id'], 0), game['id']))
+        for game in games:
+            aid = game['id']
+            if (game['state'] != 'running' or game['desired_state'] != 'running' or game['archived']
+                    or game['version'] not in {'red', 'blue'} or (game.get('provenance') or {}).get('trading_blocked')
                     or time.time() - last.get(aid, 0) < COOLDOWN_SECONDS):
                 continue
             try:
@@ -406,7 +399,7 @@ class Coordinator:
                                         'left_key': left_key, 'right_key': right_key, 'request_id': identifier()})
                     self.last_message = 'A useful exchange is preparing at the Cable Club.'
                     return self.execute(row['id'])
-        self.last_message = 'No useful exchange is ready. Participants may be stopped, protected, or cooling down.'
+        self.last_message = 'Your adventures are playing. They will trade when a useful exchange is ready.'
         return None
 
     def start_scheduler(self):
@@ -417,7 +410,7 @@ class Coordinator:
                 try:
                     self.schedule_once()
                 except Exception as error:
-                    self.last_message = 'Trading needs attention: ' + str(error)
+                    self.last_message = 'Trading is waiting and will try again. Your adventures keep their progress.'
                     log.warning('Automatic Cable Club scheduling failed: %s', error)
         self.scheduler = threading.Thread(target=run, daemon=True, name='cable-coordinator')
         self.scheduler.start()

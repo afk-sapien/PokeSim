@@ -43,8 +43,8 @@ def begin(emu, trade_key, transaction_id, max_frames=108000):
     if emu.paused or emu.manual_mode:
         raise ValueError('Resume autonomous play before preparing a trade')
     snapshot = read_snapshot(emu.pb.memory, emu.frame)
-    if not snapshot.valid or not snapshot.started or snapshot.in_battle or snapshot.textbox or snapshot.start_menu:
-        raise ValueError('Wait for an overworld safe point')
+    if not snapshot.valid or not snapshot.started:
+        raise ValueError('Wait for a valid started adventure')
     if not isinstance(trade_key, str) or len(trade_key) != 24:
         raise ValueError('Choose an identifiable Pokémon')
     location, _, _ = selection(snapshot, emu.store.trade_preferences(), trade_key)
@@ -55,10 +55,19 @@ def begin(emu, trade_key, transaction_id, max_frames=108000):
     state = {'id': transaction_id, 'trade_key': trade_key, 'phase': 'travelling',
              'started_at': time.time(), 'deadline': time.time() + 1800,
              'elapsed_frames': 0, 'max_frames': max_frames, 'party_slot': None, 'selected_key': trade_key}
+    if not overworld_ready(snapshot, Screen(emu.pb.memory).kind(snapshot)):
+        state.update(waiting_for='overworld',
+                     waiting_reason='Finishing the current battle or menu before travelling to the Cable Club')
     emu.store.set(KEY, state)
     emu.preparation = Preparation(emu, state)
-    emu.input_epoch += 1
+    if not state.get('waiting_for'):
+        emu.input_epoch += 1
     return state
+
+
+def overworld_ready(snapshot, kind):
+    return (snapshot.valid and snapshot.started and not snapshot.in_battle
+            and not snapshot.textbox and not snapshot.start_menu and kind == 'overworld')
 
 
 def restore(emu):
@@ -157,7 +166,7 @@ class Preparation:
         if signature != self.signature:
             self.signature = signature
             self.last_progress = snap.frame
-        if snap.frame - self.last_progress > 3600:
+        if not self.state.get('waiting_for') and snap.frame - self.last_progress > 3600:
             raise ValueError('Cable Club preparation stopped making progress')
         if snap.frame - self.persist_frame > 300:
             self._save()
@@ -167,6 +176,16 @@ class Preparation:
                 raise ValueError('The game state remained invalid during preparation')
             return [Action(None, 0, 12)]
         self.invalid_since = None
+        if self.state.get('waiting_for'):
+            location, _, _ = selection(snap, self.emu.store.trade_preferences(), self.state['trade_key'])
+            if location != 'box':
+                raise ValueError('The selected boxed spare moved before Cable Club preparation began')
+            if not overworld_ready(snap, kind):
+                return list(self.emu.policy.step(ctx))
+            self.state.pop('waiting_for')
+            self.state.pop('waiting_reason', None)
+            self.last_progress = snap.frame
+            self._save()
         if snap.in_battle:
             return list(self.emu.policy.step(ctx))
         location, index, mon = selection(snap, self.emu.store.trade_preferences(), self.state['trade_key'])

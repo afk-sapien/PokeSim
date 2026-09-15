@@ -1,0 +1,36 @@
+{
+  "date": "2026-09-15",
+  "change": "Automatic trading across all eligible local adventures",
+  "python_regressions": {
+    "passed": 690,
+    "skipped": 35
+  },
+  "private_cable_and_managed_runtime_tests": {
+    "passed": 44
+  },
+  "browser_logic_tests": {
+    "passed": 35
+  },
+  "package_checks": {
+    "wheel_and_sdist_privacy": "passed",
+    "isolated_installed_launcher": "passed",
+    "source_matches_installed_runtime_and_ui": true
+  },
+  "live_update": {
+    "url": "http://127.0.0.1:8991",
+    "adventures_resumed": 3,
+    "campaigns_preserved": true,
+    "frames_advanced": true,
+    "health_ok": true,
+    "all_participate_automatically": true,
+    "completed_live_trade_observed_after_update": false
+  },
+  "behavior": [
+    "New adventures join automatically without group configuration",
+    "Stopped and archived adventures are excluded from scheduling",
+    "Party and individual protections remain enforced",
+    "Battles and menus finish naturally before trade preparation",
+    "Interrupted durable exchanges retry recovery automatically",
+    "Trading page shows current activity and recent completed trades"
+  ]
+}

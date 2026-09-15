@@ -11,10 +11,8 @@
   let connecting = false
   let closing = false
   let sessionPending = null
-  let participantsDirty = false
   const cardSignatures = new Map()
   let stoppedSignature = ''
-  let participantSignature = ''
   const requests = new Map()
   const dateLabel = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : String(value || '')
   const gameUrl = id => `/games/${encodeURIComponent(id)}/`
@@ -109,52 +107,41 @@
     }
     permissions()
   }
-  function fillAdventureSelect(selector) {
-    const element = $(selector)
-    const previous = element.value
-    const choices = adventures.filter(game => !game.archived && running(game))
-    const signature = JSON.stringify(choices.map(game => [game.id, game.name]))
-    if (element.dataset.signature === signature) return
-    element.dataset.signature = signature
-    element.innerHTML = '<option value="">Select a running adventure</option>' + choices.map(game => `<option value="${esc(game.id)}">${esc(game.name)} (${esc(game.version)})</option>`).join('')
-    if (choices.some(game => game.id === previous)) element.value = previous
-    else if (previous) loadPokemon(selector.endsWith('left') ? 'left' : 'right')
+  function tradePhase(trade) {
+    if (trade.decision === 'ABORT' || trade.error || ['recovering', 'aborting', 'aborted'].includes(trade.phase)) {
+      return trade.decision === 'COMMIT' ? 'Finishing the exchange safely' : 'Getting ready to try again'
+    }
+    const labels = {
+      proposed: 'Getting ready', preparing: 'Heading to the Cable Club',
+      connecting: 'Connecting the games', trading: 'Exchanging Pokémon',
+      saving: 'Saving progress', leaving: 'Leaving the Cable Club',
+      resuming: 'Returning to the adventure', returning: 'Returning to the adventure',
+      verifying: 'Checking both saves', staging: 'Checking both saves',
+      committed: 'Saving the exchange', applying: 'Saving the exchange',
+      releasing: 'Returning to the adventure', completed: 'Trade completed'
+    }
+    return labels[trade.phase || trade.state || trade.status] || 'Getting ready'
   }
-  function describeTrade(trade) {
-    const left = adventures.find(game => game.id === trade.left_id)?.name || trade.left_id || trade.participants?.[0] || ''
-    const right = adventures.find(game => game.id === trade.right_id)?.name || trade.right_id || trade.participants?.[1] || ''
-    return `<div class="exchange"><strong>${esc(left)} ↔ ${esc(right)}</strong><span class="state-pill">${esc(trade.phase || trade.state || trade.status || 'Waiting')}</span><p>${esc(trade.message || trade.error || '')}</p>${trade.cancellable ? `<button data-trade-action="cancel" data-id="${esc(trade.id)}" data-owner>Cancel exchange</button>` : ''}${trade.phase === 'recovering' ? `<button data-trade-action="recover" data-id="${esc(trade.id)}" data-owner>Retry recovery</button>` : ''}</div>`
+  function describeTrade(trade, completed = false) {
+    const leftId = trade.left_id || trade.participants?.[0] || trade.plan?.left_id
+    const rightId = trade.right_id || trade.participants?.[1] || trade.plan?.right_id
+    const left = adventures.find(game => game.id === leftId)?.name || 'First adventure'
+    const right = adventures.find(game => game.id === rightId)?.name || 'Second adventure'
+    const time = completed && trade.updated_at ? `<p class="section-note">${esc(dateLabel(trade.updated_at))}</p>` : ''
+    return `<div class="exchange"><div class="exchange-heading"><strong>${esc(left)} ↔ ${esc(right)}</strong><span class="state-pill">${esc(completed ? 'Trade completed' : tradePhase(trade))}</span></div>${time}</div>`
   }
   async function refreshTrades() {
     const data = await api('/api/v1/interactions')
-    const selected = new Set((data.participants || []).map(item => typeof item === 'string' ? item : item.id))
-    const signature = JSON.stringify([adventures.map(game => [game.id, game.name, game.state, game.archived]), [...selected], data.enabled])
-    if (!participantsDirty && participantSignature !== signature) {
-      $('#trading-enabled').checked = Boolean(data.enabled)
-      $('#participants').innerHTML = adventures.filter(game => !game.archived).map(game => `<label class="participant inline-label"><input type="checkbox" name="participant" value="${esc(game.id)}" ${selected.has(game.id) ? 'checked' : ''} data-owner><span>${esc(game.name)} <small>${esc(game.version)} · ${esc(game.state)}</small></span></label>`).join('') || '<p>Create adventures in the Library to connect them.</p>'
-      participantSignature = signature
-    }
-    const active = Array.isArray(data.active) ? data.active : data.active ? [data.active] : []
-    $('#trade-active').innerHTML = active.length ? active.map(describeTrade).join('') : `<p>${esc(data.message || (data.enabled ? 'Waiting for a useful, eligible exchange.' : 'Automatic trading is off. You can choose an exchange below.'))}</p>`
-    $('#trade-history').innerHTML = (data.history || []).length ? data.history.map(describeTrade).join('') : '<p>No exchanges yet.</p>'
-    fillAdventureSelect('#trade-left')
-    fillAdventureSelect('#trade-right')
-    permissions()
-  }
-  async function loadPokemon(side) {
-    const id = $(`#trade-${side}`).value
-    const select = $(`#trade-${side}-key`)
-    select.innerHTML = '<option value="">Loading Pokémon…</option>'
-    if (!id) { select.innerHTML = '<option value="">Select an adventure first</option>'
-      return }
-    try {
-      const data = await api(`/api/v1/adventures/${encodeURIComponent(id)}/trade-inventory`)
-      if ($(`#trade-${side}`).value !== id) return
-      const pokemon = (data.offers || []).filter(mon => mon.trade_key && !mon.locked)
-      select.innerHTML = '<option value="">Select a Pokémon</option>' + pokemon.map(mon => `<option value="${esc(mon.trade_key)}">${esc(mon.nick || mon.name)} · Lv. ${esc(mon.level)} · ${mon.box ? `Box ${esc(mon.box)}` : 'Party'}</option>`).join('')
-      if (!pokemon.length) select.innerHTML = '<option value="">No eligible trade offers available</option>'
-    } catch (error) { select.innerHTML = '<option value="">Pokémon unavailable</option>'
-      notice(error.message, true) }
+    const count = new Set((data.participants || []).map(item => typeof item === 'string' ? item : item.id)).size
+    $('#trading-status').textContent = count >= 2 ? `${count} adventures can trade automatically.`
+      : 'Trades begin when two eligible adventures are running and have a useful exchange.'
+    const active = (Array.isArray(data.active) ? data.active : data.active ? [data.active] : [])
+      .filter(trade => !['completed', 'aborted'].includes(trade.phase))
+    const retrying = /retry|attention|recover/i.test(data.message || '')
+    $('#trade-active').innerHTML = active.length ? active.map(trade => describeTrade(trade)).join('')
+      : `<p>${retrying ? 'Trading is waiting to try again. Your adventures will reconnect automatically.' : 'Waiting for a useful exchange. Your adventures keep playing in the meantime.'}</p>`
+    const completed = (data.history || []).filter(trade => trade.phase === 'completed' && trade.decision !== 'ABORT').slice(0, 20)
+    $('#trade-history').innerHTML = completed.length ? completed.map(trade => describeTrade(trade, true)).join('') : '<p>No completed trades yet.</p>'
   }
   async function refreshBackups() {
     const data = await api('/api/v1/backups')
@@ -189,11 +176,6 @@
   $('#show-archived').onchange = renderAdventures
   document.querySelectorAll('[data-close]').forEach(button => { button.onclick = () => $(`#${button.dataset.close}`).close() })
   document.addEventListener('click', event => {
-    const control = event.target.closest('[data-trade-action]')
-    if (control && !control.disabled) act(async () => {
-      await write(`/api/v1/interactions/${encodeURIComponent(control.dataset.id)}/${control.dataset.tradeAction}`)
-      notice(control.dataset.tradeAction === 'recover' ? 'Recovery requested.' : 'Exchange cancellation requested.')
-    })
     const button = event.target.closest('[data-action]')
     if (!button || button.disabled) return
     const game = adventures.find(item => item.id === button.dataset.id)
@@ -243,22 +225,6 @@
         settings: {speed: Number($('#settings-speed').value), auto_start: $('#settings-autostart').checked, ...rewards}}, 'PATCH')
       $('#adventure-settings').close()
       notice('Adventure settings saved.')
-    }) }
-  $('#participants-form').onchange = () => { participantsDirty = true }
-  $('#participants-form').onsubmit = event => { event.preventDefault()
-    act(async () => {
-      await write('/api/v1/interactions', {enabled: $('#trading-enabled').checked,
-        participants: [...document.querySelectorAll('[name="participant"]:checked')].map(input => input.value)}, 'PATCH')
-      participantsDirty = false
-      notice('Trading group saved.')
-    }) }
-  for (const side of ['left', 'right']) $(`#trade-${side}`).onchange = () => loadPokemon(side)
-  $('#trade-form').onsubmit = event => { event.preventDefault()
-    act(async () => {
-      if ($('#trade-left').value === $('#trade-right').value) throw new Error('Choose two different adventures.')
-      await write('/api/v1/interactions/trades', {left_id: $('#trade-left').value, right_id: $('#trade-right').value,
-        left_key: $('#trade-left-key').value, right_key: $('#trade-right-key').value})
-      notice('Cable Club exchange requested. Follow its progress above.')
     }) }
   $('#settings-form').onsubmit = event => { event.preventDefault()
     act(async () => { await write('/api/v1/settings', {max_running: Number($('#max-running').value)}, 'PATCH')

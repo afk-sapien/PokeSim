@@ -204,19 +204,65 @@ def test_selection_respects_current_owner_eligibility(setup):
 
 def test_scheduler_uses_useful_eligible_offers_and_cooldown(setup):
     c = setup.coordinator
-    c.configure({'enabled': True, 'participants': list(setup.peers)})
     result = c.schedule_once()
     assert result['phase'] == 'completed'
     assert c.schedule_once() is None
     assert len(setup.cable_calls) == 1
 
 
-def test_group_cannot_remove_reserved_participant(setup):
-    c = setup.coordinator
-    c.configure({'enabled': True, 'participants': list(setup.peers)})
-    c.propose(setup.data)
-    with pytest.raises(ValueError, match='Resolve current'):
-        c.configure({'enabled': False, 'participants': []})
+def test_new_games_join_automatically_despite_obsolete_group_settings(setup):
+    setup.registry.set_setting('trading', {'enabled': False, 'participants': []})
+    old_id = setup.data['left_id']
+    setup.registry.update(old_id, state='stopped', desired_state='stopped', archived=True)
+    new = setup.registry.create('New Red', 'rom', {}, identifier())
+    setup.registry.update(new['id'], state='running', desired_state='running')
+    setup.peers[new['id']] = Peer(new['id'], 'new-offer')
+    status = setup.coordinator.status()
+    assert status['enabled']
+    assert old_id not in status['participants']
+    assert new['id'] in status['participants']
+    result = setup.coordinator.schedule_once()
+    assert result['phase'] == 'completed'
+    assert new['id'] in result['plan']['participants']
+    assert old_id not in result['plan']['participants']
+
+
+def test_scheduler_recovers_committed_exchange_without_manual_action(setup):
+    setup.peers[setup.data['right_id']].failures['apply'] = 2
+    row = setup.coordinator.propose(setup.data)
+    assert setup.coordinator.execute(row['id'])['phase'] == 'recovering'
+    assert setup.coordinator.schedule_once()['phase'] == 'completed'
+    assert setup.cable_calls == [row['id']]
+
+
+def test_failed_automatic_recovery_is_bounded_and_preserves_reservation(setup):
+    peer = setup.peers[setup.data['right_id']]
+    peer.failures['apply'] = 10
+    row = setup.coordinator.propose(setup.data)
+    assert setup.coordinator.execute(row['id'])['phase'] == 'recovering'
+    assert setup.coordinator.schedule_once()['phase'] == 'recovering'
+    calls = len(peer.calls)
+    assert setup.coordinator.schedule_once() is None
+    assert len(peer.calls) == calls
+    assert setup.coordinator.reserved(peer.aid)
+    assert setup.cable_calls == [row['id']]
+
+
+@pytest.mark.parametrize('change', [
+    {'state': 'stopped', 'desired_state': 'stopped'},
+    {'desired_state': 'stopped'},
+    {'provenance': {'trading_blocked': True}},
+])
+def test_automatic_scheduler_skips_ineligible_adventures(setup, change):
+    setup.registry.update(setup.data['left_id'], **change)
+    assert setup.coordinator.schedule_once() is None
+    assert setup.cable_calls == []
+
+
+def test_scheduler_does_not_abort_an_exchange_waiting_for_execution(setup):
+    row = setup.coordinator.propose(setup.data)
+    assert setup.coordinator.schedule_once() is None
+    assert setup.registry.transaction(row['id'])['decision'] is None
 
 
 def test_unknown_adapter_cannot_reach_staging(setup):

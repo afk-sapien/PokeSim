@@ -23,7 +23,7 @@ function library(options = {}) {
   }
   const location = {hash: options.hash || '', pathname: '/', search: '', replace() {}}
   const context = vm.createContext({
-    document: {body: {dataset: {page: 'library', adventure: ''}}, querySelector: element,
+    document: {body: {dataset: {page: options.page || 'library', adventure: ''}}, querySelector: element,
       querySelectorAll: () => [], addEventListener() {}, hidden: false},
     location, history: {replaceState(_, __, path) { calls.push({path: 'history', next: path})
       location.hash = '' }}, crypto, Uint8Array, URLSearchParams, setInterval(callback) { poll = callback },
@@ -163,4 +163,64 @@ test('startup connection failure recovers automatically but shutdown stays close
   await settle()
   assert.equal(view.calls.length, count)
   assert.equal(view.element('#workspace').hidden, true)
+})
+
+test('automatic trading shows friendly progress and only completed history without mutations or inventory requests', async () => {
+  const view = library({page: 'trading', respond: path => {
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [
+      {id: 'one', name: 'Red Sprout', state: 'running'},
+      {id: 'two', name: 'Blue Ripple', state: 'running'}
+    ]})}
+    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
+      enabled: true, participants: ['one', 'two'],
+      active: [{left_id: 'one', right_id: 'two', phase: 'staging', message: 'manifest technical detail', cancellable: true}],
+      history: [
+        {left_id: 'one', right_id: 'two', phase: 'completed', decision: 'COMMIT', updated_at: 100},
+        {left_id: 'one', right_id: 'two', phase: 'aborted', decision: 'ABORT', error: 'secret worker failure'},
+        {left_id: 'one', right_id: 'two', phase: 'completed', decision: 'ABORT'},
+        {left_id: 'one', right_id: 'two', phase: 'recovering', decision: 'COMMIT'}
+      ]
+    })}
+  }})
+  await settle()
+  assert.equal(view.element('#trading-status').textContent, '2 adventures can trade automatically.')
+  assert.match(view.element('#trade-active').innerHTML, /Red Sprout ↔ Blue Ripple/)
+  assert.match(view.element('#trade-active').innerHTML, /Checking both saves/)
+  assert.doesNotMatch(view.element('#trade-active').innerHTML, /staging|manifest|button/)
+  assert.equal((view.element('#trade-history').innerHTML.match(/Trade completed/g) || []).length, 1)
+  assert.doesNotMatch(view.element('#trade-history').innerHTML, /ABORT|recovering|secret worker/)
+  view.poll()
+  await settle()
+  assert.equal(view.calls.some(call => call.options.method && call.options.method !== 'GET'), false)
+  assert.equal(view.calls.some(call => call.path.includes('inventory')), false)
+  const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
+  assert.doesNotMatch(html, /participants-form|trading-enabled|trade-form|trade-left|trade-right|Trading group|Choose an exchange/)
+  assert.doesNotMatch(source, /data-trade-action|trade-inventory|participants-form|trading-enabled/)
+})
+
+test('automatic trade recovery never shows an aborted exchange as successful or exposes worker errors', async () => {
+  for (const decision of ['ABORT', 'COMMIT']) {
+    const view = library({page: 'trading', respond: path => {
+      if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
+        participants: [], active: [{phase: 'recovering', decision, error: 'checkpoint_sha256 wrong /private/path'}],
+        history: [{phase: 'aborted', decision: 'ABORT'}]
+      })}
+    }})
+    await settle()
+    assert.match(view.element('#trade-active').innerHTML, decision === 'ABORT' ? /Getting ready to try again/ : /Finishing the exchange safely/)
+    assert.doesNotMatch(view.element('#trade-active').innerHTML, /checkpoint|private|recovering|Trade completed|button/)
+    assert.match(view.element('#trade-history').innerHTML, /No completed trades yet/)
+  }
+})
+
+test('automatic trade issues show a retry explanation without technical messages', async () => {
+  const view = library({page: 'trading', respond: path => {
+    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
+      participants: ['one'], active: [], history: [], message: 'Trading needs attention: private exception'
+    })}
+  }})
+  await settle()
+  assert.match(view.element('#trade-active').innerHTML, /try again/)
+  assert.doesNotMatch(view.element('#trade-active').innerHTML, /private exception/)
+  assert.match(view.element('#trading-status').textContent, /two eligible adventures/)
 })

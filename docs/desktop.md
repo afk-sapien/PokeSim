@@ -37,7 +37,9 @@ Prepared adventures run offline. Adding another adventure can reuse an installed
 
 ## Trading
 
-The application's Trading page coordinates eligible adventures in the same library. Participation requires a compatible game and an eligible boxed Pokémon. Active party members and locked Pokémon are protected.
+Trading is automatic across all eligible running adventures in the same library. New adventures join automatically. There are no groups to configure or exchanges to choose. The Trading page shows current activity and recent completed trades. Participation requires a compatible game and an eligible boxed Pokémon. Active party members and locked Pokémon are protected.
+
+Games finish battles or menus before preparing for an exchange. Interrupted exchanges recover automatically from their recorded decisions.
 
 Preparation uses normal walking and PC input to retrieve the chosen individual. Both games then enter a temporary paired Cable Club session. The games execute the exchange, evolution, and save. Both verified results must commit before ordinary play resumes. No direct Pokémon record swap is used as a fallback.
 

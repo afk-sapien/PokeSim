@@ -61,7 +61,6 @@ class Registry:
         if self.setting('application_id') is None:
             self.set_setting('application_id', identifier())
             self.set_setting('max_running', 2)
-            self.set_setting('trading', {'enabled': False, 'participants': []})
 
     def setting(self, key, default=None):
         with self.lock:

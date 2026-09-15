@@ -41,7 +41,7 @@ Required outcomes:
 - Create, name, start, stop, archive, inspect, and resume multiple adventures in one UI.
 - Keep current live controls, PC, Pokédex, journal, notifications, and save protections.
 - Start the same manager from a desktop launcher, Python CLI, or container.
-- Configure useful automatic trades among selected local adventures through the UI.
+- Automatically arrange useful trades among all eligible local adventures, including newly created games.
 - Execute exchanges through the original Cable Club menus, party exchange, evolution, Pokédex, and saving routines using the experimental virtual connection.
 - Harden that connection and integrate normal gameplay preparation, safe exit, cancellation, and durable recovery before enabling managed trading.
 - Preserve individual Pokémon protection and the existing transaction recovery guarantees.
@@ -99,11 +99,11 @@ Keep browser closure independent from process shutdown. A stopped adventure shou
 
 ### Trading
 
-Add an application-wide Trading page for group membership, global status, proposed exchanges, and history. Individual game pages show the same information from that adventure's perspective.
+Add an application-wide Trading page showing automatic trading status, the current exchange, and recent completed trades. No group setup or exchange selection is required.
 
-The owner selects participating adventures and enables automatic trading. Existing per-Pokémon locks, withdrawals, party protection, and project protection remain in force. An interaction involving A and B must not pause C. A stopped game is excluded, and a held game says which interaction it is waiting for.
+All adventures participate automatically when running and eligible. Existing per-Pokémon locks, withdrawals, party protection, and project protection remain in force. An interaction involving A and B must not pause C. A stopped game is excluded, and a held game says which interaction it is waiting for.
 
-During a trade, show both participating games and progress through Preparing, Connecting, Trading, Saving, and Resuming. Route their live views to the matching side of the temporary link session, with a visible provisional status until commitment. Keep adventure IDs and browser addresses stable. Disable ordinary gameplay controls while reserved and make cancellation availability depend on the durable decision.
+During a trade, show both participating games and progress through Preparing, Connecting, Trading, Saving, and Resuming. Route their live views to the matching side of the temporary link session, with a visible provisional status until commitment. Keep adventure IDs and browser addresses stable. Disable ordinary gameplay controls while reserved and recover interrupted exchanges automatically from the durable decision.
 
 Show the meaningful reason for no trade, such as no useful exchange, partner stopped, waiting for safe gameplay, incompatible data, or recovery required. Do not present every lack of progress as a network error.
 
@@ -406,7 +406,7 @@ Hard memory isolation per game is not guaranteed in one container. Docker resour
 
 The coordinator is a module in the manager, with its own repository of durable decisions. Replace the separately deployed broker and trading services for managed local adventures. Keep pure inventory comparison and trade-selection functions reusable.
 
-Initially provide one local trading group with explicitly selected participants. Support any number of members and any pair of compatible game versions, including Red-to-Red. There is no special adventure named `red` or `blue` in the coordinator.
+Use all non-archived local adventures as the participant pool, with new adventures included automatically. Support any number of adventures and any pair of compatible game versions, including Red-to-Red. There is no special adventure named `red` or `blue` in the coordinator.
 
 Separate three responsibilities:
 
@@ -736,7 +736,7 @@ Gate: a manually initiated trade runs the real Cable Club flow, exits safely, an
 Work:
 
 - Connect pure proposal selection to an arbitrary participant registry.
-- Add local trading membership and preferences to the UI.
+- Show automatic trading progress and recent completed exchanges without setup controls.
 - Preserve fairness, cooldowns, protections, and individual eligibility checks.
 - Adapt Mew distribution and championship rewards to independent participant operations.
 
@@ -828,7 +828,7 @@ Run at least an overnight coordinated soak before beta release, including period
 1. Start one fresh container and reach one browser address.
 2. Add Red and Blue ROMs and create three named adventures, including two using the same ROM.
 3. Set the running-adventure limit to three in Settings, launch all three, and use every dashboard without selecting ports or editing files.
-4. Enable automatic trading for the chosen local group.
+4. Verify automatic trading includes every eligible running adventure without configuration.
 5. Demonstrate actual Cable Club trades across Red/Blue, Red/Red, and Blue/Blue pairs using suitable private fixtures. Create a fourth adventure for the Blue/Blue case, adjusting the running limit as needed. Show the original animation and evolution, normal exit, durable restart, and autonomous resumption. Confirm that disabling the cable prevents exchange.
 6. Kill one worker and show that unrelated games continue.
 7. Interrupt the manager at precommit, postcommit, and release boundaries in separate controlled runs.

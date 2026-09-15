@@ -377,11 +377,6 @@ def create_app(manager, shutdown=lambda: None):
     def interactions():
         return manager.coordinator.status()
 
-    @app.patch('/api/v1/interactions')
-    async def set_interactions(request: Request):
-        manager.check_available()
-        return manager.coordinator.configure(await json_body(request))
-
     @app.post('/api/v1/interactions/trades')
     async def trade(request: Request):
         manager.check_available()
