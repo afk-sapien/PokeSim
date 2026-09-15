@@ -405,3 +405,43 @@ Continue useful collection, training, pickup, reward, and trading checks. Priori
 accurate PC transfer reporting and bounded storage growth. Available filesystem space
 is 6.72 GB, with 90.43 percent used. No images, backups, or saves were removed. Preserve
 this live endurance interval and avoid repeating the confirmed legendary notifications.
+
+
+## September 15, 10:54 UTC PC release correction
+
+The final 42.2-minute sampled rc21 interval retained healthy workers, maximum speed,
+zero save reloads, and unchanged starts. Both gained two registrations since the prior
+sample. Red completed five training projects and one evolution, while Blue completed
+two training projects and one supply project. Local replanning increased by 133 and
+120. The ninth automatic exchange registered Kangaskhan for Red and Wartortle for Blue.
+See [the interval record](validation/monitor-20260915-1054.json).
+
+A 72,022-frame copied replay reproduced both a genuine Geodude release and a false
+Tentacruel release. CRICKET already appeared in the party before the box entry disappeared.
+The one-snapshot population check mistook that later removal for a release. The rc22
+candidate matches recent party arrivals by species and nickname, persists bounded
+arrival records, expires old records, and cancels them on deposit. Opposite-order writes
+confirm the matching individual's count. The replay retains only the genuine release.
+No Pokémon, release policy, historical journal events, or live saves were edited.
+
+All 458 Python tests passed, with one optional test skipped, and all seven JavaScript
+checks passed. The default sandbox stalled an API client test, so its test process was
+terminated and the complete suite reran successfully outside the sandbox. Both final
+packages passed resource checks. See
+[the copied comparison](validation/pc-release-events-0.2.0rc22.json).
+
+Both games, the board, and coordinator now run rc22 from `49403d7`. Fresh compressed
+cold backups and current-save load checks passed. All 12 public checks passed. Both
+games resumed with 132 registrations, maximum speed, and zero recovery reloads. Ten
+automatic trades have completed, and all seven Red and ten Blue rewards are delivered.
+This starts new endurance intervals. See
+[the deployment receipt](validation/release-0.2.0rc22.json).
+
+Post-rollout filesystem space is 5.71 GB free,
+with 91.17 percent used. No original saves, backups, or old images were
+removed. Prioritize bounded release storage before additional frequent deployments.
+The Dockerfile declares changing release arguments before its system-package layer,
+which invalidates that layer's cache for each release. Move metadata after stable image
+setup in a future candidate and validate packaging before deployment. Inventory image
+references and rollback needs before selecting a bounded retention policy. Continue
+checking PC journal accuracy and useful progress without unnecessary restarts.

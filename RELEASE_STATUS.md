@@ -1,4 +1,4 @@
-# Release candidate rc22: accurate PC release messages
+# Current deployment: rc22, accurate PC release messages
 
 The journal now recognizes withdrawals whose party entry appears before the box entry
 is removed. Recent arrivals are matched by species and nickname, survive checkpoint
@@ -16,6 +16,14 @@ policy controls, the live observation cadence, maximum speed, and zero rewinds. 
 All 458 Python tests passed, with one optional test skipped. Both JavaScript test files
 passed. The full suite ran outside the sandbox after its local API client stalled
 inside the sandbox. Package builds and runtime resource checks passed.
+
+Both games, the board, and coordinator now run `pokesim:0.2.0rc22-49403d7` from
+`49403d76fd169b2c106d3de908807f48bfc1635f`. Fresh compressed cold backups passed integrity
+checks and both latest saves loaded successfully. All 12 public checks passed. Both
+games are healthy at maximum speed with zero recovery reloads and 132 registrations.
+Ten automatic trades have completed. All seven Red rewards and ten Blue rewards are
+delivered. The deployment starts new endurance intervals. See
+[the release receipt](docs/validation/release-0.2.0rc22.json).
 
 # Previous deployment: rc21, complete Articuno's current puzzle
 

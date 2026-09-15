@@ -1,3 +1,9 @@
+Current journal correction, September 15: rc22 recognizes PC withdrawals in either
+RAM write order. The copied-save replay suppresses a false Tentacruel release and keeps
+a genuine Geodude release. Saved arrival records are bounded and expire. Existing
+journal history and release policy are unchanged. See
+[the comparison](validation/pc-release-events-0.2.0rc22.json).
+
 Current Articuno work, September 15: the planner now completes the Seafoam B3F
 boulder puzzle before attempting Surf on B4F. It first clears room to push each
 required boulder into its designated hole, preserves completed drops across reentry,
@@ -217,7 +223,7 @@ training, and visible ground-item detours are implemented. Continue from that ba
    distribution remains disabled.
 3. Extend reserve training with varied Hall of Fame teams and visible stat-training
    milestones. Keep useful partial progress distinct from completed targets.
-4. Correct PC transfer journal messages that can falsely report releases. Bound backup,
+4. Monitor the rc22 PC transfer journal correction. Bound backup,
    image, journal, and checkpoint growth and validate upgrades and outages over multi-day runs. This work should proceed alongside progression improvements.
 5. Add optional quality hunting after the ordinary adventure and trading paths are
    reliable. Perfect DVs and guaranteed completion remain outside the required target.

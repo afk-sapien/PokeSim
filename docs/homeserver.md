@@ -11,10 +11,10 @@ The old https://pokesim.tynet.app address remains a Red alias. Each game retains
 ROM, saves, party, boxes, journal, and notification configuration. Both games run at
 unlimited speed, with `SPEED=0` saved in their deployment configurations.
 
-Both games, the board, and the coordinator run `pokesim:0.2.0rc21-339d9a0` from tagged commit
-`339d9a0d840f87a5b829955743d9124174d9ed8b`. The image ID is
-`sha256:031f62299dc26c4cf20bc38656c382a25ccbba0f7f4ea684bd803b822d3c0080`.
-The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc21-339d9a0`.
+Both games, the board, and the coordinator run `pokesim:0.2.0rc22-49403d7` from tagged commit
+`49403d76fd169b2c106d3de908807f48bfc1635f`. The image ID is
+`sha256:676ae8b8ed8603348c78f7b4e896fe3756dab50cf892752120e8dbd2c9d2fe5b`.
+The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc22-49403d7`.
 PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
 
 The release includes persistent playtime, the four-page interface, stall recovery,
@@ -50,13 +50,13 @@ the running service from reloading.
 
 ## Backups and rollback
 
-The current rc21 deployment retained compressed cold backups and passed current-save load checks:
+The current rc22 deployment retained compressed cold backups and passed current-save load checks:
 
-- Red: `/docker/pokesim/backups/20260915T094206Z-rc21/before.tar.gz`.
-- Blue: `/docker/pokesim-blue/backups/20260915T094253Z-rc21/before.tar.gz`.
-- Previous image: `pokesim:0.2.0rc20-39f409b`.
+- Red: `/docker/pokesim/backups/20260915T110422Z-rc22/before.tar.gz`.
+- Blue: `/docker/pokesim-blue/backups/20260915T110504Z-rc22/before.tar.gz`.
+- Previous image: `pokesim:0.2.0rc21-339d9a0`.
 
-See [the rc21 release receipt](validation/release-0.2.0rc21.json). Older deployments below
+See [the rc22 release receipt](validation/release-0.2.0rc22.json). Older deployments below
 are historical records, not descriptions of the currently running services.
 
 The rc16 deployment verified both current saves and retained these cold backups:
