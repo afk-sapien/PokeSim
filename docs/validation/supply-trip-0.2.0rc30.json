@@ -1,0 +1,80 @@
+{
+  "observed_money": 455,
+  "cause": "Only an optional Antidote top-up was affordable. A persistent restock override blocked training with a distant shop trip.",
+  "change": "Distant ordinary supply trips require affordable balls, healing items, revives, or something to sell. Optional purchases remain available at the current mart. Legendary preparation is unchanged.",
+  "tests": {
+    "python_passed": 521,
+    "python_skipped": 1
+  },
+  "runs": {
+    "baseline": {
+      "checkpoint_sha256": "1340696d6a02893932ce05ace4df62a52e471d6d75ffddb029c1f1ff1129d5d3",
+      "policy_fingerprint": "acd91028e2a4df87e18429a919b743ce35daebe4485adb4e257b36fff50d2d19",
+      "frames": 90002,
+      "wall_seconds": 155.71,
+      "initial_owned": 144,
+      "final_owned": 144,
+      "rewinds": 0,
+      "policy_recoveries": 52,
+      "achievements": [],
+      "final_goal": "Restock supplies",
+      "final_map": "Indigo Plateau",
+      "project": null
+    },
+    "candidate": {
+      "checkpoint_sha256": "1340696d6a02893932ce05ace4df62a52e471d6d75ffddb029c1f1ff1129d5d3",
+      "policy_fingerprint": "94b039b15bc95105ba9b947d4ed66857d9c5abb4b2ebb3e4954331bdb95e8afc",
+      "frames": 90010,
+      "wall_seconds": 22.33,
+      "initial_owned": 144,
+      "final_owned": 144,
+      "rewinds": 0,
+      "policy_recoveries": 8,
+      "achievements": [
+        {
+          "frame": 9448,
+          "type": "level",
+          "title": "PUDDING grew to level 35"
+        },
+        {
+          "frame": 39984,
+          "type": "level",
+          "title": "PUDDING grew to level 36"
+        },
+        {
+          "frame": 76780,
+          "type": "level",
+          "title": "PUDDING grew to level 37"
+        }
+      ],
+      "final_goal": "Train Nidoking to level 40",
+      "final_map": "Victory Road 2F",
+      "project": {
+        "method": "train",
+        "parent": 7,
+        "family": [
+          7
+        ],
+        "box": 0,
+        "initial_level": 34,
+        "target_level": 40,
+        "travel_distance": 151,
+        "key": "train:7:40",
+        "training_session": {
+          "phase": "training",
+          "preparation_frames": 4624,
+          "preparation_idle": 0,
+          "preparation_since_gain": 0,
+          "active_frames": 85306,
+          "active_idle": 242,
+          "routes": {}
+        },
+        "initial_experience": 36069,
+        "gains": {
+          "experience": 9415,
+          "levels": 3
+        }
+      }
+    }
+  }
+}

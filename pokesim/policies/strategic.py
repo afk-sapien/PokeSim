@@ -713,6 +713,8 @@ class StrategicPolicy(Policy):
                 if s.map == MAPS["INDIGO_PLATEAU_LOBBY"] and m != s.map:
                     continue
                 stock = DATA["marts"].get(world["name"], [])
+                if m != s.map and not legendary:
+                    stock = [item for item in stock if item in BALLS or item in HEALING or item == ITEMS['REVIVE']]
                 if bag_full or self._shopping_item(s, stock) is not None:
                     clerk = next((o for o in world["objects"] if o[2] == "SPRITE_CLERK"), None)
                     if clerk and clerk[0] == 0:
