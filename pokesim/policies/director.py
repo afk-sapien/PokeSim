@@ -3,6 +3,8 @@ from copy import deepcopy
 
 
 def category(project):
+    if project.get('legendary'):
+        return 'legendary'
     method = project['method']
     if method == 'evolve':
         return 'evolution'
@@ -43,7 +45,7 @@ class AdventureDirector:
             recent_kinds = [entry['category'] for entry in self.recent]
             if len(kinds) > 1 and len(recent_kinds) >= 2 and recent_kinds[-1] == recent_kinds[-2]:
                 kinds = [kind for kind in kinds if kind != recent_kinds[-1]]
-            priorities = {'collection': 5, 'evolution': 4, 'training': 2, 'exploration': 1, 'supplies': 1}
+            priorities = {'legendary': 8, 'collection': 5, 'evolution': 4, 'training': 2, 'exploration': 1, 'supplies': 1}
             weights = [priorities[kind] / (1 + recent_kinds.count(kind)) for kind in kinds]
             chosen = rng.choices(kinds, weights=weights)[0]
         rows = groups[chosen]

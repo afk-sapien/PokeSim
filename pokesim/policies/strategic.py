@@ -9,7 +9,7 @@ from .naming import NamingController
 from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, boulder_task
 from .progression import STARTERS, Goal, healing_goal, journey, league_partner, milestones, story_goal
-from .collection import CENTERS, Collection, LEAGUE
+from .collection import CENTERS, Collection, LEAGUE, legendary_project
 from .awareness import ActionWatch
 from .team import development_candidate, potential, readiness, release_target, reserve_to_deposit, storage_headroom
 from ..screen import Screen, W_PLAYER_MON_NUMBER
@@ -23,6 +23,7 @@ W_WALK_COUNTER = 0xCFC5
 W_FACING = 0xC109
 W_WHICH_POKEMON = 0xCF92
 W_MOVE_NUM = 0xD0E0
+W_REPEL_STEPS = W_MOVE_NUM - 5  # wRepelRemainingSteps precedes the four-byte wMoves array
 FACING = {"down": 0, "up": 4, "left": 8, "right": 12}
 
 
@@ -430,13 +431,22 @@ class StrategicPolicy(Policy):
             if self.intent is None:
                 self.intent = choose_battle(s, me, enemy, active, self.used_status,
                                             self.turns - self.last_switch_turn >= 3, self.catch_attempts,
-                                            {'catch_cut': 15, 'catch_surf': 57, 'catch_strength': 70}.get(self.goal.key), collect_missing=True)
+                                            {'catch_cut': 15, 'catch_surf': 57, 'catch_strength': 70}.get(self.goal.key), collect_missing=True,
+                                            capture_species=self.collection.project['species']
+                                            if legendary_project(self.collection.project) else None)
                 self.intent_since = s.frame
             self.mode = f"battle: {self.intent.kind}"
             self.reason = self.intent.reason
             return self._root(scr, self.intent.kind)
         if kind == "moves":
             me, enemy = read_battler(mem, W_BATTLE_MON), read_battler(mem, W_ENEMY_MON)
+            if (s.in_battle == 1 and SPECIES.get(enemy.species, {}).get('dex') in (144, 145, 146, 150)
+                    and SPECIES[enemy.species]['dex'] not in s.owned
+                    and (not self.intent or self.intent.kind != 'fight' or MOVES.get(
+                        me.moves[self.intent.index], {}).get('effect') not in ('SLEEP_EFFECT', 'PARALYZE_EFFECT'))):
+                self.intent = None
+                self.reason = 'Return to capture controls without risking the legendary'
+                return tap('b')
             available = ranked_moves(me, enemy, self.used_status)
             slot = self.intent.index if self.intent and self.intent.kind == "fight" else available[0][1] if available else 0
             if not any(k == slot for _, k in available):
@@ -503,6 +513,9 @@ class StrategicPolicy(Policy):
             stock = DATA["marts"].get(WORLD.get(s.map, {}).get("name"), [])
             self.shop_item = self._shopping_item(s, stock)
             self.shopping = self.shop_item is not None
+            if (not self.shopping and legendary_project(self.collection.project)
+                    and ITEMS['ULTRA_BALL'] in stock):
+                self.collection.project['supplies_prepared'] = True
             self.reason = "Restock balls and medicine while keeping a cash reserve"
             return self._select(scr, 0) if self.shopping else tap("b")
         if kind == "quantity":
@@ -683,13 +696,17 @@ class StrategicPolicy(Policy):
             self.stock_latch = False
         if s.map == MAPS["INDIGO_PLATEAU_LOBBY"]:
             self.stock_latch = medicine < 10 or dict(s.items).get(ITEMS["REVIVE"], 0) < 5
+        legendary = legendary_project(self.collection.project)
+        if legendary and not dict(s.items).get(ITEMS['MASTER_BALL']):
+            self.stock_latch = (not self.collection.project.get('supplies_prepared')
+                                or dict(s.items).get(ITEMS['ULTRA_BALL'], 0) < 5 or bag_full)
         if self.stock_latch and not self.heal_latch and not in_league and goal.key != 'party_box' and self.completed.get("pokedex"):
             targets = []
             for m, world in WORLD.items():
                 if s.map == MAPS["INDIGO_PLATEAU_LOBBY"] and m != s.map:
                     continue
                 stock = DATA["marts"].get(world["name"], [])
-                if bag_full or shopping_item(s.items, stock, s.money, s.map == MAPS["INDIGO_PLATEAU_LOBBY"]) is not None:
+                if bag_full or self._shopping_item(s, stock) is not None:
                     clerk = next((o for o in world["objects"] if o[2] == "SPRITE_CLERK"), None)
                     if clerk and clerk[0] == 0:
                         targets.append((m, 2, clerk[1]))
@@ -697,6 +714,10 @@ class StrategicPolicy(Policy):
                 goal = Goal("restock", "Restock supplies", "Buy useful balls and medicine with a cash reserve", tuple(targets), "left", True)
             else:
                 self.stock_latch = False
+                if legendary:
+                    self.collection.project['supplies_prepared'] = True
+                    if ball_count < 5 and not dict(s.items).get(ITEMS['MASTER_BALL']):
+                        self.collection.abandon('Need money or bag space for legendary capture supplies')
         if self.heal_latch:
             # Medicine is useful when no known route to a center can be followed.
             for target, mon in enumerate(s.party):
@@ -712,7 +733,7 @@ class StrategicPolicy(Policy):
             if collection_goal:
                 self.next_goal = goal.to_dict() if not goal.key.startswith(('collect_', 'party_collection')) else self.next_goal
                 goal = collection_goal
-        pickup = self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
+        pickup = None if legendary_project(self.collection.project) else self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
         if pickup and not self.heal_latch and not in_league:
             self.next_goal = goal.to_dict()
             goal = pickup
@@ -818,6 +839,25 @@ class StrategicPolicy(Policy):
                 self.intent = Decision('reorder', target, reason='Lead with the best available matchup')
                 self.intent_since = s.frame
                 return tap('start')
+        if legendary_project(self.collection.project) and goal.key == 'collect_static':
+            target = max((i for i, mon in enumerate(s.party) if mon.hp and any(
+                MOVES.get(mid, {}).get('power') and pp for mid, pp in zip(mon.moves, mon.pp))),
+                key=lambda i: s.party[i].level, default=0)
+            if target != 0:
+                self.intent = Decision('reorder', target, reason='Lead the legendary expedition with a strong partner')
+                self.order_species = s.party[target].species
+                self.order_stage = 'source'
+                self.intent_since = s.frame
+                return tap('start')
+        if (legendary_project(self.collection.project) and goal.key == 'collect_static'
+                and WORLD.get(s.map, {}).get('symbol', '').startswith('CERULEAN_CAVE')
+                and not mem[W_REPEL_STEPS]):
+            repel = next((ITEMS[name] for name in ('MAX_REPEL', 'SUPER_REPEL', 'REPEL')
+                          if dict(s.items).get(ITEMS[name])), None)
+            if repel is not None:
+                action = self._use_item(s, repel)
+                if action:
+                    return action
         if not goal.key.startswith(("collect_", "party_collection")) and (goal.key == "train_league_partner" or self.development_index is not None and s.frame < self.development_until):
             target = league_partner(s) if goal.key == 'train_league_partner' else self.development_index
             if target is not None and target != 0:
@@ -901,10 +941,10 @@ class StrategicPolicy(Policy):
                 social = None if goal.key.startswith(("collect_", "party_collection")) else self._purposeful_detour(s, mem, goal)
                 if social:
                     return social
-                social = None if goal.key == 'collect_pickup' else self._social_interaction(s, mem)
+                social = None if goal.key == 'collect_pickup' or legendary_project(self.collection.project) else self._social_interaction(s, mem)
                 if social:
                     return social
-            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup") else self.exploration
+            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup") or legendary_project(self.collection.project) else self.exploration
             if s.map in MANSION_MAPS:
                 direction = self.mansion.route(s, goal.targets, self.nav)
                 if direction == "switch":
@@ -915,6 +955,11 @@ class StrategicPolicy(Policy):
             self.mode = "following objective"
             path = self.mansion.path if s.map in MANSION_MAPS else self.nav.path
             remaining = len(path) if path else None
+            project = self.collection.project
+            if (legendary_project(project) and goal.key == 'collect_static' and remaining is not None
+                    and remaining < project.get('closest_distance', float('inf'))):
+                project['closest_distance'] = remaining
+                self.collection.idle_frames = 0
             if remaining is not None and (self.goal_distance is None or remaining < self.goal_distance):
                 self.goal_distance = remaining
                 self.progress_frame = s.frame
@@ -1009,7 +1054,8 @@ class StrategicPolicy(Policy):
         if self.goal.key == 'collect_stone' and p and s.map == MAPS['CELADON_MART_4F']:
             item = ITEMS[p['evolution']['requirement']]
             return item if item in stock and not dict(s.items).get(item) and s.money >= 2500 and len(s.items)<20 else None
-        return shopping_item(s.items, stock, s.money, s.map == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=self.collection.pace!='focused' or self.collection.completed_champion)
+        return shopping_item(s.items, stock, s.money, s.map == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=self.collection.pace!='focused' or self.collection.completed_champion,
+                             legendary=legendary_project(self.collection.project))
 
     def _release_target(self, snapshot):
         project = self.collection.project or {}
@@ -1035,7 +1081,10 @@ class StrategicPolicy(Policy):
     @staticmethod
     def _sale_index(snapshot):
         return next((i for i, (item, qty) in enumerate(snapshot.items)
-                     if qty and (item == ITEMS["NUGGET"] or 201 <= item <= 250)), None)
+                     if qty and (item == ITEMS["NUGGET"] or 201 <= item <= 250
+                                 or len(snapshot.items) >= 18 and item in {
+                                     ITEMS[name] for name in ('X_ACCURACY', 'GUARD_SPEC', 'DIRE_HIT',
+                                         'X_ATTACK', 'X_DEFEND', 'X_SPEED', 'X_SPECIAL')})), None)
 
     def _use_item(self, snapshot, item, target=0):
         index = next((i for i, (mid, qty) in enumerate(snapshot.items) if mid == item and qty), None)

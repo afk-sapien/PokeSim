@@ -1,4 +1,26 @@
-# Current deployment: rc18, repeatable Championship rewards
+# Release candidate rc19: complete legendary expeditions
+
+Mewtwo remains a normal Cerulean Cave encounter. Legendary targets now have a distinct
+postgame priority and a longer bounded expedition budget. Route progress and completed
+route battles prevent false idle cancellations. These trips reserve capture resources,
+skip incidental catches and optional detours, prepare Ultra Balls and Repels, and use
+a strong lead. Crowded bags may sell expendable battle boosters to make supply space.
+
+Missing legendaries receive status moves and balls, without damaging attacks. Mewtwo's
+Barrier had made ordinary damage estimates look safe even when a critical hit could
+ignore the defensive boost and knock it out. Sleep may be reapplied after waking.
+Unexpected move menus cannot issue damaging attacks against a missing legendary.
+Resolved encounters stop the objective instead of repeated interaction with an empty spot.
+
+All 433 Python tests passed, with one optional test skipped. Both JavaScript test
+files passed, and built packages passed runtime resource checks.
+
+A full copied Red expedition caught Mewtwo and continued the adventure. Blue's reproduced
+failed encounter succeeded from the copied approach checkpoint using sleep and six Ultra
+Balls. Both checks used normal gameplay with zero rewinds and no Pokémon or encounter
+injection. See [the replay evidence](docs/validation/mewtwo-expeditions-0.2.0rc19.json).
+
+# Previous deployment: rc18, repeatable Championship rewards
 
 Every newly observed League victory earns one uniformly random level-5 Bulbasaur,
 Charmander, Squirtle, Eevee, Omanyte, Kabuto, Aerodactyl, or Mew. Claims persist through

@@ -1,3 +1,11 @@
+Current Mewtwo work: legendary expeditions receive their own postgame priority,
+a longer bounded budget, and progress credit for approaching the target and finishing
+route battles. They buy Ultra Balls and Repels, lead with a strong partner, and reserve
+captures for the legendary. Optional pickup and social detours pause during these trips.
+Missing legendaries use status moves and balls, without damaging attacks that can become
+lethal when a critical hit ignores Barrier. Capture status moves may be reused after
+sleep wears off. The ordinary adventure and Championship reward pool remain unchanged.
+
 Current Championship reward policy, September 15: every newly observed League victory
 earns one uniformly random level-5 Bulbasaur, Charmander, Squirtle, Eevee, Omanyte,
 Kabuto, Aerodactyl, or Mew. There is no roster requirement, reward cooldown, or

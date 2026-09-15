@@ -16,6 +16,11 @@ PACE = {'focused': (0, 0), 'balanced': (3600, 18000), 'thorough': (10800, 12000)
 CENTERS = tuple((m, 13, 4) for m, w in WORLD.items() if 'Pokecenter' in w['name'] and w['width'] == 14)
 CENTERS += ((MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8),)
 LEAGUE = {MAPS[n] for n in ('LORELEIS_ROOM','BRUNOS_ROOM','AGATHAS_ROOM','LANCES_ROOM','CHAMPIONS_ROOM','HALL_OF_FAME')}
+def legendary_project(project):
+    return bool(project and project.get('method') == 'static'
+                and SPECIES.get(project.get('species'), {}).get('dex') in (144, 145, 146, 150))
+
+
 RODS = {'OLD_ROD': 'VERMILION_OLD_ROD_HOUSE', 'GOOD_ROD': 'FUCHSIA_GOOD_ROD_HOUSE', 'SUPER_ROD': 'ROUTE_12_SUPER_ROD_HOUSE'}
 TRADE_NPCS = {'ROUTE_2_TRADE_HOUSE':'SCIENTIST', 'VERMILION_TRADE_HOUSE':'LITTLE_GIRL',
               'ROUTE_18_GATE_2F':'YOUNGSTER', 'CERULEAN_TRADE_HOUSE':'GRANNY'}
@@ -186,13 +191,18 @@ class Collection:
             self.idle_frames += delta
             if ((token is not None and self.progress_token is not None and token != self.progress_token)
                     or new_flags or s.map not in self.project_maps
-                    or self.project['method'] in ('grass', 'surf', 'fish', 'safari') and self.was_in_battle and not s.in_battle):
+                    or (self.project['method'] in ('grass', 'surf', 'fish', 'safari') or legendary_project(self.project))
+                    and self.was_in_battle and not s.in_battle):
                 self.idle_frames = 0
             if s.map not in self.project_maps:
                 self.project_maps.append(s.map)
             self.progress_token = token
             self.was_in_battle = bool(s.in_battle)
             target = self.project.get('species')
+            if (legendary_project(project) and not s.in_battle and dex(target) not in s.owned
+                    and project.get('flag') and event_set(s.event_flags, project['flag'])):
+                self.abandon('Legendary encounter ended without a catch')
+                return
             item = self.project.get('item')
             finished = (target and dex(target) in s.owned) or (not target and item and any(i==ITEMS[item] for i,q in s.items if q))
             if self.project['method']=='fossil' and self.project.get('initial_owned'):
@@ -319,6 +329,8 @@ class Collection:
         candidates = []
         def add(project,weight):
             key = str(project.get('species',0)) + ':' + project['method'] + ':' + str(project.get('map',0)) + ':' + str(project.get('fragment',''))
+            if legendary_project(project):
+                key = f'legendary:{project["species"]}:{project["map"]}'
             if project['method'] == 'train':
                 key = f'train:{project["parent"]}:{project["target_level"]}'
             if self.attempts.get(key,0) <= self.elapsed:
@@ -362,6 +374,8 @@ class Collection:
                     continue
                 searched.add(search_key)
                 project = dict(source,species=sid)
+                if legendary_project(project):
+                    project['legendary'] = True
                 goal = self.project_goal(s,project)
                 if not goal or not goal.targets:
                     continue
@@ -370,7 +384,8 @@ class Collection:
                     continue
                 if not self.completed_champion and (source['map'] != s.map or distance>60):
                     continue
-                add(project, (5 if mode in ('gift','fossil','static') else 1) / (1+distance/40))
+                add(project, 5 if legendary_project(project) else
+                    (5 if mode in ('gift','fossil','static') else 1) / (1+distance/40))
         for sid,level,box in held:
             if not self.completed_champion and self.pace=='balanced' and self.elapsed < 1800:
                 continue
@@ -438,7 +453,7 @@ class Collection:
         self.project_maps = [s.map]
         self.project_flags = list(s.event_flags)
         self.progress_token = None
-        self.remaining = 300000 if self.project['method']=='rematch' else 72000 if self.project['method']=='train' else 36000 if self.completed_champion else PACE[self.pace][0]
+        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) else 72000 if self.project['method']=='train' else 36000 if self.completed_champion else PACE[self.pace][0]
         nav.path.clear()
         return self.goal(s)
 

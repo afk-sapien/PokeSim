@@ -13,6 +13,11 @@ disabled. Do not
 request individual trade approvals. Monitor completed trades, stuck holds, recovery,
 and prolonged waiting for opportunities. No automatic save resets.
 
+After rc19, verify that Mewtwo expeditions are selected and completed. Track the
+legendary director category, capture supplies, expedition outcomes, and actual Pokédex
+registration. Distinguish ordinary route battles, policy replanning, and save reloads.
+Do not repeatedly interact with a resolved encounter or weaken a missing legendary.
+
 The user prefers maximum speed whenever resources allow. Use unlimited speed (`0`)
 for both live games and copied-save progression tests. Keep that preference across
 upgrades and restarts, and only slow down for a specific timing check, resource issue,
