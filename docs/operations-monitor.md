@@ -4,7 +4,10 @@ The user authorized ongoing monitoring, improvements, testing, and deployments o
 September 14, 2026. Continue within the roadmap without repeatedly asking permission
 for routine fixes or deployments. Preserve existing adventures and record backups.
 The user explicitly authorized live automatic trading on September 15, 2026 UTC.
-The scoped coordinator is enabled for useful spare exchanges every 15 minutes. Do not
+The scoped coordinator is enabled with a 15-minute minimum exchange interval. Last-copy
+sharing is enabled only for new recipient Pokédex entries. Active parties and current
+projects remain protected. The optional Mew gift remains disabled while the harder
+Championship reward design is discussed. Do not
 request individual trade approvals. Monitor completed trades, stuck holds, recovery,
 and prolonged waiting for opportunities. No automatic save resets.
 
@@ -309,3 +312,22 @@ The next exchange is waiting for both overworld states, with 12 useful proposals
 The sampler now records compact trading status and was verified against the live board.
 Monitor the delay beyond the 15-minute minimum interval. No runtime deployment or game
 restart was needed. See [the verification](validation/monitor-20260915-0659.json).
+
+
+## September 15, 07:30 UTC rc17 deployment
+
+Both games, the board, and the coordinator now use rc17 from `646b32b`. Fresh cold
+backups were taken and both current saves loaded successfully. Red retained 116
+registered entries and Blue retained 119. Both are healthy, unpaused, at unlimited
+speed with zero recovery reloads since this deployment. This starts new endurance
+intervals. All 12 public endpoint checks passed.
+
+Random fossil and Eevee evolution choices persist for new runs. Existing choices remain
+intact. Last-copy sharing is enabled only when the recipient registers a new species.
+The board displays last-copy proposals while protecting active parties and projects.
+Two previous live exchanges remain recorded, including Machamp and Golem registrations.
+
+The optional Mew gift passed copied-save interruption recovery, duplicate prevention,
+and actual PC withdrawal and training from level 5 to level 12. It remains disabled on
+the live pair while the user considers rewards requiring varied Championship teams.
+No live Mew was delivered. See [the release receipt](validation/release-0.2.0rc17.json).
