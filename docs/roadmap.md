@@ -1,3 +1,10 @@
+Supply-trip correction, rc30: Red could afford only an optional Antidote top-up,
+but this kept the global restock override active and displaced training. Restrict
+distant ordinary supply trips to affordable core supplies or selling spare items.
+Keep optional shopping in the current mart and preserve legendary preparation.
+The copied save resumed training and gained three levels over 25 game minutes.
+Track remaining route recoveries separately from this supply-priority correction.
+
 Training follow-up deployed to both games, rc29: real trainee XP renews the separate preparation allowance.
 The rc28 live run exposed cumulative healing time ending a session after three gained
 levels. The correction retains the longer active budget and strict inactivity checks,
@@ -33,7 +40,7 @@ strongest-partners shortcut, individual stat sorts, and a five-stat breakdown. T
 score sums calculated max HP, Attack, Defense, Speed, and Special at the current
 level. It includes species, DVs, and stat experience with cartridge rounding.
 
-Next planner investigation: reduce training project churn. A live one-hour sample
+Historical motivation for rc28 and rc29: reduce training project churn. A live one-hour sample
 recorded 15 Red level-ups and one championship, plus 36 Blue level-ups, three
 championships, and an evolution. Four exchanges completed, and both Pokédex totals
 were 144. Progress exists, but recent training outcomes include incomplete gains

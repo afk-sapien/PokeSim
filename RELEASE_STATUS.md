@@ -1,4 +1,19 @@
-# Current games: rc29, renew preparation only through real training gains
+# Candidate rc30: avoid distant shopping for optional supplies
+
+Red repeatedly crossed the Indigo Plateau boundary trying to restock with only
+455 money and no affordable balls or healing items. An optional Antidote top-up
+kept the restock override active and prevented productive training. Distant ordinary
+shop trips now require affordable balls, healing items, revives, or saleable items.
+Optional purchases remain available in the current mart. Legendary preparation and
+cash reserves are unchanged.
+
+A copied 90,000-frame comparison changed 52 recoveries and no achievements into
+8 recoveries and three Nidoking levels. Both used ordinary controls, preserved
+registrations, and performed no rewinds. All 521 Python tests passed with one optional
+skip. See [the reproduction](docs/validation/supply-trip-0.2.0rc30.json).
+Red deployment is pending. Blue remains on rc29 and continues progressing.
+
+# Blue and previous Red: rc29, renew preparation only through real training gains
 
 The rc28 live follow-up found Red had gained 19,383 trainee XP and three levels,
 but its productive session ended because several healing trips exhausted the
