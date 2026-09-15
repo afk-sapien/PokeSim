@@ -34,10 +34,13 @@ for edition, name, port in [('red', 'pokesim', 8930), ('blue', 'pokesim-blue', 8
             'goal': strategy.get('objective'), 'activity': strategy.get('action'),
             'policy_recoveries': strategy.get('recoveries'),
             'progress': state.get('progress'), 'league_rewards': state.get('league_rewards'),
+            'legendary_recovery': state.get('legendary_recovery'),
             'project': collection.get('hunt'),
             'project_remaining': collection.get('remaining_seconds'),
             'completed_projects': director.get('completed', {}),
             'recent_outcomes': director.get('outcomes', [])[-3:],
+            'legendary_outcomes': [row for row in director.get('outcomes', [])
+                                   if row.get('category') == 'legendary'][-4:],
             'pickups': strategy.get('pickups', {}).get('history', []),
             'pickup_state': {key: strategy.get('pickups', {}).get(key)
                              for key in ('active', 'retry', 'next_scan', 'completed')},

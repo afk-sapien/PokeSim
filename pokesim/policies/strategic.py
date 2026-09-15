@@ -7,7 +7,7 @@ from .battle import (BALLS, CURES, HEALING, W_BATTLE_MON, W_ENEMY_MON, Decision,
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .pickups import Pickups
-from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, boulder_task
+from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, boulder_task, seafoam_current_task
 from .progression import STARTERS, Goal, healing_goal, journey, league_partner, milestones, story_goal
 from .collection import CENTERS, Collection, LEAGUE, legendary_project
 from .awareness import ActionWatch
@@ -604,7 +604,7 @@ class StrategicPolicy(Policy):
                 return tap("b")
             return self._select(scr, 1 if self.pc_operation == "deposit" else 0)
         if kind == "dialogue":
-            if not s.in_battle and ("NO SURF" in text or "NO PLACE TO GET OFF" in text):
+            if not s.in_battle and ("NO SURF" in text or "NO PLACE TO GET OFF" in text or 'CURRENT IS' in text):
                 self._remember_failure(s, 'Surf was rejected at this shoreline')
                 self.watch.expected = None
                 self.intent = None
@@ -867,6 +867,24 @@ class StrategicPolicy(Policy):
                 self.order_stage = "source"
                 self.intent_since = s.frame
                 return tap("start")
+        if goal.key == 'collect_seafoam_current' and s.map == MAPS['SEAFOAM_ISLANDS_B3F']:
+            task = seafoam_current_task(s, self.nav)
+            direction = self.boulders.route(s, self.nav, task) if task else None
+            if direction:
+                if not mem[0xD728] & 1:
+                    target = next((i for i, p in enumerate(s.party) if 70 in p.moves), None)
+                    if target is not None:
+                        self.field_move = 'STRENGTH'
+                        self.intent = Decision('field', target, reason='Use Strength to slow the Seafoam current')
+                        self.intent_since = s.frame
+                        self.mode = 'using Strength'
+                        self.watch.begin('field', 'Wait for Strength to take effect', s,
+                            ActionWatch.value('field', s, '', mem[0xD700] | ((mem[0xD728] & 1) << 2)))
+                        return tap('start')
+                self.mode = 'moving a boulder to slow the current'
+                self.reason = 'Clear space and push the designated boulders into both holes'
+                self.progress_frame = s.frame
+                return tap(direction, 16, 16)
         if s.map in VICTORY_MAPS:
             task = boulder_task(s)
             following_route = ((self.collection.project or self.pickups.active) and goal.key.startswith('collect_')
