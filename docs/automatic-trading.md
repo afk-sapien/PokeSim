@@ -53,7 +53,7 @@ The ordinary resume and rewind controls cannot bypass a held exchange.
 
 The board mounts only `/docker/pokesim-trading/state/public` as `/trading:ro`, with
 `BROKER_TRADING_DIR=/trading`. That directory contains a redacted `policy.json` with
-only `enabled`, `interval_seconds`, `allow_last_copies`, and `mew_event`, and the completed exchange status. It never
+only `enabled`, `interval_seconds`, `allow_last_copies`, `mew_event`, and `league_rewards`, and the completed exchange status. It never
 receives peer tokens, ROMs, saves, or transaction backups.
 
 Set `enabled` to true in both private and public policy files after configuring the
@@ -85,3 +85,26 @@ uses the existing two-peer coordinator. It is not a general event scheduling int
 
 Current adventures keep their existing starter, fossil, and evolved Eevee. No resets,
 extra Eevee supply, or starter farming are part of this feature.
+
+
+## Championship rewards
+
+Set `league_rewards` to true in private and public policy files, with the coordinator
+enabled. Every newly observed Hall of Fame entry earns one random level-5 Pokémon from
+Bulbasaur, Charmander, Squirtle, Eevee, Omanyte, Kabuto, Aerodactyl, and Mew. Each species
+has equal probability. Gifts have ordinary DVs, zero stat experience, correct starting
+moves and experience, and original trainer POKESIM. Duplicates are allowed.
+
+Claims begin with victories observed after this upgrade. Existing historical victories
+are not backfilled. The counter persists beyond the cartridge Hall of Fame counter's
+limit. A database high-water mark prevents an older checkpoint replay from earning the
+same claim again. Selection stays fixed across delivery retries. A full PC leaves the
+claim pending, with no overwrite or loss. The coordinator delivers one pending reward
+per eligible peer per cycle using the same held-checkpoint verification and recovery
+as trades. Rewards bypass the trade interval and do not require a useful trade proposal.
+There is no reward cooldown, roster qualification, or individual approval.
+
+The board lists rewards separately from completed exchanges. Game state includes earned,
+delivered, and pending counts under `league_rewards`. Keep the older `mew_event` false
+when using this pool. Both adventures remain intact. A deliberate manual new-adventure
+restart clears the reward ledger. Ordinary recovery and restarts of the server retain it.

@@ -14,6 +14,7 @@ required = {
     'pokesim/broker/static/board.css',
     'pokesim/trade/execute.py',
     'pokesim/trade/event.py',
+    'pokesim/rewards.py',
     'pokesim/trade/pair.py',
     'pokesim/trade/service.py',
     'pokesim/broker/routine.py',

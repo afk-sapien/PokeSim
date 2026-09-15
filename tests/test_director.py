@@ -119,7 +119,8 @@ def test_full_dex_still_selects_training_and_level_100_has_no_training_candidate
     c = Collection()
     s = replace(s, party=(replace(s.party[0], level=100),))
     c.observe(s)
-    assert c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan')) is None
+    assert c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan')).key == 'collect_rematch'
+    assert c.project['method'] != 'train'
 
 
 def test_high_level_training_has_encounters_and_boxed_partner_uses_existing_pc_flow():

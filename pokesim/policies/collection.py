@@ -202,7 +202,7 @@ class Collection:
             if self.project['method']=='explore':
                 finished = (s.map,s.x,s.y) == tuple(self.project['target'])
             if self.project['method']=='rematch':
-                finished = s.hall_of_fame_count > self.project['hof_count']
+                finished = s.hall_of_fame_count > self.project['hof_count'] or s.map == MAPS['HALL_OF_FAME']
             if project['method'] == 'train':
                 finished = trainee is not None and s.party[trainee].level >= project['target_level']
             if finished or self.remaining <= 0:
@@ -377,7 +377,8 @@ class Collection:
             for evo in EVOS.get(sid,[]):
                 if dex(evo['species']) in s.owned or evo['method']=='trade':
                     continue
-                if sid == next((i for i,d in SPECIES.items() if d['dex']==133),None) and dex(evo['species']) != self.eevee_choice:
+                if (dex(sid) == 133 and self.eevee_choice not in s.owned
+                        and dex(evo['species']) != self.eevee_choice):
                     continue
                 if evo['method']=='item' and not bag.get(ITEMS[evo['requirement']]) and evo['requirement']=='MOON_STONE':
                     continue
@@ -398,8 +399,7 @@ class Collection:
                 add({'method': 'train', 'parent': sid, 'family': family,
                      'box': box, 'initial_level': level, 'target_level': min(100, (level // 10 + 1) * 10)},
                     1 / (1 + level / 20))
-            if s.money < 10000:
-                add({'method':'rematch','hof_count':s.hall_of_fame_count},10)
+            add({'method':'rematch','hof_count':s.hall_of_fame_count}, 10 if s.money < 10000 else 2)
             porygon = next(sid for sid,mon in SPECIES.items() if mon['dex']==137)
             if 137 not in s.owned and (s.money >= 20000 or s.coins >= (9999 if self.version=='red' else 6500)):
                 add({'method':'prize','species':porygon,'map':MAPS['GAME_CORNER_PRIZE_ROOM']},0.5)

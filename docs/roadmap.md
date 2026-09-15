@@ -1,17 +1,24 @@
-Latest design discussion: consider an optional extended progression mode with earned
-starter or Eevee rewards for qualifying Championships, and Mew as a later milestone.
-A reward after every ordinary League rematch would be too easy for established teams.
-A possible qualification is at least three different team species from the previous
-rewarded roster plus a real-time cooldown. This is a proposal, not implemented policy.
-Keep the simple first-Champion Mew gift disabled on the live pair while this is decided.
-Completion would also need explicit treatment of unchosen fossils and missed legends.
+Current Championship reward policy, September 15: every newly observed League victory
+earns one uniformly random level-5 Bulbasaur, Charmander, Squirtle, Eevee, Omanyte,
+Kabuto, Aerodactyl, or Mew. There is no roster requirement, reward cooldown, or
+individual approval. The existing scoped two-peer coordinator delivers claims at safe
+points and keeps them pending if boxes are full. The first victory observed after
+upgrade starts the ledger. Historical wins are not backfilled. Rewards have ordinary
+DVs and zero stat experience. Duplicates are valid and can be raised or traded.
+
+Rematches remain available alongside collecting and training after Champion, including
+when the run has plenty of money. The initial Eevee evolution keeps its random choice.
+Later Eevees can fill the other missing forms. This replaces the proposed harder
+Championship milestones and the disabled one-time Mew event on the live pair.
+The pool removes the starter, Eevee, fossil-choice, and Mew availability barriers.
+A Red and Blue pair can exchange version exclusives and trade evolutions, but missed
+unique legendary encounters can still prevent completion.
 
 Current scope update, September 15: randomize fossil and Eevee evolution choices for
 new runs. Preserve choices already made in existing saves. Starter and Eevee supply
 farming, coordinated starter allocation, and network demand planning for those gifts
 are outside scope. Permit last boxed copies to travel for new Pokédex registrations,
-while protecting active teams and current projects. Support an optional one-time
-postgame PokeSim Mew distribution with durable delivery records.
+while protecting active teams and current projects. Use Championship rewards for repeatable gifts with durable delivery records.
 
 Current trading update: rc16 provides trusted automatic spare exchanges through scoped
 controls. The user explicitly authorized ongoing automatic trading and the live policy

@@ -15,6 +15,7 @@ from pyboy import PyBoy
 
 from . import __version__, config
 from .events import RunMemory, diff
+from . import rewards
 from .play_clock import PlayClock
 from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext
@@ -126,6 +127,7 @@ class Emulator:
             "glitched": bool(self.invalid_since),
             "strategy": self.policy.details(),
             "progress": self.progress_status(),
+            "league_rewards": rewards.status(self.store),
         }
 
     def progress_status(self):
@@ -277,6 +279,8 @@ class Emulator:
             self.store.set("run_memory", self.mem.to_dict())
 
     def _handle_events(self, events, snap):
+        if any(ev.type == 'champion' for ev in events):
+            rewards.earn(self.store, self.mem.championships)
         png = self._shot_png()
         state = None
         for ev in events:
@@ -482,6 +486,7 @@ class Emulator:
             self.mem = RunMemory()
             self.last_achievement = None
             self.store.set("trade_barrier", None)
+            self.store.set(rewards.KEY, None)
             self.play_clock = PlayClock()
             self.store.set("play_clock", self.play_clock.state_dict())
             self.snapshot = None

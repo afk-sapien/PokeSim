@@ -1,4 +1,4 @@
-"""An optional one-time PokeSim Mew distribution using held checkpoints."""
+"""Custom Pokémon rewards delivered through held checkpoint transactions."""
 import hashlib
 import json
 import sqlite3
@@ -8,33 +8,37 @@ from . import boxes, pair
 from .execute import _boot, _publish, _state_bytes, register_arrival
 from ..policies.collection import champion
 from ..strategy_data import MOVES, SPECIES
+from .. import rewards
 
 EVENT_KEY = 'pokesim-mew-v1'
 MEW = 21
 
 
-def gift_slot(seed):
-    """Build a level-five Mew with ordinary DVs, no training, and event provenance."""
+def gift_slot(seed, species=MEW):
+    """Build a level-five Pokémon with ordinary DVs, no training, and event provenance."""
     digest = hashlib.sha256(seed.encode()).digest()
     attack, defense = digest[0] >> 4, digest[0] & 15
     speed, special = digest[1] >> 4, digest[1] & 15
     hp_dv = ((attack & 1) << 3) | ((defense & 1) << 2) | ((speed & 1) << 1) | (special & 1)
-    base = SPECIES[MEW]
+    base = SPECIES[species]
     level = 5
     struct = bytearray(boxes.BOX_STRUCT)
-    struct[0] = MEW
+    struct[0] = species
     hp = ((base['stats'][0] + hp_dv) * 2 * level) // 100 + level + 10
     struct[1:3] = hp.to_bytes(2, 'big')
     struct[3] = level
     struct[5:7] = bytes(base['types'])
     struct[7] = base['catch_rate']
-    struct[8] = 1
+    moves = list(dict.fromkeys(base['initial_moves'] + [move for at, move in base['learnset'] if at <= level]))[-4:]
+    struct[8:8 + len(moves)] = bytes(moves)
     struct[12:14] = digest[2:4]
-    experience = 6 * level ** 3 // 5 - 15 * level ** 2 + 100 * level - 140
+    experience = {'MEDIUM_SLOW': 6 * level ** 3 // 5 - 15 * level ** 2 + 100 * level - 140,
+                  'MEDIUM_FAST': level ** 3, 'SLOW': 5 * level ** 3 // 4,
+                  'FAST': 4 * level ** 3 // 5}[base['growth']]
     struct[14:17] = experience.to_bytes(3, 'big')
     struct[27:29] = digest[:2]
-    struct[29] = MOVES[1]['pp']
-    return boxes.Slot(0, 0, bytes(struct), boxes.encode_text('MEW'), boxes.encode_text('POKESIM'))
+    struct[29:29 + len(moves)] = bytes(MOVES[move]['pp'] for move in moves)
+    return boxes.Slot(0, 0, bytes(struct), boxes.encode_text(base['name']), boxes.encode_text('POKESIM'))
 
 
 def received(data):
@@ -43,9 +47,9 @@ def received(data):
     return bool(row and json.loads(row[0]))
 
 
-def stage(root, transaction):
+def stage(root, transaction, league_rewards=False):
     work = root / 'transactions' / transaction
-    sources, eligible, previous = {}, {}, {}
+    sources, eligible, previous, claims = {}, {}, {}, {}
     for name in ('red', 'blue'):
         data = pair.PAIR_ROOT / name
         state = pair.CheckpointStore(data / 'states').latest_state()
@@ -55,7 +59,12 @@ def stage(root, transaction):
         snapshot, metadata, slots = pair.inspect(rom, state)
         space = next(((box, count + 1) for box, count in enumerate(snapshot.box_counts, 1)
                       if count < boxes.BOX_CAPACITY), None)
-        eligible[name] = space if champion(snapshot) and 151 not in snapshot.owned and not received(data) else None
+        if league_rewards:
+            with sqlite3.connect(data / 'pokesim.sqlite') as db:
+                claims[name] = rewards.ledger(db)
+            eligible[name] = space if claims[name]['earned'] > claims[name]['delivered'] else None
+        else:
+            eligible[name] = space if champion(snapshot) and 151 not in snapshot.owned and not received(data) else None
         previous[name] = snapshot, metadata, slots
         backup = work / 'before' / name
         backup.mkdir(parents=True, exist_ok=True)
@@ -74,10 +83,17 @@ def stage(root, transaction):
         try:
             if eligible[name]:
                 box, position = eligible[name]
-                gift = gift_slot(f'{EVENT_KEY}:{name}:{transaction}')
+                ordinal, species, seed = (rewards.selection(claims[name]) if league_rewards
+                                          else (None, MEW, f'{EVENT_KEY}:{name}:{transaction}'))
+                gift = gift_slot(seed, species)
                 boxes.write_slot(pb.memory, box, position, gift)
-                register_arrival(pb.memory, MEW)
-                gifts.append({'instance': name, 'name': 'Mew', 'level': 5, 'box': box, 'position': position})
+                register_arrival(pb.memory, species)
+                gifts.append({'instance': name, 'name': SPECIES[species]['name'].title(), 'species': species,
+                              'ordinal': ordinal, 'level': 5, 'box': box, 'position': position})
+                if league_rewards:
+                    memory = dict(metadata.get('run_memory', {}))
+                    memory['championships'] = max(memory.get('championships', 0), claims[name]['earned'])
+                    metadata = dict(metadata, run_memory=memory)
             target = work / 'after' / name / f'auto-v1-trade-{transaction}.state'
             target.parent.mkdir(parents=True, exist_ok=True)
             _publish(target, _state_bytes(pb), dict(metadata, trade_id=transaction))
@@ -94,15 +110,16 @@ def stage(root, transaction):
             expected_counts[box - 1] += 1
             actual = slots[(box, position)]
             assert (actual.struct, actual.nickname, actual.ot_name) == (gift.struct, gift.nickname, gift.ot_name)
-            assert after.owned == before.owned | {151}
+            assert after.owned == before.owned | {SPECIES[gift.species]['dex']}
         else:
             assert before.owned == after.owned
         assert tuple(expected_counts) == after.box_counts
         states[name] = str(target)
         hashes[name] = hashlib.sha256(target.read_bytes()).hexdigest()
     pair.write_json(work / 'result.json', {
-        'status': 'staged', 'kind': 'mew_event', 'event': EVENT_KEY,
-        'id': transaction, 'reason': 'One-time postgame PokeSim Mew event',
+        'status': 'staged', 'kind': 'league_reward' if league_rewards else 'mew_event',
+        'event': rewards.KEY if league_rewards else EVENT_KEY,
+        'id': transaction, 'reason': 'Championship Pokémon reward' if league_rewards else 'One-time postgame PokeSim Mew event',
         'gifts': gifts, 'states': states, 'hashes': hashes,
     })
 
@@ -116,7 +133,17 @@ def journal(root, transaction):
             cursor = db.execute('INSERT OR IGNORE INTO completed_events(id) VALUES (?)', (transaction,))
             if cursor.rowcount:
                 db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', ('trade_barrier', json.dumps(transaction)))
-                if name in recipients:
+                if name in recipients and result.get('kind') == 'league_reward':
+                    gift = next(g for g in result['gifts'] if g['instance'] == name)
+                    value = rewards.ledger(db)
+                    if not value['delivered'] + 1 == gift['ordinal'] <= value['earned']:
+                        raise ValueError('Reward claim is out of order')
+                    value['delivered'] = gift['ordinal']
+                    rewards.save(db, value)
+                    db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'obtain',?,?,1,4,'Championship reward','')",
+                               (f"Received {gift['name']} for Championship #{gift['ordinal']}",
+                                f"A level-5 {gift['name']} joined the PC. Each League victory earns a random PokeSim reward."))
+                elif name in recipients:
                     db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (EVENT_KEY, json.dumps(transaction)))
                     db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'obtain',?,?,1,4,'PokeSim event','')",
                                ('Received Mew from the PokeSim event',
