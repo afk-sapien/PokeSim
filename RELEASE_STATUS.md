@@ -22,6 +22,19 @@ Blue caught a level-25 Kangaskhan in the live Safari Zone, reaching 116 register
 entries. Both live reload counters remain zero. Red's new release has only startup
 verification so far. Sustained collection and multi-day endurance remain open.
 
+## Validated followup awaiting a future release
+
+The idle-abandon path now records selected-partner experience as partial progress,
+matching the overall timeout path. A live project gained 524 XP but was incorrectly
+marked deferred. The fix retains the idle deadline and ordinary retry delay, while
+avoiding an escalating failure penalty for a productive attempt. Existing history
+is preserved. All 388 tests pass, with one optional test skipped.
+
+A 72028-frame replay matches the deployed baseline's gameplay, reaching full HP and PP
+after 10536 frames at Indigo Plateau and then training another reserve. The fix is
+committed for a later release. Red remains on rc13 and Blue on rc12 so their current
+live intervals can continue. See [the evidence](docs/validation/partial-training-20260915.json).
+
 # rc12 deployment record
 
 Blue runs `pokesim:0.2.0rc12-66b226f`, built from tagged commit

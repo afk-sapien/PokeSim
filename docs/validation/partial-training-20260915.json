@@ -1,0 +1,1507 @@
+{
+  "status": "Validated and queued for a future release. Not deployed.",
+  "baseline_revision": "17cd9973f3fbcfef2cfb3838f02f0d2e759b7b75",
+  "finding": "The live train:158:40 project gained 524 experience but was marked deferred when the idle guard abandoned it. Unlike overall timeouts, the abandon path did not pass recorded gains to the director.",
+  "implementation": "Keep the idle deadline and abandon the current objective. Record a productive partial attempt as advanced and use its ordinary retry delay instead of escalating the failure backoff.",
+  "tests": {
+    "passed": 388,
+    "skipped": 1,
+    "focused_passed": 42
+  },
+  "red_baseline": {
+    "edition": "red",
+    "frames": 72028,
+    "wall_seconds": 17.97,
+    "rewinds": 0,
+    "initial_owned": 111,
+    "final_owned": 111,
+    "new_owned": [],
+    "first_fully_restored_party": {
+      "frame": 10536,
+      "map": "Indigo Plateau Lobby"
+    },
+    "initial_party": [
+      [
+        "Seaking",
+        38,
+        58519
+      ],
+      [
+        "Lapras",
+        31,
+        39400
+      ],
+      [
+        "Muk",
+        100,
+        1000000
+      ],
+      [
+        "Rapidash",
+        80,
+        529865
+      ],
+      [
+        "Venusaur",
+        100,
+        1059860
+      ],
+      [
+        "Zapdos",
+        89,
+        890398
+      ]
+    ],
+    "final_party": [
+      [
+        "Hitmonchan",
+        30,
+        29086
+      ],
+      [
+        "Rapidash",
+        80,
+        529865
+      ],
+      [
+        "Venusaur",
+        100,
+        1059860
+      ],
+      [
+        "Zapdos",
+        89,
+        890752
+      ],
+      [
+        "Lapras",
+        31,
+        39400
+      ],
+      [
+        "Muk",
+        100,
+        1000000
+      ]
+    ],
+    "initial_items": [
+      [
+        63,
+        1
+      ],
+      [
+        196,
+        1
+      ],
+      [
+        74,
+        1
+      ],
+      [
+        72,
+        1
+      ],
+      [
+        73,
+        1
+      ],
+      [
+        48,
+        1
+      ],
+      [
+        198,
+        1
+      ],
+      [
+        199,
+        1
+      ],
+      [
+        43,
+        1
+      ],
+      [
+        53,
+        5
+      ],
+      [
+        78,
+        1
+      ],
+      [
+        76,
+        1
+      ],
+      [
+        69,
+        1
+      ],
+      [
+        77,
+        1
+      ],
+      [
+        83,
+        1
+      ],
+      [
+        16,
+        4
+      ],
+      [
+        54,
+        1
+      ],
+      [
+        2,
+        15
+      ]
+    ],
+    "final_items": [
+      [
+        63,
+        1
+      ],
+      [
+        196,
+        1
+      ],
+      [
+        74,
+        1
+      ],
+      [
+        72,
+        1
+      ],
+      [
+        73,
+        1
+      ],
+      [
+        48,
+        1
+      ],
+      [
+        198,
+        1
+      ],
+      [
+        199,
+        1
+      ],
+      [
+        43,
+        1
+      ],
+      [
+        53,
+        5
+      ],
+      [
+        78,
+        1
+      ],
+      [
+        76,
+        1
+      ],
+      [
+        69,
+        1
+      ],
+      [
+        77,
+        1
+      ],
+      [
+        83,
+        1
+      ],
+      [
+        16,
+        10
+      ],
+      [
+        54,
+        1
+      ],
+      [
+        2,
+        15
+      ]
+    ],
+    "achievements": [],
+    "mode_frames": {
+      "waiting for map transition": 1440,
+      "party": 1692,
+      "dialogue": 41754,
+      "pause": 180,
+      "using Strength": 90,
+      "waiting for the menu": 228,
+      "party_action": 378,
+      "moving a boulder onto the switch": 1056,
+      "following objective": 11940,
+      "overworld": 156,
+      "exploring obstacle": 60,
+      "battle: switch": 396,
+      "moves": 882,
+      "battle: fight": 774,
+      "interacting": 332,
+      "heal": 36,
+      "list": 2496,
+      "shop": 108,
+      "yes_no": 468,
+      "pc_root": 624,
+      "pc": 996,
+      "change_box": 882,
+      "training": 3500,
+      "battle: item": 126,
+      "naming": 1380,
+      "battle": 54
+    },
+    "history": [
+      "Changed plan: Train. No encounter, training gain, or new route in two minutes",
+      "Changed plan: Train. No encounter, training gain, or new route in two minutes",
+      "Will revisit: Zapdos toward level 90",
+      "Changed plan: Train. No encounter, training gain, or new route in two minutes",
+      "Will revisit: Ditto",
+      "Changed plan: Train. No encounter, training gain, or new route in two minutes"
+    ],
+    "director": {
+      "recent": [
+        {
+          "category": "training",
+          "key": "train:100:10"
+        },
+        {
+          "category": "training",
+          "key": "train:141:60"
+        },
+        {
+          "category": "training",
+          "key": "train:139:20"
+        },
+        {
+          "category": "training",
+          "key": "train:75:90"
+        },
+        {
+          "category": "training",
+          "key": "train:158:40"
+        },
+        {
+          "category": "collection",
+          "key": "76:grass:34:"
+        },
+        {
+          "category": "training",
+          "key": "train:155:40"
+        },
+        {
+          "category": "training",
+          "key": "train:44:40"
+        }
+      ],
+      "outcomes": [
+        {
+          "key": "train:152:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182006944,
+          "retry_at": 182066944,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "73:static:194:MOLTRES",
+          "category": "collection",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 182046940,
+          "retry_at": 182166940,
+          "target": 73,
+          "gains": {}
+        },
+        {
+          "key": "76:grass:34:",
+          "category": "collection",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 182113614,
+          "retry_at": 182233614,
+          "target": 76,
+          "gains": {}
+        },
+        {
+          "key": "train:155:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182123870,
+          "retry_at": 182183870,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "train:128:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182133976,
+          "retry_at": 182193976,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "0:trainer:198:TEXT_VICTORYROAD3F_COOLTRAINER_M2",
+          "category": "exploration",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 182151696,
+          "retry_at": 0,
+          "target": null,
+          "gains": {}
+        },
+        {
+          "key": "train:111:30",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182164540,
+          "retry_at": 182224540,
+          "target": 30,
+          "gains": {}
+        },
+        {
+          "key": "train:30:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182173732,
+          "retry_at": 182233732,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "0:trainer:198:TEXT_VICTORYROAD3F_COOLTRAINER_F1",
+          "category": "exploration",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 182179034,
+          "retry_at": 0,
+          "target": null,
+          "gains": {}
+        },
+        {
+          "key": "train:71:20",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182193584,
+          "retry_at": 182253584,
+          "target": 20,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:40:70",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182213764,
+          "retry_at": 182273764,
+          "target": 70,
+          "gains": {
+            "experience": 294,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:66:60",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182233342,
+          "retry_at": 182293342,
+          "target": 60,
+          "gains": {
+            "experience": 500,
+            "levels": 0
+          }
+        },
+        {
+          "key": "76:grass:34:",
+          "category": "collection",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 182270066,
+          "retry_at": 182510066,
+          "target": 76,
+          "gains": {}
+        },
+        {
+          "key": "train:117:30",
+          "category": "training",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 182305042,
+          "retry_at": 0,
+          "target": 30,
+          "gains": {
+            "experience": 714,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:4:10",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182313736,
+          "retry_at": 182373736,
+          "target": 10,
+          "gains": {}
+        },
+        {
+          "key": "train:128:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182330304,
+          "retry_at": 182450304,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "train:22:30",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182370748,
+          "retry_at": 182430748,
+          "target": 30,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:100:10",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182378334,
+          "retry_at": 182438334,
+          "target": 10,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:141:60",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182397214,
+          "retry_at": 182457214,
+          "target": 60,
+          "gains": {
+            "experience": 414,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:139:20",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182412760,
+          "retry_at": 182472760,
+          "target": 20,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:75:90",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 182484776,
+          "retry_at": 182544776,
+          "target": 90,
+          "gains": {
+            "experience": 13669,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:158:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182509894,
+          "retry_at": 182569894,
+          "target": 40,
+          "gains": {
+            "experience": 524,
+            "levels": 0
+          }
+        },
+        {
+          "key": "76:grass:34:",
+          "category": "collection",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 182550290,
+          "retry_at": 183030290,
+          "target": 76,
+          "gains": {}
+        },
+        {
+          "key": "train:155:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182659180,
+          "retry_at": 182779180,
+          "target": 40,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        }
+      ],
+      "failures": {
+        "train:84:10": 1,
+        "train:125:20": 1,
+        "train:152:40": 1,
+        "73:static:194:MOLTRES": 2,
+        "train:111:30": 1,
+        "train:30:40": 1,
+        "train:71:20": 1,
+        "train:40:70": 1,
+        "train:66:60": 1,
+        "train:4:10": 1,
+        "train:128:40": 2,
+        "train:22:30": 1,
+        "train:100:10": 1,
+        "train:141:60": 1,
+        "train:139:20": 1,
+        "train:158:40": 1,
+        "76:grass:34:": 4,
+        "train:155:40": 2
+      },
+      "completed": {
+        "exploration": 2,
+        "training": 1
+      }
+    },
+    "active_project": {
+      "method": "train",
+      "parent": 44,
+      "family": [
+        44
+      ],
+      "box": 4,
+      "initial_level": 30,
+      "target_level": 40,
+      "key": "train:44:40",
+      "initial_owned": [
+        1,
+        2,
+        3,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        29,
+        30,
+        32,
+        33,
+        34,
+        35,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        66,
+        67,
+        72,
+        73,
+        74,
+        75,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        107,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        116,
+        117,
+        118,
+        119,
+        120,
+        121,
+        125,
+        128,
+        129,
+        130,
+        131,
+        133,
+        134,
+        137,
+        138,
+        139,
+        142,
+        145,
+        147,
+        148,
+        149
+      ],
+      "initial_experience": 27000,
+      "gains": {
+        "experience": 2086,
+        "levels": 0
+      }
+    },
+    "pickups": {
+      "active": null,
+      "completed": [
+        "198:4"
+      ],
+      "retry": {},
+      "next_scan": 182703460,
+      "history": [
+        "Collected Max Revive",
+        "Pickup unavailable or detour budget reached: TM Explosion",
+        "Pickup unavailable or detour budget reached: Guard Spec"
+      ]
+    },
+    "policy_recoveries": 4,
+    "checkpoint_sha256": "b3851bbe1f30d317ffba4d09b23fba45c05ed5054d80045515185f9fe868ae4a",
+    "policy_fingerprint": "dfb5c7c9247f2d3b0d6333f2ea3363ae4557c9c6b1beb2ba6db8bee40c3852df",
+    "pyboy": "2.7.0",
+    "final_goal": "Train Hitmonchan to level 40",
+    "final_map": "Victory Road 2F"
+  },
+  "red_candidate": {
+    "edition": "red",
+    "frames": 72028,
+    "wall_seconds": 18.18,
+    "rewinds": 0,
+    "initial_owned": 111,
+    "final_owned": 111,
+    "new_owned": [],
+    "first_fully_restored_party": {
+      "frame": 10536,
+      "map": "Indigo Plateau Lobby"
+    },
+    "initial_party": [
+      [
+        "Seaking",
+        38,
+        58519
+      ],
+      [
+        "Lapras",
+        31,
+        39400
+      ],
+      [
+        "Muk",
+        100,
+        1000000
+      ],
+      [
+        "Rapidash",
+        80,
+        529865
+      ],
+      [
+        "Venusaur",
+        100,
+        1059860
+      ],
+      [
+        "Zapdos",
+        89,
+        890398
+      ]
+    ],
+    "final_party": [
+      [
+        "Hitmonchan",
+        30,
+        29086
+      ],
+      [
+        "Rapidash",
+        80,
+        529865
+      ],
+      [
+        "Venusaur",
+        100,
+        1059860
+      ],
+      [
+        "Zapdos",
+        89,
+        890752
+      ],
+      [
+        "Lapras",
+        31,
+        39400
+      ],
+      [
+        "Muk",
+        100,
+        1000000
+      ]
+    ],
+    "initial_items": [
+      [
+        63,
+        1
+      ],
+      [
+        196,
+        1
+      ],
+      [
+        74,
+        1
+      ],
+      [
+        72,
+        1
+      ],
+      [
+        73,
+        1
+      ],
+      [
+        48,
+        1
+      ],
+      [
+        198,
+        1
+      ],
+      [
+        199,
+        1
+      ],
+      [
+        43,
+        1
+      ],
+      [
+        53,
+        5
+      ],
+      [
+        78,
+        1
+      ],
+      [
+        76,
+        1
+      ],
+      [
+        69,
+        1
+      ],
+      [
+        77,
+        1
+      ],
+      [
+        83,
+        1
+      ],
+      [
+        16,
+        4
+      ],
+      [
+        54,
+        1
+      ],
+      [
+        2,
+        15
+      ]
+    ],
+    "final_items": [
+      [
+        63,
+        1
+      ],
+      [
+        196,
+        1
+      ],
+      [
+        74,
+        1
+      ],
+      [
+        72,
+        1
+      ],
+      [
+        73,
+        1
+      ],
+      [
+        48,
+        1
+      ],
+      [
+        198,
+        1
+      ],
+      [
+        199,
+        1
+      ],
+      [
+        43,
+        1
+      ],
+      [
+        53,
+        5
+      ],
+      [
+        78,
+        1
+      ],
+      [
+        76,
+        1
+      ],
+      [
+        69,
+        1
+      ],
+      [
+        77,
+        1
+      ],
+      [
+        83,
+        1
+      ],
+      [
+        16,
+        10
+      ],
+      [
+        54,
+        1
+      ],
+      [
+        2,
+        15
+      ]
+    ],
+    "achievements": [],
+    "mode_frames": {
+      "waiting for map transition": 1440,
+      "party": 1692,
+      "dialogue": 41754,
+      "pause": 180,
+      "using Strength": 90,
+      "waiting for the menu": 228,
+      "party_action": 378,
+      "moving a boulder onto the switch": 1056,
+      "following objective": 11940,
+      "overworld": 156,
+      "exploring obstacle": 60,
+      "battle: switch": 396,
+      "moves": 882,
+      "battle: fight": 774,
+      "interacting": 332,
+      "heal": 36,
+      "list": 2496,
+      "shop": 108,
+      "yes_no": 468,
+      "pc_root": 624,
+      "pc": 996,
+      "change_box": 882,
+      "training": 3500,
+      "battle: item": 126,
+      "naming": 1380,
+      "battle": 54
+    },
+    "history": [
+      "Changed plan: Train. No encounter, training gain, or new route in two minutes",
+      "Changed plan: Train. No encounter, training gain, or new route in two minutes",
+      "Will revisit: Zapdos toward level 90",
+      "Changed plan: Train. No encounter, training gain, or new route in two minutes",
+      "Will revisit: Ditto",
+      "Changed plan: Train. No encounter, training gain, or new route in two minutes"
+    ],
+    "director": {
+      "recent": [
+        {
+          "category": "training",
+          "key": "train:100:10"
+        },
+        {
+          "category": "training",
+          "key": "train:141:60"
+        },
+        {
+          "category": "training",
+          "key": "train:139:20"
+        },
+        {
+          "category": "training",
+          "key": "train:75:90"
+        },
+        {
+          "category": "training",
+          "key": "train:158:40"
+        },
+        {
+          "category": "collection",
+          "key": "76:grass:34:"
+        },
+        {
+          "category": "training",
+          "key": "train:155:40"
+        },
+        {
+          "category": "training",
+          "key": "train:44:40"
+        }
+      ],
+      "outcomes": [
+        {
+          "key": "train:152:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182006944,
+          "retry_at": 182066944,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "73:static:194:MOLTRES",
+          "category": "collection",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 182046940,
+          "retry_at": 182166940,
+          "target": 73,
+          "gains": {}
+        },
+        {
+          "key": "76:grass:34:",
+          "category": "collection",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 182113614,
+          "retry_at": 182233614,
+          "target": 76,
+          "gains": {}
+        },
+        {
+          "key": "train:155:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182123870,
+          "retry_at": 182183870,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "train:128:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182133976,
+          "retry_at": 182193976,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "0:trainer:198:TEXT_VICTORYROAD3F_COOLTRAINER_M2",
+          "category": "exploration",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 182151696,
+          "retry_at": 0,
+          "target": null,
+          "gains": {}
+        },
+        {
+          "key": "train:111:30",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182164540,
+          "retry_at": 182224540,
+          "target": 30,
+          "gains": {}
+        },
+        {
+          "key": "train:30:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182173732,
+          "retry_at": 182233732,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "0:trainer:198:TEXT_VICTORYROAD3F_COOLTRAINER_F1",
+          "category": "exploration",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 182179034,
+          "retry_at": 0,
+          "target": null,
+          "gains": {}
+        },
+        {
+          "key": "train:71:20",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182193584,
+          "retry_at": 182253584,
+          "target": 20,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:40:70",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182213764,
+          "retry_at": 182273764,
+          "target": 70,
+          "gains": {
+            "experience": 294,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:66:60",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182233342,
+          "retry_at": 182293342,
+          "target": 60,
+          "gains": {
+            "experience": 500,
+            "levels": 0
+          }
+        },
+        {
+          "key": "76:grass:34:",
+          "category": "collection",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 182270066,
+          "retry_at": 182510066,
+          "target": 76,
+          "gains": {}
+        },
+        {
+          "key": "train:117:30",
+          "category": "training",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 182305042,
+          "retry_at": 0,
+          "target": 30,
+          "gains": {
+            "experience": 714,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:4:10",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182313736,
+          "retry_at": 182373736,
+          "target": 10,
+          "gains": {}
+        },
+        {
+          "key": "train:128:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182330304,
+          "retry_at": 182450304,
+          "target": 40,
+          "gains": {}
+        },
+        {
+          "key": "train:22:30",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182370748,
+          "retry_at": 182430748,
+          "target": 30,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:100:10",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182378334,
+          "retry_at": 182438334,
+          "target": 10,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:141:60",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182397214,
+          "retry_at": 182457214,
+          "target": 60,
+          "gains": {
+            "experience": 414,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:139:20",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182412760,
+          "retry_at": 182472760,
+          "target": 20,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:75:90",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 182484776,
+          "retry_at": 182544776,
+          "target": 90,
+          "gains": {
+            "experience": 13669,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:158:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182509894,
+          "retry_at": 182569894,
+          "target": 40,
+          "gains": {
+            "experience": 524,
+            "levels": 0
+          }
+        },
+        {
+          "key": "76:grass:34:",
+          "category": "collection",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 182550290,
+          "retry_at": 183030290,
+          "target": 76,
+          "gains": {}
+        },
+        {
+          "key": "train:155:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 182659180,
+          "retry_at": 182779180,
+          "target": 40,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        }
+      ],
+      "failures": {
+        "train:84:10": 1,
+        "train:125:20": 1,
+        "train:152:40": 1,
+        "73:static:194:MOLTRES": 2,
+        "train:111:30": 1,
+        "train:30:40": 1,
+        "train:71:20": 1,
+        "train:40:70": 1,
+        "train:66:60": 1,
+        "train:4:10": 1,
+        "train:128:40": 2,
+        "train:22:30": 1,
+        "train:100:10": 1,
+        "train:141:60": 1,
+        "train:139:20": 1,
+        "train:158:40": 1,
+        "76:grass:34:": 4,
+        "train:155:40": 2
+      },
+      "completed": {
+        "exploration": 2,
+        "training": 1
+      }
+    },
+    "active_project": {
+      "method": "train",
+      "parent": 44,
+      "family": [
+        44
+      ],
+      "box": 4,
+      "initial_level": 30,
+      "target_level": 40,
+      "key": "train:44:40",
+      "initial_owned": [
+        1,
+        2,
+        3,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        29,
+        30,
+        32,
+        33,
+        34,
+        35,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        66,
+        67,
+        72,
+        73,
+        74,
+        75,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        107,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        116,
+        117,
+        118,
+        119,
+        120,
+        121,
+        125,
+        128,
+        129,
+        130,
+        131,
+        133,
+        134,
+        137,
+        138,
+        139,
+        142,
+        145,
+        147,
+        148,
+        149
+      ],
+      "initial_experience": 27000,
+      "gains": {
+        "experience": 2086,
+        "levels": 0
+      }
+    },
+    "pickups": {
+      "active": null,
+      "completed": [
+        "198:4"
+      ],
+      "retry": {},
+      "next_scan": 182703460,
+      "history": [
+        "Collected Max Revive",
+        "Pickup unavailable or detour budget reached: TM Explosion",
+        "Pickup unavailable or detour budget reached: Guard Spec"
+      ]
+    },
+    "policy_recoveries": 4,
+    "checkpoint_sha256": "b3851bbe1f30d317ffba4d09b23fba45c05ed5054d80045515185f9fe868ae4a",
+    "policy_fingerprint": "1c3f77aea59b5a9d5b41133e444b90e23c98b5cd7160d34449f9cf49d39ebbbe",
+    "pyboy": "2.7.0",
+    "final_goal": "Train Hitmonchan to level 40",
+    "final_map": "Victory Road 2F"
+  },
+  "gameplay_matches_baseline": true,
+  "limitations": [
+    "Existing outcome history is preserved and may contain older productive attempts marked deferred.",
+    "The replay validates unchanged healing and training behavior over 72028 frames. It does not establish multi-day endurance.",
+    "This does not fix travel or increase collection reachability. Live deployments remain Red rc13 and Blue rc12."
+  ]
+}

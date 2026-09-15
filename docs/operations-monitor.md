@@ -135,3 +135,30 @@ The first live trade remains unapproved and unexecuted.
 Filesystem use after the build and backup was 78.58 percent, with 22.71 GB free.
 No historical saves or backups were deleted. Continue watching storage growth and plan
 bounded backup and image retention before repeated releases consume the available space.
+
+
+## September 15 partial training followup
+
+Both live games remained healthy with zero save reloads. Blue continued gaining levels
+and completing training projects, with 116 registered entries. Red gained a live level
+for PUMPKIN after rc13, then returned toward healing. A copied current Red save reached
+full HP and PP at Indigo Plateau after 10536 frames and resumed reserve training.
+The 72028-frame replay used four local policy recoveries and retained 111 entries.
+
+A separate accounting issue was reproduced in a focused test. The idle-abandon path
+marked a training project as deferred even after its selected partner gained 524 XP.
+The fix records partial progress and avoids escalating the failure penalty, while
+retaining the idle guard and ordinary retry delay. It is queued for a later release,
+with 388 tests passing and one optional test skipped. The same copied-save gameplay
+was unchanged. Existing historical outcomes remain preserved. See
+[the evidence](validation/partial-training-20260915.json).
+
+No live deployment was performed during this heartbeat. Red stays on rc13 from
+`17cd997`, and Blue stays on rc12 from `66b226f`. Do not assume the checkout's queued
+accounting change is already running in either game. Use the release tags for live
+baselines. The new private reproduction is
+`data/operations/repros/red-partial-training-20260915`, the fifth retained case.
+
+Storage stayed near 78.57 percent used, with 22.71 GB free. No files were pruned.
+Continue measuring Red's collection progress and both live endurance intervals.
+The first live trade remains unapproved and unexecuted.

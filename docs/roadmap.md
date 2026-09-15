@@ -328,3 +328,13 @@ The first live trade remains unapproved and unexecuted.
 Filesystem use after the build and backup was 78.58 percent, with 22.71 GB free.
 No historical saves or backups were deleted. Continue watching storage growth and plan
 bounded backup and image retention before repeated releases consume the available space.
+
+
+## Partial training accounting followup
+
+A validated change awaiting the next release keeps productive training marked as partial
+progress when the idle guard ends a project. Previously this path escalated the failure
+penalty despite recorded XP gains. The ordinary retry delay and idle deadline remain.
+All 388 tests pass, and the copied Red healing replay is unchanged. Both live processes
+continue on their existing releases for endurance observation. See
+[the evidence](validation/partial-training-20260915.json).

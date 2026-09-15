@@ -1,3 +1,8 @@
+Unreleased, retain productive partial training outcomes
+
+- Record verified training gains as partial progress when the idle guard abandons a project.
+- Keep the idle deadline and retry delay, without escalating productive attempts as repeated failures.
+
 0.2.0rc13, count reserve preparation once
 
 - Start a fresh training idle window when the selected partner first reaches a stable party snapshot.
