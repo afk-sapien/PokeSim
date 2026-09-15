@@ -240,6 +240,8 @@ class Collection:
     def available(self,s,source):
         mode = source['method']
         bag = dict(s.items)
+        if source.get('fragment') == 'ARTICUNO' and not any(70 in p.moves for p in s.party):
+            return False
         if source.get('flag') in EVENTS and event_set(s.event_flags, source['flag']):
             return False
         if mode in ('gift','static'):
@@ -468,6 +470,11 @@ class Collection:
             return Goal('collect_hunt','Find '+name(sid),f'Search {WORLD[p["map"]]["name"]} for a missing Pokédex entry',
                         tuple(t[:3] for t in points), approaches=tuple(t for t in points if t[3]))
         if mode in ('gift','static','trade','fossil'):
+            if mode == 'static' and dex(sid) == 144 and not all(event_set(s.event_flags, flag) for flag in
+                    ('EVENT_SEAFOAM4_BOULDER1_DOWN_HOLE', 'EVENT_SEAFOAM4_BOULDER2_DOWN_HOLE')):
+                return at('collect_seafoam_current', 'Slow the current for Articuno',
+                          'Push the Seafoam boulders into the holes before using Surf',
+                          'SEAFOAM_ISLANDS_B3F', 6, 15)
             room=WORLD[p['map']]['symbol']
             fragment = p['fragment']
             if mode=='trade':

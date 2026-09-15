@@ -1,3 +1,11 @@
+Current Articuno work, September 15: the planner now completes the Seafoam B3F
+boulder puzzle before attempting Surf on B4F. It first clears room to push each
+required boulder into its designated hole, preserves completed drops across reentry,
+and avoids dropping the player into the holes. A copied Blue checkpoint that previously
+repeated the strong-current refusal caught Articuno after 17,646 frames with normal
+controls and zero rewinds. Red's separate Moltres route failure in Victory Road remains
+under investigation. See [the comparison](validation/articuno-current-0.2.0rc21.json).
+
 Current legendary recovery, September 15: failed Articuno, Zapdos, Moltres, and
 Mewtwo encounters can return. Clear only the finished-encounter and hidden-object bits
 after the player leaves the room and a persistent retry delay expires. Preserve spent

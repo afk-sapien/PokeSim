@@ -13,10 +13,13 @@ disabled. Do not
 request individual trade approvals. Monitor completed trades, stuck holds, recovery,
 and prolonged waiting for opportunities. No automatic save resets.
 
-After rc19, verify that Mewtwo expeditions are selected and completed. Track the
-legendary director category, capture supplies, expedition outcomes, and actual Pokédex
-registration. Distinguish ordinary route battles, policy replanning, and save reloads.
-Do not repeatedly interact with a resolved encounter or weaken a missing legendary.
+Both games caught Mewtwo on rc19. On rc20, missed legendary encounters can return after
+leaving the room and a persistent retry delay. Track `legendary_recovery`, recent
+legendary outcomes, capture supplies, and actual Pokédex registrations. Red's missed
+Moltres returned in event 8655. Never respawn registered legendaries, including traded
+copies. Empty balls and full storage must cause retreat and preparation. Distinguish
+ordinary route battles, policy replanning, and save reloads. Do not repeatedly interact
+with a resolved encounter or weaken a missing legendary.
 
 The user prefers maximum speed whenever resources allow. Use unlimited speed (`0`)
 for both live games and copied-save progression tests. Keep that preference across

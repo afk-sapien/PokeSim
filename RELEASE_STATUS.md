@@ -1,4 +1,24 @@
-# Current deployment: rc20, preserve missed legendary encounters
+# Release rc21: complete Articuno's current puzzle
+
+Articuno expeditions prepare the Seafoam boulder puzzle before using Surf. The planner
+clears space, pushes both designated boulders into their holes, and then returns to the
+standing encounter. It preserves completed drops after reentry and never plans a walk
+into a hole. A Strength partner is required. Strong-current refusals clear the pending
+Surf action instead of repeating the rejected menu.
+
+The same copied Blue checkpoint previously spent a 36,000-frame test repeating Surf.
+The candidate solved the puzzle and caught Articuno after 17,646 frames, then continued
+toward storage. Both tests used zero rewinds. No puzzle flags, Pokémon, or resources
+were injected. All 453 Python tests passed, with one optional test skipped.
+See [the copied-save comparison](docs/validation/articuno-current-0.2.0rc21.json).
+
+The monitor now retains legendary retry state and the last four legendary outcomes.
+The homeserver guide reflects rc20 and its backups, rewards, and coordinator settings.
+Red's Moltres path in Victory Road is still a separate unresolved route issue, with a
+fresh copied reproduction preserved. The live rc20 interval gained two automatic trades,
+two Red registrations, and three Blue registrations without save reloads or restarts.
+
+# Previous deployment: rc20, preserve missed legendary encounters
 
 A failed Articuno, Zapdos, Moltres, or Mewtwo encounter now returns after leaving its
 room and a persistent retry delay. The repair clears only its encounter-finished and

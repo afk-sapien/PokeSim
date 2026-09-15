@@ -1,6 +1,6 @@
 # Homeserver deployment
 
-Updated September 14, 2026 (America/Los_Angeles).
+Updated September 15, 2026 UTC.
 
 | Edition | URL | Container on `servarr` | Port | Data directory |
 | --- | --- | --- | --- | --- |
@@ -11,10 +11,10 @@ The old https://pokesim.tynet.app address remains a Red alias. Each game retains
 ROM, saves, party, boxes, journal, and notification configuration. Both games run at
 unlimited speed, with `SPEED=0` saved in their deployment configurations.
 
-Both games run `pokesim:0.2.0rc16-caa092b` from tagged commit
-`caa092bf76d3b73ce892575ece41480b5a455d80`. The image ID is
-`sha256:9b0228d75ddfa4757c63a6dede3038ee47ab4e0570baa9bd5b608697f8b88d54`.
-The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc16-caa092b`.
+Both games, the board, and the coordinator run `pokesim:0.2.0rc20-39f409b` from tagged commit
+`39f409be5754b1ed7c6f44503a1e7047a1b514f8`. The image ID is
+`sha256:d3df466ccbe4fe9366c22de85bded5d95f3cf96cf5d6709e571b22c9e680327d`.
+The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc20-39f409b`.
 PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
 
 The release includes persistent playtime, the four-page interface, stall recovery,
@@ -31,8 +31,11 @@ ROMs, or peer tokens. The scoped coordinator is `pokesim-trading`, configured un
 `/docker/pokesim-trading`. It runs as UID 10001 with no Docker socket or root identity.
 Private peer credentials are configured and the trading policy is enabled under the
 owner's explicit authorization for ongoing automatic exchanges. Last-copy sharing is
-enabled for new Pokédex registrations. The optional Mew event remains disabled while
-the Championship reward design is discussed. See [automatic trading](automatic-trading.md).
+enabled for new Pokédex registrations. Every newly observed Championship earns a random
+starter, Eevee, fossil Pokémon, or Mew. The older one-time Mew event remains disabled.
+The coordinator has no HTTP server, so its Compose file disables the image's inherited
+web-server health probe. Monitor its public status and transaction records.
+See [automatic trading](automatic-trading.md).
 
 ## Routing
 
@@ -46,6 +49,15 @@ for new log files. A root-owned log file can pass a root configuration check but
 the running service from reloading.
 
 ## Backups and rollback
+
+The current rc20 deployment retained these cold backups and passed current-save load checks:
+
+- Red: `/docker/pokesim/backups/20260915T084848Z-rc20/before.tar`.
+- Blue: `/docker/pokesim-blue/backups/20260915T084920Z-rc20/before.tar`.
+- Previous image: `pokesim:0.2.0rc19-1ba1fbb`.
+
+See [the rc20 release receipt](validation/release-0.2.0rc20.json). Older deployments below
+are historical records, not descriptions of the currently running services.
 
 The rc16 deployment verified both current saves and retained these cold backups:
 
@@ -151,10 +163,11 @@ entire database over unrelated configuration changes.
 
 ## Verification
 
-The current rc16 code passed 406 tests, with one optional checkpoint test skipped.
-Red resumed with 111 registered entries. Blue remained running and reached 116 after
-catching Kangaskhan. Both services and all 12 public checks passed. No multi-day pass
-is claimed. The per-release receipts above preserve the exact validation and images.
+The current rc20 code passed 448 tests, with one optional checkpoint test skipped.
+Red resumed with 122 registered entries and Blue with 124. Both retained Mewtwo.
+Red's missed Moltres encounter was restored without a rewind. Both games and all 12
+public checks passed. No multi-day pass is claimed. The per-release receipts above
+preserve the exact validation and images.
 
 ### Historical rc8 verification
 
