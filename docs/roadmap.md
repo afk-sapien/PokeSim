@@ -1,3 +1,13 @@
+Current Victory Road recovery work, September 15: Red's depleted team could not find
+a route to healing and repeatedly replanned while trades kept its achievement line
+fresh. The rc25 candidate uses one ordinary Escape Rope attempt when a healing trip
+requires recovery in Victory Road. The attempt survives saves and trades and cannot
+repeat until the party is fully healed. Without a rope, ordinary navigation recovery
+continues. The copied run escaped, healed at Saffron, and resumed training. This is a
+bounded retreat fallback, not a repair of every cave route. Include the previously
+validated journal correction in the Red release. Preserve the healthy Blue process.
+See [the copied comparison](validation/victory-escape-0.2.0rc25.json).
+
 Validated for the next game release, September 15: preserve a recent valid event
 baseline across up to 120 frames of invalid party RAM during PC transfers. The copied
 Red replay previously called a Wigglytuff withdrawal a release after seeing HP exceed
