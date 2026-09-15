@@ -1,3 +1,12 @@
+Validated for the next game release, September 15: preserve a recent valid event
+baseline across up to 120 frames of invalid party RAM during PC transfers. The copied
+Red replay previously called a Wigglytuff withdrawal a release after seeing HP exceed
+the stale maximum HP for one observation. The corrected replay keeps the withdrawal
+credit and records no release. Health and policy continue receiving the actual snapshot.
+All 481 Python tests pass, with one optional skip. This is committed source work, not a
+live deployment. Batch it into the next necessary game update to preserve the current
+endurance interval. See [the reproduction](validation/pc-invalid-write-20260915.json).
+
 Current safe-point work, September 15: coordinator rc24 requests a safe checkpoint
 from each available game independently within one shared 15-second retry window. Only
 the explicit overworld-wait response is retried. The game still rejects battles, menus,

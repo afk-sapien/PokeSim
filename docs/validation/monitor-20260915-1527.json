@@ -1,0 +1,272 @@
+{
+  "from_ts": 1789484163.945229,
+  "to_ts": 1789486059.477448,
+  "minutes": 31.59,
+  "runs": {
+    "red": {
+      "version": "0.2.0rc22",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:04:45.612766478Z",
+      "uptime": 15772,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 143,
+      "league_rewards": {
+        "earned": 26,
+        "delivered": 26,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {
+          "146": 1
+        }
+      },
+      "start_unchanged": true,
+      "new_registrations": 2,
+      "new_delivered_rewards": 6,
+      "completed_projects": {
+        "supplies": 2
+      },
+      "hold": null,
+      "journal_counts": {
+        "level": 40,
+        "faint": 8,
+        "obtain": 6,
+        "release": 18,
+        "trainer": 17,
+        "champion": 3,
+        "blackout": 1,
+        "trade": 2
+      },
+      "free_box_slots": 5,
+      "recent_training_outcomes": [
+        {
+          "key": "train:100:30",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 214308316,
+          "retry_at": 214368316,
+          "target": 30,
+          "gains": {
+            "experience": 2396,
+            "levels": 2
+          }
+        },
+        {
+          "key": "train:139:30",
+          "category": "training",
+          "status": "advanced",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 214721400,
+          "retry_at": 214781400,
+          "target": 30,
+          "gains": {
+            "experience": 1390,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:35:50",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 215112726,
+          "retry_at": 215172726,
+          "target": 50,
+          "gains": {
+            "experience": 6317,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:105:40",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 215129764,
+          "retry_at": 215189764,
+          "target": 40,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        }
+      ]
+    },
+    "blue": {
+      "version": "0.2.0rc22",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:05:13.255250711Z",
+      "uptime": 15744,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 143,
+      "league_rewards": {
+        "earned": 27,
+        "delivered": 27,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {}
+      },
+      "start_unchanged": true,
+      "new_registrations": 0,
+      "new_delivered_rewards": 3,
+      "completed_projects": {
+        "training": 1
+      },
+      "hold": null,
+      "journal_counts": {
+        "obtain": 3,
+        "release": 12,
+        "level": 31,
+        "trainer": 10,
+        "champion": 2,
+        "trade": 2
+      },
+      "free_box_slots": 6,
+      "recent_training_outcomes": [
+        {
+          "key": "train:10:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 119263748,
+          "retry_at": 119323748,
+          "target": 40,
+          "gains": {
+            "experience": 4563,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:103:20",
+          "category": "training",
+          "status": "advanced",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 119577256,
+          "retry_at": 119637256,
+          "target": 20,
+          "gains": {
+            "experience": 309,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:35:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 119649276,
+          "retry_at": 119709276,
+          "target": 40,
+          "gains": {
+            "experience": 5870,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:155:50",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 119727624,
+          "retry_at": 119787624,
+          "target": 50,
+          "gains": {
+            "experience": 6830,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:117:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 119814004,
+          "retry_at": 119874004,
+          "target": 40,
+          "gains": {
+            "experience": 10395,
+            "levels": 3
+          }
+        },
+        {
+          "key": "train:97:60",
+          "category": "training",
+          "status": "advanced",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 119836604,
+          "retry_at": 119896604,
+          "target": 60,
+          "gains": {
+            "experience": 900,
+            "levels": 0
+          }
+        }
+      ]
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 17,
+    "state": "ready",
+    "error": null,
+    "last_check": 1789485979.8520374,
+    "last_trade": 1789485964.9801,
+    "last_operation": "trade",
+    "image": "pokesim:0.2.0rc24-d99cdc2",
+    "started_at": "2026-09-15T14:53:08.13314758Z",
+    "restarts": 0,
+    "running": true,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789484130169353495",
+        "ts": 1789484130.1693544,
+        "reason": "Red registers Blastoise. Blue registers Gloom"
+      },
+      {
+        "id": "1789485035268763101",
+        "ts": 1789485035.2687643,
+        "reason": "Red registers Gengar. Blue restores a missing collection partner"
+      },
+      {
+        "id": "1789485964980098760",
+        "ts": 1789485964.9801,
+        "reason": "Red registers Magmar. Blue gains a partner at least five levels stronger"
+      }
+    ]
+  },
+  "coordinator_active": null,
+  "coordinator_log_counts": {
+    "Trading will retry after TimeoutError": 1
+  },
+  "free_disk_bytes": 18254213120,
+  "recent_trade_intervals_seconds": [
+    938.94,
+    905.1,
+    929.71
+  ],
+  "journal_followup": "Repeated release messages prompted a copied replay. It reproduced a false Wigglytuff release after one invalid party write. A correction is validated in source and pending the next game release."
+}

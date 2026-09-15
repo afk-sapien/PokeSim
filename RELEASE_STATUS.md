@@ -1,3 +1,17 @@
+# Validated journal correction for the next game release
+
+A short invalid party RAM write during withdrawal erased the event detector's valid
+comparison point. The copied Red replay reported a Wigglytuff release while PIXEL was
+successfully withdrawn and remained in the party. The correction preserves a valid
+baseline for up to 120 frames, while health and policy still receive the actual snapshot.
+Longer invalid gaps expire the baseline. The replay suppresses the false release, and
+integration tests retain real release events. All 481 Python tests pass, with one optional
+skip. See [the comparison](docs/validation/pc-invalid-write-20260915.json).
+
+This correction is validated source work and is not deployed. Include it in the next
+necessary game release. Both live games remain on rc22 to preserve their current
+endurance interval. The coordinator remains on rc24.
+
 # Current coordinator: rc24, independent safe points
 
 The coordinator previously required API samples to show both games outside battles

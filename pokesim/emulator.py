@@ -255,7 +255,12 @@ class Emulator:
             self.play_clock.seed(snap.playtime_seconds)
             self._enforce_options()
         new = diff(self.prev_snapshot, snap, self.mem)
-        self.prev_snapshot = snap
+        # Party structures briefly fail validation while a PC transfer writes them.
+        # Keep a recent valid event baseline across that write, while publishing the
+        # actual snapshot to health and policy below. Longer invalid gaps start fresh.
+        if (snap.valid or self.prev_snapshot is None
+                or not 0 <= snap.frame - self.prev_snapshot.frame <= 120):
+            self.prev_snapshot = snap
         # confirm last round's tentative events against this snapshot, then hold this round's tentative ones
         events = [ev for ev in self.pending if ev.still(snap)]
         dropped = len(self.pending) - len(events)
