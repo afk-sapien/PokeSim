@@ -1,0 +1,552 @@
+{
+  "containers": {
+    "pokesim": {
+      "image": "pokesim:0.2.0rc19-1ba1fbb",
+      "image_id": "sha256:0b07567965541558e06dc32cb18c6bea2d183b19762759796149a87a28cdbe37",
+      "started_at": "2026-09-15T08:24:07.904316078Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-blue": {
+      "image": "pokesim:0.2.0rc19-1ba1fbb",
+      "image_id": "sha256:0b07567965541558e06dc32cb18c6bea2d183b19762759796149a87a28cdbe37",
+      "started_at": "2026-09-15T08:24:50.386805074Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-broker": {
+      "image": "pokesim:0.2.0rc19-1ba1fbb",
+      "image_id": "sha256:0b07567965541558e06dc32cb18c6bea2d183b19762759796149a87a28cdbe37",
+      "started_at": "2026-09-15T08:25:36.32579587Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-trading": {
+      "image": "pokesim:0.2.0rc19-1ba1fbb",
+      "image_id": "sha256:0b07567965541558e06dc32cb18c6bea2d183b19762759796149a87a28cdbe37",
+      "started_at": "2026-09-15T08:25:36.746977315Z",
+      "restarts": 0,
+      "health": "starting"
+    }
+  },
+  "game_deployments": {
+    "red": {
+      "edition": "red",
+      "backup": "/docker/pokesim/backups/20260915T082355Z-rc19/before.tar",
+      "image": "pokesim:0.2.0rc19-1ba1fbb",
+      "image_id": "sha256:0b07567965541558e06dc32cb18c6bea2d183b19762759796149a87a28cdbe37",
+      "revision": "1ba1fbb878002608adae646c771fcff92d078ef3",
+      "timestamp": 1789460651.1736047,
+      "previous_image": "pokesim:0.2.0rc18-2b7365b",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 119,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 8595,
+          "title": "Traded MOCHI for MEW",
+          "ts": 1789460573.0,
+          "age_seconds": 78
+        }
+      }
+    },
+    "blue": {
+      "edition": "blue",
+      "backup": "/docker/pokesim-blue/backups/20260915T082445Z-rc19/before.tar",
+      "image": "pokesim:0.2.0rc19-1ba1fbb",
+      "image_id": "sha256:0b07567965541558e06dc32cb18c6bea2d183b19762759796149a87a28cdbe37",
+      "revision": "1ba1fbb878002608adae646c771fcff92d078ef3",
+      "timestamp": 1789460692.6212103,
+      "previous_image": "pokesim:0.2.0rc18-2b7365b",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 122,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 3727,
+          "title": "Traded MEW for MOCHI",
+          "ts": 1789460573.0,
+          "age_seconds": 119
+        }
+      }
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "league_rewards": true,
+    "allow_last_copies": true,
+    "mew_event": false,
+    "completed": 4,
+    "state": "ready",
+    "error": null,
+    "events": [
+      {
+        "id": "1789458870307022598",
+        "ts": 1789458870.3070238,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "blue",
+            "name": "Mew",
+            "species": 21,
+            "ordinal": 1,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789459594488151788",
+        "ts": 1789459594.4881527,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "red",
+            "name": "Bulbasaur",
+            "species": 153,
+            "ordinal": 1,
+            "level": 5,
+            "box": 1,
+            "position": 20
+          },
+          {
+            "instance": "blue",
+            "name": "Omanyte",
+            "species": 98,
+            "ordinal": 2,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789460078350906137",
+        "ts": 1789460078.3509073,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "blue",
+            "name": "Bulbasaur",
+            "species": 153,
+            "ordinal": 3,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          }
+        ]
+      },
+      {
+        "id": "1789460383358783576",
+        "ts": 1789460383.3587842,
+        "event": "league-rewards-v1",
+        "gifts": [
+          {
+            "instance": "red",
+            "name": "Bulbasaur",
+            "species": 153,
+            "ordinal": 2,
+            "level": 5,
+            "box": 2,
+            "position": 20
+          },
+          {
+            "instance": "blue",
+            "name": "Omanyte",
+            "species": 98,
+            "ordinal": 4,
+            "level": 5,
+            "box": 3,
+            "position": 20
+          }
+        ]
+      }
+    ]
+  },
+  "last_trade": [
+    {
+      "id": "1789460568088736948",
+      "ts": 1789460568.0887382,
+      "reason": "Red registers Mew. Blue registers Ekans",
+      "moved": [
+        {
+          "instance": "red",
+          "box": 7,
+          "position": 14,
+          "sent": {
+            "species": 108,
+            "name": "Ekans",
+            "level": 15,
+            "nick": "MOCHI"
+          },
+          "received": {
+            "species": 21,
+            "name": "Mew",
+            "level": 5,
+            "nick": "MEW",
+            "evolved_from": null
+          },
+          "state": "/trading/transactions/1789460568088736948/after/red/auto-v1-trade-1789460568088736948.state",
+          "owned_before": 118,
+          "owned_after": 119
+        },
+        {
+          "instance": "blue",
+          "box": 2,
+          "position": 16,
+          "sent": {
+            "species": 21,
+            "name": "Mew",
+            "level": 5,
+            "nick": "MEW"
+          },
+          "received": {
+            "species": 108,
+            "name": "Ekans",
+            "level": 15,
+            "nick": "MOCHI",
+            "evolved_from": null
+          },
+          "state": "/trading/transactions/1789460568088736948/after/blue/auto-v1-trade-1789460568088736948.state",
+          "owned_before": 121,
+          "owned_after": 122
+        }
+      ]
+    }
+  ],
+  "runs": {
+    "red": {
+      "version": "0.2.0rc19",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "league_rewards": {
+        "earned": 2,
+        "delivered": 2,
+        "pending": 0
+      },
+      "owned": 120,
+      "mewtwo_registered": true,
+      "objective": {
+        "id": "collect_train",
+        "title": "Train Butterfree to level 30",
+        "reason": "Level 28 of 30. Raise a partner, then rotate projects",
+        "targets": [
+          [
+            18,
+            8,
+            2
+          ],
+          [
+            18,
+            8,
+            3
+          ],
+          [
+            18,
+            8,
+            4
+          ],
+          [
+            18,
+            8,
+            5
+          ],
+          [
+            18,
+            9,
+            2
+          ],
+          [
+            18,
+            9,
+            3
+          ],
+          [
+            18,
+            9,
+            4
+          ],
+          [
+            18,
+            9,
+            5
+          ]
+        ],
+        "target_count": 6803,
+        "facing": null
+      },
+      "project": {
+        "method": "train",
+        "parent": 125,
+        "family": [
+          125
+        ],
+        "box": 5,
+        "initial_level": 27,
+        "target_level": 30,
+        "key": "train:125:30",
+        "initial_experience": 20818,
+        "gains": {
+          "experience": 1359,
+          "levels": 1
+        }
+      }
+    },
+    "blue": {
+      "version": "0.2.0rc19",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "league_rewards": {
+        "earned": 4,
+        "delivered": 4,
+        "pending": 0
+      },
+      "owned": 122,
+      "mewtwo_registered": false,
+      "objective": {
+        "id": "restock",
+        "title": "Restock supplies",
+        "reason": "Buy useful balls and medicine with a cash reserve",
+        "targets": [
+          [
+            172,
+            2,
+            5
+          ],
+          [
+            152,
+            2,
+            5
+          ],
+          [
+            174,
+            2,
+            5
+          ]
+        ],
+        "target_count": 3,
+        "facing": "left"
+      },
+      "project": {
+        "map": 227,
+        "method": "static",
+        "fragment": "MEWTWO",
+        "flag": "EVENT_BEAT_MEWTWO",
+        "species": 131,
+        "legendary": true,
+        "key": "legendary:131:227"
+      }
+    }
+  },
+  "public_checks": [
+    {
+      "edition": "red",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/sprites/25.png",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/sprites/25.png",
+      "status": 200
+    }
+  ],
+  "python_tests": {
+    "passed": 433,
+    "skipped": 1
+  },
+  "javascript_test_files_passed": 2,
+  "live_mewtwo_check": {
+    "red": {
+      "registered": true,
+      "owned": 120,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "reloads": 0,
+      "objective": {
+        "id": "collect_rematch",
+        "title": "Return for a League rematch",
+        "reason": "Earn prize money and experience for collecting",
+        "targets": [
+          [
+            174,
+            8,
+            10
+          ]
+        ],
+        "target_count": 1,
+        "facing": null
+      },
+      "mewtwo_events": [
+        {
+          "id": 8597,
+          "ts": 1789460706.7849734,
+          "type": "catch",
+          "title": "Caught the legendary Mewtwo!",
+          "body": "A level 70 Mewtwo on Cerulean Cave B1F. Pok\u00e9dex: 120 owned.",
+          "notable": 1,
+          "map": "Cerulean Cave B1F",
+          "playtime": "255:00:00",
+          "shot": "8597.png",
+          "state": "event-8597.state",
+          "priority": 5
+        }
+      ]
+    },
+    "blue": {
+      "registered": true,
+      "owned": 123,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "reloads": 0,
+      "objective": {
+        "id": "party_box",
+        "title": "Make room for new catches",
+        "reason": "Box 2 is full. Visit a PC and switch to Box 3",
+        "targets": [
+          [
+            133,
+            13,
+            4
+          ],
+          [
+            64,
+            13,
+            4
+          ],
+          [
+            171,
+            13,
+            4
+          ],
+          [
+            154,
+            13,
+            4
+          ],
+          [
+            141,
+            13,
+            4
+          ],
+          [
+            68,
+            13,
+            4
+          ],
+          [
+            58,
+            13,
+            4
+          ],
+          [
+            81,
+            13,
+            4
+          ]
+        ],
+        "target_count": 12,
+        "facing": "up"
+      },
+      "mewtwo_events": [
+        {
+          "id": 3731,
+          "ts": 1789460842.3228662,
+          "type": "catch",
+          "title": "Caught the legendary Mewtwo!",
+          "body": "A level 70 Mewtwo on Cerulean Cave B1F. Pok\u00e9dex: 123 owned.",
+          "notable": 1,
+          "priority": 5,
+          "map": "Cerulean Cave B1F",
+          "playtime": "255:00:00",
+          "shot": "3731.png",
+          "state": "event-3731.state"
+        }
+      ]
+    }
+  }
+}

@@ -1,4 +1,4 @@
-# Release candidate rc19: complete legendary expeditions
+# Current deployment: rc19, complete legendary expeditions
 
 Mewtwo remains a normal Cerulean Cave encounter. Legendary targets now have a distinct
 postgame priority and a longer bounded expedition budget. Route progress and completed
@@ -19,6 +19,18 @@ A full copied Red expedition caught Mewtwo and continued the adventure. Blue's r
 failed encounter succeeded from the copied approach checkpoint using sleep and six Ultra
 Balls. Both checks used normal gameplay with zero rewinds and no Pokémon or encounter
 injection. See [the replay evidence](docs/validation/mewtwo-expeditions-0.2.0rc19.json).
+
+Both games, the board, and the coordinator run `pokesim:0.2.0rc19-1ba1fbb`, tagged commit
+`1ba1fbb878002608adae646c771fcff92d078ef3`. Fresh cold backups and current-save load
+checks passed. All 12 public checks passed. Both games are healthy, unpaused, at maximum
+speed, with zero recovery reloads since deployment. Automatic trading and Championship
+rewards remain enabled. Red retained two delivered rewards and Blue retained four.
+
+Red registered Mewtwo in the live game after deployment, reaching 120 registered entries.
+Blue, at 122 entries, selected `legendary:131:227` and was restocking for its Mewtwo trip
+at verification. The existing monitor now specifically follows these live expeditions
+and notifies on confirmed captures. This deployment begins a new endurance interval.
+See [the release receipt](docs/validation/release-0.2.0rc19.json).
 
 # Previous deployment: rc18, repeatable Championship rewards
 
