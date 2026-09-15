@@ -440,6 +440,16 @@ def create_app(manager, shutdown=lambda: None):
     @app.api_route('/games/{aid}/{path:path}', methods=['GET', 'POST', 'HEAD'])
     async def game(aid: str, path: str, request: Request):
         adventure = manager.registry.adventure(aid)
+        if path == 'trading' and request.method in {'GET', 'HEAD'}:
+            from ..web.pages import render_game_page
+            return HTMLResponse(render_game_page('adventure-trading.html', base_path=f'/games/{aid}',
+                adventure_id=aid, adventure_name=adventure['name']))
+        if path == 'api/interactions' and request.method in {'GET', 'HEAD'}:
+            return JSONResponse(manager.coordinator.adventure_status(aid))
+        if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
+            asset = path.removeprefix('static/')
+            if asset in {'routes.js', 'style.css', 'pokedex.css', 'pages.css', 'adventure-trading.js'}:
+                return FileResponse(STATIC / asset)
         if path.startswith('internal') or path == 'api/trade' or '..' in path.split('/'):
             raise HTTPException(404)
         sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)

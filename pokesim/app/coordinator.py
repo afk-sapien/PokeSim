@@ -52,6 +52,20 @@ class Coordinator:
                 'history': [public(row) for row in rows if row['phase'] in TERMINAL][:100],
                 'message': self.last_message}
 
+    def adventure_status(self, aid):
+        game = self.registry.adventure(aid)
+        names = {row['id']: row['name'] for row in self.registry.adventures()}
+        rows = self.registry.transactions(adventure_id=aid)
+        def public(row):
+            peer = next(pid for pid in row['plan']['participants'] if pid != aid)
+            return {'id': row['id'], 'phase': row['phase'], 'decision': row['decision'],
+                    'updated_at': row['updated_at'], 'peer_name': names.get(peer, 'Another adventure'),
+                    'recovering': bool(row['error']) or row['phase'] == 'recovering'}
+        return {'adventure': {key: game[key] for key in ('id', 'name', 'version', 'state', 'archived')},
+                'active': [public(row) for row in self.registry.transactions(unresolved=True, adventure_id=aid)],
+                'history': [public(row) for row in rows
+                            if row['phase'] == 'completed' and row['decision'] == 'COMMIT'][:20]}
+
     def _request(self, aid, operation, data=None, recovery=False):
         if self.closed.is_set():
             raise RuntimeError('PokeSim is shutting down. The durable exchange will recover on startup.')

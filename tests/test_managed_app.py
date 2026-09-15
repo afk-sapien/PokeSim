@@ -119,3 +119,42 @@ def test_shared_portraits_work_for_new_adventures_and_allow_local_overrides(clie
     assert client.get(f'/games/{second["id"]}/sprites/25.png').content == b'shared portrait'
     assert client.get(f'/games/{second["id"]}/sprites/0.png').status_code == 404
     assert client.get(f'/games/{second["id"]}/sprites/152.png').status_code == 404
+
+
+def test_game_trading_stays_scoped_and_available_when_stopped(client):
+    client, manager = client
+    registry = manager.registry
+    registry.add_rom('fixture-rom', 'sha1', 'red')
+    a, b, c = [registry.create(name, 'fixture-rom', {}, identifier())
+               for name in ('First Red', 'Second Red', 'Third Red')]
+    def transaction(left, right, phase, decision=None):
+        row = registry.create_transaction(identifier(), {'participants': [left['id'], right['id']],
+            'left_id': left['id'], 'right_id': right['id']})
+        return registry.update_transaction(row['id'], phase=phase, decision=decision)
+    done = transaction(a, b, 'completed', 'COMMIT')
+    transaction(a, b, 'aborted', 'ABORT')
+    active = transaction(b, c, 'preparing')
+    for _ in range(1001):
+        transaction(b, c, 'completed', 'COMMIT')
+    base = f'/games/{a["id"]}'
+    response = client.get(base + '/trading', follow_redirects=False)
+    assert response.status_code == 200
+    assert 'location' not in response.headers
+    assert 'First Red' in response.text
+    assert f'href="{base}/trading"' in response.text
+    assert f'href="{base}/pc?scope=all"' in response.text
+    assert 'href="/trading"' not in response.text
+    for asset in ('adventure-trading.js', 'routes.js', 'style.css', 'pages.css', 'pokedex.css'):
+        assert client.get(base + '/static/' + asset).status_code == 200
+    data = client.get(base + '/api/interactions').json()
+    assert data['adventure']['id'] == a['id']
+    assert data['active'] == []
+    assert [row['id'] for row in data['history']] == [done['id']]
+    assert data['history'][0]['peer_name'] == 'Second Red'
+    second = client.get(f'/games/{b["id"]}/api/interactions').json()
+    assert second['adventure']['id'] == b['id']
+    assert len(second['history']) == 20
+    assert [row['id'] for row in second['active']] == [active['id']]
+    assert second['active'][0]['peer_name'] == 'Third Red'
+    assert client.get('/trading').status_code == 200
+    assert client.get('/games/' + 'f' * 32 + '/api/interactions').status_code == 404

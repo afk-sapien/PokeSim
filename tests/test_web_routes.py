@@ -30,7 +30,7 @@ def app(tmp_path, **kwargs):
     return create_app(SimpleNamespace(status=lambda: {}), store, **kwargs)
 
 
-@pytest.mark.parametrize('path', ['/', '/pc', '/pokedex', '/journal', '/events/42'])
+@pytest.mark.parametrize('path', ['/', '/pc', '/pokedex', '/journal', '/trading', '/events/42'])
 def test_managed_pages_scope_all_game_resources_and_navigation(tmp_path, path):
     client = TestClient(app(tmp_path, base_path='/games/red-two', adventure_id='red-two', adventure_name='Second Red'))
     response = client.get(path)
@@ -58,7 +58,7 @@ def test_managed_redirects_and_feed_keep_identity(tmp_path, monkeypatch):
     client = TestClient(app(tmp_path, base_path='/games/blue-three', adventure_id='blue-three'))
     assert client.get('/team', follow_redirects=False).headers['location'] == '/games/blue-three/#team'
     assert client.get('/journey', follow_redirects=False).headers['location'] == '/games/blue-three/#journey-progress'
-    assert client.get('/trading', follow_redirects=False).headers['location'] == '/trading'
+    assert client.get('/trading', follow_redirects=False).status_code == 200
     feed = ElementTree.fromstring(client.get('/feed.xml').content)
     links = [element.attrib['href'] for element in feed.iter() if 'href' in element.attrib]
     assert all(link.startswith('https://pokesim.example/games/blue-three/') for link in links)
@@ -95,4 +95,4 @@ def test_managed_local_offers_do_not_require_a_legacy_broker(tmp_path, monkeypat
     result = TestClient(application).get('/api/trading').json()
     assert result['connected'] is True
     assert result['managed'] is True
-    assert result['trading'] == {'managed': True}
+    assert result['trading'] == {'managed': True, 'enabled': True}

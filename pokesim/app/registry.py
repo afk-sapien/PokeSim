@@ -177,12 +177,20 @@ class Registry:
         item['result'] = json.loads(item['result']) if item['result'] else None
         return item
 
-    def transactions(self, unresolved=False):
+    def transactions(self, unresolved=False, *, adventure_id=None):
         with self.lock:
             query = 'SELECT id FROM interactions'
+            conditions = []
+            parameters = []
             if unresolved:
-                query += " WHERE phase NOT IN ('completed','aborted')"
-            ids = [row[0] for row in self.db.execute(query + ' ORDER BY created_at DESC LIMIT 1000')]
+                conditions.append("phase NOT IN ('completed','aborted')")
+            if adventure_id is not None:
+                validate_id(adventure_id)
+                conditions.append("EXISTS (SELECT 1 FROM json_each(interactions.plan, '$.participants') WHERE value = ?)")
+                parameters.append(adventure_id)
+            if conditions:
+                query += ' WHERE ' + ' AND '.join(conditions)
+            ids = [row[0] for row in self.db.execute(query + ' ORDER BY created_at DESC LIMIT 1000', parameters)]
         return [self.transaction(tid) for tid in ids]
 
     def create_transaction(self, tid, plan):

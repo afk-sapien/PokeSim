@@ -100,3 +100,19 @@ test('game routing refuses external addresses and parent traversal', () => {
     assert.throws(() => view.api.url(path), /game route/)
   }
 })
+
+test('switching adventures from Trading keeps the game trading page', async () => {
+  let ready
+  const switcher = {value: 'red-two', replaceChildren() {}}
+  const location = {pathname: '/games/red-one/trading', href: ''}
+  vm.runInNewContext(source, {
+    document: {
+      querySelector: name => name === '#adventure-switcher' ? switcher
+        : {content: name.includes('pokesim-base') ? '/games/red-one' : 'red-one'},
+      addEventListener(name, fn) { ready = fn },
+    }, location, fetch: async () => ({ok: true, json: async () => ({adventures: []})}),
+  })
+  await ready()
+  switcher.onchange()
+  assert.equal(location.href, '/games/red-two/trading')
+})

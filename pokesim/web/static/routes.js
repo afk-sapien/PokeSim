@@ -40,7 +40,11 @@
   document.addEventListener('DOMContentLoaded', async () => {
     const switcher = document.querySelector('#adventure-switcher')
     if (!switcher) return
-    switcher.onchange = () => { location.href = `/games/${encodeURIComponent(switcher.value)}/` }
+    switcher.onchange = () => {
+      const page = location.pathname.slice(base.length)
+      const next = ['/', '/pc', '/pokedex', '/journal', '/trading'].includes(page) ? page : '/'
+      location.href = `/games/${encodeURIComponent(switcher.value)}${next}`
+    }
     try {
       const response = await fetch('/api/v1/adventures', {cache: 'no-store'})
       if (!response.ok) return

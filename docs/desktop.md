@@ -37,7 +37,7 @@ Prepared adventures run offline. Adding another adventure can reuse an installed
 
 ## Trading
 
-Trading is automatic across all eligible running adventures in the same library. New adventures join automatically. There are no groups to configure or exchanges to choose. The Trading page shows current activity and recent completed trades. Participation requires a compatible game and an eligible boxed Pokémon. Active party members and locked Pokémon are protected.
+Trading is automatic across all eligible running adventures in the same library. New adventures join automatically. There are no groups to configure or exchanges to choose. Each adventure’s Trading page shows only its own current exchange and recent completed trades, with the adventure navigation kept in place. Its history remains available while stopped. The Library’s Trading page provides an overview across all adventures. Participation requires a compatible game and an eligible boxed Pokémon. Active party members and locked Pokémon are protected.
 
 Games finish battles or menus before preparing for an exchange. Interrupted exchanges recover automatically from their recorded decisions.
 

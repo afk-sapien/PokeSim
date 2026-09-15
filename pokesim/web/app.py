@@ -7,7 +7,6 @@ import math
 import httpx
 from pathlib import Path
 import re
-from string import Template
 
 from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
@@ -20,6 +19,7 @@ from ..policies.base import BUTTONS
 from .feed import iso_timestamp, render_feed
 from .pokedex import DEFAULT_VERSION, VERSIONS, live_status, reference
 from . import trading
+from .pages import render_game_page
 from ..trade import preferences
 
 STATIC = Path(__file__).parent / "static"
@@ -39,16 +39,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     if base_path and not re.fullmatch(r'/games/[A-Za-z0-9_-]+', base_path):
         raise ValueError('Invalid adventure base path')
     def page(name: str, **context):
-        navigation = ''
-        if base_path:
-            navigation = ('<a class="library-link" href="/">Library</a>'
-                          '<label class="adventure-select">Adventure '
-                          '<select id="adventure-switcher" aria-label="Switch adventure">'
-                          f'<option value="{html.escape(adventure_id, quote=True)}">'
-                          f'{html.escape(adventure_name or adventure_id)}</option></select></label>')
-        return Template((STATIC / name).read_text(encoding='utf-8')).substitute(
-            game_base=html.escape(base_path, quote=True),
-            adventure_id=html.escape(adventure_id, quote=True), library_nav=navigation, **context)
+        return render_game_page(name, base_path=base_path, adventure_id=adventure_id,
+                                adventure_name=adventure_name, **context)
 
     app = FastAPI(title="pokesim")
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -80,9 +72,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get('/trading', response_class=HTMLResponse)
     def trading_page():
-        if base_path:
-            return RedirectResponse('/trading', status_code=307)
-        return page('trading.html')
+        return page('adventure-trading.html' if base_path else 'trading.html')
 
     @app.get("/api/pokedex")
     def pokedex_reference(version: str | None = Query(None)):
@@ -106,8 +96,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             participant = getattr(app.state, 'participant', None)
             if participant is not None:
                 payload = participant.runtime.call(participant.inventory)
-            result = trading.unavailable(payload, adventure_id, 'Managed by the Adventure Library. Choose connected adventures on its Trading page.')
-            result.update(connected=True, managed=True, trading={'managed': True})
+            result = trading.unavailable(payload, adventure_id, 'Useful exchanges happen automatically with eligible adventures in this library.')
+            result.update(connected=True, managed=True, trading={'managed': True, 'enabled': True})
             return {**result, 'viewer_only': config.VIEWER_ONLY,
                     'holding': bool(store.get('trade_hold'))}
         instance = config.TRADING_INSTANCE or payload['version']
