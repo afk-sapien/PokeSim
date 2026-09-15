@@ -1,4 +1,4 @@
-# Release candidate rc18: repeatable Championship rewards
+# Current deployment: rc18, repeatable Championship rewards
 
 Every newly observed League victory earns one uniformly random level-5 Bulbasaur,
 Charmander, Squirtle, Eevee, Omanyte, Kabuto, Aerodactyl, or Mew. Claims persist through
@@ -15,11 +15,24 @@ protections remain intact. The older one-time Mew policy should stay disabled.
 All 422 Python tests passed, with one optional test skipped. Both JavaScript test
 files passed. Built packages passed runtime resource verification.
 
-A copied pair each received six rewards, recovered a committed delivery after both
+Using simulated earned claims, a copied pair each received six rewards, recovered a committed delivery after both
 emulators restarted, and reloaded subsequent checkpoints. All preexisting party and
 boxed Pokémon, items, badges, and registrations survived each delivery. A seventh
 claim remained pending when storage filled. See
 [the rehearsal](docs/validation/championship-rewards-0.2.0rc18.json).
+
+Both games, the board, and the coordinator run `pokesim:0.2.0rc18-2b7365b`, tagged commit
+`2b7365b583dc0b2f9c1eba0214658400e194e3ef`. Both current saves passed cold-backup and
+load checks. Rewards and automatic last-copy trading are enabled. The one-time Mew
+event is disabled. All 12 public endpoint checks passed, and the browser board displays
+the new policy. Both games are healthy, unpaused, at maximum speed, with zero recovery
+reloads since deployment. This starts a new endurance interval.
+
+The resumed coordinator completed a third automatic exchange. Both games received
+Alakazam, bringing Red to 117 registered entries and Blue to 120. No new Championship
+had occurred at the verification sample, so live reward counters were still zero.
+The existing monitor now watches earned, delivered, and pending reward claims.
+See [the release receipt](docs/validation/release-0.2.0rc18.json).
 
 # Previous deployment: rc17, varied choices and last-copy trades
 
