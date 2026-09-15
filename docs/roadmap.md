@@ -1,7 +1,8 @@
-Current trading update: the owner has requested common trading. Release rc16 implements
-trusted automatic spare exchanges and supersedes the earlier per-exchange review
-milestone for this pair. See [automatic trading](automatic-trading.md). Trade request
-objectives that send an adventure to catch a peer's missing species remain future work.
+Current trading update: rc16 provides trusted automatic spare exchanges through scoped
+controls. It is deployed but disabled pending explicit approval of the first exchange
+and automatic policy, as required by automatic approval review. See
+[automatic trading](automatic-trading.md). Peer-request catching objectives remain
+future work.
 
 # Roadmap: adventures that last for months
 

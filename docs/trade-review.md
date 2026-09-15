@@ -1,7 +1,20 @@
+# Current exchange awaiting approval
+
+Red would send its spare DIRTNAP, a level-41 Machoke, and receive Blue's spare MOCHI,
+a level-32 Vulpix. Blue would receive DIRTNAP as Machamp. Both gain a Pokédex entry.
+The copied-save rehearsal preserved both parties and every unrelated stored partner.
+The current live proposal still names these individuals, although their box slots can
+move during play and must be checked again before execution.
+
+The requested ongoing policy permits one useful spare exchange every 15 minutes,
+protecting parties, projects, last copies, and best retained partners. Both live games
+and the scoped coordinator are deployed. Execution remains disabled because automatic
+approval review requires explicit approval of the first exchange and this policy.
+
 # Historical first-trade review
 
-The owner subsequently requested common trading. The rc15 trusted automatic policy
-supersedes per-exchange approval for eligible spare trades on this pair. This older
+The owner subsequently requested common trading. The rc16 implementation is ready,
+but automatic approval review requires approval of the first trade and automatic policy. This older
 last-copy proposal remains unexecuted because automatic trading protects last copies.
 See [automatic trading](automatic-trading.md) for current behavior.
 

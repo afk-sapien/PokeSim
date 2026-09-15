@@ -1,8 +1,31 @@
-# Release candidate: rc16 scoped automatic trading
+# Current deployment: rc16, trading ready but disabled
 
-The owner requested common trading between the live pair. Routine automatic exchanges
-are being enabled with spare-only selection, safe checkpoints, durable recovery, and
-trade history. See [the operating guide](docs/automatic-trading.md).
+Red, Blue, the board, and the coordinator use `pokesim:0.2.0rc16-caa092b`, tagged commit
+`caa092bf76d3b73ce892575ece41480b5a455d80`. Both adventures are healthy at unlimited
+speed, with zero observed save reloads. Fresh cold backups and current-save checks
+passed. Red has 113 registered entries and Blue has 116.
+
+The scoped coordinator runs as UID 10001 with all capabilities dropped and no Docker
+socket. Private tokens authorize only trade controls. It can stage, verify, journal,
+and recover useful spare exchanges while protecting active teams, current projects,
+last copies, and best retained partners. Its interval is 15 minutes.
+
+All 406 Python tests and seven JavaScript tests passed, with one optional checkpoint
+test skipped. Packages built and runtime resources passed verification. Five copied
+exchanges passed, including a coordinator crash and both game restarts with durable
+holds. See [the scoped rehearsal](docs/validation/scoped-trading-0.2.0rc16.json).
+
+All 12 public endpoint checks passed. See [the release receipt](docs/validation/release-0.2.0rc16.json).
+
+No live exchange has occurred. Automatic approval review rejected enabling the policy
+because the earlier roadmap required a separately approved first exchange. The user
+has been asked to approve DIRTNAP (Red's spare level-41 Machoke) for MOCHI (Blue's spare
+level-32 Vulpix), then routine automatic trades after verification. The private and
+public policies remain disabled. See [the current review](docs/trade-review.md).
+
+The earlier root coordinator proposal was rejected and replaced. No privileged
+coordinator was started. The currently deployed service has access only to the two
+configured data directories, read-only ROMs and game data, and its recovery directory.
 
 # Previous deployment: both games on rc14
 

@@ -213,3 +213,18 @@ and six static asset comparisons passed. Red has 112 registered entries and Blue
 116. Both are healthy at unlimited speed with zero post-startup save reloads. The
 maintenance restarts begin fresh endurance intervals. Bag capacity remains the next
 simulation investigation. See [the release receipt](validation/release-0.2.0rc14.json).
+
+
+## Scoped trading release, rc16
+
+Both games, the broker, and the scoped coordinator now run rc16 from `caa092b`.
+The original privileged coordinator was rejected before startup and replaced with
+an ordinary UID 10001 service using authenticated trade controls and durable holds.
+The implementation passed 406 Python tests, seven JavaScript tests, and a copied-save
+crash recovery rehearsal. Live trading remains disabled. Automatic approval review
+requires explicit approval of the first exchange and subsequent automatic policy.
+
+The pending first exchange is Red's spare DIRTNAP (Machoke, level 41) for Blue's spare
+MOCHI (Vulpix, level 32). Recheck these individuals and protect their current projects.
+If approved, verify this exact exchange before enabling the ordinary 15-minute policy.
+Both games remain unpaused at unlimited speed, with 113 and 116 entries and zero reloads.
