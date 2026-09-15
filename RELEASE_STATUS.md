@@ -1,3 +1,18 @@
+# Candidate rc26: find the strongest boxed Pokémon
+
+Power sums the five calculated Gen I stats at the current level. It includes species
+base stats, DVs, and stat experience, with cartridge square-root rounding and caps.
+The PC offers a shortcut across all boxes, descending Power sort, individual stat
+sorts, card scores, and a detailed breakdown. Missing data sorts last. Stored order
+and simulation decisions are unchanged.
+
+Validation: 506 Python tests passed, with one optional skip. Both JavaScript test
+files, package builds, resource checks, and the lockfile check passed. The local
+browser preview used a current Red snapshot with 234 boxed Pokémon. Mewtwo ranked
+first at 1,013, followed by Dragonite at 905. API tests cover every box, numeric tests
+cover rounding boundaries, and UI tests cover filtering, pagination, bookmarks,
+unavailable data, and details. Live deployment is pending.
+
 # Current Red: rc25, retreat from a stalled healing trip
 
 Red spent roughly 25 minutes failing to leave Victory Road with a depleted team.

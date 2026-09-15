@@ -9,7 +9,7 @@ from functools import lru_cache
 from urllib.parse import quote
 
 from ..game_data import load
-from ..pokemon import TYPES
+from ..pokemon import STAT_NAMES, TYPES, stored_strength
 from ..ram import DEX_NAMES, MAP_NAMES, MOVES as MOVE_TABLE
 from ..strategy_data import MOVES as MOVE_DETAILS, SPECIES
 
@@ -17,7 +17,6 @@ COLLECTION = load("collection.json")
 EVOLUTIONS = {int(sid): rows for sid, rows in COLLECTION["evolutions"].items()}
 VERSIONS = tuple(COLLECTION["versions"])
 DEFAULT_VERSION = "red" if "red" in VERSIONS else VERSIONS[0]
-STAT_NAMES = ("HP", "Attack", "Defense", "Speed", "Special")
 GROWTH_LABELS = {"FAST": "Fast", "MEDIUM_FAST": "Medium fast", "MEDIUM_SLOW": "Medium slow", "SLOW": "Slow"}
 METHOD_LABELS = {"grass": "Tall grass", "surf": "Surfing", "fish": "Fishing", "safari": "Safari Zone",
                  "static": "Standing encounter", "gift": "Gift", "trade": "In-game trade",
@@ -141,7 +140,8 @@ def live_status(game: dict | None, collection: dict | None = None) -> dict:
                    "status_label": mon.get("status_label"), "slot": slot + 1}
                   for slot, mon in enumerate(game.get("party", []))],
         "storage": {**storage,
-                    "pokemon": [{**mon, "dex": dex_of.get(mon["species"])} for mon in storage.get("pokemon", [])]}
+                    "pokemon": [{**mon, "dex": dex_of.get(mon["species"]), **stored_strength(mon)}
+                                for mon in storage.get("pokemon", [])]}
         if storage else None,
         **plan,
     }

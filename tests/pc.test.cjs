@@ -88,3 +88,42 @@ test('bookmarked sorting survives refresh and composes with search and box selec
   assert.deepEqual(view.rows().map(p => p.level), [80])
   assert.match(view.url(), /sort=nick&order=asc/)
 })
+
+test('strongest shortcut ranks every box and clears previous filters', async () => {
+  const pokemon = Array.from({length: 25}, (_, i) => mon(Math.floor(i / 20) + 1, i % 20 + 1, 100 - i,
+    {power: 100 + i, calculated_stats: {HP: 10, Attack: 20, Defense: 30, Speed: 40, Special: i}}))
+  pokemon.push(mon(3, 1, 100, {power: null}))
+  const view = pc(pokemon, '?box=1&q=missing&sort=level')
+  await view.ready()
+  assert.equal(view.rows().length, 0)
+  view.element('#pc-strongest').onclick()
+  assert.equal(view.element('#pc-scope').value, 'all')
+  assert.equal(view.element('#pc-search').value, '')
+  assert.deepEqual(view.rows().map(p => p.power), Array.from({length: 20}, (_, i) => 124 - i))
+  view.element('#pc-next').onclick()
+  assert.deepEqual(view.rows().map(p => p.power), [104, 103, 102, 101, 100, null])
+  view.sort('power', 'asc')
+  assert.equal(view.rows()[0].power, 100)
+  view.element('#pc-next').onclick()
+  assert.equal(view.rows().at(-1).power, null)
+  view.sort('Special')
+  assert.equal(view.rows()[0].calculated_stats.Special, 24)
+  assert.equal(pokemon[0].power, 100)
+})
+
+test('power bookmarks survive refresh and details show the five stat breakdown', async () => {
+  const view = pc([mon(2, 1, 50, {power: 415,
+    calculated_stats: {HP: 110, Attack: 75, Defense: 50, Speed: 110, Special: 70}}),
+  mon(1, 1, 100, {power: null})], '?scope=all&sort=power&order=desc')
+  await view.ready()
+  await view.refresh()
+  assert.equal(view.rows()[0].power, 415)
+  assert.match(view.url(), /scope=all&sort=power&order=desc/)
+  assert.match(view.element('#pc-grid').innerHTML, /Power <b>415/)
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  const detail = view.element('#pc-detail-body').innerHTML
+  assert.match(detail, /HP<\/th><td>110/)
+  assert.match(detail, /Attack<\/th><td>75/)
+  assert.match(detail, /Special<\/th><td>70/)
+  assert.match(detail, /Power = max HP \+ Attack \+ Defense \+ Speed \+ Special/)
+})
