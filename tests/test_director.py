@@ -64,6 +64,31 @@ def test_training_target_and_gains_survive_a_checkpoint_until_the_actual_level()
     assert outcome['gains'] == {'experience': 1000, 'levels': 1}
 
 
+def test_productive_training_still_stops_when_idle_and_preserves_partial_progress():
+    c = Collection()
+    c.project = {'method': 'train', 'parent': sid(113), 'family': [sid(113)],
+                 'initial_level': 65, 'target_level': 70, 'key': 'train:chansey:70'}
+    c.remaining = 72000
+    c.director.failures[c.project['key']] = 3
+    start = state(party=(mon(species=sid(113), level=65, experience=10000),))
+    c.observe(start)
+    gained = replace(start, frame=120, party=(replace(start.party[0], experience=10524),))
+    c.observe(gained)
+    restored = Collection()
+    restored.load(json.loads(json.dumps(c.state_dict())))
+    restored.observe(gained)
+    for frame in range(240, 7441, 120):
+        restored.observe(replace(gained, frame=frame))
+    assert restored.project is None
+    outcome = restored.director.outcomes[-1]
+    assert outcome['status'] == 'advanced'
+    assert outcome['gains'] == {'experience': 524, 'levels': 0}
+    assert 'No encounter' in outcome['reason']
+    assert outcome['retry_at'] - outcome['elapsed'] == 60000
+    assert not restored.director.failures
+    assert not restored.director.completed
+
+
 def test_other_party_experience_and_supply_changes_cannot_hide_failed_training():
     c = Collection()
     c.project = {'method': 'train', 'parent': sid(113), 'family': [sid(113)],

@@ -133,7 +133,9 @@ class Collection:
             return False
         project = self.project
         label = name(project['species']) if project.get('species') else project['method'].title()
-        self.attempts[project.get('key', label)] = self.director.finish(project, self.elapsed, False, reason)
+        progressed = bool(project.get('gains', {}).get('experience', 0))
+        self.attempts[project.get('key', label)] = self.director.finish(
+            project, self.elapsed, False, reason, progressed)
         self.history = (self.history + [f'Changed plan: {label}. {reason}'])[-6:]
         self.project = None
         self.remaining = 0
