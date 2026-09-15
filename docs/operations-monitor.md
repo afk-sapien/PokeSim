@@ -692,3 +692,29 @@ manual trade cycle, or restart was necessary. The validated journal correction a
 remain subject to that known reporting issue. Continue ordinary monitoring without
 repeating prior deployment or catch notifications. See
 [the interval record](validation/monitor-20260915-1610.json).
+
+
+## September 15, 16:43 UTC Red healing stall
+
+Blue completed another training and evolution project, evolving Kabuto into Kabutops
+in event 4480. Trade twenty-two then registered Kabutops in Red. Both games reached
+144 registrations. Blue had 31 rewards earned and delivered, and Red had thirty,
+with both queues empty. Three more trades completed during the interval. Both games
+were healthy at maximum speed, with unchanged rc22 starts and zero recovery reloads.
+
+Red's local progress nevertheless stalled. Its last non-trade level event was at about
+16:19 UTC, while its depleted team repeatedly failed to leave Victory Road 1F to heal.
+The recent trade achievement concealed that distinction in the Live summary. A copied
+Red checkpoint stayed on 1F for 24,002 frames. Clearing its remembered navigation in a
+separate 36,028-frame diagnostic did not find a successful healing route either.
+
+Red had an unused Escape Rope. The rc25 candidate uses the ordinary item menu for one
+retreat attempt when a healing trip reaches recovery in Victory Road. The attempt
+persists across checkpoints and trades, so a failed attempt cannot repeatedly spend
+ropes. The flag clears after full healing. The same copied source escaped and healed
+at Saffron after 6,924 frames. A 90,004-frame continuation resumed training in Diglett's
+Cave, used one rope, and performed no rewinds or RAM edits. The witness is retained as
+`red-escape` within the existing Victory Road reproduction case, leaving eight cases.
+This fallback does not claim to solve every route or provide escape without supplies.
+All 490 Python tests passed, with one optional skip. Both JavaScript files and package
+checks passed. See [the comparison](validation/victory-escape-0.2.0rc25.json).

@@ -1,0 +1,405 @@
+{
+  "version": "0.2.0rc25",
+  "python_tests": {
+    "passed": 490,
+    "skipped": 1
+  },
+  "javascript_test_files_passed": 2,
+  "method": "Copied Red checkpoint with saved policy state and normal controls at maximum speed. No save rewind or RAM modification. A diagnostic replay also cleared remembered navigation, without resolving the stall.",
+  "baseline": {
+    "source_sha256": "45d492a19fe6674134cf4d2f28b5782554ab2b7a8374a26edcf51bb4a2ac33c9",
+    "frames": 24002,
+    "wall_seconds": 8.73,
+    "healed": false,
+    "start_map": "Victory Road 1F",
+    "end_map": "Victory Road 1F",
+    "start_recoveries": 42997,
+    "end_recoveries": 43001,
+    "route_samples": [
+      {
+        "frame": 0,
+        "map": "Victory Road 1F",
+        "position": [
+          1,
+          15
+        ],
+        "goal": "boot",
+        "mode": "boot",
+        "rope": 1
+      },
+      {
+        "frame": 22998,
+        "map": "Victory Road 1F",
+        "position": [
+          0,
+          13
+        ],
+        "goal": "heal",
+        "mode": "exploring obstacle",
+        "rope": 1
+      }
+    ]
+  },
+  "fresh_navigation_diagnostic": {
+    "source_sha256": "45d492a19fe6674134cf4d2f28b5782554ab2b7a8374a26edcf51bb4a2ac33c9",
+    "frames": 36028,
+    "wall_seconds": 14.4,
+    "healed": false,
+    "start_map": "Victory Road 1F",
+    "end_map": "Victory Road 1F",
+    "start_recoveries": 42997,
+    "end_recoveries": 42997,
+    "route_samples": [
+      {
+        "frame": 0,
+        "map": "Victory Road 1F",
+        "position": [
+          1,
+          15
+        ],
+        "goal": "boot",
+        "mode": "boot",
+        "rope": 1
+      },
+      {
+        "frame": 35124,
+        "map": "Victory Road 1F",
+        "position": [
+          5,
+          9
+        ],
+        "goal": "party_box",
+        "mode": "dialogue",
+        "rope": 1
+      }
+    ]
+  },
+  "candidate": {
+    "source_sha256": "45d492a19fe6674134cf4d2f28b5782554ab2b7a8374a26edcf51bb4a2ac33c9",
+    "frames": 6924,
+    "wall_seconds": 2.23,
+    "healed": true,
+    "start_map": "Victory Road 1F",
+    "end_map": "Saffron Pok\u00e9mon Center",
+    "start_recoveries": 42997,
+    "end_recoveries": 42998,
+    "route_samples": [
+      {
+        "frame": 0,
+        "map": "Victory Road 1F",
+        "position": [
+          1,
+          15
+        ],
+        "goal": "boot",
+        "mode": "boot",
+        "rope": 1
+      },
+      {
+        "frame": 4854,
+        "map": "Route 6",
+        "position": [
+          8,
+          35
+        ],
+        "goal": "heal",
+        "mode": "waiting for map transition",
+        "rope": 0
+      },
+      {
+        "frame": 6056,
+        "map": "Route 6",
+        "position": [
+          10,
+          1
+        ],
+        "goal": "heal",
+        "mode": "waiting for map transition",
+        "rope": 0
+      }
+    ]
+  },
+  "continued_adventure": {
+    "source_sha256": "45d492a19fe6674134cf4d2f28b5782554ab2b7a8374a26edcf51bb4a2ac33c9",
+    "frames": 90004,
+    "wall_seconds": 22.56,
+    "healed": true,
+    "healed_frame": 6924,
+    "final_rope_count": 0,
+    "final_party": [
+      [
+        104,
+        "JOLTEON",
+        29,
+        25,
+        82,
+        [
+          29,
+          15,
+          29,
+          0
+        ]
+      ],
+      [
+        19,
+        "PICKLES",
+        49,
+        208,
+        208,
+        [
+          5,
+          15,
+          15,
+          15
+        ]
+      ],
+      [
+        75,
+        "SPROUT",
+        100,
+        379,
+        381,
+        [
+          30,
+          17,
+          10,
+          30
+        ]
+      ],
+      [
+        164,
+        "GIZMO",
+        97,
+        323,
+        323,
+        [
+          15,
+          30,
+          20,
+          40
+        ]
+      ],
+      [
+        154,
+        "BUTTON",
+        100,
+        349,
+        349,
+        [
+          30,
+          24,
+          10,
+          15
+        ]
+      ],
+      [
+        136,
+        "MUFFIN",
+        100,
+        385,
+        385,
+        [
+          20,
+          40,
+          20,
+          20
+        ]
+      ]
+    ],
+    "escape_attempted": false,
+    "start_map": "Victory Road 1F",
+    "end_map": "Digletts Cave",
+    "start_recoveries": 42997,
+    "end_recoveries": 43001,
+    "route_samples": [
+      {
+        "frame": 0,
+        "map": "Victory Road 1F",
+        "position": [
+          1,
+          15
+        ],
+        "goal": "boot",
+        "mode": "boot",
+        "rope": 1
+      },
+      {
+        "frame": 4854,
+        "map": "Route 6",
+        "position": [
+          8,
+          35
+        ],
+        "goal": "heal",
+        "mode": "waiting for map transition",
+        "rope": 0
+      },
+      {
+        "frame": 7284,
+        "map": "Saffron Pok\u00e9mon Center",
+        "position": [
+          3,
+          3
+        ],
+        "goal": "party_box",
+        "mode": "dialogue",
+        "rope": 0
+      },
+      {
+        "frame": 12084,
+        "map": "Route 6 Gate",
+        "position": [
+          3,
+          5
+        ],
+        "goal": "collect_train",
+        "mode": "following objective",
+        "rope": 0
+      },
+      {
+        "frame": 13312,
+        "map": "Route 6",
+        "position": [
+          12,
+          14
+        ],
+        "goal": "collect_train",
+        "mode": "dialogue",
+        "rope": 0
+      },
+      {
+        "frame": 36278,
+        "map": "Vermilion City",
+        "position": [
+          19,
+          0
+        ],
+        "goal": "heal",
+        "mode": "waiting for map transition",
+        "rope": 0
+      },
+      {
+        "frame": 37494,
+        "map": "Vermilion Pok\u00e9mon Center",
+        "position": [
+          3,
+          3
+        ],
+        "goal": "collect_train",
+        "mode": "dialogue",
+        "rope": 0
+      },
+      {
+        "frame": 38704,
+        "map": "Route 6",
+        "position": [
+          13,
+          30
+        ],
+        "goal": "collect_train",
+        "mode": "training",
+        "rope": 0
+      },
+      {
+        "frame": 61788,
+        "map": "Vermilion City",
+        "position": [
+          18,
+          3
+        ],
+        "goal": "party_release",
+        "mode": "following objective",
+        "rope": 0
+      },
+      {
+        "frame": 62994,
+        "map": "Vermilion Pok\u00e9mon Center",
+        "position": [
+          10,
+          6
+        ],
+        "goal": "collect_train",
+        "mode": "following objective",
+        "rope": 0
+      },
+      {
+        "frame": 64214,
+        "map": "Route 6",
+        "position": [
+          13,
+          30
+        ],
+        "goal": "collect_train",
+        "mode": "dialogue",
+        "rope": 0
+      },
+      {
+        "frame": 69038,
+        "map": "Vermilion Pok\u00e9mon Center",
+        "position": [
+          3,
+          3
+        ],
+        "goal": "collect_train",
+        "mode": "dialogue",
+        "rope": 0
+      },
+      {
+        "frame": 70238,
+        "map": "Route 6",
+        "position": [
+          13,
+          31
+        ],
+        "goal": "collect_train",
+        "mode": "dialogue",
+        "rope": 0
+      },
+      {
+        "frame": 79918,
+        "map": "Vermilion Pok\u00e9mon Center",
+        "position": [
+          13,
+          4
+        ],
+        "goal": "party_release",
+        "mode": "following objective",
+        "rope": 0
+      },
+      {
+        "frame": 84728,
+        "map": "Vermilion City",
+        "position": [
+          31,
+          15
+        ],
+        "goal": "collect_train",
+        "mode": "following objective",
+        "rope": 0
+      },
+      {
+        "frame": 85950,
+        "map": "Digletts Cave",
+        "position": [
+          32,
+          31
+        ],
+        "goal": "collect_train",
+        "mode": "dialogue",
+        "rope": 0
+      },
+      {
+        "frame": 89582,
+        "map": "Digletts Cave",
+        "position": [
+          28,
+          31
+        ],
+        "goal": "collect_train",
+        "mode": "dialogue",
+        "rope": 0
+      }
+    ]
+  },
+  "retry_policy": "One Escape Rope attempt per healing episode in Victory Road. Attempts persist through checkpoint and trade restores and reset after full healing. Missing ropes and unsuitable contexts do not open an item menu."
+}

@@ -1,3 +1,18 @@
+# Candidate rc25 for Red: retreat from a stalled healing trip
+
+Red spent roughly 25 minutes failing to leave Victory Road with a depleted team.
+Recent trades masked the lack of local progress in its achievement display. A copied
+checkpoint reproduced the stall with both remembered and fresh navigation. The
+candidate makes one ordinary Escape Rope attempt when recovery interrupts a healing
+trip in Victory Road. The attempt survives saves and trades, and resets after full
+healing. An absent rope or unsuitable context does not start an item menu.
+
+The copied run healed at Saffron after 6,924 game frames and continued training through
+90,004 frames, using one rope and no rewinds. The release also includes the validated
+PC journal correction below. All 490 Python tests passed, with one optional skip.
+Both JavaScript test files and package checks passed. See
+[the escape comparison](docs/validation/victory-escape-0.2.0rc25.json).
+
 # Validated journal correction for the next game release
 
 A short invalid party RAM write during withdrawal erased the event detector's valid

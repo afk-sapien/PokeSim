@@ -92,6 +92,7 @@ class StrategicPolicy(Policy):
         self.readiness = {}
         self.next_goal = None
         self.map_view = None
+        self.escape_attempted = False
         self.on_restore()
 
     def reset(self):
@@ -175,13 +176,14 @@ class StrategicPolicy(Policy):
                 "personality": self.personality, "history": self.history[-8:], "failures": self.failures,
                 "starter": self.starter, "starter_confirmed": self.starter_confirmed,
                 "fossil": self.fossil,
-                "pickups": self.pickups.state_dict()}
+                "pickups": self.pickups.state_dict(), "escape_attempted": self.escape_attempted}
 
     def load_state_dict(self, data):
         if data.get("version") != 1:
             return
         self.collection.load(data.get("collection", {}))
         self.fossil = data.get('fossil', self.fossil)
+        self.escape_attempted = bool(data.get('escape_attempted', False))
         if self.fossil not in ('HELIX_FOSSIL', 'DOME_FOSSIL'):
             self.fossil = 'HELIX_FOSSIL'
         self.pickups.load(data.get('pickups', {}))
@@ -637,8 +639,9 @@ class StrategicPolicy(Policy):
         pos = (s.map, s.x, s.y)
         if needs_healing(s.party):
             self.heal_latch = True
-        if self.heal_latch and all(p.hp == p.max_hp and not p.status for p in s.party) and not needs_healing(s.party):
+        if all(p.hp == p.max_hp and not p.status for p in s.party) and not needs_healing(s.party):
             self.heal_latch = False
+            self.escape_attempted = False
         league_rooms = {MAPS[n] for n in ("LORELEIS_ROOM", "BRUNOS_ROOM", "AGATHAS_ROOM", "LANCES_ROOM", "CHAMPIONS_ROOM")}
         in_league = s.map in league_rooms
         goal = healing_goal(s) if self.heal_latch and not in_league else self.goal
@@ -1127,6 +1130,17 @@ class StrategicPolicy(Policy):
             self.pickups.defer(self.collection.elapsed, 'Pickup approach failed')
         self.recoveries += 1
         self.intent = None
+        if (self.heal_latch and snapshot.map in VICTORY_MAPS and snapshot.valid
+                and not snapshot.in_battle and not snapshot.textbox and not snapshot.start_menu
+                and not self.escape_attempted):
+            action = self._use_item(snapshot, ITEMS['ESCAPE_ROPE'])
+            if action:
+                # One ordinary item attempt per healing episode survives checkpoints
+                # and trades. A failed attempt must not spend additional ropes.
+                self.escape_attempted = True
+                self.mode = 'escaping to heal'
+                self.reason = 'Use an Escape Rope after the route to healing stalled'
+                return action
         blocked = self.nav.blocked.copy()
         self.nav.restore()
         self.nav.blocked.update(blocked)
