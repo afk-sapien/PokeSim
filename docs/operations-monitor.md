@@ -3,8 +3,10 @@
 The user authorized ongoing monitoring, improvements, testing, and deployments on
 September 14, 2026. Continue within the roadmap without repeatedly asking permission
 for routine fixes or deployments. Preserve existing adventures and record backups.
-The first live trade retains its specific participant approval requirement. Develop
-and validate coordinated execution before attempting it. No automatic save resets.
+The user explicitly authorized live automatic trading on September 15, 2026 UTC.
+The scoped coordinator is enabled for useful spare exchanges every 15 minutes. Do not
+request individual trade approvals. Monitor completed trades, stuck holds, recovery,
+and prolonged waiting for opportunities. No automatic save resets.
 
 The user prefers maximum speed whenever resources allow. Use unlimited speed (`0`)
 for both live games and copied-save progression tests. Keep that preference across
@@ -270,3 +272,18 @@ retry maps were empty. A bounded 90-poll capture attempt found no active pickup 
 No runtime change or deployment was justified, and neither game was paused or restarted.
 Disk use remained stable at 83.16 percent, with 16.53 GB free. See
 [the monitoring record](validation/monitor-20260915-0611.json).
+
+
+## Automatic trading activated, September 15 UTC
+
+The owner explicitly approved live automatic trading and no individual trade approval
+requests. Both policies are enabled with a 900-second minimum exchange interval.
+The existing coordinator continues independently of the desktop. The heartbeat now
+monitors automatic exchanges and no longer carries the superseded approval requirement.
+
+The board displays automatic mode. During the initial observation no exchange had
+completed. One HTTP retry cleared and neither game retained a hold. Both adventures
+remain healthy, unpaused, at unlimited speed with zero reloads and unchanged container
+start times. Follow up on the first completion and investigate prolonged safe-point
+waiting if the next monitor still finds no exchange. See
+[the activation receipt](validation/automatic-trading-enabled-20260915.json).

@@ -1,4 +1,4 @@
-# Current deployment: rc16, trading ready but disabled
+# Current deployment: rc16, automatic trading enabled
 
 Red, Blue, the board, and the coordinator use `pokesim:0.2.0rc16-caa092b`, tagged commit
 `caa092bf76d3b73ce892575ece41480b5a455d80`. Both adventures are healthy at unlimited
@@ -18,11 +18,13 @@ holds. See [the scoped rehearsal](docs/validation/scoped-trading-0.2.0rc16.json)
 
 All 12 public endpoint checks passed. See [the release receipt](docs/validation/release-0.2.0rc16.json).
 
-No live exchange has occurred. Automatic approval review rejected enabling the policy
-because the earlier roadmap required a separately approved first exchange. The user
-has been asked to approve DIRTNAP (Red's spare level-41 Machoke) for MOCHI (Blue's spare
-level-32 Vulpix), then routine automatic trades after verification. The private and
-public policies remain disabled. See [the current review](docs/trade-review.md).
+The owner explicitly approved live automatic trading on September 15, 2026 UTC.
+Both private and public policies are enabled for useful spare exchanges every 15
+minutes. Individual trades need no further approval. The coordinator waits for both
+games to reach a safe overworld state before an exchange. The initial observation
+confirmed the enabled board and healthy unpaused games, with zero completed exchanges
+yet. One HTTP retry cleared without retaining a hold. See
+[the activation receipt](docs/validation/automatic-trading-enabled-20260915.json).
 
 The earlier root coordinator proposal was rejected and replaced. No privileged
 coordinator was started. The currently deployed service has access only to the two
