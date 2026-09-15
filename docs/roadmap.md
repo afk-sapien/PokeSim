@@ -360,3 +360,12 @@ Both live sites now sort selected or all boxes before pagination by level, total
 total stat experience, total experience, Pokédex number, species, nickname, and box
 order. Cards show both stat totals, and details explain the five-stat sums. Sorting
 persists through refreshes and URLs. See [the release receipt](validation/release-0.2.0rc14.json).
+
+
+## Pickup retry investigation
+
+Live Red repeatedly failed Max Revive and Max Potion detours. The next copied replay
+made no pickup attempts, so a persistent retry-backoff candidate did not demonstrate
+an improvement and remains held outside runtime. Monitoring now includes active pickup
+state and retry timing. Capture an active failure before changing approach or retry
+behavior. See [the comparison](validation/pickup-retry-20260915.json).

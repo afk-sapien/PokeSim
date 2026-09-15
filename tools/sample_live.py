@@ -32,11 +32,14 @@ for edition, name, port in [('red', 'pokesim', 8930), ('blue', 'pokesim-blue', 8
             'owned': game['owned'], 'position': [game['map_name'], game['x'], game['y']],
             'bag_slots': len(game['items']), 'items': game['items'],
             'goal': strategy.get('objective'), 'activity': strategy.get('action'),
+            'policy_recoveries': strategy.get('recoveries'),
             'progress': state.get('progress'), 'project': collection.get('hunt'),
             'project_remaining': collection.get('remaining_seconds'),
             'completed_projects': director.get('completed', {}),
             'recent_outcomes': director.get('outcomes', [])[-3:],
             'pickups': strategy.get('pickups', {}).get('history', []),
+            'pickup_state': {key: strategy.get('pickups', {}).get(key)
+                             for key in ('active', 'retry', 'next_scan', 'completed')},
             'party': [{key: mon.get(key) for key in ('dex', 'nick', 'level', 'experience', 'hp', 'max_hp', 'status', 'pp')}
                       for mon in game['party']],
         }

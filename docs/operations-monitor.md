@@ -228,3 +228,28 @@ The pending first exchange is Red's spare DIRTNAP (Machoke, level 41) for Blue's
 MOCHI (Vulpix, level 32). Recheck these individuals and protect their current projects.
 If approved, verify this exact exchange before enabling the ordinary 15-minute policy.
 Both games remain unpaused at unlimited speed, with 113 and 116 entries and zero reloads.
+
+
+## September 15, 05:34 UTC pickup retry investigation
+
+The 33-minute rc16 interval retained both container start times, healthy workers,
+unlimited speed, and zero save reloads. Red's SPROUT reached level 100, confirmed in a
+later copied checkpoint. Both games gained other levels, and Blue completed two more
+training projects and two supply projects. Registered entries stayed at 113 and 116.
+Blue still has 20 bag slots occupied and no new pickup history during this interval.
+Disk use was 83.15 percent, with 16.53 GB free. No endurance milestone is reached yet.
+
+Red's live pickup history repeatedly alternated failed Max Revive and Max Potion
+approaches. A 216004-frame copied replay gained five levels and won five trainer
+battles, including a League rematch, but made no pickup attempts. A candidate with
+persistent capped retry backoff had identical gameplay and 29 local policy recoveries.
+Its 408 tests passed, but the replay did not establish a benefit. The candidate was
+removed from the runtime checkout and retained as `held-backoff.patch` with the private
+case `data/operations/repros/red-pickups-20260915`.
+
+The sampler now records active pickup targets, retry deadlines, completed pickup keys,
+next scan time, and local policy recoveries. Those fields should help capture a save
+while the failed detour is active. The case count is seven. Retain at most eight cases,
+preserving validation records and held patches before retiring older private artifacts.
+No games were restarted and no runtime deployment was made. Trading remains disabled
+under the existing approval block. See [the comparison](validation/pickup-retry-20260915.json).
