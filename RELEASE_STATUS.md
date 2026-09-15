@@ -1,4 +1,18 @@
-# Current games: rc26, find the strongest boxed Pokémon
+# Candidate rc27: include the party in PC rankings
+
+The PC now has a Party section alongside its twelve boxes. The combined scope and
+strongest shortcut include every party and boxed Pokémon, with every existing sort,
+search, pagination, and detail view. Cards identify party slots or box locations.
+Party and boxed partners use the same unboosted calculated stats. Existing all-box
+bookmarks now include the party, and `box=party` bookmarks the party view.
+
+All 507 Python tests passed, with one optional skip. Both JavaScript test files,
+package and resource checks, and the lockfile check passed. Tests cover every combined
+sort, party changes on refresh, location selection, details, and source immutability.
+A browser preview confirmed all six party cards and their Power breakdowns. Deployment
+is pending. Earlier sections record prior releases.
+
+# Previous games: rc26, find the strongest boxed Pokémon
 
 Power sums the five calculated Gen I stats at the current level. It includes species
 base stats, DVs, and stat experience, with cartridge square-root rounding and caps.

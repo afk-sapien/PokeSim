@@ -4,7 +4,7 @@ const test = require('node:test')
 const vm = require('node:vm')
 const source = fs.readFileSync('pokesim/web/static/pc.js', 'utf8')
 
-function pc(pokemon, search = '?scope=all') {
+function pc(pokemon, search = '?scope=all', party = []) {
   const elements = new Map()
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
@@ -18,7 +18,7 @@ function pc(pokemon, search = '?scope=all') {
     document: {querySelector: element, activeElement: null, hidden: false},
     location: {search}, URLSearchParams,
     history: {replaceState: (_, __, next) => { url = next }},
-    fetch: async () => ({ok: true, json: async () => ({started: true, version: 'blue',
+    fetch: async () => ({ok: true, json: async () => ({started: true, version: 'blue', party,
       storage: {active_box: 1, box_counts: Array(12).fill(20), pokemon}})}),
     setInterval() {},
   })
@@ -126,4 +126,50 @@ test('power bookmarks survive refresh and details show the five stat breakdown',
   assert.match(detail, /Attack<\/th><td>75/)
   assert.match(detail, /Special<\/th><td>70/)
   assert.match(detail, /Power = max HP \+ Attack \+ Defense \+ Speed \+ Special/)
+})
+
+test('party joins every combined sort and the strongest shortcut without changing source data', async () => {
+  const boxed = Array.from({length: 20}, (_, i) => mon(1, i + 1, 20 + i, {power: 200 + i}))
+  const party = [mon(undefined, undefined, 80, {slot: 1, nick: 'Ace', power: 900,
+    dvs: [15, 15, 15, 15, 15], stat_exp: [65535, 65535, 65535, 65535, 65535],
+    calculated_stats: {HP: 200, Attack: 200, Defense: 200, Speed: 200, Special: 100}})]
+  const before = JSON.stringify({boxed, party})
+  const view = pc(boxed, '?scope=all', party)
+  await view.ready()
+  for (const field of ['box', 'power', 'level', 'dvs', 'stat_exp', 'experience', 'dex', 'name', 'nick', 'HP', 'Attack', 'Defense', 'Speed', 'Special']) {
+    view.sort(field)
+    assert.equal(view.rows()[0].nick, 'Ace', field)
+  }
+  assert.equal(view.element('#pc-count').textContent, '21 Pokémon')
+  assert.match(view.element('#pc-grid').innerHTML, /PARTY · SLOT 1/)
+  view.sort('level', 'asc')
+  view.element('#pc-next').onclick()
+  assert.equal(view.rows()[0].nick, 'Ace')
+  view.element('#pc-strongest').onclick()
+  assert.equal(view.rows()[0].nick, 'Ace')
+  assert.equal(view.element('#pc-page').textContent, 'Page 1 of 2')
+  assert.equal(JSON.stringify({boxed, party}), before)
+})
+
+test('party selection bookmarks, details, refresh, and box selection remain distinct', async () => {
+  const party = [mon(undefined, undefined, 80, {slot: 1, nick: 'Ace', power: 900})]
+  const view = pc([mon(2, 1, 90)], '?box=party&sort=power&order=desc', party)
+  await view.ready()
+  assert.equal(view.rows().length, 1)
+  assert.equal(view.rows()[0].box, 0)
+  assert.equal(view.element('#pc-heading').textContent, 'Party')
+  assert.match(view.url(), /box=party/)
+  assert.match(view.element('#box-picker').innerHTML, /data-box="0" aria-pressed="true"/)
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  assert.match(view.element('#pc-detail-body').innerHTML, /PARTY · SLOT 1/)
+  party[0].level = 81
+  await view.refresh()
+  assert.match(view.element('#pc-grid').innerHTML, /Lv. 81/)
+  view.element('#mobile-box').onchange({target: {value: '2'}})
+  assert.deepEqual(view.rows().map(p => p.box), [2])
+  view.element('#box-picker').onclick({target: {closest: () => ({dataset: {box: '0'}})}})
+  assert.deepEqual(view.rows().map(p => p.box), [0])
+  view.element('#pc-search').value = 'missing'
+  view.element('#pc-search').oninput()
+  assert.equal(view.rows().length, 0)
 })

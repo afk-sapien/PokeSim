@@ -1,6 +1,6 @@
 services:
   broker:
-    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc26}
+    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc27}
     container_name: pokesim-broker
     restart: unless-stopped
     command: ["uvicorn", "pokesim.broker.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

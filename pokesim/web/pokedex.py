@@ -137,7 +137,7 @@ def live_status(game: dict | None, collection: dict | None = None) -> dict:
                    "moves": mon.get("moves", ()), "dvs": mon.get("dvs", ()),
                    "stat_exp": mon.get("stat_exp", ()),
                    "experience": (mon.get("experience") or {}).get("total", 0),
-                   "status_label": mon.get("status_label"), "slot": slot + 1}
+                   "status_label": mon.get("status_label"), "slot": slot + 1, **stored_strength(mon)}
                   for slot, mon in enumerate(game.get("party", []))],
         "storage": {**storage,
                     "pokemon": [{**mon, "dex": dex_of.get(mon["species"]), **stored_strength(mon)}
