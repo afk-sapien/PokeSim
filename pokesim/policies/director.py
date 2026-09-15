@@ -73,5 +73,7 @@ class AdventureDirector:
             'reason': reason, 'elapsed': elapsed, 'retry_at': retry,
             'target': project.get('target_level', project.get('species')),
             'gains': deepcopy(project.get('gains', {})),
+            'timing': {key: project['training_session'][key] for key in ('preparation_frames', 'active_frames')}
+                      if project.get('training_session') else None,
         }])[-24:]
         return retry

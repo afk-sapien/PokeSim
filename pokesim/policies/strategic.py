@@ -9,6 +9,7 @@ from .naming import NamingController
 from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, boulder_task, seafoam_current_task
 from .progression import STARTERS, Goal, healing_goal, journey, league_partner, milestones, story_goal
+from . import training
 from .collection import CENTERS, Collection, LEAGUE, legendary_project
 from .awareness import ActionWatch
 from .team import development_candidate, potential, readiness, release_target, reserve_to_deposit, storage_headroom
@@ -230,7 +231,10 @@ class StrategicPolicy(Policy):
         # PC transfers briefly combine a new partner with the old slot's level.
         # Accept training gains in battle or after returning to the overworld.
         self.collection.observe(s, suspended=self.pickups.active is not None,
-                                training_ready=bool(s.in_battle) or kind == 'overworld')
+                                training_ready=bool(s.in_battle) or kind == 'overworld',
+                                training_active=(self.goal.key == 'collect_train' and not self.heal_latch
+                                                 and not needs_healing(s.party)
+                                                 and (bool(s.in_battle) or kind == 'overworld' and pos in self.goal.targets)))
         self.pickups.observe(s, self.collection.elapsed)
         if self.collection.completed_champion and s.map == MAPS['HALL_OF_FAME']:
             self.goal = Goal('collect_ceremony','Celebrate the Champion victory','Finish the ceremony and continue the saved adventure')
@@ -969,10 +973,10 @@ class StrategicPolicy(Policy):
                 social = None if goal.key.startswith(("collect_", "party_collection")) else self._purposeful_detour(s, mem, goal)
                 if social:
                     return social
-                social = None if goal.key == 'collect_pickup' or legendary_project(self.collection.project) else self._social_interaction(s, mem)
+                social = None if goal.key == 'collect_pickup' or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else self._social_interaction(s, mem)
                 if social:
                     return social
-            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup") or legendary_project(self.collection.project) else self.exploration
+            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup") or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else self.exploration
             if s.map in MANSION_MAPS:
                 direction = self.mansion.route(s, goal.targets, self.nav)
                 if direction == "switch":
@@ -983,6 +987,8 @@ class StrategicPolicy(Policy):
             self.mode = "following objective"
             path = self.mansion.path if s.map in MANSION_MAPS else self.nav.path
             remaining = len(path) if path else None
+            if path:
+                training.route_progress(self.collection.project, goal.key, path[-1][2], len(path))
             project = self.collection.project
             if (legendary_project(project) and goal.key == 'collect_static' and remaining is not None
                     and remaining < project.get('closest_distance', float('inf'))):

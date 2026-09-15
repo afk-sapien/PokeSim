@@ -1,0 +1,370 @@
+{
+  "game_frames_per_comparison": 216000,
+  "rewinds": 0,
+  "tests": {
+    "python_passed": 515,
+    "python_skipped": 1,
+    "javascript_files_passed": 2
+  },
+  "runs": {
+    "red": {
+      "baseline": {
+        "checkpoint_sha256": "a9d2deea5d6c5dad04449f38c560d242316707b3d317d3eac4d6efbdab11db59",
+        "policy_fingerprint": "a8adf5dc584e70d465ea48329d73e6e4ccb03a5f14b7dadec9822548eaf82f0f",
+        "frames": 216006,
+        "training_projects_finished": 5,
+        "training_targets_completed": 0,
+        "training_xp_gained": 3910,
+        "trainee_levels_gained": 0,
+        "policy_recoveries": 17,
+        "active_training": {
+          "method": "train",
+          "parent": 49,
+          "family": [
+            49
+          ],
+          "box": 9,
+          "initial_level": 49,
+          "target_level": 50,
+          "key": "train:49:50",
+          "initial_experience": 110669,
+          "gains": {
+            "experience": 2933,
+            "levels": 0
+          }
+        },
+        "outcomes": [
+          {
+            "key": "train:97:30",
+            "category": "training",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 221891758,
+            "retry_at": 221951758,
+            "target": 30,
+            "gains": {
+              "experience": 0,
+              "levels": 0
+            }
+          },
+          {
+            "key": "train:66:70",
+            "category": "training",
+            "status": "advanced",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 221904230,
+            "retry_at": 221964230,
+            "target": 70,
+            "gains": {
+              "experience": 977,
+              "levels": 0
+            }
+          },
+          {
+            "key": "train:139:30",
+            "category": "training",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 221916594,
+            "retry_at": 221976594,
+            "target": 30,
+            "gains": {
+              "experience": 0,
+              "levels": 0
+            }
+          },
+          {
+            "key": "train:138:40",
+            "category": "training",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 221929250,
+            "retry_at": 222049250,
+            "target": 40,
+            "gains": {
+              "experience": 0,
+              "levels": 0
+            }
+          },
+          {
+            "key": "train:46:60",
+            "category": "training",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 221941322,
+            "retry_at": 222061322,
+            "target": 60,
+            "gains": {
+              "experience": 0,
+              "levels": 0
+            }
+          }
+        ],
+        "mode_frames": {
+          "waiting for map transition": 5520,
+          "moving a boulder onto the switch": 14208,
+          "dialogue": 109428,
+          "battle: fight": 1674,
+          "moves": 3330,
+          "battle: switch": 900,
+          "party": 3924,
+          "party_action": 1476,
+          "following objective": 31720,
+          "using Strength": 810,
+          "waiting for the menu": 1956,
+          "pause": 990,
+          "overworld": 576,
+          "exploring obstacle": 18400,
+          "finding another approach": 1652,
+          "heal": 36,
+          "interacting": 442,
+          "list": 3234,
+          "shop": 72,
+          "yes_no": 432,
+          "pc_root": 1404,
+          "pc": 2160,
+          "change_box": 1764,
+          "training": 4840,
+          "battle: item": 126,
+          "naming": 4932
+        },
+        "initial_owned": 144,
+        "final_owned": 144
+      },
+      "candidate": {
+        "checkpoint_sha256": "a9d2deea5d6c5dad04449f38c560d242316707b3d317d3eac4d6efbdab11db59",
+        "policy_fingerprint": "3e415b81d25152dbc943489418b7cedabbc79df38e710e03f0a2052ddb7d75ff",
+        "frames": 216020,
+        "training_projects_finished": 0,
+        "training_targets_completed": 0,
+        "training_xp_gained": 6870,
+        "trainee_levels_gained": 2,
+        "policy_recoveries": 9,
+        "active_training": {
+          "method": "train",
+          "parent": 166,
+          "family": [
+            166
+          ],
+          "box": 8,
+          "initial_level": 30,
+          "target_level": 40,
+          "travel_distance": 167,
+          "key": "train:166:40",
+          "training_session": {
+            "phase": "training",
+            "preparation_frames": 9028,
+            "preparation_idle": 0,
+            "active_frames": 86370,
+            "active_idle": 2022,
+            "routes": {}
+          },
+          "initial_experience": 27000,
+          "gains": {
+            "experience": 6870,
+            "levels": 2
+          }
+        },
+        "outcomes": [],
+        "mode_frames": {
+          "waiting for map transition": 3840,
+          "moving a boulder onto the switch": 14208,
+          "dialogue": 137424,
+          "battle: fight": 2016,
+          "moves": 4644,
+          "battle: switch": 1710,
+          "party": 4500,
+          "party_action": 1710,
+          "following objective": 22420,
+          "using Strength": 810,
+          "waiting for the menu": 1896,
+          "pause": 756,
+          "overworld": 546,
+          "exploring obstacle": 1140,
+          "finding another approach": 18,
+          "heal": 36,
+          "interacting": 104,
+          "list": 846,
+          "shop": 36,
+          "yes_no": 126,
+          "pc_root": 156,
+          "pc": 264,
+          "change_box": 450,
+          "training": 16220,
+          "battle: item": 72,
+          "battle": 72
+        },
+        "initial_owned": 144,
+        "final_owned": 144
+      }
+    },
+    "blue": {
+      "baseline": {
+        "checkpoint_sha256": "15b35da418515172bf97bbf62e6bfa1ea5d55f3601bc707a46b6fc7a14bca354",
+        "policy_fingerprint": "a8adf5dc584e70d465ea48329d73e6e4ccb03a5f14b7dadec9822548eaf82f0f",
+        "frames": 216002,
+        "training_projects_finished": 1,
+        "training_targets_completed": 0,
+        "training_xp_gained": 11077,
+        "trainee_levels_gained": 0,
+        "policy_recoveries": 23,
+        "active_training": {
+          "method": "train",
+          "parent": 166,
+          "family": [
+            166
+          ],
+          "box": 1,
+          "initial_level": 49,
+          "target_level": 50,
+          "key": "train:166:50",
+          "initial_experience": 121698,
+          "gains": {
+            "experience": 3053,
+            "levels": 0
+          }
+        },
+        "outcomes": [
+          {
+            "key": "train:75:60",
+            "category": "training",
+            "status": "advanced",
+            "reason": "Expedition time budget reached",
+            "elapsed": 126178056,
+            "retry_at": 126238056,
+            "target": 60,
+            "gains": {
+              "experience": 8024,
+              "levels": 0
+            }
+          }
+        ],
+        "mode_frames": {
+          "waiting for map transition": 2700,
+          "list": 1314,
+          "pause": 522,
+          "using an item": 162,
+          "waiting for the menu": 792,
+          "item_action": 36,
+          "dialogue": 130086,
+          "party": 4734,
+          "overworld": 1854,
+          "party_action": 1296,
+          "following objective": 31352,
+          "interacting": 1308,
+          "battle: switch": 1836,
+          "battle: fight": 1998,
+          "moves": 3312,
+          "yes_no": 792,
+          "battle": 36,
+          "finding another approach": 254,
+          "Hall of Fame ceremony": 11400,
+          "heal": 18,
+          "pc_root": 312,
+          "pc": 666,
+          "change_box": 594,
+          "using Surf": 162,
+          "training": 16540,
+          "battle: item": 36,
+          "planning the next expedition": 1836,
+          "using Cut": 54
+        },
+        "initial_owned": 144,
+        "final_owned": 144
+      },
+      "candidate": {
+        "checkpoint_sha256": "15b35da418515172bf97bbf62e6bfa1ea5d55f3601bc707a46b6fc7a14bca354",
+        "policy_fingerprint": "3e415b81d25152dbc943489418b7cedabbc79df38e710e03f0a2052ddb7d75ff",
+        "frames": 216012,
+        "training_projects_finished": 1,
+        "training_targets_completed": 1,
+        "training_xp_gained": 4845,
+        "trainee_levels_gained": 5,
+        "policy_recoveries": 21,
+        "active_training": {
+          "method": "train",
+          "parent": 21,
+          "family": [
+            21
+          ],
+          "box": 6,
+          "initial_level": 29,
+          "target_level": 30,
+          "travel_distance": 139,
+          "key": "train:21:30",
+          "training_session": {
+            "phase": "training",
+            "preparation_frames": 5458,
+            "preparation_idle": 0,
+            "active_frames": 3046,
+            "active_idle": 1312,
+            "routes": {}
+          },
+          "initial_experience": 20169,
+          "gains": {
+            "experience": 171,
+            "levels": 0
+          }
+        },
+        "outcomes": [
+          {
+            "key": "train:103:20",
+            "category": "training",
+            "status": "completed",
+            "reason": "Target reached",
+            "elapsed": 126242612,
+            "retry_at": 0,
+            "target": 20,
+            "gains": {
+              "experience": 4674,
+              "levels": 5
+            },
+            "timing": {
+              "preparation_frames": 11810,
+              "active_frames": 124758
+            }
+          }
+        ],
+        "mode_frames": {
+          "waiting for map transition": 1980,
+          "list": 1008,
+          "pause": 342,
+          "using an item": 162,
+          "waiting for the menu": 372,
+          "item_action": 36,
+          "dialogue": 144516,
+          "party": 2826,
+          "overworld": 1818,
+          "party_action": 756,
+          "following objective": 11532,
+          "interacting": 1326,
+          "battle: switch": 1044,
+          "battle: fight": 2826,
+          "moves": 3762,
+          "yes_no": 792,
+          "battle": 36,
+          "finding another approach": 60,
+          "Hall of Fame ceremony": 11400,
+          "heal": 36,
+          "pc_root": 312,
+          "pc": 714,
+          "change_box": 504,
+          "training": 26820,
+          "using Cut": 72,
+          "planning the next expedition": 960
+        },
+        "initial_owned": 144,
+        "final_owned": 144
+      }
+    }
+  },
+  "limits": {
+    "preparation_game_minutes": 10,
+    "preparation_idle_game_minutes": 5,
+    "training_game_minutes": 50,
+    "productive_extension_game_minutes": 5,
+    "maximum_training_game_minutes": 100,
+    "training_idle_game_minutes": 2
+  },
+  "scope": "Training projects only. Other expedition deadlines are unchanged. Both replays begin during a League rematch and select different trainees. Raw XP totals are not a controlled training-speed comparison."
+}

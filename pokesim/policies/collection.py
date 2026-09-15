@@ -8,6 +8,7 @@ from pathlib import Path
 from .progression import Goal, object_goal, at
 from .navigation import DIRS
 from .director import AdventureDirector
+from . import training
 from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, EVENTS, event_set, object_hidden
 
 DATA = load('collection.json')
@@ -126,6 +127,9 @@ class Collection:
             self.pace = 'thorough'
         if self.eevee_choice not in (134, 135, 136):
             self.eevee_choice = 134
+        if self.project and self.project['method'] == 'train' and 'training_session' not in self.project:
+            self.remaining = max(self.remaining, training.TRAINING_BUDGET)
+            training.session(self.project)
         self.last_frame = None
         self.report_key = None
         self.progress_token = None
@@ -154,16 +158,18 @@ class Collection:
         self.progress_token = None
         return True
 
-    def observe(self,s, suspended=False, training_ready=True):
+    def observe(self,s, suspended=False, training_ready=True, training_active=None):
         delta = max(0,min(120,s.frame - self.last_frame)) if self.last_frame is not None else 0
         self.last_frame = s.frame
         self.elapsed += delta
         self.cooldown = max(0,self.cooldown-delta)
         self.completed_champion |= champion(s)
         self.attempts = {key: deadline for key, deadline in self.attempts.items() if deadline > self.elapsed}
-        if self.project and not suspended:
+        if self.project and (not suspended or self.project['method'] == 'train'):
             project = self.project
-            self.remaining -= delta
+            training_reason = None
+            if project['method'] != 'train':
+                self.remaining -= delta
             if len(self.project_flags) != len(s.event_flags):
                 self.project_flags = list(s.event_flags)
             new_flags = any(now & ~before for now, before in zip(s.event_flags, self.project_flags))
@@ -171,33 +177,43 @@ class Collection:
             token = (s.owned, s.badges, s.items, s.coins,
                      tuple(sorted((p.species, p.level, p.experience) for p in s.party)))
             if project['method'] == 'train':
+                gained = arrived = False
+                previous_gain = project.get('gains', {}).get('experience', 0)
                 trainee = self.trainee(s, project) if training_ready else None
                 if trainee is not None:
                     mon = s.party[trainee]
                     project['parent'] = mon.species
                     # Reaching the party is a one-time preparation milestone. Keep it
                     # in the project so menu transitions and reloads cannot repeat it.
-                    if 'initial_experience' not in project:
-                        self.idle_frames = 0
+                    arrived = 'initial_experience' not in project
                     baseline = project.setdefault('initial_experience', mon.experience)
                     gains = project.setdefault('gains', {})
                     gains['experience'] = max(gains.get('experience', 0), mon.experience - baseline)
                     gains['levels'] = max(gains.get('levels', 0), mon.level - project['initial_level'])
+                    gained = gains['experience'] > previous_gain
                     token = (mon.species, mon.level, mon.experience)
                 else:
                     token = None
-            # First visits and completed battles count toward an expedition. Walking between
-            # familiar maps, rearranging menus, and taking damage do not extend its deadline.
-            self.idle_frames += delta
-            if ((token is not None and self.progress_token is not None and token != self.progress_token)
-                    or new_flags or s.map not in self.project_maps
-                    or (self.project['method'] in ('grass', 'surf', 'fish', 'safari') or legendary_project(self.project))
-                    and self.was_in_battle and not s.in_battle):
-                self.idle_frames = 0
-            if s.map not in self.project_maps:
-                self.project_maps.append(s.map)
-            self.progress_token = token
-            self.was_in_battle = bool(s.in_battle)
+            if project['method'] == 'train':
+                active = (trainee is not None and not suspended
+                          and (training_active if training_active is not None else training_ready))
+                self.remaining, training_reason = training.observe(
+                    project, delta, self.remaining, active, gained, arrived)
+                clock = project['training_session']
+                self.idle_frames = clock['active_idle'] if active else clock['preparation_idle']
+            else:
+                # First visits and completed battles count toward an expedition. Walking between
+                # familiar maps, rearranging menus, and taking damage do not extend its deadline.
+                self.idle_frames += delta
+                if ((token is not None and self.progress_token is not None and token != self.progress_token)
+                        or new_flags or s.map not in self.project_maps
+                        or (self.project['method'] in ('grass', 'surf', 'fish', 'safari') or legendary_project(self.project))
+                        and self.was_in_battle and not s.in_battle):
+                    self.idle_frames = 0
+                if s.map not in self.project_maps:
+                    self.project_maps.append(s.map)
+                self.progress_token = token
+                self.was_in_battle = bool(s.in_battle)
             target = self.project.get('species')
             if (legendary_project(project) and not s.in_battle and dex(target) not in s.owned
                     and project.get('flag') and event_set(s.event_flags, project['flag'])):
@@ -215,7 +231,10 @@ class Collection:
                 finished = s.hall_of_fame_count > self.project['hof_count'] or s.map == MAPS['HALL_OF_FAME']
             if project['method'] == 'train':
                 finished = trainee is not None and s.party[trainee].level >= project['target_level']
-            if finished or self.remaining <= 0:
+            if training_reason and not s.in_battle and not finished:
+                self.abandon(training_reason)
+                return
+            if finished or (self.remaining <= 0 and (project['method'] != 'train' or not s.in_battle)):
                 label = name(target) if target else item.replace('_',' ').title() if item else self.project['method'].title()
                 if project['method'] == 'train':
                     label = f'{name(project["parent"])} toward level {project["target_level"]}'
@@ -227,7 +246,7 @@ class Collection:
                     self.attempts[self.project['key']] = retry
                 self.project = None
                 self.cooldown = 1200 if self.completed_champion else PACE[self.pace][1]
-            elif self.idle_frames >= 7200 and not s.in_battle:
+            elif project['method'] != 'train' and self.idle_frames >= 7200 and not s.in_battle:
                 self.abandon('No encounter, training gain, or new route in two minutes')
         key = (s.owned, s.items, s.stored_pokemon, tuple((p.species,p.level) for p in s.party), s.event_flags, s.hidden_objects, self.completed_champion, self.pace, self.version)
         if key != self.report_key:
@@ -317,6 +336,7 @@ class Collection:
     def details(self):
         return {**self.report,'hunt':self.project,'remaining_seconds':max(0,self.remaining//60),
                 'history':self.history, 'director': self.director.state_dict(),
+                'training': training.details(self.project, self.remaining),
                 'reason':'Collect, evolve, train, and explore in bounded projects. Repeated failures wait longer before retrying.'}
 
     def choose(self,s,nav,rng,main):
@@ -340,7 +360,15 @@ class Collection:
                 key = f'train:{project["parent"]}:{project["target_level"]}'
             if self.attempts.get(key,0) <= self.elapsed:
                 goal = self.goal(s, project)
-                if goal and goal.targets and distance_to(goal.targets) is not None:
+                distance = distance_to(goal.targets) if goal and goal.targets else None
+                if distance is not None:
+                    if project['method'] == 'train':
+                        work_distance = distance_to(training_targets(self.version, project['initial_level']))
+                        if work_distance is None:
+                            return
+                        preparation = distance + 80 if project.get('box') is not None else 0
+                        project['travel_distance'] = work_distance + preparation
+                        weight /= 1 + project['travel_distance'] / 80
                     candidates.append((weight,{**project,'key':key}))
         sources = self.sources()
         searched = set()
@@ -458,7 +486,7 @@ class Collection:
         self.project_maps = [s.map]
         self.project_flags = list(s.event_flags)
         self.progress_token = None
-        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) else 72000 if self.project['method']=='train' else 36000 if self.completed_champion else PACE[self.pace][0]
+        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) else training.TRAINING_BUDGET if self.project['method']=='train' else 36000 if self.completed_champion else PACE[self.pace][0]
         nav.path.clear()
         return self.goal(s)
 
@@ -527,7 +555,7 @@ class Collection:
                 return Goal('party_collection','Withdraw a training partner','Keep the main battlers and bring a reserve out of storage',CENTERS,'up',True)
             if p['method'] == 'train':
                 return Goal('collect_train', f'Train {name(s.party[index].species)} to level {p["target_level"]}',
-                            f'Level {s.party[index].level} of {p["target_level"]}. Raise a partner, then rotate projects',
+                            f'Level {s.party[index].level} of {p["target_level"]}. Stay with this partner while training is productive',
                             training_targets(self.version, s.party[index].level))
             evo=p['evolution']
             if evo['method']=='item':

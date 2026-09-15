@@ -1,4 +1,32 @@
-# Current games: rc27, include the party in PC rankings
+# Candidate rc28: productive training sessions with bounded preparation
+
+Training gets 50 game minutes of active work, excluding PC setup, travel, healing,
+and pickup detours. New trainee XP can extend the remaining window to five minutes,
+with a 100-minute active-training cap. Preparation has its own cumulative 10-minute
+budget and five-minute inactivity limit. Active training retains a two-minute
+no-XP limit. Strictly shorter routes and first withdrawal count toward preparation.
+Coordinate changes, repeated replans, other partners' XP, and restore operations do
+not refill the budgets. Counters persist in the project. Legacy active projects get
+one migration to the new session budget. Other expedition deadlines are unchanged.
+
+Candidate weights now account for travel to training and the cost of a PC visit.
+Training preparation skips social detours and random route deviations. Live displays
+preparation separately from active training, and completed outcomes retain both times.
+The existing level milestone remains the goal, so useful sessions continue with the
+same partner instead of rotating when the old budget expires.
+
+All 515 Python tests passed with one optional skip, along with both JavaScript test
+files and the Live script syntax check. Same-checkpoint one-hour game-time replays
+showed Red moving from five abandoned training projects and zero trainee levels to
+one continuing project and two levels. Blue completed a five-level Flareon target
+with the candidate and none with the baseline. Blue's baseline gained more raw XP
+with higher-level partners, so this is a project-continuity comparison, not a claim
+of higher XP per battle. Both replays preserved registrations with zero rewinds.
+The private inputs and traces are continuity subcases within the existing Red partial
+training and Blue training reproduction directories. See
+[the comparison](docs/validation/training-continuity-0.2.0rc28.json). Deployment is pending.
+
+# Previous games: rc27, include the party in PC rankings
 
 The PC now has a Party section alongside its twelve boxes. The combined scope and
 strongest shortcut include every party and boxed Pokémon, with every existing sort,
