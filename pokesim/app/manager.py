@@ -11,6 +11,7 @@ from logging.handlers import RotatingFileHandler
 import math
 import os
 from pathlib import Path
+import re
 import secrets
 import socket
 import sys
@@ -446,6 +447,14 @@ def create_app(manager, shutdown=lambda: None):
         adventure = manager.registry.adventure(aid)
         if path.startswith('internal') or path == 'api/trade' or '..' in path.split('/'):
             raise HTTPException(404)
+        sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)
+        if sprite and request.method in {'GET', 'HEAD'}:
+            dex = int(sprite[1])
+            if not 1 <= dex <= 151:
+                raise HTTPException(404)
+            image = manager.assets.sprite_path(aid, dex)
+            if image is not None:
+                return FileResponse(image, media_type='image/png')
         if adventure['state'] not in {'running', 'recovering'}:
             if path in {'', 'pc', 'pokedex', 'journal', 'trading'}:
                 from ..web.library import render_library

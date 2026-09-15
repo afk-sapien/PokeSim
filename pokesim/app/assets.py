@@ -43,6 +43,18 @@ class Assets:
             raise ValueError('Stored ROM verification failed')
         return path
 
+    def sprite_path(self, adventure_id, dex):
+        if not 1 <= dex <= 151:
+            return None
+        directories = (self.registry.root / 'adventures' / adventure_id / 'sprites',
+                       self.root / 'sprites')
+        for directory in directories:
+            root = directory.resolve()
+            path = (root / f'{dex}.png').resolve()
+            if path.parent == root and path.is_file():
+                return path
+        return None
+
     def prepare(self, report=lambda message: None):
         with self.guard:
             if self.reference_source and not self.game_data_dir.exists():

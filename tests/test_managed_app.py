@@ -98,3 +98,24 @@ def test_csrf_token_from_another_browser_cannot_authorize_a_write(client):
     assert first != second
     assert client.patch('/api/v1/settings', json={'max_running': 3}, headers=first).status_code == 403
     assert client.patch('/api/v1/settings', json={'max_running': 3}, headers=second).status_code == 200
+
+
+def test_shared_portraits_work_for_new_adventures_and_allow_local_overrides(client):
+    client, manager = client
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    shared = manager.assets.root / 'sprites'
+    shared.mkdir(parents=True)
+    (shared / '25.png').write_bytes(b'shared portrait')
+    first = manager.registry.create('First', 'fixture-rom', {'starter': 'random'}, identifier())
+    second = manager.registry.create('Later', 'fixture-rom', {'starter': 'random'}, identifier())
+    for row in (first, second):
+        response = client.get(f'/games/{row["id"]}/sprites/25.png')
+        assert response.headers['content-type'] == 'image/png'
+        assert response.content == b'shared portrait'
+    custom = manager.root / 'adventures' / first['id'] / 'sprites'
+    custom.mkdir()
+    (custom / '25.png').write_bytes(b'custom portrait')
+    assert client.get(f'/games/{first["id"]}/sprites/25.png').content == b'custom portrait'
+    assert client.get(f'/games/{second["id"]}/sprites/25.png').content == b'shared portrait'
+    assert client.get(f'/games/{second["id"]}/sprites/0.png').status_code == 404
+    assert client.get(f'/games/{second["id"]}/sprites/152.png').status_code == 404

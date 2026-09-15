@@ -112,6 +112,6 @@ If this sounds like your kind of background adventure, star the project and chec
 
 ## A small note on game content
 
-PokeSim is an unofficial fan project, unaffiliated with Pokémon's rights holders. Original code is [MIT licensed](LICENSE). Pokémon ROMs, portrait packs, and generated game datasets are supplied locally and are not included in the distribution. To use your own portraits, place PNGs at `data/sprites/1.png` through `151.png`. Otherwise, the dashboard uses a neutral placeholder.
+PokeSim is an unofficial fan project, unaffiliated with Pokémon's rights holders. Original code is [MIT licensed](LICENSE). Pokémon ROMs, portrait packs, and generated game datasets are supplied locally and are not included in the distribution. To use your own portraits, place `1.png` through `151.png` in the application's `assets/sprites` folder. Every adventure shares the pack. Legacy single-game mode uses `data/sprites`. Without a supplied image, the dashboard uses a neutral placeholder.
 
 AI coding assistance was used during development and testing. The automatic player uses local rules. See [third-party notices](THIRD_PARTY_NOTICES.md) and [dependency licensing](docs/licensing.md).

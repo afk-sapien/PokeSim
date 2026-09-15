@@ -55,6 +55,8 @@ Championship rewards and the one-time postgame Mew gift are separate optional cu
 
 The application folder contains its registry, installed assets, all adventure directories, interaction recovery records, and backups.
 
+To use an existing portrait pack, place `1.png` through `151.png` in `assets/sprites` inside this application folder. Every adventure shares these images, including games created later. An adventure's own `sprites` folder can override individual portraits. Packs stay local and are included in whole-application backups.
+
 Use **Settings and backups** for a consistent backup. The application coordinates saving before capturing the library. Alternatively, stop the application and copy its entire folder. Do not copy one participant's save files alone during a trade. Restore into an empty directory so an existing library cannot be overwritten accidentally.
 
 To choose another application folder:
