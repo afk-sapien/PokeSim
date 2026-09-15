@@ -5,6 +5,11 @@ September 15, 2026 UTC. The scoped live coordinator is now enabled for useful sp
 exchanges every 15 minutes. Individual trades need no further approval. The earlier
 approval requirements below are historical and superseded by this authorization.
 
+The first automatic exchange completed at 06:32 UTC: Red received MOCHI the Vulpix
+and Blue received DIRTNAP as Machamp. Red subsequently evolved MOCHI into Ninetales.
+Both games journaled the exchange once and resumed without retained holds. See
+[the live verification](validation/monitor-20260915-0659.json).
+
 # Previously proposed first exchange
 
 Red would send its spare DIRTNAP, a level-41 Machoke, and receive Blue's spare MOCHI,

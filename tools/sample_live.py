@@ -46,6 +46,20 @@ for edition, name, port in [('red', 'pokesim', 8930), ('blue', 'pokesim-blue', 8
     except Exception as error:
         sample['runs'][edition] = {'error': str(error)}
 try:
+    with urllib.request.urlopen('http://localhost:8950/api/proposals', timeout=10) as response:
+        board = json.load(response)
+    trading = board.get('trading', {})
+    sample['trading'] = {key: trading.get(key) for key in
+                         ('enabled', 'interval_seconds', 'completed', 'state', 'error',
+                          'last_check', 'last_trade')}
+    sample['trading']['opportunities'] = len(board.get('routine_proposals', []))
+    sample['trading']['recent_exchanges'] = [
+        {key: row.get(key) for key in ('id', 'ts', 'reason')}
+        for row in trading.get('history', [])[-3:]
+    ]
+except Exception as error:
+    sample['trading'] = {'error': str(error)}
+try:
     raw = subprocess.check_output(['docker', 'stats', '--no-stream', '--format', '{{json .}}',
                                    'pokesim', 'pokesim-blue'], text=True, timeout=10)
     sample['resources'] = [json.loads(line) for line in raw.splitlines()]

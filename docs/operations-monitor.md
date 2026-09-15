@@ -15,7 +15,9 @@ or an explicit user request. Both live games were confirmed at speed 0 on Septem
 UTC, after the user changed the speed. Red's saved compose setting was also changed
 from 1 to 0 without restarting the game. Blue already persisted 0. Earlier Red samples
 were collected at 1x, so account for that change when comparing progress per wall hour.
-The sampler now records speed and pause state alongside health and progress.
+The sampler now records speed and pause state alongside health and progress. It also
+records automatic trading status, completed count, last exchange time, useful proposal
+count, and at most three compact exchange records from the public board.
 
 The task heartbeat checks every 30 minutes. It stays quiet when nothing actionable
 changes. Report material findings, verified improvements, deployments, problems needing
@@ -287,3 +289,23 @@ remain healthy, unpaused, at unlimited speed with zero reloads and unchanged con
 start times. Follow up on the first completion and investigate prolonged safe-point
 waiting if the next monitor still finds no exchange. See
 [the activation receipt](validation/automatic-trading-enabled-20260915.json).
+
+
+## September 15, 06:59 UTC first automatic trade verified
+
+The coordinator completed the approved DIRTNAP and MOCHI exchange at 06:32 UTC.
+Red registered Vulpix, then autonomously evolved MOCHI into Ninetales in event 8360.
+Blue received Machamp through the trade evolution. Red now has 115 registered entries
+and Blue has 118. Both games journaled the transaction once, released their holds,
+and retained the same trade marker in later autosaves.
+
+The 32.85-minute interval preserved container start times, healthy workers, unlimited
+speed, and zero recovery reloads. Red completed one training, one supply, and one
+evolution project. Blue completed two training, two exploration, and one supply project.
+Local policy recoveries increased by 85 and 78. No new confirmed pickup keys appeared.
+Disk use is 83.2 percent with 16.47 GB free.
+
+The next exchange is waiting for both overworld states, with 12 useful proposals visible.
+The sampler now records compact trading status and was verified against the live board.
+Monitor the delay beyond the 15-minute minimum interval. No runtime deployment or game
+restart was needed. See [the verification](validation/monitor-20260915-0659.json).
