@@ -10,6 +10,9 @@ services:
     tmpfs:
       - /tmp
     command: ["python", "-u", "-m", "pokesim.trade.service", "--loop"]
+    # This worker has no HTTP server. Monitor its coordinator status and transactions.
+    healthcheck:
+      disable: true
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

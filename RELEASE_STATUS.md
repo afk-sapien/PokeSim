@@ -1,4 +1,4 @@
-# Release rc20: preserve missed legendary encounters
+# Current deployment: rc20, preserve missed legendary encounters
 
 A failed Articuno, Zapdos, Moltres, or Mewtwo encounter now returns after leaving its
 room and a persistent retry delay. The repair clears only its encounter-finished and
@@ -22,6 +22,21 @@ pending recovery through a restart, and continued without recovery rewinds. A gu
 return selected the restored Mewtwo after the normal retry wait, then ordinary policy
 navigation and battle controls caught it. The empty-ball run instead continued through
 League rematches. See [the replay evidence](docs/validation/legendary-recovery-0.2.0rc20.json).
+
+Both games, the board, and the coordinator run `pokesim:0.2.0rc20-39f409b`, tagged
+commit `39f409be5754b1ed7c6f44503a1e7047a1b514f8`. Fresh cold backups and current-save
+load checks passed. Both games and the board are healthy, with the games unpaused at
+maximum speed and zero recovery reloads. All 12 public checks passed. The coordinator
+runs with automatic trading and Championship rewards enabled and no reported error.
+Its Compose configuration now disables the inherited HTTP probe because this worker
+has no web server. Monitor its public status and transaction records instead.
+
+Red retained 122 registrations and Blue retained 124, including both Mewtwo catches.
+Red's previously missed Moltres was restored automatically, confirmed by journal event
+8655, after the pending retry in event 8653. Neither game was rewound. Reward ledgers
+remain at three delivered for Red and five for Blue, with no pending claims. The existing
+monitor follows future legendary attempts and resource exhaustion. This rollout starts
+a new endurance interval. See [the deployment receipt](docs/validation/release-0.2.0rc20.json).
 
 # Previous deployment: rc19, complete legendary expeditions
 
