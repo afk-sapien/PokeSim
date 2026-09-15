@@ -10,7 +10,7 @@ let signature = ''
 let residents = []
 $('#pc-search').value = params.get('q') || ''
 $('#pc-scope').value = params.get('scope') === 'all' ? 'all' : 'box'
-const sortDefaults = {box: 'asc', level: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
+const sortDefaults = {box: 'asc', power: 'desc', level: 'desc', HP: 'desc', Attack: 'desc', Defense: 'desc', Speed: 'desc', Special: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
 $('#pc-sort').value = Object.hasOwn(sortDefaults, params.get('sort')) ? params.get('sort') : 'box'
 $('#pc-order').value = ['asc', 'desc'].includes(params.get('order')) ? params.get('order') : sortDefaults[$('#pc-sort').value]
 
@@ -22,6 +22,7 @@ function statTotal(mon, field) {
 
 function sortValue(mon, field) {
   if (field === 'dvs' || field === 'stat_exp') return statTotal(mon, field)
+  if (['HP', 'Attack', 'Defense', 'Speed', 'Special'].includes(field)) return mon.calculated_stats?.[field] ?? null
   if (field === 'box') return mon.box * 20 + (mon.position || 0)
   if (field === 'nick') return mon.nick || mon.name || ''
   if (field === 'name') return mon.name || ''
@@ -84,7 +85,7 @@ function render() {
   $('#box-picker').innerHTML = counts.map((count, index) => `<button data-box="${index + 1}" aria-pressed="${index + 1 === selectedBox}" class="${index + 1 === selectedBox ? 'selected' : ''}"><span>Box ${index + 1}${index + 1 === storage?.active_box ? ' ●' : ''}</span><small>${count} / 20</small></button>`).join('')
   if (focusedBox) $(`[data-box="${focusedBox}"]`)?.focus()
   const focusedMon = document.activeElement?.dataset.mon
-  $('#pc-grid').innerHTML = residents.map((mon, index) => `<button class="pc-mon" data-mon="${index}" aria-label="${esc(mon.nick || mon.name)}, level ${mon.level}, box ${mon.box}"><span class="eyebrow">BOX ${mon.box} · SLOT ${mon.position || index + 1}</span><img loading="lazy" src="/sprites/${Number(mon.dex) || 0}.png" alt="" width="72" height="72"><strong>${esc(mon.nick || mon.name)}</strong><small>${esc(mon.name)} · Lv. ${mon.level}</small><span class="pc-metrics"><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span></button>`).join('') || `<p class="dex-empty">${query ? 'No partners match this search.' : all ? 'Your stored Pokémon will appear here.' : 'This box has room for new partners.'}</p>`
+  $('#pc-grid').innerHTML = residents.map((mon, index) => `<button class="pc-mon" data-mon="${index}" aria-label="${esc(mon.nick || mon.name)}, level ${mon.level}, box ${mon.box}"><span class="eyebrow">BOX ${mon.box} · SLOT ${mon.position || index + 1}</span><img loading="lazy" src="/sprites/${Number(mon.dex) || 0}.png" alt="" width="72" height="72"><strong>${esc(mon.nick || mon.name)}</strong><small>${esc(mon.name)} · Lv. ${mon.level}</small><span class="pc-metrics"><span class="pc-power">Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span></button>`).join('') || `<p class="dex-empty">${query ? 'No partners match this search.' : all ? 'Your stored Pokémon will appear here.' : 'This box has room for new partners.'}</p>`
   if (focusedMon) $(`[data-mon="${focusedMon}"]`)?.focus()
 }
 
@@ -92,7 +93,8 @@ function detail(mon) {
   const labels = ['HP', 'Attack', 'Defense', 'Speed', 'Special']
   const known = mon.dvs?.length === 5 && mon.stat_exp?.length === 5
   $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><img src="/sprites/${Number(mon.dex) || 0}.png" alt="" width="96" height="96"><p class="eyebrow">BOX ${mon.box} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2><p>${esc(mon.name)} · Level ${mon.level}</p></div>
-    ${known ? `<table class="individual-stats"><caption>Natural potential and training</caption><thead><tr><th>Stat</th><th>DV / 15</th><th>Stat experience</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.dvs[i]}</td><td>${mon.stat_exp[i].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${formatTotal(mon, 'dvs')} / 75</td><td>${formatTotal(mon, 'stat_exp')} / 327,675</td></tr></tfoot></table><p class="detail-meta">Total DVs include HP, which is derived from the other four DVs. DVs are fixed. Stat experience grows through training, up to 65,535 in each stat.</p>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'}
+    ${known ? `<table class="individual-stats"><caption>Calculated stats, potential, and training</caption><thead><tr><th>Stat</th><th>Value</th><th>DV / 15</th><th>Stat experience</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[i]}</td><td>${mon.stat_exp[i].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')} / 75</td><td>${formatTotal(mon, 'stat_exp')} / 327,675</td></tr></tfoot></table><p class="detail-meta">Total DVs include HP, which is derived from the other four DVs. DVs are fixed. Stat experience grows through training, up to 65,535 in each stat.</p>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'}
+    <p class="detail-meta">Power = max HP + Attack + Defense + Speed + Special. Values are calculated at this level from species, DVs, and stat experience, as on PC withdrawal. Moves, type matchups, and battle bonuses are not included.</p>
     <p class="detail-meta">${Number(mon.experience || 0).toLocaleString()} total experience</p>
     ${mon.dex ? `<a class="dex-open" href="/pokedex#${String(mon.dex).padStart(3, '0')}">View ${esc(mon.name)} in the Pokédex ↗</a>` : ''}`
   $('#pc-detail').showModal()
@@ -137,6 +139,12 @@ $('#mobile-box').onchange = (event) => {
 $('#pc-grid').onclick = (event) => {
   const button = event.target.closest('[data-mon]')
   if (button) detail(residents[Number(button.dataset.mon)])
+}
+$('#pc-strongest').onclick = () => {
+  $('#pc-scope').value = 'all'
+  $('#pc-search').value = ''
+  $('#pc-sort').value = 'power'
+  $('#pc-sort').onchange()
 }
 $('#pc-sort').onchange = () => {
   $('#pc-order').value = sortDefaults[$('#pc-sort').value]

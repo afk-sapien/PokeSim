@@ -1,3 +1,17 @@
+PC strength ranking, September 15: rc26 adds a Power sort across all boxes, a
+strongest-partners shortcut, individual stat sorts, and a five-stat breakdown. The
+score sums calculated max HP, Attack, Defense, Speed, and Special at the current
+level. It includes species, DVs, and stat experience with cartridge rounding.
+
+Next planner investigation: reduce training project churn. A live one-hour sample
+recorded 15 Red level-ups and one championship, plus 36 Blue level-ups, three
+championships, and an evolution. Four exchanges completed, and both Pokédex totals
+were 144. Progress exists, but recent training outcomes include incomplete gains
+and zero-gain deferrals. Measure travel, PC preparation, healing, and actual training
+separately. Check the 7,200-frame inactivity deadline against productive preparation
+at maximum speed, then replay copied saves before adjusting it. Prefer nearby
+training and sustained gains without restoring movement-only stall extensions.
+
 Current Victory Road recovery work, September 15: Red's depleted team could not find
 a route to healing and repeatedly replanned while trades kept its achievement line
 fresh. Red now runs rc25 and uses one ordinary Escape Rope attempt when a healing trip
