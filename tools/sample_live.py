@@ -55,7 +55,7 @@ try:
     trading = board.get('trading', {})
     sample['trading'] = {key: trading.get(key) for key in
                          ('enabled', 'interval_seconds', 'completed', 'state', 'error',
-                          'last_check', 'last_trade')}
+                          'last_check', 'last_trade', 'last_operation')}
     sample['trading']['opportunities'] = len(board.get('routine_proposals', []))
     sample['trading']['recent_exchanges'] = [
         {key: row.get(key) for key in ('id', 'ts', 'reason')}

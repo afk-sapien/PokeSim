@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0rc23",
+  "scope": "Coordinator scheduling, with peer controls and staging mocked. Gameplay and transaction code are unchanged.",
+  "scenario": "Both peers are safe, useful trade proposals exist, the trade cooldown has expired, and pending rewards remain through four fresh coordinator instances.",
+  "baseline_attempts": [
+    "league_reward",
+    "league_reward",
+    "league_reward",
+    "league_reward"
+  ],
+  "candidate_attempts": [
+    "league_reward",
+    "trade",
+    "league_reward",
+    "trade"
+  ],
+  "validated_guards": [
+    "Rewards bypass trade cooldown",
+    "No useful trade keeps reward delivery active",
+    "Unavailable board does not block pending rewards",
+    "Unsafe peers are never prepared",
+    "Skipped attempts cannot starve the other operation"
+  ],
+  "live_motivation": "The 13:24 sample had twelve completed trades, more than an hour since the last exchange, continuing Championship wins, and pending rewards. Safe-point availability also contributes to latency."
+}

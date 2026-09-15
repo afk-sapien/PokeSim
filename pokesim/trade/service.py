@@ -130,7 +130,10 @@ class Coordinator:
             status['history'] = (status['history'] + [row])[-50:]
             status['completed'] += 1
             status['last_trade'] = active['ts']
-        status.update(last_check=time.time(), state='ready', error=None)
+        # Persist the last attempted operation so backlogs alternate even after a
+        # skipped proposal, interrupted attempt, or coordinator restart.
+        status.update(last_check=time.time(), state='ready', error=None,
+                      last_operation=active.get('kind', 'trade'))
         write(status_path, status)
         self.active_path.unlink(missing_ok=True)
         # Keep bounded recovery artifacts, without deleting the current transaction.
@@ -164,9 +167,16 @@ class Coordinator:
             return
         # Avoid holding both games when the fresh proposal board has nothing useful.
         opportunities = []
-        if not reward_due:
-            with urllib.request.urlopen(self.config['board_url'] + '/api/proposals', timeout=20) as response:
-                opportunities = json.load(response).get('routine_proposals', [])
+        trade_turn = (reward_due and not trade_cooling
+                      and status.get('last_operation') == 'league_reward')
+        if not reward_due or trade_turn:
+            try:
+                with urllib.request.urlopen(self.config['board_url'] + '/api/proposals', timeout=20) as response:
+                    opportunities = json.load(response).get('routine_proposals', [])
+            except (OSError, ValueError):
+                if not reward_due:
+                    raise
+                # An unavailable board must not prevent an earned reward delivery.
         event_due = self.config.get('mew_event', False) and any(
             name not in status.get('mew_recipients', [])
             and 151 not in state.get('game', {}).get('dex_owned', [])
@@ -178,7 +188,7 @@ class Coordinator:
             write(status_path, status)
             return
         active = {'id': str(time.time_ns()), 'ts': time.time(), 'phase': 'preparing', 'prepared': [], 'targets': []}
-        if reward_due:
+        if reward_due and not opportunities:
             active['kind'] = 'league_reward'
         elif event_due:
             active['kind'] = 'mew_event'
