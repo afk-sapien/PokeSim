@@ -1,0 +1,83 @@
+{
+  "method": "Copied checkpoints, normal game controls, no RAM gifts or encounter resets",
+  "red_scope": "Complete prepared expedition from the copied Fuchsia City checkpoint",
+  "blue_scope": "Capture replay from a copied approach checkpoint produced by the full cave journey",
+  "findings": [
+    "Distant targets competed with nearby routine tasks",
+    "Trips expired during travel and route battles",
+    "Incidental catches consumed balls and storage",
+    "Capture damage estimates did not bound critical hits through Barrier"
+  ],
+  "runs": {
+    "red": {
+      "edition": "red",
+      "frames": 180016,
+      "wall_seconds": 83.38,
+      "rewinds": 0,
+      "initial_owned": 117,
+      "final_owned": 118,
+      "new_owned": [
+        150
+      ],
+      "achievements": [
+        {
+          "frame": 48668,
+          "type": "catch",
+          "title": "Caught the legendary Mewtwo!"
+        },
+        {
+          "frame": 50376,
+          "type": "item",
+          "title": "Picked up Ultra Ball"
+        }
+      ],
+      "history": [
+        "Will revisit: Mewtwo",
+        "Will revisit: Slowbro toward level 50",
+        "Changed plan: Explore. No encounter, training gain, or new route in two minutes",
+        "Completed: Mewtwo",
+        "Changed plan: Rematch. No encounter, training gain, or new route in two minutes",
+        "Changed plan: Lickitung. No encounter, training gain, or new route in two minutes"
+      ],
+      "checkpoint_sha256": "7a7b1f3fcc873461adfa897079e9273da64f1690edc45650fa50f0551a6b7c8f",
+      "policy_fingerprint": "c2fd2c01c85247a8fcd72dadeb43bea5c24316e8b9b9ccfa9f6c01a07ebee979",
+      "pyboy": "2.7.0",
+      "final_map": "Route 6"
+    },
+    "blue": {
+      "edition": "blue",
+      "frames": 30014,
+      "wall_seconds": 8.59,
+      "rewinds": 0,
+      "initial_owned": 121,
+      "final_owned": 122,
+      "new_owned": [
+        150
+      ],
+      "achievements": [
+        {
+          "frame": 7756,
+          "type": "catch",
+          "title": "Caught the legendary Mewtwo!"
+        },
+        {
+          "frame": 9194,
+          "type": "item",
+          "title": "Picked up Ultra Ball"
+        }
+      ],
+      "history": [
+        "Will revisit: Wigglytuff toward level 30",
+        "Completed: Rematch",
+        "Will revisit: Mewtwo",
+        "Changed plan: Train. No encounter, training gain, or new route in two minutes",
+        "Changed plan: Train. No encounter, training gain, or new route in two minutes",
+        "Completed: Mewtwo"
+      ],
+      "checkpoint_sha256": "466c7393aa3d685837e2406e46d434974992bdecbd6608e7632a6e21368d2f92",
+      "policy_fingerprint": "c2fd2c01c85247a8fcd72dadeb43bea5c24316e8b9b9ccfa9f6c01a07ebee979",
+      "pyboy": "2.7.0",
+      "final_map": "Cerulean Cave B1F"
+    }
+  }
+}

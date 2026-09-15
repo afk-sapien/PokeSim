@@ -186,8 +186,18 @@ def healing_item(items, mon, incoming=0):
     return min(choices)[1] if choices else None
 
 
-def shopping_item(items, stock, money, league=False, collecting=False):
+def shopping_item(items, stock, money, league=False, collecting=False, legendary=False):
     counts = dict(items)
+    if legendary and not counts.get(ITEMS['MASTER_BALL']):
+        if ITEMS['ULTRA_BALL'] not in stock:
+            return None
+        repel = next((name for name in ('MAX_REPEL', 'SUPER_REPEL', 'REPEL') if ITEMS[name] in stock), 'MAX_REPEL')
+        for name, target in (('ULTRA_BALL', 20), (repel, 3), ('HYPER_POTION', 5)):
+            item = ITEMS[name]
+            if item in stock and counts.get(item, 0) < target and PRICES[item] <= money - 300:
+                if item in counts or len(items) < 20:
+                    return item
+        return None
     desired = {ITEMS["POKE_BALL"]: 5, ITEMS["POTION"]: 3, ITEMS["SUPER_POTION"]: 3,
                ITEMS["ANTIDOTE"]: 2, ITEMS["PARLYZ_HEAL"]: 1}
     if league:
@@ -217,11 +227,15 @@ class Decision:
     reason: str = ""
 
 
-def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, catch_attempts=0, required_move=None, collect_missing=False):
+def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, catch_attempts=0, required_move=None, collect_missing=False, capture_species=None):
     if (snapshot.in_battle == 1
             and MAPS['POKEMON_TOWER_1F'] <= snapshot.map <= MAPS['POKEMON_TOWER_7F']
             and not dict(snapshot.items).get(ITEMS['SILPH_SCOPE'])):
         return Decision('run', reason='Leave the unidentified ghost until the Silph Scope is obtained')
+    if (capture_species is not None and snapshot.in_battle == 1 and snapshot.battle_type == 0
+            and enemy.species != capture_species
+            and SPECIES.get(enemy.species, {}).get('dex') not in (144, 145, 146, 150)):
+        return Decision('run', reason='Save time and supplies for the legendary expedition')
     moves = ranked_moves(me, enemy, used_status)
     slot = moves[0][1] if moves else 0
     incoming = max((damage(mid, enemy, me) for mid in enemy.moves if mid), default=me.max_hp * 0.2)
@@ -233,7 +247,9 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     safe = me.hp > incoming * 1.5 and not me.status
     balls = [(i, item) for item in BALLS for i, (bag_item, qty) in enumerate(snapshot.items) if bag_item == item and qty > 0]
     legendary = known.get('dex') in (144,145,146,150)
-    collection_target = collect_missing and missing_species
+    allowed_capture = capture_species is None or enemy.species == capture_species or legendary
+    useful = useful and allowed_capture
+    collection_target = collect_missing and missing_species and allowed_capture
     capture_limit = 10000 if legendary else 20
     master = next((i for i,(item,qty) in enumerate(snapshot.items) if item==ITEMS['MASTER_BALL'] and qty),None)
     if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and collection_target and catch_attempts < capture_limit and (balls or legendary and master is not None):
@@ -243,21 +259,21 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
         if me.hp <= incoming * 1.5 and healing is not None:
             return Decision('item',healing,active,'Keep the catcher healthy while preserving the wild Pokémon')
         status_moves = [(MOVES[mid]['accuracy'],i) for i,(mid,pp) in enumerate(zip(me.moves,me.pp))
-                        if pp and mid not in used_status and MOVES.get(mid,{}).get('effect') in ('SLEEP_EFFECT','PARALYZE_EFFECT')
+                        if pp and MOVES.get(mid,{}).get('effect') in ('SLEEP_EFFECT','PARALYZE_EFFECT')
                         and effectiveness(MOVES[mid]['type'],enemy.types)]
-        if not enemy.status and status_moves and me.hp > incoming:
+        if not enemy.status and status_moves and (me.hp > incoming or me.speed > enemy.speed):
             return Decision('fight',max(status_moves)[1],reason='Use sleep or paralysis to help the catch')
         if can_switch and not enemy.status and not status_moves:
             catchers = [(p.hp,i) for i,p in enumerate(snapshot.party) if i!=active and p.hp>p.max_hp*0.7 and not p.status
                         and any(pp and MOVES.get(mid,{}).get('effect') in ('SLEEP_EFFECT','PARALYZE_EFFECT')
                                 and effectiveness(MOVES[mid]['type'],enemy.types) for mid,pp in zip(p.moves,p.pp))
-                        and p.hp > 2 * max((damage(mid,enemy,p) for mid in enemy.moves),default=0)]
+                        and p.hp > max((damage(mid,enemy,p) for mid in enemy.moves),default=0)]
             if catchers:
                 return Decision('switch',max(catchers)[1],reason='Bring in a healthy catcher with sleep or paralysis')
         weakening = [(score,i) for score,i in moves if MOVES[me.moves[i]]['effect'] not in
                      ('EXPLODE_EFFECT','RECOIL_EFFECT','OHKO_EFFECT','TWO_TO_FIVE_ATTACKS_EFFECT')
                      and 0 < damage(me.moves[i],me,enemy) * 2.5 < enemy.hp]
-        if enemy.hp > enemy.max_hp*0.4 and weakening and not enemy.status:
+        if not legendary and enemy.hp > enemy.max_hp*0.4 and weakening and not enemy.status:
             return Decision('fight',max(weakening)[1],reason='Use a gentle attack with a margin for critical damage')
         return Decision('item',balls[-1][0],reason='Catch the missing Pokédex entry without risking a knockout')
     if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and useful and balls and safe and catch_attempts < (12 if required else 5):
