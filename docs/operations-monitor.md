@@ -621,3 +621,47 @@ claim. Continue measuring safe-point timeout frequency, pending rewards, and use
 trades while preserving the game processes. Free disk space was 18.28 GB after the
 new image and compressed backup. Retain rc20 through rc24 to cover the current
 services and their rollback images.
+
+
+## September 15, 15:27 UTC reward queues clear and journal investigation
+
+The 31.59-minute interval preserved both rc22 game starts, maximum speed, zero save
+reloads, and zero container restarts. Red reached 143 registrations and Blue remained
+at 143. Red completed two supply projects, and Blue completed another training project.
+The journals recorded forty Red level events and thirty-one Blue level events. Recent
+Blue training outcomes included 5,870 XP and one level, 6,830 XP and one level, and
+10,395 XP and three levels. No new ground pickups were observed in this interval.
+
+The rc24 coordinator completed trades sixteen and seventeen. Red registered Gengar,
+then Magmar. Blue recovered a missing collection partner, then received a stronger
+partner. The new trade intervals were 905.10 and 929.71 seconds, close to the configured
+900-second minimum. Red received six Championship rewards and Blue received three.
+Both queues were empty at the sample, with 26 Red rewards and 27 Blue rewards earned
+and delivered. Five Red box slots and six Blue slots were free at the detailed check.
+One additional bounded preparation timeout appeared in the coordinator log. The
+coordinator and both games had no active holds when inspected, with no current error.
+Free disk space stayed near 18.25 GB. See
+[the interval record](validation/monitor-20260915-1527.json).
+
+Repeated Diglett release journal messages prompted a separate copied Red replay. It
+reproduced a false Wigglytuff release at frame 53,118, while the cartridge text said
+PIXEL was taken out and PIXEL remained in the party. At frame 53,026, the incomplete
+party structure temporarily reported 251 HP against a stale maximum of 195. This
+invalid snapshot replaced the last valid event baseline. The following valid snapshot
+therefore failed to record the arrival before the box entry disappeared.
+
+The candidate retains a recent valid event baseline across at most 120 invalid frames.
+Health and policy still receive the actual invalid snapshot, and longer gaps reset
+the baseline. The same 54,000-frame replay suppresses the false release, with the same
+party and box contents at confirmation. Three integration regressions failed before
+the change and pass afterward, including preservation of real release events. All
+481 Python tests passed, with one optional skip. Original copied checkpoint hashes
+were unchanged. The temporary source is `/tmp/pokesim-director/pc-check-1530`, leaving
+the eight retained private reproduction cases unchanged. See
+[the comparison](validation/pc-invalid-write-20260915.json).
+
+This journal-only correction is committed for the next necessary game release. No
+runtime deployment or restart was performed. Preserve the current endurance interval,
+which had reached about four hours and twenty-three minutes at the sample. Continue
+monitoring useful progress and recurring transfer messages without treating these
+messages alone as evidence that a Pokémon was lost.
