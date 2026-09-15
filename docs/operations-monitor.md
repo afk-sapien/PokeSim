@@ -873,3 +873,52 @@ The board retained its process and coordinator rc24 resumed at
 2026-09-15T17:59:31.05231564Z. Both games resumed healthy at maximum speed with existing
 registrations. See the [Red receipt](validation/release-0.2.0rc28-red.json) and
 [Blue receipt](validation/release-0.2.0rc28-blue.json).
+
+
+## September 15, productive healing cycles retain their training partner
+
+The rc28 follow-up caught a cumulative preparation limit ending Red's session after
+19,383 trainee XP and three levels. Blue completed a Porygon training milestone with
+7,117 XP and two levels. Both games remained healthy at maximum speed with zero reloads.
+See [the live evidence](validation/training-live-0.2.0rc28.json).
+
+rc29 renews the preparation allowance only on new trainee XP. Repeated readings and
+other partners' gains do not renew it. Active training keeps its 50-minute budget and
+100-minute cap, while all preparation and work together cap at 150 game minutes.
+The five-minute preparation and two-minute training inactivity limits remain.
+Tests explicitly cover repeated productive healing, repeated XP readings, and the
+combined hard limit. The isolated release passed 517 Python tests with one optional
+skip, both JavaScript test files, Live syntax, lockfile, and package checks. Unrelated
+trading-page work in the shared checkout was excluded from the release. Final copied
+replays retained the rc28 results: Red stayed with one partner and gained two levels,
+while Blue completed a five-level milestone. No rewinds were used. See
+[the corrected comparison](validation/training-continuity-0.2.0rc29.json).
+
+Both games were deployed from tag v0.2.0rc29 after verified compressed cold backups
+and saved-game load checks. Their previous intervals ended at
+1195 seconds for Red and
+1193 seconds for Blue. New starts are
+2026-09-15T18:18:36.073721542Z and 2026-09-15T18:19:32.712199958Z.
+The board retained its process and coordinator rc24 resumed at
+2026-09-15T18:19:35.033012842Z. Existing registrations and maximum speed were preserved.
+Monitor completed training goals, preparation cost, and actual trainee XP rather than
+movement. Cave navigation remains a separate source of recoveries. See the
+[Red receipt](validation/release-0.2.0rc29-red.json) and
+[Blue receipt](validation/release-0.2.0rc29-blue.json).
+
+
+The public rc29 follow-up confirmed both healthy, unpaused games at maximum speed
+with zero recovery reloads and 144 registrations each. Red's ongoing training
+project had reached 66 active game minutes and five total trainee levels, with a
+fresh post-deployment level-up to 75. Its preparation allowance had renewed through
+new XP. Blue's carried-over session reached the 100-minute active cap with eight
+total trainee levels, then ended as advanced instead of running indefinitely. Its
+latest post-deployment event reached level 38. These projects began before rc29, so
+the total gains are not all attributed to this release. Trading was ready with 28
+completed exchanges and no reported error. Free disk space was 15,967,289,344 bytes.
+See [the live check](validation/training-live-0.2.0rc29.json).
+
+The existing 30-minute monitor was updated with rc29 timings, exact deployment
+starts and backups, and the corrected preparation rules. It now prioritizes
+completed training milestones, trainee XP, preparation costs, and repeated failures.
+It remains quiet for routine unchanged samples. Multi-day endurance remains unverified.

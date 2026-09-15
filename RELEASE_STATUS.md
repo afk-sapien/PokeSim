@@ -1,4 +1,4 @@
-# Candidate rc29: renew preparation only through real training gains
+# Current games: rc29, renew preparation only through real training gains
 
 The rc28 live follow-up found Red had gained 19,383 trainee XP and three levels,
 but its productive session ended because several healing trips exhausted the
@@ -17,7 +17,21 @@ The isolated release passed all 517 Python tests with one optional skip, both
 JavaScript test files, Live syntax, lockfile, and package checks. Final copied-save
 replays retained the rc28 continuity results with no rewinds. See
 [the rc29 comparison](docs/validation/training-continuity-0.2.0rc29.json).
-Deployment is pending.
+Both games run `pokesim:0.2.0rc29-4f0587e` from tagged source
+`4f0587e2b45e0178d0e6ce22d0facdd163c5368a`. Each passed a verified compressed cold
+backup and saved-game load check, then resumed healthy at maximum speed with existing
+registrations preserved. Red started at 2026-09-15T18:18:36.073721542Z and Blue at
+2026-09-15T18:19:32.712199958Z. The board retained its process and coordinator rc24 resumed.
+See the [Red receipt](docs/validation/release-0.2.0rc29-red.json) and
+[Blue receipt](docs/validation/release-0.2.0rc29-blue.json).
+
+A public follow-up confirmed both games healthy and unpaused at maximum speed,
+with zero recovery reloads. Red was still training after 66 active game minutes,
+with fresh XP renewing its preparation allowance. Blue's ongoing project stopped
+at the 100-minute active cap after eight total trainee levels. Those projects began
+before rc29, so their full gains cannot be attributed to this release. Automatic
+trading was ready with 28 completed exchanges. The existing 30-minute monitor now
+tracks these training rules. See [the live check](docs/validation/training-live-0.2.0rc29.json).
 
 # Previous games: rc28, productive training sessions with bounded preparation
 

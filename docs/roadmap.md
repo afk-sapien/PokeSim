@@ -1,10 +1,10 @@
-Training follow-up, rc29: real trainee XP renews the separate preparation allowance.
+Training follow-up deployed to both games, rc29: real trainee XP renews the separate preparation allowance.
 The rc28 live run exposed cumulative healing time ending a session after three gained
 levels. The correction retains the longer active budget and strict inactivity checks,
 while adding a 150-game-minute combined limit. Monitor completed milestones and the
 ratio of preparation to active training. More walking alone must never extend a project.
 
-Training continuity deployed to both games, September 15: rc28 gives training
+The initial September 15 rc28 rollout gave training
 50 active game minutes, excluding preparation. Genuine trainee XP extends the
 remaining window to five minutes, with a 100-minute active cap. Preparation has a
 separate cumulative 10-minute budget and a five-minute inactivity limit. Training
