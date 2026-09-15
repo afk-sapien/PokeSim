@@ -227,144 +227,6 @@
       ]
     }
   ],
-  "runs": {
-    "red": {
-      "version": "0.2.0rc19",
-      "health": {
-        "ok": true,
-        "worker_alive": true,
-        "activity_age_seconds": 0.0,
-        "error": null
-      },
-      "speed": 0.0,
-      "paused": false,
-      "reloads": 0,
-      "league_rewards": {
-        "earned": 2,
-        "delivered": 2,
-        "pending": 0
-      },
-      "owned": 120,
-      "mewtwo_registered": true,
-      "objective": {
-        "id": "collect_train",
-        "title": "Train Butterfree to level 30",
-        "reason": "Level 28 of 30. Raise a partner, then rotate projects",
-        "targets": [
-          [
-            18,
-            8,
-            2
-          ],
-          [
-            18,
-            8,
-            3
-          ],
-          [
-            18,
-            8,
-            4
-          ],
-          [
-            18,
-            8,
-            5
-          ],
-          [
-            18,
-            9,
-            2
-          ],
-          [
-            18,
-            9,
-            3
-          ],
-          [
-            18,
-            9,
-            4
-          ],
-          [
-            18,
-            9,
-            5
-          ]
-        ],
-        "target_count": 6803,
-        "facing": null
-      },
-      "project": {
-        "method": "train",
-        "parent": 125,
-        "family": [
-          125
-        ],
-        "box": 5,
-        "initial_level": 27,
-        "target_level": 30,
-        "key": "train:125:30",
-        "initial_experience": 20818,
-        "gains": {
-          "experience": 1359,
-          "levels": 1
-        }
-      }
-    },
-    "blue": {
-      "version": "0.2.0rc19",
-      "health": {
-        "ok": true,
-        "worker_alive": true,
-        "activity_age_seconds": 0.0,
-        "error": null
-      },
-      "speed": 0.0,
-      "paused": false,
-      "reloads": 0,
-      "league_rewards": {
-        "earned": 4,
-        "delivered": 4,
-        "pending": 0
-      },
-      "owned": 122,
-      "mewtwo_registered": false,
-      "objective": {
-        "id": "restock",
-        "title": "Restock supplies",
-        "reason": "Buy useful balls and medicine with a cash reserve",
-        "targets": [
-          [
-            172,
-            2,
-            5
-          ],
-          [
-            152,
-            2,
-            5
-          ],
-          [
-            174,
-            2,
-            5
-          ]
-        ],
-        "target_count": 3,
-        "facing": "left"
-      },
-      "project": {
-        "map": 227,
-        "method": "static",
-        "fragment": "MEWTWO",
-        "flag": "EVENT_BEAT_MEWTWO",
-        "species": 131,
-        "legendary": true,
-        "key": "legendary:131:227"
-      }
-    }
-  },
   "public_checks": [
     {
       "edition": "red",
@@ -548,5 +410,144 @@
         }
       ]
     }
-  }
+  },
+  "runs_at_initial_verification": {
+    "red": {
+      "version": "0.2.0rc19",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "league_rewards": {
+        "earned": 2,
+        "delivered": 2,
+        "pending": 0
+      },
+      "owned": 120,
+      "mewtwo_registered": true,
+      "objective": {
+        "id": "collect_train",
+        "title": "Train Butterfree to level 30",
+        "reason": "Level 28 of 30. Raise a partner, then rotate projects",
+        "targets": [
+          [
+            18,
+            8,
+            2
+          ],
+          [
+            18,
+            8,
+            3
+          ],
+          [
+            18,
+            8,
+            4
+          ],
+          [
+            18,
+            8,
+            5
+          ],
+          [
+            18,
+            9,
+            2
+          ],
+          [
+            18,
+            9,
+            3
+          ],
+          [
+            18,
+            9,
+            4
+          ],
+          [
+            18,
+            9,
+            5
+          ]
+        ],
+        "target_count": 6803,
+        "facing": null
+      },
+      "project": {
+        "method": "train",
+        "parent": 125,
+        "family": [
+          125
+        ],
+        "box": 5,
+        "initial_level": 27,
+        "target_level": 30,
+        "key": "train:125:30",
+        "initial_experience": 20818,
+        "gains": {
+          "experience": 1359,
+          "levels": 1
+        }
+      }
+    },
+    "blue": {
+      "version": "0.2.0rc19",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "league_rewards": {
+        "earned": 4,
+        "delivered": 4,
+        "pending": 0
+      },
+      "owned": 122,
+      "mewtwo_registered": false,
+      "objective": {
+        "id": "restock",
+        "title": "Restock supplies",
+        "reason": "Buy useful balls and medicine with a cash reserve",
+        "targets": [
+          [
+            172,
+            2,
+            5
+          ],
+          [
+            152,
+            2,
+            5
+          ],
+          [
+            174,
+            2,
+            5
+          ]
+        ],
+        "target_count": 3,
+        "facing": "left"
+      },
+      "project": {
+        "map": 227,
+        "method": "static",
+        "fragment": "MEWTWO",
+        "flag": "EVENT_BEAT_MEWTWO",
+        "species": 131,
+        "legendary": true,
+        "key": "legendary:131:227"
+      }
+    }
+  },
+  "both_live_mewtwo_captures_confirmed": true
 }
