@@ -1,0 +1,255 @@
+{
+  "containers": {
+    "pokesim": {
+      "image": "pokesim:0.2.0rc18-2b7365b",
+      "image_id": "sha256:fe4cace9a935abc378b4fd6b73865b4931a3efa600879ccbc925d79cea1500bb",
+      "started_at": "2026-09-15T07:51:30.544368557Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-blue": {
+      "image": "pokesim:0.2.0rc18-2b7365b",
+      "image_id": "sha256:fe4cace9a935abc378b4fd6b73865b4931a3efa600879ccbc925d79cea1500bb",
+      "started_at": "2026-09-15T07:51:50.127975797Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-broker": {
+      "image": "pokesim:0.2.0rc18-2b7365b",
+      "image_id": "sha256:fe4cace9a935abc378b4fd6b73865b4931a3efa600879ccbc925d79cea1500bb",
+      "started_at": "2026-09-15T07:52:20.270439324Z",
+      "restarts": 0,
+      "health": "healthy"
+    },
+    "pokesim-trading": {
+      "image": "pokesim:0.2.0rc18-2b7365b",
+      "image_id": "sha256:fe4cace9a935abc378b4fd6b73865b4931a3efa600879ccbc925d79cea1500bb",
+      "started_at": "2026-09-15T07:52:20.703924296Z",
+      "restarts": 0,
+      "health": "starting"
+    }
+  },
+  "game_deployments": {
+    "red": {
+      "edition": "red",
+      "backup": "/docker/pokesim/backups/20260915T075115Z-rc18/before.tar",
+      "image": "pokesim:0.2.0rc18-2b7365b",
+      "image_id": "sha256:fe4cace9a935abc378b4fd6b73865b4931a3efa600879ccbc925d79cea1500bb",
+      "revision": "2b7365b583dc0b2f9c1eba0214658400e194e3ef",
+      "timestamp": 1789458693.8382487,
+      "previous_image": "pokesim:0.2.0rc17-646b32b",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 116,
+      "reloads": 0,
+      "progress": {
+        "state": "exploring",
+        "last_achievement": {
+          "id": 8531,
+          "title": "WETLASAGNA grew to level 25",
+          "ts": 1789458544.5093186,
+          "age_seconds": 149
+        }
+      }
+    },
+    "blue": {
+      "edition": "blue",
+      "backup": "/docker/pokesim-blue/backups/20260915T075145Z-rc18/before.tar",
+      "image": "pokesim:0.2.0rc18-2b7365b",
+      "image_id": "sha256:fe4cace9a935abc378b4fd6b73865b4931a3efa600879ccbc925d79cea1500bb",
+      "revision": "2b7365b583dc0b2f9c1eba0214658400e194e3ef",
+      "timestamp": 1789458712.3276527,
+      "previous_image": "pokesim:0.2.0rc17-646b32b",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 119,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 3664,
+          "title": "JELLYBEAN grew to level 27",
+          "ts": 1789458701.2363975,
+          "age_seconds": 11
+        }
+      }
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "league_rewards": true,
+    "allow_last_copies": true,
+    "mew_event": false,
+    "completed": 3,
+    "state": "ready",
+    "error": null,
+    "events": null
+  },
+  "last_trade": [
+    {
+      "id": "1789458743404234828",
+      "ts": 1789458743.4042366,
+      "reason": "Red registers Alakazam. Blue registers Alakazam",
+      "moved": [
+        {
+          "instance": "red",
+          "box": 1,
+          "position": 3,
+          "sent": {
+            "species": 38,
+            "name": "Kadabra",
+            "level": 49,
+            "nick": "SOUPCRIME"
+          },
+          "received": {
+            "species": 149,
+            "name": "Alakazam",
+            "level": 49,
+            "nick": "BORKUS",
+            "evolved_from": 38
+          },
+          "state": "/trading/transactions/1789458743404234828/after/red/auto-v1-trade-1789458743404234828.state",
+          "owned_before": 116,
+          "owned_after": 117
+        },
+        {
+          "instance": "blue",
+          "box": 1,
+          "position": 5,
+          "sent": {
+            "species": 38,
+            "name": "Kadabra",
+            "level": 49,
+            "nick": "BORKUS"
+          },
+          "received": {
+            "species": 149,
+            "name": "Alakazam",
+            "level": 49,
+            "nick": "SOUPCRIME",
+            "evolved_from": 38
+          },
+          "state": "/trading/transactions/1789458743404234828/after/blue/auto-v1-trade-1789458743404234828.state",
+          "owned_before": 119,
+          "owned_after": 120
+        }
+      ]
+    }
+  ],
+  "observed_at": 1789458768.919833,
+  "runs": {
+    "red": {
+      "version": "0.2.0rc18",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.5,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 117,
+      "league_rewards": {
+        "earned": 0,
+        "delivered": 0,
+        "pending": 0
+      }
+    },
+    "blue": {
+      "version": "0.2.0rc18",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 120,
+      "league_rewards": {
+        "earned": 0,
+        "delivered": 0,
+        "pending": 0
+      }
+    }
+  },
+  "public_checks": [
+    {
+      "edition": "red",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/sprites/25.png",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/sprites/25.png",
+      "status": 200
+    }
+  ],
+  "python_tests": {
+    "passed": 422,
+    "skipped": 1
+  },
+  "javascript_test_files_passed": 2,
+  "reward_board_verified": true,
+  "reward_rehearsal_used_simulated_earned_claims": true
+}
