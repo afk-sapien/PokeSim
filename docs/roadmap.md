@@ -1,21 +1,20 @@
 Current Victory Road recovery work, September 15: Red's depleted team could not find
 a route to healing and repeatedly replanned while trades kept its achievement line
-fresh. The rc25 candidate uses one ordinary Escape Rope attempt when a healing trip
+fresh. Red now runs rc25 and uses one ordinary Escape Rope attempt when a healing trip
 requires recovery in Victory Road. The attempt survives saves and trades and cannot
 repeat until the party is fully healed. Without a rope, ordinary navigation recovery
 continues. The copied run escaped, healed at Saffron, and resumed training. This is a
-bounded retreat fallback, not a repair of every cave route. Include the previously
-validated journal correction in the Red release. Preserve the healthy Blue process.
+bounded retreat fallback, not a repair of every cave route. The Red release includes the previously
+validated journal correction. Blue remains on rc22 with unchanged uptime.
 See [the copied comparison](validation/victory-escape-0.2.0rc25.json).
 
-Validated for the next game release, September 15: preserve a recent valid event
+Journal correction deployed to Red and pending for Blue, September 15: preserve a recent valid event
 baseline across up to 120 frames of invalid party RAM during PC transfers. The copied
 Red replay previously called a Wigglytuff withdrawal a release after seeing HP exceed
 the stale maximum HP for one observation. The corrected replay keeps the withdrawal
 credit and records no release. Health and policy continue receiving the actual snapshot.
-All 481 Python tests pass, with one optional skip. This is committed source work, not a
-live deployment. Batch it into the next necessary game update to preserve the current
-endurance interval. See [the reproduction](validation/pc-invalid-write-20260915.json).
+All 481 Python tests pass, with one optional skip. Red received this correction with its rc25 recovery deployment. Blue will receive it
+in its next necessary game update, preserving the current Blue endurance interval. See [the reproduction](validation/pc-invalid-write-20260915.json).
 
 Current safe-point work, September 15: coordinator rc24 requests a safe checkpoint
 from each available game independently within one shared 15-second retry window. Only
@@ -29,7 +28,7 @@ Current exchange scheduling, September 15: coordinator rc23 prevents a constant
 Championship reward backlog from monopolizing safe points. An overdue useful trade gets
 the turn after a reward attempt. Reward delivery continues during trade cooldown and
 when no useful proposal exists or the board is unavailable. Persisted turn state survives
-coordinator restarts. The games remain on rc22 with unchanged starts. See
+coordinator restarts. Blue remains on rc22 with its original start, while Red now runs rc25 after its healing recovery update. See
 [the regression](validation/trade-fairness-0.2.0rc23.json).
 
 Current release storage work, September 15: legacy cold backups are compressed with

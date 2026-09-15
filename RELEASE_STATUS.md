@@ -1,4 +1,4 @@
-# Candidate rc25 for Red: retreat from a stalled healing trip
+# Current Red: rc25, retreat from a stalled healing trip
 
 Red spent roughly 25 minutes failing to leave Victory Road with a depleted team.
 Recent trades masked the lack of local progress in its achievement display. A copied
@@ -13,7 +13,14 @@ PC journal correction below. All 490 Python tests passed, with one optional skip
 Both JavaScript test files and package checks passed. See
 [the escape comparison](docs/validation/victory-escape-0.2.0rc25.json).
 
-# Validated journal correction for the next game release
+Red was upgraded from rc22 after a verified compressed cold backup and successful
+current-save load check. The first live follow-up found it on Route 9 with a healed
+party and a new Kangaskhan training objective. Its Escape Rope was consumed normally.
+The next live sample confirmed that Kangaskhan gained 15,961 XP and three levels.
+Blue and the board retained their processes. The rc24 coordinator resumed after the
+short deployment stop. See [the deployment receipt](docs/validation/release-0.2.0rc25.json).
+
+# Journal correction deployed to Red, pending for Blue
 
 A short invalid party RAM write during withdrawal erased the event detector's valid
 comparison point. The copied Red replay reported a Wigglytuff release while PIXEL was
@@ -23,9 +30,8 @@ Longer invalid gaps expire the baseline. The replay suppresses the false release
 integration tests retain real release events. All 481 Python tests pass, with one optional
 skip. See [the comparison](docs/validation/pc-invalid-write-20260915.json).
 
-This correction is validated source work and is not deployed. Include it in the next
-necessary game release. Both live games remain on rc22 to preserve their current
-endurance interval. The coordinator remains on rc24.
+This correction is deployed to Red in rc25. Blue remains on rc22 and will receive it
+in its next necessary game release. The coordinator remains on rc24.
 
 # Current coordinator: rc24, independent safe points
 
@@ -76,7 +82,7 @@ reports ordinary overworld waiting, no error, and a persisted reward turn. Monit
 next actual exchange before claiming a measured trade-frequency improvement. See
 [the deployment receipt](docs/validation/release-0.2.0rc23.json).
 
-# Current games and board: rc22, accurate PC release messages
+# Current Blue and board: rc22, earlier PC release correction
 
 The journal now recognizes withdrawals whose party entry appears before the box entry
 is removed. Recent arrivals are matched by species and nickname, survive checkpoint

@@ -10,6 +10,7 @@ REMOTE = r'''
 import json
 from pathlib import Path
 import shutil
+import sqlite3
 import subprocess
 import time
 import urllib.request
@@ -47,6 +48,18 @@ for edition, name, port in [('red', 'pokesim', 8930), ('blue', 'pokesim-blue', 8
             'party': [{key: mon.get(key) for key in ('dex', 'nick', 'level', 'experience', 'hp', 'max_hp', 'status', 'pp')}
                       for mon in game['party']],
         }
+        try:
+            with sqlite3.connect(f'file:/docker/{name}/data/pokesim.sqlite?mode=ro', uri=True) as db:
+                db.row_factory = sqlite3.Row
+                row = db.execute("""SELECT id,ts,type,title FROM events
+                    WHERE type IN ('catch','evolve','level','champion','item','badge','trainer')
+                    ORDER BY id DESC LIMIT 1""").fetchone()
+            local = dict(row) if row else None
+            if local:
+                local['age_seconds'] = max(0, int(time.time() - local['ts']))
+            sample['runs'][edition]['last_local_progress'] = local
+        except sqlite3.Error as error:
+            sample['runs'][edition]['journal_error'] = str(error)
     except Exception as error:
         sample['runs'][edition] = {'error': str(error)}
 try:

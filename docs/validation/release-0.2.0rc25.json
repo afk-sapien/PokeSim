@@ -1,0 +1,600 @@
+{
+  "version": "0.2.0rc25",
+  "edition": "red",
+  "image": "pokesim:0.2.0rc25-a0c3398",
+  "revision": "a0c33988bd1e17d252acd5e44d117a05fe890c81",
+  "image_id": "sha256:1d10f8842edbff407c44f006dfba6abb36f794c12951636cd2f104e56e48a8d9",
+  "previous_image": "pokesim:0.2.0rc22-49403d7",
+  "backup": "/docker/pokesim/backups/20260915T165613Z-rc25/before.tar.gz",
+  "cold_backup_verified": true,
+  "timestamp": 1789491405.9155967,
+  "blue_and_board_unchanged": true,
+  "coordinator_resumed_same_image": true,
+  "previous_red_uptime": 21086,
+  "initial_health": {
+    "ok": true,
+    "worker_alive": true,
+    "activity_age_seconds": 0.0,
+    "error": null
+  },
+  "initial_owned": 144,
+  "containers": [
+    {
+      "name": "/pokesim",
+      "image": "pokesim:0.2.0rc25-a0c3398",
+      "started_at": "2026-09-15T16:56:43.489648316Z"
+    },
+    {
+      "name": "/pokesim-blue",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:05:13.255250711Z"
+    },
+    {
+      "name": "/pokesim-broker",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:05:17.18415372Z"
+    },
+    {
+      "name": "/pokesim-trading",
+      "image": "pokesim:0.2.0rc24-d99cdc2",
+      "started_at": "2026-09-15T16:56:45.687822663Z"
+    }
+  ],
+  "python_tests": {
+    "passed": 490,
+    "skipped": 1
+  },
+  "javascript_test_files_passed": 2,
+  "package_resources_verified": true,
+  "first_followup": {
+    "ts": 1789491428.2570763,
+    "runs": {
+      "red": {
+        "version": "0.2.0rc25",
+        "started_at": "2026-09-15T16:56:43.489648316Z",
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.1,
+          "error": null
+        },
+        "uptime": 23,
+        "speed": 0.0,
+        "paused": false,
+        "reloads": 0,
+        "owned": 144,
+        "position": [
+          "Route 9",
+          2,
+          9
+        ],
+        "league_rewards": {
+          "earned": 30,
+          "delivered": 30,
+          "pending": 0
+        },
+        "last_local_progress": {
+          "id": 9483,
+          "ts": 1789489171.5652988,
+          "type": "level",
+          "title": "PICKLES grew to level 49",
+          "age_seconds": 2256
+        },
+        "party": [
+          {
+            "dex": 115,
+            "nick": "GRUNKLE",
+            "level": 45,
+            "experience": {
+              "total": 94632,
+              "earned": 3507,
+              "needed": 6211,
+              "remaining": 2704,
+              "percent": 56.5,
+              "max_level": false
+            },
+            "hp": 167,
+            "max_hp": 167,
+            "status": 0,
+            "pp": [
+              20,
+              20,
+              25,
+              30
+            ]
+          },
+          {
+            "dex": 89,
+            "nick": "MUFFIN",
+            "level": 100,
+            "experience": {
+              "total": 1000000,
+              "earned": 0,
+              "needed": 1,
+              "remaining": 0,
+              "percent": 100,
+              "max_level": true
+            },
+            "hp": 385,
+            "max_hp": 385,
+            "status": 0,
+            "pp": [
+              20,
+              40,
+              20,
+              20
+            ]
+          },
+          {
+            "dex": 131,
+            "nick": "PICKLES",
+            "level": 49,
+            "experience": {
+              "total": 147157,
+              "earned": 96,
+              "needed": 9189,
+              "remaining": 9093,
+              "percent": 1.0,
+              "max_level": false
+            },
+            "hp": 208,
+            "max_hp": 208,
+            "status": 0,
+            "pp": [
+              5,
+              15,
+              15,
+              15
+            ]
+          },
+          {
+            "dex": 145,
+            "nick": "SPROUT",
+            "level": 100,
+            "experience": {
+              "total": 1250000,
+              "earned": 0,
+              "needed": 1,
+              "remaining": 0,
+              "percent": 100,
+              "max_level": true
+            },
+            "hp": 381,
+            "max_hp": 381,
+            "status": 0,
+            "pp": [
+              30,
+              20,
+              10,
+              30
+            ]
+          },
+          {
+            "dex": 78,
+            "nick": "GIZMO",
+            "level": 97,
+            "experience": {
+              "total": 939340,
+              "earned": 26667,
+              "needed": 28519,
+              "remaining": 1852,
+              "percent": 93.5,
+              "max_level": false
+            },
+            "hp": 323,
+            "max_hp": 323,
+            "status": 0,
+            "pp": [
+              15,
+              30,
+              20,
+              40
+            ]
+          },
+          {
+            "dex": 3,
+            "nick": "BUTTON",
+            "level": 100,
+            "experience": {
+              "total": 1059860,
+              "earned": 0,
+              "needed": 1,
+              "remaining": 0,
+              "percent": 100,
+              "max_level": true
+            },
+            "hp": 349,
+            "max_hp": 349,
+            "status": 0,
+            "pp": [
+              30,
+              25,
+              10,
+              15
+            ]
+          }
+        ]
+      },
+      "blue": {
+        "version": "0.2.0rc22",
+        "started_at": "2026-09-15T11:05:13.255250711Z",
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.0,
+          "error": null
+        },
+        "uptime": 21113,
+        "speed": 0.0,
+        "paused": false,
+        "reloads": 0,
+        "owned": 144,
+        "position": [
+          "Route 18",
+          39,
+          13
+        ],
+        "league_rewards": {
+          "earned": 32,
+          "delivered": 32,
+          "pending": 0
+        },
+        "last_local_progress": {
+          "id": 4517,
+          "ts": 1789491410.0392468,
+          "type": "level",
+          "title": "MEATPOCKET grew to level 38",
+          "age_seconds": 18
+        },
+        "party": [
+          {
+            "dex": 137,
+            "nick": "MEATPOCKET",
+            "level": 38,
+            "experience": {
+              "total": 56843,
+              "earned": 1971,
+              "needed": 4447,
+              "remaining": 2476,
+              "percent": 44.3,
+              "max_level": false
+            },
+            "hp": 84,
+            "max_hp": 111,
+            "status": 0,
+            "pp": [
+              8,
+              19,
+              30,
+              0
+            ]
+          },
+          {
+            "dex": 3,
+            "nick": "TOAST",
+            "level": 100,
+            "experience": {
+              "total": 1059860,
+              "earned": 0,
+              "needed": 1,
+              "remaining": 0,
+              "percent": 100,
+              "max_level": true
+            },
+            "hp": 355,
+            "max_hp": 355,
+            "status": 0,
+            "pp": [
+              30,
+              25,
+              10,
+              10
+            ]
+          },
+          {
+            "dex": 75,
+            "nick": "EMBER",
+            "level": 100,
+            "experience": {
+              "total": 1059860,
+              "earned": 0,
+              "needed": 1,
+              "remaining": 0,
+              "percent": 100,
+              "max_level": true
+            },
+            "hp": 284,
+            "max_hp": 311,
+            "status": 0,
+            "pp": [
+              8,
+              5,
+              2,
+              0
+            ]
+          },
+          {
+            "dex": 18,
+            "nick": "FIZZ",
+            "level": 100,
+            "experience": {
+              "total": 1059860,
+              "earned": 0,
+              "needed": 1,
+              "remaining": 0,
+              "percent": 100,
+              "max_level": true
+            },
+            "hp": 363,
+            "max_hp": 363,
+            "status": 0,
+            "pp": [
+              30,
+              35,
+              30,
+              20
+            ]
+          },
+          {
+            "dex": 143,
+            "nick": "BOOTS",
+            "level": 100,
+            "experience": {
+              "total": 1250000,
+              "earned": 0,
+              "needed": 1,
+              "remaining": 0,
+              "percent": 100,
+              "max_level": true
+            },
+            "hp": 519,
+            "max_hp": 519,
+            "status": 0,
+            "pp": [
+              15,
+              15,
+              10,
+              15
+            ]
+          },
+          {
+            "dex": 93,
+            "nick": "SCOUT",
+            "level": 100,
+            "experience": {
+              "total": 1059860,
+              "earned": 0,
+              "needed": 1,
+              "remaining": 0,
+              "percent": 100,
+              "max_level": true
+            },
+            "hp": 281,
+            "max_hp": 281,
+            "status": 0,
+            "pp": [
+              30,
+              0,
+              15,
+              19
+            ]
+          }
+        ]
+      }
+    },
+    "trading": {
+      "enabled": true,
+      "interval_seconds": 900,
+      "completed": 22,
+      "state": "ready",
+      "error": null,
+      "last_check": 1789491017.973251,
+      "last_trade": 1789490586.8243766,
+      "last_operation": "league_reward",
+      "image": "pokesim:0.2.0rc24-d99cdc2",
+      "started_at": "2026-09-15T16:56:45.687822663Z",
+      "restarts": 0,
+      "running": true,
+      "opportunities": 12,
+      "recent_exchanges": [
+        {
+          "id": "1789488759564550893",
+          "ts": 1789488759.5645518,
+          "reason": "Red restores a missing collection partner. Blue gains a partner at least five levels stronger"
+        },
+        {
+          "id": "1789489674442865212",
+          "ts": 1789489674.442866,
+          "reason": "Red gains a partner at least five levels stronger. Blue improves total DVs by at least four"
+        },
+        {
+          "id": "1789490586824375645",
+          "ts": 1789490586.8243766,
+          "reason": "Red registers Kabutops. Blue improves total DVs by at least four"
+        }
+      ]
+    },
+    "free_disk_bytes": 17572802560,
+    "red_rope_count": 0
+  },
+  "progress_followup": {
+    "ts": 1789491526.0365586,
+    "runs": {
+      "red": {
+        "version": "0.2.0rc25",
+        "started_at": "2026-09-15T16:56:43.489648316Z",
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.2,
+          "error": null
+        },
+        "uptime": 121,
+        "speed": 0.0,
+        "paused": false,
+        "reloads": 0,
+        "owned": 144,
+        "position": [
+          "Underground Path North South",
+          4,
+          35
+        ],
+        "last_local_progress": {
+          "id": 9489,
+          "ts": 1789491486.5958686,
+          "type": "level",
+          "title": "GRUNKLE grew to level 48",
+          "age_seconds": 39
+        },
+        "league_rewards": {
+          "earned": 30,
+          "delivered": 30,
+          "pending": 0
+        },
+        "recent_outcomes": [
+          {
+            "key": "0:explore:187:",
+            "category": "exploration",
+            "status": "deferred",
+            "reason": "Expedition time budget reached",
+            "elapsed": 217152364,
+            "retry_at": 217632364,
+            "target": null,
+            "gains": {}
+          },
+          {
+            "key": "0:rematch:0:",
+            "category": "supplies",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 217310950,
+            "retry_at": 217790950,
+            "target": null,
+            "gains": {}
+          },
+          {
+            "key": "train:2:50",
+            "category": "training",
+            "status": "advanced",
+            "reason": "Expedition time budget reached",
+            "elapsed": 219507940,
+            "retry_at": 219567940,
+            "target": 50,
+            "gains": {
+              "experience": 15961,
+              "levels": 3
+            }
+          }
+        ]
+      },
+      "blue": {
+        "version": "0.2.0rc22",
+        "started_at": "2026-09-15T11:05:13.255250711Z",
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.0,
+          "error": null
+        },
+        "uptime": 21211,
+        "speed": 0.0,
+        "paused": false,
+        "reloads": 0,
+        "owned": 144,
+        "position": [
+          "Route 20",
+          99,
+          5
+        ],
+        "last_local_progress": {
+          "id": 4519,
+          "ts": 1789491472.0283394,
+          "type": "level",
+          "title": "MEATDEPT grew to level 64",
+          "age_seconds": 54
+        },
+        "league_rewards": {
+          "earned": 32,
+          "delivered": 32,
+          "pending": 0
+        },
+        "recent_outcomes": [
+          {
+            "key": "train:30:50",
+            "category": "training",
+            "status": "advanced",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 123734430,
+            "retry_at": 123794430,
+            "target": 50,
+            "gains": {
+              "experience": 713,
+              "levels": 0
+            }
+          },
+          {
+            "key": "train:170:40",
+            "category": "training",
+            "status": "advanced",
+            "reason": "Expedition time budget reached",
+            "elapsed": 123810538,
+            "retry_at": 123870538,
+            "target": 40,
+            "gains": {
+              "experience": 5058,
+              "levels": 1
+            }
+          },
+          {
+            "key": "train:10:40",
+            "category": "training",
+            "status": "completed",
+            "reason": "Target reached",
+            "elapsed": 123839142,
+            "retry_at": 0,
+            "target": 40,
+            "gains": {
+              "experience": 3386,
+              "levels": 1
+            }
+          }
+        ]
+      }
+    },
+    "trading": {
+      "enabled": true,
+      "interval_seconds": 900,
+      "completed": 22,
+      "state": "ready",
+      "error": null,
+      "last_check": 1789491017.973251,
+      "last_trade": 1789490586.8243766,
+      "last_operation": "league_reward",
+      "image": "pokesim:0.2.0rc24-d99cdc2",
+      "started_at": "2026-09-15T16:56:45.687822663Z",
+      "restarts": 0,
+      "running": true,
+      "opportunities": 12,
+      "recent_exchanges": [
+        {
+          "id": "1789488759564550893",
+          "ts": 1789488759.5645518,
+          "reason": "Red restores a missing collection partner. Blue gains a partner at least five levels stronger"
+        },
+        {
+          "id": "1789489674442865212",
+          "ts": 1789489674.442866,
+          "reason": "Red gains a partner at least five levels stronger. Blue improves total DVs by at least four"
+        },
+        {
+          "id": "1789490586824375645",
+          "ts": 1789490586.8243766,
+          "reason": "Red registers Kabutops. Blue improves total DVs by at least four"
+        }
+      ]
+    },
+    "holds": {
+      "active": null
+    }
+  }
+}
