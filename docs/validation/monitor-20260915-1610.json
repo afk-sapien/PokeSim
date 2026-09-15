@@ -1,0 +1,314 @@
+{
+  "from_ts": 1789486059.477448,
+  "to_ts": 1789488631.6682622,
+  "minutes": 42.87,
+  "runs": {
+    "red": {
+      "version": "0.2.0rc22",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:04:45.612766478Z",
+      "uptime": 18344,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.9,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 143,
+      "league_rewards": {
+        "earned": 30,
+        "delivered": 30,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {
+          "146": 1
+        }
+      },
+      "start_unchanged": true,
+      "new_registrations": 0,
+      "completed_projects": {
+        "training": 2
+      },
+      "new_delivered_rewards": 4,
+      "hold": null,
+      "journal_counts": {
+        "champion": 4,
+        "faint": 1,
+        "level": 31,
+        "obtain": 4,
+        "release": 15,
+        "trade": 2,
+        "trainer": 20
+      },
+      "gifts": [
+        {
+          "id": 9410,
+          "title": "Received Aerodactyl for Championship #27"
+        },
+        {
+          "id": 9425,
+          "title": "Received Kabuto for Championship #28"
+        },
+        {
+          "id": 9437,
+          "title": "Received Omanyte for Championship #29"
+        },
+        {
+          "id": 9459,
+          "title": "Received Mew for Championship #30"
+        }
+      ],
+      "duplicate_gifts": [],
+      "free_box_slots": 6,
+      "held_legendaries": [
+        "Articuno",
+        "Mewtwo",
+        "Moltres",
+        "Zapdos"
+      ],
+      "recent_training_outcomes": [
+        {
+          "key": "train:73:60",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 216836268,
+          "retry_at": 216896268,
+          "target": 60,
+          "gains": {
+            "experience": 11657,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:49:50",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 216909498,
+          "retry_at": 216969498,
+          "target": 50,
+          "gains": {
+            "experience": 8429,
+            "levels": 2
+          }
+        },
+        {
+          "key": "train:105:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 216982720,
+          "retry_at": 217042720,
+          "target": 40,
+          "gains": {
+            "experience": 10367,
+            "levels": 3
+          }
+        },
+        {
+          "key": "train:104:30",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 217097054,
+          "retry_at": 217157054,
+          "target": 30,
+          "gains": {
+            "experience": 8085,
+            "levels": 3
+          }
+        },
+        {
+          "key": "train:28:40",
+          "category": "training",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 217115156,
+          "retry_at": 0,
+          "target": 40,
+          "gains": {
+            "experience": 1919,
+            "levels": 1
+          }
+        }
+      ]
+    },
+    "blue": {
+      "version": "0.2.0rc22",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:05:13.255250711Z",
+      "uptime": 18316,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 143,
+      "league_rewards": {
+        "earned": 29,
+        "delivered": 29,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {}
+      },
+      "start_unchanged": true,
+      "new_registrations": 0,
+      "completed_projects": {
+        "training": 1
+      },
+      "new_delivered_rewards": 2,
+      "hold": null,
+      "journal_counts": {
+        "champion": 2,
+        "faint": 1,
+        "level": 39,
+        "obtain": 2,
+        "release": 12,
+        "trade": 2,
+        "trainer": 10
+      },
+      "gifts": [
+        {
+          "id": 4412,
+          "title": "Received Squirtle for Championship #28"
+        },
+        {
+          "id": 4435,
+          "title": "Received Aerodactyl for Championship #29"
+        }
+      ],
+      "duplicate_gifts": [],
+      "free_box_slots": 6,
+      "held_legendaries": [
+        "Articuno",
+        "Mewtwo",
+        "Moltres",
+        "Zapdos"
+      ],
+      "recent_training_outcomes": [
+        {
+          "key": "train:177:10",
+          "category": "training",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 121121808,
+          "retry_at": 0,
+          "target": 10,
+          "gains": {
+            "experience": 498,
+            "levels": 5
+          }
+        },
+        {
+          "key": "train:170:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 121195022,
+          "retry_at": 121255022,
+          "target": 40,
+          "gains": {
+            "experience": 3537,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:120:50",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 121268242,
+          "retry_at": 121328242,
+          "target": 50,
+          "gains": {
+            "experience": 3813,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:26:30",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 121603196,
+          "retry_at": 121663196,
+          "target": 30,
+          "gains": {
+            "experience": 5360,
+            "levels": 3
+          }
+        },
+        {
+          "key": "train:152:50",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 121713616,
+          "retry_at": 121773616,
+          "target": 50,
+          "gains": {
+            "experience": 6106,
+            "levels": 1
+          }
+        }
+      ]
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 19,
+    "state": "ready",
+    "error": null,
+    "last_check": 1789488277.4829903,
+    "last_trade": 1789487844.0569873,
+    "last_operation": "league_reward",
+    "image": "pokesim:0.2.0rc24-d99cdc2",
+    "started_at": "2026-09-15T14:53:08.13314758Z",
+    "restarts": 0,
+    "running": true,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789485964980098760",
+        "ts": 1789485964.9801,
+        "reason": "Red registers Magmar. Blue gains a partner at least five levels stronger"
+      },
+      {
+        "id": "1789486907913189202",
+        "ts": 1789486907.9131906,
+        "reason": "Red restores a missing collection partner. Blue gains a partner at least five levels stronger"
+      },
+      {
+        "id": "1789487844056986071",
+        "ts": 1789487844.0569873,
+        "reason": "Red restores a missing collection partner. Blue gains a partner at least five levels stronger"
+      }
+    ]
+  },
+  "coordinator": {
+    "active": null,
+    "timeout_count": 2
+  },
+  "free_disk_bytes": 18235297792,
+  "runtime_changed": false,
+  "pending_source_fix": "dac1f95 remains validated but undeployed for the next necessary game release",
+  "trade_intervals_seconds": [
+    942.93,
+    936.14
+  ]
+}
