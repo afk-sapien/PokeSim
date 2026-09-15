@@ -1,8 +1,32 @@
+Training follow-up, rc29: real trainee XP renews the separate preparation allowance.
+The rc28 live run exposed cumulative healing time ending a session after three gained
+levels. The correction retains the longer active budget and strict inactivity checks,
+while adding a 150-game-minute combined limit. Monitor completed milestones and the
+ratio of preparation to active training. More walking alone must never extend a project.
+
+Training continuity deployed to both games, September 15: rc28 gives training
+50 active game minutes, excluding preparation. Genuine trainee XP extends the
+remaining window to five minutes, with a 100-minute active cap. Preparation has a
+separate cumulative 10-minute budget and a five-minute inactivity limit. Training
+retains a two-minute no-XP limit. Budgets and route progress survive saves and trades.
+Existing level milestones stay in place. Other expedition deadlines are unchanged.
+
+Training candidate weights include distance and PC setup cost. Training avoids social
+detours and random route deviations. Live distinguishes preparation from actual
+training, and outcomes record both times. Same-checkpoint one-hour replays improved
+Red from five abandoned training projects and no trainee levels to one continuing
+project and two levels. Blue completed a five-level Flareon milestone, compared with
+no completed training target under the baseline. Different trainees were selected,
+so raw XP totals are not directly comparable. Monitor longer live runs for milestone
+completion, preparation cost, repeated deferrals, and route failures. Cave navigation
+recoveries remain visible in both replays and are not universally fixed by this change.
+See [the comparison](validation/training-continuity-0.2.0rc28.json).
+
 Party inclusion deployed to both games, September 15: rc27 adds a Party section to
 the PC sidebar and mobile selector. The combined scope includes party and boxed
 Pokémon in all sorts and searches, with location labels and identical calculated
 Power. Existing all-box bookmarks include the party. This is a presentation change.
-Training continuity remains the next planner investigation described below.
+Training continuity was subsequently deployed in rc28, as described above.
 
 PC strength ranking deployed to both games, September 15: rc26 adds a Power sort across all boxes, a
 strongest-partners shortcut, individual stat sorts, and a five-stat breakdown. The
