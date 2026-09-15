@@ -79,6 +79,8 @@ def trading_status():
         path = directory / 'status.json'
         status = json.loads(path.read_text()) if path.exists() else {}
         return {**status, 'enabled': policy.get('enabled', False),
+                'allow_last_copies': policy.get('allow_last_copies', False),
+                'mew_event': policy.get('mew_event', False),
                 'interval_seconds': policy.get('interval_seconds', 900)}
     except (OSError, ValueError):
         return {'enabled': False, 'history': [], 'completed': 0, 'error': 'Trading status unavailable'}
@@ -89,8 +91,11 @@ def render_board(inventories, proposals: list[dict], level_bar: int, trading=Non
     automatic = trading.get('enabled', False)
     heading = 'Partners between adventures.' if automatic else 'What these two could trade.'
     note = 'Automatic exchanges between trusted peers.' if automatic else 'Read only. Nothing here is executed.'
+    protection = ('Active teams and current projects are protected. A last boxed copy may travel to unlock a new Pokédex entry.'
+                  if trading.get('allow_last_copies') else
+                  'Active teams, current projects, last copies, and best retained partners are protected.')
     intro = (f"Useful exchanges can happen every {trading.get('interval_seconds', 900) // 60} minutes, when both adventures are ready. "
-             'Active teams, current projects, last copies, and best retained partners are protected.' if automatic else
+             + protection if automatic else
              'Proposed exchanges between the two adventures. Each proposal shows what changes hands and what each run gains. Review last copies carefully. An exchange requires explicit approval.')
     history = ''
     activity = {'ready': 'Watching for the next exchange', 'waiting_for_overworld': 'Waiting for both adventures to finish their current activity', 'waiting_for_opportunity': 'Waiting for a useful exchange', 'retrying': 'Retrying after a trading interruption'}.get(trading.get('state'), 'Preparing automatic trading')
@@ -99,6 +104,9 @@ def render_board(inventories, proposals: list[dict], level_bar: int, trading=Non
         for row in reversed(trading.get('history', [])[-10:]):
             descriptions = [f"{m['instance'].title()} received {m['received']['nick']} ({m['received']['name']}, Lv. {m['received']['level']})" for m in row['moved']]
             history += '<article class="deal"><p>' + html.escape('. '.join(descriptions)) + '</p><p class="reason">' + html.escape(row['reason']) + '</p></article>'
+        for row in reversed(trading.get('events', [])[-10:]):
+            recipients = ', '.join(gift['instance'].title() for gift in row.get('gifts', []))
+            history += '<article class="deal"><p>' + html.escape(recipients + ' received Mew (Lv. 5)') + '</p><p class="reason">One-time postgame PokeSim event gift</p></article>'
         history += '</section>'
 
     runs = ''.join(_card(inv) for inv in inventories)
@@ -153,9 +161,11 @@ def create_app(read=inventory.read, urls: dict[str, str] | None = None, level_ba
     @app.get('/api/proposals')
     def api_proposals():
         inventories, deals = collect()
+        status = trading_status()
         return {'premium_level': bar, 'premium_dex': sorted(negotiation.premium_dex()),
                 'instances': [inv.summary() for inv in inventories], 'proposals': deals,
-                'routine_proposals': routine.proposals(inventories), 'trading': trading_status()}
+                'routine_proposals': routine.proposals(inventories, allow_last_copies=status.get('allow_last_copies', False)),
+                'trading': status}
 
     @app.get('/sprites/{instance}/{dex}.png')
     def portrait(instance: str, dex: int):
@@ -172,6 +182,7 @@ def create_app(read=inventory.read, urls: dict[str, str] | None = None, level_ba
     def board():
         inventories, deals = collect()
         status = trading_status()
-        return render_board(inventories, routine.proposals(inventories) if status.get('enabled') else deals, bar, status)
+        return render_board(inventories, routine.proposals(inventories, allow_last_copies=status.get('allow_last_copies', False))
+                            if status.get('enabled') else deals, bar, status)
 
     return app

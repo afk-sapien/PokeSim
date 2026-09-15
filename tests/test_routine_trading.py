@@ -54,3 +54,46 @@ def test_dv_upgrade_requires_known_totals_and_a_comparable_level():
     assert routine.benefit(red, incoming)[0] == 5
     assert routine.benefit(red, replace(incoming, level=10))[0] == 0
     assert routine.benefit(replace(red, stored=tuple(replace(p, dvs=()) for p in red.stored)), incoming)[0] == 0
+
+
+def test_last_copy_can_unlock_a_new_entry_when_enabled():
+    red = inv('red', {MAGIKARP}, stored=[(MAGIKARP, 5)])
+    blue = inv('blue', {ZUBAT}, stored=[(ZUBAT, 8)])
+    deal, = routine.proposals([red, blue], allow_last_copies=True)
+    assert deal['spends'] == {'give': 'last one', 'take': 'last one'}
+    assert 'registers' in deal['reason']
+    red_after = inv('red', {MAGIKARP, ZUBAT}, stored=[(ZUBAT, 8)])
+    blue_after = inv('blue', {MAGIKARP, ZUBAT}, stored=[(MAGIKARP, 5)])
+    assert routine.proposals([red_after, blue_after], allow_last_copies=True) == []
+
+
+def test_last_copy_mode_keeps_party_projects_and_best_of_multiple_copies():
+    blue = inv('blue', {ZUBAT}, stored=[(ZUBAT, 8)])
+    red = inv('red', {MAGIKARP}, party=[(MAGIKARP, 5)])
+    assert routine.proposals([red, blue], allow_last_copies=True) == []
+    red = inv('red', {MAGIKARP}, stored=[(MAGIKARP, 5)], hunting=DEX_TO_SPECIES[MAGIKARP])
+    assert routine.proposals([red, blue], allow_last_copies=True) == []
+    red = inv('red', {MAGIKARP}, stored=[(MAGIKARP, 5), (MAGIKARP, 15)])
+    deal, = routine.proposals([red, blue], allow_last_copies=True)
+    assert deal['give']['level'] == 5
+    assert deal['spends']['give'] == 'spare'
+
+
+def test_last_copy_cannot_be_spent_for_a_quality_upgrade_alone():
+    red = inv('red', {MAGIKARP, ZUBAT}, stored=[(MAGIKARP, 40), (ZUBAT, 5)])
+    blue = inv('blue', {MAGIKARP, ZUBAT}, stored=[(ZUBAT, 40), (MAGIKARP, 5)])
+    assert routine.proposals([red, blue], allow_last_copies=True) == []
+
+
+def test_board_explains_last_copy_sharing_and_event_gifts():
+    from pokesim.broker.app import render_board
+    red = inv('red', {MAGIKARP}, stored=[(MAGIKARP, 5)])
+    blue = inv('blue', {ZUBAT}, stored=[(ZUBAT, 8)])
+    deals = routine.proposals([red, blue], allow_last_copies=True)
+    page = render_board([red, blue], deals, 90, {
+        'enabled': True, 'allow_last_copies': True,
+        'events': [{'gifts': [{'instance': 'red'}]}],
+    })
+    assert 'LAST ONE' in page
+    assert 'A last boxed copy may travel' in page
+    assert 'Red received Mew (Lv. 5)' in page

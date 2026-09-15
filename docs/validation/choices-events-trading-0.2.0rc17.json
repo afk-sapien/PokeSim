@@ -1,0 +1,157 @@
+{
+  "mew_event": {
+    "status": "staged",
+    "kind": "mew_event",
+    "event": "pokesim-mew-v1",
+    "id": "1789456839608403401",
+    "reason": "One-time postgame PokeSim Mew event",
+    "gifts": [
+      {
+        "instance": "red",
+        "name": "Mew",
+        "level": 5,
+        "box": 7,
+        "position": 20
+      },
+      {
+        "instance": "blue",
+        "name": "Mew",
+        "level": 5,
+        "box": 5,
+        "position": 20
+      }
+    ],
+    "states": {
+      "red": "/tmp/pokesim-director/rc17-rehearsal-2/coordinator/transactions/1789456839608403401/after/red/auto-v1-trade-1789456839608403401.state",
+      "blue": "/tmp/pokesim-director/rc17-rehearsal-2/coordinator/transactions/1789456839608403401/after/blue/auto-v1-trade-1789456839608403401.state"
+    },
+    "hashes": {
+      "red": "cb9ac8fa24e58723b0005481af5ed556304a864d4398493fdc073b32cd9730a3",
+      "blue": "6f33be1d6e180471e98bc14ca8fd42149908501dfec7ec76dc187b83707c0a76"
+    }
+  },
+  "crash_after_commit_recovered": true,
+  "last_copy_trade": {
+    "moved": [
+      {
+        "instance": "red",
+        "box": 6,
+        "position": 20,
+        "sent": {
+          "species": 44,
+          "name": "Hitmonchan",
+          "level": 30,
+          "nick": "WAFFLES"
+        },
+        "received": {
+          "species": 43,
+          "name": "Hitmonlee",
+          "level": 40,
+          "nick": "MAPLE",
+          "evolved_from": null
+        },
+        "state": "/tmp/pokesim-director/rc17-rehearsal-2/coordinator/transactions/1789456842778879920/after/red/auto-v1-trade-1789456842778879920.state",
+        "owned_before": 117,
+        "owned_after": 118
+      },
+      {
+        "instance": "blue",
+        "box": 7,
+        "position": 17,
+        "sent": {
+          "species": 43,
+          "name": "Hitmonlee",
+          "level": 40,
+          "nick": "MAPLE"
+        },
+        "received": {
+          "species": 44,
+          "name": "Hitmonchan",
+          "level": 30,
+          "nick": "WAFFLES",
+          "evolved_from": null
+        },
+        "state": "/tmp/pokesim-director/rc17-rehearsal-2/coordinator/transactions/1789456842778879920/after/blue/auto-v1-trade-1789456842778879920.state",
+        "owned_before": 119,
+        "owned_after": 120
+      }
+    ],
+    "reason": "Red registers Hitmonlee. Blue registers Hitmonchan",
+    "price": "trusted exchange",
+    "states": {
+      "red": "/tmp/pokesim-director/rc17-rehearsal-2/coordinator/transactions/1789456842778879920/after/red/auto-v1-trade-1789456842778879920.state",
+      "blue": "/tmp/pokesim-director/rc17-rehearsal-2/coordinator/transactions/1789456842778879920/after/blue/auto-v1-trade-1789456842778879920.state"
+    },
+    "status": "staged",
+    "id": "1789456842778879920",
+    "proposal": {
+      "give": {
+        "instance": "red",
+        "dex": 107,
+        "species": 44,
+        "box": 6,
+        "position": 20,
+        "level": 30,
+        "nick": "WAFFLES",
+        "name": "Hitmonchan",
+        "dvs": [
+          4,
+          14,
+          9,
+          2,
+          4
+        ],
+        "stat_exp": [
+          250,
+          387,
+          234,
+          441,
+          215
+        ]
+      },
+      "take": {
+        "instance": "blue",
+        "dex": 106,
+        "species": 43,
+        "box": 7,
+        "position": 17,
+        "level": 40,
+        "nick": "MAPLE",
+        "name": "Hitmonlee",
+        "dvs": [
+          9,
+          1,
+          14,
+          10,
+          13
+        ],
+        "stat_exp": [
+          4707,
+          7089,
+          4882,
+          8871,
+          6771
+        ]
+      },
+      "reason": "Red registers Hitmonlee. Blue registers Hitmonchan",
+      "price": "trusted exchange",
+      "spends": {
+        "give": "last one",
+        "take": "last one"
+      }
+    },
+    "hashes": {
+      "red": "60f8c49996a5f5dc5bab49a09f91cb35207c850909253ebc6eb635c90e870be5",
+      "blue": "4cea3c0cc8ef3001c962672b196e78e756ef7854c3743fda4b85819a2ec663c7"
+    }
+  },
+  "no_repeat_event": true,
+  "no_last_copy_ping_pong": true,
+  "subsequent_autosaves_reload": true,
+  "validation": {
+    "python_tests": 416,
+    "python_skipped": 1,
+    "javascript_tests": 7,
+    "package_resources_verified": true
+  }
+}

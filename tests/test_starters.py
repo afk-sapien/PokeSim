@@ -40,3 +40,28 @@ def test_legacy_checkpoints_retain_the_old_starter_and_fixed_choice_survives_res
 def test_invalid_starter_setting_fails_before_play():
     with pytest.raises(ValueError, match='starter'):
         StrategicPolicy(1, 'pikachu')
+
+
+def test_fossil_and_eevee_choices_are_varied_seeded_and_survive_restore():
+    policies = [StrategicPolicy(seed) for seed in range(30)]
+    assert {p.fossil for p in policies} == {'DOME_FOSSIL', 'HELIX_FOSSIL'}
+    assert {p.collection.eevee_choice for p in policies} == {134, 135, 136}
+    for p in policies:
+        same = StrategicPolicy(p.seed)
+        assert (same.fossil, same.collection.eevee_choice) == (p.fossil, p.collection.eevee_choice)
+        restored = StrategicPolicy(999)
+        restored.load_state_dict(json.loads(json.dumps(p.state_dict())))
+        assert (restored.fossil, restored.collection.eevee_choice) == (p.fossil, p.collection.eevee_choice)
+
+
+def test_both_fossil_choices_target_the_correct_object():
+    from pokesim.policies.progression import object_goal
+    from test_campaign import ready
+    from dataclasses import replace
+    state = replace(ready(badges=1), map=MAPS['MT_MOON_B2F'],
+                    event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_BEAT_MT_MOON_EXIT_SUPER_NERD'))
+    for fossil in ('DOME_FOSSIL', 'HELIX_FOSSIL'):
+        goal = story_goal(state, fossil=fossil)
+        expected = object_goal('fossil', '', '', 'MT_MOON_B2F', fossil)
+        assert goal.key == 'fossil'
+        assert goal.targets == expected.targets

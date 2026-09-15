@@ -119,6 +119,8 @@ class Collection:
         self.director.load(data.get('director', {}))
         if self.pace not in PACE:
             self.pace = 'thorough'
+        if self.eevee_choice not in (134, 135, 136):
+            self.eevee_choice = 134
         self.last_frame = None
         self.report_key = None
         self.progress_token = None

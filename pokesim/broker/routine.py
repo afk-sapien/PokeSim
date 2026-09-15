@@ -1,4 +1,4 @@
-"""Useful exchanges between trusted peers, using only expendable boxed partners."""
+"""Useful exchanges with optional last-copy sharing for new Pokédex entries."""
 from ..strategy_data import SPECIES
 from ..ram import DEX_NAMES
 from ..policies.collection import EVOS
@@ -30,21 +30,38 @@ def benefit(inv, incoming):
     return 0, ''
 
 
-def proposals(inventories, limit=12):
+def offers(inv, allow_last_copies):
+    if not allow_last_copies:
+        return inv.spares
+    held = inv.held
+    return inv.spares + tuple(copy for copy in inv.tradeable if held[copy.species] == 1)
+
+
+def proposals(inventories, limit=12, allow_last_copies=False):
     live = [inv for inv in inventories if inv.started and inv.reachable]
     candidates = []
     for i, us in enumerate(live):
         for peer in live[i + 1:]:
-            for give in us.spares:
-                for take in peer.spares:
+            our_spares, their_spares = us.spare_slots, peer.spare_slots
+            for give in offers(us, allow_last_copies):
+                for take in offers(peer, allow_last_copies):
                     mine, reason_mine = benefit(us, take)
                     theirs, reason_theirs = benefit(peer, give)
                     if not mine and not theirs:
                         continue
-                    score = (mine + theirs, bool(mine and theirs), -(give.level + take.level))
+                    last_give = (give.box, give.position) not in our_spares
+                    last_take = (take.box, take.position) not in their_spares
+                    # A unique partner can travel for a new registration, never for repeated
+                    # restoration or quality upgrades after both peers already know it.
+                    if (last_give and theirs < 100) or (last_take and mine < 100):
+                        continue
+                    score = (mine + theirs, bool(mine and theirs),
+                             -(last_give + last_take), -(give.level + take.level))
                     candidates.append((score, {'give': give.as_side(), 'take': take.as_side(),
                         'reason': '. '.join(r for r in [reason_mine, reason_theirs] if r),
-                        'price': 'trusted exchange', 'spends': {'give': 'spare', 'take': 'spare'}}))
+                        'price': 'trusted exchange',
+                        'spends': {'give': 'last one' if last_give else 'spare',
+                                   'take': 'last one' if last_take else 'spare'}}))
     selected, claimed, outcomes = [], set(), set()
     for _, proposal in sorted(candidates, key=lambda row: row[0], reverse=True):
         sides = [proposal[k] for k in ['give', 'take']]

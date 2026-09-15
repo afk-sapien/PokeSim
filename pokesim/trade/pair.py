@@ -65,7 +65,7 @@ def stage(root, transaction):
         with sqlite3.connect(data / 'pokesim.sqlite') as db, sqlite3.connect(backup / 'pokesim.sqlite') as dest:
             db.backup(dest)
         source[name] = {'rom': rom, 'state': backup / state.name}
-    deals = routine.proposals(inventories, limit=1)
+    deals = routine.proposals(inventories, limit=1, allow_last_copies=policy.get('allow_last_copies', False))
     if not deals:
         write_json(work / 'result.json', {'status': 'no_opportunity'})
         return

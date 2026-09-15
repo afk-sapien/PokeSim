@@ -1,3 +1,14 @@
+0.2.0rc17, varied choices and broader exchanges
+
+- New runs choose a seeded random fossil and Eevee evolution, persisted across reloads.
+- Optional last-copy trades unlock new Pokédex registrations while protecting parties,
+  current projects, and explicitly protected species. Unique partners are not exchanged
+  merely to restore collection gaps or improve stats.
+- An optional one-time postgame PokeSim Mew distribution uses backed-up checkpoints,
+  verified inventory preservation, and the existing durable hold and recovery controls.
+  Gifts are labeled as custom events and counted separately from trades.
+- Starter and Eevee supply farming remain outside scope.
+
 0.2.0rc16, scoped automatic trading
 
 - Coordinate trades through authenticated controls and durable game holds, without Docker access or a root service.

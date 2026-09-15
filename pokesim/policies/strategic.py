@@ -75,6 +75,9 @@ class StrategicPolicy(Policy):
         self.interactions = {}
         self.interaction_count = 0
         self.collection = Collection()
+        choices = random.Random(f'{seed}:adventure-choices') if seed is not None else random.Random()
+        self.fossil = choices.choice(('HELIX_FOSSIL', 'DOME_FOSSIL'))
+        self.collection.eevee_choice = choices.choice((134, 135, 136))
         self.pickups = Pickups()
         self.personality = self.rng.choice(('Sociable', 'Collector', 'Explorer'))
         self.starter_setting = starter if starter is not None else config.STARTER
@@ -156,6 +159,7 @@ class StrategicPolicy(Policy):
                 "interactions": self.interaction_count,
                 "personality": self.personality, "next": self.next_goal,
                 "starter": self.starter, "starter_confirmed": self.starter_confirmed,
+                "fossil": self.fossil,
                 "pickups": self.pickups.state_dict(),
                 "readiness": self.readiness, "history": self.history[-8:],
                 "expectation": self.watch.expected['label'] if self.watch.expected else None,
@@ -169,12 +173,16 @@ class StrategicPolicy(Policy):
                 "interactions": list(self.interactions), "interaction_count": self.interaction_count,
                 "personality": self.personality, "history": self.history[-8:], "failures": self.failures,
                 "starter": self.starter, "starter_confirmed": self.starter_confirmed,
+                "fossil": self.fossil,
                 "pickups": self.pickups.state_dict()}
 
     def load_state_dict(self, data):
         if data.get("version") != 1:
             return
         self.collection.load(data.get("collection", {}))
+        self.fossil = data.get('fossil', self.fossil)
+        if self.fossil not in ('HELIX_FOSSIL', 'DOME_FOSSIL'):
+            self.fossil = 'HELIX_FOSSIL'
         self.pickups.load(data.get('pickups', {}))
         self.nav.load_state_dict(data.get("navigation", {}))
         self.naming.load_state_dict(data.get("naming", {}))
@@ -259,7 +267,7 @@ class StrategicPolicy(Policy):
             if len(families) == 1:
                 self.starter = families.pop()
             self.starter_confirmed = True
-        self.goal = story_goal(s, self.starter) if s.started else self.goal
+        self.goal = story_goal(s, self.starter, self.fossil) if s.started else self.goal
         if self.collection.completed_champion and s.map not in LEAGUE:
             self.goal = Goal('collect_plan', 'Plan the next adventure project',
                              'Choose a collecting, evolution, training, or exploration objective')
