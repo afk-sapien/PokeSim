@@ -1,4 +1,4 @@
-Supply-trip correction, rc30: Red could afford only an optional Antidote top-up,
+Supply-trip correction deployed to Red, rc30: Red could afford only an optional Antidote top-up,
 but this kept the global restock override active and displaced training. Restrict
 distant ordinary supply trips to affordable core supplies or selling spare items.
 Keep optional shopping in the current mart and preserve legendary preparation.

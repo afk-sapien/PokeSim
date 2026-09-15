@@ -11,10 +11,13 @@ The old https://pokesim.tynet.app address remains a Red alias. Each game retains
 ROM, saves, party, boxes, journal, and notification configuration. Both games run at
 unlimited speed, with `SPEED=0` saved in their deployment configurations.
 
-Both games run `pokesim:0.2.0rc29-4f0587e` from tagged commit
-`4f0587e2b45e0178d0e6ce22d0facdd163c5368a`. The image ID is
-`sha256:f4c4f27fbd9dce68d777344e4183a84491f62f803eed03ffd41c529089b111b8`.
-The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc29-4f0587e`.
+Red runs `pokesim:0.2.0rc30-2c692f6` from tagged commit
+`2c692f6bd7fa663b941f6571e311d462bdb0b342`. The image ID is
+`sha256:a730c408b5cfcd1ee0b75d9ce290720c466abf1ad5600b360f7a55b0e3ce8e56` and source is retained at
+`/docker/pokesim/releases/0.2.0rc30-2c692f6`. The supply-priority correction stops
+unaffordable essential supplies from causing distant trips for optional purchases.
+Blue retains `pokesim:0.2.0rc29-4f0587e`, source
+`4f0587e2b45e0178d0e6ce22d0facdd163c5368a`, with its existing process preserved.
 PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
 
 Training projects have 50 active game minutes, excluding preparation, with real trainee
@@ -24,12 +27,12 @@ remain five preparation minutes and two active minutes. Nearby and party-ready p
 receive more weight, and Live separates preparation from training.
 
 Both games passed saved-game loading and resumed healthy at maximum speed with existing
-registrations. Verified private cold backups are `/docker/pokesim/backups/20260915T181809Z-rc29/before.tar.gz` and
+registrations. Verified private cold backups are `/docker/pokesim/backups/20260915T190329Z-rc30/before.tar.gz` and
 `/docker/pokesim-blue/backups/20260915T181922Z-rc29/before.tar.gz`.
-Red's new endurance interval began at 2026-09-15T18:18:36.073721542Z and Blue's at
+Red's new endurance interval began at 2026-09-15T19:03:56.67078667Z and Blue's at
 2026-09-15T18:19:32.712199958Z. The board remains on rc22 with its original start.
-Coordinator rc24 resumed at 2026-09-15T18:19:35.033012842Z.
-See the [Red receipt](validation/release-0.2.0rc29-red.json) and
+Coordinator rc24 resumed at 2026-09-15T19:03:59.660732997Z.
+See the [Red receipt](validation/release-0.2.0rc30-red.json) and
 [Blue receipt](validation/release-0.2.0rc29-blue.json).
 
 The scoped coordinator runs `pokesim:0.2.0rc24-d99cdc2` from tagged commit
@@ -37,7 +40,7 @@ The scoped coordinator runs `pokesim:0.2.0rc24-d99cdc2` from tagged commit
 `sha256:9f4a98a9096d658db78ed2b77612ad7c1767aa210af8f0d8239fd4f79758b461`.
 The source archive is `/docker/pokesim/releases/0.2.0rc24-d99cdc2`. This coordinator-only
 update lets each game prepare at its own safe point within a shared retry window.
-At the coordinator rollout, games and the board retained their rc22 processes. Both games were subsequently upgraded to rc29 as described above. The private
+At the coordinator rollout, games and the board retained their rc22 processes. Red subsequently reached rc30 and Blue rc29 as described above. The private
 coordinator backup is `/docker/pokesim-trading/backups/20260915T145218Z-rc24/before.tar.gz`.
 It contains state and configuration and must not be published. See
 [the coordinator receipt](validation/release-0.2.0rc24.json).
@@ -69,7 +72,7 @@ Also retain every image referenced by a running or stopped container, any held e
 and legacy images created before this monitoring workflow. Before removing an older
 monitoring image, verify its exact tag, source revision label, retained source directory,
 and all container references. Remove its tag without force. Do not use a global image,
-build-cache, or volume prune. The current retained release set is rc20, rc21, rc22, rc23, rc24, rc25, rc26, rc27, rc28, and rc29,
+build-cache, or volume prune. The current retained release set is rc20, rc21, rc22, rc23, rc24, rc25, rc26, rc27, rc28, rc29, and rc30,
 covering both the games and the separately upgraded coordinator. The held rc11 experiment is also preserved. Older source archives remain available
 for rebuilding historical releases.
 
