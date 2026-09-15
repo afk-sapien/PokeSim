@@ -1,4 +1,20 @@
-# Current deployment: rc22, accurate PC release messages
+# Coordinator candidate rc23: share safe points between rewards and trades
+
+A persistent Championship reward backlog previously won every safe-point opportunity,
+preventing overdue trades from being considered. The coordinator now persists its last
+attempted operation and gives a useful overdue exchange the next turn after a reward.
+Trade cooldown, peer safety, individual protections, staging, and recovery remain intact.
+Missing opportunities or an unavailable board do not block reward delivery. Skipped
+attempts also yield to the other operation, so neither queue can monopolize safe points.
+
+The reproduced four-cycle backlog changes from four reward attempts to alternating
+reward and trade attempts across coordinator restarts. See
+[the scheduling regression](docs/validation/trade-fairness-0.2.0rc23.json).
+All 468 Python tests passed, with one optional test skipped, along with seven JavaScript
+checks. Packages passed runtime resource checks. The deployment target is the scoped coordinator only. Games and the board remain on
+rc22 so their endurance intervals continue.
+
+# Current games and board: rc22, accurate PC release messages
 
 The journal now recognizes withdrawals whose party entry appears before the box entry
 is removed. Recent arrivals are matched by species and nickname, survive checkpoint
