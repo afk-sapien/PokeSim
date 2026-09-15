@@ -56,6 +56,10 @@ try:
     sample['trading'] = {key: trading.get(key) for key in
                          ('enabled', 'interval_seconds', 'completed', 'state', 'error',
                           'last_check', 'last_trade', 'last_operation')}
+    coordinator = json.loads(subprocess.check_output(['docker', 'inspect', 'pokesim-trading'], timeout=8))[0]
+    sample['trading'].update(image=coordinator['Config']['Image'],
+                             started_at=coordinator['State']['StartedAt'],
+                             restarts=coordinator['RestartCount'], running=coordinator['State']['Running'])
     sample['trading']['opportunities'] = len(board.get('routine_proposals', []))
     sample['trading']['recent_exchanges'] = [
         {key: row.get(key) for key in ('id', 'ts', 'reason')}

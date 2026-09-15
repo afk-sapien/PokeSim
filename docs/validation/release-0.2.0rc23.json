@@ -1,0 +1,135 @@
+{
+  "version": "0.2.0rc23",
+  "revision": "7ccf16eb342e137b35360870de75d307a987e331",
+  "image": "pokesim:0.2.0rc23-7ccf16e",
+  "image_id": "sha256:b6ca427508008cef31be183051f8547f0544e013ea14d1f41c356f0a45314065",
+  "previous_image": "pokesim:0.2.0rc22-49403d7",
+  "backup": "/docker/pokesim-trading/backups/20260915T133227Z-rc23/before.tar.gz",
+  "timestamp": 1789479312.460038,
+  "games_and_board_unchanged": true,
+  "containers": [
+    {
+      "name": "/pokesim",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:04:45.612766478Z"
+    },
+    {
+      "name": "/pokesim-blue",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:05:13.255250711Z"
+    },
+    {
+      "name": "/pokesim-broker",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:05:17.18415372Z"
+    },
+    {
+      "name": "/pokesim-trading",
+      "image": "pokesim:0.2.0rc23-7ccf16e",
+      "started_at": "2026-09-15T13:35:12.244576901Z"
+    }
+  ],
+  "validation": {
+    "python_passed": 468,
+    "python_skipped": 1,
+    "javascript_passed": 7,
+    "package_resources": "passed",
+    "coordinator_config_and_barriers": "passed",
+    "cold_backup_gzip": "passed"
+  },
+  "initial_trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 12,
+    "state": "retrying",
+    "error": "HTTPError",
+    "last_check": 1789479314.6713092,
+    "last_trade": 1789474694.3994656,
+    "last_operation": "league_reward",
+    "image": "pokesim:0.2.0rc23-7ccf16e",
+    "started_at": "2026-09-15T13:35:12.244576901Z",
+    "restarts": 0,
+    "running": true,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789470183998647267",
+        "ts": 1789470183.998649,
+        "reason": "Red registers Persian. Blue registers Electabuzz"
+      },
+      {
+        "id": "1789473531862648751",
+        "ts": 1789473531.86265,
+        "reason": "Red registers Golem. Blue registers Arcanine"
+      },
+      {
+        "id": "1789474694399464191",
+        "ts": 1789474694.3994656,
+        "reason": "Red registers Hitmonlee. Blue registers Gengar"
+      }
+    ]
+  },
+  "followup_trading": {
+    "completed": 12,
+    "state": "waiting_for_overworld",
+    "error": null,
+    "last_operation": "league_reward",
+    "last_check": 1789479374.7496264,
+    "last_trade": 1789474694.3994656,
+    "enabled": true,
+    "league_rewards": true,
+    "allow_last_copies": true,
+    "mew_event": false,
+    "interval_seconds": 900
+  },
+  "games": {
+    "red": {
+      "version": "0.2.0rc22",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:04:45.612766478Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 138,
+      "league_rewards": {
+        "earned": 16,
+        "delivered": 15,
+        "pending": 1
+      }
+    },
+    "blue": {
+      "version": "0.2.0rc22",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:05:13.255250711Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 140,
+      "league_rewards": {
+        "earned": 19,
+        "delivered": 19,
+        "pending": 0
+      }
+    }
+  },
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 109842333696,
+    "free_bytes": 18905509888,
+    "used_percent": 81.4
+  },
+  "preflight_retry": "The first temporary check omitted the read-only game-data mount. Rollout stopped before changing the image and resumed the old worker. The corrected check passed.",
+  "runtime_retry": "An initial HTTPError during preparation cleared to ordinary overworld waiting on the next scheduled cycle. No successful rc23 exchange is claimed by this receipt."
+}

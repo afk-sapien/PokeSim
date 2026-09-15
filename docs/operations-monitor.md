@@ -532,3 +532,39 @@ in the next interval, and investigate only if the wait persists without safe-poi
 No runtime change, manual trade cycle, or restart was needed. Disk space remains stable
 at 19.48 GB free. Continue the rc22 endurance interval. See
 [the monitoring record](validation/monitor-20260915-1252.json).
+
+
+## September 15, 13:24 UTC reward and trade scheduling
+
+Both games retained healthy rc22 processes, maximum speed, and zero recovery reloads.
+Red reached 138 registrations and Blue reached 140. Earlier pending rewards were
+delivered, but more League wins built another backlog. The trade count remained twelve,
+with more than an hour since the last exchange despite visible useful proposals.
+Training continued, including Red's Alakazam gaining 24,262 XP and three levels.
+See [the interval record](validation/monitor-20260915-1324.json).
+
+The coordinator always selected rewards first at safe points. A regression with pending
+rewards across four fresh coordinator instances reproduced four reward-only attempts.
+The rc23 candidate alternates reward and overdue useful trade attempts. It persists the
+last attempted operation, including skipped attempts, retains the configured cooldown,
+and delivers rewards when proposals are absent or the board cannot be reached. Unsafe
+peers are never held to force scheduling. No transaction, release, or Pokémon handling
+code changed. All 468 Python tests passed, with one optional test skipped, and seven
+JavaScript checks passed. See
+[the scheduling evidence](validation/trade-fairness-0.2.0rc23.json).
+
+Only the scoped coordinator was upgraded, to rc23 from `7ccf16e`. A cold private archive
+of its state and configuration passed gzip integrity checks. The first preflight missed
+a game-data mount in the temporary check, stopped before cutover, and resumed the old
+worker. The corrected preflight passed. Both games and the board remain on rc22 with
+their original starts. This preserves the game endurance interval, while coordinator
+uptime starts anew. A first preparation HTTPError cleared to ordinary overworld waiting
+on the next scheduled cycle. The durable last operation is a reward attempt, leaving
+an overdue useful trade eligible for the next safe turn.
+
+Do not claim a measured live trade-frequency improvement yet. Confirm subsequent actual
+exchanges and continued reward delivery. The sampler now retains coordinator image,
+start time, process status, and last operation alongside trade counts. Keep the union of
+rollback images needed by each service, currently rc20 through rc23 plus the held rc11
+image and earlier legacy images. See
+[the coordinator deployment receipt](validation/release-0.2.0rc23.json).

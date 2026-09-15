@@ -1,0 +1,149 @@
+{
+  "from_ts": 1789476755.9100907,
+  "to_ts": 1789478699.5509636,
+  "minutes": 32.39,
+  "game_version": "0.2.0rc22",
+  "runs": {
+    "red": {
+      "started_at": "2026-09-15T11:04:45.612766478Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.1,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 138,
+      "uptime": 8412,
+      "league_rewards": {
+        "earned": 16,
+        "delivered": 14,
+        "pending": 2
+      },
+      "start_unchanged": true,
+      "new_registrations": 1,
+      "local_replanning": 107,
+      "completed_projects": {},
+      "selected_training_outcomes": [
+        {
+          "key": "train:149:60",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 210463732,
+          "retry_at": 210523732,
+          "target": 60,
+          "gains": {
+            "experience": 24262,
+            "levels": 3
+          }
+        }
+      ]
+    },
+    "blue": {
+      "started_at": "2026-09-15T11:05:13.255250711Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.3,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 140,
+      "uptime": 8384,
+      "league_rewards": {
+        "earned": 19,
+        "delivered": 18,
+        "pending": 1
+      },
+      "start_unchanged": true,
+      "new_registrations": 1,
+      "local_replanning": 96,
+      "completed_projects": {
+        "training": 1
+      },
+      "selected_training_outcomes": [
+        {
+          "key": "train:74:60",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 113948148,
+          "retry_at": 114008148,
+          "target": 60,
+          "gains": {
+            "experience": 7774,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:4:30",
+          "category": "training",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 113967762,
+          "retry_at": 114027762,
+          "target": 30,
+          "gains": {
+            "experience": 0,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:83:30",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 114041658,
+          "retry_at": 114101658,
+          "target": 30,
+          "gains": {
+            "experience": 6345,
+            "levels": 2
+          }
+        }
+      ]
+    }
+  },
+  "trading_before_fix": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 12,
+    "state": "waiting_for_overworld",
+    "error": null,
+    "last_check": 1789478682.2031586,
+    "last_trade": 1789474694.3994656,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789470183998647267",
+        "ts": 1789470183.998649,
+        "reason": "Red registers Persian. Blue registers Electabuzz"
+      },
+      {
+        "id": "1789473531862648751",
+        "ts": 1789473531.86265,
+        "reason": "Red registers Golem. Blue registers Arcanine"
+      },
+      {
+        "id": "1789474694399464191",
+        "ts": 1789474694.3994656,
+        "reason": "Red registers Hitmonlee. Blue registers Gengar"
+      }
+    ]
+  },
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 109263712256,
+    "free_bytes": 19484131328,
+    "used_percent": 80.97
+  },
+  "trade_wait_minutes": 66.75,
+  "finding": "Safe-point waiting and strict reward priority both contribute to latency. A persistent reward backlog can prevent overdue trades from being considered at any safe point."
+}

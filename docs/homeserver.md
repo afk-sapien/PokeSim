@@ -11,11 +11,21 @@ The old https://pokesim.tynet.app address remains a Red alias. Each game retains
 ROM, saves, party, boxes, journal, and notification configuration. Both games run at
 unlimited speed, with `SPEED=0` saved in their deployment configurations.
 
-Both games, the board, and the coordinator run `pokesim:0.2.0rc22-49403d7` from tagged commit
+Both games and the board run `pokesim:0.2.0rc22-49403d7` from tagged commit
 `49403d76fd169b2c106d3de908807f48bfc1635f`. The image ID is
 `sha256:676ae8b8ed8603348c78f7b4e896fe3756dab50cf892752120e8dbd2c9d2fe5b`.
 The source archive is unpacked at `/docker/pokesim/releases/0.2.0rc22-49403d7`.
 PyBoy remains at version 2.7.0. Game data and sprites remain separate mounts.
+
+The scoped coordinator runs `pokesim:0.2.0rc23-7ccf16e` from tagged commit
+`7ccf16eb342e137b35360870de75d307a987e331`. Its image ID is
+`sha256:b6ca427508008cef31be183051f8547f0544e013ea14d1f41c356f0a45314065`.
+The source archive is `/docker/pokesim/releases/0.2.0rc23-7ccf16e`. This coordinator-only
+update alternates pending rewards with overdue useful trades at safe points. Games and
+the board retain their rc22 processes and endurance intervals. The private coordinator
+backup is `/docker/pokesim-trading/backups/20260915T133227Z-rc23/before.tar.gz`.
+It contains state and configuration and must not be published. See
+[the coordinator receipt](validation/release-0.2.0rc23.json).
 
 The release includes persistent playtime, the four-page interface, stall recovery,
 bounded collection objectives, and return paths through Victory Road. Live displays
@@ -39,13 +49,13 @@ See [automatic trading](automatic-trading.md).
 
 ## Release storage retention
 
-Keep the current deployed release and the two most recent successful rollback images.
+Keep each service's current deployed release and its two most recent successful rollback images.
 Also retain every image referenced by a running or stopped container, any held experiment,
 and legacy images created before this monitoring workflow. Before removing an older
 monitoring image, verify its exact tag, source revision label, retained source directory,
 and all container references. Remove its tag without force. Do not use a global image,
-build-cache, or volume prune. The current retained release set is rc20, rc21, and rc22,
-with the held rc11 experiment also preserved. Older source archives remain available
+build-cache, or volume prune. The current retained release set is rc20, rc21, rc22, and rc23,
+covering both the games and the separately upgraded coordinator. The held rc11 experiment is also preserved. Older source archives remain available
 for rebuilding historical releases.
 
 Cold backups now use gzip compression. Historical `before.tar` paths in earlier receipts
