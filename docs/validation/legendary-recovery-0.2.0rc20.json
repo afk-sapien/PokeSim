@@ -1,0 +1,1085 @@
+{
+  "version": "0.2.0rc20",
+  "python_tests": {
+    "passed": 448,
+    "skipped": 1
+  },
+  "javascript_test_files_passed": 2,
+  "method": "Copied Blue approach checkpoint. The first fight deliberately forces a knockout or removes capture balls to simulate exhaustion. Each scenario restarts at the same checkpoint with the pending delay preserved. The revisit scenario explicitly selects the restored Mewtwo after the normal retry wait, then uses ordinary policy shopping, storage, navigation, and capture controls.",
+  "toggle_validation": "Generated cartridge toggle entries match the normalized installed bundle. The unused entry is index 186, Mewtwo is 209, and Articuno is 227.",
+  "scenarios": [
+    {
+      "scenario": "no_balls",
+      "frames": 360024,
+      "wall_seconds": 203.68,
+      "source_sha256": "466c7393aa3d685837e2406e46d434974992bdecbd6608e7632a6e21368d2f92",
+      "source_unchanged": true,
+      "rewinds": 0,
+      "failed_encounter": {
+        "frame": 2094,
+        "hidden": true,
+        "items": [
+          [
+            63,
+            1
+          ],
+          [
+            196,
+            1
+          ],
+          [
+            74,
+            1
+          ],
+          [
+            72,
+            1
+          ],
+          [
+            73,
+            1
+          ],
+          [
+            48,
+            1
+          ],
+          [
+            198,
+            1
+          ],
+          [
+            199,
+            1
+          ],
+          [
+            200,
+            1
+          ],
+          [
+            43,
+            1
+          ],
+          [
+            53,
+            5
+          ],
+          [
+            76,
+            1
+          ],
+          [
+            78,
+            1
+          ],
+          [
+            69,
+            1
+          ],
+          [
+            77,
+            1
+          ],
+          [
+            54,
+            1
+          ],
+          [
+            29,
+            1
+          ],
+          [
+            18,
+            5
+          ]
+        ],
+        "hp": [
+          304,
+          130,
+          344,
+          251,
+          508,
+          341
+        ]
+      },
+      "restored_encounter": {
+        "frame": 119376,
+        "map": "Route 22",
+        "items": [
+          [
+            63,
+            1
+          ],
+          [
+            196,
+            1
+          ],
+          [
+            74,
+            1
+          ],
+          [
+            72,
+            1
+          ],
+          [
+            73,
+            1
+          ],
+          [
+            48,
+            1
+          ],
+          [
+            198,
+            1
+          ],
+          [
+            199,
+            1
+          ],
+          [
+            200,
+            1
+          ],
+          [
+            43,
+            1
+          ],
+          [
+            53,
+            5
+          ],
+          [
+            76,
+            1
+          ],
+          [
+            78,
+            1
+          ],
+          [
+            69,
+            1
+          ],
+          [
+            77,
+            1
+          ],
+          [
+            54,
+            1
+          ],
+          [
+            29,
+            1
+          ],
+          [
+            18,
+            4
+          ]
+        ]
+      },
+      "restart": {
+        "frame": 2094,
+        "state": {
+          "pending": {
+            "150": 36000
+          },
+          "attempts": {
+            "150": 1
+          }
+        }
+      },
+      "caught": false,
+      "final_owned": 121,
+      "final_map": "Lances Room",
+      "recovery": {
+        "pending": {},
+        "attempts": {
+          "150": 1
+        }
+      },
+      "events": [
+        {
+          "type": "trainer",
+          "title": "Defeated Agatha"
+        },
+        {
+          "type": "trainer",
+          "title": "Defeated Bruno"
+        },
+        {
+          "type": "trainer",
+          "title": "Defeated Lorelei"
+        },
+        {
+          "type": "item",
+          "title": "Picked up Max Revive"
+        },
+        {
+          "type": "level",
+          "title": "TOAST grew to level 97"
+        },
+        {
+          "type": "level",
+          "title": "FIZZ grew to level 96"
+        },
+        {
+          "type": "item",
+          "title": "Picked up Full Heal"
+        },
+        {
+          "type": "legendary_retry",
+          "title": "Mewtwo can be encountered again"
+        },
+        {
+          "type": "legendary_retry",
+          "title": "Mewtwo will have another encounter"
+        },
+        {
+          "type": "seen",
+          "title": "Saw Mewtwo for the first time"
+        }
+      ],
+      "trace": [
+        {
+          "frame": 12,
+          "map": "Cerulean Cave B1F",
+          "goal": "Start the adventure",
+          "mode": "waiting for map transition"
+        },
+        {
+          "frame": 1300,
+          "action": "simulate_no_balls"
+        },
+        {
+          "frame": 2094,
+          "action": "encounter_failed"
+        },
+        {
+          "frame": 2094,
+          "action": "restart_same_checkpoint"
+        },
+        {
+          "frame": 14098,
+          "map": "Cerulean Cave B1F",
+          "goal": "Explore Route16Gate2F",
+          "mode": "following objective"
+        },
+        {
+          "frame": 26116,
+          "map": "Cerulean Cave B1F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 38136,
+          "map": "Cerulean Cave B1F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 50156,
+          "map": "Cerulean Cave B1F",
+          "goal": "Withdraw a training partner",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 62170,
+          "map": "Cerulean Cave 1F",
+          "goal": "Withdraw a training partner",
+          "mode": "following objective"
+        },
+        {
+          "frame": 74188,
+          "map": "Cerulean Cave 2F",
+          "goal": "Withdraw a training partner",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 86194,
+          "map": "Cerulean Cave 1F",
+          "goal": "Train Pidgeot to level 100",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 98202,
+          "map": "Route 6",
+          "goal": "Train Pidgeot to level 100",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 110208,
+          "map": "Route 2",
+          "goal": "Train Pidgeot to level 100",
+          "mode": "following objective"
+        },
+        {
+          "frame": 119376,
+          "action": "encounter_restored"
+        },
+        {
+          "frame": 131386,
+          "map": "Route 22",
+          "goal": "Train Pidgeot to level 100",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 143398,
+          "map": "Route 23",
+          "goal": "Train Pidgeot to level 100",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 155402,
+          "map": "Route 23",
+          "goal": "Return for a League rematch",
+          "mode": "following objective"
+        },
+        {
+          "frame": 167408,
+          "map": "Victory Road 1F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 179416,
+          "map": "Victory Road 1F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 191430,
+          "map": "Victory Road 2F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 203452,
+          "map": "Victory Road 2F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 215452,
+          "map": "Victory Road 2F",
+          "goal": "Return for a League rematch",
+          "mode": "following objective"
+        },
+        {
+          "frame": 227468,
+          "map": "Victory Road 3F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 239494,
+          "map": "Victory Road 3F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 251522,
+          "map": "Victory Road 3F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 263542,
+          "map": "Victory Road 3F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 275550,
+          "map": "Victory Road 3F",
+          "goal": "Heal the party",
+          "mode": "moving a boulder onto the switch"
+        },
+        {
+          "frame": 287566,
+          "map": "Victory Road 3F",
+          "goal": "Heal the party",
+          "mode": "moving a boulder onto the switch"
+        },
+        {
+          "frame": 299574,
+          "map": "Victory Road 3F",
+          "goal": "Heal the party",
+          "mode": "following objective"
+        },
+        {
+          "frame": 311598,
+          "map": "Victory Road 3F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 323608,
+          "map": "Loreleis Room",
+          "goal": "Challenge Lorelei",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 335618,
+          "map": "Brunos Room",
+          "goal": "Challenge Bruno",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 347632,
+          "map": "Agathas Room",
+          "goal": "Challenge Agatha",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 359658,
+          "map": "Lances Room",
+          "goal": "Challenge Lance",
+          "mode": "dialogue"
+        }
+      ]
+    },
+    {
+      "scenario": "knockout",
+      "frames": 180010,
+      "wall_seconds": 102.6,
+      "source_sha256": "466c7393aa3d685837e2406e46d434974992bdecbd6608e7632a6e21368d2f92",
+      "source_unchanged": true,
+      "rewinds": 0,
+      "failed_encounter": {
+        "frame": 5242,
+        "hidden": true,
+        "items": [
+          [
+            63,
+            1
+          ],
+          [
+            196,
+            1
+          ],
+          [
+            74,
+            1
+          ],
+          [
+            72,
+            1
+          ],
+          [
+            73,
+            1
+          ],
+          [
+            48,
+            1
+          ],
+          [
+            198,
+            1
+          ],
+          [
+            199,
+            1
+          ],
+          [
+            200,
+            1
+          ],
+          [
+            43,
+            1
+          ],
+          [
+            53,
+            5
+          ],
+          [
+            76,
+            1
+          ],
+          [
+            78,
+            1
+          ],
+          [
+            69,
+            1
+          ],
+          [
+            77,
+            1
+          ],
+          [
+            54,
+            1
+          ],
+          [
+            29,
+            1
+          ],
+          [
+            2,
+            20
+          ],
+          [
+            18,
+            5
+          ]
+        ],
+        "hp": [
+          33,
+          130,
+          344,
+          251,
+          508,
+          341
+        ]
+      },
+      "restored_encounter": {
+        "frame": 133040,
+        "map": "Route 21",
+        "items": [
+          [
+            63,
+            1
+          ],
+          [
+            196,
+            1
+          ],
+          [
+            74,
+            1
+          ],
+          [
+            72,
+            1
+          ],
+          [
+            73,
+            1
+          ],
+          [
+            48,
+            1
+          ],
+          [
+            198,
+            1
+          ],
+          [
+            199,
+            1
+          ],
+          [
+            200,
+            1
+          ],
+          [
+            43,
+            1
+          ],
+          [
+            53,
+            5
+          ],
+          [
+            76,
+            1
+          ],
+          [
+            78,
+            1
+          ],
+          [
+            69,
+            1
+          ],
+          [
+            77,
+            1
+          ],
+          [
+            54,
+            1
+          ],
+          [
+            29,
+            1
+          ],
+          [
+            2,
+            19
+          ]
+        ]
+      },
+      "restart": {
+        "frame": 5242,
+        "state": {
+          "pending": {
+            "150": 36000
+          },
+          "attempts": {
+            "150": 1
+          }
+        }
+      },
+      "caught": false,
+      "final_owned": 121,
+      "final_map": "Seafoam Islands B4F",
+      "recovery": {
+        "pending": {},
+        "attempts": {
+          "150": 1
+        }
+      },
+      "events": [
+        {
+          "type": "legendary_retry",
+          "title": "Mewtwo can be encountered again"
+        },
+        {
+          "type": "release",
+          "title": "Said goodbye to a spare Electrode"
+        },
+        {
+          "type": "legendary_retry",
+          "title": "Mewtwo will have another encounter"
+        },
+        {
+          "type": "seen",
+          "title": "Saw Mewtwo for the first time"
+        }
+      ],
+      "trace": [
+        {
+          "frame": 12,
+          "map": "Cerulean Cave B1F",
+          "goal": "Start the adventure",
+          "mode": "waiting for map transition"
+        },
+        {
+          "frame": 1300,
+          "action": "simulate_knockout"
+        },
+        {
+          "frame": 5242,
+          "action": "encounter_failed"
+        },
+        {
+          "frame": 5242,
+          "action": "restart_same_checkpoint"
+        },
+        {
+          "frame": 17266,
+          "map": "Cerulean Cave B1F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 29266,
+          "map": "Cerulean Cave B1F",
+          "goal": "Plan the next adventure project",
+          "mode": "list"
+        },
+        {
+          "frame": 41270,
+          "map": "Cerulean Cave B1F",
+          "goal": "Make room in storage",
+          "mode": "exploring obstacle"
+        },
+        {
+          "frame": 53288,
+          "map": "Cerulean Cave B1F",
+          "goal": "Make room in storage",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 65298,
+          "map": "Cerulean Cave B1F",
+          "goal": "Make room in storage",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 77304,
+          "map": "Cerulean Cave B1F",
+          "goal": "Make room in storage",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 89332,
+          "map": "Cerulean Cave B1F",
+          "goal": "Make room in storage",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 101340,
+          "map": "Cerulean Cave 2F",
+          "goal": "Make room in storage",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 113354,
+          "map": "Cerulean Pok\u00e9mon Center",
+          "goal": "Make room in storage",
+          "mode": "following objective"
+        },
+        {
+          "frame": 125358,
+          "map": "Route 2",
+          "goal": "Restock supplies",
+          "mode": "following objective"
+        },
+        {
+          "frame": 133040,
+          "action": "encounter_restored"
+        },
+        {
+          "frame": 145054,
+          "map": "Route 1",
+          "goal": "Collect Articuno",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 157056,
+          "map": "Route 12",
+          "goal": "Collect Articuno",
+          "mode": "following objective"
+        },
+        {
+          "frame": 169066,
+          "map": "Seafoam Islands B1F",
+          "goal": "Collect Articuno",
+          "mode": "following objective"
+        }
+      ]
+    },
+    {
+      "scenario": "knockout",
+      "frames": 179670,
+      "wall_seconds": 88.59,
+      "source_sha256": "466c7393aa3d685837e2406e46d434974992bdecbd6608e7632a6e21368d2f92",
+      "source_unchanged": true,
+      "rewinds": 0,
+      "guided_return": true,
+      "failed_encounter": {
+        "frame": 5242,
+        "hidden": true,
+        "items": [
+          [
+            63,
+            1
+          ],
+          [
+            196,
+            1
+          ],
+          [
+            74,
+            1
+          ],
+          [
+            72,
+            1
+          ],
+          [
+            73,
+            1
+          ],
+          [
+            48,
+            1
+          ],
+          [
+            198,
+            1
+          ],
+          [
+            199,
+            1
+          ],
+          [
+            200,
+            1
+          ],
+          [
+            43,
+            1
+          ],
+          [
+            53,
+            5
+          ],
+          [
+            76,
+            1
+          ],
+          [
+            78,
+            1
+          ],
+          [
+            69,
+            1
+          ],
+          [
+            77,
+            1
+          ],
+          [
+            54,
+            1
+          ],
+          [
+            29,
+            1
+          ],
+          [
+            2,
+            20
+          ],
+          [
+            18,
+            5
+          ]
+        ],
+        "hp": [
+          33,
+          130,
+          344,
+          251,
+          508,
+          341
+        ]
+      },
+      "restored_encounter": {
+        "frame": 133040,
+        "map": "Route 21",
+        "items": [
+          [
+            63,
+            1
+          ],
+          [
+            196,
+            1
+          ],
+          [
+            74,
+            1
+          ],
+          [
+            72,
+            1
+          ],
+          [
+            73,
+            1
+          ],
+          [
+            48,
+            1
+          ],
+          [
+            198,
+            1
+          ],
+          [
+            199,
+            1
+          ],
+          [
+            200,
+            1
+          ],
+          [
+            43,
+            1
+          ],
+          [
+            53,
+            5
+          ],
+          [
+            76,
+            1
+          ],
+          [
+            78,
+            1
+          ],
+          [
+            69,
+            1
+          ],
+          [
+            77,
+            1
+          ],
+          [
+            54,
+            1
+          ],
+          [
+            29,
+            1
+          ],
+          [
+            2,
+            19
+          ]
+        ]
+      },
+      "restart": {
+        "frame": 5242,
+        "state": {
+          "pending": {
+            "150": 36000
+          },
+          "attempts": {
+            "150": 1
+          }
+        }
+      },
+      "caught": true,
+      "final_owned": 122,
+      "final_map": "Cerulean Cave B1F",
+      "recovery": {
+        "pending": {},
+        "attempts": {
+          "150": 1
+        }
+      },
+      "events": [
+        {
+          "type": "legendary_retry",
+          "title": "Mewtwo can be encountered again"
+        },
+        {
+          "type": "release",
+          "title": "Said goodbye to a spare Electrode"
+        },
+        {
+          "type": "legendary_retry",
+          "title": "Mewtwo will have another encounter"
+        },
+        {
+          "type": "seen",
+          "title": "Saw Mewtwo for the first time"
+        }
+      ],
+      "trace": [
+        {
+          "frame": 12,
+          "map": "Cerulean Cave B1F",
+          "goal": "Start the adventure",
+          "mode": "waiting for map transition"
+        },
+        {
+          "frame": 1300,
+          "action": "simulate_knockout"
+        },
+        {
+          "frame": 5242,
+          "action": "encounter_failed"
+        },
+        {
+          "frame": 5242,
+          "action": "restart_same_checkpoint"
+        },
+        {
+          "frame": 17266,
+          "map": "Cerulean Cave B1F",
+          "goal": "Return for a League rematch",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 29266,
+          "map": "Cerulean Cave B1F",
+          "goal": "Plan the next adventure project",
+          "mode": "list"
+        },
+        {
+          "frame": 41270,
+          "map": "Cerulean Cave B1F",
+          "goal": "Make room in storage",
+          "mode": "exploring obstacle"
+        },
+        {
+          "frame": 53288,
+          "map": "Cerulean Cave B1F",
+          "goal": "Make room in storage",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 65298,
+          "map": "Cerulean Cave B1F",
+          "goal": "Make room in storage",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 77304,
+          "map": "Cerulean Cave B1F",
+          "goal": "Make room in storage",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 89332,
+          "map": "Cerulean Cave B1F",
+          "goal": "Make room in storage",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 101340,
+          "map": "Cerulean Cave 2F",
+          "goal": "Make room in storage",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 113354,
+          "map": "Cerulean Pok\u00e9mon Center",
+          "goal": "Make room in storage",
+          "mode": "following objective"
+        },
+        {
+          "frame": 125358,
+          "map": "Route 2",
+          "goal": "Restock supplies",
+          "mode": "following objective"
+        },
+        {
+          "frame": 133040,
+          "action": "encounter_restored"
+        },
+        {
+          "frame": 133040,
+          "action": "select_restored_mewtwo_for_validation"
+        },
+        {
+          "frame": 145054,
+          "map": "Route 1",
+          "goal": "Collect Mewtwo",
+          "mode": "dialogue"
+        },
+        {
+          "frame": 157070,
+          "map": "Underground Path North South",
+          "goal": "Collect Mewtwo",
+          "mode": "following objective"
+        },
+        {
+          "frame": 169080,
+          "map": "Cerulean Cave B1F",
+          "goal": "Collect Mewtwo",
+          "mode": "following objective"
+        },
+        {
+          "frame": 179670,
+          "action": "mewtwo_caught"
+        }
+      ]
+    }
+  ]
+}

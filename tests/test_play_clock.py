@@ -68,6 +68,7 @@ def test_emulator_ticks_count_simulated_frames_including_manual_play():
 
 
 def test_autosave_persists_clock_in_store_and_checkpoint(tmp_path):
+    from pokesim.legendary import LegendaryRecovery
     store = Store(tmp_path)
     emu = Emulator.__new__(Emulator)
     emu.store = store
@@ -80,9 +81,11 @@ def test_autosave_persists_clock_in_store_and_checkpoint(tmp_path):
     emu.mem.to_dict.return_value = {}
     emu.rom_sha1 = 'test-rom'
     emu.frame = 0
+    emu.legendary_recovery = LegendaryRecovery({'pending': {'150': 1234}, 'attempts': {'150': 1}})
     emu._state_bytes = lambda: b'save'
     emu._autosave()
     assert store.checkpoint_metadata(store.latest_state())['play_clock'] == emu.play_clock.state_dict()
+    assert store.checkpoint_metadata(store.latest_state())['legendary_recovery'] == emu.legendary_recovery.state_dict()
     store.close()
     reopened = Store(tmp_path)
     assert PlayClock(reopened.get('play_clock')).status() == emu.play_clock.status()

@@ -75,7 +75,7 @@ class Navigator:
                         self.story_blocks.update((m, x + dx, y + dy) for dx in range(2) for dy in range(2))
         cleared = set()
         for index, (m, obj_id) in enumerate(DATA["toggle_objects"]):
-            if obj_id >= len(WORLD[m]["objects"]):
+            if m not in WORLD or obj_id >= len(WORLD[m]["objects"]):
                 continue
             if index // 8 < len(snapshot.hidden_objects) and snapshot.hidden_objects[index // 8] & (1 << (index % 8)):
                 obj = WORLD[m]["objects"][obj_id]

@@ -16,6 +16,7 @@ from pyboy import PyBoy
 from . import __version__, config
 from .events import RunMemory, diff
 from . import rewards
+from .legendary import LegendaryRecovery
 from .play_clock import PlayClock
 from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext
@@ -48,6 +49,7 @@ class Emulator:
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
         self.mem = RunMemory.from_dict(store.get("run_memory", {}))
+        self.legendary_recovery = LegendaryRecovery()
         achievements = store.events(limit=1, types=('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'))
         self.last_achievement = achievements[0] if achievements else None
         self.policy.load_state_dict(store.get("policy_state", {}))
@@ -128,6 +130,7 @@ class Emulator:
             "strategy": self.policy.details(),
             "progress": self.progress_status(),
             "league_rewards": rewards.status(self.store),
+            "legendary_recovery": self.legendary_recovery.state_dict(),
         }
 
     def progress_status(self):
@@ -187,6 +190,7 @@ class Emulator:
             self.frame = metadata.get("frame", self.frame)
         self.prev_snapshot = None
         self.pending = []
+        self.legendary_recovery = LegendaryRecovery((metadata or {}).get('legendary_recovery'))
         self.stuck_since = time.time()
         self.play_clock.restore(metadata.get("play_clock") if metadata else None)
         self.policy.on_restore()
@@ -259,6 +263,14 @@ class Emulator:
             log.info("dropped %d transient event(s)", dropped)
         self.pending = [ev for ev in new if ev.still is not None]
         events += [ev for ev in new if ev.still is None]
+        restored_legendary = False
+        if (self.rom_sha1 in config.KNOWN_ROM_SHA1 and not self.manual_mode
+                and not self.store.get('trade_hold')):
+            recovery_events, restored_legendary = self.legendary_recovery.observe(snap, self.pb.memory)
+            events += recovery_events
+            if restored_legendary:
+                snap = read_snapshot(self.pb.memory, self.frame)
+                self.prev_snapshot = snap
         with self.lock:
             self.snapshot = snap
         now = time.time()
@@ -277,6 +289,8 @@ class Emulator:
         if events:
             self._handle_events(events, snap)
             self.store.set("run_memory", self.mem.to_dict())
+        if restored_legendary:
+            self._autosave()
 
     def _handle_events(self, events, snap):
         if any(ev.type == 'champion' for ev in events):
@@ -318,6 +332,7 @@ class Emulator:
             "policy_state": self.policy.state_dict(), "run_memory": self.mem.to_dict(),
             "frame": self.frame, "play_clock": self.play_clock.state_dict(),
             "trade_id": self.store.get("trade_barrier"),
+            "legendary_recovery": self.legendary_recovery.state_dict(),
         })
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
@@ -484,6 +499,7 @@ class Emulator:
                 p.unlink()
                 p.with_suffix(".json").unlink(missing_ok=True)
             self.mem = RunMemory()
+            self.legendary_recovery = LegendaryRecovery()
             self.last_achievement = None
             self.store.set("trade_barrier", None)
             self.store.set(rewards.KEY, None)

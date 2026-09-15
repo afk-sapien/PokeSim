@@ -15,6 +15,7 @@ required = {
     'pokesim/trade/execute.py',
     'pokesim/trade/event.py',
     'pokesim/rewards.py',
+    'pokesim/legendary.py',
     'pokesim/trade/pair.py',
     'pokesim/trade/service.py',
     'pokesim/broker/routine.py',

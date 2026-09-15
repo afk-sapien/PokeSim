@@ -249,9 +249,12 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     legendary = known.get('dex') in (144,145,146,150)
     allowed_capture = capture_species is None or enemy.species == capture_species or legendary
     useful = useful and allowed_capture
-    collection_target = collect_missing and missing_species and allowed_capture
-    capture_limit = 10000 if legendary else 20
+    collection_target = (collect_missing or legendary) and missing_species and allowed_capture
+    capture_limit = 50 if legendary else 20
     master = next((i for i,(item,qty) in enumerate(snapshot.items) if item==ITEMS['MASTER_BALL'] and qty),None)
+    if (snapshot.in_battle == 1 and snapshot.battle_type == 0 and legendary and missing_species
+            and (not snapshot.can_catch or not balls and master is None or catch_attempts >= capture_limit)):
+        return Decision('run', reason='Retreat and prepare another legendary attempt with balls and storage space')
     if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and collection_target and catch_attempts < capture_limit and (balls or legendary and master is not None):
         if legendary and master is not None:
             return Decision('item',master,reason='Secure the missing legendary with the Master Ball')

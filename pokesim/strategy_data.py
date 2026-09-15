@@ -13,6 +13,21 @@ PRICES = {int(k): v for k, v in DATA["prices"].items()}
 MATCHUPS = {(a, b): factor for a, b, factor in DATA["matchups"]}
 
 
+def normalize_toggle_objects(rows):
+    """Keep the unused cartridge entry so every subsequent flag keeps its real bit."""
+    rows = [list(row) for row in rows]
+    unused = [MAPS['UNUSED_MAP_F4'], 1]
+    if unused not in rows:
+        index = next(i for i, (m, _) in enumerate(rows) if m == MAPS['POKEMON_MANSION_2F'])
+        rows.insert(index, unused)
+    return rows
+
+
+# Older verified bundles omitted the numeric object ID in UNUSED_MAP_F4.
+# Normalize in memory so upgrades also fix existing installations without rewriting bundles.
+DATA['toggle_objects'] = normalize_toggle_objects(DATA['toggle_objects'])
+
+
 def event_set(flags: bytes, name: str) -> bool:
     index = EVENTS[name]
     return index // 8 < len(flags) and bool(flags[index // 8] & (1 << (index % 8)))
