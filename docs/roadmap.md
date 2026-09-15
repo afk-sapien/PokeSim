@@ -1,4 +1,4 @@
-PC strength ranking, September 15: rc26 adds a Power sort across all boxes, a
+PC strength ranking deployed to both games, September 15: rc26 adds a Power sort across all boxes, a
 strongest-partners shortcut, individual stat sorts, and a five-stat breakdown. The
 score sums calculated max HP, Attack, Defense, Speed, and Special at the current
 level. It includes species, DVs, and stat experience with cartridge rounding.
@@ -11,6 +11,8 @@ and zero-gain deferrals. Measure travel, PC preparation, healing, and actual tra
 separately. Check the 7,200-frame inactivity deadline against productive preparation
 at maximum speed, then replay copied saves before adjusting it. Prefer nearby
 training and sustained gains without restoring movement-only stall extensions.
+Both games now also include the earlier PC journal correction and bounded Victory
+Road retreat. Deployment notes below describe earlier release states.
 
 Current Victory Road recovery work, September 15: Red's depleted team could not find
 a route to healing and repeatedly replanned while trades kept its achievement line

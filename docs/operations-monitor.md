@@ -750,3 +750,47 @@ new image and backup was about 17.57 GB. The rc25 recovery and restored Red prog
 are verified live. Further monitoring should watch for recurring cave stalls when
 no Escape Rope is available, without treating the bounded fallback as a universal
 navigation repair.
+
+
+## September 15, PC power ranking and planning assessment
+
+The user requested a way to identify the strongest boxed Pokémon and asked whether
+walking and task switching conceal slow progress. A one-hour journal sample found
+15 Red level-ups and one Championship, plus 36 Blue level-ups, three Championships,
+and one evolution. Four exchanges completed across the pair. Both had 144 registered
+species. Ordinary wild wins are not journaled as trainer events, so those counts are
+not battle totals. Recent project outcomes nevertheless include partial training
+and zero-gain deferrals. The 7,200-frame inactivity deadline is game time, not wall
+time. Investigate preparation and travel separately from productive training before
+changing the planner. Longer useful sessions and fewer repeated PC trips are the next
+priority. Do not extend deadlines merely because coordinates change.
+
+rc26 adds Power as the sum of calculated max HP, Attack, Defense, Speed, and Special.
+Stats use current level, species, DVs, and stat experience with cartridge rounding.
+The UI supports a strongest-across-all-boxes shortcut, individual stat sorting,
+visible scores, and a detailed breakdown. Calculation, API enrichment, sorting,
+filtering, pagination, missing values, and bookmarks are covered by tests. All 506
+Python tests passed with one optional skip. Both JavaScript test files and package
+checks passed. A current Red snapshot was visually checked in the local browser.
+
+The tagged release b04057e was deployed sequentially to both games after each verified
+compressed cold backup and saved-game smoke check. The coordinator was stopped for
+each deployment boundary and resumed after confirming no active transaction or holds.
+Both games resumed healthy at maximum speed with 144 registrations. The board was
+unchanged. Red's prior interval ended at 1,444 seconds and Blue's at 22,622 seconds.
+New starts are 17:21:16 UTC for Red and 17:22:28 UTC for Blue. Coordinator rc24 resumed
+at 17:22:30 UTC. Both games now include the earlier journal correction. No training
+policy change was included with the PC ranking. See the
+[Red receipt](validation/release-0.2.0rc26-red.json) and
+[Blue receipt](validation/release-0.2.0rc26-blue.json).
+
+The post-deployment sample confirmed new local progress independently of trading:
+Red leveled Mew to 39 and Blue evolved Squirtle into Wartortle. Both stayed healthy,
+unpaused, at maximum speed, with zero recovery reloads and 144 registrations. Red
+had 31 rewards delivered and Blue 33, with no pending claims. The coordinator was
+running, enabled, and ready, reporting 24 completed exchanges and no error. Public
+Red served valid scores for all 234 boxed Pokémon. The public Blue page displayed
+its Power ranking and all-box controls in the browser. Free disk space was
+16,892,948,480 bytes. The existing monitoring automation now includes rc26 deployment
+identities and the training-churn investigation. See
+[the follow-up evidence](validation/pc-power-0.2.0rc26.json).

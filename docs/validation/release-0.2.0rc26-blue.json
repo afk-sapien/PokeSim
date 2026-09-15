@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0rc26",
+  "edition": "blue",
+  "image": "pokesim:0.2.0rc26-b04057e",
+  "revision": "b04057e5d6a713c79b4e19612c581bc97744eae9",
+  "image_id": "sha256:03ba97779def533579122b7fe703947bd7a9ceb904abeccad44fe2cd65f42d3f",
+  "previous_image": "pokesim:0.2.0rc22-49403d7",
+  "backup": "/docker/pokesim-blue/backups/20260915T172217Z-rc26/before.tar.gz",
+  "cold_backup_verified": true,
+  "timestamp": 1789492951.2311058,
+  "other_game_and_board_unchanged": true,
+  "coordinator_resumed_same_image": true,
+  "previous_game_uptime": 22622,
+  "initial_health": {
+    "ok": true,
+    "worker_alive": true,
+    "activity_age_seconds": 0.0,
+    "error": null
+  },
+  "initial_owned": 144,
+  "containers": [
+    {
+      "name": "/pokesim",
+      "image": "pokesim:0.2.0rc26-b04057e",
+      "started_at": "2026-09-15T17:21:16.033180451Z"
+    },
+    {
+      "name": "/pokesim-blue",
+      "image": "pokesim:0.2.0rc26-b04057e",
+      "started_at": "2026-09-15T17:22:28.646316173Z"
+    },
+    {
+      "name": "/pokesim-broker",
+      "image": "pokesim:0.2.0rc22-49403d7",
+      "started_at": "2026-09-15T11:05:17.18415372Z"
+    },
+    {
+      "name": "/pokesim-trading",
+      "image": "pokesim:0.2.0rc24-d99cdc2",
+      "started_at": "2026-09-15T17:22:30.947849825Z"
+    }
+  ]
+}
