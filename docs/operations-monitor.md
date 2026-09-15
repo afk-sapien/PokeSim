@@ -6,6 +6,15 @@ for routine fixes or deployments. Preserve existing adventures and record backup
 The first live trade retains its specific participant approval requirement. Develop
 and validate coordinated execution before attempting it. No automatic save resets.
 
+The user prefers maximum speed whenever resources allow. Use unlimited speed (`0`)
+for both live games and copied-save progression tests. Keep that preference across
+upgrades and restarts, and only slow down for a specific timing check, resource issue,
+or an explicit user request. Both live games were confirmed at speed 0 on September 15
+UTC, after the user changed the speed. Red's saved compose setting was also changed
+from 1 to 0 without restarting the game. Blue already persisted 0. Earlier Red samples
+were collected at 1x, so account for that change when comparing progress per wall hour.
+The sampler now records speed and pause state alongside health and progress.
+
 The task heartbeat checks every 30 minutes. It stays quiet when nothing actionable
 changes. Report material findings, verified improvements, deployments, problems needing
 attention, and completed 24-hour, 48-hour, and week-long endurance milestones.

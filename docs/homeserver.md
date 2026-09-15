@@ -8,8 +8,8 @@ Updated September 14, 2026 (America/Los_Angeles).
 | Blue | https://pokesim-blue.tynet.app | `pokesim-blue` | 8940 | `/docker/pokesim-blue/data` |
 
 The old https://pokesim.tynet.app address remains a Red alias. Each game retains its own
-ROM, saves, party, boxes, journal, and notification configuration. Red runs at speed 1,
-and Blue retains its existing unlimited speed setting.
+ROM, saves, party, boxes, journal, and notification configuration. Both games run at
+unlimited speed, with `SPEED=0` saved in their deployment configurations.
 
 Blue runs `pokesim:0.2.0rc12-66b226f` from commit
 `66b226f6d2a565c5281692a285d419d79fabaf2f`. Its image ID is

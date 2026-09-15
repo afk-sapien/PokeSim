@@ -27,6 +27,7 @@ for edition, name, port in [('red', 'pokesim', 8930), ('blue', 'pokesim-blue', 8
             'version': state['version'], 'image': info['Config']['Image'],
             'started_at': info['State']['StartedAt'], 'restarts': info['RestartCount'],
             'health': state['health'], 'uptime': state['uptime'],
+            'speed': state.get('speed'), 'paused': state.get('paused'),
             'reloads': state['reloads'], 'frame': state['frame'],
             'owned': game['owned'], 'position': [game['map_name'], game['x'], game['y']],
             'goal': strategy.get('objective'), 'activity': strategy.get('action'),
