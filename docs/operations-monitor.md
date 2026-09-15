@@ -922,3 +922,47 @@ The existing 30-minute monitor was updated with rc29 timings, exact deployment
 starts and backups, and the corrected preparation rules. It now prioritizes
 completed training milestones, trainee XP, preparation costs, and repeated failures.
 It remains quiet for routine unchanged samples. Multi-day endurance remains unverified.
+
+
+## September 15, optional supplies interrupted Red's training
+
+The scheduled sample found both rc29 games healthy at maximum speed with zero reloads.
+Compared with the prior follow-up, Red completed one training target and the journal
+recorded 19 level-ups. Blue recorded 15 level-ups, two Championships, and two delivered
+rewards. Two automatic exchanges brought the total to 30. Free disk space remained
+stable at 15,967,457,280 bytes. These counts cover the interval from 18:20:14 UTC to
+the detailed follow-up near 18:53 UTC and do not count every battle.
+
+Red then spent more than eight wall minutes without a local achievement, repeatedly
+crossing the Indigo Plateau boundary under the restock override. It had 455 money,
+one Great Ball, no affordable balls or healing items, and no saleable spare items.
+An optional Antidote top-up was enough to keep distant shopping active. The override
+prevented training even after preparation objectives were deferred.
+
+A copied 90,000-frame run reproduced 52 policy recoveries with no achievements and
+finished still restocking at Indigo Plateau. rc30 limits ordinary distant shop trips
+to affordable balls, healing, revives, or selling spare items. Optional purchases
+remain available at the current shop. Legendary preparation and cash reserves remain
+unchanged. The same copied input then resumed Nidoking training, gaining 9,415 XP
+and three levels with eight recoveries. Both runs retained registrations with no
+rewinds. The witness is a supply-trip subcase within red-partial-training-20260915,
+keeping eight top-level reproduction cases. All 521 Python tests passed with one
+optional skip, and lockfile and package checks passed. The isolated release excluded
+unrelated work in the shared checkout. See [the comparison](validation/supply-trip-0.2.0rc30.json).
+
+Only Red was upgraded, after a verified compressed cold backup and current-save load.
+Its previous endurance interval ended at 2692 seconds.
+The new start is 2026-09-15T19:03:56.67078667Z. Blue retained its productive rc29 process
+from 2026-09-15T18:19:32.712199958Z, and the board also retained its process.
+Coordinator rc24 resumed at 2026-09-15T19:03:59.660732997Z.
+See [the receipt](validation/release-0.2.0rc30-red.json).
+
+
+The first live follow-up confirmed Red had resumed League battles, defeating Bruno
+within 30 seconds of startup. Blue continued training and reached Arcanine level 41.
+Both remained healthy, unpaused, at maximum speed, with zero recovery reloads and
+144 registrations. Automatic trading was ready with 31 completed exchanges and no
+reported error. Red had 34 delivered Championship rewards and Blue 39, with none
+pending. Free disk space was 15,657,025,536 bytes. The monitor now records the split
+Red rc30 and Blue rc29 deployment, supply-trip regression, private witness, and exact
+endurance starts. See [the live evidence](validation/supply-live-0.2.0rc30.json).

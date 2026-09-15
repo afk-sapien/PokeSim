@@ -1,4 +1,4 @@
-# Candidate rc30: avoid distant shopping for optional supplies
+# Current Red: rc30, avoid distant shopping for optional supplies
 
 Red repeatedly crossed the Indigo Plateau boundary trying to restock with only
 455 money and no affordable balls or healing items. An optional Antidote top-up
@@ -11,7 +11,17 @@ A copied 90,000-frame comparison changed 52 recoveries and no achievements into
 8 recoveries and three Nidoking levels. Both used ordinary controls, preserved
 registrations, and performed no rewinds. All 521 Python tests passed with one optional
 skip. See [the reproduction](docs/validation/supply-trip-0.2.0rc30.json).
-Red deployment is pending. Blue remains on rc29 and continues progressing.
+Red now runs `pokesim:0.2.0rc30-2c692f6` from tag `v0.2.0rc30`, source
+`2c692f6bd7fa663b941f6571e311d462bdb0b342`. It passed a verified compressed cold
+backup and current-save load, then resumed healthy at maximum speed with 144
+registrations. Red started 2026-09-15T19:03:56.67078667Z. Blue remains on rc29 with its
+2026-09-15T18:19:32.712199958Z start preserved. The board retained its process and
+coordinator rc24 resumed. See [the receipt](docs/validation/release-0.2.0rc30-red.json).
+
+The live follow-up found Red battling through the League again, with a fresh Bruno
+victory within 30 seconds of startup. Blue continued gaining levels without a restart.
+Both games were healthy at maximum speed with zero recovery reloads. Automatic trading
+was ready with 31 completed exchanges. See [the live evidence](docs/validation/supply-live-0.2.0rc30.json).
 
 # Blue and previous Red: rc29, renew preparation only through real training gains
 
