@@ -1,10 +1,8 @@
 # Automatic trading between trusted adventures
 
-The owner requested common trading on the live Red and Blue pair. The implementation
-is deployed, but execution remains disabled. Automatic approval review still requires
-explicit approval of the first exchange and subsequent automatic policy because the
-earlier roadmap required a separately approved first trade. Other installations also
-default to disabled.
+The owner explicitly authorized live automatic trading on September 15, 2026 UTC.
+The Red and Blue coordinator is enabled. Individual exchanges do not require further
+approval. Other installations default to disabled until configured by their owner.
 
 The coordinator checks each minute and permits one useful exchange every 15 minutes.
 It waits for both games to reach unpaused, healthy overworld states. Authenticated

@@ -1,4 +1,11 @@
-# Current exchange awaiting approval
+# Live automatic trading authorized
+
+The owner explicitly approved the first exchange and ongoing automatic trading on
+September 15, 2026 UTC. The scoped live coordinator is now enabled for useful spare
+exchanges every 15 minutes. Individual trades need no further approval. The earlier
+approval requirements below are historical and superseded by this authorization.
+
+# Previously proposed first exchange
 
 Red would send its spare DIRTNAP, a level-41 Machoke, and receive Blue's spare MOCHI,
 a level-32 Vulpix. Blue would receive DIRTNAP as Machamp. Both gain a Pokédex entry.
@@ -8,13 +15,12 @@ move during play and must be checked again before execution.
 
 The requested ongoing policy permits one useful spare exchange every 15 minutes,
 protecting parties, projects, last copies, and best retained partners. Both live games
-and the scoped coordinator are deployed. Execution remains disabled because automatic
-approval review requires explicit approval of the first exchange and this policy.
+and the scoped coordinator were deployed before activation. Automatic approval review
+initially blocked activation. The owner has now explicitly approved automatic trading.
 
 # Historical first-trade review
 
-The owner subsequently requested common trading. The rc16 implementation is ready,
-but automatic approval review requires approval of the first trade and automatic policy. This older
+The owner subsequently requested and explicitly authorized automatic trading. This older
 last-copy proposal remains unexecuted because automatic trading protects last copies.
 See [automatic trading](automatic-trading.md) for current behavior.
 
@@ -38,8 +44,7 @@ The rehearsal found and fixed a missing registration step in the save-based exec
 That correction is committed after the adventure release and is not active in either
 live game. The board cannot write saves or execute trades.
 
-Before a live exchange, obtain approval for these specific participants, re-read both
-inventories, and reject a stale proposal. Stop and cold-backup both games, use the
-corrected executor to stage both saves, then validate and install both outputs together.
-Retain the pre-trade backups and record the exchange in both journals. Approval of this
-one exchange must not enable automatic trading.
+That earlier plan required specific participant approval and cold backups before a
+manual exchange. The owner later explicitly authorized automatic exchanges. The rc16
+coordinator now uses fresh held checkpoints, staged verification, durable recovery,
+and journals in both games. The earlier one-exchange approval limit no longer applies.

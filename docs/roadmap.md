@@ -1,6 +1,6 @@
 Current trading update: rc16 provides trusted automatic spare exchanges through scoped
-controls. It is deployed but disabled pending explicit approval of the first exchange
-and automatic policy, as required by automatic approval review. See
+controls. The user explicitly authorized ongoing automatic trading and the live policy
+is enabled. Individual trades need no further approval. See
 [automatic trading](automatic-trading.md). Peer-request catching objectives remain
 future work.
 
@@ -44,19 +44,18 @@ Activity distinguishes exploring, making progress, and recovering. Playtime anno
 retain their history across checkpoint restores, so rewinds cannot announce the same
 hour repeatedly. The app clock remains persistent beyond the cartridge limit.
 
-## 3. Introduce exchanges in stages
+## 3. Maintain useful automatic exchanges
 
-The proposal engine and save-based executor exist. First connect a read-only trade board
-to the two live inventories. Show both Pokémon, their box locations, whether either is a
-last copy, and what each game gains. No trade executes from the proposal board.
+The live board shows proposals and completed exchanges. The owner explicitly authorized
+ongoing automatic trading. The scoped coordinator checks every minute and permits one
+useful spare exchange every 15 minutes once both games reach a safe overworld state.
+It backs up fresh checkpoints, verifies both staged inventories, and applies a durable
+commit before loading and releasing both games. Parties, current projects, last copies,
+and best retained partners stay protected. Individual trades need no further approval.
 
-Next prepare one concrete exchange for explicit user approval. Re-read both inventories,
-stop both runs, create cold backups, validate exact participants, stage both outputs,
-verify their inventories and manifests, then install and resume both together. Do not
-turn approval of one exchange into authorization for scheduled trading.
-
-Consider automation only after approved exchanges and sustained autonomous progress have
-been observed. Do not promise complete collections from trading alone.
+Monitor actual exchanges and recovery. Add peer-request catching objectives so connected
+adventures deliberately collect useful spares. Do not promise complete collections from
+trading alone.
 
 ## 4. Keep releases reproducible
 

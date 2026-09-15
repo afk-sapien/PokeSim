@@ -1,0 +1,57 @@
+{
+  "checked_at": 1789453698.091557,
+  "release": "0.2.0rc16",
+  "revision": "caa092bf76d3b73ce892575ece41480b5a455d80",
+  "authorization": "Owner explicitly approved live automatic trading and no individual trade approvals",
+  "enabled": true,
+  "public_policy": {
+    "enabled": true,
+    "interval_seconds": 900
+  },
+  "active_transaction": false,
+  "status": {
+    "completed": 0,
+    "history": [],
+    "state": "waiting_for_overworld",
+    "last_check": 1789453686.3769665,
+    "error": null
+  },
+  "games": {
+    "red": {
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "paused": false,
+      "speed": 0.0,
+      "reloads": 0,
+      "owned": 113,
+      "hold": null,
+      "trade_barrier": null,
+      "journaled_trades": 0
+    },
+    "blue": {
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.5,
+        "error": null
+      },
+      "paused": false,
+      "speed": 0.0,
+      "reloads": 0,
+      "owned": 117,
+      "hold": null,
+      "trade_barrier": null,
+      "journaled_trades": 0
+    }
+  },
+  "container_started_at": {
+    "red": "2026-09-15T04:59:48.782749019Z",
+    "blue": "2026-09-15T04:59:06.756964327Z"
+  },
+  "browser_check": "Trade board displays automatic exchanges, 15 minute interval, and waiting for both adventures",
+  "observation": "No completed exchange during initial observation. One HTTPError retry cleared without a retained hold. Both games continued with zero reloads."
+}
