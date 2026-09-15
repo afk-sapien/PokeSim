@@ -317,9 +317,14 @@ function renderCollection(collection, game) {
   set('#collection-caught', 'textContent', `${collection.caught || 0} / 151`)
   set('#collection-available', 'textContent', collection.available || 0)
   const hunt = collection.hunt
-  const target = collection.entries?.find(entry => entry.species === hunt?.species)
-  set('#collection-hunt', 'textContent', hunt ? `${target?.name || hunt.item?.replaceAll('_', ' ') || 'Exploration'} · ${({grass:'Pokédex hunt', surf:'Surf expedition', fish:'Fishing', safari:'Safari expedition', evolve:'Evolution', gift:'Gift', fossil:'Fossil revival', static:'Legendary encounter', rod:'Fishing gear', trade:'In-game trade', prize:'Game Corner', rematch:'League rematch', trainer:'Trainer battle', explore:'Exploration', amber:'Fossil discovery'})[hunt.method] || 'Expedition'}` : 'Watching for new discoveries')
-  set('#collection-budget', 'textContent', hunt ? `Reassess in ${Math.ceil(collection.remaining_seconds / 60)} game minutes` : 'Short expeditions alternate with the main journey')
+  const target = collection.entries?.find(entry => entry.species === (hunt?.species || hunt?.parent))
+  set('#collection-hunt', 'textContent', hunt ? `${target?.name || hunt.item?.replaceAll('_', ' ') || 'Exploration'} · ${({grass:'Pokédex hunt', surf:'Surf expedition', fish:'Fishing', safari:'Safari expedition', evolve:'Evolution', gift:'Gift', fossil:'Fossil revival', static:'Legendary encounter', rod:'Fishing gear', trade:'In-game trade', prize:'Game Corner', rematch:'League rematch', train:'Training', trainer:'Trainer battle', explore:'Exploration', amber:'Fossil discovery'})[hunt.method] || 'Expedition'}` : 'Watching for new discoveries')
+  const training = collection.training
+  set('#collection-budget', 'textContent', training
+    ? training.phase === 'preparation'
+      ? `Preparing · ${Math.ceil(training.preparation_remaining_seconds / 60)} game minutes left for preparation`
+      : `Training · ${Math.ceil(training.remaining_seconds / 60)} game minutes left, extendable with XP gains`
+    : hunt ? `Reassess in ${Math.ceil(collection.remaining_seconds / 60)} game minutes` : 'Short expeditions alternate with the main journey')
   set('#collection-evolutions', 'innerHTML', collection.evolutions?.length ? collection.evolutions.map(e => `<li><strong>${esc(e.from)} → ${esc(e.to)}</strong><span>${e.method === 'level' ? `Level ${e.level} → ${e.requirement}` : e.method === 'trade' ? 'Requires a link trade' : esc(String(e.requirement).replaceAll('_', ' '))}</span></li>`).join('') : '<li>More evolution projects will appear as the collection grows.</li>')
   set('#collection-history', 'innerHTML', collection.history?.length ? collection.history.map(line => `<li>${esc(line)}</li>`).join('') : '<li>The next discovery is out there.</li>')
 }

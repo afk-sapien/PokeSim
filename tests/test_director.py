@@ -30,13 +30,14 @@ def test_restarts_preserve_category_rotation_and_repeated_failure_backoff():
     assert restored.completed == {'collection': 1}
 
 
-def test_productive_training_timeout_is_advanced_and_does_not_escalate_failure():
+def test_productive_training_hard_limit_is_advanced_and_does_not_escalate_failure():
     c = Collection()
     c.completed_champion = True
     c.project = {'method': 'train', 'parent': sid(113), 'family': [sid(113)],
                  'initial_level': 65, 'target_level': 70, 'key': 'train:chansey:70'}
     c.remaining = 120
     c.observe(state(frame=0, party=(mon(species=sid(113), level=65, experience=10000),)))
+    c.project['training_session']['active_frames'] = 360000 - 120
     c.observe(state(frame=120, party=(mon(species=sid(113), level=65, experience=10500),)))
     assert c.project is None
     assert c.director.outcomes[-1]['status'] == 'advanced'
@@ -83,7 +84,7 @@ def test_productive_training_still_stops_when_idle_and_preserves_partial_progres
     outcome = restored.director.outcomes[-1]
     assert outcome['status'] == 'advanced'
     assert outcome['gains'] == {'experience': 524, 'levels': 0}
-    assert 'No encounter' in outcome['reason']
+    assert 'No trainee experience gain' in outcome['reason']
     assert outcome['retry_at'] - outcome['elapsed'] == 60000
     assert not restored.director.failures
     assert not restored.director.completed
