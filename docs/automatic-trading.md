@@ -108,3 +108,18 @@ The board lists rewards separately from completed exchanges. Game state includes
 delivered, and pending counts under `league_rewards`. Keep the older `mew_event` false
 when using this pool. Both adventures remain intact. A deliberate manual new-adventure
 restart clears the reward ledger. Ordinary recovery and restarts of the server retain it.
+
+
+## Independent safe points
+
+The coordinator checks that both games are healthy, running, and have parties before
+starting a useful operation. Each game then checks its current battle, text, and menu
+state when asked to prepare. API snapshots do not need to show both games in the
+overworld at the same instant.
+
+Preparation shares one 15-second retry window across both games. Only the explicit
+overworld-wait response is retried, at intervals of up to 250 milliseconds. Requests
+already in flight retain their existing 20-second transport timeout. Other rejections
+or an expired retry window abort the operation and release prepared peers. A failed
+cleanup remains durable for the next coordinator cycle. The 15-minute trade interval,
+reward fairness, and game-side checkpoint checks are unchanged.

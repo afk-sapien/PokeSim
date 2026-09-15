@@ -1,0 +1,172 @@
+{
+  "source_hashes": {
+    "red": "7c60edaeddecb662ab4217413f4a3a2a850049c844ca3757c9786f847b69dd2d",
+    "blue": "17e7cebab2c3a7aa76e59e9ec8ac795e80c40c865106fca671ea4f48c03e74a3"
+  },
+  "source_saves_unchanged": true,
+  "blue_menu_rejected_by_game": true,
+  "red_held_while_blue_continued": true,
+  "blue_closed_menu_with_normal_controls": true,
+  "both_released": true,
+  "subsequent_checkpoints_reload": true,
+  "calls": [
+    [
+      "red",
+      "prepare",
+      "1789483741404863387"
+    ],
+    [
+      "blue",
+      "prepare",
+      "1789483741404863387"
+    ],
+    [
+      "blue",
+      "prepare",
+      "1789483741404863387"
+    ],
+    [
+      "red",
+      "load",
+      "1789483741404863387"
+    ],
+    [
+      "blue",
+      "load",
+      "1789483741404863387"
+    ],
+    [
+      "red",
+      "release",
+      "1789483741404863387"
+    ],
+    [
+      "blue",
+      "release",
+      "1789483741404863387"
+    ]
+  ],
+  "result": {
+    "moved": [
+      {
+        "instance": "red",
+        "box": 7,
+        "position": 9,
+        "sent": {
+          "species": 108,
+          "name": "Ekans",
+          "level": 15,
+          "nick": "MOCHI"
+        },
+        "received": {
+          "species": 96,
+          "name": "Sandshrew",
+          "level": 18,
+          "nick": "PICKLES",
+          "evolved_from": null
+        },
+        "state": "/tmp/pokesim-director/rc24-safe-points-3/coordinator/transactions/1789483741404863387/after/red/auto-v1-trade-1789483741404863387.state",
+        "owned_before": 116,
+        "owned_after": 117
+      },
+      {
+        "instance": "blue",
+        "box": 7,
+        "position": 13,
+        "sent": {
+          "species": 96,
+          "name": "Sandshrew",
+          "level": 18,
+          "nick": "PICKLES"
+        },
+        "received": {
+          "species": 108,
+          "name": "Ekans",
+          "level": 15,
+          "nick": "MOCHI",
+          "evolved_from": null
+        },
+        "state": "/tmp/pokesim-director/rc24-safe-points-3/coordinator/transactions/1789483741404863387/after/blue/auto-v1-trade-1789483741404863387.state",
+        "owned_before": 118,
+        "owned_after": 119
+      }
+    ],
+    "reason": "Red registers Sandshrew. Blue registers Ekans",
+    "price": "trusted exchange",
+    "states": {
+      "red": "/tmp/pokesim-director/rc24-safe-points-3/coordinator/transactions/1789483741404863387/after/red/auto-v1-trade-1789483741404863387.state",
+      "blue": "/tmp/pokesim-director/rc24-safe-points-3/coordinator/transactions/1789483741404863387/after/blue/auto-v1-trade-1789483741404863387.state"
+    },
+    "status": "staged",
+    "id": "1789483741404863387",
+    "proposal": {
+      "give": {
+        "instance": "red",
+        "dex": 23,
+        "species": 108,
+        "box": 7,
+        "position": 9,
+        "level": 15,
+        "nick": "MOCHI",
+        "name": "Ekans",
+        "dvs": [
+          3,
+          8,
+          8,
+          15,
+          9
+        ],
+        "stat_exp": [
+          166,
+          213,
+          205,
+          181,
+          209
+        ]
+      },
+      "take": {
+        "instance": "blue",
+        "dex": 27,
+        "species": 96,
+        "box": 7,
+        "position": 13,
+        "level": 18,
+        "nick": "PICKLES",
+        "name": "Sandshrew",
+        "dvs": [
+          0,
+          12,
+          6,
+          12,
+          14
+        ],
+        "stat_exp": [
+          4851,
+          6341,
+          4947,
+          7939,
+          4045
+        ]
+      },
+      "reason": "Red registers Sandshrew. Blue registers Ekans",
+      "price": "trusted exchange",
+      "spends": {
+        "give": "last one",
+        "take": "last one"
+      }
+    },
+    "hashes": {
+      "red": "06510a406b2443a31d5424e8dc6b6f59f1fc0fb7718ba61123f59075f1eed7db",
+      "blue": "ff554e30d90bf12ab003077e264ab3479e876a22a146bbf0af87f6d9922a544d"
+    }
+  },
+  "version": "0.2.0rc24",
+  "baseline": "The staggered-safe-point regression failed on rc23 because the API sample was in battle.",
+  "retry_window_seconds": 15,
+  "transport_timeout_seconds": 20,
+  "python_tests": {
+    "passed": 478,
+    "skipped": 1
+  },
+  "javascript_test_files_passed": 2
+}

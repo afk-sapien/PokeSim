@@ -568,3 +568,35 @@ start time, process status, and last operation alongside trade counts. Keep the 
 rollback images needed by each service, currently rc20 through rc23 plus the held rc11
 image and earlier legacy images. See
 [the coordinator deployment receipt](validation/release-0.2.0rc23.json).
+
+
+## September 15, 14:46 UTC independent exchange safe points
+
+Across 36.85 minutes with unchanged game starts, Red reached 140 registrations and
+Blue reached 142. Red completed three training projects, one evolution, and one supply
+project. Blue completed another training project. Red's recent partial training gains
+included 13,165 XP and two levels, followed by 3,675 XP and another level. Both games
+remained healthy at maximum speed with zero recovery reloads.
+
+The rc23 coordinator completed its second live exchange since deployment, bringing the
+total to fourteen. Red registered Charizard and Blue registered Kabuto. Each game also
+received four Championship rewards since 14:09. The pending counts declined from four
+and three to three and two despite three new wins each. This confirms continued reward
+delivery and actual useful trades, while long gaps between overlapping safe samples
+still leave room to improve scheduling.
+
+The preserved regression failed on rc23 when API samples showed battle state even
+though each game could reach its own safe checkpoint. The rc24 candidate requests
+preparation independently within one shared 15-second retry window, retrying only the
+explicit overworld-wait response. The game-side safety checks are unchanged. Timeouts
+and all other rejections release prepared peers through existing durable cleanup.
+An in-flight request retains the existing 20-second transport timeout.
+
+A copied-save rehearsal held Red while Blue's open menu rejected preparation. Ordinary
+B input closed Blue's menu, then the coordinator completed a useful Sandshrew and Ekans
+exchange. Both games resumed and subsequent saves reloaded. Original source hashes
+were unchanged. Tests cover staggered readiness, a shared deadline, abort cleanup,
+paused or unhealthy peers, authentication rejection, conflicting holds, and unknown
+409 responses. All 478 Python tests passed, with one optional test skipped. Both
+JavaScript test files passed. See
+[the safe-point evidence](validation/trade-safe-points-0.2.0rc24.json).

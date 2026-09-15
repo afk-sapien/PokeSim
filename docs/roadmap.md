@@ -1,3 +1,11 @@
+Current safe-point work, September 15: coordinator rc24 requests a safe checkpoint
+from each available game independently within one shared 15-second retry window. Only
+the explicit overworld-wait response is retried. The game still rejects battles, menus,
+and paused play. Timeout or other rejection aborts the transaction and releases its
+holds. Existing transport timeouts also apply to requests already in flight. The copied
+rehearsal completed a useful exchange after Blue closed its menu with normal controls,
+while Red held its checkpoint. The game processes do not require an upgrade.
+
 Current exchange scheduling, September 15: coordinator rc23 prevents a constant
 Championship reward backlog from monopolizing safe points. An overdue useful trade gets
 the turn after a reward attempt. Reward delivery continues during trade cooldown and
