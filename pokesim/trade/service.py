@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 import tempfile
 import time
+from urllib.error import HTTPError
 import urllib.request
 
 
@@ -87,6 +88,25 @@ class Coordinator:
     def result(self, transaction):
         return json.loads((self.root / 'transactions' / transaction / 'result.json').read_text())
 
+    def prepare(self, name, transaction, deadline):
+        while True:
+            if time.monotonic() >= deadline:
+                raise TimeoutError('The games did not reach a safe point in time')
+            try:
+                return self.control(name, 'prepare', transaction)
+            except HTTPError as error:
+                if error.code != 409:
+                    raise
+                try:
+                    detail = json.load(error).get('detail')
+                except (ValueError, AttributeError):
+                    raise error
+                if detail != 'Waiting for an unpaused overworld safe point':
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining > 0:
+                    time.sleep(min(0.25, remaining))
+
     def finish(self, active):
         committed = active['phase'] == 'committed'
         if committed:
@@ -161,7 +181,8 @@ class Coordinator:
             for state in states.values())
         if trade_cooling and not reward_due:
             return
-        if any(s.get('paused') or not safe(s) for s in states.values()):
+        if any(s.get('paused') or not s.get('health', {}).get('ok')
+               or not (s.get('game') or {}).get('party') for s in states.values()):
             status.update(last_check=time.time(), state='waiting_for_overworld', error=None)
             write(status_path, status)
             return
@@ -194,10 +215,13 @@ class Coordinator:
             active['kind'] = 'mew_event'
         write(self.active_path, active)
         try:
+            # Each game checks its own live state. Stale API samples need not share
+            # an overworld instant. Retries share one deadline across both peers.
+            deadline = time.monotonic() + 15
             for name in self.peers:
                 active['prepared'].append(name)
                 write(self.active_path, active)
-                prepared = self.control(name, 'prepare', active['id'])
+                prepared = self.prepare(name, active['id'], deadline)
                 if prepared['phase'] != 'prepared':
                     raise RuntimeError('The game has not reached a safe checkpoint')
             self.worker('stage', active['id'])

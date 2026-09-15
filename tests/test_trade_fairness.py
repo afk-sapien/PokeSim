@@ -66,9 +66,15 @@ def test_board_failure_does_not_block_pending_rewards(scheduler, monkeypatch):
     assert attempts == ['league_reward']
 
 
-def test_unsafe_peer_is_never_held_to_force_fairness(scheduler):
+@pytest.mark.parametrize('unavailable', ['paused', 'unhealthy', 'no_party'])
+def test_unavailable_peer_is_never_held_to_force_fairness(scheduler, unavailable):
     root, state, board, calls, attempts = scheduler
-    state['game']['in_battle'] = 1
+    if unavailable == 'paused':
+        state['paused'] = True
+    elif unavailable == 'unhealthy':
+        state['health']['ok'] = False
+    else:
+        state['game']['party'] = []
     service.Coordinator(root).cycle()
     assert attempts == []
     assert not (root / 'active.json').exists()
