@@ -369,3 +369,11 @@ made no pickup attempts, so a persistent retry-backoff candidate did not demonst
 an improvement and remains held outside runtime. Monitoring now includes active pickup
 state and retry timing. Capture an active failure before changing approach or retry
 behavior. See [the comparison](validation/pickup-retry-20260915.json).
+
+
+## Live collection progress, September 15
+
+Blue completed the Route 18 Gate NPC trade for Lickitung and reached 117 registered
+entries. Both runs completed two additional training projects in the next monitoring
+interval without save reloads or container restarts. Coordinated server-to-server
+trading remains disabled. See [the monitoring record](validation/monitor-20260915-0611.json).

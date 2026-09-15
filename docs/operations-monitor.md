@@ -253,3 +253,20 @@ while the failed detour is active. The case count is seven. Retain at most eight
 preserving validation records and held patches before retiring older private artifacts.
 No games were restarted and no runtime deployment was made. Trading remains disabled
 under the existing approval block. See [the comparison](validation/pickup-retry-20260915.json).
+
+
+## September 15, 06:11 UTC progress check
+
+Blue obtained Lickitung through the Route 18 Gate 2F NPC exchange, confirmed by journal
+event 3444, and reached 117 registered entries. This was an ordinary in-game NPC trade,
+not a coordinated exchange between the servers. Red remains at 113. Each game completed
+two more training projects in the 31.9-minute interval, and the selected partners also
+showed current experience gains. Blue completed one collection and one supply project.
+
+Both rc16 containers retain their start times and continue at unlimited speed with zero
+save reloads. Local policy recoveries increased by 82 for Red and 88 for Blue. Red's
+pickup history still records repeated failures, while both sampled active targets and
+retry maps were empty. A bounded 90-poll capture attempt found no active pickup checkpoint.
+No runtime change or deployment was justified, and neither game was paused or restarted.
+Disk use remained stable at 83.16 percent, with 16.53 GB free. See
+[the monitoring record](validation/monitor-20260915-0611.json).
