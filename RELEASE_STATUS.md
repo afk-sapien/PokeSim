@@ -1,3 +1,18 @@
+# Release candidate rc17: varied choices, last-copy trades, and Mew
+
+The candidate adds persisted random fossil and Eevee evolution choices for new runs.
+Existing choices remain intact. Optional last-copy trades require a new Pokédex entry
+for the recipient and continue protecting active parties and projects. An optional
+one-time postgame Mew event uses the existing scoped coordinator, backed-up checkpoints,
+staged inventory checks, and durable recovery.
+
+All 416 Python tests and seven JavaScript tests passed, with one optional checkpoint
+test skipped. The packages built and runtime resources passed verification. A copied
+pair recovered a Mew distribution after an interruption following durable commitment,
+then completed a last-copy Hitmonchan and Hitmonlee trade. Repeated delivery and a
+pointless return exchange were rejected. Subsequent autosaves reloaded successfully.
+See [the rehearsal](docs/validation/choices-events-trading-0.2.0rc17.json).
+
 # Current deployment: rc16, automatic trading enabled
 
 Red, Blue, the board, and the coordinator use `pokesim:0.2.0rc16-caa092b`, tagged commit

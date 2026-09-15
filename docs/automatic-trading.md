@@ -9,9 +9,14 @@ It waits for both games to reach unpaused, healthy overworld states. Authenticat
 trade controls place durable holds on both games and create fresh checkpoints. Trading
 briefly pauses the adventures and preserves their speed. It does not restart containers.
 
-Only spare boxed partners are eligible. Active parties, current collection and training
-subjects, last copies, and the best retained copy of each species are protected. Owners
-can protect additional internal species IDs in `protected_species`.
+Spare boxed partners are eligible by default. Set `allow_last_copies` to true in the
+private policy and its redacted public copy to let a final boxed partner travel when
+it gives the recipient a new Pokédex registration. This does not erase the sender's
+registration. It does give up that physical copy. Unique partners are never spent for
+collection restoration or quality upgrades alone, preventing repeated return trades.
+Active parties, current collection and training subjects, explicitly protected species,
+and the best copy when several are held remain protected. Owners can protect additional
+internal species IDs in `protected_species`.
 
 New Pokédex entries and trade evolutions come first. Already registered species can
 provide upgrades of at least five levels, four total DVs at a comparable level, or
@@ -48,7 +53,7 @@ The ordinary resume and rewind controls cannot bypass a held exchange.
 
 The board mounts only `/docker/pokesim-trading/state/public` as `/trading:ro`, with
 `BROKER_TRADING_DIR=/trading`. That directory contains a redacted `policy.json` with
-only `enabled` and `interval_seconds`, and the completed exchange status. It never
+only `enabled`, `interval_seconds`, `allow_last_copies`, and `mew_event`, and the completed exchange status. It never
 receives peer tokens, ROMs, saves, or transaction backups.
 
 Set `enabled` to true in both private and public policy files after configuring the
@@ -60,3 +65,23 @@ A process lock prevents concurrent coordinators. The latest 20 recovery director
 and 50 visible exchange records are retained. Small transaction markers remain in each
 game's database to prevent duplicate journal delivery. Trade preparation expeditions
 for missing peer requests remain future work.
+
+
+## Optional Mew distribution
+
+Set `mew_event` to true in the private policy and redacted public policy to enable a
+one-time postgame gift for each configured instance. The normal coordinator must be
+enabled. At a safe point after Champion, with a free box slot, it can deliver a level-5
+Mew with Pound, ordinary random DVs, no stat experience, and original trainer POKESIM.
+This is a custom PokeSim event, not an official Nintendo distribution or a hidden
+cartridge quest. Original Red and Blue have no event switch to activate.
+
+Delivery uses fresh held checkpoints, backups, staged verification, and the same durable
+publication and recovery path as exchanges. Both games retain every existing Pokémon,
+party member, item, and badge. The gift occupies a free slot. A persistent database
+marker and existing Pokédex registration prevent another gift after a reload or trade.
+The board lists gifts separately from completed exchanges. This initial event service
+uses the existing two-peer coordinator. It is not a general event scheduling interface.
+
+Current adventures keep their existing starter, fossil, and evolved Eevee. No resets,
+extra Eevee supply, or starter farming are part of this feature.

@@ -65,7 +65,13 @@ class Coordinator:
                 hold = json.loads(row[0]) if row else None
                 if not hold or hold['id'] != transaction or hold['phase'] != 'prepared':
                     raise ValueError('Both games must hold this prepared transaction')
-        (pair.stage if action == 'stage' else pair.journal)(self.root, transaction)
+        kind = (json.loads(self.active_path.read_text()).get('kind') if action == 'stage'
+                else self.result(transaction).get('kind'))
+        if kind == 'mew_event':
+            from . import event
+            (event.stage if action == 'stage' else event.journal)(self.root, transaction)
+        else:
+            (pair.stage if action == 'stage' else pair.journal)(self.root, transaction)
 
     def control(self, name, action, transaction):
         peer = self.peers[name]
@@ -102,7 +108,15 @@ class Coordinator:
                 self.control(name, 'abort', active['id'])
         status_path = self.root / 'public' / 'status.json'
         status = json.loads(status_path.read_text()) if status_path.exists() else {'history': [], 'completed': 0}
-        if committed and not any(row['id'] == active['id'] for row in status['history']):
+        if committed and active.get('kind') == 'mew_event':
+            result = self.result(active['id'])
+            events = status.get('events', [])
+            if not any(row['id'] == active['id'] for row in events):
+                events.append({'id': active['id'], 'ts': active['ts'], 'event': result['event'], 'gifts': result['gifts']})
+                status['events'] = events[-10:]
+                status['mew_recipients'] = sorted(set(status.get('mew_recipients', []))
+                                                | {gift['instance'] for gift in result['gifts']})
+        elif committed and not any(row['id'] == active['id'] for row in status['history']):
             result = self.result(active['id'])
             row = {'id': active['id'], 'ts': active['ts'], 'reason': result['reason'], 'moved': result['moved']}
             status['history'] = (status['history'] + [row])[-50:]
@@ -136,11 +150,19 @@ class Coordinator:
         # Avoid holding both games when the fresh proposal board has nothing useful.
         with urllib.request.urlopen(self.config['board_url'] + '/api/proposals', timeout=20) as response:
             opportunities = json.load(response).get('routine_proposals', [])
-        if not opportunities:
+        event_due = self.config.get('mew_event', False) and any(
+            name not in status.get('mew_recipients', [])
+            and 151 not in state.get('game', {}).get('dex_owned', [])
+            and state.get('strategy', {}).get('milestones', {}).get('champion')
+            and any(count < 20 for count in state.get('game', {}).get('storage', {}).get('box_counts', []))
+            for name, state in states.items())
+        if not opportunities and not event_due:
             status.update(last_check=time.time(), state='waiting_for_opportunity', error=None)
             write(status_path, status)
             return
         active = {'id': str(time.time_ns()), 'ts': time.time(), 'phase': 'preparing', 'prepared': [], 'targets': []}
+        if event_due:
+            active['kind'] = 'mew_event'
         write(self.active_path, active)
         try:
             for name in self.peers:

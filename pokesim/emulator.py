@@ -397,7 +397,7 @@ class Emulator:
                 if not path or self.store.get('trade_barrier') != transaction:
                     raise ValueError('The committed checkpoint is not ready')
                 self._load_state_file(path)
-                events = self.store.events(limit=1, types=('trade',))
+                events = self.store.events(limit=1, types=('trade', 'obtain'))
                 if events:
                     self.last_achievement = events[0]
                 hold['phase'] = 'loaded'

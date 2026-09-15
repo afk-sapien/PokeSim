@@ -1,3 +1,10 @@
+Current scope update, September 15: randomize fossil and Eevee evolution choices for
+new runs. Preserve choices already made in existing saves. Starter and Eevee supply
+farming, coordinated starter allocation, and network demand planning for those gifts
+are outside scope. Permit last boxed copies to travel for new Pokédex registrations,
+while protecting active teams and current projects. Support an optional one-time
+postgame PokeSim Mew distribution with durable delivery records.
+
 Current trading update: rc16 provides trusted automatic spare exchanges through scoped
 controls. The user explicitly authorized ongoing automatic trading and the live policy
 is enabled. Individual trades need no further approval. See
@@ -50,8 +57,9 @@ The live board shows proposals and completed exchanges. The owner explicitly aut
 ongoing automatic trading. The scoped coordinator checks every minute and permits one
 useful spare exchange every 15 minutes once both games reach a safe overworld state.
 It backs up fresh checkpoints, verifies both staged inventories, and applies a durable
-commit before loading and releasing both games. Parties, current projects, last copies,
-and best retained partners stay protected. Individual trades need no further approval.
+commit before loading and releasing both games. Parties and current projects stay
+protected. Last-copy sharing can be enabled for new Pokédex registrations. Individual
+trades need no further approval.
 
 Monitor actual exchanges and recovery. Add peer-request catching objectives so connected
 adventures deliberately collect useful spares. Do not promise complete collections from
@@ -132,9 +140,9 @@ and Squirtle, with a fixed choice available in configuration. Existing saves kee
 actual starter. All three opening campaigns have passed through the first badge. Extend
 validation to later gyms and longer runs as the planner changes.
 
-For groups creating new runs together, optionally distribute starter choices across
-the group before repeating a choice. Variation in gifts, team preferences, and expedition
-selection can make runs distinct without manufacturing species or restarting saves.
+Fossil selection and Eevee evolution now vary independently of the starter choice and
+persist across reloads. Coordinating starter or Eevee supplies across a network is out
+of scope. The optional Mew distribution is explicitly labeled as a custom PokeSim event.
 
 ### Make months of operation practical
 
@@ -159,8 +167,8 @@ training, and visible ground-item detours are implemented. Continue from that ba
 
 1. Prove sustained collection and training progress. Improve travel and maintenance
    interruptions, while preserving productive live runs for endurance observation.
-2. Build and validate durable coordination for the first specifically approved live
-   trade. Then add trusted-peer automatic exchanges and trade preparation objectives.
+2. Maintain automatic exchanges and verify useful last-copy sharing. Support the optional
+   postgame Mew distribution with recovery checks and one-time delivery records.
 3. Extend reserve training with varied Hall of Fame teams and visible stat-training
    milestones. Keep useful partial progress distinct from completed targets.
 4. Bound backup, image, journal, and checkpoint growth and validate upgrades and outages

@@ -65,7 +65,7 @@ def milestones(snapshot):
 STARTERS = ("bulbasaur", "charmander", "squirtle")
 
 
-def story_goal(snapshot, starter="bulbasaur"):
+def story_goal(snapshot, starter="bulbasaur", fossil="HELIX_FOSSIL"):
     flags = snapshot.event_flags
     has = lambda name: any(item == ITEMS[name] and qty for item, qty in snapshot.items)
     if not event_set(flags, "EVENT_FOLLOWED_OAK_INTO_LAB") and not snapshot.party:
@@ -87,7 +87,7 @@ def story_goal(snapshot, starter="bulbasaur"):
                              if tile == (0x52 if name == "ROUTE_2" else 0x20))
             return Goal("train_brock", "Prepare for Brock", "Build a useful matchup against Brock before entering the gym", tuple(grass))
         return at("boulder", "Challenge Brock", "Earn the Boulder Badge to continue east", "PEWTER_GYM", 4, 2, "up")
-    return campaign_goal(snapshot)
+    return campaign_goal(snapshot, fossil)
 
 
 GYMS = (
@@ -164,7 +164,7 @@ def partner_habitats(move, level):
     return tuple(targets)
 
 
-def campaign_goal(s):
+def campaign_goal(s, fossil="HELIX_FOSSIL"):
     done = lambda name: event_set(s.event_flags, name)
     has = lambda name: any(item == ITEMS[name] and qty for item, qty in s.items)
     knows = lambda move: any(move in p.moves for p in s.party)
@@ -175,7 +175,7 @@ def campaign_goal(s):
         if (s.map in west or (s.map == MAPS["ROUTE_4"] and s.x < 21)) and not (done("EVENT_GOT_DOME_FOSSIL") or done("EVENT_GOT_HELIX_FOSSIL")):
             if not done("EVENT_BEAT_MT_MOON_EXIT_SUPER_NERD"):
                 return obj("moon_trainer", "Find a way through Mt. Moon", "Defeat the Super Nerd guarding the fossils", "MT_MOON_B2F", "SUPER_NERD")
-            return obj("fossil", "Choose a fossil", "Collect a fossil to clear the exit toward Cerulean", "MT_MOON_B2F", "HELIX_FOSSIL")
+            return obj("fossil", "Choose " + fossil.replace('_', ' ').title(), "Collect a fossil to clear the exit toward Cerulean", "MT_MOON_B2F", fossil)
         return gym_goal(s, 2)
     if not s.badges & 4:
         if not (has("S_S_TICKET") or done("EVENT_GOT_SS_TICKET") or has("HM01") or knows(15)):
