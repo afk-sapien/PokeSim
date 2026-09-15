@@ -162,3 +162,12 @@ baselines. The new private reproduction is
 Storage stayed near 78.57 percent used, with 22.71 GB free. No files were pruned.
 Continue measuring Red's collection progress and both live endurance intervals.
 The first live trade remains unapproved and unexecuted.
+
+
+The 00:38 UTC September 15 check confirmed Red had restored its depleted attacking PP
+and recorded further live level gains after the healing concern. Both container start
+times remained unchanged, with zero save reloads. Blue continued gaining levels and
+its completed training count reached 18. Registered entries remained Red 111 and Blue
+116. Storage was stable at 78.57 percent used, with 22.72 GB free. No deployment or
+new runtime change was needed for this check. Keep the partial-training accounting
+change queued and continue the existing live endurance intervals.
