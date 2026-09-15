@@ -1,0 +1,283 @@
+{
+  "from_ts": 1789474838.0154881,
+  "to_ts": 1789476755.9100907,
+  "minutes": 31.96,
+  "version": "0.2.0rc22",
+  "deployment_performed": false,
+  "runs": {
+    "red": {
+      "started_at": "2026-09-15T11:04:45.612766478Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 137,
+      "uptime": 6468,
+      "league_rewards": {
+        "earned": 14,
+        "delivered": 13,
+        "pending": 1
+      },
+      "start_unchanged": true,
+      "new_registrations": 1,
+      "local_replanning": 104,
+      "completed_projects": {
+        "training": 1,
+        "supplies": 2,
+        "evolution": 1
+      },
+      "selected_training_outcomes": [
+        {
+          "key": "train:101:60",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 209072602,
+          "retry_at": 209132602,
+          "target": 60,
+          "gains": {
+            "experience": 7951,
+            "levels": 1
+          }
+        }
+      ],
+      "journal_evidence": {
+        "event_counts": {
+          "level": 24,
+          "item": 1,
+          "champion": 3,
+          "trainer": 15,
+          "evolve": 1,
+          "release": 15,
+          "obtain": 2
+        },
+        "milestones": [
+          {
+            "id": 9078,
+            "type": "item",
+            "title": "Picked up Escape Rope",
+            "body": "On Pok\u00e9mon Mansion 1F.",
+            "ts": 1789476729.9667826
+          },
+          {
+            "id": 9076,
+            "type": "champion",
+            "title": "Champion! League victory #14",
+            "body": "Party: SPROUT L100, PIXEL L58, GIZMO L94, PICKLES L41, MUFFIN L100, BUTTON L100.",
+            "ts": 1789476651.407059
+          },
+          {
+            "id": 9066,
+            "type": "evolve",
+            "title": "Eevee evolved into Flareon!",
+            "body": "Level 5, on Celadon Mart 4F.",
+            "ts": 1789476312.509987
+          },
+          {
+            "id": 9063,
+            "type": "obtain",
+            "title": "Received Eevee for Championship #13",
+            "body": "A level-5 Eevee joined the PC. Each League victory earns a random PokeSim reward.",
+            "ts": 1789476269.0
+          },
+          {
+            "id": 9058,
+            "type": "champion",
+            "title": "Champion! League victory #13",
+            "body": "Party: GIZMO L94, TOAST L36, PICKLES L41, MUFFIN L100, BUTTON L100, SPROUT L100.",
+            "ts": 1789475888.8361635
+          },
+          {
+            "id": 9033,
+            "type": "obtain",
+            "title": "Received Charmander for Championship #12",
+            "body": "A level-5 Charmander joined the PC. Each League victory earns a random PokeSim reward.",
+            "ts": 1789475124.0
+          },
+          {
+            "id": 9026,
+            "type": "champion",
+            "title": "Champion! League victory #12",
+            "body": "Party: BUTTON L100, OLIVE L46, SPROUT L100, GIZMO L93, PICKLES L41, MUFFIN L100.",
+            "ts": 1789474884.4761806
+          }
+        ],
+        "league_rewards": {
+          "earned": 14,
+          "delivered": 13,
+          "pending": 1
+        },
+        "safe_point": {
+          "in_battle": 1,
+          "textbox": true,
+          "start_menu": false,
+          "paused": false
+        },
+        "box_free_slots": 6,
+        "legendary_releases": []
+      }
+    },
+    "blue": {
+      "started_at": "2026-09-15T11:05:13.255250711Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.3,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 139,
+      "uptime": 6441,
+      "league_rewards": {
+        "earned": 17,
+        "delivered": 16,
+        "pending": 1
+      },
+      "start_unchanged": true,
+      "new_registrations": 2,
+      "local_replanning": 103,
+      "completed_projects": {
+        "training": 2,
+        "supplies": 1,
+        "evolution": 2
+      },
+      "selected_training_outcomes": [
+        {
+          "key": "train:28:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 112572096,
+          "retry_at": 112632096,
+          "target": 40,
+          "gains": {
+            "experience": 5809,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:170:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 112645322,
+          "retry_at": 112705322,
+          "target": 40,
+          "gains": {
+            "experience": 6598,
+            "levels": 2
+          }
+        }
+      ],
+      "journal_evidence": {
+        "event_counts": {
+          "level": 35,
+          "champion": 2,
+          "trainer": 10,
+          "release": 3,
+          "evolve": 2,
+          "obtain": 1
+        },
+        "milestones": [
+          {
+            "id": 4107,
+            "type": "champion",
+            "title": "Champion! League victory #17",
+            "body": "Party: EMBER L100, Jolteon L25, FIZZ L100, BOOTS L100, TOAST L100, SCOUT L98.",
+            "ts": 1789476582.182923
+          },
+          {
+            "id": 4088,
+            "type": "evolve",
+            "title": "BLASTOISE evolved into Blastoise!",
+            "body": "Level 36, on Route 21.",
+            "ts": 1789476290.3393207
+          },
+          {
+            "id": 4086,
+            "type": "obtain",
+            "title": "Received Aerodactyl for Championship #16",
+            "body": "A level-5 Aerodactyl joined the PC. Each League victory earns a random PokeSim reward.",
+            "ts": 1789476269.0
+          },
+          {
+            "id": 4081,
+            "type": "champion",
+            "title": "Champion! League victory #16",
+            "body": "Party: EMBER L100, MARC L46, FIZZ L100, BOOTS L100, TOAST L100, SCOUT L98.",
+            "ts": 1789475917.9878435
+          },
+          {
+            "id": 4068,
+            "type": "evolve",
+            "title": "Eevee evolved into Jolteon!",
+            "body": "Level 13, on Celadon Mart 4F.",
+            "ts": 1789475558.1606824
+          }
+        ],
+        "league_rewards": {
+          "earned": 17,
+          "delivered": 16,
+          "pending": 1
+        },
+        "safe_point": {
+          "in_battle": 1,
+          "textbox": true,
+          "start_menu": false,
+          "paused": false
+        },
+        "box_free_slots": 6,
+        "legendary_releases": []
+      }
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 12,
+    "state": "waiting_for_overworld",
+    "error": null,
+    "last_check": 1789476753.1802754,
+    "last_trade": 1789474694.3994656,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789470183998647267",
+        "ts": 1789470183.998649,
+        "reason": "Red registers Persian. Blue registers Electabuzz"
+      },
+      {
+        "id": "1789473531862648751",
+        "ts": 1789473531.86265,
+        "reason": "Red registers Golem. Blue registers Arcanine"
+      },
+      {
+        "id": "1789474694399464191",
+        "ts": 1789474694.3994656,
+        "reason": "Red registers Hitmonlee. Blue registers Gengar"
+      }
+    ]
+  },
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 109263470592,
+    "free_bytes": 19484372992,
+    "used_percent": 80.97
+  },
+  "directory_bytes": {
+    "/docker/pokesim/data": 1060433920,
+    "/docker/pokesim/backups": 3434184704,
+    "/docker/pokesim-blue/data": 232845312,
+    "/docker/pokesim-blue/backups": 636657664
+  },
+  "completed_trade_delta": 0
+}
