@@ -1,4 +1,4 @@
-# Release rc21: complete Articuno's current puzzle
+# Current deployment: rc21, complete Articuno's current puzzle
 
 Articuno expeditions prepare the Seafoam boulder puzzle before using Surf. The planner
 clears space, pushes both designated boulders into their holes, and then returns to the
@@ -13,10 +13,23 @@ were injected. All 453 Python tests passed, with one optional test skipped.
 See [the copied-save comparison](docs/validation/articuno-current-0.2.0rc21.json).
 
 The monitor now retains legendary retry state and the last four legendary outcomes.
-The homeserver guide reflects rc20 and its backups, rewards, and coordinator settings.
+The homeserver guide reflects the current image, compressed backups, rewards, and coordinator settings.
 Red's Moltres path in Victory Road is still a separate unresolved route issue, with a
 fresh copied reproduction preserved. The live rc20 interval gained two automatic trades,
 two Red registrations, and three Blue registrations without save reloads or restarts.
+
+Both games, the board, and coordinator run `pokesim:0.2.0rc21-339d9a0`, tagged commit
+`339d9a0d840f87a5b829955743d9124174d9ed8b`. Fresh compressed cold backups passed gzip
+integrity checks and both current saves loaded before rollout. The two backups total
+117,561,751 bytes. No old backups or live data were removed. All 12 public checks passed.
+
+Both live games then caught Articuno, confirmed by Red event 8709 and Blue event 3806.
+Red reached 125 registrations and Blue reached 128. Both are healthy, unpaused, at maximum
+speed, with zero recovery reloads. Automatic trading remains enabled with seven completed
+exchanges and no coordinator error. Red's five Championship rewards and Blue's six are
+all delivered. This begins a new endurance interval. The monitor now prioritizes Red's
+remaining Moltres route and ongoing useful progress.
+See [the release receipt](docs/validation/release-0.2.0rc21.json).
 
 # Previous deployment: rc20, preserve missed legendary encounters
 

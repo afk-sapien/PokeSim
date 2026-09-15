@@ -341,3 +341,37 @@ The optional Mew gift passed copied-save interruption recovery, duplicate preven
 and actual PC withdrawal and training from level 5 to level 12. It remains disabled on
 the live pair while the user considers rewards requiring varied Championship teams.
 No live Mew was delivered. See [the release receipt](validation/release-0.2.0rc17.json).
+
+
+## September 15, 09:24 UTC legendary route investigation
+
+During 45.2 minutes of unchanged rc20 container starts, Red gained two registrations
+and Blue gained three. Two automatic exchanges completed: Bellsprout for Mankey, then
+Pinsir for Vileplume. Blue also evolved Mankey into Primeape. Both games stayed healthy
+at maximum speed with zero save reloads and container restarts. Local policy replanning
+increased by 95 for Red and 126 for Blue. No 24-hour endurance pass is claimed.
+See [the interval record](validation/monitor-20260915-0924.json).
+
+The new private reproduction is `data/operations/repros/legendary-routes-20260915`,
+the eighth retained case. Blue repeatedly requested Surf at Seafoam B4F's strong-current
+stairs. A 36,000-frame replay of the exact rc20 source reproduced the failure. The rc21
+candidate loaded the same saved objective, completed the normal boulder pushes, caught
+Articuno after 17,646 frames, and continued toward storage. No flags, inventory, or
+Pokémon were injected. All 453 tests passed, with one optional test skipped.
+
+The new sampler fields retain legendary retry state and four recent legendary outcomes.
+Red's separate Moltres issue remains unresolved. Its copied checkpoint routes between
+Victory Road's east pockets while the switch gates have reset. Do not describe restoring
+Moltres's encounter as catching it. Continue investigating a valid route to its platform,
+and preserve productive live training and trading while testing candidates on copies.
+
+New cold backups use gzip compression. Existing backups and live data were not pruned.
+
+
+Both live games caught Articuno after rc21 deployment, in Red event 8709 and Blue event
+3806. Red reached 125 registrations and Blue reached 128. Both games are healthy at
+maximum speed with zero recovery reloads. Automatic trading has seven completed exchanges.
+All five Red rewards and six Blue rewards are delivered. The new cold backups passed
+compressed-stream integrity checks. See [the rc21 receipt](validation/release-0.2.0rc21.json).
+The rollout starts new endurance intervals. Continue with Red's Moltres route and avoid
+repeating notifications for the already confirmed Mewtwo and Articuno catches.
