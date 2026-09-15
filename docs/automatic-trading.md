@@ -38,7 +38,17 @@ The board displays completed exchanges and upcoming opportunities. It mounts the
 coordinator directory read-only and cannot access ROMs or saves. The worker is a
 separate local operator process with explicit paths to the two trusted games.
 
-## Installation
+## Container installation
+
+The live installation uses `deploy/compose.trading.yaml` and a committed tools
+directory selected with `TRADING_SOURCE`. It runs the coordinator every minute using
+the host's existing Docker client and socket. It requires operator-level Docker access
+and mounts only the configured games' data plus its recovery directory. The client
+must be compatible with the release image. The games and browser-facing board never
+receive the Docker socket. Set the exact `POKESIM_IMAGE` tag, configure `policy.json`
+as below, and start the compose service. This persists without a desktop session.
+
+## Alternative host service installation
 
 Deploy the same tagged release to both games and the board first. Copy
 `tools/trade_pair.py` into `/docker/pokesim-trading/trade_pair.py`. Copy
