@@ -1,4 +1,4 @@
-# Release candidate: rc15 trusted automatic trading
+# Release candidate: rc16 scoped automatic trading
 
 The owner requested common trading between the live pair. Routine automatic exchanges
 are being enabled with spare-only selection, safe checkpoints, durable recovery, and

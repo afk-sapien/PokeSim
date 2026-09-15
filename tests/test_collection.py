@@ -210,6 +210,7 @@ def test_adventure_pace_command_persists_without_changing_speed():
     emu=Emulator.__new__(Emulator)
     emu.policy=StrategicPolicy(2)
     emu.store=Mock()
+    emu.store.get.return_value=None
     emu.speed=4
     assert emu._handle_command('adventure_pace','balanced')
     assert emu.policy.collection.pace=='balanced'
@@ -224,7 +225,7 @@ def test_api_rejects_invalid_adventure_pace(tmp_path):
     from fastapi import HTTPException
     from pokesim.web.app import create_app, Control
     emu=Mock()
-    app=create_app(emu,SimpleNamespace(shots=tmp_path))
+    app=create_app(emu,SimpleNamespace(shots=tmp_path,get=lambda *args: None))
     endpoint=next(r.endpoint for r in app.routes if getattr(r,'path',None)=='/api/control')
     with pytest.raises(HTTPException) as error:
         endpoint(Control(action='adventure_pace',value='invalid'))

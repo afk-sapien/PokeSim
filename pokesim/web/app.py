@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import html
+import hmac
 import math
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -111,8 +112,21 @@ def create_app(emu, store) -> FastAPI:
             raise HTTPException(403, "This instance is view-only")
         return [p.name for p in sorted(store.states.glob("*.state"), key=lambda p: p.stat().st_mtime, reverse=True)]
 
+    @app.post('/api/trade')
+    def trade(c: Control, authorization: str = Header(default='')):
+        if not config.TRADE_TOKEN or not hmac.compare_digest(authorization, 'Bearer ' + config.TRADE_TOKEN):
+            raise HTTPException(403, 'Trading is disabled or the peer is not authorized')
+        if c.action not in ('prepare', 'load', 'release', 'abort') or not isinstance(c.value, str) or not c.value.isdigit():
+            raise HTTPException(400, 'Invalid trade command')
+        try:
+            return emu.trade(c.action, c.value)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
     @app.post("/api/control")
     def control(c: Control):
+        if store.get("trade_hold") and c.action != "speed":
+            raise HTTPException(409, "An exchange is holding this adventure")
         if config.VIEWER_ONLY:
             raise HTTPException(403, "This instance is view-only")
         if c.action == "press":

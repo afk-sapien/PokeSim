@@ -1,5 +1,5 @@
-PokeSim 0.2.0rc15 adds opt-in automatic exchanges between trusted local Red and Blue instances. It protects active teams, current projects, last copies, and each species' best retained partner. The board shows upcoming opportunities and completed exchanges.
+PokeSim 0.2.0rc16 enables useful automatic trades between configured Red and Blue peers. It prioritizes Pokédex entries, trade evolutions, and meaningful partner upgrades while protecting parties, projects, last copies, and best retained partners.
 
-The coordinator waits for safe overworld checkpoints, stages both saves, validates their contents, and records a durable decision before restarting either game. Recovery finishes or cancels the pair together. Completed trades establish a checkpoint barrier against inventory duplication through older restores.
+The coordinator uses authenticated trade controls and durable game holds. It runs under the games' ordinary UID without Docker or root access. Staged saves and journal records recover as a pair, and completed trades block restores of older inventories. The board shows completed exchanges and opportunities.
 
-Four consecutive copied-save exchanges passed, including Vulpix acquisition and Machamp and Alakazam evolutions. Parties and unrelated stored partners remained unchanged. The games reloaded traded checkpoints and subsequent autosaves, and duplicate journal delivery was harmless. See [automatic trading](automatic-trading.md) for configuration and recovery details.
+Five copied-save exchanges were validated. The final rehearsal interrupted the coordinator after commitment, restarted both games, verified that their holds remained active, then recovered and released both adventures. See [automatic trading](automatic-trading.md).

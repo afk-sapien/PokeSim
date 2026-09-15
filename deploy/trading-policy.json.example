@@ -1,12 +1,10 @@
 {
   "enabled": false,
   "interval_seconds": 900,
-  "image": "pokesim:0.2.0rc15",
-  "game_data": "/docker/pokesim/data/game-data",
-  "board_url": "http://127.0.0.1:8950",
+  "board_url": "http://host.docker.internal:8950",
   "protected_species": {"red": [], "blue": []},
   "peers": {
-    "red": {"container": "pokesim", "url": "http://127.0.0.1:8930", "data": "/docker/pokesim/data", "rom": "/docker/pokesim/roms/pokered.gb"},
-    "blue": {"container": "pokesim-blue", "url": "http://127.0.0.1:8940", "data": "/docker/pokesim-blue/data", "rom": "/docker/pokesim-blue/roms/pokeblue.gb"}
+    "red": {"url": "http://host.docker.internal:8930", "data": "/pair/red", "token": "SET_A_PRIVATE_PEER_TOKEN"},
+    "blue": {"url": "http://host.docker.internal:8940", "data": "/pair/blue", "token": "SET_A_PRIVATE_PEER_TOKEN"}
   }
 }
