@@ -1,4 +1,7 @@
-Unreleased, retain productive partial training outcomes
+0.2.0rc14, compare stored partners
+
+- Sort selected or all storage boxes by level, total DVs, total stat experience, total experience, Pokédex number, species, nickname, or box order.
+- Apply sorting before pagination, keep the selection in the URL, and show individual stat totals on cards and in details.
 
 - Record verified training gains as partial progress when the idle guard abandons a project.
 - Keep the idle deadline and retry delay, without escalating productive attempts as repeated failures.

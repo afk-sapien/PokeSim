@@ -1,4 +1,9 @@
-# Current deployment: Red rc13, Blue rc12
+# Release candidate: rc14
+
+PC sorting and stat totals are ready for validation and deployment to both adventures.
+The release also includes the validated partial-training accounting fix described below.
+
+# Previous deployment: Red rc13, Blue rc12
 
 Red runs `pokesim:0.2.0rc13-17cd997` from tagged commit
 `17cd9973f3fbcfef2cfb3838f02f0d2e759b7b75`. Its current save loaded successfully

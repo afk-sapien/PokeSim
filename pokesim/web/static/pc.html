@@ -8,7 +8,7 @@
 <title>A place for every partner. · pokesim</title>
 <link rel="stylesheet" href="/static/style.css?v=watch-2">
 <link rel="stylesheet" href="/static/pokedex.css?v=pages-1">
-<link rel="stylesheet" href="/static/pages.css?v=clock-1">
+<link rel="stylesheet" href="/static/pages.css?v=pc-sort-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="/feed.xml">
 </head>
 <body data-page="pc">
@@ -23,7 +23,7 @@
 <section class="pc-overview" aria-label="Storage overview"><div><span class="eyebrow">IN STORAGE</span><strong id="pc-total">0 / 240</strong></div><div><span class="eyebrow">RECEIVING NEW CATCHES</span><strong id="pc-active">Box 1</strong></div><a href="/#team">View the traveling team ↗</a></section>
 <section class="pc-workspace" aria-label="PC storage">
 <aside class="pc-sidebar"><label class="mobile-box-control" for="mobile-box">Storage box<select id="mobile-box"></select></label><h2>Storage boxes</h2><div id="box-picker" class="box-picker" role="group" aria-label="Choose a storage box"></div></aside>
-<div class="pc-content"><div class="dex-toolbar"><label for="pc-search">Find <input id="pc-search" type="search" placeholder="Name or Pokédex number" autocomplete="off"></label><label for="pc-scope">In <select id="pc-scope"><option value="box">Selected box</option><option value="all">All boxes</option></select></label><span class="count-pill" id="pc-count">0 Pokémon</span></div>
+<div class="pc-content"><div class="dex-toolbar"><label for="pc-search">Find <input id="pc-search" type="search" placeholder="Name or Pokédex number" autocomplete="off"></label><label for="pc-scope">In <select id="pc-scope"><option value="box">Selected box</option><option value="all">All boxes</option></select></label><label for="pc-sort">Sort by <select id="pc-sort"><option value="box">Box and slot</option><option value="level">Level</option><option value="dvs">Total DVs</option><option value="stat_exp">Total stat experience</option><option value="experience">Total experience</option><option value="dex">Pokédex number</option><option value="name">Species name</option><option value="nick">Nickname</option></select></label><label for="pc-order">Order <select id="pc-order"><option value="asc">Lowest first</option><option value="desc">Highest first</option></select></label><span class="count-pill" id="pc-count">0 Pokémon</span></div>
 <div class="section-heading"><h2 id="pc-heading">Box 1</h2><span class="eyebrow" id="pc-note">Stored partners</span></div>
 <div id="pc-grid" class="pc-grid"><p class="dex-empty">Opening the PC…</p></div>
 <nav class="pagination" aria-label="PC result pages"><button id="pc-prev">← Previous</button><span id="pc-page" aria-live="polite"></span><button id="pc-next">Next →</button></nav>
@@ -33,6 +33,6 @@
 <footer><span id="app-version"></span><a class="brand footer-brand" href="/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><a href="/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="/static/pc.js?v=pages-1"></script>
+<script src="/static/pc.js?v=pc-sort-1"></script>
 </body>
 </html>
