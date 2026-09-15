@@ -203,3 +203,13 @@ items instead of discarding them, and keep necessary keys, HMs, balls, medicine,
 escape supplies available. Also reproduce the expired pickup detours independently.
 The sampler now records item contents and occupied bag slots. The private reproduction
 is `data/operations/repros/blue-item-capacity-20260915`, the sixth retained case.
+
+
+## PC sorting release, September 14 evening
+
+Both games now run rc14 from `1473f1d`, including the previously queued partial-training
+accounting fix. Cold backups and save compatibility checks passed. All 12 public checks
+and six static asset comparisons passed. Red has 112 registered entries and Blue has
+116. Both are healthy at unlimited speed with zero post-startup save reloads. The
+maintenance restarts begin fresh endurance intervals. Bag capacity remains the next
+simulation investigation. See [the release receipt](validation/release-0.2.0rc14.json).

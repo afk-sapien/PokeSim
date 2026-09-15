@@ -1,0 +1,1162 @@
+{
+  "version": "0.2.0rc14",
+  "revision": "1473f1daf16acf6f66ef8a9067bef0eda16fb5ff",
+  "deployments": [
+    {
+      "edition": "red",
+      "backup": "/docker/pokesim/backups/20260915T040744Z-rc14/before.tar",
+      "image": "pokesim:0.2.0rc14-1473f1d",
+      "image_id": "sha256:284bc68df9aa6e473d9001af548151a8976c92ee0690d559c3a1e26532322715",
+      "revision": "1473f1daf16acf6f66ef8a9067bef0eda16fb5ff",
+      "timestamp": 1789445279.0057886,
+      "previous_image": "pokesim:0.2.0rc13-17cd997",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 112,
+      "reloads": 0,
+      "progress": {
+        "state": "exploring",
+        "last_achievement": {
+          "id": 8031,
+          "title": "TOFFEE grew to level 30",
+          "ts": 1789445145.828265,
+          "age_seconds": 133
+        }
+      }
+    },
+    {
+      "edition": "blue",
+      "backup": "/docker/pokesim-blue/backups/20260915T040653Z-rc14/before.tar",
+      "image": "pokesim:0.2.0rc14-1473f1d",
+      "image_id": "sha256:284bc68df9aa6e473d9001af548151a8976c92ee0690d559c3a1e26532322715",
+      "revision": "1473f1daf16acf6f66ef8a9067bef0eda16fb5ff",
+      "timestamp": 1789445221.447159,
+      "previous_image": "pokesim:0.2.0rc12-66b226f",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 116,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 3288,
+          "title": "Defeated Lance",
+          "ts": 1789445205.410777,
+          "age_seconds": 16
+        }
+      }
+    }
+  ],
+  "validation": {
+    "python_tests_passed": 388,
+    "python_tests_skipped": 1,
+    "pc_javascript_tests_passed": 3,
+    "screen_javascript_suite_passed": true,
+    "lock_checked_offline": true,
+    "wheel_and_sdist_verified": true,
+    "browser_verified": [
+      "All-box level ranking",
+      "Total DV ranking",
+      "Stat experience ranking",
+      "Detail totals"
+    ],
+    "public_endpoints": [
+      {
+        "edition": "red",
+        "path": "/",
+        "status": 200
+      },
+      {
+        "edition": "red",
+        "path": "/healthz",
+        "status": 200
+      },
+      {
+        "edition": "red",
+        "path": "/pokedex",
+        "status": 200
+      },
+      {
+        "edition": "red",
+        "path": "/pc",
+        "status": 200
+      },
+      {
+        "edition": "red",
+        "path": "/journal",
+        "status": 200
+      },
+      {
+        "edition": "red",
+        "path": "/sprites/25.png",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/healthz",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/pokedex",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/pc",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/journal",
+        "status": 200
+      },
+      {
+        "edition": "blue",
+        "path": "/sprites/25.png",
+        "status": 200
+      }
+    ],
+    "public_static_assets": [
+      {
+        "edition": "red",
+        "file": "pc.html",
+        "sha256": "cd2eb4d7dccf3f4c5c2c549ac595fd587c388812b1dd1e395d703ea74951cf6e"
+      },
+      {
+        "edition": "red",
+        "file": "pc.js",
+        "sha256": "85ff63c5f2dc8f4fe026cfe9816dac494708e1826b0e4b387dcdf42b8fb17de5"
+      },
+      {
+        "edition": "red",
+        "file": "pages.css",
+        "sha256": "3653c6fd7b3f583d5cce260c603ae3f41189bbfdfcf005c3a0be17dd3999a683"
+      },
+      {
+        "edition": "blue",
+        "file": "pc.html",
+        "sha256": "cd2eb4d7dccf3f4c5c2c549ac595fd587c388812b1dd1e395d703ea74951cf6e"
+      },
+      {
+        "edition": "blue",
+        "file": "pc.js",
+        "sha256": "85ff63c5f2dc8f4fe026cfe9816dac494708e1826b0e4b387dcdf42b8fb17de5"
+      },
+      {
+        "edition": "blue",
+        "file": "pages.css",
+        "sha256": "3653c6fd7b3f583d5cce260c603ae3f41189bbfdfcf005c3a0be17dd3999a683"
+      }
+    ]
+  },
+  "post_deployment_sample": {
+    "ts": 1789445308.1134505,
+    "runs": {
+      "red": {
+        "version": "0.2.0rc14",
+        "image": "pokesim:0.2.0rc14-1473f1d",
+        "started_at": "2026-09-15T04:07:56.779160008Z",
+        "restarts": 0,
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.1,
+          "error": null
+        },
+        "uptime": 29,
+        "speed": 0.0,
+        "paused": false,
+        "reloads": 0,
+        "frame": 15848176,
+        "owned": 112,
+        "position": [
+          "Route 11",
+          38,
+          9
+        ],
+        "bag_slots": 16,
+        "items": [
+          {
+            "id": 63,
+            "name": "S S Ticket",
+            "qty": 1
+          },
+          {
+            "id": 196,
+            "name": "HM01",
+            "qty": 1
+          },
+          {
+            "id": 74,
+            "name": "Lift Key",
+            "qty": 1
+          },
+          {
+            "id": 72,
+            "name": "Silph Scope",
+            "qty": 1
+          },
+          {
+            "id": 73,
+            "name": "Poke Flute",
+            "qty": 1
+          },
+          {
+            "id": 48,
+            "name": "Card Key",
+            "qty": 1
+          },
+          {
+            "id": 198,
+            "name": "HM03",
+            "qty": 1
+          },
+          {
+            "id": 199,
+            "name": "HM04",
+            "qty": 1
+          },
+          {
+            "id": 43,
+            "name": "Secret Key",
+            "qty": 1
+          },
+          {
+            "id": 53,
+            "name": "Revive",
+            "qty": 5
+          },
+          {
+            "id": 78,
+            "name": "Super Rod",
+            "qty": 1
+          },
+          {
+            "id": 76,
+            "name": "Old Rod",
+            "qty": 1
+          },
+          {
+            "id": 69,
+            "name": "Coin Case",
+            "qty": 1
+          },
+          {
+            "id": 77,
+            "name": "Good Rod",
+            "qty": 1
+          },
+          {
+            "id": 54,
+            "name": "Max Revive",
+            "qty": 2
+          },
+          {
+            "id": 2,
+            "name": "Ultra Ball",
+            "qty": 2
+          }
+        ],
+        "goal": {
+          "id": "collect_hunt",
+          "title": "Find Kangaskhan",
+          "reason": "Search SafariZoneWest for a missing Pok\u00e9dex entry",
+          "targets": [
+            [
+              219,
+              3,
+              18
+            ],
+            [
+              219,
+              2,
+              19
+            ],
+            [
+              219,
+              3,
+              19
+            ],
+            [
+              219,
+              2,
+              20
+            ],
+            [
+              219,
+              3,
+              20
+            ],
+            [
+              219,
+              4,
+              20
+            ],
+            [
+              219,
+              5,
+              20
+            ],
+            [
+              219,
+              6,
+              20
+            ]
+          ],
+          "target_count": 55,
+          "facing": null
+        },
+        "activity": "overworld",
+        "progress": {
+          "state": "exploring",
+          "last_achievement": {
+            "id": 8031,
+            "title": "TOFFEE grew to level 30",
+            "ts": 1789445145.828265,
+            "age_seconds": 162
+          }
+        },
+        "project": {
+          "map": 219,
+          "method": "safari",
+          "level": 28,
+          "species": 2,
+          "key": "2:safari:219:",
+          "initial_owned": [
+            1,
+            2,
+            3,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            29,
+            30,
+            32,
+            33,
+            34,
+            35,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            54,
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            63,
+            64,
+            66,
+            67,
+            72,
+            73,
+            74,
+            75,
+            77,
+            78,
+            79,
+            80,
+            81,
+            82,
+            84,
+            85,
+            86,
+            87,
+            88,
+            89,
+            90,
+            91,
+            92,
+            93,
+            95,
+            96,
+            97,
+            98,
+            99,
+            100,
+            101,
+            102,
+            103,
+            104,
+            105,
+            107,
+            109,
+            110,
+            111,
+            112,
+            113,
+            114,
+            116,
+            117,
+            118,
+            119,
+            120,
+            121,
+            125,
+            128,
+            129,
+            130,
+            131,
+            132,
+            133,
+            134,
+            137,
+            138,
+            139,
+            142,
+            145,
+            147,
+            148,
+            149
+          ]
+        },
+        "project_remaining": 243,
+        "completed_projects": {
+          "exploration": 6,
+          "training": 4,
+          "supplies": 2,
+          "collection": 1
+        },
+        "recent_outcomes": [
+          {
+            "key": "train:138:30",
+            "category": "training",
+            "status": "completed",
+            "reason": "Target reached",
+            "elapsed": 187579214,
+            "retry_at": 0,
+            "target": 30,
+            "gains": {
+              "experience": 4969,
+              "levels": 2
+            }
+          },
+          {
+            "key": "26:safari:220:",
+            "category": "collection",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 187607386,
+            "retry_at": 188087386,
+            "target": 26,
+            "gains": {}
+          },
+          {
+            "key": "train:139:20",
+            "category": "training",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 187663874,
+            "retry_at": 188143874,
+            "target": 20,
+            "gains": {
+              "experience": 593,
+              "levels": 0
+            }
+          }
+        ],
+        "pickups": [
+          "Collected Iron",
+          "Pickup approach failed: Max Revive",
+          "Pickup approach failed: Max Potion",
+          "Pickup approach failed: Max Revive",
+          "Pickup approach failed: Max Potion",
+          "Pickup approach failed: Max Revive",
+          "Pickup unavailable or detour budget reached: Max Potion",
+          "Pickup unavailable or detour budget reached: TM Whirlwind"
+        ],
+        "party": [
+          {
+            "dex": 91,
+            "nick": "BUTTERBEAN",
+            "level": 17,
+            "experience": {
+              "total": 7047,
+              "earned": 906,
+              "needed": 1149,
+              "remaining": 243,
+              "percent": 78.9,
+              "max_level": false
+            },
+            "hp": 39,
+            "max_hp": 45,
+            "status": 0,
+            "pp": [
+              30,
+              40,
+              0,
+              0
+            ]
+          },
+          {
+            "dex": 89,
+            "nick": "MUFFIN",
+            "level": 100,
+            "experience": {
+              "total": 1000000,
+              "earned": 0,
+              "needed": 1,
+              "remaining": 0,
+              "percent": 100,
+              "max_level": true
+            },
+            "hp": 385,
+            "max_hp": 385,
+            "status": 0,
+            "pp": [
+              20,
+              40,
+              20,
+              20
+            ]
+          },
+          {
+            "dex": 145,
+            "nick": "SPROUT",
+            "level": 95,
+            "experience": {
+              "total": 1104402,
+              "earned": 32684,
+              "needed": 34202,
+              "remaining": 1518,
+              "percent": 95.6,
+              "max_level": false
+            },
+            "hp": 362,
+            "max_hp": 362,
+            "status": 0,
+            "pp": [
+              30,
+              20,
+              10,
+              30
+            ]
+          },
+          {
+            "dex": 78,
+            "nick": "GIZMO",
+            "level": 84,
+            "experience": {
+              "total": 593547,
+              "earned": 843,
+              "needed": 21421,
+              "remaining": 20578,
+              "percent": 3.9,
+              "max_level": false
+            },
+            "hp": 279,
+            "max_hp": 279,
+            "status": 0,
+            "pp": [
+              15,
+              30,
+              20,
+              40
+            ]
+          },
+          {
+            "dex": 131,
+            "nick": "PICKLES",
+            "level": 33,
+            "experience": {
+              "total": 48211,
+              "earned": 3290,
+              "needed": 4209,
+              "remaining": 919,
+              "percent": 78.2,
+              "max_level": false
+            },
+            "hp": 140,
+            "max_hp": 140,
+            "status": 0,
+            "pp": [
+              15,
+              15,
+              15,
+              15
+            ]
+          },
+          {
+            "dex": 3,
+            "nick": "BUTTON",
+            "level": 100,
+            "experience": {
+              "total": 1059860,
+              "earned": 0,
+              "needed": 1,
+              "remaining": 0,
+              "percent": 100,
+              "max_level": true
+            },
+            "hp": 349,
+            "max_hp": 349,
+            "status": 0,
+            "pp": [
+              30,
+              25,
+              10,
+              15
+            ]
+          }
+        ]
+      },
+      "blue": {
+        "version": "0.2.0rc14",
+        "image": "pokesim:0.2.0rc14-1473f1d",
+        "started_at": "2026-09-15T04:06:59.194748838Z",
+        "restarts": 0,
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.6,
+          "error": null
+        },
+        "uptime": 87,
+        "speed": 0.0,
+        "paused": false,
+        "reloads": 0,
+        "frame": 54208358,
+        "owned": 116,
+        "position": [
+          "Route 5",
+          16,
+          12
+        ],
+        "bag_slots": 20,
+        "items": [
+          {
+            "id": 63,
+            "name": "S S Ticket",
+            "qty": 1
+          },
+          {
+            "id": 196,
+            "name": "HM01",
+            "qty": 1
+          },
+          {
+            "id": 74,
+            "name": "Lift Key",
+            "qty": 1
+          },
+          {
+            "id": 72,
+            "name": "Silph Scope",
+            "qty": 1
+          },
+          {
+            "id": 73,
+            "name": "Poke Flute",
+            "qty": 1
+          },
+          {
+            "id": 48,
+            "name": "Card Key",
+            "qty": 1
+          },
+          {
+            "id": 198,
+            "name": "HM03",
+            "qty": 1
+          },
+          {
+            "id": 199,
+            "name": "HM04",
+            "qty": 1
+          },
+          {
+            "id": 200,
+            "name": "HM05",
+            "qty": 1
+          },
+          {
+            "id": 43,
+            "name": "Secret Key",
+            "qty": 1
+          },
+          {
+            "id": 53,
+            "name": "Revive",
+            "qty": 5
+          },
+          {
+            "id": 76,
+            "name": "Old Rod",
+            "qty": 1
+          },
+          {
+            "id": 78,
+            "name": "Super Rod",
+            "qty": 1
+          },
+          {
+            "id": 69,
+            "name": "Coin Case",
+            "qty": 1
+          },
+          {
+            "id": 77,
+            "name": "Good Rod",
+            "qty": 1
+          },
+          {
+            "id": 54,
+            "name": "Max Revive",
+            "qty": 1
+          },
+          {
+            "id": 29,
+            "name": "Escape Rope",
+            "qty": 1
+          },
+          {
+            "id": 2,
+            "name": "Ultra Ball",
+            "qty": 15
+          },
+          {
+            "id": 46,
+            "name": "X Accuracy",
+            "qty": 1
+          },
+          {
+            "id": 16,
+            "name": "Full Restore",
+            "qty": 8
+          }
+        ],
+        "goal": {
+          "id": "collect_static",
+          "title": "Collect Mewtwo",
+          "reason": "Visit a remaining source for the Pok\u00e9dex",
+          "targets": [
+            [
+              227,
+              27,
+              14
+            ],
+            [
+              227,
+              28,
+              13
+            ],
+            [
+              227,
+              27,
+              12
+            ],
+            [
+              227,
+              26,
+              13
+            ]
+          ],
+          "target_count": 4,
+          "facing": "up"
+        },
+        "activity": "overworld",
+        "progress": {
+          "state": "making_progress",
+          "last_achievement": {
+            "id": 3289,
+            "title": "Defeated rival JULES",
+            "ts": 1789445224.0607736,
+            "age_seconds": 84
+          }
+        },
+        "project": {
+          "map": 227,
+          "method": "static",
+          "fragment": "MEWTWO",
+          "flag": "EVENT_BEAT_MEWTWO",
+          "species": 131,
+          "key": "131:static:227:MEWTWO",
+          "initial_owned": [
+            1,
+            2,
+            3,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            32,
+            33,
+            34,
+            35,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            60,
+            61,
+            62,
+            63,
+            64,
+            66,
+            67,
+            69,
+            70,
+            71,
+            72,
+            73,
+            74,
+            75,
+            77,
+            78,
+            79,
+            80,
+            81,
+            82,
+            84,
+            85,
+            86,
+            87,
+            88,
+            89,
+            90,
+            91,
+            92,
+            93,
+            95,
+            96,
+            97,
+            98,
+            99,
+            100,
+            101,
+            102,
+            103,
+            104,
+            105,
+            106,
+            109,
+            110,
+            111,
+            112,
+            113,
+            114,
+            115,
+            116,
+            117,
+            118,
+            119,
+            120,
+            121,
+            126,
+            127,
+            128,
+            129,
+            130,
+            131,
+            132,
+            133,
+            134,
+            137,
+            138,
+            139,
+            142,
+            143,
+            145,
+            146,
+            147,
+            148,
+            149
+          ]
+        },
+        "project_remaining": 292,
+        "completed_projects": {
+          "training": 28,
+          "collection": 2,
+          "exploration": 35,
+          "supplies": 9
+        },
+        "recent_outcomes": [
+          {
+            "key": "train:66:70",
+            "category": "training",
+            "status": "advanced",
+            "reason": "Expedition time budget reached",
+            "elapsed": 89926628,
+            "retry_at": 89986628,
+            "target": 70,
+            "gains": {
+              "experience": 4450,
+              "levels": 0
+            }
+          },
+          {
+            "key": "train:19:30",
+            "category": "training",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 89937222,
+            "retry_at": 89997222,
+            "target": 30,
+            "gains": {
+              "experience": 0,
+              "levels": 0
+            }
+          },
+          {
+            "key": "0:rematch:0:",
+            "category": "supplies",
+            "status": "completed",
+            "reason": "Target reached",
+            "elapsed": 90000720,
+            "retry_at": 0,
+            "target": null,
+            "gains": {}
+          }
+        ],
+        "pickups": [
+          "Pickup unavailable or detour budget reached: Ultra Ball",
+          "Pickup unavailable or detour budget reached: Ultra Ball",
+          "Pickup unavailable or detour budget reached: Ultra Ball",
+          "Pickup unavailable or detour budget reached: Hp Up",
+          "Collected X Accuracy",
+          "Pickup unavailable or detour budget reached: Ultra Ball",
+          "Collected Hp Up",
+          "Pickup unavailable or detour budget reached: Max Revive"
+        ],
+        "party": [
+          {
+            "dex": 75,
+            "nick": "EMBER",
+            "level": 100,
+            "experience": {
+              "total": 1059860,
+              "earned": 0,
+              "needed": 1,
+              "remaining": 0,
+              "percent": 100,
+              "max_level": true
+            },
+            "hp": 307,
+            "max_hp": 311,
+            "status": 0,
+            "pp": [
+              0,
+              5,
+              5,
+              0
+            ]
+          },
+          {
+            "dex": 131,
+            "nick": "WAFFLES",
+            "level": 27,
+            "experience": {
+              "total": 25641,
+              "earned": 1038,
+              "needed": 2837,
+              "remaining": 1799,
+              "percent": 36.6,
+              "max_level": false
+            },
+            "hp": 118,
+            "max_hp": 119,
+            "status": 0,
+            "pp": [
+              25,
+              40,
+              15,
+              30
+            ]
+          },
+          {
+            "dex": 3,
+            "nick": "TOAST",
+            "level": 88,
+            "experience": {
+              "total": 729833,
+              "earned": 19567,
+              "needed": 25641,
+              "remaining": 6074,
+              "percent": 76.3,
+              "max_level": false
+            },
+            "hp": 264,
+            "max_hp": 310,
+            "status": 0,
+            "pp": [
+              30,
+              17,
+              10,
+              10
+            ]
+          },
+          {
+            "dex": 93,
+            "nick": "SCOUT",
+            "level": 87,
+            "experience": {
+              "total": 685939,
+              "earned": 711,
+              "needed": 25038,
+              "remaining": 24327,
+              "percent": 2.8,
+              "max_level": false
+            },
+            "hp": 214,
+            "max_hp": 245,
+            "status": 0,
+            "pp": [
+              0,
+              0,
+              15,
+              20
+            ]
+          },
+          {
+            "dex": 143,
+            "nick": "BOOTS",
+            "level": 92,
+            "experience": {
+              "total": 987235,
+              "earned": 13875,
+              "needed": 32086,
+              "remaining": 18211,
+              "percent": 43.2,
+              "max_level": false
+            },
+            "hp": 416,
+            "max_hp": 475,
+            "status": 0,
+            "pp": [
+              15,
+              14,
+              10,
+              14
+            ]
+          },
+          {
+            "dex": 18,
+            "nick": "FIZZ",
+            "level": 85,
+            "experience": {
+              "total": 643206,
+              "earned": 6271,
+              "needed": 23852,
+              "remaining": 17581,
+              "percent": 26.3,
+              "max_level": false
+            },
+            "hp": 303,
+            "max_hp": 303,
+            "status": 0,
+            "pp": [
+              30,
+              35,
+              25,
+              20
+            ]
+          }
+        ]
+      }
+    },
+    "resources": [
+      {
+        "BlockIO": "4.7MB / 90.1kB",
+        "CPUPerc": "99.21%",
+        "Container": "pokesim",
+        "ID": "6fd1b4d46cbe",
+        "MemPerc": "0.99%",
+        "MemUsage": "98.49MiB / 9.712GiB",
+        "Name": "pokesim",
+        "NetIO": "17kB / 594kB",
+        "PIDs": "11"
+      },
+      {
+        "BlockIO": "3.63MB / 4.94MB",
+        "CPUPerc": "98.68%",
+        "Container": "pokesim-blue",
+        "ID": "452d7b47b112",
+        "MemPerc": "1.02%",
+        "MemUsage": "101.7MiB / 9.712GiB",
+        "Name": "pokesim-blue",
+        "NetIO": "33kB / 1.16MB",
+        "PIDs": "11"
+      }
+    ],
+    "disk": {
+      "total_bytes": 134949060608,
+      "used_bytes": 108101742592,
+      "free_bytes": 20646100992,
+      "used_percent": 80.11
+    },
+    "directory_bytes": {
+      "/docker/pokesim/data": 1020489728,
+      "/docker/pokesim/backups": 9158012928,
+      "/docker/pokesim-blue/data": 194473984,
+      "/docker/pokesim-blue/backups": 1458405376
+    }
+  }
+}
