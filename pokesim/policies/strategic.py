@@ -4,19 +4,22 @@ from dataclasses import asdict
 
 from .base import Action, Policy
 from .battle import (BALLS, CURES, HEALING, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
-                     healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, shopping_item)
+                     healing_item, needs_healing, ranked_moves, read_battler, replacement_slot)
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, boulder_task, seafoam_current_task
 from .progression import STARTERS, Goal, healing_goal, journey, league_partner, milestones, story_goal
 from . import training
+from .menus import select, tap
+from .shopping import ShoppingController
+from .storage import StorageController
 from .collection import CENTERS, Collection, LEAGUE, legendary_project
 from .awareness import ActionWatch
-from .team import development_candidate, potential, readiness, release_target, reserve_to_deposit, storage_headroom
+from .team import development_candidate, potential, readiness, reserve_to_deposit, storage_headroom
 from ..screen import Screen, W_PLAYER_MON_NUMBER
 from ..ram import W_TILEMAP
-from ..strategy_data import DATA, ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
+from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
 from .. import config
 
 EXPLORATION_CHANCE = 0.12
@@ -51,10 +54,6 @@ def ready_to_drop(snapshot):
     """
     return (event_set(snapshot.event_flags, "EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2")
             and not event_set(snapshot.event_flags, "EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2"))
-
-
-def tap(button, hold=6, gap=12):
-    return [Action(button, hold, gap)]
 
 
 def wait():
@@ -118,20 +117,18 @@ class StrategicPolicy(Policy):
         self.last_switch_turn = -5
         self.catch_attempts = 0
         self.heal_latch = False
-        self.shopping = False
-        self.selling = False
-        self.shop_item = None
+        self.shop = ShoppingController()
+        self.pc = StorageController()
+        self.pending_trade_key = None
         self.goal_attempts = 0
         self.observed_map = None
         self.settle_until = 0
-        self.stock_latch = False
         self.recovery_until = 0
         self.progress_frame = None
         self.progress_goal = None
         self.goal_distance = None
         self.order_stage = None
         self.order_species = None
-        self.pc_operation = None
         self.elevator_exit = False
         self.elevator_floor = "B1F"
         self.field_move = None
@@ -147,8 +144,6 @@ class StrategicPolicy(Policy):
         self.development_cooldown = 0
         self.development_index = None
         self.assessment_token = None
-        self.storage_species = None
-        self.storage_map = None
         self.menu_context = None
         self.pending_social = None
         self.supply_attempts = set()
@@ -211,10 +206,7 @@ class StrategicPolicy(Policy):
         self.on_restore()
 
     def _select(self, scr, target, one_based=False, scroll=False):
-        current = scr.menu_index - int(one_based) + (scr.scroll if scroll else 0)
-        if current != target:
-            return tap("down" if current < target else "up")
-        return tap("a")
+        return select(scr, target, one_based, scroll)
 
     def _root(self, scr, kind):
         target_col, target_row = {"fight": (9, 0), "item": (9, 1), "switch": (15, 0), "run": (15, 1)}[kind]
@@ -283,14 +275,14 @@ class StrategicPolicy(Policy):
             self.goal = self.collection.goal(s) or self.goal
         if self.pickups.active and s.map not in LEAGUE:
             self.goal = self.pickups.goal(self.pickups.active)
-        if self.storage_species:
-            if any(p.species == self.storage_species for p in s.party) or self.storage_map is None:
-                self.storage_species = None
-                self.storage_map = None
+        if self.pc.species:
+            if any(p.species == self.pc.species for p in s.party) or self.pc.destination is None:
+                self.pc.species = None
+                self.pc.destination = None
             else:
                 self.goal = Goal('party_upgrade', 'Bring a stronger reserve onto the team',
                                  'Swap an underused reserve for a useful Pokémon already in storage',
-                                 ((self.storage_map, 13, 4),), 'up', True)
+                                 ((self.pc.destination, 13, 4),), 'up', True)
         self.next_goal = self.goal.to_dict()
         league_rooms = {MAPS[n] for n in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM')}
         withdrawing_partner = (
@@ -300,14 +292,14 @@ class StrategicPolicy(Policy):
         )
         release = self._release_target(s) if storage_headroom(s) < RELEASE_BUFFER else None
         if release and not withdrawing_partner and s.map not in league_rooms:
-            self.storage_species = None
-            self.storage_map = None
+            self.pc.species = None
+            self.pc.destination = None
             self.goal = Goal('party_release', 'Make room in storage',
                              'Let a spare duplicate go so there is room for new catches',
                              CENTERS, 'up', True)
         elif s.box_full and not withdrawing_partner and s.next_free_box is not None and s.map not in league_rooms:
-            self.storage_species = None
-            self.storage_map = None
+            self.pc.species = None
+            self.pc.destination = None
             self.goal = Goal('party_box', 'Make room for new catches',
                              f'Box {s.active_box + 1} is full. Visit a PC and switch to Box {s.next_free_box + 1}',
                              CENTERS, 'up', True)
@@ -379,24 +371,14 @@ class StrategicPolicy(Policy):
         text = scr.text.upper()
         active = min(mem[W_PLAYER_MON_NUMBER], max(0, len(s.party) - 1))
         if kind == "yes_no":
-            # Match the confirmation itself, not the word RELEASE in the PC menu behind it.
-            if "GONE FOREVER" in text or "RELEASED" in text or "BYE BYE" in text:
-                pending = getattr(self, 'pending_release', None)
-                current = next((mon for mon in s.storage_entries()
-                                if pending and (mon['box'], mon['position']) == pending[:2]), None)
-                allowed = (self.goal.key == 'party_release' and pending and current == pending[2]
-                           and self._release_target(s) == pending[:2])
-                return self._select(scr, 0 if allowed else 1)
+            decision = self.pc.confirmation(s, scr, text, self.goal.key, self.collection.project,
+                                            self._preferences(), self.menu_context)
+            if decision is not None:
+                return self._menu_decision(decision)
             if self.goal.key == 'collect_trade' and getattr(self, 'pending_trade_key', None):
                 choices = self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
                 if choices.get(self.pending_trade_key, {}).get('state') == 'locked':
                     return self._select(scr, 1)
-            if self.menu_context == 'pc' and self.goal.key.startswith('party_'):
-                # "When you change a POKéMON BOX, data will be saved. Is that okay?" The rule below
-                # reads the PC menu still drawn behind the prompt — CHANGE BOX, WITHDRAW PKMN — and
-                # answers no, so the goal reopens the menu forever. Storage work means yes.
-                self.reason = 'Confirm the storage prompt'
-                return self._select(scr, 0)
             if "CHANGE" in text and "MON" in text:
                 return self._select(scr, 1)
             if "ABANDON" in text or "STOP LEARNING" in text:
@@ -526,24 +508,11 @@ class StrategicPolicy(Policy):
                 self.last_switch_turn = self.turns
                 return self._select(scr, 0)
             return tap("b")
-        if kind == "shop":
-            self.menu_context = 'shop'
-            self.intent = None
-            self.selling = (self.selling and len(s.items) > 15) or len(s.items) >= 18
-            if self.selling and self._sale_index(s) is not None:
-                self.reason = "Sell spare TMs and Nuggets to make room for story items"
-                return self._select(scr, 1)
-            self.selling = False
-            stock = DATA["marts"].get(WORLD.get(s.map, {}).get("name"), [])
-            self.shop_item = self._shopping_item(s, stock)
-            self.shopping = self.shop_item is not None
-            if (not self.shopping and legendary_project(self.collection.project)
-                    and ITEMS['ULTRA_BALL'] in stock):
-                self.collection.project['supplies_prepared'] = True
-            self.reason = "Restock balls and medicine while keeping a cash reserve"
-            return self._select(scr, 0) if self.shopping else tap("b")
-        if kind == "quantity":
-            return tap("a") if self.shopping or self.selling else tap("b")
+        if kind in ('shop', 'quantity'):
+            if kind == 'shop':
+                self.menu_context = 'shop'
+                self.intent = None
+            return self._menu_decision(self.shop.step(s, scr, kind, self.goal.key, self.collection.project))
         if kind == "elevator":
             target = 2 if self.elevator_floor == "B4F" else 0
             if scr.menu_index + scr.scroll == target:
@@ -556,32 +525,11 @@ class StrategicPolicy(Policy):
                 fossils = [item for item in ('DOME_FOSSIL','HELIX_FOSSIL','OLD_AMBER') if dict(s.items).get(ITEMS[item])]
                 desired = self.collection.project.get('item') if self.collection.project else None
                 return self._select(scr,fossils.index(desired) if desired in fossils else 0,scroll=True)
-            if self.selling:
-                index = self._sale_index(s) if len(s.items) > 15 else None
-                if index is None:
-                    self.selling = False
-                    return tap("b")
-                return self._select(scr, index, scroll=True)
-            if self.shopping:
-                stock = DATA["marts"].get(WORLD.get(s.map, {}).get("name"), [])
-                item = self._shopping_item(s, stock)
-                if item is None:
-                    self.shopping = False
-                    return tap("b")
-                self.shop_item = item
-                return self._select(scr, stock.index(item), scroll=True)
-            if self.menu_context == 'shop':
-                return tap('b')
-            if self.menu_context == 'pc' and self.goal.key.startswith("party_"):
-                target = self._pc_target(s)
-                if target is None:
-                    return tap('b')
-                actions = self._select(scr, target, scroll=True)
-                if self.goal.key == 'party_release' and actions[0].button == 'a':
-                    chosen = next((mon for mon in s.storage_entries()
-                                   if (mon['box'], mon['position']) == (s.active_box, target)), None)
-                    self.pending_release = (s.active_box, target, chosen) if chosen else None
-                return actions
+            if self.shop.selling or self.shop.buying or self.menu_context == 'shop':
+                return self._menu_decision(self.shop.step(s, scr, kind, self.goal.key, self.collection.project))
+            if self.menu_context == 'pc' and self.goal.key.startswith('party_'):
+                return self._menu_decision(self.pc.step(s, scr, kind, self.goal.key,
+                                                      self.collection.project, self._preferences()))
             if self.intent and self.intent.kind == "item" and self.intent.index < len(s.items):
                 if s.items[self.intent.index][0] in BALLS and not s.can_catch:
                     self.intent = None
@@ -602,38 +550,10 @@ class StrategicPolicy(Policy):
             return tap("b")
         if kind == "item_action":
             return self._select(scr, 0) if self.intent else tap("b")
-        if kind == "pc_root":
+        if kind in ('pc_root', 'change_box', 'pc'):
             self.menu_context = 'pc'
-            return self._select(scr, 0) if self.goal.key.startswith("party_") else tap("b")
-        if kind == 'change_box':
-            self.menu_context = 'pc'
-            release = self._release_target(s) if self.goal.key == 'party_release' else None
-            target = (release[0] if release else None) if self.goal.key == 'party_release' else \
-                s.next_free_box if self.goal.key == 'party_box' else self.collection.project.get('box') if self.goal.key == 'party_collection' and self.collection.project else None
-            self.reason = 'Select a storage box with room for new catches'
-            return tap('b') if target is None or target == s.active_box else self._select(scr, target)
-        if kind == "pc":
-            self.menu_context = 'pc'
-            if not self.goal.key.startswith("party_"):
-                return tap("b")
-            if scr.cursor and scr.cursor[0] == 10:
-                return self._select(scr, 0)
-            if self.goal.key == 'party_release':
-                release = self._release_target(s)
-                if release is None:
-                    return tap('b')
-                if release[0] != s.active_box:
-                    self.reason = 'Open the box holding the spare duplicate'
-                    return self._select(scr, 3)
-                self.reason = 'Let a spare duplicate go, keeping one of every species'
-                return self._select(scr, 2)
-            if self.goal.key == 'party_box' or (self.goal.key == 'party_collection' and len(s.party)<6 and self.collection.project and self.collection.project.get('box') != s.active_box):
-                self.reason = 'Change the active storage box without releasing any Pokémon'
-                return self._select(scr, 3)
-            self.pc_operation = "deposit" if len(s.party) >= 6 else "withdraw"
-            if self._pc_target(s) is None:
-                return tap("b")
-            return self._select(scr, 1 if self.pc_operation == "deposit" else 0)
+            return self._menu_decision(self.pc.step(s, scr, kind, self.goal.key,
+                                                  self.collection.project, self._preferences()))
         if kind == "dialogue":
             if not s.in_battle and ("NO SURF" in text or "NO PLACE TO GET OFF" in text or 'CURRENT IS' in text):
                 self._remember_failure(s, 'Surf was rejected at this shoreline')
@@ -650,7 +570,7 @@ class StrategicPolicy(Policy):
                 return tap('a',6,24)
             self.reason = "Advance dialogue and wait for the next decision"
             accepting = scr.shop or any(row.strip("? ") == "HEAL" for row in scr.rows)
-            return tap("a" if accepting or self.shopping or self.selling or self.intent or s.in_battle or s.playtime_seconds == 0 or "EVOLV" in text or "WHAT?" in text else "b", 6, 24)
+            return tap("a" if accepting or self.shop.buying or self.shop.selling or self.intent or s.in_battle or s.playtime_seconds == 0 or "EVOLV" in text or "WHAT?" in text else "b", 6, 24)
         if s.in_battle:
             return wait()
         if not s.started or (s.playtime_seconds == 0 and not s.party):
@@ -663,8 +583,7 @@ class StrategicPolicy(Policy):
     def _overworld(self, s, mem):
         self.menu_context = None
         self.intent = None
-        self.shopping = False
-        self.selling = False
+        self.shop.leave_menu()
         pos = (s.map, s.x, s.y)
         if needs_healing(s.party):
             self.heal_latch = True
@@ -682,8 +601,8 @@ class StrategicPolicy(Policy):
                             if level >= max(mon.level for mon in s.party) * 0.5
                             and not any(mon.species == sid for mon in s.party)]
                 if upgrades and max(upgrades)[0] > potential(p.species, [mon for i, mon in enumerate(s.party) if i != weakest]) + p.level * 10 + 80:
-                    self.storage_species = max(upgrades)[1]
-                    self.storage_map = s.map
+                    self.pc.species = max(upgrades)[1]
+                    self.pc.destination = s.map
                     goal = Goal('party_upgrade', 'Bring a stronger reserve onto the team',
                                 'Swap an underused reserve for a useful Pokémon already in storage', ((s.map, 13, 4),), 'up', True)
         if in_league:
@@ -719,40 +638,14 @@ class StrategicPolicy(Policy):
                 if signature not in self.supply_attempts:
                     self.supply_attempts.add(signature)
                     return self._use_item(s,item,target)
-        ball_count = sum(qty for item, qty in s.items if item in BALLS)
-        medicine = sum(qty for item, qty in s.items if item in HEALING)
-        bag_full = len(s.items) >= 18 and self._sale_index(s) is not None
-        if ball_count < 2 or (medicine == 0 and (s.map in (2, 56) or WORLD.get(s.map, {}).get('name', '').endswith('Gym'))) or bag_full:
-            self.stock_latch = True
-        elif ball_count >= 2 and medicine and not bag_full:
-            self.stock_latch = False
-        if s.map == MAPS["INDIGO_PLATEAU_LOBBY"]:
-            self.stock_latch = medicine < 10 or dict(s.items).get(ITEMS["REVIVE"], 0) < 5
-        legendary = legendary_project(self.collection.project)
-        if legendary and not dict(s.items).get(ITEMS['MASTER_BALL']):
-            self.stock_latch = (not self.collection.project.get('supplies_prepared')
-                                or dict(s.items).get(ITEMS['ULTRA_BALL'], 0) < 5 or bag_full)
-        if self.stock_latch and not self.heal_latch and not in_league and goal.key != 'party_box' and self.completed.get("pokedex"):
-            targets = []
-            for m, world in WORLD.items():
-                if s.map == MAPS["INDIGO_PLATEAU_LOBBY"] and m != s.map:
-                    continue
-                stock = DATA["marts"].get(world["name"], [])
-                if m != s.map and not legendary:
-                    stock = [item for item in stock if item in BALLS or item in HEALING or item == ITEMS['REVIVE']]
-                if bag_full or self._shopping_item(s, stock) is not None:
-                    clerk = next((o for o in world["objects"] if o[2] == "SPRITE_CLERK"), None)
-                    if clerk and clerk[0] == 0:
-                        targets.append((m, 2, clerk[1]))
-            if targets:
-                goal = Goal("restock", "Restock supplies", "Buy useful balls and medicine with a cash reserve", tuple(targets), "left", True)
-            else:
-                self.stock_latch = False
-                if legendary:
-                    self.collection.project['supplies_prepared'] = True
-                    if dict(s.items).get(ITEMS['ULTRA_BALL'], 0) < 5 and not dict(s.items).get(ITEMS['MASTER_BALL']):
-                        self.collection.abandon('Need money or bag space for legendary capture supplies')
-                        goal = Goal('collect_plan', 'Plan another expedition', 'Earn supplies before another legendary attempt')
+        supplies = self.shop.plan(s, goal, self.collection.project, requested_goal=self.goal.key,
+                                  healing=self.heal_latch, in_league=in_league,
+                                  has_pokedex=self.completed.get('pokedex', False))
+        goal = supplies.goal
+        if supplies.prepared and self.collection.project:
+            self.collection.project['supplies_prepared'] = True
+        if supplies.abandon:
+            self.collection.abandon(supplies.abandon)
         if self.heal_latch:
             # Medicine is useful when no known route to a center can be followed.
             for target, mon in enumerate(s.party):
@@ -1110,46 +1003,26 @@ class StrategicPolicy(Policy):
                     "Search the trash cans, then try a neighboring can when the first switch opens",
                     tuple(p[:3] for p in approaches), "up", True, approaches=approaches)
 
-    def _shopping_item(self, s, stock):
-        p = self.collection.project
-        if self.goal.key == 'collect_stone' and p and s.map == MAPS['CELADON_MART_4F']:
-            item = ITEMS[p['evolution']['requirement']]
-            return item if item in stock and not dict(s.items).get(item) and s.money >= 2500 and len(s.items)<20 else None
-        return shopping_item(s.items, stock, s.money, s.map == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=True,
-                             legendary=legendary_project(self.collection.project))
+    def _menu_decision(self, decision):
+        if decision.reason is not None:
+            self.reason = decision.reason
+        if decision.supplies_prepared and self.collection.project:
+            self.collection.project['supplies_prepared'] = True
+        return decision.actions
+
+    def _preferences(self):
+        return self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
+
+    def _shopping_item(self, snapshot, stock):
+        return self.shop.item_for(snapshot, stock, self.goal.key, self.collection.project)
 
     def _release_target(self, snapshot):
-        from ..trade.preferences import identity
-        project = self.collection.project or {}
-        protected = set(project.get('family', [project['parent']])) if project.get('method') in ('evolve', 'train') and project.get('parent') else set()
-        preferences = self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
-        reserved = {(mon['box'], mon['position']) for mon in snapshot.storage_entries()
-                    if preferences.get(identity(mon), {}).get('state') in ('offered', 'locked')}
-        return release_target(snapshot, protected, reserved)
+        return self.pc.release_target(snapshot, self.collection.project, self._preferences())
 
     def _pc_target(self, snapshot):
-        if self.goal.key == 'party_release':
-            release = self._release_target(snapshot)
-            return release[1] if release and release[0] == snapshot.active_box else None
-        if self.pc_operation == "deposit":
-            return reserve_to_deposit(snapshot) if len(snapshot.party) >= 6 and not snapshot.box_full else None
-        if self.goal.key == 'party_collection_space':
-            return None
-        if self.goal.key == 'party_collection' and self.collection.project:
-            sid = self.collection.project['parent']
-            return next((i for i,(species,level) in enumerate(snapshot.boxed_pokemon) if species==sid),None) if len(snapshot.party)<6 else None
-        move = {"party_cut": 15, "party_surf": 57, "party_strength": 70}.get(self.goal.key)
-        candidates = [(level, i) for i, (species, level) in enumerate(snapshot.boxed_pokemon)
-                      if (species == self.storage_species if self.goal.key == 'party_upgrade' else move in SPECIES.get(species, {}).get("hms", []))]
-        return max(candidates)[1] if candidates and len(snapshot.party) < 6 else None
+        return self.pc.target(snapshot, self.goal.key, self.collection.project, self._preferences())
 
-    @staticmethod
-    def _sale_index(snapshot):
-        return next((i for i, (item, qty) in enumerate(snapshot.items)
-                     if qty and (item == ITEMS["NUGGET"] or 201 <= item <= 250
-                                 or len(snapshot.items) >= 18 and item in {
-                                     ITEMS[name] for name in ('X_ACCURACY', 'GUARD_SPEC', 'DIRE_HIT',
-                                         'X_ATTACK', 'X_DEFEND', 'X_SPEED', 'X_SPECIAL')})), None)
+    _sale_index = staticmethod(ShoppingController.sale_index)
 
     def _use_item(self, snapshot, item, target=0):
         index = next((i for i, (mid, qty) in enumerate(snapshot.items) if mid == item and qty), None)

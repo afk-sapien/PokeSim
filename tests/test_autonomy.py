@@ -117,7 +117,7 @@ def test_surf_partner_uses_storage_without_releasing_pokemon():
     assert (s.map, 13, 4) in goal.targets
     policy = StrategicPolicy(7)
     policy.goal = goal
-    policy.pc_operation = 'deposit'
+    policy.pc.operation = 'deposit'
     assert policy._pc_target(s) == 1
-    policy.pc_operation = 'withdraw'
+    policy.pc.operation = 'withdraw'
     assert policy._pc_target(replace(s, party=party[:5])) == 0
