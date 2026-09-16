@@ -46,7 +46,10 @@ def observe(root, output):
                               glitched=state.get('glitched'), reloads=state.get('reloads'),
                               map=game.get('map_name'), position=[game.get('x'), game.get('y')],
                               badges=game.get('badges'), owned=len(game.get('dex_owned', [])),
-                              goal=strategy.get('goal'), milestones=strategy.get('milestones'),
+                              goal=strategy.get('objective') or strategy.get('goal'),
+                              policy_recoveries=strategy.get('recoveries'),
+                              policy_action=strategy.get('action'),
+                              milestones=strategy.get('milestones'),
                               party=[{'name': p.get('name'), 'level': p.get('level'), 'hp': p.get('hp')}
                                      for p in game.get('party', [])],
                               recent_events=[{k: event.get(k) for k in ('id', 'ts', 'type', 'title')}
