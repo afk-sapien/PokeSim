@@ -77,7 +77,7 @@ For a persistent launch command, run `uv tool install --python 3.12 .` from the 
 
 Close a browser tab to leave the game running. Choose **Desktop → Save and quit** to stop it. Your computer must stay awake for the adventure to advance.
 
-Standalone desktop builds bundle Python and dependencies. The desktop workflow builds Windows x86-64, macOS Intel and Apple Silicon, and Linux x86-64 and ARM64 downloads. These are new build targets, with platform validation determined by the workflow results. Older public releases do not contain the launcher. See the [desktop installation and download guide](docs/desktop.md) for build availability, save locations, and troubleshooting.
+Standalone desktop builds bundle Python and dependencies. The [v0.2.0rc31 release](https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0rc31) includes Windows x86-64, macOS Intel and Apple Silicon, and Linux x86-64 and ARM64 downloads. All five targets passed native build and bundled-runtime checks. See the [desktop installation and download guide](docs/desktop.md) for setup, save locations, and troubleshooting.
 
 ### On an always-on server
 
