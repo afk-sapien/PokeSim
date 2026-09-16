@@ -12,11 +12,12 @@ def test_compression_preserves_backup_bytes_and_permissions(tmp_path):
     data = b'unchanged saved adventure\0' * 1000
     source.write_bytes(data)
     source.chmod(0o640)
+    original_mode = source.stat().st_mode & 0o777
     result = compress(source)
     target = Path(result['compressed'])
     assert gzip.decompress(target.read_bytes()) == data
     assert result['decompressed_sha256'] == hashlib.sha256(data).hexdigest()
-    assert target.stat().st_mode & 0o777 == 0o640
+    assert target.stat().st_mode & 0o777 == original_mode
     assert not source.exists()
 
 
