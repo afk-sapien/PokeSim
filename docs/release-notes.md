@@ -1,14 +1,16 @@
-# PokeSim 0.2.0rc30
+# PokeSim 0.2.0rc31 candidate
 
-The strategic player no longer crosses distant maps just to buy optional supplies when
-it cannot afford essential balls or healing. Optional purchases remain available in the
-current mart, and legendary preparation retains its existing rules.
+This source candidate adds desktop setup, game-local trading and partner locks, a
+separate one-time Champion Mew reward, and shared desktop/server lifecycle handling.
 
-The recorded copied-save comparison reduced recovery loops and produced three trainee
-levels. See the [supply-trip comparison](https://github.com/afk-sapien/PokeSim/blob/v0.2.0rc30/docs/validation/supply-trip-0.2.0rc30.json).
-This targeted result does not establish uninterrupted autonomous campaign completion.
+Server shutdown now reports final-save failures. An adventure directory lock prevents
+two updated runtimes from opening the same game. Shopping and PC interactions have
+separate state owners, and runtime status includes source build identity.
 
-This is an experimental release. Supply your own supported ROM and keep a complete
-backup of the data directory before upgrading. Match the source, image, and configuration
-to this tag. Later working-source changes, including desktop packaging and revised Mew
-rewards, are not implied by this release note.
+Validation includes synthetic Python scenarios, real Chromium flows, private ROM
+opening tests, and copied-save comparisons. These checks do not establish uninterrupted
+multi-day gameplay or native bundle qualification on every operating system.
+
+This candidate has not been published or deployed. Supply your own supported ROM and
+back up the complete data directory before upgrading. Review these notes and the
+matching validation evidence against the exact tag before publishing.

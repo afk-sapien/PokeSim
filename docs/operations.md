@@ -1,6 +1,6 @@
 Operating pokesim
 
-Use one process and one container per data directory. Sharing a data directory between active instances is unsupported. The examples below assume the default `./data` directory. Substitute the actual `DATA_PATH` for a customized installation.
+Use one process and one container per data directory. Desktop and server runtimes take an exclusive `adventure.lock` in the game data directory. A second runtime fails before opening the database. Never remove the lock file while a runtime is active. The operating system releases the lock when its process exits. The examples below assume the default `./data` directory. Substitute the actual `DATA_PATH` for a customized installation.
 
 **Permissions and startup**
 

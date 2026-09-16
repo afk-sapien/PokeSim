@@ -41,6 +41,8 @@ def run(rom, checkpoint, frames):
     achievements = []
     full_recovery = None
     pending = []
+    progress_samples = []
+    next_sample = 36000
     try:
         with checkpoint.open('rb') as stream:
             pb.load_state(stream)
@@ -69,6 +71,17 @@ def run(rom, checkpoint, frames):
                     pb.tick(action.gap, render=False)
                 frame += action.hold + action.gap
                 counts[policy.mode] += action.hold + action.gap
+            if frame - start >= next_sample:
+                project = policy.collection.project or {}
+                progress_samples.append({
+                    'frame': frame - start, 'owned': len(snapshot.owned),
+                    'policy_recoveries': policy.recoveries - metadata['policy_state'].get('recoveries', 0),
+                    'achievement_count': len(achievements), 'project': project.get('key'),
+                    'gains': dict(project.get('gains', {})),
+                    'training': {key: value for key, value in project.get('training_session', {}).items()
+                                 if key != 'routes'},
+                })
+                next_sample += 36000
         final = read_snapshot(pb.memory, frame)
         return {'edition': policy.collection.version, 'frames': frame - start,
                 'wall_seconds': round(time.monotonic() - wall, 2), 'rewinds': 0,
@@ -79,6 +92,7 @@ def run(rom, checkpoint, frames):
                 'final_party': [(mon.name, mon.level, mon.experience) for mon in final.party],
                 'initial_items': list(first.items), 'final_items': list(final.items),
                 'achievements': achievements, 'mode_frames': counts,
+                'progress_samples': progress_samples,
                 'history': policy.collection.history,
                 'director': policy.collection.director.state_dict(),
                 'active_project': policy.collection.project,

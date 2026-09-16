@@ -36,6 +36,23 @@ jobs:
       - run: python tools/check_docs.py
       - run: uv build
       - run: python tools/check_package.py
+      - name: Install browser test runtime
+        if: matrix.python == '3.12'
+        run: |
+          uv sync --locked --extra dev --extra browser-test
+          uv run --locked --extra browser-test python -m playwright install --with-deps chromium
+      - name: Exercise real browser flows
+        if: matrix.python == '3.12'
+        env:
+          POKESIM_BROWSER_TESTS: '1'
+        run: uv run --locked --extra dev --extra browser-test pytest tests/browser -q --basetemp=build/browser-tests
+      - name: Retain browser diagnostics on failure
+        if: failure() && matrix.python == '3.12'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: browser-diagnostics
+          path: build/browser-tests/**/browser-trace.zip
+          if-no-files-found: ignore
   container:
     runs-on: ubuntu-latest
     steps:

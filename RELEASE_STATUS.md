@@ -5,9 +5,15 @@ recorded observations, not a fresh health check.
 
 ## Source and deployment versions
 
-The package version is `0.2.0rc30`. The working source also contains newer desktop,
-PC trading, Pokémon lock, and reward changes. A version number alone does not identify
-those changes. Record the exact source revision when building or deploying.
+The source candidate is `0.2.0rc31`, including desktop, PC trading, Pokémon locks,
+revised rewards, and lifecycle hardening. It has not been published or deployed.
+Runtime status now reports build revision and dirty state. See the
+[validation guide](docs/testing.md) for build identity and regression checks.
+
+The [local cleanup validation](docs/validation/cleanup-0.2.0rc31.json) records 614
+passing Python tests including five real Chromium scenarios, 20 Node tests, and five
+private ROM tests. Two copied checkpoints each matched the baseline over two game
+hours. Existing recovery churn remains, and multi-day reliability is still unproven.
 
 | Component | Last recorded version | Evidence |
 | --- | --- | --- |
