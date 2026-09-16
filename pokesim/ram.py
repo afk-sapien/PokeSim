@@ -120,6 +120,7 @@ class PartyMon:
     max_pp: tuple[int, ...] = ()
     dvs: tuple[int, ...] = ()
     stat_exp: tuple[int, ...] = ()
+    trainer_id: int | None = None
 
     @property
     def name(self) -> str:
@@ -137,6 +138,7 @@ class StoredMon:
     experience: int
     dvs: tuple[int, ...]
     stat_exp: tuple[int, ...]
+    trainer_id: int | None = None
 
 
 def individual_data(struct):
@@ -144,7 +146,8 @@ def individual_data(struct):
     attack, defense = struct[27] >> 4, struct[27] & 15
     speed, special = struct[28] >> 4, struct[28] & 15
     hp = ((attack & 1) << 3) | ((defense & 1) << 2) | ((speed & 1) << 1) | (special & 1)
-    return {'moves': tuple(struct[8:12]), 'experience': int.from_bytes(struct[14:17], 'big'),
+    return {'moves': tuple(struct[8:12]), 'trainer_id': int.from_bytes(struct[12:14], 'big'),
+            'experience': int.from_bytes(struct[14:17], 'big'),
             'dvs': (hp, attack, defense, speed, special),
             'stat_exp': tuple(int.from_bytes(struct[i:i + 2], 'big') for i in range(17, 27, 2))}
 

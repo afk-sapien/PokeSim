@@ -38,9 +38,9 @@ def spare_copies(s, protected=()):
             spare_entries([asdict(mon) for mon in s.party], s.storage_entries(), protected)]
 
 
-def release_target(s, protected=()):
+def release_target(s, protected=(), reserved=()):
     """The box and position of the duplicate to give up first: lowest level, earliest box."""
-    spare = spare_copies(s, protected)
+    spare = [mon for mon in spare_copies(s, protected) if mon[:2] not in reserved]
     return min(spare, key=lambda entry: (entry[2], entry[0], entry[1]))[:2] if spare else None
 
 

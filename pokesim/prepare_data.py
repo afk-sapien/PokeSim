@@ -20,6 +20,13 @@ def prepare(source, destination):
         raise ValueError(f'Use source revision {game_data.SOURCE_REVISION}, found {revision}')
     if git('status', '--porcelain', '--untracked-files=no'):
         raise ValueError('The source checkout has modified tracked files. Use a clean checkout.')
+    return generate_bundle(source, destination, revision)
+
+
+def generate_bundle(source, destination, revision):
+    """Generate from a source tree already verified by the calling installer."""
+    if revision != game_data.SOURCE_REVISION:
+        raise ValueError('Unsupported reference revision')
     generated_strategy = strategy.generate(source, revision)
     values = {'strategy.json': generated_strategy, 'tables.json': tables.generate(source),
               'collection.json': collection.generate(source, json.loads(json.dumps(generated_strategy)))}

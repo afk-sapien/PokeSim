@@ -9,7 +9,7 @@ function pc(pokemon, search = '?scope=all', party = []) {
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
       value: '', innerHTML: '', textContent: '', options: [{}, {}],
-      classList: {add() {}, remove() {}}, showModal() {}, focus() {},
+      classList: {add() {}, remove() {}, toggle() {}}, setAttribute() {}, showModal() {}, focus() {},
     })
     return elements.get(selector)
   }
@@ -172,4 +172,27 @@ test('party selection bookmarks, details, refresh, and box selection remain dist
   view.element('#pc-search').value = 'missing'
   view.element('#pc-search').oninput()
   assert.equal(view.rows().length, 0)
+})
+
+test('box and list modes have separate controls and preserve physical slots', async () => {
+  const view = pc([mon(1, 2, 99), mon(1, 1, 10)], '?box=1&sort=level&order=desc')
+  await view.ready()
+  assert.deepEqual(view.rows().map(mon => mon.position), [1, 2])
+  assert.equal(view.element('#pc-sidebar').hidden, false)
+  assert.equal(view.element('#pc-sort-control').hidden, true)
+  assert.equal(view.element('#pc-pagination').hidden, true)
+  assert.match(view.element('#pc-grid').innerHTML, /pc-empty-slot/)
+  view.element('#pc-all-view').onclick()
+  assert.deepEqual(view.rows().map(mon => mon.level), [99, 10])
+  assert.equal(view.element('#pc-sidebar').hidden, true)
+  assert.equal(view.element('#pc-sort-control').hidden, false)
+  assert.match(view.element('#pc-grid').innerHTML, /pc-list-row/)
+  assert.doesNotMatch(view.element('#pc-grid').innerHTML, /pc-empty-slot/)
+  view.element('#pc-search').value = 'missing'
+  view.element('#pc-search').oninput()
+  view.element('#pc-boxes-view').onclick()
+  assert.equal(view.element('#pc-search').value, '')
+  assert.equal(view.rows().length, 2)
+  view.element('#pc-all-view').onclick()
+  assert.equal(view.element('#pc-search').value, 'missing')
 })

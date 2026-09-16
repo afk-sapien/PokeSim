@@ -90,7 +90,7 @@ async function refreshState() {
     const state = await response.json()
     if ($('#connection').classList.contains('is-offline')) window.pokesimScreen?.reconnect()
     viewerOnly = Boolean(state.viewer_only)
-    document.querySelectorAll('.controls, .manual-controls, .controller, .wander-control, .wander-hint, label[for="adventure-pace"], #restart').forEach((element) => {
+    document.querySelectorAll('.controls, .manual-controls, .controller, #restart').forEach((element) => {
       element.hidden = viewerOnly
     })
     set('#app-version', 'textContent', `v${state.version || 'unknown'}`)
@@ -108,7 +108,6 @@ async function refreshState() {
     set('#take-control', 'textContent', manualMode ? 'Let AI play' : 'Take control')
     set('#control-mode', 'textContent', manualMode ? 'You’re playing · AI paused' : paused ? 'Game frozen' : 'AI is playing')
     set('#control-hint', 'textContent', manualMode ? 'Play at normal speed. Let AI play when you’re ready to hand it back.' : 'Press any game control to pause the AI and take over.')
-    if ($('#wander') && document.activeElement !== $('#wander')) $('#wander').value = String(state.strategy?.exploration ?? 0.12)
     $('#connection').classList.toggle('is-paused', paused)
     $('#connection').classList.remove('is-offline')
     set('#status', 'textContent', manualMode ? 'You’re in control' : paused ? 'Game frozen' : 'Adventure in progress')
@@ -201,7 +200,6 @@ async function refreshEvents(append = false) {
 
 if ($('#pause')) $('#pause').onclick = (event) => control(event.currentTarget, paused && !manualMode ? 'take_control' : 'pause')
 if ($('#take-control')) $('#take-control').onclick = (event) => control(event.currentTarget, manualMode ? 'resume' : 'take_control')
-if ($('#wander')) $('#wander').onchange = (event) => control(event.currentTarget, 'exploration', Number(event.target.value))
 if ($('#speed')) $('#speed').onchange = (event) => control(event.currentTarget, 'speed', Number(event.target.value))
 if ($('#save')) $('#save').onclick = (event) => control(event.currentTarget, 'save', undefined, 'Save requested. A little moment to come back to.')
 if ($('#restart')) $('#restart').onclick = (event) => {
@@ -312,7 +310,6 @@ function renderCollection(collection, game) {
   const key = JSON.stringify([collection, game?.storage])
   if (key === collectionRenderKey) return
   collectionRenderKey = key
-  if ($('#adventure-pace') && document.activeElement !== $('#adventure-pace')) $('#adventure-pace').value = collection.pace
   set('#collection-phase', 'textContent', collection.phase || 'Adventure')
   set('#collection-caught', 'textContent', `${collection.caught || 0} / 151`)
   set('#collection-available', 'textContent', collection.available || 0)
@@ -328,7 +325,6 @@ function renderCollection(collection, game) {
   set('#collection-evolutions', 'innerHTML', collection.evolutions?.length ? collection.evolutions.map(e => `<li><strong>${esc(e.from)} → ${esc(e.to)}</strong><span>${e.method === 'level' ? `Level ${e.level} → ${e.requirement}` : e.method === 'trade' ? 'Requires a link trade' : esc(String(e.requirement).replaceAll('_', ' '))}</span></li>`).join('') : '<li>More evolution projects will appear as the collection grows.</li>')
   set('#collection-history', 'innerHTML', collection.history?.length ? collection.history.map(line => `<li>${esc(line)}</li>`).join('') : '<li>The next discovery is out there.</li>')
 }
-if ($('#adventure-pace')) $('#adventure-pace').onchange = event => control(event.currentTarget, 'adventure_pace', event.target.value)
 
 function revealAdventure() {
   if (['#collection', '#journey-progress'].includes(location.hash)) set('#adventure-details', 'open', true)

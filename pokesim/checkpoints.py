@@ -9,6 +9,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from .platform_io import sync_directory
+
 log = logging.getLogger(__name__)
 
 
@@ -52,11 +54,7 @@ class CheckpointStore:
                 output.flush()
                 os.fsync(output.fileno())
             os.replace(temporary, path)
-            directory = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory)
-            finally:
-                os.close(directory)
+            sync_directory(path.parent)
         finally:
             temporary.unlink(missing_ok=True)
 

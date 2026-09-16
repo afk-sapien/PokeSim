@@ -136,6 +136,7 @@ def live_status(game: dict | None, collection: dict | None = None) -> dict:
                    "level": mon["level"], "hp": mon["hp"], "max_hp": mon["max_hp"],
                    "moves": mon.get("moves", ()), "dvs": mon.get("dvs", ()),
                    "stat_exp": mon.get("stat_exp", ()),
+                   **({'trainer_id': mon['trainer_id']} if mon.get('trainer_id') is not None else {}),
                    "experience": (mon.get("experience") or {}).get("total", 0),
                    "status_label": mon.get("status_label"), "slot": slot + 1, **stored_strength(mon)}
                   for slot, mon in enumerate(game.get("party", []))],

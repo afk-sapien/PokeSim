@@ -1,6 +1,5 @@
 """Coordinate scoped, authenticated exchanges without host or Docker access."""
 import argparse
-import fcntl
 import hashlib
 import json
 import os
@@ -12,6 +11,9 @@ import time
 from urllib.error import HTTPError
 import urllib.request
 
+from ..platform_io import lock_file, sync_directory
+from ..rewards import mew_enabled
+
 
 def atomic(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -22,11 +24,7 @@ def atomic(path, data):
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
-        fd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
+        sync_directory(path.parent)
     finally:
         Path(temporary).unlink(missing_ok=True)
 
@@ -116,11 +114,7 @@ class Coordinator:
             for path in active.get('targets', []):
                 target = Path(path)
                 target.unlink(missing_ok=True)
-                fd = os.open(target.parent, os.O_RDONLY)
-                try:
-                    os.fsync(fd)
-                finally:
-                    os.close(fd)
+                sync_directory(target.parent)
         if committed:
             for name in self.peers:
                 self.control(name, 'load', active['id'])
@@ -172,14 +166,20 @@ class Coordinator:
         status = json.loads(status_path.read_text()) if status_path.exists() else {'history': [], 'completed': 0}
         interval = max(300, self.config.get('interval_seconds', 900))
         trade_cooling = time.time() - status.get('last_trade', 0) < interval
-        if trade_cooling and not self.config.get('league_rewards', False):
+        if trade_cooling and not mew_enabled(self.config):
             return
         states = {name: request(peer) for name, peer in self.peers.items()}
         reward_due = self.config.get('league_rewards', False) and any(
             state.get('league_rewards', {}).get('pending', 0) > 0
             and any(count < 20 for count in state.get('game', {}).get('storage', {}).get('box_counts', []))
             for state in states.values())
-        if trade_cooling and not reward_due:
+        event_due = mew_enabled(self.config) and any(
+            name not in status.get('mew_recipients', [])
+            and 151 not in state.get('game', {}).get('dex_owned', [])
+            and state.get('strategy', {}).get('milestones', {}).get('champion')
+            and any(count < 20 for count in state.get('game', {}).get('storage', {}).get('box_counts', []))
+            for name, state in states.items())
+        if trade_cooling and not reward_due and not event_due:
             return
         if any(s.get('paused') or not s.get('health', {}).get('ok')
                or not (s.get('game') or {}).get('party') for s in states.values()):
@@ -190,7 +190,7 @@ class Coordinator:
         opportunities = []
         trade_turn = (reward_due and not trade_cooling
                       and status.get('last_operation') == 'league_reward')
-        if not reward_due or trade_turn:
+        if not event_due and (not reward_due or trade_turn):
             try:
                 with urllib.request.urlopen(self.config['board_url'] + '/api/proposals', timeout=20) as response:
                     opportunities = json.load(response).get('routine_proposals', [])
@@ -198,21 +198,15 @@ class Coordinator:
                 if not reward_due:
                     raise
                 # An unavailable board must not prevent an earned reward delivery.
-        event_due = self.config.get('mew_event', False) and any(
-            name not in status.get('mew_recipients', [])
-            and 151 not in state.get('game', {}).get('dex_owned', [])
-            and state.get('strategy', {}).get('milestones', {}).get('champion')
-            and any(count < 20 for count in state.get('game', {}).get('storage', {}).get('box_counts', []))
-            for name, state in states.items())
         if not opportunities and not event_due and not reward_due:
             status.update(last_check=time.time(), state='waiting_for_opportunity', error=None)
             write(status_path, status)
             return
         active = {'id': str(time.time_ns()), 'ts': time.time(), 'phase': 'preparing', 'prepared': [], 'targets': []}
-        if reward_due and not opportunities:
-            active['kind'] = 'league_reward'
-        elif event_due:
+        if event_due:
             active['kind'] = 'mew_event'
+        elif reward_due and not opportunities:
+            active['kind'] = 'league_reward'
         write(self.active_path, active)
         try:
             # Each game checks its own live state. Stale API samples need not share
@@ -252,9 +246,9 @@ def main():
     parser.add_argument('--loop', action='store_true')
     args = parser.parse_args()
     args.root.mkdir(parents=True, exist_ok=True)
-    with (args.root / 'lock').open('w') as lock:
+    with (args.root / 'lock').open('a+b') as lock:
         try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            lock_file(lock)
         except BlockingIOError:
             return
         while True:

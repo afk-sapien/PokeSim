@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 import asyncio
-import html
 import hmac
 import math
+import httpx
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from typing import Literal
 
 from .. import config
 from ..policies.base import BUTTONS
-from .feed import iso_timestamp, render_feed
+from .event_page import render_event
+from .feed import render_feed
 from .pokedex import DEFAULT_VERSION, VERSIONS, live_status, reference
+from . import trading
+from ..trade import preferences
 
 STATIC = Path(__file__).parent / "static"
 
@@ -24,6 +28,11 @@ class Control(BaseModel):
     value: str | float | None = None
 
 
+class TradePreference(BaseModel):
+    key: str
+    state: Literal['offered', 'withdrawn', 'auto', 'locked', 'unlocked']
+
+
 def create_app(emu, store) -> FastAPI:
     app = FastAPI(title="pokesim")
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -31,11 +40,11 @@ def create_app(emu, store) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index():
-        return (STATIC / "index.html").read_text()
+        return (STATIC / "index.html").read_text(encoding="utf-8")
 
     @app.get("/pokedex", response_class=HTMLResponse)
     def pokedex_page():
-        return (STATIC / "pokedex.html").read_text()
+        return (STATIC / "pokedex.html").read_text(encoding="utf-8")
 
     @app.get("/team", response_class=HTMLResponse)
     def team_page():
@@ -47,11 +56,15 @@ def create_app(emu, store) -> FastAPI:
 
     @app.get("/pc", response_class=HTMLResponse)
     def pc_page():
-        return (STATIC / "pc.html").read_text()
+        return (STATIC / "pc.html").read_text(encoding="utf-8")
 
     @app.get("/journal", response_class=HTMLResponse)
     def journal_page():
-        return (STATIC / "journal.html").read_text()
+        return (STATIC / "journal.html").read_text(encoding="utf-8")
+
+    @app.get('/trading', response_class=HTMLResponse)
+    def trading_page():
+        return (STATIC / 'trading.html').read_text(encoding="utf-8")
 
     @app.get("/api/pokedex")
     def pokedex_reference(version: str | None = Query(None)):
@@ -65,7 +78,31 @@ def create_app(emu, store) -> FastAPI:
     @app.get("/api/pokedex/status")
     def pokedex_status():
         status = emu.status()
-        return live_status(status.get("game"), (status.get("strategy") or {}).get("collection"))
+        payload = live_status(status.get("game"), (status.get("strategy") or {}).get("collection"))
+        return preferences.apply(payload, store.trade_preferences())
+
+    @app.get('/api/trading')
+    def trading_status():
+        payload = pokedex_status()
+        instance = config.TRADING_INSTANCE or payload['version']
+        try:
+            result = trading.perspective(payload, trading.board(), instance)
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            message = ('Trading is not connected to this game yet.' if not config.TRADING_URL else
+                       'Trading is reconnecting. Offers and history will refresh when the coordinator is available.')
+            result = trading.unavailable(payload, instance, message)
+        return {**result, 'viewer_only': config.VIEWER_ONLY,
+                'holding': bool(store.get('trade_hold'))}
+
+    @app.post('/api/trading/preferences')
+    def trading_preference(choice: TradePreference):
+        if config.VIEWER_ONLY:
+            raise HTTPException(403, 'This instance is view-only')
+        try:
+            emu.set_trade_preference(choice.key, choice.state)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+        return {'ok': True}
 
     @app.get("/sprites/{dex}.png")
     def sprite(dex: int):
@@ -135,10 +172,6 @@ def create_app(emu, store) -> FastAPI:
             emu.press(str(c.value))
         elif c.action in ("pause", "resume", "take_control", "save", "restart"):
             emu.command(c.action)
-        elif c.action == 'adventure_pace':
-            if c.value not in ('focused','balanced','thorough'):
-                raise HTTPException(400,'Choose focused, balanced, or thorough')
-            emu.command('adventure_pace', c.value)
         elif c.action == "speed":
             try:
                 value = float(c.value)
@@ -147,16 +180,6 @@ def create_app(emu, store) -> FastAPI:
             if not math.isfinite(value) or not (value == 0 or 0.1 <= value <= 16):
                 raise HTTPException(400, "Speed must be 0 for unlimited, or between 0.1 and 16")
             emu.command("speed", value)
-        elif c.action == "exploration":
-            if c.value is None:
-                raise HTTPException(400, "exploration requires a number")
-            try:
-                value = float(c.value)
-            except (TypeError, ValueError):
-                raise HTTPException(400, "exploration requires a number")
-            if not 0 <= value <= 0.3:
-                raise HTTPException(400, "exploration must be between 0 and 0.3")
-            emu.command("exploration", value)
         elif c.action == "load_state":
             if not isinstance(c.value, str) or not store.state_path(c.value):
                 raise HTTPException(400, "Save state does not exist")
@@ -196,16 +219,8 @@ def create_app(emu, store) -> FastAPI:
         ev = store.event(eid)
         if not ev:
             raise HTTPException(404)
-        shot = f"/shots/{ev['shot']}" if ev["shot"] else ""
         can_rewind = bool(ev["state"]) and not config.VIEWER_ONLY and not store.get("trade_barrier")
-        return f"""<!doctype html><html><head><meta charset="utf-8"><title>{html.escape(ev['title'])} · pokesim</title>
-<link rel="stylesheet" href="/static/style.css"></head><body class="event">
-<main><a href="/journal">Back to the journal</a><h1>{html.escape(ev['title'])}</h1>
-<p class="meta">{iso_timestamp(ev['ts'])} &middot; {html.escape(ev['map'])} &middot; play time {ev['playtime']} &middot; {ev['type']} &middot; priority {ev['priority']}</p>
-<p>{html.escape(ev['body'])}</p>
-{f'<img class="shot" src="{shot}" alt="">' if shot else ''}
-{f'<p><button onclick="fetch(&quot;/api/control&quot;,{{method:&quot;POST&quot;,headers:{{&quot;content-type&quot;:&quot;application/json&quot;}},body:JSON.stringify({{action:&quot;load_state&quot;,value:&quot;{ev["state"]}&quot;}})}}).then(()=>location.href=&quot;/&quot;)">Rewind the live game to this moment</button></p>' if can_rewind else ''}
-</main></body></html>"""
+        return render_event(ev, can_rewind=can_rewind)
 
     @app.get("/feed.xml")
     def feed(types: str | None = None, all: int = 0, limit: int = Query(50, ge=1, le=200), min_priority: int | None = None):

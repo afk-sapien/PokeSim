@@ -312,7 +312,7 @@ def test_release_confirmation_is_refused_unless_the_policy_asked_for_it():
     p.goal = Goal('secret_key', 'Continue', 'Resume the adventure')
     assert p._dispatch(stuffed(), scr, 'yes_no', memory)[0].button == 'down', 'must land on NO'
     p.goal = Goal('party_release', 'Make room in storage', 'Free a slot')
-    assert p._dispatch(stuffed(), scr, 'yes_no', memory)[0].button == 'a', 'YES is already selected'
+    assert p._dispatch(stuffed(), scr, 'yes_no', memory)[0].button == 'down', 'untracked release must be refused'
 
 def test_the_box_change_confirmation_is_answered_yes():
     # Gen I asks "data will be saved. Is that okay?" with the PC menu still drawn behind it, so the
@@ -335,4 +335,4 @@ def test_a_release_confirmation_is_still_refused_outside_a_release():
     p.goal = Goal('party_box', 'Make room for new catches', 'Switch to a box with space')
     assert p._dispatch(full_box(), Screen(memory), 'yes_no', memory)[0].button == 'down'
     p.goal = Goal('party_release', 'Make room in storage', 'Free a slot')
-    assert p._dispatch(full_box(), Screen(memory), 'yes_no', memory)[0].button == 'a'
+    assert p._dispatch(full_box(), Screen(memory), 'yes_no', memory)[0].button == 'down'
