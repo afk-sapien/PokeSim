@@ -13,21 +13,24 @@ sys.path.insert(0, str(ROOT))
 from pokesim.build_info import source_info
 
 
-def stamp(directory):
+def stamp(directory, identity):
     path = Path(directory) / 'pokesim' / '_build.json'
-    path.write_text(json.dumps(source_info(ROOT), indent=2) + '\n', encoding='utf-8')
+    path.write_text(json.dumps(identity, indent=2) + '\n', encoding='utf-8')
 
 
 class BuildPy(build_py):
     def run(self):
+        identity = source_info(ROOT)
         super().run()
-        stamp(self.build_lib)
+        stamp(self.build_lib, identity)
 
 
 class Sdist(sdist):
     def make_release_tree(self, base_dir, files):
+        # Capture the checkout before setuptools creates its untracked staging tree.
+        identity = source_info(ROOT)
         super().make_release_tree(base_dir, files)
-        stamp(base_dir)
+        stamp(base_dir, identity)
 
 
 setup(cmdclass={'build_py': BuildPy, 'sdist': Sdist})
