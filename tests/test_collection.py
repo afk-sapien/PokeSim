@@ -185,7 +185,7 @@ def test_pc_deposits_before_switching_to_a_full_source_box():
     s=state(party=(mon(),)*6,active_box=1,boxed_pokemon=())
     mem=menu({1:'  WITHDRAW',3:'  DEPOSIT',5:'  RELEASE',7:'  CHANGE BOX'},(1,1),top=(1,1))
     assert p._dispatch(s,Screen(mem),'pc',mem)[0].button=='down'
-    assert p.pc_operation=='deposit'
+    assert p.pc.operation=='deposit'
 
 
 def test_fossil_quest_walks_outside_while_lab_works():

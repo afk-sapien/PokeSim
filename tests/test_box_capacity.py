@@ -59,14 +59,14 @@ def test_full_storage_does_not_offer_another_full_box():
 
 def test_full_box_routes_to_pc_and_overrides_pending_upgrade():
     p = StrategicPolicy(7)
-    p.storage_species = 17
-    p.storage_map = MAPS['LAVENDER_POKECENTER']
+    p.pc.species = 17
+    p.pc.destination = MAPS['LAVENDER_POKECENTER']
     s = full_box(textbox=True)
     p.observed_map = s.map
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
     action = p.step(PolicyContext(s, 0, 0, memory))[0]
     assert p.goal.key == 'party_box'
-    assert p.storage_species is None
+    assert p.pc.species is None
     assert all(m != MAPS['LAVENDER_MART'] for m, x, y in p.goal.targets)
     assert action.button == 'down'
 
@@ -107,7 +107,7 @@ def test_pending_ball_intent_is_cancelled_when_box_is_full():
 
 def test_no_deposit_when_active_box_is_full():
     p = StrategicPolicy(7)
-    p.pc_operation = 'deposit'
+    p.pc.operation = 'deposit'
     assert p._pc_target(full_box()) is None
 
 
@@ -141,7 +141,7 @@ def test_full_source_box_allows_withdrawal_instead_of_switching_away():
                   (1, 1), top=(1, 1))
     action = p.step(PolicyContext(s, 0, 0, memory))[0]
     assert p.goal.key == 'party_collection'
-    assert p.pc_operation == 'withdraw'
+    assert p.pc.operation == 'withdraw'
     assert action.button == 'a'
     assert p._pc_target(s) == 0
 
