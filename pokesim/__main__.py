@@ -44,8 +44,6 @@ def main():
 
         threading.Thread(target=monitor, name="emulator-monitor", daemon=True).start()
         server.run()
-        if emu.fatal_error:
-            raise SystemExit(1)
     finally:
         monitor_done.set()
         if emu is not None:
@@ -55,6 +53,8 @@ def main():
             else:
                 emu.pb.stop(save=False)
         store.close()
+    if emu is not None and emu.fatal_error:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
