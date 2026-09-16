@@ -1,6 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.2.0rc31, development candidate
+
+This candidate is prepared in source. It has not been published or deployed.
+
+### Lifecycle and verification
+
+- Report final-save failures as unsuccessful server exits.
+- Share runtime ownership between desktop and server launchers. Hold an adventure
+  directory lock until the worker stops and its database closes.
+- Clear stale input, recovery timers, and transient menu state on appropriate
+  transitions while preserving checkpoint memory and existing journal history.
+- Extract shopping and storage controllers with explicit state and decision inputs.
+- Report source revision and dirty state, and embed build identity in distributions.
+- Add real Chromium scenarios to CI and release checks, plus bounded private replay
+  comparisons with progress sampling and input-integrity checks.
 
 ### One-time Mew reward
 
@@ -93,7 +107,7 @@
 
 - Award one random level-5 starter, Eevee, fossil Pokémon, or Mew for each newly observed
   Championship, with durable delivery and pending claims when storage is full.
-  The unreleased source revision above separates Mew from this historical pool.
+  The rc31 candidate above separates Mew from this historical pool.
 
 ## 0.2.0rc17, varied choices and broader exchanges
 

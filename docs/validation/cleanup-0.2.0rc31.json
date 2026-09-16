@@ -1,0 +1,278 @@
+{
+  "candidate": "0.2.0rc31",
+  "date": "2026-09-15",
+  "scope": "Local cleanup validation with private copied checkpoints",
+  "baseline_revision": "b54e9625349eba3d221539486482a4e124d35b20",
+  "controller_revision": "147444f643a4e9ec49053a111a52c823d68fc773",
+  "automated_checks": {
+    "python_including_real_chromium": {
+      "passed": 614,
+      "skipped": 1
+    },
+    "real_chromium_scenarios_included": 5,
+    "node_tests": 20,
+    "private_rom_tests": 5,
+    "desktop_launcher_smoke": "passed",
+    "real_rom_runtime_save_and_restore": "passed",
+    "compose_configuration": "passed"
+  },
+  "replays": {
+    "supply_trip": {
+      "baseline": {
+        "frames": 432016,
+        "game_hours": 2.0,
+        "new_registrations": [],
+        "rewinds": 0,
+        "policy_recoveries": 45,
+        "useful_events": {
+          "level": 9,
+          "trainer": 5,
+          "champion": 1
+        },
+        "longest_useful_event_gap_frames": 86990,
+        "progress_samples": [],
+        "final_project_gains": {
+          "experience": 7841,
+          "levels": 2
+        },
+        "final_map": "Route 15",
+        "policy_fingerprint": "46f261ea26486fd2fc715baeb5812195bed314e86fc5d75986134fb15d3233a7"
+      },
+      "candidate": {
+        "frames": 432016,
+        "game_hours": 2.0,
+        "new_registrations": [],
+        "rewinds": 0,
+        "policy_recoveries": 45,
+        "useful_events": {
+          "level": 9,
+          "trainer": 5,
+          "champion": 1
+        },
+        "longest_useful_event_gap_frames": 86990,
+        "progress_samples": [],
+        "final_project_gains": {
+          "experience": 7841,
+          "levels": 2
+        },
+        "final_map": "Route 15",
+        "policy_fingerprint": "a45ba3fde841c4b30c6661ded6c9a32e22256d09cd7d5dd4e50a0c331971072c"
+      },
+      "changed_fields": []
+    },
+    "preparation": {
+      "baseline": {
+        "frames": 432028,
+        "game_hours": 2.0,
+        "new_registrations": [
+          144
+        ],
+        "rewinds": 0,
+        "policy_recoveries": 37,
+        "useful_events": {
+          "level": 3,
+          "trainer": 10,
+          "champion": 2,
+          "catch": 1
+        },
+        "longest_useful_event_gap_frames": 149244,
+        "progress_samples": [],
+        "final_project_gains": {},
+        "final_map": "Seafoam Islands B2F",
+        "policy_fingerprint": "46f261ea26486fd2fc715baeb5812195bed314e86fc5d75986134fb15d3233a7"
+      },
+      "candidate": {
+        "frames": 432028,
+        "game_hours": 2.0,
+        "new_registrations": [
+          144
+        ],
+        "rewinds": 0,
+        "policy_recoveries": 37,
+        "useful_events": {
+          "level": 3,
+          "trainer": 10,
+          "champion": 2,
+          "catch": 1
+        },
+        "longest_useful_event_gap_frames": 149244,
+        "progress_samples": [
+          {
+            "frame": 36012,
+            "owned": 111,
+            "policy_recoveries": 1,
+            "achievement_count": 0,
+            "project": "train:75:90",
+            "gains": {
+              "experience": 18255,
+              "levels": 1
+            },
+            "training": {
+              "phase": "training",
+              "preparation_frames": 1260,
+              "preparation_idle": 0,
+              "preparation_since_gain": 0,
+              "active_frames": 34722,
+              "active_idle": 2498
+            }
+          },
+          {
+            "frame": 72006,
+            "owned": 111,
+            "policy_recoveries": 1,
+            "achievement_count": 0,
+            "project": "train:75:90",
+            "gains": {
+              "experience": 22669,
+              "levels": 1
+            },
+            "training": {
+              "phase": "training",
+              "preparation_frames": 1260,
+              "preparation_idle": 0,
+              "preparation_since_gain": 0,
+              "active_frames": 70728,
+              "active_idle": 1000
+            }
+          },
+          {
+            "frame": 108020,
+            "owned": 111,
+            "policy_recoveries": 2,
+            "achievement_count": 0,
+            "project": "train:75:90",
+            "gains": {
+              "experience": 28280,
+              "levels": 1
+            },
+            "training": {
+              "phase": "training",
+              "preparation_frames": 1600,
+              "preparation_idle": 0,
+              "preparation_since_gain": 0,
+              "active_frames": 106390,
+              "active_idle": 1434
+            }
+          },
+          {
+            "frame": 144016,
+            "owned": 111,
+            "policy_recoveries": 2,
+            "achievement_count": 0,
+            "project": "train:75:90",
+            "gains": {
+              "experience": 34586,
+              "levels": 1
+            },
+            "training": {
+              "phase": "training",
+              "preparation_frames": 6776,
+              "preparation_idle": 0,
+              "preparation_since_gain": 0,
+              "active_frames": 137210,
+              "active_idle": 1134
+            }
+          },
+          {
+            "frame": 180028,
+            "owned": 111,
+            "policy_recoveries": 10,
+            "achievement_count": 4,
+            "project": "0:rematch:0:",
+            "gains": {},
+            "training": {}
+          },
+          {
+            "frame": 216002,
+            "owned": 111,
+            "policy_recoveries": 15,
+            "achievement_count": 8,
+            "project": "76:grass:34:",
+            "gains": {},
+            "training": {}
+          },
+          {
+            "frame": 252010,
+            "owned": 111,
+            "policy_recoveries": 16,
+            "achievement_count": 8,
+            "project": "train:99:50",
+            "gains": {},
+            "training": {
+              "phase": "preparation",
+              "preparation_frames": 8934,
+              "preparation_idle": 0,
+              "preparation_since_gain": 8934,
+              "active_frames": 0,
+              "active_idle": 0
+            }
+          },
+          {
+            "frame": 288020,
+            "owned": 111,
+            "policy_recoveries": 18,
+            "achievement_count": 8,
+            "project": "train:45:60",
+            "gains": {},
+            "training": {
+              "phase": "preparation",
+              "preparation_frames": 8894,
+              "preparation_idle": 8894,
+              "preparation_since_gain": 8894,
+              "active_frames": 0,
+              "active_idle": 0
+            }
+          },
+          {
+            "frame": 324002,
+            "owned": 111,
+            "policy_recoveries": 21,
+            "achievement_count": 9,
+            "project": "0:rematch:0:",
+            "gains": {},
+            "training": {}
+          },
+          {
+            "frame": 360028,
+            "owned": 111,
+            "policy_recoveries": 36,
+            "achievement_count": 15,
+            "project": null,
+            "gains": {},
+            "training": {}
+          },
+          {
+            "frame": 396018,
+            "owned": 111,
+            "policy_recoveries": 36,
+            "achievement_count": 15,
+            "project": "legendary:74:162",
+            "gains": {},
+            "training": {}
+          },
+          {
+            "frame": 432028,
+            "owned": 112,
+            "policy_recoveries": 37,
+            "achievement_count": 17,
+            "project": null,
+            "gains": {},
+            "training": {}
+          }
+        ],
+        "final_project_gains": {},
+        "final_map": "Seafoam Islands B2F",
+        "policy_fingerprint": "a45ba3fde841c4b30c6661ded6c9a32e22256d09cd7d5dd4e50a0c331971072c"
+      },
+      "changed_fields": [],
+      "inputs_unchanged": true
+    }
+  },
+  "limits": [
+    "Each replay covers two hours of game time, not multi-day wall-clock endurance.",
+    "Both candidates match baseline outcomes and recovery counts. Existing recovery churn remains.",
+    "Browser scenarios use real Chromium and application routes with synthetic cartridge state.",
+    "Native Windows and macOS bundles have not been validated here.",
+    "No release was published or deployed."
+  ]
+}

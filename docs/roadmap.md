@@ -25,9 +25,9 @@ Some of these changes are newer than the recorded deployments.
 3. **Long runs and releases.** Measure 24-hour, 48-hour, and week-long intervals without
    confusing HTTP health with game progress. Track resource growth and test backup,
    restore, upgrade, shutdown, and peer outages. Qualify each desktop build target.
-4. **Clearer module ownership.** Extract shop and PC controllers from `StrategicPolicy`
-   using explicit state boundaries. Consolidate emulator reset bookkeeping only after
-   tests establish what each transition preserves. See [architecture](architecture.md).
+4. **Clearer module ownership.** The rc31 candidate extracts shop and PC controllers and shares lifecycle ownership.
+   Apply the same explicit boundaries to battle and field-move interactions as needed.
+   Keep transition tests as the compatibility contract. See [architecture](architecture.md).
 5. **One app, multiple adventures.** Follow the separate
    [multi-adventure implementation plan](multi-adventure-app-plan.md), including its
    Cable Club execution and migration gates. This is a proposed architecture, not the

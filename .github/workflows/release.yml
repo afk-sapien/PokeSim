@@ -71,6 +71,13 @@ jobs:
           persist-credentials: false
       - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
       - run: uv run --locked pytest --ignore=tests/test_rom.py -q
+      - name: Validate real browser flows before publishing
+        env:
+          POKESIM_BROWSER_TESTS: '1'
+        run: |
+          uv sync --locked --extra dev --extra browser-test
+          uv run --locked --extra browser-test python -m playwright install --with-deps chromium
+          uv run --locked --extra dev --extra browser-test pytest tests/browser -q
       - run: uv build
       - run: python tools/check_package.py
       - name: Build versioned image and release assets

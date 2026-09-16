@@ -3,8 +3,15 @@ from pathlib import Path
 import tarfile
 import zipfile
 import tomllib
+import json
 
 required = {
+    'pokesim/_build.json',
+    'pokesim/build_info.py',
+    'pokesim/runtime.py',
+    'pokesim/policies/menus.py',
+    'pokesim/policies/shopping.py',
+    'pokesim/policies/storage.py',
     'pokesim/web/event_page.py',
     'pokesim/web/static/event.js',
     'pokesim/web/trading.py',
@@ -62,10 +69,12 @@ for artifact in artifacts:
     if artifact.suffix == '.whl':
         with zipfile.ZipFile(artifact) as archive:
             names = set(archive.namelist())
+            identity = json.loads(archive.read('pokesim/_build.json'))
     else:
         with tarfile.open(artifact) as archive:
             names = {name.partition('/')[2] for name in archive.getnames()}
-        assert {'uv.lock', 'THIRD_PARTY_NOTICES.md', 'RELEASE_STATUS.md',
+            identity = json.load(archive.extractfile(f'pokesim-{release_version}/pokesim/_build.json'))
+        assert {'uv.lock', 'setup.py', 'THIRD_PARTY_NOTICES.md', 'RELEASE_STATUS.md',
                 'Dockerfile', '.dockerignore', '.env.example', 'compose.yaml',
                 'compose.build.yaml', 'compose.proxy.yaml', 'deploy/Caddyfile',
                 'docs/README.md', 'docs/images/live-adventure.jpg',
@@ -73,6 +82,7 @@ for artifact in artifacts:
                 'tools/check_web.py', 'tools/check_docs.py',
                 'deploy/proxy.env.example', 'docs/validation/public-install-0.2.0rc2.json'} <= names
     missing = required - names
+    assert identity['version'] == release_version, f'{artifact}: build version mismatch'
     assert not missing, f'{artifact}: missing runtime files {missing}'
     for name in names:
         path = Path(name)
