@@ -4,7 +4,7 @@ PokeSim can run on your own computer with a local browser dashboard. The desktop
 
 ## Desktop downloads
 
-Desktop packaging is new. Older releases, including v0.2.0rc6, do not contain the desktop launcher. Until a desktop release is published, use a successful **Desktop builds** workflow artifact from [GitHub Actions](https://github.com/afk-sapien/PokeSim/actions/workflows/desktop.yml), or install from this source checkout below. GitHub may require sign-in to download workflow artifacts.
+Download the standalone archives and their checksums from the [v0.2.0rc31 release](https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0rc31). All five targets passed native build, launcher, and bundled-runtime checks in the [release validation run](https://github.com/afk-sapien/PokeSim/actions/runs/35045201890). Older releases, including v0.2.0rc6, do not contain the desktop launcher.
 
 The workflow builds these targets and tests each bundle on its own operating system:
 
