@@ -1,4 +1,4 @@
-# pokesim
+# Gameplay and feature guide
 
 A Pokémon Red that plays itself. A headless Game Boy emulator (PyBoy) runs the game 24/7,
 driven by a policy that plans objectives and checks each action against the game state. A small web app shows the
@@ -16,12 +16,13 @@ Follow the current [installation instructions](../README.md) and [operations gui
 | Path | What |
 |---|---|
 | `/` | live view, stats, timeline, controls |
+| `/pokedex`, `/pc`, `/journal`, `/trading` | collection reference, storage and locks, event history, and game-local trading |
 | `/stream` | MJPEG stream of the screen (`/frame.jpg` for a single frame) |
 | `/feed.xml` | Atom feed of notable events; `?all=1` for everything, `?types=badge,catch` or `?min_priority=4` to filter |
-| `/events/{id}` | one event with its screenshot and a "rewind the game to this moment" button |
+| `/events/{id}` | one event and screenshot, with rewind available when a saved state and access policy allow it |
 | `/api/state` | JSON: emulator status + parsed game state |
 | `/api/events` | JSON event list (`limit`, `all`, `types`, `min_priority`, `before`) |
-| `/api/control` | POST `{"action": "pause"|"resume"|"save"|"restart"|"speed"|"load_state"|"press", "value": ...}` |
+| `/api/control` | POST an `action` and optional `value`. Actions: `pause`, `resume`, `take_control`, `save`, `restart`, `speed`, `load_state`, `press` |
 
 ## Configuration (environment)
 
@@ -40,8 +41,13 @@ Follow the current [installation instructions](../README.md) and [operations gui
 | `NTFY_MUTE` | | comma-separated event types never pushed, e.g. `map,blackout` |
 | `PUBLIC_URL` | `http://localhost:8000` | absolute links in the feed / ntfy click actions |
 | `AUTOSAVE_SECONDS` / `KEEP_AUTOSAVES` | `60` / `20` | save-state rotation |
-| `STUCK_RELOAD_SECONDS` | `600` | no position change for this long → reload an older autosave |
+| `STUCK_RELOAD_SECONDS` | `600` | stationary timeout, valid strategic overworld play replans while other cases can reload an autosave |
 | `BATTLE_TIMEOUT_SECONDS` | `900` | a battle lasting this long → reload |
+| `HOST` / `PORT` | `127.0.0.1` / `8000` | native service bind address and port |
+| `VIEWER_ONLY` | `0` | disable browser game controls and preference writes |
+| `EVENT_RETENTION_DAYS` | `0` | journal retention, with `0` keeping all history |
+| `TRADING_URL` / `TRADING_INSTANCE` | empty | broker URL and instance key for [game-local trading](pc-trading.md) |
+| `TRADE_TOKEN` | empty | scoped peer authentication for [automatic exchanges](automatic-trading.md) |
 | `STREAM_FPS` | `15` | MJPEG frame rate |
 
 ## Event priorities
@@ -86,15 +92,15 @@ Defaults live in `pokesim/events.py`; change a priority there to reclassify an e
     decisions (the "no items, ITEM → CANCEL forever" class of problem).
   Exploration memory persists across restarts. `guided_random.py` is the original dumb version.
   Implement `Policy.step()` to add another.
-- Guards: if the RAM stops looking like a running game (glitch/crash), a battle never ends,
-  or the player hasn't moved for 10 minutes, the emulator reloads an autosave from before
-  the trouble started.
+- Guards: invalid game state and battle timeouts can trigger checkpoint recovery.
+  A stationary strategic run with a valid overworld snapshot abandons its objective
+  and replans without reloading.
+  Baseline policies can reload an autosave after the stationary timeout.
 
 ## Tests
 
-```sh
-pytest         # unit tests for the event detector; ROM smoke test runs if roms/pokered.gb exists
-```
+See [Contributing](../CONTRIBUTING.md#checks-before-a-pull-request) for the Python,
+browser, documentation, package, and optional ROM checks.
 
 ## Strategic play
 
@@ -117,7 +123,7 @@ The planner follows story flags for the starter, Oak’s parcel, and the Pokéde
 prepares for each gym and follows prerequisites through all eight badges and the League.
 This includes Mt. Moon, Bill, the S.S. Anne, the Rocket hideout, Pokémon Tower,
 Silph Co., Safari Zone HMs, the mansion key, and each Elite Four member.
-The Exploration selector controls occasional weighted detours toward less-visited tiles.
+The automatic player occasionally takes weighted detours toward less-visited tiles.
 Goals still pull the player forward, with focused navigation for healing and supplies.
 Blocked objectives trigger short autonomous recovery attempts, followed by replanning.
 The policy never pauses the simulator or requests a human handoff. Only explicit user
@@ -253,13 +259,14 @@ To regenerate strategy data from a local checkout:
 python -m pokesim.prepare_data /path/to/pokered
 ```
 
-## Thorough Adventure and the collection journal
+## The ongoing adventure and collection journal
 
-Thorough Adventure is the default adventure style. It mixes bounded collecting and
-evolution projects into the badge journey, then continues with Pokédex expeditions
-after the Hall of Fame. The adventure style selector offers Focused, Balanced, and
-Thorough. It changes which activities the AI chooses, independently of playback
-speed. The selection persists across restarts.
+The automatic player mixes bounded collecting and evolution projects into the badge
+journey, then continues with Pokédex expeditions after the Hall of Fame. It chooses
+projects automatically. Playback speed changes how fast the game runs.
+
+Older saves still load with their active projects and progress intact. Saved adventure
+style and exploration preferences are ignored, so every run uses the same automatic activity selection.
 
 Missing species now matter even when they are too weak for the main battle team.
 The catcher prefers sleep or paralysis, avoids attacks with a high knockout risk,
@@ -291,7 +298,7 @@ The GUI has four pages:
 
 - **Live** (`/`): the game, current goal, all six party members, and badge progress together.
   Expand a partner for moves and stats. Adventure details contains projects, routes, readiness,
-  the bag, and exploration settings. The gamepad opens when taking control.
+  and the bag. The gamepad opens when taking control.
 - **Pokédex** (`/pokedex`): all 151 species in one list, with search, filters, and individual records.
 - **PC** (`/pc`): one storage box at a time, search across boxes, and individual DVs and training.
 - **Journal** (`/journal`): event filters, highlights, and earlier moments.

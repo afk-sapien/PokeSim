@@ -67,11 +67,14 @@ game's database to prevent duplicate journal delivery. Trade preparation expedit
 for missing peer requests remain future work.
 
 
-## Optional Mew distribution
+## One-time Mew gift for the final rival victory
 
-Set `mew_event` to true in the private policy and redacted public policy to enable a
-one-time postgame gift for each configured instance. The normal coordinator must be
-enabled. At a safe point after Champion, with a free box slot, it can deliver a level-5
+Enabling `league_rewards` also enables a separate one-time Mew gift for each configured
+instance, even if an older policy still has `mew_event` set to false. To enable only
+the Mew gift, set `mew_event` to true in the private and redacted public policies.
+The normal coordinator must be enabled. Defeating the final rival who holds the
+Champion title unlocks the gift. Beating the four Elite Four members alone does not.
+At the next safe point, with a free box slot, the coordinator delivers a level-5
 Mew with Pound, ordinary random DVs, no stat experience, and original trainer POKESIM.
 This is a custom PokeSim event, not an official Nintendo distribution or a hidden
 cartridge quest. Original Red and Blue have no event switch to activate.
@@ -79,7 +82,11 @@ cartridge quest. Original Red and Blue have no event switch to activate.
 Delivery uses fresh held checkpoints, backups, staged verification, and the same durable
 publication and recovery path as exchanges. Both games retain every existing Pokémon,
 party member, item, and badge. The gift occupies a free slot. A persistent database
-marker and existing Pokédex registration prevent another gift after a reload or trade.
+marker and existing Pokédex registration prevent another gift after a reload, trade,
+or rematch. Adventures that already registered Mew from the previous random reward
+pool do not receive another gift. Existing Pokémon are preserved. A full PC delays
+delivery until space opens. The gift takes priority over repeatable rewards and does
+not depend on the trade cooldown or proposal board.
 The board lists gifts separately from completed exchanges. This initial event service
 uses the existing two-peer coordinator. It is not a general event scheduling interface.
 
@@ -91,22 +98,26 @@ extra Eevee supply, or starter farming are part of this feature.
 
 Set `league_rewards` to true in private and public policy files, with the coordinator
 enabled. Every newly observed Hall of Fame entry earns one random level-5 Pokémon from
-Bulbasaur, Charmander, Squirtle, Eevee, Omanyte, Kabuto, Aerodactyl, and Mew. Each species
+Bulbasaur, Charmander, Squirtle, Eevee, Omanyte, Kabuto, and Aerodactyl. Each species
 has equal probability. Gifts have ordinary DVs, zero stat experience, correct starting
-moves and experience, and original trainer POKESIM. Duplicates are allowed.
+moves and experience, and original trainer POKESIM. Duplicates are allowed in this
+seven-species pool. Mew is exclusively the separate one-time final rival gift.
 
 Claims begin with victories observed after this upgrade. Existing historical victories
 are not backfilled. The counter persists beyond the cartridge Hall of Fame counter's
 limit. A database high-water mark prevents an older checkpoint replay from earning the
-same claim again. Selection stays fixed across delivery retries. A full PC leaves the
+same claim again. Selection stays fixed across delivery retries. Pending non-Mew
+selections from the old pool stay unchanged. Unstaged Mew selections are replaced
+with one of the seven repeatable species. Already committed transactions complete
+their existing recovery path. A full PC leaves the
 claim pending, with no overwrite or loss. The coordinator delivers one pending reward
 per eligible peer per cycle using the same held-checkpoint verification and recovery
 as trades. Rewards bypass the trade interval and do not require a useful trade proposal.
 There is no reward cooldown, roster qualification, or individual approval.
 
 The board lists rewards separately from completed exchanges. Game state includes earned,
-delivered, and pending counts under `league_rewards`. Keep the older `mew_event` false
-when using this pool. Both adventures remain intact. A deliberate manual new-adventure
+delivered, and pending counts under `league_rewards`. The separate Mew gift does not
+consume a Championship claim. Both adventures remain intact. A deliberate manual new-adventure
 restart clears the reward ledger. Ordinary recovery and restarts of the server retain it.
 
 
