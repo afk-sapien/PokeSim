@@ -42,6 +42,7 @@ def main():
     command = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--noupx',
                '--name', 'PokeSim', '--onedir', '--distpath', str(output), '--workpath', str(work / 'pyinstaller'),
                '--specpath', str(work), '--paths', str(ROOT),
+               '--additional-hooks-dir', str(ROOT / 'tools' / 'pyinstaller_hooks'),
                '--add-data', f'{assets / "web/static"}:pokesim/web/static',
                '--add-data', f'{assets / "broker/static"}:pokesim/broker/static',
                '--add-data', f'{identity}:pokesim',

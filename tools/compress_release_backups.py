@@ -8,6 +8,11 @@ from pathlib import Path
 import re
 import shutil
 import stat
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from pokesim.platform_io import sync_directory
 
 
 RELEASE_DIRECTORY = re.compile(r'^\d{8}T\d{6}Z-rc\d+(?:-final)?$')
@@ -55,15 +60,11 @@ def compress(path):
         # Hard linking refuses to replace a destination created by another process.
         os.link(temporary, target)
         temporary.unlink()
-        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(directory)
-            if fingerprint(path) != original:
-                raise ValueError('Source changed before replacement')
-            path.unlink()
-            os.fsync(directory)
-        finally:
-            os.close(directory)
+        sync_directory(path.parent)
+        if fingerprint(path) != original:
+            raise ValueError('Source changed before replacement')
+        path.unlink()
+        sync_directory(path.parent)
         return {'original': str(path), 'compressed': str(target), 'original_bytes': original[2],
                 'compressed_bytes': target.stat().st_size, 'decompressed_sha256': source_hash}
     finally:
