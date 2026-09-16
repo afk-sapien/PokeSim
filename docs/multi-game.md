@@ -1,4 +1,10 @@
-Current scope: see [roadmap.md](roadmap.md). This document records earlier design work. Trading is being introduced as read-only proposals, followed by individually approved exchanges. Completion and automatic trading are not current commitments.
+# Earlier multi-game design
+
+Historical design notes. Automatic trading is now implemented for configured trusted
+peers. See [automatic trading](automatic-trading.md) for current behavior and the
+[multi-adventure application plan](multi-adventure-app-plan.md) for future architecture.
+The original proposal below is retained for context.
+
 
 # Multiple cartridges that trade with each other
 

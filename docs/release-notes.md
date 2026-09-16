@@ -1,7 +1,14 @@
-PokeSim 0.2.0rc16 enables useful automatic trades between configured Red and Blue peers. It prioritizes Pokédex entries, trade evolutions, and meaningful partner upgrades while protecting parties, projects, last copies, and best retained partners.
+# PokeSim 0.2.0rc30
 
-The coordinator uses authenticated trade controls and durable game holds. It runs under the games' ordinary UID without Docker or root access. Staged saves and journal records recover as a pair, and completed trades block restores of older inventories. The board shows completed exchanges and opportunities.
+The strategic player no longer crosses distant maps just to buy optional supplies when
+it cannot afford essential balls or healing. Optional purchases remain available in the
+current mart, and legendary preparation retains its existing rules.
 
-Five copied-save exchanges were validated. The final rehearsal interrupted the coordinator after commitment, restarted both games, verified that their holds remained active, then recovered and released both adventures. See [automatic trading](automatic-trading.md).
+The recorded copied-save comparison reduced recovery loops and produced three trainee
+levels. See the [supply-trip comparison](https://github.com/afk-sapien/PokeSim/blob/v0.2.0rc30/docs/validation/supply-trip-0.2.0rc30.json).
+This targeted result does not establish uninterrupted autonomous campaign completion.
 
-The release is deployed and tested. Live execution remains disabled pending explicit approval of the first exchange and the automatic policy, as required by automatic approval review. Both games continue at unlimited speed.
+This is an experimental release. Supply your own supported ROM and keep a complete
+backup of the data directory before upgrading. Match the source, image, and configuration
+to this tag. Later working-source changes, including desktop packaging and revised Mew
+rewards, are not implied by this release note.
