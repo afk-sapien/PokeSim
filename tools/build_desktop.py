@@ -5,15 +5,20 @@ import hashlib
 import shutil
 import subprocess
 import sys
+import json
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
+    sys.path.insert(0, str(ROOT))
+    from pokesim.build_info import source_info
     output = ROOT / 'dist' / 'desktop'
     work = ROOT / 'build' / 'desktop'
     notices = work / 'notices'
     work.mkdir(parents=True, exist_ok=True)
+    identity = work / '_build.json'
+    identity.write_text(json.dumps(source_info(ROOT), indent=2) + '\n', encoding='utf-8')
     subprocess.run([sys.executable, str(ROOT / 'tools' / 'bundle_dependency_sources.py'), str(notices)],
                    cwd=ROOT, check=True)
     source = notices / 'source' / 'pokesim'
@@ -31,7 +36,7 @@ def main():
         for path in (ROOT / 'pokesim' / relative).iterdir():
             if path.is_file() and path.suffix in {'.html', '.css', '.js'}:
                 shutil.copy2(path, target / path.name)
-    for name in ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'pyproject.toml', 'uv.lock']:
+    for name in ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'pyproject.toml', 'setup.py', 'uv.lock']:
         shutil.copy2(ROOT / name, notices / 'source' / name)
     shutil.copytree(ROOT / 'licenses', notices / 'licenses' / 'project', dirs_exist_ok=True)
     command = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--noupx',
@@ -39,6 +44,7 @@ def main():
                '--specpath', str(work), '--paths', str(ROOT),
                '--add-data', f'{assets / "web/static"}:pokesim/web/static',
                '--add-data', f'{assets / "broker/static"}:pokesim/broker/static',
+               '--add-data', f'{identity}:pokesim',
                '--collect-all', 'pyboy', '--collect-all', 'sdl2', '--collect-all', 'sdl2dll',
                '--exclude-module', 'pyboy.conftest', '--exclude-module', 'pytest',
                '--recursive-copy-metadata', 'pokesim', '--collect-submodules', 'uvicorn',

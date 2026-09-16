@@ -14,6 +14,7 @@ from PIL import Image
 from pyboy import PyBoy
 
 from . import __version__, config
+from .build_info import build_info
 from .events import RunMemory, diff
 from . import rewards
 from .legendary import LegendaryRecovery
@@ -119,6 +120,7 @@ class Emulator:
         snap = self.snapshot
         return {
             "version": __version__, "viewer_only": config.VIEWER_ONLY,
+            "build": build_info(),
             "health": self.health(),
             "paused": self.paused, "speed": self.speed, "policy": self.policy.describe(),
             "manual_mode": self.manual_mode, "help_request": None,

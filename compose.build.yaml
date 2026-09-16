@@ -1,7 +1,13 @@
 services:
   pokesim:
     image: pokesim:local
-    build: .
+    build:
+      context: .
+      args:
+        REVISION: ${POKESIM_REVISION:-unknown}
   prepare-data:
     image: pokesim:local
-    build: .
+    build:
+      context: .
+      args:
+        REVISION: ${POKESIM_REVISION:-unknown}

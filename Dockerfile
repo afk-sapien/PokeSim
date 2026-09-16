@@ -3,7 +3,7 @@ FROM python:3.12-slim-bookworm AS build
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
-COPY pyproject.toml uv.lock README.md LICENSE THIRD_PARTY_NOTICES.md ./
+COPY pyproject.toml setup.py uv.lock README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY pokesim ./pokesim
 COPY tools/bundle_dependency_sources.py ./tools/bundle_dependency_sources.py
 RUN uv sync --frozen --no-dev --no-editable \
@@ -22,10 +22,11 @@ WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /notices /usr/share/pokesim
 COPY --from=build /app/pokesim /usr/share/pokesim/source/pokesim
-COPY pyproject.toml uv.lock LICENSE THIRD_PARTY_NOTICES.md /usr/share/pokesim/source/
+COPY pyproject.toml setup.py uv.lock LICENSE THIRD_PARTY_NOTICES.md /usr/share/pokesim/source/
 COPY licenses /usr/share/pokesim/licenses
-ARG VERSION=0.2.0rc30
+ARG VERSION=0.2.0rc31
 ARG REVISION=unknown
+ENV POKESIM_REVISION=$REVISION
 LABEL org.opencontainers.image.source="https://github.com/afk-sapien/PokeSim" \
       org.opencontainers.image.title="pokesim" \
       org.opencontainers.image.version=$VERSION \
