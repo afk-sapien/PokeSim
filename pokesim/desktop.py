@@ -28,6 +28,7 @@ from .checkpoints import CheckpointStore
 from .desktop_setup import MAX_ROM, ROM_NAMES, ensure_game_data, install_rom, read_settings, user_directory
 from .platform_io import lock_file
 from .runtime import Runtime
+from .build_info import build_info
 
 STATIC = Path(__file__).parent / 'web' / 'static'
 log = logging.getLogger('pokesim.desktop')
@@ -52,7 +53,7 @@ class Adventure:
 
     def status(self):
         with self.guard:
-            return dict(state=self.state, message=self.message, error=self.error,
+            return dict(state=self.state, message=self.message, error=self.error, build=build_info(),
                         has_rom=(self.root / 'rom.gb').is_file(), data_dir=str(self.root),
                         running=bool(self.thread and self.thread.is_alive()))
 

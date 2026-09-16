@@ -1,5 +1,6 @@
 **
 !pyproject.toml
+!setup.py
 !uv.lock
 !README.md
 !THIRD_PARTY_NOTICES.md
