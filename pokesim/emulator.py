@@ -189,16 +189,27 @@ class Emulator:
             self.mem.playtime_milestones.update(announced)
             self.store.set('run_memory', self.mem.to_dict())
             self.frame = metadata.get("frame", self.frame)
-        self.prev_snapshot = None
-        self.pending = []
+        self._reset_transient(clear_observation=True)
         self.legendary_recovery = LegendaryRecovery((metadata or {}).get('legendary_recovery'))
-        self.stuck_since = time.time()
         self.play_clock.restore(metadata.get("play_clock") if metadata else None)
-        self.policy.on_restore()
-        self.input_epoch += 1
         self.snapshot = read_snapshot(self.pb.memory, self.frame)
         if self.snapshot.started:
             self.play_clock.seed(self.snapshot.playtime_seconds)
+
+    def _reset_transient(self, *, clear_observation=False):
+        """Discard queued input and recovery timers without erasing durable progress."""
+        self.policy.on_restore()
+        self.input_epoch = getattr(self, 'input_epoch', 0) + 1
+        self.stuck_since = self.last_reload = time.time()
+        self.last_pos = None
+        self.invalid_since = self.battle_since = None
+        manual = getattr(self, 'manual', None)
+        if manual is not None:
+            while not manual.empty():
+                manual.get_nowait()
+        if clear_observation:
+            self.prev_snapshot = None
+            self.pending = []
 
     def _state_bytes(self) -> bytes:
         buf = io.BytesIO()
@@ -502,11 +513,7 @@ class Emulator:
         elif name == "resume":
             self.paused = False
             self.manual_mode = False
-            self.policy.on_restore()
-            self.stuck_since = self.last_reload = time.time()
-            self.battle_since = self.invalid_since = None
-            while not self.manual.empty():
-                self.manual.get_nowait()
+            self._reset_transient()
         elif name == "speed":
             self.speed = max(0.0, min(float(arg), 16.0))
         elif name == "save":
@@ -535,10 +542,9 @@ class Emulator:
             self.policy.reset()
             self.store.set("policy_state", {})
             self.pb = self._boot()
-            self.prev_snapshot = None
-            self.stuck_since = time.time()
-            self.pending = []
-            self.input_epoch += 1
+            self.frame = 0
+            self.paused = self.manual_mode = False
+            self._reset_transient(clear_observation=True)
         return True
 
     def _run(self):

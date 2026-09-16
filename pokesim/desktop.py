@@ -27,6 +27,7 @@ import uvicorn
 from .checkpoints import CheckpointStore
 from .desktop_setup import MAX_ROM, ROM_NAMES, ensure_game_data, install_rom, read_settings, user_directory
 from .platform_io import lock_file
+from .runtime import Runtime
 
 STATIC = Path(__file__).parent / 'web' / 'static'
 log = logging.getLogger('pokesim.desktop')
@@ -67,8 +68,6 @@ class Adventure:
             self.thread.start()
 
     def run(self):
-        store = None
-        emu = None
         failure = None
         try:
             settings = read_settings(self.root)
@@ -94,43 +93,27 @@ class Adventure:
             config.TRADING_INSTANCE = ''
             config.TRADE_TOKEN = ''
             config.validate()
-            from .emulator import Emulator
-            from .store import Store
             from .web.app import create_app
-            store = Store(config.DATA_DIR)
-            emu = Emulator(store)
-            emu.start()
-            game = create_app(emu, store)
-            with self.guard:
-                self.game = game
-                self.state = 'ready'
-                self.message = 'Your adventure is running.'
-            while not self.cancelled.wait(0.25):
-                if not emu.thread.is_alive():
-                    raise RuntimeError(emu.fatal_error or 'The adventure stopped unexpectedly. See desktop.log.')
+            with Runtime(config.DATA_DIR) as runtime:
+                emu = runtime.emu
+                game = create_app(emu, runtime.store)
+                with self.guard:
+                    self.game = game
+                    self.state = 'ready'
+                    self.message = 'Your adventure is running.'
+                try:
+                    while not self.cancelled.wait(0.25):
+                        if not emu.thread.is_alive():
+                            raise RuntimeError(emu.fatal_error or 'The adventure stopped unexpectedly. See desktop.log.')
+                finally:
+                    with self.guard:
+                        self.game = None
+                        self.state = 'stopping'
+                        self.message = 'Saving your adventure…'
         except Exception as error:
             log.exception('Desktop adventure failed')
             failure = str(error)
         finally:
-            with self.guard:
-                self.game = None
-                self.state = 'stopping'
-                self.message = 'Saving your adventure…'
-            if emu is not None:
-                try:
-                    if emu.thread.is_alive():
-                        emu.stop()
-                    elif emu.thread.ident is None:
-                        emu.pb.stop(save=False)
-                    if emu.fatal_error:
-                        failure = emu.fatal_error
-                except Exception as error:
-                    log.exception('Could not stop the emulator')
-                    failure = str(error)
-                    # Keep the database and process lock until the worker exits.
-                    emu.thread.join()
-            if store is not None:
-                store.close()
             with self.guard:
                 self.error = failure
                 self.state = 'error' if failure else 'stopped'
