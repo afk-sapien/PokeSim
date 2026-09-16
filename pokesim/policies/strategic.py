@@ -1,5 +1,6 @@
 """An objective-driven policy that observes the game after every action."""
 import random
+from dataclasses import asdict
 
 from .base import Action, Policy
 from .battle import (BALLS, CURES, HEALING, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
@@ -17,6 +18,8 @@ from ..screen import Screen, W_PLAYER_MON_NUMBER
 from ..ram import W_TILEMAP
 from ..strategy_data import DATA, ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
 from .. import config
+
+EXPLORATION_CHANCE = 0.12
 
 RELEASE_BUFFER = 5      # free storage slots kept available, so catching never stalls
 
@@ -72,7 +75,6 @@ class StrategicPolicy(Policy):
         self.completed = {}
         self.recoveries = 0
         self.decisions = 0
-        self.exploration = 0.12
         self.journey = []
         self.interactions = {}
         self.interaction_count = 0
@@ -158,7 +160,7 @@ class StrategicPolicy(Policy):
         return {"collection": self.collection.details(), "objective": self.goal.to_dict(), "action": self.mode, "reason": self.reason,
                 "milestones": self.completed.copy(), "recoveries": self.recoveries,
                 "decisions": self.decisions, "visited_tiles": len(self.nav.visits),
-                "exploration": self.exploration, "journey": self.journey,
+                "journey": self.journey,
                 "interactions": self.interaction_count,
                 "personality": self.personality, "next": self.next_goal,
                 "starter": self.starter, "starter_confirmed": self.starter_confirmed,
@@ -172,7 +174,7 @@ class StrategicPolicy(Policy):
     def state_dict(self):
         return {"version": 1, "collection": self.collection.state_dict(), "navigation": self.nav.state_dict(), "rng": self.rng.getstate(),
                 "recoveries": self.recoveries, "decisions": self.decisions,
-                "exploration": self.exploration, "naming": self.naming.state_dict(),
+                "naming": self.naming.state_dict(),
                 "interactions": list(self.interactions), "interaction_count": self.interaction_count,
                 "personality": self.personality, "history": self.history[-8:], "failures": self.failures,
                 "starter": self.starter, "starter_confirmed": self.starter_confirmed,
@@ -206,7 +208,6 @@ class StrategicPolicy(Policy):
             self.rng.setstate(tuples(data["rng"]))
         self.recoveries = data.get("recoveries", 0)
         self.decisions = data.get("decisions", 0)
-        self.exploration = max(0.0, min(float(data.get("exploration", 0.12)), 0.3))
         self.on_restore()
 
     def _select(self, scr, target, one_based=False, scroll=False):
@@ -380,7 +381,16 @@ class StrategicPolicy(Policy):
         if kind == "yes_no":
             # Match the confirmation itself, not the word RELEASE in the PC menu behind it.
             if "GONE FOREVER" in text or "RELEASED" in text or "BYE BYE" in text:
-                return self._select(scr, 0 if self.goal.key == 'party_release' else 1)
+                pending = getattr(self, 'pending_release', None)
+                current = next((mon for mon in s.storage_entries()
+                                if pending and (mon['box'], mon['position']) == pending[:2]), None)
+                allowed = (self.goal.key == 'party_release' and pending and current == pending[2]
+                           and self._release_target(s) == pending[:2])
+                return self._select(scr, 0 if allowed else 1)
+            if self.goal.key == 'collect_trade' and getattr(self, 'pending_trade_key', None):
+                choices = self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
+                if choices.get(self.pending_trade_key, {}).get('state') == 'locked':
+                    return self._select(scr, 1)
             if self.menu_context == 'pc' and self.goal.key.startswith('party_'):
                 # "When you change a POKéMON BOX, data will be saved. Is that okay?" The rule below
                 # reads the PC menu still drawn behind the prompt — CHANGE BOX, WITHDRAW PKMN — and
@@ -468,8 +478,16 @@ class StrategicPolicy(Policy):
         if kind == "party":
             project = self.collection.project
             if not s.in_battle and self.goal.key == 'collect_trade' and project:
-                target = next((i for i,p in enumerate(s.party) if p.species==project['give']), None)
-                return tap('b') if target is None else self._select(scr,target)
+                from ..trade.preferences import identity
+                choices = self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
+                target = next((i for i,p in enumerate(s.party) if p.species == project['give']
+                               and choices.get(identity(asdict(p)), {}).get('state') != 'locked'), None)
+                if target is None:
+                    return tap('b')
+                actions = self._select(scr, target)
+                if actions[0].button == 'a':
+                    self.pending_trade_key = identity(asdict(s.party[target]))
+                return actions
             if not s.in_battle and self.intent is None:
                 return tap("b")
             if self.intent and self.intent.kind == "reorder":
@@ -556,7 +574,14 @@ class StrategicPolicy(Policy):
                 return tap('b')
             if self.menu_context == 'pc' and self.goal.key.startswith("party_"):
                 target = self._pc_target(s)
-                return tap("b") if target is None else self._select(scr, target, scroll=True)
+                if target is None:
+                    return tap('b')
+                actions = self._select(scr, target, scroll=True)
+                if self.goal.key == 'party_release' and actions[0].button == 'a':
+                    chosen = next((mon for mon in s.storage_entries()
+                                   if (mon['box'], mon['position']) == (s.active_box, target)), None)
+                    self.pending_release = (s.active_box, target, chosen) if chosen else None
+                return actions
             if self.intent and self.intent.kind == "item" and self.intent.index < len(s.items):
                 if s.items[self.intent.index][0] in BALLS and not s.can_catch:
                     self.intent = None
@@ -978,7 +1003,7 @@ class StrategicPolicy(Policy):
                 social = None if goal.key == 'collect_pickup' or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else self._social_interaction(s, mem)
                 if social:
                     return social
-            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup") or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else self.exploration
+            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup") or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else EXPLORATION_CHANCE
             if s.map in MANSION_MAPS:
                 direction = self.mansion.route(s, goal.targets, self.nav)
                 if direction == "switch":
@@ -1090,13 +1115,17 @@ class StrategicPolicy(Policy):
         if self.goal.key == 'collect_stone' and p and s.map == MAPS['CELADON_MART_4F']:
             item = ITEMS[p['evolution']['requirement']]
             return item if item in stock and not dict(s.items).get(item) and s.money >= 2500 and len(s.items)<20 else None
-        return shopping_item(s.items, stock, s.money, s.map == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=self.collection.pace!='focused' or self.collection.completed_champion,
+        return shopping_item(s.items, stock, s.money, s.map == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=True,
                              legendary=legendary_project(self.collection.project))
 
     def _release_target(self, snapshot):
+        from ..trade.preferences import identity
         project = self.collection.project or {}
         protected = set(project.get('family', [project['parent']])) if project.get('method') in ('evolve', 'train') and project.get('parent') else set()
-        return release_target(snapshot, protected)
+        preferences = self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
+        reserved = {(mon['box'], mon['position']) for mon in snapshot.storage_entries()
+                    if preferences.get(identity(mon), {}).get('state') in ('offered', 'locked')}
+        return release_target(snapshot, protected, reserved)
 
     def _pc_target(self, snapshot):
         if self.goal.key == 'party_release':
@@ -1235,7 +1264,7 @@ class StrategicPolicy(Policy):
             self.mode = 'training a partner' if key == 'development' else 'following a curiosity'
             self.nav.issued(pos, direction, s.frame)
             return tap(direction, 8, 12)
-        if s.frame < self.next_conversation or not self.exploration or self.rng.random() > self.exploration * 0.15:
+        if s.frame < self.next_conversation or self.rng.random() > EXPLORATION_CHANCE * 0.15:
             return None
         w = WORLD.get(s.map, {})
         if any(p.status for p in s.party) or max((p.hp / max(1, p.max_hp) for p in s.party), default=0) < 0.8:

@@ -40,6 +40,7 @@ class Emulator:
         self.paused = False
         self.manual_mode = False
         self.policy = make_policy(config.POLICY, config.SEED)
+        self.policy.trade_preferences = store.trade_preferences
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
         self.frame_jpeg: bytes = b""
@@ -382,6 +383,24 @@ class Emulator:
         elif self.battle_since and now - self.battle_since > config.BATTLE_TIMEOUT_SECONDS:
             self._unstick(self.battle_since, "battle never ended")
 
+    def set_trade_preference(self, key, state):
+        done, response = threading.Event(), {}
+        self.commands.put(('trade_preference', (key, state, done, response)))
+        if not done.wait(15):
+            raise ValueError('The preference update is still pending. Refresh before retrying.')
+        if 'error' in response:
+            raise ValueError(response['error'])
+
+    def _set_trade_preference(self, key, state):
+        from .trade.preferences import update
+        from .web.pokedex import live_status
+        snapshot = read_snapshot(self.pb.memory, self.frame)
+        if not snapshot.valid or not snapshot.started:
+            raise ValueError('Wait for the adventure to be ready before changing partner protection.')
+        update(self.store, live_status(snapshot.to_dict()), key, state)
+        self.snapshot = snapshot
+        self.input_epoch += 1
+
     def trade(self, action, transaction):
         done, response = threading.Event(), {}
         self.commands.put(('trade', (action, transaction, done, response)))
@@ -445,6 +464,15 @@ class Emulator:
         return {'id': transaction, 'phase': 'released'}
 
     def _handle_command(self, name, arg) -> bool:
+        if name == 'trade_preference':
+            key, state, done, response = arg
+            try:
+                self._set_trade_preference(key, state)
+            except Exception as error:
+                response['error'] = str(error)
+            finally:
+                done.set()
+            return True
         if name == 'trade':
             action, transaction, done, response = arg
             try:
@@ -479,15 +507,6 @@ class Emulator:
             self.battle_since = self.invalid_since = None
             while not self.manual.empty():
                 self.manual.get_nowait()
-        elif name == "exploration":
-            if hasattr(self.policy, "exploration"):
-                self.policy.exploration = max(0.0, min(float(arg), 0.3))
-        elif name == 'adventure_pace':
-            if hasattr(self.policy,'collection') and arg in ('focused','balanced','thorough'):
-                self.policy.collection.pace = arg
-                self.policy.collection.project = None
-                self.policy.collection.cooldown = 0
-                self.store.set('policy_state',self.policy.state_dict())
         elif name == "speed":
             self.speed = max(0.0, min(float(arg), 16.0))
         elif name == "save":
@@ -507,6 +526,7 @@ class Emulator:
             self.legendary_recovery = LegendaryRecovery()
             self.last_achievement = None
             self.store.set("trade_barrier", None)
+            self.store.clear_trade_preferences()
             self.store.set(rewards.KEY, None)
             self.play_clock = PlayClock()
             self.store.set("play_clock", self.play_clock.state_dict())
@@ -589,5 +609,8 @@ class Emulator:
         try:
             if not getattr(self, "fatal_error", None):
                 self._autosave()
+        except Exception:
+            self.fatal_error = 'The final save failed. Check disk space and the logs before relaunching.'
+            log.exception('Final emulator save failed')
         finally:
             self.pb.stop(save=False)

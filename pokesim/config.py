@@ -78,3 +78,5 @@ def validate():
             raise ValueError("ROM_PATH points to an empty file")
 
 TRADE_TOKEN = _env("TRADE_TOKEN", "")
+TRADING_URL = _env('TRADING_URL', '')
+TRADING_INSTANCE = _env('TRADING_INSTANCE', '')

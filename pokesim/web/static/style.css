@@ -919,19 +919,6 @@ h1 { font-size:40px }
 .control-help small { color:#929f89 }
 .game-card.is-manual { box-shadow:0 0 0 2px #b7a16f }
 .game-card.is-manual .live-label { color:#ecd69f }
-.wander-control { display:flex }
-.wander-control { justify-content:space-between }
-.wander-control { align-items:center }
-.wander-control { margin-top:17px }
-.wander-control { padding-top:13px }
-.wander-control { border-top:1px solid #deded3 }
-.wander-control { font-size:11px }
-.wander-control select { background:#fffef9 }
-.wander-control select { color:#4e5b46 }
-.wander-control select { border-color:#d6dcca }
-.wander-hint { color:#858d7a }
-.wander-hint { font-size:10px }
-.wander-hint { margin-top:7px }
 .journey-details { margin-top:12px }
 .journey-details { font-size:11px }
 .journey-details summary { color:#647456 }

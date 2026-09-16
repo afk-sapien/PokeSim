@@ -5,6 +5,20 @@ import zipfile
 import tomllib
 
 required = {
+    'pokesim/web/event_page.py',
+    'pokesim/web/static/event.js',
+    'pokesim/web/trading.py',
+    'pokesim/trade/preferences.py',
+    'pokesim/web/static/trade-ui.js',
+    'pokesim/web/static/trading.html',
+    'pokesim/web/static/trading.js',
+    'pokesim/desktop.py',
+    'pokesim/desktop_setup.py',
+    'pokesim/desktop_check.py',
+    'pokesim/platform_io.py',
+    'pokesim/web/static/desktop.html',
+    'pokesim/web/static/desktop.js',
+    'pokesim/web/static/desktop.css',
     'pokesim/policies/director.py',
     'pokesim/policies/pickups.py',
     'pokesim/ground_items.py',
@@ -54,6 +68,9 @@ for artifact in artifacts:
         assert {'uv.lock', 'THIRD_PARTY_NOTICES.md', 'RELEASE_STATUS.md',
                 'Dockerfile', '.dockerignore', '.env.example', 'compose.yaml',
                 'compose.build.yaml', 'compose.proxy.yaml', 'deploy/Caddyfile',
+                'docs/README.md', 'docs/images/live-adventure.jpg',
+                'docs/images/pc-storage.jpg', 'docs/images/pokedex.jpg',
+                'tools/check_web.py', 'tools/check_docs.py',
                 'deploy/proxy.env.example', 'docs/validation/public-install-0.2.0rc2.json'} <= names
     missing = required - names
     assert not missing, f'{artifact}: missing runtime files {missing}'

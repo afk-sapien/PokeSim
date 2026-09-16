@@ -13,7 +13,8 @@ from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, EVENTS, event_set, obje
 
 DATA = load('collection.json')
 EVOS = {int(sid): rows for sid, rows in DATA['evolutions'].items()}
-PACE = {'focused': (0, 0), 'balanced': (3600, 18000), 'thorough': (10800, 12000)}
+PROJECT_BUDGET = 10800
+PROJECT_COOLDOWN = 12000
 CENTERS = tuple((m, 13, 4) for m, w in WORLD.items() if 'Pokecenter' in w['name'] and w['width'] == 14)
 CENTERS += ((MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8),)
 LEAGUE = {MAPS[n] for n in ('LORELEIS_ROOM','BRUNOS_ROOM','AGATHAS_ROOM','LANCES_ROOM','CHAMPIONS_ROOM','HALL_OF_FAME')}
@@ -93,7 +94,6 @@ def training_family(sid):
 
 class Collection:
     def __init__(self):
-        self.pace = 'thorough'
         self.version = 'red'
         self.project = None
         self.remaining = 0
@@ -115,7 +115,7 @@ class Collection:
         self.director = AdventureDirector()
 
     def state_dict(self):
-        return {**{k:getattr(self,k) for k in ('pace','project','remaining','cooldown','attempts','elapsed','eevee_choice','history','completed_champion','idle_frames','project_maps','project_flags')},
+        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','attempts','elapsed','eevee_choice','history','completed_champion','idle_frames','project_maps','project_flags')},
                 'director': self.director.state_dict()}
 
     def load(self, data):
@@ -123,8 +123,6 @@ class Collection:
             if key in data and key != 'director':
                 setattr(self,key,data[key])
         self.director.load(data.get('director', {}))
-        if self.pace not in PACE:
-            self.pace = 'thorough'
         if self.eevee_choice not in (134, 135, 136):
             self.eevee_choice = 134
         if self.project and self.project['method'] == 'train' and 'training_session' not in self.project:
@@ -245,10 +243,10 @@ class Collection:
                 if retry:
                     self.attempts[self.project['key']] = retry
                 self.project = None
-                self.cooldown = 1200 if self.completed_champion else PACE[self.pace][1]
+                self.cooldown = 1200 if self.completed_champion else PROJECT_COOLDOWN
             elif project['method'] != 'train' and self.idle_frames >= 7200 and not s.in_battle:
                 self.abandon('No encounter, training gain, or new route in two minutes')
-        key = (s.owned, s.items, s.stored_pokemon, tuple((p.species,p.level) for p in s.party), s.event_flags, s.hidden_objects, self.completed_champion, self.pace, self.version)
+        key = (s.owned, s.items, s.stored_pokemon, tuple((p.species,p.level) for p in s.party), s.event_flags, s.hidden_objects, self.completed_champion, self.version)
         if key != self.report_key:
             self.report_key = key
             self.report = self.describe(s)
@@ -329,7 +327,7 @@ class Collection:
                 if dex(e['species']) not in s.owned:
                     evos.append({'from':p.nick or name(p.species),'to':name(e['species']), 'method':e['method'],
                                  'requirement':e['requirement'],'level':p.level})
-        return {'pace':self.pace,'phase':'Pokédex expeditions' if self.completed_champion else 'Thorough adventure' if self.pace=='thorough' else 'Badge journey',
+        return {'phase':'Pokédex expeditions' if self.completed_champion else 'Adventure in progress',
                 'caught':len(s.owned),'available':sum(e['status']=='available' for e in entries),
                 'entries':entries,'evolutions':evos[:6], 'version':self.version}
 
@@ -344,7 +342,7 @@ class Collection:
             return None
         if self.project:
             return self.goal(s)
-        if (self.pace=='focused' and not self.completed_champion) or self.cooldown or self.elapsed-self.last_choice < 600:
+        if self.cooldown or self.elapsed-self.last_choice < 600:
             return None
         if not self.completed_champion and main.key.startswith('league_'):
             return None
@@ -420,8 +418,6 @@ class Collection:
                 add(project, 5 if legendary_project(project) else
                     (5 if mode in ('gift','fossil','static') else 1) / (1+distance/40))
         for sid,level,box in held:
-            if not self.completed_champion and self.pace=='balanced' and self.elapsed < 1800:
-                continue
             for evo in EVOS.get(sid,[]):
                 if dex(evo['species']) in s.owned or evo['method']=='trade':
                     continue
@@ -486,7 +482,7 @@ class Collection:
         self.project_maps = [s.map]
         self.project_flags = list(s.event_flags)
         self.progress_token = None
-        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) else training.TRAINING_BUDGET if self.project['method']=='train' else 36000 if self.completed_champion else PACE[self.pace][0]
+        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) else training.TRAINING_BUDGET if self.project['method']=='train' else 36000 if self.completed_champion else PROJECT_BUDGET
         nav.path.clear()
         return self.goal(s)
 

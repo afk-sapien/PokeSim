@@ -1,5 +1,6 @@
 """Championship claims survive rewinds, full storage, and repeated delivery."""
 import json
+import random
 import sqlite3
 import time
 
@@ -31,8 +32,8 @@ def test_repeated_championships_count_beyond_cartridge_cap_and_restore_safely(tm
     store.close()
 
 
-def test_pool_has_all_eight_species_with_playable_level_five_data():
-    assert {SPECIES[s]['dex'] for s in rewards.POOL} == {1, 4, 7, 133, 138, 140, 142, 151}
+def test_pool_has_seven_species_with_playable_level_five_data_and_no_mew():
+    assert {SPECIES[s]['dex'] for s in rewards.POOL} == {1, 4, 7, 133, 138, 140, 142}
     selected = set()
     for number in range(300):
         value = {'seed': 'test adventure', 'delivered': number}
@@ -49,6 +50,22 @@ def test_pool_has_all_eight_species_with_playable_level_five_data():
         expected_xp = {'MEDIUM_SLOW': 135, 'MEDIUM_FAST': 125, 'SLOW': 156, 'FAST': 100}
         assert int.from_bytes(gift.struct[14:17], 'big') == expected_xp[SPECIES[species]['growth']]
     assert selected == set(rewards.POOL)
+
+
+def test_pending_rewards_preserve_other_species_and_replace_legacy_mew():
+    replaced = 0
+    for number in range(300):
+        value = {'seed': 'existing adventure', 'delivered': number}
+        ordinal, species, seed = rewards.selection(value)
+        previous = random.Random(seed).choice((153, 176, 177, 102, 98, 90, 171, 21))
+        if previous == event.MEW:
+            replaced += 1
+            assert species in rewards.POOL
+        else:
+            assert species == previous
+        assert species != event.MEW
+        assert ordinal == number + 1
+    assert replaced > 0
 
 
 def test_reward_journal_consumes_one_claim_once_and_preserves_next_claim(tmp_path, monkeypatch):

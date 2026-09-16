@@ -299,28 +299,19 @@ def test_the_proposals_endpoint_reports_the_trades_and_both_inventories():
     assert set(body['proposals'][0]) == {'give', 'take', 'reason', 'price', 'spends'}
 
 
-def test_the_trade_board_shows_each_side_with_its_reason_and_price():
-    payloads = {'red': status({MAGIKARP}, stored=[(MAGIKARP, 5), (MAGIKARP, 9)]),
-                'blue': status({ZUBAT}, stored=[(ZUBAT, 6), (ZUBAT, 8)], version='blue', name='BLUE')}
-    page = client(payloads).get('/').text
-
-    assert 'Red is missing Zubat; Blue is missing Magikarp' in page
-    assert 'DUPLICATE SWAP' in page and '1 proposal<' in page
-    assert 'RED SENDS' in page and 'BLUE SENDS' in page
-    assert '/sprites/blue/41.png' in page and '/sprites/red/129.png' in page
-    assert 'Box 1, slot 1' in page                      # 1-based, exactly as the proposal reports
-    assert '/static/board.css' in page
-    assert 'LAST ONE' not in page and 'BEST COPY' not in page
+def test_the_old_board_points_to_the_game_trading_page(monkeypatch):
+    payloads = {'red': status({MAGIKARP}), 'blue': status({ZUBAT})}
+    monkeypatch.setenv('BROKER_GAME_URL', 'http://red-game')
+    page = client(payloads).get('/', follow_redirects=False)
+    assert page.status_code == 307
+    assert page.headers['location'] == 'http://red-game/trading'
 
 
-def test_the_board_marks_a_proposal_that_spends_a_keeper():
-    payloads = {'red': status({MAGIKARP, VENUSAUR},
-                              stored=[(MAGIKARP, 5), (MAGIKARP, 9), (VENUSAUR, BAR + 2)]),
-                'blue': status({GENGAR}, stored=[(GENGAR, 40), (GENGAR, 41)], version='blue', name='BLUE')}
-    page = client(payloads).get('/').text
-
-    assert 'PREMIUM<span class="chip">LAST ONE</span>' in page
-    assert 'Its last one' in page
+def test_the_old_board_has_no_separate_trading_interface(monkeypatch):
+    monkeypatch.delenv('BROKER_GAME_URL', raising=False)
+    page = client({'red': status({MAGIKARP})}).get('/')
+    assert 'Trading now lives inside each game' in page.text
+    assert 'proposal' not in page.text
 
 
 def test_a_portrait_falls_back_to_the_packaged_path_on_older_instances(monkeypatch):
@@ -351,11 +342,9 @@ def test_the_board_proxies_portraits_so_either_lineage_renders():
 def test_the_board_survives_an_instance_that_is_down():
     payloads = {'red': status({MAGIKARP}, stored=[(MAGIKARP, 5), (MAGIKARP, 9)]),
                 'blue': ConnectionError('connection refused')}
-    page = client(payloads).get('/')
-
-    assert page.status_code == 200
-    assert 'Unreachable' in page.text and 'connection refused' in page.text
-    assert client(payloads).get('/api/proposals').json()['proposals'] == []
+    body = client(payloads).get('/api/proposals').json()
+    assert 'connection refused' in body['instances'][1]['error']
+    assert body['proposals'] == []
 
 
 def test_the_board_serves_its_own_stylesheet():

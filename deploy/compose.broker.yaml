@@ -8,6 +8,7 @@ services:
       - "8950:8000"
     environment:
       BROKER_INSTANCES: "red=http://host.docker.internal:8930,blue=http://host.docker.internal:8940"
+      BROKER_GAME_URL: ${BROKER_GAME_URL:-}
     volumes:
       - "${GAME_DATA_DIR:?Set GAME_DATA_DIR to the prepared game-data directory}:/data/game-data:ro"
     extra_hosts:

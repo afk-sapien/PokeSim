@@ -1,6 +1,8 @@
 from dataclasses import replace
 import random
 
+import pytest
+
 from pokesim.policies.collection import Collection, DATA, EVOS, dex
 from pokesim.policies.battle import choose_battle, needs_healing
 from pokesim.policies.navigation import Navigator
@@ -103,13 +105,36 @@ def test_restricted_entries_are_not_counted_as_available():
     assert entries[137]['status']=='available'
 
 
-def test_focused_pace_preserves_main_journey_before_champion():
-    c=Collection()
-    c.pace='focused'
-    s=state(map=MAPS['ROUTE_1'])
-    nav=Navigator()
+@pytest.mark.parametrize('legacy_style', ['focused', 'balanced', 'thorough', 'invalid'])
+def test_legacy_style_uses_automatic_collection_before_champion(legacy_style):
+    restored = Collection()
+    restored.load({'pace': legacy_style})
+    fresh = Collection()
+    s = state(map=MAPS['ROUTE_1'])
+    nav = Navigator()
     nav.update_story(s)
-    assert c.choose(s,nav,random.Random(3),Goal('boulder','Brock','Earn a badge')) is None
+    main = Goal('boulder', 'Brock', 'Earn a badge')
+    expected = fresh.choose(s, nav, random.Random(3), main)
+    assert expected is not None
+    assert restored.choose(s, nav, random.Random(3), main) == expected
+    assert restored.remaining == fresh.remaining
+    assert 'pace' not in restored.state_dict()
+    assert 'pace' not in restored.describe(s)
+
+
+@pytest.mark.parametrize('legacy_style', ['focused', 'balanced', 'thorough'])
+def test_legacy_style_preserves_active_project_and_progress(legacy_style):
+    original = Collection()
+    original.project = {'species': sid(16), 'method': 'grass',
+                        'map': MAPS['ROUTE_1'], 'key': 'hunt'}
+    original.remaining = 500
+    original.cooldown = 120
+    original.elapsed = 9000
+    original.history = ['Completed: Caterpie']
+    saved = original.state_dict()
+    restored = Collection()
+    restored.load({**saved, 'pace': legacy_style})
+    assert restored.state_dict() == saved
 
 
 def test_nonattacking_evolution_partner_does_not_cause_healing_loop():
@@ -204,34 +229,23 @@ def test_storage_records_read_banked_species_levels_and_names():
     assert read_stored_pokemon(Memory())==((6,sid(10),6,''),)
 
 
-def test_adventure_pace_command_persists_without_changing_speed():
-    from unittest.mock import Mock
-    from pokesim.emulator import Emulator
-    emu=Emulator.__new__(Emulator)
-    emu.policy=StrategicPolicy(2)
-    emu.store=Mock()
-    emu.store.get.return_value=None
-    emu.speed=4
-    assert emu._handle_command('adventure_pace','balanced')
-    assert emu.policy.collection.pace=='balanced'
-    assert emu.speed==4
-    emu.store.set.assert_called_once()
-
-
-def test_api_rejects_invalid_adventure_pace(tmp_path):
+@pytest.mark.parametrize('action,value', [
+    ('adventure_pace', 'focused'), ('adventure_pace', 'balanced'),
+    ('adventure_pace', 'thorough'), ('adventure_pace', 'invalid'),
+    ('exploration', 0), ('exploration', 0.12), ('exploration', 0.3),
+])
+def test_api_rejects_removed_behavior_controls(tmp_path, action, value):
     from types import SimpleNamespace
     from unittest.mock import Mock
-    import pytest
     from fastapi import HTTPException
     from pokesim.web.app import create_app, Control
-    emu=Mock()
-    app=create_app(emu,SimpleNamespace(shots=tmp_path,get=lambda *args: None))
-    endpoint=next(r.endpoint for r in app.routes if getattr(r,'path',None)=='/api/control')
+    emu = Mock()
+    app = create_app(emu, SimpleNamespace(shots=tmp_path, get=lambda *args: None))
+    endpoint = next(r.endpoint for r in app.routes if getattr(r, 'path', None) == '/api/control')
     with pytest.raises(HTTPException) as error:
-        endpoint(Control(action='adventure_pace',value='invalid'))
-    assert error.value.status_code==400
-    assert endpoint(Control(action='adventure_pace',value='thorough'))=={'ok':True}
-    emu.command.assert_called_once_with('adventure_pace','thorough')
+        endpoint(Control(action=action, value=value))
+    assert error.value.status_code == 400
+    emu.command.assert_not_called()
 
 
 def test_evolution_project_does_not_block_restocking_at_another_mart():
@@ -375,3 +389,23 @@ def test_unreachable_evolution_and_trainer_candidates_are_not_selected():
     c.observe(s)
     assert c.choose(s, nav, random.Random(2), Goal('collect_plan', 'Plan', 'Plan')) is None
     assert c.project is None
+
+
+@pytest.mark.parametrize('legacy_exploration', [0, 0.12, 0.3])
+def test_old_exploration_preferences_do_not_change_restored_adventures(legacy_exploration):
+    from copy import deepcopy
+    original = StrategicPolicy(7)
+    original.decisions = 123
+    original.collection.project = {'species': sid(16), 'method': 'grass',
+                                   'map': MAPS['ROUTE_1'], 'key': 'hunt'}
+    original.collection.remaining = 500
+    saved = original.state_dict()
+    expected = StrategicPolicy(7)
+    expected.load_state_dict(deepcopy(saved))
+    restored = StrategicPolicy(7)
+    restored.load_state_dict({**deepcopy(saved), 'exploration': legacy_exploration})
+    assert restored.state_dict() == expected.state_dict()
+    assert restored.collection.project == original.collection.project
+    assert restored.decisions == 123
+    assert 'exploration' not in restored.state_dict()
+    assert 'exploration' not in restored.details()

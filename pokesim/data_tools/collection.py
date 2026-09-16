@@ -23,7 +23,7 @@ def generate(src, strategy):
     species = {v['name']: int(k) for k, v in strategy['species'].items()}
     maps = {w['symbol']: int(k) for k, w in strategy['world'].items()}
     result = {'versions': {}, 'evolutions': {}}
-    text = (src / 'data/pokemon/evos_moves.asm').read_text()
+    text = (src / 'data/pokemon/evos_moves.asm').read_text(encoding="utf-8")
     names = {name.replace('_', ''): sid for name, sid in species.items()}
     for name, block in re.findall(r'^(\w+)EvosMoves:\n(.*?)(?=^\w+EvosMoves:|\Z)', text, re.M | re.S):
         sid = names.get(name.upper())
@@ -46,7 +46,7 @@ def generate(src, strategy):
             if not path.exists():
                 continue
             method = None
-            for line in version_text(path.read_text(), version):
+            for line in version_text(path.read_text(encoding="utf-8"), version):
                 match = re.search(r'def_(grass|water)_wildmons\s+(\d+)', line)
                 if match:
                     method = ('surf' if match[1] == 'water' else 'grass') if int(match[2]) else None
@@ -58,7 +58,7 @@ def generate(src, strategy):
                                   level=int(match[1]))
                     if source not in sources.get(species[match[2]], []):
                         add(species[match[2]], **source)
-        fishing = '\n'.join(version_text((src / 'data/wild/super_rod.asm').read_text(), version))
+        fishing = '\n'.join(version_text((src / 'data/wild/super_rod.asm').read_text(encoding="utf-8"), version))
         groups = {n: [(int(l), species[p]) for l, p in re.findall(r'db\s+(\d+),\s*(\w+)', block) if p in species]
                   for n, block in re.findall(r'\.(Group\d+):\n(.*?)(?=\.Group\d+:|\Z)', fishing, re.S)}
         for map_name, group in re.findall(r'dbw\s+(\w+),\s*\.(Group\d+)', fishing):
@@ -94,7 +94,7 @@ def generate(src, strategy):
         path = src / 'scripts' / (w['name'] + '.asm')
         if not path.exists():
             continue
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         headers = dict(re.findall(r'(\w+TrainerHeader\d*):\s*\n\s*trainer (EVENT_\w+)',text))
         for x,y,sprite,movement,fragment in w['objects']:
             label = fragment.removeprefix('TEXT_').replace('_','').lower() + 'text'

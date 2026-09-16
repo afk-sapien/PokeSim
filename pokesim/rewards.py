@@ -4,7 +4,11 @@ import random
 import secrets
 
 KEY = 'league-rewards-v1'
-POOL = (153, 176, 177, 102, 98, 90, 171, 21)
+POOL = (153, 176, 177, 102, 98, 90, 171)
+
+
+def mew_enabled(policy):
+    return bool(policy.get('league_rewards', False) or policy.get('mew_event', False))
 
 
 def ledger(db):
@@ -34,4 +38,8 @@ def status(store):
 def selection(value):
     ordinal = value['delivered'] + 1
     seed = f"{value['seed']}:{ordinal}"
-    return ordinal, random.Random(seed).choice(POOL), seed
+    rng = random.Random(seed)
+    # Preserve pending non-Mew selections from the original eight-slot draw.
+    index = rng.randrange(len(POOL) + 1)
+    species = POOL[index] if index < len(POOL) else rng.choice(POOL)
+    return ordinal, species, seed

@@ -119,7 +119,7 @@ def stage(root, transaction, league_rewards=False):
     pair.write_json(work / 'result.json', {
         'status': 'staged', 'kind': 'league_reward' if league_rewards else 'mew_event',
         'event': rewards.KEY if league_rewards else EVENT_KEY,
-        'id': transaction, 'reason': 'Championship Pokémon reward' if league_rewards else 'One-time postgame PokeSim Mew event',
+        'id': transaction, 'reason': 'Championship Pokémon reward' if league_rewards else 'One-time Mew gift for defeating the final rival',
         'gifts': gifts, 'states': states, 'hashes': hashes,
     })
 
@@ -145,6 +145,6 @@ def journal(root, transaction):
                                 f"A level-5 {gift['name']} joined the PC. Each League victory earns a random PokeSim reward."))
                 elif name in recipients:
                     db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (EVENT_KEY, json.dumps(transaction)))
-                    db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'obtain',?,?,1,4,'PokeSim event','')",
-                               ('Received Mew from the PokeSim event',
-                                'A one-time level-5 Mew gift after becoming Champion. This is a custom PokeSim distribution, not an official Nintendo event.'))
+                    db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'obtain',?,?,1,4,'Final rival reward','')",
+                               ('Received Mew for defeating the final rival',
+                                'A one-time level-5 Mew joined the PC after defeating the rival who held the Champion title. Rematches do not award another Mew.'))
