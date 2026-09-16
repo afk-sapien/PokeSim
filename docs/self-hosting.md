@@ -2,21 +2,25 @@
 
 For the current source-build setup, start with [Run your own adventure](../README.md#run-your-own-adventure).
 
-The prebuilt instructions below are pinned to the older **v0.2.0rc6** public archive. That release does not include every feature shown in the current README screenshots. Keep its source checkout, image, and configuration together.
+The prebuilt instructions below target the **v0.2.0rc31** experimental release. Keep its source checkout, image, and configuration together.
 
-## Install the prebuilt v0.2.0rc6 release
+## Install the prebuilt v0.2.0rc31 release
 
 The prebuilt release supports **Linux amd64** with Docker Engine and the Compose plugin. Supply your own clean Pokémon Red (USA, Europe) ROM. Pokémon ROMs, sprites, and game datasets are not bundled. The PyBoy dependency includes its own small demo ROM, which cannot replace your Pokémon ROM. Blue and ARM do not yet have equivalent release validation.
 
 Clone the public release source:
 
 ```sh
-git clone --branch v0.2.0rc6 --depth 1 https://github.com/afk-sapien/PokeSim.git pokesim
+git clone --branch v0.2.0rc31 --depth 1 https://github.com/afk-sapien/PokeSim.git pokesim
 cd pokesim
 cp .env.example .env
 mkdir -p roms data
 sudo chown 10001:10001 data
 ```
+
+Set `POKESIM_IMAGE=pokesim:0.2.0rc31` in `.env` to select the downloaded image.
+The source example defaults to a local build. The release asset `env.example` already
+selects the release image.
 
 Place your ROM at `roms/pokered.gb`. Create a local reference checkout for data preparation:
 
@@ -28,8 +32,8 @@ git -C .reference/pokered checkout a1a22aaf84d1675bcdbaeb194592379d586d838e
 Download the prebuilt image and verify its checksum. These public downloads require no GitHub account, token, or registry login:
 
 ```sh
-curl -fL --retry 3 -o image-linux-amd64.tar.gz https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc6/image-linux-amd64.tar.gz
-curl -fL --retry 3 -o SHA256SUMS https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc6/SHA256SUMS
+curl -fL --retry 3 -o image-linux-amd64.tar.gz https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc31/image-linux-amd64.tar.gz
+curl -fL --retry 3 -o SHA256SUMS https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc31/SHA256SUMS
 sha256sum --ignore-missing -c SHA256SUMS
 ```
 
@@ -42,7 +46,7 @@ docker compose up -d --pull never
 docker compose logs --tail=50 pokesim
 ```
 
-Open [localhost:8930](http://localhost:8930). The archive loads the exact image tag `pokesim:0.2.0rc6`. Releases are distributed as downloadable Docker archives, so there is no `docker compose pull` step. The [release page](https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0rc6) also provides source packages, Compose files, a dependency inventory, and a manifest with the image ID and source revision.
+Open [localhost:8930](http://localhost:8930). The archive loads the exact image tag `pokesim:0.2.0rc31`. Releases are distributed as downloadable Docker archives, so there is no `docker compose pull` step. The [release page](https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0rc31) also provides source packages, Compose files, a dependency inventory, and a manifest with the image ID and source revision.
 
 The setup command parses the pinned source checkout and writes verified game data into `./data`. It does not build or download a ROM. The runtime uses the local data afterward and does not require that source checkout or internet access unless notifications are enabled.
 

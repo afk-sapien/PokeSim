@@ -9,7 +9,7 @@ This index separates current instructions, future plans, and historical evidence
 | --- | --- |
 | Desktop setup, downloads, and save locations | [Desktop](desktop.md) |
 | Current server installation | [Source-build setup](../README.md#on-an-always-on-server) |
-| Older pinned public image | [Prebuilt rc6 reference](self-hosting.md) |
+| Prebuilt release image | [Prebuilt rc31 installation](self-hosting.md) |
 | Gameplay, settings, and APIs | [Feature guide](guide.md) |
 | PC views, offers, and Pokémon locks | [PC and trading](pc-trading.md) |
 | Trusted server-to-server exchanges | [Automatic trading](automatic-trading.md) |

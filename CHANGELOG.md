@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.2.0rc31, development candidate
+## 0.2.0rc31, experimental beta
 
-This candidate is prepared in source. It has not been published or deployed.
+Desktop setup, collection controls, and lifecycle hardening. Existing deployments
+must be upgraded separately.
 
 ### Lifecycle and verification
 

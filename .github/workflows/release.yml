@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag, for example v0.2.0rc6
+        description: Existing version tag, for example v0.2.0rc31
         required: true
         type: string
 permissions:
@@ -100,6 +100,8 @@ jobs:
           import os
           from pathlib import Path
           root = Path('release')
+          env_file = root / 'env.example'
+          env_file.write_text(env_file.read_text().replace('POKESIM_IMAGE=pokesim:local', 'POKESIM_IMAGE=' + os.environ['IMAGE']))
           metadata = json.loads((root / 'image-metadata.json').read_text())
           manifest = {'image': os.environ['IMAGE'], 'image_id': metadata['Id'], 'version': os.environ['VERSION'], 'revision': os.environ['REVISION'], 'platform': 'linux/amd64'}
           manifest['files'] = {}

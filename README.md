@@ -137,7 +137,7 @@ Unlimited speed can use a full CPU core. Journal history and screenshots grow ov
 
 </details>
 
-Prefer a prebuilt image? The [prebuilt installation reference](docs/self-hosting.md) preserves the older v0.2.0rc6 download instructions. That release predates parts of the interface shown above.
+Prefer a prebuilt image? Follow the [v0.2.0rc31 installation instructions](docs/self-hosting.md) for the Linux amd64 download.
 
 ## Follow along or help it grow
 

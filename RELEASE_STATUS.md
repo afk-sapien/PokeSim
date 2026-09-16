@@ -5,8 +5,10 @@ recorded observations, not a fresh health check.
 
 ## Source and deployment versions
 
-The source candidate is `0.2.0rc31`, including desktop, PC trading, Pokémon locks,
-revised rewards, and lifecycle hardening. It has not been published or deployed.
+The source version is `0.2.0rc31`, including desktop, PC trading, Pokémon locks,
+revised rewards, and lifecycle hardening. Publication is tracked on the
+[rc31 release page](https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0rc31).
+Existing deployments are separate and retain the last recorded versions below.
 Runtime status now reports build revision and dirty state. See the
 [validation guide](docs/testing.md) for build identity and regression checks.
 
@@ -20,7 +22,7 @@ hours. Existing recovery churn remains, and multi-day reliability is still unpro
 | Red adventure | rc30 | [Deployment receipt](docs/validation/release-0.2.0rc30-red.json) |
 | Blue adventure | rc29 | [Deployment receipt](docs/validation/release-0.2.0rc29-blue.json) |
 | Trading coordinator | rc24 | [Independent safe-point validation](docs/validation/trade-safe-points-0.2.0rc24.json) |
-| Public prebuilt installation documented here | rc6 | [Pinned installation reference](docs/self-hosting.md) |
+| Prebuilt installation documented here | rc31 | [Pinned installation reference](docs/self-hosting.md) |
 | Desktop bundles | New workflow targets | [Desktop build and validation guide](docs/desktop.md) |
 
 The rc30 follow-up recorded both games healthy at maximum speed, zero recovery reloads,
