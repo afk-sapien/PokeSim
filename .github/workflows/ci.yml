@@ -5,9 +5,13 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         python: ['3.11', '3.12']
@@ -36,6 +40,9 @@ jobs:
       - run: python tools/check_docs.py
       - run: uv build
       - run: python tools/check_package.py
+      - name: Verify installation outside the source checkout
+        if: matrix.python == '3.12'
+        run: python tools/check_installed_wheel.py
       - name: Install browser test runtime
         if: matrix.python == '3.12'
         run: |
@@ -57,19 +64,17 @@ jobs:
           if-no-files-found: ignore
   container:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - run: docker compose config --quiet
       - run: docker build -t pokesim:ci .
-      - name: Read user-content reference for tests only
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: pret/pokered
-          ref: a1a22aaf84d1675bcdbaeb194592379d586d838e
-          path: .reference/pokered
-          persist-credentials: false
+      - name: Verify the Compose installation and save lifecycle
+        run: python tools/check_container.py pokesim:ci
       - name: Prepare local data outside the image
-        run: docker run --rm -v "$PWD/.reference/pokered:/source:ro" -v pokesim-ci-data:/data pokesim:ci python -m pokesim.prepare_data /source
+        run: docker run --rm -v pokesim-ci-data:/data pokesim:ci python -m pokesim.prepare_data --download
+      - name: Verify repeated setup works offline
+        run: docker run --rm --network none --read-only --cap-drop ALL -v pokesim-ci-data:/data pokesim:ci python -m pokesim.prepare_data --download
       - name: Verify installed runtime and non-root user
         run: |
           docker run --rm -i -v pokesim-ci-data:/data --entrypoint python pokesim:ci <<'PYCODE'

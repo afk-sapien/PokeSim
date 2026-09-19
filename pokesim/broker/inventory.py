@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 import httpx
 
 from ..duplicates import spare_entries
+from ..milestones import is_perfect
 
 DEFAULT_INSTANCES = 'red=http://127.0.0.1:8930,blue=http://127.0.0.1:8940'
 STATUS_PATH = '/api/pokedex/status'
@@ -145,7 +146,7 @@ def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory
                                trade_key=mon.get('trade_key'), trade_preference=mon.get('trade_preference', 'auto'),
                                trade_ambiguous=mon.get('trade_ambiguous', False))
     boxes = placed(stored)
-    available = [mon for mon in boxes if mon.get('trade_preference') not in ('withdrawn', 'locked')
+    available = [mon for mon in boxes if not is_perfect(mon) and mon.get('trade_preference') not in ('withdrawn', 'locked')
                  and not mon.get('trade_ambiguous')]
     available_slots = {(mon['box'], mon['position']) for mon in available}
     return Inventory(

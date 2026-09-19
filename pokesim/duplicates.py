@@ -3,6 +3,7 @@ from collections import defaultdict
 from math import isqrt
 
 from .strategy_data import MOVES, SPECIES
+from .milestones import is_perfect
 
 
 def quality(mon):
@@ -32,6 +33,7 @@ def quality(mon):
 def spare_entries(party, stored, protected=()):
     """Keep the best individual per species, with party members winning exact ties.
 
+    Perfect DV individuals are always retained alongside the practical keeper.
     Party members are never offered. A better boxed copy survives alongside them.
     Older payloads without individual data retain the original level-only rule.
     """
@@ -48,5 +50,5 @@ def spare_entries(party, stored, protected=()):
         else:
             keepers[species] = next((mon for mon in party if mon['species'] == species),
                                     max(copies, key=lambda mon: mon['level']))
-    return [mon for mon in stored if mon['species'] not in protected
+    return [mon for mon in stored if mon['species'] not in protected and not is_perfect(mon)
             and mon is not keepers[mon['species']]]

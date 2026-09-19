@@ -10,6 +10,7 @@
   function control(key) {
     const mon = find(key)
     if (!mon) return '<span class="trade-meta">Trading details unavailable</span>'
+    if (mon.perfect_dvs) return '<span class="trade-meta">✦ Perfect DV partner preserved from release and trading</span>'
     const selected = mon.listed || mon.preference === 'offered'
     const lockDisabled = writing || status.viewer_only || status.holding || !mon.editable
     const disabled = lockDisabled || !status.connected

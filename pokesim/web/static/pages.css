@@ -414,6 +414,8 @@ button:disabled { opacity:.45 }
 .watch-layout .screen img { max-width:400px }
 .manual-controls { border-top:1px solid #465046 }
 .manual-controls { margin:0 18px 10px }
+.manual-controls { width:auto }
+.manual-controls { padding-top:0 }
 .manual-controls>summary { padding:12px 0 }
 .manual-controls>summary { color:#c6d0c0 }
 .manual-controls>summary { cursor:pointer }
@@ -447,25 +449,6 @@ button:disabled { opacity:.45 }
 .watch-progress .badge-icon { height:23px }
 .watch-progress .badge-icon { font-size:19px }
 .watch-progress .badge>span:not(.badge-icon),.watch-progress .badge>small { display:none }
-.adventure-details { border:1px solid #dce1d3 }
-.adventure-details { border-radius:14px }
-.adventure-details { background:#fffef9 }
-.adventure-details>summary { padding:17px 20px }
-.adventure-details>summary { cursor:pointer }
-.adventure-details>summary { font-size:13px }
-.adventure-details>summary { font-weight:600 }
-.adventure-details>summary>span { margin-left:12px }
-.adventure-details>summary>span { color:#727b6b }
-.adventure-details>summary>span { font-weight:400 }
-.adventure-details>summary>span { font-size:11px }
-.adventure-content { padding:0 20px 20px }
-.adventure-content .collection-card { margin:0 }
-.adventure-content .collection-card { padding:20px 0 }
-.adventure-content .collection-card { border:0 }
-.adventure-content .collection-card { background:none }
-.adventure-content .collection-card h2 { font-size:21px }
-.adventure-content .collection-intro { display:none }
-.adventure-content .team-support { margin-top:0 }
 #team,#journey-progress,#collection { scroll-margin-top:20px }
 @media (max-width:1000px) {
 .watch-layout { grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr) }
@@ -502,10 +485,6 @@ button:disabled { opacity:.45 }
 .watch-layout .party { gap:9px }
 .watch-progress { padding:15px }
 .watch-progress .eyebrow { font-size:8px }
-.adventure-details>summary>span { display:block }
-.adventure-details>summary>span { margin:6px 0 0 15px }
-.adventure-content { padding:0 15px 15px }
-.adventure-content .section-heading { flex-wrap:wrap }
 }
 .watch-layout .mon-main { padding:8px 10px }
 .watch-layout .sprite-stage { height:68px }
@@ -572,3 +551,197 @@ button:disabled { opacity:.45 }
 .pc-metrics .pc-power { font-size:12px }
 .pc-metrics .pc-power { color:#304b36 }
 .pc-metrics .pc-power { padding-bottom:4px }
+
+/* Keep the live workspace stable while switching views and inspecting partners. */
+.live-view-tabs { display:flex }
+.live-view-tabs { gap:4px }
+.live-view-tabs { margin:0 18px 12px }
+.live-view-tabs { padding:4px }
+.live-view-tabs { width:fit-content }
+.live-view-tabs { background:#17231e }
+.live-view-tabs { border-radius:9px }
+.live-view-tabs button { border:0 }
+.live-view-tabs button { padding:7px 20px }
+.live-view-tabs button { background:transparent }
+.live-view-tabs button { color:#b8c7ba }
+.live-view-tabs button { font-size:12px }
+.live-view-tabs button[aria-selected="true"] { background:#e7ecde }
+.live-view-tabs button[aria-selected="true"] { color:#263b2e }
+.live-viewport { display:grid }
+.live-viewport { position:relative }
+.live-viewport>div { grid-area:1/1 }
+.live-viewport>div[hidden] { display:block!important }
+.live-viewport>div[hidden] { visibility:hidden }
+.live-viewport>div[hidden] { pointer-events:none }
+#map-view { display:flex }
+#map-view { position:absolute }
+#map-view { inset:0 }
+.live-viewport>#map-view[hidden] { display:flex!important }
+#map-view { flex-direction:column }
+#map-view { min-width:0 }
+.map-stage { display:flex }
+.map-stage { flex-direction:column }
+.map-stage { flex:1 }
+.map-stage { min-height:0 }
+.map-stage { margin:0 12px }
+.map-stage { padding:18px }
+.map-stage { background:#1c302b }
+.map-stage { border:1px solid #ffffff0d }
+.map-stage { border-radius:9px }
+.map-heading { display:grid }
+.map-heading { gap:3px }
+.map-heading .eyebrow { color:#9dad97 }
+.map-heading strong { font-size:16px }
+#map-position { font:10px ui-monospace,monospace }
+#map-position { color:#a4b7a3 }
+.map-stage #route-map { flex:1 }
+.map-stage #route-map { min-height:0 }
+.map-stage #route-map { height:0 }
+.map-stage #route-map { width:100% }
+.map-stage #route-map { object-fit:contain }
+.map-stage #route-map { margin:8px 0 }
+.map-stage #route-map { background:#1c302b }
+.map-legend { display:flex }
+.map-legend { flex-wrap:wrap }
+.map-legend { justify-content:center }
+.map-legend { gap:14px }
+.map-legend { color:#c6d1bf }
+.map-legend>span { display:flex }
+.map-legend>span { align-items:center }
+.map-legend>span { gap:6px }
+.map-legend i { display:inline-block }
+.map-legend i { width:8px }
+.map-legend i { height:8px }
+.legend-player { background:#ffcd64 }
+.legend-player { border-radius:50% }
+.legend-route { background:#8ae2cd }
+.legend-door { background:#faf5df }
+.map-note { padding:10px 20px }
+.map-note { font-size:10px }
+.map-note { color:#a6b0a6 }
+.map-empty { display:grid }
+.map-empty { flex:1 }
+.map-empty { align-content:center }
+.map-empty { text-align:center }
+.map-empty { color:#bac9b5 }
+.map-empty { padding:30px }
+.map-empty { font-size:13px }
+.partner-open { display:flex }
+.partner-open { justify-content:space-between }
+.partner-open { width:100% }
+.partner-open { padding:9px 12px }
+.partner-open { border:0 }
+.partner-open { border-top:1px solid #eeeee5 }
+.partner-open { border-radius:0 0 12px 12px }
+.partner-open { color:#59674f }
+.partner-open { font-size:10px }
+.partner-detail { width:min(460px,calc(100% - 32px)) }
+.partner-detail { max-height:85vh }
+.partner-detail { padding:24px }
+.partner-detail { border:1px solid #d0d8c8 }
+.partner-detail { border-radius:20px }
+.partner-detail { color:#292c29 }
+.partner-detail { background:#f5f3ed }
+.partner-detail::backdrop { background:#192d2480 }
+body:has(.partner-detail[open]) { overflow:hidden }
+.partner-close { display:block }
+.partner-close { margin-left:auto }
+.partner-close { font-size:12px }
+.partner-detail-head { text-align:center }
+.partner-detail-head { margin:0 0 24px }
+.partner-detail-head img { image-rendering:pixelated }
+.partner-detail-head h2 { margin:6px 0 }
+.partner-detail-head>p:last-child { color:#687461 }
+.partner-detail-head>p:last-child { font-size:12px }
+.partner-detail h3 { margin:20px 0 12px }
+.partner-detail .moves { grid-template-columns:1fr }
+.adventure-workspace { border:1px solid #dce1d3 }
+.adventure-workspace { border-radius:14px }
+.adventure-workspace { background:#fffef9 }
+.adventure-workspace { overflow:hidden }
+.notebook-heading { display:flex }
+.notebook-heading { justify-content:space-between }
+.notebook-heading { align-items:center }
+.notebook-heading { gap:16px }
+.notebook-heading { padding:20px 24px 16px }
+.notebook-heading h2 { font-size:20px }
+.notebook-heading h2 { margin-top:4px }
+.notebook-heading a { color:#59674f }
+.notebook-heading a { font-size:12px }
+.notebook-tabs { display:flex }
+.notebook-tabs { gap:24px }
+.notebook-tabs { padding:0 24px }
+.notebook-tabs { border-bottom:1px solid #dce1d3 }
+.notebook-tabs button { padding:12px 2px }
+.notebook-tabs button { border:0 }
+.notebook-tabs button { border-bottom:3px solid transparent }
+.notebook-tabs button { border-radius:0 }
+.notebook-tabs button { background:none }
+.notebook-tabs button { color:#737c6c }
+.notebook-tabs button { font-size:13px }
+.notebook-tabs button[aria-selected="true"] { color:#304b36 }
+.notebook-tabs button[aria-selected="true"] { border-bottom-color:#54765b }
+.notebook-tabs button[aria-selected="true"] { font-weight:650 }
+.notebook-panel { height:320px }
+.notebook-panel { overflow:auto }
+.notebook-panel { overscroll-behavior:contain }
+.notebook-panel { scrollbar-gutter:stable }
+.notebook-panel { padding:24px }
+.notebook-panel .collection-card { margin:0 }
+.notebook-panel .collection-card { padding:0 }
+.notebook-panel .collection-card { border:0 }
+.notebook-panel .collection-card { background:none }
+.notebook-panel .collection-card h2 { font-size:20px }
+.notebook-panel .collection-intro { display:none }
+.notebook-panel .collection-summary { gap:12px }
+.notebook-panel .collection-summary { margin:16px 0 }
+.notebook-panel .collection-summary>div { padding:12px }
+.notebook-panel .collection-summary .eyebrow { font-size:8px }
+.notebook-panel .collection-summary strong { font-size:22px }
+.notebook-panel .hunt-summary strong { font-size:15px }
+.notebook-panel .hunt-summary small { font-size:11px }
+.notebook-panel .collection-projects { gap:18px }
+.notebook-panel .collection-projects h3 { font-size:14px }
+.notebook-panel .collection-projects li { font-size:12px }
+.journey-columns { display:grid }
+.journey-columns { grid-template-columns:1fr 1fr 1fr }
+.journey-columns { gap:28px }
+.journey-columns h3 { font-size:14px }
+.journey-columns .readiness { border:0 }
+.journey-columns .readiness { padding:0 }
+#journey { list-style:none }
+#journey { padding:0 }
+#journey { margin:14px 0 0 }
+#journey li { font-size:12px }
+#journey li { padding:8px 0 8px 12px }
+#journey li { border-left:2px solid #e2e6da }
+#journey li { color:#7b8273 }
+#journey .done { color:#54765b }
+#journey .current { border-color:#b5793d }
+#journey .current { color:#78512e }
+#journey .current { font-weight:600 }
+.notebook-panel #recovery-history { max-height:none }
+.notebook-panel #recovery-history { overflow:visible }
+.notebook-panel #bag-items { margin:0 }
+@media (max-width:850px) {
+.journey-columns { grid-template-columns:1fr 1fr }
+.journey-columns>section:last-child { grid-column:1/-1 }
+}
+@media (max-width:580px) {
+.notebook-heading { padding:18px }
+.notebook-heading h2 { font-size:18px }
+.notebook-heading a { font-size:11px }
+.notebook-tabs { padding:0 18px }
+.notebook-panel { padding:18px }
+.notebook-panel { height:340px }
+.journey-columns { grid-template-columns:1fr }
+.map-stage { padding:14px }
+.live-view-tabs button { min-height:40px }
+.partner-open { min-height:40px }
+}
+.partner-detail .move { font-size:13px }
+.partner-detail .move { padding:7px 0 }
+.partner-detail .move small { font-size:11px }
+.partner-detail .battle-stats dt { font-size:11px }
+.partner-detail .battle-stats dd { font-size:17px }
+.partner-detail .total-xp { font-size:11px }

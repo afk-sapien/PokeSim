@@ -42,12 +42,15 @@ required = {
     'pokesim/broker/routine.py',
     'pokesim/trade/boxes.py',
     'pokesim/duplicates.py',
+    'pokesim/milestones.py',
+    'pokesim/catches.py',
     'pokesim/play_clock.py',
     'pokesim/web/static/index.html',
     'pokesim/web/static/journal.html',
     'pokesim/web/static/pc.html',
     'pokesim/web/static/pc.js',
     'pokesim/web/static/pages.css',
+    'pokesim/web/static/live.css',
     'pokesim/web/static/app.js',
     'pokesim/web/static/screen.js',
     'pokesim/web/static/style.css',
@@ -63,8 +66,8 @@ required = {
 }
 release_version = tomllib.loads(Path('pyproject.toml').read_text())['project']['version']
 artifacts = list(Path('dist').glob(f'pokesim-{release_version}-*.whl')) + list(Path('dist').glob(f'pokesim-{release_version}.tar.gz'))
-if not artifacts:
-    raise SystemExit('Build packages first with uv build')
+if len(artifacts) != 2 or sum(path.suffix == '.whl' for path in artifacts) != 1:
+    raise SystemExit('Build exactly one wheel and one source archive first with uv build')
 for artifact in artifacts:
     if artifact.suffix == '.whl':
         with zipfile.ZipFile(artifact) as archive:
@@ -77,8 +80,9 @@ for artifact in artifacts:
         assert {'uv.lock', 'setup.py', 'THIRD_PARTY_NOTICES.md', 'RELEASE_STATUS.md',
                 'Dockerfile', '.dockerignore', '.env.example', 'compose.yaml',
                 'compose.build.yaml', 'compose.proxy.yaml', 'deploy/Caddyfile',
-                'docs/README.md', 'docs/images/live-adventure.jpg',
-                'docs/images/pc-storage.jpg', 'docs/images/pokedex.jpg',
+                'docs/README.md', 'docs/images/live-adventure.png',
+                'docs/images/pc-storage.png', 'docs/images/pokedex.png',
+                'docs/images/journal.png',
                 'tools/check_web.py', 'tools/check_docs.py',
                 'deploy/proxy.env.example', 'docs/validation/public-install-0.2.0rc2.json'} <= names
     missing = required - names

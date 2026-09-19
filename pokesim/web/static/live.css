@@ -1,0 +1,89 @@
+/* Keep the game and its team aligned below a compact adventure summary. */
+.watch-layout { grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr) }
+.watch-layout { grid-template-areas:none }
+.watch-layout { grid-template-rows:auto }
+.watch-layout { align-items:stretch }
+.watch-stage,.watch-companions { display:flex }
+.watch-stage,.watch-companions { flex-direction:column }
+.watch-stage,.watch-companions { min-width:0 }
+.watch-companions { gap:16px }
+.watch-stage .game-card { display:flex }
+.watch-stage .game-card { flex-direction:column }
+.watch-stage .game-card { flex:1 }
+.watch-stage .screen { flex:1 }
+.watch-stage .screen img { max-width:400px }
+.watch-stage .screen img { object-fit:contain }
+.watch-companions .party-section { display:flex }
+.watch-companions .party-section { flex-direction:column }
+.watch-companions .party-section { flex:1 }
+.watch-companions .party { flex:1 }
+.watch-companions .party { grid-auto-rows:auto }
+.watch-companions .mon-card { display:flex }
+.watch-companions .mon-card { flex-direction:column }
+.watch-companions .mon-main { flex:1 }
+.watch-companions .mon-main { align-items:center }
+.watch-companions .mon-details { margin-top:auto }
+.live-summary { display:flex }
+.live-summary { align-items:center }
+.live-summary { flex-wrap:wrap }
+.live-summary { gap:14px 28px }
+.live-summary { padding:14px 0 }
+.live-summary { margin-bottom:18px }
+.live-summary { border-bottom:1px solid #dcded3 }
+.live-summary .eyebrow { margin:0 }
+.live-summary .eyebrow { font-size:9px }
+.live-summary .eyebrow { letter-spacing:1px }
+.live-identity { display:flex }
+.live-identity { flex-direction:column }
+.live-identity { gap:3px }
+.live-identity { margin-right:auto }
+.live-identity { min-width:100px }
+.live-identity h1 { font:600 18px/1.2 system-ui,sans-serif }
+.live-identity h1 { line-height:1.2 }
+.live-identity h1 { margin:0 }
+.live-identity small,.live-time small { font-size:10px }
+.live-identity small,.live-time small { color:#687063 }
+.live-badges { min-width:190px }
+.live-badge-label { display:flex }
+.live-badge-label { align-items:center }
+.live-badge-label { gap:10px }
+.live-badge-label strong { font-size:11px }
+.live-summary .badges { grid-template-columns:repeat(8,minmax(0,1fr)) }
+.live-summary .badges { gap:5px }
+.live-summary .badges { margin-top:4px }
+.live-summary .badge { padding:0 }
+.live-summary .badge-icon { width:21px }
+.live-summary .badge-icon { height:21px }
+.live-summary .badge-icon { font-size:18px }
+.live-summary .badge>span:not(.badge-icon),.live-summary .badge>small { display:none }
+.live-stat { display:flex }
+.live-stat { flex-direction:column }
+.live-stat { gap:5px }
+.live-stat strong { font-size:14px }
+.live-stat strong { font-variant-numeric:tabular-nums }
+.live-time small:empty { display:none }
+@media (max-width:1000px) {
+  .live-summary { gap:12px 20px }
+  .live-identity { min-width:85px }
+}
+@media (max-width:850px) {
+  .watch-layout { grid-template-columns:minmax(0,1fr) }
+  .watch-layout { grid-template-areas:none }
+  .watch-companions .party { grid-auto-rows:auto }
+}
+@media (max-width:600px) {
+  .live-summary { display:grid }
+  .live-summary { grid-template-columns:repeat(4,minmax(0,1fr)) }
+  .live-summary { gap:12px 8px }
+  .live-identity { flex:1 }
+  .live-identity { min-width:0 }
+  .live-identity h1 { font-size:16px }
+  .live-badges { min-width:0 }
+  .live-badges { grid-column:2 / -1 }
+  .live-badges { justify-self:end }
+  .live-stat { flex:1 1 calc(25% - 16px) }
+  .live-summary .eyebrow { font-size:8px }
+  .live-stat strong { font-size:12px }
+  .live-summary .badge-icon { width:18px }
+  .live-summary .badge-icon { height:18px }
+}

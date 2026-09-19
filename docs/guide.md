@@ -297,10 +297,12 @@ This does not add perfect-DV hunts or replace party members for small DV differe
 The GUI has four pages:
 
 - **Live** (`/`): the game, current goal, all six party members, and badge progress together.
-  Expand a partner for moves and stats. Adventure details contains projects, routes, readiness,
-  and the bag. The gamepad opens when taking control.
+  The game and the plan with the party align in two columns on desktop.
+  A compact trainer strip below both columns holds badges, registrations, League wins, and money.
+  The gamepad opens when taking control. Detailed planning, route, and bag panels are omitted from Live.
 - **Pokédex** (`/pokedex`): all 151 species in one list, with search, filters, and individual records.
-- **PC** (`/pc`): one storage box at a time, search across boxes, and individual DVs and training.
+- **PC** (`/pc`): physical boxes or the entire collection on one page, with search, sorting,
+  individual DVs, and training. All Pokémon includes every partner without pagination.
 - **Journal** (`/journal`): event filters, highlights, and earlier moments.
 
 The PC box selector changes the view, not the game's active box. Keyboard game controls

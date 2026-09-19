@@ -36,6 +36,8 @@ class Emulator:
     def __init__(self, store, ntfy=None):
         self.store = store
         self.ntfy = ntfy
+        from .milestones import MilestoneTracker
+        self.milestones = MilestoneTracker(store)
         self.rom = Path(config.ROM_PATH)
         self.speed = config.SPEED
         self.paused = False
@@ -70,6 +72,8 @@ class Emulator:
         self.reloads = 0
         self.pending: list = []      # events waiting for confirmation on the next snapshot
         self.rom_note = self._check_rom()
+        from .catches import CatchTracker
+        self.catch_tracker = CatchTracker(store, self.rom_sha1)
         if hasattr(self.policy, "collection"):
             self.policy.collection.version = "blue" if "Blue" in self.rom_note else "red"
         if hasattr(self.policy, "nav"):
@@ -92,6 +96,8 @@ class Emulator:
     def _boot(self) -> PyBoy:
         pb = PyBoy(str(self.rom), window="null", sound_emulated=False)
         pb.set_emulation_speed(0)
+        if hasattr(self, 'catch_tracker'):
+            self.catch_tracker.attach(pb)
         return pb
 
     def start(self):
@@ -290,6 +296,11 @@ class Emulator:
             if restored_legendary:
                 snap = read_snapshot(self.pb.memory, self.frame)
                 self.prev_snapshot = snap
+        if hasattr(self, 'milestones'):
+            self.milestones.observe(snap)
+            if hasattr(self.policy, 'collection'):
+                from .milestones import status as milestone_status
+                self.policy.collection.milestones = milestone_status(self.store)
         with self.lock:
             self.snapshot = snap
         now = time.time()
@@ -536,6 +547,10 @@ class Emulator:
             self.last_achievement = None
             self.store.set("trade_barrier", None)
             self.store.clear_trade_preferences()
+            if hasattr(self, 'catch_tracker'):
+                self.catch_tracker.reset()
+            if hasattr(self, 'milestones'):
+                self.milestones.reset()
             self.store.set(rewards.KEY, None)
             self.play_clock = PlayClock()
             self.store.set("play_clock", self.play_clock.state_dict())

@@ -79,7 +79,8 @@ def create_app(emu, store) -> FastAPI:
     def pokedex_status():
         status = emu.status()
         payload = live_status(status.get("game"), (status.get("strategy") or {}).get("collection"))
-        return preferences.apply(payload, store.trade_preferences())
+        from ..milestones import apply as milestones
+        return preferences.apply(milestones(payload, store), store.trade_preferences())
 
     @app.get('/api/trading')
     def trading_status():

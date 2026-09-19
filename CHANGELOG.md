@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- Show every partner in All Pokémon without pagination.
+- Align the live game with the plan and party, place trainer progress below both
+  columns, and remove the detailed planning, route, and bag panels from Live.
+
+- Track persistent level 100 Pokédex stars, with ancestor credit for final evolutions.
+- Record perfect DV species and confirmed finds, highlight rare partners in the PC,
+  and preserve them from automatic release and trade offers.
+- Favor unearned training stars and continue repeat expeditions for perfect partners.
+
+- Refresh the README with real development screenshots of Live, Pokédex, PC, and
+  Journal, with visible feature previews and a clear release-version note.
+- Lead installation with native desktop downloads and the prebuilt server guide.
+- Prepare server reference data from the verified archive without an extra Git
+  checkout. Preserve the checkout and offline-archive preparation options.
+- Gate release publication on all five native desktop builds and a complete set
+  of matching package identities. Verify draft uploads before publishing.
+- Check extracted desktop downloads, a fresh installed wheel, and the Compose
+  startup, save, and resume path with disposable demonstration data.
+
 ## 0.2.0rc31, experimental beta
 
 Desktop setup, collection controls, and lifecycle hardening. Existing deployments

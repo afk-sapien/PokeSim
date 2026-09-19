@@ -112,3 +112,58 @@ POKESIM_REVISION=$(git rev-parse HEAD) docker compose -f compose.yaml -f compose
 The release workflow supplies the revision automatically. Containers report an unknown
 dirty state because a revision argument alone cannot prove a clean build context.
 The package check verifies embedded version metadata and required runtime resources.
+
+## Distribution installation checks
+
+On Linux, build both packages and install the wheel in a fresh temporary environment:
+
+```sh
+uv build
+uv run --locked python tools/check_package.py
+uv run --locked python tools/check_installed_wheel.py
+```
+
+The wheel check runs outside the repository and resolves the wheel's declared
+dependencies. It tests the installed launcher, setup assets, duplicate launch, and
+protected shutdown. It needs uv and access to the package index.
+
+After building a native desktop bundle, test its actual downloadable archive:
+
+```sh
+uv run --locked python tools/check_desktop_archive.py
+```
+
+This extracts to a temporary directory and tests that copy. Native runtime checks
+use PyBoy's demonstration ROM and verified reference data. They do not validate
+Pokémon cartridge playback on that platform.
+
+For an isolated server installation test:
+
+```sh
+docker build -t pokesim:check .
+uv run --locked python tools/check_container.py pokesim:check
+```
+
+The test creates a uniquely named Compose project, disposable named volume, and
+random localhost port. It uses only PyBoy's demo ROM, downloads verified reference
+data, checks HTTP health, stops cleanly, verifies saved checkpoint hashes, and
+restarts from a checkpoint. It removes only its test project and volume afterward.
+It does not touch an existing adventure or establish autonomous campaign progress.
+
+## Publishing a complete release
+
+Choose a new version, update package metadata and release notes, and tag the reviewed
+commit. Run **Publish public release** with that existing tag from a branch containing
+the updated workflow. All five desktop targets must pass before publication continues.
+Every package must carry the same version and clean source revision. The final
+manifest and `SHA256SUMS` cover desktop, container, Python, and configuration assets.
+
+The workflow uploads a draft, checks every uploaded digest, then makes it public.
+An interrupted upload or verification failure leaves an unpublished draft for review.
+The preflight rejects an existing release, including a draft. After inspecting a
+failed draft, delete only that failed draft before retrying. Never replace a published
+release. Release candidates are marked prerelease based on the `rc` version suffix.
+
+Publication does not merge the public default branch or upgrade any deployment.
+Keep the public installation page aligned with the newly published version, and
+verify downloads anonymously before announcing it.

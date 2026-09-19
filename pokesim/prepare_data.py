@@ -1,8 +1,9 @@
-"""Generate local game data from a pinned, user-supplied disassembly checkout."""
+"""Prepare local game data from a verified reference archive or pinned Git checkout."""
 import argparse
 import hashlib
 import json
 import subprocess
+import threading
 from pathlib import Path
 
 from . import __version__
@@ -46,13 +47,24 @@ def generate_bundle(source, destination, revision):
     return bundle
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('source', type=Path)
+    parser.add_argument('source', type=Path, nargs='?', help='Existing pinned reference Git checkout')
+    archive = parser.add_mutually_exclusive_group()
+    archive.add_argument('--download', action='store_true', help='Download and verify the pinned reference archive')
+    archive.add_argument('--reference-archive', type=Path, help='Use a verified reference ZIP for offline setup')
     parser.add_argument('--output', type=Path, default=game_data.directory())
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if bool(args.source) == bool(args.download or args.reference_archive):
+        parser.error('Choose a source checkout, --download, or --reference-archive')
     try:
-        print(prepare(args.source, args.output))
+        if args.source:
+            print(prepare(args.source, args.output))
+        else:
+            from .desktop_setup import ensure_game_data
+            ensure_game_data(args.output, lambda message: print(message, flush=True),
+                             threading.Event(), args.reference_archive)
+            print(f'Game data ready: {game_data.bundle_path(args.output)}')
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         raise SystemExit(f'Cannot prepare game data: {error}') from error
 

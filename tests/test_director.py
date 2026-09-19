@@ -120,7 +120,9 @@ def test_full_dex_still_selects_training_and_level_100_has_no_training_candidate
     c = Collection()
     s = replace(s, party=(replace(s.party[0], level=100),))
     c.observe(s)
-    assert c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan')).key == 'collect_rematch'
+    goal = c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
+    assert goal.key != 'collect_train'
+    assert c.project['method'] == 'rematch' or c.project.get('repeat')
     assert c.project['method'] != 'train'
 
 

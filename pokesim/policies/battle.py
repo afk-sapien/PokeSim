@@ -227,7 +227,7 @@ class Decision:
     reason: str = ""
 
 
-def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, catch_attempts=0, required_move=None, collect_missing=False, capture_species=None):
+def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, catch_attempts=0, required_move=None, collect_missing=False, capture_species=None, repeat_species=None):
     if (snapshot.in_battle == 1
             and MAPS['POKEMON_TOWER_1F'] <= snapshot.map <= MAPS['POKEMON_TOWER_7F']
             and not dict(snapshot.items).get(ITEMS['SILPH_SCOPE'])):
@@ -250,7 +250,9 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     allowed_capture = capture_species is None or enemy.species == capture_species or legendary
     useful = useful and allowed_capture
     collection_target = (collect_missing or legendary) and missing_species and allowed_capture
-    capture_limit = 50 if legendary else 20
+    repeat_target = enemy.species == repeat_species and not missing_species and not legendary
+    collection_target |= repeat_target
+    capture_limit = 5 if repeat_target else 50 if legendary else 20
     master = next((i for i,(item,qty) in enumerate(snapshot.items) if item==ITEMS['MASTER_BALL'] and qty),None)
     if (snapshot.in_battle == 1 and snapshot.battle_type == 0 and legendary and missing_species
             and (not snapshot.can_catch or not balls and master is None or catch_attempts >= capture_limit)):

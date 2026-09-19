@@ -67,10 +67,10 @@ def test_dvs_choose_between_otherwise_equal_duplicates_across_boxes():
     {'level': 21}, {'stat_exp': (10000,) * 5}, {'experience': 8100},
     {'moves': (33, 45, 73, 0)}, {'moves': (33, 45, 22, 0)},
 ])
-def test_practical_investment_beats_perfect_dvs(investment):
+def test_practical_keeper_and_perfect_individual_are_both_preserved(investment):
     keeper = stored(1, dvs=(0,) * 5, **investment)
     s = snapshot([stored(0, dvs=(15,) * 5), keeper])
-    assert_spares(s, [(0, 0, 20)])
+    assert_spares(s, [])
 
 
 def test_better_boxed_copy_survives_without_displacing_party_member():
@@ -84,7 +84,7 @@ def test_better_boxed_copy_survives_without_displacing_party_member():
 def test_trained_party_member_remains_the_keeper_over_perfect_dvs():
     partner = mon(level=20, moves=(33, 45, 0, 0), experience=8000,
                   dvs=(0,) * 5, stat_exp=(10000,) * 5)
-    assert_spares(snapshot([stored(0, dvs=(15,) * 5)], party=(partner,)), [(0, 0, 20)])
+    assert_spares(snapshot([stored(0, dvs=(15,) * 5)], party=(partner,)), [])
 
 
 def test_exact_ties_keep_one_copy_and_protected_species_are_never_offered():

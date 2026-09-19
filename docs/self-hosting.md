@@ -1,26 +1,24 @@
 # Self-hosting reference
 
-For the current source-build setup, start with [Run your own adventure](../README.md#run-your-own-adventure).
+For standalone computer downloads, start with [Run your own adventure](../README.md#run-your-own-adventure).
 
-The prebuilt instructions below target the **v0.2.0rc31** experimental release. Keep its source checkout, image, and configuration together.
+The prebuilt instructions below target the **v0.2.0rc31** experimental release.
+Keep its image and configuration together. No PokeSim source checkout is needed.
 
 ## Install the prebuilt v0.2.0rc31 release
 
 The prebuilt release supports **Linux amd64** with Docker Engine and the Compose plugin. Supply your own clean Pokémon Red (USA, Europe) ROM. Pokémon ROMs, sprites, and game datasets are not bundled. The PyBoy dependency includes its own small demo ROM, which cannot replace your Pokémon ROM. Blue and ARM do not yet have equivalent release validation.
 
-Clone the public release source:
+Create a new installation directory:
 
 ```sh
-git clone --branch v0.2.0rc31 --depth 1 https://github.com/afk-sapien/PokeSim.git pokesim
+mkdir pokesim
 cd pokesim
-cp .env.example .env
 mkdir -p roms data
 sudo chown 10001:10001 data
 ```
 
-Set `POKESIM_IMAGE=pokesim:0.2.0rc31` in `.env` to select the downloaded image.
-The source example defaults to a local build. The release asset `env.example` already
-selects the release image.
+The release configuration downloaded below selects `pokesim:0.2.0rc31` automatically.
 
 Place your ROM at `roms/pokered.gb`. Create a local reference checkout for data preparation:
 
@@ -34,10 +32,14 @@ Download the prebuilt image and verify its checksum. These public downloads requ
 ```sh
 curl -fL --retry 3 -o image-linux-amd64.tar.gz https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc31/image-linux-amd64.tar.gz
 curl -fL --retry 3 -o SHA256SUMS https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc31/SHA256SUMS
+curl -fL --retry 3 -o compose.yaml https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc31/compose.yaml
+curl -fL --retry 3 -o env.example https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc31/env.example
 sha256sum --ignore-missing -c SHA256SUMS
+cp env.example .env
 ```
 
-Confirm that the image archive reports `OK`, then load and start it:
+Confirm that the image archive, Compose file, and environment example all report
+`OK`, then load and start it:
 
 ```sh
 docker load -i image-linux-amd64.tar.gz
@@ -89,7 +91,9 @@ See [backup, restore, upgrades, rollback, and troubleshooting](operations.md). E
 
 ## Build from source
 
-After preparing the ROM, data directory, and source checkout above:
+Use a source checkout containing the updated setup command. Create `.env` from
+`.env.example` for a new installation, add your ROM, and prepare the data directory
+as shown in the [README](../README.md#run-your-own-adventure). Then run:
 
 ```sh
 docker compose -f compose.yaml -f compose.build.yaml build
@@ -99,3 +103,22 @@ docker compose -f compose.yaml -f compose.build.yaml up -d
 
 For native development, follow [CONTRIBUTING.md](../CONTRIBUTING.md).
 
+The updated source setup service uses `pokesim-prepare-data --download`. It downloads
+the same pinned, checksum-verified reference archive as the desktop launcher.
+Subsequent setup runs reuse valid prepared data without accessing the network.
+Setup writes only the generated game-data bundle and preserves saves and the journal.
+The source image must be built before using the updated Compose file. Published
+rc31 images still need the original reference-checkout setup documented above.
+
+For offline first setup, transfer the pinned archive described in the
+[desktop guide](desktop.md#troubleshooting), then supply it read-only:
+
+```sh
+docker compose --profile setup run --rm --pull never \
+  -v "$PWD/reference.zip:/reference.zip:ro" prepare-data \
+  python -m pokesim.prepare_data --reference-archive /reference.zip
+```
+
+The original native command `pokesim-prepare-data /path/to/pokered` still accepts a
+clean Git checkout at the pinned revision. Existing prepared adventures do not need
+to regenerate data when moving to the new setup command.

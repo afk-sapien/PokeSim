@@ -18,7 +18,8 @@ def main():
     notices = work / 'notices'
     work.mkdir(parents=True, exist_ok=True)
     identity = work / '_build.json'
-    identity.write_text(json.dumps(source_info(ROOT), indent=2) + '\n', encoding='utf-8')
+    build = source_info(ROOT)
+    identity.write_text(json.dumps(build, indent=2) + '\n', encoding='utf-8')
     subprocess.run([sys.executable, str(ROOT / 'tools' / 'bundle_dependency_sources.py'), str(notices)],
                    cwd=ROOT, check=True)
     source = notices / 'source' / 'pokesim'
@@ -71,6 +72,9 @@ def main():
         if archive.name.endswith(('.zip', '.tar.gz')):
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             archive.with_name(archive.name + '.sha256').write_text(f'{digest}  {archive.name}\n')
+            archive.with_name(archive.name + '.json').write_text(json.dumps({
+                **build, 'archive': archive.name, 'sha256': digest,
+            }, indent=2) + '\n', encoding='utf-8')
     print(f'Desktop download created in {output}')
 
 

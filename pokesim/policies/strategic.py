@@ -431,7 +431,9 @@ class StrategicPolicy(Policy):
                                             self.turns - self.last_switch_turn >= 3, self.catch_attempts,
                                             {'catch_cut': 15, 'catch_surf': 57, 'catch_strength': 70}.get(self.goal.key), collect_missing=True,
                                             capture_species=self.collection.project['species']
-                                            if legendary_project(self.collection.project) else None)
+                                            if legendary_project(self.collection.project) else None,
+                                            repeat_species=self.collection.project.get('species')
+                                            if (self.collection.project or {}).get('repeat') else None)
                 self.intent_since = s.frame
             self.mode = f"battle: {self.intent.kind}"
             self.reason = self.intent.reason
@@ -461,8 +463,9 @@ class StrategicPolicy(Policy):
             project = self.collection.project
             if not s.in_battle and self.goal.key == 'collect_trade' and project:
                 from ..trade.preferences import identity
+                from ..milestones import is_perfect
                 choices = self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
-                target = next((i for i,p in enumerate(s.party) if p.species == project['give']
+                target = next((i for i,p in enumerate(s.party) if p.species == project['give'] and not is_perfect(asdict(p))
                                and choices.get(identity(asdict(p)), {}).get('state') != 'locked'), None)
                 if target is None:
                     return tap('b')

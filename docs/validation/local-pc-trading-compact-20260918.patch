@@ -1,0 +1,253 @@
+--- /dev/null
++++ b/pokesim/web/static/collection-layout.css
+@@ -0,0 +1,171 @@
++.pc-summary,.trading-summary { display:flex }
++.pc-summary,.trading-summary { align-items:center }
++.pc-summary,.trading-summary { flex-wrap:wrap }
++.pc-summary,.trading-summary { gap:12px 24px }
++.pc-summary,.trading-summary { padding:16px 0 }
++.pc-summary,.trading-summary { margin-bottom:12px }
++.pc-summary,.trading-summary { border-bottom:1px solid #dcded3 }
++.pc-summary h1,.trading-summary h1 { margin:0 }
++.pc-summary h1,.trading-summary h1 { font-size:28px }
++.pc-summary h1,.trading-summary h1 { letter-spacing:-.7px }
++.pc-summary-stat { display:flex }
++.pc-summary-stat { align-items:baseline }
++.pc-summary-stat { gap:8px }
++.pc-summary-stat { font-size:13px }
++.pc-summary-stat>span { color:#687063 }
++.pc-summary-stat strong { font-size:14px }
++.pc-summary-stat strong { font-variant-numeric:tabular-nums }
++.pc-summary .view-switch { margin:0 0 0 auto }
++.pc-summary .view-switch { padding:3px }
++.pc-summary .view-switch button { padding:9px 14px }
++.pc-toolbar { display:flex }
++.pc-toolbar { flex-wrap:wrap }
++.pc-toolbar { padding:12px 14px }
++.pc-toolbar { gap:12px }
++.pc-toolbar { border-radius:12px }
++.pc-toolbar { align-items:flex-end }
++.pc-toolbar label { display:flex }
++.pc-toolbar label { flex-direction:column }
++.pc-toolbar label { align-items:stretch }
++.pc-toolbar label { gap:5px }
++.pc-toolbar label { min-width:0 }
++.pc-toolbar label { letter-spacing:.7px }
++.pc-toolbar .pc-search-control { flex:1 1 240px }
++.pc-toolbar input,.pc-toolbar select { width:100% }
++.pc-toolbar input,.pc-toolbar select { box-sizing:border-box }
++.pc-toolbar input,.pc-toolbar select { height:38px }
++.pc-toolbar #pc-count { margin:0 0 9px auto }
++.pc-toolbar #pc-count { flex-shrink:0 }
++#pc-sort-control { flex:0 1 210px }
++#pc-order-control { flex:0 1 150px }
++[data-page="pc"] .pc-workspace { gap:20px }
++[data-page="pc"] .pc-sidebar h2 { margin:0 0 12px }
++[data-page="pc"] .pc-sidebar h2 { font-size:14px }
++[data-page="pc"] .box-picker { gap:6px }
++[data-page="pc"] .box-picker button { padding:9px 10px }
++[data-page="pc"] .box-picker button { border-radius:9px }
++[data-page="pc"] .pc-content { min-width:0 }
++[data-page="pc"] .section-heading { margin:0 0 12px }
++[data-page="pc"] .section-heading { gap:8px 16px }
++[data-page="pc"] .section-heading { align-items:center }
++[data-page="pc"] .section-heading { flex-wrap:wrap }
++[data-page="pc"] .section-heading h2 { font-size:18px }
++#pc-note { margin-left:auto }
++.pc-power-note { position:relative }
++.pc-power-note { margin:0 }
++.pc-power-note { font-size:12px }
++.pc-power-note summary { cursor:pointer }
++.pc-power-note summary { color:#4c644c }
++.pc-power-note>p { position:absolute }
++.pc-power-note>p { z-index:5 }
++.pc-power-note>p { top:24px }
++.pc-power-note>p { right:0 }
++.pc-power-note>p { width:min(280px,70vw) }
++.pc-power-note>p { padding:12px 14px }
++.pc-power-note>p { margin:0 }
++.pc-power-note>p { background:#fffef9 }
++.pc-power-note>p { border:1px solid #d0d5c8 }
++.pc-power-note>p { border-radius:10px }
++.pc-power-note>p { box-shadow:0 6px 20px #24382814 }
++.library[data-page="trading"] .library-main { margin-top:12px }
++.trading-summary .trade-status-strip { margin:0 }
++.trading-summary .trade-status-strip { padding:0 }
++.trading-summary .trade-status-strip { border:0 }
++.trading-summary .trade-status-strip { border-radius:0 }
++.trading-summary .trade-status-strip { background:transparent }
++.trading-summary .trade-status-strip { gap:5px 12px }
++.trading-protection { margin-left:auto }
++.trading-protection { font-size:12px }
++.trading-protection { color:#687063 }
++[data-page="trading"] .trade-section { margin-top:18px }
++[data-page="trading"] .trade-section>.section-heading { margin-bottom:10px }
++[data-page="trading"] .trade-section h2 { font-size:17px }
++[data-page="trading"] .trade-section .exchange { padding:12px 16px }
++[data-page="trading"] .trade-section .exchange { margin-bottom:8px }
++[data-page="trading"] .trade-section .exchange { border-radius:12px }
++[data-page="trading"] .exchange-heading .state-pill { padding:3px 8px }
++[data-page="trading"] .exchange-heading .state-pill { font-size:10px }
++[data-page="trading"] .exchange-heading .section-note { font-size:11px }
++[data-page="trading"] .exchange-pair { margin-top:8px }
++[data-page="trading"] .exchange-pair { gap:12px }
++[data-page="trading"] .exchange-pair { grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr) }
++[data-page="trading"] .exchange-partner { display:grid }
++[data-page="trading"] .exchange-partner { grid-template-columns:44px minmax(0,1fr) }
++[data-page="trading"] .exchange-partner { column-gap:10px }
++[data-page="trading"] .exchange-partner h3 { grid-column:2 }
++[data-page="trading"] .exchange-partner h3 { margin:0 0 3px }
++[data-page="trading"] .exchange-partner h3 { font-size:12px }
++[data-page="trading"] .exchange-pokemon { display:contents }
++[data-page="trading"] .exchange-pokemon img,[data-page="trading"] .exchange-placeholder { grid-column:1 }
++[data-page="trading"] .exchange-pokemon img,[data-page="trading"] .exchange-placeholder { grid-row:1 / span 2 }
++[data-page="trading"] .exchange-pokemon img,[data-page="trading"] .exchange-placeholder { align-self:center }
++[data-page="trading"] .exchange-pokemon img,[data-page="trading"] .exchange-placeholder { width:44px }
++[data-page="trading"] .exchange-pokemon img,[data-page="trading"] .exchange-placeholder { height:44px }
++[data-page="trading"] .exchange-pokemon>div { display:flex }
++[data-page="trading"] .exchange-pokemon>div { align-items:baseline }
++[data-page="trading"] .exchange-pokemon>div { flex-wrap:wrap }
++[data-page="trading"] .exchange-pokemon>div { gap:2px 8px }
++[data-page="trading"] .exchange-pokemon strong { font-size:15px }
++[data-page="trading"] .exchange-pokemon .eyebrow { order:1 }
++[data-page="trading"] .exchange-pokemon .eyebrow { margin:0 }
++[data-page="trading"] .exchange-pokemon .eyebrow { letter-spacing:.5px }
++[data-page="trading"] .exchange-nickname { order:2 }
++[data-page="trading"] .exchange-nickname { margin:0 }
++[data-page="trading"] .exchange-evolution { order:3 }
++[data-page="trading"] .exchange-evolution { flex-basis:100% }
++[data-page="trading"] .exchange-evolution { margin:2px 0 0 }
++[data-page="trading"] .page-intro { padding:18px 0 12px }
++[data-page="trading"] .page-intro .eyebrow,[data-page="trading"] .intro-copy { display:none }
++[data-page="trading"] .page-intro h1 { font-size:28px }
++[data-page="trading"] .trade-overview { padding:12px 16px }
++[data-page="trading"] .trade-overview { margin-bottom:14px }
++[data-page="trading"] .trade-overview h2 { font-size:16px }
++[data-page="trading"] .trade-offer { padding:10px 14px }
++[data-page="trading"] .trade-deal { padding:14px 16px }
++[data-page="trading"] .trade-swap { margin:10px 0 }
++[data-page="trading"] .trade-swap { gap:12px }
++[data-page="trading"] .trade-side img,[data-page="trading"] .trade-offer img { width:48px }
++[data-page="trading"] .trade-side img,[data-page="trading"] .trade-offer img { height:48px }
++@media(min-width:901px) {
++  [data-page="pc"] .pc-workspace:not(.pc-workspace-all) { grid-template-columns:190px minmax(0,1fr) }
++  [data-page="pc"] .box-picker { grid-template-columns:repeat(2,minmax(0,1fr)) }
++  [data-page="pc"] .box-picker button { flex-direction:column }
++  [data-page="pc"] .box-picker button { align-items:flex-start }
++  [data-page="pc"] .box-picker button { gap:3px }
++  [data-page="pc"] .box-picker button[data-box="0"] { grid-column:1 / -1 }
++  [data-page="pc"] .box-picker button[data-box="0"] { flex-direction:row }
++  [data-page="pc"] .box-picker button[data-box="0"] { align-items:center }
++}
++@media(max-width:760px) {
++  .pc-summary { gap:10px 18px }
++  .pc-summary .view-switch { margin-left:0 }
++  .pc-toolbar .pc-search-control { flex-basis:100% }
++  #pc-sort-control { flex:1 1 140px }
++  #pc-order-control { flex:1 1 100px }
++  .pc-toolbar #pc-count { margin:0 0 2px auto }
++  .trading-summary { gap:8px 16px }
++  .trading-summary .trade-status-strip { flex:1 1 240px }
++  .trading-summary .trade-status-strip { flex-direction:row }
++  .trading-protection { margin-left:0 }
++}
++@media(max-width:600px) {
++  .pc-summary h1 { font-size:25px }
++  .pc-summary-stat { font-size:11px }
++  .pc-summary-stat { gap:5px }
++  .pc-summary-stat strong { font-size:12px }
++  .pc-summary .view-switch { width:100% }
++  .pc-summary .view-switch button { flex:1 }
++  .pc-toolbar { padding:10px }
++  .pc-toolbar { gap:10px }
++  [data-page="pc"] .pc-workspace { gap:12px }
++  [data-page="pc"] .mobile-box-control { margin:0 }
++  #pc-note { display:none }
++  .pc-power-note { margin-left:auto }
++  .library[data-page="trading"] .library-main { padding:0 16px }
++  [data-page="trading"] .exchange-pair { grid-template-columns:minmax(0,1fr) }
++  [data-page="trading"] .exchange-pair { gap:8px }
++  [data-page="trading"] .exchange-partner+ .exchange-arrow+ .exchange-partner { padding-top:8px }
++  [data-page="trading"] .trade-section .exchange { padding:10px 12px }
++  [data-page="trading"] .exchange-heading { flex-wrap:wrap }
++  [data-page="trading"] .trade-section>.section-heading { flex-wrap:wrap }
++}
+--- a/pokesim/web/static/pc.html
++++ b/pokesim/web/static/pc.html
+@@ -8,28 +8,29 @@
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="theme-color" content="#f5f3ed">
+ <meta name="description" content="Explore your party and boxes and inspect each Pokémon’s natural potential and training.">
+-<title>A place for every partner. · pokesim</title>
++<title>PC · pokesim</title>
+ <link rel="stylesheet" href="${game_base}/static/style.css?v=watch-2">
+ <link rel="stylesheet" href="${game_base}/static/pokedex.css?v=milestones-1">
+ <link rel="stylesheet" href="${game_base}/static/pages.css?v=shared-cards-1">
+ <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
++<link rel="stylesheet" href="${game_base}/static/collection-layout.css?v=compact-1">
+ </head>
+ <body data-page="pc">
+-<a class="skip-link" href="#main">Skip to a place for every partner.</a>
++<a class="skip-link" href="#main">Skip to Pokémon storage</a>
+ <header class="topbar">
+ <a class="brand" href="${game_base}/" aria-label="pokesim home"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition" id="edition">KANTO</span></a>
+ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a><a href="${game_base}/pokedex">Pokédex</a><a href="${game_base}/pc" class="nav-current" aria-current="page">PC</a><a href="${game_base}/trading">Trading</a><a href="${game_base}/journal">Journal</a></nav>
+ <span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
+ </header>
+ <main id="main" class="page-main">
+-<section class="page-intro"><div><p class="eyebrow"><span class="tiny-dot"></span> SOMEONE'S PC</p><h1>A place for every partner.</h1><p class="intro-copy">Explore your party and boxes and inspect each Pokémon’s natural potential and training.</p></div></section>
+-<section class="pc-overview" aria-label="Storage overview"><div><span class="eyebrow">IN STORAGE</span><strong id="pc-total">0 / 240</strong></div><div><span class="eyebrow">RECEIVING NEW CATCHES</span><strong id="pc-active">Box 1</strong></div></section>
+-<div class="view-switch" role="group" aria-label="PC view"><button id="pc-boxes-view" aria-pressed="true">Boxes</button><button id="pc-all-view" aria-pressed="false">All Pokémon</button></div>
++<header class="pc-summary"><h1>PC</h1><div class="pc-summary-stat"><span>Stored</span><strong id="pc-total">0 / 240</strong></div><div class="pc-summary-stat"><span>New catches</span><strong id="pc-active">Box 1</strong></div><div class="view-switch" role="group" aria-label="PC view"><button id="pc-boxes-view" aria-pressed="true">Boxes</button><button id="pc-all-view" aria-pressed="false">All Pokémon</button></div>
++</header>
++<div class="dex-toolbar pc-toolbar"><label class="pc-search-control" for="pc-search">Find Pokémon <input id="pc-search" type="search" placeholder="Name or Pokédex number" autocomplete="off"></label><input id="pc-scope" type="hidden" value="box"><label id="pc-sort-control" for="pc-sort">Sort by <select id="pc-sort"><option value="box">Location and slot</option><option value="power">Power (total stats)</option><option value="level">Level</option><option value="elite_four_wins">Elite Four wins</option><option value="HP">Max HP</option><option value="Attack">Attack</option><option value="Defense">Defense</option><option value="Speed">Speed</option><option value="Special">Special</option><option value="dvs">Total DVs</option><option value="stat_exp">Total stat experience</option><option value="experience">Total experience</option><option value="dex">Pokédex number</option><option value="name">Species name</option><option value="nick">Nickname</option></select></label><label id="pc-order-control" for="pc-order">Order <select id="pc-order"><option value="asc">Lowest first</option><option value="desc">Highest first</option></select></label><span class="count-pill" id="pc-count">0 Pokémon</span></div>
+ <section id="pc-workspace" class="pc-workspace" aria-label="PC storage">
+ <aside id="pc-sidebar" class="pc-sidebar"><label class="mobile-box-control" for="mobile-box">Party or box<select id="mobile-box"></select></label><h2>Party and boxes</h2><div id="box-picker" class="box-picker" role="group" aria-label="Choose party or a storage box"></div></aside>
+-<div class="pc-content"><div class="dex-toolbar"><label for="pc-search">Find <input id="pc-search" type="search" placeholder="Name or Pokédex number" autocomplete="off"></label><input id="pc-scope" type="hidden" value="box"><label id="pc-sort-control" for="pc-sort">Sort by <select id="pc-sort"><option value="box">Location and slot</option><option value="power">Power (total stats)</option><option value="level">Level</option><option value="elite_four_wins">Elite Four wins</option><option value="HP">Max HP</option><option value="Attack">Attack</option><option value="Defense">Defense</option><option value="Speed">Speed</option><option value="Special">Special</option><option value="dvs">Total DVs</option><option value="stat_exp">Total stat experience</option><option value="experience">Total experience</option><option value="dex">Pokédex number</option><option value="name">Species name</option><option value="nick">Nickname</option></select></label><label id="pc-order-control" for="pc-order">Order <select id="pc-order"><option value="asc">Lowest first</option><option value="desc">Highest first</option></select></label><span class="count-pill" id="pc-count">0 Pokémon</span></div>
+-<p id="pc-power-note" class="pc-power-note">Power adds max HP, Attack, Defense, Speed, and Special at the current level. Species, DVs, and training all count. Open a Pokémon for the breakdown.</p>
+-<div class="section-heading"><h2 id="pc-heading">Box 1</h2><span class="eyebrow" id="pc-note">Stored partners</span></div>
++<div class="pc-content">
++
++<div class="section-heading"><h2 id="pc-heading">Box 1</h2><span class="eyebrow" id="pc-note">Stored partners</span><details id="pc-power-note" class="pc-power-note"><summary>About power</summary><p>Power totals max HP, Attack, Defense, Speed, and Special. Open a Pokémon to see its stats, DVs, and training.</p></details></div>
+ <div id="pc-grid" class="pc-grid"><p class="dex-empty">Opening the PC…</p></div>
+ </div></section>
+ </main>
+--- a/pokesim/web/static/trading.html
++++ b/pokesim/web/static/trading.html
+@@ -13,6 +13,7 @@
+ <link rel="stylesheet" href="${game_base}/static/pokedex.css?v=pages-1">
+ <link rel="stylesheet" href="${game_base}/static/pages.css?v=locks-1">
+ <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
++<link rel="stylesheet" href="${game_base}/static/collection-layout.css?v=compact-1">
+ </head>
+ <body data-page="trading">
+ <a class="skip-link" href="#main">Skip to trading.</a>
+@@ -22,7 +23,7 @@
+ <span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
+ </header>
+ <main id="main" class="page-main">
+-<section class="page-intro"><div><p class="eyebrow"><span class="tiny-dot"></span> LINK CABLE</p><h1>Partners between adventures.</h1><p class="intro-copy">Offer a partner, discover a match, and let the adventures handle the exchange.</p></div></section>
++<section class="page-intro"><div><p class="eyebrow"><span class="tiny-dot"></span> LINK CABLE</p><h1>Trading</h1><p class="intro-copy">Offer a partner, discover a match, and let the adventures handle the exchange.</p></div></section>
+ <section class="trade-overview" aria-label="Automatic trading status"><div><span class="eyebrow">AUTOMATIC TRADING</span><h2 id="trade-status">Connecting…</h2><p id="trade-activity">Checking on the other adventure.</p></div><a class="trade-pc-link" href="${game_base}/pc?scope=all">Choose Pokémon in the PC ↗</a></section>
+ <p id="trade-connection-note" class="trade-notice" role="status" hidden></p>
+ <div id="trade-tabs" class="view-switch" role="group" aria-label="Trading view"><button data-view="block" aria-pressed="true">Trading block</button><button data-view="opportunities" aria-pressed="false">Opportunities</button><button data-view="history" aria-pressed="false">History</button></div>
+--- a/pokesim/web/static/library.html
++++ b/pokesim/web/static/library.html
+@@ -8,6 +8,7 @@
+ <link rel="stylesheet" href="/static/style.css">
+ <link rel="stylesheet" href="/static/library.css?v=trade-history-1">
+ <script src="/static/library.js?v=trade-history-1" defer></script>
++<link rel="stylesheet" href="/static/collection-layout.css?v=compact-1">
+ </head>
+ <body class="library" data-page="${page}" data-adventure="${adventure_id}">
+ <a class="skip-link" href="#main">Skip to content</a>
+@@ -23,8 +24,7 @@
+ </section>
+ <section data-view="stopped" hidden><p class="eyebrow">YOUR ADVENTURE</p><h1 id="stopped-title">Adventure</h1><div id="stopped-card" class="adventure-grid"></div><p class="section-note">Stopping an adventure keeps its saves. Start it to return to the live view, PC, and journal.</p><a class="text-link" href="/">Back to the library ↗</a></section>
+ <section data-view="trading" hidden>
+-<div class="section-heading"><div><p class="eyebrow">THE CABLE CLUB</p><h1>Trades across your adventures</h1><p>New companions, familiar faces, and trade evolutions. Follow every exchange in one place.</p></div></div>
+-<section class="trade-status-strip" aria-label="Automatic trading"><strong>Automatic trading</strong><p id="trading-status" role="status">Checking your adventures…</p><p class="section-note">Your team and locked Pokémon stay protected.</p></section>
++<header class="trading-summary"><h1>Trading</h1><section class="trade-status-strip" aria-label="Automatic trading"><strong>Automatic trading</strong><p id="trading-status" role="status">Checking your adventures…</p></section><span class="trading-protection">Party and locked Pokémon stay protected.</span></header>
+ <section class="trade-section" id="trade-active-section" hidden><div class="section-heading"><h2>Current exchange</h2><span class="section-note">Other adventures keep playing.</span></div><div id="trade-active" aria-live="polite">Checking the Cable Club…</div></section>
+ <section class="trade-section"><div class="section-heading"><h2>Recent completed trades</h2><span class="section-note" id="trade-history-count"></span></div><div id="trade-history">No completed trades yet.</div></section>
+ <section class="panel" id="trade-failures-section" hidden><details><summary>Recent attempts that did not complete</summary><div id="trade-failures"></div></details></section>

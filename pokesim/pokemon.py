@@ -9,6 +9,17 @@ TYPES = {0: "Normal", 1: "Fighting", 2: "Flying", 3: "Poison", 4: "Ground", 5: "
 STAT_NAMES = ('HP', 'Attack', 'Defense', 'Speed', 'Special')
 
 
+def dv_rating(mon):
+    """Rate fixed potential using all five DVs, including derived HP, out of 75."""
+    dvs = mon.get('dvs')
+    if (not isinstance(dvs, (list, tuple)) or len(dvs) != 5
+            or any(type(value) is not int or not 0 <= value <= 15 for value in dvs)):
+        return {'dv_stars': None, 'dv_total': None, 'dv_percent': None}
+    total = sum(dvs)
+    stars = 4 if total == 75 else 3 if total >= 60 else 2 if total >= 38 else 1
+    return {'dv_stars': stars, 'dv_total': total, 'dv_percent': round(total * 100 / 75, 1)}
+
+
 def stored_strength(mon):
     """Calculate withdrawal stats using the pinned pokered home/move_mon.asm CalcStat.
 

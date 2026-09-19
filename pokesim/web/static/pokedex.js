@@ -14,6 +14,9 @@ let owned = new Set()
 let seen = new Set()
 let plan = new Map()
 let held = new Map()
+let maxed = new Set()
+let perfectSpecies = new Set()
+let highQualitySpecies = new Set()
 let hunting = null
 let openDex = null
 let gridSignature = ''
@@ -31,6 +34,11 @@ function matches(entry) {
   if (query && !entry.name.toLowerCase().includes(query) && !num(entry.dex).includes(query.replace(/^#/, ''))) return false
   if (type !== 'all' && !entry.types.includes(type)) return false
   if (filter === 'available') return plan.get(entry.dex)?.status === 'available'
+  if (filter === 'maxed') return maxed.has(entry.dex)
+  if (filter === 'unmastered') return !maxed.has(entry.dex)
+  if (filter === 'quality') return highQualitySpecies.has(entry.dex)
+  if (filter === 'three-held') return (held.get(entry.dex) || []).some(copy => copy.stars === 3)
+  if (filter === 'perfect') return perfectSpecies.has(entry.dex)
   if (filter === 'held') return held.has(entry.dex)
   if (filter !== 'all') return record(entry.dex) === filter
   return true
@@ -45,11 +53,15 @@ function sorted(rows) {
   return copy
 }
 
+function milestoneBadges(dex) {
+  return `<span class="milestone-badges">${maxed.has(dex) ? '<span class="mastery-badge"><span aria-hidden="true">★</span> Lv. 100</span>' : ''}${perfectSpecies.has(dex) ? '<span class="perfect-badge"><span aria-hidden="true">★★★★</span> Perfect DV</span>' : highQualitySpecies.has(dex) ? '<span class="dv-badge dv-stars-3" aria-label="3-star or better DVs found"><span aria-hidden="true">★★★</span> DV found</span>' : ''}</span>`
+}
+
 function renderGrid() {
   if (!entries.length) return
   const rows = sorted(entries.filter(matches))
   $('#result-count').textContent = `${rows.length} Pokémon`
-  const signature = JSON.stringify([rows, [...owned], [...seen], [...held], [...plan], hunting])
+  const signature = JSON.stringify([rows, [...owned], [...seen], [...held], [...plan], hunting, [...maxed], [...perfectSpecies], [...highQualitySpecies]])
   if (signature === gridSignature) return
   gridSignature = signature
   $('#grid').innerHTML = rows.map((entry) => {
@@ -58,11 +70,11 @@ function renderGrid() {
     const project = plan.get(entry.dex)
     const note = state === 'caught' ? (copies ? `${copies.length} with you` : 'In the Pokédex')
       : project?.status === 'available' ? 'Possible in this run' : PLAN_LABELS[project?.status] || 'Somewhere out there'
-    return `<button class="dex-card ${state}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}">
+    return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${maxed.has(entry.dex) ? ', level 100 star earned' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}">
       <span class="dex-num">#${num(entry.dex)}</span>
       ${entry.dex === hunting ? '<span class="hunt-flag" title="The current expedition">Hunting</span>' : ''}
       <img loading="lazy" src="/sprites/${entry.dex}.png" alt="" width="72" height="72">
-      <strong>${esc(entry.name)}</strong>
+      <strong>${esc(entry.name)}</strong>${milestoneBadges(entry.dex)}
       <span class="card-types">${typeTags(entry.types)}</span>
       <span class="card-note">${esc(note)}</span>
     </button>`
@@ -96,7 +108,7 @@ function renderDetail(dex, refresh = false) {
   const state = record(dex)
   const project = plan.get(dex)
   const copies = held.get(dex) || []
-  const signature = JSON.stringify([entry, state, project, copies, hunting])
+  const signature = JSON.stringify([entry, state, project, copies, hunting, maxed.has(dex), perfectSpecies.has(dex), highQualitySpecies.has(dex)])
   if (refresh && signature === detailSignature) return
   detailSignature = signature
   const moves = entry.moves.map((move) => `<tr><td>${move.level ? `Lv. ${move.level}` : 'Start'}</td><td>${esc(move.name)}</td>
@@ -105,13 +117,13 @@ function renderDetail(dex, refresh = false) {
     <header class="detail-head ${typeClass(entry.types[0])}">
       <img src="/sprites/${dex}.png" alt="${esc(entry.name)}" width="112" height="112">
       <div><span class="eyebrow">NO. ${num(dex)}${entry.dex === hunting ? ' · CURRENT EXPEDITION' : ''}</span>
-        <h2 id="detail-name">${esc(entry.name)}</h2>
+        <h2 id="detail-name">${esc(entry.name)}</h2>${milestoneBadges(entry.dex)}
         <div class="detail-types">${typeTags(entry.types)}</div>
         <span class="record-pill ${state}">${RECORD_LABELS[state]}</span></div>
     </header>
     ${project && state !== 'caught' ? `<p class="plan-note"><b>${esc(PLAN_LABELS[project.status] || 'Status')}</b> ${esc(project.reason || '')}</p>` : ''}
     ${copies.length ? `<section class="detail-section"><h3>With you right now</h3><ul class="copy-list">${copies.map((copy) =>
-      `<li><strong>${esc(copy.nick || entry.name)}</strong><span>Lv. ${copy.level} · ${esc(copy.where)}</span></li>`).join('')}</ul></section>` : ''}
+      `<li><strong>${esc(copy.nick || entry.name)}</strong><span>Lv. ${copy.level} · ${esc(copy.where)} · ${copy.stars ? `${copy.stars}★ DVs` : 'DVs unknown'}</span></li>`).join('')}</ul></section>` : ''}
     <section class="detail-section"><h3>Base stats</h3>
       ${Object.entries(entry.stats).map(([label, value]) => statRow(label, value)).join('')}
       <p class="detail-meta">Total ${entry.total} · Generation I shares one Special stat</p>
@@ -162,8 +174,8 @@ function renderHolders(status) {
     if (!dex) return
     held.set(dex, [...(held.get(dex) || []), copy])
   }
-  party.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, where: `Party slot ${mon.slot}`}))
-  stored.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, where: `Box ${mon.box}`}))
+  party.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, stars: mon.dv_stars, where: `Party slot ${mon.slot}`}))
+  stored.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, stars: mon.dv_stars, where: `Box ${mon.box}`}))
 
 
 }
@@ -183,14 +195,22 @@ async function refreshStatus() {
     const response = await fetch('/api/pokedex/status', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
     const status = await response.json()
+    const goals = status.milestones || {}
+    maxed = new Set(goals.level_100 || [])
+    perfectSpecies = new Set(goals.perfect_species || [])
+    highQualitySpecies = new Set([...(goals.high_quality_species || []), ...perfectSpecies])
+    $('#sum-three-star').textContent = String(goals.three_star_held || 0)
+    $('#sum-quality').innerHTML = `${highQualitySpecies.size} <small>/ 151</small>`
+    $('#sum-maxed').innerHTML = `${maxed.size} <small>/ 151</small>`
+    $('#maxed-meter').value = maxed.size
+    $('#sum-perfect').textContent = `${goals.perfect_found || 0}${goals.perfect_found ? '+' : ''}`
+    $('#perfect-note').textContent = `${perfectSpecies.size} species discovered · ${goals.perfect_held || 0} perfect partners with you. Confirmed minimum.`
     owned = new Set(status.owned || [])
     seen = new Set(status.seen || [])
     plan = new Map((status.plan || []).map((row) => [row.dex, row]))
     hunting = (status.plan || []).find((row) => row.species === status.hunting)?.dex ?? null
     $('#connection').classList.remove('is-offline')
     $('#status').textContent = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
-    $('#dex-owned').textContent = owned.size
-    $('#dex-phase').textContent = status.phase || 'The journey continues.'
     if (status.version) $('#edition').textContent = `${status.version.toUpperCase()} VERSION`
     $('#sum-owned').innerHTML = `${owned.size} <small>/ 151</small>`
     $('#sum-seen').innerHTML = `${seen.size} <small>/ 151</small>`

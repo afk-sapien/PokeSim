@@ -1,6 +1,6 @@
 services:
   pokesim:
-    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc31}
+    image: ${POKESIM_IMAGE:-pokesim:local}
     restart: unless-stopped
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_PORT:-8930}:8000"
@@ -49,9 +49,8 @@ services:
 
   prepare-data:
     profiles: [setup]
-    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc31}
-    command: [python, -m, pokesim.prepare_data, /source]
-    network_mode: none
+    image: ${POKESIM_IMAGE:-pokesim:local}
+    command: [python, -m, pokesim.prepare_data, --download]
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -59,9 +58,3 @@ services:
       - /tmp:size=64m,mode=1777
     volumes:
       - ${DATA_PATH:-./data}:/data
-      - type: bind
-        source: ${POKERED_SOURCE:-./.reference/pokered}
-        target: /source
-        read_only: true
-        bind:
-          create_host_path: false

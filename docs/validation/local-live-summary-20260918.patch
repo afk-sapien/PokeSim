@@ -1,0 +1,146 @@
+--- a/pokesim/web/static/index.html
++++ b/pokesim/web/static/index.html
+@@ -23,12 +23,14 @@
+ <span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
+ </header>
+ <main id="main" class="page-main">
+-<section class="page-intro watch-intro"><div><p class="eyebrow">LIVE FROM KANTO</p><h1>One team. Questionable decisions.</h1></div><div class="watch-clock"><span id="playtime">00:00</span><span class="eyebrow">PLAY HOURS</span><small id="clock-note"></small></div></section>
+-<section class="watch-progress trainer-card" id="journey-progress" aria-label="Adventure progress">
+-<div class="trainer-identity"><div class="watch-trainer"><span class="eyebrow">TRAINER CARD</span><strong id="trainer-name">Getting ready</strong></div><small id="trainer-rival"></small></div>
+-<div class="watch-badges"><div class="watch-badge-label"><span class="eyebrow">KANTO BADGES</span><strong id="badge-count">0 / 8</strong></div><div class="badges" id="badges"></div></div>
+-<div class="trainer-stats"><div class="watch-stat"><span class="eyebrow">REGISTERED</span><strong id="dex-count">0 / 151</strong></div><div class="watch-stat"><span class="eyebrow">LEAGUE WINS</span><strong id="league-wins" title="Completed Elite Four and Champion runs">0</strong></div><div class="watch-stat"><span class="eyebrow">POCKET MONEY</span><strong id="money">₽0</strong></div></div>
+-</section>
++<header class="live-summary" id="journey-progress" aria-label="Trainer and adventure summary">
++<div class="live-identity" aria-label="Trainer"><h1 id="trainer-name">Getting ready</h1><small id="trainer-rival"></small></div>
++<div class="live-badges"><div class="live-badge-label"><span class="eyebrow">Badges</span><strong id="badge-count">0 / 8</strong></div><div class="badges" id="badges"></div></div>
++<div class="live-stat"><span class="eyebrow">Registered</span><strong id="dex-count">0 / 151</strong></div>
++<div class="live-stat"><span class="eyebrow">League wins</span><strong id="league-wins" title="Completed Elite Four and Champion runs">0</strong></div>
++<div class="live-stat"><span class="eyebrow">Money</span><strong id="money">₽0</strong></div>
++<div class="live-stat live-time"><span class="eyebrow">Play hours</span><strong id="playtime">00:00</strong><small id="clock-note"></small></div>
++</header>
+ <div class="watch-layout"><div class="watch-stage"><section class="game-card" aria-labelledby="live-heading">
+         <div class="game-heading"><div><span class="live-label"><i></i> LIVE NOW</span><h2 id="live-heading">Somewhere in Kanto</h2></div><button class="icon-button" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">⛶</button></div>
+         <div class="screen" id="screen"><img id="stream" alt="Live Pokémon game"><span class="screen-corner">POKÉMON · GAME BOY</span></div>
+--- a/pokesim/web/static/live.css
++++ b/pokesim/web/static/live.css
+@@ -1,4 +1,4 @@
+-/* Keep the game and its team aligned, with shared progress underneath. */
++/* Keep the game and its team aligned below a compact adventure summary. */
+ .watch-layout { grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr) }
+ .watch-layout { grid-template-areas:none }
+ .watch-layout { grid-template-rows:auto }
+@@ -23,58 +23,67 @@
+ .watch-companions .mon-main { flex:1 }
+ .watch-companions .mon-main { align-items:center }
+ .watch-companions .mon-details { margin-top:auto }
+-.watch-progress.trainer-card { display:grid }
+-.watch-progress.trainer-card { grid-template-columns:minmax(120px,.7fr) minmax(220px,1.2fr) minmax(300px,1.3fr) }
+-.watch-progress.trainer-card { align-items:center }
+-.watch-progress.trainer-card { gap:24px }
+-.watch-progress.trainer-card { margin:0 0 18px }
+-.watch-progress.trainer-card { padding:18px 22px }
+-.trainer-identity { display:grid }
+-.trainer-identity { gap:5px }
+-.trainer-identity>small { color:#64735e }
+-.trainer-identity>small { font-size:10px }
+-.trainer-card .watch-trainer { gap:5px }
+-.trainer-card .watch-trainer strong { font-size:15px }
+-.trainer-card .eyebrow { font-size:9px }
+-.trainer-card .watch-badge-label { justify-content:space-between }
+-.trainer-card .badges { gap:8px }
+-.trainer-card .badge { border-radius:7px }
+-.trainer-card .badge { padding:4px 0 }
+-.trainer-card .badge.earned { background:#ffffff80 }
+-.trainer-card .badge-icon { width:24px }
+-.trainer-card .badge-icon { height:24px }
+-.trainer-stats { display:grid }
+-.trainer-stats { grid-template-columns:repeat(3,minmax(0,1fr)) }
+-.trainer-stats { gap:12px }
+-.trainer-stats { border-left:1px solid #d4ddca }
+-.trainer-stats { padding-left:24px }
+-.trainer-stats .watch-stat { min-width:0 }
+-.trainer-stats strong { font-size:17px }
+-.trainer-stats strong { font-variant-numeric:tabular-nums }
++.live-summary { display:flex }
++.live-summary { align-items:center }
++.live-summary { flex-wrap:wrap }
++.live-summary { gap:14px 28px }
++.live-summary { padding:14px 0 }
++.live-summary { margin-bottom:18px }
++.live-summary { border-bottom:1px solid #dcded3 }
++.live-summary .eyebrow { margin:0 }
++.live-summary .eyebrow { font-size:9px }
++.live-summary .eyebrow { letter-spacing:1px }
++.live-identity { display:flex }
++.live-identity { flex-direction:column }
++.live-identity { gap:3px }
++.live-identity { margin-right:auto }
++.live-identity { min-width:100px }
++.live-identity h1 { font:600 18px/1.2 system-ui,sans-serif }
++.live-identity h1 { line-height:1.2 }
++.live-identity h1 { margin:0 }
++.live-identity small,.live-time small { font-size:10px }
++.live-identity small,.live-time small { color:#687063 }
++.live-badges { min-width:190px }
++.live-badge-label { display:flex }
++.live-badge-label { align-items:center }
++.live-badge-label { gap:10px }
++.live-badge-label strong { font-size:11px }
++.live-summary .badges { grid-template-columns:repeat(8,minmax(0,1fr)) }
++.live-summary .badges { gap:5px }
++.live-summary .badges { margin-top:4px }
++.live-summary .badge { padding:0 }
++.live-summary .badge-icon { width:21px }
++.live-summary .badge-icon { height:21px }
++.live-summary .badge-icon { font-size:18px }
++.live-summary .badge>span:not(.badge-icon),.live-summary .badge>small { display:none }
++.live-stat { display:flex }
++.live-stat { flex-direction:column }
++.live-stat { gap:5px }
++.live-stat strong { font-size:14px }
++.live-stat strong { font-variant-numeric:tabular-nums }
++.live-time small:empty { display:none }
+ @media (max-width:1000px) {
+-  .watch-progress.trainer-card { gap:16px }
+-  .watch-progress.trainer-card { grid-template-columns:minmax(100px,.65fr) minmax(200px,1fr) minmax(260px,1.2fr) }
+-  .trainer-stats { padding-left:16px }
++  .live-summary { gap:12px 20px }
++  .live-identity { min-width:85px }
+ }
+ @media (max-width:850px) {
+   .watch-layout { grid-template-columns:minmax(0,1fr) }
+   .watch-layout { grid-template-areas:none }
+   .watch-companions .party { grid-auto-rows:auto }
+-  .watch-progress.trainer-card { grid-template-columns:minmax(0,.6fr) minmax(0,1fr) }
+-  .trainer-stats { grid-column:1/-1 }
+-  .trainer-stats { border-left:0 }
+-  .trainer-stats { border-top:1px solid #d4ddca }
+-  .trainer-stats { padding:14px 0 0 }
+ }
+-@media (max-width:580px) {
+-  .watch-progress.trainer-card { padding:16px }
+-  .watch-progress.trainer-card { grid-template-columns:minmax(0,1fr) }
+-  .trainer-identity { display:flex }
+-  .trainer-identity { justify-content:space-between }
+-  .trainer-identity { align-items:center }
+-  .trainer-card .watch-trainer { display:flex }
+-  .trainer-card .watch-trainer { align-items:center }
+-  .trainer-card .watch-trainer { gap:10px }
+-  .trainer-card .eyebrow { font-size:8px }
+-  .trainer-stats strong { font-size:15px }
++@media (max-width:600px) {
++  .live-summary { display:grid }
++  .live-summary { grid-template-columns:repeat(4,minmax(0,1fr)) }
++  .live-summary { gap:12px 8px }
++  .live-identity { flex:1 }
++  .live-identity { min-width:0 }
++  .live-identity h1 { font-size:16px }
++  .live-badges { min-width:0 }
++  .live-badges { grid-column:2 / -1 }
++  .live-badges { justify-self:end }
++  .live-stat { flex:1 1 calc(25% - 16px) }
++  .live-summary .eyebrow { font-size:8px }
++  .live-stat strong { font-size:12px }
++  .live-summary .badge-icon { width:18px }
++  .live-summary .badge-icon { height:18px }
+ }

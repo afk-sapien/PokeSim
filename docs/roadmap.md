@@ -25,6 +25,8 @@ Some of these changes are newer than the recorded deployments.
 3. **Long runs and releases.** Measure 24-hour, 48-hour, and week-long intervals without
    confusing HTTP health with game progress. Track resource growth and test backup,
    restore, upgrade, shutdown, and peer outages. Qualify each desktop build target.
+   Follow the [distribution review](distribution-readiness.md) for public branch
+   alignment, registry images, simpler server storage, and desktop signing.
 4. **Clearer module ownership.** The rc31 release extracts shop and PC controllers and shares lifecycle ownership.
    Apply the same explicit boundaries to battle and field-move interactions as needed.
    Keep transition tests as the compatibility contract. See [architecture](architecture.md).

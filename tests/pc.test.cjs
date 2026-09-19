@@ -41,18 +41,15 @@ const mon = (box, position, level, extra = {}) => ({box, position, level, dex: 2
   nick: 'Partner', name: 'Pikachu', experience: level ** 3,
   dvs: [1, 2, 3, 4, 5], stat_exp: [0, 0, 0, 0, 0], ...extra})
 
-test('all-box level sorting happens before pagination and leaves storage order intact', async () => {
+test('all-box level sorting includes every partner and leaves storage order intact', async () => {
   const pokemon = Array.from({length: 25}, (_, i) => mon(Math.floor(i / 20) + 1, i % 20 + 1, i + 1))
   const before = JSON.stringify(pokemon)
   const view = pc(pokemon)
   await view.ready()
   view.sort('level')
-  assert.deepEqual(view.rows().map(p => p.level), Array.from({length: 20}, (_, i) => 25 - i))
-  view.element('#pc-next').onclick()
-  assert.deepEqual(view.rows().map(p => p.level), [5, 4, 3, 2, 1])
+  assert.deepEqual(view.rows().map(p => p.level), Array.from({length: 25}, (_, i) => 25 - i))
   view.sort('level', 'asc')
   assert.equal(view.rows()[0].level, 1)
-  assert.equal(view.element('#pc-page').textContent, 'Page 1 of 2')
   assert.equal(JSON.stringify(pokemon), before)
 })
 
@@ -99,12 +96,9 @@ test('strongest shortcut ranks every box and clears previous filters', async () 
   view.element('#pc-strongest').onclick()
   assert.equal(view.element('#pc-scope').value, 'all')
   assert.equal(view.element('#pc-search').value, '')
-  assert.deepEqual(view.rows().map(p => p.power), Array.from({length: 20}, (_, i) => 124 - i))
-  view.element('#pc-next').onclick()
-  assert.deepEqual(view.rows().map(p => p.power), [104, 103, 102, 101, 100, null])
+  assert.deepEqual(view.rows().map(p => p.power), [...Array.from({length: 25}, (_, i) => 124 - i), null])
   view.sort('power', 'asc')
   assert.equal(view.rows()[0].power, 100)
-  view.element('#pc-next').onclick()
   assert.equal(view.rows().at(-1).power, null)
   view.sort('Special')
   assert.equal(view.rows()[0].calculated_stats.Special, 24)
@@ -143,11 +137,9 @@ test('party joins every combined sort and the strongest shortcut without changin
   assert.equal(view.element('#pc-count').textContent, '21 Pokémon')
   assert.match(view.element('#pc-grid').innerHTML, /PARTY · SLOT 1/)
   view.sort('level', 'asc')
-  view.element('#pc-next').onclick()
-  assert.equal(view.rows()[0].nick, 'Ace')
+  assert.equal(view.rows().at(-1).nick, 'Ace')
   view.element('#pc-strongest').onclick()
   assert.equal(view.rows()[0].nick, 'Ace')
-  assert.equal(view.element('#pc-page').textContent, 'Page 1 of 2')
   assert.equal(JSON.stringify({boxed, party}), before)
 })
 
@@ -180,7 +172,6 @@ test('box and list modes have separate controls and preserve physical slots', as
   assert.deepEqual(view.rows().map(mon => mon.position), [1, 2])
   assert.equal(view.element('#pc-sidebar').hidden, false)
   assert.equal(view.element('#pc-sort-control').hidden, true)
-  assert.equal(view.element('#pc-pagination').hidden, true)
   assert.match(view.element('#pc-grid').innerHTML, /pc-empty-slot/)
   view.element('#pc-all-view').onclick()
   assert.deepEqual(view.rows().map(mon => mon.level), [99, 10])
@@ -195,4 +186,72 @@ test('box and list modes have separate controls and preserve physical slots', as
   assert.equal(view.rows().length, 2)
   view.element('#pc-all-view').onclick()
   assert.equal(view.element('#pc-search').value, 'missing')
+})
+
+test('perfect partners carry an accessible badge in box and all-partner views', async () => {
+  const view = pc([mon(1, 1, 20, {perfect_dvs:true, dv_stars:4, dv_total:75, dv_percent:100}), mon(1, 2, 21)], '?box=1')
+  await view.ready()
+  assert.match(view.element('#pc-grid').innerHTML, /pc-mon perfect-entry/)
+  assert.match(view.element('#pc-grid').innerHTML, /perfect DVs, preserved for the collection/)
+  assert.match(view.element('#pc-grid').innerHTML, /Perfect DV/)
+  view.element('#pc-all-view').onclick()
+  assert.match(view.element('#pc-grid').innerHTML, /pc-mon perfect-entry/)
+})
+
+
+test('all 246 partners remain searchable, sortable, and openable on one page', async () => {
+  const boxed = Array.from({length:240}, (_, i) => mon(Math.floor(i / 20) + 1, i % 20 + 1,
+    i % 100 + 1, {nick:'Boxed ' + i}))
+  const party = Array.from({length:6}, (_, i) => mon(undefined, undefined, 100,
+    {slot:i + 1, nick:'Party ' + i}))
+  const view = pc(boxed, '?scope=all', party)
+  await view.ready()
+  assert.equal(view.rows().length, 246)
+  assert.equal((view.element('#pc-grid').innerHTML.match(/data-mon=/g) || []).length, 246)
+  assert.doesNotMatch(source, /pc-pagination|pc-next|pc-prev/)
+  view.sort('level')
+  assert.equal(view.rows().length, 246)
+  const last = view.rows()[245]
+  view.element('#pc-grid').onclick({target:{closest:() => ({dataset:{mon:'245'}})}})
+  assert.match(view.element('#pc-detail-body').innerHTML, new RegExp(last.nick))
+  view.element('#pc-search').value = 'Boxed 239'
+  view.element('#pc-search').oninput()
+  assert.equal(view.rows().length, 1)
+  view.element('#pc-search').value = ''
+  view.element('#pc-search').oninput()
+  await view.refresh()
+  assert.equal(view.rows().length, 246)
+})
+
+test('DV ratings filter, sort, bookmark, and explain partners in every view', async () => {
+  const view = pc([
+    mon(1, 1, 99, {dv_stars: 1, dv_total: 15, dv_percent: 20}),
+    mon(1, 2, 20, {dv_stars: 3, dv_total: 60, dv_percent: 80}),
+    mon(1, 3, 21, {dv_stars: 3, dv_total: 70, dv_percent: 93.3}),
+    mon(1, 4, 5, {dv_stars: 4, dv_total: 75, dv_percent: 100, perfect_dvs: true}),
+    mon(1, 5, 100, {dvs: [], dv_stars: null}),
+  ], '?scope=all&rating=3plus&sort=dv_stars')
+  await view.ready()
+  assert.deepEqual(view.rows().map(p => p.position), [4, 3, 2])
+  assert.match(view.url(), /rating=3plus/)
+  assert.match(view.element('#pc-grid').innerHTML, /3-star DVs/)
+  assert.match(view.element('#pc-grid').innerHTML, /★★★★/)
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '1'}})}})
+  assert.match(view.element('#pc-detail-body').innerHTML, /70 \/ 75 DVs · 93.3%/)
+  assert.match(view.element('#pc-detail-body').innerHTML, /Level and training do not affect/)
+  view.element('#pc-rating').value = '3'
+  view.element('#pc-rating').oninput()
+  await view.refresh()
+  assert.deepEqual(view.rows().map(p => p.position), [3, 2])
+  view.element('#pc-boxes-view').onclick()
+  assert.deepEqual(view.rows().map(p => p.position), [2, 3])
+  view.element('#pc-rating').value = 'unknown'
+  view.element('#pc-rating').oninput()
+  assert.deepEqual(view.rows().map(p => p.position), [5])
+  assert.match(view.element('#pc-grid').innerHTML, /DVs unknown/)
+  view.element('#pc-rating').value = 'all'
+  view.element('#pc-rating').oninput()
+  view.element('#pc-all-view').onclick()
+  view.sort('dv_stars', 'asc')
+  assert.deepEqual(view.rows().map(p => p.position), [1, 2, 3, 4, 5])
 })

@@ -8,7 +8,8 @@
 <title>The live adventure. · pokesim</title>
 <link rel="stylesheet" href="/static/style.css?v=watch-2">
 
-<link rel="stylesheet" href="/static/pages.css?v=trading-1">
+<link rel="stylesheet" href="/static/pages.css?v=live-workspace-1">
+<link rel="stylesheet" href="/static/live.css?v=balanced-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="/feed.xml">
 </head>
 <body data-page="index">
@@ -19,25 +20,29 @@
 <span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
 </header>
 <main id="main" class="page-main">
-<section class="page-intro watch-intro"><div><p class="eyebrow">LIVE FROM KANTO</p><h1>One team. Questionable decisions.</h1></div><div class="watch-clock"><span id="playtime">00:00</span><span class="eyebrow">PLAY HOURS</span><small id="clock-note"></small></div></section>
-<div class="watch-layout"><section class="game-card" aria-labelledby="live-heading">
+<header class="live-summary" id="journey-progress" aria-label="Trainer and adventure summary">
+<div class="live-identity" aria-label="Trainer"><h1 id="trainer-name">Getting ready</h1><small id="trainer-rival"></small></div>
+<div class="live-badges"><div class="live-badge-label"><span class="eyebrow">Badges</span><strong id="badge-count">0 / 8</strong></div><div class="badges" id="badges"></div></div>
+<div class="live-stat"><span class="eyebrow">Registered</span><strong id="dex-count">0 / 151</strong></div>
+<div class="live-stat"><span class="eyebrow">League wins</span><strong id="league-wins" title="Completed Elite Four and Champion runs">0</strong></div>
+<div class="live-stat"><span class="eyebrow">Money</span><strong id="money">₽0</strong></div>
+<div class="live-stat live-time"><span class="eyebrow">Play hours</span><strong id="playtime">00:00</strong><small id="clock-note"></small></div>
+</header>
+<div class="watch-layout"><div class="watch-stage"><section class="game-card" aria-labelledby="live-heading">
         <div class="game-heading"><div><span class="live-label"><i></i> LIVE NOW</span><h2 id="live-heading">Somewhere in Kanto</h2></div><button class="icon-button" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">⛶</button></div>
         <div class="screen" id="screen"><img id="stream" alt="Live Pokémon game"><span class="screen-corner">POKÉMON · GAME BOY</span></div>
         <div class="game-caption"><span id="game-activity">The adventure is loading…</span><span id="coordinates">KANTO REGION</span></div>
         <div class="controls"><button id="take-control" class="primary-button">Take control</button><button id="pause" class="quiet-button">Ⅱ Freeze game</button><label class="speed-label" for="speed">AI pace <select id="speed"><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="16">16×</option><option value="0">Max</option></select></label><button id="save" class="quiet-button">↓ Save</button></div>
         <details class="manual-controls" id="manual-controls"><summary>Gamepad & keyboard controls</summary><div class="controller"><div class="pad"><span></span><button data-b="up" aria-label="Move up">▲</button><span></span><button data-b="left" aria-label="Move left">◀</button><button data-b="down" aria-label="Move down">▼</button><button data-b="right" aria-label="Move right">▶</button></div><div class="action-buttons"><button data-b="b">B</button><button data-b="a">A</button><button data-b="start">Start</button><button data-b="select">Select</button></div><div class="control-help"><strong id="control-mode">AI is playing</strong><p id="control-hint">Press any game control to pause the AI and take over.</p><small>Arrows · Z / A · X / B · Enter / Start · Shift / Select</small></div></div></details>
-      </section><section class="objective-card" id="strategy-panel" aria-labelledby="objective-heading" hidden>
-<div class="objective-body"><p class="eyebrow" id="objective-heading">THE PLAN (ALLEGEDLY)</p><h2 id="objective">Finding the way forward</h2><p id="decision"></p><p class="eyebrow" id="progress-state">Exploring</p><p id="last-achievement">Waiting for the first achievement.</p><div class="watch-next"><span>Up next</span><strong id="next-objective">Finding the next milestone</strong></div></div></section><section class="party-section" id="team" aria-labelledby="party-heading"><div class="section-heading"><div><p class="eyebrow">BETTER TOGETHER</p><h2 id="party-heading">The usual suspects</h2></div><span class="count-pill" id="party-count">0 / 6</span></div><ul class="party" id="party"><li class="empty-party"><span aria-hidden="true">◌</span><h3>Every team starts somewhere.</h3><p>The first partner will appear here.</p></li></ul></section></div><section class="watch-progress" id="journey-progress" aria-label="Adventure progress"><div class="watch-trainer"><span class="eyebrow">TRAINER</span><strong id="trainer-name">Getting ready</strong><small id="trainer-rival"></small></div><div class="watch-badges"><div class="watch-badge-label"><span class="eyebrow">BADGES</span><strong id="badge-count">0 / 8</strong></div><div class="badges" id="badges"></div></div><div class="watch-stat"><span class="eyebrow">REGISTERED</span><strong id="dex-count">0 / 151</strong></div><div class="watch-stat"><span class="eyebrow">POCKET MONEY</span><strong id="money">₽0</strong></div></section><details class="adventure-details" id="adventure-details"><summary>Adventure details <span>Projects, route, bag & settings</span></summary><div class="adventure-content"><section class="collection-card" id="collection" aria-labelledby="collection-heading">
-    <div class="section-heading"><div><p class="eyebrow" id="collection-phase">THE ADVENTURE CONTINUES</p><h2 id="collection-heading">A growing collection.</h2></div></div>
-    <p class="collection-intro">Explore between badges, raise new partners, and keep collecting after the Champion. The next project is chosen automatically as the adventure unfolds.</p>
-    <div class="collection-summary"><div><span class="eyebrow">REGISTERED</span><strong id="collection-caught">0 / 151</strong></div><div><span class="eyebrow">MORE POSSIBLE HERE</span><strong id="collection-available">0</strong></div><div class="hunt-summary"><span class="eyebrow">CURRENT PROJECT</span><strong id="collection-hunt">Watching for new discoveries</strong><small id="collection-budget"></small></div></div>
-    <div class="collection-projects"><div><h3>Growing toward something</h3><ul id="collection-evolutions"></ul></div><div><h3>Recent expeditions</h3><ul id="collection-history"></ul></div></div>
-<div class="link-row"><a href="/pokedex">Browse the Pokédex ↗</a><a href="/pc">Open the PC ↗</a></div></section><div class="team-support"><section class="support-card"><details class="route-details"><summary>Route and recent decisions</summary><canvas id="route-map" width="560" height="260" role="img" aria-label="Current area with player, planned route, and doors"></canvas><p class="map-legend">Gold: player · Teal: route · White: doors</p><ol id="recovery-history"></ol></details><details class="journey-details"><summary>Journey milestones</summary><ol id="journey"></ol></details></section><section class="support-card"><div class="readiness"><strong id="readiness-label">Team readiness</strong><progress id="readiness-meter" max="100" value="0" aria-label="Estimated matchup readiness"></progress><p id="readiness-concerns"></p><small>Matchup estimate, not a win probability</small><div id="readiness-members"></div></div><details class="bag-card"><summary>Inside the bag <span id="bag-count">0 items</span></summary><div id="bag-items" class="bag-items"></div></details></section></div></div></details>
+      </section></div><div class="watch-companions"><section class="objective-card" id="strategy-panel" aria-labelledby="objective-heading" hidden>
+<div class="objective-body"><p class="eyebrow" id="objective-heading">THE PLAN (ALLEGEDLY)</p><h2 id="objective">Finding the way forward</h2><p id="decision"></p><p class="eyebrow" id="progress-state">Exploring</p><p id="last-achievement">Waiting for the first achievement.</p><div class="watch-next"><span>Up next</span><strong id="next-objective">Finding the next milestone</strong></div></div></section><section class="party-section" id="team" aria-labelledby="party-heading"><div class="section-heading"><div><p class="eyebrow">BETTER TOGETHER</p><h2 id="party-heading">The usual suspects</h2></div><span class="count-pill" id="party-count">0 / 6</span></div><ul class="party" id="party"><li class="empty-party"><span aria-hidden="true">◌</span><h3>Every team starts somewhere.</h3><p>The first partner will appear here.</p></li></ul></section></div></div>
+
 </main>
 
 <footer><span id="app-version"></span><a class="brand footer-brand" href="/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><button id="restart" class="restart-link">Restart run</button><a href="/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
+<dialog id="partner-detail" class="partner-detail" aria-labelledby="partner-detail-heading"><form method="dialog"><button class="partner-close" aria-label="Close Pokémon details">Close ×</button></form><div id="partner-detail-content"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script src="/static/screen.js?v=1"></script>
-<script src="/static/app.js?v=automatic-adventure-2"></script>
+<script src="/static/app.js?v=live-simple-1"></script>
 </body>
 </html>

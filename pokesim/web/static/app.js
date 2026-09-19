@@ -17,6 +17,8 @@ let paused = false
 let manualMode = false
 let stateBusy = false
 let partySignature = ''
+let currentParty = []
+let selectedPartner = null
 let eventFilter = 'highlights'
 let eventRows = []
 let eventGeneration = 0
@@ -54,10 +56,11 @@ async function control(button, action, value, message) {
 
 function renderParty(party) {
   if (!$('#party')) return
+  currentParty = party
+  renderPartnerDetail()
   const signature = JSON.stringify(party)
   if (signature === partySignature || $('#party').contains(document.activeElement)) return
   partySignature = signature
-  const expanded = new Set([...document.querySelectorAll('.mon-details[open]')].map((el) => el.dataset.key))
   set('#party-count', 'textContent', `${party.length} / 6`)
   if (!party.length) {
     set('#party', 'innerHTML', '<li class="empty-party"><span aria-hidden="true">◌</span><h3>Every team starts somewhere.</h3><p>The first partner will appear here.</p></li>')
@@ -67,17 +70,13 @@ function renderParty(party) {
     const hp = clamp(mon.max_hp ? mon.hp / mon.max_hp * 100 : 0)
     const health = hp < 20 ? 'critical' : hp < 50 ? 'low' : 'healthy'
     const xp = mon.experience
-    const key = `${index}-${mon.species}`
     const name = mon.nick && mon.nick.toUpperCase() !== mon.name.toUpperCase() ? mon.nick : mon.name
     const typeNames = mon.type_names || []
     const types = typeNames.map((type) => `<span class="type-tag ${typeClass(type)}">${esc(type)}</span>`).join('')
     const dex = mon.dex ? `No. ${String(mon.dex).padStart(3, '0')}` : 'Partner'
     const status = mon.status_label || (mon.hp ? 'Healthy' : 'Fainted')
-    const nextLevel = xp?.max_level ? 'A lifetime of experience' : `${fmt(xp?.remaining)} XP to Lv. ${mon.level + 1}`
     const sprite = mon.dex ? `<img src="/sprites/${Number(mon.dex)}.png" alt="${esc(mon.name)} portrait" width="96" height="96">` : '<span class="unknown-sprite">?</span>'
-    const moves = (mon.move_details || []).map((move) => `<div class="move"><span class="move-type ${typeClass(move.type)}" aria-hidden="true"></span><span>${esc(move.name)}</span><small class="${move.pp ? '' : 'depleted'}">${move.pp}/${move.max_pp} PP</small></div>`).join('')
-    const stats = Object.entries(mon.stats || {}).map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${fmt(value)}</dd></div>`).join('')
-    return `<li class="mon-card ${mon.hp ? '' : 'fainted'}"><div class="mon-main"><div class="sprite-stage ${typeClass(typeNames[0])}">${sprite}<span class="party-slot">${String(index + 1).padStart(2, '0')}</span></div><div class="mon-info"><div class="mon-title"><h3>${esc(name)}</h3><span class="level"><small>LV.</small> ${mon.level}</span></div><div class="mon-subtitle"><span>${dex}${name !== mon.name ? ` · ${esc(mon.name)}` : ''}</span>${types}${status !== 'Healthy' ? `<span class="condition">${esc(status)}</span>` : ''}</div><div class="meter-label"><span>HP <b class="${health}">${mon.hp > 0 ? '●' : '○'}</b></span><span><strong>${fmt(mon.hp)}</strong> / ${fmt(mon.max_hp)}</span></div><progress class="hp-meter ${health}" max="100" value="${hp}" aria-label="${esc(name)} health: ${mon.hp} of ${mon.max_hp}"></progress><div class="meter-label xp-label"><span>XP</span><span>${xp ? xp.max_level ? 'MAX LEVEL' : `${clamp(xp.percent)}%` : 'Unavailable'}</span></div><progress class="xp-meter" max="100" value="${clamp(xp?.percent)}" aria-label="${esc(name)} progress to next level"></progress></div></div><details class="mon-details" data-key="${key}" ${expanded.has(key) ? 'open' : ''}><summary><span>Moves & stats</span><span>＋</span></summary><div class="mon-extra"><div class="moves">${moves || '<p>No moves yet.</p>'}</div><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${nextLevel}</p>` : ''}</div></details></li>`
+    return `<li class="mon-card ${mon.hp ? '' : 'fainted'}"><div class="mon-main"><div class="sprite-stage ${typeClass(typeNames[0])}">${sprite}<span class="party-slot">${String(index + 1).padStart(2, '0')}</span></div><div class="mon-info"><div class="mon-title"><h3>${esc(name)}</h3><span class="level"><small>LV.</small> ${mon.level}</span></div><div class="mon-subtitle"><span>${dex}${name !== mon.name ? ` · ${esc(mon.name)}` : ''}</span>${types}${status !== 'Healthy' ? `<span class="condition">${esc(status)}</span>` : ''}</div><div class="meter-label"><span>HP <b class="${health}">${mon.hp > 0 ? '●' : '○'}</b></span><span><strong>${fmt(mon.hp)}</strong> / ${fmt(mon.max_hp)}</span></div><progress class="hp-meter ${health}" max="100" value="${hp}" aria-label="${esc(name)} health: ${mon.hp} of ${mon.max_hp}"></progress><div class="meter-label xp-label"><span>XP</span><span>${xp ? xp.max_level ? 'MAX LEVEL' : `${clamp(xp.percent)}%` : 'Unavailable'}</span></div><progress class="xp-meter" max="100" value="${clamp(xp?.percent)}" aria-label="${esc(name)} progress to next level"></progress></div></div><button class="partner-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} moves and stats">Moves & stats <span aria-hidden="true">↗</span></button></li>`
   }).join('')
 }
 
@@ -102,7 +101,9 @@ async function refreshState() {
     }
     const game = state.game
     paused = state.paused
-    if (state.manual_mode && !manualMode) set('#manual-controls', 'open', true)
+    if (state.manual_mode && !manualMode) {
+      set('#manual-controls', 'open', true)
+    }
     manualMode = state.manual_mode
     $('.game-card')?.classList.toggle('is-manual', manualMode)
     set('#take-control', 'textContent', manualMode ? 'Let AI play' : 'Take control')
@@ -120,14 +121,12 @@ async function refreshState() {
     const since = age < 60 ? 'just now' : age < 3600 ? `${Math.floor(age / 60)}m ago` : `${Math.floor(age / 3600)}h ago`
     set('#last-achievement', 'textContent', achievement ? `Last achievement: ${achievement.title} · ${since}` : 'Waiting for the first achievement.')
     const strategy = state.strategy
-    set('#journey', 'innerHTML', (strategy?.journey || []).map((step) => `<li class="${step.done ? 'done' : step.current ? 'current' : ''}">${step.done ? '✓ ' : ''}${esc(step.title)}</li>`).join(''))
     set('#strategy-panel', 'hidden', !strategy?.objective)
+    renderIntent(strategy || {})
     if (strategy?.objective) {
-      renderIntent(strategy)
-      renderCollection(strategy.collection, state.game)
       set('#objective', 'textContent', strategy.objective.title)
       set('#decision', 'textContent', strategy.reason)
-      set('#action-tag', 'textContent', strategy.action.charAt(0).toUpperCase() + strategy.action.slice(1))
+      set('#action-tag', 'textContent', (strategy.action || '').replace(/^./, (letter) => letter.toUpperCase()))
       set('#progress', 'textContent', `${fmt(strategy.visited_tiles)} tiles explored`)
     }
     if (!game) return
@@ -143,15 +142,13 @@ async function refreshState() {
     set('#trainer-rival', 'textContent', game.rival_name ? `Rival: ${game.rival_name}` : 'A new story begins')
     set('#dex-count', 'innerHTML', `${game.owned} <small>/ 151</small>`)
     set('#dex-count', 'title', `${game.seen} Pokémon seen`)
+    set('#league-wins', 'textContent', fmt(state.league_rewards?.wins ?? game.hall_of_fame_count ?? 0))
     set('#money', 'textContent', `₽${fmt(game.money)}`)
     set('#areas', 'textContent', fmt(state.areas_discovered))
     const earned = game.badges || []
     set('#badge-count', 'textContent', `${earned.length} / 8`)
     set('#badges', 'innerHTML', BADGES.map((badge, i) => `<div class="badge ${earned.includes(badge) ? 'earned' : ''}" title="${badge} Badge · ${LEADERS[i]} · ${earned.includes(badge) ? 'Earned' : 'Still ahead'}"><span class="badge-icon badge-${i}" aria-hidden="true">${BADGE_SYMBOLS[i]}</span><span>${badge}</span><small>${earned.includes(badge) ? 'EARNED' : String(i + 1).padStart(2, '0')}</small></div>`).join(''))
     renderParty(game.party)
-    const items = game.items || []
-    set('#bag-count', 'textContent', `${items.length} ${items.length === 1 ? 'item' : 'items'}`)
-    set('#bag-items', 'innerHTML', items.length ? items.map((item) => `<div><span>${esc(item.name)}</span><strong>×${item.qty}</strong></div>`).join('') : '<p>A little room for future finds.</p>')
   } catch (_) {
     set('#status', 'textContent', 'Reconnecting…')
     $('#connection').classList.add('is-offline')
@@ -245,7 +242,7 @@ async function manualPress(button) {
 }
 let lastKeyPress = 0
 window.addEventListener('keydown', (event) => {
-  if (viewerOnly || !$('#screen')) return
+  if (viewerOnly || !$('#screen') || $('#partner-detail')?.open) return
   const map = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', z: 'a', x: 'b', Enter: 'start', Shift: 'select'}
   if (map[event.key] && !event.target.closest('input, select, textarea, [contenteditable]') && !(event.key === 'Enter' && event.target.closest('button, summary, a'))) {
     event.preventDefault()
@@ -261,73 +258,34 @@ setInterval(() => { if (!document.hidden) refreshState() }, 2000)
 setInterval(() => { if (!document.hidden) refreshEvents() }, 15000)
 
 function renderIntent(strategy) {
-  const assessment = strategy.readiness || {}
   set('#next-objective', 'textContent', strategy.next?.title || 'Continue the journey')
-  set('#expectation', 'textContent', strategy.expectation || '')
-  set('#personality', 'textContent', strategy.personality || '')
-  set('#readiness-label', 'textContent', assessment.opponent ? `${assessment.status} for ${assessment.opponent}` : 'Team readiness')
-  set('#readiness-meter', 'value', assessment.score || 0)
-  set('#readiness-concerns', 'textContent', (assessment.concerns || []).join('. ') || 'The team has a useful matchup and supplies.')
-  set('#readiness-members', 'innerHTML', (assessment.members || []).map((p) => `<span>${esc(p.name)} · ${p.score}/100${p.index === assessment.lead ? ' · best matchup' : ''}</span>`).join(''))
-  set('#recovery-history', 'innerHTML', (strategy.history || []).slice().reverse().map((entry) => `<li>${esc(entry.message)}<small>${esc(entry.time)} · ${esc(entry.place)}. ${esc(entry.response)}</small></li>`).join('') || '<li>No recent recovery needed.</li>')
-  const map = strategy.map
-  const canvas = $('#route-map')
-  if (!map || !canvas) return
-  const ctx = canvas.getContext('2d')
-  const size = Math.min(canvas.width / map.width, canvas.height / map.height)
-  const ox = (canvas.width - map.width * size) / 2
-  const oy = (canvas.height - map.height * size) / 2
-  ctx.fillStyle = '#263b34'
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
-  const passable = new Set(map.passable)
-  let y = 0
-  while (y < map.height) {
-    let x = 0
-    while (x < map.width) {
-      const tile = map.tiles[y][x]
-      ctx.fillStyle = passable.has(tile) ? '#58735e' : ['OVERWORLD', 'CAVERN', 'FOREST', 'PLATEAU'].includes(map.tileset) && [20, 50, 72].includes(tile) ? '#396a80' : '#30483c'
-      ctx.fillRect(ox + x * size, oy + y * size, size, size)
-      x++
-    }
-    y++
-  }
-  ctx.fillStyle = '#69d6bf'
-  for (const [m, x, y] of strategy.route || []) {
-    if (m === map.id) ctx.fillRect(ox + x * size, oy + y * size, size, size)
-  }
-  ctx.fillStyle = '#f4f3db'
-  for (const [x, y] of map.warps) ctx.fillRect(ox + x * size, oy + y * size, size, size)
-  ctx.fillStyle = '#ffcd64'
-  ctx.beginPath()
-  ctx.arc(ox + (map.player[0] + 0.5) * size, oy + (map.player[1] + 0.5) * size, Math.max(3, size * 0.6), 0, Math.PI * 2)
-  ctx.fill()
-  canvas.setAttribute('aria-label', `${map.name}, player at ${map.player.join(', ')}, planned route in teal`)
 }
 
-let collectionRenderKey = ''
-function renderCollection(collection, game) {
-  if (!collection || !$('#collection')) return
-  const key = JSON.stringify([collection, game?.storage])
-  if (key === collectionRenderKey) return
-  collectionRenderKey = key
-  set('#collection-phase', 'textContent', collection.phase || 'Adventure')
-  set('#collection-caught', 'textContent', `${collection.caught || 0} / 151`)
-  set('#collection-available', 'textContent', collection.available || 0)
-  const hunt = collection.hunt
-  const target = collection.entries?.find(entry => entry.species === (hunt?.species || hunt?.parent))
-  set('#collection-hunt', 'textContent', hunt ? `${target?.name || hunt.item?.replaceAll('_', ' ') || 'Exploration'} · ${({grass:'Pokédex hunt', surf:'Surf expedition', fish:'Fishing', safari:'Safari expedition', evolve:'Evolution', gift:'Gift', fossil:'Fossil revival', static:'Legendary encounter', rod:'Fishing gear', trade:'In-game trade', prize:'Game Corner', rematch:'League rematch', train:'Training', trainer:'Trainer battle', explore:'Exploration', amber:'Fossil discovery'})[hunt.method] || 'Expedition'}` : 'Watching for new discoveries')
-  const training = collection.training
-  set('#collection-budget', 'textContent', training
-    ? training.phase === 'preparation'
-      ? `Preparing · ${Math.ceil(training.preparation_remaining_seconds / 60)} game minutes left for preparation`
-      : `Training · ${Math.ceil(training.remaining_seconds / 60)} game minutes left, extendable with XP gains`
-    : hunt ? `Reassess in ${Math.ceil(collection.remaining_seconds / 60)} game minutes` : 'Short expeditions alternate with the main journey')
-  set('#collection-evolutions', 'innerHTML', collection.evolutions?.length ? collection.evolutions.map(e => `<li><strong>${esc(e.from)} → ${esc(e.to)}</strong><span>${e.method === 'level' ? `Level ${e.level} → ${e.requirement}` : e.method === 'trade' ? 'Requires a link trade' : esc(String(e.requirement).replaceAll('_', ' '))}</span></li>`).join('') : '<li>More evolution projects will appear as the collection grows.</li>')
-  set('#collection-history', 'innerHTML', collection.history?.length ? collection.history.map(line => `<li>${esc(line)}</li>`).join('') : '<li>The next discovery is out there.</li>')
+function renderPartnerDetail() {
+  const dialog = $('#partner-detail')
+  if (!dialog?.open || !selectedPartner) return
+  const mon = currentParty[selectedPartner.index]
+  if (!mon || mon.species !== selectedPartner.species || mon.nick !== selectedPartner.nick) {
+    dialog.close()
+    return
+  }
+  const name = mon.nick || mon.name
+  const xp = mon.experience
+  const moves = (mon.move_details || []).map((move) => `<div class="move"><span class="move-type ${typeClass(move.type)}" aria-hidden="true"></span><span>${esc(move.name)}</span><small class="${move.pp ? '' : 'depleted'}">${move.pp}/${move.max_pp} PP</small></div>`).join('')
+  const stats = Object.entries(mon.stats || {}).map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${fmt(value)}</dd></div>`).join('')
+  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head">${mon.dex ? `<img src="/sprites/${Number(mon.dex)}.png" alt="" width="96" height="96">` : ''}<p class="eyebrow">PARTNER ${selectedPartner.index + 1} · LEVEL ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><p>${esc(mon.name)} · ${mon.hp} / ${mon.max_hp} HP · ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><h3>Moves</h3><div class="moves">${moves || '<p>No moves yet.</p>'}</div><h3>Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${xp.max_level ? 'MAX LEVEL' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}`)
 }
-
-function revealAdventure() {
-  if (['#collection', '#journey-progress'].includes(location.hash)) set('#adventure-details', 'open', true)
-}
-revealAdventure()
-window.addEventListener('hashchange', revealAdventure)
+$('#party')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-partner]')
+  if (!button) return
+  const index = Number(button.dataset.partner)
+  const mon = currentParty[index]
+  selectedPartner = {index, species: mon.species, nick: mon.nick}
+  $('#partner-detail').showModal()
+  renderPartnerDetail()
+})
+$('#partner-detail')?.addEventListener('close', () => {
+  const index = selectedPartner?.index
+  selectedPartner = null
+  $(`[data-partner="${index}"]`)?.focus()
+})

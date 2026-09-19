@@ -2,8 +2,8 @@
 
 The PC has two views. Boxes preserves physical slot order and displays only the
 selected party or box. All Pokémon hides the box picker and shows a sortable list
-of the entire collection. Each view remembers its search and result page while
-switching. Sorting never writes to game storage.
+of the entire collection without pagination. Every matching partner is on the page,
+including the party. Each view remembers its search while switching. Sorting never writes to game storage.
 
 Every game serves `/trading` with Trading block, Opportunities, and History.
 The shared broker remains an internal read API. Its old root page redirects to

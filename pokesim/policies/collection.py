@@ -9,6 +9,7 @@ from .progression import Goal, object_goal, at
 from .navigation import DIRS
 from .director import AdventureDirector
 from . import training
+from ..milestones import is_perfect, level_credit
 from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, EVENTS, event_set, object_hidden
 
 DATA = load('collection.json')
@@ -84,6 +85,11 @@ def training_targets(version, level):
                          for target in tiles(source)}))
 
 
+def held_count(snapshot, species):
+    return sum(mon.species == species for mon in snapshot.party) + sum(
+        sid == species for box, sid, level, nick in snapshot.stored_pokemon)
+
+
 def training_family(sid):
     family = {sid}
     for _ in range(2):
@@ -113,6 +119,7 @@ class Collection:
         self.progress_token = None
         self.was_in_battle = False
         self.director = AdventureDirector()
+        self.milestones = {}
 
     def state_dict(self):
         return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','attempts','elapsed','eevee_choice','history','completed_champion','idle_frames','project_maps','project_flags')},
@@ -219,6 +226,8 @@ class Collection:
                 return
             item = self.project.get('item')
             finished = (target and dex(target) in s.owned) or (not target and item and any(i==ITEMS[item] for i,q in s.items if q))
+            if project.get('repeat'):
+                finished = held_count(s, target) > project['initial_count']
             if self.project['method']=='fossil' and self.project.get('initial_owned'):
                 finished = finished or bool(s.owned - set(self.project['initial_owned']))
             if self.project['method']=='trainer':
@@ -373,7 +382,9 @@ class Collection:
         distance_to = nav.distance_lookup((s.map, s.x, s.y), s.frame)
         for sid,rows in sources.items():
             if dex(sid) in s.owned:
-                continue
+                if not self.completed_champion or dex(sid) in self.milestones.get('perfect_species', ()):
+                    continue
+                rows = [source for source in rows if source['method'] in ('grass', 'surf', 'fish', 'safari')]
             for source in rows:
                 if not self.available(s,source):
                     continue
@@ -390,7 +401,7 @@ class Collection:
                     continue
                 if mode == 'trade':
                     offered = next((p for p in s.party if p.species==source['give']),None)
-                    if offered is None or offered.level == max(p.level for p in s.party) or any(
+                    if offered is None or is_perfect({'dvs': offered.dvs}) or offered.level == max(p.level for p in s.party) or any(
                         mid in (15,19,57,70,148) and not any(mid in other.moves for other in s.party if other is not offered)
                         for mid in offered.moves):
                         continue
@@ -405,6 +416,11 @@ class Collection:
                     continue
                 searched.add(search_key)
                 project = dict(source,species=sid)
+                if dex(sid) in s.owned:
+                    balls = sum(bag.get(ITEMS[n], 0) for n in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL'))
+                    if mode != 'safari' and balls < 5:
+                        continue
+                    project.update(repeat=True, initial_count=held_count(s, sid))
                 if legendary_project(project):
                     project['legendary'] = True
                 goal = self.project_goal(s,project)
@@ -416,7 +432,8 @@ class Collection:
                 if not self.completed_champion and (source['map'] != s.map or distance>60):
                     continue
                 add(project, 5 if legendary_project(project) else
-                    (5 if mode in ('gift','fossil','static') else 1) / (1+distance/40))
+                    (0.25 / (1 + held_count(s, sid)) ** 2 if project.get('repeat') else
+                     5 if mode in ('gift','fossil','static') else 1) / (1+distance/40))
         for sid,level,box in held:
             for evo in EVOS.get(sid,[]):
                 if dex(evo['species']) in s.owned or evo['method']=='trade':
@@ -441,7 +458,8 @@ class Collection:
                 if any(evo['method'] == 'level' and dex(evo['species']) not in s.owned for evo in EVOS.get(sid, [])):
                     continue
                 add({'method': 'train', 'parent': sid, 'family': family,
-                     'box': box, 'initial_level': level, 'target_level': min(100, (level // 10 + 1) * 10)},
+                     'box': box, 'initial_level': level, 'target_level': 100,
+                     'mastery_needed': any(level_credit(relative) - set(self.milestones.get('level_100', ())) for relative in family)},
                     1 / (1 + level / 20))
             add({'method':'rematch','hof_count':s.hall_of_fame_count}, 10 if s.money < 10000 else 2)
             porygon = next(sid for sid,mon in SPECIES.items() if mon['dex']==137)

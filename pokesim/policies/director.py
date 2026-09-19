@@ -45,10 +45,14 @@ class AdventureDirector:
             recent_kinds = [entry['category'] for entry in self.recent]
             if len(kinds) > 1 and len(recent_kinds) >= 2 and recent_kinds[-1] == recent_kinds[-2]:
                 kinds = [kind for kind in kinds if kind != recent_kinds[-1]]
-            priorities = {'legendary': 8, 'collection': 5, 'evolution': 4, 'training': 2, 'exploration': 1, 'supplies': 1}
+            priorities = {'legendary': 8, 'collection': 5, 'evolution': 4, 'training': 12, 'exploration': 1, 'supplies': 1}
+            if all(p.get('repeat') for _, p in groups.get('collection', ())):
+                priorities['collection'] = 1
             weights = [priorities[kind] / (1 + recent_kinds.count(kind)) for kind in kinds]
             chosen = rng.choices(kinds, weights=weights)[0]
         rows = groups[chosen]
+        if chosen == 'training' and any(p.get('mastery_needed') for _, p in rows):
+            rows = [(weight, p) for weight, p in rows if p.get('mastery_needed')]
         recent_keys = [entry['key'] for entry in self.recent]
         weights = [weight / (1 + 4 * recent_keys.count(project['key'])) for weight, project in rows]
         project = rng.choices([project for weight, project in rows], weights=weights)[0]
