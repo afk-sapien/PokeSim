@@ -372,3 +372,115 @@ test('missing historical Pokémon remain unknown and active offers do not claim 
   assert.match(view.element('#trade-active').innerHTML, /Receiving/)
   assert.doesNotMatch(view.element('#trade-active').innerHTML, /Gastly|Lv. 999|sprites\/-1/)
 })
+
+function notificationsView(overrides = {}, extra = () => null) {
+  const red = 'a'.repeat(32)
+  const blue = 'b'.repeat(32)
+  const saved = {source: 'saved', enabled: true, server: 'https://ntfy.sh', topic: 'pokesim-old', token_set: true, min_priority: 2,
+    categories: [{key: 'badges', label: 'Gym <badges>', detail: 'A badge', enabled: true}, {key: 'levels', label: 'Levels', detail: '', enabled: false}],
+    adventures: [{id: red, name: 'Red', archived: false, enabled: true}, {id: blue, name: 'Blue', archived: false, enabled: false}], ...overrides}
+  const view = library({page: 'notifications', respond(path, options) {
+    const override = extra(path, options)
+    if (override) return override
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [
+      {id: red, name: 'Red', version: 'red', state: 'running'}, {id: blue, name: 'Blue', version: 'blue', state: 'stopped'},
+      {id: 'c'.repeat(32), name: 'Newcomer', version: 'red', state: 'stopped'}, {id: 'd'.repeat(32), name: 'Old', version: 'red', archived: true}]})}
+    if (path === '/api/v1/notifications') return {ok: true, json: async () => ({...saved, pending: []})}
+    return null
+  }})
+  return {view, red, blue}
+}
+
+test('notifications page shows saved choices without ever holding the token', async () => {
+  const {view, red, blue} = notificationsView()
+  await settle()
+  assert.equal(view.element('#notify-enabled').checked, true)
+  assert.equal(view.element('#notify-topic').value, 'pokesim-old')
+  assert.equal(view.element('#notify-token').value, '')
+  assert.match(view.element('#notify-token').placeholder, /saved/)
+  assert.equal(view.element('#notify-clear-row').hidden, false)
+  assert.match(view.element('#notify-subscribe').innerHTML, /href="https:\/\/ntfy.sh\/pokesim-old"/)
+  const categories = view.element('#notify-categories').innerHTML
+  assert.match(categories, /data-key="badges" checked/)
+  assert.match(categories, /data-key="levels"  data-owner/)
+  assert.match(categories, /Gym &lt.*badges&gt/)
+  const adventures = view.element('#notify-adventures').innerHTML
+  assert.match(adventures, new RegExp(`data-key="${red}" checked`))
+  assert.match(adventures, new RegExp(`data-key="${blue}"  data-owner`))
+  // An adventure created after the last save notifies by default. Archived ones are not listed.
+  assert.match(adventures, new RegExp(`data-key="${'c'.repeat(32)}" checked`))
+  assert.doesNotMatch(adventures, /Old/)
+})
+
+test('notifications save sends checkbox choices and only a newly typed token', async () => {
+  const {view, red, blue} = notificationsView()
+  await settle()
+  const form = view.element('#notify-form')
+  form.onchange({target: {dataset: {notify: 'categories', key: 'levels'}, checked: true}})
+  form.onchange({target: {dataset: {notify: 'adventures', key: blue}, checked: true}})
+  form.onchange({target: {dataset: {notify: 'adventures', key: 'c'.repeat(32)}, checked: false}})
+  view.element('#notify-priority').value = '4'
+  form.onsubmit({preventDefault() {}})
+  await settle()
+  let request = view.calls.find(call => call.path === '/api/v1/notifications' && call.options.method === 'PATCH')
+  let payload = JSON.parse(request.options.body)
+  assert.equal(request.options.headers['X-PokeSim-CSRF'], 'csrf')
+  assert.equal('token' in payload, false)
+  assert.equal('request_id' in payload, false)
+  assert.deepEqual(payload.categories, {badges: true, levels: true})
+  assert.deepEqual(payload.adventures, {[red]: true, [blue]: true, ['c'.repeat(32)]: false})
+  assert.equal(payload.min_priority, 4)
+  assert.equal(payload.topic, 'pokesim-old')
+  assert.match(view.element('#notice').textContent, /Notifications saved/)
+  view.calls.length = 0
+  view.element('#notify-token').value = 'tk_new'
+  form.onsubmit({preventDefault() {}})
+  await settle()
+  request = view.calls.find(call => call.path === '/api/v1/notifications' && call.options.method === 'PATCH')
+  assert.equal(JSON.parse(request.options.body).token, 'tk_new')
+  assert.equal(view.element('#notify-token').value, '')
+  view.calls.length = 0
+  view.element('#notify-clear-token').checked = true
+  form.onsubmit({preventDefault() {}})
+  await settle()
+  request = view.calls.find(call => call.path === '/api/v1/notifications' && call.options.method === 'PATCH')
+  assert.equal(JSON.parse(request.options.body).token, '')
+})
+
+test('random topics are unguessable and update the subscribe address', async () => {
+  const {view} = notificationsView({topic: '', token_set: false})
+  await settle()
+  assert.match(view.element('#notify-subscribe').innerHTML, /Choose a topic/)
+  view.element('#notify-generate').onclick()
+  const first = view.element('#notify-topic').value
+  assert.match(first, /^pokesim-[A-Za-z0-9]{16}$/)
+  assert.ok(view.element('#notify-subscribe').innerHTML.includes(`href="https://ntfy.sh/${first}"`))
+  view.element('#notify-generate').onclick()
+  assert.notEqual(view.element('#notify-topic').value, first)
+  view.element('#notify-server').value = 'javascript:alert(1)'
+  view.element('#notify-form').oninput()
+  assert.doesNotMatch(view.element('#notify-subscribe').innerHTML, /href/)
+})
+
+test('test notification tries the typed destination and shows what ntfy answered', async () => {
+  let answer = {ok: true}
+  const {view} = notificationsView({}, (path, options) => path === '/api/v1/notifications/test'
+    ? {ok: true, json: async () => answer} : null)
+  await settle()
+  view.element('#notify-topic').value = 'draft-topic'
+  view.element('#notify-test').onclick()
+  await settle()
+  const request = view.calls.find(call => call.path === '/api/v1/notifications/test')
+  const payload = JSON.parse(request.options.body)
+  assert.equal(request.options.method, 'POST')
+  assert.equal(payload.server, 'https://ntfy.sh')
+  assert.equal(payload.topic, 'draft-topic')
+  assert.equal('token' in payload, false)
+  assert.match(view.element('#notify-result').textContent, /accepted/)
+  // Unsaved edits survive the test.
+  assert.equal(view.element('#notify-topic').value, 'draft-topic')
+  answer = {ok: false, error: 'ntfy answered 403: forbidden'}
+  view.element('#notify-test').onclick()
+  await settle()
+  assert.equal(view.element('#notify-result').textContent, 'ntfy did not accept it: ntfy answered 403: forbidden')
+})

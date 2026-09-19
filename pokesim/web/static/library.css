@@ -212,6 +212,27 @@
 #trade-failures-section .exchange { margin-top:14px }
 #trade-failures-section .exchange>strong { display:block }
 #trade-failures-section .exchange>strong { margin-top:12px }
+.notify-choices { display:grid }
+.notify-choices { gap:14px }
+.notify-choices { margin-top:18px }
+.library .notify-choices .inline-label { align-items:flex-start }
+.library .notify-choices .inline-label { font-weight:500 }
+.notify-choices input { flex-shrink:0 }
+.notify-choices input { margin-top:2px }
+.notify-choices small { display:block }
+.notify-choices small { color:#687063 }
+.notify-choices small { font-weight:400 }
+.notify-choices small { margin-top:2px }
+.notify-subscribe { overflow-wrap:anywhere }
+#notify-form .panel > button { margin-top:12px }
+#notify-form .panel > label { margin-top:16px }
+.notify-actions { display:flex }
+.notify-actions { flex-wrap:wrap }
+.notify-actions { align-items:center }
+.notify-actions { gap:12px 16px }
+.notify-actions { margin-top:6px }
+#notify-result { color:#64695e }
+#notify-result { overflow-wrap:anywhere }
 @media(max-width:600px) {
   .trade-section>.section-heading { align-items:flex-start }
   .trade-section>.section-heading { gap:8px }
