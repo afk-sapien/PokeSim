@@ -5,7 +5,31 @@ from .battle import BALLS, HEALING, shopping_item
 from .progression import Goal
 from .collection import legendary_project
 from .menus import MenuDecision, select, tap
-from ..strategy_data import DATA, ITEMS, MAPS, WORLD
+from ..strategy_data import DATA, ITEMS, MAPS, PRICES, WORLD
+
+# Red and Blue refuse Safari Zone entry below this amount, and the story needs two visits' worth of
+# prizes (Surf and the Gold Teeth), so an unaffordable fee is a permanent roadblock, not a delay.
+SAFARI_FEE = 500
+CASH_RESERVE = 300
+SAFARI_GOALS = ('surf', 'teeth')
+SAFARI_INTERIOR = {m for m, w in WORLD.items() if w['name'].startswith('SafariZone') and w['name'] != 'SafariZoneGate'}
+SPARE = {ITEMS[name] for name in ('NUGGET', 'X_ACCURACY', 'GUARD_SPEC', 'DIRE_HIT', 'X_ATTACK', 'X_DEFEND',
+                                  'X_SPEED', 'X_SPECIAL')}
+LUXURIES = {ITEMS[name] for name in ('HP_UP', 'PROTEIN', 'IRON', 'CARBOS', 'CALCIUM', 'PP_UP', 'RARE_CANDY')}
+
+
+def entry_fee(snapshot, goal_key):
+    """Cash the current objective needs at a gate before it can make any progress."""
+    return SAFARI_FEE if goal_key in SAFARI_GOALS and snapshot.map not in SAFARI_INTERIOR else 0
+
+
+def cash_reserve(snapshot):
+    """Keep the Safari fee untouched from the fourth badge until both Safari prizes are collected."""
+    counts = dict(snapshot.items)
+    knows = {move for mon in snapshot.party for move in mon.moves}
+    surf = counts.get(ITEMS['HM03']) or 57 in knows
+    strength = counts.get(ITEMS['HM04']) or 70 in knows or counts.get(ITEMS['GOLD_TEETH'])
+    return CASH_RESERVE + (SAFARI_FEE if snapshot.badges & 8 and not (surf and strength) else 0)
 
 
 @dataclass
@@ -21,6 +45,7 @@ class ShoppingController:
     selling: bool = False
     item: int | None = None
     restocking: bool = False
+    fund_target: int = 0
 
     def leave_menu(self):
         self.buying = self.selling = False
@@ -33,7 +58,25 @@ class ShoppingController:
             return item if item in stock and not dict(snapshot.items).get(item) and snapshot.money >= 2500 and len(snapshot.items) < 20 else None
         return shopping_item(snapshot.items, stock, snapshot.money,
                              snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=True,
-                             legendary=legendary_project(project))
+                             legendary=legendary_project(project), reserve=cash_reserve(snapshot))
+
+    @staticmethod
+    def fund_index(snapshot):
+        """Bag slot to sell for cash: spares first, then luxuries, then the priciest remaining supply."""
+        def rank(row):
+            item = row[1]
+            tier = 0 if item in SPARE or 201 <= item <= 250 else 1 if item in LUXURIES else 3 if item in BALLS else 2
+            return tier, -PRICES.get(item, 0)
+        rows = [(i, item) for i, (item, qty) in enumerate(snapshot.items) if qty and PRICES.get(item, 0) > 0]
+        return min(rows, key=rank)[0] if rows else None
+
+    def raising_funds(self, snapshot):
+        return bool(self.fund_target) and snapshot.money < self.fund_target
+
+    def _sale_choice(self, snapshot):
+        if self.raising_funds(snapshot):
+            return self.fund_index(snapshot)
+        return self.sale_index(snapshot) if len(snapshot.items) > 15 else None
 
     @staticmethod
     def sale_index(snapshot):
@@ -44,6 +87,15 @@ class ShoppingController:
                                                              'X_ATTACK', 'X_DEFEND', 'X_SPEED', 'X_SPECIAL')})), None)
 
     def plan(self, snapshot, goal, project, *, requested_goal, healing, in_league, has_pokedex, completed_champion=False):
+        fee = entry_fee(snapshot, goal.key)
+        self.fund_target = fee + CASH_RESERVE if fee and snapshot.money < fee else 0
+        if self.fund_target and not healing and not in_league and has_pokedex and self.fund_index(snapshot) is not None:
+            clerks = [(map_id, 2, clerk[1]) for map_id, world in WORLD.items() if world['name'] in DATA['marts']
+                      for clerk in world['objects'] if clerk[2] == 'SPRITE_CLERK' and clerk[0] == 0]
+            if clerks:
+                return SupplyPlan(Goal('restock', 'Raise the Safari Zone entry fee',
+                                       'Sell spare valuables at a shop because the Safari Zone turns away anyone short of the fee',
+                                       tuple(clerks), 'left', True))
         ball_reserve = 5 if completed_champion else 2
         balls = sum(qty for item, qty in snapshot.items if item in BALLS)
         medicine = sum(qty for item, qty in snapshot.items if item in HEALING)
@@ -85,9 +137,13 @@ class ShoppingController:
     def step(self, snapshot, screen, kind, goal_key, project):
         stock = DATA['marts'].get(WORLD.get(snapshot.map, {}).get('name'), [])
         if kind == 'shop':
-            self.selling = (self.selling and len(snapshot.items) > 15) or len(snapshot.items) >= 18
-            if self.selling and self.sale_index(snapshot) is not None:
-                return MenuDecision(select(screen, 1), 'Sell spare TMs and Nuggets to make room for story items')
+            self.selling = ((self.selling and len(snapshot.items) > 15) or len(snapshot.items) >= 18
+                            or self.raising_funds(snapshot))
+            if self.selling and (self.fund_index(snapshot) if self.raising_funds(snapshot)
+                                 else self.sale_index(snapshot)) is not None:
+                return MenuDecision(select(screen, 1), 'Sell spare valuables to cover the Safari Zone entry fee'
+                                    if self.raising_funds(snapshot) else
+                                    'Sell spare TMs and Nuggets to make room for story items')
             self.selling = False
             self.item = self.item_for(snapshot, stock, goal_key, project)
             self.buying = self.item is not None
@@ -98,7 +154,7 @@ class ShoppingController:
             return MenuDecision(tap('a') if self.buying or self.selling else tap('b'))
         if kind == 'list':
             if self.selling:
-                index = self.sale_index(snapshot) if len(snapshot.items) > 15 else None
+                index = self._sale_choice(snapshot)
                 if index is None:
                     self.selling = False
                     return MenuDecision(tap('b'))

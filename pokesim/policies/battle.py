@@ -200,7 +200,7 @@ def healing_item(items, mon, incoming=0):
     return min(choices)[1] if choices else None
 
 
-def shopping_item(items, stock, money, league=False, collecting=False, legendary=False):
+def shopping_item(items, stock, money, league=False, collecting=False, legendary=False, reserve=300):
     counts = dict(items)
     if legendary and not counts.get(ITEMS['MASTER_BALL']):
         if ITEMS['ULTRA_BALL'] not in stock:
@@ -208,7 +208,7 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
         repel = next((name for name in ('MAX_REPEL', 'SUPER_REPEL', 'REPEL') if ITEMS[name] in stock), 'MAX_REPEL')
         for name, target in (('ULTRA_BALL', 20), (repel, 3), ('HYPER_POTION', 5)):
             item = ITEMS[name]
-            if item in stock and counts.get(item, 0) < target and PRICES[item] <= money - 300:
+            if item in stock and counts.get(item, 0) < target and PRICES[item] <= money - reserve:
                 if item in counts or len(items) < 20:
                     return item
         return None
@@ -228,7 +228,7 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
             target = max(0, (10 if league else 3) - heal_count + counts.get(item, 0))
         if counts.get(item, 0) >= target or (len(items) >= (20 if league else 18) and item not in counts):
             continue
-        if 0 < PRICES.get(item, 0) <= money - 300:
+        if 0 < PRICES.get(item, 0) <= money - reserve:
             return item
     return None
 
