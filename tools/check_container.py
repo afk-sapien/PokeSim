@@ -106,8 +106,10 @@ def main():
                             assert b'Your adventure library' in response.read()
                 compose('stop', 'pokesim')
                 container = compose('ps', '-a', '-q', 'pokesim', capture=True).strip()
-                assert subprocess.check_output(['docker', 'inspect', '--format',
-                    '{{.State.ExitCode}}', container], text=True).strip() == '0'
+                exit_code = subprocess.check_output(['docker', 'inspect', '--format',
+                    '{{.State.ExitCode}}', container], text=True).strip()
+                # Uvicorn re-raises SIGTERM after graceful shutdown when running under init.
+                assert exit_code in {'0', '143'}, f'Library shutdown failed: {exit_code}'
             print('Library Compose passed: first launch, assets, session, graceful shutdown, and restart')
         except BaseException:
             subprocess.run([*command, 'logs', '--no-color', '--tail', '100'], env=env, timeout=30)
