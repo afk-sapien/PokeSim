@@ -55,7 +55,9 @@ def test_rejects_newer_schema(tmp_path):
 def test_import_cannot_escape_destination(tmp_path, name):
     archive = tmp_path / 'bad.zip'
     with zipfile.ZipFile(archive, 'w') as output:
-        output.writestr(name, b'invalid')
+        member = zipfile.ZipInfo('placeholder')
+        member.filename = name
+        output.writestr(member, b'invalid')
     with pytest.raises(ValueError, match='unsafe'):
         extract_archive(archive, tmp_path / 'output')
 

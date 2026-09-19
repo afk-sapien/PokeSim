@@ -1,6 +1,8 @@
 """Quiesced portable backups with checksummed, bounded restore."""
 from __future__ import annotations
 
+from contextlib import closing
+
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
@@ -26,7 +28,7 @@ def extract_archive(archive, destination, max_expanded=MAX_EXPANDED):
             relative = PurePosixPath(info.filename)
             mode = info.external_attr >> 16
             total += info.file_size
-            if (relative.is_absolute() or '..' in relative.parts or '\\' in info.filename
+            if (relative.is_absolute() or '..' in relative.parts or '\\' in info.orig_filename or '\x00' in info.orig_filename
                     or ':' in info.filename or mode & 0o170000 == 0o120000 or total > max_expanded):
                 raise ValueError('Archive contains unsafe paths or exceeds the expanded size limit')
             path = destination.joinpath(*relative.parts)
@@ -60,7 +62,7 @@ def create_backup(manager):
             destination = backups / (bid + '.zip')
             with tempfile.TemporaryDirectory(prefix='pokesim-backup-') as temporary:
                 staging = Path(temporary)
-                with sqlite3.connect(staging / 'app.sqlite') as target:
+                with closing(sqlite3.connect(staging / 'app.sqlite')) as target:
                     with manager.registry.lock:
                         manager.registry.db.backup(target)
                 for name in ('assets', 'adventures', 'interactions', 'legacy_imports'):
@@ -70,7 +72,7 @@ def create_backup(manager):
                 files = {}
                 for path in staging.rglob('*'):
                     if path.is_file():
-                        files[str(path.relative_to(staging))] = hashlib.sha256(path.read_bytes()).hexdigest()
+                        files[path.relative_to(staging).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
                 manifest = {'format': 1, 'id': bid, 'created_at': time.time(), 'files': files}
                 (staging / 'backup.json').write_text(json.dumps(manifest, indent=2))
                 pending = backups / (bid + '.pending')
@@ -101,13 +103,13 @@ def restore_backup(archive, destination):
         manifest = json.loads((staging / 'backup.json').read_text())
         if manifest.get('format') != 1 or not isinstance(manifest.get('files'), dict):
             raise ValueError('Unsupported backup format')
-        actual = {str(p.relative_to(staging)) for p in staging.rglob('*') if p.is_file()} - {'backup.json'}
+        actual = {p.relative_to(staging).as_posix() for p in staging.rglob('*') if p.is_file()} - {'backup.json'}
         if actual != set(manifest['files']) or 'app.sqlite' not in actual:
             raise ValueError('Backup file list is incomplete')
         for relative, expected in manifest['files'].items():
             if hashlib.sha256((staging / relative).read_bytes()).hexdigest() != expected:
                 raise ValueError(f'Backup verification failed for {relative}')
-        with sqlite3.connect(staging / 'app.sqlite') as db:
+        with closing(sqlite3.connect(staging / 'app.sqlite')) as db:
             if db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                 raise ValueError('Backup database is damaged')
         if destination.exists():

@@ -539,7 +539,7 @@ def configure_logging(root):
     root = Path(root).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     if sys.stdout is None:
-        sys.stdout = open(os.devnull, 'w', encoding='utf-8')
+        sys.stdout = (root / 'manager-output.log').open('a', encoding='utf-8')
     if sys.stderr is None:
         sys.stderr = (root / 'manager-errors.log').open('a', encoding='utf-8')
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s: %(message)s')

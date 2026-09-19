@@ -275,4 +275,3 @@ test('Elite Four wins sort across the party and boxes with unknown totals last',
   view.element('#pc-grid').onclick({target: {closest: selector => selector === '[data-mon]' ? {dataset: {mon: '0'}} : null}})
   assert.match(view.element('#pc-detail-body').innerHTML, /Elite Four wins: 2/)
 })
-

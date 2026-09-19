@@ -22,6 +22,11 @@ Local checks on the combined source:
   reference setup, offline retry, legacy save and resume, Library startup, static
   assets, session creation, graceful shutdown, and restart.
 
+Windows CI also exposed open SQLite handles during backup cleanup. Backup and
+legacy import now close those connections explicitly. Manifest paths use portable
+forward slashes, archive validation inspects original entry names, and windowed
+console output uses a regular log file.
+
 Hosted CI adds Python 3.11, 3.12, and 3.14 regression jobs, optional Numba checks,
 and isolated native Python installations on Windows x86-64, Intel macOS, Apple
 Silicon, and Linux x86-64 and ARM64. Consult the checks on the consolidated main
