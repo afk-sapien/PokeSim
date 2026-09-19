@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Install with one pipx or pip command from the repository, with no checkout, uv,
+  or release URL to keep up to date.
+- Point the container quick start at the latest published release and image.
+
 ## 0.1.1
 
 - Show All Pokémon in the PC as a compact card grid again, so many more partners

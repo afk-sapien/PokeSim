@@ -67,13 +67,18 @@ Keep several adventures in one library, including multiple Red and Blue games. E
 
 Launch the Adventure Library, add your own clean **Pokémon Red or Blue (USA, Europe) ROM**, and create one or more named adventures. Start and stop each game independently. Your ROM stays on your computer.
 
-From this source checkout, install [uv](https://docs.astral.sh/uv/getting-started/installation/) and run:
+Install it with [pipx](https://pipx.pypa.io/stable/installation/) and Git, then start it:
 
 ```sh
-uv run --python 3.12 --locked pokesim-desktop
+pipx install git+https://github.com/afk-sapien/PokeSim.git
+pokesim-desktop
 ```
 
-For a command available from any folder, install with `uv tool install --python 3.12 .`, then run `pokesim-desktop`. Docker and an always-on server are optional. First setup downloads verified reference data, then prepared games work offline.
+Without pipx, `python -m pip install git+https://github.com/afk-sapien/PokeSim.git` works in a
+virtual environment. Python 3.11 or newer is required, and 3.12 is the tested version. Upgrade
+later with `pipx upgrade pokesim`, or pin a release by adding `@v0.1.2` to the URL. Docker and an
+always-on server are optional. First setup downloads verified reference data, then prepared games
+work offline. See the [desktop guide](docs/desktop.md) for released wheels and a source checkout.
 
 [Optional Numba acceleration](docs/desktop.md#optional-navigation-acceleration) can speed up repeated path searches at the cost of more memory and startup work. The normal installation uses the Python backend.
 
@@ -85,19 +90,19 @@ Python installation and Docker are the supported distribution paths. The Python 
 
 ### In one Docker container
 
-The server runs the same library and child-process architecture. One persistent application folder contains its independent adventures and shared assets. Future releases publish a prebuilt Linux amd64 image to `ghcr.io/afk-sapien/pokesim` and include ready-to-use Compose files. See [installing a published container](docs/self-hosting.md#install-a-published-container) for the download and pull commands. No registry login or source build is needed for a published image.
-
-The current candidate has not been published. For now, build and start this checkout:
+The server runs the same library and child-process architecture. One persistent application folder contains its independent adventures and shared assets. Each release publishes a prebuilt Linux amd64 image to `ghcr.io/afk-sapien/pokesim`, with ready-to-use Compose files attached. No GitHub login, registry login, or source build is needed:
 
 ```sh
-git clone https://github.com/afk-sapien/PokeSim.git pokesim
-cd pokesim
-cp .env.example .env
+curl -fLO https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.yaml
+curl -fL -o .env https://github.com/afk-sapien/PokeSim/releases/latest/download/env.example
 mkdir -p pokesim-app
 sudo chown 10001:10001 pokesim-app
-docker compose -f compose.yaml -f compose.build.yaml build
-docker compose -f compose.yaml -f compose.build.yaml up -d --pull never
+docker compose pull
+docker compose up -d
 ```
+
+See [installing a published container](docs/self-hosting.md#install-a-published-container) for
+upgrades, offline image archives, and building this checkout instead.
 
 Open [localhost:8930](http://localhost:8930) and create adventures in the Library. No sign-in or owner key is required. Setup accepts your own ROMs and prepares the pinned reference data. No ROMs are bundled or downloaded.
 

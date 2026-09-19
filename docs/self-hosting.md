@@ -17,8 +17,12 @@ Once a release is published, choose its exact tag from the
 folder, download that release's configuration. The version below is an example for
 the upcoming candidate and will work only after it is published:
 
+For the newest release, `https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.yaml`
+and `.../env.example` always resolve to it, so the commands below never go stale. To pin an exact
+version instead, name its tag:
+
 ```sh
-POKESIM_RELEASE=v0.1.1
+POKESIM_RELEASE=v0.1.2
 curl -fL --retry 3 -o compose.yaml "https://github.com/afk-sapien/PokeSim/releases/download/$POKESIM_RELEASE/compose.yaml"
 curl -fL --retry 3 -o .env "https://github.com/afk-sapien/PokeSim/releases/download/$POKESIM_RELEASE/env.example"
 mkdir -p pokesim-app
@@ -57,7 +61,7 @@ still needs internet access unless the reference archive is supplied locally.
 | `PUBLIC_URL=http://localhost:8930` | Exact browser address, including scheme and port |
 | `HTTP_PORT=8930` | Host port mapped to the manager |
 | `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
-| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.1.1` | Exact published image version, overridden by `compose.build.yaml` for source builds |
+| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.1.2` | Exact published image version, overridden by `compose.build.yaml` for source builds |
 
 The Library opens directly without a sign-in or owner key. Its default published port is local-only. Anyone who can reach the Library can manage adventures, so remote access belongs behind an authenticated HTTPS reverse proxy or on a trusted private network. Point an existing authenticated proxy at the manager and preserve the Host matching `PUBLIC_URL`, which must be the browser-facing address. The application checks Host and Origin and protects browser writes against cross-site requests. These protections do not authenticate remote users. Worker credentials and private ports remain internal.
 
