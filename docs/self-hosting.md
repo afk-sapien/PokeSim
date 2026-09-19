@@ -4,7 +4,52 @@
 
 One manager serves the browser, owns the library, and starts one child process per running adventure. Several Red or Blue games can run inside one container. Cable trading uses an additional temporary paired emulator process. Set capacity according to available CPU, memory, and storage.
 
-Build and start using the [README instructions](../README.md#in-one-docker-container). The container runs as UID and GID 10001, with a read-only root filesystem. Its `/data` volume contains the complete application. Reference setup writes verified shared assets there on first use.
+Use a published GHCR image as described below, or build and start using the [README instructions](../README.md#in-one-docker-container). The container runs as UID and GID 10001, with a read-only root filesystem. Its `/data` volume contains the complete application. Reference setup writes verified shared assets there on first use.
+
+### Install a published container
+
+The next release will publish a versioned Linux amd64 image at `ghcr.io/afk-sapien/pokesim`.
+This candidate is not published yet. Until it is, use the source build in the README.
+Older retired releases do not provide this registry installation.
+
+Once a release is published, choose its exact tag from the
+[release page](https://github.com/afk-sapien/PokeSim/releases). In a new installation
+folder, download that release's configuration. The version below is an example for
+the upcoming candidate and will work only after it is published:
+
+```sh
+POKESIM_RELEASE=v0.1.0
+curl -fL --retry 3 -o compose.yaml "https://github.com/afk-sapien/PokeSim/releases/download/$POKESIM_RELEASE/compose.yaml"
+curl -fL --retry 3 -o .env "https://github.com/afk-sapien/PokeSim/releases/download/$POKESIM_RELEASE/env.example"
+mkdir -p pokesim-app
+sudo chown 10001:10001 pokesim-app
+docker compose pull
+docker compose up -d
+```
+
+Open [localhost:8930](http://localhost:8930) and supply your ROM through the Library.
+You need Docker Engine with Compose on a Linux amd64 host, or Docker Desktop
+configured for Linux containers on an x86-64 computer. Native ARM64 container
+images are not part of this release pipeline. Python installation remains available
+for supported ARM64 systems.
+
+The release's Compose and environment files select the exact image version. There
+is no floating `latest` tag and no automatic upgrade of an existing installation.
+Public image pulls need no GitHub account, access token, Git clone, or local build.
+
+For an upgrade, back up and stop the application, review the release notes, and set
+`POKESIM_IMAGE` in your existing `.env` to the new version. Preserve your data path
+and other settings. Then run `docker compose pull` and `docker compose up -d`.
+Review any Compose changes in the new release before restarting.
+
+The release also retains `image-linux-amd64.tar.gz` for offline image loading.
+Download it and `SHA256SUMS` from the same release, verify with
+`sha256sum --ignore-missing -c SHA256SUMS`, then run
+`docker load -i image-linux-amd64.tar.gz` and `docker compose up -d --pull never`.
+The loaded archive has the same versioned GHCR tag. Initial reference preparation
+still needs internet access unless the reference archive is supplied locally.
+
+### Settings
 
 | Setting | Purpose |
 | --- | --- |
@@ -12,7 +57,7 @@ Build and start using the [README instructions](../README.md#in-one-docker-conta
 | `PUBLIC_URL=http://localhost:8930` | Exact browser address, including scheme and port |
 | `HTTP_PORT=8930` | Host port mapped to the manager |
 | `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
-| `POKESIM_IMAGE=pokesim:local` | Image built from this checkout |
+| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.1.0` | Exact published image version, overridden by `compose.build.yaml` for source builds |
 
 The Library opens directly without a sign-in or owner key. Its default published port is local-only. Anyone who can reach the Library can manage adventures, so remote access belongs behind an authenticated HTTPS reverse proxy or on a trusted private network. Point an existing authenticated proxy at the manager and preserve the Host matching `PUBLIC_URL`, which must be the browser-facing address. The application checks Host and Origin and protects browser writes against cross-site requests. These protections do not authenticate remote users. Worker credentials and private ports remain internal.
 
@@ -60,7 +105,10 @@ Native source launch depends on the availability of Python, PyBoy, and its nativ
 
 ## Historical prebuilt release
 
-The prebuilt instructions below are pinned to the older **v0.2.0rc6** public archive. That release does not include every feature shown in the current README screenshots. Keep its source checkout, image, and configuration together.
+The instructions below are retained only for existing **v0.2.0rc6** installations.
+This release is retired and should not be used for a new installation. Use the
+current application instructions above. Keep historical source, images, and
+configuration together when recovering an old installation.
 
 ## Install the prebuilt v0.2.0rc6 release
 

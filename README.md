@@ -85,7 +85,9 @@ Python installation and Docker are the supported distribution paths. The Python 
 
 ### In one Docker container
 
-The server runs the same library and child-process architecture. One persistent application folder contains its independent adventures and shared assets. This is development source, so build this checkout rather than using an older public image.
+The server runs the same library and child-process architecture. One persistent application folder contains its independent adventures and shared assets. Future releases publish a prebuilt Linux amd64 image to `ghcr.io/afk-sapien/pokesim` and include ready-to-use Compose files. See [installing a published container](docs/self-hosting.md#install-a-published-container) for the download and pull commands. No registry login or source build is needed for a published image.
+
+The current candidate has not been published. For now, build and start this checkout:
 
 ```sh
 git clone https://github.com/afk-sapien/PokeSim.git pokesim
@@ -94,7 +96,7 @@ cp .env.example .env
 mkdir -p pokesim-app
 sudo chown 10001:10001 pokesim-app
 docker compose -f compose.yaml -f compose.build.yaml build
-docker compose up -d --pull never
+docker compose -f compose.yaml -f compose.build.yaml up -d --pull never
 ```
 
 Open [localhost:8930](http://localhost:8930) and create adventures in the Library. No sign-in or owner key is required. Setup accepts your own ROMs and prepares the pinned reference data. No ROMs are bundled or downloaded.

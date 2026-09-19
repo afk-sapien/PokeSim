@@ -1,15 +1,17 @@
 name: Publish public release
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag, for example v0.2.0rc32
+        description: Tag of an existing GitHub release, for example v0.1.0
         required: true
         type: string
 permissions:
   contents: read
 concurrency:
-  group: publish-${{ inputs.tag }}
+  group: publish-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 jobs:
   validate:
@@ -22,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: refs/tags/${{ inputs.tag }}
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
@@ -30,7 +32,7 @@ jobs:
       - name: Validate public release destination
         id: release
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python - <<'PY'
@@ -54,13 +56,16 @@ jobs:
               assert json.load(response)['visibility'] == 'public', 'This workflow publishes only reviewed public source'
           try:
               with urlopen(Request(f'https://api.github.com/repos/{repo}/releases/tags/{tag}', headers=headers)) as response:
-                  raise RuntimeError('This release already exists. Publish a new version.')
+                  release = json.load(response)
           except HTTPError as error:
-              if error.code != 404:
-                  raise
+              if error.code == 404:
+                  raise SystemExit('Create and publish the GitHub release for this tag first')
+              raise
+          assert not any(asset['name'] == 'image-linux-amd64.tar.gz' for asset in release['assets']), \
+              'This version already has published downloads. Publish a new version.'
           revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write(f'image=pokesim:{version}\nversion={version}\nrevision={revision}\n')
+              output.write(f'image=ghcr.io/{repo.lower()}:{version}\nversion={version}\nrevision={revision}\n')
           PY
   python-install:
     needs: validate
@@ -73,6 +78,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+      packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -108,14 +114,35 @@ jobs:
       - run: uv build
       - run: python tools/check_package.py
       - run: python tools/check_python_install.py
-      - name: Build versioned image and release assets
+      - name: Build and test the versioned image
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
           VERSION: ${{ needs.validate.outputs.version }}
           REVISION: ${{ needs.validate.outputs.revision }}
         run: |
-          docker build --build-arg VERSION="$VERSION" --build-arg REVISION="$REVISION" -t "$IMAGE" .
+          docker build --platform linux/amd64 --build-arg VERSION="$VERSION" --build-arg REVISION="$REVISION" -t "$IMAGE" .
           python tools/check_container.py "$IMAGE"
+      - name: Publish image and verify anonymous access
+        env:
+          IMAGE: ${{ needs.validate.outputs.image }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
+        run: |
+          mkdir -p "$DOCKER_CONFIG"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE"
+          python tools/check_registry_image.py "$IMAGE"
+      - name: Remove registry credentials
+        if: always()
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
+        run: docker logout ghcr.io
+      - name: Assemble versioned release downloads
+        env:
+          IMAGE: ${{ needs.validate.outputs.image }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          REVISION: ${{ needs.validate.outputs.revision }}
+        run: |
           mkdir -p release
           docker save "$IMAGE" | gzip > release/image-linux-amd64.tar.gz
           cp dist/* release/
@@ -123,13 +150,13 @@ jobs:
           cp .env.example release/env.example
           docker run --rm --network none "$IMAGE" cat /usr/share/pokesim/python-dependencies.json > release/python-dependencies.json
           docker image inspect "$IMAGE" --format '{{json .}}' > release/image-metadata.json
-          python tools/assemble_release.py release --version "$VERSION" --revision "$REVISION" --without-desktop
-      - name: Upload and verify the complete draft before publication
+          python tools/assemble_release.py release --version "$VERSION" --revision "$REVISION" --image "$IMAGE" --without-desktop
+      - name: Upload and verify the release downloads
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$RELEASE_TAG" --verify-tag --draft --title "$RELEASE_TAG" --notes-file docs/release-notes.md release/*
+          gh release upload "$RELEASE_TAG" release/* --clobber
           python - <<'PY'
           import hashlib
           import json
@@ -139,7 +166,6 @@ jobs:
           tag = os.environ['RELEASE_TAG']
           repo = os.environ['GITHUB_REPOSITORY']
           release = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/releases/tags/{tag}']))
-          assert release['draft'], 'Only an unpublished draft can be finalized'
           assets = {asset['name']: asset for asset in release['assets']}
           files = list(Path('release').iterdir())
           assert set(assets) == {path.name for path in files}, 'Uploaded asset set is incomplete'
@@ -147,6 +173,6 @@ jobs:
               with path.open('rb') as stream:
                   digest = 'sha256:' + hashlib.file_digest(stream, 'sha256').hexdigest()
               assert assets[path.name]['digest'] == digest, f'Upload verification failed: {path.name}'
-          subprocess.run(['gh', 'release', 'edit', tag, '--draft=false',
+          subprocess.run(['gh', 'release', 'edit', tag,
                           '--prerelease=' + str('rc' in tag).lower()], check=True)
           PY

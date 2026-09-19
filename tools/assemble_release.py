@@ -28,7 +28,7 @@ def check_identity(identity, version, revision):
         raise ValueError('Every package must come from the same clean tagged revision')
 
 
-def assemble(root, version, revision, *, include_desktop=True):
+def assemble(root, version, revision, *, include_desktop=True, image=None):
     archives = DESKTOP_ARCHIVES if include_desktop else ()
     if not re.fullmatch(r'\d+\.\d+\.\d+(?:rc\d+)?', version):
         raise ValueError('Invalid release version')
@@ -63,6 +63,19 @@ def assemble(root, version, revision, *, include_desktop=True):
             or labels['org.opencontainers.image.revision'] != revision):
         raise ValueError('Container identity or platform does not match the release')
 
+    registry_digest = None
+    if image is not None:
+        if not re.fullmatch(r'ghcr\.io/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*:' + re.escape(version), image):
+            raise ValueError('Registry image must use GHCR and the exact release version')
+        if image not in metadata.get('RepoTags', []):
+            raise ValueError('Registry image tag is absent from the tested image')
+        repository = image.rsplit(':', 1)[0]
+        matches = [value for value in metadata.get('RepoDigests', [])
+                   if re.fullmatch(re.escape(repository) + r'@sha256:[0-9a-f]{64}', value)]
+        if len(matches) != 1:
+            raise ValueError('Registry image must have exactly one verified repository digest')
+        registry_digest = matches[0]
+
     desktop = {}
     for name in archives:
         identity = json.loads((root / (name + '.json')).read_text())
@@ -74,7 +87,7 @@ def assemble(root, version, revision, *, include_desktop=True):
             raise ValueError(f'Desktop checksum mismatch: {name}')
         desktop[name] = identity
 
-    image = f'pokesim:{version}'
+    image = image or f'pokesim:{version}'
     settings = root / 'env.example'
     contents = settings.read_text()
     if len(re.findall(r'^POKESIM_IMAGE=.*$', contents, flags=re.M)) != 1:
@@ -83,7 +96,7 @@ def assemble(root, version, revision, *, include_desktop=True):
                               contents, flags=re.M), encoding='utf-8')
     compose = root / 'compose.yaml'
     contents = compose.read_text()
-    image_default = r'\$\{POKESIM_IMAGE:-pokesim:(?:local|\d+\.\d+\.\d+(?:rc\d+)?)\}'
+    image_default = r'\$\{POKESIM_IMAGE:-[^}\s]+\}'
     if len(re.findall(image_default, contents)) not in (1, 2):
         raise ValueError('Release Compose must select the versioned application image')
     compose.write_text(re.sub(image_default, '${POKESIM_IMAGE:-' + image + '}', contents),
@@ -96,6 +109,7 @@ def assemble(root, version, revision, *, include_desktop=True):
              if path.name not in {'manifest.json', 'SHA256SUMS'}}
     (root / 'manifest.json').write_text(json.dumps({
         'version': version, 'revision': revision, 'image': image,
+        **({'image_digest': registry_digest} if registry_digest else {}),
         'image_id': metadata['Id'], 'platform': 'linux/amd64', 'files': files,
     }, indent=2) + '\n', encoding='utf-8')
     files['manifest.json'] = digest(root / 'manifest.json')
@@ -109,8 +123,10 @@ def main():
     parser.add_argument('--version', required=True)
     parser.add_argument('--revision', required=True)
     parser.add_argument('--without-desktop', action='store_true', help='Assemble the Python and Docker release')
+    parser.add_argument('--image', help='Verified GHCR image tagged with the release version')
     args = parser.parse_args()
-    assemble(args.directory, args.version, args.revision, include_desktop=not args.without_desktop)
+    assemble(args.directory, args.version, args.revision,
+             include_desktop=not args.without_desktop, image=args.image)
     print('Release assets verified and manifests written')
 
 

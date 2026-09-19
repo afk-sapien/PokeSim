@@ -79,6 +79,9 @@ Update the owning guide when behavior changes and add user-visible changes to
 [CHANGELOG.md](CHANGELOG.md). Keep future work in the roadmap and deployment details
 in validation receipts. Review `docs/release-notes.md` for the exact tag before publishing.
 
+For publishing triggers, GHCR setup, and recovery after a failed release run, see
+the [release workflow guide](docs/publishing.md).
+
 Bug reports should include the release or commit, operating system and CPU architecture,
 ROM hash, sanitized settings and logs, and reproduction steps. Omit tokens and private
 save files. Use [private reporting](SECURITY.md) for security issues.

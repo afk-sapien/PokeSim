@@ -49,11 +49,11 @@ Point `DATA_PATH` at `./restored/data` and use the matching previous image for t
 For source builds, use the additional `-f compose.build.yaml` file and `--build`. Make a backup and record the current Git commit. Preserve the currently running image before rebuilding:
 
 ```sh
-docker image tag pokesim:local pokesim:before-upgrade
+docker image tag "$(docker compose images -q pokesim)" pokesim:before-upgrade
 docker compose stop
 ```
 
-Take the backup, check out the desired reviewed revision, and run `docker compose -f compose.yaml -f compose.build.yaml up -d --build`. For release images, download and verify the desired version archive using the README instructions, load it with `docker load`, set that exact tag in `POKESIM_IMAGE`, then run `docker compose up -d --pull never --no-build`. There is no public registry dependency.
+Take the backup, check out the desired reviewed revision, and run `docker compose -f compose.yaml -f compose.build.yaml up -d --build`. For new GHCR releases, set the exact version tag in `POKESIM_IMAGE`, then run `docker compose pull` and `docker compose up -d --no-build`. See [container installation](self-hosting.md#install-a-published-container). The checksummed image archive remains available for offline loading with `docker load` and `docker compose up -d --pull never --no-build`.
 
 Rollback can require both the previous image and its matching data backup. A database or save-state format may have changed. Point `DATA_PATH` at a restored backup and set `POKESIM_IMAGE=pokesim:before-upgrade`, then run `docker compose up -d --no-build`. Never use `--build` when starting an old image for rollback.
 

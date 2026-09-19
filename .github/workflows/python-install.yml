@@ -12,7 +12,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: python-install-${{ github.ref }}
+  group: python-install-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   install:

@@ -1,6 +1,6 @@
-# PokeSim 0.2.0rc32 experimental beta
+# PokeSim 0.1.0 experimental beta
 
-This candidate brings the latest development work together on main.
+This release brings the latest development work together on main.
 
 - Manage multiple independent Red and Blue adventures in one Adventure Library.
 - Trade automatically through the in-game Cable Club, with protected partners,
@@ -12,12 +12,19 @@ This candidate brings the latest development work together on main.
 - Apply simulation pace from Library Settings and inspect party moves and stats.
 - Include newer collection, training, healing, shopping, and storage safeguards.
 - Update Python container, runtime, build, and GitHub Actions dependencies.
+- Publish the tested Linux amd64 image to GHCR with versioned Compose downloads
+  and verified anonymous pulls.
 
 Install the Python package with `pokesim-desktop`, or run one Docker container.
 Prepared adventures work offline. Supply your own supported ROM. Packages exclude
 Pokémon ROMs, saves, generated game datasets, and portrait packs.
 
-Downloads for this candidate are Python packages, a Linux amd64 Docker image,
+After publication, install the container from `ghcr.io/afk-sapien/pokesim:0.1.0`
+using the attached `compose.yaml` and `env.example`. Follow the
+[container installation guide](https://github.com/afk-sapien/PokeSim/blob/v0.1.0/docs/self-hosting.md#install-a-published-container).
+No GitHub login or local image build is needed.
+
+Downloads for this release are Python packages, a Linux amd64 Docker image archive,
 Compose configuration, checksums, and a source manifest. Standalone executable
 bundles are outside this release scope. Native package checks use PyBoy's demo
 ROM and do not establish full cartridge gameplay reliability on every platform.
