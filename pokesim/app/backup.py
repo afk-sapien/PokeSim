@@ -15,6 +15,14 @@ import zipfile
 from .registry import identifier
 
 MAX_EXPANDED = 16 * 1024**3
+RESERVED_NAMES = {'CON', 'PRN', 'AUX', 'NUL', 'CONIN$', 'CONOUT$'} | {
+    prefix + number for prefix in ('COM', 'LPT') for number in '123456789¹²³'
+}
+
+
+def file_checksum(path):
+    with path.open('rb') as source:
+        return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
 def extract_archive(archive, destination, max_expanded=MAX_EXPANDED):
@@ -28,10 +36,19 @@ def extract_archive(archive, destination, max_expanded=MAX_EXPANDED):
             relative = PurePosixPath(info.filename)
             mode = info.external_attr >> 16
             total += info.file_size
+            components = info.orig_filename.rstrip('/').split('/')
+            unsafe_component = any(
+                not part or part in {'.', '..'} or part.endswith((' ', '.'))
+                or part.split('.')[0].upper() in RESERVED_NAMES
+                or any(ord(character) < 32 or ord(character) == 127 or character in '<>"|?*' for character in part)
+                for part in components)
             if (relative.is_absolute() or '..' in relative.parts or '\\' in info.orig_filename or '\x00' in info.orig_filename
-                    or ':' in info.filename or mode & 0o170000 == 0o120000 or total > max_expanded):
+                    or ':' in info.filename or unsafe_component
+                    or mode & 0o170000 == 0o120000 or total > max_expanded):
                 raise ValueError('Archive contains unsafe paths or exceeds the expanded size limit')
             path = destination.joinpath(*relative.parts)
+            if any(parent.is_symlink() for parent in (path, *path.parents) if parent != destination):
+                raise ValueError('Archive contains unsafe paths through a symbolic link')
             if info.is_dir():
                 path.mkdir(parents=True, exist_ok=True)
             else:
@@ -72,7 +89,7 @@ def create_backup(manager):
                 files = {}
                 for path in staging.rglob('*'):
                     if path.is_file():
-                        files[path.relative_to(staging).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+                        files[path.relative_to(staging).as_posix()] = file_checksum(path)
                 manifest = {'format': 1, 'id': bid, 'created_at': time.time(), 'files': files}
                 (staging / 'backup.json').write_text(json.dumps(manifest, indent=2))
                 pending = backups / (bid + '.pending')
@@ -107,7 +124,7 @@ def restore_backup(archive, destination):
         if actual != set(manifest['files']) or 'app.sqlite' not in actual:
             raise ValueError('Backup file list is incomplete')
         for relative, expected in manifest['files'].items():
-            if hashlib.sha256((staging / relative).read_bytes()).hexdigest() != expected:
+            if file_checksum(staging / relative) != expected:
                 raise ValueError(f'Backup verification failed for {relative}')
         with closing(sqlite3.connect(staging / 'app.sqlite')) as db:
             if db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':

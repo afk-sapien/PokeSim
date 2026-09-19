@@ -28,17 +28,35 @@ from starlette.background import BackgroundTask
 from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, user_directory
 from ..platform_io import lock_file
+from ..web.security import protect_response, public_origin
 from .assets import Assets
 from .registry import Registry, identifier, validate_id
 from .supervisor import Supervisor
 
 log = logging.getLogger(__name__)
 STATIC = Path(__file__).parents[1] / 'web' / 'static'
+GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'trading',
+                   'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
+                   'api/state', 'api/events', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml'}
+
+
+def public_game_path(method, path):
+    """Allow public routes before HTTP client URL normalization can change them."""
+    if method == 'POST':
+        return path in {'api/control', 'api/trading/preferences'}
+    if method not in {'GET', 'HEAD'}:
+        return False
+    if path in GAME_READ_PATHS:
+        return True
+    if any(part in {'', '.', '..'} for part in path.split('/')):
+        return False
+    return bool(re.fullmatch(r'(?:api/events|events)/[0-9]+|(?:sprites|shots)/[0-9]+\.png|static/[A-Za-z0-9_.-]+', path))
 
 
 class Manager:
     def __init__(self, root, public_url='http://127.0.0.1:8000', *, game_data_dir=None,
                  reference_archive=None, child_factory=None):
+        self.public_url = public_origin(public_url)
         self.root = Path(root).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.lock = (self.root / 'application.lock').open('a+b')
@@ -48,7 +66,6 @@ class Manager:
         except BaseException:
             self.lock.close()
             raise
-        self.public_url = public_url.rstrip('/')
         self.assets = Assets(self.registry, game_data_dir, reference_archive)
         self.supervisor = Supervisor(self.registry, self.assets, self.public_url,
                                      **({'child_factory': child_factory} if child_factory else {}))
@@ -213,9 +230,7 @@ def create_app(manager, shutdown=lambda: None):
             if session is None or not csrf.isascii() or not hmac.compare_digest(csrf, session['csrf_token']):
                 return JSONResponse({'detail': 'Reload this page before making changes'}, status_code=403)
         response = await call_next(request)
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['Referrer-Policy'] = 'no-referrer'
-        response.headers['X-Frame-Options'] = 'DENY'
+        protect_response(response)
         if not request.url.path.startswith('/static/'):
             response.headers['Cache-Control'] = 'no-store'
         return response
@@ -450,6 +465,8 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.api_route('/games/{aid}/{path:path}', methods=['GET', 'POST', 'HEAD'])
     async def game(aid: str, path: str, request: Request):
+        if not public_game_path(request.method, path):
+            raise HTTPException(404)
         adventure = manager.registry.adventure(aid)
         if path == 'trading' and request.method in {'GET', 'HEAD'}:
             from ..web.pages import render_game_page
@@ -461,8 +478,6 @@ def create_app(manager, shutdown=lambda: None):
             asset = path.removeprefix('static/')
             if asset in {'routes.js', 'style.css', 'pokedex.css', 'pages.css', 'adventure-trading.js'}:
                 return FileResponse(STATIC / asset)
-        if path.startswith('internal') or path == 'api/trade' or '..' in path.split('/'):
-            raise HTTPException(404)
         sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)
         if sprite and request.method in {'GET', 'HEAD'}:
             dex = int(sprite[1])
@@ -509,9 +524,7 @@ def create_app(manager, shutdown=lambda: None):
         if request.method == 'POST' and manager.coordinator.reserved(aid):
             raise HTTPException(409, 'A trade holds this adventure')
         client = httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(20, read=30))
-        target = child.url + '/' + path
-        if request.url.query:
-            target += '?' + request.url.query
+        target = httpx.URL(child.url).copy_with(path='/' + path, query=request.scope['query_string'])
         headers = {'Authorization': 'Bearer ' + child.token}
         if request.headers.get('content-type'):
             headers['Content-Type'] = request.headers['content-type']

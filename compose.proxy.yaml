@@ -4,10 +4,17 @@ services:
       file: compose.yaml
       service: pokesim
     ports: !reset []
-    networks: [backend]
+    networks: [backend, outbound]
   proxy:
     image: caddy:2.11.4-alpine
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
       AUTH_USER: ${AUTH_USER:?Set AUTH_USER in the proxy environment file}
@@ -29,6 +36,7 @@ networks:
   backend:
     internal: true
   edge:
+  outbound:
 volumes:
   proxy-data:
   proxy-config:
