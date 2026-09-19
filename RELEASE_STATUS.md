@@ -9,6 +9,9 @@ Docker image and Compose configuration. The `pokesim-desktop` Python command ope
 the Library in your browser. Standalone executable bundles are experimental and
 are not required or advertised for this release.
 
+The [consolidation validation record](docs/validation/repository-cleanup-20260918.md)
+records the local checks and their scope.
+
 Publication is gated on Python and browser regression checks, clean package
 identities, Docker lifecycle checks, and isolated native Python installations on
 Windows x86-64, Intel macOS, Apple Silicon, and Linux x86-64 and ARM64. The workflow

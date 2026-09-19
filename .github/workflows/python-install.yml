@@ -11,8 +11,12 @@ on:
         type: string
 permissions:
   contents: read
+concurrency:
+  group: python-install-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   install:
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -33,13 +37,14 @@ jobs:
       - name: Prepare verified reference data without a private ROM
         run: uv run --locked python tools/prepare_test_data.py
       - name: Test native service and Python launcher
-        run: uv run --locked pytest --ignore=tests/test_rom.py -q
+        run: uv run --locked pytest --ignore=tests/test_rom.py -q -o faulthandler_timeout=120
       - run: uv build
       - name: Check package resources and exclude private data
         run: uv run --locked python tools/check_package.py
       - name: Install wheel and test Library and native workers outside the checkout
         run: uv run --locked python tools/check_python_install.py
   acceleration:
+    timeout-minutes: 15
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

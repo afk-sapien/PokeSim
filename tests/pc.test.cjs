@@ -22,7 +22,6 @@ function pc(pokemon, search = '?scope=all', party = [], base = '') {
       storage: {active_box: 1, box_counts: Array(12).fill(20), pokemon}})}),
     setInterval() {},
   })
-  context.PokeSim = {base: '', fetch: context.fetch}
   vm.runInContext(source, context)
   return {
     async ready() { await new Promise(resolve => setImmediate(resolve)) },
@@ -257,3 +256,23 @@ test('DV ratings filter, sort, bookmark, and explain partners in every view', as
   view.sort('dv_stars', 'asc')
   assert.deepEqual(view.rows().map(p => p.position), [1, 2, 3, 4, 5])
 })
+
+test('PC filters preserve the selected adventure address', async () => {
+  const view = pc([mon(1, 1, 20)], '?scope=all', [], '/games/second-red')
+  await view.ready()
+  view.sort('level')
+  assert.match(view.url(), /^\/games\/second-red\/pc\?/)
+})
+
+test('Elite Four wins sort across the party and boxes with unknown totals last', async () => {
+  const view = pc([mon(1, 1, 20, {elite_four_wins: 2}), mon(2, 1, 20, {elite_four_wins: null})],
+    '?scope=all&sort=elite_four_wins', [{...mon(0, 1, 20, {elite_four_wins: 7}), slot: 1}])
+  await view.ready()
+  assert.deepEqual(view.rows().map(p => p.elite_four_wins), [7, 2, null])
+  assert.match(view.element('#pc-grid').innerHTML, /Elite Four wins <b>7/)
+  view.sort('elite_four_wins', 'asc')
+  assert.deepEqual(view.rows().map(p => p.elite_four_wins), [2, 7, null])
+  view.element('#pc-grid').onclick({target: {closest: selector => selector === '[data-mon]' ? {dataset: {mon: '0'}} : null}})
+  assert.match(view.element('#pc-detail-body').innerHTML, /Elite Four wins: 2/)
+})
+
