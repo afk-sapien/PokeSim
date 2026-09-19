@@ -57,16 +57,17 @@ class SimulationRuntime:
                     load(name)
                 from ..store import Store
                 from ..emulator import Emulator
-                from ..notify import Ntfy
+                from ..notify import LiveNtfy, Ntfy
                 self.store = Store(Path(self.settings.data_dir))
                 if self.managed:
                     from .participant import recover_storage
                     recover_storage(self.store)
                     from .reward_delivery import recover_storage as recover_rewards
                     recover_rewards(self.store)
-                ntfy = (Ntfy(self.settings.ntfy_url, self.settings.ntfy_token,
-                             self.settings.ntfy_min_priority, set(self.settings.ntfy_mute))
-                        if self.settings.ntfy_url else None)
+                sender = (self.settings.ntfy_url, self.settings.ntfy_token,
+                          self.settings.ntfy_min_priority, set(self.settings.ntfy_mute))
+                # A managed adventure receives its destination and filters from the Library while it runs.
+                ntfy = LiveNtfy(*sender) if self.managed else Ntfy(*sender) if self.settings.ntfy_url else None
                 self.emulator = Emulator(self.store, ntfy, isolated_ram=self.managed)
                 self.emulator.start()
             except BaseException:
