@@ -52,9 +52,9 @@ def main():
         def ready():
             compose('up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '60', 'pokesim')
             address = compose('port', 'pokesim', '8000', capture=True).strip()
-            with urlopen(f'http://{address}/healthz', timeout=5) as response:
+            with urlopen(Request(f'http://{address}/healthz', headers={'Host': 'localhost:8930'}), timeout=5) as response:
                 assert response.status == 200
-            with urlopen(f'http://{address}/', timeout=5) as response:
+            with urlopen(Request(f'http://{address}/', headers={'Host': 'localhost:8930'}), timeout=5) as response:
                 assert b'<html' in response.read().lower()
 
         try:

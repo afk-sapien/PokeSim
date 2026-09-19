@@ -30,7 +30,7 @@ def legacy_main():
     try:
         with Runtime(config.DATA_DIR, ntfy) as runtime:
             emu = runtime.emu
-            app = create_app(emu, runtime.store)
+            app = create_app(emu, runtime.store, browser_origin=config.PUBLIC_URL)
             server = uvicorn.Server(uvicorn.Config(
                 app, host=config.HOST, port=config.PORT, log_level="warning",
                 timeout_graceful_shutdown=5))

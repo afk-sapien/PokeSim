@@ -1,5 +1,5 @@
 FROM ghcr.io/astral-sh/uv:0.12.15 AS uv
-FROM python:3.14-slim-bookworm AS build
+FROM python:3.14-slim-trixie AS build
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
@@ -9,15 +9,18 @@ COPY tools/bundle_dependency_sources.py ./tools/bundle_dependency_sources.py
 RUN uv sync --frozen --no-dev --no-editable \
     && .venv/bin/python tools/bundle_dependency_sources.py /notices
 
-FROM python:3.14-slim-bookworm
+FROM python:3.14-slim-trixie
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     DATA_DIR=/data ROM_PATH=/roms/pokered.gb PORT=8000 HOST=0.0.0.0 \
     SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy PATH=/app/.venv/bin:$PATH
-RUN apt-get update && apt-get install -y --no-install-recommends git libgl1 libglib2.0-0 \
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 pokesim \
     && useradd --uid 10001 --gid pokesim --no-create-home pokesim \
     && mkdir /data /roms && chown pokesim:pokesim /data
+RUN python -m pip uninstall --yes pip \
+    && rm -rf /usr/local/lib/python3.14/ensurepip
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /notices /usr/share/pokesim

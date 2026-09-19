@@ -12,6 +12,8 @@ PyBoy 2.7.0 is distributed under GNU LGPL version 3. The original LGPL text and 
 
 Other Python dependencies retain their own licenses. The image records their installed names, versions, license metadata, and notice paths in `/usr/share/pokesim/python-dependencies.json`. Native components and Debian packages retain their installed notices under `/usr/share/doc`. The OCI license label summarizes the application and emulator licenses. It is not an exhaustive license expression for every OS and transitive dependency.
 
+The optional authenticated proxy builds [Caddy 2.11.4](https://github.com/caddyserver/caddy/tree/v2.11.4), licensed under Apache License 2.0, with a current Go toolchain and pinned dependency updates. Its image retains discovered module license and notice files under `/usr/share/pokesim-proxy/licenses`, the exact module versions and checksums in that directory's parent, and a list of compiled packages. The build recipe and wrapper source are in `deploy/proxy`. This proxy is a separate image from the Python application.
+
 Sources:
 
 - [PyBoy source and LGPL license](https://github.com/Baekalfen/PyBoy/tree/4627b90b878e91faff443b3acd6d4e4be09a4387)

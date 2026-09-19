@@ -35,14 +35,18 @@ class TradePreference(BaseModel):
     state: Literal['offered', 'withdrawn', 'auto', 'locked', 'unlocked']
 
 
-def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adventure_name: str = '') -> FastAPI:
+def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adventure_name: str = '',
+               browser_origin: str | None = None) -> FastAPI:
     if base_path and not re.fullmatch(r'/games/[A-Za-z0-9_-]+', base_path):
         raise ValueError('Invalid adventure base path')
     def page(name: str, **context):
         return render_game_page(name, base_path=base_path, adventure_id=adventure_id,
                                 adventure_name=adventure_name, **context)
 
-    app = FastAPI(title="pokesim")
+    app = FastAPI(title="pokesim", docs_url=None, redoc_url=None, openapi_url=None)
+    if browser_origin is not None:
+        from .security import install_browser_boundary
+        install_browser_boundary(app, browser_origin)
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     app.mount("/shots", StaticFiles(directory=store.shots), name="shots")
 

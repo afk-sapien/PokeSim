@@ -125,7 +125,7 @@ def game(tmp_path, monkeypatch):
     monkeypatch.setattr(trading, 'board', emu.board)
     eid = store.add_event(Event('catch', 'Caught a partner', priority=4), emu.snapshot, None, b'checkpoint')
     try:
-        with serve(lambda url: create_app(emu, store)) as url:
+        with serve(lambda url: create_app(emu, store, browser_origin=url)) as url:
             yield url, store, emu, eid
     finally:
         store.close()
