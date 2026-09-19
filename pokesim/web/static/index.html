@@ -23,7 +23,14 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" class="n
 <span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
 </header>
 <main id="main" class="page-main">
-
+<header class="live-summary" id="journey-progress" aria-label="Trainer and adventure summary">
+<div class="live-identity" aria-label="Trainer"><h1 id="trainer-name">Getting ready</h1><small id="trainer-rival"></small></div>
+<div class="live-badges"><div class="live-badge-label"><span class="eyebrow">Badges</span><strong id="badge-count">0 / 8</strong></div><div class="badges" id="badges"></div></div>
+<div class="live-stat"><span class="eyebrow">Registered</span><strong id="dex-count">0 / 151</strong></div>
+<div class="live-stat"><span class="eyebrow">League wins</span><strong id="league-wins" title="Completed Elite Four and Champion runs">0</strong></div>
+<div class="live-stat"><span class="eyebrow">Money</span><strong id="money">₽0</strong></div>
+<div class="live-stat live-time"><span class="eyebrow">Play hours</span><strong id="playtime">00:00</strong><small id="clock-note"></small></div>
+</header>
 <div class="watch-layout"><div class="watch-stage"><section class="game-card" aria-labelledby="live-heading">
         <div class="game-heading"><div><span class="live-label"><i></i> LIVE NOW</span><h2 id="live-heading">Somewhere in Kanto</h2></div><button class="icon-button" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">⛶</button></div>
         <div class="screen" id="screen"><img id="stream" alt="Live Pokémon game"><span class="screen-corner">POKÉMON · GAME BOY</span></div>
@@ -33,20 +40,12 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" class="n
       </section></div><div class="watch-companions"><section class="objective-card" id="strategy-panel" aria-labelledby="objective-heading" hidden>
 <div class="objective-body"><p class="eyebrow" id="objective-heading">THE PLAN (ALLEGEDLY)</p><h2 id="objective">Finding the way forward</h2><p id="decision"></p><p class="eyebrow" id="progress-state">Exploring</p><p id="last-achievement">Waiting for the first achievement.</p><div class="watch-next"><span>Up next</span><strong id="next-objective">Finding the next milestone</strong></div></div></section><section class="party-section" id="team" aria-labelledby="party-heading"><div class="section-heading"><div><p class="eyebrow">BETTER TOGETHER</p><h2 id="party-heading">The usual suspects</h2></div><span class="count-pill" id="party-count">0 / 6</span></div><ul class="party" id="party"><li class="empty-party"><span aria-hidden="true">◌</span><h3>Every team starts somewhere.</h3><p>The first partner will appear here.</p></li></ul></section></div></div>
 
-<header class="live-summary" id="journey-progress" aria-label="Trainer and adventure summary">
-<div class="live-identity" aria-label="Trainer"><h1 id="trainer-name">Getting ready</h1><small id="trainer-rival"></small></div>
-<div class="live-badges"><div class="live-badge-label"><span class="eyebrow">Badges</span><strong id="badge-count">0 / 8</strong></div><div class="badges" id="badges"></div></div>
-<div class="live-stat"><span class="eyebrow">Registered</span><strong id="dex-count">0 / 151</strong></div>
-<div class="live-stat"><span class="eyebrow">League wins</span><strong id="league-wins" title="Completed Elite Four and Champion runs">0</strong></div>
-<div class="live-stat"><span class="eyebrow">Money</span><strong id="money">₽0</strong></div>
-<div class="live-stat live-time"><span class="eyebrow">Play hours</span><strong id="playtime">00:00</strong><small id="clock-note"></small></div>
-</header>
 </main>
 
 <footer><span id="app-version"></span><a class="brand footer-brand" href="${game_base}/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><button id="restart" class="restart-link">Restart run</button><a href="${game_base}/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
 <dialog id="partner-detail" class="partner-detail" aria-labelledby="partner-detail-heading"><form method="dialog"><button class="partner-close" aria-label="Close Pokémon details">Close ×</button></form><div id="partner-detail-content"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script src="${game_base}/static/screen.js?v=1"></script>
-<script src="${game_base}/static/app.js?v=live-simple-1"></script>
+<script src="${game_base}/static/app.js?v=live-summary-top-1"></script>
 </body>
 </html>

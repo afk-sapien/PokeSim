@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- Show the trainer, badges, registrations, League wins, money and play time above
+  the Live game and party panels.
 - Publish GHCR images automatically when a GitHub release is published, with anonymous pull
   verification, and versioned Compose downloads for Python and Docker releases.
 - Consolidate the Adventure Library and independent Red and Blue workers on main.
