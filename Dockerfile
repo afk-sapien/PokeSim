@@ -19,6 +19,8 @@ RUN apt-get update && apt-get upgrade -y \
     && groupadd --gid 10001 pokesim \
     && useradd --uid 10001 --gid pokesim --no-create-home pokesim \
     && mkdir /data /roms && chown pokesim:pokesim /data
+RUN python -m pip uninstall --yes pip \
+    && rm -rf /usr/local/lib/python3.14/ensurepip
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /notices /usr/share/pokesim

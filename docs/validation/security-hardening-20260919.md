@@ -11,6 +11,7 @@ Changes:
 - Restricted the Caddy container to a read-only root filesystem, no new privileges, and its required port-binding capability. Corrected the proxy's library data-directory example and documented the distinction between viewer-only controls and library administration.
 - Added locked runtime dependency auditing and an actual authenticated TLS deployment check to CI.
 - Moved the application image from Debian 12 to Debian 13, applied available OS updates, and removed unused desktop graphics libraries. Debian records the older SQLite issue as fixed in the newer distribution. See the [Debian SQLite advisory](https://security-tracker.debian.org/tracker/CVE-2025-7458).
+- Removed the base image's unused runtime pip installer and bootstrap bundle. A full language-package image scan found vulnerable vendored msgpack and setuptools copies inside that installer, outside the application's locked environment. Dependency installation remains in the build stage.
 - Added a reproducible proxy build using Caddy 2.11.4, Go 1.27.1, and locked patched Go modules. It includes dependency license notices and the compiled package list. Dependabot covers its Docker and Go dependencies. CI scans both images and rejects fixable high and critical advisories.
 
 Local validation:
