@@ -42,6 +42,9 @@ Follow the current [installation instructions](../README.md) and [operations gui
 | `PUBLIC_URL` | `http://localhost:8000` | absolute links in the feed / ntfy click actions |
 | `AUTOSAVE_SECONDS` / `KEEP_AUTOSAVES` | `60` / `20` | save-state rotation |
 | `STUCK_RELOAD_SECONDS` | `600` | stationary timeout, valid strategic overworld play replans while other cases can reload an autosave |
+| `STALL_ALERT_GAME_MINUTES` | `120` | game time without an achievement before a `stall` journal entry is recorded, `0` turns it off |
+| `STALL_ALERT_REAL_MINUTES` | `15` | real time that must also pass, so Max pace does not report brief lulls |
+| `STALL_ALERT_REPEAT_HOURS` | `6` | real hours before a continuing stall is reported again |
 | `BATTLE_TIMEOUT_SECONDS` | `900` | a battle lasting this long → reload |
 | `HOST` / `PORT` | `127.0.0.1` / `8000` | native service bind address and port |
 | `VIEWER_ONLY` | `0` | disable browser game controls and preference writes |

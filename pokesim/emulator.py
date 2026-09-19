@@ -15,7 +15,7 @@ from pyboy import PyBoy
 
 from . import __version__, config
 from .build_info import build_info
-from .events import RunMemory, diff
+from .events import HIGH, Event, RunMemory, diff
 from . import rewards
 from .legendary import LegendaryRecovery
 from .play_clock import PlayClock
@@ -23,6 +23,7 @@ from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext
 from .ram import Snapshot, read_snapshot
 from .screen import W_OPTIONS
+from .stalls import PROGRESS_EVENTS, StallWatch
 
 log = logging.getLogger("pokesim.emu")
 
@@ -58,6 +59,8 @@ class Emulator:
         self.legendary_recovery = LegendaryRecovery()
         achievements = store.events(limit=1, types=('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'))
         self.last_achievement = achievements[0] if achievements else None
+        self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
+                                config.STALL_ALERT_REPEAT_HOURS)
         self.policy.load_state_dict(store.get("policy_state", {}))
         self.commands: queue.Queue = queue.Queue()
         self.manual: queue.Queue = queue.Queue(maxsize=2)
@@ -179,10 +182,14 @@ class Emulator:
         mode = self.policy.details().get('action', '')
         state = 'recovering' if (self.invalid_since or time.time() - self.last_reload < 30
                                  or mode == 'finding another approach') else 'making_progress' if age is not None and age < 120 else 'exploring'
-        return {'state': state, 'last_achievement': {
-            'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
-            'age_seconds': age,
-        } if achievement else None}
+        stall, now = getattr(self, 'stall', None), time.time()
+        if stall and stall.stalled(self.frame, now):
+            state = 'stalled'
+        return {'state': state, 'quiet_game_minutes': stall.quiet(self.frame, now)[0] if stall else 0,
+                'last_achievement': {
+                    'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
+                    'age_seconds': age,
+                } if achievement else None}
 
     # ---------------- internals ----------------
     def health(self) -> dict:
@@ -373,6 +380,8 @@ class Emulator:
             eid = self.store.add_event(ev, snap, png, state if ev.notable else None)
             if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'):
                 self.last_achievement = {'id': eid, 'title': ev.title, 'ts': time.time()}
+            if ev.type in PROGRESS_EVENTS and getattr(self, 'stall', None):
+                self.stall.progress(self.frame, time.time())
             log.info("event #%d %s p%d: %s", eid, ev.type, ev.priority, ev.title)
             if ev.notable and self.ntfy and self.ntfy.wants(ev):
                 self.ntfy.send(ev.title, ev.body, tags=ev.tags, priority=ev.priority, image=png,
@@ -447,6 +456,25 @@ class Emulator:
                 self._unstick(self.stuck_since, "stuck")
         elif self.battle_since and now - self.battle_since > config.BATTLE_TIMEOUT_SECONDS:
             self._unstick(self.battle_since, "battle never ended")
+        self._check_stall(now)
+
+    def _check_stall(self, now):
+        """Report a run that is healthy and moving but has achieved nothing for hours of game time."""
+        snap = self.snapshot
+        if snap is None or not snap.valid or not snap.started:
+            return
+        stall = getattr(self, 'stall', None)
+        quiet = stall.check(self.frame, now) if stall else None
+        if quiet is None:
+            return
+        details = self.policy.details() if hasattr(self.policy, 'details') else {}
+        objective = (details.get('objective') or {}).get('title') or 'no objective'
+        hours = quiet[0] / 60
+        log.warning('no progress for %.1f game hours at %s: %s', hours, snap.map_name, objective)
+        self._handle_events([Event('stall', f'Stuck? {hours:.0f} game hours without progress',
+                                   f'Objective: {objective}. On {snap.map_name} after {quiet[1]} real minutes '
+                                   f'and {details.get("recoveries", 0)} recoveries. The saved moment is attached '
+                                   'to this journal entry.', priority=HIGH, tags='warning')], snap)
 
     def set_trade_preference(self, key, state):
         done, response = threading.Event(), {}

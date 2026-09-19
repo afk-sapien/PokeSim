@@ -284,7 +284,8 @@ class Supervisor:
                     summary = {'activity': game.get('map_name') or 'Adventure in progress',
                                'paused': status.get('paused', False),
                                'frame': status.get('frame'), 'playtime': game.get('playtime'),
-                               'last_response': time.time(), 'league_rewards': status.get('league_rewards')}
+                               'last_response': time.time(), 'league_rewards': status.get('league_rewards'),
+                               'stalled': (status.get('progress') or {}).get('state') == 'stalled'}
                     current = self.registry.adventure(aid)
                     if current['generation'] == child.generation:
                         self.registry.update(aid, summary=summary)

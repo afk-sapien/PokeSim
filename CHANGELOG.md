@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Sell a spare valuable to raise the Safari Zone entry fee. A run that reached the gate
+  short of the fee used to talk to the attendant indefinitely, and shopping now leaves
+  the fee untouched until Surf and the Gold Teeth are collected.
+- Report a stall. An adventure with no achievement for two hours of game time and
+  fifteen real minutes records a `stall` journal entry with the saved moment, shows
+  Stuck? on Live, and sets `stalled` in the Library summary. Managed trades do not
+  count as progress. `STALL_ALERT_GAME_MINUTES=0` turns it off.
+- Add `tools/find_stalls.py`, which plays an isolated adventure at full speed and keeps
+  a replayable bundle for every stall it finds.
+
 ## 0.1.2
 
 - Install with one pipx or pip command from the repository, with no checkout, uv,
