@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an improvement to PokeSim
+title: '[Feature] '
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe what you were trying to do and what got in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+      description: Describe the behavior you have in mind. Screenshots or sketches are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run PokeSim?
+      options:
+        - Docker
+        - Python package (pokesim-desktop)
+        - From source
+        - Other

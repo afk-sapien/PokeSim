@@ -113,6 +113,8 @@ If this sounds like your kind of background adventure, star the project and chec
 - [Backups, updates, and troubleshooting](docs/operations.md)
 - [Development and bug-reporting guide](CONTRIBUTING.md)
 - [Security and private reporting](SECURITY.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+- [Getting help](SUPPORT.md)
 
 ## A small note on game content
 

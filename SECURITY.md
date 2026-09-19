@@ -1,8 +1,8 @@
-Security and support policy
+# Security and support policy
 
 Report a suspected vulnerability using [GitHub private vulnerability reporting](https://github.com/afk-sapien/PokeSim/security/advisories/new). Describe the affected release, deployment configuration, impact, and reproduction steps. Do not put security-sensitive details in a public issue. Never include ROMs, private saves, notification tokens, or passwords in a report.
 
-The current 0.2.0 release-candidate line receives best-effort fixes. This is an experimental personal project with no guaranteed response time or stable-release support commitment. Keep deployments current and preserve backups before updating.
+Only the latest release receives best-effort fixes. This is an experimental personal project with no guaranteed response time or stable-release support commitment. Keep deployments current and preserve backups before updating.
 
 The application serves one owner or a trusted group. It has no built-in login or per-user permissions. Anyone who can reach the application can obtain a browser session and manage the library, including its ROMs, saves, imports, and downloadable backups. CSRF tokens and browser-origin checks prevent unrelated websites from issuing requests. They do not authenticate a person.
 

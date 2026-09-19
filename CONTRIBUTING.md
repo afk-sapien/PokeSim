@@ -1,5 +1,8 @@
 # Contributing to PokeSim
 
+Everyone taking part is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
+For questions, see [getting help](SUPPORT.md).
+
 Original code is MIT licensed. Keep changes focused and describe the problem, resulting
 behavior, and validation in each pull request. Start with the
 [documentation index](docs/README.md) and [module boundaries](docs/architecture.md).
