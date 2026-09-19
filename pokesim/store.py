@@ -76,6 +76,9 @@ class Store:
                         (ts, ev.type, ev.title, ev.body, int(ev.notable), int(ev.priority), snapshot.map_name,
                          "%d:%02d:%02d" % snapshot.playtime))
                     eid = cur.lastrowid
+                    if ev.type == 'champion':
+                        from .league_partners import record
+                        record(self.db, snapshot, ev.title, eid)
                     shot = f"{eid}.png" if shot_png else None
                     state = f"event-{eid}.state" if state_bytes else None
                     for directory, name, data in (

@@ -4,10 +4,13 @@ from __future__ import annotations
 import time
 
 from .cable import CableError, checked
+from .centers import CENTERS, safe_center
 
 
-CENTER_MAP = 89
 CLUB_MAP = 239
+PLAYER_FACING = 0xC109
+WALK_COUNTER = 0xCFC5
+FACING_UP = 4
 
 
 class CableDriver:
@@ -76,20 +79,33 @@ class CableDriver:
     def enter(self):
         from pokesim.policies.navigation import Navigator
         self.report('preparing')
+        for side in self.sides:
+            source = self.snapshot(side)
+            checked(safe_center(source, source.map, side.pb.memory),
+                    'Cable input must be a prepared supported Center checkpoint')
+            checked(side.get('wLinkState') == 0, 'Cable source has an active link state')
+            previous = getattr(side, 'source_center_map', source.map)
+            checked(previous == source.map, 'Cable source Center changed during preparation')
+            side.source_center_map = source.map
         navigators = [Navigator(), Navigator()]
         for _ in range(240):
             buttons = []
             for side, nav in zip(self.sides, navigators):
                 s = self.snapshot(side)
-                checked(s.valid and s.map == CENTER_MAP,
-                        'Cable input must be a prepared Vermilion Center checkpoint')
+                checked(safe_center(s, side.source_center_map, side.pb.memory),
+                        'Cable preparation left its original supported Center')
+                target = CENTERS[side.source_center_map]['rendezvous']
                 pos = (s.map, s.x, s.y)
                 nav.update_live(s, side.pb.memory)
-                buttons.append(None if pos == (CENTER_MAP, 11, 3)
-                               else nav.route(pos, [(CENTER_MAP, 11, 3)], side.frame))
-            if all((self.snapshot(s).x, self.snapshot(s).y) == (11, 3) for s in self.sides):
-                self.press(['up', 'up'], frames=4, after=16)
-                return
+                buttons.append(None if pos == target else nav.route(pos, [target], side.frame))
+            if all((self.snapshot(s).map, self.snapshot(s).x, self.snapshot(s).y)
+                   == CENTERS[s.source_center_map]['rendezvous'] for s in self.sides):
+                if all(s.pb.memory[PLAYER_FACING] == FACING_UP and not s.pb.memory[WALK_COUNTER]
+                       for s in self.sides):
+                    return
+                self.press([None if s.pb.memory[WALK_COUNTER] or s.pb.memory[PLAYER_FACING] == FACING_UP
+                            else 'up' for s in self.sides], frames=8, after=24)
+                continue
             self.press(buttons)
         raise CableError('Cannot reach Cable Club attendant within preparation budget')
 
@@ -168,17 +184,22 @@ class CableDriver:
             for i, side in enumerate(self.sides):
                 snap = self.snapshot(side)
                 screen = Screen(side.pb.memory)
-                if entered[i] and snap.valid and snap.started and snap.map == CENTER_MAP and not snap.textbox:
+                if entered[i] and safe_center(snap, side.source_center_map, side.pb.memory):
                     buttons.append(None)
                 elif 'CONTINUE' in screen.text:
                     entered[i] = True
-                    buttons.append('a')
+                    buttons.append('up' if screen.menu_index > 0 else 'a')
+                elif 'NEW GAME' in screen.text:
+                    raise CableError('Cartridge save has no Continue option')
+                elif entered[i]:
+                    buttons.append(None)
                 else:
                     buttons.append('start' if step % 3 == 0 else 'a')
-            if all(entered[i] and self.snapshot(side).valid and self.snapshot(side).started
-                   and self.snapshot(side).map == CENTER_MAP and not self.snapshot(side).textbox
+            if all(entered[i] and safe_center(self.snapshot(side), side.source_center_map, side.pb.memory)
                    and side.get('wLinkState') == 0 for i, side in enumerate(self.sides)):
                 self.tick(120)
+                checked(all(safe_center(self.snapshot(side), side.source_center_map, side.pb.memory)
+                            for side in self.sides), 'Center was not stable after Continue')
                 return
             self.press(buttons, after=60)
         raise CableError('Cartridge Continue did not return both games to the Center')

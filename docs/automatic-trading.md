@@ -89,26 +89,21 @@ extra Eevee supply, or starter farming are part of this feature.
 
 ## Championship rewards
 
-Set `league_rewards` to true in private and public policy files, with the coordinator
-enabled. Every newly observed Hall of Fame entry earns one random level-5 Pokémon from
-Bulbasaur, Charmander, Squirtle, Eevee, Omanyte, Kabuto, Aerodactyl, and Mew. Each species
-has equal probability. Gifts have ordinary DVs, zero stat experience, correct starting
-moves and experience, and original trainer POKESIM. Duplicates are allowed.
+New managed adventures enable League rewards and the one-time Mew event by default.
+Each future League victory while enabled earns one level-5 gift. See the
+[reward unlock table](desktop.md#trading) for the current pool and requirements.
+Species in the eligible pool have equal probability. Gifts have ordinary DVs,
+zero stat experience, correct starting moves and experience, and original trainer
+POKESIM. Duplicates are allowed.
 
-Claims begin with victories observed after this upgrade. Existing historical victories
-are not backfilled. The counter persists beyond the cartridge Hall of Fame counter's
-limit. A database high-water mark prevents an older checkpoint replay from earning the
-same claim again. Selection stays fixed across delivery retries. A full PC leaves the
-claim pending, with no overwrite or loss. The coordinator delivers one pending reward
-per eligible peer per cycle using the same held-checkpoint verification and recovery
-as trades. Rewards bypass the trade interval and do not require a useful trade proposal.
-There is no reward cooldown, roster qualification, or individual approval.
+Historical wins are not rewarded retrospectively. Total League wins are tracked
+separately from earned, delivered, and pending gifts, including wins while rewards
+are disabled. Both counts survive ordinary restarts and checkpoint restores.
+The full unlocked pool contains twelve species, but each win still earns one gift.
 
-The board lists rewards separately from completed exchanges. Game state includes earned,
-delivered, and pending counts under `league_rewards`. Keep the older `mew_event` false
-when using this pool. Both adventures remain intact. A deliberate manual new-adventure
-restart clears the reward ledger. Ordinary recovery and restarts of the server retain it.
-
+A full PC leaves a claim pending without replacing existing Pokémon. Managed
+adventures deliver local gifts at safe points using durable receipts and ownership
+barriers. Real cable trading remains a separate operation.
 
 ## Independent safe points
 

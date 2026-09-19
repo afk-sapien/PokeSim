@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -55,6 +56,28 @@ def observe(root, output):
                               recent_events=[{k: event.get(k) for k in ('id', 'ts', 'type', 'title')}
                                              for event in events])
                 before = prior.get(aid, {})
+                storage = game.get('storage') or {}
+                species = Counter(mon.get('name', 'Unknown')
+                                  for mon in [*game.get('party', []), *storage.get('pokemon', [])])
+                sample.update(in_battle=game.get('in_battle'), enemy=game.get('enemy'),
+                              enemy_level=game.get('enemy_level'),
+                              species_counts=dict(species.most_common()),
+                              storage_free=sum(20 - count for count in storage.get('box_counts', [])))
+                try:
+                    dex = app.request('GET', f'/games/{aid}/api/pokedex/status')
+                    sample['catches'] = dex.get('catches')
+                    catches = sample['catches'] or {}
+                    prior_catches = before.get('catches') or {}
+                    if (catches.get('available') and prior_catches.get('available')
+                            and catches.get('started_at') == prior_catches.get('started_at')):
+                        sample['catches_change'] = catches['total'] - prior_catches['total']
+                        sample['species_catches_change'] = {
+                            dex: count - prior_catches.get('counts', {}).get(dex, 0)
+                            for dex, count in catches.get('counts', {}).items()
+                            if count != prior_catches.get('counts', {}).get(dex, 0)}
+                except Exception as error:
+                    sample['catches_observation_error'] = str(error)
+                    report['concerns'].append(f"{row['name']}: capture counts unavailable: {error}")
                 if before.get('frame') is not None:
                     sample['frame_change'] = sample['frame'] - before['frame']
                     sample['generation_changed'] = before.get('generation') != sample['generation']

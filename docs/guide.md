@@ -291,10 +291,12 @@ This does not add perfect-DV hunts or replace party members for small DV differe
 The GUI has four pages:
 
 - **Live** (`/`): the game, current goal, all six party members, and badge progress together.
-  Expand a partner for moves and stats. Adventure details contains projects, routes, readiness,
-  and the bag. The gamepad opens when taking control.
+  The game and the plan with the party align in two columns on desktop.
+  A compact trainer strip below both columns holds badges, registrations, League wins, and money.
+  The gamepad opens when taking control. Detailed planning, route, and bag panels are omitted from Live.
 - **Pokédex** (`/pokedex`): all 151 species in one list, with search, filters, and individual records.
-- **PC** (`/pc`): one storage box at a time, search across boxes, and individual DVs and training.
+- **PC** (`/pc`): physical boxes or the entire collection on one page, with search, sorting,
+  individual DVs, and training. All Pokémon includes every partner without pagination.
 - **Journal** (`/journal`): event filters, highlights, and earlier moments.
 
 The PC box selector changes the view, not the game's active box. Keyboard game controls
@@ -347,3 +349,32 @@ and polls Red on port 8930 and Blue on port 8940 through the host gateway. It mo
 read-only game data and has no access to saves or ROMs. It cannot execute an exchange.
 Each actual exchange requires approval of its specific participants before live saves
 are stopped, backed up, validated, and exchanged.
+
+## Ongoing collecting
+
+Registering a species does not remove it from future catching expeditions. The
+player prioritizes missing Pokédex entries and Pokémon requested by other running
+adventures. It also seeks species it no longer holds and occasionally catches
+another copy of a species already in its collection. Plentiful and recently caught
+species receive less attention.
+
+Each repeat expedition aims to acquire one additional individual before choosing
+its next project. Ordinary repeat hunts require a reserve of normal Poké Balls and
+use a bounded attempt budget. They do not spend a Master Ball. Storage cleanup
+retains useful copies and respects locks, offers, active projects, and the copies
+currently needed for other adventures. A single adventure continues collecting
+without needing a trading partner.
+
+## Individual Elite Four wins
+
+The PC shows an **Elite Four wins** count on each Pokémon card and in its details. In **All Pokémon**, choose **Elite Four wins** under **Sort by** to rank the party and every box together.
+
+Each completed Elite Four and Champion run credits every member of the Hall of Fame party, including fainted members. Boxed Pokémon receive no credit for that run. Counts persist through evolution, training, PC moves, restarts, and managed cable trades. Replayed victory records and repeated trade recovery do not add duplicate credit.
+
+Counts include verified historical victory saves when imported. Missing history is not estimated. Generation I has no unique individual identifier. If two partners have indistinguishable trainer and DV data, the count shows **Unavailable** to avoid assigning one Pokémon's wins to another.
+
+## Training more partners to level 100
+
+After becoming Champion, training projects aim for level 100 and favor eligible Pokémon within five levels of the highest unfinished partner. Training takes a larger share of postgame projects, with breaks for collecting, exploration, League rewards, and urgent supplies. Productive training can return to the same individual after a bounded session, while stalled projects retain their normal timeout and retry safeguards.
+
+Individually identifiable duplicates can train even when another member of their evolution family is owned. Pokémon already at level 100 are excluded. When preparing a boxed trainee, the party prefers to deposit a level-100 reserve while keeping a strong battler and required field moves. A trainee with a safe, effective attack stays in battle rather than switching merely for a stronger matchup. Healing and emergency switches still take priority.

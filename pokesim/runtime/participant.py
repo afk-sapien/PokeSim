@@ -55,14 +55,18 @@ def _promote(store, record):
         raise ValueError('The committed checkpoint is damaged')
     CheckpointStore.atomic_write(path.with_suffix('.json'), json.dumps(metadata).encode())
     with store.lock, store.db:
+        from ..league_partners import merge
+        merge(store.db, record.get('incoming_league_record'))
         store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', ('trade_barrier', json.dumps(record['id'])))
         hold = {'id': record['id'], 'source': record['source_name'], 'phase': 'prepared'}
         store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', ('trade_hold', json.dumps(hold)))
         marker = 'managed_journal:' + record['id']
         if not store.db.execute('SELECT 1 FROM kv WHERE k=?', (marker,)).fetchone():
+            from ..interactions.centers import CENTERS
+            location = CENTERS.get(record.get('source_center_map'), {}).get('name', 'Pokémon Center')
             store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime)
                 VALUES (?,?,?,?,?,?,?,?)''', (time.time(), 'trade', 'Cable Club trade completed',
-                'Both cartridges completed their exchange and saved the result.', 1, 4, 'Vermilion Pokémon Center', ''))
+                'Both cartridges completed their exchange and saved the result.', 1, 4, location, ''))
             store.db.execute('INSERT INTO kv VALUES (?, ?)', (marker, 'true'))
     return path
 
@@ -100,20 +104,39 @@ class Participant:
         from ..web.pokedex import live_status
         from ..trade.preferences import apply
         from ..broker.inventory import normalise
-        from ..broker.routine import benefit, offers
+        from ..broker.routine import offers
+        from ..policies.collection import LEAGUE
         status = self.emu.status()
         payload = apply(live_status(status.get('game'), (status.get('strategy') or {}).get('collection')),
                         self.store.trade_preferences())
+        from ..league_partners import apply as league_partners
+        payload = league_partners(payload, self.store)
         inv = normalise(self.bootstrap.adventure_id, '', payload)
         # Only the owning runtime imports game-specific data to derive offers.
         candidates = []
-        for mon in offers(inv, False):
+        available = (status.get('game') or {}).get('map') not in LEAGUE
+        for mon in offers(inv, True) if available else ():
             from ..broker.routine import EVOLVES
             from ..strategy_data import SPECIES
-            candidates.append({**mon.as_side(), 'arrived_dex': SPECIES[EVOLVES.get(mon.species, mon.species)]['dex']})
+            candidates.append({**mon.as_side(), 'last_copy': inv.held[mon.species] == 1,
+                               'arrived_dex': SPECIES[EVOLVES.get(mon.species, mon.species)]['dex']})
         return {**payload, 'adventure_id': self.bootstrap.adventure_id,
                 'generation': self.bootstrap.generation, 'offers': candidates,
                 'revision': digest(payload), 'holding': bool(self.store.get('trade_hold'))}
+
+    def collection_demand(self, data):
+        requests = data.get('requests', {})
+        if not isinstance(requests, dict) or len(requests) > 151:
+            raise ValueError('Collection requests must map Pokédex entries to demand counts')
+        cleaned = {}
+        for key, count in requests.items():
+            if not str(key).isdigit() or not 1 <= int(key) <= 151 or type(count) is not int or not 1 <= count <= 10000:
+                raise ValueError('Invalid collection request')
+            cleaned[int(key)] = count
+        collection = getattr(self.emu.policy, 'collection', None)
+        if collection is not None:
+            collection.set_demand(cleaned)
+        return {'requests': cleaned}
 
     def prepare(self, data):
         tid = validate_id(data['id'])
@@ -160,13 +183,21 @@ class Participant:
         row = rows[slot]
         if identity(individual_data(row['struct'])) != selected:
             raise ValueError('Prepared party member does not match the selected individual')
+        from ..interactions.centers import safe_center
+        from ..ram import read_snapshot
+        snapshot = read_snapshot(self.emu.pb.memory, self.emu.frame)
+        if not safe_center(snapshot, snapshot.map, self.emu.pb.memory):
+            raise ValueError('Prepared adventure is not in a supported Center')
         record.update(phase='prepared', source_name=source.name, source_metadata=metadata,
+                      source_center_map=snapshot.map,
                       source={'adventure_id': self.bootstrap.adventure_id,
                               'rom_path': self.runtime.settings.rom_path,
                               'checkpoint_path': str(path), 'cartridge_save_path': None,
                               'checkpoint_sha256': hashlib.sha256(raw).hexdigest(),
                               'party_slot': slot, 'selected_key': selected},
                       outgoing={key: value.hex() for key, value in row.items()})
+        from ..league_partners import export
+        record['outgoing_league_record'] = export(self.store, selected)
         return _save(self.store, record)
 
     def stage(self, data):
@@ -198,6 +229,11 @@ class Participant:
         raw = _artifact(result['state_path'], result['checkpoint_sha256'])
         save = _artifact(result['cartridge_save_path'], result['cartridge_sha256'])
         self.verify_result(record, result, raw, save, data['incoming'])
+        from ..league_partners import validate
+        from ..trade.preferences import identity
+        from ..ram import individual_data
+        incoming_key = identity(individual_data(bytes.fromhex(data['incoming']['struct'])))
+        record['incoming_league_record'] = validate(data.get('incoming_league_record'), incoming_key)
         directory = self.root / record['id']
         target, cartridge = directory / 'staged.state', directory / 'staged.sav'
         CheckpointStore.atomic_write(target, raw)
@@ -218,8 +254,16 @@ class Participant:
         try:
             pb.load_state(io.BytesIO(_artifact(record['source']['checkpoint_path'], record['source']['checkpoint_sha256'])))
             before, boxes = party(pb, symbols), boxed_inventory(pb, symbols)
+            from ..ram import read_snapshot
+            from ..interactions.centers import safe_center
+            source = read_snapshot(pb.memory, 0)
+            if not safe_center(source, source.map, pb.memory):
+                raise ValueError('Prepared checkpoint is not in a supported Center')
+            if record.get('source_center_map', source.map) != source.map:
+                raise ValueError('Prepared checkpoint Center does not match its reservation')
             pb.load_state(io.BytesIO(state))
             side = SimpleNamespace(pb=pb, sym=symbols, frame=0, attached=False, rom_bytes=rom,
+                source_center_map=source.map,
                 counts=result['evidence']['transport'], get=lambda name: pb.memory[symbols[name][1]])
             expected, _ = verify_exchange(side, before,
                 {key: bytes.fromhex(value) for key, value in incoming.items()}, record['source']['party_slot'], boxes)
@@ -308,7 +352,7 @@ def install(app, runtime):
 
     @app.post('/internal/participant/{operation}')
     async def command(operation: str, request: Request):
-        if operation not in {'prepare', 'stage', 'apply', 'release', 'abort'}:
+        if operation not in {'prepare', 'stage', 'apply', 'release', 'abort', 'collection_demand'}:
             raise HTTPException(404)
         from ..app.manager import json_body
         data = await json_body(request, limit=262144)

@@ -285,7 +285,11 @@ def create_app(manager, shutdown=lambda: None):
     async def create(request: Request):
         manager.check_available()
         data = await json_body(request)
-        settings = manager.validate_adventure_settings({'starter': data.get('starter', 'random')})
+        settings = manager.validate_adventure_settings({
+            'starter': data.get('starter', 'random'),
+            'league_rewards': data.get('league_rewards', True),
+            'mew_event': data.get('mew_event', True),
+        })
         return manager.registry.create(data.get('name', ''), data.get('rom_id', ''), settings,
                                        data.get('request_id', identifier()))
 

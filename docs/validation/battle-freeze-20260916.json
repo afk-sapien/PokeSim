@@ -1,0 +1,38 @@
+{
+  "adventure": "Red Sprout",
+  "cause": "Original Generation I damage calculation divides by zero after scaling a defensive stat below four",
+  "observed": {
+    "attacker": "Graveler",
+    "attacker_level": 100,
+    "attack": 324,
+    "defender": "Rattata",
+    "defender_level": 2,
+    "defense": 3,
+    "move": "STRENGTH",
+    "dividend": 272160,
+    "divisor": 0,
+    "routine": "_Divide.loop"
+  },
+  "prevention": "Exclude attacks with a zero scaled defensive stat from move ranking and switch candidate offense. Allow an emergency safe switch despite the normal switch cooldown, or escape a wild encounter without a safe partner.",
+  "scope": "This guard uses current battle stats. It is not a complete emulator-level fix for every Gen I damage bug, enemy decision, critical hit, or Reflect and Light Screen interaction.",
+  "recovery": "On a private copied checkpoint, validate the known ROM hash, division call stack, registers, numerator and zero divisor. At the division loop boundary, set the divisor to one and reset the quotient scratch buffer. Save after one frame. No Pokemon stats, inventory or progression fields are edited.",
+  "replay": {
+    "battle_finished": true,
+    "money_preserved": true,
+    "owned_preserved": true,
+    "party_hp_preserved": true,
+    "raticate_experience_gained": 8,
+    "policy_decisions": 1000,
+    "emulated_frames": 25500,
+    "distinct_positions": 153,
+    "raticate_level_after_policy_replay": 43
+  },
+  "tests": {"passed": 726, "skipped": 40},
+  "deployment": {
+    "wheel_sha256": "ea5fcc03561ed3afcec1724f2a45c9a9358ae02b3b1eba94b670ba3871c39705",
+    "all_campaign_ids_preserved": true,
+    "all_workers_healthy": true,
+    "red_sprout_travel_after_recovery": ["Route 1", "Route 21", "Route 23"]
+  },
+  "private_evidence": "/home/ty/.local/share/pokesim/smoke-20260915/observations/red-battle-freeze-20260916"
+}

@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="${game_base}/static/style.css?v=watch-2">
 <link rel="stylesheet" href="${game_base}/static/pokedex.css?v=pages-1">
 <link rel="stylesheet" href="${game_base}/static/pages.css?v=locks-1">
+<link rel="stylesheet" href="${game_base}/static/adventure-trading.css?v=compact-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
@@ -25,12 +26,13 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <section class="page-intro"><div><p class="eyebrow"><span class="tiny-dot"></span> ${adventure_name}</p><h1>This adventure’s trades.</h1><p class="intro-copy">Useful exchanges happen automatically with other adventures. Your team and locked Pokémon stay protected.</p></div></section>
 <section class="trade-overview" aria-label="Automatic trading status"><div><span class="eyebrow">AUTOMATIC TRADING</span><h2 id="trade-status">Connecting…</h2><p id="trade-activity">Checking this adventure’s trades.</p></div><a class="trade-pc-link" href="${game_base}/pc?scope=all">View this adventure’s Pokémon ↗</a></section>
 <p id="trade-connection-note" class="trade-notice" role="status" hidden></p>
-<section aria-labelledby="current-heading"><div class="section-heading"><h2 id="current-heading">Current exchange</h2></div><div id="trade-active" aria-live="polite">Checking for an exchange…</div></section>
-<section aria-labelledby="history-heading"><div class="section-heading"><h2 id="history-heading">Recent completed trades</h2></div><div id="trade-history" aria-live="polite">Loading this adventure’s history…</div></section>
+<section id="current-exchange-section" aria-labelledby="current-heading"><div class="section-heading"><h2 id="current-heading">Current exchange</h2></div><div id="trade-active" aria-live="polite">Checking for an exchange…</div></section>
+<section aria-labelledby="history-heading"><div class="section-heading"><h2 id="history-heading">Recent completed trades</h2><span class="count-pill" id="trade-history-count"></span></div><div id="trade-history" aria-live="polite">Loading this adventure’s history…</div></section>
+<section id="trade-failures-section" aria-labelledby="failures-heading" hidden><details class="cable-attempts"><summary id="failures-heading">Recent attempts that did not complete</summary><div id="trade-failures" aria-live="polite"></div></details></section>
 </main>
 <footer><span id="app-version"></span><a class="brand footer-brand" href="${game_base}/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><a href="${game_base}/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="${game_base}/static/adventure-trading.js?v=1"></script>
+<script src="${game_base}/static/adventure-trading.js?v=compact-1"></script>
 </body>
 </html>

@@ -55,6 +55,8 @@ def test_library_upload_reuse_same_version_and_stopped_page(client, monkeypatch)
         response = client.post('/api/v1/adventures', json=payload, headers=headers)
         assert response.status_code == 200, response.text
         row = response.json()
+        assert row['settings']['league_rewards'] is True
+        assert row['settings']['mew_event'] is True
         assert client.post('/api/v1/adventures', json=payload, headers=headers).json()['id'] == row['id']
         created.append(row)
     assert len(client.get('/api/v1/adventures').json()['adventures']) == 2
@@ -63,6 +65,28 @@ def test_library_upload_reuse_same_version_and_stopped_page(client, monkeypatch)
     assert client.get(created[0]['url'] + 'internal/health').status_code == 404
     assert client.get(created[0]['url'] + 'api/trade').status_code == 404
     assert client.post(f"/api/v1/adventures/{created[0]['id']}/archive", json={}, headers=headers).json()['archived']
+
+
+def test_reward_defaults_respect_explicit_choices_and_existing_adventures(client):
+    client, manager = client
+    headers = login(client, manager)
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    response = client.post('/api/v1/adventures', headers=headers, json={
+        'name': 'No gifts', 'rom_id': 'fixture-rom',
+        'league_rewards': False, 'mew_event': False,
+    })
+    assert response.status_code == 200
+    row = response.json()
+    route = f"/api/v1/adventures/{row['id']}"
+    edited = client.patch(route, headers=headers, json={'settings': {'auto_start': True}}).json()
+    assert edited['settings']['league_rewards'] is False
+    assert edited['settings']['mew_event'] is False
+    legacy = manager.registry.create('Existing', 'fixture-rom', {}, identifier())
+    response = client.patch(f"/api/v1/adventures/{legacy['id']}", headers=headers,
+                            json={'settings': {'auto_start': True}})
+    assert response.status_code == 200
+    assert not response.json()['settings'].get('league_rewards', False)
+    assert not response.json()['settings'].get('mew_event', False)
 
 
 def test_full_backup_and_verified_restore(client, tmp_path):

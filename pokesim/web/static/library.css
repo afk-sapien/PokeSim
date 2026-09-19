@@ -139,3 +139,90 @@
 .exchange-heading { align-items:center }
 .exchange-heading { gap:12px }
 .exchange:last-child { border-bottom:0 }
+
+.trade-status-strip { display:flex }
+.trade-status-strip { align-items:center }
+.trade-status-strip { flex-wrap:wrap }
+.trade-status-strip { gap:8px 20px }
+.trade-status-strip { padding:18px 22px }
+.trade-status-strip { margin-top:28px }
+.trade-status-strip { border:1px solid #d6dfcd }
+.trade-status-strip { border-radius:12px }
+.trade-status-strip { background:#eaf0e1 }
+.trade-status-strip strong { font-size:13px }
+.trade-status-strip p { margin:0 }
+.trade-status-strip p { font-size:13px }
+.trade-status-strip .section-note { margin-left:auto }
+.trade-section { margin-top:32px }
+.trade-section>.section-heading { display:flex }
+.trade-section>.section-heading { justify-content:space-between }
+.trade-section>.section-heading { align-items:center }
+.trade-section>.section-heading { margin-bottom:14px }
+.trade-section>.section-heading .section-note { margin:0 }
+.trade-section h2 { font-size:19px }
+.trade-section .exchange { border:1px solid #dadcd2 }
+.trade-section .exchange { border-radius:14px }
+.trade-section .exchange { padding:20px 24px }
+.trade-section .exchange { margin-bottom:12px }
+.trade-section .exchange { background:#fffef9 }
+.exchange-heading { justify-content:space-between }
+.exchange-heading .section-note { margin:0 }
+.exchange-completed .state-pill { border:0 }
+.exchange-completed .state-pill { background:#eaf0e1 }
+.exchange-completed .state-pill { color:#315f4a }
+.exchange-pair { display:grid }
+.exchange-pair { grid-template-columns:minmax(0,1fr) 48px minmax(0,1fr) }
+.exchange-pair { align-items:center }
+.exchange-pair { gap:20px }
+.exchange-pair { margin-top:18px }
+.exchange-partner { min-width:0 }
+.exchange-partner h3 { font-size:13px }
+.exchange-partner h3 { color:#315f4a }
+.exchange-partner h3 { margin-bottom:12px }
+.exchange-partner h3 { overflow-wrap:anywhere }
+.exchange-partner a:hover { text-decoration:underline }
+.exchange-pokemon { display:flex }
+.exchange-pokemon { align-items:center }
+.exchange-pokemon { gap:16px }
+.exchange-pokemon>div { min-width:0 }
+.exchange-pokemon>div { overflow-wrap:anywhere }
+.exchange-pokemon img,.exchange-placeholder { width:64px }
+.exchange-pokemon img,.exchange-placeholder { height:64px }
+.exchange-pokemon img,.exchange-placeholder { flex-shrink:0 }
+.exchange-pokemon img { object-fit:contain }
+.exchange-pokemon .eyebrow { font-size:9px }
+.exchange-pokemon .eyebrow { margin-bottom:5px }
+.exchange-pokemon strong { font-size:18px }
+.exchange-nickname { margin-top:4px }
+.exchange-nickname { color:#687063 }
+.exchange-nickname { font-size:12px }
+.exchange-evolution { margin-top:6px }
+.exchange-evolution { color:#866026 }
+.exchange-evolution { font-size:12px }
+.exchange-placeholder { display:grid }
+.exchange-placeholder { place-items:center }
+.exchange-placeholder { background:#f0f1e9 }
+.exchange-placeholder { border-radius:12px }
+.exchange-placeholder { color:#687063 }
+.exchange-arrow { text-align:center }
+.exchange-arrow { color:#7d8f72 }
+.exchange-arrow { font-size:28px }
+#trade-failures-section summary { cursor:pointer }
+#trade-failures-section summary { font-size:14px }
+#trade-failures-section .exchange { margin-top:14px }
+#trade-failures-section .exchange>strong { display:block }
+#trade-failures-section .exchange>strong { margin-top:12px }
+@media(max-width:600px) {
+  .trade-section>.section-heading { align-items:flex-start }
+  .trade-section>.section-heading { gap:8px }
+  .trade-status-strip { align-items:start }
+  .trade-status-strip { flex-direction:column }
+  .trade-status-strip .section-note { margin-left:0 }
+  .exchange-pair { grid-template-columns:minmax(0,1fr) }
+  .exchange-pair { gap:14px }
+  .exchange-arrow { display:none }
+  .exchange-partner+ .exchange-arrow+ .exchange-partner { border-top:1px solid #e5e8df }
+  .exchange-partner+ .exchange-arrow+ .exchange-partner { padding-top:14px }
+  .trade-section .exchange { padding:18px }
+  .exchange-heading { gap:8px }
+}

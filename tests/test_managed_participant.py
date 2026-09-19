@@ -37,6 +37,21 @@ def test_recovery_publishes_only_committed_state_once(tmp_path):
     store.close()
 
 
+@pytest.mark.parametrize('map_id,location', [(174, 'Indigo Plateau lobby'),
+                                           (89, 'Vermilion Pokémon Center'),
+                                           (None, 'Pokémon Center')])
+def test_trade_journal_uses_the_owning_adventures_center(tmp_path, map_id, location):
+    store = Store(tmp_path)
+    try:
+        record = committed(store)
+        if map_id is not None:
+            record['source_center_map'] = map_id
+        _promote(store, record)
+        assert store.events(types=['trade'])[0]['map'] == location
+    finally:
+        store.close()
+
+
 def test_uncommitted_files_never_become_autosaves(tmp_path):
     store = Store(tmp_path)
     record = committed(store)

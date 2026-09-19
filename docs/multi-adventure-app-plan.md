@@ -99,7 +99,7 @@ Keep browser closure independent from process shutdown. A stopped adventure shou
 
 ### Trading
 
-Add an application-wide Trading page showing automatic trading status, the current exchange, and recent completed trades. No group setup or exchange selection is required.
+Keep an application-wide Trading page as the shared history across adventures. Show automatic trading in a compact status strip and show the current exchange only while one is active. Completed trades show both adventures, the Pokémon each received, sprites, nicknames, levels, and verified trade evolutions. Link each adventure to its own Trading page. Put unsuccessful attempts in a collapsed section below the history. No group setup or exchange selection is required.
 
 All adventures participate automatically when running and eligible. Existing per-Pokémon locks, withdrawals, party protection, and project protection remain in force. An interaction involving A and B must not pause C. A stopped game is excluded, and a held game says which interaction it is waiting for.
 

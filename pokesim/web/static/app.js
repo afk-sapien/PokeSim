@@ -119,11 +119,9 @@ async function refreshState() {
     const since = age < 60 ? 'just now' : age < 3600 ? `${Math.floor(age / 60)}m ago` : `${Math.floor(age / 3600)}h ago`
     set('#last-achievement', 'textContent', achievement ? `Last achievement: ${achievement.title} · ${since}` : 'Waiting for the first achievement.')
     const strategy = state.strategy
-    set('#journey', 'innerHTML', (strategy?.journey || []).map((step) => `<li class="${step.done ? 'done' : step.current ? 'current' : ''}">${step.done ? '✓ ' : ''}${esc(step.title)}</li>`).join(''))
     set('#strategy-panel', 'hidden', !strategy?.objective)
     if (strategy?.objective) {
       renderIntent(strategy)
-      renderCollection(strategy.collection, state.game)
       set('#objective', 'textContent', strategy.objective.title)
       set('#decision', 'textContent', strategy.reason)
       set('#action-tag', 'textContent', strategy.action.charAt(0).toUpperCase() + strategy.action.slice(1))
@@ -142,15 +140,13 @@ async function refreshState() {
     set('#trainer-rival', 'textContent', game.rival_name ? `Rival: ${game.rival_name}` : 'A new story begins')
     set('#dex-count', 'innerHTML', `${game.owned} <small>/ 151</small>`)
     set('#dex-count', 'title', `${game.seen} Pokémon seen`)
+    set('#league-wins', 'textContent', fmt(state.league_rewards?.wins ?? 0))
     set('#money', 'textContent', `₽${fmt(game.money)}`)
     set('#areas', 'textContent', fmt(state.areas_discovered))
     const earned = game.badges || []
     set('#badge-count', 'textContent', `${earned.length} / 8`)
     set('#badges', 'innerHTML', BADGES.map((badge, i) => `<div class="badge ${earned.includes(badge) ? 'earned' : ''}" title="${badge} Badge · ${LEADERS[i]} · ${earned.includes(badge) ? 'Earned' : 'Still ahead'}"><span class="badge-icon badge-${i}" aria-hidden="true">${BADGE_SYMBOLS[i]}</span><span>${badge}</span><small>${earned.includes(badge) ? 'EARNED' : String(i + 1).padStart(2, '0')}</small></div>`).join(''))
     renderParty(game.party)
-    const items = game.items || []
-    set('#bag-count', 'textContent', `${items.length} ${items.length === 1 ? 'item' : 'items'}`)
-    set('#bag-items', 'innerHTML', items.length ? items.map((item) => `<div><span>${esc(item.name)}</span><strong>×${item.qty}</strong></div>`).join('') : '<p>A little room for future finds.</p>')
   } catch (_) {
     set('#status', 'textContent', 'Reconnecting…')
     $('#connection').classList.add('is-offline')
@@ -259,73 +255,5 @@ setInterval(() => { if (!document.hidden) refreshState() }, 2000)
 setInterval(() => { if (!document.hidden) refreshEvents() }, 15000)
 
 function renderIntent(strategy) {
-  const assessment = strategy.readiness || {}
   set('#next-objective', 'textContent', strategy.next?.title || 'Continue the journey')
-  set('#expectation', 'textContent', strategy.expectation || '')
-  set('#personality', 'textContent', strategy.personality || '')
-  set('#readiness-label', 'textContent', assessment.opponent ? `${assessment.status} for ${assessment.opponent}` : 'Team readiness')
-  set('#readiness-meter', 'value', assessment.score || 0)
-  set('#readiness-concerns', 'textContent', (assessment.concerns || []).join('. ') || 'The team has a useful matchup and supplies.')
-  set('#readiness-members', 'innerHTML', (assessment.members || []).map((p) => `<span>${esc(p.name)} · ${p.score}/100${p.index === assessment.lead ? ' · best matchup' : ''}</span>`).join(''))
-  set('#recovery-history', 'innerHTML', (strategy.history || []).slice().reverse().map((entry) => `<li>${esc(entry.message)}<small>${esc(entry.time)} · ${esc(entry.place)}. ${esc(entry.response)}</small></li>`).join('') || '<li>No recent recovery needed.</li>')
-  const map = strategy.map
-  const canvas = $('#route-map')
-  if (!map || !canvas) return
-  const ctx = canvas.getContext('2d')
-  const size = Math.min(canvas.width / map.width, canvas.height / map.height)
-  const ox = (canvas.width - map.width * size) / 2
-  const oy = (canvas.height - map.height * size) / 2
-  ctx.fillStyle = '#263b34'
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
-  const passable = new Set(map.passable)
-  let y = 0
-  while (y < map.height) {
-    let x = 0
-    while (x < map.width) {
-      const tile = map.tiles[y][x]
-      ctx.fillStyle = passable.has(tile) ? '#58735e' : ['OVERWORLD', 'CAVERN', 'FOREST', 'PLATEAU'].includes(map.tileset) && [20, 50, 72].includes(tile) ? '#396a80' : '#30483c'
-      ctx.fillRect(ox + x * size, oy + y * size, size, size)
-      x++
-    }
-    y++
-  }
-  ctx.fillStyle = '#69d6bf'
-  for (const [m, x, y] of strategy.route || []) {
-    if (m === map.id) ctx.fillRect(ox + x * size, oy + y * size, size, size)
-  }
-  ctx.fillStyle = '#f4f3db'
-  for (const [x, y] of map.warps) ctx.fillRect(ox + x * size, oy + y * size, size, size)
-  ctx.fillStyle = '#ffcd64'
-  ctx.beginPath()
-  ctx.arc(ox + (map.player[0] + 0.5) * size, oy + (map.player[1] + 0.5) * size, Math.max(3, size * 0.6), 0, Math.PI * 2)
-  ctx.fill()
-  canvas.setAttribute('aria-label', `${map.name}, player at ${map.player.join(', ')}, planned route in teal`)
 }
-
-let collectionRenderKey = ''
-function renderCollection(collection, game) {
-  if (!collection || !$('#collection')) return
-  const key = JSON.stringify([collection, game?.storage])
-  if (key === collectionRenderKey) return
-  collectionRenderKey = key
-  set('#collection-phase', 'textContent', collection.phase || 'Adventure')
-  set('#collection-caught', 'textContent', `${collection.caught || 0} / 151`)
-  set('#collection-available', 'textContent', collection.available || 0)
-  const hunt = collection.hunt
-  const target = collection.entries?.find(entry => entry.species === (hunt?.species || hunt?.parent))
-  set('#collection-hunt', 'textContent', hunt ? `${target?.name || hunt.item?.replaceAll('_', ' ') || 'Exploration'} · ${({grass:'Pokédex hunt', surf:'Surf expedition', fish:'Fishing', safari:'Safari expedition', evolve:'Evolution', gift:'Gift', fossil:'Fossil revival', static:'Legendary encounter', rod:'Fishing gear', trade:'In-game trade', prize:'Game Corner', rematch:'League rematch', train:'Training', trainer:'Trainer battle', explore:'Exploration', amber:'Fossil discovery'})[hunt.method] || 'Expedition'}` : 'Watching for new discoveries')
-  const training = collection.training
-  set('#collection-budget', 'textContent', training
-    ? training.phase === 'preparation'
-      ? `Preparing · ${Math.ceil(training.preparation_remaining_seconds / 60)} game minutes left for preparation`
-      : `Training · ${Math.ceil(training.remaining_seconds / 60)} game minutes left, extendable with XP gains`
-    : hunt ? `Reassess in ${Math.ceil(collection.remaining_seconds / 60)} game minutes` : 'Short expeditions alternate with the main journey')
-  set('#collection-evolutions', 'innerHTML', collection.evolutions?.length ? collection.evolutions.map(e => `<li><strong>${esc(e.from)} → ${esc(e.to)}</strong><span>${e.method === 'level' ? `Level ${e.level} → ${e.requirement}` : e.method === 'trade' ? 'Requires a link trade' : esc(String(e.requirement).replaceAll('_', ' '))}</span></li>`).join('') : '<li>More evolution projects will appear as the collection grows.</li>')
-  set('#collection-history', 'innerHTML', collection.history?.length ? collection.history.map(line => `<li>${esc(line)}</li>`).join('') : '<li>The next discovery is out there.</li>')
-}
-
-function revealAdventure() {
-  if (['#collection', '#journey-progress'].includes(location.hash)) set('#adventure-details', 'open', true)
-}
-revealAdventure()
-window.addEventListener('hashchange', revealAdventure)

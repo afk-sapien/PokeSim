@@ -3,10 +3,19 @@ from collections import defaultdict
 from math import isqrt
 
 from .strategy_data import MOVES, SPECIES
+from .milestones import is_perfect
+
+
+def dv_quality(mon):
+    """Rank known natural stats before any trainable investment."""
+    dvs = mon.get('dvs', ())
+    if len(dvs) != 5 or any(type(value) is not int or not 0 <= value <= 15 for value in dvs):
+        return (-1, -1)
+    return (sum(dvs), min(dvs))
 
 
 def quality(mon):
-    """Prefer practical investment before natural potential, within one species.
+    """Prefer natural potential, then practical investment, within one species.
 
     Current HP and PP are deliberately absent because healing restores them.
     Move coverage and useful status moves matter more than raw move count.
@@ -24,7 +33,7 @@ def quality(mon):
         else:
             utility += 40 if move.get('effect') in (
                 'SLEEP_EFFECT', 'HEAL_EFFECT', 'LEECH_SEED_EFFECT', 'PARALYZE_EFFECT') else 8
-    return (mon['level'], sum(isqrt(value) for value in mon.get('stat_exp', ())),
+    return (*dv_quality(mon), mon['level'], sum(isqrt(value) for value in mon.get('stat_exp', ())),
             sum(coverage.values()) + utility, mon.get('experience', 0),
             sum(mon.get('dvs', ())))
 
@@ -32,6 +41,7 @@ def quality(mon):
 def spare_entries(party, stored, protected=()):
     """Keep the best individual per species, with party members winning exact ties.
 
+    Every perfect individual is retained. Higher DVs win over higher levels.
     Party members are never offered. A better boxed copy survives alongside them.
     Older payloads without individual data retain the original level-only rule.
     """
@@ -48,5 +58,5 @@ def spare_entries(party, stored, protected=()):
         else:
             keepers[species] = next((mon for mon in party if mon['species'] == species),
                                     max(copies, key=lambda mon: mon['level']))
-    return [mon for mon in stored if mon['species'] not in protected
+    return [mon for mon in stored if mon['species'] not in protected and not is_perfect(mon)
             and mon is not keepers[mon['species']]]

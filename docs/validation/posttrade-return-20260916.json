@@ -1,0 +1,33 @@
+{
+  "date": "2026-09-16",
+  "issue": "The Continue menu exposes saved party and map values before gameplay resumes. Snapshot-only checks incorrectly accepted that menu as a completed cable return.",
+  "fix": [
+    "Require the overworld sprite engine, no menu cursor, no Continue text, and a supported original Center.",
+    "Confirm both Continue prompts before exporting the result.",
+    "Prove normal movement after checkpoint and cartridge restarts on disposable copies."
+  ],
+  "validation": {
+    "regression_tests_passed": 815,
+    "regression_tests_skipped": 40,
+    "private_cable_tests_passed": 36,
+    "mixed_center_exchange": {
+      "red_center": 171,
+      "blue_center": 174,
+      "checkpoint_movement_passed": true,
+      "cartridge_movement_passed": true
+    },
+    "recovery": {
+      "method": "Normal Continue inputs on the committed trade output, preserving the completed exchange.",
+      "party_unchanged": true,
+      "boxes_unchanged": true,
+      "pokedex_unchanged": true,
+      "trade_and_reward_barriers_preserved": true,
+      "blue_party_count": 6,
+      "blue_owned": 112,
+      "red_party_count": 6,
+      "red_owned": 123
+    }
+  },
+  "wheel_sha256": "49c94cedbe3f4203e3ac119a9a33fc83c437aea0fa21012264ab0495a7d29586",
+  "private_artifacts": "Kept outside the repository. No ROMs or gameplay checkpoints are included."
+}

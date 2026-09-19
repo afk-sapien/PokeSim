@@ -126,7 +126,14 @@ Missing legendaries use status moves and balls, without damaging attacks that ca
 lethal when a critical hit ignores Barrier. Capture status moves may be reused after
 sleep wears off. The ordinary adventure and Championship reward pool remain unchanged.
 
-Current Championship reward policy, September 15: every newly observed League victory
+Current Championship reward policy, September 17: one gift per future League win,
+chosen uniformly from the adventure's unlocked pool. Starters are available immediately. Mew is a separate one-time event gift per adventure and is excluded from repeatable League rewards. A first fossil acquisition unlocks Omanyte, Kabuto, and Aerodactyl.
+An Eevee-family acquisition unlocks Eevee. Beating the Karate Master unlocks both
+dojo fighters. Mr. Mime and Jynx each require their own first acquisition. Existing
+progress satisfies these requirements, without backfilling rewards for old wins.
+Total League wins appear in the Library and live adventure view.
+
+Historical Championship reward policy, September 15: every newly observed League victory
 earns one uniformly random level-5 Bulbasaur, Charmander, Squirtle, Eevee, Omanyte,
 Kabuto, Aerodactyl, or Mew. There is no roster requirement, reward cooldown, or
 individual approval. The existing scoped two-peer coordinator delivers claims at safe

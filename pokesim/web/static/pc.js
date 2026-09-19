@@ -5,17 +5,15 @@ let selectedBox = params.get('box') === 'party' ? 0 : Math.min(12, Math.max(1, N
 let followActive = !params.has('box')
 let storage = null
 let party = []
-let page = 0
 let busy = false
 let signature = ''
 let residents = []
 let detailKey = null
-let viewPages = {box: 0, all: 0}
 let viewQueries = {box: '', all: ''}
 $('#pc-search').value = params.get('q') || ''
 $('#pc-scope').value = params.get('scope') === 'all' ? 'all' : 'box'
 viewQueries[$('#pc-scope').value] = $('#pc-search').value
-const sortDefaults = {box: 'asc', power: 'desc', level: 'desc', HP: 'desc', Attack: 'desc', Defense: 'desc', Speed: 'desc', Special: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
+const sortDefaults = {elite_four_wins: 'desc', box: 'asc', power: 'desc', level: 'desc', HP: 'desc', Attack: 'desc', Defense: 'desc', Speed: 'desc', Special: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
 $('#pc-sort').value = Object.hasOwn(sortDefaults, params.get('sort')) ? params.get('sort') : 'box'
 $('#pc-order').value = ['asc', 'desc'].includes(params.get('order')) ? params.get('order') : sortDefaults[$('#pc-sort').value]
 
@@ -55,6 +53,10 @@ function isLocked(mon) {
   return globalThis.TradeUI?.find(mon.trade_key)?.locked ?? mon.trade_locked
 }
 
+function perfectBadge(mon) {
+  return mon.perfect_dvs ? '<span class="perfect-badge"><span aria-hidden="true">✦</span> Perfect DV</span>' : ''
+}
+
 function lockBadge(mon) {
   return isLocked(mon) ? '<span class="pc-lock-badge"><span aria-hidden="true">🔒</span> Locked</span>' : ''
 }
@@ -62,19 +64,20 @@ function lockBadge(mon) {
 function render() {
   const counts = storage?.box_counts || Array(12).fill(0)
   const pokemon = [...party, ...(storage?.pokemon || [])]
-  const query = $('#pc-search').value.trim().toLowerCase().replace(/^#/, '')
+  const search = $('#pc-search').value.trim().toLowerCase()
+  const dexQuery = /^#\d{1,3}$/.test(search) ? Number(search.slice(1)) : null
+  const query = search.replace(/^#/, '')
   const all = $('#pc-scope').value === 'all'
   const sort = $('#pc-sort').value
   const order = $('#pc-order').value
   const alphabetical = sort === 'name' || sort === 'nick'
   $('#pc-order').options[0].textContent = alphabetical ? 'A to Z' : sort === 'box' ? 'First to last' : 'Lowest first'
   $('#pc-order').options[1].textContent = alphabetical ? 'Z to A' : sort === 'box' ? 'Last to first' : 'Highest first'
-  const rows = pokemon.filter((mon) => (all || mon.box === selectedBox) && (!query ||
-    `${mon.nick} ${mon.name}`.toLowerCase().includes(query) || String(mon.dex).padStart(3, '0').includes(query)))
+  const rows = pokemon.filter((mon) => (all || mon.box === selectedBox) &&
+    (dexQuery !== null ? mon.dex === dexQuery : (!query ||
+      `${mon.nick} ${mon.name}`.toLowerCase().includes(query) || String(mon.dex).padStart(3, '0').includes(query))))
   rows.sort((a, b) => comparePartners(a, b, all ? sort : 'box', all ? order : 'asc'))
-  const pages = Math.max(1, Math.ceil(rows.length / 20))
-  page = Math.min(page, pages - 1)
-  residents = rows.slice(page * 20, (page + 1) * 20)
+  residents = rows
   const url = new URLSearchParams({box: selectedBox === 0 ? 'party' : String(selectedBox)})
   if (query) url.set('q', $('#pc-search').value)
   if (all) url.set('scope', 'all')
@@ -86,19 +89,15 @@ function render() {
   $('#pc-heading').textContent = all ? 'Party and all boxes' : selectedBox === 0 ? 'Party' : `Box ${selectedBox}`
   $('#pc-note').textContent = all ? 'ALL PARTNERS' : selectedBox === 0 ? 'TRAVELING TEAM' : selectedBox === storage?.active_box ? 'TAKING NEW ARRIVALS' : 'STORED PARTNERS'
   $('#pc-count').textContent = `${rows.length} Pokémon`
-  $('#pc-page').textContent = `Page ${page + 1} of ${pages}`
-  $('#pc-prev').disabled = page === 0
-  $('#pc-next').disabled = page >= pages - 1
   $('#pc-sidebar').hidden = all
   $('#pc-sort-control').hidden = !all
   $('#pc-order-control').hidden = !all
   $('#pc-power-note').hidden = !all
-  $('#pc-pagination').hidden = !all
   $('#pc-workspace').classList.toggle('pc-workspace-all', all)
-  $('#pc-grid').classList.toggle('pc-list', all)
+  $('#pc-grid').classList.toggle('pc-all-grid', all)
   $('#pc-boxes-view').setAttribute('aria-pressed', String(!all))
   $('#pc-all-view').setAttribute('aria-pressed', String(all))
-  const key = JSON.stringify([storage, party, selectedBox, query, all, sort, order, page, globalThis.TradeUI?.status()])
+  const key = JSON.stringify([storage, party, selectedBox, query, all, sort, order, globalThis.TradeUI?.status()])
   if (key === signature) return
   signature = key
   $('#mobile-box').innerHTML = `<option value="0">Party · ${party.length} / 6</option>` + counts.map((count, index) => `<option value="${index + 1}">Box ${index + 1} · ${count} / 20${index + 1 === storage?.active_box ? ' · Receiving catches' : ''}</option>`).join('')
@@ -107,9 +106,9 @@ function render() {
   $('#box-picker').innerHTML = `<button data-box="0" aria-pressed="${selectedBox === 0}" class="${selectedBox === 0 ? 'selected' : ''}"><span>Party</span><small>${party.length} / 6</small></button>` + counts.map((count, index) => `<button data-box="${index + 1}" aria-pressed="${index + 1 === selectedBox}" class="${index + 1 === selectedBox ? 'selected' : ''}"><span>Box ${index + 1}${index + 1 === storage?.active_box ? ' ●' : ''}</span><small>${count} / 20</small></button>`).join('')
   if (focusedBox) $(`[data-box="${focusedBox}"]`)?.focus()
   const focusedMon = document.activeElement?.dataset.mon
-  const card = (mon, index) => `<button class="pc-mon" data-mon="${index}" aria-label="${esc(mon.nick || mon.name)}, level ${mon.level}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${isLocked(mon) ? ', locked' : ''}"><span class="eyebrow">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || index + 1}</span><img loading="lazy" src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt="" width="72" height="72"><strong>${esc(mon.nick || mon.name)}${lockBadge(mon)}</strong><small>${esc(mon.name)} · Lv. ${mon.level}</small>${all ? `<span class="pc-metrics"><span class="pc-power">Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span>` : ''}</button>`
+  const card = (mon, index) => `<button class="pc-mon${mon.perfect_dvs ? ' perfect-entry' : ''}" data-mon="${index}" aria-label="${esc(mon.nick || mon.name)}, level ${mon.level}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${isLocked(mon) ? ', locked' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}"><span class="eyebrow">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || index + 1}</span><img loading="lazy" src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt="" width="72" height="72"><strong>${esc(mon.nick || mon.name)}${lockBadge(mon)}${perfectBadge(mon)}</strong><small>${esc(mon.name)} · Lv. ${mon.level}</small><span class="pc-metrics"><span class="pc-power">Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Elite Four wins <b>${Number.isFinite(mon.elite_four_wins) ? mon.elite_four_wins.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat XP <b>${formatTotal(mon, 'stat_exp')}</b></span></span></button>`
   if (all) {
-    $('#pc-grid').innerHTML = residents.map((mon, index) => `<div class="pc-list-row">${card(mon, index)}<div class="pc-list-trade">${globalThis.TradeUI?.control(mon.trade_key) || ''}</div></div>`).join('') || '<p class="dex-empty">No Pokémon match this search.</p>'
+    $('#pc-grid').innerHTML = residents.map(card).join('') || '<p class="dex-empty">No Pokémon match this search.</p>'
   } else {
     $('#pc-grid').innerHTML = Array.from({length: selectedBox === 0 ? 6 : 20}, (_, slot) => {
       const index = residents.findIndex(mon => mon.position === slot + 1)
@@ -124,9 +123,10 @@ function detail(mon) {
   detailKey = mon.trade_key
   const labels = ['HP', 'Attack', 'Defense', 'Speed', 'Special']
   const known = mon.dvs?.length === 5 && mon.stat_exp?.length === 5
-  $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt="" width="96" height="96"><p class="eyebrow">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2><p>${esc(mon.name)} · Level ${mon.level}</p></div>
+  $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt="" width="96" height="96"><p class="eyebrow">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>${perfectBadge(mon)}${mon.perfect_dvs ? '<p class="detail-meta">All five DVs are 15. Preserved from automatic release and trading.</p>' : ''}<p>${esc(mon.name)} · Level ${mon.level}</p></div>
     ${known ? `<table class="individual-stats"><caption>Calculated stats, potential, and training</caption><thead><tr><th>Stat</th><th>Value</th><th>DV / 15</th><th>Stat experience</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[i]}</td><td>${mon.stat_exp[i].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')} / 75</td><td>${formatTotal(mon, 'stat_exp')} / 327,675</td></tr></tfoot></table><p class="detail-meta">Total DVs include HP, which is derived from the other four DVs. DVs are fixed. Stat experience grows through training, up to 65,535 in each stat.</p>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'}
     <p class="detail-meta">Power = max HP + Attack + Defense + Speed + Special. Values are calculated at this level from species, DVs, and stat experience, as on PC withdrawal. Moves, type matchups, and battle bonuses are not included.</p>
+    <p class="detail-meta"><strong>Elite Four wins: ${Number.isFinite(mon.elite_four_wins) ? mon.elite_four_wins.toLocaleString() : 'Unavailable'}</strong>. One win for being in the Hall of Fame party after defeating the Elite Four and Champion. Includes verified saved victories and follows this Pokémon through trades. Missing historical records are not estimated.</p>
     <p class="detail-meta">${Number(mon.experience || 0).toLocaleString()} total experience</p>
     ${mon.dex ? `<a class="dex-open" href="${PokeSim.base}/pokedex#${String(mon.dex).padStart(3, '0')}">View ${esc(mon.name)} in the Pokédex ↗</a>` : ''}`
   $('#pc-trade-action').innerHTML = globalThis.TradeUI?.control(detailKey) || ''
@@ -160,14 +160,12 @@ $('#box-picker').onclick = (event) => {
   selectedBox = Number(button.dataset.box)
   followActive = false
   $('#pc-scope').value = 'box'
-  page = 0
   render()
 }
 $('#mobile-box').onchange = (event) => {
   selectedBox = Number(event.target.value)
   followActive = false
   $('#pc-scope').value = 'box'
-  page = 0
   render()
 }
 $('#pc-grid').onclick = (event) => {
@@ -177,19 +175,11 @@ $('#pc-grid').onclick = (event) => {
   const button = event.target.closest('[data-mon]')
   if (button) detail(residents[Number(button.dataset.mon)])
 }
-$('#pc-strongest').onclick = () => {
-  switchView('all')
-  $('#pc-search').value = ''
-  $('#pc-sort').value = 'power'
-  $('#pc-sort').onchange()
-}
 function switchView(view) {
   const previous = $('#pc-scope').value
   if (previous !== view) {
-    viewPages[previous] = page
     viewQueries[previous] = $('#pc-search').value
     $('#pc-scope').value = view
-    page = viewPages[view]
     $('#pc-search').value = viewQueries[view]
   }
   render()
@@ -202,19 +192,12 @@ $('#pc-trade-action').onclick = event => {
 }
 $('#pc-sort').onchange = () => {
   $('#pc-order').value = sortDefaults[$('#pc-sort').value]
-  page = 0
   render()
 }
-$('#pc-order').onchange = () => { page = 0
-  render() }
+$('#pc-order').onchange = render
 for (const selector of ['#pc-search', '#pc-scope']) {
-  $(selector).oninput = () => { page = 0
-    render() }
+  $(selector).oninput = render
 }
-$('#pc-prev').onclick = () => { page -= 1
-  render() }
-$('#pc-next').onclick = () => { page += 1
-  render() }
 $('#pc-close').onclick = () => $('#pc-detail').close()
 $('#pc-detail').onclick = (event) => {
   if (event.target !== $('#pc-detail')) return

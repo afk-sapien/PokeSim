@@ -37,6 +37,8 @@ class Emulator:
         self.preparation = None
         self.store = store
         self.ntfy = ntfy
+        from .milestones import MilestoneTracker
+        self.milestones = MilestoneTracker(store)
         self.rom = Path(config.ROM_PATH)
         self.speed = config.SPEED
         self.paused = False
@@ -71,6 +73,10 @@ class Emulator:
         self.reloads = 0
         self.pending: list = []      # events waiting for confirmation on the next snapshot
         self.rom_note = self._check_rom()
+        from .catches import CatchTracker
+        fresh = (not store.autosaves() and not store.events(limit=1)
+                 and (isolated_ram or not Path(str(self.rom) + '.ram').exists()))
+        self.catch_tracker = CatchTracker(store, self.rom_sha1, fresh=fresh)
         if hasattr(self.policy, "collection"):
             self.policy.collection.version = "blue" if "Blue" in self.rom_note else "red"
         if hasattr(self.policy, "nav"):
@@ -101,12 +107,16 @@ class Emulator:
             options['ram_file'] = io.BytesIO(bytes(32768))
         pb = PyBoy(str(self.rom), window="null", sound_emulated=False, **options)
         pb.set_emulation_speed(0)
+        tracker = getattr(self, 'catch_tracker', None)
+        if tracker is not None:
+            tracker.attach(pb)
         return pb
 
     def start(self):
         saves = self.store.autosaves()
         if saves:
             self._restore_first_valid(reversed(saves))
+        rewards.initialize(self.store, self.mem.championships)
         self.paused = bool(self.store.get("trade_hold"))
         if self.isolated_ram:
             from .runtime.preparation import restore
@@ -216,6 +226,9 @@ class Emulator:
             announced = getattr(self, 'mem', RunMemory()).playtime_milestones.copy()
             announced.update(self.store.get('run_memory', {}).get('playtime_milestones', []))
             self.mem = RunMemory.from_dict(metadata["run_memory"])
+            with self.store.lock:
+                self.mem.championships = max(self.mem.championships,
+                                            rewards.championship_count(rewards.ledger(self.store.db)))
             self.mem.playtime_milestones.update(announced)
             self.store.set('run_memory', self.mem.to_dict())
             self.frame = metadata.get("frame", self.frame)
@@ -307,6 +320,11 @@ class Emulator:
             if restored_legendary:
                 snap = read_snapshot(self.pb.memory, self.frame)
                 self.prev_snapshot = snap
+        if hasattr(self, 'milestones'):
+            self.milestones.observe(snap)
+            if hasattr(self.policy, 'collection'):
+                from .milestones import status as milestone_status
+                self.policy.collection.milestones = milestone_status(self.store)
         with self.lock:
             self.snapshot = snap
         now = time.time()
@@ -329,8 +347,11 @@ class Emulator:
             self._autosave()
 
     def _handle_events(self, events, snap):
+        if any(ev.type in ('catch', 'obtain', 'evolve', 'champion', 'trainer') for ev in events):
+            rewards.observe_progress(self.store, snap)
         if any(ev.type == 'champion' for ev in events):
-            rewards.earn(self.store, self.mem.championships)
+            rewards.earn(self.store, self.mem.championships,
+                         enabled=getattr(config, 'LEAGUE_REWARDS', False))
         png = self._shot_png()
         state = None
         for ev in events:
@@ -567,6 +588,8 @@ class Emulator:
         elif name == "restart":
             log.warning("restarting run from power-on")
             self.pb.stop(save=False)
+            if getattr(self, 'catch_tracker', None) is not None:
+                self.catch_tracker.reset()
             for p in self.store.states.glob("auto-*.state"):
                 p.unlink()
                 p.with_suffix(".json").unlink(missing_ok=True)
@@ -577,6 +600,8 @@ class Emulator:
             self.store.set("custom-reward-barrier-v1", None)
             self.store.set("custom-reward-pending-v1", None)
             self.store.clear_trade_preferences()
+            if hasattr(self, 'milestones'):
+                self.milestones.reset()
             self.store.set(rewards.KEY, None)
             self.play_clock = PlayClock()
             self.store.set("play_clock", self.play_clock.state_dict())
@@ -652,10 +677,12 @@ class Emulator:
                 if not self.manual_mode and not getattr(self, 'preparation', None):
                     self._check_guards()
                 if getattr(self, 'isolated_ram', False) and now >= getattr(self, '_next_reward', 0):
-                    self._next_reward = now + 60
                     from .runtime.reward_delivery import deliver
-                    deliver(self, league_rewards=getattr(config, 'LEAGUE_REWARDS', False),
-                            mew_event=getattr(config, 'MEW_EVENT', False))
+                    self._next_reward = now + 60
+                    delivered = deliver(self, league_rewards=getattr(config, 'LEAGUE_REWARDS', False),
+                                        mew_event=getattr(config, 'MEW_EVENT', False))
+                    # A battle or menu should not postpone a pending gift for another minute.
+                    self._next_reward = now + (60 if delivered else 1)
                 self.last_activity = time.monotonic()
                 self.consecutive_errors = 0
             except Exception:  # noqa: BLE001

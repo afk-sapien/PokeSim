@@ -9,6 +9,8 @@ WATER_TILESETS = {"OVERWORLD", "PLATEAU", "FOREST", "CAVERN", "SHIP_PORT"}
 OPTIONAL_LIFTS = {MAPS["CELADON_MART_ELEVATOR"], MAPS["SILPH_CO_ELEVATOR"]}
 FORCED = {(m, x, y): (m, tx, ty) for m, w in WORLD.items() for x, y, tx, ty in w.get("forced_moves", [])}
 FORCED[(MAPS["VICTORY_ROAD_3F"], 23, 15)] = (MAPS["VICTORY_ROAD_2F"], 22, 16)
+MANSION_FALLS = {(MAPS['POKEMON_MANSION_3F'], x, 14): (MAPS['POKEMON_MANSION_1F'], 16, 14)
+                 for x in (16, 17)}
 LEDGES = {(dr, a, b) for dr, a, b in DATA["ledges"]}
 SEAFOAM_HOLES = {(MAPS[name], x, y) for name, points in (
     ("SEAFOAM_ISLANDS_1F", ((17, 6), (24, 6))),
@@ -42,16 +44,18 @@ class Navigator:
         self._map_signatures = {}
         self._neighbor_cache = {}
         self._compiled_graph = None
+        self._open_navigation = None
 
     def update_live(self, snapshot, memory):
         self.live_map = snapshot.map
         self.live_positions = [(memory[0xC215 + i * 16] - 4, memory[0xC214 + i * 16] - 4)
                                for i in range(min(15, len(WORLD.get(snapshot.map, {}).get("objects", []))))]
 
-    def update_story(self, snapshot):
+    def update_story(self, snapshot, *, allow_remote_puzzles=True):
         can_strength = any(70 in p.moves for p in snapshot.party)
         self.tile_overrides = {(m, x, y): tile for m, w in WORLD.items() for flag, x, y, tile in w.get("opened_tiles", [])
-                               if event_set(snapshot.event_flags, flag) or (m != snapshot.map and can_strength)}
+                               if event_set(snapshot.event_flags, flag)
+                               or (allow_remote_puzzles and m != snapshot.map and can_strength)}
         # Puzzle switches reset on reentry. Old successful steps cannot reopen a gate.
         self.closed_passages = {(m, x, y) for m, w in WORLD.items()
                                 for _, x, y, _ in w.get("opened_tiles", [])
@@ -121,6 +125,9 @@ class Navigator:
             if pos[0] == source[0] and abs(pos[1] - source[1]) + abs(pos[2] - source[2]) > 2:
                 self.attempt = None
                 return
+            if not self.connected_maps(source[0], pos[0]):
+                self.attempt = None
+                return
             # Only record the observed direction. Ledges and warps are not reversible by assumption.
             self.edges.setdefault(source, {})[direction] = pos
             self.blocked.pop((source, direction), None)
@@ -155,8 +162,46 @@ class Navigator:
         for p, dr, q in data.get("edges", []):
             if WORLD.get(p[0], {}).get("forced_moves"):
                 continue
+            if not self.connected_maps(p[0], q[0]):
+                continue
             self.edges.setdefault(tuple(p), {})[dr] = tuple(q)
         self.restore()
+
+    def connected_maps(self, source, target):
+        """Exclude distant scripted moves from the learned walking graph."""
+        if not self.use_world or source == target or source not in WORLD or target not in WORLD:
+            return True
+        world = WORLD[source]
+        if any(destination == target for _, destination, _ in world['connections']):
+            return True
+        if any(destination and destination[0] == target
+               for destination in (self._warp(source, warp) for warp in world['warps'])):
+            return True
+        return any(pos[0] == source and destination[0] == target
+                   for transitions in (FORCED, MANSION_FALLS)
+                   for pos, destination in transitions.items())
+
+    def open_route(self, snapshot, targets):
+        """Find a route that needs no additional puzzle switches on any floor."""
+        if self._open_navigation is None:
+            self._open_navigation = Navigator()
+        navigation = self._open_navigation
+        previous_gates = navigation.closed_passages
+        navigation.update_story(snapshot, allow_remote_puzzles=False)
+        if (navigation.closed_passages != previous_gates
+                or navigation.live_map != self.live_map
+                or navigation.live_positions != self.live_positions):
+            navigation.path.clear()
+        navigation.use_world = self.use_world
+        navigation.live_map = self.live_map
+        navigation.live_positions = self.live_positions
+        navigation.edges = self.edges
+        navigation.blocked = self.blocked
+        direction = navigation.route((snapshot.map, snapshot.x, snapshot.y), targets, snapshot.frame)
+        if direction is not None:
+            self.path = deque(navigation.path)
+            self.target = navigation.target
+        return direction
 
     @staticmethod
     def _tile(world, x, y):
@@ -169,6 +214,9 @@ class Navigator:
         x, y, destination, index = warp
         if [x, y] in WORLD.get(source, {}).get("inactive_warps", []):
             return None
+        if destination == -1 and source == MAPS['ROUTE_22_GATE']:
+            # The cartridge selects the last map from the exit's side of the gate.
+            destination = MAPS['ROUTE_23'] if y < 4 else MAPS['ROUTE_22']
         if destination == -1:
             parents = [m for m, w in WORLD.items() if index < len(w["warps"])
                        and w["warps"][index][2] == source]
@@ -269,6 +317,11 @@ class Navigator:
             dx, dy = DIRS[dr]
             current_world = WORLD.get(m) if self.use_world else None
             if current_world:
+                if m not in indices:
+                    indices[m] = self._index_world(m, current_world)
+                objects = indices[m][1]
+                if (x + dx, y + dy) in objects or q[0] == m and q[1:] in objects:
+                    continue
                 here = self.active_tile(current_world, x, y)
                 front = self.active_tile(current_world, x + dx, y + dy)
                 ts = current_world["tileset"]

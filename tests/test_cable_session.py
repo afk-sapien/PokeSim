@@ -106,6 +106,7 @@ def test_real_trade_pairs_and_roles(cartridge_plan, tmp_path, reverse, pairing):
         assert sha256(Path(entry['state_path']).read_bytes()) == entry['checkpoint_sha256']
         evidence = entry['evidence']
         assert evidence['cartridge_restart_passed'] and evidence['checkpoint_reload_passed']
+        assert evidence['cartridge_movement_passed'] and evidence['checkpoint_movement_passed']
         assert evidence['transport']['TradeCenter_Trade'] == 1
         assert evidence['transport']['ReturnToCableClubRoom'] == 1
         assert evidence['safe_return_map'] == 89

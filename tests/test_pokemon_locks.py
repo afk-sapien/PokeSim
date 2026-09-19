@@ -41,10 +41,10 @@ def test_lock_after_list_selection_cancels_release_confirmation():
 
 def test_locked_party_member_is_not_given_to_an_in_game_trader():
     partner = mon(trainer_id=100, dvs=(8,) * 5)
-    s = snapshot([], party=(partner,))
+    s = snapshot([], party=(partner, mon(level=80)))
     policy = StrategicPolicy(7)
     policy.goal = Goal('collect_trade', 'Trade', 'Meet the trader')
-    policy.collection.project = {'give': partner.species}
+    policy.collection.project = {'give': partner.species, 'map': s.map}
     choices = {identity(asdict(partner)): {'state': 'locked'}}
     policy.trade_preferences = lambda: choices
     memory = menu({1: '  BULBASAUR'}, (1, 1), top=(1, 1))

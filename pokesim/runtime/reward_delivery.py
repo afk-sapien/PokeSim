@@ -19,6 +19,20 @@ def _put(db, key, value):
     db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (key, json.dumps(value)))
 
 
+def select_reward(snapshot, ledger, mew_received, *, league_rewards=False, mew_event=False):
+    """Catch up a missed Mew before draining repeatable League rewards."""
+    from ..policies.collection import champion
+    from ..trade.event import MEW
+
+    # Eligibility is persistent progress, so enabling the event after victory works too.
+    if mew_event and champion(snapshot) and 151 not in snapshot.owned and not mew_received:
+        return 'mew_event', None, MEW, str(uuid.uuid4())
+    if league_rewards and ledger['earned'] > ledger['delivered']:
+        ordinal, species, seed = rewards.selection(ledger)
+        return 'league_reward', ordinal, species, seed
+    return None
+
+
 def recover_storage(store):
     """Publish only an unfinished committed reward, never an older completed one."""
     record = store.get(PENDING)
@@ -45,9 +59,8 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
     """Stage and commit at most one local gift at an unreserved safe point."""
     from ..ram import read_snapshot
     from ..trade import boxes
-    from ..trade.event import EVENT_KEY, MEW, gift_slot
+    from ..trade.event import EVENT_KEY, gift_slot
     from ..trade.execute import register_arrival
-    from ..policies.collection import champion
     from ..strategy_data import SPECIES
 
     if not league_rewards and not mew_event:
@@ -61,16 +74,14 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
     space = next(((box, count + 1) for box, count in enumerate(before.box_counts, 1) if count < 20), None)
     if space is None:
         return None
+    rewards.observe_progress(emu.store, before)
     with emu.store.lock:
         value = rewards.ledger(emu.store.db)
-    if league_rewards and value['earned'] > value['delivered']:
-        ordinal, species, seed = rewards.selection(value)
-        kind = 'league_reward'
-    elif mew_event and champion(before) and 151 not in before.owned and not emu.store.get(EVENT_KEY):
-        ordinal, species, seed = None, MEW, str(uuid.uuid4())
-        kind = 'mew_event'
-    else:
+    selected = select_reward(before, value, emu.store.get(EVENT_KEY),
+                             league_rewards=league_rewards, mew_event=mew_event)
+    if selected is None:
         return None
+    kind, ordinal, species, seed = selected
     identifier = uuid.uuid4().hex
     state = emu._state_bytes()
     emu.snapshot = before
@@ -84,7 +95,7 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
     clone = emu._boot()
     try:
         clone.load_state(io.BytesIO(state))
-        gift = gift_slot(seed, species)
+        gift = gift_slot(seed, species, random_name=kind == 'league_reward')
         box, position = space
         boxes.write_slot(clone.memory, box, position, gift)
         register_arrival(clone.memory, species)
@@ -111,7 +122,7 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
     CheckpointStore.atomic_write(directory / 'result.state', raw)
     metadata = {**metadata, 'sha256': hashlib.sha256(raw).hexdigest(), 'reward_id': identifier}
     memory = dict(metadata['run_memory'])
-    memory['championships'] = max(memory.get('championships', 0), value['earned'])
+    memory['championships'] = max(memory.get('championships', 0), rewards.championship_count(value))
     metadata['run_memory'] = memory
     record = {'id': identifier, 'phase': 'staged', 'decision': None, 'kind': kind,
               'ordinal': ordinal, 'species': species, 'sha256': metadata['sha256'],
@@ -125,7 +136,7 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
                 raise ValueError('Custom reward ownership changed before commitment')
             current['delivered'] = ordinal
             rewards.save(emu.store.db, current)
-            title = f"Received {SPECIES[species]['name']} for Championship #{ordinal}"
+            title = f"Received {gift.nick} ({SPECIES[species]['name']}) for League reward #{ordinal}"
         else:
             _put(emu.store.db, EVENT_KEY, identifier)
             title = 'Received Mew from the custom PokeSim event'

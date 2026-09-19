@@ -90,8 +90,9 @@ def test_managed_local_offers_do_not_require_a_legacy_broker(tmp_path, monkeypat
         'connected': False, 'instance': instance, 'offers': [], 'message': message})
     payload = {'version': 'red', 'owned': [], 'seen': [], 'party': [], 'storage': None}
     application.state.participant = SimpleNamespace(runtime=SimpleNamespace(call=lambda operation: payload), inventory=lambda: payload)
-    monkeypatch.setattr('pokesim.web.app.live_status', lambda *args: payload)
+    monkeypatch.setattr('pokesim.web.app.live_status', lambda *args, **kwargs: payload)
     monkeypatch.setattr('pokesim.web.app.preferences.apply', lambda data, _: data)
+    monkeypatch.setattr('pokesim.league_partners.apply', lambda data, _: data)
     result = TestClient(application).get('/api/trading').json()
     assert result['connected'] is True
     assert result['managed'] is True

@@ -1,7 +1,7 @@
 """Plan through the Mansion while accounting for the shared statue switch."""
 from collections import deque
 
-from .navigation import DIRS, PAIR_COLLISIONS, SEAFOAM_HOLES, Navigator
+from .navigation import DIRS, MANSION_FALLS, PAIR_COLLISIONS, SEAFOAM_HOLES, Navigator
 from ..strategy_data import MAPS, WORLD, event_set
 
 MANSION_MAPS = {MAPS[n] for n in ('POKEMON_MANSION_1F', 'POKEMON_MANSION_2F',
@@ -10,8 +10,7 @@ STATUES = {(MAPS[name], x, y + 1) for name, points in (
     ('POKEMON_MANSION_1F', [(2, 5)]), ('POKEMON_MANSION_2F', [(2, 11)]),
     ('POKEMON_MANSION_3F', [(10, 5)]), ('POKEMON_MANSION_B1F', [(20, 3), (18, 25)]))
     for x, y in points}
-FALLS = {(MAPS['POKEMON_MANSION_3F'], x, 14): (MAPS['POKEMON_MANSION_1F'], 16, 14)
-         for x in (16, 17)}
+FALLS = MANSION_FALLS
 
 
 class MansionPlanner:

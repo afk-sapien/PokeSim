@@ -86,8 +86,15 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     @app.get("/api/pokedex/status")
     def pokedex_status():
         status = emu.status()
-        payload = live_status(status.get("game"), (status.get("strategy") or {}).get("collection"))
-        return preferences.apply(payload, store.trade_preferences())
+        payload = live_status(status.get("game"), (status.get("strategy") or {}).get("collection"),
+                              league_rewards=status.get('league_rewards', {})
+                              if getattr(config, 'LEAGUE_REWARDS', False) else None)
+        from ..catches import status as catch_status
+        payload['catches'] = catch_status(store)
+        from ..league_partners import apply as league_partners
+        payload = league_partners(payload, store)
+        from ..milestones import apply as milestones
+        return preferences.apply(milestones(payload, store), store.trade_preferences())
 
     @app.get('/api/trading')
     def trading_status():

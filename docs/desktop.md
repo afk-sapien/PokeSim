@@ -47,11 +47,30 @@ Trading is automatic across all eligible running adventures in the same library.
 
 Games finish battles or menus before preparing for an exchange. Interrupted exchanges recover automatically from their recorded decisions.
 
-Preparation uses normal walking and PC input to retrieve the chosen individual. Both games then enter a temporary paired Cable Club session. The games execute the exchange, evolution, and save. Both verified results must commit before ordinary play resumes. No direct Pokémon record swap is used as a fallback.
+Preparation routes each adventure to a reachable Pokémon Center, using normal movement, battles, field moves, and PC input to retrieve the chosen individual. Games can use different centers. When the active box is full, preparation uses another box with space for a safe party reserve. Both games then enter a temporary paired Cable Club session. The games execute the exchange, evolution, and save. Both verified results must commit before ordinary play resumes. No direct Pokémon record swap is used as a fallback.
 
-The current adapter supports clean English Red and Blue and the Vermilion Pokémon Center. An adventure without a supported route waits or reports a preparation failure. Link battles and trading with another application installation are not implemented.
+If every box and the party are full, preparation uses the existing duplicate cleanup rules to release one unprotected spare through the PC. The selected trade offer and locked Pokémon are protected. If there is no safe duplicate to release, the attempt stops and reports the storage problem.
 
-Championship rewards and the one-time postgame Mew gift are separate optional custom PokeSim features. Enable them per adventure in Settings. They default to off and use an independent local gift transaction, without pausing another adventure or pretending the gift was a cable trade.
+The current adapter supports clean English Red and Blue at all twelve Cable Club centers, including the Indigo Plateau lobby. Each cartridge returns to its own original center after trading. An adventure without a supported route waits or reports a preparation failure. Trading pages show recent failed attempts and their reasons alongside completed exchanges. Link battles and trading with another application installation are not implemented.
+
+Championship rewards and the one-time postgame Mew gift are enabled by default for new adventures. You can disable either feature in the adventure's Settings while it is stopped. Existing adventures keep their saved settings. These custom PokeSim gifts use an independent local gift transaction. League rewards apply to future victories while enabled. The Mew gift can catch up once if its original milestone was missed. Mew is excluded from repeatable League rewards. Having previously owned Mew permanently closes the event claim for that adventure, including after a checkpoint restore.
+
+Each completed Elite Four and Champion run awards one random level-5 Pokémon with a random nickname,
+with equal chances among the species this adventure has unlocked:
+
+| Reward Pokémon | Requirement |
+| --- | --- |
+| Bulbasaur, Charmander, Squirtle | Complete a League run with rewards enabled |
+| Eevee | Previously acquire Eevee or one of its evolutions |
+| Omanyte, Kabuto, Aerodactyl | Previously acquire any fossil Pokémon or its evolution |
+| Hitmonlee, Hitmonchan | Beat the Fighting Dojo's Karate Master |
+| Mr. Mime | Previously acquire Mr. Mime |
+| Jynx | Previously acquire Jynx |
+
+Unlocks are per adventure and survive trading away a Pokémon or restoring a
+checkpoint. Existing progress counts toward unlocks. This does not award gifts
+for past League wins. The Library and live screen show total League wins,
+including wins earned with rewards disabled, independently of reward counts.
 
 ## Your files and backups
 
@@ -135,3 +154,13 @@ uv run --locked python tools/check_python_install.py
 The install check creates a temporary isolated environment, installs the built wheel and its dependencies, and launches the installed `pokesim-desktop` command outside the checkout. It verifies the Library, static assets, duplicate launch, CSRF protection, and clean shutdown. It then launches two actual worker processes and checks private credentials, independent save files, and shutdown when their parent closes its pipe.
 
 These checks need no Pokémon ROM. Reference preparation and dependency installation require network access unless their inputs are already cached. Private ROM gameplay and cable-trading tests remain separate qualification requirements for each platform. Packages exclude private ROMs, saves, generated datasets, and portrait packs.
+
+## Pokédex catch counts
+
+Each species shows **Caught**, the number of successful captures recorded in this adventure, and **Have**, the number currently in the party and PC boxes. The entry details separate party and PC totals. The page summary adds up captures across all species.
+
+Duplicate captures and Pokémon sent directly to the PC count. Gifts, trades, evolutions, failed throws, and the catching tutorial do not. Releasing, trading, or evolving a Pokémon does not subtract its original capture. Counts persist independently of journal retention and checkpoint restores. Replaying the exact same saved capture completion does not add a second receipt. An explicit adventure restart clears the counts for the new run.
+
+Existing adventures begin tracking when the updated version first runs and display the tracking date. Older totals cannot be reconstructed reliably from Pokédex flags or the journal. Capture tracking uses verified English retail Red and Blue cartridge routines. Other ROMs display an unavailable catch count while still showing current ownership.
+
+Automatic trade selection remembers which individual Pokémon have already belonged to each campaign. Returning an individual must unlock a new Pokédex entry, rather than repeat a previous quality upgrade. Among equally useful exchanges, the scheduler favors species traded less often in each adventure's last eight completed exchanges. It compares all eligible game pairs while preserving party, last-copy, project, and locked-Pokémon protections.

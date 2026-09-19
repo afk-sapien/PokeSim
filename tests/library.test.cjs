@@ -72,6 +72,21 @@ test('create can reuse a ROM without starting and sends a stable-format idempote
   assert.equal(view.calls.some(call => call.path.endsWith('/start')), false)
 })
 
+test('adventure cards show League wins independently of reward counts', async () => {
+  const view = library({respond(path) {
+    if (path !== '/api/v1/adventures') return null
+    return {ok: true, json: async () => ({adventures: [{
+      id: 'a'.repeat(32), name: 'Red', version: 'red', state: 'running',
+      summary: {league_rewards: {wins: 300, earned: 2, delivered: 2}},
+    }]})}
+  }})
+  let markup = ''
+  view.element('#adventure-list').insertAdjacentHTML = (_, html) => { markup += html }
+  await settle()
+  assert.match(markup, /300 League wins/)
+  assert.doesNotMatch(markup, />2 League wins/)
+})
+
 test('settings mutations send only fields accepted by the manager', async () => {
   const view = library()
   await settle()
@@ -250,7 +265,9 @@ test('automatic trading shows friendly progress and only completed history witho
   }})
   await settle()
   assert.equal(view.element('#trading-status').textContent, '2 adventures can trade automatically.')
-  assert.match(view.element('#trade-active').innerHTML, /Red Sprout ↔ Blue Ripple/)
+  assert.match(view.element('#trade-active').innerHTML, /Red Sprout/)
+  assert.match(view.element('#trade-active').innerHTML, /Blue Ripple/)
+  assert.equal(view.element('#trade-active-section').hidden, false)
   assert.match(view.element('#trade-active').innerHTML, /Checking both saves/)
   assert.doesNotMatch(view.element('#trade-active').innerHTML, /staging|manifest|button/)
   assert.equal((view.element('#trade-history').innerHTML.match(/Trade completed/g) || []).length, 1)
@@ -289,4 +306,69 @@ test('automatic trade issues show a retry explanation without technical messages
   assert.match(view.element('#trade-active').innerHTML, /try again/)
   assert.doesNotMatch(view.element('#trade-active').innerHTML, /private exception/)
   assert.match(view.element('#trading-status').textContent, /two eligible adventures/)
+})
+
+test('global trading shows persistent travel failures instead of saying adventures are ready', async () => {
+  const view = library({page: 'trading', respond: path => {
+    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
+      participants: ['one', 'two'], active: [], history: [],
+      attention: {message: '12 recent trade attempts did not complete. An adventure could not reach the Cable Club.'},
+      recent_failures: [{phase: 'aborted', decision: 'ABORT', updated_at: 1000,
+        failure_reason: 'An adventure could not reach the Cable Club.', error: '/private/path'}],
+    })}
+  }})
+  await settle()
+  assert.match(view.element('#trading-status').textContent, /12 recent.*Cable Club/)
+  assert.doesNotMatch(view.element('#trading-status').textContent, /can trade automatically/)
+  assert.match(view.element('#trade-active').innerHTML, /try again/)
+  assert.equal(view.element('#trade-failures-section').hidden, false)
+  assert.match(view.element('#trade-failures').innerHTML, /Trade did not complete/)
+  assert.match(view.element('#trade-failures').innerHTML, /could not reach the Cable Club/)
+  assert.doesNotMatch(view.element('#trade-failures').innerHTML, /private/)
+  assert.match(view.element('#trade-history').innerHTML, /No completed trades yet/)
+})
+
+test('shared trade history shows both arrivals, sprites and verified evolutions while hiding idle exchanges', async () => {
+  const left = 'a'.repeat(32)
+  const right = 'b'.repeat(32)
+  const view = library({page: 'trading', respond: path => {
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [
+      {id: left, name: 'Red <Sprout>', state: 'running'},
+      {id: right, name: 'Blue Ripple', state: 'stopped'}
+    ]})}
+    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
+      participants: [left, right], active: [], history: [{
+        left_id: left, right_id: right, phase: 'completed', decision: 'COMMIT', display: {
+          [left]: {received: {name: 'Oddish', nickname: '<SPROUT>', dex: 43, level: 12}},
+          [right]: {received: {name: 'Gengar', dex: 94, level: 33, evolved_from: {name: 'Haunter'}}}
+        }
+      }]
+    })}
+  }})
+  await settle()
+  const html = view.element('#trade-history').innerHTML
+  assert.equal(view.element('#trade-active-section').hidden, true)
+  assert.match(html, new RegExp(`/games/${left}/sprites/43.png`))
+  assert.match(html, new RegExp(`/games/${right}/sprites/94.png`))
+  assert.match(html, new RegExp(`/games/${right}/trading`))
+  assert.match(html, /Haunter → Gengar/)
+  assert.match(html, /Received · Lv. 33/)
+  assert.match(html, /&lt.*SPROUT.*&gt/)
+  assert.doesNotMatch(html, /<SPROUT>/)
+  assert.equal(view.element('#trade-history-count').textContent, '1 recent exchange')
+})
+
+test('missing historical Pokémon remain unknown and active offers do not claim an evolution', async () => {
+  const view = library({page: 'trading', respond: path => {
+    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
+      participants: [], active: [{left_id: 'one', right_id: 'two', phase: 'preparing', display: {
+        one: {received: {name: 'Haunter', dex: -1, level: 999, evolved_from: {name: 'Gastly'}}}
+      }}], history: [{phase: 'completed', decision: 'COMMIT'}]
+    })}
+  }})
+  await settle()
+  assert.match(view.element('#trade-history').innerHTML, /Pokémon details unavailable/)
+  assert.doesNotMatch(view.element('#trade-history').innerHTML, /<img/)
+  assert.match(view.element('#trade-active').innerHTML, /Receiving/)
+  assert.doesNotMatch(view.element('#trade-active').innerHTML, /Gastly|Lv. 999|sprites\/-1/)
 })

@@ -9,7 +9,7 @@ from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
 from pokesim.strategy_data import ITEMS, MAPS, WORLD
 from test_collection import sid, state
-from test_strategy import mon
+from test_strategy import flags, mon
 
 
 def test_restarts_preserve_category_rotation_and_repeated_failure_backoff():
@@ -110,9 +110,12 @@ def test_full_dex_still_selects_training_and_level_100_has_no_training_candidate
     nav.visits = {(m, 0, 0): 1 for m in WORLD}
     nav.distance_lookup = Mock(return_value=lambda targets: 0 if targets else None)
     s = state(map=MAPS['ROUTE_1'], money=100000, hall_of_fame_count=1,
+              event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_GOT_HITMONLEE'),
               owned=frozenset(range(1, 152)), party=(mon(species=sid(113), level=99),),
               items=tuple((ITEMS[item], 10) for item in ('POKE_BALL', 'OLD_ROD', 'GOOD_ROD', 'SUPER_ROD')))
     c.observe(s)
+    c.director.select = Mock(side_effect=lambda candidates, rng, urgent=False:
+                             next(project for weight, project in candidates if project['method'] == 'train'))
     goal = c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
     assert goal.key == 'collect_train'
     assert c.project['target_level'] == 100
@@ -120,7 +123,9 @@ def test_full_dex_still_selects_training_and_level_100_has_no_training_candidate
     c = Collection()
     s = replace(s, party=(replace(s.party[0], level=100),))
     c.observe(s)
-    assert c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan')).key == 'collect_rematch'
+    c.director.select = Mock(wraps=c.director.select)
+    assert c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan')).key in ('collect_rematch', 'collect_hunt')
+    assert all(project['method'] != 'train' for weight, project in c.director.select.call_args.args[0])
     assert c.project['method'] != 'train'
 
 

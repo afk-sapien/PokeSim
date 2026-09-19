@@ -41,3 +41,27 @@ def test_list_menu_and_yes_no():
     assert Screen(fake_mem({12: "  WITHDRAW"})).pc
     assert Screen(fake_mem({5: "  A B C D E F G H I "})).naming
     assert not Screen(fake_mem({})).battle_menu
+
+
+def test_yes_no_ignores_pokemon_names_behind_confirmation():
+    from test_events import snap
+    from test_strategy import menu
+
+    for cursor_row in (8, 10):
+        memory = menu({8: '     MR MIME    ?YES?',
+                       10: '     HITMONLEE  ?NO ?'},
+                      (15, cursor_row), top=(15, 8))
+        screen = Screen(memory)
+        assert screen.yes_no
+        assert screen.kind(snap(textbox=True)) == 'yes_no'
+
+
+def test_yes_no_requires_complete_labels_in_the_selected_column():
+    from test_strategy import menu
+
+    memory = menu({4: '     YESMAN', 6: '     NOBODY', 8: '     CANCEL'},
+                  (4, 4), top=(4, 4))
+    assert not Screen(memory).yes_no
+    memory = menu({4: '     CANCEL', 8: '               YES', 10: '               NO'},
+                  (4, 4), top=(4, 4))
+    assert not Screen(memory).yes_no

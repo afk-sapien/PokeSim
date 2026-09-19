@@ -193,6 +193,22 @@ class Registry:
             ids = [row[0] for row in self.db.execute(query + ' ORDER BY created_at DESC LIMIT 1000', parameters)]
         return [self.transaction(tid) for tid in ids]
 
+    def completed_trade_visits(self):
+        """Individuals previously held by each campaign, including both trade sides."""
+        query = '''SELECT participant.value,
+                   json_extract(interactions.plan, '$.campaign_ids.' || participant.value),
+                   json_extract(interactions.plan, '$.left_key')
+                   FROM interactions, json_each(interactions.plan, '$.participants') AS participant
+                   WHERE phase = 'completed' AND decision = 'COMMIT'
+                   UNION
+                   SELECT participant.value,
+                   json_extract(interactions.plan, '$.campaign_ids.' || participant.value),
+                   json_extract(interactions.plan, '$.right_key')
+                   FROM interactions, json_each(interactions.plan, '$.participants') AS participant
+                   WHERE phase = 'completed' AND decision = 'COMMIT' '''
+        with self.lock:
+            return {tuple(row) for row in self.db.execute(query) if row[2]}
+
     def create_transaction(self, tid, plan):
         validate_id(tid)
         with self.lock, self.db:
