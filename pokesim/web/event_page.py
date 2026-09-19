@@ -1,37 +1,23 @@
-"""Journal detail rendering without HTTP, configuration, or storage dependencies."""
+"""Render escaped journal details with adventure-scoped navigation."""
 from html import escape
 
 from .feed import iso_timestamp
+from .pages import render_game_page
 
 
-def render_event(event: dict, *, can_rewind: bool) -> str:
-    title = escape(event['title'])
+def render_event(event: dict, *, can_rewind: bool, base_path='', adventure_id='', adventure_name='') -> str:
     shot = ''
     if event['shot']:
-        source = escape(f"/shots/{event['shot']}", quote=True)
+        source = escape(f"{base_path}/shots/{event['shot']}", quote=True)
         shot = f'<img class="shot" src="{source}" alt="">'
     rewind = ''
     if can_rewind and event['state']:
         state = escape(event['state'], quote=True)
-        rewind = (
-            f'<p><button id="rewind" data-state="{state}">'
-            'Rewind the live game to this moment</button></p>'
-            '<p id="rewind-error" role="alert" hidden></p>'
-            '<script src="/static/event.js" defer></script>'
-        )
-    metadata = ' · '.join((
-        iso_timestamp(event['ts']), escape(event['map']),
-        f"play time {escape(str(event['playtime']))}",
-        escape(event['type']), f"priority {escape(str(event['priority']))}",
-    ))
-    return f'''<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title} · pokesim</title>
-<link rel="stylesheet" href="/static/style.css"></head><body class="event">
-<main><a href="/journal">Back to the journal</a><h1>{title}</h1>
-<p class="meta">{metadata}</p>
-<p>{escape(event['body'])}</p>
-{shot}
-{rewind}
-</main></body></html>'''
+        rewind = (f'<button id="rewind" data-state="{state}">'
+                  'Rewind the live game to this moment</button>')
+    return render_game_page('event.html', base_path=base_path, adventure_id=adventure_id,
+                            adventure_name=adventure_name, title=escape(event['title']),
+                            timestamp=iso_timestamp(event['ts']), location=escape(event['map']),
+                            playtime=escape(str(event['playtime'])), event_type=escape(event['type']),
+                            priority=escape(str(event['priority'])), body=escape(event['body']),
+                            screenshot=shot, rewind=rewind)

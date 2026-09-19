@@ -1,42 +1,31 @@
-# PokeSim 0.2.0rc31 experimental beta
+# PokeSim 0.2.0rc32 experimental beta
 
-This release adds desktop setup, game-local trading and partner locks, a
-separate one-time Champion Mew reward, and shared desktop/server lifecycle handling.
+This candidate brings the latest development work together on main.
 
-Server shutdown now reports final-save failures. An adventure directory lock prevents
-two updated runtimes from opening the same game. Shopping and PC interactions have
-separate state owners, and runtime status includes source build identity.
+- Manage multiple independent Red and Blue adventures in one Adventure Library.
+- Trade automatically through the in-game Cable Club, with protected partners,
+  verified trade evolutions, and recovery for interrupted exchanges.
+- Browse PC Pokémon by DV rating. One to three stars show quality at a glance,
+  and four stars identify perfect DVs. The Pokédex tracks species with three-star
+  or better partners alongside persistent level 100 and perfect-DV milestones.
+- Track captures, current ownership, and each partner's League victories.
+- Apply simulation pace from Library Settings and inspect party moves and stats.
+- Include newer collection, training, healing, shopping, and storage safeguards.
+- Update Python container, runtime, build, and GitHub Actions dependencies.
 
-Validation includes synthetic Python scenarios, real Chromium flows, private ROM
-opening tests, and copied-save comparisons. These checks do not establish uninterrupted
-multi-day gameplay or Pokémon cartridge playback on every supported target.
+Install the Python package with `pokesim-desktop`, or run one Docker container.
+Prepared adventures work offline. Supply your own supported ROM. Packages exclude
+Pokémon ROMs, saves, generated game datasets, and portrait packs.
 
-Validation passed 614 Python tests including five Chromium scenarios, 20 JavaScript
-tests, and five private ROM tests. Two copied checkpoints each matched the baseline
-over two game hours. Existing recovery churn remains.
+Downloads for this candidate are Python packages, a Linux amd64 Docker image,
+Compose configuration, checksums, and a source manifest. Standalone executable
+bundles are outside this release scope. Native package checks use PyBoy's demo
+ROM and do not establish full cartridge gameplay reliability on every platform.
 
-Downloads include a Linux amd64 Docker image archive, Python packages, Compose
-configuration, checksums, and a manifest identifying the exact source revision.
-See [installation instructions](https://github.com/afk-sapien/PokeSim/blob/v0.2.0rc31/docs/self-hosting.md).
-Native desktop bundles are also attached. All five targets passed their native build, launcher, and bundled-runtime checks in the [Desktop builds workflow](https://github.com/afk-sapien/PokeSim/actions/runs/35045201890).
+Back up existing adventures before upgrading. Import older single-game data into
+a new library while both applications are stopped. Publishing does not upgrade
+existing installations. See [installation and migration](desktop.md) and
+[server setup](self-hosting.md).
 
-Supply your own supported ROM and back up the complete data directory before upgrading.
-Publishing this release does not upgrade existing deployments.
-
-## Desktop downloads
-
-Extract the complete archive, then open the application inside it:
-
-| Platform | Archive | Application |
-| --- | --- | --- |
-| Windows x86-64 | `PokeSim-windows-amd64.zip` | `PokeSim/PokeSim.exe` |
-| Apple Silicon Mac | `PokeSim-darwin-arm64.zip` | `PokeSim.app` |
-| Intel Mac | `PokeSim-darwin-x86_64.zip` | `PokeSim.app` |
-| Linux x86-64 | `PokeSim-linux-x86_64.tar.gz` | `PokeSim/PokeSim` |
-| Linux ARM64 | `PokeSim-linux-aarch64.tar.gz` | `PokeSim/PokeSim` |
-
-Each desktop archive has a SHA-256 checksum. `desktop-manifest.json` records its source
-revision and validation run. Windows and macOS bundles are unsigned and are not
-notarized. Native checks use PyBoy's demonstration ROM. Private Pokémon gameplay
-checks were performed on Linux and do not establish multi-day or cross-platform
-cartridge reliability.
+The automatic player can get stuck. This remains an experimental beta without
+a new uninterrupted multi-day gameplay claim.

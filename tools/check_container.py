@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 import uuid
 
 
@@ -30,7 +30,8 @@ def main():
         override.write_text(json.dumps({
             'services': {
                 'pokesim': {'volumes': ['audit-data:/data'], 'healthcheck': {'interval': '2s'}},
-                'prepare-data': {'volumes': ['audit-data:/data']},
+                'prepare-data': {'volumes': ['audit-data:/data'], 'network_mode': 'bridge',
+                                 'command': ['python', '-m', 'pokesim.prepare_data', '--download']},
             },
             'volumes': {'audit-data': {}},
         }))
@@ -39,10 +40,10 @@ def main():
         env = {**os.environ, 'POKESIM_IMAGE': args.image, 'ROM_FILE': str(rom),
                'DATA_PATH': str(root / 'unused'), 'BIND_ADDRESS': '127.0.0.1',
                'HTTP_PORT': '0', 'POLICY': 'guided_random', 'SPEED': '1',
-               'NTFY_URL': '', 'NTFY_TOKEN': '', 'TRADING_URL': '', 'TRADING_INSTANCE': '',
+               'PUBLIC_URL': 'http://localhost:8930', 'NTFY_URL': '', 'NTFY_TOKEN': '', 'TRADING_URL': '', 'TRADING_INSTANCE': '',
                'VIEWER_ONLY': '1', 'AUTOSAVE_SECONDS': '2', 'KEEP_AUTOSAVES': '3'}
         command = ['docker', 'compose', '--project-name', project, '--env-file', str(settings),
-                   '-f', str(ROOT / 'compose.yaml'), '-f', str(override)]
+                   '-f', str(ROOT / 'compose.legacy.yaml'), '-f', str(override)]
 
         def compose(*arguments, capture=False, timeout=120):
             return subprocess.run([*command, *arguments], env=env, check=True, timeout=timeout,
@@ -79,7 +80,35 @@ def main():
             ready()
             logs = compose('logs', '--no-color', 'pokesim', capture=True)
             assert 'resumed from auto-' in logs, 'Restart did not restore the saved adventure'
-            print('Compose passed: verified setup, offline retry, HTTP health, clean save, and resume')
+            print('Legacy Compose passed: setup, offline retry, health, clean save, and resume')
+            subprocess.run(['docker', 'run', '--rm', '--network', 'none', '--read-only',
+                            '--cap-drop', 'ALL', '--tmpfs', '/tmp:size=256m,mode=1777',
+                            '-v', project + '_audit-data:/data',
+                            '-v', str(ROOT / 'tools/check_python_runtime.py') + ':/check_runtime.py:ro',
+                            '--entrypoint', 'python', args.image, '/check_runtime.py'],
+                           check=True, timeout=180)
+            compose('down', '--remove-orphans')
+            override.write_text(json.dumps({
+                'services': {'pokesim': {'volumes': ['audit-data:/data'],
+                    'command': ['python', '-m', 'pokesim', 'serve', '--data-dir', '/data/library', '--host', '0.0.0.0'],
+                    'healthcheck': {'interval': '2s'}}},
+                'volumes': {'audit-data': {}},
+            }))
+            command[command.index(str(ROOT / 'compose.legacy.yaml'))] = str(ROOT / 'compose.yaml')
+            for attempt in range(2):
+                compose('up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '60', 'pokesim')
+                address = compose('port', 'pokesim', '8000', capture=True).strip()
+                for path in ('/', '/health/ready', '/static/library.js', '/api/v1/session'):
+                    request = Request(f'http://{address}{path}', headers={'Host': 'localhost:8930'})
+                    with urlopen(request, timeout=5) as response:
+                        assert response.status == 200
+                        if path == '/':
+                            assert b'Your adventure library' in response.read()
+                compose('stop', 'pokesim')
+                container = compose('ps', '-a', '-q', 'pokesim', capture=True).strip()
+                assert subprocess.check_output(['docker', 'inspect', '--format',
+                    '{{.State.ExitCode}}', container], text=True).strip() == '0'
+            print('Library Compose passed: first launch, assets, session, graceful shutdown, and restart')
         except BaseException:
             subprocess.run([*command, 'logs', '--no-color', '--tail', '100'], env=env, timeout=30)
             raise

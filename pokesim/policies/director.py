@@ -43,18 +43,34 @@ class AdventureDirector:
         else:
             kinds = list(groups)
             recent_kinds = [entry['category'] for entry in self.recent]
-            if len(kinds) > 1 and len(recent_kinds) >= 2 and recent_kinds[-1] == recent_kinds[-2]:
+            limit = 4 if recent_kinds and recent_kinds[-1] == 'training' else 2
+            if len(kinds) > 1 and len(recent_kinds) >= limit and len(set(recent_kinds[-limit:])) == 1:
                 kinds = [kind for kind in kinds if kind != recent_kinds[-1]]
             priorities = {'legendary': 8, 'collection': 5, 'evolution': 4, 'training': 12, 'exploration': 1, 'supplies': 1}
-            if all(p.get('repeat') for _, p in groups.get('collection', ())):
-                priorities['collection'] = 1
-            weights = [priorities[kind] / (1 + recent_kinds.count(kind)) for kind in kinds]
+            if groups.get('collection') and all(p.get('repeat') and not p.get('needed_capture') for _, p in groups['collection']):
+                priorities['collection'] = 8 if any(p.get('dv_hunt') for _, p in groups['collection']) else 1
+            weights = [priorities[kind] / (1 if kind == 'training' else 1 + recent_kinds.count(kind)) for kind in kinds]
             chosen = rng.choices(kinds, weights=weights)[0]
         rows = groups[chosen]
-        if chosen == 'training' and any(p.get('mastery_needed') for _, p in rows):
+        if chosen in ('training', 'evolution') and any(p.get('perfect_partner') for _, p in rows):
+            rows = [(weight, p) for weight, p in rows if p.get('perfect_partner')]
+        elif chosen == 'training' and any(p.get('mastery_needed') for _, p in rows):
             rows = [(weight, p) for weight, p in rows if p.get('mastery_needed')]
+        if chosen == 'training':
+            # Finish the closest partners before spreading experience to lower levels.
+            highest = max(p.get('initial_level', 0) for _, p in rows)
+            rows = [(weight, p) for weight, p in rows if p.get('initial_level', 0) >= highest - 5]
+        if chosen == 'collection' and all(p.get('dv_hunt') for _, p in rows):
+            # Rotate through reachable species, then choose a route for that species.
+            # Many encounter locations must not buy a species more turns.
+            oldest = min(p.get('last_hunt', -1) for _, p in rows)
+            rows = [(weight, p) for weight, p in rows if p.get('last_hunt', -1) == oldest]
+            species = list(dict.fromkeys(p['species'] for _, p in rows))
+            priorities = [max(p.get('capture_priority', 1) for _, p in rows if p['species'] == sid) for sid in species]
+            target = rng.choices(species, weights=priorities)[0]
+            rows = [(weight, p) for weight, p in rows if p['species'] == target]
         recent_keys = [entry['key'] for entry in self.recent]
-        weights = [weight / (1 + 4 * recent_keys.count(project['key'])) for weight, project in rows]
+        weights = [weight / (1 if chosen == 'training' else 1 + 4 * recent_keys.count(project['key'])) for weight, project in rows]
         project = rng.choices([project for weight, project in rows], weights=weights)[0]
         self.recent = (self.recent + [{'category': chosen, 'key': project['key']}])[-8:]
         return project

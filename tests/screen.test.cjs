@@ -3,7 +3,7 @@ const fs = require('node:fs')
 const test = require('node:test')
 const vm = require('node:vm')
 
-const source = fs.readFileSync('pokesim/web/static/screen.js', 'utf8')
+const source = fs.readFileSync('pokesim/web/static/routes.js', 'utf8') + '\n{}\n' + fs.readFileSync('pokesim/web/static/screen.js', 'utf8')
 const flush = () => new Promise(resolve => setImmediate(resolve))
 const response = body => ({ok: true, blob: async () => body})
 

@@ -1,4 +1,8 @@
-# Distribution readiness review
+# Historical distribution readiness review
+
+This review predates the repository consolidation. Its branch names, commits,
+blockers, and standalone-download recommendations describe that earlier snapshot.
+See [current release status](../RELEASE_STATUS.md) for the present plan.
 
 Reviewed September 18, 2026. Scope: public GitHub repository, published assets,
 local packaging, CI, desktop onboarding, and home-server installation.

@@ -27,7 +27,6 @@ import uvicorn
 from .checkpoints import CheckpointStore
 from .desktop_setup import MAX_ROM, ROM_NAMES, ensure_game_data, install_rom, read_settings, user_directory
 from .platform_io import lock_file
-from .runtime import Runtime
 from .build_info import build_info
 
 STATIC = Path(__file__).parent / 'web' / 'static'
@@ -69,6 +68,8 @@ class Adventure:
             self.thread.start()
 
     def run(self):
+        runtime = None
+        emu = None
         failure = None
         try:
             settings = read_settings(self.root)
@@ -79,42 +80,41 @@ class Adventure:
             if self.cancelled.is_set():
                 return
             self.report('Opening your adventure…')
-            # Configure before importing modules that load generated reference data.
-            os.environ['DATA_DIR'] = str(self.root / 'adventure')
-            os.environ['GAME_DATA_DIR'] = str(self.root / 'game-data')
-            from . import config
-            config.DATA_DIR = self.root / 'adventure'
-            config.ROM_PATH = self.root / 'rom.gb'
-            config.HOST = '127.0.0.1'
-            config.PORT = int(self.url.rsplit(':', 1)[1])
-            config.PUBLIC_URL = self.url
-            config.STARTER = settings['starter']
-            config.VIEWER_ONLY = False
-            config.TRADING_URL = ''
-            config.TRADING_INSTANCE = ''
-            config.TRADE_TOKEN = ''
-            config.validate()
-            from .web.app import create_app
-            with Runtime(config.DATA_DIR) as runtime:
-                emu = runtime.emu
-                game = create_app(emu, runtime.store)
-                with self.guard:
-                    self.game = game
-                    self.state = 'ready'
-                    self.message = 'Your adventure is running.'
-                try:
-                    while not self.cancelled.wait(0.25):
-                        if not emu.thread.is_alive():
-                            raise RuntimeError(emu.fatal_error or 'The adventure stopped unexpectedly. See desktop.log.')
-                finally:
-                    with self.guard:
-                        self.game = None
-                        self.state = 'stopping'
-                        self.message = 'Saving your adventure…'
+            from .runtime import SimulationRuntime, SimulationSettings
+            runtime = SimulationRuntime(SimulationSettings(
+                rom_path=str((self.root / 'rom.gb').resolve()),
+                data_dir=str((self.root / 'adventure').resolve()),
+                game_data_dir=str((self.root / 'game-data').resolve()),
+                public_url=self.url, starter=settings['starter']))
+            runtime.start()
+            emu = runtime.emulator
+            game = runtime.create_app()
+            with self.guard:
+                self.game = game
+                self.state = 'ready'
+                self.message = 'Your adventure is running.'
+            while not self.cancelled.wait(0.25):
+                if not emu.thread.is_alive():
+                    raise RuntimeError(emu.fatal_error or 'The adventure stopped unexpectedly. See desktop.log.')
         except Exception as error:
             log.exception('Desktop adventure failed')
             failure = str(error)
         finally:
+            with self.guard:
+                self.game = None
+                self.state = 'stopping'
+                self.message = 'Saving your adventure…'
+            if runtime is not None:
+                try:
+                    runtime.close()
+                    if emu is not None and emu.fatal_error:
+                        failure = emu.fatal_error
+                except Exception as error:
+                    log.exception('Could not stop the emulator')
+                    failure = str(error)
+                    if emu is not None:
+                        emu.thread.join()
+                    runtime.close()
             with self.guard:
                 self.error = failure
                 self.state = 'error' if failure else 'stopped'
@@ -251,7 +251,7 @@ def existing_url(root):
     return None
 
 
-def main(argv=None):
+def legacy_main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--data-dir', type=Path, default=user_directory(), help='Use a separate folder for this adventure')
     parser.add_argument('--no-browser', action='store_true', help='Print the address without opening a browser')
@@ -324,6 +324,16 @@ def main(argv=None):
                 (root / 'instance.json').unlink(missing_ok=True)
                 logging.getLogger().removeHandler(handler)
                 handler.close()
+
+
+def main(argv=None):
+    args = list(sys.argv[1:] if argv is None else argv)
+    if '--check-runtime' in args:
+        return legacy_main(args)
+    from .__main__ import main as application_main
+    if args and args[0] in {'--worker', 'worker', '--link-session'}:
+        return application_main(args)
+    return application_main(['--desktop', *args])
 
 
 if __name__ == '__main__':

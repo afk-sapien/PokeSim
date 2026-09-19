@@ -14,7 +14,7 @@ EVENT_KEY = 'pokesim-mew-v1'
 MEW = 21
 
 
-def gift_slot(seed, species=MEW):
+def gift_slot(seed, species=MEW, *, random_name=False):
     """Build a level-five Pokémon with ordinary DVs, no training, and event provenance."""
     digest = hashlib.sha256(seed.encode()).digest()
     attack, defense = digest[0] >> 4, digest[0] & 15
@@ -38,7 +38,13 @@ def gift_slot(seed, species=MEW):
     struct[14:17] = experience.to_bytes(3, 'big')
     struct[27:29] = digest[:2]
     struct[29:29 + len(moves)] = bytes(MOVES[move]['pp'] for move in moves)
-    return boxes.Slot(0, 0, bytes(struct), boxes.encode_text(base['name']), boxes.encode_text('POKESIM'))
+    nickname = base['name']
+    if random_name:
+        from ..policies.naming import POKEMON_NAMES
+        # Keep naming independent of the draw and stable across delivery retries.
+        name_hash = hashlib.sha256(f'nickname:{seed}'.encode()).digest()
+        nickname = POKEMON_NAMES[int.from_bytes(name_hash, 'big') % len(POKEMON_NAMES)]
+    return boxes.Slot(0, 0, bytes(struct), boxes.encode_text(nickname), boxes.encode_text('POKESIM'))
 
 
 def received(data):
@@ -83,16 +89,18 @@ def stage(root, transaction, league_rewards=False):
         try:
             if eligible[name]:
                 box, position = eligible[name]
-                ordinal, species, seed = (rewards.selection(claims[name]) if league_rewards
+                claim = {**claims.get(name, {}), 'unlocks': sorted(
+                    set(claims.get(name, {}).get('unlocks', ())) | rewards.progress_unlocks(before))}
+                ordinal, species, seed = (rewards.selection(claim) if league_rewards
                                           else (None, MEW, f'{EVENT_KEY}:{name}:{transaction}'))
-                gift = gift_slot(seed, species)
+                gift = gift_slot(seed, species, random_name=league_rewards)
                 boxes.write_slot(pb.memory, box, position, gift)
                 register_arrival(pb.memory, species)
                 gifts.append({'instance': name, 'name': SPECIES[species]['name'].title(), 'species': species,
                               'ordinal': ordinal, 'level': 5, 'box': box, 'position': position})
                 if league_rewards:
                     memory = dict(metadata.get('run_memory', {}))
-                    memory['championships'] = max(memory.get('championships', 0), claims[name]['earned'])
+                    memory['championships'] = max(memory.get('championships', 0), rewards.championship_count(claims[name]))
                     metadata = dict(metadata, run_memory=memory)
             target = work / 'after' / name / f'auto-v1-trade-{transaction}.state'
             target.parent.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="pokesim-base" content="${game_base}">
+<meta name="pokesim-adventure" content="${adventure_id}">
+<title>${title} · pokesim</title>
+<link rel="stylesheet" href="${game_base}/static/style.css">
+<script src="${game_base}/static/routes.js"></script>
+<script src="${game_base}/static/event.js" defer></script>
+</head>
+<body class="event">
+<header class="topbar">${library_nav}</header>
+<main><a href="${game_base}/journal">Back to the journal</a><h1>${title}</h1>
+<p class="meta">${timestamp} · ${location} · play time ${playtime} · ${event_type} · priority ${priority}</p>
+<p>${body}</p>${screenshot}<p>${rewind}</p><p id="rewind-error" role="alert" hidden></p>
+</main></body></html>

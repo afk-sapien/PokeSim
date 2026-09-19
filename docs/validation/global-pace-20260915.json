@@ -1,0 +1,52 @@
+{
+  "date": "2026-09-15",
+  "change": "Global simulation pace with recommended default 1x",
+  "python_regressions": {
+    "passed": 696,
+    "skipped": 35
+  },
+  "browser_logic_tests": {
+    "passed": 43
+  },
+  "private_managed_app_and_cable_integration": {
+    "passed": 3
+  },
+  "isolated_installed_package_smoke": "passed",
+  "live_global_speed": 0,
+  "live_games_healthy": 3,
+  "benchmark": {
+    "description": "One-minute simultaneous Max-speed run, measured emulated frames divided by elapsed seconds and 60. Actual speed varies with gameplay and load.",
+    "games": [
+      {
+        "name": "Red Sprout",
+        "seconds": 60.67,
+        "average_multiplier": 39.26,
+        "interval_multipliers": [
+          47.23,
+          39.4,
+          31.15
+        ]
+      },
+      {
+        "name": "Blue Ripple",
+        "seconds": 60.62,
+        "average_multiplier": 29.58,
+        "interval_multipliers": [
+          38.82,
+          32.07,
+          17.9
+        ]
+      },
+      {
+        "name": "Red Ember",
+        "seconds": 60.63,
+        "average_multiplier": 36.61,
+        "interval_multipliers": [
+          44.81,
+          43.2,
+          21.87
+        ]
+      }
+    ]
+  }
+}

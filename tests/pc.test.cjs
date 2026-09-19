@@ -2,9 +2,9 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const test = require('node:test')
 const vm = require('node:vm')
-const source = fs.readFileSync('pokesim/web/static/pc.js', 'utf8')
+const source = fs.readFileSync('pokesim/web/static/routes.js', 'utf8') + '\n{}\n' + fs.readFileSync('pokesim/web/static/pc.js', 'utf8')
 
-function pc(pokemon, search = '?scope=all', party = []) {
+function pc(pokemon, search = '?scope=all', party = [], base = '') {
   const elements = new Map()
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
@@ -15,13 +15,14 @@ function pc(pokemon, search = '?scope=all', party = []) {
   }
   let url
   const context = vm.createContext({
-    document: {querySelector: element, activeElement: null, hidden: false},
+    document: {querySelector: selector => selector.startsWith('meta[') ? {content: selector.includes('pokesim-base') ? base : ''} : element(selector), activeElement: null, hidden: false},
     location: {search}, URLSearchParams,
     history: {replaceState: (_, __, next) => { url = next }},
     fetch: async () => ({ok: true, json: async () => ({started: true, version: 'blue', party,
       storage: {active_box: 1, box_counts: Array(12).fill(20), pokemon}})}),
     setInterval() {},
   })
+  context.PokeSim = {base: '', fetch: context.fetch}
   vm.runInContext(source, context)
   return {
     async ready() { await new Promise(resolve => setImmediate(resolve)) },
@@ -86,14 +87,15 @@ test('bookmarked sorting survives refresh and composes with search and box selec
   assert.match(view.url(), /sort=nick&order=asc/)
 })
 
-test('strongest shortcut ranks every box and clears previous filters', async () => {
+test('all Pokemon power sorting ranks every box independently of box filters', async () => {
   const pokemon = Array.from({length: 25}, (_, i) => mon(Math.floor(i / 20) + 1, i % 20 + 1, 100 - i,
     {power: 100 + i, calculated_stats: {HP: 10, Attack: 20, Defense: 30, Speed: 40, Special: i}}))
   pokemon.push(mon(3, 1, 100, {power: null}))
   const view = pc(pokemon, '?box=1&q=missing&sort=level')
   await view.ready()
   assert.equal(view.rows().length, 0)
-  view.element('#pc-strongest').onclick()
+  view.element('#pc-all-view').onclick()
+  view.sort('power')
   assert.equal(view.element('#pc-scope').value, 'all')
   assert.equal(view.element('#pc-search').value, '')
   assert.deepEqual(view.rows().map(p => p.power), [...Array.from({length: 25}, (_, i) => 124 - i), null])
@@ -122,7 +124,7 @@ test('power bookmarks survive refresh and details show the five stat breakdown',
   assert.match(detail, /Power = max HP \+ Attack \+ Defense \+ Speed \+ Special/)
 })
 
-test('party joins every combined sort and the strongest shortcut without changing source data', async () => {
+test('party joins every combined sort without changing source data', async () => {
   const boxed = Array.from({length: 20}, (_, i) => mon(1, i + 1, 20 + i, {power: 200 + i}))
   const party = [mon(undefined, undefined, 80, {slot: 1, nick: 'Ace', power: 900,
     dvs: [15, 15, 15, 15, 15], stat_exp: [65535, 65535, 65535, 65535, 65535],

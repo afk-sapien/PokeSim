@@ -1,25 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.2.0rc32, release candidate in preparation
 
-- Show every partner in All Pokémon without pagination.
-- Align the live game with the plan and party, place trainer progress below both
-  columns, and remove the detailed planning, route, and bag panels from Live.
-
-- Track persistent level 100 Pokédex stars, with ancestor credit for final evolutions.
-- Record perfect DV species and confirmed finds, highlight rare partners in the PC,
-  and preserve them from automatic release and trade offers.
-- Favor unearned training stars and continue repeat expeditions for perfect partners.
-
-- Refresh the README with real development screenshots of Live, Pokédex, PC, and
-  Journal, with visible feature previews and a clear release-version note.
-- Lead installation with native desktop downloads and the prebuilt server guide.
-- Prepare server reference data from the verified archive without an extra Git
-  checkout. Preserve the checkout and offline-archive preparation options.
-- Gate release publication on all five native desktop builds and a complete set
-  of matching package identities. Verify draft uploads before publishing.
-- Check extracted desktop downloads, a fresh installed wheel, and the Compose
-  startup, save, and resume path with disposable demonstration data.
+- Consolidate the Adventure Library and independent Red and Blue workers on main.
+- Coordinate automatic Cable Club trading with protected partners and recovery.
+- Add PC DV star ratings, rating filters, and persistent three-star Pokédex counts.
+- Keep level 100 and perfect-DV milestones across checkpoint restores.
+- Track captures, current ownership, and individual League victories.
+- Improve repeat catching, training, NPC exchanges, healing, and PC cleanup.
+- Preserve party detail dialogs and use one global simulation pace setting.
+- Update dependencies and verify Python installations across five native targets.
+- Align publication with Python packages and Docker, verified draft checksums,
+  and the Adventure Library startup and worker lifecycle.
 
 ## 0.2.0rc31, experimental beta
 

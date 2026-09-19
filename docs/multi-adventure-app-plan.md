@@ -2,11 +2,11 @@
 
 Architecture and implementation plan. Prepared September 15, 2026 against the working tree reporting v0.2.0rc30.
 
-**Status: proposed design, not implemented behavior.** Revised September 15, 2026 to make the proven Cable Club experiment the required trading pathway. This plan covers the application refactor. It does not authorize migrating or restarting existing deployed games as part of writing the plan.
+**Status: design reference for the implementation on `codex/multi-adventure-app`.** See [implementation and validation status](multi-adventure-implementation.md) for completed work and remaining release qualification. Revised September 15, 2026 to require the proven Cable Club pathway. Existing deployed games are migrated only through an explicit import or cutover operation.
 
 ## 1. Recommendation
 
-Build one PokeSim application that creates, runs, displays, and connects multiple adventures. Ship that application as both a desktop download and one Docker container. Give it one browser address and one persistent application data folder.
+Build one PokeSim application that creates, runs, displays, and connects multiple adventures. Distribute that application as a Python package and one Docker container. The Python package includes the desktop browser launcher. Give it one browser address and one persistent application data folder.
 
 Internally, use one manager process and one child process per running adventure. The manager contains the application API, process supervisor, library, and interaction coordinator. Each adventure child contains the existing emulator, its policies, its storage, and a private game API. During a trade, launch one temporary link-session child containing two PyBoy instances on isolated copies of the reserved adventures. Their cartridges execute the Cable Club trade. The ordinary adventure workers remain held until both results are durably accepted or the operation is aborted.
 
@@ -41,13 +41,13 @@ Required outcomes:
 - Create, name, start, stop, archive, inspect, and resume multiple adventures in one UI.
 - Keep current live controls, PC, Pokédex, journal, notifications, and save protections.
 - Start the same manager from a desktop launcher, Python CLI, or container.
-- Configure useful automatic trades among selected local adventures through the UI.
+- Automatically arrange useful trades among all eligible local adventures, including newly created games.
 - Execute exchanges through the original Cable Club menus, party exchange, evolution, Pokédex, and saving routines using the experimental virtual connection.
 - Harden that connection and integrate normal gameplay preparation, safe exit, cancellation, and durable recovery before enabling managed trading.
 - Preserve individual Pokémon protection and the existing transaction recovery guarantees.
 - Import existing desktop and server adventures through a controlled migration flow.
 - Explain waiting, stopped, failed, and recovery states clearly.
-- Test the packaged process model on Windows, Intel Mac, Apple Silicon, and Linux x86-64 and ARM64.
+- Test the installed Python process model on Windows, Intel Mac, Apple Silicon, and Linux x86-64 and ARM64.
 
 Designed for later, not implemented in this refactor:
 
@@ -58,7 +58,7 @@ Designed for later, not implemented in this refactor:
 - Automatic operating-system startup, a tray application, and automatic updates.
 - Multiple manager replicas, distributed consensus, and large-scale scheduling.
 
-Signing and notarization are distribution work alongside this plan. They are required for a polished downloadable release, but they do not dictate the runtime architecture.
+Standalone executable downloads, app bundles, signing, and notarization are outside this release scope. Python installation and Docker are the supported distribution paths.
 
 ## 3. User experience
 
@@ -99,11 +99,11 @@ Keep browser closure independent from process shutdown. A stopped adventure shou
 
 ### Trading
 
-Add an application-wide Trading page for group membership, global status, proposed exchanges, and history. Individual game pages show the same information from that adventure's perspective.
+Keep an application-wide Trading page as the shared history across adventures. Show automatic trading in a compact status strip and show the current exchange only while one is active. Completed trades show both adventures, the Pokémon each received, sprites, nicknames, levels, and verified trade evolutions. Link each adventure to its own Trading page. Put unsuccessful attempts in a collapsed section below the history. No group setup or exchange selection is required.
 
-The owner selects participating adventures and enables automatic trading. Existing per-Pokémon locks, withdrawals, party protection, and project protection remain in force. An interaction involving A and B must not pause C. A stopped game is excluded, and a held game says which interaction it is waiting for.
+All adventures participate automatically when running and eligible. Existing per-Pokémon locks, withdrawals, party protection, and project protection remain in force. An interaction involving A and B must not pause C. A stopped game is excluded, and a held game says which interaction it is waiting for.
 
-During a trade, show both participating games and progress through Preparing, Connecting, Trading, Saving, and Resuming. Route their live views to the matching side of the temporary link session, with a visible provisional status until commitment. Keep adventure IDs and browser addresses stable. Disable ordinary gameplay controls while reserved and make cancellation availability depend on the durable decision.
+During a trade, show both participating games and progress through Preparing, Connecting, Trading, Saving, and Resuming. Route their live views to the matching side of the temporary link session, with a visible provisional status until commitment. Keep adventure IDs and browser addresses stable. Disable ordinary gameplay controls while reserved and recover interrupted exchanges automatically from the durable decision.
 
 Show the meaningful reason for no trade, such as no useful exchange, partner stopped, waiting for safe gameplay, incompatible data, or recovery required. Do not present every lack of progress as a network error.
 
@@ -122,7 +122,7 @@ Show the meaningful reason for no trade, such as no useful exchange, partner sto
 | `trade/pair.py` and `trade/execute.py` | Inventory conservation checks, provenance, and recovery requirements | Replace direct record mutation and manual evolution with cartridge-driven Cable Club execution |
 | Cable experiment at commit `705ec4d`, `tools/cable_club_spike.py` | Proven connection hooks, paired stepping, and cartridge-result checks | Extract a production transport, gameplay driver, isolated session worker, and bounded failure handling |
 | `trade/event.py` and `rewards.py` | Existing reward eligibility and duplicate prevention | Make single-adventure events independent of unrelated peers |
-| `desktop_setup.py` and build tools | ROM checks, verified setup, packaging | Shared assets and import workflows, bundled worker launch |
+| `desktop_setup.py` and build tools | ROM checks, verified setup, packaging | Shared assets and import workflows, installed Python worker launch |
 
 Specific constraints found in the current implementation:
 
@@ -305,7 +305,7 @@ Keep both the existing recognized ROM SHA-1 values and a catalog SHA-256 digest 
 
 ## 8. Worker launch and lifecycle
 
-Use an explicit child executable mode through `subprocess.Popen`. In source installations, invoke the selected interpreter and worker module. In packaged installations, invoke the bundled executable in worker mode. Dispatch that mode before browser opening or manager initialization.
+Use an explicit child executable mode through `subprocess.Popen`. In both source and installed Python environments, invoke the active interpreter and worker module. Dispatch that mode before browser opening or manager initialization.
 
 Pass arguments as an argument list with `shell=False`. Pass bootstrap settings and a short-lived worker credential through an inherited pipe rather than putting secrets in the command line. The child validates all bootstrap fields. It binds its private API to `127.0.0.1` on an available port and reports its protocol version, adventure ID, generation, and endpoint through a structured readiness message.
 
@@ -313,7 +313,7 @@ Apply the same launch, generation, parent-death, and process-tree cleanup rules 
 
 Keep lifecycle messages separate from log output. Continuously drain output pipes and bound in-memory log buffers so a verbose worker cannot block itself. Keep the parent pipe open for parent-death detection. A child losing its manager stops emulation, preserves any transaction hold, attempts a safe checkpoint, and exits.
 
-Explicit executable launch avoids depending on a platform's default multiprocessing start method. Bundled executables and inherited library paths still need dedicated tests, especially on Windows and macOS. Python and PyInstaller document important differences in process startup and frozen execution. [Python subprocess documentation](https://docs.python.org/3.12/library/subprocess.html), [PyInstaller process guidance](https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html)
+Explicit interpreter launch avoids depending on a platform's default multiprocessing start method. Test the installed wheel and its native dependencies on each supported platform, especially Windows and macOS. [Python subprocess documentation](https://docs.python.org/3.12/library/subprocess.html)
 
 ### State model
 
@@ -353,7 +353,7 @@ Use private authenticated HTTP between manager and local adventure workers initi
 
 Link-session control uses a bounded versioned pipe protocol, with transaction-scoped file manifests for large artifacts. Serial byte and nybble queues remain inside the paired child process. They do not travel through browser routes or HTTP requests.
 
-The public manager is the only browser endpoint. It enforces authorization and proxies permitted game requests. Strip untrusted internal headers, supply the correct worker credential, apply deadlines, and propagate cancellation. Never accept an arbitrary worker URL from an ordinary browser request.
+The public manager is the only browser endpoint. It validates browser sessions, Host, Origin, and CSRF protection, and proxies permitted game requests. Strip untrusted internal headers, supply the correct worker credential, apply deadlines, and propagate cancellation. Never accept an arbitrary worker URL from an ordinary browser request.
 
 Proposed public routes:
 
@@ -382,11 +382,11 @@ Commands that change durable state need idempotency keys. A timed-out browser re
 
 ### Access
 
-Default desktop binding remains loopback. Bind inside Docker as required, but publish its port on host loopback by default. Remote access uses the documented authenticated HTTPS deployment.
+Default desktop binding remains loopback. Bind inside Docker as required, but publish its port on host loopback by default. Remote access uses an existing authenticated HTTPS reverse proxy or a trusted private network.
 
-Add application-level owner authorization for management operations before introducing uploads, creation, import, and shutdown endpoints. A practical first version is a generated owner bootstrap credential exchanged for an authenticated session. Server bootstrap can use a secret file. Require CSRF protection for browser mutations and validate host and origin consistently.
+Open the Library directly without an owner credential or sign-in step. The session endpoint creates a browser cookie and CSRF token automatically. Require the matching token for browser mutations and validate Host and Origin consistently. These checks prevent cross-site requests, but they do not identify users. Anyone who can reach the manager can manage its adventures.
 
-Keep authorization separate from transport so a reverse proxy or later account system can integrate without bypassing permissions. Viewer access, if enabled, cannot upload ROMs, spawn workers, stop the manager, or change trade permissions. Worker credentials and transaction commands are never sent to the browser.
+Keep remote authentication at the deployment boundary. A later account system can add application permissions, but the initial Library has one trusted management role. Worker credentials and transaction commands are never sent to the browser.
 
 This is a single-owner design. It does not isolate hostile users who can run arbitrary code under the same operating-system account.
 
@@ -406,7 +406,7 @@ Hard memory isolation per game is not guaranteed in one container. Docker resour
 
 The coordinator is a module in the manager, with its own repository of durable decisions. Replace the separately deployed broker and trading services for managed local adventures. Keep pure inventory comparison and trade-selection functions reusable.
 
-Initially provide one local trading group with explicitly selected participants. Support any number of members and any pair of compatible game versions, including Red-to-Red. There is no special adventure named `red` or `blue` in the coordinator.
+Use all non-archived local adventures as the participant pool, with new adventures included automatically. Support any number of adventures and any pair of compatible game versions, including Red-to-Red. There is no special adventure named `red` or `blue` in the coordinator.
 
 Separate three responsibilities:
 
@@ -476,7 +476,7 @@ The temporary session is speculative until the application records its decision.
 2. **Prepare through gameplay.** Each participant accepts or declines the proposed trip, reaches a supported Center, and retrieves or arranges the exact negotiated Pokémon using normal PC/menu actions. Apply a deadline and validate party capacity and protection rules throughout. Persist a preparation reservation before travel so competing trades and conflicting controls remain blocked across worker restarts. Distinguish this travelling state from the later stationary hold. Journal legitimate travel and PC changes as normal progress. The final rollback baseline is the prepared state at the rendezvous, not a rewind of all travel. A failed preparation remains at its latest safe ordinary checkpoint.
 3. **Durably hold and export.** Both adventure workers stop ordinary ticking, persist their holds, and export verified immutable source snapshots with checkpoint/cartridge provenance, individual identities, inventory revisions, protections, and policy context. No helper opens their databases. Revalidate the final proposal against both sources. The local link child receives transaction-scoped copies of both complete states and read-only access to their verified assets.
 4. **Run the real exchange.** Launch one paired link-session process. Load each source with its own ROM and cartridge-save stream. Enter the Club, assign compatible connection roles, exchange serial messages, select the negotiated party members, and confirm exactly one trade through the original game menus. The cartridge performs the exchange, animation, evolution, Pokédex updates, and save routines. Drive each side from observed game state, not a shared blind button sequence or a fixed slot assumption.
-5. **Exit and verify.** Require both games to finish saving, leave the trade menus and Club normally, and reach a supported safe return state. Drain the transport and detach every hook, restore parking bytes and interrupt state, and export each proposed checkpoint and cartridge save. Independently verify exact incoming identities, permitted game-driven changes, untouched inventory, and both fresh checkpoint and cartridge-save reloads. Completion at a second selection screen alone is insufficient for production. Produce a paired result manifest binding both inputs and outputs to the same attempt.
+5. **Exit and verify.** Require both games to finish saving, cancel the trade menus, and use the cartridge-supported soft reset and Continue sequence to return safely. The original Trade Center has no normal exit warp. Drain the transport and detach every hook, restore parking bytes and interrupt state, and export each proposed checkpoint and cartridge save. Independently verify exact incoming identities, permitted game-driven changes, untouched inventory, and both fresh checkpoint and cartridge-save reloads. Completion at a second selection screen alone is insufficient for production. Produce a paired result manifest binding both inputs and outputs to the same attempt.
 6. **Stage with each owner.** Each adventure worker validates its source revision, current hold, attempt, result hashes, and expected gameplay effects. It copies its result into private immutable staging and durably records a receipt before acknowledging. Preserve or explicitly reconcile policy memory, individual protections, collection observations, and journal context with the new return location and inventory. No ordinary autosave scan can select these files.
 7. **Commit the decision.** Only after both durable stage acknowledgments does the coordinator record `COMMIT`. This is the irreversible application decision point. Bind the plan, attempt, cable adapter identity, both sources, and both staged result hashes. The temporary process has no vote or authority after these durable results are recorded.
 8. **Apply locally.** Each adventure worker records the commit receipt, promotes its staged checkpoint through recovery, and updates its journal, trade barriers, policy reconciliation, and local receipt idempotently. It remains held until release is authorized. Never rerun the cable session to recover a committed trade.
@@ -491,7 +491,7 @@ Before commitment, a rejection, cancellation, or deadline may produce a durable 
 - **Transport:** Bound byte/nybble queues, steps, and pending exchanges. Track per-side progress and detect impossible ordering, queue overflow, and stalls. Test reversed roles and asymmetrical stepping. Do not infer completion from wall-clock elapsed time or matching aggregate counters alone.
 - **Watchdogs:** Give preparation, handshake, selection, exchange, saving, exit, and verification explicit budgets. Distinguish user cancellation, game refusal, transport stall, and worker crash. The parent must be able to terminate a stuck native emulator without blocking the manager. Never leave one adventure held indefinitely without a reported recovery state.
 - **Normal gameplay:** Replace fixed Center coordinates, first-slot selection, and text-only button heuristics with a bounded state machine using verified game state. Begin with an explicit supported rendezvous policy and navigate there legally. Handle boxed candidates, changed inventory, full party/box constraints, menu cancellation, and all supported trade evolutions. Never teleport games or write party records to make preparation succeed.
-- **Safe resumption:** Exit both sides through gameplay, verify drained queues and clean hook removal, and release all pressed buttons. Reconcile ordinary policy state with travel, PC operations, the evolved incoming Pokémon, and the post-trade location. A fresh cartridge restart may return to the Center according to the game's own saving behavior. Require valid expected states for each restart mode rather than identical screen positions.
+- **Safe resumption:** Cancel both trade menus, verify drained queues and clean hook removal, then use normal reset-button input and Continue to return through the cartridge save. Release all pressed buttons. Reconcile ordinary policy state with travel, PC operations, the evolved incoming Pokémon, and the post-trade location. A fresh cartridge restart may return to the Center according to the game's own saving behavior. Require valid expected states for each restart mode rather than identical screen positions.
 - **Isolation and cleanup:** Use independent save streams, explicit assets per side, bounded disposable directories, parent-death handling, and attempt fencing. On abnormal exit preserve diagnostic metadata and source snapshots, but never load partial outputs into an authoritative adventure.
 - **User experience:** Stream both provisional screens through their existing adventure pages. Bound recording retention, preserve requested playback settings after the session, and show why a trade waits or fails. Avoid unrestricted automatic retries against the same reproducible defect.
 
@@ -564,7 +564,7 @@ The registry URL and tag above are illustrative. Preserve the actual chosen dist
 
 The image should run as the existing non-root user. Verify first-run volume ownership for both Docker named volumes and documented bind mounts. Do not fix permissions by recursively changing ownership of arbitrary imported directories.
 
-ROMs can be added through the authenticated UI. Optionally support a read-only import mount for owners who prefer it. Reference preparation runs as a managed setup job, eliminating the need for a separate setup service in the normal flow. Retain an offline archive option.
+ROMs can be added through the Library. Optionally support a read-only import mount for owners who prefer it. Reference preparation runs as a managed setup job, eliminating the need for a separate setup service in the normal flow. Retain an offline archive option.
 
 Run exactly one manager application worker. Multiple Uvicorn workers, production reload mode, or two containers against the same data root would otherwise create competing supervisors. Enforce the application lock and document this constraint. A reverse proxy can serve multiple browser clients without multiple manager processes.
 
@@ -574,7 +574,7 @@ Container health reports manager liveness and readiness. One unhealthy game make
 
 `pokesim-desktop` becomes a thin adapter that selects the application directory, starts or discovers its manager, and opens the library. It should not import an emulator or mutate per-game globals.
 
-The packaged executable supports internal adventure-worker and link-session modes with no browser launch. It must be tested through the actual Windows executable and macOS app bundle, not only through `python -m` in CI. Preserve package symlinks, bundled certificates, dependency notices, and native libraries.
+The installed Python package supports internal adventure-worker and link-session modes with no browser launch. Test its console command and real child processes from a fresh wheel installation outside the checkout. Verify native dependencies on Windows, macOS, and Linux. No standalone build or signing pipeline is required.
 
 Proposed public commands:
 
@@ -590,7 +590,7 @@ pokesim backup
 pokesim restore
 ```
 
-These are proposed commands. They do not exist yet. The desktop alias remains available. Management commands should call the active manager rather than bypassing it and opening live databases.
+These commands are implemented through the shared manager and administrative CLI. See `pokesim --help` and the implementation guide for exact arguments. The desktop alias remains available. Management commands should call the active manager rather than bypassing it and opening live databases.
 
 Keep the current single-game `pokesim` behavior available through a named legacy command during a deprecation period. Do not silently reinterpret an existing environment-configured service as an empty managed library. Announce the default-command change as a migration boundary.
 
@@ -645,7 +645,7 @@ Starting a second copy of a full backup creates a separate fork, not a high-avai
 
 ### Update and rollback
 
-Stop new interactions, preserve a consistent backup, stop all workers, apply explicit schema migrations, then recover before resuming normal work. All local workers use the manager's bundled release in the first version. Mixed worker versions are rejected unless compatibility is explicitly tested.
+Stop new interactions, preserve a consistent backup, stop all workers, apply explicit schema migrations, then recover before resuming normal work. All local workers use the manager's installed release in the first version. Mixed worker versions are rejected unless compatibility is explicitly tested.
 
 Rollback uses the matching pre-upgrade backup and previous executable or image. It is not simply replacing the binary against a database that has undergone an incompatible migration.
 
@@ -665,8 +665,8 @@ Work:
 - Capture representative private Red and Blue checkpoints and current trade recovery scenarios.
 - Preserve and reproduce cable experiment commit `705ec4d`, including normal roles, reversed roles, no-cable control, and restart validation. Keep fixtures separate from the production executor.
 - Probe the missing normal Club exit and policy-resume behavior early, and record the memory cost of two temporary emulators. Resolve any blocker in the proposed session boundary before completing the architecture extraction.
-- Build a minimal bundled manager that launches two fake workers, receives readiness, handles exit, and shuts them down.
-- Run that process smoke on every desktop target and inside the container.
+- Install a minimal Python manager that launches two fake workers, receives readiness, handles exit, and shuts them down.
+- Run that process smoke on every Python platform target and inside the container.
 - Confirm import paths, packaged child dispatch, pipe draining, parent-death behavior, and log handling.
 
 Gate: two packaged workers can start, stop, crash independently, and exit when their parent disappears. No orphan or recursive-launch behavior. This spike comes before committing to the process adapter. The cable baseline must also reproduce and the missing exit/resume behavior must have a demonstrated path. Document any unsupported pair or platform explicitly.
@@ -698,12 +698,12 @@ Gate: three isolated adventures can start and stop through a CLI or API. Killing
 
 Work:
 
-- Add library, creation/setup, profile settings, and owner access.
+- Add library, creation/setup, profile settings, and automatic browser sessions with CSRF protection.
 - Scope existing pages and APIs by adventure ID through URL helpers.
 - Add the switcher, library navigation, stopped-state pages, and per-game failures.
 - Centralize background summaries and avoid full-rate rendering of every card.
 
-Gate: create three games through one browser address and control each independently. All game pages, images, feeds, and notification links point to the correct adventure. Viewer permissions cannot perform owner operations.
+Gate: create three games through one browser address and control each independently. All game pages, images, feeds, and notification links point to the correct adventure. Cross-site writes fail, and the local Library opens without a credential prompt.
 
 ### Phase 4: Unify installation and import
 
@@ -736,7 +736,7 @@ Gate: a manually initiated trade runs the real Cable Club flow, exits safely, an
 Work:
 
 - Connect pure proposal selection to an arbitrary participant registry.
-- Add local trading membership and preferences to the UI.
+- Show automatic trading progress and recent completed exchanges without setup controls.
 - Preserve fairness, cooldowns, protections, and individual eligibility checks.
 - Adapt Mew distribution and championship rewards to independent participant operations.
 
@@ -747,12 +747,12 @@ Gate: at least four adventures, including two Red and two Blue, complete useful 
 Work:
 
 - Run the cross-platform, fault, migration, resource, and endurance matrix.
-- Build signed/notarized desktop artifacts when the publisher credentials are available.
+- Build the wheel and source distribution, install the wheel in fresh native environments, and smoke test the Python launcher and worker processes.
 - Publish explicit supported-platform results and operational limits.
 - Deprecate separate local broker/coordinator deployment only after migration is proven.
 - Update README, architecture, desktop, operations, trading, and historical multi-game references together.
 
-Gate: the full acceptance scenario below passes on supported release targets. Documentation describes actual released behavior. Missing signing or platform evidence remains a release limitation, not a hidden success claim.
+Gate: the full acceptance scenario below passes on supported release targets. Documentation describes actual released behavior. Missing native Python platform evidence remains a release limitation and must be reported explicitly.
 
 ### Future phase: Remote participants
 
@@ -807,12 +807,12 @@ Test both participants independently at each boundary. Test restart while one ha
 ### Platform and packaging tests
 
 - Linux x86-64 and ARM64 container and source execution.
-- Windows x86-64 packaged execution.
-- Intel macOS and Apple Silicon packaged execution.
-- Actual bundled child launch and runtime checks, not only top-level imports.
+- Windows x86-64 installed Python execution.
+- Intel macOS and Apple Silicon installed Python execution.
+- Actual installed Python child launch and runtime checks, including isolation from the source checkout.
 - Unicode and space-containing paths, paths outside the source checkout, and read-only installation directories.
 - Local filesystem locks, atomic checkpoint behavior, and cleanup on each platform.
-- Browser-opening behavior from a packaged process.
+- Browser-opening behavior from the installed Python launcher.
 - Fresh first-run network preparation, offline prepared startup, and offline archive setup.
 
 Private ROM tests remain private. Use fake workers for supervisor faults, synthetic inventories for matching, and PyBoy's demo for distributable emulator packaging checks. Do not include ROMs or private saves in CI artifacts.
@@ -828,14 +828,14 @@ Run at least an overnight coordinated soak before beta release, including period
 1. Start one fresh container and reach one browser address.
 2. Add Red and Blue ROMs and create three named adventures, including two using the same ROM.
 3. Set the running-adventure limit to three in Settings, launch all three, and use every dashboard without selecting ports or editing files.
-4. Enable automatic trading for the chosen local group.
+4. Verify automatic trading includes every eligible running adventure without configuration.
 5. Demonstrate actual Cable Club trades across Red/Blue, Red/Red, and Blue/Blue pairs using suitable private fixtures. Create a fourth adventure for the Blue/Blue case, adjusting the running limit as needed. Show the original animation and evolution, normal exit, durable restart, and autonomous resumption. Confirm that disabling the cable prevents exchange.
 6. Kill one worker and show that unrelated games continue.
 7. Interrupt the manager at precommit, postcommit, and release boundaries in separate controlled runs.
 8. Restart and verify the correct durable outcomes without repeated exchanges or lost participants.
 9. Stop and resume each adventure, then stop and resume the whole installation.
 10. Export a coherent backup and restore it into a separate installation directory under the documented identity rules.
-11. Repeat the user flow through the packaged desktop launcher.
+11. Repeat the user flow through the installed Python desktop launcher.
 
 No claim of successful completion should rest only on the number of unit tests. Retain reports for process behavior, migration, actual game preservation, and packaged-platform execution.
 
@@ -899,6 +899,6 @@ The refactor is complete when one installation can manage multiple independent a
 
 For a useful intermediate release, Phases 0–4 can ship a multi-adventure library with trading clearly unavailable in managed mode. That release must not imply the full coordinated milestone is complete. The full requested application includes Phases 5–7 as well.
 
-The next implementation task should be **Phase 0 followed by Phase 1**: reproduce and preserve the cable experiment, prove its exit/resume path and the bundled worker process model, then extract explicit settings and the shared runtime. That is the smallest foundation that reduces risk for every later phase.
+The next implementation task should be **Phase 0 followed by Phase 1**: reproduce and preserve the cable experiment, prove its exit/resume path and the installed Python worker process model, then extract explicit settings and the shared runtime. That is the smallest foundation that reduces risk for every later phase.
 
-No exact delivery estimate is assigned before the worker-packaging and interaction-recovery spikes. The experiment reduces uncertainty about whether real cartridge trading can work. Production gameplay coverage, cable hardening, and the interaction ownership rewrite remain the largest uncertainties. Estimate individual phases after those results rather than treating this as a small UI addition.
+No exact delivery estimate is assigned before the Python installation and interaction-recovery spikes. The experiment reduces uncertainty about whether real cartridge trading can work. Production gameplay coverage, cable hardening, and the interaction ownership rewrite remain the largest uncertainties. Estimate individual phases after those results rather than treating this as a small UI addition.

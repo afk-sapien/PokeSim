@@ -1,0 +1,48 @@
+{
+  "timestamp": 1789507140.413404,
+  "reason": "Planned keyless Library upgrade",
+  "keyless_browser": true,
+  "keyless_cli": true,
+  "cross_site_protection": true,
+  "owner_file_absent": true,
+  "campaigns_preserved": true,
+  "adventures": {
+    "fa6fc93e5c244f80b7a15fa3c115d11b": {
+      "name": "Red Sprout",
+      "frame": 1088006,
+      "badges": [
+        "Boulder",
+        "Cascade"
+      ],
+      "healthy": true
+    },
+    "541515be632d48ffb13520adf9823f41": {
+      "name": "Blue Ripple",
+      "frame": 1073194,
+      "badges": [
+        "Boulder",
+        "Cascade"
+      ],
+      "healthy": true
+    },
+    "b8a967c32afd409885392e9d2a74dcc4": {
+      "name": "Red Ember",
+      "frame": 1027592,
+      "badges": [
+        "Boulder",
+        "Cascade"
+      ],
+      "healthy": true
+    }
+  },
+  "python_regressions": {
+    "passed": 674,
+    "skipped": 35,
+    "failed": 0
+  },
+  "javascript_regressions": {
+    "passed": 32,
+    "failed": 0
+  },
+  "installed_package_smoke": "passed"
+}

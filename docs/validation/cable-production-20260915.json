@@ -1,0 +1,858 @@
+{
+  "date": "2026-09-15",
+  "platform": "Linux x86_64",
+  "pyboy": "2.7.0",
+  "experiment_source_revision": "705ec4ddc2f0e5a1265170b33f101141c5892960",
+  "original_experiment_fresh_reproduction": {
+    "status": "passed",
+    "elapsed_seconds": 1.82
+  },
+  "production_unit_and_private_integration": {
+    "passed": 34,
+    "failed": 0,
+    "elapsed_seconds": 33.42
+  },
+  "additional_machoke_graveler_pair_and_role_tests": {
+    "passed": 6,
+    "failed": 0
+  },
+  "optimized_python_cli_stdin": {
+    "status": "verified",
+    "adapter_id": "english-rb-pyboy270-cable-v1",
+    "attempt_id": "attempt-1",
+    "return_method": "cartridge_soft_reset_continue",
+    "sides": {
+      "a": {
+        "boxes_unchanged": true,
+        "cartridge_restart_passed": true,
+        "checkpoint_reload_passed": true,
+        "incoming_species": 39,
+        "party_conserved": true,
+        "pokedex_updated": true,
+        "received_key": "ff5412350b30e51e1d463080",
+        "received_species": 49,
+        "safe_return_map": 89,
+        "safe_return_x": 11,
+        "safe_return_y": 3,
+        "transport": {
+          "CableClub_DoBattleOrTrade": 1,
+          "ReturnToCableClubRoom": 1,
+          "SavePartyAndDexData": 2,
+          "TradeCenter_SelectMon": 2,
+          "TradeCenter_Trade": 1,
+          "TradeCenter_Trade.tradeCompleted": 1,
+          "byte_calls": 1946,
+          "byte_exchanged": 1297,
+          "connect": 1,
+          "nybble_calls": 11,
+          "nybble_exchanged": 7
+        }
+      },
+      "b": {
+        "boxes_unchanged": true,
+        "cartridge_restart_passed": true,
+        "checkpoint_reload_passed": true,
+        "incoming_species": 41,
+        "party_conserved": true,
+        "pokedex_updated": true,
+        "received_key": "f37bfb758de0738baedb1e3a",
+        "received_species": 126,
+        "safe_return_map": 89,
+        "safe_return_x": 11,
+        "safe_return_y": 3,
+        "transport": {
+          "CableClub_DoBattleOrTrade": 1,
+          "ReturnToCableClubRoom": 1,
+          "SavePartyAndDexData": 2,
+          "TradeCenter_SelectMon": 2,
+          "TradeCenter_Trade": 1,
+          "TradeCenter_Trade.tradeCompleted": 1,
+          "byte_calls": 1945,
+          "byte_exchanged": 1297,
+          "connect": 1,
+          "nybble_calls": 10,
+          "nybble_exchanged": 7
+        }
+      }
+    }
+  },
+  "matrix": {
+    "status": "passed",
+    "cases": {
+      "red-blue-0": {
+        "status": "verified",
+        "elapsed_seconds": 2.348,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "ff5412350b30e51e1d463080",
+            "incoming_species": 38,
+            "received_species": 149,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 11,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "f37bfb758de0738baedb1e3a",
+            "incoming_species": 147,
+            "received_species": 14,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 10,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      },
+      "red-blue-1": {
+        "status": "verified",
+        "elapsed_seconds": 2.051,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "ff5412350b30e51e1d463080",
+            "incoming_species": 38,
+            "received_species": 149,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 13,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "f37bfb758de0738baedb1e3a",
+            "incoming_species": 147,
+            "received_species": 14,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 8,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      },
+      "red-red-0": {
+        "status": "verified",
+        "elapsed_seconds": 2.075,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "f37bfb758de0738baedb1e3a",
+            "incoming_species": 147,
+            "received_species": 14,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 11,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "f37bfb758de0738baedb1e3a",
+            "incoming_species": 147,
+            "received_species": 14,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 10,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      },
+      "red-red-1": {
+        "status": "verified",
+        "elapsed_seconds": 2.046,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "f37bfb758de0738baedb1e3a",
+            "incoming_species": 147,
+            "received_species": 14,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 13,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "f37bfb758de0738baedb1e3a",
+            "incoming_species": 147,
+            "received_species": 14,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 8,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      },
+      "blue-blue-0": {
+        "status": "verified",
+        "elapsed_seconds": 2.106,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "ff5412350b30e51e1d463080",
+            "incoming_species": 38,
+            "received_species": 149,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 10,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "ff5412350b30e51e1d463080",
+            "incoming_species": 38,
+            "received_species": 149,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 11,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      },
+      "blue-blue-1": {
+        "status": "verified",
+        "elapsed_seconds": 2.19,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "ff5412350b30e51e1d463080",
+            "incoming_species": 38,
+            "received_species": 149,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 13,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "ff5412350b30e51e1d463080",
+            "incoming_species": 38,
+            "received_species": 149,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 8,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      },
+      "slots-0-5": {
+        "status": "verified",
+        "elapsed_seconds": 2.039,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "1a99ba5edb5b145438d82742",
+            "incoming_species": 114,
+            "received_species": 114,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 12,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "f37bfb758de0738baedb1e3a",
+            "incoming_species": 147,
+            "received_species": 14,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 9,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      },
+      "slots-1-4": {
+        "status": "verified",
+        "elapsed_seconds": 1.832,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "976688befa4069b61c6c07c4",
+            "incoming_species": 150,
+            "received_species": 150,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 12,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "992268e6d67ccaf514b20558",
+            "incoming_species": 178,
+            "received_species": 178,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 9,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      },
+      "slots-2-3": {
+        "status": "verified",
+        "elapsed_seconds": 1.804,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "2aa10f0507c96e9bd42a6dd7",
+            "incoming_species": 125,
+            "received_species": 125,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 11,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "c4c847a34834d48aeafd2239",
+            "incoming_species": 169,
+            "received_species": 169,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 10,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      },
+      "slots-3-2": {
+        "status": "verified",
+        "elapsed_seconds": 1.821,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "c4c847a34834d48aeafd2239",
+            "incoming_species": 169,
+            "received_species": 169,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 11,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "2aa10f0507c96e9bd42a6dd7",
+            "incoming_species": 125,
+            "received_species": 125,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 10,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      },
+      "slots-4-1": {
+        "status": "verified",
+        "elapsed_seconds": 1.847,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "992268e6d67ccaf514b20558",
+            "incoming_species": 178,
+            "received_species": 178,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 11,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "976688befa4069b61c6c07c4",
+            "incoming_species": 150,
+            "received_species": 150,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 10,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      },
+      "slots-5-0": {
+        "status": "verified",
+        "elapsed_seconds": 1.995,
+        "adapter_id": "english-rb-pyboy270-cable-v1",
+        "sides": {
+          "left": {
+            "received_key": "ff5412350b30e51e1d463080",
+            "incoming_species": 38,
+            "received_species": 149,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 11,
+              "nybble_exchanged": 7,
+              "byte_calls": 1946,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          },
+          "right": {
+            "received_key": "1a99ba5edb5b145438d82742",
+            "incoming_species": 114,
+            "received_species": 114,
+            "party_conserved": true,
+            "boxes_unchanged": true,
+            "pokedex_updated": true,
+            "safe_return_map": 89,
+            "safe_return_x": 11,
+            "safe_return_y": 3,
+            "transport": {
+              "connect": 1,
+              "SavePartyAndDexData": 2,
+              "nybble_calls": 10,
+              "nybble_exchanged": 7,
+              "byte_calls": 1945,
+              "byte_exchanged": 1297,
+              "CableClub_DoBattleOrTrade": 1,
+              "TradeCenter_SelectMon": 2,
+              "TradeCenter_Trade": 1,
+              "TradeCenter_Trade.tradeCompleted": 1,
+              "ReturnToCableClubRoom": 1
+            },
+            "checkpoint_reload_passed": true,
+            "cartridge_restart_passed": true
+          }
+        }
+      }
+    },
+    "negative_control": {
+      "status": "passed",
+      "parties_unchanged": true,
+      "trades": 0
+    }
+  },
+  "not_exercised_here": [
+    "Native Windows and macOS packaged runtimes",
+    "A useful automatic scheduler trade with distinct boxed collections",
+    "Preparation travel from arbitrary distant maps"
+  ],
+  "additional_selected_key_binding_test": {
+    "passed": 1,
+    "failed": 0
+  },
+  "managed_worker_integration": {
+    "passed": 2,
+    "failed": 0,
+    "elapsed_seconds": 53.79,
+    "real_worker_processes": 2,
+    "separate_link_process": true,
+    "boxed_selection_gameplay_preparation": true,
+    "owner_side_result_verification": true,
+    "duplicate_stage_apply_release": true,
+    "restart_while_committed_remains_held": true,
+    "restart_after_release_preserves_received_individuals": true,
+    "one_sided_stage_rejection_aborts_both": true,
+    "abort_preserves_exact_prepared_parties": true,
+    "restart_after_abort_preserves_original_ownership": true,
+    "journal_exactly_once": true
+  },
+  "parent_liveness_cancellation": {
+    "passed": 1,
+    "failed": 0,
+    "elapsed_seconds": 0.48,
+    "stdin_pipe_eof_aborts": true,
+    "success_manifest_absent": true,
+    "native_stall_fallback_seconds": 45
+  },
+  "full_manager_integration": {
+    "status": "passed",
+    "interaction_id": "9bc7140854324ef49497a201c1d75f3d",
+    "participants": [
+      "eca0cbbd4e114e9f927ca7268376fa15",
+      "3e37625551704bdb9f7763ca1afac321"
+    ],
+    "unrelated_id": "f36af9ff06714fffb0b5d7b0843b656f",
+    "three_distinct_worker_processes": true,
+    "paired_manifest_bound_to_commit": true,
+    "unselected_worker_continued": true,
+    "unrelated_frames_advanced": 72,
+    "committed_recovery_survived_manager_restart": true,
+    "completed_retry_idempotent": true,
+    "coordinator_history_once": true,
+    "original_fixture_hashes": {
+      "red": "551fbe48b19883bd35e369f0eb502ae986e5929a47b44aaff5e766d07d8d2c3e",
+      "blue": "c1dd92f381c9e41db5e69d2f6f4d1f41af2e63d6c348ccf409929fd68e7ac494"
+    },
+    "automatic_scheduler": "Not exercised with shared-origin identical boxed collections",
+    "journal_exactly_once": true,
+    "source_fixtures_unchanged": true
+  },
+  "default_species_names_evolve_through_cartridge": {
+    "passed": 6,
+    "failed": 0,
+    "elapsed_seconds": 12.97
+  }
+}

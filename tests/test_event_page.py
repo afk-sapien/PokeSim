@@ -39,7 +39,7 @@ def test_event_content_is_text_and_state_is_data():
     assert [attrs for tag, attrs in page.tags if tag == 'button'] == [
         {'id': 'rewind', 'data-state': event['state']}]
     assert [attrs for tag, attrs in page.tags if tag == 'script'] == [
-        {'src': '/static/event.js', 'defer': None}]
+        {'src': '/static/routes.js'}, {'src': '/static/event.js', 'defer': None}]
     assert not any(tag in {'b', 'svg'} for tag, _ in page.tags)
 
 
@@ -62,7 +62,7 @@ def test_event_route_preserves_rewind_restrictions(tmp_path, monkeypatch, viewer
             response = client.get(f'/events/{eid}')
             assert response.status_code == 200
             assert ('id="rewind"' in response.text) == visible
-            assert ('/static/event.js' in response.text) == visible
+            assert '/static/event.js' in response.text
             assert '<img' not in response.text
             assert client.get('/events/999999').status_code == 404
             if saved:

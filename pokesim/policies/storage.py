@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 
 from .menus import MenuDecision, select, tap
+from .collection import Collection, held_count
 from .team import release_target, reserve_to_deposit
 from ..strategy_data import SPECIES
 from ..trade.preferences import identity
@@ -15,22 +16,40 @@ class StorageController:
     pending_release: tuple | None = None
 
     @staticmethod
-    def release_target(snapshot, project, preferences):
+    def release_target(snapshot, project, preferences, collection=None):
         project = project or {}
         protected = set(project.get('family', [project['parent']])) if project.get('method') in ('evolve', 'train') and project.get('parent') else set()
+        demand = collection.demand() if collection else {}
+        protected.update(sid for sid, data in SPECIES.items()
+                         if demand.get(data['dex'], 0) and held_count(snapshot, sid) <= demand[data['dex']])
+        if project.get('method') == 'trade':
+            protected.add(project['give'])
         reserved = {(mon['box'], mon['position']) for mon in snapshot.storage_entries()
                     if preferences.get(identity(mon), {}).get('state') in ('offered', 'locked')}
         return release_target(snapshot, protected, reserved)
 
-    def target(self, snapshot, goal_key, project, preferences):
+    def target(self, snapshot, goal_key, project, preferences, collection=None):
         if goal_key == 'party_release':
-            release = self.release_target(snapshot, project, preferences)
+            release = self.release_target(snapshot, project, preferences, collection)
             return release[1] if release and release[0] == snapshot.active_box else None
         if self.operation == 'deposit':
-            return reserve_to_deposit(snapshot) if len(snapshot.party) >= 6 and not snapshot.box_full else None
+            if len(snapshot.party) < 6 or snapshot.box_full:
+                return None
+            project = project or {}
+            if goal_key == 'party_collection' and project.get('method') == 'trade':
+                return collection.trade_deposit_target(snapshot, project) if collection else None
+            return reserve_to_deposit(snapshot, prefer_completed=goal_key == 'party_collection'
+                                      and project.get('method') == 'train')
         if goal_key == 'party_collection_space':
             return None
         if goal_key == 'party_collection' and project:
+            if project.get('trainee_key'):
+                matches = [mon for mon in Collection.partner_matches(snapshot, project) if 'party_index' not in mon]
+                return (matches[0]['position'] if len(matches) == 1 and len(snapshot.party) < 6
+                        and matches[0]['box'] == snapshot.active_box else None)
+            if project.get('method') == 'trade':
+                partner = collection.trade_candidate(snapshot, project) if collection else None
+                return partner['position'] if partner and partner.get('box') == snapshot.active_box and len(snapshot.party) < 6 else None
             return next((i for i, (species, level) in enumerate(snapshot.boxed_pokemon)
                          if species == project['parent']), None) if len(snapshot.party) < 6 else None
         move = {'party_cut': 15, 'party_surf': 57, 'party_strength': 70}.get(goal_key)
@@ -39,23 +58,23 @@ class StorageController:
                           else move in SPECIES.get(species, {}).get('hms', []))]
         return max(candidates)[1] if candidates and len(snapshot.party) < 6 else None
 
-    def confirmation(self, snapshot, screen, text, goal_key, project, preferences, context):
+    def confirmation(self, snapshot, screen, text, goal_key, project, preferences, context, collection=None):
         if 'GONE FOREVER' in text or 'RELEASED' in text or 'BYE BYE' in text:
             pending = self.pending_release
             current = next((mon for mon in snapshot.storage_entries()
                             if pending and (mon['box'], mon['position']) == pending[:2]), None)
             allowed = (goal_key == 'party_release' and pending and current == pending[2]
-                       and self.release_target(snapshot, project, preferences) == pending[:2])
+                       and self.release_target(snapshot, project, preferences, collection) == pending[:2])
             return MenuDecision(select(screen, 0 if allowed else 1))
         if context == 'pc' and goal_key.startswith('party_'):
             return MenuDecision(select(screen, 0), 'Confirm the storage prompt')
         return None
 
-    def step(self, snapshot, screen, kind, goal_key, project, preferences):
+    def step(self, snapshot, screen, kind, goal_key, project, preferences, collection=None):
         if kind == 'pc_root':
             return MenuDecision(select(screen, 0) if goal_key.startswith('party_') else tap('b'))
         if kind == 'change_box':
-            release = self.release_target(snapshot, project, preferences) if goal_key == 'party_release' else None
+            release = self.release_target(snapshot, project, preferences, collection) if goal_key == 'party_release' else None
             target = ((release[0] if release else None) if goal_key == 'party_release' else
                       snapshot.next_free_box if goal_key == 'party_box' else
                       project.get('box') if goal_key == 'party_collection' and project else None)
@@ -67,7 +86,7 @@ class StorageController:
             if screen.cursor and screen.cursor[0] == 10:
                 return MenuDecision(select(screen, 0))
             if goal_key == 'party_release':
-                release = self.release_target(snapshot, project, preferences)
+                release = self.release_target(snapshot, project, preferences, collection)
                 if release is None:
                     return MenuDecision(tap('b'))
                 if release[0] != snapshot.active_box:
@@ -77,11 +96,11 @@ class StorageController:
                                            and project and project.get('box') != snapshot.active_box):
                 return MenuDecision(select(screen, 3), 'Change the active storage box without releasing any Pokémon')
             self.operation = 'deposit' if len(snapshot.party) >= 6 else 'withdraw'
-            if self.target(snapshot, goal_key, project, preferences) is None:
+            if self.target(snapshot, goal_key, project, preferences, collection) is None:
                 return MenuDecision(tap('b'))
             return MenuDecision(select(screen, 1 if self.operation == 'deposit' else 0))
         if kind == 'list':
-            target = self.target(snapshot, goal_key, project, preferences)
+            target = self.target(snapshot, goal_key, project, preferences, collection)
             if target is None:
                 return MenuDecision(tap('b'))
             actions = select(screen, target, scroll=True)

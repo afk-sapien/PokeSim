@@ -103,3 +103,15 @@ def test_unexpected_private_file_blocks_release(assets):
     (assets / 'adventure.state').write_bytes(b'private state')
     with pytest.raises(ValueError, match='Unexpected release assets'):
         assemble(assets, VERSION, REVISION)
+
+
+def test_python_and_docker_release_excludes_standalone_archives(assets):
+    for name in DESKTOP_ARCHIVES:
+        for suffix in ('', '.sha256', '.json'):
+            (assets / (name + suffix)).unlink()
+    (assets / 'compose.yaml').write_text('services:\n  pokesim:\n    image: ${POKESIM_IMAGE:-pokesim:local}\n')
+    assemble(assets, VERSION, REVISION, include_desktop=False)
+    assert not (assets / 'desktop-manifest.json').exists()
+    sums = dict(line.split('  ', 1)[::-1] for line in (assets / 'SHA256SUMS').read_text().splitlines())
+    assert set(sums) == {path.name for path in assets.iterdir()} - {'SHA256SUMS'}
+    assert all(digest(assets / name) == checksum for name, checksum in sums.items())

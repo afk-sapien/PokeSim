@@ -4,7 +4,8 @@ from dataclasses import asdict
 
 from .base import Action, Policy
 from .battle import (BALLS, CURES, HEALING, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
-                     healing_item, needs_healing, ranked_moves, read_battler, replacement_slot)
+                     healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, shopping_item,
+                     useful_capture)
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .pickups import Pickups
@@ -78,9 +79,11 @@ class StrategicPolicy(Policy):
         self.interactions = {}
         self.interaction_count = 0
         self.collection = Collection()
+        self.collection.trade_preferences = lambda: self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
         choices = random.Random(f'{seed}:adventure-choices') if seed is not None else random.Random()
         self.fossil = choices.choice(('HELIX_FOSSIL', 'DOME_FOSSIL'))
         self.collection.eevee_choice = choices.choice((134, 135, 136))
+        self.collection.dojo_choice = choices.choice((106, 107))
         self.pickups = Pickups()
         self.personality = self.rng.choice(('Sociable', 'Collector', 'Explorer'))
         self.starter_setting = starter if starter is not None else config.STARTER
@@ -372,12 +375,12 @@ class StrategicPolicy(Policy):
         active = min(mem[W_PLAYER_MON_NUMBER], max(0, len(s.party) - 1))
         if kind == "yes_no":
             decision = self.pc.confirmation(s, scr, text, self.goal.key, self.collection.project,
-                                            self._preferences(), self.menu_context)
+                                            self._preferences(), self.menu_context, self.collection)
             if decision is not None:
                 return self._menu_decision(decision)
             if self.goal.key == 'collect_trade' and getattr(self, 'pending_trade_key', None):
                 choices = self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
-                if choices.get(self.pending_trade_key, {}).get('state') == 'locked':
+                if choices.get(self.pending_trade_key, {}).get('state') in ('locked', 'offered'):
                     return self._select(scr, 1)
             if "CHANGE" in text and "MON" in text:
                 return self._select(scr, 1)
@@ -405,8 +408,11 @@ class StrategicPolicy(Policy):
             self.catch_attempts = 0
             self.last_switch_turn = -5
         if kind == "safari":
-            if not s.can_catch:
-                self.reason = 'Leave the encounter because the party and active box are full'
+            missing = SPECIES.get(s.enemy_species, {}).get('dex') not in s.owned
+            targeted = self.collection.repeat_target(s.enemy_species, s.map) == s.enemy_species
+            if not s.can_catch or not (missing or targeted or useful_capture(s, s.enemy_species, s.enemy_level)):
+                self.reason = ('Leave the encounter because the party and active box are full' if not s.can_catch
+                               else 'Leave an unnecessary duplicate already covered by the collection')
                 if scr.top_x != 13:
                     return tap('right')
                 return self._select(scr, 1)
@@ -432,8 +438,9 @@ class StrategicPolicy(Policy):
                                             {'catch_cut': 15, 'catch_surf': 57, 'catch_strength': 70}.get(self.goal.key), collect_missing=True,
                                             capture_species=self.collection.project['species']
                                             if legendary_project(self.collection.project) else None,
-                                            repeat_species=self.collection.project.get('species')
-                                            if (self.collection.project or {}).get('repeat') else None)
+                                            repeat_species=self.collection.repeat_target(enemy.species, s.map),
+                                            training_index=self.collection.trainee(s, self.collection.project)
+                                            if self.collection.project and self.collection.project['method'] == 'train' else None)
                 self.intent_since = s.frame
             self.mode = f"battle: {self.intent.kind}"
             self.reason = self.intent.reason
@@ -461,12 +468,11 @@ class StrategicPolicy(Policy):
             return self._select(scr, slot, one_based=True)
         if kind == "party":
             project = self.collection.project
-            if not s.in_battle and self.goal.key == 'collect_trade' and project:
+            if (not s.in_battle and self.goal.key == 'collect_trade' and project
+                    and s.map == project['map'] and self.intent is None):
                 from ..trade.preferences import identity
-                from ..milestones import is_perfect
-                choices = self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
-                target = next((i for i,p in enumerate(s.party) if p.species == project['give'] and not is_perfect(asdict(p))
-                               and choices.get(identity(asdict(p)), {}).get('state') != 'locked'), None)
+                partner = self.collection.trade_candidate(s, project)
+                target = partner.get('party_index') if partner else None
                 if target is None:
                     return tap('b')
                 actions = self._select(scr, target)
@@ -476,7 +482,12 @@ class StrategicPolicy(Policy):
             if not s.in_battle and self.intent is None:
                 return tap("b")
             if self.intent and self.intent.kind == "reorder":
-                if s.party[0].species == self.order_species:
+                from ..trade.preferences import identity
+                ordered = (identity(asdict(s.party[0])) == self.intent.partner_key if self.intent.partner_key
+                           else s.party[0].species == self.order_species)
+                if self.intent.partner_key and self.collection.project and self.collection.project.get('scoped_partner'):
+                    ordered = self.collection.trainee(s, self.collection.project) == 0
+                if ordered:
                     if self.development_index is not None:
                         self.development_index = 0
                     self.intent = None
@@ -493,7 +504,8 @@ class StrategicPolicy(Policy):
             return self._select(scr, target)
         if kind == "party_action":
             if self.intent and self.intent.kind == "reorder":
-                row = next((i for i, line in enumerate(scr.rows) if "SWITCH" in line), None)
+                row = next((i for i, line in enumerate(scr.rows)
+                            if scr.cursor and line[scr.cursor[0] + 1:].strip(' ?') == 'SWITCH'), None)
                 if row is not None and scr.cursor:
                     cy = scr.cursor[1]
                     if cy == row:
@@ -501,7 +513,8 @@ class StrategicPolicy(Policy):
                     return tap("a" if cy == row else "down" if cy < row else "up")
                 return tap("b")
             if self.intent and self.intent.kind == "field":
-                row = next((i for i, line in enumerate(scr.rows) if self.field_move in line), None)
+                row = next((i for i, line in enumerate(scr.rows)
+                            if scr.cursor and line[scr.cursor[0] + 1:].strip(' ?') == self.field_move), None)
                 if row is not None and scr.cursor:
                     cy = scr.cursor[1]
                     return tap("a" if cy == row else "down" if cy < row else "up")
@@ -532,7 +545,7 @@ class StrategicPolicy(Policy):
                 return self._menu_decision(self.shop.step(s, scr, kind, self.goal.key, self.collection.project))
             if self.menu_context == 'pc' and self.goal.key.startswith('party_'):
                 return self._menu_decision(self.pc.step(s, scr, kind, self.goal.key,
-                                                      self.collection.project, self._preferences()))
+                                                      self.collection.project, self._preferences(), self.collection))
             if self.intent and self.intent.kind == "item" and self.intent.index < len(s.items):
                 if s.items[self.intent.index][0] in BALLS and not s.can_catch:
                     self.intent = None
@@ -556,7 +569,7 @@ class StrategicPolicy(Policy):
         if kind in ('pc_root', 'change_box', 'pc'):
             self.menu_context = 'pc'
             return self._menu_decision(self.pc.step(s, scr, kind, self.goal.key,
-                                                  self.collection.project, self._preferences()))
+                                                  self.collection.project, self._preferences(), self.collection))
         if kind == "dialogue":
             if not s.in_battle and ("NO SURF" in text or "NO PLACE TO GET OFF" in text or 'CURRENT IS' in text):
                 self._remember_failure(s, 'Surf was rejected at this shoreline')
@@ -643,7 +656,8 @@ class StrategicPolicy(Policy):
                     return self._use_item(s,item,target)
         supplies = self.shop.plan(s, goal, self.collection.project, requested_goal=self.goal.key,
                                   healing=self.heal_latch, in_league=in_league,
-                                  has_pokedex=self.completed.get('pokedex', False))
+                                  has_pokedex=self.completed.get('pokedex', False),
+                                  completed_champion=self.collection.completed_champion)
         goal = supplies.goal
         if supplies.prepared and self.collection.project:
             self.collection.project['supplies_prepared'] = True
@@ -733,7 +747,7 @@ class StrategicPolicy(Policy):
             return self._recovery_step(s)
         project = self.collection.project
         if goal.key == 'collect_evolve' and project:
-            target = next((i for i,p in enumerate(s.party) if p.species==project['parent']),None)
+            target = self.collection.trainee(s, project)
             if target is not None:
                 return self._use_item(s,ITEMS[project['evolution']['requirement']],target) or tap('b')
         if goal.key == 'collect_train' and project:
@@ -741,7 +755,8 @@ class StrategicPolicy(Policy):
             if target and s.party[target].hp:
                 self.order_species = s.party[target].species
                 self.order_stage = 'source'
-                self.intent = Decision('reorder',target,reason='Train a partner toward its next milestone')
+                self.intent = Decision('reorder',target,reason='Train a partner toward level 100',
+                                       partner_key=project.get('trainee_key'))
                 self.intent_since = s.frame
                 return tap('start')
         if goal.key == 'collect_hunt' and project and pos in goal.targets:
@@ -816,9 +831,14 @@ class StrategicPolicy(Policy):
                 self.progress_frame = s.frame
                 return tap(direction, 16, 16)
         if s.map in VICTORY_MAPS:
+            if goal.key in ('heal', 'collect_hunt'):
+                direction = self.nav.open_route(s, goal.targets)
+                if direction is not None:
+                    return self._move(s, mem, direction)
             task = boulder_task(s)
             following_route = ((self.collection.project or self.pickups.active) and goal.key.startswith('collect_')
-                                    and (pos in goal.targets or self.nav.route(pos, goal.targets, s.frame) is not None))
+                                    and (pos in goal.targets or goal.key != 'collect_hunt'
+                                         and self.nav.route(pos, goal.targets, s.frame) is not None))
             # Plan the push before reaching for Strength. A boulder in another section of the floor
             # is only reachable by ladder, so there is no push to make from here; activating
             # Strength first meant every step opened the menu, and crossing a map boundary clears
@@ -852,6 +872,15 @@ class StrategicPolicy(Policy):
                     self.reason = "Find legal pushes and keep room to walk around the boulder"
                     self.progress_frame = s.frame
                     return tap(direction, 16, 16)
+            if goal.key == 'collect_hunt' and not following_route and not direction:
+                # Reach a puzzle from its accessible ladder instead of repeatedly
+                # following an optimistic route through another floor's closed gate.
+                targets = (((MAPS['VICTORY_ROAD_3F'], 27, 15), (MAPS['VICTORY_ROAD_3F'], 23, 7))
+                           if s.map == MAPS['VICTORY_ROAD_2F'] else
+                           ((MAPS['VICTORY_ROAD_2F'], 22, 16),) if s.map == MAPS['VICTORY_ROAD_3F'] else ())
+                direction = self.nav.open_route(s, targets) if targets else None
+                if direction is not None:
+                    return self._move(s, mem, direction)
             upper_ladder = ((MAPS["VICTORY_ROAD_3F"], 23, 7),)
             # Reentry can strand the party beyond the lower switch. Reach the upper
             # puzzle by ladder when the lower boulder and the destination are inaccessible.
@@ -899,7 +928,7 @@ class StrategicPolicy(Policy):
                 social = None if goal.key == 'collect_pickup' or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else self._social_interaction(s, mem)
                 if social:
                     return social
-            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup") or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else EXPLORATION_CHANCE
+            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup", "collect_hunt") or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else EXPLORATION_CHANCE
             if s.map in MANSION_MAPS:
                 direction = self.mansion.route(s, goal.targets, self.nav)
                 if direction == "switch":
@@ -930,6 +959,11 @@ class StrategicPolicy(Policy):
 
             if s.frame - self.progress_frame > 2400:
                 return self._recover(s)
+        return self._move(s, mem, direction)
+
+    def _move(self, s, mem, direction):
+        """Follow one route step, opening field-move menus when needed."""
+        pos = (s.map, s.x, s.y)
         dx, dy = DIRS[direction]
         world = WORLD.get(s.map, {})
         tree = self.nav._tile(world, s.x + dx, s.y + dy) if world else None
@@ -1020,10 +1054,10 @@ class StrategicPolicy(Policy):
         return self.shop.item_for(snapshot, stock, self.goal.key, self.collection.project)
 
     def _release_target(self, snapshot):
-        return self.pc.release_target(snapshot, self.collection.project, self._preferences())
+        return self.pc.release_target(snapshot, self.collection.project, self._preferences(), self.collection)
 
     def _pc_target(self, snapshot):
-        return self.pc.target(snapshot, self.goal.key, self.collection.project, self._preferences())
+        return self.pc.target(snapshot, self.goal.key, self.collection.project, self._preferences(), self.collection)
 
     _sale_index = staticmethod(ShoppingController.sale_index)
 

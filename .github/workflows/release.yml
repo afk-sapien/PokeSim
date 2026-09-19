@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag, for example v0.2.0rc31
+        description: Existing version tag, for example v0.2.0rc32
         required: true
         type: string
 permissions:
@@ -20,11 +20,11 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       revision: ${{ steps.release.outputs.revision }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: refs/tags/${{ inputs.tag }}
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
       - name: Validate public release destination
@@ -62,35 +62,35 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write(f'image=pokesim:{version}\nversion={version}\nrevision={revision}\n')
           PY
-  desktop:
+  python-install:
     needs: validate
-    uses: ./.github/workflows/desktop.yml
+    uses: ./.github/workflows/python-install.yml
     with:
       ref: ${{ needs.validate.outputs.revision }}
   release:
-    needs: [validate, desktop]
+    needs: [validate, python-install]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.validate.outputs.revision }}
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
-      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
         with:
-          version: '0.9.7'
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+          version: '0.12.15'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
       - run: python tools/check_web.py
       - run: python tools/check_docs.py
       - run: uv sync --locked --extra dev
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: pret/pokered
           ref: a1a22aaf84d1675bcdbaeb194592379d586d838e
@@ -107,13 +107,7 @@ jobs:
           uv run --locked --extra dev --extra browser-test pytest tests/browser -q
       - run: uv build
       - run: python tools/check_package.py
-      - run: python tools/check_installed_wheel.py
-      - name: Gather all five validated desktop downloads
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          pattern: pokesim-desktop-*
-          merge-multiple: true
-          path: release
+      - run: python tools/check_python_install.py
       - name: Build versioned image and release assets
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
@@ -129,7 +123,7 @@ jobs:
           cp .env.example release/env.example
           docker run --rm --network none "$IMAGE" cat /usr/share/pokesim/python-dependencies.json > release/python-dependencies.json
           docker image inspect "$IMAGE" --format '{{json .}}' > release/image-metadata.json
-          python tools/assemble_release.py release --version "$VERSION" --revision "$REVISION"
+          python tools/assemble_release.py release --version "$VERSION" --revision "$REVISION" --without-desktop
       - name: Upload and verify the complete draft before publication
         env:
           RELEASE_TAG: ${{ inputs.tag }}

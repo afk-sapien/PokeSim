@@ -1,66 +1,29 @@
-# Release status
+# Release preparation: 0.2.0rc32
 
-Updated September 15, 2026 from repository evidence. Deployment details below are
-recorded observations, not a fresh health check.
+The current source consolidates the Adventure Library, independent Red and Blue
+adventures, automatic Cable Club trades, updated gameplay policies, and DV ratings.
+The eight outstanding dependency PRs have been squash merged into main.
 
-## Source and deployment versions
+The release targets are a Python wheel and source archive, plus a Linux amd64
+Docker image and Compose configuration. The `pokesim-desktop` Python command opens
+the Library in your browser. Standalone executable bundles are experimental and
+are not required or advertised for this release.
 
-The source version is `0.2.0rc31`, including desktop, PC trading, Pokémon locks,
-revised rewards, and lifecycle hardening. Publication is tracked on the
-[rc31 release page](https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0rc31).
-The prerelease includes Python packages, a Linux amd64 Docker archive, and five
-native desktop downloads. See the [publication receipt](docs/validation/release-0.2.0rc31.json).
-Existing deployments are separate and retain the last recorded versions below.
-Runtime status now reports build revision and dirty state. See the
-[validation guide](docs/testing.md) for build identity and regression checks.
+Publication is gated on Python and browser regression checks, clean package
+identities, Docker lifecycle checks, and isolated native Python installations on
+Windows x86-64, Intel macOS, Apple Silicon, and Linux x86-64 and ARM64. The workflow
+uploads a draft, verifies every uploaded checksum, and only then publishes it.
 
-The [local cleanup validation](docs/validation/cleanup-0.2.0rc31.json) records 614
-passing Python tests including five real Chromium scenarios, 20 Node tests, and five
-private ROM tests. Two copied checkpoints each matched the baseline over two game
-hours. Existing recovery churn remains, and multi-day reliability is still unproven.
+This source consolidation does not publish a release or upgrade existing running
+adventures. Older downloadable releases contain the previous single-game app.
+See [candidate release notes](docs/release-notes.md), [desktop installation](docs/desktop.md),
+and [self-hosting](docs/self-hosting.md).
 
-| Component | Last recorded version | Evidence |
-| --- | --- | --- |
-| Red adventure | rc30 | [Deployment receipt](docs/validation/release-0.2.0rc30-red.json) |
-| Blue adventure | rc29 | [Deployment receipt](docs/validation/release-0.2.0rc29-blue.json) |
-| Trading coordinator | rc24 | [Independent safe-point validation](docs/validation/trade-safe-points-0.2.0rc24.json) |
-| Prebuilt installation documented here | rc31 | [Pinned installation reference](docs/self-hosting.md) |
-| Desktop bundles | rc31, five native targets passed | [Desktop build and validation guide](docs/desktop.md) |
+Gameplay remains an experimental beta. Synthetic tests and demonstration-ROM
+worker checks do not establish uninterrupted multi-day cartridge gameplay on all
+platforms. Existing private gameplay and cable-trading receipts retain their
+original scope. Back up the complete library before upgrading. Import legacy
+adventures into a new application folder with the old application stopped.
 
-The rc30 follow-up recorded both games healthy at maximum speed, zero recovery reloads,
-144 registrations in each adventure, and 31 completed automatic exchanges.
-See the [recorded follow-up](docs/validation/supply-live-0.2.0rc30.json).
-
-## What has been demonstrated
-
-- Runs have reached the Hall of Fame and continued collecting and training.
-- Copied-save comparisons cover route recovery, legendary encounters, PC transfers,
-  training continuity, and the rc30 optional-shopping correction.
-- Trusted Red and Blue peers have completed automatic exchanges with durable holds,
-  checkpoint validation, and recovery after interrupted transactions.
-- The current source adds browser-based desktop setup, game-local trading views,
-  individual offers and locks, and a separate one-time Champion Mew reward.
-  These source changes do not establish that existing deployments have received them.
-
-## Remaining limits
-
-- Autonomous campaign completion, all 151 registrations, and uninterrupted multi-day
-  progress are not guaranteed. Routing, preparation, and storage can still stall projects.
-- Red is the primary supported game. Blue remains experimental.
-- Desktop bundles passed native build and demo-ROM runtime checks on all five targets.
-  Private Pokémon gameplay checks remain Linux-only. Windows and macOS downloads
-  are unsigned and not notarized.
-- Current trading uses coordinated checkpoint edits. Authentic Cable Club execution
-  and a single application managing multiple adventures remain planned work.
-- Existing deployments may still use the earlier eight-species Championship reward
-  pool. The source now separates Mew from the seven-species repeatable pool.
-
-## Where updates belong
-
-Use [CHANGELOG.md](CHANGELOG.md) for user-visible changes,
-[the roadmap](docs/roadmap.md) for remaining work, and
-[the monitoring runbook](docs/operations-monitor.md) for evidence collection.
-Keep this page short and link new validation records rather than copying their contents.
-
-The complete previous status log is preserved in
-[release and deployment history](docs/history/release-status.md).
+[Historical release and deployment records](docs/history/releases-through-rc31.md)
+remain available for earlier version receipts and their limitations.

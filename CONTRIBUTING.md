@@ -18,8 +18,8 @@ uv run --locked python -m pokesim.prepare_data .reference/pokered
 
 Reference preparation writes local game data for tests and native runs. It does not
 create a ROM. For an existing reference checkout, skip cloning and verify its revision.
-See [desktop development](docs/desktop.md#build-a-standalone-application) for bundling
-and native launcher checks.
+See [desktop development](docs/desktop.md#build-and-verify-the-python-package) for isolated package
+and native worker checks.
 
 ## Checks before a pull request
 

@@ -2,24 +2,37 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="pokesim-base" content="${game_base}">
+<meta name="pokesim-adventure" content="${adventure_id}">
+<script src="${game_base}/static/routes.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f5f3ed">
 <meta name="description" content="Watch the next move, or take the controls.">
 <title>The live adventure. · pokesim</title>
-<link rel="stylesheet" href="/static/style.css?v=watch-2">
+<link rel="stylesheet" href="${game_base}/static/style.css?v=watch-2">
 
-<link rel="stylesheet" href="/static/pages.css?v=live-workspace-1">
-<link rel="stylesheet" href="/static/live.css?v=balanced-1">
-<link rel="alternate" type="application/atom+xml" title="pokesim events" href="/feed.xml">
+<link rel="stylesheet" href="${game_base}/static/pages.css?v=trading-1">
+<link rel="stylesheet" href="${game_base}/static/live.css?v=balanced-1">
+<link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="index">
 <a class="skip-link" href="#main">Skip to the live adventure.</a>
 <header class="topbar">
-<a class="brand" href="/" aria-label="pokesim home"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition" id="edition">KANTO</span></a>
-<nav aria-label="Main navigation"><a href="/" class="nav-current" aria-current="page">Live</a><a href="/pokedex">Pokédex</a><a href="/pc">PC</a><a href="/trading">Trading</a><a href="/journal">Journal</a></nav>
+<a class="brand" href="${game_base}/" aria-label="pokesim home"><span class="brand-mark" aria-hidden="true">p.</span>pokesim<span class="brand-edition" id="edition">KANTO</span></a>
+${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" class="nav-current" aria-current="page">Live</a><a href="${game_base}/pokedex">Pokédex</a><a href="${game_base}/pc">PC</a><a href="${game_base}/trading">Trading</a><a href="${game_base}/journal">Journal</a></nav>
 <span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
 </header>
 <main id="main" class="page-main">
+
+<div class="watch-layout"><div class="watch-stage"><section class="game-card" aria-labelledby="live-heading">
+        <div class="game-heading"><div><span class="live-label"><i></i> LIVE NOW</span><h2 id="live-heading">Somewhere in Kanto</h2></div><button class="icon-button" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">⛶</button></div>
+        <div class="screen" id="screen"><img id="stream" alt="Live Pokémon game"><span class="screen-corner">POKÉMON · GAME BOY</span></div>
+        <div class="game-caption"><span id="game-activity">The adventure is loading…</span><span id="coordinates">KANTO REGION</span></div>
+        <div class="controls"><button id="take-control" class="primary-button">Take control</button><button id="pause" class="quiet-button">Ⅱ Freeze game</button><button id="save" class="quiet-button">↓ Save</button></div>
+        <details class="manual-controls" id="manual-controls"><summary>Gamepad & keyboard controls</summary><div class="controller"><div class="pad"><span></span><button data-b="up" aria-label="Move up">▲</button><span></span><button data-b="left" aria-label="Move left">◀</button><button data-b="down" aria-label="Move down">▼</button><button data-b="right" aria-label="Move right">▶</button></div><div class="action-buttons"><button data-b="b">B</button><button data-b="a">A</button><button data-b="start">Start</button><button data-b="select">Select</button></div><div class="control-help"><strong id="control-mode">AI is playing</strong><p id="control-hint">Press any game control to pause the AI and take over.</p><small>Arrows · Z / A · X / B · Enter / Start · Shift / Select</small></div></div></details>
+      </section></div><div class="watch-companions"><section class="objective-card" id="strategy-panel" aria-labelledby="objective-heading" hidden>
+<div class="objective-body"><p class="eyebrow" id="objective-heading">THE PLAN (ALLEGEDLY)</p><h2 id="objective">Finding the way forward</h2><p id="decision"></p><p class="eyebrow" id="progress-state">Exploring</p><p id="last-achievement">Waiting for the first achievement.</p><div class="watch-next"><span>Up next</span><strong id="next-objective">Finding the next milestone</strong></div></div></section><section class="party-section" id="team" aria-labelledby="party-heading"><div class="section-heading"><div><p class="eyebrow">BETTER TOGETHER</p><h2 id="party-heading">The usual suspects</h2></div><span class="count-pill" id="party-count">0 / 6</span></div><ul class="party" id="party"><li class="empty-party"><span aria-hidden="true">◌</span><h3>Every team starts somewhere.</h3><p>The first partner will appear here.</p></li></ul></section></div></div>
+
 <header class="live-summary" id="journey-progress" aria-label="Trainer and adventure summary">
 <div class="live-identity" aria-label="Trainer"><h1 id="trainer-name">Getting ready</h1><small id="trainer-rival"></small></div>
 <div class="live-badges"><div class="live-badge-label"><span class="eyebrow">Badges</span><strong id="badge-count">0 / 8</strong></div><div class="badges" id="badges"></div></div>
@@ -28,21 +41,12 @@
 <div class="live-stat"><span class="eyebrow">Money</span><strong id="money">₽0</strong></div>
 <div class="live-stat live-time"><span class="eyebrow">Play hours</span><strong id="playtime">00:00</strong><small id="clock-note"></small></div>
 </header>
-<div class="watch-layout"><div class="watch-stage"><section class="game-card" aria-labelledby="live-heading">
-        <div class="game-heading"><div><span class="live-label"><i></i> LIVE NOW</span><h2 id="live-heading">Somewhere in Kanto</h2></div><button class="icon-button" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">⛶</button></div>
-        <div class="screen" id="screen"><img id="stream" alt="Live Pokémon game"><span class="screen-corner">POKÉMON · GAME BOY</span></div>
-        <div class="game-caption"><span id="game-activity">The adventure is loading…</span><span id="coordinates">KANTO REGION</span></div>
-        <div class="controls"><button id="take-control" class="primary-button">Take control</button><button id="pause" class="quiet-button">Ⅱ Freeze game</button><label class="speed-label" for="speed">AI pace <select id="speed"><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="16">16×</option><option value="0">Max</option></select></label><button id="save" class="quiet-button">↓ Save</button></div>
-        <details class="manual-controls" id="manual-controls"><summary>Gamepad & keyboard controls</summary><div class="controller"><div class="pad"><span></span><button data-b="up" aria-label="Move up">▲</button><span></span><button data-b="left" aria-label="Move left">◀</button><button data-b="down" aria-label="Move down">▼</button><button data-b="right" aria-label="Move right">▶</button></div><div class="action-buttons"><button data-b="b">B</button><button data-b="a">A</button><button data-b="start">Start</button><button data-b="select">Select</button></div><div class="control-help"><strong id="control-mode">AI is playing</strong><p id="control-hint">Press any game control to pause the AI and take over.</p><small>Arrows · Z / A · X / B · Enter / Start · Shift / Select</small></div></div></details>
-      </section></div><div class="watch-companions"><section class="objective-card" id="strategy-panel" aria-labelledby="objective-heading" hidden>
-<div class="objective-body"><p class="eyebrow" id="objective-heading">THE PLAN (ALLEGEDLY)</p><h2 id="objective">Finding the way forward</h2><p id="decision"></p><p class="eyebrow" id="progress-state">Exploring</p><p id="last-achievement">Waiting for the first achievement.</p><div class="watch-next"><span>Up next</span><strong id="next-objective">Finding the next milestone</strong></div></div></section><section class="party-section" id="team" aria-labelledby="party-heading"><div class="section-heading"><div><p class="eyebrow">BETTER TOGETHER</p><h2 id="party-heading">The usual suspects</h2></div><span class="count-pill" id="party-count">0 / 6</span></div><ul class="party" id="party"><li class="empty-party"><span aria-hidden="true">◌</span><h3>Every team starts somewhere.</h3><p>The first partner will appear here.</p></li></ul></section></div></div>
-
 </main>
 
-<footer><span id="app-version"></span><a class="brand footer-brand" href="/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><button id="restart" class="restart-link">Restart run</button><a href="/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
+<footer><span id="app-version"></span><a class="brand footer-brand" href="${game_base}/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><button id="restart" class="restart-link">Restart run</button><a href="${game_base}/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
 <dialog id="partner-detail" class="partner-detail" aria-labelledby="partner-detail-heading"><form method="dialog"><button class="partner-close" aria-label="Close Pokémon details">Close ×</button></form><div id="partner-detail-content"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script src="/static/screen.js?v=1"></script>
-<script src="/static/app.js?v=live-simple-1"></script>
+<script src="${game_base}/static/screen.js?v=1"></script>
+<script src="${game_base}/static/app.js?v=live-simple-1"></script>
 </body>
 </html>

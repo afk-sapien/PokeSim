@@ -33,7 +33,9 @@ CHUNK = 4                 # frames per render / pacing step
 
 
 class Emulator:
-    def __init__(self, store, ntfy=None):
+    def __init__(self, store, ntfy=None, *, isolated_ram=False):
+        self.isolated_ram = isolated_ram
+        self.preparation = None
         self.store = store
         self.ntfy = ntfy
         from .milestones import MilestoneTracker
@@ -73,12 +75,18 @@ class Emulator:
         self.pending: list = []      # events waiting for confirmation on the next snapshot
         self.rom_note = self._check_rom()
         from .catches import CatchTracker
-        self.catch_tracker = CatchTracker(store, self.rom_sha1)
+        fresh = (not store.autosaves() and not store.events(limit=1)
+                 and (isolated_ram or not Path(str(self.rom) + '.ram').exists()))
+        self.catch_tracker = CatchTracker(store, self.rom_sha1, fresh=fresh)
         if hasattr(self.policy, "collection"):
             self.policy.collection.version = "blue" if "Blue" in self.rom_note else "red"
         if hasattr(self.policy, "nav"):
             self.policy.nav.use_world = not self.rom_note.startswith("unverified")
         self.input_epoch = 0
+        if hasattr(self.policy, 'nav'):
+            # Pay optional compilation cost during startup, before gameplay begins.
+            from .policies.navigation_numba import kernel
+            kernel()
         self.pb = self._boot()
         self.thread = threading.Thread(target=self._run, name="emulator", daemon=True)
 
@@ -94,17 +102,26 @@ class Emulator:
         return f"unverified ROM (sha1 {sha[:12]})"
 
     def _boot(self) -> PyBoy:
-        pb = PyBoy(str(self.rom), window="null", sound_emulated=False)
+        options = {}
+        if getattr(self, 'isolated_ram', False):
+            import io
+            options['ram_file'] = io.BytesIO(bytes(32768))
+        pb = PyBoy(str(self.rom), window="null", sound_emulated=False, **options)
         pb.set_emulation_speed(0)
-        if hasattr(self, 'catch_tracker'):
-            self.catch_tracker.attach(pb)
+        tracker = getattr(self, 'catch_tracker', None)
+        if tracker is not None:
+            tracker.attach(pb)
         return pb
 
     def start(self):
         saves = self.store.autosaves()
         if saves:
             self._restore_first_valid(reversed(saves))
+        rewards.initialize(self.store, self.mem.championships)
         self.paused = bool(self.store.get("trade_hold"))
+        if self.isolated_ram:
+            from .runtime.preparation import restore
+            restore(self)
         self.thread.start()
 
     def stop(self):
@@ -117,6 +134,20 @@ class Emulator:
     # ---------------- public controls (thread-safe) ----------------
     def command(self, name: str, arg=None):
         self.commands.put((name, arg))
+
+    def call(self, function, timeout=30):
+        """Run a participant operation in the same queue as ticks and controls."""
+        if threading.current_thread() is self.thread:
+            return function()
+        if not self.thread.is_alive():
+            raise RuntimeError('The emulator is not running')
+        done, response = threading.Event(), {}
+        self.commands.put(('runtime_call', (function, done, response)))
+        if not done.wait(timeout):
+            raise TimeoutError('The operation is still pending. Retry the same operation ID.')
+        if 'error' in response:
+            raise response['error']
+        return response.get('result')
 
     def press(self, button: str):
         if button in BUTTONS:
@@ -180,6 +211,9 @@ class Emulator:
         barrier = self.store.get("trade_barrier")
         if barrier and (metadata or {}).get("trade_id") != barrier:
             raise ValueError("Checkpoint predates the latest completed trade")
+        reward_barrier = self.store.get('custom-reward-barrier-v1')
+        if reward_barrier and (metadata or {}).get('reward_id') != reward_barrier:
+            raise ValueError('Checkpoint predates the latest custom reward')
         if metadata:
             if metadata.get("rom_sha1") != self.rom_sha1:
                 raise ValueError("Checkpoint was created with a different ROM")
@@ -194,6 +228,9 @@ class Emulator:
             announced = getattr(self, 'mem', RunMemory()).playtime_milestones.copy()
             announced.update(self.store.get('run_memory', {}).get('playtime_milestones', []))
             self.mem = RunMemory.from_dict(metadata["run_memory"])
+            with self.store.lock:
+                self.mem.championships = max(self.mem.championships,
+                                            rewards.championship_count(rewards.ledger(self.store.db)))
             self.mem.playtime_milestones.update(announced)
             self.store.set('run_memory', self.mem.to_dict())
             self.frame = metadata.get("frame", self.frame)
@@ -323,8 +360,11 @@ class Emulator:
             self._autosave()
 
     def _handle_events(self, events, snap):
+        if any(ev.type in ('catch', 'obtain', 'evolve', 'champion', 'trainer') for ev in events):
+            rewards.observe_progress(self.store, snap)
         if any(ev.type == 'champion' for ev in events):
-            rewards.earn(self.store, self.mem.championships)
+            rewards.earn(self.store, self.mem.championships,
+                         enabled=getattr(config, 'LEAGUE_REWARDS', False))
         png = self._shot_png()
         state = None
         for ev in events:
@@ -362,6 +402,7 @@ class Emulator:
             "policy_state": self.policy.state_dict(), "run_memory": self.mem.to_dict(),
             "frame": self.frame, "play_clock": self.play_clock.state_dict(),
             "trade_id": self.store.get("trade_barrier"),
+            "reward_id": self.store.get("custom-reward-barrier-v1"),
             "legendary_recovery": self.legendary_recovery.state_dict(),
         })
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
@@ -488,6 +529,15 @@ class Emulator:
         return {'id': transaction, 'phase': 'released'}
 
     def _handle_command(self, name, arg) -> bool:
+        if name == 'runtime_call':
+            function, done, response = arg
+            try:
+                response['result'] = function()
+            except Exception as error:
+                response['error'] = error
+            finally:
+                done.set()
+            return True
         if name == 'trade_preference':
             key, state, done, response = arg
             try:
@@ -506,6 +556,14 @@ class Emulator:
             finally:
                 done.set()
             return True
+        if getattr(self, 'store', None):
+            preparation = self.store.get('interaction_preparation') or {}
+            if preparation.get('phase') in {'travelling', 'storage', 'rendezvous'}:
+                if name == 'pause' and getattr(self, 'preparation', None):
+                    from .runtime.preparation import cancel
+                    cancel(self, preparation['id'])
+                elif name not in ('stop', 'speed', 'pause'):
+                    return True
         if getattr(self, 'store', None) and self.store.get('trade_hold') and name not in ('stop', 'speed', 'pause'):
             return True
         if name == "stop":
@@ -539,6 +597,8 @@ class Emulator:
         elif name == "restart":
             log.warning("restarting run from power-on")
             self.pb.stop(save=False)
+            if getattr(self, 'catch_tracker', None) is not None:
+                self.catch_tracker.reset()
             for p in self.store.states.glob("auto-*.state"):
                 p.unlink()
                 p.with_suffix(".json").unlink(missing_ok=True)
@@ -547,8 +607,8 @@ class Emulator:
             self.last_achievement = None
             self.store.set("trade_barrier", None)
             self.store.clear_trade_preferences()
-            if hasattr(self, 'catch_tracker'):
-                self.catch_tracker.reset()
+            self.store.set("custom-reward-barrier-v1", None)
+            self.store.set("custom-reward-pending-v1", None)
             if hasattr(self, 'milestones'):
                 self.milestones.reset()
             self.store.set(rewards.KEY, None)
@@ -595,7 +655,11 @@ class Emulator:
                 if not pending:
                     snap = read_snapshot(self.pb.memory, self.frame)
                     ctx = PolicyContext(snap, time.time() - self.stuck_since, time.time(), self.pb.memory)
-                    pending = list(self.policy.step(ctx)) or [Action(None, 0, 12)]
+                    preparation = getattr(self, 'preparation', None)
+                    pending = list(preparation.step(ctx) if preparation else self.policy.step(ctx))
+                    if self.paused:
+                        continue
+                    pending = pending or [Action(None, 0, 12)]
                 act = pending.pop(0)
                 nav = getattr(self.policy, "nav", None) if self.manual_mode else None
                 if nav and act.button in ("up", "down", "left", "right") and not self.pb.memory[0xCFC5]:
@@ -618,8 +682,15 @@ class Emulator:
                 if now >= next_autosave:
                     self._autosave()
                     next_autosave = now + config.AUTOSAVE_SECONDS
-                if not self.manual_mode:
+                if not self.manual_mode and not getattr(self, 'preparation', None):
                     self._check_guards()
+                if getattr(self, 'isolated_ram', False) and now >= getattr(self, '_next_reward', 0):
+                    from .runtime.reward_delivery import deliver
+                    self._next_reward = now + 60
+                    delivered = deliver(self, league_rewards=getattr(config, 'LEAGUE_REWARDS', False),
+                                        mew_event=getattr(config, 'MEW_EVENT', False))
+                    # A battle or menu should not postpone a pending gift for another minute.
+                    self._next_reward = now + (60 if delivered else 1)
                 self.last_activity = time.monotonic()
                 self.consecutive_errors = 0
             except Exception:  # noqa: BLE001

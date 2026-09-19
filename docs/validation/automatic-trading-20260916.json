@@ -1,0 +1,88 @@
+{
+  "date": "2026-09-16",
+  "problem": {
+    "completed_before": 0,
+    "aborted_at_diagnosis": 248,
+    "unsupported_route_errors_at_diagnosis": 238
+  },
+  "repair": [
+    "Reachable Cable Club centers, including Indigo Plateau",
+    "Normal movement, field moves, battle and PC controls",
+    "Safe duplicate cleanup for completely full storage",
+    "Bounded waits for transient PC records and menu transitions",
+    "Persistent failure explanations on trading pages"
+  ],
+  "tests": {
+    "regression_passed": 805,
+    "regression_skipped": 40,
+    "private_cable_matrix_passed": 36,
+    "browser_suites_passed": 20
+  },
+  "copied_game_cable_smokes": [
+    {
+      "versions": "red/red",
+      "status": "passed",
+      "centers": [
+        89,
+        174
+      ],
+      "duplicate_apply": true,
+      "committed_restart_held": true,
+      "released_restart_preserved": true,
+      "journal_once": true
+    },
+    {
+      "versions": "red/blue",
+      "status": "passed",
+      "centers": [
+        89,
+        174
+      ],
+      "duplicate_apply": true,
+      "committed_restart_held": true,
+      "released_restart_preserved": true,
+      "journal_once": true
+    }
+  ],
+  "blue_full_storage": {
+    "exactly_one_spare_released": true,
+    "no_species_lost": true,
+    "prepared_in_frames": 2772
+  },
+  "wheel_sha256": "6db8d9434c2423cbcd1b3efc16b3cf5809f4ee390dbe290ee6ef9309e44f81f7",
+  "live_validation": {
+    "status": "passed",
+    "automatic_trade": {
+      "id": "d71cd94b75b245e79d544190c0a6ad47",
+      "decision": "COMMIT",
+      "phase": "completed",
+      "received": [
+        {
+          "adventure": "Blue Ripple",
+          "incoming": "MACHOKE",
+          "received": "MACHAMP",
+          "source_center": 174,
+          "return_center": 174,
+          "checkpoint_restart": true,
+          "cartridge_restart": true
+        },
+        {
+          "adventure": "Red Ember",
+          "incoming": "MACHOKE",
+          "received": "MACHAMP",
+          "source_center": 171,
+          "return_center": 171,
+          "checkpoint_restart": true,
+          "cartridge_restart": true
+        }
+      ]
+    },
+    "all_three_games_healthy_and_resumed": true,
+    "campaign_identities_preserved": true
+  },
+  "continuous_preparation": {
+    "red_original_checkpoint": "passed",
+    "blue_original_checkpoint": "passed",
+    "includes_center_entry_and_pc_work": true
+  }
+}

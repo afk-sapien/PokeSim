@@ -19,6 +19,7 @@ main#pokedex { padding-bottom:40px }
 .dex-summary strong small { letter-spacing:0 }
 .dex-summary small { color:#7c8175 }
 .dex-summary small { font-size:11px }
+.dex-summary .catch-summary { grid-column:1/-1 }
 
 .dex-tabs { display:flex }
 .dex-tabs { gap:8px }
@@ -87,6 +88,10 @@ main#pokedex { padding-bottom:40px }
 .dex-card .card-note { font-size:9px }
 .dex-card .card-note { color:#8b8f82 }
 .dex-card .card-note { margin-top:6px }
+.dex-card .card-counts { font-size:11px }
+.dex-card .card-counts { color:#53614d }
+.dex-card .card-counts { margin-top:8px }
+.dex-card .card-counts { font-variant-numeric:tabular-nums }
 .dex-card.caught { border-color:#c3d3b6 }
 .dex-card.caught { background:#fbfdf5 }
 .dex-card.caught .card-note { color:#6f8d5f }
@@ -214,6 +219,21 @@ main#pokedex { padding-bottom:40px }
 .detail-meta { font-size:11px }
 .detail-meta { color:#7c8175 }
 .detail-meta { margin-top:8px }
+.collection-counts { display:grid }
+.collection-counts { grid-template-columns:repeat(2,minmax(0,1fr)) }
+.collection-counts { gap:12px }
+.collection-counts { margin:0 }
+.collection-counts>div { padding:12px 16px }
+.collection-counts>div { background:#fffef9 }
+.collection-counts>div { border:1px solid #e2e3d8 }
+.collection-counts>div { border-radius:12px }
+.collection-counts dt { font-size:12px }
+.collection-counts dt { color:#53614d }
+.collection-counts dd { margin:4px 0 0 }
+.collection-counts dd { font-size:24px }
+.collection-counts dd { font-weight:600 }
+.collection-counts dd { font-variant-numeric:tabular-nums }
+.collection-counts .count-unavailable { font-size:14px }
 .stat-row { display:flex }
 .stat-row { align-items:center }
 .stat-row { gap:12px }

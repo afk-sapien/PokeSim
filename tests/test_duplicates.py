@@ -67,10 +67,10 @@ def test_dvs_choose_between_otherwise_equal_duplicates_across_boxes():
     {'level': 21}, {'stat_exp': (10000,) * 5}, {'experience': 8100},
     {'moves': (33, 45, 73, 0)}, {'moves': (33, 45, 22, 0)},
 ])
-def test_practical_keeper_and_perfect_individual_are_both_preserved(investment):
+def test_perfect_dvs_take_priority_over_trainable_investment(investment):
     keeper = stored(1, dvs=(0,) * 5, **investment)
     s = snapshot([stored(0, dvs=(15,) * 5), keeper])
-    assert_spares(s, [])
+    assert_spares(s, [(0, 1, keeper.level)])
 
 
 def test_better_boxed_copy_survives_without_displacing_party_member():

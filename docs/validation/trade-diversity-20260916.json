@@ -1,0 +1,23 @@
+{
+  "date": "2026-09-16",
+  "changes": [
+    "Remember individual visits across all completed transactions, scoped to campaign.",
+    "Prevent automatic repeat visits unless they register a new Pokédex entry.",
+    "Rank all eligible game pairs and prefer less recently traded species among equally useful exchanges.",
+    "Compact trade cards while retaining sprites, species, nicknames, levels, partner links, timestamps and evolution details."
+  ],
+  "validation": {
+    "regression_passed": 844,
+    "regression_skipped": 40,
+    "javascript_passed": 8,
+    "live_inventory_preview": "Both selected individuals had never visited their proposed recipients.",
+    "live_desktop_card_height": 191,
+    "live_mobile_card_height": 239,
+    "sprites_loaded": true,
+    "horizontal_overflow": false,
+    "script_errors": [],
+    "campaigns_and_catch_totals_preserved": true
+  },
+  "limits": "Diversity depends on eligible spare Pokémon. New Pokédex entries retain priority over cosmetic variety.",
+  "wheel_sha256": "817e9a93ecaa2a1781aba93c570ab3f120411e56cb782e667cb3eda228f7b287"
+}

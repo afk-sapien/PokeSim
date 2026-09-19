@@ -33,6 +33,18 @@ def api(tmp_path, monkeypatch):
 def test_reference_covers_every_kanto_number(dex):
     assert sorted(dex) == list(range(1, 152))
     assert [entry['dex'] for entry in reference()['entries']] == list(range(1, 152))
+
+
+def test_live_plan_explains_reward_unlocks_without_exposing_locked_species():
+    collection = {'entries': [{'dex': dex, 'species': sid, 'status': 'unavailable', 'reason': 'No local source'}
+                              for dex, sid in ((107, 44), (122, 42), (133, 102))]}
+    game = snap(owned=frozenset({133})).to_dict()
+    enabled = live_status(game, collection, league_rewards={'unlocks': ['dojo', 'eevee']})
+    hitmonchan, mime, eevee = enabled['plan']
+    assert hitmonchan['status'] == 'available' and 'reward pool' in hitmonchan['reason']
+    assert mime['status'] == 'unavailable'
+    assert eevee['status'] == 'unavailable'
+    assert live_status(game, collection)['plan'][0]['status'] == 'unavailable'
     assert reference()['version'] == DEFAULT_VERSION
 
 
@@ -171,3 +183,25 @@ def test_pokedex_follows_the_running_cartridge(api):
 
 def test_a_blue_cartridge_is_a_known_rom():
     assert 'Pokemon Blue (USA, Europe)' in config.KNOWN_ROM_SHA1.values()
+
+
+def test_status_exposes_durable_catches_separately_from_current_ownership(tmp_path):
+    from pokesim.catches import CatchTracker, SUPPORTED
+    store = Store(tmp_path)
+    try:
+        tracker = CatchTracker(store, sorted(SUPPORTED)[0])
+        tracker.record('capture-one', 25)
+        tracker.record('capture-two', 25)
+        emu = Mock()
+        emu.status.return_value = {'game': {
+            'dex_owned': [25], 'dex_seen': [25], 'party': [],
+            'storage': {'pokemon': []}}, 'strategy': {}}
+        with TestClient(create_app(emu, store)) as client:
+            result = client.get('/api/pokedex/status').json()
+        assert result['catches']['counts'] == {'25': 2}
+        assert result['catches']['total'] == 2
+        assert result['catches']['complete_history'] is False
+        assert result['party'] == []
+        assert result['storage']['pokemon'] == []
+    finally:
+        store.close()

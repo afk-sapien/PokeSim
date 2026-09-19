@@ -221,8 +221,6 @@ button:disabled { opacity:.45 }
 .pc-overview strong { display:block }
 .pc-overview strong { font-size:23px }
 .pc-overview strong { margin-top:6px }
-.pc-overview a { margin-left:auto }
-.pc-overview a { font-size:13px }
 .pc-workspace { display:grid }
 .pc-workspace { grid-template-columns:180px minmax(0,1fr) }
 .pc-workspace { gap:24px }
@@ -309,7 +307,6 @@ button:disabled { opacity:.45 }
 .box-picker { grid-template-columns:repeat(4,minmax(0,1fr)) }
 .box-picker button { padding:10px }
 .pc-overview { gap:20px }
-.pc-overview a { max-width:120px }
 }
 @media (max-width:580px) {
 .page-main { margin:0 18px }
@@ -326,9 +323,6 @@ button:disabled { opacity:.45 }
 .box-picker { grid-template-columns:repeat(3,minmax(0,1fr)) }
 .pc-overview { flex-wrap:wrap }
 .pc-overview { padding:20px }
-.pc-overview a { max-width:none }
-.pc-overview a { width:100% }
-.pc-overview a { margin:0 }
 .page-shortcuts { grid-template-columns:1fr }
 [data-page="journey"] .collection-card>.section-heading { flex-wrap:wrap }
 .pagination { gap:8px }
@@ -535,15 +529,6 @@ button:disabled { opacity:.45 }
 .pc-content .dex-toolbar select { flex:1 }
 }
 
-.pc-strongest { border:1px solid #b5c4a6 }
-.pc-strongest { border-radius:8px }
-.pc-strongest { padding:10px 14px }
-.pc-strongest { background:#e9eee2 }
-.pc-strongest { color:#304b36 }
-.pc-strongest { font:inherit }
-.pc-strongest { font-size:12px }
-.pc-strongest { cursor:pointer }
-.pc-strongest:hover { background:#dce6d1 }
 .pc-power-note { color:#66715e }
 .pc-power-note { font-size:12px }
 .pc-power-note { line-height:1.6 }

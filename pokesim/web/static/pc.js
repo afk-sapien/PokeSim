@@ -14,7 +14,7 @@ let viewQueries = {box: '', all: ''}
 $('#pc-search').value = params.get('q') || ''
 $('#pc-scope').value = params.get('scope') === 'all' ? 'all' : 'box'
 viewQueries[$('#pc-scope').value] = $('#pc-search').value
-const sortDefaults = {box: 'asc', power: 'desc', level: 'desc', HP: 'desc', Attack: 'desc', Defense: 'desc', Speed: 'desc', Special: 'desc', dv_stars: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
+const sortDefaults = {box: 'asc', power: 'desc', level: 'desc', HP: 'desc', Attack: 'desc', Defense: 'desc', Speed: 'desc', Special: 'desc', elite_four_wins: 'desc', dv_stars: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
 $('#pc-sort').value = Object.hasOwn(sortDefaults, params.get('sort')) ? params.get('sort') : 'box'
 $('#pc-order').value = ['asc', 'desc'].includes(params.get('order')) ? params.get('order') : sortDefaults[$('#pc-sort').value]
 
@@ -73,7 +73,9 @@ function lockBadge(mon) {
 function render() {
   const counts = storage?.box_counts || Array(12).fill(0)
   const pokemon = [...party, ...(storage?.pokemon || [])]
-  const query = $('#pc-search').value.trim().toLowerCase().replace(/^#/, '')
+  const search = $('#pc-search').value.trim().toLowerCase()
+  const dexQuery = /^#\d{1,3}$/.test(search) ? Number(search.slice(1)) : null
+  const query = search.replace(/^#/, '')
   const all = $('#pc-scope').value === 'all'
   const rating = $('#pc-rating').value
   const sort = $('#pc-sort').value
@@ -91,7 +93,7 @@ function render() {
   if (rating !== 'all') url.set('rating', rating)
   url.set('sort', sort)
   url.set('order', order)
-  history.replaceState(null, '', `/pc?${url}`)
+  history.replaceState(null, '', `${PokeSim.base}/pc?${url}`)
   $('#pc-total').textContent = `${counts.reduce((sum, count) => sum + count, 0)} / ${counts.length * 20}`
   $('#pc-active').textContent = `Box ${storage?.active_box || 1}`
   $('#pc-heading').textContent = all ? 'Party and all boxes' : selectedBox === 0 ? 'Party' : `Box ${selectedBox}`
@@ -114,7 +116,7 @@ function render() {
   $('#box-picker').innerHTML = `<button data-box="0" aria-pressed="${selectedBox === 0}" class="${selectedBox === 0 ? 'selected' : ''}"><span>Party</span><small>${party.length} / 6</small></button>` + counts.map((count, index) => `<button data-box="${index + 1}" aria-pressed="${index + 1 === selectedBox}" class="${index + 1 === selectedBox ? 'selected' : ''}"><span>Box ${index + 1}${index + 1 === storage?.active_box ? ' ●' : ''}</span><small>${count} / 20</small></button>`).join('')
   if (focusedBox) $(`[data-box="${focusedBox}"]`)?.focus()
   const focusedMon = document.activeElement?.dataset.mon
-  const card = (mon, index) => `<button class="pc-mon${mon.perfect_dvs ? ' perfect-entry' : ''}" data-mon="${index}" aria-label="${esc(mon.nick || mon.name)}, level ${mon.level}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${', ' + ratingLabel(mon)}${isLocked(mon) ? ', locked' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}"><span class="eyebrow">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || index + 1}</span><img loading="lazy" src="/sprites/${Number(mon.dex) || 0}.png" alt="" width="72" height="72"><strong>${esc(mon.nick || mon.name)}${lockBadge(mon)}${ratingBadge(mon)}</strong><small>${esc(mon.name)} · Lv. ${mon.level}</small>${all ? `<span class="pc-metrics"><span class="pc-power">Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span>` : ''}</button>`
+  const card = (mon, index) => `<button class="pc-mon${mon.perfect_dvs ? ' perfect-entry' : ''}" data-mon="${index}" aria-label="${esc(mon.nick || mon.name)}, level ${mon.level}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${', ' + ratingLabel(mon)}${isLocked(mon) ? ', locked' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}"><span class="eyebrow">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || index + 1}</span><img loading="lazy" src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt="" width="72" height="72"><strong>${esc(mon.nick || mon.name)}${lockBadge(mon)}${ratingBadge(mon)}</strong><small>${esc(mon.name)} · Lv. ${mon.level}</small>${all ? `<span class="pc-metrics"><span class="pc-power">Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span>` : ''}</button>`
   if (all) {
     $('#pc-grid').innerHTML = residents.map((mon, index) => `<div class="pc-list-row">${card(mon, index)}<div class="pc-list-trade">${globalThis.TradeUI?.control(mon.trade_key) || ''}</div></div>`).join('') || '<p class="dex-empty">No Pokémon match this search.</p>'
   } else {
@@ -131,12 +133,13 @@ function detail(mon) {
   detailKey = mon.trade_key
   const labels = ['HP', 'Attack', 'Defense', 'Speed', 'Special']
   const known = mon.dvs?.length === 5 && mon.stat_exp?.length === 5
-  $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><img src="/sprites/${Number(mon.dex) || 0}.png" alt="" width="96" height="96"><p class="eyebrow">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>${ratingBadge(mon)}${mon.perfect_dvs ? '<p class="detail-meta">All five DVs are 15. Preserved from automatic release and trading.</p>' : ''}<p>${esc(mon.name)} · Level ${mon.level}</p></div>
+  $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt="" width="96" height="96"><p class="eyebrow">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>${ratingBadge(mon)}${mon.perfect_dvs ? '<p class="detail-meta">All five DVs are 15. Preserved from automatic release and trading.</p>' : ''}<p>${esc(mon.name)} · Level ${mon.level}</p></div>
     <p class="detail-meta">DV stars measure fixed potential using the total of all five DVs, including derived HP, out of 75. 1★: 0–37, 2★: 38–59, 3★: 60–74, 4★: 75 (perfect). Level and training do not affect this rating.</p>
     ${known ? `<table class="individual-stats"><caption>Calculated stats, potential, and training</caption><thead><tr><th>Stat</th><th>Value</th><th>DV / 15</th><th>Stat experience</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[i]}</td><td>${mon.stat_exp[i].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')} / 75</td><td>${formatTotal(mon, 'stat_exp')} / 327,675</td></tr></tfoot></table><p class="detail-meta">Total DVs include HP, which is derived from the other four DVs. DVs are fixed. Stat experience grows through training, up to 65,535 in each stat.</p>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'}
     <p class="detail-meta">Power = max HP + Attack + Defense + Speed + Special. Values are calculated at this level from species, DVs, and stat experience, as on PC withdrawal. Moves, type matchups, and battle bonuses are not included.</p>
+    <p class="detail-meta"><strong>Elite Four wins: ${Number.isFinite(mon.elite_four_wins) ? mon.elite_four_wins.toLocaleString() : 'Unavailable'}</strong>. One win for being in the Hall of Fame party after defeating the Elite Four and Champion. Includes verified saved victories and follows this Pokémon through trades. Missing historical records are not estimated.</p>
     <p class="detail-meta">${Number(mon.experience || 0).toLocaleString()} total experience</p>
-    ${mon.dex ? `<a class="dex-open" href="/pokedex#${String(mon.dex).padStart(3, '0')}">View ${esc(mon.name)} in the Pokédex ↗</a>` : ''}`
+    ${mon.dex ? `<a class="dex-open" href="${PokeSim.base}/pokedex#${String(mon.dex).padStart(3, '0')}">View ${esc(mon.name)} in the Pokédex ↗</a>` : ''}`
   $('#pc-trade-action').innerHTML = globalThis.TradeUI?.control(detailKey) || ''
   $('#pc-detail').showModal()
 }
@@ -145,7 +148,7 @@ async function refresh() {
   if (busy) return
   busy = true
   try {
-    const response = await fetch('/api/pokedex/status', {cache: 'no-store'})
+    const response = await PokeSim.fetch('/api/pokedex/status', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
     const status = await response.json()
     storage = status.storage

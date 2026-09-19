@@ -5,7 +5,7 @@ const TYPE_CLASS = new Set(['normal', 'fighting', 'flying', 'poison', 'ground', 
 const typeClass = (name) => TYPE_CLASS.has(String(name).toLowerCase()) ? String(name).toLowerCase() : 'normal'
 const typeTags = (types) => types.map((type) => `<span class="type-tag ${typeClass(type)}">${esc(type)}</span>`).join('')
 const MAX_STAT = 190
-const RECORD_LABELS = {caught: 'Registered', seen: 'Seen', unseen: 'Not met yet'}
+const RECORD_LABELS = {caught: 'In Pokédex', seen: 'Seen', unseen: 'Not encountered'}
 const PLAN_LABELS = {available: 'Possible in this run', caught: 'Already registered', external: 'Needs another game', unavailable: 'Out of reach for now'}
 
 let entries = []
@@ -14,6 +14,7 @@ let owned = new Set()
 let seen = new Set()
 let plan = new Map()
 let held = new Map()
+let catches = null
 let maxed = new Set()
 let perfectSpecies = new Set()
 let highQualitySpecies = new Set()
@@ -22,6 +23,18 @@ let openDex = null
 let gridSignature = ''
 let detailSignature = ''
 let detailTrigger = null
+
+const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0
+const catchesAvailable = () => Boolean(catches) && catches.available !== false
+const caughtCount = dex => catchesAvailable() ? count(catches.counts?.[dex]) : null
+function trackingNote() {
+  if (catches?.available === false) return 'Catch tracking is unavailable for this game.'
+  if (catches?.complete_history) return 'Catches tracked from the start of this adventure.'
+  if (Number.isFinite(catches?.started_at) && catches.started_at > 0) {
+    return `Catches tracked since ${new Date(catches.started_at * 1000).toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'})}`
+  }
+  return 'Catch tracking has not started yet.'
+}
 
 function record(dex) {
   return owned.has(dex) ? 'caught' : seen.has(dex) ? 'seen' : 'unseen'
@@ -61,21 +74,22 @@ function renderGrid() {
   if (!entries.length) return
   const rows = sorted(entries.filter(matches))
   $('#result-count').textContent = `${rows.length} Pokémon`
-  const signature = JSON.stringify([rows, [...owned], [...seen], [...held], [...plan], hunting, [...maxed], [...perfectSpecies], [...highQualitySpecies]])
+  const signature = JSON.stringify([rows, [...owned], [...seen], [...held], [...plan], hunting, catches, [...maxed], [...perfectSpecies], [...highQualitySpecies]])
   if (signature === gridSignature) return
   gridSignature = signature
   $('#grid').innerHTML = rows.map((entry) => {
     const state = record(entry.dex)
     const copies = held.get(entry.dex)
-    const project = plan.get(entry.dex)
-    const note = state === 'caught' ? (copies ? `${copies.length} with you` : 'In the Pokédex')
-      : project?.status === 'available' ? 'Possible in this run' : PLAN_LABELS[project?.status] || 'Somewhere out there'
-    return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${maxed.has(entry.dex) ? ', level 100 star earned' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}">
+    const note = RECORD_LABELS[state]
+    const caught = caughtCount(entry.dex)
+    const counts = `${caught === null ? 'Catch count unavailable' : `Caught ${caught}`} · Have ${copies?.length || 0}`
+    return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${maxed.has(entry.dex) ? ', level 100 star earned' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}, ${counts}" aria-describedby="catch-tracking-note">
       <span class="dex-num">#${num(entry.dex)}</span>
       ${entry.dex === hunting ? '<span class="hunt-flag" title="The current expedition">Hunting</span>' : ''}
-      <img loading="lazy" src="/sprites/${entry.dex}.png" alt="" width="72" height="72">
+      <img loading="lazy" src="${PokeSim.base}/sprites/${entry.dex}.png" alt="" width="72" height="72">
       <strong>${esc(entry.name)}</strong>${milestoneBadges(entry.dex)}
       <span class="card-types">${typeTags(entry.types)}</span>
+      <span class="card-counts">${counts}</span>
       <span class="card-note">${esc(note)}</span>
     </button>`
   }).join('') || '<p class="dex-empty">Nobody matches that search. Try another name, type, or filter.</p>'
@@ -88,7 +102,7 @@ function statRow(label, value) {
 
 function chip(step, direction) {
   return `<button class="evo-chip" data-dex="${step.dex}">
-    <img loading="lazy" src="/sprites/${step.dex}.png" alt="" width="44" height="44">
+    <img loading="lazy" src="${PokeSim.base}/sprites/${step.dex}.png" alt="" width="44" height="44">
     <span><strong>${esc(step.name)}</strong><small>${direction} · ${esc(step.label)}</small></span></button>`
 }
 
@@ -108,19 +122,27 @@ function renderDetail(dex, refresh = false) {
   const state = record(dex)
   const project = plan.get(dex)
   const copies = held.get(dex) || []
-  const signature = JSON.stringify([entry, state, project, copies, hunting, maxed.has(dex), perfectSpecies.has(dex), highQualitySpecies.has(dex)])
+  const signature = JSON.stringify([entry, state, project, copies, hunting, catches, maxed.has(dex), perfectSpecies.has(dex), highQualitySpecies.has(dex)])
   if (refresh && signature === detailSignature) return
   detailSignature = signature
+  const partyCount = copies.filter(copy => copy.where.startsWith('Party slot ')).length
+  const pcCount = copies.filter(copy => copy.where.startsWith('Box ')).length
   const moves = entry.moves.map((move) => `<tr><td>${move.level ? `Lv. ${move.level}` : 'Start'}</td><td>${esc(move.name)}</td>
     <td><span class="type-tag ${typeClass(move.type)}">${esc(move.type)}</span></td><td>${move.power || 'N/A'}</td><td>${move.accuracy ?? 'N/A'}%</td><td>${move.pp ?? 'N/A'}</td></tr>`).join('')
   $('#detail-body').innerHTML = `
     <header class="detail-head ${typeClass(entry.types[0])}">
-      <img src="/sprites/${dex}.png" alt="${esc(entry.name)}" width="112" height="112">
+      <img src="${PokeSim.base}/sprites/${dex}.png" alt="${esc(entry.name)}" width="112" height="112">
       <div><span class="eyebrow">NO. ${num(dex)}${entry.dex === hunting ? ' · CURRENT EXPEDITION' : ''}</span>
         <h2 id="detail-name">${esc(entry.name)}</h2>${milestoneBadges(entry.dex)}
         <div class="detail-types">${typeTags(entry.types)}</div>
         <span class="record-pill ${state}">${RECORD_LABELS[state]}</span></div>
     </header>
+    <section class="detail-section" aria-label="Collection counts">
+      <dl class="collection-counts"><div><dt>Caught</dt><dd${catchesAvailable() ? '' : ' class="count-unavailable"'}>${caughtCount(dex) ?? 'Unavailable'}</dd></div><div><dt>Have</dt><dd>${copies.length}</dd></div></dl>
+      <p class="detail-meta">Party ${partyCount} · PC ${pcCount}</p>
+      <p class="detail-meta">${esc(trackingNote())}</p>
+      <div class="link-row"><a href="${PokeSim.base}/pc?scope=all&q=%23${num(dex)}&sort=power&order=desc">View in PC ↗</a></div>
+    </section>
     ${project && state !== 'caught' ? `<p class="plan-note"><b>${esc(PLAN_LABELS[project.status] || 'Status')}</b> ${esc(project.reason || '')}</p>` : ''}
     ${copies.length ? `<section class="detail-section"><h3>With you right now</h3><ul class="copy-list">${copies.map((copy) =>
       `<li><strong>${esc(copy.nick || entry.name)}</strong><span>Lv. ${copy.level} · ${esc(copy.where)} · ${copy.stars ? `${copy.stars}★ DVs` : 'DVs unknown'}</span></li>`).join('')}</ul></section>` : ''}
@@ -181,7 +203,7 @@ function renderHolders(status) {
 }
 
 async function loadReference() {
-  const response = await fetch('/api/pokedex')
+  const response = await PokeSim.fetch('/api/pokedex')
   if (!response.ok) throw new Error('The Pokédex could not be opened.')
   const data = await response.json()
   entries = data.entries
@@ -192,9 +214,10 @@ async function loadReference() {
 
 async function refreshStatus() {
   try {
-    const response = await fetch('/api/pokedex/status', {cache: 'no-store'})
+    const response = await PokeSim.fetch('/api/pokedex/status', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
     const status = await response.json()
+    catches = status.catches || null
     const goals = status.milestones || {}
     maxed = new Set(goals.level_100 || [])
     perfectSpecies = new Set(goals.perfect_species || [])
@@ -214,6 +237,9 @@ async function refreshStatus() {
     if (status.version) $('#edition').textContent = `${status.version.toUpperCase()} VERSION`
     $('#sum-owned').innerHTML = `${owned.size} <small>/ 151</small>`
     $('#sum-seen').innerHTML = `${seen.size} <small>/ 151</small>`
+    $('#sum-caught').textContent = catchesAvailable() ? count(catches.total) : 'Unavailable'
+    $('#sum-caught-label').textContent = catches?.complete_history ? 'Total caught' : 'Catches tracked'
+    $('#catch-tracking-note').textContent = trackingNote()
     $('#owned-meter').value = owned.size
     $('#seen-meter').value = seen.size
     renderHolders(status)

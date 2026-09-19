@@ -103,7 +103,11 @@ class Screen:
 
     @property
     def yes_no(self) -> bool:
-        return self.has("YES") and self.has("NO") and "MON" not in self.text[: self.text.find("NO")].split("\n")[-1]
+        column = self.cursor[0] + 1 if self.cursor else 0
+        labels = [row[column:].strip("? ").upper() for row in self.rows]
+        if self.cursor and labels[self.cursor[1]] not in ("YES", "NO"):
+            return False
+        return "YES" in labels and "NO" in labels
 
     @property
     def shop(self) -> bool:

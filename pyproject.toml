@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=77,<81"]
+requires = ["setuptools>=84.0.0,<85"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pokesim"
-version = "0.2.0rc31"
-description = "A Pokémon Red that plays itself: headless emulator, live web view, event feed with screenshots"
+version = "0.2.0rc32"
+description = "One application for autonomous Pokémon Red and Blue adventures with live views and cable trading"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
@@ -13,7 +13,7 @@ requires-python = ">=3.11"
 dependencies = [
   "pyboy==2.7.0",
   "fastapi>=0.110",
-  "uvicorn[standard]>=0.29",
+  "uvicorn[standard]>=0.53.0",
   "pillow>=10",
   "numpy",
   "httpx>=0.27",
@@ -29,6 +29,7 @@ desktop-build = ["pyinstaller==6.16.0"]
 browser-test = [
     "playwright>=1.50",
 ]
+acceleration = ["numba>=0.61,<0.68"]
 
 [project.scripts]
 pokesim = "pokesim.__main__:main"

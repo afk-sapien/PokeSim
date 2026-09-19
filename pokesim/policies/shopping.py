@@ -43,17 +43,18 @@ class ShoppingController:
                                      ITEMS[name] for name in ('X_ACCURACY', 'GUARD_SPEC', 'DIRE_HIT',
                                                              'X_ATTACK', 'X_DEFEND', 'X_SPEED', 'X_SPECIAL')})), None)
 
-    def plan(self, snapshot, goal, project, *, requested_goal, healing, in_league, has_pokedex):
+    def plan(self, snapshot, goal, project, *, requested_goal, healing, in_league, has_pokedex, completed_champion=False):
+        ball_reserve = 5 if completed_champion else 2
         balls = sum(qty for item, qty in snapshot.items if item in BALLS)
         medicine = sum(qty for item, qty in snapshot.items if item in HEALING)
         bag_full = len(snapshot.items) >= 18 and self.sale_index(snapshot) is not None
-        if balls < 2 or (medicine == 0 and (snapshot.map in (2, 56)
+        if balls < ball_reserve or (medicine == 0 and (snapshot.map in (2, 56)
                 or WORLD.get(snapshot.map, {}).get('name', '').endswith('Gym'))) or bag_full:
             self.restocking = True
-        elif balls >= 2 and medicine and not bag_full:
+        elif balls >= ball_reserve and medicine and not bag_full:
             self.restocking = False
         if snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY']:
-            self.restocking = medicine < 10 or dict(snapshot.items).get(ITEMS['REVIVE'], 0) < 5
+            self.restocking = balls < ball_reserve or medicine < 10 or dict(snapshot.items).get(ITEMS['REVIVE'], 0) < 5
         legendary = legendary_project(project)
         if legendary and not dict(snapshot.items).get(ITEMS['MASTER_BALL']):
             self.restocking = (not project.get('supplies_prepared')

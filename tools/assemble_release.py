@@ -28,7 +28,8 @@ def check_identity(identity, version, revision):
         raise ValueError('Every package must come from the same clean tagged revision')
 
 
-def assemble(root, version, revision):
+def assemble(root, version, revision, *, include_desktop=True):
+    archives = DESKTOP_ARCHIVES if include_desktop else ()
     if not re.fullmatch(r'\d+\.\d+\.\d+(?:rc\d+)?', version):
         raise ValueError('Invalid release version')
     if not re.fullmatch(r'[0-9a-f]{40}', revision):
@@ -37,12 +38,14 @@ def assemble(root, version, revision):
     source = f'pokesim-{version}.tar.gz'
     required = {wheel, source, 'image-linux-amd64.tar.gz', 'image-metadata.json',
                 'python-dependencies.json', 'compose.yaml', 'env.example'}
-    for name in DESKTOP_ARCHIVES:
+    for name in archives:
         required.update({name, name + '.sha256', name + '.json'})
     missing = sorted(name for name in required if not (root / name).is_file())
     if missing:
         raise ValueError(f'Missing release assets: {missing}')
-    allowed = required | {'manifest.json', 'desktop-manifest.json', 'SHA256SUMS'}
+    allowed = required | {'manifest.json', 'SHA256SUMS'}
+    if include_desktop:
+        allowed.add('desktop-manifest.json')
     unexpected = sorted(path.name for path in root.iterdir() if path.name not in allowed or not path.is_file())
     if unexpected:
         raise ValueError(f'Unexpected release assets: {unexpected}')
@@ -61,7 +64,7 @@ def assemble(root, version, revision):
         raise ValueError('Container identity or platform does not match the release')
 
     desktop = {}
-    for name in DESKTOP_ARCHIVES:
+    for name in archives:
         identity = json.loads((root / (name + '.json')).read_text())
         check_identity(identity, version, revision)
         checksum = digest(root / name)
@@ -81,13 +84,14 @@ def assemble(root, version, revision):
     compose = root / 'compose.yaml'
     contents = compose.read_text()
     image_default = r'\$\{POKESIM_IMAGE:-pokesim:(?:local|\d+\.\d+\.\d+(?:rc\d+)?)\}'
-    if len(re.findall(image_default, contents)) != 2:
-        raise ValueError('Release Compose must select the image for both services')
+    if len(re.findall(image_default, contents)) not in (1, 2):
+        raise ValueError('Release Compose must select the versioned application image')
     compose.write_text(re.sub(image_default, '${POKESIM_IMAGE:-' + image + '}', contents),
                        encoding='utf-8')
-    (root / 'desktop-manifest.json').write_text(json.dumps({
-        'version': version, 'revision': revision, 'archives': desktop,
-    }, indent=2) + '\n', encoding='utf-8')
+    if include_desktop:
+        (root / 'desktop-manifest.json').write_text(json.dumps({
+            'version': version, 'revision': revision, 'archives': desktop,
+        }, indent=2) + '\n', encoding='utf-8')
     files = {path.name: digest(path) for path in sorted(root.iterdir())
              if path.name not in {'manifest.json', 'SHA256SUMS'}}
     (root / 'manifest.json').write_text(json.dumps({
@@ -104,9 +108,10 @@ def main():
     parser.add_argument('directory', type=Path)
     parser.add_argument('--version', required=True)
     parser.add_argument('--revision', required=True)
+    parser.add_argument('--without-desktop', action='store_true', help='Assemble the Python and Docker release')
     args = parser.parse_args()
-    assemble(args.directory, args.version, args.revision)
-    print('Release complete: five desktop targets, container, Python packages, and configuration')
+    assemble(args.directory, args.version, args.revision, include_desktop=not args.without_desktop)
+    print('Release assets verified and manifests written')
 
 
 if __name__ == '__main__':

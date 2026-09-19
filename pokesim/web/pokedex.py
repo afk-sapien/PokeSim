@@ -113,7 +113,7 @@ def reference(version: str = DEFAULT_VERSION) -> dict:
     return {"version": version, "count": len(entries), "entries": entries}
 
 
-def live_status(game: dict | None, collection: dict | None = None) -> dict:
+def live_status(game: dict | None, collection: dict | None = None, *, league_rewards=None) -> dict:
     """The parts of a snapshot a Pokédex reader needs, without the rest of the state payload."""
     # Only the fields the page reads: the planner's entries repeat on every poll.
     plan = {"plan": [{"dex": row.get("dex"), "species": row.get("species"),
@@ -124,6 +124,12 @@ def live_status(game: dict | None, collection: dict | None = None) -> dict:
             "hunting": ((collection or {}).get("hunt") or {}).get("species"),
             "protected_species": [value for key, value in ((collection or {}).get("hunt") or {}).items()
                                   if key in ("species", "parent") and value]}
+    if league_rewards is not None:
+        from ..rewards import eligible_pool
+        reward_dex = {SPECIES[sid]['dex'] for sid in eligible_pool(league_rewards)}
+        for entry in plan['plan']:
+            if entry['dex'] in reward_dex and entry['dex'] not in (game or {}).get('dex_owned', ()):
+                entry.update(status='available', reason='Unlocked in the random League victory reward pool')
     if not game:
         return {"started": False, "owned": [], "seen": [], "party": [], "storage": None, **plan}
     dex_of = {sid: mon["dex"] for sid, mon in SPECIES.items()}

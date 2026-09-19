@@ -2,7 +2,7 @@
 import logging
 from pathlib import Path
 
-from .platform_io import lock_file
+from ..platform_io import lock_file
 
 log = logging.getLogger(__name__)
 
@@ -16,8 +16,8 @@ class Runtime:
         self.emu = None
 
     def __enter__(self):
-        from .emulator import Emulator
-        from .store import Store
+        from ..emulator import Emulator
+        from ..store import Store
 
         self.directory.mkdir(parents=True, exist_ok=True)
         self.lock = (self.directory / 'adventure.lock').open('a+b')

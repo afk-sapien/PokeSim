@@ -8,7 +8,7 @@ import json
 required = {
     'pokesim/_build.json',
     'pokesim/build_info.py',
-    'pokesim/runtime.py',
+    'pokesim/runtime/legacy.py',
     'pokesim/policies/menus.py',
     'pokesim/policies/shopping.py',
     'pokesim/policies/storage.py',
@@ -19,6 +19,25 @@ required = {
     'pokesim/web/static/trade-ui.js',
     'pokesim/web/static/trading.html',
     'pokesim/web/static/trading.js',
+    'pokesim/policies/navigation_numba.py',
+    'pokesim/app/manager.py',
+    'pokesim/app/coordinator.py',
+    'pokesim/app/supervisor.py',
+    'pokesim/app/cli.py',
+    'pokesim/runtime/worker.py',
+    'pokesim/runtime/simulation.py',
+    'pokesim/runtime/preparation.py',
+    'pokesim/runtime/reward_delivery.py',
+    'pokesim/runtime/participant.py',
+    'pokesim/interactions/link_worker.py',
+    'pokesim/interactions/cable_metadata.py',
+    'pokesim/web/library.py',
+    'pokesim/web/pages.py',
+    'pokesim/web/static/adventure-trading.html',
+    'pokesim/web/static/adventure-trading.js',
+    'pokesim/web/static/library.html',
+    'pokesim/web/static/library.js',
+    'pokesim/web/static/library.css',
     'pokesim/desktop.py',
     'pokesim/desktop_setup.py',
     'pokesim/desktop_check.py',
@@ -90,7 +109,7 @@ for artifact in artifacts:
     assert not missing, f'{artifact}: missing runtime files {missing}'
     for name in names:
         path = Path(name)
-        assert path.suffix not in {'.gb', '.gbc', '.sav', '.state', '.sqlite'}, name
+        assert path.suffix not in {'.gb', '.gbc', '.sav', '.state', '.sqlite', '.nbi', '.nbc'}, name
         assert path.name != '.env', name
         assert not name.startswith(('pokesim/data/', 'pokesim/web/static/sprites/')), name
     print(f'{artifact.name}: runtime resources verified')

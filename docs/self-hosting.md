@@ -1,24 +1,80 @@
-# Self-hosting reference
+# Self-hosting PokeSim
 
-For standalone computer downloads, start with [Run your own adventure](../README.md#run-your-own-adventure).
+## Current application
 
-The prebuilt instructions below target the **v0.2.0rc31** experimental release.
-Keep its image and configuration together. No PokeSim source checkout is needed.
+One manager serves the browser, owns the library, and starts one child process per running adventure. Several Red or Blue games can run inside one container. Cable trading uses an additional temporary paired emulator process. Set capacity according to available CPU, memory, and storage.
 
-## Install the prebuilt v0.2.0rc31 release
+Build and start using the [README instructions](../README.md#in-one-docker-container). The container runs as UID and GID 10001, with a read-only root filesystem. Its `/data` volume contains the complete application. Reference setup writes verified shared assets there on first use.
+
+| Setting | Purpose |
+| --- | --- |
+| `DATA_PATH=./pokesim-app` | Persistent application folder containing all adventures |
+| `PUBLIC_URL=http://localhost:8930` | Exact browser address, including scheme and port |
+| `HTTP_PORT=8930` | Host port mapped to the manager |
+| `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
+| `POKESIM_IMAGE=pokesim:local` | Image built from this checkout |
+
+The Library opens directly without a sign-in or owner key. Its default published port is local-only. Anyone who can reach the Library can manage adventures, so remote access belongs behind an authenticated HTTPS reverse proxy or on a trusted private network. Point an existing authenticated proxy at the manager and preserve the Host matching `PUBLIC_URL`, which must be the browser-facing address. The application checks Host and Origin and protects browser writes against cross-site requests. These protections do not authenticate remote users. Worker credentials and private ports remain internal.
+
+The Compose service uses an init process to reap children and allows 90 seconds for orderly shutdown. Keep a single manager process per application folder. Do not add Uvicorn workers or share one application volume between containers.
+
+A native server uses the same application:
+
+```sh
+pokesim serve --data-dir /path/to/library --host 127.0.0.1 --port 8000
+```
+
+Start and stop adventures in the browser. A command-line client is also available while the manager is running:
+
+```sh
+pokesim adventures list --data-dir /path/to/library
+pokesim adventures create --data-dir /path/to/library --name "Red orchard" --rom /path/to/pokered.gb --start
+pokesim backup --data-dir /path/to/library
+```
+
+### Migration and recovery
+
+Stop both the source adventure and destination application. Back up the original files, then import into a fresh application root:
+
+```sh
+pokesim import /path/to/old-data --stopped --rom /path/to/pokered.gb --name "Original Red" --data-dir /path/to/library
+```
+
+For a container import, run the same command in a temporary container with the application volume, a stopped backup copy of the source folder, and the ROM mounted. The importer needs writable lock files in the source directory, while the ROM can remain read-only. It does not change source saves or database contents. Do not bind the old adventure folder directly as the new application root.
+
+An individually imported adventure with legacy trades remains playable, but its trading stays blocked until its peers are reconciled. Import the resolved Red and Blue pair together when the original coordinator evidence is available:
+
+```sh
+pokesim import-pair --red /path/to/old-red --blue /path/to/old-blue --red-rom /path/to/pokered.gb --blue-rom /path/to/pokeblue.gb --coordinator-root /path/to/old-trader --stopped --data-dir /path/to/library
+```
+
+Stop both legacy adventures, their coordinator, and the destination application first. The paired import verifies exact matching completion history, latest trade barriers, verified checkpoints, and retained coordinator evidence before registering either copied adventure. Missing or mismatched evidence fails the import and cannot be bypassed by clearing a protection flag. Source saves, databases, and coordinator evidence remain unchanged. The importer opens coordination lock files, so use writable backup copies when the originals must remain read-only. Keep those original services stopped after migration to avoid running duplicate ownership histories.
+
+The previous single-game Compose file remains at `compose.legacy.yaml` and its settings at `.env.legacy.example`. With the new image, its explicit `legacy` command continues to use environment configuration. Existing deployment examples under `deploy/` describe the legacy separate broker and trader. They are not components of the new managed application.
+
+Restore a complete backup into an empty application directory. Recovery needs the registry, adventure files, and interaction decisions together. If a trade had committed before a crash, recovery applies its recorded results instead of rerunning the cable exchange.
+
+### Validation boundary
+
+Native source launch depends on the availability of Python, PyBoy, and its native dependencies for the host. Docker packages those dependencies for a Linux target. Neither the manager nor the simulation protocol requires x86-64. The Python install workflow covers multiple OS and CPU targets, with actual passing results required before claiming support for a release.
+
+## Historical prebuilt release
+
+The prebuilt instructions below are pinned to the older **v0.2.0rc6** public archive. That release does not include every feature shown in the current README screenshots. Keep its source checkout, image, and configuration together.
+
+## Install the prebuilt v0.2.0rc6 release
 
 The prebuilt release supports **Linux amd64** with Docker Engine and the Compose plugin. Supply your own clean Pokémon Red (USA, Europe) ROM. Pokémon ROMs, sprites, and game datasets are not bundled. The PyBoy dependency includes its own small demo ROM, which cannot replace your Pokémon ROM. Blue and ARM do not yet have equivalent release validation.
 
-Create a new installation directory:
+Clone the public release source:
 
 ```sh
-mkdir pokesim
+git clone --branch v0.2.0rc6 --depth 1 https://github.com/afk-sapien/PokeSim.git pokesim
 cd pokesim
+cp .env.example .env
 mkdir -p roms data
 sudo chown 10001:10001 data
 ```
-
-The release configuration downloaded below selects `pokesim:0.2.0rc31` automatically.
 
 Place your ROM at `roms/pokered.gb`. Create a local reference checkout for data preparation:
 
@@ -30,16 +86,12 @@ git -C .reference/pokered checkout a1a22aaf84d1675bcdbaeb194592379d586d838e
 Download the prebuilt image and verify its checksum. These public downloads require no GitHub account, token, or registry login:
 
 ```sh
-curl -fL --retry 3 -o image-linux-amd64.tar.gz https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc31/image-linux-amd64.tar.gz
-curl -fL --retry 3 -o SHA256SUMS https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc31/SHA256SUMS
-curl -fL --retry 3 -o compose.yaml https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc31/compose.yaml
-curl -fL --retry 3 -o env.example https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc31/env.example
+curl -fL --retry 3 -o image-linux-amd64.tar.gz https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc6/image-linux-amd64.tar.gz
+curl -fL --retry 3 -o SHA256SUMS https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc6/SHA256SUMS
 sha256sum --ignore-missing -c SHA256SUMS
-cp env.example .env
 ```
 
-Confirm that the image archive, Compose file, and environment example all report
-`OK`, then load and start it:
+Confirm that the image archive reports `OK`, then load and start it:
 
 ```sh
 docker load -i image-linux-amd64.tar.gz
@@ -48,7 +100,7 @@ docker compose up -d --pull never
 docker compose logs --tail=50 pokesim
 ```
 
-Open [localhost:8930](http://localhost:8930). The archive loads the exact image tag `pokesim:0.2.0rc31`. Releases are distributed as downloadable Docker archives, so there is no `docker compose pull` step. The [release page](https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0rc31) also provides source packages, Compose files, a dependency inventory, and a manifest with the image ID and source revision.
+Open [localhost:8930](http://localhost:8930). The archive loads the exact image tag `pokesim:0.2.0rc6`. Releases are distributed as downloadable Docker archives, so there is no `docker compose pull` step. The [release page](https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0rc6) also provides source packages, Compose files, a dependency inventory, and a manifest with the image ID and source revision.
 
 The setup command parses the pinned source checkout and writes verified game data into `./data`. It does not build or download a ROM. The runtime uses the local data afterward and does not require that source checkout or internet access unless notifications are enabled.
 
@@ -91,9 +143,7 @@ See [backup, restore, upgrades, rollback, and troubleshooting](operations.md). E
 
 ## Build from source
 
-Use a source checkout containing the updated setup command. Create `.env` from
-`.env.example` for a new installation, add your ROM, and prepare the data directory
-as shown in the [README](../README.md#run-your-own-adventure). Then run:
+After preparing the ROM, data directory, and source checkout above:
 
 ```sh
 docker compose -f compose.yaml -f compose.build.yaml build
@@ -102,23 +152,3 @@ docker compose -f compose.yaml -f compose.build.yaml up -d
 ```
 
 For native development, follow [CONTRIBUTING.md](../CONTRIBUTING.md).
-
-The updated source setup service uses `pokesim-prepare-data --download`. It downloads
-the same pinned, checksum-verified reference archive as the desktop launcher.
-Subsequent setup runs reuse valid prepared data without accessing the network.
-Setup writes only the generated game-data bundle and preserves saves and the journal.
-The source image must be built before using the updated Compose file. Published
-rc31 images still need the original reference-checkout setup documented above.
-
-For offline first setup, transfer the pinned archive described in the
-[desktop guide](desktop.md#troubleshooting), then supply it read-only:
-
-```sh
-docker compose --profile setup run --rm --pull never \
-  -v "$PWD/reference.zip:/reference.zip:ro" prepare-data \
-  python -m pokesim.prepare_data --reference-archive /reference.zip
-```
-
-The original native command `pokesim-prepare-data /path/to/pokered` still accepts a
-clean Git checkout at the pinned revision. Existing prepared adventures do not need
-to regenerate data when moving to the new setup command.

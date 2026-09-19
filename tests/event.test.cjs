@@ -13,7 +13,7 @@ function page(fetch) {
     }}
   const error = {hidden: true, textContent: ''}
   const location = {href: '/events/42'}
-  const context = vm.createContext({fetch, location, document: {
+  const context = vm.createContext({PokeSim: {fetch, url: path => path}, location, document: {
     querySelector: selector => selector === '#rewind' ? button : error,
   }})
   vm.runInContext(source, context)

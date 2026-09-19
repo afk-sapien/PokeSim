@@ -139,7 +139,7 @@ def test_final_rival_win_delivers_one_mew_before_hall_of_fame_and_survives_retri
     event.journal(tmp_path, '1')
     for name in ('red', 'blue'):
         store = Store(pair.PAIR_ROOT / name)
-        assert rewards.status(store) == {'earned': 3, 'delivered': 0, 'pending': 3}
+        assert rewards.status(store) == {'earned': 3, 'delivered': 0, 'pending': 3, 'wins': 3, 'unlocks': []}
         assert len(store.events()) == 1
         store.close()
     # Even a checkpoint from before receiving or trading Mew cannot earn it again.

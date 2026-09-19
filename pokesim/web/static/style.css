@@ -1260,3 +1260,19 @@ h1 { font-size:31px }
 .dex-open { background: #f1f4e9 }
 .dex-open { font-size: 12px }
 .dex-open:hover { color: #6d8a4c }
+.library-link { color:#315f4a }
+.library-link { font-weight:650 }
+.adventure-select { display:flex }
+.adventure-select { align-items:center }
+.adventure-select { gap:8px }
+.adventure-select { font-size:12px }
+.adventure-select select { max-width:180px }
+.adventure-select select { border:1px solid #c9cfc1 }
+.adventure-select select { border-radius:6px }
+.adventure-select select { padding:6px }
+.topbar:has(.adventure-select) { flex-wrap:wrap }
+.topbar:has(.adventure-select) { height:auto }
+.topbar:has(.adventure-select) { min-height:88px }
+.topbar:has(.adventure-select) { gap:18px }
+.topbar:has(.adventure-select) { padding-top:16px }
+.topbar:has(.adventure-select) { padding-bottom:16px }
