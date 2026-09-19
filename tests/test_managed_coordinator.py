@@ -94,6 +94,8 @@ def setup(tmp_path):
     supervisor = Supervisor(registry, peers)
     manager = SimpleNamespace(root=tmp_path, registry=registry, supervisor=supervisor, suspended=False,
                               assets=SimpleNamespace(game_data_dir=tmp_path), maintenance=threading.RLock())
+    announced = []
+    manager.notifications = SimpleNamespace(trade_completed=lambda row, display: announced.append(row['id']))
     coordinator = Coordinator(manager)
     cable_calls = []
     def cable(row, plan):
@@ -106,7 +108,7 @@ def setup(tmp_path):
     coordinator._run_cable = cable
     data = {'left_id': games[0]['id'], 'right_id': games[1]['id'], 'left_key': '0', 'right_key': '1', 'request_id': identifier()}
     yield SimpleNamespace(coordinator=coordinator, registry=registry, peers=peers, supervisor=supervisor,
-                          data=data, cable_calls=cable_calls, manager=manager)
+                          data=data, cable_calls=cable_calls, manager=manager, announced=announced)
     coordinator.close()
     registry.close()
 
@@ -148,6 +150,7 @@ def test_both_stages_precede_commit_and_both_apply_precede_release(setup):
     assert c.execute(row['id'])['phase'] == 'completed'
     assert len(observed) == calls
     assert setup.cable_calls == [row['id']]
+    assert setup.announced == [row['id']]
 
 
 def test_failed_second_stage_aborts_without_applying_either_output(setup):

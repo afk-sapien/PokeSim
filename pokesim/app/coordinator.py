@@ -525,6 +525,10 @@ class Coordinator:
                 if receipt.get('phase') != 'released':
                     raise ValueError('Participant did not acknowledge release')
             row = self.registry.update_transaction(tid, phase='completed', error=None)
+            try:
+                self.manager.notifications.trade_completed(row, manifest.get('display') or {})
+            except Exception:
+                log.exception('Could not announce trade %s', tid)
         for aid in plan['participants']:
             self.previews.pop(aid, None)
             if self.registry.adventure(aid)['desired_state'] == 'stopped':
