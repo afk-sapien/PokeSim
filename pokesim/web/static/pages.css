@@ -21,42 +21,9 @@
 .view-switch button[aria-pressed="true"] { background:#304b36 }
 .view-switch button[aria-pressed="true"] { color:#fffef9 }
 .pc-workspace.pc-workspace-all { grid-template-columns:minmax(0,1fr) }
-.pc-grid.pc-list { grid-template-columns:minmax(0,1fr) }
-.pc-list-row { display:flex }
-.pc-list-row { align-items:center }
-.pc-list-row { gap:18px }
-.pc-list-row { background:#fffef9 }
-.pc-list-row { border:1px solid #dcded3 }
-.pc-list-row { border-radius:14px }
-.pc-list-row { padding:8px 18px 8px 6px }
-.pc-list .pc-mon { display:grid }
-.pc-list .pc-mon { grid-template-columns:64px minmax(120px,1fr) minmax(230px,1.5fr) }
-.pc-list .pc-mon { grid-template-rows:auto auto auto }
-.pc-list .pc-mon { flex:1 }
-.pc-list .pc-mon { border:0 }
-.pc-list .pc-mon { text-align:left }
-.pc-list .pc-mon { column-gap:14px }
-.pc-list .pc-mon img { grid-column:1 }
-.pc-list .pc-mon img { grid-row:1/4 }
-.pc-list .pc-mon img { width:64px }
-.pc-list .pc-mon img { height:64px }
-.pc-list .pc-mon>.eyebrow { grid-column:2 }
-.pc-list .pc-mon>strong { grid-column:2 }
-.pc-list .pc-mon>small { grid-column:2 }
-.pc-list .pc-mon .pc-metrics { grid-column:3 }
-.pc-list .pc-mon .pc-metrics { grid-row:1/4 }
-.pc-list .pc-mon .pc-metrics { display:flex }
-.pc-list .pc-mon .pc-metrics { flex-wrap:wrap }
-.pc-list .pc-mon .pc-metrics { gap:12px }
-.pc-list .pc-mon .pc-metrics { border:0 }
-.pc-list .pc-mon .pc-metrics { margin:0 }
-.pc-list .pc-mon .pc-metrics>span { display:flex }
-.pc-list .pc-mon .pc-metrics>span { flex-direction:column }
-.pc-list .pc-mon .pc-metrics>span { gap:2px }
-.pc-list-trade,.pc-trade-action,.trade-offer-action { display:flex }
-.pc-list-trade,.pc-trade-action,.trade-offer-action { flex-direction:column }
-.pc-list-trade,.pc-trade-action,.trade-offer-action { gap:8px }
-.pc-list-trade { max-width:180px }
+.pc-trade-action,.trade-offer-action { display:flex }
+.pc-trade-action,.trade-offer-action { flex-direction:column }
+.pc-trade-action,.trade-offer-action { gap:8px }
 .trade-meta { color:#687461 }
 .trade-meta { font-size:12px }
 .pc-empty-slot { min-height:152px }
@@ -117,23 +84,7 @@
 .trade-notice { margin-bottom:20px }
 .trade-notice { background:#eee7d5 }
 .trade-notice { border-radius:12px }
-@media (max-width:900px) {
-.pc-list-row { flex-wrap:wrap }
-.pc-list-trade { flex-direction:row }
-.pc-list-trade { align-items:center }
-.pc-list-trade { max-width:none }
-.pc-list-trade { width:100% }
-.pc-list-trade { justify-content:space-between }
-.pc-list-trade { padding:0 12px 8px }
-}
 @media (max-width:580px) {
-.pc-list .pc-mon { grid-template-columns:54px minmax(0,1fr) }
-.pc-list .pc-mon img { width:54px }
-.pc-list .pc-mon img { height:54px }
-.pc-list .pc-mon .pc-metrics { grid-column:1/-1 }
-.pc-list .pc-mon .pc-metrics { grid-row:4 }
-.pc-list .pc-mon .pc-metrics { margin-top:12px }
-.pc-list-row { gap:4px }
 .trade-overview { flex-direction:column }
 .trade-overview { align-items:flex-start }
 .trade-swap { grid-template-columns:minmax(0,1fr) }
@@ -730,3 +681,29 @@ body:has(.partner-detail[open]) { overflow:hidden }
 .partner-detail .battle-stats dt { font-size:11px }
 .partner-detail .battle-stats dd { font-size:17px }
 .partner-detail .total-xp { font-size:11px }
+
+/* All partners use compact cards, with actions available in their details. */
+.pc-grid.pc-all-grid { grid-template-columns:repeat(auto-fill,minmax(160px,1fr)) }
+.pc-grid.pc-all-grid { gap:10px }
+.pc-grid .pc-mon { padding:10px }
+.pc-grid .pc-mon { gap:3px }
+.pc-grid .pc-mon img { width:56px }
+.pc-grid .pc-mon img { height:56px }
+.pc-grid .pc-mon strong { font-size:12px }
+.pc-grid .pc-mon small { font-size:10px }
+.pc-grid .pc-metrics { display:grid }
+.pc-grid .pc-metrics { grid-template-columns:repeat(2,minmax(0,1fr)) }
+.pc-grid .pc-metrics { gap:4px }
+.pc-grid .pc-metrics { margin-top:5px }
+.pc-grid .pc-metrics { padding-top:6px }
+.pc-grid .pc-metrics>span { flex-direction:column }
+.pc-grid .pc-metrics>span { gap:2px }
+.pc-grid .pc-metrics>span { font-size:9px }
+.pc-grid .pc-metrics>span { padding:0 }
+.pc-grid .pc-metrics b { font-size:10px }
+.pc-grid .pc-metrics b { overflow-wrap:anywhere }
+@media (max-width:580px) {
+.pc-grid.pc-all-grid { grid-template-columns:repeat(2,minmax(0,1fr)) }
+.pc-grid.pc-all-grid { gap:8px }
+.pc-grid .pc-mon { padding:9px 7px }
+}

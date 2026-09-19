@@ -178,7 +178,8 @@ test('box and list modes have separate controls and preserve physical slots', as
   assert.deepEqual(view.rows().map(mon => mon.level), [99, 10])
   assert.equal(view.element('#pc-sidebar').hidden, true)
   assert.equal(view.element('#pc-sort-control').hidden, false)
-  assert.match(view.element('#pc-grid').innerHTML, /pc-list-row/)
+  assert.match(view.element('#pc-grid').innerHTML, /class="pc-mon/)
+  assert.doesNotMatch(view.element('#pc-grid').innerHTML, /pc-list-row/)
   assert.doesNotMatch(view.element('#pc-grid').innerHTML, /pc-empty-slot/)
   view.element('#pc-search').value = 'missing'
   view.element('#pc-search').oninput()

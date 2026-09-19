@@ -473,7 +473,6 @@ main#pokedex { margin-right:18px }
 .pc-mon .dv-badge { display:flex }
 .pc-mon .dv-badge { width:fit-content }
 .pc-mon .dv-badge { margin:5px auto 0 }
-.pc-list .pc-mon .dv-badge { margin-left:0 }
 .dex-count-help { font-size:11px }
 .dex-count-help { color:#687060 }
 .dex-count-help summary { cursor:pointer }
