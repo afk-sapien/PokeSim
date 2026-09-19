@@ -1,8 +1,11 @@
 """Check that the actual browser enforces the application content policy."""
-from playwright.sync_api import expect
-
 from pokesim.app.manager import Manager, create_app
 from conftest import serve
+
+
+def expect(value):
+    from playwright.sync_api import expect as assertion
+    return assertion(value)
 
 
 def test_library_scripts_work_and_injected_inline_script_is_blocked(page, tmp_path, monkeypatch):
