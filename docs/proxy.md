@@ -3,8 +3,8 @@ Authenticated HTTPS deployment
 This recipe protects the homepage, controls, API, feed, screenshots, and stream with the same authentication boundary. The application has no published backend port. Caddy terminates TLS and streams MJPEG without buffering. Docker Compose 2.24.4 or newer is required for the port reset used by the example.
 
 Prepare the application data directory and its ownership using the README first.
-This advanced recipe also needs `compose.proxy.yaml`, `deploy/Caddyfile`, and
-`deploy/proxy.env.example` from the source archive matching your installed release.
+This advanced recipe also needs `compose.proxy.yaml`, `deploy/Caddyfile`,
+`deploy/proxy.env.example`, and the entire `deploy/proxy` folder from the source archive matching your installed release.
 If you installed only the prebuilt release assets, copy those files into your
 installation directory, preserving the `deploy` folder. The
 source archive for the same release contains them. Stop the direct deployment before switching:
@@ -13,14 +13,17 @@ source archive for the same release contains them. Stop the direct deployment be
 docker compose stop
 cp deploy/proxy.env.example .env.proxy
 chmod 600 .env.proxy
-docker run --rm -it caddy:2.11.4-alpine caddy hash-password
+docker run --rm -it --network none caddy:2.11.4-alpine caddy hash-password
 ```
 
 Enter a password interactively. Copy the resulting hash into `AUTH_HASH` in `.env.proxy`, using single quotes around the hash. Set `AUTH_USER` and `DATA_PATH`. Use the existing Adventure Library directory, normally `./pokesim-app`. Do not point it at a legacy single-adventure `./data` folder. Import legacy saves through the library instead. Copy the exact `POKESIM_IMAGE` setting from your working `.env` too, since `.env.proxy` replaces it for these commands. For the localhost example, keep the supplied address and port defaults.
 
 ```sh
+docker compose --env-file .env.proxy -f compose.proxy.yaml build --pull proxy
 docker compose --env-file .env.proxy -f compose.proxy.yaml up -d
 ```
+
+The first command builds the proxy locally from Caddy 2.11.4 with a current Go toolchain and locked security updates for its dependencies. It needs internet access and may take several minutes. This avoids older Go dependencies still present in the official Caddy binary. Repeat the build when updating the source recipe. The application image is still the prebuilt image selected by `POKESIM_IMAGE`.
 
 Visit `https://localhost:9443`. Caddy uses its local CA for localhost. Export the root certificate from the proxy and add it to the specific client's trust store before connecting. Do not disable certificate verification to work around the local CA. The automated test uses an explicit CA file with hostname verification enabled.
 

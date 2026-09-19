@@ -6,7 +6,9 @@ services:
     ports: !reset []
     networks: [backend, outbound]
   proxy:
-    image: caddy:2.11.4-alpine
+    image: pokesim-proxy:2.11.4-hardened-20260919
+    build:
+      context: ./deploy/proxy
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

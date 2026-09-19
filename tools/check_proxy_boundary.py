@@ -52,11 +52,12 @@ def main():
         command = ['docker', 'compose', '-p', project, '--env-file', str(empty),
                    '-f', str(ROOT / 'compose.proxy.yaml'), '-f', str(override)]
 
-        def compose(*arguments):
+        def compose(*arguments, timeout=120):
             return subprocess.check_output([*command, *arguments], env=env, text=True,
-                                           stderr=subprocess.STDOUT, timeout=120).strip()
+                                           stderr=subprocess.STDOUT, timeout=timeout).strip()
 
         try:
+            compose('build', '--pull', 'proxy', timeout=600)
             compose('up', '-d', '--wait', '--wait-timeout', '60')
             proxy = compose('ps', '-q', 'proxy')
             certificate = root / 'root.crt'

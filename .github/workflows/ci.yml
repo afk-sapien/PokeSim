@@ -83,11 +83,22 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - run: docker compose config --quiet
-      - run: docker build -t pokesim:ci .
+      - run: docker build --pull -t pokesim:ci .
       - name: Verify the Compose installation and save lifecycle
         run: python tools/check_container.py pokesim:ci
       - name: Verify the authenticated HTTPS proxy
         run: python tools/check_proxy_boundary.py pokesim:ci
+      - name: Reject fixable high and critical image vulnerabilities
+        run: |
+          docker save pokesim:ci -o /tmp/pokesim-app.tar
+          docker save pokesim-proxy:2.11.4-hardened-20260919 -o /tmp/pokesim-proxy.tar
+          for image in app proxy
+          do
+            docker run --rm --cap-drop ALL --security-opt no-new-privileges:true \
+              -v "/tmp/pokesim-$image.tar:/image.tar:ro" -v /tmp/trivy-cache:/root/.cache/trivy \
+              aquasec/trivy:0.74.0 image --input /image.tar --scanners vuln \
+              --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1
+          done
       - name: Prepare local data outside the image
         run: docker run --rm -v pokesim-ci-data:/data pokesim:ci python -m pokesim.prepare_data --download
       - name: Verify repeated setup works offline
