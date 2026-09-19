@@ -1,5 +1,5 @@
 FROM ghcr.io/astral-sh/uv:0.12.15 AS uv
-FROM python:3.12-slim-bookworm AS build
+FROM python:3.14-slim-bookworm AS build
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
@@ -9,7 +9,7 @@ COPY tools/bundle_dependency_sources.py ./tools/bundle_dependency_sources.py
 RUN uv sync --frozen --no-dev --no-editable \
     && .venv/bin/python tools/bundle_dependency_sources.py /notices
 
-FROM python:3.12-slim-bookworm
+FROM python:3.14-slim-bookworm
 ARG VERSION=0.2.0rc6
 ARG REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/afk-sapien/PokeSim" \
