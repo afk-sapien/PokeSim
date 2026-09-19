@@ -58,14 +58,17 @@ On a server, with Docker:
 
 ```sh
 curl -fLO https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.yaml
-curl -fL -o .env https://github.com/afk-sapien/PokeSim/releases/latest/download/env.example
 mkdir -p pokesim-app
 sudo chown 10001:10001 pokesim-app
-docker compose pull
 docker compose up -d
 ```
 
 That pulls the published image, so there's nothing to build and no registry login. Open [localhost:8930](http://localhost:8930) and create your first adventure.
+
+To change the port, the data folder or the address you browse to, put the settings in a `.env` file
+next to `compose.yaml`. [env.example](https://github.com/afk-sapien/PokeSim/releases/latest/download/env.example)
+from the same release lists them all. It's optional, and settings kept there survive replacing
+`compose.yaml` on your next upgrade.
 
 <details>
 <summary>Rather write the Compose file yourself?</summary>

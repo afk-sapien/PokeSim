@@ -24,12 +24,14 @@ version instead, name its tag:
 ```sh
 POKESIM_RELEASE=v0.1.2
 curl -fL --retry 3 -o compose.yaml "https://github.com/afk-sapien/PokeSim/releases/download/$POKESIM_RELEASE/compose.yaml"
-curl -fL --retry 3 -o .env "https://github.com/afk-sapien/PokeSim/releases/download/$POKESIM_RELEASE/env.example"
 mkdir -p pokesim-app
 sudo chown 10001:10001 pokesim-app
-docker compose pull
 docker compose up -d
 ```
+
+Every setting below has a default inside `compose.yaml`, so a `.env` file is optional. Add one next
+to `compose.yaml` to change any of them, and download that release's `env.example` as a starting
+point. Settings kept in `.env` survive replacing `compose.yaml` when you upgrade.
 
 Open [localhost:8930](http://localhost:8930) and supply your ROM through the Library.
 You need Docker Engine with Compose on a Linux amd64 host, or Docker Desktop
