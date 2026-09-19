@@ -1,40 +1,32 @@
 # PokeSim
 
-### A little Pokémon adventure that keeps going while you're away.
+### A Pokémon adventure that keeps going while you're away.
 
-Leave Kanto running on your desktop or server. Come back to a new catch, an evolved teammate, or a gym badge you weren't there to see. PokeSim plays Pokémon Red and Blue for you, with a live browser view that lets you follow the journey and take the controls whenever you feel like it.
+PokeSim plays Pokémon Red and Blue by itself, and you watch it happen in your browser. Leave it running and come back to a new catch, an evolution, or a badge you didn't see it earn. Take the controls whenever you want, then hand the game back.
 
-Pick a favorite. Question its battle decisions. Get surprisingly attached to a Lapras named PICKLES.
-
-**Desktop or server · Automatic play · Browser controls · Your own ongoing adventure**
-
-[Take a look](#a-window-into-kanto) · [Make-it-yours options](#your-adventure-your-pace) · [Run your own](#run-your-own-adventure)
+Fair warning: you will get attached to a Lapras named PICKLES, and you will argue with its battle decisions.
 
 ![PokeSim running Pokémon Red, with the live game, six teammates, current goal, and all eight badges](docs/images/live-adventure.jpg)
 
 *The live adventure: the game, the team, and the plan (allegedly), all in one place.*
 
-## A window into Kanto
+## What you get
 
-PokeSim is something to check in on over coffee, keep open on a second screen, or leave exploring while you get on with your day.
+Battles, catches, evolutions and the slow march to the Pokémon League, with the current plan shown next to the screen. Keyboard and touch controls are there when you want to steer, and a speed dial from 0.5× up to Max when you want to skip ahead or slow down and actually watch a fight.
 
-- **Watch a team find its way.** Follow battles, catches, evolutions, and the journey toward the Pokémon League. See what the automatic player is trying to do next.
-- **Jump in whenever you want.** Take over with keyboard or touch controls, then let automatic play continue. Slow things down to watch a battle or speed up the journey.
-- **Get to know your Pokémon.** See your party's nicknames, levels, health, moves, and stats. There is a whole PC full of partners to browse beyond the traveling six.
-- **Keep chasing the next discovery.** Collection, evolution, training, and exploration projects continue after the Hall of Fame.
-- **Catch up on what you missed.** The Journal records milestones with screenshots. Subscribe in your feed reader, or add optional ntfy phone notifications for the moments you care about.
+There's a Journal of milestones with screenshots, which you can follow in a feed reader or as phone notifications through [ntfy](https://ntfy.sh). After the Hall of Fame it keeps going, working on collection, training and evolution projects.
 
-Game decisions run locally. There is no AI subscription, model API key, or per-move bill.
+It decides everything locally with ordinary game logic. No model API key, no subscription, no per-move bill.
 
-## The collection is part of the fun
+## The collection is half the fun
 
-Browse all 151 Kanto species, search by name or type, and see who's registered, who's been spotted, and who's still out there. Open an entry for moves, evolutions, and places to look.
+Browse all 151 Kanto entries, search by name or type, and see who's registered, who's only been spotted, and who's still out there somewhere.
 
 ![The Pokédex showing collection progress, search and filter options, and the original Kanto starters](docs/images/pokedex.jpg)
 
 *One more entry. One more reason to check back.*
 
-The PC lets you search your party and every storage box together, sort by DV star rating, and inspect each partner's stats and training. Four stars mark perfect DVs. The Pokédex keeps track of species with three-star or better partners.
+The PC searches your party and every box at once, sorts by DV rating, and shows each partner's stats and training. Four stars means perfect DVs.
 
 <details>
 <summary><strong>Look inside the PC</strong></summary>
@@ -45,69 +37,84 @@ The PC lets you search your party and every storage box together, sort by DV sta
 
 </details>
 
-## Your adventure, your pace
+You can run several adventures at once, Red and Blue side by side, each with its own saves. Eligible games trade with each other through the actual Cable Club, so trade evolutions work the way they always did. The [desktop and trading guide](docs/desktop.md) covers that.
 
-| In the mood for… | Make it yours |
-| --- | --- |
-| Watching every little moment | Set playback to **1×**, or slow it to **0.5×**. |
-| Checking back after a burst of progress | Choose **2× to 16×**, or **Max** speed. |
-| Being the trainer for a while | Choose **Take control**, then **Let AI play** when you're done. |
+## Bring your own ROM
 
-The automatic player balances the badge journey with collecting and evolution projects, then keeps exploring after the Champion. Playback speed changes how fast the game runs. You can also pick Bulbasaur, Charmander, or Squirtle for a new adventure when creating an adventure, or leave the starter as a surprise. Simulation pace is shared across the library.
+PokeSim ships no ROMs and downloads none. You supply your own clean copy of Pokémon Red or Blue (USA, Europe), legally acquired, as I'm sure it is, like everyone else's. We're all upstanding citizens here and nobody is going to ask any follow-up questions. Your ROM never leaves your computer.
 
-Keep several adventures in one library, including multiple Red and Blue games. Each has independent saves and controls. The application coordinates eligible games through real Cable Club trading, including game-driven trade evolution. See the [desktop and trading guide](docs/desktop.md).
+## Running it
 
-**Still an experimental beta.** Runs have reached the Hall of Fame, but the automatic player can get stuck. A complete campaign, all 151 registrations, and uninterrupted long-term progress are not guaranteed. See [current progress and known limits](RELEASE_STATUS.md).
-
-*Screenshots show a running v0.2.0rc28 adventure with an optional, locally supplied portrait pack. Portraits are not bundled. Screenshots are illustrative. Older release downloads contain the previous single-game application.*
-
-## Run your own adventure
-
-### Python package on your desktop
-
-Launch the Adventure Library, add your own clean **Pokémon Red or Blue (USA, Europe) ROM**, and create one or more named adventures. Start and stop each game independently. Your ROM stays on your computer.
-
-From this source checkout, install [uv](https://docs.astral.sh/uv/getting-started/installation/) and run:
+On your own computer, with [pipx](https://pipx.pypa.io/stable/installation/) and Git:
 
 ```sh
-uv run --python 3.12 --locked pokesim-desktop
+pipx install git+https://github.com/afk-sapien/PokeSim.git
+pokesim-desktop
 ```
 
-For a command available from any folder, install with `uv tool install --python 3.12 .`, then run `pokesim-desktop`. Docker and an always-on server are optional. First setup downloads verified reference data, then prepared games work offline.
+Your browser opens the Library, where you add your ROM and start an adventure. Python 3.11 or newer, tested on 3.12. Without pipx, `python -m pip install git+https://github.com/afk-sapien/PokeSim.git` in a virtual environment does the same thing. `pipx upgrade pokesim` updates it later. The [desktop guide](docs/desktop.md) has released wheels, pinned versions, data locations and troubleshooting.
 
-[Optional Numba acceleration](docs/desktop.md#optional-navigation-acceleration) can speed up repeated path searches at the cost of more memory and startup work. The normal installation uses the Python backend.
-
-The Library opens directly without a sign-in or owner key. Desktop launch and the default Docker port are local-only. For remote access, use an authenticated reverse proxy or a trusted private network. Anyone who can reach the Library can manage its adventures.
-
-Closing a browser tab keeps the games running. Use **Save and quit** to save and stop the application. Your computer must stay awake for games to advance.
-
-Python installation and Docker are the supported distribution paths. The Python install checks target Windows x86-64, macOS Intel and Apple Silicon, and Linux x86-64 and ARM64. Successful CI runs establish platform validation. Older releases do not contain this new library. See the [desktop installation guide](docs/desktop.md) for installation, data locations, import, and troubleshooting.
-
-### In one Docker container
-
-The server runs the same library and child-process architecture. One persistent application folder contains its independent adventures and shared assets. Future releases publish a prebuilt Linux amd64 image to `ghcr.io/afk-sapien/pokesim` and include ready-to-use Compose files. See [installing a published container](docs/self-hosting.md#install-a-published-container) for the download and pull commands. No registry login or source build is needed for a published image.
-
-The current candidate has not been published. For now, build and start this checkout:
+On a server, with Docker:
 
 ```sh
-git clone https://github.com/afk-sapien/PokeSim.git pokesim
-cd pokesim
-cp .env.example .env
+curl -fLO https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.yaml
 mkdir -p pokesim-app
 sudo chown 10001:10001 pokesim-app
-docker compose -f compose.yaml -f compose.build.yaml build
-docker compose -f compose.yaml -f compose.build.yaml up -d --pull never
+docker compose up -d
 ```
 
-Open [localhost:8930](http://localhost:8930) and create adventures in the Library. No sign-in or owner key is required. Setup accepts your own ROMs and prepares the pinned reference data. No ROMs are bundled or downloaded.
+That pulls the published image, so there's nothing to build and no registry login. Open [localhost:8930](http://localhost:8930) and create your first adventure.
 
-The default port is reachable only on the host. For remote access, configure `PUBLIC_URL` to match the external address and use HTTPS. See [self-hosting](docs/self-hosting.md) for configuration and migration.
+To change the port, the data folder or the address you browse to, put the settings in a `.env` file
+next to `compose.yaml`. [env.example](https://github.com/afk-sapien/PokeSim/releases/latest/download/env.example)
+from the same release lists them all. It's optional, and settings kept there survive replacing
+`compose.yaml` on your next upgrade.
 
-**Existing installations:** Stop and back up each old adventure before importing it into a fresh application folder. The original single-game launch is available as `pokesim legacy`, with its Compose configuration preserved in `compose.legacy.yaml`. Never attach the legacy trading coordinator and the new manager to the same adventures.
+<details>
+<summary>Rather write the Compose file yourself?</summary>
 
-## Follow along or help it grow
+This is the short version of what the release downloads. Save it as `compose.yaml`, create the
+`pokesim-app` folder as above, and run `docker compose up -d`:
 
-If this sounds like your kind of background adventure, star the project and check back for updates. Found a strange decision or have an idea that would make it more fun? [Open an issue](https://github.com/afk-sapien/PokeSim/issues).
+```yaml
+services:
+  pokesim:
+    image: ghcr.io/afk-sapien/pokesim:0.1.2
+    container_name: pokesim
+    ports:
+      - "127.0.0.1:8930:8000"
+    environment:
+      PUBLIC_URL: http://localhost:8930
+    volumes:
+      - ./pokesim-app:/data
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    stop_grace_period: 90s
+```
+
+The data folder must be writable by user 10001, which is what the `chown` above does. Change
+`PUBLIC_URL` to the address you'll open in your browser, and keep the published port matching it.
+
+</details>
+
+See [self-hosting](docs/self-hosting.md) for upgrades, offline image archives and building from source.
+
+Either way, the games keep running when you close the tab, and your computer has to stay awake for them to get anywhere. Use **Save and quit** to stop everything cleanly.
+
+**One thing worth knowing about access:** there's no login. Anyone who can reach the Library can manage it, so both the desktop launch and the default Docker port stay on localhost. If you want it reachable from elsewhere, put it behind an authenticated HTTPS proxy or keep it on a private network, and set `PUBLIC_URL` to the address you'll actually use.
+
+**Upgrading from the old single-game version?** Stop and back up each adventure first, then import it into a fresh application folder. The original launcher still exists as `pokesim legacy`. Don't point the old trading coordinator and the new manager at the same games.
+
+## This is still a beta
+
+Runs have reached the Hall of Fame, but the automatic player still gets stuck sometimes. A full campaign, all 151 registrations, and weeks of uninterrupted progress aren't guaranteed. [Current progress and known limits](RELEASE_STATUS.md) is the honest version.
+
+Found a strange decision, or have an idea that would make it more fun? [Open an issue](https://github.com/afk-sapien/PokeSim/issues) or say hello in [Discussions](https://github.com/afk-sapien/PokeSim/discussions).
 
 - [Gameplay and feature guide](docs/guide.md)
 - [Backups, updates, and troubleshooting](docs/operations.md)
@@ -116,8 +123,10 @@ If this sounds like your kind of background adventure, star the project and chec
 - [Code of conduct](CODE_OF_CONDUCT.md)
 - [Getting help](SUPPORT.md)
 
-## A small note on game content
+## Odds and ends
 
-PokeSim is an unofficial fan project, unaffiliated with Pokémon's rights holders. Original code is [MIT licensed](LICENSE). Pokémon ROMs, portrait packs, and generated game datasets are supplied locally and are not included in the distribution. To use your own portraits, place `1.png` through `151.png` in the application's `assets/sprites` folder. Every adventure shares the pack. Legacy single-game mode uses `data/sprites`. Without a supplied image, the dashboard uses a neutral placeholder.
+PokeSim is an unofficial fan project with no connection to Pokémon's rights holders. The code is [MIT licensed](LICENSE). ROMs, portrait packs and generated game data are yours and aren't distributed here.
 
-AI coding assistance was used during development and testing. The automatic player uses local rules. See [third-party notices](THIRD_PARTY_NOTICES.md) and [dependency licensing](docs/licensing.md).
+The screenshots use a portrait pack that isn't included. To use your own, drop `1.png` through `151.png` into the application's `assets/sprites` folder and every adventure will pick them up. Without them you get a neutral placeholder.
+
+AI coding assistance was used while building and testing this. The automatic player itself is plain local rules, not a model. See [third-party notices](THIRD_PARTY_NOTICES.md) and [dependency licensing](docs/licensing.md).

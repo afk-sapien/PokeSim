@@ -4,18 +4,32 @@ Open one PokeSim application to manage a library of independent adventures. Crea
 
 Install PokeSim as a Python package to run it on your desktop, or use one Docker container. The `pokesim-desktop` command opens the same Adventure Library in your browser. Docker is optional. Standalone executables and app bundles are outside the release scope.
 
-## First launch
+## Install
 
-From this source checkout, install [uv](https://docs.astral.sh/uv/getting-started/installation/) and run:
+One command with [pipx](https://pipx.pypa.io/stable/installation/), which also needs Git:
 
 ```sh
-uv run --python 3.12 --locked pokesim-desktop
+pipx install git+https://github.com/afk-sapien/PokeSim.git
 ```
 
-For an installed command:
+That builds the current default branch. Add `@v0.1.2` to the URL to pin a release, or install a
+released wheel without Git:
 
 ```sh
-uv tool install --python 3.12 .
+pipx install https://github.com/afk-sapien/PokeSim/releases/download/v0.1.2/pokesim-0.1.2-py3-none-any.whl
+```
+
+Without pipx, use `python -m pip install git+https://github.com/afk-sapien/PokeSim.git` inside a
+virtual environment. Upgrade with `pipx upgrade pokesim`, which installs a newer version number, or
+`pipx reinstall pokesim` to rebuild the current default branch. Remove it with `pipx uninstall pokesim`.
+
+From a source checkout, [uv](https://docs.astral.sh/uv/getting-started/installation/) runs it
+without installing: `uv run --python 3.12 --locked pokesim-desktop`, or
+`uv tool install --python 3.12 .` for an installed command.
+
+## First launch
+
+```sh
 pokesim-desktop
 ```
 
@@ -102,18 +116,24 @@ The importer copies the adventure and reports its new ID. The original folder re
 
 ## Python installation and platform support
 
-Python 3.11 or newer is required. Python 3.12 is the recommended tested installation version. `uv tool install --python 3.12 .` installs this checkout and its dependencies in an isolated environment and makes `pokesim-desktop` available on your command path. Run `uv tool update-shell` if uv reports that its tool directory is missing from your path, then open a new terminal.
+Python 3.11 or newer is required. Python 3.12 is the recommended tested installation version. pipx
+and `uv tool install --python 3.12 .` both install PokeSim and its dependencies in an isolated
+environment and put `pokesim-desktop` on your command path. Run `pipx ensurepath` (or
+`uv tool update-shell`) if the tool directory is missing from your path, then open a new terminal.
 
-For an ordinary virtual environment, activate it and run `python -m pip install .` from the checkout. Start with `pokesim-desktop` or `python -m pokesim desktop`.
+Installing from a Git URL needs Git and builds the package locally. A released wheel needs neither.
+For an ordinary virtual environment, activate it and run `python -m pip install .` from a checkout.
+Start with `pokesim-desktop` or `python -m pokesim desktop`.
 
 ### Optional navigation acceleration
 
 To try compiled pathfinding, install the optional extra from the checkout:
 
 ```sh
-uv tool install --python 3.12 '.[acceleration]'
+pipx install 'pokesim[acceleration] @ git+https://github.com/afk-sapien/PokeSim.git'
 ```
 
+From a checkout, use `uv tool install --python 3.12 '.[acceleration]'`.
 For an activated virtual environment, use `python -m pip install '.[acceleration]'`.
 For a checkout launched directly with uv, use
 `uv run --python 3.12 --locked --extra acceleration pokesim-desktop`.
