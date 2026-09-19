@@ -65,6 +65,8 @@ still needs internet access unless the reference archive is supplied locally.
 | `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
 | `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.1.2` | Exact published image version, overridden by `compose.build.yaml` for source builds |
 
+Phone notifications need no setting here. Open the Library, choose **Notifications**, generate a topic, and subscribe to it in the [ntfy](https://ntfy.sh) app. See the [guide](guide.md#notifications). `NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY`, and `NTFY_MUTE` are still read from the environment as defaults until notifications are saved in the Library.
+
 The Library opens directly without a sign-in or owner key. Its default published port is local-only. Anyone who can reach the Library can manage adventures, so remote access belongs behind an authenticated HTTPS reverse proxy or on a trusted private network. Point an existing authenticated proxy at the manager and preserve the Host matching `PUBLIC_URL`, which must be the browser-facing address. The application checks Host and Origin and protects browser writes against cross-site requests. These protections do not authenticate remote users. Worker credentials and private ports remain internal.
 
 The Compose service uses an init process to reap children and allows 90 seconds for orderly shutdown. Keep a single manager process per application folder. Do not add Uvicorn workers or share one application volume between containers.
@@ -183,7 +185,7 @@ Edit `.env`, then run `docker compose up -d --pull never`.
 | `PUBLIC_URL` | `http://localhost:8930` | Links in feeds and notifications |
 | `SPEED` | `1` | Game speed, 0 means unlimited |
 | `VIEWER_ONLY` | `0` | 1 disables controls |
-| `NTFY_URL` | empty | Optional notification destination |
+| `NTFY_URL` | empty | Optional notification destination for this historical single-game release. The current application uses the Library's Notifications page |
 | `EVENT_RETENTION_DAYS` | `0` | History retention, 0 keeps everything |
 | `KEEP_AUTOSAVES` | `20` | Recent autosave pairs to retain |
 

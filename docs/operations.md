@@ -83,7 +83,7 @@ Autosaves rotate according to `KEEP_AUTOSAVES`. Their manifests rotate with them
 
 Compose caps container logs at three files of 10 MB each. Monitor available disk space and back up before experimenting with retention. An interrupted write leaves a complete old checkpoint available. A full disk can still prevent new progress from being saved.
 
-ntfy is the optional outbound application integration. When enabled, it sends event titles, descriptions, priorities, screenshots, and links to the configured destination. Tokens stay in local settings. Without ntfy, the runtime does not require a model service or a notification account. Offline acceptance testing is tracked in the release status.
+ntfy is the optional outbound application integration, set up on the Library's Notifications page. When enabled, it sends adventure names, event titles, descriptions, priorities, screenshots, and links to the configured destination. The topic and optional access token are stored in the application database, are included in full backups, and are never returned to the browser. `NTFY_*` environment variables only provide defaults until the page is saved. Without ntfy, the runtime does not require a model service or a notification account. Offline acceptance testing is tracked in the release status.
 
 **Moving from 0.1.0 to 0.2.0rc3**
 

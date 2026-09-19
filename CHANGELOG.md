@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Set up phone notifications from the Library's new Notifications page, with no
+  account or settings file. Choose the ntfy server and topic, generate a random
+  topic, add an optional access token, and send a test notification.
+- Choose which adventures notify and which kinds of news are sent, including a
+  "Stuck or needs attention" kind. Changes reach running adventures right away.
+- Name the adventure in every notification title, and announce completed trades once.
+- Keep `NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY` and `NTFY_MUTE` as the defaults
+  until notifications are saved in the Library.
+
 ## 0.1.2
 
 - Install with one pipx or pip command from the repository, with no checkout, uv,
