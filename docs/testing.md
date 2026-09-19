@@ -158,11 +158,11 @@ the updated workflow. All five desktop targets must pass before publication cont
 Every package must carry the same version and clean source revision. The final
 manifest and `SHA256SUMS` cover desktop, container, Python, and configuration assets.
 
-The workflow uploads a draft, checks every uploaded digest, then makes it public.
-An interrupted upload or verification failure leaves an unpublished draft for review.
-The preflight rejects an existing release, including a draft. After inspecting a
-failed draft, delete only that failed draft before retrying. Never replace a published
-release. Release candidates are marked prerelease based on the `rc` version suffix.
+Publishing a GitHub release starts the workflow, which uploads the downloads and
+checks every uploaded digest. An interrupted upload or verification failure leaves
+the release with incomplete assets. Rerun the workflow manually for the same tag.
+The preflight rejects a release whose downloads are already attached. Never replace
+a completed release. Release candidates are marked prerelease based on the `rc` version suffix.
 
 Publication does not merge the public default branch or upgrade any deployment.
 Keep the public installation page aligned with the newly published version, and

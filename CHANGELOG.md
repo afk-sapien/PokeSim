@@ -1,7 +1,11 @@
 # Changelog
 
-## 0.2.0rc32, release candidate in preparation
+## 0.1.0
 
+- Show the trainer, badges, registrations, League wins, money and play time above
+  the Live game and party panels.
+- Publish GHCR images automatically when a GitHub release is published, with anonymous pull
+  verification, and versioned Compose downloads for Python and Docker releases.
 - Consolidate the Adventure Library and independent Red and Blue workers on main.
 - Coordinate automatic Cable Club trading with protected partners and recovery.
 - Add PC DV star ratings, rating filters, and persistent three-star Pokédex counts.

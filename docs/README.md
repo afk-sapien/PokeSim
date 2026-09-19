@@ -10,6 +10,7 @@ This index separates current instructions, future plans, and historical evidence
 | Python desktop setup and save locations | [Desktop](desktop.md) |
 | Current server installation | [Server setup](../README.md#in-one-docker-container) |
 | Prebuilt release image | [Docker and migration](self-hosting.md) |
+| Publishing Python and Docker releases | [Release workflow and GHCR setup](publishing.md) |
 | DV ratings, level 100 stars, and perfect finds | [Collection goals](collection-goals.md) |
 | Gameplay, settings, and APIs | [Feature guide](guide.md) |
 | PC views, offers, and Pokémon locks | [PC and trading](pc-trading.md) |

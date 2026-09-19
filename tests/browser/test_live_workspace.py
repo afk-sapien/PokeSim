@@ -36,7 +36,8 @@ def test_live_columns_and_partner_details(page, live_game, width):
     if width > 850:
         assert abs(game_box['y'] - team_box['y']) < 1
         assert abs(game_box['height'] - team_box['height']) < 1
-    assert trainer_box['y'] >= max(game_box['y'] + game_box['height'], team_box['y'] + team_box['height'])
+    # The trainer, badge and totals summary sits above the game and party panels.
+    assert trainer_box['y'] + trainer_box['height'] <= min(game_box['y'], team_box['y'])
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
 
     team_height = page.locator('#team').bounding_box()['height']

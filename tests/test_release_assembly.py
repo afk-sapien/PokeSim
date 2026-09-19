@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+from pathlib import Path
 import tarfile
 import zipfile
 
@@ -115,3 +116,65 @@ def test_python_and_docker_release_excludes_standalone_archives(assets):
     sums = dict(line.split('  ', 1)[::-1] for line in (assets / 'SHA256SUMS').read_text().splitlines())
     assert set(sums) == {path.name for path in assets.iterdir()} - {'SHA256SUMS'}
     assert all(digest(assets / name) == checksum for name, checksum in sums.items())
+
+
+@pytest.fixture
+def registry_assets(assets):
+    for name in DESKTOP_ARCHIVES:
+        for suffix in ('', '.sha256', '.json'):
+            (assets / (name + suffix)).unlink()
+    path = assets / 'image-metadata.json'
+    metadata = json.loads(path.read_text())
+    metadata['RepoTags'] = [f'ghcr.io/afk-sapien/pokesim:{VERSION}']
+    metadata['RepoDigests'] = ['ghcr.io/afk-sapien/pokesim@sha256:' + 'b' * 64]
+    path.write_text(json.dumps(metadata))
+    # Use the actual shipped configuration, including its future release default.
+    root = Path(__file__).resolve().parents[1]
+    (assets / 'compose.yaml').write_text((root / 'compose.yaml').read_text())
+    (assets / 'env.example').write_text((root / '.env.example').read_text())
+    return assets
+
+
+def test_registry_release_pins_configuration_and_records_digest(registry_assets):
+    image = f'ghcr.io/afk-sapien/pokesim:{VERSION}'
+    assemble(registry_assets, VERSION, REVISION, include_desktop=False, image=image)
+    manifest = json.loads((registry_assets / 'manifest.json').read_text())
+    assert manifest['image'] == image
+    assert manifest['image_digest'] == 'ghcr.io/afk-sapien/pokesim@sha256:' + 'b' * 64
+    assert '${POKESIM_IMAGE:-' + image + '}' in (registry_assets / 'compose.yaml').read_text()
+    assert f'POKESIM_IMAGE={image}\n' in (registry_assets / 'env.example').read_text()
+    sums = dict(line.split('  ', 1)[::-1]
+                for line in (registry_assets / 'SHA256SUMS').read_text().splitlines())
+    assert set(sums) == {path.name for path in registry_assets.iterdir()} - {'SHA256SUMS'}
+    assert all(digest(registry_assets / name) == checksum for name, checksum in sums.items())
+    before = (registry_assets / 'SHA256SUMS').read_bytes()
+    assemble(registry_assets, VERSION, REVISION, include_desktop=False, image=image)
+    assert (registry_assets / 'SHA256SUMS').read_bytes() == before
+
+
+@pytest.mark.parametrize('image', [
+    'ghcr.io/afk-sapien/pokesim:latest',
+    'ghcr.io/afk-sapien/pokesim:0.1.0',
+    f'docker.io/afk-sapien/pokesim:{VERSION}',
+])
+def test_registry_release_rejects_wrong_destination_or_version(registry_assets, image):
+    with pytest.raises(ValueError, match='exact release version'):
+        assemble(registry_assets, VERSION, REVISION, include_desktop=False, image=image)
+    assert not (registry_assets / 'manifest.json').exists()
+
+
+@pytest.mark.parametrize('field,value', [
+    ('RepoTags', []),
+    ('RepoDigests', []),
+    ('RepoDigests', ['ghcr.io/someone/else@sha256:' + 'b' * 64]),
+    ('RepoDigests', ['ghcr.io/afk-sapien/pokesim@sha256:invalid']),
+])
+def test_registry_release_requires_published_image_evidence(registry_assets, field, value):
+    path = registry_assets / 'image-metadata.json'
+    metadata = json.loads(path.read_text())
+    metadata[field] = value
+    path.write_text(json.dumps(metadata))
+    with pytest.raises(ValueError, match='Registry image'):
+        assemble(registry_assets, VERSION, REVISION, include_desktop=False,
+                 image=f'ghcr.io/afk-sapien/pokesim:{VERSION}')
+    assert not (registry_assets / 'manifest.json').exists()
