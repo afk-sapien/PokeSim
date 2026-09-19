@@ -18,12 +18,15 @@ def test_pc_lock_persists_after_refresh_even_when_trading_is_offline(page, game,
     url, store, emu, _ = game
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(url + '/pc?scope=all')
-    row = page.locator('.pc-list-row').filter(has_text='BUD')
+    # All Pokemon is a compact grid; Lock lives in each partner's details.
+    row = page.locator('#pc-trade-action')
+    page.locator('#pc-grid .pc-mon').filter(has_text='BUD').click()
     expect(row.get_by_role('button', name='Lock Pokémon', exact=True)).to_be_enabled()
     row.get_by_role('button', name='Lock Pokémon', exact=True).click()
     expect(row.get_by_role('button', name='Unlock Pokémon', exact=True)).to_be_visible()
     assert any(value['state'] == 'locked' for value in store.trade_preferences().values())
     page.reload()
+    page.locator('#pc-grid .pc-mon').filter(has_text='BUD').click()
     expect(row.get_by_role('button', name='Unlock Pokémon', exact=True)).to_be_visible()
     row.get_by_role('button', name='Unlock Pokémon', exact=True).click()
     expect(row.get_by_role('button', name='Lock Pokémon', exact=True)).to_be_visible()
@@ -44,7 +47,8 @@ def test_trading_availability_and_viewer_mode_reach_real_controls(page, game, mo
     assert any(value['state'] == 'withdrawn' for value in store.trade_preferences().values())
     monkeypatch.setattr(config, 'VIEWER_ONLY', True)
     page.goto(url + '/pc?scope=all')
-    expect(page.get_by_role('button', name='Lock Pokémon', exact=True).first).to_be_disabled()
+    page.locator('#pc-grid .pc-mon').first.click()
+    expect(page.locator('#pc-trade-action').get_by_role('button', name='Lock Pokémon', exact=True)).to_be_disabled()
     assert emu.commands == []
 
 

@@ -1,3 +1,3 @@
 """pokesim: a Pokemon Red that plays itself."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

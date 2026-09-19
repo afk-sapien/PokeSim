@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Show All Pokémon in the PC as a compact card grid again, so many more partners
+  fit on screen. Lock and trade actions are in each partner's details.
+
 ## 0.1.0
 
 - Show the trainer, badges, registrations, League wins, money and play time above

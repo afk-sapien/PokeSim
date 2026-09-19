@@ -104,7 +104,7 @@ function render() {
   $('#pc-order-control').hidden = !all
   $('#pc-power-note').hidden = !all
   $('#pc-workspace').classList.toggle('pc-workspace-all', all)
-  $('#pc-grid').classList.toggle('pc-list', all)
+  $('#pc-grid').classList.toggle('pc-all-grid', all)
   $('#pc-boxes-view').setAttribute('aria-pressed', String(!all))
   $('#pc-all-view').setAttribute('aria-pressed', String(all))
   const key = JSON.stringify([storage, party, selectedBox, query, all, sort, order, rating, globalThis.TradeUI?.status()])
@@ -118,7 +118,7 @@ function render() {
   const focusedMon = document.activeElement?.dataset.mon
   const card = (mon, index) => `<button class="pc-mon${mon.perfect_dvs ? ' perfect-entry' : ''}" data-mon="${index}" aria-label="${esc(mon.nick || mon.name)}, level ${mon.level}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${', ' + ratingLabel(mon)}${isLocked(mon) ? ', locked' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}"><span class="eyebrow">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || index + 1}</span><img loading="lazy" src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt="" width="72" height="72"><strong>${esc(mon.nick || mon.name)}${lockBadge(mon)}${ratingBadge(mon)}</strong><small>${esc(mon.name)} · Lv. ${mon.level}</small>${all ? `<span class="pc-metrics"><span class="pc-power">Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Elite Four wins <b>${Number.isFinite(mon.elite_four_wins) ? mon.elite_four_wins.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span>` : ''}</button>`
   if (all) {
-    $('#pc-grid').innerHTML = residents.map((mon, index) => `<div class="pc-list-row">${card(mon, index)}<div class="pc-list-trade">${globalThis.TradeUI?.control(mon.trade_key) || ''}</div></div>`).join('') || '<p class="dex-empty">No Pokémon match this search.</p>'
+    $('#pc-grid').innerHTML = residents.map(card).join('') || '<p class="dex-empty">No Pokémon match these filters.</p>'
   } else {
     $('#pc-grid').innerHTML = Array.from({length: selectedBox === 0 ? 6 : 20}, (_, slot) => {
       const index = residents.findIndex(mon => mon.position === slot + 1)
