@@ -47,7 +47,7 @@ jobs:
         run: uv run --locked python tools/build_desktop.py
       - name: Extract and test the actual desktop download
         run: uv run --locked python tools/check_desktop_archive.py
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: pokesim-desktop-${{ matrix.label }}
           path: |
