@@ -1,0 +1,326 @@
+{
+  "status": "validated, pending next game release",
+  "source_sha256": "f5723856394d25e41bf2b1e54fdb785f5e672a6bfb54f765436d606fcf9ae0d5",
+  "source_unchanged": true,
+  "comparison_frames": 54000,
+  "method": "Copied Red checkpoint, saved strategic policy, ordinary inputs, maximum speed, and 30-frame event observation cadence. Candidate uses the new event baseline rule. Emulator integration tests exercise the actual observation method.",
+  "baseline_release_events": [
+    {
+      "frame": 53118,
+      "titles": [
+        "Said goodbye to a spare Wigglytuff"
+      ],
+      "party": [
+        [
+          75,
+          "SPROUT",
+          100
+        ],
+        [
+          164,
+          "GIZMO",
+          97
+        ],
+        [
+          154,
+          "BUTTON",
+          100
+        ],
+        [
+          136,
+          "MUFFIN",
+          100
+        ],
+        [
+          19,
+          "PICKLES",
+          46
+        ],
+        [
+          101,
+          "PIXEL",
+          58
+        ]
+      ],
+      "screen": "??????????????      \n?            ?      \n??WI????????????????\n?   ?              ?\n? DE? MOCHI        ?\n?   ?         ?64  ?\n? RE? PUDDING      ?\n?   ?         ?34  ?\n? CH??PIXEL        ?\n?   ?         ?58  ?\n? SE? JOL???????????\n?????    ?         ?\n????????????????????\n?                  ?\n?taken out.        ?\n?                  ?\n?Got PIXE          ?\n????????????????????"
+    }
+  ],
+  "candidate_release_events": [],
+  "candidate_transfer_observations": [
+    {
+      "frame": 53026,
+      "valid": false,
+      "party_hp": [
+        [
+          333,
+          381
+        ],
+        [
+          323,
+          323
+        ],
+        [
+          345,
+          349
+        ],
+        [
+          360,
+          385
+        ],
+        [
+          195,
+          195
+        ],
+        [
+          251,
+          195
+        ]
+      ],
+      "party": [
+        [
+          75,
+          "SPROUT",
+          100
+        ],
+        [
+          164,
+          "GIZMO",
+          97
+        ],
+        [
+          154,
+          "BUTTON",
+          100
+        ],
+        [
+          136,
+          "MUFFIN",
+          100
+        ],
+        [
+          19,
+          "PICKLES",
+          46
+        ],
+        [
+          101,
+          "PIXEL",
+          46
+        ]
+      ],
+      "arrivals": [],
+      "new": [],
+      "releases": []
+    },
+    {
+      "frame": 53058,
+      "valid": true,
+      "party_hp": [
+        [
+          333,
+          381
+        ],
+        [
+          323,
+          323
+        ],
+        [
+          345,
+          349
+        ],
+        [
+          360,
+          385
+        ],
+        [
+          195,
+          195
+        ],
+        [
+          251,
+          252
+        ]
+      ],
+      "party": [
+        [
+          75,
+          "SPROUT",
+          100
+        ],
+        [
+          164,
+          "GIZMO",
+          97
+        ],
+        [
+          154,
+          "BUTTON",
+          100
+        ],
+        [
+          136,
+          "MUFFIN",
+          100
+        ],
+        [
+          19,
+          "PICKLES",
+          46
+        ],
+        [
+          101,
+          "PIXEL",
+          58
+        ]
+      ],
+      "arrivals": [
+        [
+          43764392,
+          101,
+          "PIXEL",
+          1
+        ]
+      ],
+      "new": [],
+      "releases": []
+    },
+    {
+      "frame": 53088,
+      "valid": true,
+      "party_hp": [
+        [
+          333,
+          381
+        ],
+        [
+          323,
+          323
+        ],
+        [
+          345,
+          349
+        ],
+        [
+          360,
+          385
+        ],
+        [
+          195,
+          195
+        ],
+        [
+          251,
+          252
+        ]
+      ],
+      "party": [
+        [
+          75,
+          "SPROUT",
+          100
+        ],
+        [
+          164,
+          "GIZMO",
+          97
+        ],
+        [
+          154,
+          "BUTTON",
+          100
+        ],
+        [
+          136,
+          "MUFFIN",
+          100
+        ],
+        [
+          19,
+          "PICKLES",
+          46
+        ],
+        [
+          101,
+          "PIXEL",
+          58
+        ]
+      ],
+      "arrivals": [],
+      "new": [],
+      "releases": []
+    },
+    {
+      "frame": 53118,
+      "valid": true,
+      "party_hp": [
+        [
+          333,
+          381
+        ],
+        [
+          323,
+          323
+        ],
+        [
+          345,
+          349
+        ],
+        [
+          360,
+          385
+        ],
+        [
+          195,
+          195
+        ],
+        [
+          251,
+          252
+        ]
+      ],
+      "party": [
+        [
+          75,
+          "SPROUT",
+          100
+        ],
+        [
+          164,
+          "GIZMO",
+          97
+        ],
+        [
+          154,
+          "BUTTON",
+          100
+        ],
+        [
+          136,
+          "MUFFIN",
+          100
+        ],
+        [
+          19,
+          "PICKLES",
+          46
+        ],
+        [
+          101,
+          "PIXEL",
+          58
+        ]
+      ],
+      "arrivals": [],
+      "new": [],
+      "releases": []
+    }
+  ],
+  "python_tests": {
+    "passed": 481,
+    "skipped": 1
+  },
+  "baseline_regressions_failed": 3,
+  "candidate_regressions_passed": 3,
+  "deployment": "No live game deployment or restart. Batch this journal correction into the next necessary game release.",
+  "same_retained_party_and_boxes_at_confirmation": true
+}

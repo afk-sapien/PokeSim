@@ -1,0 +1,149 @@
+{
+  "release": "0.2.0rc17",
+  "revision": "646b32b4be0f4671d32ded62963836e654af612f",
+  "deployments": [
+    {
+      "edition": "red",
+      "backup": "/docker/pokesim/backups/20260915T072856Z-rc17/before.tar",
+      "image": "pokesim:0.2.0rc17-646b32b",
+      "image_id": "sha256:385799d78a52b738df07ec7e0ebe0e5b4ecf95a7e68135ce090edc36a26373a2",
+      "revision": "646b32b4be0f4671d32ded62963836e654af612f",
+      "timestamp": 1789457352.5202265,
+      "previous_image": "pokesim:0.2.0rc16-caa092b",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 116,
+      "reloads": 0,
+      "progress": {
+        "state": "exploring",
+        "last_achievement": {
+          "id": 8478,
+          "title": "GIZMO grew to level 40",
+          "ts": 1789457183.5576286,
+          "age_seconds": 168
+        }
+      }
+    },
+    {
+      "edition": "blue",
+      "backup": "/docker/pokesim-blue/backups/20260915T072929Z-rc17/before.tar",
+      "image": "pokesim:0.2.0rc17-646b32b",
+      "image_id": "sha256:385799d78a52b738df07ec7e0ebe0e5b4ecf95a7e68135ce090edc36a26373a2",
+      "revision": "646b32b4be0f4671d32ded62963836e654af612f",
+      "timestamp": 1789457378.2117443,
+      "previous_image": "pokesim:0.2.0rc16-caa092b",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 119,
+      "reloads": 0,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 3625,
+          "title": "CRICKET grew to level 30",
+          "ts": 1789457332.318355,
+          "age_seconds": 45
+        }
+      }
+    }
+  ],
+  "public_checks": [
+    {
+      "edition": "red",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/sprites/25.png",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/sprites/25.png",
+      "status": 200
+    }
+  ],
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 2,
+    "state": "waiting_for_overworld",
+    "error": null,
+    "last_check": 1789457469.3741403,
+    "last_trade": 1789456401.4560392,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789453929155376363",
+        "ts": 1789453929.1553776,
+        "reason": "Red registers Vulpix. Blue registers Machamp"
+      },
+      {
+        "id": "1789456401456038088",
+        "ts": 1789456401.4560392,
+        "reason": "Red registers Machamp. Blue registers Golem"
+      }
+    ],
+    "allow_last_copies": true,
+    "mew_event": false
+  },
+  "browser_verified": "Board shows last-copy labels, protections, and existing exchange history",
+  "python_tests": 416,
+  "python_skipped": 1,
+  "javascript_tests": 7,
+  "new_endurance_interval": true
+}

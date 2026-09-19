@@ -14,8 +14,8 @@ def directory():
     return Path(os.environ.get('GAME_DATA_DIR', str(Path(os.environ.get('DATA_DIR', 'data')) / 'game-data')))
 
 
-def bundle_path():
-    root = directory()
+def bundle_path(root=None):
+    root = directory() if root is None else Path(root)
     try:
         pointer = json.loads((root / 'current.json').read_text())
         bundle_id = pointer['bundle']
@@ -26,10 +26,10 @@ def bundle_path():
         raise RuntimeError('Game data is missing or invalid. Run the documented prepare-data command before starting pokesim.') from error
 
 
-def load(name):
+def load(name, *, directory=None):
     if name not in FILES:
         raise ValueError('Unknown game data file')
-    root = bundle_path()
+    root = bundle_path(directory)
     try:
         manifest = json.loads((root / 'manifest.json').read_text())
         raw = (root / name).read_bytes()

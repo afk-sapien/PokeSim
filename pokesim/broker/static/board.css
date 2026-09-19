@@ -1,0 +1,141 @@
+* { box-sizing:border-box }
+:root { color-scheme:light }
+body { margin:0 }
+body { background:#f5f3ed }
+body { color:#292c29 }
+body { font:14px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+h1,h2,h3,p { margin:0 }
+h1 { font-size:34px }
+h1 { letter-spacing:-1.2px }
+h2 { font-size:21px }
+h2 { line-height:1.25 }
+h2 { letter-spacing:-.6px }
+h3 { font-size:16px }
+h3 { line-height:1.3 }
+dl,dd { margin:0 }
+
+.eyebrow { font:10px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace }
+.eyebrow { letter-spacing:1.5px }
+.eyebrow { text-transform:uppercase }
+.eyebrow { color:#77796f }
+
+.topbar { display:flex }
+.topbar { align-items:center }
+.topbar { gap:32px }
+.topbar { height:88px }
+.topbar { max-width:1100px }
+.topbar { margin:auto }
+.topbar { padding:0 24px }
+.topbar { border-bottom:1px solid #deded5 }
+.topbar-note { margin-left:auto }
+.topbar-note { font:10px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace }
+.topbar-note { letter-spacing:1.2px }
+.topbar-note { text-transform:uppercase }
+.topbar-note { color:#77796f }
+.brand { display:flex }
+.brand { align-items:center }
+.brand { gap:12px }
+.brand { font-weight:750 }
+.brand { font-size:23px }
+.brand { letter-spacing:-1px }
+.brand-mark { display:grid }
+.brand-mark { place-items:center }
+.brand-mark { width:38px }
+.brand-mark { height:38px }
+.brand-mark { background:#bc4734 }
+.brand-mark { color:#fffdf4 }
+.brand-mark { border-radius:11px }
+.brand-mark { font-size:28px }
+.brand-mark { padding-bottom:4px }
+.brand-edition { font:9px ui-monospace,monospace }
+.brand-edition { letter-spacing:1px }
+.brand-edition { color:#a7503d }
+.brand-edition { border-left:1px solid #d8d7cd }
+.brand-edition { padding-left:14px }
+
+main { max-width:1100px }
+main { margin:auto }
+main { padding:0 24px 48px }
+
+.page-intro { padding:36px 0 28px }
+.page-intro h1 { margin:10px 0 12px }
+.intro-copy { max-width:62ch }
+.intro-copy { color:#5d6159 }
+
+.runs { display:grid }
+.runs { grid-template-columns:repeat(auto-fit,minmax(280px,1fr)) }
+.runs { gap:16px }
+.runs { margin-bottom:32px }
+.run { padding:20px 22px }
+.run { background:#fffef9 }
+.run { border:1px solid #dcded3 }
+.run { border-radius:16px }
+.run h2 { margin:6px 0 8px }
+.run-note { color:#7c8175 }
+.run-note { font-size:12px }
+.run-down { color:#a7503d }
+.run dl { display:grid }
+.run dl { grid-template-columns:repeat(3,minmax(0,1fr)) }
+.run dl { gap:12px }
+.run dl { margin-top:16px }
+.run dd { font-size:23px }
+.run dd { letter-spacing:-.8px }
+.run dd { margin-top:4px }
+.run dd small { font-size:11px }
+.run dd small { color:#9a9d90 }
+.run dd small { letter-spacing:0 }
+
+.deals h2 { margin-bottom:16px }
+.deal { padding:18px 22px 20px }
+.deal { background:#fffef9 }
+.deal { border:1px solid #dcded3 }
+.deal { border-radius:16px }
+.deal { margin-bottom:12px }
+.deal-premium { border-color:#c9b48a }
+.deal-premium { background:#fffcf1 }
+.price { color:#77796f }
+.deal-premium .price { color:#8a6a26 }
+.chip { margin-left:10px }
+.chip { padding:2px 8px }
+.chip { border:1px solid #e0c3ba }
+.chip { border-radius:999px }
+.chip { background:#fbf0ec }
+.chip { color:#a7503d }
+
+.swap { display:grid }
+.swap { grid-template-columns:1fr auto 1fr }
+.swap { align-items:center }
+.swap { gap:16px }
+.swap { margin:12px 0 14px }
+.arrows { font-size:22px }
+.arrows { color:#9a9d90 }
+.side { display:flex }
+.side { align-items:center }
+.side { gap:14px }
+.side { min-width:0 }
+.side-sprite { width:72px }
+.side-sprite { height:72px }
+.side-sprite { border-radius:12px }
+.side-sprite { background:#f1f1e7 }
+.side-sprite { flex:none }
+.side h3 { margin:3px 0 4px }
+.side-meta { font-size:12px }
+.side-meta { color:#7c8175 }
+.side-keeper { color:#a7503d }
+.side-keeper { font-weight:600 }
+
+.reason { border-top:1px solid #eceade }
+.reason { padding-top:12px }
+.reason { color:#5d6159 }
+
+.empty { padding:24px }
+.empty { background:#fffef9 }
+.empty { border:1px dashed #dcded3 }
+.empty { border-radius:16px }
+.empty { color:#7c8175 }
+
+@media (max-width:640px) {
+  .swap { grid-template-columns:1fr }
+  .arrows { text-align:center }
+  h1 { font-size:27px }
+}

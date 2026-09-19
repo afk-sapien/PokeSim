@@ -178,3 +178,73 @@ def test_unrelated_party_replacement_is_not_an_evolution():
     prev=snap(party=(PartyMon(0x99,30,30,16,'BUDDY'),))
     cur=snap(party=(PartyMon(0x54,30,30,16,'BUDDY'),))
     assert 'evolve' not in types(diff(prev,cur,RunMemory()))
+
+def test_a_withdrawal_caught_mid_commit_is_not_reported_as_a_release():
+    # The box slot clears a few frames before the party grows, so the in-between snapshot looks
+    # like a release. The guard only lets it through if the population stays down afterwards.
+    mem = RunMemory(seen_maps={1})
+    prev = snap(stored_pokemon=((0, 0x54, 9, 'PIKA'), (0, 0x99, 3, '')), box_counts=(2,) + (0,) * 11)
+    midway = snap(stored_pokemon=((0, 0x99, 3, ''),), box_counts=(1,) + (0,) * 11)
+    evs = diff(prev, midway, mem)
+    assert types(evs) == ['release']
+    landed = snap(party=midway.party + (PartyMon(0x54, 10, 10, 9, 'PIKA'),),
+                  stored_pokemon=midway.stored_pokemon, box_counts=(1,) + (0,) * 11)
+    assert not evs[0].still(landed), 'the party gained it, so nothing was released'
+
+    # A real release keeps the population down.
+    assert evs[0].still(midway)
+
+
+def test_party_first_withdrawal_is_not_a_release_after_checkpoint():
+    before = snap(frame=100, stored_pokemon=((0, 0x83, 70, 'YELLMAN'),))
+    midway = dataclasses.replace(before, frame=130,
+        party=before.party + (PartyMon(0x83, 200, 200, 70, 'YELLMAN'),))
+    memory = RunMemory(seen_maps={1})
+    assert 'release' not in types(diff(before, midway, memory))
+    memory = RunMemory.from_dict(memory.to_dict())
+    after = dataclasses.replace(midway, frame=160, stored_pokemon=())
+    assert 'release' not in types(diff(midway, after, memory))
+    assert memory.party_arrivals == []
+
+
+def test_withdrawal_credit_does_not_hide_another_individuals_release():
+    before = snap(frame=100, stored_pokemon=((0, 0x54, 9, 'PIKA'), (0, 0x54, 5, 'SPARE')))
+    midway = dataclasses.replace(before, frame=130,
+        party=before.party + (PartyMon(0x54, 10, 10, 9, 'PIKA'),))
+    memory = RunMemory(seen_maps={1})
+    diff(before, midway, memory)
+    after = dataclasses.replace(midway, frame=160, stored_pokemon=())
+    releases = [e for e in diff(midway, after, memory) if e.type == 'release']
+    assert len(releases) == 1
+    assert releases[0].still(after)
+
+
+def test_old_or_rewound_arrivals_cannot_suppress_real_release():
+    for observed_at in (0, 2000):
+        memory = RunMemory(seen_maps={1}, party_arrivals=[[observed_at, 0x54, 'PIKA', 1]])
+        before = snap(frame=1000, stored_pokemon=((0, 0x54, 9, 'PIKA'),))
+        after = dataclasses.replace(before, frame=1030, stored_pokemon=())
+        releases = [e for e in diff(before, after, memory) if e.type == 'release']
+        assert len(releases) == 1
+        assert releases[0].still(after)
+
+
+def test_release_confirmation_tracks_individual_instead_of_total_population():
+    before = snap(stored_pokemon=((0, 0x54, 9, 'PIKA'), (0, 0x99, 3, 'BUD')))
+    midway = dataclasses.replace(before, stored_pokemon=((0, 0x99, 3, 'BUD'),))
+    release = next(e for e in diff(before, midway, RunMemory()) if e.type == 'release')
+    landed = dataclasses.replace(midway, stored_pokemon=(),
+        party=midway.party + (PartyMon(0x54, 10, 10, 9, 'PIKA'),))
+    assert not release.still(landed)
+
+
+def test_redeposit_cancels_arrival_credit_before_real_release():
+    boxed = snap(frame=100, stored_pokemon=((0, 0x54, 9, 'PIKA'),))
+    party = dataclasses.replace(boxed, frame=130, stored_pokemon=(),
+        party=boxed.party + (PartyMon(0x54, 10, 10, 9, 'PIKA'),))
+    memory = RunMemory(seen_maps={1}, party_arrivals=[[120, 0x54, 'PIKA', 1]])
+    deposited = dataclasses.replace(boxed, frame=160)
+    diff(party, deposited, memory)
+    assert memory.party_arrivals == []
+    released = dataclasses.replace(deposited, frame=190, stored_pokemon=())
+    assert 'release' in types(diff(deposited, released, memory))

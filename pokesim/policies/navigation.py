@@ -9,7 +9,15 @@ WATER_TILESETS = {"OVERWORLD", "PLATEAU", "FOREST", "CAVERN", "SHIP_PORT"}
 OPTIONAL_LIFTS = {MAPS["CELADON_MART_ELEVATOR"], MAPS["SILPH_CO_ELEVATOR"]}
 FORCED = {(m, x, y): (m, tx, ty) for m, w in WORLD.items() for x, y, tx, ty in w.get("forced_moves", [])}
 FORCED[(MAPS["VICTORY_ROAD_3F"], 23, 15)] = (MAPS["VICTORY_ROAD_2F"], 22, 16)
+MANSION_FALLS = {(MAPS['POKEMON_MANSION_3F'], x, 14): (MAPS['POKEMON_MANSION_1F'], 16, 14)
+                 for x in (16, 17)}
 LEDGES = {(dr, a, b) for dr, a, b in DATA["ledges"]}
+SEAFOAM_HOLES = {(MAPS[name], x, y) for name, points in (
+    ("SEAFOAM_ISLANDS_1F", ((17, 6), (24, 6))),
+    ("SEAFOAM_ISLANDS_B1F", ((18, 6), (23, 6))),
+    ("SEAFOAM_ISLANDS_B2F", ((19, 6), (22, 6))),
+    ("SEAFOAM_ISLANDS_B3F", ((3, 16), (6, 16))),
+) for x, y in points}
 
 
 class Navigator:
@@ -28,22 +36,35 @@ class Navigator:
         self.can_surf = False
         self.can_cut = False
         self.story_blocks = set()
+        self.closed_passages = set()
         self.live_map = None
         self.live_positions = []
+        self._world_indices = {}
+        self._graph_signature = None
+        self._map_signatures = {}
+        self._neighbor_cache = {}
+        self._compiled_graph = None
+        self._open_navigation = None
 
     def update_live(self, snapshot, memory):
         self.live_map = snapshot.map
         self.live_positions = [(memory[0xC215 + i * 16] - 4, memory[0xC214 + i * 16] - 4)
                                for i in range(min(15, len(WORLD.get(snapshot.map, {}).get("objects", []))))]
 
-    def update_story(self, snapshot):
+    def update_story(self, snapshot, *, allow_remote_puzzles=True):
         can_strength = any(70 in p.moves for p in snapshot.party)
         self.tile_overrides = {(m, x, y): tile for m, w in WORLD.items() for flag, x, y, tile in w.get("opened_tiles", [])
-                               if event_set(snapshot.event_flags, flag) or (m != snapshot.map and can_strength)}
+                               if event_set(snapshot.event_flags, flag)
+                               or (allow_remote_puzzles and m != snapshot.map and can_strength)}
+        # Puzzle switches reset on reentry. Old successful steps cannot reopen a gate.
+        self.closed_passages = {(m, x, y) for m, w in WORLD.items()
+                                for _, x, y, _ in w.get("opened_tiles", [])
+                                if self.active_tile(w, x, y) not in w["passable"]}
         self.can_surf = bool(snapshot.badges & 16 and any(57 in p.moves for p in snapshot.party))
         self.can_cut = bool(snapshot.badges & 2 and any(15 in p.moves for p in snapshot.party))
         drinks = {ITEMS[n] for n in ("FRESH_WATER", "SODA_POP", "LEMONADE")}
-        self.story_blocks = set()
+        # Routine routes use ladders to avoid scripted falls and downstream currents.
+        self.story_blocks = set(SEAFOAM_HOLES)
         if not all(event_set(snapshot.event_flags, flag) for flag in
                    ('EVENT_SEAFOAM3_BOULDER1_DOWN_HOLE', 'EVENT_SEAFOAM3_BOULDER2_DOWN_HOLE')):
             # The current pushes the player away from these apparent exits.
@@ -63,7 +84,7 @@ class Navigator:
                         self.story_blocks.update((m, x + dx, y + dy) for dx in range(2) for dy in range(2))
         cleared = set()
         for index, (m, obj_id) in enumerate(DATA["toggle_objects"]):
-            if obj_id >= len(WORLD[m]["objects"]):
+            if m not in WORLD or obj_id >= len(WORLD[m]["objects"]):
                 continue
             if index // 8 < len(snapshot.hidden_objects) and snapshot.hidden_objects[index // 8] & (1 << (index % 8)):
                 obj = WORLD[m]["objects"][obj_id]
@@ -104,6 +125,9 @@ class Navigator:
             if pos[0] == source[0] and abs(pos[1] - source[1]) + abs(pos[2] - source[2]) > 2:
                 self.attempt = None
                 return
+            if not self.connected_maps(source[0], pos[0]):
+                self.attempt = None
+                return
             # Only record the observed direction. Ledges and warps are not reversible by assumption.
             self.edges.setdefault(source, {})[direction] = pos
             self.blocked.pop((source, direction), None)
@@ -138,8 +162,46 @@ class Navigator:
         for p, dr, q in data.get("edges", []):
             if WORLD.get(p[0], {}).get("forced_moves"):
                 continue
+            if not self.connected_maps(p[0], q[0]):
+                continue
             self.edges.setdefault(tuple(p), {})[dr] = tuple(q)
         self.restore()
+
+    def connected_maps(self, source, target):
+        """Exclude distant scripted moves from the learned walking graph."""
+        if not self.use_world or source == target or source not in WORLD or target not in WORLD:
+            return True
+        world = WORLD[source]
+        if any(destination == target for _, destination, _ in world['connections']):
+            return True
+        if any(destination and destination[0] == target
+               for destination in (self._warp(source, warp) for warp in world['warps'])):
+            return True
+        return any(pos[0] == source and destination[0] == target
+                   for transitions in (FORCED, MANSION_FALLS)
+                   for pos, destination in transitions.items())
+
+    def open_route(self, snapshot, targets):
+        """Find a route that needs no additional puzzle switches on any floor."""
+        if self._open_navigation is None:
+            self._open_navigation = Navigator()
+        navigation = self._open_navigation
+        previous_gates = navigation.closed_passages
+        navigation.update_story(snapshot, allow_remote_puzzles=False)
+        if (navigation.closed_passages != previous_gates
+                or navigation.live_map != self.live_map
+                or navigation.live_positions != self.live_positions):
+            navigation.path.clear()
+        navigation.use_world = self.use_world
+        navigation.live_map = self.live_map
+        navigation.live_positions = self.live_positions
+        navigation.edges = self.edges
+        navigation.blocked = self.blocked
+        direction = navigation.route((snapshot.map, snapshot.x, snapshot.y), targets, snapshot.frame)
+        if direction is not None:
+            self.path = deque(navigation.path)
+            self.target = navigation.target
+        return direction
 
     @staticmethod
     def _tile(world, x, y):
@@ -152,6 +214,9 @@ class Navigator:
         x, y, destination, index = warp
         if [x, y] in WORLD.get(source, {}).get("inactive_warps", []):
             return None
+        if destination == -1 and source == MAPS['ROUTE_22_GATE']:
+            # The cartridge selects the last map from the exit's side of the gate.
+            destination = MAPS['ROUTE_23'] if y < 4 else MAPS['ROUTE_22']
         if destination == -1:
             parents = [m for m, w in WORLD.items() if index < len(w["warps"])
                        and w["warps"][index][2] == source]
@@ -178,18 +243,94 @@ class Navigator:
                 return None
         return self._warp(source, warp)
 
+    @staticmethod
+    def _world_signature(world):
+        return (world['symbol'], world['width'], world['height'], world['tileset'],
+                tuple(tuple(row) for row in world['tiles']), tuple(world['passable']),
+                tuple(tuple(row) for row in world['objects']), tuple(tuple(row) for row in world['warps']),
+                tuple(tuple(row) for row in world['connections']),
+                tuple(tuple(row) for row in world.get('inactive_warps', [])))
+
+    def _index_world(self, m, world):
+        warps = {}
+        for warp in world['warps']:
+            warps.setdefault(tuple(warp[:2]), warp)
+        positions = self.live_positions if self.live_map == m else []
+        objects = {positions[i] if i < len(positions) else (o[0], o[1])
+                   for i, o in enumerate(world['objects'])
+                   if o[3] == 'STAY' and o[2] not in ('SPRITE_POKE_BALL', 'SPRITE_OAK', 'SPRITE_BLUE')
+                   and (m, o[0], o[1]) not in self.cleared_objects}
+        return warps, objects, frozenset(world['passable'])
+
+    def _search_neighbors(self, frame):
+        # Custom graph providers retain their existing expansion semantics.
+        if getattr(self.neighbors, '__func__', None) is not Navigator.neighbors:
+            return lambda pos: self.neighbors(pos, frame)
+        worlds = tuple((m, self._world_signature(w)) for m, w in WORLD.items())
+        signature = (worlds, self.use_world, self.can_surf, self.can_cut,
+                     frozenset(self.cleared_objects), frozenset(self.tile_overrides.items()),
+                     frozenset(self.story_blocks), frozenset(self.closed_passages),
+                     frozenset(FORCED.items()), frozenset(OPTIONAL_LIFTS), frozenset(SEAFOAM_HOLES),
+                     frozenset(PAIR_COLLISIONS), frozenset(LEDGES), frozenset(MAPS.items()),
+                     frozenset(WATER_TILESETS), tuple(DIRS.items()))
+        if signature != self._graph_signature:
+            self._graph_signature = signature
+            self._map_signatures.clear()
+            self._neighbor_cache.clear()
+            self._world_indices.clear()
+        edges = {}
+        for pos, directions in self.edges.items():
+            edges.setdefault(pos[0], []).append((pos, frozenset(directions.items())))
+        blocked = {}
+        for (pos, dr), until in self.blocked.items():
+            if until > frame:
+                blocked.setdefault(pos[0], []).append((pos, dr))
+        maps = set(WORLD) | set(edges) | set(blocked) | set(self._map_signatures)
+        for m in maps:
+            key = (frozenset(edges.get(m, ())), frozenset(blocked.get(m, ())),
+                   tuple(self.live_positions) if self.live_map == m else ())
+            if key != self._map_signatures.get(m):
+                self._map_signatures[m] = key
+                self._neighbor_cache.pop(m, None)
+                self._world_indices.pop(m, None)
+        # Each search owns its view even if another distance lookup is created later.
+        caches = self._neighbor_cache.copy()
+        indices = self._world_indices
+        def neighbors(pos):
+            m = pos[0]
+            if m not in caches:
+                caches[m] = self._neighbor_cache.setdefault(m, {})
+            cache = caches[m]
+            if pos not in cache:
+                cache[pos] = tuple(self._neighbors(pos, frame, indices))
+            return cache[pos]
+        return neighbors
+
     def neighbors(self, pos, frame):
+        # Direct callers always observe current mutable navigation state.
+        return self._neighbors(pos, frame, {})
+
+    def _neighbors(self, pos, frame, indices):
         m, x, y = pos
         observed = self.edges.get(pos, {})
         for dr, q in sorted(observed.items()):
             dx, dy = DIRS[dr]
             current_world = WORLD.get(m) if self.use_world else None
             if current_world:
+                if m not in indices:
+                    indices[m] = self._index_world(m, current_world)
+                objects = indices[m][1]
+                if (x + dx, y + dy) in objects or q[0] == m and q[1:] in objects:
+                    continue
                 here = self.active_tile(current_world, x, y)
                 front = self.active_tile(current_world, x + dx, y + dy)
                 ts = current_world["tileset"]
                 if (ts, here, front) in PAIR_COLLISIONS or (ts, front, here) in PAIR_COLLISIONS:
                     continue
+            if (m, x + dx, y + dy) in self.closed_passages or q in self.closed_passages:
+                continue
+            if (m, x + dx, y + dy) in SEAFOAM_HOLES:
+                continue
             q = FORCED.get((m, x + dx, y + dy), q)
             if q[0] != m and current_world:
                 # Older samples can pair the new map with the indoor coordinates.
@@ -212,10 +353,9 @@ class Navigator:
         if not world:
             return
         here = self.active_tile(world, x, y)
-        positions = self.live_positions if self.live_map == m else []
-        static_objects = {positions[i] if i < len(positions) else (o[0], o[1]) for i, o in enumerate(world["objects"])
-                          if o[3] == "STAY" and o[2] not in ("SPRITE_POKE_BALL", "SPRITE_OAK", "SPRITE_BLUE")
-                          and (m, o[0], o[1]) not in self.cleared_objects}
+        if m not in indices:
+            indices[m] = self._index_world(m, world)
+        warps, static_objects, passable = indices[m]
         for dr, (dx, dy) in DIRS.items():
             if dr in observed or self.blocked.get((pos, dr), 0) > frame:
                 continue
@@ -225,7 +365,7 @@ class Navigator:
             tile = self.active_tile(world, nx, ny)
             if tile is None:
                 # Exit mats at an indoor map edge activate when walking outward.
-                warp = next((w for w in world["warps"] if w[:2] == [x, y]), None)
+                warp = warps.get((x, y))
                 if warp:
                     target = self._directed_warp(m, warp, dr)
                     if target:
@@ -243,15 +383,15 @@ class Navigator:
                 continue
             if world["tileset"] == "OVERWORLD" and (dr, here, tile) in LEDGES:
                 lx, ly = nx + dx, ny + dy
-                if self.active_tile(world, lx, ly) in world["passable"]:
+                if self.active_tile(world, lx, ly) in passable:
                     yield dr, (m, lx, ly)
                 continue
             cuttable = self.can_cut and ((world["tileset"] == "OVERWORLD" and tile == 0x3D)
                                         or (world["tileset"] == "GYM" and tile == 0x50))
             water = self.can_surf and world["tileset"] in WATER_TILESETS and tile in (0x14, 0x32, 0x48)
-            if (tile not in world["passable"] and not cuttable and not water) or (nx, ny) in static_objects:
+            if (tile not in passable and not cuttable and not water) or (nx, ny) in static_objects:
                 # Some exits activate by pressing into the boundary from the warp square.
-                warp = next((w for w in world["warps"] if w[:2] == [x, y]), None)
+                warp = warps.get((x, y))
                 target = self._directed_warp(m, warp, dr) if warp else None
                 if target:
                     yield dr, target
@@ -259,7 +399,7 @@ class Navigator:
             ts = world["tileset"]
             if (ts, here, tile) in PAIR_COLLISIONS or (ts, tile, here) in PAIR_COLLISIONS:
                 continue
-            warp = next((w for w in world["warps"] if w[:2] == [nx, ny]), None)
+            warp = warps.get((nx, ny))
             target = self._directed_warp(m, warp, dr) if warp else None
             if target and target[0] in OPTIONAL_LIFTS:
                 continue
@@ -267,6 +407,7 @@ class Navigator:
 
     def distance_lookup(self, pos, frame, limit=60000):
         """Share one bounded search across goals while navigation state stays unchanged."""
+        neighbors = self._search_neighbors(frame)
         distances = {pos: 0}
         queue = deque([pos])
         expanded = 0
@@ -283,7 +424,7 @@ class Navigator:
                 source = queue.popleft()
                 depth = distances[source] + 1
                 found = False
-                for _, target in self.neighbors(source, frame):
+                for _, target in neighbors(source):
                     if target not in distances:
                         distances[target] = depth
                         queue.append(target)
@@ -309,6 +450,20 @@ class Navigator:
                     return dr
         self.target = goals
         self.path.clear()
+        neighbors = self._search_neighbors(frame)
+        if getattr(self.neighbors, '__func__', None) is Navigator.neighbors:
+            from .navigation_numba import SearchGraph, disable, kernel
+            run = kernel()
+            if run is not None:
+                try:
+                    if self._compiled_graph is None or self._compiled_graph.signature is not self._graph_signature:
+                        self._compiled_graph = SearchGraph(run, self._graph_signature, DIRS)
+                    self.path.extend(self._compiled_graph.route(pos, goals, limit, neighbors, self._neighbor_cache))
+                    return self.path[0][1] if self.path else None
+                except Exception as error:
+                    disable(error)
+                    self._compiled_graph = None
+                    self.path.clear()
         prev = {pos: None}
         queue = deque([pos])
         found = None
@@ -317,7 +472,7 @@ class Navigator:
             if p in goals:
                 found = p
                 break
-            for dr, q in self.neighbors(p, frame):
+            for dr, q in neighbors(p):
                 if q not in prev:
                     prev[q] = (p, dr)
                     queue.append(q)

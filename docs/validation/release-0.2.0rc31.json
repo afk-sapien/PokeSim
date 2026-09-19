@@ -1,0 +1,106 @@
+{
+  "version": "0.2.0rc31",
+  "tag": "v0.2.0rc31",
+  "revision": "0983b0de77a69d52731c5cdde67054bb549aec6e",
+  "url": "https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0rc31",
+  "published_at": "2026-09-16T01:50:00Z",
+  "prerelease": true,
+  "ci": "https://github.com/afk-sapien/PokeSim/actions/runs/35045201905",
+  "desktop_validation": "https://github.com/afk-sapien/PokeSim/actions/runs/35045201890",
+  "publication": "https://github.com/afk-sapien/PokeSim/actions/runs/35045462893",
+  "assets": {
+    "PokeSim-darwin-arm64.zip": {
+      "bytes": 39684497,
+      "digest": "sha256:70e9e81bee02d0fab3f13ac1a7c688a2de660e8793ccfa0b7e6fae76de10b281"
+    },
+    "PokeSim-darwin-arm64.zip.sha256": {
+      "bytes": 91,
+      "digest": "sha256:3a0c6d00117784abff98bbe059a6a9733b6d64b8d6f7774c68071fe6fb03f695"
+    },
+    "PokeSim-darwin-x86_64.zip": {
+      "bytes": 43139937,
+      "digest": "sha256:876ba0e557fe61eae83ee983d3f6fde88966007c207dc001e37032cc9dbc0288"
+    },
+    "PokeSim-darwin-x86_64.zip.sha256": {
+      "bytes": 92,
+      "digest": "sha256:4700a552b85b03767160dec494f8efb6f1da17c4348786419df5d6aee3c8a108"
+    },
+    "PokeSim-linux-aarch64.tar.gz": {
+      "bytes": 70523592,
+      "digest": "sha256:4ff0eee2176dd2ad031084c593641b90a9f5d97cb0053664d242df09b46c3909"
+    },
+    "PokeSim-linux-aarch64.tar.gz.sha256": {
+      "bytes": 95,
+      "digest": "sha256:1f9b108f3af3c85cef472a96498d416de8bf54fc18e6c78a7b15325f03431c44"
+    },
+    "PokeSim-linux-x86_64.tar.gz": {
+      "bytes": 74470971,
+      "digest": "sha256:9439b5665c0711961c4f53127cf75708a33c3c68defcd32af9e75a7c650c40f6"
+    },
+    "PokeSim-linux-x86_64.tar.gz.sha256": {
+      "bytes": 94,
+      "digest": "sha256:2b81e9d1f96b904718b7885cb15b61ca81dc5ff474063fec0bc2f0a5c6055b69"
+    },
+    "PokeSim-windows-amd64.zip": {
+      "bytes": 48483567,
+      "digest": "sha256:18173a8578c7a11725b330364d328b1348fa9ee9a81330f1fbdfaf7bb4835331"
+    },
+    "PokeSim-windows-amd64.zip.sha256": {
+      "bytes": 93,
+      "digest": "sha256:c24f20542bde91c35d2d24b3dcca42e26ada83ccfae9a9850cbd0f8c69839b6f"
+    },
+    "SHA256SUMS": {
+      "bytes": 617,
+      "digest": "sha256:0de470605b4ca334c01171a2213ce9482ac1e0b956e545ca9a69f68bd52a462e"
+    },
+    "compose.yaml": {
+      "bytes": 1937,
+      "digest": "sha256:0d2501e62d8694cd234d73a4874dae05afb196863e400a34c7cf26893488119c"
+    },
+    "desktop-manifest.json": {
+      "bytes": 734,
+      "digest": "sha256:44f583cf25356b991d3e158e0c6e7e15a4ab24c4ed1e02eca10461c77092a465"
+    },
+    "env.example": {
+      "bytes": 801,
+      "digest": "sha256:d40b9f5e2679ec211e94bb475e23e03ac44d4aaba2c3053336c4e87cf7251898"
+    },
+    "image-linux-amd64.tar.gz": {
+      "bytes": 201591958,
+      "digest": "sha256:523479bd4130f40491c5eb174e8c67b844d3c39f50f19f548b32d39172e5cde4"
+    },
+    "image-metadata.json": {
+      "bytes": 3489,
+      "digest": "sha256:13940d59238fdfb9d75c2ceaddaa72f6b9ddb1db6cc246a522cd0138bc435089"
+    },
+    "manifest.json": {
+      "bytes": 934,
+      "digest": "sha256:682dc28f5b725736f2800849d86f55589e4673cfd91c534553034989915a25a6"
+    },
+    "pokesim-0.2.0rc31-py3-none-any.whl": {
+      "bytes": 233297,
+      "digest": "sha256:556f47afd1f93a63a050ab8b676ee9dba58f163ec2bc9bcadd7ea75ab1e28583"
+    },
+    "pokesim-0.2.0rc31.tar.gz": {
+      "bytes": 939709,
+      "digest": "sha256:e3187bea0cc958cbd0efe17454213b55d6e2ee5940a0398ea93022acd11a93aa"
+    },
+    "python-dependencies.json": {
+      "bytes": 15066,
+      "digest": "sha256:e581941234d37fb8f5a76dc17873eca19941ed51053c8d5c2102cfd4f2f785a3"
+    }
+  },
+  "verified": [
+    "Published wheel has the clean tagged source identity",
+    "Release configuration selects the versioned image",
+    "Published asset digests match server and desktop manifests",
+    "All five native targets passed launcher and bundled-runtime checks"
+  ],
+  "deployment": "No existing adventure or trading coordinator was upgraded",
+  "limits": [
+    "Native runtime checks use the PyBoy demo ROM",
+    "Private Pokemon gameplay testing remains Linux-only",
+    "Multi-day autonomous reliability is not established",
+    "Windows and macOS downloads have no publisher signing or notarization"
+  ]
+}

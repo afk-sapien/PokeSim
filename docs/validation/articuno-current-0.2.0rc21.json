@@ -1,0 +1,93 @@
+{
+  "baseline": {
+    "frames": 36012,
+    "wall_seconds": 62.75,
+    "rewinds": 0,
+    "initial_owned": 127,
+    "final_owned": 127,
+    "new_owned": [],
+    "achievements": [],
+    "mode_frames": {
+      "waiting for map transition": 60,
+      "following objective": 1780,
+      "using Surf": 810,
+      "waiting for the menu": 540,
+      "pause": 1728,
+      "dialogue": 18990,
+      "party": 4608,
+      "party_action": 3654,
+      "finding another approach": 1470,
+      "battle: run": 432,
+      "exploring obstacle": 1940
+    },
+    "history": [
+      "Will revisit: Magmar toward level 50",
+      "Changed plan: Articuno. No encounter, training gain, or new route in two minutes",
+      "Completed: Primeape",
+      "Will revisit: Exeggutor toward level 40",
+      "Will revisit: Beedrill toward level 40",
+      "Will revisit: Tauros toward level 50"
+    ],
+    "checkpoint_sha256": "aa1ac54fde38fd25201ecc4691392fcfdbcf871cb68adffe474b0f13412e9a98",
+    "policy_fingerprint": "d18efd962d21917fffebe0333194977257cbe3ba03b704bdaf1aed0073d2e014",
+    "pyboy": "2.7.0",
+    "final_map": "Seafoam Islands B4F"
+  },
+  "candidate": {
+    "frames": 36006,
+    "wall_seconds": 10.16,
+    "rewinds": 0,
+    "initial_owned": 127,
+    "final_owned": 128,
+    "new_owned": [
+      144
+    ],
+    "achievements": [
+      {
+        "frame": 17646,
+        "type": "catch",
+        "title": "Caught the legendary Articuno!"
+      }
+    ],
+    "mode_frames": {
+      "waiting for map transition": 540,
+      "following objective": 6140,
+      "using Strength": 36,
+      "waiting for the menu": 168,
+      "pause": 126,
+      "dialogue": 21618,
+      "party": 774,
+      "party_action": 180,
+      "moving a boulder to slow the current": 2944,
+      "battle: run": 432,
+      "exploring obstacle": 20,
+      "overworld": 156,
+      "using Surf": 54,
+      "interacting": 34,
+      "battle: switch": 252,
+      "battle: fight": 252,
+      "moves": 324,
+      "battle: item": 162,
+      "list": 564,
+      "naming": 1230
+    },
+    "history": [
+      "Changed plan: Articuno. No encounter, training gain, or new route in two minutes",
+      "Completed: Primeape",
+      "Will revisit: Exeggutor toward level 40",
+      "Will revisit: Beedrill toward level 40",
+      "Will revisit: Tauros toward level 50",
+      "Completed: Articuno"
+    ],
+    "checkpoint_sha256": "aa1ac54fde38fd25201ecc4691392fcfdbcf871cb68adffe474b0f13412e9a98",
+    "policy_fingerprint": "f4dc27b474302457e9506c3735ca9d537d3cc38a69446a8d4d3c1527bf02f339",
+    "pyboy": "2.7.0",
+    "final_map": "Route 19"
+  },
+  "method": "Both replays load the same copied Blue checkpoint with its saved project and policy state. Baseline uses the exact rc20 source archive. Candidate completes both Strength pushes, uses Surf, catches Articuno, and leaves for storage. No project selection, game flags, inventory, or Pokemon are modified by the validation harness.",
+  "tests": {
+    "passed": 453,
+    "skipped": 1
+  },
+  "command": "tools/validate_progress.py with the copied Blue checkpoint and ROM, --frames 36000"
+}

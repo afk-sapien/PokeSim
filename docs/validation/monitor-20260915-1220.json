@@ -1,0 +1,309 @@
+{
+  "from_ts": 1789472919.1197126,
+  "to_ts": 1789474838.0154881,
+  "minutes": 31.98,
+  "version": "0.2.0rc22",
+  "deployment_performed": false,
+  "runs": {
+    "red": {
+      "started_at": "2026-09-15T11:04:45.612766478Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 136,
+      "uptime": 4550,
+      "league_rewards": {
+        "earned": 11,
+        "delivered": 11,
+        "pending": 0
+      },
+      "start_unchanged": true,
+      "new_registrations": 2,
+      "local_replanning": 71,
+      "completed_projects": {},
+      "selected_training_outcomes": [
+        {
+          "key": "train:73:60",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 207674060,
+          "retry_at": 207734060,
+          "target": 60,
+          "gains": {
+            "experience": 9282,
+            "levels": 1
+          }
+        },
+        {
+          "key": "train:126:50",
+          "category": "training",
+          "status": "advanced",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 207732132,
+          "retry_at": 207792132,
+          "target": 50,
+          "gains": {
+            "experience": 3575,
+            "levels": 0
+          }
+        },
+        {
+          "key": "train:144:50",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Expedition time budget reached",
+          "elapsed": 207806140,
+          "retry_at": 207866140,
+          "target": 50,
+          "gains": {
+            "experience": 10456,
+            "levels": 2
+          }
+        }
+      ],
+      "journal_evidence": {
+        "event_counts": {
+          "trainer": 9,
+          "level": 15,
+          "trade": 2,
+          "release": 12,
+          "obtain": 1,
+          "champion": 1
+        },
+        "milestones": [
+          {
+            "id": 9018,
+            "type": "trade",
+            "title": "Traded PEBBLE for MAPLE",
+            "body": "Received Hitmonlee at level 45. Red registers Hitmonlee. Blue registers Gengar. Exchange 1789474694399464191.",
+            "ts": 1789474699.0
+          },
+          {
+            "id": 9000,
+            "type": "obtain",
+            "title": "Received Mew for Championship #11",
+            "body": "A level-5 Mew joined the PC. Each League victory earns a random PokeSim reward.",
+            "ts": 1789473903.0
+          },
+          {
+            "id": 8999,
+            "type": "champion",
+            "title": "Champion! League victory #11",
+            "body": "Party: GIZMO L93, PUDDING L31, PICKLES L41, MUFFIN L100, BUTTON L100, SPROUT L100.",
+            "ts": 1789473796.5075955
+          },
+          {
+            "id": 8991,
+            "type": "trade",
+            "title": "Traded SCOUT for SOUPTAX",
+            "body": "Received Golem at level 45. Red registers Golem. Blue registers Arcanine. Exchange 1789473531862648751.",
+            "ts": 1789473536.0
+          }
+        ],
+        "legendary_releases": [],
+        "legendary_holdings": [
+          {
+            "name": "Zapdos",
+            "nick": "SPROUT",
+            "level": 100,
+            "box": null
+          },
+          {
+            "name": "Moltres",
+            "nick": "BORKUS",
+            "level": 51,
+            "box": 5
+          },
+          {
+            "name": "Articuno",
+            "nick": "SOUPWIZARD",
+            "level": 51,
+            "box": 6
+          },
+          {
+            "name": "Mewtwo",
+            "nick": "CORNWIZARD",
+            "level": 70,
+            "box": 9
+          }
+        ],
+        "league_rewards": {
+          "earned": 11,
+          "delivered": 11,
+          "pending": 0
+        }
+      }
+    },
+    "blue": {
+      "started_at": "2026-09-15T11:05:13.255250711Z",
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "restarts": 0,
+      "owned": 137,
+      "uptime": 4523,
+      "league_rewards": {
+        "earned": 15,
+        "delivered": 15,
+        "pending": 0
+      },
+      "start_unchanged": true,
+      "new_registrations": 3,
+      "local_replanning": 72,
+      "completed_projects": {
+        "training": 2,
+        "evolution": 1
+      },
+      "selected_training_outcomes": [
+        {
+          "key": "train:102:10",
+          "category": "training",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 111142538,
+          "retry_at": 0,
+          "target": 10,
+          "gains": {
+            "experience": 875,
+            "levels": 5
+          }
+        }
+      ],
+      "journal_evidence": {
+        "event_counts": {
+          "level": 42,
+          "trade": 2,
+          "release": 8,
+          "faint": 1,
+          "obtain": 1,
+          "champion": 1,
+          "trainer": 5,
+          "evolve": 1
+        },
+        "milestones": [
+          {
+            "id": 4050,
+            "type": "trade",
+            "title": "Traded MAPLE for PEBBLE",
+            "body": "Received Gengar at level 40. Red registers Hitmonlee. Blue registers Gengar. Exchange 1789474694399464191. The incoming partner evolved during the exchange.",
+            "ts": 1789474699.0
+          },
+          {
+            "id": 4040,
+            "type": "obtain",
+            "title": "Received Charmander for Championship #15",
+            "body": "A level-5 Charmander joined the PC. Each League victory earns a random PokeSim reward.",
+            "ts": 1789474328.0
+          },
+          {
+            "id": 4035,
+            "type": "champion",
+            "title": "Champion! League victory #15",
+            "body": "Party: FIZZ L100, Charmeleon L30, BOOTS L100, TOAST L100, SCOUT L97, EMBER L100.",
+            "ts": 1789474130.452846
+          },
+          {
+            "id": 4015,
+            "type": "trade",
+            "title": "Traded SOUPTAX for SCOUT",
+            "body": "Received Arcanine at level 39. Red registers Golem. Blue registers Arcanine. Exchange 1789473531862648751.",
+            "ts": 1789473536.0
+          },
+          {
+            "id": 4010,
+            "type": "evolve",
+            "title": "Charmander evolved into Charmeleon!",
+            "body": "Level 16, on Route 6.",
+            "ts": 1789473243.2645912
+          }
+        ],
+        "legendary_releases": [],
+        "legendary_holdings": [
+          {
+            "name": "Moltres",
+            "nick": "CRABRAVE",
+            "level": 59,
+            "box": 3
+          },
+          {
+            "name": "Articuno",
+            "nick": "SPORKLORD",
+            "level": 50,
+            "box": 4
+          },
+          {
+            "name": "Mewtwo",
+            "nick": "YELLMAN",
+            "level": 72,
+            "box": 4
+          },
+          {
+            "name": "Zapdos",
+            "nick": "BEEFCHIEF",
+            "level": 54,
+            "box": 11
+          }
+        ],
+        "league_rewards": {
+          "earned": 15,
+          "delivered": 15,
+          "pending": 0
+        }
+      }
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 12,
+    "state": "ready",
+    "error": null,
+    "last_check": 1789474700.39632,
+    "last_trade": 1789474694.3994656,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789470183998647267",
+        "ts": 1789470183.998649,
+        "reason": "Red registers Persian. Blue registers Electabuzz"
+      },
+      {
+        "id": "1789473531862648751",
+        "ts": 1789473531.86265,
+        "reason": "Red registers Golem. Blue registers Arcanine"
+      },
+      {
+        "id": "1789474694399464191",
+        "ts": 1789474694.3994656,
+        "reason": "Red registers Hitmonlee. Blue registers Gengar"
+      }
+    ]
+  },
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 109287059456,
+    "free_bytes": 19460784128,
+    "used_percent": 80.98
+  },
+  "directory_bytes": {
+    "/docker/pokesim/data": 1067237376,
+    "/docker/pokesim/backups": 3434184704,
+    "/docker/pokesim-blue/data": 239128576,
+    "/docker/pokesim-blue/backups": 636657664
+  },
+  "completed_trade_delta": 2
+}

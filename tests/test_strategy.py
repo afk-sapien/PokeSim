@@ -236,3 +236,95 @@ def test_weak_partners_pp_does_not_hide_an_exhausted_lead():
     lead = mon(level=40, pp=(0, 0, 40, 0))
     reserve = mon(level=5)
     assert needs_healing((lead, reserve))
+
+def test_strength_is_only_used_when_a_boulder_push_is_actually_planned():
+    # Victory Road's floors are linked by ladders, so a boulder in another section cannot be
+    # reached on foot. Reaching for Strength before planning meant every step reopened the menu.
+    from unittest.mock import patch
+    from pokesim.policies.base import PolicyContext
+    from pokesim.policies.strategic import StrategicPolicy
+    from pokesim.strategy_data import MAPS
+    from test_events import snap
+
+    memory = bytearray(65536)
+    s = snap(map=MAPS['VICTORY_ROAD_2F'], x=29, y=7, frame=100,
+             party=(mon(species=0x6E, level=40, hp=100, max_hp=100, moves=(70, 0, 0, 0), pp=(15, 0, 0, 0)),),
+             event_flags=flags('EVENT_GOT_POKEDEX'))
+    p = StrategicPolicy(7)
+    p.observed_map = s.map
+
+    # No push available: the run must not sit in the Strength menu.
+    with patch.object(type(p.boulders), 'route', return_value=None):
+        action = p.step(PolicyContext(s, 0, 0, memory))[0]
+    assert p.mode != 'using Strength'
+
+    # A push is available: Strength is activated so the boulder can be moved.
+    with patch.object(type(p.boulders), 'route', return_value='left'):
+        p.step(PolicyContext(s, 0, 0, memory))
+    assert p.mode == 'using Strength'
+
+def test_victory_road_climbs_only_after_this_floor_is_done():
+    # The ascent used to fire on every visit to 2F, replacing whatever the run came for with
+    # "climb to 3F" — unroutable from the entrance pocket, so it shuttled out and back instead.
+    from pokesim.policies.strategic import ready_to_climb
+    from test_events import snap
+
+    fresh = snap(event_flags=flags('EVENT_GOT_POKEDEX'))
+    assert not ready_to_climb(fresh), 'do this floor first, and leave other objectives alone'
+
+    lower_done = snap(event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1'))
+    assert ready_to_climb(lower_done), 'climb once this floor is satisfied'
+
+    all_done = snap(event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1',
+                                      'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'))
+    assert not ready_to_climb(all_done), 'nothing left to do upstairs'
+
+
+def test_victory_road_does_not_ride_the_ladder_between_floors():
+    # 2F sends the run up to 3F whenever 3F's switch is unset; if 3F sent it straight back down on
+    # the same condition the two goals mirror each other and the run never leaves Victory Road.
+    from pokesim.policies.strategic import ready_to_drop
+    from test_events import snap
+
+    neither = snap(event_flags=flags('EVENT_GOT_POKEDEX'))
+    assert not ready_to_drop(neither), 'must not descend before this floor is done'
+
+    upper_done = snap(event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'))
+    assert ready_to_drop(upper_done), 'descend once the upper switch is satisfied'
+
+    both_done = snap(event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2',
+                                       'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2'))
+    assert not ready_to_drop(both_done), 'nothing left to do downstairs'
+
+
+def test_returning_from_plateau_clears_the_east_corridor_boulder():
+    from pokesim.policies.puzzles import BoulderPlanner, boulder_task
+    from pokesim.strategy_data import WORLD
+    s = snap(map=MAPS['VICTORY_ROAD_3F'], x=27, y=15,
+             party=(mon(moves=(70, 0, 0, 0)),))
+    nav = Navigator()
+    nav.update_story(s)
+    nav.live_map = s.map
+    nav.live_positions = [(o[0], o[1]) for o in WORLD[s.map]['objects']]
+    planner = BoulderPlanner()
+    assert planner.route(s, nav, boulder_task(s)) is None
+    assert planner.route(s, nav, ('BOULDER3', (22, 10))) is not None
+    assert planner.path[-1][0][2:] == (23, 10)
+    assert planner.path[-1][1] == 'left'
+
+
+def test_returning_through_victory_road_can_solve_the_second_switch_first():
+    from pokesim.policies.puzzles import BoulderPlanner, boulder_task
+    from pokesim.strategy_data import WORLD
+    s = snap(map=MAPS['VICTORY_ROAD_2F'], x=22, y=16,
+             party=(mon(moves=(70, 0, 0, 0)),),
+             event_flags=flags('EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'))
+    nav = Navigator()
+    nav.update_story(s)
+    nav.live_map = s.map
+    nav.live_positions = [(o[0], o[1]) for o in WORLD[s.map]['objects']]
+    planner = BoulderPlanner()
+    assert planner.route(s, nav, boulder_task(s)) is None
+    assert planner.route(s, nav, ('BOULDER3', (9, 16))) is not None
+    assert planner.path[-1][0][2:] == (10, 16)
+    assert planner.path[-1][1] == 'left'

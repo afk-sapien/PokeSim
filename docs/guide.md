@@ -1,4 +1,4 @@
-# pokesim
+# Gameplay and feature guide
 
 A Pokémon Red that plays itself. A headless Game Boy emulator (PyBoy) runs the game 24/7,
 driven by a policy that plans objectives and checks each action against the game state. A small web app shows the
@@ -16,12 +16,13 @@ Follow the current [installation instructions](../README.md) and [operations gui
 | Path | What |
 |---|---|
 | `/` | live view, stats, timeline, controls |
+| `/pokedex`, `/pc`, `/journal`, `/trading` | collection reference, storage and locks, event history, and game-local trading |
 | `/stream` | MJPEG stream of the screen (`/frame.jpg` for a single frame) |
 | `/feed.xml` | Atom feed of notable events; `?all=1` for everything, `?types=badge,catch` or `?min_priority=4` to filter |
-| `/events/{id}` | one event with its screenshot and a "rewind the game to this moment" button |
+| `/events/{id}` | one event and screenshot, with rewind available when a saved state and access policy allow it |
 | `/api/state` | JSON: emulator status + parsed game state |
 | `/api/events` | JSON event list (`limit`, `all`, `types`, `min_priority`, `before`) |
-| `/api/control` | POST `{"action": "pause"|"resume"|"save"|"restart"|"speed"|"load_state"|"press", "value": ...}` |
+| `/api/control` | POST an `action` and optional `value`. Actions: `pause`, `resume`, `take_control`, `save`, `restart`, `speed`, `load_state`, `press` |
 
 ## Configuration (environment)
 
@@ -33,14 +34,20 @@ Follow the current [installation instructions](../README.md) and [operations gui
 | `POLICY` | `strategic` | objective-driven play with verified menu actions, navigation, battle estimates, and resource management. `smart_random` and `guided_random` remain available as baselines |
 | `FAST_TEXT` | `1` | force the in-game text speed to FAST |
 | `BATTLE_ANIMATIONS` | `1` | `0` turns battle animations off (faster) |
-| `SEED` | random | RNG seed for the policy and random names |
+| `SEED` | random | RNG seed for the policy, starter choice, and random names |
+| `STARTER` | `random` | new strategic adventures choose among all three starters. Set `bulbasaur`, `charmander`, or `squirtle` for a fixed choice. Saved adventures retain their choice |
 | `NTFY_URL` / `NTFY_TOKEN` | off | push notable events (with screenshot) to an ntfy topic |
 | `NTFY_MIN_PRIORITY` | `2` | only push events at or above this priority (1–5, see below) |
 | `NTFY_MUTE` | | comma-separated event types never pushed, e.g. `map,blackout` |
 | `PUBLIC_URL` | `http://localhost:8000` | absolute links in the feed / ntfy click actions |
 | `AUTOSAVE_SECONDS` / `KEEP_AUTOSAVES` | `60` / `20` | save-state rotation |
-| `STUCK_RELOAD_SECONDS` | `600` | no position change for this long → reload an older autosave |
+| `STUCK_RELOAD_SECONDS` | `600` | stationary timeout, valid strategic overworld play replans while other cases can reload an autosave |
 | `BATTLE_TIMEOUT_SECONDS` | `900` | a battle lasting this long → reload |
+| `HOST` / `PORT` | `127.0.0.1` / `8000` | native service bind address and port |
+| `VIEWER_ONLY` | `0` | disable browser game controls and preference writes |
+| `EVENT_RETENTION_DAYS` | `0` | journal retention, with `0` keeping all history |
+| `TRADING_URL` / `TRADING_INSTANCE` | empty | broker URL and instance key for [game-local trading](pc-trading.md) |
+| `TRADE_TOKEN` | empty | scoped peer authentication for [automatic exchanges](automatic-trading.md) |
 | `STREAM_FPS` | `15` | MJPEG frame rate |
 
 ## Event priorities
@@ -85,15 +92,15 @@ Defaults live in `pokesim/events.py`; change a priority there to reclassify an e
     decisions (the "no items, ITEM → CANCEL forever" class of problem).
   Exploration memory persists across restarts. `guided_random.py` is the original dumb version.
   Implement `Policy.step()` to add another.
-- Guards: if the RAM stops looking like a running game (glitch/crash), a battle never ends,
-  or the player hasn't moved for 10 minutes, the emulator reloads an autosave from before
-  the trouble started.
+- Guards: invalid game state and battle timeouts can trigger checkpoint recovery.
+  A stationary strategic run with a valid overworld snapshot abandons its objective
+  and replans without reloading.
+  Baseline policies can reload an autosave after the stationary timeout.
 
 ## Tests
 
-```sh
-pytest         # unit tests for the event detector; ROM smoke test runs if roms/pokered.gb exists
-```
+See [Contributing](../CONTRIBUTING.md#checks-before-a-pull-request) for the Python,
+browser, documentation, package, and optional ROM checks.
 
 ## Strategic play
 
@@ -106,11 +113,17 @@ nicknames fit the ten-character limit. Choices avoid repeats until their pool ru
 `SEED` makes the name sequence repeatable, and naming state is included in policy saves.
 Existing names are kept when resuming a game. Player and rival names are chosen on a new run.
 
+New strategic adventures also choose a random starter. The choice is saved before the
+Pokémon is received, so restoring a checkpoint does not reroll it. `STARTER` selects a
+fixed partner when desired. Checkpoints from older releases retain the previous
+Bulbasaur choice, with the actual starter family recognized when the party is observed.
+Changing this setting does not replace Pokémon in an existing save.
+
 The planner follows story flags for the starter, Oak’s parcel, and the Pokédex. It then
 prepares for each gym and follows prerequisites through all eight badges and the League.
 This includes Mt. Moon, Bill, the S.S. Anne, the Rocket hideout, Pokémon Tower,
 Silph Co., Safari Zone HMs, the mansion key, and each Elite Four member.
-The Exploration selector controls occasional weighted detours toward less-visited tiles.
+The automatic player occasionally takes weighted detours toward less-visited tiles.
 Goals still pull the player forward, with focused navigation for healing and supplies.
 Blocked objectives trigger short autonomous recovery attempts, followed by replanning.
 The policy never pauses the simulator or requests a human handoff. Only explicit user
@@ -123,6 +136,39 @@ the Hall of Fame. See [playtests](../RELEASE_STATUS.md) for the fixes and valida
 The policy also stops for occasional conversations and signs, with cooldowns and memory
 to prevent repeatedly talking to the same person. Puzzle planners handle mansion switches
 and Victory Road boulders. Live NPC positions and story changes update navigation.
+
+After the Champion, a persistent adventure director alternates collection, evolution,
+training, and exploration projects. Category selection favors collection and evolution,
+but avoids three consecutive projects of one category when alternatives are available.
+Urgent supply projects can take priority. Failures wait progressively longer before a
+retry, from about 17 simulated minutes to about 133 simulated minutes. Active deadlines,
+recent choices, and a bounded record of outcomes survive restarts.
+
+Training projects bring a unique partner out of storage when needed, give it the lead,
+and work toward its next ten-level milestone, up to level 100. Missing level evolutions
+take priority over general training for that partner. Training measures that partner's
+experience and levels, so unrelated battles and supply changes cannot hide a stalled
+project. A productive session can end before its target and rotate to another project.
+The current implementation does not train stat experience explicitly or search for
+better DVs. Trade requests will join the planner after coordinated live trading is ready.
+
+The collection status in `/api/state` includes `director` outcomes with completion or
+deferral reasons, retry times in simulated frames, and training gains. These records
+describe bounded projects, not a guarantee of Pokédex completion or indefinite progress.
+
+Ground items have their own short detours, including during collection expeditions in
+caves. The planner checks nearby item balls, selects a reachable approach on the same
+map, and resumes its previous objective afterward. Healing, supplies, party management,
+and League battles retain priority. A detour pauses the original expedition's budget
+and lasts at most 30 simulated seconds before deferral. Failed pickups wait five
+simulated minutes before another attempt.
+
+Pickups require a free bag slot or room in an existing stack. A full stack is skipped,
+and TM pickups conservatively require a free slot. The game object's disappearance
+confirms collection, with completed pickups and retry times saved across restarts.
+These detours target visible item balls. Hidden items and balls containing Pokémon
+remain outside this pickup behavior. Item gains appear in the existing journal, and
+the strategy's `pickups` status records recent pickup outcomes.
 
 Navigation combines map geometry with observed movement. Learned edges store the actual
 button and destination, including doors, map connections, and ledges. Reverse movement is
@@ -213,13 +259,14 @@ To regenerate strategy data from a local checkout:
 python -m pokesim.prepare_data /path/to/pokered
 ```
 
-## Thorough Adventure and the collection journal
+## The ongoing adventure and collection journal
 
-Thorough Adventure is the default adventure style. It mixes bounded collecting and
-evolution projects into the badge journey, then continues with Pokédex expeditions
-after the Hall of Fame. The adventure style selector offers Focused, Balanced, and
-Thorough. It changes which activities the AI chooses, independently of playback
-speed. The selection persists across restarts.
+The automatic player mixes bounded collecting and evolution projects into the badge
+journey, then continues with Pokédex expeditions after the Hall of Fame. It chooses
+projects automatically. Playback speed changes how fast the game runs.
+
+Older saves still load with their active projects and progress intact. Saved adventure
+style and exploration preferences are ignored, so every run uses the same automatic activity selection.
 
 Missing species now matter even when they are too weak for the main battle team.
 The catcher prefers sleep or paralysis, avoids attacks with a high knockout risk,
@@ -237,11 +284,44 @@ out and enter a cooldown so one unsuccessful hunt cannot take over the adventure
 After the Champion, the simulator finishes the ceremony, continues the saved game,
 and looks for more collection projects. It can visit unexplored areas, meet unbeaten
 trainers, and undertake League rematches when funds run low. Captures, time budgets,
-and unfinished projects survive controller restarts. No Pokémon are released.
+and unfinished projects survive controller restarts.
 
-The Collection section shows the current project, registered entries, remaining
-possibilities, evolution targets, recent expeditions, and all twelve storage boxes.
-Its searchable Pokédex separates link-trade and event requirements from available
+When storage needs room, duplicate cleanup keeps the best individual of each species.
+It compares level, stat experience, move usefulness, and progress toward the next level
+before using DVs as a tie-breaker. A better boxed copy is retained alongside an established
+party member. Exact ties favor the party member, then the first stored copy. Older snapshots
+without individual stats retain the level-only selection rule. Protected species and the
+last copy of a species are never released. The trade broker uses the same spare selection.
+This does not add perfect-DV hunts or replace party members for small DV differences.
+
+The GUI has four pages:
+
+- **Live** (`/`): the game, current goal, all six party members, and badge progress together.
+  The game and the plan with the party align in two columns on desktop.
+  A compact trainer strip below both columns holds badges, registrations, League wins, and money.
+  The gamepad opens when taking control. Detailed planning, route, and bag panels are omitted from Live.
+- **Pokédex** (`/pokedex`): all 151 species in one list, with search, filters, and individual records.
+- **PC** (`/pc`): physical boxes or the entire collection on one page, with search, sorting,
+  individual DVs, and training. All Pokémon includes every partner without pagination.
+- **Journal** (`/journal`): event filters, highlights, and earlier moments.
+
+The PC box selector changes the view, not the game's active box. Keyboard game controls
+work only on Live. Old `/team` and `/journey` links return to the corresponding section on Live.
+The nickname pool gives new catches names such as TAXFRAUD, MEATWIFI, and SOUPCRIME through
+normal in-game naming. Names already assigned to existing Pokémon are preserved.
+
+The Live page's play clock is stored by the app and keeps counting beyond 255 hours.
+It counts 60 emulated frames as one second. Faster playback advances this clock faster,
+and pauses or server downtime add no time. Autosaves and clean shutdowns persist the
+clock. Loading an earlier save does not subtract time already spent playing, while
+Restart run starts a new clock. An abrupt failure can lose time since the last autosave.
+
+Existing runs start from their cartridge time. If the cartridge already reached 255 hours,
+the clock shows a `+` and a note because the earlier total is a lower bound. The app counts
+new time from that point. The cartridge display and older journal times stay unchanged.
+The state API exposes the app clock separately as `play_clock`.
+
+The searchable Pokédex separates link-trade and event requirements from available
 sources. “Possible here” includes future evolutions and choices, rather than claiming
 that every listed entry is immediately reachable or that all mutually exclusive
 choices can be collected in one save. The planner checks routes before hunts and
@@ -252,3 +332,55 @@ Collection source data is regenerated from a pret/pokered checkout with:
 ```sh
 python -m pokesim.prepare_data /path/to/pokered
 ```
+
+## Reproduce a stalled expedition
+
+Copy a live autosave and its matching JSON manifest into a scratch directory. Keep the
+original pair unchanged. Use the matching user-supplied ROM and PyBoy 2.7.0:
+
+```sh
+python tools/validate_progress.py --rom /path/to/pokered.gb --checkpoint /scratch/auto-v1-example.state --frames 432000 --output /scratch/progress.json
+```
+
+The replay restores policy state as well as game state. It advances two simulated hours
+without rewinds and reports new Pokédex entries, experience changes, journal achievements,
+policy recoveries, and input fingerprints. It does not claim to replace live endurance
+validation, whose guard timers use wall time.
+
+## Read-only proposals for a live pair
+
+Set `GAME_DATA_DIR` to a prepared game-data directory and run
+`docker compose -f deploy/compose.broker.yaml up -d`. The board is available on port 8950
+and polls Red on port 8930 and Blue on port 8940 through the host gateway. It mounts only
+read-only game data and has no access to saves or ROMs. It cannot execute an exchange.
+Each actual exchange requires approval of its specific participants before live saves
+are stopped, backed up, validated, and exchanged.
+
+## Ongoing collecting
+
+Registering a species does not remove it from future catching expeditions. The
+player prioritizes missing Pokédex entries and Pokémon requested by other running
+adventures. It also seeks species it no longer holds and occasionally catches
+another copy of a species already in its collection. Plentiful and recently caught
+species receive less attention.
+
+Each repeat expedition aims to acquire one additional individual before choosing
+its next project. Ordinary repeat hunts require a reserve of normal Poké Balls and
+use a bounded attempt budget. They do not spend a Master Ball. Storage cleanup
+retains useful copies and respects locks, offers, active projects, and the copies
+currently needed for other adventures. A single adventure continues collecting
+without needing a trading partner.
+
+## Individual Elite Four wins
+
+The PC shows an **Elite Four wins** count on each Pokémon card and in its details. In **All Pokémon**, choose **Elite Four wins** under **Sort by** to rank the party and every box together.
+
+Each completed Elite Four and Champion run credits every member of the Hall of Fame party, including fainted members. Boxed Pokémon receive no credit for that run. Counts persist through evolution, training, PC moves, restarts, and managed cable trades. Replayed victory records and repeated trade recovery do not add duplicate credit.
+
+Counts include verified historical victory saves when imported. Missing history is not estimated. Generation I has no unique individual identifier. If two partners have indistinguishable trainer and DV data, the count shows **Unavailable** to avoid assigning one Pokémon's wins to another.
+
+## Training more partners to level 100
+
+After becoming Champion, training projects aim for level 100 and favor eligible Pokémon within five levels of the highest unfinished partner. Training takes a larger share of postgame projects, with breaks for collecting, exploration, League rewards, and urgent supplies. Productive training can return to the same individual after a bounded session, while stalled projects retain their normal timeout and retry safeguards.
+
+Individually identifiable duplicates can train even when another member of their evolution family is owned. Pokémon already at level 100 are excluded. When preparing a boxed trainee, the party prefers to deposit a level-100 reserve while keeping a strong battler and required field moves. A trainee with a safe, effective attack stays in battle rather than switching merely for a stronger matchup. Healing and emergency switches still take priority.

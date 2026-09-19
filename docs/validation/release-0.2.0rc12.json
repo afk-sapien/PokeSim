@@ -1,0 +1,432 @@
+{
+  "revision": "66b226f6d2a565c5281692a285d419d79fabaf2f",
+  "blue_deployment": {
+    "edition": "blue",
+    "backup": "/docker/pokesim-blue/backups/20260914T224357Z-rc12/before.tar",
+    "image": "pokesim:0.2.0rc12-66b226f",
+    "image_id": "sha256:8d2e402895f59e9493269244f95d55db49c5d907a0291f4f2028415831ef1f11",
+    "revision": "66b226f6d2a565c5281692a285d419d79fabaf2f",
+    "timestamp": 1789425843.440949,
+    "previous_image": "pokesim:0.2.0rc10-6a23720",
+    "health": {
+      "ok": true,
+      "worker_alive": true,
+      "activity_age_seconds": 0.0,
+      "error": null
+    },
+    "owned": 115,
+    "reloads": 0,
+    "progress": {
+      "state": "exploring",
+      "last_achievement": {
+        "id": 2701,
+        "title": "MEATDEPT grew to level 60",
+        "ts": 1789423553.7165086,
+        "age_seconds": 2289
+      }
+    }
+  },
+  "unchanged_red": {
+    "version": "0.2.0rc10",
+    "image": "pokesim:0.2.0rc10-6a23720",
+    "started_at": "2026-09-14T21:11:08.984047943Z",
+    "uptime": 5604,
+    "reloads": 0,
+    "health": {
+      "ok": true,
+      "worker_alive": true,
+      "activity_age_seconds": 0.0,
+      "error": null
+    }
+  },
+  "public_checks": [
+    {
+      "edition": "red",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "red",
+      "path": "/sprites/25.png",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/healthz",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pokedex",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/pc",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/journal",
+      "status": 200
+    },
+    {
+      "edition": "blue",
+      "path": "/sprites/25.png",
+      "status": 200
+    }
+  ],
+  "live_blue_after_start": {
+    "version": "0.2.0rc12",
+    "image": "pokesim:0.2.0rc12-66b226f",
+    "uptime": 31,
+    "reloads": 0,
+    "health": {
+      "ok": true,
+      "worker_alive": true,
+      "activity_age_seconds": 0.0,
+      "error": null
+    },
+    "position": [
+      "Route 11",
+      39,
+      15
+    ],
+    "party": [
+      {
+        "dex": 95,
+        "nick": "NOODLE",
+        "level": 16,
+        "experience": {
+          "total": 4525,
+          "earned": 429,
+          "needed": 817,
+          "remaining": 388,
+          "percent": 52.5,
+          "max_level": false
+        },
+        "hp": 7,
+        "max_hp": 38,
+        "status": 0,
+        "pp": [
+          34,
+          40,
+          20,
+          0
+        ]
+      },
+      {
+        "dex": 93,
+        "nick": "SCOUT",
+        "level": 75,
+        "experience": {
+          "total": 439320,
+          "earned": 10085,
+          "needed": 18356,
+          "remaining": 8271,
+          "percent": 54.9,
+          "max_level": false
+        },
+        "hp": 203,
+        "max_hp": 203,
+        "status": 0,
+        "pp": [
+          30,
+          15,
+          15,
+          20
+        ]
+      },
+      {
+        "dex": 18,
+        "nick": "FIZZ",
+        "level": 75,
+        "experience": {
+          "total": 431149,
+          "earned": 1914,
+          "needed": 18356,
+          "remaining": 16442,
+          "percent": 10.4,
+          "max_level": false
+        },
+        "hp": 261,
+        "max_hp": 261,
+        "status": 0,
+        "pp": [
+          30,
+          35,
+          30,
+          20
+        ]
+      },
+      {
+        "dex": 143,
+        "nick": "BOOTS",
+        "level": 82,
+        "experience": {
+          "total": 691104,
+          "earned": 1894,
+          "needed": 25523,
+          "remaining": 23629,
+          "percent": 7.4,
+          "max_level": false
+        },
+        "hp": 414,
+        "max_hp": 414,
+        "status": 0,
+        "pp": [
+          15,
+          15,
+          10,
+          15
+        ]
+      },
+      {
+        "dex": 3,
+        "nick": "TOAST",
+        "level": 80,
+        "experience": {
+          "total": 537756,
+          "earned": 11496,
+          "needed": 21014,
+          "remaining": 9518,
+          "percent": 54.7,
+          "max_level": false
+        },
+        "hp": 276,
+        "max_hp": 276,
+        "status": 0,
+        "pp": [
+          30,
+          25,
+          10,
+          10
+        ]
+      },
+      {
+        "dex": 75,
+        "nick": "EMBER",
+        "level": 100,
+        "experience": {
+          "total": 1059860,
+          "earned": 0,
+          "needed": 1,
+          "remaining": 0,
+          "percent": 100,
+          "max_level": true
+        },
+        "hp": 308,
+        "max_hp": 311,
+        "status": 0,
+        "pp": [
+          10,
+          5,
+          15,
+          10
+        ]
+      }
+    ]
+  },
+  "validation": {
+    "pytest_passed": 386,
+    "pytest_skipped": 1,
+    "release_checks_passed": 41,
+    "package_runtime_files_verified": 61
+  },
+  "endurance": "Blue has a new endurance interval after maintenance. Red was not restarted. No multi-day pass is claimed.",
+  "live_blue_followup": {
+    "uptime": 166,
+    "reloads": 0,
+    "health": {
+      "ok": true,
+      "worker_alive": true,
+      "activity_age_seconds": 0.0,
+      "error": null
+    },
+    "owned": 115,
+    "position": [
+      "Fuchsia City",
+      16,
+      12
+    ],
+    "progress": {
+      "state": "making_progress",
+      "last_achievement": {
+        "id": 2710,
+        "title": "PEACH grew to level 32",
+        "ts": 1789425984.7975047,
+        "age_seconds": 24
+      }
+    },
+    "party": [
+      {
+        "dex": 22,
+        "nick": "PEACH",
+        "level": 32,
+        "experience": {
+          "total": 34271,
+          "earned": 1503,
+          "needed": 3169,
+          "remaining": 1666,
+          "percent": 47.4,
+          "max_level": false
+        },
+        "hp": 97,
+        "max_hp": 98,
+        "status": 0,
+        "pp": [
+          19,
+          40,
+          30,
+          20
+        ]
+      },
+      {
+        "dex": 18,
+        "nick": "FIZZ",
+        "level": 75,
+        "experience": {
+          "total": 431149,
+          "earned": 1914,
+          "needed": 18356,
+          "remaining": 16442,
+          "percent": 10.4,
+          "max_level": false
+        },
+        "hp": 261,
+        "max_hp": 261,
+        "status": 0,
+        "pp": [
+          30,
+          35,
+          30,
+          20
+        ]
+      },
+      {
+        "dex": 143,
+        "nick": "BOOTS",
+        "level": 82,
+        "experience": {
+          "total": 691571,
+          "earned": 2361,
+          "needed": 25523,
+          "remaining": 23162,
+          "percent": 9.3,
+          "max_level": false
+        },
+        "hp": 399,
+        "max_hp": 414,
+        "status": 0,
+        "pp": [
+          15,
+          15,
+          10,
+          13
+        ]
+      },
+      {
+        "dex": 3,
+        "nick": "TOAST",
+        "level": 80,
+        "experience": {
+          "total": 538170,
+          "earned": 11910,
+          "needed": 21014,
+          "remaining": 9104,
+          "percent": 56.7,
+          "max_level": false
+        },
+        "hp": 273,
+        "max_hp": 276,
+        "status": 0,
+        "pp": [
+          30,
+          23,
+          10,
+          10
+        ]
+      },
+      {
+        "dex": 75,
+        "nick": "EMBER",
+        "level": 100,
+        "experience": {
+          "total": 1059860,
+          "earned": 0,
+          "needed": 1,
+          "remaining": 0,
+          "percent": 100,
+          "max_level": true
+        },
+        "hp": 275,
+        "max_hp": 311,
+        "status": 0,
+        "pp": [
+          0,
+          5,
+          0,
+          0
+        ]
+      },
+      {
+        "dex": 93,
+        "nick": "SCOUT",
+        "level": 75,
+        "experience": {
+          "total": 440030,
+          "earned": 10795,
+          "needed": 18356,
+          "remaining": 7561,
+          "percent": 58.8,
+          "max_level": false
+        },
+        "hp": 201,
+        "max_hp": 203,
+        "status": 0,
+        "pp": [
+          22,
+          0,
+          15,
+          20
+        ]
+      }
+    ]
+  },
+  "red_followup": {
+    "started_at": "2026-09-14T21:11:08.984047943Z",
+    "uptime": 5738,
+    "reloads": 0,
+    "health": {
+      "ok": true,
+      "worker_alive": true,
+      "activity_age_seconds": 0.1,
+      "error": null
+    }
+  }
+}

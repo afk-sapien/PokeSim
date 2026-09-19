@@ -19,7 +19,7 @@ def pretty(name: str) -> str:
 
 def parse(src, path, macro):
     out = {}
-    for line in (src / path).read_text().splitlines():
+    for line in (src / path).read_text(encoding="utf-8").splitlines():
         m = re.match(rf"\s*{macro}\s+([A-Z0-9_]+)\b.*\x3b\s*\$([0-9A-Fa-f]{{2}})", line)
         if m:
             out[int(m.group(2), 16)] = m.group(1)
@@ -29,13 +29,13 @@ def generate(src):
     maps = parse(src / "constants", "map_constants.asm", "map_const")
     trainers = parse(src / "constants", "trainer_constants.asm", "trainer_const")
     moves = {}
-    for line in (src / "data/moves/moves.asm").read_text().splitlines():
+    for line in (src / "data/moves/moves.asm").read_text(encoding="utf-8").splitlines():
         m = re.match(r"\s*move\s+([A-Z0-9_]+),\s*([A-Z0-9_]+),\s*(\d+),\s*([A-Z0-9_]+),\s*(\d+),\s*(\d+)", line)
         if m:
             moves[len(moves) + 1] = {"name": pretty(m.group(1)), "power": int(m.group(3)), "type": pretty(m.group(4)),
                                      "effect": m.group(2)}
     dex = {}
-    for line in (src / "constants/pokedex_constants.asm").read_text().splitlines():
+    for line in (src / "constants/pokedex_constants.asm").read_text(encoding="utf-8").splitlines():
         m = re.match(r"\s*const\s+DEX_([A-Z0-9_]+)\s*\x3b\s*(\d+)", line)
         if m:
             dex[int(m.group(2))] = m.group(1)

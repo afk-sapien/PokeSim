@@ -1,0 +1,494 @@
+{
+  "edition": "red",
+  "frames": 432028,
+  "wall_seconds": 202.53,
+  "rewinds": 0,
+  "initial_owned": 111,
+  "final_owned": 111,
+  "new_owned": [],
+  "initial_party": [
+    [
+      "Muk",
+      100,
+      1000000
+    ],
+    [
+      "Dragonite",
+      55,
+      213209
+    ],
+    [
+      "Rapidash",
+      80,
+      523596
+    ],
+    [
+      "Zapdos",
+      88,
+      867881
+    ],
+    [
+      "Venusaur",
+      100,
+      1059860
+    ],
+    [
+      "Lapras",
+      31,
+      39015
+    ]
+  ],
+  "final_party": [
+    [
+      "Rapidash",
+      81,
+      544147
+    ],
+    [
+      "Zapdos",
+      88,
+      872027
+    ],
+    [
+      "Venusaur",
+      100,
+      1059860
+    ],
+    [
+      "Lapras",
+      31,
+      39015
+    ],
+    [
+      "Muk",
+      100,
+      1000000
+    ],
+    [
+      "Graveler",
+      43,
+      73100
+    ]
+  ],
+  "initial_items": [
+    [
+      63,
+      1
+    ],
+    [
+      196,
+      1
+    ],
+    [
+      74,
+      1
+    ],
+    [
+      72,
+      1
+    ],
+    [
+      73,
+      1
+    ],
+    [
+      48,
+      1
+    ],
+    [
+      198,
+      1
+    ],
+    [
+      199,
+      1
+    ],
+    [
+      43,
+      1
+    ],
+    [
+      53,
+      5
+    ],
+    [
+      78,
+      1
+    ],
+    [
+      76,
+      1
+    ],
+    [
+      69,
+      1
+    ],
+    [
+      77,
+      1
+    ],
+    [
+      83,
+      1
+    ],
+    [
+      4,
+      6
+    ],
+    [
+      2,
+      7
+    ]
+  ],
+  "final_items": [
+    [
+      63,
+      1
+    ],
+    [
+      196,
+      1
+    ],
+    [
+      74,
+      1
+    ],
+    [
+      72,
+      1
+    ],
+    [
+      73,
+      1
+    ],
+    [
+      48,
+      1
+    ],
+    [
+      198,
+      1
+    ],
+    [
+      199,
+      1
+    ],
+    [
+      43,
+      1
+    ],
+    [
+      53,
+      5
+    ],
+    [
+      78,
+      1
+    ],
+    [
+      76,
+      1
+    ],
+    [
+      69,
+      1
+    ],
+    [
+      77,
+      1
+    ],
+    [
+      83,
+      1
+    ],
+    [
+      4,
+      6
+    ],
+    [
+      2,
+      8
+    ],
+    [
+      16,
+      7
+    ],
+    [
+      247,
+      1
+    ]
+  ],
+  "achievements": [
+    {
+      "frame": 97194,
+      "type": "level",
+      "title": "KIWI grew to level 56"
+    },
+    {
+      "frame": 139068,
+      "type": "level",
+      "title": "SQUISH grew to level 52"
+    },
+    {
+      "frame": 246312,
+      "type": "level",
+      "title": "SQUISH grew to level 53"
+    },
+    {
+      "frame": 349902,
+      "type": "level",
+      "title": "GIZMO grew to level 81"
+    },
+    {
+      "frame": 359220,
+      "type": "trainer",
+      "title": "Defeated Cooltrainer F"
+    },
+    {
+      "frame": 365034,
+      "type": "item",
+      "title": "Picked up TM Explosion"
+    },
+    {
+      "frame": 425404,
+      "type": "trainer",
+      "title": "Defeated Cooltrainer M"
+    }
+  ],
+  "mode_frames": {
+    "waiting for map transition": 10920,
+    "following objective": 50880,
+    "dialogue": 246036,
+    "battle: run": 1620,
+    "using Strength": 1728,
+    "waiting for the menu": 4056,
+    "pause": 1638,
+    "party": 8262,
+    "party_action": 2844,
+    "moving a boulder onto the switch": 51840,
+    "overworld": 696,
+    "exploring obstacle": 11100,
+    "finding another approach": 586,
+    "heal": 54,
+    "interacting": 562,
+    "list": 6300,
+    "shop": 108,
+    "yes_no": 918,
+    "pc_root": 1248,
+    "pc": 1242,
+    "training": 5460,
+    "battle: fight": 3150,
+    "moves": 6012,
+    "battle: item": 504,
+    "battle": 54,
+    "naming": 10314,
+    "change_box": 792,
+    "battle: switch": 2088,
+    "planning the next expedition": 984,
+    "talking to locals": 32
+  },
+  "history": [
+    "Completed: Graveler toward level 50",
+    "Will revisit: Ditto",
+    "Changed plan: Train. No encounter, training gain, or new route in two minutes",
+    "Changed plan: Train. No encounter, training gain, or new route in two minutes",
+    "Completed: Trainer",
+    "Will revisit: Trainer"
+  ],
+  "director": {
+    "recent": [
+      {
+        "category": "collection",
+        "key": "76:grass:34:"
+      },
+      {
+        "category": "collection",
+        "key": "73:static:194:MOLTRES"
+      },
+      {
+        "category": "training",
+        "key": "train:39:50"
+      },
+      {
+        "category": "collection",
+        "key": "76:grass:34:"
+      },
+      {
+        "category": "training",
+        "key": "train:158:40"
+      },
+      {
+        "category": "training",
+        "key": "train:125:20"
+      },
+      {
+        "category": "exploration",
+        "key": "0:trainer:198:TEXT_VICTORYROAD3F_COOLTRAINER_F1"
+      },
+      {
+        "category": "exploration",
+        "key": "0:trainer:194:TEXT_VICTORYROAD2F_MOLTRES"
+      }
+    ],
+    "outcomes": [
+      {
+        "key": "train:66:60",
+        "category": "training",
+        "status": "deferred",
+        "reason": "No encounter, training gain, or new route in two minutes",
+        "elapsed": 181895474,
+        "retry_at": 181955474,
+        "target": 60,
+        "gains": {
+          "experience": 2253,
+          "levels": 0
+        }
+      },
+      {
+        "key": "73:static:194:MOLTRES",
+        "category": "collection",
+        "status": "deferred",
+        "reason": "Expedition time budget reached",
+        "elapsed": 181932258,
+        "retry_at": 181992258,
+        "target": 73,
+        "gains": {}
+      },
+      {
+        "key": "train:45:60",
+        "category": "training",
+        "status": "deferred",
+        "reason": "No encounter, training gain, or new route in two minutes",
+        "elapsed": 181983084,
+        "retry_at": 182043084,
+        "target": 60,
+        "gains": {
+          "experience": 1234,
+          "levels": 0
+        }
+      },
+      {
+        "key": "76:grass:34:",
+        "category": "collection",
+        "status": "deferred",
+        "reason": "Expedition time budget reached",
+        "elapsed": 182021264,
+        "retry_at": 182081264,
+        "target": 76,
+        "gains": {}
+      },
+      {
+        "key": "73:static:194:MOLTRES",
+        "category": "collection",
+        "status": "deferred",
+        "reason": "Expedition time budget reached",
+        "elapsed": 182092882,
+        "retry_at": 182212882,
+        "target": 73,
+        "gains": {}
+      },
+      {
+        "key": "train:39:50",
+        "category": "training",
+        "status": "completed",
+        "reason": "Target reached",
+        "elapsed": 182117156,
+        "retry_at": 0,
+        "target": 50,
+        "gains": {
+          "experience": 0,
+          "levels": 57
+        }
+      },
+      {
+        "key": "76:grass:34:",
+        "category": "collection",
+        "status": "deferred",
+        "reason": "Expedition time budget reached",
+        "elapsed": 182154364,
+        "retry_at": 182274364,
+        "target": 76,
+        "gains": {}
+      },
+      {
+        "key": "train:158:40",
+        "category": "training",
+        "status": "deferred",
+        "reason": "No encounter, training gain, or new route in two minutes",
+        "elapsed": 182165206,
+        "retry_at": 182225206,
+        "target": 40,
+        "gains": {}
+      },
+      {
+        "key": "train:125:20",
+        "category": "training",
+        "status": "deferred",
+        "reason": "No encounter, training gain, or new route in two minutes",
+        "elapsed": 182175734,
+        "retry_at": 182235734,
+        "target": 20,
+        "gains": {}
+      },
+      {
+        "key": "0:trainer:198:TEXT_VICTORYROAD3F_COOLTRAINER_F1",
+        "category": "exploration",
+        "status": "completed",
+        "reason": "Target reached",
+        "elapsed": 182182914,
+        "retry_at": 0,
+        "target": null,
+        "gains": {}
+      },
+      {
+        "key": "0:trainer:194:TEXT_VICTORYROAD2F_MOLTRES",
+        "category": "exploration",
+        "status": "deferred",
+        "reason": "Expedition time budget reached",
+        "elapsed": 182223194,
+        "retry_at": 182283194,
+        "target": null,
+        "gains": {}
+      }
+    ],
+    "failures": {
+      "train:66:60": 1,
+      "train:45:60": 1,
+      "73:static:194:MOLTRES": 2,
+      "76:grass:34:": 2,
+      "train:158:40": 1,
+      "train:125:20": 1,
+      "0:trainer:194:TEXT_VICTORYROAD2F_MOLTRES": 1
+    },
+    "completed": {
+      "training": 1,
+      "exploration": 1
+    }
+  },
+  "active_project": null,
+  "pickups": {
+    "active": null,
+    "completed": [
+      "198:5"
+    ],
+    "retry": {},
+    "next_scan": 182187706,
+    "history": [
+      "Pickup unavailable or detour budget reached: Max Revive",
+      "Collected TM Explosion"
+    ]
+  },
+  "policy_recoveries": 25,
+  "checkpoint_sha256": "89a49c3dd0a063d28524996074ff73abc09971b995afb48787df3db9802998d3",
+  "policy_fingerprint": "7f5e5843d65c6532b1c1408a7647cb53680f232ef6a6a72bae2c7d8286adcb65",
+  "pyboy": "2.7.0",
+  "final_goal": "Plan the next adventure project",
+  "final_map": "Victory Road 3F",
+  "source_revision": "8ca0271dd4f76d8fb74574efaa464b4bbf90ac43",
+  "limitations": [
+    "Rewinds are disabled in this replay, so this does not validate the live recovery guard.",
+    "Local policy recoveries are not save reloads.",
+    "Director training totals require further validation when multiple partners share a species."
+  ],
+  "followup": "The training counter concern was traced to a partial PC withdrawal snapshot, not a stronger duplicate. Fixed in rc10. Historical metrics are preserved."
+}

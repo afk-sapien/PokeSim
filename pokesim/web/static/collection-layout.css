@@ -1,0 +1,171 @@
+.pc-summary,.trading-summary { display:flex }
+.pc-summary,.trading-summary { align-items:center }
+.pc-summary,.trading-summary { flex-wrap:wrap }
+.pc-summary,.trading-summary { gap:12px 24px }
+.pc-summary,.trading-summary { padding:16px 0 }
+.pc-summary,.trading-summary { margin-bottom:12px }
+.pc-summary,.trading-summary { border-bottom:1px solid #dcded3 }
+.pc-summary h1,.trading-summary h1 { margin:0 }
+.pc-summary h1,.trading-summary h1 { font-size:28px }
+.pc-summary h1,.trading-summary h1 { letter-spacing:-.7px }
+.pc-summary-stat { display:flex }
+.pc-summary-stat { align-items:baseline }
+.pc-summary-stat { gap:8px }
+.pc-summary-stat { font-size:13px }
+.pc-summary-stat>span { color:#687063 }
+.pc-summary-stat strong { font-size:14px }
+.pc-summary-stat strong { font-variant-numeric:tabular-nums }
+.pc-summary .view-switch { margin:0 0 0 auto }
+.pc-summary .view-switch { padding:3px }
+.pc-summary .view-switch button { padding:9px 14px }
+.pc-toolbar { display:flex }
+.pc-toolbar { flex-wrap:wrap }
+.pc-toolbar { padding:12px 14px }
+.pc-toolbar { gap:12px }
+.pc-toolbar { border-radius:12px }
+.pc-toolbar { align-items:flex-end }
+.pc-toolbar label { display:flex }
+.pc-toolbar label { flex-direction:column }
+.pc-toolbar label { align-items:stretch }
+.pc-toolbar label { gap:5px }
+.pc-toolbar label { min-width:0 }
+.pc-toolbar label { letter-spacing:.7px }
+.pc-toolbar .pc-search-control { flex:1 1 240px }
+.pc-toolbar input,.pc-toolbar select { width:100% }
+.pc-toolbar input,.pc-toolbar select { box-sizing:border-box }
+.pc-toolbar input,.pc-toolbar select { height:38px }
+.pc-toolbar #pc-count { margin:0 0 9px auto }
+.pc-toolbar #pc-count { flex-shrink:0 }
+#pc-sort-control { flex:0 1 210px }
+#pc-order-control { flex:0 1 150px }
+[data-page="pc"] .pc-workspace { gap:20px }
+[data-page="pc"] .pc-sidebar h2 { margin:0 0 12px }
+[data-page="pc"] .pc-sidebar h2 { font-size:14px }
+[data-page="pc"] .box-picker { gap:6px }
+[data-page="pc"] .box-picker button { padding:9px 10px }
+[data-page="pc"] .box-picker button { border-radius:9px }
+[data-page="pc"] .pc-content { min-width:0 }
+[data-page="pc"] .section-heading { margin:0 0 12px }
+[data-page="pc"] .section-heading { gap:8px 16px }
+[data-page="pc"] .section-heading { align-items:center }
+[data-page="pc"] .section-heading { flex-wrap:wrap }
+[data-page="pc"] .section-heading h2 { font-size:18px }
+#pc-note { margin-left:auto }
+.pc-power-note { position:relative }
+.pc-power-note { margin:0 }
+.pc-power-note { font-size:12px }
+.pc-power-note summary { cursor:pointer }
+.pc-power-note summary { color:#4c644c }
+.pc-power-note>p { position:absolute }
+.pc-power-note>p { z-index:5 }
+.pc-power-note>p { top:24px }
+.pc-power-note>p { right:0 }
+.pc-power-note>p { width:min(280px,70vw) }
+.pc-power-note>p { padding:12px 14px }
+.pc-power-note>p { margin:0 }
+.pc-power-note>p { background:#fffef9 }
+.pc-power-note>p { border:1px solid #d0d5c8 }
+.pc-power-note>p { border-radius:10px }
+.pc-power-note>p { box-shadow:0 6px 20px #24382814 }
+.library[data-page="trading"] .library-main { margin-top:12px }
+.trading-summary .trade-status-strip { margin:0 }
+.trading-summary .trade-status-strip { padding:0 }
+.trading-summary .trade-status-strip { border:0 }
+.trading-summary .trade-status-strip { border-radius:0 }
+.trading-summary .trade-status-strip { background:transparent }
+.trading-summary .trade-status-strip { gap:5px 12px }
+.trading-protection { margin-left:auto }
+.trading-protection { font-size:12px }
+.trading-protection { color:#687063 }
+[data-page="trading"] .trade-section { margin-top:18px }
+[data-page="trading"] .trade-section>.section-heading { margin-bottom:10px }
+[data-page="trading"] .trade-section h2 { font-size:17px }
+[data-page="trading"] .trade-section .exchange { padding:12px 16px }
+[data-page="trading"] .trade-section .exchange { margin-bottom:8px }
+[data-page="trading"] .trade-section .exchange { border-radius:12px }
+[data-page="trading"] .exchange-heading .state-pill { padding:3px 8px }
+[data-page="trading"] .exchange-heading .state-pill { font-size:10px }
+[data-page="trading"] .exchange-heading .section-note { font-size:11px }
+[data-page="trading"] .exchange-pair { margin-top:8px }
+[data-page="trading"] .exchange-pair { gap:12px }
+[data-page="trading"] .exchange-pair { grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr) }
+[data-page="trading"] .exchange-partner { display:grid }
+[data-page="trading"] .exchange-partner { grid-template-columns:44px minmax(0,1fr) }
+[data-page="trading"] .exchange-partner { column-gap:10px }
+[data-page="trading"] .exchange-partner h3 { grid-column:2 }
+[data-page="trading"] .exchange-partner h3 { margin:0 0 3px }
+[data-page="trading"] .exchange-partner h3 { font-size:12px }
+[data-page="trading"] .exchange-pokemon { display:contents }
+[data-page="trading"] .exchange-pokemon img,[data-page="trading"] .exchange-placeholder { grid-column:1 }
+[data-page="trading"] .exchange-pokemon img,[data-page="trading"] .exchange-placeholder { grid-row:1 / span 2 }
+[data-page="trading"] .exchange-pokemon img,[data-page="trading"] .exchange-placeholder { align-self:center }
+[data-page="trading"] .exchange-pokemon img,[data-page="trading"] .exchange-placeholder { width:44px }
+[data-page="trading"] .exchange-pokemon img,[data-page="trading"] .exchange-placeholder { height:44px }
+[data-page="trading"] .exchange-pokemon>div { display:flex }
+[data-page="trading"] .exchange-pokemon>div { align-items:baseline }
+[data-page="trading"] .exchange-pokemon>div { flex-wrap:wrap }
+[data-page="trading"] .exchange-pokemon>div { gap:2px 8px }
+[data-page="trading"] .exchange-pokemon strong { font-size:15px }
+[data-page="trading"] .exchange-pokemon .eyebrow { order:1 }
+[data-page="trading"] .exchange-pokemon .eyebrow { margin:0 }
+[data-page="trading"] .exchange-pokemon .eyebrow { letter-spacing:.5px }
+[data-page="trading"] .exchange-nickname { order:2 }
+[data-page="trading"] .exchange-nickname { margin:0 }
+[data-page="trading"] .exchange-evolution { order:3 }
+[data-page="trading"] .exchange-evolution { flex-basis:100% }
+[data-page="trading"] .exchange-evolution { margin:2px 0 0 }
+[data-page="trading"] .page-intro { padding:18px 0 12px }
+[data-page="trading"] .page-intro .eyebrow,[data-page="trading"] .intro-copy { display:none }
+[data-page="trading"] .page-intro h1 { font-size:28px }
+[data-page="trading"] .trade-overview { padding:12px 16px }
+[data-page="trading"] .trade-overview { margin-bottom:14px }
+[data-page="trading"] .trade-overview h2 { font-size:16px }
+[data-page="trading"] .trade-offer { padding:10px 14px }
+[data-page="trading"] .trade-deal { padding:14px 16px }
+[data-page="trading"] .trade-swap { margin:10px 0 }
+[data-page="trading"] .trade-swap { gap:12px }
+[data-page="trading"] .trade-side img,[data-page="trading"] .trade-offer img { width:48px }
+[data-page="trading"] .trade-side img,[data-page="trading"] .trade-offer img { height:48px }
+@media(min-width:901px) {
+  [data-page="pc"] .pc-workspace:not(.pc-workspace-all) { grid-template-columns:190px minmax(0,1fr) }
+  [data-page="pc"] .box-picker { grid-template-columns:repeat(2,minmax(0,1fr)) }
+  [data-page="pc"] .box-picker button { flex-direction:column }
+  [data-page="pc"] .box-picker button { align-items:flex-start }
+  [data-page="pc"] .box-picker button { gap:3px }
+  [data-page="pc"] .box-picker button[data-box="0"] { grid-column:1 / -1 }
+  [data-page="pc"] .box-picker button[data-box="0"] { flex-direction:row }
+  [data-page="pc"] .box-picker button[data-box="0"] { align-items:center }
+}
+@media(max-width:760px) {
+  .pc-summary { gap:10px 18px }
+  .pc-summary .view-switch { margin-left:0 }
+  .pc-toolbar .pc-search-control { flex-basis:100% }
+  #pc-sort-control { flex:1 1 140px }
+  #pc-order-control { flex:1 1 100px }
+  .pc-toolbar #pc-count { margin:0 0 2px auto }
+  .trading-summary { gap:8px 16px }
+  .trading-summary .trade-status-strip { flex:1 1 240px }
+  .trading-summary .trade-status-strip { flex-direction:row }
+  .trading-protection { margin-left:0 }
+}
+@media(max-width:600px) {
+  .pc-summary h1 { font-size:25px }
+  .pc-summary-stat { font-size:11px }
+  .pc-summary-stat { gap:5px }
+  .pc-summary-stat strong { font-size:12px }
+  .pc-summary .view-switch { width:100% }
+  .pc-summary .view-switch button { flex:1 }
+  .pc-toolbar { padding:10px }
+  .pc-toolbar { gap:10px }
+  [data-page="pc"] .pc-workspace { gap:12px }
+  [data-page="pc"] .mobile-box-control { margin:0 }
+  #pc-note { display:none }
+  .pc-power-note { margin-left:auto }
+  .library[data-page="trading"] .library-main { padding:0 16px }
+  [data-page="trading"] .exchange-pair { grid-template-columns:minmax(0,1fr) }
+  [data-page="trading"] .exchange-pair { gap:8px }
+  [data-page="trading"] .exchange-partner+ .exchange-arrow+ .exchange-partner { padding-top:8px }
+  [data-page="trading"] .trade-section .exchange { padding:10px 12px }
+  [data-page="trading"] .exchange-heading { flex-wrap:wrap }
+  [data-page="trading"] .trade-section>.section-heading { flex-wrap:wrap }
+}

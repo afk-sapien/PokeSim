@@ -1,0 +1,498 @@
+{
+  "baseline_revision": "6a23720ec5f6eb97fd581c0721cb51c5f64a1c44",
+  "candidate_revision": "6de8c1bd57d7a3d61a2f49a3f30377cf3e29667e",
+  "deployed": false,
+  "decision": "Keep rc10 live. The candidate fixes a confirmed obstacle collision, but the longer comparison did not improve overall adventure progress or collecting. Broader routing changes were discarded.",
+  "collision_probe": {
+    "baseline": {
+      "source": [
+        198,
+        23,
+        10
+      ],
+      "target": [
+        198,
+        24,
+        10
+      ],
+      "object_present": true,
+      "remembered": true,
+      "allowed": true
+    },
+    "candidate": {
+      "source": [
+        198,
+        23,
+        10
+      ],
+      "target": [
+        198,
+        24,
+        10
+      ],
+      "object_present": true,
+      "remembered": true,
+      "allowed": false
+    }
+  },
+  "red_baseline": {
+    "frames": 432018,
+    "wall_seconds": 190.3,
+    "rewinds": 0,
+    "initial_owned": 111,
+    "final_owned": 111,
+    "final_party": [
+      [
+        "Zapdos",
+        89,
+        886339
+      ],
+      [
+        "Rapidash",
+        80,
+        529865
+      ],
+      [
+        "Vileplume",
+        32,
+        27886
+      ],
+      [
+        "Venusaur",
+        100,
+        1059860
+      ],
+      [
+        "Lapras",
+        31,
+        39400
+      ],
+      [
+        "Muk",
+        100,
+        1000000
+      ]
+    ],
+    "final_map": "Victory Road 2F",
+    "final_goal": "Train Zapdos to level 90",
+    "policy_recoveries": 43,
+    "checkpoint_sha256": "95c85980ef6aedb42aed1115b3b7ff747361b3264759b0d28bb689f9672d81bb",
+    "policy_fingerprint": "58deaf66eee37456d561667bef833cae60901a854fd642e29098998f98c4b739",
+    "achievement_counts": {
+      "level": 16,
+      "trainer": 3,
+      "item": 2
+    },
+    "achievements": [
+      {
+        "frame": 11866,
+        "type": "level",
+        "title": "TOAST grew to level 22"
+      },
+      {
+        "frame": 22650,
+        "type": "trainer",
+        "title": "Defeated Cooltrainer M"
+      },
+      {
+        "frame": 25186,
+        "type": "level",
+        "title": "TOAST grew to level 23"
+      },
+      {
+        "frame": 121288,
+        "type": "level",
+        "title": "MAPLE grew to level 11"
+      },
+      {
+        "frame": 128698,
+        "type": "level",
+        "title": "MAPLE grew to level 12"
+      },
+      {
+        "frame": 138892,
+        "type": "level",
+        "title": "MAPLE grew to level 13"
+      },
+      {
+        "frame": 144634,
+        "type": "level",
+        "title": "MAPLE grew to level 14"
+      },
+      {
+        "frame": 158078,
+        "type": "level",
+        "title": "MAPLE grew to level 15"
+      },
+      {
+        "frame": 162242,
+        "type": "level",
+        "title": "MAPLE grew to level 16"
+      },
+      {
+        "frame": 170844,
+        "type": "level",
+        "title": "MAPLE grew to level 17"
+      },
+      {
+        "frame": 179546,
+        "type": "level",
+        "title": "MAPLE grew to level 18"
+      },
+      {
+        "frame": 182120,
+        "type": "trainer",
+        "title": "Defeated Cooltrainer F"
+      },
+      {
+        "frame": 184288,
+        "type": "item",
+        "title": "Picked up Full Heal"
+      },
+      {
+        "frame": 188922,
+        "type": "trainer",
+        "title": "Defeated Juggler"
+      },
+      {
+        "frame": 190976,
+        "type": "level",
+        "title": "MAPLE grew to level 19"
+      },
+      {
+        "frame": 209788,
+        "type": "level",
+        "title": "MAPLE grew to level 20"
+      },
+      {
+        "frame": 234158,
+        "type": "level",
+        "title": "MAPLE grew to level 21"
+      },
+      {
+        "frame": 294860,
+        "type": "level",
+        "title": "PEACH grew to level 31"
+      },
+      {
+        "frame": 353296,
+        "type": "level",
+        "title": "PEACH grew to level 32"
+      },
+      {
+        "frame": 385166,
+        "type": "level",
+        "title": "SPROUT grew to level 89"
+      },
+      {
+        "frame": 392380,
+        "type": "item",
+        "title": "Picked up TM Mega Kick"
+      }
+    ],
+    "mode_frames": {
+      "waiting for map transition": 7560,
+      "dialogue": 262344,
+      "battle: switch": 3222,
+      "party": 10512,
+      "party_action": 2574,
+      "battle: fight": 4230,
+      "moves": 7398,
+      "moving a boulder onto the switch": 23584,
+      "following objective": 37540,
+      "overworld": 846,
+      "talking to locals": 68,
+      "yes_no": 954,
+      "using Strength": 792,
+      "waiting for the menu": 1968,
+      "pause": 1044,
+      "exploring obstacle": 29200,
+      "finding another approach": 2346,
+      "interacting": 760,
+      "pc_root": 1092,
+      "pc": 1584,
+      "list": 9480,
+      "heal": 36,
+      "training": 16380,
+      "battle: item": 810,
+      "naming": 4470,
+      "shop": 180,
+      "change_box": 918,
+      "learn_move": 36,
+      "battle": 90
+    }
+  },
+  "red_candidate": {
+    "frames": 432020,
+    "wall_seconds": 194.48,
+    "rewinds": 0,
+    "initial_owned": 111,
+    "final_owned": 111,
+    "final_party": [
+      [
+        "Dewgong",
+        36,
+        46702
+      ],
+      [
+        "Venusaur",
+        100,
+        1059860
+      ],
+      [
+        "Lapras",
+        31,
+        39400
+      ],
+      [
+        "Muk",
+        100,
+        1000000
+      ],
+      [
+        "Rapidash",
+        80,
+        529865
+      ],
+      [
+        "Zapdos",
+        88,
+        875749
+      ]
+    ],
+    "final_map": "Victory Road 3F",
+    "final_goal": "Find Ditto",
+    "policy_recoveries": 42,
+    "checkpoint_sha256": "95c85980ef6aedb42aed1115b3b7ff747361b3264759b0d28bb689f9672d81bb",
+    "policy_fingerprint": "c7cb912882cdadf3c3f68193d4a4deb7a381ac4e7540093a0646e9eb1ac7e58a",
+    "achievement_counts": {
+      "level": 7,
+      "trainer": 2
+    },
+    "achievements": [
+      {
+        "frame": 11866,
+        "type": "level",
+        "title": "TOAST grew to level 22"
+      },
+      {
+        "frame": 22650,
+        "type": "trainer",
+        "title": "Defeated Cooltrainer M"
+      },
+      {
+        "frame": 25186,
+        "type": "level",
+        "title": "TOAST grew to level 23"
+      },
+      {
+        "frame": 41952,
+        "type": "level",
+        "title": "TOAST grew to level 24"
+      },
+      {
+        "frame": 44232,
+        "type": "trainer",
+        "title": "Defeated Cooltrainer F"
+      },
+      {
+        "frame": 151104,
+        "type": "level",
+        "title": "TOFFEE grew to level 33"
+      },
+      {
+        "frame": 221062,
+        "type": "level",
+        "title": "SCOUT grew to level 33"
+      },
+      {
+        "frame": 417240,
+        "type": "level",
+        "title": "PUMPKIN grew to level 35"
+      },
+      {
+        "frame": 430106,
+        "type": "level",
+        "title": "PUMPKIN grew to level 36"
+      }
+    ],
+    "mode_frames": {
+      "waiting for map transition": 8220,
+      "dialogue": 235200,
+      "battle: switch": 2718,
+      "party": 9288,
+      "party_action": 2232,
+      "battle: fight": 3132,
+      "moves": 5958,
+      "moving a boulder onto the switch": 13920,
+      "following objective": 47220,
+      "overworld": 900,
+      "talking to locals": 16,
+      "yes_no": 1998,
+      "using Strength": 468,
+      "waiting for the menu": 1236,
+      "pause": 954,
+      "interacting": 1276,
+      "exploring obstacle": 39520,
+      "pc_root": 2964,
+      "pc": 4566,
+      "list": 10848,
+      "change_box": 6966,
+      "heal": 72,
+      "finding another approach": 3280,
+      "battle: item": 792,
+      "naming": 11640,
+      "shop": 216,
+      "training": 16240,
+      "battle": 180
+    }
+  },
+  "blue_candidate": {
+    "frames": 144012,
+    "wall_seconds": 79.66,
+    "rewinds": 0,
+    "initial_owned": 115,
+    "final_owned": 115,
+    "final_party": [
+      [
+        "Tentacruel",
+        32,
+        41015
+      ],
+      [
+        "Venusaur",
+        78,
+        504952
+      ],
+      [
+        "Graveler",
+        100,
+        1059860
+      ],
+      [
+        "Haunter",
+        74,
+        420608
+      ],
+      [
+        "Pidgeot",
+        72,
+        386749
+      ],
+      [
+        "Snorlax",
+        79,
+        635802
+      ]
+    ],
+    "final_map": "Route 7",
+    "final_goal": "Train Tentacruel to level 40",
+    "policy_recoveries": 9,
+    "checkpoint_sha256": "3a876e7d6c57d2abe7908338162a876b89ec3c4349e3c1fcf634933d60c844cc",
+    "policy_fingerprint": "c7cb912882cdadf3c3f68193d4a4deb7a381ac4e7540093a0646e9eb1ac7e58a",
+    "achievement_counts": {
+      "level": 12
+    },
+    "achievements": [
+      {
+        "frame": 1928,
+        "type": "level",
+        "title": "TOAST grew to level 12"
+      },
+      {
+        "frame": 23408,
+        "type": "level",
+        "title": "TOAST grew to level 13"
+      },
+      {
+        "frame": 34366,
+        "type": "level",
+        "title": "TOAST grew to level 14"
+      },
+      {
+        "frame": 70808,
+        "type": "level",
+        "title": "TOAST grew to level 15"
+      },
+      {
+        "frame": 74310,
+        "type": "level",
+        "title": "TOAST grew to level 16"
+      },
+      {
+        "frame": 78918,
+        "type": "level",
+        "title": "TOAST grew to level 17"
+      },
+      {
+        "frame": 81660,
+        "type": "level",
+        "title": "TOAST grew to level 18"
+      },
+      {
+        "frame": 92400,
+        "type": "level",
+        "title": "TOAST grew to level 19"
+      },
+      {
+        "frame": 96514,
+        "type": "level",
+        "title": "TOAST grew to level 20"
+      },
+      {
+        "frame": 105326,
+        "type": "level",
+        "title": "TOAST grew to level 21"
+      },
+      {
+        "frame": 110058,
+        "type": "level",
+        "title": "TOAST grew to level 22"
+      },
+      {
+        "frame": 143050,
+        "type": "level",
+        "title": "PIXEL grew to level 32"
+      }
+    ],
+    "mode_frames": {
+      "waiting for map transition": 2220,
+      "dialogue": 94944,
+      "training": 4780,
+      "battle: switch": 1116,
+      "party": 2952,
+      "party_action": 756,
+      "battle: fight": 1692,
+      "moves": 4086,
+      "planning the next expedition": 1980,
+      "following objective": 24508,
+      "using Cut": 54,
+      "waiting for the menu": 288,
+      "pause": 324,
+      "overworld": 390,
+      "using Surf": 108,
+      "interacting": 106,
+      "heal": 54,
+      "finding another approach": 452,
+      "yes_no": 144,
+      "exploring obstacle": 1900,
+      "pc_root": 156,
+      "pc": 318,
+      "list": 360,
+      "change_box": 324
+    }
+  },
+  "tests": {
+    "passed": 386,
+    "skipped": 1
+  },
+  "local_repro_directories": [
+    "data/operations/repros/red-navigation-20260914",
+    "data/operations/repros/blue-training-20260914"
+  ],
+  "limitations": [
+    "Replays disable rewinds and do not validate the live save recovery guard.",
+    "An early shorter replay looked better, but the longer comparison did not confirm that improvement.",
+    "Fewer local recoveries alone do not establish better gameplay."
+  ]
+}

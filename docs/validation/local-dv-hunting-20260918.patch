@@ -1,0 +1,474 @@
+--- a/pokesim/duplicates.py
++++ b/pokesim/duplicates.py
+@@ -6,8 +6,16 @@
+ from .milestones import is_perfect
+ 
+ 
++def dv_quality(mon):
++    """Rank known natural stats before any trainable investment."""
++    dvs = mon.get('dvs', ())
++    if len(dvs) != 5 or any(type(value) is not int or not 0 <= value <= 15 for value in dvs):
++        return (-1, -1)
++    return (sum(dvs), min(dvs))
++
++
+ def quality(mon):
+-    """Prefer practical investment before natural potential, within one species.
++    """Prefer natural potential, then practical investment, within one species.
+ 
+     Current HP and PP are deliberately absent because healing restores them.
+     Move coverage and useful status moves matter more than raw move count.
+@@ -25,7 +33,7 @@
+         else:
+             utility += 40 if move.get('effect') in (
+                 'SLEEP_EFFECT', 'HEAL_EFFECT', 'LEECH_SEED_EFFECT', 'PARALYZE_EFFECT') else 8
+-    return (mon['level'], sum(isqrt(value) for value in mon.get('stat_exp', ())),
++    return (*dv_quality(mon), mon['level'], sum(isqrt(value) for value in mon.get('stat_exp', ())),
+             sum(coverage.values()) + utility, mon.get('experience', 0),
+             sum(mon.get('dvs', ())))
+ 
+@@ -33,7 +41,7 @@
+ def spare_entries(party, stored, protected=()):
+     """Keep the best individual per species, with party members winning exact ties.
+ 
+-    Perfect DV individuals are always retained alongside the practical keeper.
++    Every perfect individual is retained. Higher DVs win over higher levels.
+     Party members are never offered. A better boxed copy survives alongside them.
+     Older payloads without individual data retain the original level-only rule.
+     """
+--- a/pokesim/policies/team.py
++++ b/pokesim/policies/team.py
+@@ -32,7 +32,7 @@
+ def spare_copies(s, protected=()):
+     """Boxed duplicates that can be given up, as (box, position, level).
+ 
+-    Keep the best copy using level, training, moves, experience, then DVs. Party members stay
++    Keep the best DVs, then level, training, moves and experience. Party members stay
+     on the team and win exact ties. Species in `protected` are never offered.
+     """
+     return [(mon['box'], mon['position'], mon['level']) for mon in
+--- a/pokesim/policies/collection.py
++++ b/pokesim/policies/collection.py
+@@ -3,7 +3,7 @@
+ import time
+ from collections import Counter
+ from dataclasses import asdict
+-from ..duplicates import quality
++from ..duplicates import quality, dv_quality
+ from functools import lru_cache
+ from ..game_data import load
+ from pathlib import Path
+@@ -129,6 +129,7 @@
+         self.director = AdventureDirector()
+         self.milestones = {}
+         self.last_repeat = {}
++        self.last_hunt = {}
+         self.peer_demand = {}
+         self.demand_until = 0
+ 
+@@ -148,13 +149,19 @@
+             return 12.0 / (1 + count)
+         if not count:
+             return 2.0
+-        weight = (0.75 if dex(species) not in self.milestones.get('perfect_species', ()) else 0.25) / (1 + count) ** 2
++        weight = (1.5 if dex(species) not in self.milestones.get('perfect_species', ()) else 0.75) / (1 + min(count, 10) / 10)
+         if self.elapsed - self.last_repeat.get(str(species), -216000) < 216000:
+             weight *= 0.05
+         return weight
+ 
++    def repeat_target(self, species, map_id=None):
++        project = self.project or {}
++        if project.get('dv_hunt') and map_id == project.get('map'):
++            return species
++        return project.get('species') if project.get('repeat') else None
++
+     def state_dict(self):
+-        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','attempts','elapsed','eevee_choice','dojo_choice','history','completed_champion','idle_frames','project_maps','project_flags','last_repeat')},
++        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','attempts','elapsed','eevee_choice','dojo_choice','history','completed_champion','idle_frames','project_maps','project_flags','last_repeat','last_hunt')},
+                 'director': self.director.state_dict()}
+ 
+     def load(self, data):
+@@ -187,7 +194,7 @@
+             return False
+         project = self.project
+         label = name(project['species']) if project.get('species') else project['method'].title()
+-        progressed = bool(project.get('gains', {}).get('experience', 0))
++        progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
+         self.attempts[project.get('key', label)] = self.director.finish(
+             project, self.elapsed, False, reason, progressed)
+         self.history = (self.history + [f'Changed plan: {label}. {reason}'])[-6:]
+@@ -268,7 +275,12 @@
+             item = self.project.get('item')
+             finished = (target and dex(target) in s.owned) or (not target and item and any(i==ITEMS[item] for i,q in s.items if q))
+             if project.get('repeat'):
+-                finished = held_count(s, target) > project['initial_count']
++                caught = max(0, held_count(s, target) - project['initial_count'])
++                project.setdefault('gains', {})['catches'] = max(project.get('gains', {}).get('catches', 0), caught)
++                finished = caught >= project.get('catch_goal', 1)
++            if project.get('upgrade_evolution'):
++                index = self.trainee(s, project)
++                finished = index is not None and s.party[index].species == target
+             if project['method'] == 'gift' and dex(target) in (106, 107):
+                 finished = event_set(s.event_flags, project['flag'])
+             if self.project['method']=='fossil' and self.project.get('initial_owned'):
+@@ -291,7 +303,7 @@
+                 if project['method'] == 'train':
+                     label = f'{name(project["parent"])} toward level {project["target_level"]}'
+                 self.history = (self.history + [f'{"Completed" if finished else "Will revisit"}: {label}'])[-6:]
+-                progressed = bool(project.get('gains', {}).get('experience', 0))
++                progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
+                 retry = self.director.finish(project, self.elapsed, bool(finished),
+                                              'Target reached' if finished else 'Expedition time budget reached', progressed)
+                 if retry:
+@@ -410,8 +422,12 @@
+             key = str(project.get('species',0)) + ':' + project['method'] + ':' + str(project.get('map',0)) + ':' + str(project.get('fragment',''))
+             if legendary_project(project):
+                 key = f'legendary:{project["species"]}:{project["map"]}'
++            if project['method'] == 'evolve' and project.get('trainee_key'):
++                key += ':' + project['trainee_key']
+             if project['method'] == 'train':
+                 key = f'train:{project.get("trainee_key") or project["parent"]}:{project["target_level"]}'
++                if project.get('scoped_partner'):
++                    key += ':' + str(project['parent']) + ':' + project.get('trainee_nick', '')
+             if self.attempts.get(key,0) <= self.elapsed:
+                 goal = self.goal(s, project)
+                 distance = distance_to(goal.targets) if goal and goal.targets else None
+@@ -427,6 +443,19 @@
+         sources = self.sources()
+         searched = set()
+         distance_to = nav.distance_lookup((s.map, s.x, s.y), s.frame)
++        plateau_maps = {MAPS[n] for n in ('INDIGO_PLATEAU', 'INDIGO_PLATEAU_LOBBY',
++                        'ROUTE_23', 'VICTORY_ROAD_1F', 'VICTORY_ROAD_2F', 'VICTORY_ROAD_3F')}
++        if (self.completed_champion and s.map in plateau_maps
++                and any(70 in mon.moves for mon in s.party)
++                and distance_to(((MAPS['ROUTE_23'], 8, 138),)) is None):
++            # At a project boundary, reopen the route instead of endlessly selecting
++            # only the few species reachable from the League side of Victory Road.
++            north = (s.map in (MAPS['INDIGO_PLATEAU'], MAPS['INDIGO_PLATEAU_LOBBY'])
++                     or s.map == MAPS['ROUTE_23'] and s.y < 40
++                     or s.map in (MAPS['VICTORY_ROAD_2F'], MAPS['VICTORY_ROAD_3F']) and s.x >= 24 and s.y >= 7)
++            target = ((MAPS['VICTORY_ROAD_3F'], 27, 15) if north else (MAPS['ROUTE_23'], 8, 138))
++            return Goal('collect_passage', 'Return to Kanto for more hunting grounds',
++                        'Open the Victory Road passage before selecting another expedition', (target,))
+         for sid,rows in sources.items():
+             if dex(sid) in s.owned:
+                 rows = [source for source in rows if source['method'] in REPEATABLE
+@@ -469,7 +498,11 @@
+                     normal_balls = sum(bag.get(ITEMS[n], 0) for n in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL'))
+                     if mode != 'safari' and normal_balls < 5:
+                         continue
+-                    project.update(repeat=True, initial_count=held_count(s, sid))
++                    project.update(repeat=True, initial_count=held_count(s, sid),
++                                   catch_goal=1 if project['needed_capture'] else 3,
++                                   dv_hunt=not project['needed_capture'],
++                                   last_hunt=self.last_hunt.get(str(sid), -1),
++                                   capture_priority=self.capture_weight(s, sid))
+                 if offered is not None:
+                     project.update(parent=source['give'], box=offered.get('box'),
+                                    give_key=identity(offered))
+@@ -485,18 +518,45 @@
+                     continue
+                 weight = self.capture_weight(s, sid) if mode in REPEATABLE else 5 if mode in ('gift','fossil','static') else 1
+                 add(project, 5 if legendary_project(project) else weight / (1+distance/40))
+-        for sid,level,box in held:
+-            for evo in EVOS.get(sid,[]):
+-                if dex(evo['species']) in s.owned or evo['method']=='trade':
++        individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
++        preferences = self.trade_preferences()
++        best_dvs = {}
++        for mon in individuals:
++            best_dvs[mon['species']] = max(best_dvs.get(mon['species'], (-1, -1)), dv_quality(mon))
++        for sid in dict.fromkeys(mon['species'] for mon in individuals):
++            copies = [mon for mon in individuals if mon['species'] == sid
++                      and preferences.get(identity(mon), {}).get('state') != 'offered']
++            if not copies:
++                continue
++            mon = max(copies, key=quality)
++            level, box, key = mon['level'], mon.get('box'), identity(mon)
++            if held_count(s, sid) <= self.demand().get(dex(sid), 0):
++                continue
++            for evo in EVOS.get(sid, []):
++                if evo['method'] == 'trade':
++                    continue
++                registered = dex(evo['species']) in s.owned
++                upgrade = (self.completed_champion and key and dv_quality(mon) > (-1, -1)
++                           and dv_quality(mon) > best_dvs.get(evo['species'], (-1, -1)))
++                if registered and not upgrade:
+                     continue
+                 if (dex(sid) == 133 and self.eevee_choice not in s.owned
+                         and dex(evo['species']) != self.eevee_choice):
+                     continue
+-                if evo['method']=='item' and not bag.get(ITEMS[evo['requirement']]) and evo['requirement']=='MOON_STONE':
++                if evo['method'] == 'item' and not bag.get(ITEMS[evo['requirement']]) and evo['requirement'] == 'MOON_STONE':
++                    continue
++                if evo['method'] == 'level' and level >= 100:
+                     continue
+                 if box is not None and (not self.completed_champion or not storage_exchange_possible(s)):
+                     continue
+-                add({'species':evo['species'],'parent':sid,'method':'evolve','evolution':evo,'box':box},3)
++                project = {'species': evo['species'], 'parent': sid, 'method': 'evolve',
++                           'evolution': evo, 'box': box, 'trainee_key': key,
++                           'family': [sid, evo['species']], 'trainee_nick': mon.get('nick', ''),
++                           'scoped_partner': True, 'upgrade_evolution': bool(registered),
++                           'perfect_partner': is_perfect(mon)}
++                if key and len(self.partner_matches(s, project)) != 1:
++                    continue
++                add(project, 3)
+         if self.completed_champion:
+             counts = Counter(sid for sid, level, box in held)
+             individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
+@@ -508,9 +568,12 @@
+                 key = identity(mon)
+                 if counts[sid] <= self.demand().get(dex(sid), 0):
+                     continue
++                if dv_quality(mon) < best_dvs[sid]:
++                    continue
+                 if level >= 100 or preferences.get(key, {}).get('state') == 'offered':
+                     continue
+-                if (key and identities[key] != 1
++                reference = {'trainee_key': key, 'family': family, 'trainee_nick': mon.get('nick', ''), 'scoped_partner': True}
++                if (key and len(self.partner_matches(s, reference)) != 1
+                         or not key and sum(counts[relative] for relative in family) != 1):
+                     continue
+                 if box is not None and not storage_exchange_possible(s):
+@@ -518,8 +581,9 @@
+                 # Prefer missing evolutions before a general level milestone for this partner.
+                 if any(evo['method'] == 'level' and dex(evo['species']) not in s.owned for evo in EVOS.get(sid, [])):
+                     continue
+-                add({'method': 'train', 'parent': sid, 'family': family,
++                add({**reference, 'method': 'train', 'parent': sid, 'family': family,
+                      'trainee_key': key, 'box': box, 'initial_level': level, 'target_level': 100,
++                     'perfect_partner': is_perfect(mon),
+                      'mastery_needed': any(level_credit(relative) - set(self.milestones.get('level_100', ())) for relative in family)},
+                     (1 + level / 20) ** 2)
+             add({'method':'rematch','hof_count':s.hall_of_fame_count}, 10 if s.money < 10000 else 2)
+@@ -559,12 +623,14 @@
+         self.project = (self.director.select(candidates, rng, urgent=s.money < 10000)
+                         if self.completed_champion else
+                         rng.choices([p for w,p in candidates],weights=[w for w,p in candidates])[0])
++        if self.project.get('dv_hunt'):
++            self.last_hunt[str(self.project['species'])] = self.elapsed
+         self.project['initial_owned'] = list(s.owned)
+         self.idle_frames = 0
+         self.project_maps = [s.map]
+         self.project_flags = list(s.event_flags)
+         self.progress_token = None
+-        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project['method'] == 'trade' else training.TRAINING_BUDGET if self.project['method']=='train' else 36000 if self.completed_champion else PROJECT_BUDGET
++        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project['method'] == 'trade' else training.TRAINING_BUDGET if self.project['method']=='train' else 108000 if self.project.get('dv_hunt') else 36000 if self.completed_champion else PROJECT_BUDGET
+         nav.path.clear()
+         return self.goal(s)
+ 
+@@ -574,7 +640,7 @@
+         if mode in ('grass','surf','fish','safari'):
+             points=tiles(p)
+             purpose = ('a partner another adventure needs' if self.demand().get(dex(sid), 0)
+-                       else 'another partner for the collection' if p.get('repeat') else 'a missing Pokédex entry')
++                       else 'more chances to find high DV partners' if p.get('dv_hunt') else 'another partner for the collection' if p.get('repeat') else 'a missing Pokédex entry')
+             return Goal('collect_hunt','Find '+name(sid),f'Search {WORLD[p["map"]]["name"]} for {purpose}',
+                         tuple(t[:3] for t in points), approaches=tuple(t for t in points if t[3]))
+         if mode in ('gift','static','trade','fossil'):
+@@ -619,15 +685,23 @@
+         return None
+ 
+     @staticmethod
++    def partner_matches(s, project):
++        from ..trade.preferences import identity
++        rows = [dict(asdict(mon), party_index=i) for i, mon in enumerate(s.party)] + s.storage_entries()
++        rows = [mon for mon in rows if identity(mon) == project.get('trainee_key')]
++        if project.get('scoped_partner'):
++            rows = [mon for mon in rows if mon['species'] in project['family']]
++            nick = project.get('trainee_nick')
++            default_names = {SPECIES[sid]['name'].upper() for sid in project['family']}
++            if nick and nick.upper() not in default_names:
++                rows = [mon for mon in rows if mon.get('nick') == nick]
++        return rows
++
++    @staticmethod
+     def trainee(s, project):
+         if project.get('trainee_key'):
+-            from ..trade.preferences import identity
+-            if sum(identity(mon) == project['trainee_key'] for mon in
+-                   [asdict(p) for p in s.party] + s.storage_entries()) != 1:
+-                return None
+-            matches = [i for i, mon in enumerate(s.party)
+-                       if identity(asdict(mon)) == project['trainee_key']]
+-            return matches[0] if len(matches) == 1 else None
++            matches = Collection.partner_matches(s, project)
++            return matches[0].get('party_index') if len(matches) == 1 else None
+         family = project.get('family', [project.get('parent')])
+         return next((i for i, mon in enumerate(s.party) if mon.species in family), None)
+ 
+@@ -693,13 +767,12 @@
+                             'Retrieve ' + name(p['give']) + ' from storage for ' + name(p['species']),
+                             CENTERS, 'up', True)
+         if p['method'] in ('evolve', 'train'):
+-            if p.get('trainee_key') and sum(identity(mon) == p['trainee_key'] for mon in
+-                    [asdict(mon) for mon in s.party] + s.storage_entries()) != 1:
++            if p.get('trainee_key') and len(self.partner_matches(s, p)) != 1:
+                 return None
+             index = self.trainee(s, p)
+             if index is None:
+                 if p.get('trainee_key'):
+-                    matches = [mon for mon in s.storage_entries() if identity(mon) == p['trainee_key']]
++                    matches = [mon for mon in self.partner_matches(s, p) if 'party_index' not in mon]
+                     if len(matches) != 1:
+                         return None
+                     p['box'] = matches[0]['box']
+--- a/pokesim/policies/director.py
++++ b/pokesim/policies/director.py
+@@ -47,17 +47,28 @@
+             if len(kinds) > 1 and len(recent_kinds) >= limit and len(set(recent_kinds[-limit:])) == 1:
+                 kinds = [kind for kind in kinds if kind != recent_kinds[-1]]
+             priorities = {'legendary': 8, 'collection': 5, 'evolution': 4, 'training': 12, 'exploration': 1, 'supplies': 1}
+-            if all(p.get('repeat') and not p.get('needed_capture') for _, p in groups.get('collection', ())):
+-                priorities['collection'] = 1
++            if groups.get('collection') and all(p.get('repeat') and not p.get('needed_capture') for _, p in groups['collection']):
++                priorities['collection'] = 8 if any(p.get('dv_hunt') for _, p in groups['collection']) else 1
+             weights = [priorities[kind] / (1 if kind == 'training' else 1 + recent_kinds.count(kind)) for kind in kinds]
+             chosen = rng.choices(kinds, weights=weights)[0]
+         rows = groups[chosen]
+-        if chosen == 'training' and any(p.get('mastery_needed') for _, p in rows):
++        if chosen in ('training', 'evolution') and any(p.get('perfect_partner') for _, p in rows):
++            rows = [(weight, p) for weight, p in rows if p.get('perfect_partner')]
++        elif chosen == 'training' and any(p.get('mastery_needed') for _, p in rows):
+             rows = [(weight, p) for weight, p in rows if p.get('mastery_needed')]
+         if chosen == 'training':
+             # Finish the closest partners before spreading experience to lower levels.
+             highest = max(p.get('initial_level', 0) for _, p in rows)
+             rows = [(weight, p) for weight, p in rows if p.get('initial_level', 0) >= highest - 5]
++        if chosen == 'collection' and all(p.get('dv_hunt') for _, p in rows):
++            # Rotate through reachable species, then choose a route for that species.
++            # Many encounter locations must not buy a species more turns.
++            oldest = min(p.get('last_hunt', -1) for _, p in rows)
++            rows = [(weight, p) for weight, p in rows if p.get('last_hunt', -1) == oldest]
++            species = list(dict.fromkeys(p['species'] for _, p in rows))
++            priorities = [max(p.get('capture_priority', 1) for _, p in rows if p['species'] == sid) for sid in species]
++            target = rng.choices(species, weights=priorities)[0]
++            rows = [(weight, p) for weight, p in rows if p['species'] == target]
+         recent_keys = [entry['key'] for entry in self.recent]
+         weights = [weight / (1 if chosen == 'training' else 1 + 4 * recent_keys.count(project['key'])) for weight, project in rows]
+         project = rng.choices([project for weight, project in rows], weights=weights)[0]
+--- a/pokesim/policies/strategic.py
++++ b/pokesim/policies/strategic.py
+@@ -427,8 +427,7 @@
+             self.last_switch_turn = -5
+         if kind == "safari":
+             missing = SPECIES.get(s.enemy_species, {}).get('dex') not in s.owned
+-            repeat = self.collection.project or {}
+-            targeted = repeat.get('repeat') and repeat.get('species') == s.enemy_species
++            targeted = self.collection.repeat_target(s.enemy_species, s.map) == s.enemy_species
+             if not s.can_catch or not (missing or targeted or useful_capture(s, s.enemy_species, s.enemy_level)):
+                 self.reason = ('Leave the encounter because the party and active box are full' if not s.can_catch
+                                else 'Leave an unnecessary duplicate already covered by the collection')
+@@ -457,8 +456,7 @@
+                                             {'catch_cut': 15, 'catch_surf': 57, 'catch_strength': 70}.get(self.goal.key), collect_missing=True,
+                                             capture_species=self.collection.project['species']
+                                             if legendary_project(self.collection.project) else None,
+-                                            repeat_species=self.collection.project.get('species')
+-                                            if self.collection.project and self.collection.project.get('repeat') else None,
++                                            repeat_species=self.collection.repeat_target(enemy.species, s.map),
+                                             training_index=self.collection.trainee(s, self.collection.project)
+                                             if self.collection.project and self.collection.project['method'] == 'train' else None)
+                 self.intent_since = s.frame
+@@ -505,6 +503,8 @@
+                 from ..trade.preferences import identity
+                 ordered = (identity(asdict(s.party[0])) == self.intent.partner_key if self.intent.partner_key
+                            else s.party[0].species == self.order_species)
++                if self.intent.partner_key and self.collection.project and self.collection.project.get('scoped_partner'):
++                    ordered = self.collection.trainee(s, self.collection.project) == 0
+                 if ordered:
+                     if self.development_index is not None:
+                         self.development_index = 0
+@@ -736,14 +736,15 @@
+                     self.supply_attempts.add(signature)
+                     return self._use_item(s,item,target)
+         ball_count = sum(qty for item, qty in s.items if item in BALLS)
++        ball_reserve = 5 if self.collection.completed_champion else 2
+         medicine = sum(qty for item, qty in s.items if item in HEALING)
+         bag_full = len(s.items) >= 18 and self._sale_index(s) is not None
+-        if ball_count < 2 or (medicine == 0 and (s.map in (2, 56) or WORLD.get(s.map, {}).get('name', '').endswith('Gym'))) or bag_full:
++        if ball_count < ball_reserve or (medicine == 0 and (s.map in (2, 56) or WORLD.get(s.map, {}).get('name', '').endswith('Gym'))) or bag_full:
+             self.stock_latch = True
+-        elif ball_count >= 2 and medicine and not bag_full:
++        elif ball_count >= ball_reserve and medicine and not bag_full:
+             self.stock_latch = False
+         if s.map == MAPS["INDIGO_PLATEAU_LOBBY"]:
+-            self.stock_latch = medicine < 10 or dict(s.items).get(ITEMS["REVIVE"], 0) < 5
++            self.stock_latch = ball_count < ball_reserve or medicine < 10 or dict(s.items).get(ITEMS["REVIVE"], 0) < 5
+         legendary = legendary_project(self.collection.project)
+         if legendary and not dict(s.items).get(ITEMS['MASTER_BALL']):
+             self.stock_latch = (not self.collection.project.get('supplies_prepared')
+@@ -853,7 +854,7 @@
+             return self._recovery_step(s)
+         project = self.collection.project
+         if goal.key == 'collect_evolve' and project:
+-            target = next((i for i,p in enumerate(s.party) if p.species==project['parent']),None)
++            target = self.collection.trainee(s, project)
+             if target is not None:
+                 return self._use_item(s,ITEMS[project['evolution']['requirement']],target) or tap('b')
+         if goal.key == 'collect_train' and project:
+@@ -937,13 +938,14 @@
+                 self.progress_frame = s.frame
+                 return tap(direction, 16, 16)
+         if s.map in VICTORY_MAPS:
+-            if goal.key == 'heal':
++            if goal.key in ('heal', 'collect_hunt'):
+                 direction = self.nav.open_route(s, goal.targets)
+                 if direction is not None:
+                     return self._move(s, mem, direction)
+             task = boulder_task(s)
+             following_route = ((self.collection.project or self.pickups.active) and goal.key.startswith('collect_')
+-                                    and (pos in goal.targets or self.nav.route(pos, goal.targets, s.frame) is not None))
++                                    and (pos in goal.targets or goal.key != 'collect_hunt'
++                                         and self.nav.route(pos, goal.targets, s.frame) is not None))
+             # Plan the push before reaching for Strength. A boulder in another section of the floor
+             # is only reachable by ladder, so there is no push to make from here; activating
+             # Strength first meant every step opened the menu, and crossing a map boundary clears
+@@ -977,6 +979,15 @@
+                     self.reason = "Find legal pushes and keep room to walk around the boulder"
+                     self.progress_frame = s.frame
+                     return tap(direction, 16, 16)
++            if goal.key == 'collect_hunt' and not following_route and not direction:
++                # Reach a puzzle from its accessible ladder instead of repeatedly
++                # following an optimistic route through another floor's closed gate.
++                targets = (((MAPS['VICTORY_ROAD_3F'], 27, 15), (MAPS['VICTORY_ROAD_3F'], 23, 7))
++                           if s.map == MAPS['VICTORY_ROAD_2F'] else
++                           ((MAPS['VICTORY_ROAD_2F'], 22, 16),) if s.map == MAPS['VICTORY_ROAD_3F'] else ())
++                direction = self.nav.open_route(s, targets) if targets else None
++                if direction is not None:
++                    return self._move(s, mem, direction)
+             upper_ladder = ((MAPS["VICTORY_ROAD_3F"], 23, 7),)
+             # Reentry can strand the party beyond the lower switch. Reach the upper
+             # puzzle by ladder when the lower boulder and the destination are inaccessible.
+@@ -1024,7 +1035,7 @@
+                 social = None if goal.key == 'collect_pickup' or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else self._social_interaction(s, mem)
+                 if social:
+                     return social
+-            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup") or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else EXPLORATION_CHANCE
++            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup", "collect_hunt") or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else EXPLORATION_CHANCE
+             if s.map in MANSION_MAPS:
+                 direction = self.mansion.route(s, goal.targets, self.nav)
+                 if direction == "switch":
+@@ -1176,8 +1187,8 @@
+         if self.goal.key == 'party_collection' and self.collection.project:
+             if self.collection.project.get('trainee_key'):
+                 from ..trade.preferences import identity
+-                matches = [mon for mon in snapshot.storage_entries()
+-                           if identity(mon) == self.collection.project['trainee_key']]
++                matches = [mon for mon in self.collection.partner_matches(snapshot, self.collection.project)
++                           if 'party_index' not in mon]
+                 return (matches[0]['position'] if len(matches) == 1 and len(snapshot.party) < 6
+                         and matches[0]['box'] == snapshot.active_box else None)
+             if self.collection.project.get('method') == 'trade':
+--- a/pokesim/policies/navigation.py
++++ b/pokesim/policies/navigation.py
+@@ -214,6 +214,9 @@
+         x, y, destination, index = warp
+         if [x, y] in WORLD.get(source, {}).get("inactive_warps", []):
+             return None
++        if destination == -1 and source == MAPS['ROUTE_22_GATE']:
++            # The cartridge selects the last map from the exit's side of the gate.
++            destination = MAPS['ROUTE_23'] if y < 4 else MAPS['ROUTE_22']
+         if destination == -1:
+             parents = [m for m, w in WORLD.items() if index < len(w["warps"])
+                        and w["warps"][index][2] == source]

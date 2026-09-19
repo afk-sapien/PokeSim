@@ -1,6 +1,10 @@
 """Opponent preparation and party development using observable team capabilities."""
+from dataclasses import asdict
+from collections import Counter
+
 from .battle import HEALING, damage, effectiveness, ranked_moves
-from ..ram import PartyMon
+from ..duplicates import quality, spare_entries
+from ..ram import BOX_CAPACITY, PartyMon
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, event_set
 
 OPPONENTS = {
@@ -20,13 +24,42 @@ def potential(species, teammates=()):
     return sum(data.get('stats', [0])) + 70 * len(set(data.get('types', [])) - covered)
 
 
-def reserve_to_deposit(s):
+def storage_headroom(s):
+    """Free slots across every box."""
+    return sum(BOX_CAPACITY - count for count in s.box_counts)
+
+
+def spare_copies(s, protected=()):
+    """Boxed duplicates that can be given up, as (box, position, level).
+
+    Keep the best DVs, then level, training, moves and experience. Party members stay
+    on the team and win exact ties. Species in `protected` are never offered.
+    """
+    return [(mon['box'], mon['position'], mon['level']) for mon in
+            spare_entries([asdict(mon) for mon in s.party], s.storage_entries(), protected)]
+
+
+def release_target(s, protected=(), reserved=()):
+    """Reduce the most numerous species first, keeping its best copy and all protections."""
+    party = [asdict(mon) for mon in s.party]
+    stored = s.storage_entries()
+    counts = Counter(mon['species'] for mon in [*party, *stored])
+    spare = [mon for mon in spare_entries(party, stored, protected)
+             if (mon['box'], mon['position']) not in reserved]
+    if not spare:
+        return None
+    target = min(spare, key=lambda mon: (-counts[mon['species']], quality(mon), mon['box'], mon['position']))
+    return target['box'], target['position']
+
+
+def reserve_to_deposit(s, *, prefer_completed=False):
     strongest = max(range(len(s.party)), key=lambda i: s.party[i].level, default=None)
     candidates = [i for i, p in enumerate(s.party) if i != strongest
                   and not any(move in (15, 19, 57, 70, 148)
                               and not any(move in other.moves for j, other in enumerate(s.party) if j != i)
                               for move in p.moves)]
-    return min(candidates, key=lambda i: s.party[i].level * 10 + potential(s.party[i].species)) if candidates else None
+    return min(candidates, key=lambda i: (not (prefer_completed and s.party[i].level >= 100),
+                                         s.party[i].level * 10 + potential(s.party[i].species))) if candidates else None
 
 
 def development_candidate(s, encounter_level):

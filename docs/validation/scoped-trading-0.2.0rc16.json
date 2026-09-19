@@ -1,0 +1,114 @@
+{
+  "transaction": "1789447973215278464",
+  "crash_after_commit": true,
+  "both_restarted_held": true,
+  "both_recovered_and_released": true,
+  "result": {
+    "moved": [
+      {
+        "instance": "red",
+        "box": 2,
+        "position": 10,
+        "sent": {
+          "species": 34,
+          "name": "Onix",
+          "level": 36,
+          "nick": "TATER"
+        },
+        "received": {
+          "species": 78,
+          "name": "Krabby",
+          "level": 28,
+          "nick": "BONGOBEAN",
+          "evolved_from": null
+        },
+        "owned_before": 116,
+        "owned_after": 116
+      },
+      {
+        "instance": "blue",
+        "box": 2,
+        "position": 6,
+        "sent": {
+          "species": 78,
+          "name": "Krabby",
+          "level": 28,
+          "nick": "BONGOBEAN"
+        },
+        "received": {
+          "species": 34,
+          "name": "Onix",
+          "level": 36,
+          "nick": "TATER",
+          "evolved_from": null
+        },
+        "owned_before": 118,
+        "owned_after": 118
+      }
+    ],
+    "reason": "Red restores a missing collection partner. Blue gains a partner at least five levels stronger",
+    "price": "trusted exchange",
+    "status": "staged",
+    "id": "1789447973215278464",
+    "proposal": {
+      "give": {
+        "instance": "red",
+        "dex": 95,
+        "species": 34,
+        "box": 2,
+        "position": 10,
+        "level": 36,
+        "nick": "TATER",
+        "name": "Onix",
+        "dvs": [
+          3,
+          4,
+          8,
+          7,
+          3
+        ],
+        "stat_exp": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "take": {
+        "instance": "blue",
+        "dex": 98,
+        "species": 78,
+        "box": 2,
+        "position": 6,
+        "level": 28,
+        "nick": "BONGOBEAN",
+        "name": "Krabby",
+        "dvs": [
+          7,
+          4,
+          9,
+          1,
+          15
+        ],
+        "stat_exp": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "reason": "Red restores a missing collection partner. Blue gains a partner at least five levels stronger",
+      "price": "trusted exchange",
+      "spends": {
+        "give": "spare",
+        "take": "spare"
+      }
+    },
+    "hashes": {
+      "red": "7c60edaeddecb662ab4217413f4a3a2a850049c844ca3757c9786f847b69dd2d",
+      "blue": "17e7cebab2c3a7aa76e59e9ec8ac795e80c40c865106fca671ea4f48c03e74a3"
+    }
+  }
+}

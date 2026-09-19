@@ -1,0 +1,281 @@
+{
+  "date": "2026-09-15",
+  "change": "Reuse indexed map geometry and ordered navigation neighbors with state-aware invalidation",
+  "baseline_commit": "ae01a79",
+  "scope": "Local policy.step CPU and wall time. This is not overall application throughput.",
+  "method": "Same 128 sequential captured inputs per trial, one warmup trial, three measured trials, fresh policy per trial, virtual game clock. Versions run sequentially.",
+  "python": "3.12.3",
+  "primary_workload": {
+    "name": "Red Sprout",
+    "workload_sha256": "eab1071af2c1208fed8f6ba56d0dce894dec5f4083ec38f0fc0ee75b5a858462",
+    "decisions_per_trial": 128,
+    "measured_trials": 3,
+    "before": {
+      "aggregate": {
+        "decision_wall": {
+          "calls": 384,
+          "total_ms": 60017.29308,
+          "mean_ms": 156.2950340625,
+          "p95_ms": 405.015876,
+          "max_ms": 777.518395
+        },
+        "decision_cpu": {
+          "calls": 384,
+          "total_ms": 60004.495951,
+          "mean_ms": 156.26170820572918,
+          "p95_ms": 405.005181,
+          "max_ms": 770.917252
+        },
+        "route_wall": {
+          "calls": 264,
+          "total_ms": 59797.151669,
+          "mean_ms": 226.50436238257575,
+          "p95_ms": 409.443206,
+          "max_ms": 499.448094
+        },
+        "route_cpu": {
+          "calls": 264,
+          "total_ms": 59784.908913,
+          "mean_ms": 226.45798830681818,
+          "p95_ms": 409.440734,
+          "max_ms": 499.445427
+        }
+      },
+      "mean_trial_decision_total_ms": 20005.76436,
+      "peak_rss_mib": 119.515625
+    },
+    "after": {
+      "aggregate": {
+        "decision_wall": {
+          "calls": 384,
+          "total_ms": 11592.377932,
+          "mean_ms": 30.188484197916665,
+          "p95_ms": 76.623634,
+          "max_ms": 373.234103
+        },
+        "decision_cpu": {
+          "calls": 384,
+          "total_ms": 11588.51294,
+          "mean_ms": 30.178419114583335,
+          "p95_ms": 76.62182,
+          "max_ms": 373.214776
+        },
+        "route_wall": {
+          "calls": 264,
+          "total_ms": 11335.867097,
+          "mean_ms": 42.938890518939395,
+          "p95_ms": 77.035779,
+          "max_ms": 358.732129
+        },
+        "route_cpu": {
+          "calls": 264,
+          "total_ms": 11332.797476,
+          "mean_ms": 42.92726316666667,
+          "p95_ms": 76.861721,
+          "max_ms": 358.716336
+        }
+      },
+      "mean_trial_decision_total_ms": 3864.125977333333,
+      "peak_rss_mib": 158.390625,
+      "navigation_cache": {
+        "reachable_bytes_estimate": 22430123,
+        "neighbor_cells": 33027,
+        "note": "Recursive Python object sizes with shared objects counted once. Not exclusive allocation size."
+      }
+    },
+    "decision_speedup": 5.177306453607435,
+    "navigation_source_sha256": "58f166430f5f8f318611e040ea3e3b65380385f14a03871c74a2c4ddbd765c05",
+    "identical_decisions": true
+  },
+  "validation": {
+    "pytest_passed": 707,
+    "pytest_skipped": 36,
+    "ordered_neighbors_compared": 379760,
+    "maps_compared": 223,
+    "surf_cut_combinations": 4,
+    "installed_wheel_smoke": "passed",
+    "gameplay_traces": [
+      {
+        "name": "Red Sprout",
+        "frame_budget": 12000,
+        "decisions": 572,
+        "actions_executed": 572,
+        "trace_equivalent": true,
+        "differences": {},
+        "trace_sha256": "e76e55095eaf58c873c211521d1765cb61fc89c054f85b8f01b8b17c9ab5c9f1",
+        "final_state_sha256": "54a92b2ec166b154d9e5cc61bbf0cc9e23222d3883dfd5d1712b4e04e5afd0ac"
+      },
+      {
+        "name": "Blue Ripple",
+        "frame_budget": 3000,
+        "decisions": 150,
+        "actions_executed": 150,
+        "trace_equivalent": true,
+        "differences": {},
+        "trace_sha256": "b51d26ca7513fb07b228e3d88f23c77aec59ba3d69e0c42c0cd15d5cd039966b",
+        "final_state_sha256": "1add920b09d42d24c33a8d72f1142c07340224a1a84ed762bdd98806a455c901"
+      },
+      {
+        "name": "Red Ember",
+        "frame_budget": 3000,
+        "decisions": 113,
+        "actions_executed": 113,
+        "trace_equivalent": true,
+        "differences": {},
+        "trace_sha256": "2bc7a7ff988218158dd25e867f44f2f5fdd99a3bae7a3cacd63f9eb078322143",
+        "final_state_sha256": "8dd9c97ef47febeb2301512082c5696c444d02504838fabaf4d9c9e333f85b44"
+      }
+    ]
+  },
+  "limitations": [
+    "Captured private saves are a sample of game situations, not a universal performance guarantee.",
+    "Cold searches still reached 373 ms in the primary candidate sample.",
+    "Cache validation can add overhead to short searches.",
+    "Primary benchmark process peak RSS grew by about 39 MiB. Reachable cache objects were about 22.4 MB, which is not an exclusive allocation measurement.",
+    "Virtual-clock traces omit runtime pacing, notifications, rendering, trading and recovery guards."
+  ],
+  "additional_workloads": [
+    {
+      "name": "Blue Ripple",
+      "decisions_per_trial": 150,
+      "measured_trials": 3,
+      "before": {
+        "decision_wall": {
+          "calls": 450,
+          "total_ms": 1108.907616,
+          "mean_ms": 2.464239146666667,
+          "p95_ms": 23.215898,
+          "max_ms": 51.918538
+        },
+        "decision_cpu": {
+          "calls": 450,
+          "total_ms": 1107.492619,
+          "mean_ms": 2.461094708888889,
+          "p95_ms": 23.214508,
+          "max_ms": 51.824712
+        },
+        "route_wall": {
+          "calls": 312,
+          "total_ms": 854.321342,
+          "mean_ms": 2.7382094294871795,
+          "p95_ms": 28.75495,
+          "max_ms": 50.979942
+        },
+        "route_cpu": {
+          "calls": 312,
+          "total_ms": 853.611872,
+          "mean_ms": 2.735935487179487,
+          "p95_ms": 28.70976,
+          "max_ms": 50.889649
+        }
+      },
+      "after": {
+        "decision_wall": {
+          "calls": 450,
+          "total_ms": 1513.519302,
+          "mean_ms": 3.3633762266666665,
+          "p95_ms": 27.517699,
+          "max_ms": 63.439206
+        },
+        "decision_cpu": {
+          "calls": 450,
+          "total_ms": 1512.479576,
+          "mean_ms": 3.3610657244444444,
+          "p95_ms": 27.516605,
+          "max_ms": 63.437744
+        },
+        "route_wall": {
+          "calls": 312,
+          "total_ms": 1256.472471,
+          "mean_ms": 4.027155355769231,
+          "p95_ms": 35.042564,
+          "max_ms": 62.842618
+        },
+        "route_cpu": {
+          "calls": 312,
+          "total_ms": 1255.97427,
+          "mean_ms": 4.025558557692308,
+          "p95_ms": 34.995678,
+          "max_ms": 62.843687
+        }
+      },
+      "identical_decisions": true,
+      "interpretation": "Cache validation adds about 0.9 ms per decision in this cheaper routing workload."
+    },
+    {
+      "name": "Red Ember",
+      "decisions_per_trial": 113,
+      "measured_trials": 3,
+      "before": {
+        "decision_wall": {
+          "calls": 339,
+          "total_ms": 19058.638959,
+          "mean_ms": 56.220173920353986,
+          "p95_ms": 109.084521,
+          "max_ms": 148.588554
+        },
+        "decision_cpu": {
+          "calls": 339,
+          "total_ms": 19043.927549,
+          "mean_ms": 56.17677743067846,
+          "p95_ms": 109.084959,
+          "max_ms": 148.06962
+        },
+        "route_wall": {
+          "calls": 0,
+          "total_ms": 0,
+          "mean_ms": null,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "route_cpu": {
+          "calls": 0,
+          "total_ms": 0,
+          "mean_ms": null,
+          "p95_ms": null,
+          "max_ms": null
+        }
+      },
+      "after": {
+        "decision_wall": {
+          "calls": 339,
+          "total_ms": 18478.51261,
+          "mean_ms": 54.508886755162244,
+          "p95_ms": 105.149932,
+          "max_ms": 115.714892
+        },
+        "decision_cpu": {
+          "calls": 339,
+          "total_ms": 18474.305399,
+          "mean_ms": 54.49647610324484,
+          "p95_ms": 105.139001,
+          "max_ms": 115.71489
+        },
+        "route_wall": {
+          "calls": 0,
+          "total_ms": 0,
+          "mean_ms": null,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "route_cpu": {
+          "calls": 0,
+          "total_ms": 0,
+          "mean_ms": null,
+          "p95_ms": null,
+          "max_ms": null
+        }
+      },
+      "identical_decisions": true,
+      "interpretation": "Roughly unchanged with no route calls in this sample. Small timing variation is not evidence of a navigation improvement."
+    }
+  ],
+  "deployment": {
+    "installed_wheel_sha256": "5784b8ae81ff00026ccccaabaa6770dadbe0a8ed52ed600f2d26604dcd40423e",
+    "healthy_games": 3,
+    "campaigns_preserved": true,
+    "frames_advanced": true,
+    "global_speed": 0,
+    "installed_navigation_matches_tested_source": true
+  }
+}

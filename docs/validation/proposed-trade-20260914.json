@@ -1,0 +1,54 @@
+{
+  "live_execution": false,
+  "requires_specific_approval": true,
+  "proposal": {
+    "give": {
+      "instance": "blue",
+      "dex": 132,
+      "species": 76,
+      "box": 3,
+      "position": 17,
+      "level": 26,
+      "nick": "SPAMWIZARD",
+      "name": "Ditto"
+    },
+    "take": {
+      "instance": "red",
+      "dex": 107,
+      "species": 44,
+      "box": 5,
+      "position": 12,
+      "level": 30,
+      "nick": "WAFFLES",
+      "name": "Hitmonchan"
+    },
+    "reason": "Blue is missing Hitmonchan. Red is missing Ditto",
+    "price": "duplicate swap",
+    "spends": {
+      "give": "last one",
+      "take": "last one"
+    }
+  },
+  "verification": [
+    {
+      "edition": "red",
+      "before_owned": 111,
+      "after_owned": 112,
+      "new_owned": [
+        132
+      ],
+      "party_unchanged": true,
+      "badges_unchanged": true
+    },
+    {
+      "edition": "blue",
+      "before_owned": 113,
+      "after_owned": 114,
+      "new_owned": [
+        107
+      ],
+      "party_unchanged": true,
+      "badges_unchanged": true
+    }
+  ]
+}

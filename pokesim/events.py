@@ -4,6 +4,8 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from .game_data import load
+from .ground_items import ground_item
+from .strategy_data import DATA as STRATEGY_DATA, WORLD
 from pathlib import Path
 from typing import Callable
 
@@ -50,14 +52,19 @@ class RunMemory:
     money_milestones: set[int] = field(default_factory=set)
     playtime_milestones: set[int] = field(default_factory=set)
 
+    championships: int = 0
+    party_arrivals: list = field(default_factory=list)
+
     def to_dict(self):
         return {"seen_maps": sorted(self.seen_maps), "money_milestones": sorted(self.money_milestones),
-                "playtime_milestones": sorted(self.playtime_milestones)}
+                "playtime_milestones": sorted(self.playtime_milestones), "championships": self.championships,
+                "party_arrivals": [list(row) for row in self.party_arrivals]}
 
     @classmethod
     def from_dict(cls, d):
         return cls(set(d.get("seen_maps", [])), set(d.get("money_milestones", [])),
-                   set(d.get("playtime_milestones", [])))
+                   set(d.get("playtime_milestones", [])), int(d.get("championships", 0)),
+                   [list(row) for row in d.get("party_arrivals", [])][-12:])
 
 
 def _mon_label(p) -> str:
@@ -133,6 +140,46 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
                             (f" fighting a {SPECIES_NAMES.get(cur.enemy_species, '?')}." if cur.in_battle == 1 else "."),
                             priority=LOW, tags="skull", still=lambda s: s.all_fainted))
 
+    # --- storage releases ---
+    # PC withdrawal writes can span observations in either order. Remember recent
+    # party arrivals until their matching box entries disappear, including across saves.
+    mem.party_arrivals = [row for row in mem.party_arrivals if 0 <= cur.frame - row[0] <= 600]
+    departures = (Counter((p.species, p.nick) for p in prev.party)
+                  - Counter((p.species, p.nick) for p in cur.party))
+    for arrival in mem.party_arrivals:
+        key = (arrival[1], arrival[2])
+        returned = min(arrival[3], departures[key])
+        arrival[3] -= returned
+        departures[key] -= returned
+    arrivals = (Counter((p.species, p.nick) for p in cur.party)
+                - Counter((p.species, p.nick) for p in prev.party))
+    mem.party_arrivals.extend([cur.frame, species, nick, count]
+                             for (species, nick), count in arrivals.items())
+    mem.party_arrivals = mem.party_arrivals[-12:]
+    shrink = len(prev.stored_pokemon) - len(cur.stored_pokemon)
+    if prev.stored_pokemon and 0 < shrink <= 2:
+        gone = (Counter((species, nick) for box, species, level, nick in prev.stored_pokemon)
+                - Counter((species, nick) for box, species, level, nick in cur.stored_pokemon))
+        for (species, nick), count in sorted(gone.items()):
+            for arrival in mem.party_arrivals:
+                if arrival[1:3] == [species, nick]:
+                    withdrawn = min(count, arrival[3])
+                    count -= withdrawn
+                    arrival[3] -= withdrawn
+            name = SPECIES_NAMES.get(species, f"#{species}")
+            # If the box clears first, confirm this individual's combined count on
+            # the next observation. Changes to unrelated partners cannot confirm it.
+            population = sum(p.species == species and p.nick == nick for p in cur.party)
+            population += sum(row[1] == species and row[3] == nick for row in cur.stored_pokemon)
+            for _ in range(count):
+                events.append(Event("release", f"Said goodbye to a spare {name}",
+                                    f"Storage was nearly full, so a duplicate {name} was let go on {cur.map_name}.",
+                                    priority=MINIMAL, tags="wave",
+                                    still=lambda s, sp=species, label=nick, n=population:
+                                        sum(p.species == sp and p.nick == label for p in s.party)
+                                        + sum(row[1] == sp and row[3] == label for row in s.stored_pokemon) <= n))
+    mem.party_arrivals = [row for row in mem.party_arrivals if row[3]]
+
     # --- trainer battles ---
     if prev.in_battle == 2 and cur.in_battle == 0 and not cur.all_fainted and prev.trainer_class is not None:
         tc = prev.trainer_class
@@ -142,14 +189,17 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
         prio = URGENT if tc in ELITE_FOUR else HIGH if tc in NOTABLE_TRAINERS else MINIMAL
         events.append(Event("trainer", f"Defeated {name}", f"On {cur.map_name}.", priority=prio, tags="crossed_swords"))
 
-    # --- new areas / hall of fame ---
+    # Count every completed League journey, independently of the cartridge's capped counter.
+    if cur.map == HALL_OF_FAME_MAP and prev.map != HALL_OF_FAME_MAP:
+        mem.championships += 1
+        events.append(Event("champion", f"Champion! League victory #{mem.championships}",
+                            f"Party: {', '.join(f'{_mon_label(p)} L{p.level}' for p in cur.party)}.",
+                            priority=URGENT, tags="crown"))
+
+    # --- new areas ---
     if cur.map not in mem.seen_maps:
         mem.seen_maps.add(cur.map)
-        if cur.map == HALL_OF_FAME_MAP:
-            events.append(Event("champion", "CHAMPION! Entered the Hall of Fame",
-                                f"Party: {', '.join(f'{_mon_label(p)} L{p.level}' for p in cur.party)}. "
-                                f"Play time {cur.playtime[0]}h.", priority=URGENT, tags="crown"))
-        else:
+        if cur.map != HALL_OF_FAME_MAP:
             events.append(Event("map", f"Entered {cur.map_name}", f"Area #{len(mem.seen_maps)} discovered.",
                                 priority=LOW, tags="world_map"))
 
@@ -159,6 +209,21 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
         if i in KEY_ITEM_IDS and i not in prev_items:
             events.append(Event("item", f"Got the {ITEM_NAMES.get(i, f'item #{i}')}", f"On {cur.map_name}.",
                                 priority=HIGH, tags="key"))
+
+    # Ordinary ground pickups are useful journal milestones too. Object flags
+    # distinguish them from shopping, PC withdrawals, and failed bag-full prompts.
+    if prev.map == cur.map and len(prev.hidden_objects) == len(cur.hidden_objects):
+        for offset, (map_id, index) in enumerate(STRATEGY_DATA['toggle_objects']):
+            byte, bit = offset // 8, 1 << (offset % 8)
+            if (map_id != cur.map or map_id not in WORLD or index >= len(WORLD[map_id]['objects'])
+                    or byte >= len(cur.hidden_objects)
+                    or prev.hidden_objects[byte] & bit or not cur.hidden_objects[byte] & bit):
+                continue
+            item = ground_item(WORLD[map_id]['objects'][index])
+            if item and item['item'] not in KEY_ITEM_IDS:
+                events.append(Event('item', 'Picked up ' + item['name'], f'On {cur.map_name}.',
+                                    priority=MINIMAL,
+                                    still=lambda s, byte=byte, bit=bit: byte < len(s.hidden_objects) and bool(s.hidden_objects[byte] & bit)))
 
     # --- money ---
     for m in MONEY_MILESTONES:

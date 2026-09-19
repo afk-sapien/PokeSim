@@ -17,3 +17,5 @@ include compose*.yaml
 recursive-include deploy *
 recursive-include docs/validation *.json
 recursive-include tests *.cjs
+recursive-include tests *.py
+recursive-include docs/images *.png *.jpg

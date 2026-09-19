@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pokesim"
-version = "0.2.0rc6"
-description = "A Pokémon Red that plays itself: headless emulator, live web view, event feed with screenshots"
+version = "0.2.0rc32"
+description = "One application for autonomous Pokémon Red and Blue adventures with live views and cable trading"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
@@ -25,17 +25,23 @@ Issues = "https://github.com/afk-sapien/PokeSim/issues"
 
 [project.optional-dependencies]
 dev = ["pytest"]
+desktop-build = ["pyinstaller==6.16.0"]
+browser-test = [
+    "playwright>=1.50",
+]
+acceleration = ["numba>=0.61,<0.68"]
 
 [project.scripts]
 pokesim = "pokesim.__main__:main"
 pokesim-prepare-data = "pokesim.prepare_data:main"
+pokesim-desktop = "pokesim.desktop:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 filterwarnings = ["ignore::UserWarning"]
 
 [tool.setuptools.package-data]
-pokesim = ["web/static/*"]
+pokesim = ["web/static/*", "broker/static/*", "_build.json"]
 
 [tool.setuptools.packages.find]
 include = ["pokesim*"]

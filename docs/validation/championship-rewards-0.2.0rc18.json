@@ -1,0 +1,178 @@
+{
+  "crash_after_commit_recovered": true,
+  "no_duplicate_on_recovery": true,
+  "six_rewards_each": true,
+  "seventh_claim_waits_for_storage": true,
+  "subsequent_autosaves_reload": true,
+  "trade_cooldown_does_not_block_rewards": true,
+  "transactions": [
+    {
+      "kind": "league_reward",
+      "id": "1789458349564014736",
+      "gifts": [
+        {
+          "instance": "red",
+          "name": "Bulbasaur",
+          "species": 153,
+          "ordinal": 1,
+          "level": 5,
+          "box": 7,
+          "position": 20
+        },
+        {
+          "instance": "blue",
+          "name": "Aerodactyl",
+          "species": 171,
+          "ordinal": 1,
+          "level": 5,
+          "box": 5,
+          "position": 20
+        }
+      ],
+      "hashes": {
+        "red": "9e806026a56b5f8ea3cdbd3ee02e317b7d460cc9b99c3ad82029bc444e565b8e",
+        "blue": "8b4958d6ad5e2a4c0124c038cf9b29f91f2bfe4533e23f7937e7b30c1f4b97ef"
+      }
+    },
+    {
+      "kind": "league_reward",
+      "id": "1789458353751193412",
+      "gifts": [
+        {
+          "instance": "red",
+          "name": "Charmander",
+          "species": 176,
+          "ordinal": 2,
+          "level": 5,
+          "box": 9,
+          "position": 20
+        },
+        {
+          "instance": "blue",
+          "name": "Squirtle",
+          "species": 177,
+          "ordinal": 2,
+          "level": 5,
+          "box": 7,
+          "position": 20
+        }
+      ],
+      "hashes": {
+        "red": "fdc18023e059da79ee4b85e6101e2ae6932a47b23b8434d528bded42d3d367d4",
+        "blue": "20e946abf9a4a56d151bb5a2d8b32b3e0461909615d4bbdca4437b39ca3dca1b"
+      }
+    },
+    {
+      "kind": "league_reward",
+      "id": "1789458357643749000",
+      "gifts": [
+        {
+          "instance": "red",
+          "name": "Omanyte",
+          "species": 98,
+          "ordinal": 3,
+          "level": 5,
+          "box": 11,
+          "position": 20
+        },
+        {
+          "instance": "blue",
+          "name": "Squirtle",
+          "species": 177,
+          "ordinal": 3,
+          "level": 5,
+          "box": 12,
+          "position": 17
+        }
+      ],
+      "hashes": {
+        "red": "f8543fc944e62fd80f1c419146e27629d4abde77653ab91f66a9f19a02fdc03a",
+        "blue": "50db05baf8c729bce774ea868d083fc1e62930d91d81a45d8542283340a2eb72"
+      }
+    },
+    {
+      "kind": "league_reward",
+      "id": "1789458360603743563",
+      "gifts": [
+        {
+          "instance": "red",
+          "name": "Kabuto",
+          "species": 90,
+          "ordinal": 4,
+          "level": 5,
+          "box": 12,
+          "position": 18
+        },
+        {
+          "instance": "blue",
+          "name": "Charmander",
+          "species": 176,
+          "ordinal": 4,
+          "level": 5,
+          "box": 12,
+          "position": 18
+        }
+      ],
+      "hashes": {
+        "red": "4d964826320c61ab2f3a113370bcc40b6582a586913836bf84e3d62da4f3f1e5",
+        "blue": "6d1d04e83ffbefd637aeeea2174c8de4f0ef8f8e8c6db8421ec2f5664695fb53"
+      }
+    },
+    {
+      "kind": "league_reward",
+      "id": "1789458363425973938",
+      "gifts": [
+        {
+          "instance": "red",
+          "name": "Charmander",
+          "species": 176,
+          "ordinal": 5,
+          "level": 5,
+          "box": 12,
+          "position": 19
+        },
+        {
+          "instance": "blue",
+          "name": "Bulbasaur",
+          "species": 153,
+          "ordinal": 5,
+          "level": 5,
+          "box": 12,
+          "position": 19
+        }
+      ],
+      "hashes": {
+        "red": "465139a0874a3364530c826093d872a2a941fef7567bd7fad6eae8bda44be79c",
+        "blue": "48d3d05ba074bceecdd7bc0f9d1b385bdc8bfed5202dbdf2f79ac2e34b3b9946"
+      }
+    },
+    {
+      "kind": "league_reward",
+      "id": "1789458366119603786",
+      "gifts": [
+        {
+          "instance": "red",
+          "name": "Mew",
+          "species": 21,
+          "ordinal": 6,
+          "level": 5,
+          "box": 12,
+          "position": 20
+        },
+        {
+          "instance": "blue",
+          "name": "Aerodactyl",
+          "species": 171,
+          "ordinal": 6,
+          "level": 5,
+          "box": 12,
+          "position": 20
+        }
+      ],
+      "hashes": {
+        "red": "6a3950c2d6faf334b332a2283d87061b8190b53ff984bd8cc97c0d38202de19e",
+        "blue": "5603857efcf5d3dbc6c541f358c3683e9784d590cf13b6ccbbf4303902f1656d"
+      }
+    }
+  ]
+}

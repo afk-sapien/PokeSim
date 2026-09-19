@@ -40,6 +40,19 @@ def effectiveness(move_type, defender_types):
     return factor
 
 
+def damage_division_safe(move_id, attacker, defender):
+    """Reject attacks whose scaled defensive stat becomes a zero divisor in Gen I."""
+    move = MOVES.get(move_id)
+    if not move or not move['power'] or move['effect'] in ('EXPLODE_EFFECT', 'OHKO_EFFECT'):
+        return True
+    physical = move['type'] < 20
+    attack = attacker.attack if physical else attacker.special
+    defense = defender.defense if physical else defender.special
+    if attack > 255 or defense > 255:
+        defense = (defense >> 2) & 255
+    return defense > 0
+
+
 def damage(move_id, attacker, defender):
     """Expected connected-hit damage before accuracy, including common special moves."""
     move = MOVES.get(move_id)
@@ -122,7 +135,8 @@ def move_score(move_id, attacker, defender, used_status=()):
 
 def ranked_moves(me, enemy, used_status=()):
     return sorted([(move_score(mid, me, enemy, used_status), slot) for slot, (mid, pp)
-                   in enumerate(zip(me.moves, me.pp)) if mid and pp], reverse=True)
+                   in enumerate(zip(me.moves, me.pp))
+                   if mid and pp and damage_division_safe(mid, me, enemy)], reverse=True)
 
 
 def replacement_slot(mon, new_move):
@@ -186,8 +200,18 @@ def healing_item(items, mon, incoming=0):
     return min(choices)[1] if choices else None
 
 
-def shopping_item(items, stock, money, league=False, collecting=False):
+def shopping_item(items, stock, money, league=False, collecting=False, legendary=False):
     counts = dict(items)
+    if legendary and not counts.get(ITEMS['MASTER_BALL']):
+        if ITEMS['ULTRA_BALL'] not in stock:
+            return None
+        repel = next((name for name in ('MAX_REPEL', 'SUPER_REPEL', 'REPEL') if ITEMS[name] in stock), 'MAX_REPEL')
+        for name, target in (('ULTRA_BALL', 20), (repel, 3), ('HYPER_POTION', 5)):
+            item = ITEMS[name]
+            if item in stock and counts.get(item, 0) < target and PRICES[item] <= money - 300:
+                if item in counts or len(items) < 20:
+                    return item
+        return None
     desired = {ITEMS["POKE_BALL"]: 5, ITEMS["POTION"]: 3, ITEMS["SUPER_POTION"]: 3,
                ITEMS["ANTIDOTE"]: 2, ITEMS["PARLYZ_HEAL"]: 1}
     if league:
@@ -215,27 +239,59 @@ class Decision:
     index: int = 0
     target: int = 0
     reason: str = ""
+    partner_key: str | None = None
 
 
-def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, catch_attempts=0, required_move=None, collect_missing=False):
+def useful_capture(snapshot, species, level, required_move=None):
+    """Judge incidental captures against the party and every storage box."""
+    known = SPECIES.get(species, {})
+    if required_move and required_move in known.get('hms', []):
+        return True
+    held = [(p.species, p.level) for p in snapshot.party]
+    held.extend((sid, value) for box, sid, value, nick in snapshot.stored_pokemon)
+    # Compact snapshots may expose only the active box.
+    held.extend(snapshot.boxed_pokemon)
+    team_level = max((p.level for p in snapshot.party), default=1)
+    if known.get('dex') not in snapshot.owned:
+        return len(snapshot.party) < 3 or level >= team_level * 0.4
+    copies = [value for sid, value in held if sid == species]
+    if copies:
+        # An actual level upgrade is useful, repeated equal copies are not.
+        best = max(copies)
+        return level >= best + max(5, (best + 9) // 10) and level >= team_level * 0.5
+    covered = {typ for sid, value in held for typ in SPECIES.get(sid, {}).get('types', ())}
+    return bool(set(known.get('types', ())) - covered) and level >= team_level * 0.5
+
+
+def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, catch_attempts=0, required_move=None, collect_missing=False, capture_species=None, repeat_species=None, training_index=None):
     if (snapshot.in_battle == 1
             and MAPS['POKEMON_TOWER_1F'] <= snapshot.map <= MAPS['POKEMON_TOWER_7F']
             and not dict(snapshot.items).get(ITEMS['SILPH_SCOPE'])):
         return Decision('run', reason='Leave the unidentified ghost until the Silph Scope is obtained')
+    if (capture_species is not None and snapshot.in_battle == 1 and snapshot.battle_type == 0
+            and enemy.species != capture_species
+            and SPECIES.get(enemy.species, {}).get('dex') not in (144, 145, 146, 150)):
+        return Decision('run', reason='Save time and supplies for the legendary expedition')
     moves = ranked_moves(me, enemy, used_status)
     slot = moves[0][1] if moves else 0
     incoming = max((damage(mid, enemy, me) for mid in enemy.moves if mid), default=me.max_hp * 0.2)
     known = SPECIES.get(enemy.species, {})
     missing_species = known.get("dex") not in snapshot.owned
-    coverage = set(enemy.types) - {t for p in snapshot.party for t in p.types}
     required = required_move in known.get('hms', []) if required_move else False
-    useful = required or (missing_species and (len(snapshot.party) < 3 or enemy.level >= max((p.level for p in snapshot.party), default=1) * 0.4)) or bool(coverage and enemy.level >= me.level * 0.5)
+    useful = useful_capture(snapshot, enemy.species, enemy.level, required_move)
     safe = me.hp > incoming * 1.5 and not me.status
     balls = [(i, item) for item in BALLS for i, (bag_item, qty) in enumerate(snapshot.items) if bag_item == item and qty > 0]
     legendary = known.get('dex') in (144,145,146,150)
-    collection_target = collect_missing and missing_species
-    capture_limit = 10000 if legendary else 20
+    allowed_capture = capture_species is None or enemy.species == capture_species or legendary
+    useful = useful and allowed_capture
+    collection_target = (collect_missing or legendary) and missing_species and allowed_capture
+    repeat_target = enemy.species == repeat_species and not missing_species and not legendary
+    collection_target |= repeat_target
+    capture_limit = 5 if repeat_target else 50 if legendary else 20
     master = next((i for i,(item,qty) in enumerate(snapshot.items) if item==ITEMS['MASTER_BALL'] and qty),None)
+    if (snapshot.in_battle == 1 and snapshot.battle_type == 0 and legendary and missing_species
+            and (not snapshot.can_catch or not balls and master is None or catch_attempts >= capture_limit)):
+        return Decision('run', reason='Retreat and prepare another legendary attempt with balls and storage space')
     if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and collection_target and catch_attempts < capture_limit and (balls or legendary and master is not None):
         if legendary and master is not None:
             return Decision('item',master,reason='Secure the missing legendary with the Master Ball')
@@ -243,27 +299,28 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
         if me.hp <= incoming * 1.5 and healing is not None:
             return Decision('item',healing,active,'Keep the catcher healthy while preserving the wild Pokémon')
         status_moves = [(MOVES[mid]['accuracy'],i) for i,(mid,pp) in enumerate(zip(me.moves,me.pp))
-                        if pp and mid not in used_status and MOVES.get(mid,{}).get('effect') in ('SLEEP_EFFECT','PARALYZE_EFFECT')
+                        if pp and MOVES.get(mid,{}).get('effect') in ('SLEEP_EFFECT','PARALYZE_EFFECT')
                         and effectiveness(MOVES[mid]['type'],enemy.types)]
-        if not enemy.status and status_moves and me.hp > incoming:
+        if not enemy.status and status_moves and (me.hp > incoming or me.speed > enemy.speed):
             return Decision('fight',max(status_moves)[1],reason='Use sleep or paralysis to help the catch')
         if can_switch and not enemy.status and not status_moves:
             catchers = [(p.hp,i) for i,p in enumerate(snapshot.party) if i!=active and p.hp>p.max_hp*0.7 and not p.status
                         and any(pp and MOVES.get(mid,{}).get('effect') in ('SLEEP_EFFECT','PARALYZE_EFFECT')
                                 and effectiveness(MOVES[mid]['type'],enemy.types) for mid,pp in zip(p.moves,p.pp))
-                        and p.hp > 2 * max((damage(mid,enemy,p) for mid in enemy.moves),default=0)]
+                        and p.hp > max((damage(mid,enemy,p) for mid in enemy.moves),default=0)]
             if catchers:
                 return Decision('switch',max(catchers)[1],reason='Bring in a healthy catcher with sleep or paralysis')
         weakening = [(score,i) for score,i in moves if MOVES[me.moves[i]]['effect'] not in
                      ('EXPLODE_EFFECT','RECOIL_EFFECT','OHKO_EFFECT','TWO_TO_FIVE_ATTACKS_EFFECT')
                      and 0 < damage(me.moves[i],me,enemy) * 2.5 < enemy.hp]
-        if enemy.hp > enemy.max_hp*0.4 and weakening and not enemy.status:
+        if not legendary and enemy.hp > enemy.max_hp*0.4 and weakening and not enemy.status:
             return Decision('fight',max(weakening)[1],reason='Use a gentle attack with a margin for critical damage')
-        return Decision('item',balls[-1][0],reason='Catch the missing Pokédex entry without risking a knockout')
+        return Decision('item',balls[-1][0],reason='Catch another partner for the collection or a useful trade' if repeat_target
+                        else 'Catch the missing Pokédex entry without risking a knockout')
     if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and useful and balls and safe and catch_attempts < (12 if required else 5):
         if enemy.hp <= enemy.max_hp * 0.35 or enemy.status or not moves:
             ball_index = balls[-1][0] if known.get("catch_rate", 255) < 100 else balls[0][0]
-            return Decision("item", ball_index, reason="Catch a missing species or improve team coverage")
+            return Decision("item", ball_index, reason="Catch a missing species, a needed partner, or a stronger reserve")
         weakening = [(score, k) for score, k in moves if 0 < damage(me.moves[k], me, enemy) < enemy.hp * 0.8]
         if weakening:
             return Decision("fight", max(weakening)[1], reason="Weaken the target without an expected knockout")
@@ -273,17 +330,25 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     if item_index is not None:
         return Decision("item", item_index, active, "Recover HP or cure status before attacking")
     candidates = []
-    if can_switch:
+    unsafe_moves = any(mid and pp and not damage_division_safe(mid, me, enemy)
+                       for mid, pp in zip(me.moves, me.pp))
+    needs_safe_partner = unsafe_moves and not any(score > 0 for score, _ in moves)
+    if can_switch or needs_safe_partner:
         for i, mon in enumerate(snapshot.party):
             if i == active or mon.hp <= 0 or mon.status & 39:
                 continue
             offense = ranked_moves(mon, enemy)
             threat = max((damage(mid, enemy, mon) for mid in enemy.moves if mid), default=mon.max_hp * 0.2)
-            if offense and any(damage(mid, mon, enemy) > 0 and pp for mid, pp in zip(mon.moves, mon.pp)) and mon.hp > threat * 2:
+            if offense and any(damage(mon.moves[slot], mon, enemy) > 0 for _, slot in offense) and mon.hp > threat * 2:
                 candidates.append((offense[0][0] / max(1, threat), i))
     current_ratio = (moves[0][0] if moves else 0) / max(1, incoming)
-    if candidates and (me.hp <= incoming or not moves or max(candidates)[0] > current_ratio * 2.5):
+    productive_trainee = (active == training_index and me.level < 100 and me.hp > incoming * 2
+                          and any(score > 0 and damage(me.moves[index], me, enemy) > 0 for score, index in moves))
+    if candidates and (needs_safe_partner or me.hp <= incoming or not moves
+                       or not productive_trainee and max(candidates)[0] > current_ratio * 2.5):
         return Decision("switch", max(candidates)[1], reason="Bring in a healthier Pokémon with a better matchup")
+    if snapshot.in_battle == 1 and needs_safe_partner and not candidates:
+        return Decision('run', reason='Leave a matchup that risks the original game’s damage calculation freeze')
     if snapshot.in_battle == 1 and (not moves or me.hp <= incoming) and not candidates:
         return Decision("run", reason="Avoid a likely blackout in a wild encounter")
     return Decision("fight", slot, reason="Choose the strongest expected outcome from moves with PP")

@@ -1,0 +1,24 @@
+services:
+  trading:
+    image: ${POKESIM_IMAGE:-pokesim:0.2.0rc30}
+    container_name: pokesim-trading
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp
+    command: ["python", "-u", "-m", "pokesim.trade.service", "--loop"]
+    # This worker has no HTTP server. Monitor its coordinator status and transactions.
+    healthcheck:
+      disable: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "/docker/pokesim-trading/state:/trading"
+      - "/docker/pokesim/data:/pair/red"
+      - "/docker/pokesim-blue/data:/pair/blue"
+      - "/docker/pokesim/roms/pokered.gb:/roms/red.gb:ro"
+      - "/docker/pokesim-blue/roms/pokeblue.gb:/roms/blue.gb:ro"
+      - "/docker/pokesim/data/game-data:/data/game-data:ro"

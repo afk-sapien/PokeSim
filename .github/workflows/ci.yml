@@ -5,12 +5,16 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
-        python: ['3.11', '3.12']
+        python: ['3.11', '3.12', '3.14']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
@@ -18,7 +22,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
         with:
-          version: '0.9.7'
+          version: '0.12.15'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
@@ -32,26 +36,45 @@ jobs:
           persist-credentials: false
       - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
       - run: uv run --locked pytest --ignore=tests/test_rom.py -q
-      - run: node --check pokesim/web/static/app.js
-      - run: node --check pokesim/web/static/screen.js
-      - run: node --test tests/screen.test.cjs
+      - run: python tools/check_web.py
+      - run: python tools/check_docs.py
       - run: uv build
       - run: python tools/check_package.py
+      - name: Verify installation outside the source checkout
+        if: matrix.python == '3.12'
+        run: python tools/check_python_install.py
+      - name: Install browser test runtime
+        if: matrix.python == '3.12'
+        run: |
+          uv sync --locked --extra dev --extra browser-test
+          uv run --locked --extra browser-test python -m playwright install --with-deps chromium
+      - name: Exercise real browser flows
+        if: matrix.python == '3.12'
+        env:
+          POKESIM_BROWSER_TESTS: '1'
+        run: |
+          mkdir -p build
+          uv run --locked --extra dev --extra browser-test pytest tests/browser -q --basetemp=build/browser-tests
+      - name: Retain browser diagnostics on failure
+        if: failure() && matrix.python == '3.12'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: browser-diagnostics
+          path: build/browser-tests/**/browser-trace.zip
+          if-no-files-found: ignore
   container:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - run: docker compose config --quiet
       - run: docker build -t pokesim:ci .
-      - name: Read user-content reference for tests only
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: pret/pokered
-          ref: a1a22aaf84d1675bcdbaeb194592379d586d838e
-          path: .reference/pokered
-          persist-credentials: false
+      - name: Verify the Compose installation and save lifecycle
+        run: python tools/check_container.py pokesim:ci
       - name: Prepare local data outside the image
-        run: docker run --rm -v "$PWD/.reference/pokered:/source:ro" -v pokesim-ci-data:/data pokesim:ci python -m pokesim.prepare_data /source
+        run: docker run --rm -v pokesim-ci-data:/data pokesim:ci python -m pokesim.prepare_data --download
+      - name: Verify repeated setup works offline
+        run: docker run --rm --network none --read-only --cap-drop ALL -v pokesim-ci-data:/data pokesim:ci python -m pokesim.prepare_data --download
       - name: Verify installed runtime and non-root user
         run: |
           docker run --rm -i -v pokesim-ci-data:/data --entrypoint python pokesim:ci <<'PYCODE'

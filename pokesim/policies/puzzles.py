@@ -1,7 +1,7 @@
 """Plan through the Mansion while accounting for the shared statue switch."""
 from collections import deque
 
-from .navigation import DIRS, PAIR_COLLISIONS, Navigator
+from .navigation import DIRS, MANSION_FALLS, PAIR_COLLISIONS, SEAFOAM_HOLES, Navigator
 from ..strategy_data import MAPS, WORLD, event_set
 
 MANSION_MAPS = {MAPS[n] for n in ('POKEMON_MANSION_1F', 'POKEMON_MANSION_2F',
@@ -10,8 +10,7 @@ STATUES = {(MAPS[name], x, y + 1) for name, points in (
     ('POKEMON_MANSION_1F', [(2, 5)]), ('POKEMON_MANSION_2F', [(2, 11)]),
     ('POKEMON_MANSION_3F', [(10, 5)]), ('POKEMON_MANSION_B1F', [(20, 3), (18, 25)]))
     for x, y in points}
-FALLS = {(MAPS['POKEMON_MANSION_3F'], x, 14): (MAPS['POKEMON_MANSION_1F'], 16, 14)
-         for x in (16, 17)}
+FALLS = MANSION_FALLS
 
 
 class MansionPlanner:
@@ -79,6 +78,21 @@ class MansionPlanner:
 VICTORY_MAPS = {MAPS[n] for n in ('VICTORY_ROAD_1F', 'VICTORY_ROAD_2F', 'VICTORY_ROAD_3F')}
 
 
+def seafoam_current_task(snapshot, navigation):
+    """Clear space, then push each designated boulder into the hole below Articuno."""
+    if snapshot.map != MAPS['SEAFOAM_ISLANDS_B3F']:
+        return None
+    if not event_set(snapshot.event_flags, 'EVENT_SEAFOAM4_BOULDER1_DOWN_HOLE'):
+        if navigation.live_positions[0] != (2, 14):
+            return 'BOULDER1', (2, 14)
+        return 'BOULDER2', (3, 16)
+    if not event_set(snapshot.event_flags, 'EVENT_SEAFOAM4_BOULDER2_DOWN_HOLE'):
+        if navigation.live_positions[3] != (9, 12):
+            return 'BOULDER4', (9, 12)
+        return 'BOULDER3', (6, 16)
+    return None
+
+
 def boulder_task(snapshot):
     done = lambda flag: event_set(snapshot.event_flags, flag)
     if snapshot.map == MAPS['VICTORY_ROAD_1F'] and not done('EVENT_VICTORY_ROAD_1_BOULDER_ON_SWITCH'):
@@ -134,7 +148,8 @@ class BoulderPlanner:
                     there = navigation.active_tile(world, *dest)
                     pair_blocked = ((world['tileset'], here, there) in PAIR_COLLISIONS
                                     or (world['tileset'], there, here) in PAIR_COLLISIONS)
-                    if dest != stone and dest not in previous and floor(dest) and not pair_blocked:
+                    if (dest != stone and dest not in previous and floor(dest) and not pair_blocked
+                            and (snapshot.map, *dest) not in SEAFOAM_HOLES):
                         previous[dest] = (point, direction)
                         queue.append(dest)
             return previous

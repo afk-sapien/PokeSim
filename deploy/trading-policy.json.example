@@ -1,0 +1,13 @@
+{
+  "enabled": false,
+  "allow_last_copies": false,
+  "mew_event": false,
+  "league_rewards": false,
+  "interval_seconds": 900,
+  "board_url": "http://host.docker.internal:8950",
+  "protected_species": {"red": [], "blue": []},
+  "peers": {
+    "red": {"url": "http://host.docker.internal:8930", "data": "/pair/red", "token": "SET_A_PRIVATE_PEER_TOKEN"},
+    "blue": {"url": "http://host.docker.internal:8940", "data": "/pair/blue", "token": "SET_A_PRIVATE_PEER_TOKEN"}
+  }
+}

@@ -919,19 +919,6 @@ h1 { font-size:40px }
 .control-help small { color:#929f89 }
 .game-card.is-manual { box-shadow:0 0 0 2px #b7a16f }
 .game-card.is-manual .live-label { color:#ecd69f }
-.wander-control { display:flex }
-.wander-control { justify-content:space-between }
-.wander-control { align-items:center }
-.wander-control { margin-top:17px }
-.wander-control { padding-top:13px }
-.wander-control { border-top:1px solid #deded3 }
-.wander-control { font-size:11px }
-.wander-control select { background:#fffef9 }
-.wander-control select { color:#4e5b46 }
-.wander-control select { border-color:#d6dcca }
-.wander-hint { color:#858d7a }
-.wander-hint { font-size:10px }
-.wander-hint { margin-top:7px }
 .journey-details { margin-top:12px }
 .journey-details { font-size:11px }
 .journey-details summary { color:#647456 }
@@ -1265,3 +1252,27 @@ h1 { font-size:31px }
 .screen-status { font:12px system-ui,sans-serif }
 .screen-status { text-align:center }
 .screen-status { max-width:90% }
+.dex-open { margin-left: auto }
+.dex-open { align-self: center }
+.dex-open { padding: 8px 14px }
+.dex-open { border: 1px solid #d0d5c8 }
+.dex-open { border-radius: 10px }
+.dex-open { background: #f1f4e9 }
+.dex-open { font-size: 12px }
+.dex-open:hover { color: #6d8a4c }
+.library-link { color:#315f4a }
+.library-link { font-weight:650 }
+.adventure-select { display:flex }
+.adventure-select { align-items:center }
+.adventure-select { gap:8px }
+.adventure-select { font-size:12px }
+.adventure-select select { max-width:180px }
+.adventure-select select { border:1px solid #c9cfc1 }
+.adventure-select select { border-radius:6px }
+.adventure-select select { padding:6px }
+.topbar:has(.adventure-select) { flex-wrap:wrap }
+.topbar:has(.adventure-select) { height:auto }
+.topbar:has(.adventure-select) { min-height:88px }
+.topbar:has(.adventure-select) { gap:18px }
+.topbar:has(.adventure-select) { padding-top:16px }
+.topbar:has(.adventure-select) { padding-bottom:16px }

@@ -10,7 +10,7 @@ from pathlib import Path
 
 def generate(src, revision):
     def read(path):
-        return (src / path).read_text()
+        return (src / path).read_text(encoding="utf-8")
 
     def constants(path):
         return {name: int(value, 16) for name, value in re.findall(
@@ -37,7 +37,7 @@ def generate(src, revision):
     learnsets = {name.replace('_', '').upper(): [(int(level), move_ids[move]) for level, move in re.findall(r'\bdb\s+(\d+),\s*(\w+)', block) if move in move_ids]
                  for name, block in re.findall(r'^(\w+)EvosMoves:\n(.*?)(?=^\w+EvosMoves:|\Z)', read('data/pokemon/evos_moves.asm'), re.M | re.S)}
     for path in sorted((src / "data/pokemon/base_stats").glob("*.asm")):
-        lines = [line.split(chr(59))[0].strip() for line in path.read_text().splitlines()]
+        lines = [line.split(chr(59))[0].strip() for line in path.read_text(encoding="utf-8").splitlines()]
         fields = [line[3:].strip() for line in lines if line.startswith("db ")]
         name = fields[0].removeprefix("DEX_")
         if name not in species:
@@ -93,7 +93,7 @@ def generate(src, revision):
     world = {}
     object_ids = {}
     for header in sorted((src / "data/maps/headers").glob("*.asm")):
-        match = re.search(r"map_header (\w+), (\w+), (\w+)", header.read_text())
+        match = re.search(r"map_header (\w+), (\w+), (\w+)", header.read_text(encoding="utf-8"))
         if not match:
             continue
         name, symbol, tile_symbol = match.groups()
@@ -122,7 +122,7 @@ def generate(src, revision):
         backgrounds = [[int(x), int(y), text] for x, y, text in re.findall(
             r"bg_event\s+(\d+),\s*(\d+),\s*(\w+)", obj)]
         connections = [[dr, maps[dest], int(offset)] for dr, dest, offset in re.findall(
-            r"connection (\w+), \w+, (\w+), (-?\d+)", header.read_text())]
+            r"connection (\w+), \w+, (\w+), (-?\d+)", header.read_text(encoding="utf-8"))]
         objects = [[int(x), int(y), sprite, movement, text] for x, y, sprite, movement, text in re.findall(
             r"object_event\s+(\d+),\s*(\d+),\s*(\w+),\s*(\w+),\s*\w+,\s*(\w+)", obj)]
         opened_blocks = {
@@ -175,7 +175,7 @@ def generate(src, revision):
         encounters = []
         active = False
         if path.exists():
-            for line in path.read_text().splitlines():
+            for line in path.read_text(encoding="utf-8").splitlines():
                 if 'def_grass_wildmons' in line:
                     active = True
                 if 'end_grass_wildmons' in line:
@@ -189,9 +189,10 @@ def generate(src, revision):
         match = re.match(r"\s*toggleable_objects_for (\w+)", line)
         if match:
             toggle_map = maps[match[1]]
-        match = re.match(r"\s*toggle_object_state (\w+),", line)
+        match = re.match(r"\s*toggle_object_state (\$[\da-fA-F]+|\w+),", line)
         if match:
-            toggles.append([toggle_map, object_ids[match[1]]])
+            object_id = int(match[1][1:], 16) - 1 if match[1].startswith('$') else object_ids[match[1]]
+            toggles.append([toggle_map, object_id])
     pairs = [[ts, int(a, 16), int(b, 16)] for ts, a, b in re.findall(
         r"db (\w+), \$([\da-fA-F]+), \$([\da-fA-F]+)",
         read("data/tilesets/pair_collision_tile_ids.asm"))]

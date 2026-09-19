@@ -1,0 +1,28 @@
+{
+  "date": "2026-09-16",
+  "feature": "Persistent per-species and total captures, with current party and PC ownership in the Pokédex.",
+  "regression_tests_passed": 836,
+  "regression_tests_skipped": 40,
+  "javascript_tests_passed": 6,
+  "private_cartridge_probes": {
+    "red_and_blue_duplicate_party_capture": true,
+    "red_and_blue_duplicate_pc_capture": true,
+    "red_and_blue_tutorial_excluded": true,
+    "blue_failed_throw_excluded": true,
+    "exact_checkpoint_replay_not_double_counted": true,
+    "hooked_and_unhooked_gameplay_checkpoint_bytes_identical": true,
+    "hooked_checkpoint_compatible_with_unhooked_cable_worker": true,
+    "fixture_setup": "Disposable private fixture RAM setup followed by normal controller inputs. Live game memory was not edited."
+  },
+  "browser": {
+    "desktop_width": 1280,
+    "mobile_width": 390,
+    "species_cards_verified": 151,
+    "party_pc_breakdown_verified": true,
+    "partial_history_date_visible": true,
+    "script_errors": [],
+    "horizontal_overflow": false
+  },
+  "existing_games": "Counts begin at deployment and are labeled with the tracking date. Historical totals are not inferred from ownership or journal entries.",
+  "wheel_sha256": "a4da4ca8e283070bec720471292462f8cd18897ee5866bd05458a393e761b224"
+}

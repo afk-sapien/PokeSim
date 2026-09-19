@@ -47,3 +47,17 @@ def test_strategic_replay_is_repeatable_from_power_on():
     assert game["rival_name"] in TRAINER_NAMES
     assert game["player_name"] != game["rival_name"]
     assert game["party"][0]["nick"] in POKEMON_NAMES
+
+
+@pytest.mark.parametrize('starter,dex', [('bulbasaur', 1), ('charmander', 4), ('squirtle', 7)])
+def test_all_starters_complete_the_opening_with_the_requested_partner(monkeypatch, starter, dex):
+    from pokesim import config
+    from pokesim.benchmark import run
+    from pokesim.strategy_data import SPECIES
+    if hashlib.sha1(ROM.read_bytes()).hexdigest() not in config.KNOWN_ROM_SHA1:
+        pytest.skip('Opening scenario requires a recognized Red or Blue ROM')
+    monkeypatch.setattr(config, 'STARTER', starter)
+    result = run(ROM, 'strategic', 1, 96000, target='pokedex')
+    assert result['success'], result['final_screen']
+    assert SPECIES[result['final']['party'][0]['species']]['dex'] == dex
+    assert result['recovery_reloads'] == 0

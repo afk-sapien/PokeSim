@@ -1,0 +1,94 @@
+{
+  "date": "2026-09-15",
+  "branch": "codex/multi-adventure-app",
+  "baseline_commit": "bd9f570",
+  "platform": "Linux x86_64",
+  "python_suite": {
+    "passed": 696,
+    "skipped": 10,
+    "failed": 0,
+    "seconds": 133.74,
+    "private_managed_and_cable_tests_enabled": true,
+    "skip_reason": "Legacy tests require their separate ROM and populated-save paths",
+    "log": "/tmp/pokesim-overhaul-final-tests.log"
+  },
+  "subsequent_watchdog_and_backup_regressions": {
+    "passed": 8,
+    "failed": 0,
+    "additional_unique_test": 1
+  },
+  "javascript_suite": {
+    "passed": 27,
+    "failed": 0,
+    "log": "/tmp/pokesim-overhaul-final-js-tests.log"
+  },
+  "real_manager_recovery": {
+    "status": "passed",
+    "interaction_id": "9bc7140854324ef49497a201c1d75f3d",
+    "participants": [
+      "eca0cbbd4e114e9f927ca7268376fa15",
+      "3e37625551704bdb9f7763ca1afac321"
+    ],
+    "unrelated_id": "f36af9ff06714fffb0b5d7b0843b656f",
+    "three_distinct_worker_processes": true,
+    "paired_manifest_bound_to_commit": true,
+    "unselected_worker_continued": true,
+    "unrelated_frames_advanced": 72,
+    "committed_recovery_survived_manager_restart": true,
+    "completed_retry_idempotent": true,
+    "coordinator_history_once": true,
+    "original_fixture_hashes": {
+      "red": "551fbe48b19883bd35e369f0eb502ae986e5929a47b44aaff5e766d07d8d2c3e",
+      "blue": "c1dd92f381c9e41db5e69d2f6f4d1f41af2e63d6c348ccf409929fd68e7ac494"
+    },
+    "automatic_scheduler": "Not exercised with shared-origin identical boxed collections",
+    "journal_exactly_once": true,
+    "source_fixtures_unchanged": true
+  },
+  "real_backup": {
+    "status": "passed",
+    "four_workers_resumed": true,
+    "paused_game_stayed_paused": true,
+    "backup_id": "e0637032ecb642bfa76211d35c0af456"
+  },
+  "desktop": {
+    "archive": "dist/desktop/PokeSim-linux-x86_64.tar.gz",
+    "bytes": 67183894,
+    "sha256": "aa4d35a9891e74d05b016ae15931f07f923ba54836ee25ed45b71e939f3af22d",
+    "library_smoke": "passed",
+    "two_frozen_workers_with_isolated_saves_and_parent_eof": "passed",
+    "frozen_link_session_default_name_evolution": "verified",
+    "private_cartridge_and_save_leaks": 0,
+    "documented_pyboy_demo_roms": 1
+  },
+  "docker": {
+    "image": "pokesim:multi-adventure-check",
+    "result": "passed",
+    "checks": [
+      "nonroot",
+      "read_only_root",
+      "two_red_workers",
+      "scoped_routes",
+      "healthcheck",
+      "clean_shutdown"
+    ],
+    "disposable_container_and_volume_removed": true
+  },
+  "wheel_and_sdist_resources": "passed",
+  "original_workspace": {
+    "baseline_files_checked": 73,
+    "differences": []
+  },
+  "release_gates": [
+    "Native Windows, macOS Intel, Apple Silicon, and Linux ARM64 CI execution",
+    "Signing and notarization with publisher credentials",
+    "Overnight coordinated soak and longer unattended operation"
+  ],
+  "scope_limits": [
+    "Verified English retail Red and Blue ROMs",
+    "Walking and PC preparation to Vermilion Center",
+    "No remote installation federation",
+    "No link battles",
+    "No hardware cycle-accurate serial transport"
+  ]
+}

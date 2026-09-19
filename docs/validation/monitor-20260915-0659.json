@@ -1,0 +1,173 @@
+{
+  "interval_minutes": 32.85,
+  "runs": {
+    "red": {
+      "same_container_start": true,
+      "healthy": true,
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned_before": 113,
+      "owned_after": 115,
+      "policy_recovery_delta": 85,
+      "completed_delta": {
+        "exploration": 0,
+        "training": 1,
+        "supplies": 1,
+        "collection": 0,
+        "evolution": 1
+      },
+      "new_pickup_keys": [],
+      "latest_autosave_retains_trade_marker": true
+    },
+    "blue": {
+      "same_container_start": true,
+      "healthy": true,
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned_before": 117,
+      "owned_after": 118,
+      "policy_recovery_delta": 78,
+      "completed_delta": {
+        "training": 2,
+        "collection": 0,
+        "exploration": 2,
+        "supplies": 1
+      },
+      "new_pickup_keys": [],
+      "latest_autosave_retains_trade_marker": true
+    }
+  },
+  "trading": {
+    "checked_at": 1789455584.0001147,
+    "release": "0.2.0rc16",
+    "revision": "caa092bf76d3b73ce892575ece41480b5a455d80",
+    "authorization": "Owner explicitly approved live automatic trading and no individual trade approvals",
+    "enabled": true,
+    "public_policy": {
+      "enabled": true,
+      "interval_seconds": 900
+    },
+    "active_transaction": false,
+    "status": {
+      "completed": 1,
+      "history": [
+        {
+          "id": "1789453929155376363",
+          "ts": 1789453929.1553776,
+          "reason": "Red registers Vulpix. Blue registers Machamp",
+          "moved": [
+            {
+              "instance": "red",
+              "box": 2,
+              "position": 3,
+              "sent": {
+                "species": 41,
+                "name": "Machoke",
+                "level": 41,
+                "nick": "DIRTNAP"
+              },
+              "received": {
+                "species": 82,
+                "name": "Vulpix",
+                "level": 32,
+                "nick": "MOCHI",
+                "evolved_from": null
+              },
+              "state": "/trading/transactions/1789453929155376363/after/red/auto-v1-trade-1789453929155376363.state",
+              "owned_before": 113,
+              "owned_after": 114
+            },
+            {
+              "instance": "blue",
+              "box": 5,
+              "position": 13,
+              "sent": {
+                "species": 82,
+                "name": "Vulpix",
+                "level": 32,
+                "nick": "MOCHI"
+              },
+              "received": {
+                "species": 126,
+                "name": "Machamp",
+                "level": 41,
+                "nick": "DIRTNAP",
+                "evolved_from": 41
+              },
+              "state": "/trading/transactions/1789453929155376363/after/blue/auto-v1-trade-1789453929155376363.state",
+              "owned_before": 117,
+              "owned_after": 118
+            }
+          ]
+        }
+      ],
+      "state": "waiting_for_overworld",
+      "last_check": 1789455558.0826867,
+      "error": null,
+      "last_trade": 1789453929.1553776
+    },
+    "games": {
+      "red": {
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.0,
+          "error": null
+        },
+        "paused": false,
+        "speed": 0.0,
+        "reloads": 0,
+        "owned": 115,
+        "hold": null,
+        "trade_barrier": "1789453929155376363",
+        "journaled_trades": 1
+      },
+      "blue": {
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.0,
+          "error": null
+        },
+        "paused": false,
+        "speed": 0.0,
+        "reloads": 0,
+        "owned": 118,
+        "hold": null,
+        "trade_barrier": "1789453929155376363",
+        "journaled_trades": 1
+      }
+    }
+  },
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 112275111936,
+    "free_bytes": 16472731648,
+    "used_percent": 83.2
+  },
+  "red_evolution": {
+    "species": "Ninetales",
+    "nickname": "MOCHI",
+    "journal_event": 8360,
+    "timestamp_utc": "2026-09-15T06:32:42.213Z"
+  },
+  "sampler_verification": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 1,
+    "state": "waiting_for_overworld",
+    "error": null,
+    "last_check": 1789455618.1557374,
+    "last_trade": 1789453929.1553776,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789453929155376363",
+        "ts": 1789453929.1553776,
+        "reason": "Red registers Vulpix. Blue registers Machamp"
+      }
+    ]
+  }
+}

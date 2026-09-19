@@ -1,0 +1,354 @@
+{
+  "sample_timestamp": 1789496414.660655,
+  "public": {
+    "ts": 1789496420.0407057,
+    "runs": [
+      {
+        "edition": "red",
+        "version": "0.2.0rc29",
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.0,
+          "error": null
+        },
+        "speed": 0.0,
+        "reloads": 0,
+        "frame": 51702054,
+        "owned": 144,
+        "training": {
+          "phase": "training",
+          "active_seconds": 3983,
+          "preparation_seconds": 517,
+          "preparation_remaining_seconds": 600,
+          "remaining_seconds": 286
+        },
+        "project": {
+          "method": "train",
+          "parent": 131,
+          "family": [
+            131
+          ],
+          "box": 8,
+          "initial_level": 70,
+          "target_level": 80,
+          "travel_distance": 338,
+          "key": "train:131:80",
+          "training_session": {
+            "phase": "training",
+            "preparation_frames": 31068,
+            "preparation_idle": 0,
+            "active_frames": 239034,
+            "active_idle": 782,
+            "routes": {},
+            "preparation_since_gain": 0
+          },
+          "initial_experience": 446105,
+          "gains": {
+            "experience": 85675,
+            "levels": 5
+          }
+        },
+        "recent_outcomes": [
+          {
+            "key": "0:rematch:0:",
+            "category": "supplies",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 223079318,
+            "retry_at": 223559318,
+            "target": null,
+            "gains": {},
+            "timing": null
+          },
+          {
+            "key": "train:110:40",
+            "category": "training",
+            "status": "advanced",
+            "reason": "Training preparation budget reached",
+            "elapsed": 223255462,
+            "retry_at": 223315462,
+            "target": 40,
+            "gains": {
+              "experience": 6451,
+              "levels": 3
+            },
+            "timing": {
+              "preparation_frames": 36018,
+              "active_frames": 94098
+            }
+          },
+          {
+            "key": "72:trade:63:",
+            "category": "collection",
+            "status": "deferred",
+            "reason": "No encounter, training gain, or new route in two minutes",
+            "elapsed": 223266392,
+            "retry_at": 223746392,
+            "target": 72,
+            "gains": {},
+            "timing": null
+          }
+        ]
+      },
+      {
+        "edition": "blue",
+        "version": "0.2.0rc29",
+        "health": {
+          "ok": true,
+          "worker_alive": true,
+          "activity_age_seconds": 0.6,
+          "error": null
+        },
+        "speed": 0.0,
+        "reloads": 0,
+        "frame": 92298008,
+        "owned": 144,
+        "training": null,
+        "project": {
+          "method": "explore",
+          "map": 187,
+          "target": [
+            187,
+            7,
+            6
+          ],
+          "key": "0:explore:187:"
+        },
+        "recent_outcomes": [
+          {
+            "key": "train:128:40",
+            "category": "training",
+            "status": "completed",
+            "reason": "Target reached",
+            "elapsed": 127516662,
+            "retry_at": 0,
+            "target": 40,
+            "gains": {
+              "experience": 7828,
+              "levels": 2
+            },
+            "timing": {
+              "preparation_frames": 8818,
+              "active_frames": 80478
+            }
+          },
+          {
+            "key": "train:168:40",
+            "category": "training",
+            "status": "completed",
+            "reason": "Target reached",
+            "elapsed": 127734528,
+            "retry_at": 0,
+            "target": 40,
+            "gains": {
+              "experience": 26851,
+              "levels": 7
+            },
+            "timing": {
+              "preparation_frames": 24758,
+              "active_frames": 191902
+            }
+          },
+          {
+            "key": "train:45:40",
+            "category": "training",
+            "status": "advanced",
+            "reason": "Training session limit reached",
+            "elapsed": 128110482,
+            "retry_at": 128170482,
+            "target": 40,
+            "gains": {
+              "experience": 28461,
+              "levels": 8
+            },
+            "timing": {
+              "preparation_frames": 14234,
+              "active_frames": 360514
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "runs": {
+    "red": {
+      "version": "0.2.0rc29",
+      "image": "pokesim:0.2.0rc29-4f0587e",
+      "started_at": "2026-09-15T18:18:36.073721542Z",
+      "uptime": 96,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 144,
+      "last_local_progress": {
+        "id": 9652,
+        "ts": 1789496408.395266,
+        "type": "level",
+        "title": "CORNWIZARD grew to level 75",
+        "age_seconds": 6
+      },
+      "recent_outcomes": [
+        {
+          "key": "0:rematch:0:",
+          "category": "supplies",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 223079318,
+          "retry_at": 223559318,
+          "target": null,
+          "gains": {},
+          "timing": null
+        },
+        {
+          "key": "train:110:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Training preparation budget reached",
+          "elapsed": 223255462,
+          "retry_at": 223315462,
+          "target": 40,
+          "gains": {
+            "experience": 6451,
+            "levels": 3
+          },
+          "timing": {
+            "preparation_frames": 36018,
+            "active_frames": 94098
+          }
+        },
+        {
+          "key": "72:trade:63:",
+          "category": "collection",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 223266392,
+          "retry_at": 223746392,
+          "target": 72,
+          "gains": {},
+          "timing": null
+        }
+      ]
+    },
+    "blue": {
+      "version": "0.2.0rc29",
+      "image": "pokesim:0.2.0rc29-4f0587e",
+      "started_at": "2026-09-15T18:19:32.712199958Z",
+      "uptime": 40,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.4,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 144,
+      "last_local_progress": {
+        "id": 4663,
+        "ts": 1789496378.6114993,
+        "type": "level",
+        "title": "MOCHI grew to level 38",
+        "age_seconds": 36
+      },
+      "recent_outcomes": [
+        {
+          "key": "train:128:40",
+          "category": "training",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 127516662,
+          "retry_at": 0,
+          "target": 40,
+          "gains": {
+            "experience": 7828,
+            "levels": 2
+          },
+          "timing": {
+            "preparation_frames": 8818,
+            "active_frames": 80478
+          }
+        },
+        {
+          "key": "train:168:40",
+          "category": "training",
+          "status": "completed",
+          "reason": "Target reached",
+          "elapsed": 127734528,
+          "retry_at": 0,
+          "target": 40,
+          "gains": {
+            "experience": 26851,
+            "levels": 7
+          },
+          "timing": {
+            "preparation_frames": 24758,
+            "active_frames": 191902
+          }
+        },
+        {
+          "key": "train:45:40",
+          "category": "training",
+          "status": "advanced",
+          "reason": "Training session limit reached",
+          "elapsed": 128110482,
+          "retry_at": 128170482,
+          "target": 40,
+          "gains": {
+            "experience": 28461,
+            "levels": 8
+          },
+          "timing": {
+            "preparation_frames": 14234,
+            "active_frames": 360514
+          }
+        }
+      ]
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 28,
+    "state": "ready",
+    "error": null,
+    "last_check": 1789496228.095521,
+    "last_trade": 1789496218.4097278,
+    "last_operation": "trade",
+    "image": "pokesim:0.2.0rc24-d99cdc2",
+    "started_at": "2026-09-15T18:19:35.033012842Z",
+    "restarts": 0,
+    "running": true,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789494320191237697",
+        "ts": 1789494320.1912389,
+        "reason": "Red improves total DVs by at least four. Blue improves total DVs by at least four"
+      },
+      {
+        "id": "1789495233671310263",
+        "ts": 1789495233.671312,
+        "reason": "Red improves total DVs by at least four. Blue improves total DVs by at least four"
+      },
+      {
+        "id": "1789496218409726221",
+        "ts": 1789496218.4097278,
+        "reason": "Red improves total DVs by at least four. Blue improves total DVs by at least four"
+      }
+    ]
+  },
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 112780554240,
+    "free_bytes": 15967289344,
+    "used_percent": 83.57
+  }
+}

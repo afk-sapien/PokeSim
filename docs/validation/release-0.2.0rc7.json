@@ -1,0 +1,106 @@
+{
+  "version": "0.2.0rc7",
+  "tag": "v0.2.0rc7",
+  "revision": "ca32f704db74e794a9a6f4a03ba6ba15259f23e2",
+  "image": "pokesim:0.2.0rc7-ca32f70",
+  "image_id": "sha256:21aaf503ad5965fc0c3aecb40471c2e0ca8aba58438f9f5c06508a81833103a3",
+  "package_sha256": {
+    "pokesim-0.2.0rc7.tar.gz": "aeaf753312e72f295998c317b02d28e122a19079f2fc638ac40c5b368363694e",
+    "pokesim-0.2.0rc7-py3-none-any.whl": "4a28f66a07c3fac6bd74c04a2d4c257d5cc37a1194b42af996588e7afb9dc461"
+  },
+  "wheel_runtime_files_match_commit": 58,
+  "tests": {
+    "passed": 350,
+    "skipped": 1,
+    "browser_controller": "passed",
+    "package_resources": "passed"
+  },
+  "deployments": [
+    {
+      "edition": "red",
+      "backup": "/docker/pokesim/backups/20260914T184015Z-rc7-final/before.tar",
+      "image": "pokesim:0.2.0rc7-ca32f70",
+      "revision": "ca32f704db74e794a9a6f4a03ba6ba15259f23e2",
+      "timestamp": 1789411229.5832512,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 111,
+      "reloads": 0,
+      "progress": {
+        "state": "exploring",
+        "last_achievement": {
+          "id": 7750,
+          "title": "SPROUT grew to level 88",
+          "ts": 1789409992.677842,
+          "age_seconds": 1236
+        }
+      }
+    },
+    {
+      "edition": "blue",
+      "backup": "/docker/pokesim-blue/backups/20260914T183932Z-rc7-final/before.tar",
+      "image": "pokesim:0.2.0rc7-ca32f70",
+      "revision": "ca32f704db74e794a9a6f4a03ba6ba15259f23e2",
+      "timestamp": 1789411178.1654563,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "owned": 113,
+      "reloads": 0,
+      "progress": {
+        "state": "exploring",
+        "last_achievement": {
+          "id": 2405,
+          "title": "Caught the legendary Moltres!",
+          "ts": 1789379169.9500134,
+          "age_seconds": 32008
+        }
+      }
+    }
+  ],
+  "trade_execution_enabled": false,
+  "public_release_published": false,
+  "public_http_checks": {
+    "red": {
+      "/": 200,
+      "/pokedex": 200,
+      "/pc": 200,
+      "/journal": 200,
+      "/healthz": 200,
+      "/sprites/25.png": 200
+    },
+    "blue": {
+      "/": 200,
+      "/pokedex": 200,
+      "/pc": 200,
+      "/journal": 200,
+      "/healthz": 200,
+      "/sprites/25.png": 200
+    }
+  },
+  "live_ui_verified": [
+    "activity label",
+    "last achievement title and age",
+    "party display",
+    "read-only trade board"
+  ],
+  "live_observation": {
+    "red": {
+      "uptime_seconds": 631,
+      "reloads": 0,
+      "healthy_every_sample": true
+    },
+    "blue": {
+      "uptime_seconds": 683,
+      "reloads": 0,
+      "healthy_every_sample": true
+    }
+  }
+}

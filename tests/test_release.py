@@ -102,7 +102,7 @@ def test_failed_atomic_write_leaves_previous_file_intact(store, monkeypatch):
     path.write_bytes(b'previous')
     def fail(source, destination):
         raise OSError('disk error')
-    monkeypatch.setattr('pokesim.store.os.replace', fail)
+    monkeypatch.setattr('pokesim.checkpoints.os.replace', fail)
     with pytest.raises(OSError):
         store.atomic_write(path, b'new')
     assert path.read_bytes() == b'previous'
@@ -124,6 +124,8 @@ def restore_emulator(store):
     emu.policy = Mock()
     emu.rom_sha1 = 'known-rom'
     emu.frame = 0
+    from pokesim.play_clock import PlayClock
+    emu.play_clock = PlayClock()
     emu.input_epoch = 0
     emu._boot = Mock(return_value=Mock())
     return emu
@@ -195,7 +197,8 @@ def test_paused_worker_is_healthy_but_stalled_worker_is_not():
 
 
 @pytest.mark.parametrize('name,value', [('SPEED', float('nan')), ('STREAM_FPS', 0),
-                                      ('KEEP_AUTOSAVES', 0), ('PORT', 70000), ('POLICY', 'missing')])
+                                      ('KEEP_AUTOSAVES', 0), ('PORT', 70000), ('POLICY', 'missing'),
+                                      ('STARTER', 'pikachu')])
 def test_invalid_configuration_is_actionable(monkeypatch, name, value):
     monkeypatch.setattr(config, name, value)
     with pytest.raises(ValueError, match=name):
@@ -230,3 +233,24 @@ def test_stop_interrupts_long_tick_without_advancing_game():
     emu.pb = Mock()
     emu._tick(10000)
     emu.pb.tick.assert_not_called()
+
+
+def test_final_save_failure_is_reported_to_the_launcher():
+    emu = Emulator.__new__(Emulator)
+    emu.stopping = True
+    emu.input_epoch = 0
+    emu.fatal_error = None
+    emu.pb = Mock()
+    emu._autosave = Mock(side_effect=OSError('disk full'))
+    emu._run()
+    assert 'final save failed' in emu.fatal_error
+    emu.pb.stop.assert_called_once_with(save=False)
+
+
+def test_completed_trade_blocks_restore_of_an_older_inventory(store):
+    old = store.write_checkpoint(b'valid', metadata())
+    store.set('trade_barrier', '1234')
+    emu = restore_emulator(store)
+    with pytest.raises(ValueError, match='predates'):
+        emu._load_state_file(old)
+    emu.pb.load_state.assert_not_called()

@@ -2,7 +2,13 @@ Authenticated HTTPS deployment
 
 This recipe protects the homepage, controls, API, feed, screenshots, and stream with the same authentication boundary. The application has no published backend port. Caddy terminates TLS and streams MJPEG without buffering. Docker Compose 2.24.4 or newer is required for the port reset used by the example.
 
-Prepare the ROM, data ownership, and local game-data bundle using the README first. Stop the direct deployment before switching:
+Prepare the ROM, data ownership, and local game-data bundle using the README first.
+This advanced recipe also needs `compose.proxy.yaml`, `deploy/Caddyfile`, and
+`deploy/proxy.env.example` from the source archive matching your installed release.
+If you installed only the prebuilt release assets, copy those files into your
+installation directory, preserving the `deploy` folder. The
+[rc31 source archive](https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc31/pokesim-0.2.0rc31.tar.gz)
+contains them. Stop the direct deployment before switching:
 
 ```sh
 docker compose stop
@@ -11,7 +17,7 @@ chmod 600 .env.proxy
 docker run --rm -it caddy:2.11.4-alpine caddy hash-password
 ```
 
-Enter a password interactively. Copy the resulting hash into `AUTH_HASH` in `.env.proxy`, using single quotes around the hash. Set `AUTH_USER`, `ROM_FILE`, and `DATA_PATH`. For the localhost example, keep the supplied address and port defaults.
+Enter a password interactively. Copy the resulting hash into `AUTH_HASH` in `.env.proxy`, using single quotes around the hash. Set `AUTH_USER`, `ROM_FILE`, and `DATA_PATH`. Copy the exact `POKESIM_IMAGE` setting from your working `.env` too, since `.env.proxy` replaces it for these commands. For the localhost example, keep the supplied address and port defaults.
 
 ```sh
 docker compose --env-file .env.proxy -f compose.proxy.yaml up -d

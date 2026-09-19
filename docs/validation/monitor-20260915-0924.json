@@ -1,0 +1,203 @@
+{
+  "from": 1789462347.2763727,
+  "to": 1789465059.2435963,
+  "minutes": 45.2,
+  "runs": {
+    "red": {
+      "version": "0.2.0rc20",
+      "image": "pokesim:0.2.0rc20-39f409b",
+      "started_at": "2026-09-15T08:48:58.078802863Z",
+      "restarts": 0,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 124,
+      "progress": {
+        "state": "exploring",
+        "last_achievement": {
+          "id": 8686,
+          "title": "SPROUT grew to level 35",
+          "ts": 1789464773.1157603,
+          "age_seconds": 286
+        }
+      },
+      "league_rewards": {
+        "earned": 4,
+        "delivered": 4,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {
+          "146": 1
+        }
+      },
+      "legendary_outcomes": [
+        {
+          "key": "legendary:73:194",
+          "category": "legendary",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 201082820,
+          "retry_at": 201322820,
+          "target": 73,
+          "gains": {}
+        },
+        {
+          "key": "legendary:73:194",
+          "category": "legendary",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 201521484,
+          "retry_at": 202001484,
+          "target": 73,
+          "gains": {}
+        }
+      ],
+      "same_container_start": true,
+      "new_registrations": 2,
+      "completed_project_deltas": {
+        "exploration": 1,
+        "training": 0,
+        "supplies": 0,
+        "collection": 0,
+        "evolution": 0,
+        "legendary": 0
+      },
+      "policy_recovery_delta": 95,
+      "current_training_gains": {
+        "experience": 138,
+        "levels": 0
+      }
+    },
+    "blue": {
+      "version": "0.2.0rc20",
+      "image": "pokesim:0.2.0rc20-39f409b",
+      "started_at": "2026-09-15T08:49:25.429057495Z",
+      "restarts": 0,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 127,
+      "progress": {
+        "state": "making_progress",
+        "last_achievement": {
+          "id": 3789,
+          "title": "PIP grew to level 40",
+          "ts": 1789465029.8580477,
+          "age_seconds": 29
+        }
+      },
+      "league_rewards": {
+        "earned": 5,
+        "delivered": 5,
+        "pending": 0
+      },
+      "legendary_recovery": {
+        "pending": {},
+        "attempts": {}
+      },
+      "legendary_outcomes": [
+        {
+          "key": "legendary:74:162",
+          "category": "legendary",
+          "status": "deferred",
+          "reason": "Expedition time budget reached",
+          "elapsed": 103600458,
+          "retry_at": 103660458,
+          "target": 74,
+          "gains": {}
+        },
+        {
+          "key": "legendary:74:162",
+          "category": "legendary",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 103753072,
+          "retry_at": 103873072,
+          "target": 74,
+          "gains": {}
+        },
+        {
+          "key": "legendary:74:162",
+          "category": "legendary",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 103966680,
+          "retry_at": 104206680,
+          "target": 74,
+          "gains": {}
+        },
+        {
+          "key": "legendary:74:162",
+          "category": "legendary",
+          "status": "deferred",
+          "reason": "No encounter, training gain, or new route in two minutes",
+          "elapsed": 104365634,
+          "retry_at": 104845634,
+          "target": 74,
+          "gains": {}
+        }
+      ],
+      "same_container_start": true,
+      "new_registrations": 3,
+      "completed_project_deltas": {
+        "training": 2,
+        "collection": 0,
+        "exploration": 0,
+        "supplies": 0,
+        "legendary": 0,
+        "evolution": 1
+      },
+      "policy_recovery_delta": 126,
+      "current_training_gains": null
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 7,
+    "state": "waiting_for_overworld",
+    "error": null,
+    "last_check": 1789465055.0183814,
+    "last_trade": 1789463959.3332334,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789461583518322019",
+        "ts": 1789461583.5183234,
+        "reason": "Red registers Sandshrew. Blue registers Scyther"
+      },
+      {
+        "id": "1789462569590803904",
+        "ts": 1789462569.5908055,
+        "reason": "Red registers Bellsprout. Blue registers Mankey"
+      },
+      {
+        "id": "1789463959333232082",
+        "ts": 1789463959.3332334,
+        "reason": "Red registers Pinsir. Blue registers Vileplume"
+      }
+    ]
+  },
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 120981925888,
+    "free_bytes": 7765917696,
+    "used_percent": 89.65
+  },
+  "runtime_deployments_during_interval": 0,
+  "new_automatic_trades": 2
+}

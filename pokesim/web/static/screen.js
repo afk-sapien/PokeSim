@@ -25,7 +25,7 @@
     let candidateUrl
     let retryDelay = frameInterval
     try {
-      const response = await fetch('/frame.jpg', {cache: 'no-store', signal: request.signal})
+      const response = await PokeSim.fetch('/frame.jpg', {cache: 'no-store', signal: request.signal})
       if (!response.ok) throw new Error('Frame unavailable')
       const blob = await response.blob()
       candidateUrl = URL.createObjectURL(blob)

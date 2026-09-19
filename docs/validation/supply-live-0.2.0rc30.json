@@ -1,0 +1,99 @@
+{
+  "timestamp": 1789499067.9180112,
+  "runs": {
+    "red": {
+      "version": "0.2.0rc30",
+      "image": "pokesim:0.2.0rc30-2c692f6",
+      "started_at": "2026-09-15T19:03:56.67078667Z",
+      "uptime": 29,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 144,
+      "last_local_progress": {
+        "id": 9711,
+        "ts": 1789499061.5998461,
+        "type": "trainer",
+        "title": "Defeated Bruno",
+        "age_seconds": 6
+      },
+      "league_rewards": {
+        "earned": 34,
+        "delivered": 34,
+        "pending": 0
+      }
+    },
+    "blue": {
+      "version": "0.2.0rc29",
+      "image": "pokesim:0.2.0rc29-4f0587e",
+      "started_at": "2026-09-15T18:19:32.712199958Z",
+      "uptime": 2693,
+      "health": {
+        "ok": true,
+        "worker_alive": true,
+        "activity_age_seconds": 0.0,
+        "error": null
+      },
+      "speed": 0.0,
+      "paused": false,
+      "reloads": 0,
+      "owned": 144,
+      "last_local_progress": {
+        "id": 4754,
+        "ts": 1789499061.7462697,
+        "type": "level",
+        "title": "SCOUT grew to level 41",
+        "age_seconds": 6
+      },
+      "league_rewards": {
+        "earned": 39,
+        "delivered": 39,
+        "pending": 0
+      }
+    }
+  },
+  "trading": {
+    "enabled": true,
+    "interval_seconds": 900,
+    "completed": 31,
+    "state": "ready",
+    "error": null,
+    "last_check": 1789499049.4884224,
+    "last_trade": 1789499042.316309,
+    "last_operation": "trade",
+    "image": "pokesim:0.2.0rc24-d99cdc2",
+    "started_at": "2026-09-15T19:03:59.660732997Z",
+    "restarts": 0,
+    "running": true,
+    "opportunities": 12,
+    "recent_exchanges": [
+      {
+        "id": "1789497223027133364",
+        "ts": 1789497223.0271342,
+        "reason": "Red improves total DVs by at least four. Blue improves total DVs by at least four"
+      },
+      {
+        "id": "1789498135377833875",
+        "ts": 1789498135.377835,
+        "reason": "Red improves total DVs by at least four. Blue improves total DVs by at least four"
+      },
+      {
+        "id": "1789499042316307042",
+        "ts": 1789499042.316309,
+        "reason": "Red improves total DVs by at least four. Blue improves total DVs by at least four"
+      }
+    ]
+  },
+  "disk": {
+    "total_bytes": 134949060608,
+    "used_bytes": 113090818048,
+    "free_bytes": 15657025536,
+    "used_percent": 83.8
+  }
+}
