@@ -1,9 +1,18 @@
-# PokeSim 0.1.1 experimental beta
+# PokeSim 0.1.2 experimental beta
 
-This update restores the compact All Pokémon grid in the PC, so many more
-partners fit on screen at once. Lock and trade actions are in each partner's
-details. It otherwise matches 0.1.0, which brought the latest development work
-together on main:
+Installing is now one command, with no checkout and nothing to keep up to date:
+
+```sh
+pipx install git+https://github.com/afk-sapien/PokeSim.git
+pokesim-desktop
+```
+
+The container quick start downloads the latest release's Compose file and pulls
+its published image, and a `.env` file is optional because every setting has a
+default. 0.1.1 restored the compact All Pokémon grid in the PC, so many more
+partners fit on screen at once, with lock and trade actions in each partner's
+details. Both build on 0.1.0, which brought the latest development work together
+on main:
 
 - Manage multiple independent Red and Blue adventures in one Adventure Library.
 - Trade automatically through the in-game Cable Club, with protected partners,
@@ -22,9 +31,9 @@ Install the Python package with `pokesim-desktop`, or run one Docker container.
 Prepared adventures work offline. Supply your own supported ROM. Packages exclude
 Pokémon ROMs, saves, generated game datasets, and portrait packs.
 
-After publication, install the container from `ghcr.io/afk-sapien/pokesim:0.1.1`
+After publication, install the container from `ghcr.io/afk-sapien/pokesim:0.1.2`
 using the attached `compose.yaml` and `env.example`. Follow the
-[container installation guide](https://github.com/afk-sapien/PokeSim/blob/v0.1.1/docs/self-hosting.md#install-a-published-container).
+[container installation guide](https://github.com/afk-sapien/PokeSim/blob/v0.1.2/docs/self-hosting.md#install-a-published-container).
 No GitHub login or local image build is needed.
 
 Downloads for this release are Python packages, a Linux amd64 Docker image archive,
