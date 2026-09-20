@@ -241,6 +241,13 @@ class Navigator:
             # The two exit mat squares only warp while facing out of the building.
             if direction != "down":
                 return None
+        elif warp[2] == -1:
+            # An exit back to the previous map on the map's edge, such as a cave mouth, only warps
+            # while walking off that edge. Pacing along a pair of them never leaves.
+            outward = {name for name, edge in (("left", x == 0), ("right", x == world["width"] - 1),
+                                               ("up", y == 0), ("down", y == world["height"] - 1)) if edge}
+            if outward and direction not in outward:
+                return None
         return self._warp(source, warp)
 
     @staticmethod

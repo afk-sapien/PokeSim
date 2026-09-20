@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Leave edge exits such as cave mouths by walking outward. A run that needed healing paced
+  between Victory Road 2F's two east exit squares indefinitely.
 - Sell a spare valuable to raise the Safari Zone entry fee. A run that reached the gate
   short of the fee used to talk to the attendant indefinitely, and shopping now leaves
   the fee untouched until Surf and the Gold Teeth are collected.
