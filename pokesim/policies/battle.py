@@ -217,6 +217,8 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
                ITEMS["ANTIDOTE"]: 2, ITEMS["PARLYZ_HEAL"]: 1}
     if league:
         desired[ITEMS["REVIVE"]] = 5
+        # Freeze never thaws, and Lance's Dragonair can stall forever against a frozen last partner.
+        desired[ITEMS["FULL_HEAL"]] = 3
     ball_count = sum(counts.get(i, 0) for i in BALLS)
     heal_count = sum(counts.get(i, 0) for i in HEALING)
     order = sorted(stock, key=lambda item: (item != ITEMS["REVIVE"],

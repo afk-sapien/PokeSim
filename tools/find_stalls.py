@@ -11,6 +11,7 @@ from collections import Counter, deque
 import hashlib
 from importlib.metadata import version
 import json
+import secrets
 from pathlib import Path
 import sys
 import time
@@ -54,6 +55,16 @@ class Run:
             self.frame = metadata.get('frame', 0)
             with checkpoint.open('rb') as stream:
                 self.pb.load_state(stream)
+
+    def reload(self, path):
+        """Go back to a checkpoint as the application does after a battle that never ends."""
+        metadata = CheckpointStore(path.parent).checkpoint_metadata(path)
+        self.policy.load_state_dict(metadata['policy_state'])
+        self.memory = RunMemory.from_dict(metadata['run_memory'])
+        with path.open('rb') as stream:
+            self.pb.load_state(stream)
+        # The same save and the same choices would replay the same trouble.
+        self.pb.tick(1 + secrets.randbelow(180), render=False)
 
     def save(self, path):
         """Write a checkpoint the application and the replay tools both accept."""
@@ -160,6 +171,14 @@ def main():
                 objective = (open_stall['objective'] or {}).get('title')
                 print(f'{clock(run.frame - start)} STALL {folder.name}: {quiet // MINUTE} quiet minutes on '
                       f'{snapshot.map_name}, objective "{objective}", money {snapshot.money}', flush=True)
+                if snapshot.in_battle and before:
+                    # Some original-game battles cannot end, such as a frozen last partner against a
+                    # foe that only uses Agility. The application reloads a save from before the battle.
+                    run.reload(folder / 'before.state')
+                    open_stall['escape'] = 'reloaded the checkpoint from before the battle'
+                    (folder / 'report.json').write_text(json.dumps(open_stall, indent=2))
+                    previous, pending = None, []
+                    print('  battle could not end, reloaded the checkpoint from before it', flush=True)
             if open_stall and args.give_up_minutes and run.frame - open_stall['noticed_frame'] >= args.give_up_minutes * MINUTE:
                 outcome = f'gave up in {open_stall["folder"]}'
                 break

@@ -5,6 +5,7 @@ import hashlib
 import io
 import logging
 import queue
+import secrets
 import threading
 from importlib.metadata import version
 import time
@@ -402,6 +403,11 @@ class Emulator:
             return
         self.store.set("play_clock", self.play_clock.state_dict())
         snap = self.snapshot
+        battle_since = getattr(self, 'battle_since', None)
+        if battle_since and not trade_prepare and time.time() - battle_since > config.BATTLE_TIMEOUT_SECONDS / 3:
+            # A battle this long may never end, and the only way out is a save from before it began.
+            # Rotating autosaves during it would push that save out before the timeout reloads it.
+            return
         if snap is not None and not snap.valid:
             log.warning("skipping autosave: game state looks glitched")
             return
@@ -427,6 +433,9 @@ class Emulator:
             log.warning("%s for %ds, reloading %s", why, time.time() - since, target.name)
             candidates = [target] + [p for p in reversed(saves) if p != target]
             self._restore_first_valid(candidates)
+            # The emulator is deterministic, so the same save and the same choices would replay the
+            # same trouble. Idling a random moment moves the game's random numbers along.
+            self._tick(1 + secrets.randbelow(180))
         else:
             log.warning("%s and no save state to go back to; power-cycling", why)
             self.pb.stop(save=False)

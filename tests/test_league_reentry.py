@@ -70,7 +70,7 @@ def postgame_policy(**changes):
     s = returning_trainer(map=MAPS['INDIGO_PLATEAU_LOBBY'], x=8, y=10,
                           hall_of_fame_count=6, frame=100,
                           items=((ITEMS['POKE_BALL'], 10), (ITEMS['SUPER_POTION'], 10),
-                                 (ITEMS['REVIVE'], 5)), **changes)
+                                 (ITEMS['REVIVE'], 5), (ITEMS['FULL_HEAL'], 3)), **changes)
     p = StrategicPolicy(7)
     p.observed_map = s.map
     p.collection.cooldown = 1200

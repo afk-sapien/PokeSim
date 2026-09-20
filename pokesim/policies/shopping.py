@@ -106,7 +106,9 @@ class ShoppingController:
         elif balls >= ball_reserve and medicine and not bag_full:
             self.restocking = False
         if snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY']:
-            self.restocking = balls < ball_reserve or medicine < 10 or dict(snapshot.items).get(ITEMS['REVIVE'], 0) < 5
+            counts = dict(snapshot.items)
+            self.restocking = (balls < ball_reserve or medicine < 10 or counts.get(ITEMS['REVIVE'], 0) < 5
+                               or counts.get(ITEMS['FULL_HEAL'], 0) < 3)
         legendary = legendary_project(project)
         if legendary and not dict(snapshot.items).get(ITEMS['MASTER_BALL']):
             self.restocking = (not project.get('supplies_prepared')
