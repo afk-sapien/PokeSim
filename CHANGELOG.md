@@ -11,6 +11,17 @@
   count as progress. `STALL_ALERT_GAME_MINUTES=0` turns it off.
 - Add `tools/find_stalls.py`, which plays an isolated adventure at full speed and keeps
   a replayable bundle for every stall it finds.
+- Keep the last Surf partner out of automatic trades, and stop revisiting the Silph
+  worker once his Lapras is registered. A run that traded the gift Lapras away before
+  collecting HM03 had no reachable way to cross water.
+- Set up phone notifications from the Library's new Notifications page, with no
+  account or settings file. Choose the ntfy server and topic, generate a random
+  topic, add an optional access token, and send a test notification.
+- Choose which adventures notify and which kinds of news are sent, including a
+  "Stuck or needs attention" kind. Changes reach running adventures right away.
+- Name the adventure in every notification title, and announce completed trades once.
+- Keep `NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY` and `NTFY_MUTE` as the defaults
+  until notifications are saved in the Library.
 
 ## 0.1.2
 

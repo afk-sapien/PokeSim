@@ -24,7 +24,49 @@ Follow the current [installation instructions](../README.md) and [operations gui
 | `/api/events` | JSON event list (`limit`, `all`, `types`, `min_priority`, `before`) |
 | `/api/control` | POST an `action` and optional `value`. Actions: `pause`, `resume`, `take_control`, `save`, `restart`, `speed`, `load_state`, `press` |
 
+## Notifications
+
+Open the Library and choose **Notifications**. No account or settings file is needed.
+
+1. Leave the server as `https://ntfy.sh`, or enter your own ntfy server.
+2. Choose **Generate a random topic**. On a public server anyone who knows the topic can read
+   it, so a random topic works like a password. An access token is only needed for a protected
+   topic or a private server. It is stored in the application folder and never shown again.
+3. Subscribe to the same topic in the ntfy phone app, or open the address shown on the page.
+4. Turn on **Send notifications**, choose **Send a test notification**, then save.
+
+Choose which adventures notify and which kinds of news are sent. New adventures notify until
+they are turned off. Changes apply to running adventures right away, and each title names its
+adventure, such as "Red · Beat Brock! Got the Boulder Badge". Notifications keep their
+screenshot and open the journal entry when tapped.
+
+| Kind | Default | Events |
+|---|---|---|
+| Stuck or needs attention | on | `stall` |
+| Gym badges | on | `badge` |
+| Elite Four and Champion | on | `champion`, Elite Four `trainer` wins |
+| Legendary Pokémon | on | legendary `catch`, `legendary_retry` |
+| New Pokédex entries | on | other `catch`, `obtain` |
+| Evolutions | on | `evolve` |
+| Trades between adventures | off | completed Cable Club exchanges |
+| Rival and notable trainers | off | other notable `trainer` wins |
+| Level milestones | off | `level` (every tenth level) |
+| New areas and key items | off | `map`, `item` |
+| Blackouts | off | `blackout` |
+| Everything else | on | `money`, `name`, `playtime`, and any type added later |
+
+Only notable events (priority 2 and up) are ever pushed. **Least important notification**
+raises that threshold.
+
+`NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY` and `NTFY_MUTE` in the manager's environment are
+optional defaults. They apply until notifications are saved in the Library, and the Library
+wins from then on. The legacy single-game runtime has no Library and uses only these variables.
+
 ## Configuration (environment)
+
+These variables configure the legacy single-game runtime. The Adventure Library keeps its
+settings in the browser.
+
 
 | Var | Default | Meaning |
 |---|---|---|
@@ -36,7 +78,7 @@ Follow the current [installation instructions](../README.md) and [operations gui
 | `BATTLE_ANIMATIONS` | `1` | `0` turns battle animations off (faster) |
 | `SEED` | random | RNG seed for the policy, starter choice, and random names |
 | `STARTER` | `random` | new strategic adventures choose among all three starters. Set `bulbasaur`, `charmander`, or `squirtle` for a fixed choice. Saved adventures retain their choice |
-| `NTFY_URL` / `NTFY_TOKEN` | off | push notable events (with screenshot) to an ntfy topic |
+| `NTFY_URL` / `NTFY_TOKEN` | off | push notable events (with screenshot) to an ntfy topic, such as `https://ntfy.sh/my-topic`. Optional defaults for the Library's [Notifications](#notifications) page |
 | `NTFY_MIN_PRIORITY` | `2` | only push events at or above this priority (1–5, see below) |
 | `NTFY_MUTE` | | comma-separated event types never pushed, e.g. `map,blackout` |
 | `PUBLIC_URL` | `http://localhost:8000` | absolute links in the feed / ntfy click actions |

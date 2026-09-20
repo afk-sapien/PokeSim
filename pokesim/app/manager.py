@@ -69,6 +69,8 @@ class Manager:
         self.assets = Assets(self.registry, game_data_dir, reference_archive)
         self.supervisor = Supervisor(self.registry, self.assets, self.public_url,
                                      **({'child_factory': child_factory} if child_factory else {}))
+        from .notifications import NotificationCenter
+        self.notifications = NotificationCenter(self.registry, self.supervisor, self.public_url)
         self.maintenance = threading.RLock()
         self.supervisor.admission = self.maintenance
         self.suspended = False
@@ -239,6 +241,7 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.get('/', response_class=HTMLResponse)
     @app.get('/trading', response_class=HTMLResponse)
+    @app.get('/notifications', response_class=HTMLResponse)
     @app.get('/settings', response_class=HTMLResponse)
     def home(request: Request):
         from ..web.library import render_library
@@ -398,6 +401,22 @@ def create_app(manager, shutdown=lambda: None):
         if 'max_running' in data:
             manager.registry.set_setting('max_running', data['max_running'])
         return {**settings(), 'pace_pending': pending}
+
+    @app.get('/api/v1/notifications')
+    def notifications():
+        return manager.notifications.public()
+
+    @app.patch('/api/v1/notifications')
+    async def set_notifications(request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        pending = await asyncio.to_thread(manager.notifications.update, data)
+        return {**manager.notifications.public(), 'pending': pending}
+
+    @app.post('/api/v1/notifications/test')
+    async def test_notification(request: Request):
+        data = await json_body(request)
+        return await asyncio.to_thread(manager.notifications.test, data)
 
     @app.get('/api/v1/interactions')
     def interactions():

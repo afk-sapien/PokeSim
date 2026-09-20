@@ -6,13 +6,13 @@
 <meta name="theme-color" content="#f5f3ed">
 <title>Your adventures · PokeSim</title>
 <link rel="stylesheet" href="/static/style.css">
-<link rel="stylesheet" href="/static/library.css?v=trade-history-1">
-<script src="/static/library.js?v=trade-history-1" defer></script>
+<link rel="stylesheet" href="/static/library.css?v=notifications-1">
+<script src="/static/library.js?v=notifications-1" defer></script>
 <link rel="stylesheet" href="/static/collection-layout.css?v=compact-1">
 </head>
 <body class="library" data-page="${page}" data-adventure="${adventure_id}">
 <a class="skip-link" href="#main">Skip to content</a>
-<header class="topbar"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">p.</span>PokeSim</a><nav aria-label="Application"><a href="/" data-nav="library">Library</a><a href="/trading" data-nav="trading">Trading</a><a href="/settings" data-nav="settings">Settings and backups</a></nav><span id="connection" role="status">Connecting</span></header>
+<header class="topbar"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">p.</span>PokeSim</a><nav aria-label="Application"><a href="/" data-nav="library">Library</a><a href="/trading" data-nav="trading">Trading</a><a href="/notifications" data-nav="notifications">Notifications</a><a href="/settings" data-nav="settings">Settings and backups</a></nav><span id="connection" role="status">Connecting</span></header>
 <main id="main" class="library-main">
 <p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
 <div id="workspace" hidden>
@@ -28,6 +28,14 @@
 <section class="trade-section" id="trade-active-section" hidden><div class="section-heading"><h2>Current exchange</h2><span class="section-note">Other adventures keep playing.</span></div><div id="trade-active" aria-live="polite">Checking the Cable Club…</div></section>
 <section class="trade-section"><div class="section-heading"><h2>Recent completed trades</h2><span class="section-note" id="trade-history-count"></span></div><div id="trade-history">No completed trades yet.</div></section>
 <section class="panel" id="trade-failures-section" hidden><details><summary>Recent attempts that did not complete</summary><div id="trade-failures"></div></details></section>
+</section>
+<section data-view="notifications" hidden>
+<p class="eyebrow">NEWS FROM THE ROAD</p><h1>Notifications</h1><p class="section-note">Get badges, new Pokémon and other milestones on your phone through <a class="text-link" href="https://ntfy.sh" rel="noreferrer">ntfy</a>. No account is needed.</p>
+<form id="notify-form"><div class="settings-grid">
+<section class="panel"><h2>Where to send them</h2><label class="inline-label"><input id="notify-enabled" type="checkbox" data-owner> Send notifications</label><label>ntfy server<input id="notify-server" type="url" maxlength="200" required placeholder="https://ntfy.sh" data-owner></label><label>Topic<input id="notify-topic" maxlength="64" pattern="[A-Za-z0-9_\-]{1,64}" autocomplete="off" autocapitalize="none" spellcheck="false" data-owner></label><button type="button" id="notify-generate" data-owner>Generate a random topic</button><p class="section-note">Anyone who knows the topic can read its notifications, so treat it like a password. Subscribe to the same topic in the ntfy app, or open it in a browser:</p><p id="notify-subscribe" class="notify-subscribe"></p><label>Access token (optional)<input id="notify-token" type="password" maxlength="512" autocomplete="off" data-owner></label><p class="section-note" id="notify-token-note">Only needed for a protected topic or a private server.</p><label class="inline-label" id="notify-clear-row" hidden><input id="notify-clear-token" type="checkbox" data-owner> Remove the saved token</label></section>
+<section class="panel"><h2>What to send</h2><label>Least important notification<select id="notify-priority" data-owner><option value="2">Everything selected below</option><option value="3">Normal and above</option><option value="4">Important and above</option><option value="5">Only the biggest moments</option></select></label><div id="notify-categories" class="notify-choices"></div></section>
+<section class="panel"><h2>Which adventures</h2><p>New adventures send notifications until you turn them off here.</p><div id="notify-adventures" class="notify-choices"></div></section>
+</div><div class="notify-actions"><button class="primary-button" data-owner>Save notifications</button><button type="button" id="notify-test" data-owner>Send a test notification</button><span id="notify-result" role="status" aria-live="polite"></span></div></form>
 </section>
 <section data-view="settings" hidden>
 <p class="eyebrow">MAKE YOURSELF AT HOME</p><h1>Settings and backups</h1>

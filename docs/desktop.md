@@ -49,6 +49,10 @@ Prepared adventures run offline. Adding another adventure can reuse an installed
 - Keep the computer awake to advance the games. Sleeping or powered-off computers do not accumulate simulated progress.
 - Desktop launch uses an available loopback port, accessible only from your computer. The Library has no account or owner-key step. For remote access, use an authenticated reverse proxy or a trusted private network as described in [self-hosting](self-hosting.md). Anyone who can reach the Library can manage its adventures.
 
+## Notifications
+
+Choose **Notifications** in the Library to get milestones on your phone through [ntfy](https://ntfy.sh). Generate a random topic, subscribe to it in the ntfy app, send a test, and save. No account is needed. The page also chooses which adventures notify and which kinds of news are sent, and changes apply to running adventures right away. See the [guide](guide.md#notifications) for the full list.
+
 ## Simulation pace
 
 Set the pace for all adventures in Library Settings. The default and recommended pace is 1×, so adventures unfold gradually and produce fewer notifications per hour. The live screen and individual adventure settings do not change pace. Newly created and restarted adventures inherit the global setting, which also applies to new Cable Club sessions. A cable session already in progress finishes at its starting pace.
