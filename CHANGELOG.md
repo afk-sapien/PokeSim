@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Respect the badge checks on Route 23, plan restocking only at shops that can be reached, and spend
+  vitamins and Rare Candies when the bag is too full to buy Poké Balls. A run with six badges and a
+  bag of keepsakes argued with the Volcano Badge guard on its way to the Indigo Plateau shop.
 - Restart a League attempt that cannot be finished. A checkpoint is kept from the moment the
   attempt begins, and it is used when a battle runs past the timeout twice with no progress between.
 - Tell party members of one species apart when changing the lead. With two Haunters the run

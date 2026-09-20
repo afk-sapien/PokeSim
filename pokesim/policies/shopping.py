@@ -119,6 +119,9 @@ class ShoppingController:
         for map_id, world in WORLD.items():
             if snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY'] and map_id != snapshot.map:
                 continue
+            if map_id == MAPS['INDIGO_PLATEAU_LOBBY'] and map_id != snapshot.map and snapshot.badges != 255:
+                # Route 23 turns back anyone without every badge, so this shop cannot be a plan yet.
+                continue
             stock = DATA['marts'].get(world['name'], [])
             if map_id != snapshot.map and not legendary:
                 stock = [item for item in stock if item in BALLS or item in HEALING or item == ITEMS['REVIVE']]

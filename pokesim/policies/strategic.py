@@ -664,14 +664,16 @@ class StrategicPolicy(Policy):
                                and (mon.hp < mon.max_hp * 0.8 or mon.status & CURES.get(item, 0))]
                     if choices:
                         return self._use_item(s, max(choices)[1], target)
-        if self.collection.project and len(s.items) >= 18:
+        # A bag this full cannot take a new kind of item, Poké Balls included, so spend the vitamins and
+        # Rare Candies that fill it, whether or not a collection project is under way.
+        if len(s.items) >= 18:
             for item,qty in s.items:
                 if item not in {ITEMS[n] for n in ('RARE_CANDY','HP_UP','PROTEIN','IRON','CARBOS','CALCIUM')}:
                     continue
                 candidates = [i for i,p in enumerate(s.party) if p.level<100]
                 if not candidates:
                     continue
-                parent = self.collection.project.get('parent')
+                parent = (self.collection.project or {}).get('parent')
                 target = next((i for i in candidates if s.party[i].species==parent),max(candidates,key=lambda i:s.party[i].level))
                 signature = (item,qty,s.party[target].species,s.party[target].level)
                 if signature not in self.supply_attempts:
