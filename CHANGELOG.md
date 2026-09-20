@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Choose the second League battler the same way whatever the party order. With two partners tied
+  for the highest level, moving the chosen partner to the lead changed the choice, and a run with
+  eight badges swapped Lapras and Muk in the party menu of Pokémon Mansion indefinitely.
 - Keep each stall for later. An adventure's `stalls/` folder holds the moment a stall was reported
   beside the first autosave after the last achievement, which the rotating autosaves had long
   dropped by then. `KEEP_STALL_BUNDLES` sets how many are kept, 5 by default, 0 for none.

@@ -288,10 +288,17 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
 
 
 def league_partner(snapshot):
-    strongest = max(range(len(snapshot.party)), key=lambda i: snapshot.party[i].level)
-    candidates = [i for i, p in enumerate(snapshot.party) if i != strongest
+    """The sturdy partner to train beside the strongest, chosen the same way whatever the party order.
+
+    The partner is moved to the lead, so a choice that depended on position changed once it was
+    made: with Muk and Charizard both at level 54, Lapras and Muk traded the lead forever."""
+    party = snapshot.party
+    bulk = lambda i: (party[i].max_hp + party[i].attack, party[i].level, party[i].experience)
+    # Ties go to the later partner, so that an identical twin already leading stays the one to train.
+    strongest = max(range(len(party)), key=lambda i: (party[i].level, *bulk(i), i))
+    candidates = [i for i, p in enumerate(party) if i != strongest
                   and SPECIES.get(p.species, {}).get("stats", [0])[0] >= 90]
-    return max(candidates, key=lambda i: snapshot.party[i].max_hp + snapshot.party[i].attack) if candidates else None
+    return max(candidates, key=lambda i: (bulk(i), -i)) if candidates else None
 
 
 def journey(snapshot, current):
