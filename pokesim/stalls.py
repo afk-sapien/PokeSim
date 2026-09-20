@@ -34,3 +34,9 @@ class StallWatch:
             return None
         self.alerted = now
         return self.quiet(frame, now)
+
+
+def held(snapshot):
+    """Pokémon in the party and every box. A catch of a species already registered is still progress."""
+    return len(snapshot.party) + (sum(snapshot.box_counts) if snapshot.box_counts else len(snapshot.boxed_pokemon))
+

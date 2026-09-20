@@ -48,3 +48,11 @@ def test_emulator_reports_a_stall_as_a_notable_event_with_the_objective():
     Emulator._check_stall(game, 660)
     assert len(seen) == 1 and seen[0].type == 'stall' and seen[0].notable and seen[0].priority == 4
     assert 'Find the secret house' in seen[0].body and 'Safari Zone Gate' in seen[0].body and '9 recoveries' in seen[0].body
+
+
+def test_catching_a_species_the_pokedex_already_has_is_still_progress():
+    from pokesim.stalls import held
+    hunting = SimpleNamespace(party=(1, 2, 3), box_counts=(20, 4), boxed_pokemon=())
+    caught = SimpleNamespace(party=(1, 2, 3), box_counts=(20, 5), boxed_pokemon=())
+    assert held(caught) == held(hunting) + 1
+    assert held(SimpleNamespace(party=(1,), box_counts=(), boxed_pokemon=((1, 5), (2, 6)))) == 3
