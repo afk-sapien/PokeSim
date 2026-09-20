@@ -27,6 +27,9 @@ from pokesim.policies.strategic import StrategicPolicy
 from pokesim.ram import read_snapshot
 from pokesim.screen import Screen, W_OPTIONS
 from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS
+from pokesim.strategy_data import MAPS
+
+LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
 
 BLUE_SHA1 = 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2'
 
@@ -118,6 +121,7 @@ def main():
     next_roll = next_report = run.frame
     stalls, timeline, modes = [], [], Counter()
     open_stall = None
+    escapes, league_entry = 0, args.output / 'league-entry.state'
     previous, pending, outcome = None, [], 'budget reached'
     wall = time.monotonic()
 
@@ -135,13 +139,16 @@ def main():
         while run.frame - start < budget:
             snapshot = read_snapshot(run.pb.memory, run.frame)
             events = [event for event in pending if event.still(snapshot)]
+            if (previous is not None and snapshot.valid and snapshot.map == MAPS['LORELEIS_ROOM']
+                    and previous.map not in LEAGUE and not snapshot.in_battle):
+                run.save(league_entry)          # the application keeps the same save to restart a lost attempt
             new = diff(previous, snapshot, run.memory)
             pending = [event for event in new if event.still is not None]
             events += [event for event in new if event.still is None]
             previous = snapshot
             gained = [event for event in events if event.type in PROGRESS_EVENTS]
             if gained:
-                progress_frame = run.frame
+                progress_frame, escapes = run.frame, 0
                 if open_stall:
                     open_stall['ended_after_minutes'] = (run.frame - open_stall['noticed_frame']) // MINUTE
                     open_stall['ended_by'] = gained[0].title
@@ -175,12 +182,17 @@ def main():
                       f'{snapshot.map_name}, objective "{objective}", money {snapshot.money}', flush=True)
                 if snapshot.in_battle and (calm or before):
                     # Some original-game battles cannot end, such as a frozen last partner against a
-                    # foe that only uses Agility. The application reloads a save from before the battle.
-                    run.reload(calm or folder / 'before.state')
-                    open_stall['escape'] = 'reloaded the checkpoint from before the battle'
+                    # foe that only uses Agility. The application reloads a save from before the battle,
+                    # and restarts the League attempt if that did not help.
+                    escapes += 1
+                    restart = escapes >= 2 and snapshot.map in LEAGUE and league_entry.exists()
+                    run.reload(league_entry if restart else calm or folder / 'before.state')
+                    open_stall['escape'] = 'restarted the League attempt' if restart else 'reloaded a checkpoint from before the battle'
                     (folder / 'report.json').write_text(json.dumps(open_stall, indent=2))
-                    previous, pending = None, []
-                    print('  battle could not end, reloaded the checkpoint from before it', flush=True)
+                    print(f'  battle could not end, {open_stall["escape"]}', flush=True)
+                    # Watch again from here, so a second dead end is noticed instead of waited out.
+                    previous, pending, open_stall, progress_frame = None, [], None, run.frame
+                    recent.clear()
             if open_stall and args.give_up_minutes and run.frame - open_stall['noticed_frame'] >= args.give_up_minutes * MINUTE:
                 outcome = f'gave up in {open_stall["folder"]}'
                 break

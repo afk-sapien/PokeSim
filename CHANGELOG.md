@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Restart a League attempt that cannot be finished. A checkpoint is kept from the moment the
+  attempt begins, and it is used when a battle runs past the timeout twice with no progress between.
 - Tell party members of one species apart when changing the lead. With two Haunters the run
   thought the stronger one already led, and reopened the party menu at a gym door forever.
 - Buy Full Heals before the League, keep the save from before an endless battle until the
