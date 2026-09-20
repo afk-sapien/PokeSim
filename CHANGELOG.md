@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1
 
 - Train for the League in Route 23's grass. Training places were found by the overworld's grass
   tile, and Route 23 uses the Plateau tileset's, so the goal had no destination. A fresh run with

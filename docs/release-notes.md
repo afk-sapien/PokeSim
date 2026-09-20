@@ -1,45 +1,43 @@
-# PokeSim 0.2.0 experimental beta
+# PokeSim 0.2.1 experimental beta
 
-This release is about adventures that keep going, and about hearing from them.
+This release fixes four ways an adventure could stop getting anywhere, and makes every stall
+something that can be replayed until it is fixed.
 
-**Phone notifications without an account.** The Library has a Notifications page. Choose an
-[ntfy](https://ntfy.sh) server and topic, generate a random topic, add an access token only if your
-server needs one, and send a test. Pick which adventures notify and which kinds of news are sent.
-Changes reach running adventures at once, and the token is never shown again. The `NTFY_*`
-variables still work as defaults until you save settings in the Library.
+Found by full-speed test adventures and by saves edited into hard situations:
 
-**Stalls are found, reported and fixed.** An adventure with no achievement for two hours of game
-time and fifteen real minutes records a Stuck? journal entry with the saved moment, shows it on
-Live and on its Library card, and sends it like any other news. A capture or earned experience
-counts as progress, so a long hunt or a training session is not a stall.
+- **A battle nobody can finish.** The original trainer routine favours any move of a super
+  effective type, even one that does nothing, so Lorelei's Dewgong only uses Rest against a frozen
+  Muk and never knocks it out. With nobody able to act, the player hands over to a partner the foe
+  does attack, and when there is none the save from before the battle is reloaded at once instead
+  of after the battle timeout.
+- **Trading the lead forever.** With two partners tied for the highest level, moving the second
+  League battler to the lead changed who was chosen, and a run with eight badges swapped Lapras
+  and Muk in Pokémon Mansion's party menu indefinitely.
+- **Wandering before Misty.** A side project that led back to Viridian Forest replaced the Mt. Moon
+  goal with training on Route 24, which lies beyond the mountain. Misty is now reached about three
+  game hours after Brock instead of nine.
+- **Wandering before the League.** Route 23 draws its grass with its own tile, so preparing for the
+  League there had no destination. One test adventure reached the Hall of Fame in 41 game hours
+  instead of 60.
 
-Full-speed test adventures found these dead ends, and each now plays through:
+**Stalls are kept.** Rotating autosaves were long gone by the time a stall was reported. Each
+adventure now keeps the first autosave after its last achievement, and a reported stall leaves a
+folder in `stalls/` with that save, the moment the stall was noticed, a screenshot and a report.
+`KEEP_STALL_BUNDLES` sets how many are kept, 5 by default, 0 for none.
 
-- Short of the Safari Zone entry fee, the run sells a spare valuable instead of arguing at the gate.
-- Automatic trading keeps the last partner that can learn Surf, and a Cut, Surf or Strength partner
-  is found in any PC box, not only the open one.
-- Exits on a map's edge, such as Victory Road's, are left by walking outward.
-- The last partner standing fights on instead of trying to switch to itself.
-- A frozen battler is cured, replaced, or a partner is revived. Freeze never thaws in these games.
-- The Silph Co nurse is approached directly, and is not asked to heal once the building is freed.
-- Two party members of one species are told apart when changing the lead.
-- Route 23 checks badges, restocking is only planned at shops that can be reached, and a bag too
-  full to buy Poke Balls spends its vitamins and Rare Candies.
-- Full Heals are bought before the League. A battle that the original game cannot end, such as
-  Lance's Dragonair using Agility forever against a frozen last partner, is left by reloading, and
-  a League attempt that is already lost restarts from the moment it began.
-
-`tools/find_stalls.py` plays a fresh cartridge or a copied checkpoint at full speed, about a minute
-per game hour, and keeps a replayable bundle for every stall. Eleven fresh Red and Blue adventures
-reached the Hall of Fame with it on this code.
+**Stuck scenarios.** `tools/stuck_scenarios.py` turns any of those saves into a regression test that
+replays in about a minute, and can edit the copy into a situation that is hard to reach by
+playing: frozen or sleeping partners, 1 HP, no PP, an emptied bag, no money. See the
+[validation guide](testing.md#stuck-scenarios). Seventeen private scenarios and four fresh Red
+adventures play through on this code.
 
 Install the Python package with `pokesim-desktop`, or run one Docker container. Prepared
 adventures work offline. Supply your own supported ROM. Packages exclude Pokemon ROMs, saves,
 generated game datasets, and portrait packs.
 
-After publication, install the container from `ghcr.io/afk-sapien/pokesim:0.2.0`
+After publication, install the container from `ghcr.io/afk-sapien/pokesim:0.2.1`
 using the attached `compose.yaml` and `env.example`. Follow the
-[container installation guide](https://github.com/afk-sapien/PokeSim/blob/v0.2.0/docs/self-hosting.md#install-a-published-container).
+[container installation guide](https://github.com/afk-sapien/PokeSim/blob/v0.2.1/docs/self-hosting.md#install-a-published-container).
 No GitHub login or local image build is needed. To upgrade, set `POKESIM_IMAGE` to the new
 version, then `docker compose pull && docker compose up -d`. Adventures and settings are kept.
 

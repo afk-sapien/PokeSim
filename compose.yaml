@@ -1,6 +1,6 @@
 services:
   pokesim:
-    image: ${POKESIM_IMAGE:-ghcr.io/afk-sapien/pokesim:0.2.0}
+    image: ${POKESIM_IMAGE:-ghcr.io/afk-sapien/pokesim:0.2.1}
     init: true
     restart: unless-stopped
     command: [python, -m, pokesim, serve, --data-dir, /data, --host, 0.0.0.0]

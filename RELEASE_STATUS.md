@@ -1,4 +1,4 @@
-# Release preparation: 0.2.0
+# Release preparation: 0.2.1
 
 The current source consolidates the Adventure Library, independent Red and Blue
 adventures, automatic Cable Club trades, updated gameplay policies, and DV ratings.
