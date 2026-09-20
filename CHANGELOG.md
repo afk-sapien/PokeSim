@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Train for the League in Route 23's grass. Training places were found by the overworld's grass
+  tile, and Route 23 uses the Plateau tileset's, so the goal had no destination. A fresh run with
+  eight badges drifted along Route 21 for seventeen game hours before entering the League.
 - Keep Mt. Moon as the goal wherever a side project leads before it is cleared. Back in Viridian
   Forest the goal became training for Misty on Route 24, which lies beyond the mountain, so two of
   three fresh runs wandered between Route 1 and Route 22 and reached Misty after nine game hours

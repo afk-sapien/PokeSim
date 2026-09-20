@@ -8,7 +8,7 @@ from functools import lru_cache
 from ..game_data import load
 from pathlib import Path
 
-from .progression import Goal, object_goal, at
+from .progression import GRASS_TILES, Goal, object_goal, at
 from .navigation import DIRS
 from .director import AdventureDirector
 from . import training
@@ -44,7 +44,6 @@ TRADE_NPCS = {'ROUTE_2_TRADE_HOUSE':'GAMEBOY_KID', 'VERMILION_TRADE_HOUSE':'LITT
 # (CAVERN and the interiors, -1 upstream) has encounters on any walkable floor tile instead, which
 # is the fallback in tiles(). Leaving PLATEAU out of this meant Route 23 offered 981 encounter
 # tiles instead of its 44, so the run walked to a tile that could never produce a battle.
-GRASS_TILES = {'OVERWORLD': 0x52, 'FOREST': 0x20, 'PLATEAU': 0x45}
 
 
 def name(sid):

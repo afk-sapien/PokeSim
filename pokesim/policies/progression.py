@@ -111,12 +111,18 @@ GYM_HELP = {
 }
 
 
+GRASS_TILES = {'OVERWORLD': 0x52, 'FOREST': 0x20, 'PLATEAU': 0x45}
+
+
 def training_goal(key, title, reason, map_name):
     m = MAPS[map_name]
     w = WORLD[m]
-    # Outdoor grass and indoor encounter floors are navigated using the same graph.
+    # Outdoor grass and indoor encounter floors are navigated using the same graph. Each tileset
+    # draws grass with its own tile: Route 23 had no targets at all under the overworld's, and a run
+    # told to prepare for the League there drifted along Route 21 for seventeen hours of game time.
+    grass = GRASS_TILES.get(w["tileset"])
     targets = tuple((m, x, y) for y, row in enumerate(w["tiles"]) for x, tile in enumerate(row)
-                    if tile == 0x52 or (map_name == "POKEMON_MANSION_1F" and tile in w["passable"]))
+                    if tile == grass or (map_name == "POKEMON_MANSION_1F" and tile in w["passable"]))
     return Goal("train_" + key, title, reason, targets)
 
 
