@@ -72,3 +72,14 @@ def test_purchases_leave_the_fee_until_both_safari_prizes_are_collected():
     assert ShoppingController.item_for(broke(money=2000, items=()), stock, 'restock', None) == ITEMS['ULTRA_BALL']
     assert ShoppingController.item_for(broke(money=1500, items=()), stock, 'restock', None) is None
     assert ShoppingController.item_for(broke(money=1500, items=(), badges=7), stock, 'restock', None) == ITEMS['ULTRA_BALL']
+
+
+def test_the_silph_worker_is_not_revisited_once_his_lapras_is_gone():
+    from pokesim.policies.progression import teaching_goal
+    from pokesim.strategy_data import SPECIES
+    lapras_dex = next(row['dex'] for row in SPECIES.values() if row['name'] == 'LAPRAS')
+    rattata = next(sid for sid, row in SPECIES.items() if row['name'] == 'RATTATA')
+    state = broke(party=(mon(species=rattata, level=40),), event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_BEAT_SILPH_CO_GIOVANNI'))
+    assert teaching_goal('teach_surf', 'Teach Surf', 'Cross water', state).key == 'lapras'
+    gone = broke(party=state.party, event_flags=state.event_flags, owned=frozenset({lapras_dex}))
+    assert teaching_goal('teach_surf', 'Teach Surf', 'Cross water', gone).key == 'catch_surf'

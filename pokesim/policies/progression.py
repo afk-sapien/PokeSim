@@ -139,7 +139,10 @@ def teaching_goal(key, title, reason, s):
             targets = tuple((m, 13, 4) for m, w in WORLD.items() if "Pokecenter" in w["name"] and w["width"] == 14)
             return Goal("party_" + key.removeprefix("teach_"), "Bring a field-move partner onto the team",
                         "Use Bill’s PC to store a reserve and withdraw a compatible partner", targets, "up", True)
-        if move in SPECIES.get(next((sid for sid, d in SPECIES.items() if d.get('name') == 'LAPRAS'), 0), {}).get('hms', []) and event_set(s.event_flags, 'EVENT_BEAT_SILPH_CO_GIOVANNI'):
+        lapras = next((sid for sid, d in SPECIES.items() if d.get('name') == 'LAPRAS'), 0)
+        # The worker gives one Lapras. A registered Lapras that is no longer held was traded or released.
+        if (move in SPECIES.get(lapras, {}).get('hms', []) and SPECIES.get(lapras, {}).get('dex') not in s.owned
+                and event_set(s.event_flags, 'EVENT_BEAT_SILPH_CO_GIOVANNI')):
             return object_goal("lapras", "Meet the rescued Silph worker", "Accept an accessible Lapras for the missing field move", "SILPH_CO_7F", "SILPH_WORKER_M1")
         name = key.removeprefix('teach_')
         return Goal('catch_' + name, f'Find a {name.title()} partner',

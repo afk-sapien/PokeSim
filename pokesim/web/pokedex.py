@@ -113,6 +113,30 @@ def reference(version: str = DEFAULT_VERSION) -> dict:
     return {"version": version, "count": len(entries), "entries": entries}
 
 
+# Cut and Strength partners live in reachable grass and caves. Every wild Surf partner is behind water.
+FIELD_MOVES = (57,)
+
+
+def field_move_partners(game: dict) -> set[int]:
+    """Species of the last stored partner able to use a field move the travelling party lacks.
+
+    The gift Lapras is often the only Surf learner a run can reach without Surf, so trading it
+    away before HM03 is taught leaves the adventure with no way forward.
+    """
+    stored = (game.get('storage') or {}).get('pokemon') or ()
+    learns = lambda mon, move: move in SPECIES.get(mon['species'], {}).get('hms', ())
+    keep = set()
+    for move in FIELD_MOVES:
+        # The party is never traded, so a learner travelling with it already secures the move.
+        if any(move in (mon.get('moves') or ()) or learns(mon, move) for mon in game.get('party') or ()):
+            continue
+        partners = ([mon for mon in stored if move in (mon.get('moves') or ())]
+                    or [mon for mon in stored if learns(mon, move)])
+        if len(partners) == 1:
+            keep.add(partners[0]['species'])
+    return keep
+
+
 def live_status(game: dict | None, collection: dict | None = None, *, league_rewards=None) -> dict:
     """The parts of a snapshot a Pokédex reader needs, without the rest of the state payload."""
     # Only the fields the page reads: the planner's entries repeat on every poll.
@@ -132,6 +156,7 @@ def live_status(game: dict | None, collection: dict | None = None, *, league_rew
                 entry.update(status='available', reason='Unlocked in the random League victory reward pool')
     if not game:
         return {"started": False, "owned": [], "seen": [], "party": [], "storage": None, **plan}
+    plan["protected_species"] = sorted(set(plan["protected_species"]) | field_move_partners(game))
     dex_of = {sid: mon["dex"] for sid, mon in SPECIES.items()}
     storage = game.get("storage") or {}
     return {
