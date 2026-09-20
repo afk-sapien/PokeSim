@@ -213,3 +213,13 @@ def test_victory_road_boulder_plan_preserves_a_walkable_push_route():
     from pokesim.policies.navigation import DIRS
     dx, dy = DIRS[direction]
     assert (state[2] + dx, state[3] + dy) == task[1]
+
+
+def test_mt_moon_stays_the_goal_wherever_a_side_project_leads():
+    # Training for Misty happens on Route 24, beyond the mountain. A run that went back to Viridian
+    # Forest to evolve a Metapod was given that goal and wandered for hours of game time.
+    for name in ('VIRIDIAN_FOREST', 'ROUTE_2', 'ROUTE_22', 'ROUTE_1', 'PALLET_TOWN', 'PEWTER_POKECENTER', 'MT_MOON_B1F'):
+        assert story_goal(ready(badges=1, map=MAPS[name], x=5, y=5)).key == 'moon_trainer', name
+    # East of the mountain the fossil no longer matters.
+    assert story_goal(ready(badges=1, map=MAPS['CERULEAN_CITY'], x=5, y=5)).key.endswith('cascade')
+    assert story_goal(ready(badges=1, map=MAPS['ROUTE_4'], x=40, y=6)).key.endswith('cascade')

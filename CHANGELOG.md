@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep Mt. Moon as the goal wherever a side project leads before it is cleared. Back in Viridian
+  Forest the goal became training for Misty on Route 24, which lies beyond the mountain, so two of
+  three fresh runs wandered between Route 1 and Route 22 and reached Misty after nine game hours
+  instead of three.
 - Choose the second League battler the same way whatever the party order. With two partners tied
   for the highest level, moving the chosen partner to the lead changed the choice, and a run with
   eight badges swapped Lapras and Muk in the party menu of Pokémon Mansion indefinitely.

@@ -103,8 +103,9 @@ def test_progression_uses_flags_and_training_prerequisite():
     ready = snap(party=(mon(),), event_flags=flags('EVENT_GOT_POKEDEX'))
     assert story_goal(ready).key == 'boulder'
     assert story_goal(replace(ready, party=(mon(level=5, hp=20, max_hp=20, attack=10, defense=10, special=10, moves=(33, 45), pp=(35, 40)),))).key == 'train_brock'
-    assert story_goal(replace(ready, badges=1)).key == 'train_cascade'
-    assert story_goal(replace(ready, badges=1, party=(mon(level=20, hp=60, max_hp=60, attack=40, defense=40, special=55),))).key == 'cascade'
+    assert story_goal(replace(ready, badges=1)).key == 'moon_trainer'        # Misty's training route lies beyond Mt. Moon
+    assert story_goal(replace(ready, badges=1, map=MAPS['CERULEAN_CITY'])).key == 'train_cascade'
+    assert story_goal(replace(ready, badges=1, map=MAPS['CERULEAN_CITY'], party=(mon(level=20, hp=60, max_hp=60, attack=40, defense=40, special=55),))).key == 'cascade'
 
 
 def test_directed_edges_observation_and_restore():

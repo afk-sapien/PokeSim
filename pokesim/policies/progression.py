@@ -176,7 +176,11 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
     def obj(key, title, reason, map_name, fragment, help=""):
         return replace(object_goal(key, title, reason, map_name, fragment), help=help)
     if not s.badges & 2:
-        west = {MAPS[n] for n in ("PEWTER_CITY", "ROUTE_3", "MT_MOON_1F", "MT_MOON_B1F", "MT_MOON_B2F")}
+        # Everywhere that can be reached before Mt. Moon is cleared. A side project that led back to
+        # Viridian Forest used to swap this goal for training on Route 24, which lies beyond the
+        # mountain, and the run wandered between Route 1 and Route 22 for hours of game time.
+        west = {m for name, m in MAPS.items() if name in ("ROUTE_1", "ROUTE_2", "ROUTE_3") or name.startswith(
+            ("PALLET", "REDS_HOUSE", "BLUES_HOUSE", "OAKS_LAB", "VIRIDIAN_", "PEWTER_", "MUSEUM", "MT_MOON", "ROUTE_2_", "ROUTE_22"))}
         if (s.map in west or (s.map == MAPS["ROUTE_4"] and s.x < 21)) and not (done("EVENT_GOT_DOME_FOSSIL") or done("EVENT_GOT_HELIX_FOSSIL")):
             if not done("EVENT_BEAT_MT_MOON_EXIT_SUPER_NERD"):
                 return obj("moon_trainer", "Find a way through Mt. Moon", "Defeat the Super Nerd guarding the fossils", "MT_MOON_B2F", "SUPER_NERD")
