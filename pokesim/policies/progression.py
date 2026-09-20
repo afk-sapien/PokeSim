@@ -304,6 +304,9 @@ def journey(snapshot, current):
 
 def healing_goal(snapshot, preferred_map=None):
     candidates = [m for m, w in WORLD.items() if any(o[2] == "SPRITE_NURSE" for o in w["objects"])]
+    if event_set(snapshot.event_flags, "EVENT_BEAT_SILPH_CO_GIOVANNI"):
+        # Once Silph Co is freed its nurse only says thank you. She no longer heals anyone.
+        candidates = [m for m in candidates if m != MAPS["SILPH_CO_9F"]]
     if preferred_map in candidates:
         candidates = [preferred_map]
     elif snapshot.map in candidates:
@@ -314,5 +317,9 @@ def healing_goal(snapshot, preferred_map=None):
         w = WORLD[m]
         nurse = next((o for o in w["objects"] if o[2] == "SPRITE_NURSE"), None)
         if nurse:
-            targets.append((m, nurse[0], nurse[1] + 2))
+            # A Center nurse is spoken to across her counter. The one in Silph Co stands on open floor,
+            # where two squares away only faces an empty tile.
+            below = nurse[1] + 1
+            open_floor = below < w["height"] and w["tiles"][below][nurse[0]] in w["passable"]
+            targets.append((m, nurse[0], below if open_floor else nurse[1] + 2))
     return Goal("heal", "Heal the party", "Restore HP, status, and PP before continuing", tuple(targets), "up", True)

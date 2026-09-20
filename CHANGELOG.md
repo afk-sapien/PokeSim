@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Heal at a real Center once Silph Co is freed, because its nurse stops healing then, and stand
+  next to her before that instead of two squares away. A sleeping partner kept a run at her side indefinitely.
 - Hand over or revive a partner when the active Pokémon is frozen. Freeze never thaws in these
   games, and a foe with only Normal attacks could not finish a frozen Ghost, so the battle never ended.
 - Find a Cut, Surf or Strength partner in any PC box and open that box before withdrawing.
