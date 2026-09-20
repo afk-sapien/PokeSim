@@ -14,6 +14,7 @@ W_PLAYER_DISABLED_MOVE = 0xD06D
 BALLS = (ITEMS["POKE_BALL"], ITEMS["GREAT_BALL"], ITEMS["ULTRA_BALL"])
 HM_MOVES = {15, 19, 57, 70, 148}
 FROZEN = 32
+HOPELESS = 'Nobody here can act and this foe never attacks, so only an earlier save ends the battle'
 HEALING = {ITEMS["POTION"]: 20, ITEMS["SUPER_POTION"]: 50, ITEMS["HYPER_POTION"]: 200,
            ITEMS["MAX_POTION"]: 999, ITEMS["FULL_RESTORE"]: 999,
            ITEMS["FRESH_WATER"]: 50, ITEMS["SODA_POP"]: 60, ITEMS["LEMONADE"]: 80}
@@ -39,6 +40,16 @@ def effectiveness(move_type, defender_types):
     for typ in set(defender_types):
         factor *= MATCHUPS.get((move_type, typ), 1.0)
     return factor
+
+
+def foe_never_attacks(enemy, mon):
+    """True when a trainer's Pokémon will only ever use a move that does nothing.
+
+    The trainer routine favours any move whose type is super effective, even one without power.
+    Rest and Agility are Psychic, so Lorelei's Dewgong rests and Lance's Dragonair speeds up forever
+    against a Poison or Fighting partner, and a partner who cannot act is never knocked out."""
+    favoured = [MOVES[mid] for mid in enemy.moves if mid in MOVES and effectiveness(MOVES[mid]['type'], mon.types) > 1]
+    return bool(favoured) and not any(move['power'] for move in favoured)
 
 
 def damage_division_safe(move_id, attacker, defender):
@@ -346,6 +357,15 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
             return Decision("item", revive, max(fainted)[1], "Revive a partner because a frozen Pokémon can never act")
         if snapshot.in_battle == 1:
             return Decision("run", reason="Leave a battle that a frozen Pokémon cannot finish")
+        if foe_never_attacks(enemy, me):
+            # Nobody can act and this foe will never knock the battler out. A partner it does attack
+            # loses the attempt instead, and the blackout heals everyone at a Pokémon Center.
+            targets = [(max((damage(mid, enemy, mon) for mid in enemy.moves if mid), default=0) / mon.hp, i)
+                       for i, mon in enumerate(snapshot.party)
+                       if i != active and mon.hp > 0 and not foe_never_attacks(enemy, mon)]
+            if targets:
+                return Decision("switch", max(targets)[1], reason="Nobody can act, so let the foe end an attempt that cannot be won")
+            return Decision("fight", slot, reason=HOPELESS)
     candidates = []
     unsafe_moves = any(mid and pp and not damage_division_safe(mid, me, enemy)
                        for mid, pp in zip(me.moves, me.pp))

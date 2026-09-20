@@ -3,7 +3,7 @@ import random
 from dataclasses import asdict
 
 from .base import Action, Policy
-from .battle import (BALLS, CURES, HEALING, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
+from .battle import (BALLS, CURES, HEALING, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
                      healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, shopping_item,
                      useful_capture)
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
@@ -108,6 +108,11 @@ class StrategicPolicy(Policy):
 
     def reset(self):
         self.__init__(self.seed, self.starter_setting)
+
+    @property
+    def hopeless_battle(self):
+        """The battle under way cannot end, so waiting out the battle timeout gains nothing."""
+        return bool(self.intent and self.intent.reason == HOPELESS)
 
     def on_restore(self):
         self.collection.last_frame = None

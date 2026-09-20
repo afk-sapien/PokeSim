@@ -507,6 +507,9 @@ class Emulator:
                 self._unstick(self.stuck_since, "stuck")
         elif self.battle_since and now - self.battle_since > config.BATTLE_TIMEOUT_SECONDS:
             self._unstick(self.battle_since, "battle never ended")
+        elif self.battle_since and getattr(self.policy, 'hopeless_battle', False):
+            # The player has worked out that neither side can finish, so the timeout has nothing to wait for.
+            self._unstick(self.battle_since, "battle cannot end")
         self._check_stall(now)
 
     def _check_stall(self, now):

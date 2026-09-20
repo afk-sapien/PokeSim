@@ -75,3 +75,42 @@ def test_a_league_attempt_is_checkpointed_on_entry_and_restarted_when_a_battle_r
     game.snapshot.map, game.unstick_streak = emulator.MAPS['ROUTE_1'], 5
     emulator.Emulator._unstick(game, time.time() + 3600, 'battle never ended')
     assert restored[-1] == recent.name, 'outside the League the entry checkpoint is never used'
+
+
+def lorelei_dewgong():
+    # Growl, Aurora Beam, Rest, Take Down. Rest is Psychic, which the trainer routine favours against Poison.
+    return mon(level=54, moves=(45, 62, 156, 36), types=(21, 25))
+
+
+def test_a_foe_that_favours_a_powerless_move_never_attacks():
+    from pokesim.policies.battle import foe_never_attacks
+    muk, graveler, lapras = mon(types=(3, 3)), mon(types=(5, 4)), mon(types=(21, 25))
+    assert foe_never_attacks(lorelei_dewgong(), muk)
+    assert not foe_never_attacks(lorelei_dewgong(), graveler)      # Aurora Beam is favoured too, and it hurts
+    assert not foe_never_attacks(lorelei_dewgong(), lapras)        # nothing is favoured, so it attacks some turns
+
+
+def test_a_party_that_cannot_act_hands_over_to_someone_the_foe_will_knock_out():
+    from pokesim.policies.battle import HOPELESS
+    muk, graveler = mon(status=FROZEN, types=(3, 3)), mon(status=FROZEN, types=(5, 4), level=100)
+    state = snap(party=(muk, graveler, mon(hp=0)), in_battle=2, items=())
+    decision = choose_battle(state, muk, lorelei_dewgong(), 0, can_switch=False)
+    assert (decision.kind, decision.index) == ('switch', 1)
+    # The partner being attacked stays in, and a lone battler the foe ignores says the battle cannot end.
+    assert choose_battle(state, graveler, lorelei_dewgong(), 1, can_switch=False).kind == 'fight'
+    alone = snap(party=(muk, mon(hp=0)), in_battle=2, items=())
+    assert choose_battle(alone, muk, lorelei_dewgong(), 0, can_switch=False).reason == HOPELESS
+
+
+def test_a_hopeless_battle_is_reloaded_without_waiting_for_the_timeout():
+    import time
+    from types import SimpleNamespace
+    from pokesim.emulator import Emulator
+    reloaded = []
+    game = SimpleNamespace(last_reload=0, invalid_since=None, stuck_since=time.time(), battle_since=time.time() - 90,
+                           policy=SimpleNamespace(hopeless_battle=True), _check_stall=lambda now: None,
+                           _unstick=lambda since, why: reloaded.append(why))
+    Emulator._check_guards(game)
+    game.policy.hopeless_battle = False
+    Emulator._check_guards(game)
+    assert reloaded == ['battle cannot end']
