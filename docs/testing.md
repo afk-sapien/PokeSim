@@ -91,6 +91,41 @@ reliability. Use the existing isolated container checks in `tools/soak_release.p
 [monitoring runbook](operations-monitor.md) for wall-clock endurance, resource growth,
 viewer load, and process continuity.
 
+## Stuck scenarios
+
+A stuck scenario is a saved moment the player once could not get out of, replayed as a
+regression test. It passes when the player achieves something again within its budget.
+Scenarios hold private game data, so they live under `data/scenarios` or a folder named by
+`POKESIM_SCENARIOS`, never in the repository.
+
+Stalls come from two places, in the same layout. A running adventure keeps the last
+`KEEP_STALL_BUNDLES` (default 5) in its `stalls/` folder: `noticed.state` from the moment the
+stall was reported and `before.state`, the first autosave after the last achievement.
+`tools/find_stalls.py` plays an isolated adventure at full speed and writes the same bundles.
+
+```sh
+uv run --locked python tools/find_stalls.py --rom roms/pokered.gb --output data/operations/stall-hunt/run-1 --until-champion
+uv run --locked python tools/stuck_scenarios.py add seafoam-boulders data/operations/stall-hunt/run-1/stall-01
+uv run --locked python tools/stuck_scenarios.py run
+POKESIM_SCENARIO_TESTS=1 uv run --locked --extra dev pytest tests/test_scenarios.py -q
+```
+
+`add` also edits the copied save into a situation that is hard to reach by playing:
+
+```sh
+uv run --locked python tools/stuck_scenarios.py add league-everyone-frozen league-entry.state \
+  --party all:status=frozen --item FULL_RESTORE=0 --item REVIVE=0 \
+  --fallback league-entry.state --until champion --budget 300
+```
+
+`--party` takes a slot or `all` with `status`, `hp` (a number, or a share such as `0.25`) and
+`pp`. `--item NAME=0` removes an item and `--money` sets the wallet. Edits are applied each time
+the scenario loads, so the copied save stays as it was. When a battle runs past its timeout, or
+the player reports that it cannot end, the runner reloads the scenario as the application
+reloads an autosave. The second reload goes to the unedited `--fallback` save, as the
+application restarts a League attempt from its entry save. `show` prints the party, bag and
+place a scenario starts from.
+
 ## Build identity and packages
 
 `/api/state` and `/desktop/status` include `build.version`, `build.revision`, and

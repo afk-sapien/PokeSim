@@ -8,89 +8,27 @@ private game data and must remain outside the checkout.
 """
 import argparse
 from collections import Counter, deque
-import hashlib
 from importlib.metadata import version
 import json
-import secrets
 from pathlib import Path
 import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pyboy import PyBoy
-from pokesim.checkpoints import CheckpointStore
-from pokesim.events import RunMemory, diff
-from pokesim.policies.base import PolicyContext
+from pokesim.events import diff
+from pokesim.headless import HeadlessRun
 from pokesim.policies.progression import milestones
-from pokesim.policies.strategic import StrategicPolicy
 from pokesim.ram import read_snapshot
-from pokesim.screen import Screen, W_OPTIONS
+from pokesim.screen import Screen
 from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, advanced
 from pokesim.strategy_data import MAPS
 
 LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
 
-BLUE_SHA1 = 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2'
-
 
 def clock(frames):
     return f'{frames // (60 * MINUTE)}:{frames // MINUTE % 60:02d}'
-
-
-class Run:
-    def __init__(self, rom, checkpoint, seed):
-        self.rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
-        self.pb = PyBoy(str(rom), window='null', sound_emulated=False)
-        self.pb.set_emulation_speed(0)
-        self.policy = StrategicPolicy(seed)
-        self.policy.collection.version = 'blue' if self.rom_sha1 == BLUE_SHA1 else 'red'
-        self.memory = RunMemory()
-        self.frame = 0
-        if checkpoint:
-            metadata = CheckpointStore(checkpoint.parent).checkpoint_metadata(checkpoint)
-            if not metadata:
-                raise ValueError('A checkpoint manifest is required for a faithful replay')
-            if metadata['rom_sha1'] != self.rom_sha1 or metadata['pyboy_version'] != version('pyboy'):
-                raise ValueError('ROM or emulator version does not match the checkpoint')
-            self.policy.load_state_dict(metadata['policy_state'])
-            self.memory = RunMemory.from_dict(metadata['run_memory'])
-            self.frame = metadata.get('frame', 0)
-            with checkpoint.open('rb') as stream:
-                self.pb.load_state(stream)
-
-    def reload(self, path):
-        """Go back to a checkpoint as the application does after a battle that never ends."""
-        metadata = CheckpointStore(path.parent).checkpoint_metadata(path)
-        self.policy.load_state_dict(metadata['policy_state'])
-        self.memory = RunMemory.from_dict(metadata['run_memory'])
-        with path.open('rb') as stream:
-            self.pb.load_state(stream)
-        # The same save and the same choices would replay the same trouble.
-        self.pb.tick(1 + secrets.randbelow(180), render=False)
-
-    def save(self, path):
-        """Write a checkpoint the application and the replay tools both accept."""
-        with path.open('wb') as stream:
-            self.pb.save_state(stream)
-        manifest = {'format': 1, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
-                    'pyboy_version': version('pyboy'), 'rom_sha1': self.rom_sha1, 'policy': 'strategic',
-                    'policy_state': self.policy.state_dict(), 'run_memory': self.memory.to_dict(),
-                    'frame': self.frame}
-        path.with_suffix('.json').write_text(json.dumps(manifest))
-
-    def step(self, snapshot):
-        self.pb.memory[W_OPTIONS] = (self.pb.memory[W_OPTIONS] & ~7) | 1
-        for action in self.policy.step(PolicyContext(snapshot, 0, 0, self.pb.memory)):
-            if action.button:
-                self.pb.button_press(action.button)
-            if action.hold:
-                self.pb.tick(action.hold, render=False)
-            if action.button:
-                self.pb.button_release(action.button)
-            if action.gap:
-                self.pb.tick(action.gap, render=False)
-            self.frame += action.hold + action.gap
 
 
 def main():
@@ -114,7 +52,7 @@ def main():
     rolling = args.output / 'rolling'
     rolling.mkdir(exist_ok=True)
 
-    run = Run(args.rom, args.checkpoint, args.seed)
+    run = HeadlessRun(args.rom, args.checkpoint, args.seed)
     start = progress_frame = run.frame
     budget = int(args.hours * 60 * MINUTE)
     recent = deque(maxlen=8)                      # rolling checkpoints, oldest first
@@ -231,7 +169,7 @@ def main():
                                       row.get('ended_after_minutes')) for row in stalls],
                           'badges': summary['final']['badges'], 'owned': summary['final']['owned']}))
     finally:
-        run.pb.stop(save=False)
+        run.stop()
     return 1 if stalls else 0
 
 

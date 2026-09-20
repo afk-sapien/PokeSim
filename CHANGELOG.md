@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Keep each stall for later. An adventure's `stalls/` folder holds the moment a stall was reported
+  beside the first autosave after the last achievement, which the rotating autosaves had long
+  dropped by then. `KEEP_STALL_BUNDLES` sets how many are kept, 5 by default, 0 for none.
+- Replay stuck scenarios as regression tests with `tools/stuck_scenarios.py`. A scenario is a copied
+  save, optionally edited into a harder situation such as a frozen party with no cures at the League door.
+- End a battle in which nobody can act. The original trainer routine favours any move of a super
+  effective type, so Lorelei's Dewgong only uses Rest against a frozen Muk and never knocks it out.
+  The player hands over to a partner the foe does attack, and when there is none the save from
+  before the battle is reloaded at once instead of after the battle timeout.
+
 ## 0.2.0
 
 - Respect the badge checks on Route 23, plan restocking only at shops that can be reached, and spend
