@@ -14,14 +14,18 @@ class StallWatch:
         self.real_seconds = real_minutes * 60
         self.repeat_seconds = repeat_hours * 3600
         self.frame = self.since = self.alerted = None
+        # True until the next autosave, which is then the save to keep from before any stall.
+        self.fresh = True
 
     def progress(self, frame, now):
-        self.frame, self.since, self.alerted = frame, now, None
+        self.frame, self.since, self.alerted, self.fresh = frame, now, None, True
 
     def quiet(self, frame, now):
         """Game minutes and real minutes since the last progress, starting the clocks on first use."""
         if self.frame is None or frame < self.frame:
-            self.progress(frame, now)
+            # A reloaded save restarts the clocks, but it is not progress: the save kept from
+            # before the trouble must outlive the reloads that try to escape it.
+            self.frame, self.since, self.alerted = frame, now, None
         return (frame - self.frame) // FRAMES_PER_GAME_MINUTE, int(now - self.since) // 60
 
     def stalled(self, frame, now):

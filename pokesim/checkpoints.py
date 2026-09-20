@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import tempfile
 import time
 from pathlib import Path
@@ -74,6 +75,40 @@ class CheckpointStore:
                     log.exception("Cannot remove incomplete checkpoint file %s", output)
             raise
         return path
+
+    def keep_as(self, path: Path, name: str):
+        """Keep an autosave under a name that pruning leaves alone. A link costs no second write."""
+        for suffix in ('.state', '.json'):
+            source, pending = path.with_suffix(suffix), self.states / f'.pending-{name}{suffix}'
+            pending.unlink(missing_ok=True)
+            try:
+                os.link(source, pending)
+            except OSError:
+                shutil.copyfile(source, pending)
+            os.replace(pending, (self.states / name).with_suffix(suffix))
+
+    @property
+    def stalls(self) -> Path:
+        return self.states.parent / 'stalls'
+
+    def write_stall_bundle(self, state: bytes, metadata: dict, report: dict, png: bytes | None,
+                           before: Path | None, keep: int) -> Path:
+        """Keep the moment a stall was noticed beside the save from before it began.
+
+        tools/find_stalls.py writes the same layout, so tools/stuck_scenarios.py accepts either."""
+        folder = self.stalls / f'stall-{time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())}'
+        folder.mkdir(parents=True, exist_ok=True)
+        bundle = CheckpointStore(folder)
+        bundle.write_checkpoint(state, metadata, name='noticed.state')
+        if before is not None:
+            for suffix in ('.state', '.json'):
+                shutil.copyfile(before.with_suffix(suffix), folder / f'before{suffix}')
+        if png:
+            self.atomic_write(folder / 'noticed.png', png)
+        self.atomic_write(folder / 'report.json', json.dumps(dict(report, has_before=before is not None), indent=2).encode())
+        for old in sorted(self.stalls.glob('stall-*'))[:-keep] if keep > 0 else []:
+            shutil.rmtree(old, ignore_errors=True)
+        return folder
 
     def checkpoint_metadata(self, path: Path) -> dict | None:
         manifest = path.with_suffix(".json")

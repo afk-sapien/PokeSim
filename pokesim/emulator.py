@@ -30,6 +30,7 @@ from .strategy_data import MAPS
 LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
 LEAGUE_ENTRY = MAPS['LORELEIS_ROOM']
 LEAGUE_CHECKPOINT = 'league-entry.state'
+BEFORE_STALL_CHECKPOINT = 'before-stall.state'
 
 log = logging.getLogger("pokesim.emu")
 
@@ -436,14 +437,24 @@ class Emulator:
         self.store.set("play_clock", self.play_clock.state_dict())
         snap = self.snapshot
         battle_since = getattr(self, 'battle_since', None)
-        if battle_since and not trade_prepare and time.time() - battle_since > config.BATTLE_TIMEOUT_SECONDS / 3:
+        if battle_since and not trade_prepare and (time.time() - battle_since > config.BATTLE_TIMEOUT_SECONDS / 3
+                                                   or getattr(self.policy, 'hopeless_battle', False)):
             # A battle this long may never end, and the only way out is a save from before it began.
             # Rotating autosaves during it would push that save out before the timeout reloads it.
             return
         if snap is not None and not snap.valid:
             log.warning("skipping autosave: game state looks glitched")
             return
-        self.store.write_checkpoint(self._state_bytes(), self._manifest())
+        path = self.store.write_checkpoint(self._state_bytes(), self._manifest())
+        stall = getattr(self, 'stall', None)
+        if stall and stall.fresh and config.KEEP_STALL_BUNDLES and not (snap is not None and snap.in_battle):
+            # The first save after an achievement is the last one known to be from before any stall.
+            # Autosaves rotate out long before a stall is noticed, so keep it under its own name.
+            try:
+                self.store.keep_as(path, BEFORE_STALL_CHECKPOINT)
+                stall.fresh = False
+            except OSError:
+                log.exception("cannot keep the save from before a stall")
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
         self.store.set("policy_state", self.policy.state_dict())
@@ -511,6 +522,19 @@ class Emulator:
         objective = (details.get('objective') or {}).get('title') or 'no objective'
         hours = quiet[0] / 60
         log.warning('no progress for %.1f game hours at %s: %s', hours, snap.map_name, objective)
+        if config.KEEP_STALL_BUNDLES:
+            try:
+                report = {'quiet_game_minutes': quiet[0], 'quiet_real_minutes': quiet[1], 'frame': self.frame,
+                          'map': snap.map_name, 'position': [snap.x, snap.y], 'in_battle': bool(snap.in_battle),
+                          'objective': details.get('objective'), 'action': details.get('action'),
+                          'reason': details.get('reason'), 'recoveries': details.get('recoveries', 0),
+                          'reloads': self.reloads, 'party': [[mon.name, mon.level, mon.hp, mon.status] for mon in snap.party]}
+                folder = self.store.write_stall_bundle(self._state_bytes(), self._manifest(), report, self._shot_png(),
+                                                       self.store.state_path(BEFORE_STALL_CHECKPOINT),
+                                                       config.KEEP_STALL_BUNDLES)
+                log.warning('kept the stall and the save from before it in %s', folder)
+            except Exception:
+                log.exception('cannot keep the stall bundle')
         self._handle_events([Event('stall', f'Stuck? {hours:.0f} game hours without progress',
                                    f'Objective: {objective}. On {snap.map_name} after {quiet[1]} real minutes '
                                    f'and {details.get("recoveries", 0)} recoveries. The saved moment is attached '

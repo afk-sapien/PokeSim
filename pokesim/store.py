@@ -190,6 +190,12 @@ class Store:
     def checkpoint_metadata(self, path: Path) -> dict | None:
         return self.checkpoints.checkpoint_metadata(path)
 
+    def keep_as(self, path: Path, name: str):
+        self.checkpoints.keep_as(path, name)
+
+    def write_stall_bundle(self, *args, **kwargs) -> Path:
+        return self.checkpoints.write_stall_bundle(*args, **kwargs)
+
     def prune_events(self, days: int) -> int:
         if days <= 0:
             return 0
