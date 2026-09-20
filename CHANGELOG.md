@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tell party members of one species apart when changing the lead. With two Haunters the run
+  thought the stronger one already led, and reopened the party menu at a gym door forever.
 - Buy Full Heals before the League, keep the save from before an endless battle until the
   timeout reloads it, and idle a random moment after that reload so the battle plays out
   differently. Lance's Dragonair can use Agility forever against a frozen last partner.

@@ -160,7 +160,9 @@ def main():
                 folder.mkdir(exist_ok=True)
                 run.save(folder / 'noticed.state')
                 run.pb.screen.image.save(folder / 'noticed.png')
-                before = next((path for frame, path in recent if frame <= progress_frame), recent[0][1] if recent else None)
+                before = next((path for frame, path, _ in recent if frame <= progress_frame), recent[0][1] if recent else None)
+                # A checkpoint inside a battle that cannot end is no way out of it.
+                calm = next((path for _, path, fighting in reversed(recent) if not fighting), None)
                 if before:
                     for suffix in ('.state', '.json'):
                         (folder / f'before{suffix}').write_bytes(before.with_suffix(suffix).read_bytes())
@@ -171,10 +173,10 @@ def main():
                 objective = (open_stall['objective'] or {}).get('title')
                 print(f'{clock(run.frame - start)} STALL {folder.name}: {quiet // MINUTE} quiet minutes on '
                       f'{snapshot.map_name}, objective "{objective}", money {snapshot.money}', flush=True)
-                if snapshot.in_battle and before:
+                if snapshot.in_battle and (calm or before):
                     # Some original-game battles cannot end, such as a frozen last partner against a
                     # foe that only uses Agility. The application reloads a save from before the battle.
-                    run.reload(folder / 'before.state')
+                    run.reload(calm or folder / 'before.state')
                     open_stall['escape'] = 'reloaded the checkpoint from before the battle'
                     (folder / 'report.json').write_text(json.dumps(open_stall, indent=2))
                     previous, pending = None, []
@@ -182,13 +184,15 @@ def main():
             if open_stall and args.give_up_minutes and run.frame - open_stall['noticed_frame'] >= args.give_up_minutes * MINUTE:
                 outcome = f'gave up in {open_stall["folder"]}'
                 break
-            if run.frame >= next_roll and snapshot.started and snapshot.valid:
+            # Prefer a moment outside battle, but never go a whole hour without a checkpoint.
+            if (run.frame >= next_roll and snapshot.started and snapshot.valid
+                    and (not snapshot.in_battle or run.frame >= next_roll + 30 * MINUTE)):
                 path = rolling / f'{run.frame:010d}.state'
                 run.save(path)
                 if len(recent) == recent.maxlen:
                     for suffix in ('.state', '.json'):
                         recent[0][1].with_suffix(suffix).unlink(missing_ok=True)
-                recent.append((run.frame, path))
+                recent.append((run.frame, path, bool(snapshot.in_battle)))
                 next_roll = run.frame + 30 * MINUTE
             if run.frame >= next_report:
                 print(f'{clock(run.frame - start)} {snapshot.map_name} badges {bin(snapshot.badges).count("1")} '

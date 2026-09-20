@@ -62,6 +62,11 @@ def wait():
     return [Action(None, 0, 12)]
 
 
+def individual(mon):
+    """Enough to tell two party members of one species apart for the length of a menu."""
+    return mon.species, mon.level, mon.nick, mon.max_hp, tuple(mon.moves)
+
+
 class StrategicPolicy(Policy):
     name = "strategic"
 
@@ -133,6 +138,7 @@ class StrategicPolicy(Policy):
         self.goal_distance = None
         self.order_stage = None
         self.order_species = None
+        self.order_signature = None
         self.elevator_exit = False
         self.elevator_floor = "B1F"
         self.field_move = None
@@ -489,7 +495,10 @@ class StrategicPolicy(Policy):
                 return tap("b")
             if self.intent and self.intent.kind == "reorder":
                 from ..trade.preferences import identity
+                # Species alone cannot tell twins apart: with a weaker Haunter already leading, the
+                # stronger one looked promoted, and the reorder was cancelled and restarted forever.
                 ordered = (identity(asdict(s.party[0])) == self.intent.partner_key if self.intent.partner_key
+                           else individual(s.party[0]) == self.order_signature if self.order_signature
                            else s.party[0].species == self.order_species)
                 if self.intent.partner_key and self.collection.project and self.collection.project.get('scoped_partner'):
                     ordered = self.collection.trainee(s, self.collection.project) == 0
@@ -768,6 +777,7 @@ class StrategicPolicy(Policy):
             target = self.collection.trainee(s, project)
             if target and s.party[target].hp:
                 self.order_species = s.party[target].species
+                self.order_signature = individual(s.party[target])
                 self.order_stage = 'source'
                 self.intent = Decision('reorder',target,reason='Train a partner toward level 100',
                                        partner_key=project.get('trainee_key'))
@@ -795,6 +805,7 @@ class StrategicPolicy(Policy):
             target = self.readiness.get('lead', 0)
             if target and target < len(s.party) and s.party[target].hp:
                 self.order_species = s.party[target].species
+                self.order_signature = individual(s.party[target])
                 self.order_stage = 'source'
                 self.intent = Decision('reorder', target, reason='Lead with the best available matchup')
                 self.intent_since = s.frame
@@ -806,6 +817,7 @@ class StrategicPolicy(Policy):
             if target != 0:
                 self.intent = Decision('reorder', target, reason='Lead the legendary expedition with a strong partner')
                 self.order_species = s.party[target].species
+                self.order_signature = individual(s.party[target])
                 self.order_stage = 'source'
                 self.intent_since = s.frame
                 return tap('start')
@@ -823,6 +835,7 @@ class StrategicPolicy(Policy):
             if target is not None and target != 0:
                 self.intent = Decision("reorder", target, reason="Give the partner the lead position while training")
                 self.order_species = s.party[target].species
+                self.order_signature = individual(s.party[target])
                 self.order_stage = "source"
                 self.intent_since = s.frame
                 return tap("start")
@@ -1206,6 +1219,7 @@ class StrategicPolicy(Policy):
             self.excursion = (goal, self.development_until, 'development')
             if trainee != 0:
                 self.order_species = s.party[trainee].species
+                self.order_signature = individual(s.party[trainee])
                 self.order_stage = 'source'
                 self.intent = Decision('reorder', trainee, reason=goal.reason)
                 self.intent_since = s.frame
