@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Find a Cut, Surf or Strength partner in any PC box and open that box before withdrawing.
+  A run whose gift Lapras sat in another box hunted for a Surf partner it could never reach.
 - Keep fighting with the last partner standing. The party menu used to choose the partner
   already in battle, which the game refuses, and the battle never ended.
 - Leave edge exits such as cave mouths by walking outward. A run that needed healing paced

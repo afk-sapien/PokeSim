@@ -8,6 +8,8 @@ from ..strategy_data import SPECIES
 from ..trade.preferences import identity
 
 
+FIELD_MOVE_GOALS = {'party_cut': 15, 'party_surf': 57, 'party_strength': 70}
+
 @dataclass
 class StorageController:
     operation: str | None = None
@@ -27,6 +29,14 @@ class StorageController:
         reserved = {(mon['box'], mon['position']) for mon in snapshot.storage_entries()
                     if preferences.get(identity(mon), {}).get('state') in ('offered', 'locked')}
         return release_target(snapshot, protected, reserved)
+
+    @staticmethod
+    def field_move_box(snapshot, goal_key):
+        """Box holding the strongest stored partner for a field move, preferring the open box."""
+        move = FIELD_MOVE_GOALS.get(goal_key)
+        boxes = [(box == snapshot.active_box, level, box) for box, species, level, _ in snapshot.stored_pokemon
+                 if move in SPECIES.get(species, {}).get('hms', [])]
+        return max(boxes)[2] if move and boxes else None
 
     def target(self, snapshot, goal_key, project, preferences, collection=None):
         if goal_key == 'party_release':
@@ -52,7 +62,7 @@ class StorageController:
                 return partner['position'] if partner and partner.get('box') == snapshot.active_box and len(snapshot.party) < 6 else None
             return next((i for i, (species, level) in enumerate(snapshot.boxed_pokemon)
                          if species == project['parent']), None) if len(snapshot.party) < 6 else None
-        move = {'party_cut': 15, 'party_surf': 57, 'party_strength': 70}.get(goal_key)
+        move = FIELD_MOVE_GOALS.get(goal_key)
         candidates = [(level, i) for i, (species, level) in enumerate(snapshot.boxed_pokemon)
                       if (species == self.species if goal_key == 'party_upgrade'
                           else move in SPECIES.get(species, {}).get('hms', []))]
@@ -77,6 +87,7 @@ class StorageController:
             release = self.release_target(snapshot, project, preferences, collection) if goal_key == 'party_release' else None
             target = ((release[0] if release else None) if goal_key == 'party_release' else
                       snapshot.next_free_box if goal_key == 'party_box' else
+                      self.field_move_box(snapshot, goal_key) if goal_key in FIELD_MOVE_GOALS else
                       project.get('box') if goal_key == 'party_collection' and project else None)
             return MenuDecision(tap('b') if target is None or target == snapshot.active_box else select(screen, target),
                                 'Select a storage box with room for new catches')
@@ -95,6 +106,9 @@ class StorageController:
             if goal_key == 'party_box' or (goal_key == 'party_collection' and len(snapshot.party) < 6
                                            and project and project.get('box') != snapshot.active_box):
                 return MenuDecision(select(screen, 3), 'Change the active storage box without releasing any Pokémon')
+            if (goal_key in FIELD_MOVE_GOALS and len(snapshot.party) < 6
+                    and self.field_move_box(snapshot, goal_key) not in (None, snapshot.active_box)):
+                return MenuDecision(select(screen, 3), 'Open the box holding a partner that can learn the field move')
             self.operation = 'deposit' if len(snapshot.party) >= 6 else 'withdraw'
             if self.target(snapshot, goal_key, project, preferences, collection) is None:
                 return MenuDecision(tap('b'))

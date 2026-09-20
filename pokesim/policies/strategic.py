@@ -14,6 +14,7 @@ from .progression import STARTERS, Goal, healing_goal, journey, league_partner, 
 from . import training
 from .menus import select, tap
 from .shopping import ShoppingController
+from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
 from .collection import CENTERS, Collection, LEAGUE, legendary_project
 from .awareness import ActionWatch
@@ -292,6 +293,11 @@ class StrategicPolicy(Policy):
             self.goal.key == 'party_collection' and len(s.party) < 6
             and self.collection.project
             and any(species == self.collection.project['parent'] for species, level in s.boxed_pokemon)
+        ) or (
+            # The field-move partner may sit in a full box. Making room first would switch away from
+            # it again, and the two storage goals would trade boxes forever.
+            self.goal.key in FIELD_MOVE_GOALS and len(s.party) < 6
+            and self.pc.field_move_box(s, self.goal.key) is not None
         )
         release = self._release_target(s) if storage_headroom(s) < RELEASE_BUFFER else None
         if release and not withdrawing_partner and s.map not in league_rooms:
