@@ -87,6 +87,19 @@ test('adventure cards show League wins independently of reward counts', async ()
   assert.doesNotMatch(markup, />2 League wins/)
 })
 
+test('a running adventure that reports a stall says so on its card', async () => {
+  const games = [{id: 'a'.repeat(32), name: 'Red', version: 'red', state: 'running', summary: {stalled: true}},
+    {id: 'b'.repeat(32), name: 'Blue', version: 'blue', state: 'running', summary: {}},
+    {id: 'c'.repeat(32), name: 'Old', version: 'red', state: 'stopped', summary: {stalled: true}}]
+  const view = library({respond(path) {
+    return path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: games})} : null
+  }})
+  const cards = []
+  view.element('#adventure-list').insertAdjacentHTML = (_, html) => { cards.push(html) }
+  await settle()
+  assert.deepEqual(cards.map(html => /Stuck\?/.test(html)), [true, false, false])
+})
+
 test('settings mutations send only fields accepted by the manager', async () => {
   const view = library()
   await settle()

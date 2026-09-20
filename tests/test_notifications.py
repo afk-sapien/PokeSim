@@ -325,3 +325,18 @@ def test_completed_trades_are_announced_once_for_both_adventures(client, monkeyp
                      'Red received Gengar. Blue received Alakazam.', 'http://testserver/trading')]
     client.patch('/api/v1/notifications', json={'adventures': {blue: False}})
     assert manager.notifications.trade_completed(row, display) is None
+
+
+def test_the_settings_database_is_private_to_its_owner(tmp_path):
+    import os
+    import stat
+    if os.name == 'nt':
+        pytest.skip('POSIX permissions')
+    Registry(tmp_path)
+    assert stat.S_IMODE((tmp_path / 'app.sqlite').stat().st_mode) == 0o600
+
+
+def test_a_stall_is_routed_by_its_own_category():
+    rules = dict((key, kinds) for key, _, _, _, kinds in CATEGORIES)
+    assert rules['stall'] == (('stall', 1),)
+    assert CATEGORIES[0][0] == 'stall' and CATEGORIES[0][3] is True
