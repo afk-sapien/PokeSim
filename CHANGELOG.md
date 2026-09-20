@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Respect the badge checks on Route 23, plan restocking only at shops that can be reached, and spend
   vitamins and Rare Candies when the bag is too full to buy Poké Balls. A run with six badges and a
