@@ -40,3 +40,15 @@ def held(snapshot):
     """Pokémon in the party and every box. A catch of a species already registered is still progress."""
     return len(snapshot.party) + (sum(snapshot.box_counts) if snapshot.box_counts else len(snapshot.boxed_pokemon))
 
+
+def experience(snapshot):
+    """Experience across the party. Grinding for a gym earns it steadily between level milestones,
+    while a menu loop or a battle that cannot end earns none."""
+    return sum(getattr(mon, 'experience', 0) or 0 for mon in snapshot.party)
+
+
+def advanced(previous, snapshot):
+    """True when the run caught something or earned experience since the previous snapshot."""
+    return held(snapshot) > held(previous) or (len(snapshot.party) == len(previous.party)
+                                               and experience(snapshot) > experience(previous))
+

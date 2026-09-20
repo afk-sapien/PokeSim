@@ -24,7 +24,7 @@ from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext
 from .ram import Snapshot, read_snapshot
 from .screen import W_OPTIONS
-from .stalls import PROGRESS_EVENTS, StallWatch, held
+from .stalls import PROGRESS_EVENTS, StallWatch, advanced
 from .strategy_data import MAPS
 
 LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
@@ -326,8 +326,9 @@ class Emulator:
             self._enforce_options()
         came_from = self.prev_snapshot.map if self.prev_snapshot else None
         if (self.prev_snapshot is not None and snap.valid and self.prev_snapshot.valid
-                and held(snap) > held(self.prev_snapshot) and getattr(self, 'stall', None)):
-            # A long hunt catches plenty that the Pokédex already has. That is not a stall.
+                and advanced(self.prev_snapshot, snap) and getattr(self, 'stall', None)):
+            # A long hunt catches plenty that the Pokédex already has, and training earns experience
+            # between level milestones. Neither is a stall.
             self.stall.progress(self.frame, time.time())
         new = diff(self.prev_snapshot, snap, self.mem)
         if (snap.valid and snap.map == LEAGUE_ENTRY and came_from is not None and came_from not in LEAGUE

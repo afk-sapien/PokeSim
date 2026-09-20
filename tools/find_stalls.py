@@ -26,7 +26,7 @@ from pokesim.policies.progression import milestones
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.ram import read_snapshot
 from pokesim.screen import Screen, W_OPTIONS
-from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, held
+from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, advanced
 from pokesim.strategy_data import MAPS
 
 LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
@@ -145,11 +145,11 @@ def main():
             new = diff(previous, snapshot, run.memory)
             pending = [event for event in new if event.still is not None]
             events += [event for event in new if event.still is None]
-            caught = previous is not None and previous.valid and snapshot.valid and held(snapshot) > held(previous)
+            caught = previous is not None and previous.valid and snapshot.valid and advanced(previous, snapshot)
             previous = snapshot
             gained = [event for event in events if event.type in PROGRESS_EVENTS]
             if caught and not gained:
-                progress_frame, escapes = run.frame, 0      # a catch the Pokédex already had is still progress
+                progress_frame, escapes = run.frame, 0      # a repeat catch or earned experience is still progress
             if gained:
                 progress_frame, escapes = run.frame, 0
                 if open_stall:

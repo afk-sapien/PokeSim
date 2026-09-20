@@ -56,3 +56,13 @@ def test_catching_a_species_the_pokedex_already_has_is_still_progress():
     caught = SimpleNamespace(party=(1, 2, 3), box_counts=(20, 5), boxed_pokemon=())
     assert held(caught) == held(hunting) + 1
     assert held(SimpleNamespace(party=(1,), box_counts=(), boxed_pokemon=((1, 5), (2, 6)))) == 3
+
+
+def test_earned_experience_is_progress_but_a_party_swap_is_not():
+    from pokesim.stalls import advanced
+    mon = lambda xp: SimpleNamespace(experience=xp)
+    before = SimpleNamespace(party=(mon(1000), mon(500)), box_counts=(3,), boxed_pokemon=())
+    assert advanced(before, SimpleNamespace(party=(mon(1040), mon(500)), box_counts=(3,), boxed_pokemon=()))
+    assert not advanced(before, SimpleNamespace(party=(mon(1000), mon(500)), box_counts=(3,), boxed_pokemon=()))
+    # Withdrawing a stronger partner raises the party's total without anything being earned.
+    assert not advanced(before, SimpleNamespace(party=(mon(1000), mon(500), mon(90000)), box_counts=(2,), boxed_pokemon=()))
