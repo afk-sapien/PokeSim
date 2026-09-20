@@ -5,6 +5,7 @@ import hashlib
 import io
 import logging
 import queue
+import secrets
 import threading
 from importlib.metadata import version
 import time
@@ -15,7 +16,7 @@ from pyboy import PyBoy
 
 from . import __version__, config
 from .build_info import build_info
-from .events import RunMemory, diff
+from .events import HIGH, Event, RunMemory, diff
 from . import rewards
 from .legendary import LegendaryRecovery
 from .play_clock import PlayClock
@@ -23,6 +24,12 @@ from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext
 from .ram import Snapshot, read_snapshot
 from .screen import W_OPTIONS
+from .stalls import PROGRESS_EVENTS, StallWatch, advanced
+from .strategy_data import MAPS
+
+LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
+LEAGUE_ENTRY = MAPS['LORELEIS_ROOM']
+LEAGUE_CHECKPOINT = 'league-entry.state'
 
 log = logging.getLogger("pokesim.emu")
 
@@ -58,6 +65,8 @@ class Emulator:
         self.legendary_recovery = LegendaryRecovery()
         achievements = store.events(limit=1, types=('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'))
         self.last_achievement = achievements[0] if achievements else None
+        self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
+                                config.STALL_ALERT_REPEAT_HOURS)
         self.policy.load_state_dict(store.get("policy_state", {}))
         self.commands: queue.Queue = queue.Queue()
         self.manual: queue.Queue = queue.Queue(maxsize=2)
@@ -179,10 +188,14 @@ class Emulator:
         mode = self.policy.details().get('action', '')
         state = 'recovering' if (self.invalid_since or time.time() - self.last_reload < 30
                                  or mode == 'finding another approach') else 'making_progress' if age is not None and age < 120 else 'exploring'
-        return {'state': state, 'last_achievement': {
-            'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
-            'age_seconds': age,
-        } if achievement else None}
+        stall, now = getattr(self, 'stall', None), time.time()
+        if stall and stall.stalled(self.frame, now):
+            state = 'stalled'
+        return {'state': state, 'quiet_game_minutes': stall.quiet(self.frame, now)[0] if stall else 0,
+                'last_achievement': {
+                    'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
+                    'age_seconds': age,
+                } if achievement else None}
 
     # ---------------- internals ----------------
     def health(self) -> dict:
@@ -311,7 +324,21 @@ class Emulator:
         if snap.started:
             self.play_clock.seed(snap.playtime_seconds)
             self._enforce_options()
+        came_from = self.prev_snapshot.map if self.prev_snapshot else None
+        if (self.prev_snapshot is not None and snap.valid and self.prev_snapshot.valid
+                and advanced(self.prev_snapshot, snap) and getattr(self, 'stall', None)):
+            # A long hunt catches plenty that the Pokédex already has, and training earns experience
+            # between level milestones. Neither is a stall.
+            self.stall.progress(self.frame, time.time())
         new = diff(self.prev_snapshot, snap, self.mem)
+        if (snap.valid and snap.map == LEAGUE_ENTRY and came_from is not None and came_from not in LEAGUE
+                and not snap.in_battle):
+            # Nobody can leave the League, and no trade happens inside it, so this is the one save that
+            # can undo an attempt that reaches a battle neither side can finish.
+            try:
+                self.store.write_checkpoint(self._state_bytes(), self._manifest(), name=LEAGUE_CHECKPOINT)
+            except OSError:
+                log.exception("cannot write the League entry checkpoint")
         # Party structures briefly fail validation while a PC transfer writes them.
         # Keep a recent valid event baseline across that write, while publishing the
         # actual snapshot to health and policy below. Longer invalid gaps start fresh.
@@ -373,6 +400,10 @@ class Emulator:
             eid = self.store.add_event(ev, snap, png, state if ev.notable else None)
             if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'):
                 self.last_achievement = {'id': eid, 'title': ev.title, 'ts': time.time()}
+            if ev.type in PROGRESS_EVENTS:
+                self.unstick_streak = 0
+            if ev.type in PROGRESS_EVENTS and getattr(self, 'stall', None):
+                self.stall.progress(self.frame, time.time())
             log.info("event #%d %s p%d: %s", eid, ev.type, ev.priority, ev.title)
             if ev.notable and self.ntfy and self.ntfy.wants(ev):
                 self.ntfy.send(ev.title, ev.body, tags=ev.tags, priority=ev.priority, image=png,
@@ -388,15 +419,8 @@ class Emulator:
         if want != self.pb.memory[W_OPTIONS]:
             self.pb.memory[W_OPTIONS] = want
 
-    def _autosave(self, trade_prepare=False):
-        if self.store.get("trade_hold") and not trade_prepare:
-            return
-        self.store.set("play_clock", self.play_clock.state_dict())
-        snap = self.snapshot
-        if snap is not None and not snap.valid:
-            log.warning("skipping autosave: game state looks glitched")
-            return
-        self.store.write_checkpoint(self._state_bytes(), {
+    def _manifest(self):
+        return {
             "app_version": __version__, "pyboy_version": version("pyboy"),
             "rom_sha1": self.rom_sha1, "policy": config.POLICY,
             "policy_state": self.policy.state_dict(), "run_memory": self.mem.to_dict(),
@@ -404,7 +428,22 @@ class Emulator:
             "trade_id": self.store.get("trade_barrier"),
             "reward_id": self.store.get("custom-reward-barrier-v1"),
             "legendary_recovery": self.legendary_recovery.state_dict(),
-        })
+        }
+
+    def _autosave(self, trade_prepare=False):
+        if self.store.get("trade_hold") and not trade_prepare:
+            return
+        self.store.set("play_clock", self.play_clock.state_dict())
+        snap = self.snapshot
+        battle_since = getattr(self, 'battle_since', None)
+        if battle_since and not trade_prepare and time.time() - battle_since > config.BATTLE_TIMEOUT_SECONDS / 3:
+            # A battle this long may never end, and the only way out is a save from before it began.
+            # Rotating autosaves during it would push that save out before the timeout reloads it.
+            return
+        if snap is not None and not snap.valid:
+            log.warning("skipping autosave: game state looks glitched")
+            return
+        self.store.write_checkpoint(self._state_bytes(), self._manifest())
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
         self.store.set("policy_state", self.policy.state_dict())
@@ -414,10 +453,20 @@ class Emulator:
         saves = self.store.autosaves()
         older = [p for p in saves if p.stat().st_mtime < since - 30]
         target = older[-1] if older else (saves[0] if saves else None)
+        # A recent save inside the League can already be lost: one frozen partner left and an
+        # opponent that never attacks. If going back a little did not help, restart the attempt.
+        self.unstick_streak = getattr(self, 'unstick_streak', 0) + 1
+        entry = self.store.state_path(LEAGUE_CHECKPOINT)
+        if self.unstick_streak >= 2 and entry and self.snapshot is not None and self.snapshot.map in LEAGUE:
+            log.warning("%s again with no progress, restarting the League attempt", why)
+            target, saves = entry, [entry] + saves
         if target:
             log.warning("%s for %ds, reloading %s", why, time.time() - since, target.name)
             candidates = [target] + [p for p in reversed(saves) if p != target]
             self._restore_first_valid(candidates)
+            # The emulator is deterministic, so the same save and the same choices would replay the
+            # same trouble. Idling a random moment moves the game's random numbers along.
+            self._tick(1 + secrets.randbelow(180))
         else:
             log.warning("%s and no save state to go back to; power-cycling", why)
             self.pb.stop(save=False)
@@ -447,6 +496,25 @@ class Emulator:
                 self._unstick(self.stuck_since, "stuck")
         elif self.battle_since and now - self.battle_since > config.BATTLE_TIMEOUT_SECONDS:
             self._unstick(self.battle_since, "battle never ended")
+        self._check_stall(now)
+
+    def _check_stall(self, now):
+        """Report a run that is healthy and moving but has achieved nothing for hours of game time."""
+        snap = self.snapshot
+        if snap is None or not snap.valid or not snap.started:
+            return
+        stall = getattr(self, 'stall', None)
+        quiet = stall.check(self.frame, now) if stall else None
+        if quiet is None:
+            return
+        details = self.policy.details() if hasattr(self.policy, 'details') else {}
+        objective = (details.get('objective') or {}).get('title') or 'no objective'
+        hours = quiet[0] / 60
+        log.warning('no progress for %.1f game hours at %s: %s', hours, snap.map_name, objective)
+        self._handle_events([Event('stall', f'Stuck? {hours:.0f} game hours without progress',
+                                   f'Objective: {objective}. On {snap.map_name} after {quiet[1]} real minutes '
+                                   f'and {details.get("recoveries", 0)} recoveries. The saved moment is attached '
+                                   'to this journal entry.', priority=HIGH, tags='warning')], snap)
 
     def set_trade_preference(self, key, state):
         done, response = threading.Event(), {}

@@ -114,7 +114,7 @@ async function refreshState() {
     set('#status', 'textContent', manualMode ? 'You’re in control' : paused ? 'Game frozen' : 'Adventure in progress')
     set('#pause', 'textContent', paused && !manualMode ? '▶ Unfreeze' : 'Ⅱ Freeze game')
     const progress = state.progress
-    set('#progress-state', 'textContent', paused ? 'Paused' : ({exploring: 'Exploring', making_progress: 'Making progress', recovering: 'Recovering'}[progress?.state] || 'Exploring'))
+    set('#progress-state', 'textContent', paused ? 'Paused' : ({exploring: 'Exploring', making_progress: 'Making progress', recovering: 'Recovering', stalled: 'Stuck?'}[progress?.state] || 'Exploring'))
     const achievement = progress?.last_achievement
     const age = achievement?.age_seconds || 0
     const since = age < 60 ? 'just now' : age < 3600 ? `${Math.floor(age / 60)}m ago` : `${Math.floor(age / 3600)}h ago`

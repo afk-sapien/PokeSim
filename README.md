@@ -14,7 +14,7 @@ Fair warning: you will get attached to a Lapras named PICKLES, and you will argu
 
 Battles, catches, evolutions and the slow march to the Pokémon League, with the current plan shown next to the screen. Keyboard and touch controls are there when you want to steer, and a speed dial from 0.5× up to Max when you want to skip ahead or slow down and actually watch a fight.
 
-There's a Journal of milestones with screenshots, which you can follow in a feed reader or as phone notifications through [ntfy](https://ntfy.sh). After the Hall of Fame it keeps going, working on collection, training and evolution projects.
+There's a Journal of milestones with screenshots, which you can follow in a feed reader or as phone notifications through [ntfy](https://ntfy.sh). Open the Library, choose **Notifications**, generate a topic and subscribe to it in the ntfy app. There is no account and nothing to edit. After the Hall of Fame it keeps going, working on collection, training and evolution projects.
 
 It decides everything locally with ordinary game logic. No model API key, no subscription, no per-move bill.
 
@@ -79,7 +79,7 @@ This is the short version of what the release downloads. Save it as `compose.yam
 ```yaml
 services:
   pokesim:
-    image: ghcr.io/afk-sapien/pokesim:0.1.2
+    image: ghcr.io/afk-sapien/pokesim:0.2.0
     container_name: pokesim
     ports:
       - "127.0.0.1:8930:8000"

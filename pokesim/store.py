@@ -184,8 +184,8 @@ class Store:
 
     atomic_write = staticmethod(CheckpointStore.atomic_write)
 
-    def write_checkpoint(self, state: bytes, metadata: dict) -> Path:
-        return self.checkpoints.write_checkpoint(state, metadata)
+    def write_checkpoint(self, state: bytes, metadata: dict, name: str | None = None) -> Path:
+        return self.checkpoints.write_checkpoint(state, metadata, name)
 
     def checkpoint_metadata(self, path: Path) -> dict | None:
         return self.checkpoints.checkpoint_metadata(path)

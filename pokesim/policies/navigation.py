@@ -20,6 +20,10 @@ SEAFOAM_HOLES = {(MAPS[name], x, y) for name, points in (
 ) for x, y in points}
 
 
+# Row on Route 23 and the badge checked there, from Cascade in the south to Earth in the north.
+ROUTE_23_CHECKS = ((136, 2), (119, 4), (105, 8), (96, 16), (85, 32), (56, 64), (35, 128))
+
+
 class Navigator:
     def __init__(self):
         self.visits = {}
@@ -71,6 +75,14 @@ class Navigator:
             self.story_blocks.add((MAPS['SEAFOAM_ISLANDS_B3F'], 15, 8))
             self.story_blocks.update((MAPS['SEAFOAM_ISLANDS_B4F'], x, y)
                                      for x in (20, 21) for y in (16, 17))
+        # Route 23 checks one badge at each of these rows and walks the player back without it. Unmodelled,
+        # the Indigo Plateau shop looked like the nearest place to restock, and a run with six badges
+        # argued with the Volcano Badge guard indefinitely.
+        route_23 = WORLD.get(MAPS['ROUTE_23'])
+        if route_23:
+            for row, badge in ROUTE_23_CHECKS:
+                if not snapshot.badges & badge:
+                    self.story_blocks.update((MAPS['ROUTE_23'], x, row) for x in range(route_23['width']))
         if not snapshot.saffron_open and not any(item in drinks for item, qty in snapshot.items if qty):
             for name, coords in (("ROUTE_5_GATE", ((3, 3), (4, 3))),
                                  ("ROUTE_6_GATE", ((3, 2), (4, 2))),
@@ -240,6 +252,13 @@ class Navigator:
         if world["tileset"] in ("MART", "POKECENTER") and y == world["height"] - 1:
             # The two exit mat squares only warp while facing out of the building.
             if direction != "down":
+                return None
+        elif warp[2] == -1:
+            # An exit back to the previous map on the map's edge, such as a cave mouth, only warps
+            # while walking off that edge. Pacing along a pair of them never leaves.
+            outward = {name for name, edge in (("left", x == 0), ("right", x == world["width"] - 1),
+                                               ("up", y == 0), ("down", y == world["height"] - 1)) if edge}
+            if outward and direction not in outward:
                 return None
         return self._warp(source, warp)
 

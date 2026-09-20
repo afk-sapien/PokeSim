@@ -32,6 +32,32 @@ can increase without a level-up, and a difficult catch can span multiple observa
 Inspect the selected partner, objective outcomes, supplies, recent events, and route
 before calling a run stalled.
 
+## Stall reports
+
+Each adventure watches its own progress. With no badge, catch, evolution, gift, item,
+trainer victory, level or new map for two hours of game time and fifteen real minutes,
+it records a `stall` journal entry naming the objective and place, attaches the saved
+moment, and sends it like any other notable event. Live shows Stuck? and the Library
+summary sets `stalled`. Managed trades are arranged by the coordinator and do not count.
+A continuing stall is reported again every six hours. The three `STALL_ALERT_*` settings
+in the [guide](guide.md) adjust or disable this.
+
+## Find stalls before a release
+
+```sh
+.venv/bin/python tools/find_stalls.py --rom roms/pokered.gb \
+  --output ~/pokesim-soak/red-seed7 --until-champion --seed 7
+```
+
+This plays a fresh cartridge, or a copied `--checkpoint`, at full speed with no server
+and no live data. One game hour takes about a minute. Every stall leaves a `stall-NN`
+folder holding the moment it was noticed, the rolling checkpoint from before it began,
+a screenshot and a report with the objective, position, money and recent failures.
+Both checkpoints replay with `tools/validate_progress.py`, so a candidate fix can be
+compared with the baseline on identical input. The run stops after six game hours in
+one stall, at the Hall of Fame with `--until-champion`, or when `--hours` is spent, and
+exits nonzero when it found any stall. Run several seeds and both editions.
+
 ## Investigate and validate
 
 Reproduce failures on private copied saves with matching ROM and PyBoy metadata.

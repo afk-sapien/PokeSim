@@ -115,3 +115,26 @@ def test_learned_walk_does_not_pass_through_a_boulder_that_moved_back():
     nav.live_positions[rock] = (22, 15)
     assert ('right', target) in nav.neighbors(source, state.frame)
     assert nav.route(source, (target,), state.frame) == 'right'
+
+
+def test_a_nurse_on_open_floor_is_approached_directly_and_a_center_nurse_across_her_counter():
+    from pokesim.policies.progression import healing_goal
+    from pokesim.strategy_data import MAPS, WORLD
+    from test_events import snap
+    silph = MAPS['SILPH_CO_9F']
+    nurse = next(o for o in WORLD[silph]['objects'] if o[2] == 'SPRITE_NURSE')
+    assert healing_goal(snap(map=silph)).targets == ((silph, nurse[0], nurse[1] + 1),)
+    center = MAPS['VIRIDIAN_POKECENTER']
+    desk = next(o for o in WORLD[center]['objects'] if o[2] == 'SPRITE_NURSE')
+    assert healing_goal(snap(map=center)).targets == ((center, desk[0], desk[1] + 2),)
+
+
+def test_the_silph_nurse_is_not_a_heal_target_once_the_building_is_freed():
+    from pokesim.policies.progression import healing_goal
+    from pokesim.strategy_data import MAPS
+    from test_events import snap
+    from test_strategy import flags
+    silph = MAPS['SILPH_CO_9F']
+    freed = healing_goal(snap(map=silph, event_flags=flags('EVENT_BEAT_SILPH_CO_GIOVANNI')))
+    assert freed.targets and all(m != silph for m, _, _ in freed.targets)
+

@@ -361,3 +361,18 @@ def test_the_broker_only_ever_issues_reads():
     methods = {method for route in app.routes for method in getattr(route, 'methods', set())}
 
     assert methods <= {'GET', 'HEAD'}
+
+
+def test_the_last_stored_field_move_partner_is_not_offered():
+    from pokesim.web.pokedex import field_move_partners
+    lapras, pidgey, seel = (next(sid for sid, row in SPECIES.items() if row['name'] == name)
+                            for name in ('LAPRAS', 'PIDGEY', 'SEEL'))
+    game = {'party': [{'species': pidgey, 'moves': [33, 0, 0, 0]}],
+            'storage': {'pokemon': [{'species': lapras, 'moves': [55, 45, 0, 0]}]}}
+    assert field_move_partners(game) == {lapras}
+    game['storage']['pokemon'].append({'species': seel, 'moves': [29, 0, 0, 0]})
+    assert field_move_partners(game) == set()                     # either one may go, not both
+    game['storage']['pokemon'][1]['moves'] = [57, 0, 0, 0]
+    assert field_move_partners(game) == {seel}                    # the partner that already surfs stays
+    game['party'].append({'species': seel, 'moves': [29, 0, 0, 0]})
+    assert field_move_partners(game) == set()                     # a learner travels with the party

@@ -1,6 +1,6 @@
 services:
   pokesim:
-    image: ${POKESIM_IMAGE:-ghcr.io/afk-sapien/pokesim:0.1.2}
+    image: ${POKESIM_IMAGE:-ghcr.io/afk-sapien/pokesim:0.2.0}
     init: true
     restart: unless-stopped
     command: [python, -m, pokesim, serve, --data-dir, /data, --host, 0.0.0.0]
@@ -9,6 +9,11 @@ services:
     environment:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8930}
       PORT: "8000"
+      # Optional defaults. Notifications are normally set up in the Library.
+      NTFY_URL: ${NTFY_URL:-}
+      NTFY_TOKEN: ${NTFY_TOKEN:-}
+      NTFY_MIN_PRIORITY: ${NTFY_MIN_PRIORITY:-2}
+      NTFY_MUTE: ${NTFY_MUTE:-}
     volumes:
       - ${DATA_PATH:-./pokesim-app}:/data
     security_opt:

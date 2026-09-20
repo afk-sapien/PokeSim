@@ -127,6 +127,15 @@ def serve(bootstrap, parent_stream, ready_stream):
                 return {'speed': runtime.emulator.speed}
             return runtime.call(apply)
 
+        @app.post('/internal/notifications')
+        def notifications(data: dict):
+            from fastapi import HTTPException
+            try:
+                runtime.emulator.ntfy.configure(data)
+            except ValueError as error:
+                raise HTTPException(400, str(error)) from error
+            return {'ok': True}
+
         @app.post('/internal/shutdown')
         def shutdown():
             server.should_exit = True

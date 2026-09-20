@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.2.0
+
+- Respect the badge checks on Route 23, plan restocking only at shops that can be reached, and spend
+  vitamins and Rare Candies when the bag is too full to buy Poké Balls. A run with six badges and a
+  bag of keepsakes argued with the Volcano Badge guard on its way to the Indigo Plateau shop.
+- Restart a League attempt that cannot be finished. A checkpoint is kept from the moment the
+  attempt begins, and it is used when a battle runs past the timeout twice with no progress between.
+- Tell party members of one species apart when changing the lead. With two Haunters the run
+  thought the stronger one already led, and reopened the party menu at a gym door forever.
+- Buy Full Heals before the League, keep the save from before an endless battle until the
+  timeout reloads it, and idle a random moment after that reload so the battle plays out
+  differently. Lance's Dragonair can use Agility forever against a frozen last partner.
+- Heal at a real Center once Silph Co is freed, because its nurse stops healing then, and stand
+  next to her before that instead of two squares away. A sleeping partner kept a run at her side indefinitely.
+- Hand over or revive a partner when the active Pokémon is frozen. Freeze never thaws in these
+  games, and a foe with only Normal attacks could not finish a frozen Ghost, so the battle never ended.
+- Find a Cut, Surf or Strength partner in any PC box and open that box before withdrawing.
+  A run whose gift Lapras sat in another box hunted for a Surf partner it could never reach.
+- Keep fighting with the last partner standing. The party menu used to choose the partner
+  already in battle, which the game refuses, and the battle never ended.
+- Leave edge exits such as cave mouths by walking outward. A run that needed healing paced
+  between Victory Road 2F's two east exit squares indefinitely.
+- Sell a spare valuable to raise the Safari Zone entry fee. A run that reached the gate
+  short of the fee used to talk to the attendant indefinitely, and shopping now leaves
+  the fee untouched until Surf and the Gold Teeth are collected.
+- Report a stall. An adventure with no achievement for two hours of game time and
+  fifteen real minutes records a `stall` journal entry with the saved moment, shows
+  Stuck? on Live, and sets `stalled` in the Library summary. Managed trades do not
+  count as progress. `STALL_ALERT_GAME_MINUTES=0` turns it off.
+- Add `tools/find_stalls.py`, which plays an isolated adventure at full speed and keeps
+  a replayable bundle for every stall it finds.
+- Keep the last Surf partner out of automatic trades, and stop revisiting the Silph
+  worker once his Lapras is registered. A run that traded the gift Lapras away before
+  collecting HM03 had no reachable way to cross water.
+- Set up phone notifications from the Library's new Notifications page, with no
+  account or settings file. Choose the ntfy server and topic, generate a random
+  topic, add an optional access token, and send a test notification.
+- Choose which adventures notify and which kinds of news are sent, including a
+  "Stuck or needs attention" kind. Changes reach running adventures right away.
+- Name the adventure in every notification title, and announce completed trades once.
+- Keep `NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY` and `NTFY_MUTE` as the defaults
+  until notifications are saved in the Library.
+
 ## 0.1.2
 
 - Install with one pipx or pip command from the repository, with no checkout, uv,

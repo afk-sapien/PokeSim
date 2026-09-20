@@ -34,6 +34,11 @@ class Registry:
         self.root.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.db = sqlite3.connect(self.root / 'app.sqlite', check_same_thread=False)
+        try:
+            # Library settings can hold an ntfy access token.
+            (self.root / 'app.sqlite').chmod(0o600)
+        except OSError:
+            pass
         self.db.row_factory = sqlite3.Row
         version = self.db.execute('PRAGMA user_version').fetchone()[0]
         if version > SCHEMA:

@@ -12,6 +12,10 @@
   let closing = false
   let sessionPending = null
   let appSettingsDirty = false
+  let notifyDirty = false
+  let notifyAdventuresSignature = ''
+  // Checkbox choices on the Notifications page, kept apart from the markup that shows them.
+  const notify = {categories: {}, adventures: {}}
   const cardSignatures = new Map()
   let stoppedSignature = ''
   const requests = new Map()
@@ -79,8 +83,9 @@
     const wins = summary.league_rewards?.wins
     const league = Number.isInteger(wins) ? `<p class="section-note">${wins.toLocaleString()} League ${wins === 1 ? 'win' : 'wins'}</p>` : ''
     const provenance = game.provenance?.trading_blocked ? `<p class="card-error">${esc(game.provenance.reason || 'Legacy trade history needs reconciliation before trading.')}</p>` : ''
+    const stalled = active && summary.stalled ? '<p class="card-error">Stuck? No progress for a while. Open the adventure to see its objective.</p>' : ''
     const failure = game.error ? `<p class="card-error">${esc(typeof game.error === 'string' ? game.error : JSON.stringify(game.error))}</p>` : ''
-    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}">${active ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${esc(game.name)} game screen" loading="lazy" width="160" height="144"></div>` : ''}<div class="card-banner"><span class="eyebrow">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="state-pill">${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></div><div class="card-body"><h2>${esc(game.name)}</h2><p>${esc(activity)}</p>${league}${failure}${provenance}${game.archived ? '<p class="section-note">Archived adventures keep all their saves.</p>' : ''}<div class="card-actions"><a class="primary-button" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'} ↗</a>${game.archived ? `<button data-action="restore" data-id="${esc(game.id)}" data-owner>Restore</button>` : `<button data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${transitional ? 'disabled data-blocked' : ''}>${transitional ? esc(game.state) : active ? 'Save and stop' : 'Start'}</button><button data-action="settings" data-id="${esc(game.id)}" data-owner>Settings</button>${!active && !transitional ? `<button data-action="archive" data-id="${esc(game.id)}" data-owner>Archive</button>` : ''}`}</div></div></article>`
+    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}">${active ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${esc(game.name)} game screen" loading="lazy" width="160" height="144"></div>` : ''}<div class="card-banner"><span class="eyebrow">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="state-pill">${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></div><div class="card-body"><h2>${esc(game.name)}</h2><p>${esc(activity)}</p>${league}${stalled}${failure}${provenance}${game.archived ? '<p class="section-note">Archived adventures keep all their saves.</p>' : ''}<div class="card-actions"><a class="primary-button" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'} ↗</a>${game.archived ? `<button data-action="restore" data-id="${esc(game.id)}" data-owner>Restore</button>` : `<button data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${transitional ? 'disabled data-blocked' : ''}>${transitional ? esc(game.state) : active ? 'Save and stop' : 'Start'}</button><button data-action="settings" data-id="${esc(game.id)}" data-owner>Settings</button>${!active && !transitional ? `<button data-action="archive" data-id="${esc(game.id)}" data-owner>Archive</button>` : ''}`}</div></div></article>`
   }
   function renderAdventures() {
     const visible = adventures.filter(game => $('#show-archived').checked || !game.archived)
@@ -177,6 +182,55 @@
     const backups = Array.isArray(data) ? data : data.backups || []
     $('#backups').innerHTML = backups.length ? backups.map(backup => `<p><a class="text-link" href="/api/v1/backups/${encodeURIComponent(backup.id)}/download">Download backup ${esc(dateLabel(backup.created_at) || backup.id)} ↗</a></p>`).join('') : '<p class="section-note">No backups yet.</p>'
   }
+  function randomTopic() {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    return 'pokesim-' + Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => alphabet[byte % alphabet.length]).join('')
+  }
+  function notifyChoice(kind, key, label, detail, checked) {
+    return `<label class="inline-label"><input type="checkbox" data-notify="${kind}" data-key="${esc(key)}" ${checked ? 'checked' : ''} data-owner><span>${esc(label)}${detail ? `<small>${esc(detail)}</small>` : ''}</span></label>`
+  }
+  function renderSubscribe() {
+    const server = $('#notify-server').value.trim().replace(/\/+$/, '')
+    const topic = $('#notify-topic').value.trim()
+    const valid = /^https?:\/\/[^\s/]+/.test(server) && /^[A-Za-z0-9_-]{1,64}$/.test(topic)
+    $('#notify-subscribe').innerHTML = valid ? `<a class="text-link" href="${esc(`${server}/${topic}`)}" target="_blank" rel="noreferrer">${esc(`${server}/${topic}`)} ↗</a>`
+      : 'Choose a topic to see its address.'
+  }
+  function renderNotifyAdventures() {
+    // New adventures notify until they are turned off, so a missing choice counts as on.
+    const markup = adventures.filter(game => !game.archived).map(game => notifyChoice('adventures', game.id, game.name, '', notify.adventures[game.id] !== false)).join('')
+      || '<p class="section-note">Adventures appear here once you create them.</p>'
+    if (markup === notifyAdventuresSignature) return
+    notifyAdventuresSignature = markup
+    $('#notify-adventures').innerHTML = markup
+    permissions()
+  }
+  function renderNotifications(data) {
+    $('#notify-enabled').checked = Boolean(data.enabled)
+    $('#notify-server').value = data.server || 'https://ntfy.sh'
+    $('#notify-topic').value = data.topic || ''
+    $('#notify-priority').value = String(Math.max(2, data.min_priority ?? 2))
+    $('#notify-token').value = ''
+    $('#notify-token').placeholder = data.token_set ? 'A token is saved. Leave blank to keep it.' : ''
+    $('#notify-clear-token').checked = false
+    $('#notify-clear-row').hidden = !data.token_set
+    $('#notify-token-note').textContent = data.source === 'environment'
+      ? 'These values come from the NTFY_* environment settings. Saving here replaces them.'
+      : 'Only needed for a protected topic or a private server.'
+    const categories = data.categories || []
+    notify.categories = Object.fromEntries(categories.map(row => [row.key, Boolean(row.enabled)]))
+    notify.adventures = Object.fromEntries((data.adventures || []).map(row => [row.id, Boolean(row.enabled)]))
+    $('#notify-categories').innerHTML = categories.map(row => notifyChoice('categories', row.key, row.label, row.detail, row.enabled)).join('')
+    notifyAdventuresSignature = ''
+    renderSubscribe()
+    renderNotifyAdventures()
+    notifyDirty = false
+    permissions()
+  }
+  function notifyDestination() {
+    const token = $('#notify-clear-token').checked ? {token: ''} : $('#notify-token').value ? {token: $('#notify-token').value} : {}
+    return {server: $('#notify-server').value.trim(), topic: $('#notify-topic').value.trim(), ...token}
+  }
   async function refresh() {
     if (refreshing || $('#workspace').hidden) return
     refreshing = true
@@ -184,6 +238,7 @@
       const data = await api('/api/v1/adventures')
       adventures = data.adventures || []
       renderAdventures()
+      if (page === 'notifications') renderNotifyAdventures()
       if (page === 'trading') await refreshTrades()
       $('#connection').textContent = 'Connected'
     } catch (error) { $('#connection').textContent = 'Reconnecting'
@@ -259,6 +314,32 @@
   $('#settings-form').onsubmit = event => { event.preventDefault()
     act(async () => { const result = await write('/api/v1/settings', {max_running: Number($('#max-running').value), speed: Number($('#simulation-speed').value)}, 'PATCH')
       notice(result.pace_pending?.length ? 'Settings saved. The pace will apply to reconnecting adventures automatically.' : 'Application settings saved.') }) }
+  $('#notify-form').oninput = () => { notifyDirty = true
+    renderSubscribe() }
+  $('#notify-form').onchange = event => { notifyDirty = true
+    const input = event?.target
+    if (input?.dataset?.notify) notify[input.dataset.notify][input.dataset.key] = Boolean(input.checked) }
+  $('#notify-generate').onclick = () => { $('#notify-topic').value = randomTopic()
+    notifyDirty = true
+    renderSubscribe() }
+  $('#notify-form').onsubmit = event => { event.preventDefault()
+    act(async () => {
+      const known = new Set(adventures.map(game => game.id))
+      const result = await write('/api/v1/notifications', {enabled: $('#notify-enabled').checked, ...notifyDestination(),
+        min_priority: Number($('#notify-priority').value), categories: notify.categories,
+        adventures: Object.fromEntries(Object.entries(notify.adventures).filter(([id]) => known.has(id)))}, 'PATCH')
+      renderNotifications(result)
+      $('#notify-result').textContent = ''
+      notice(result.pending?.length ? 'Notifications saved. Reconnecting adventures will pick them up automatically.' : 'Notifications saved. They apply to running adventures right away.')
+    }) }
+  $('#notify-test').onclick = () => act(async () => {
+    $('#notify-result').textContent = 'Sending…'
+    try {
+      const result = await write('/api/v1/notifications/test', notifyDestination())
+      $('#notify-result').textContent = result.ok ? 'ntfy accepted the test. Check your phone.' : `ntfy did not accept it: ${result.error}`
+    } catch (error) { $('#notify-result').textContent = ''
+      throw error }
+  })
   $('#create-backup').onclick = () => act(async () => {
     notice('Saving adventures and creating a backup…')
     await write('/api/v1/backups')
@@ -289,6 +370,7 @@
       }
       await refreshBackups()
     }
+    if (page === 'notifications' && owner && !notifyDirty) renderNotifications(await api('/api/v1/notifications'))
     permissions()
     await refresh()
   }

@@ -14,6 +14,7 @@ from .progression import STARTERS, Goal, healing_goal, journey, league_partner, 
 from . import training
 from .menus import select, tap
 from .shopping import ShoppingController
+from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
 from .collection import CENTERS, Collection, LEAGUE, legendary_project
 from .awareness import ActionWatch
@@ -59,6 +60,11 @@ def ready_to_drop(snapshot):
 
 def wait():
     return [Action(None, 0, 12)]
+
+
+def individual(mon):
+    """Enough to tell two party members of one species apart for the length of a menu."""
+    return mon.species, mon.level, mon.nick, mon.max_hp, tuple(mon.moves)
 
 
 class StrategicPolicy(Policy):
@@ -132,6 +138,7 @@ class StrategicPolicy(Policy):
         self.goal_distance = None
         self.order_stage = None
         self.order_species = None
+        self.order_signature = None
         self.elevator_exit = False
         self.elevator_floor = "B1F"
         self.field_move = None
@@ -292,6 +299,11 @@ class StrategicPolicy(Policy):
             self.goal.key == 'party_collection' and len(s.party) < 6
             and self.collection.project
             and any(species == self.collection.project['parent'] for species, level in s.boxed_pokemon)
+        ) or (
+            # The field-move partner may sit in a full box. Making room first would switch away from
+            # it again, and the two storage goals would trade boxes forever.
+            self.goal.key in FIELD_MOVE_GOALS and len(s.party) < 6
+            and self.pc.field_move_box(s, self.goal.key) is not None
         )
         release = self._release_target(s) if storage_headroom(s) < RELEASE_BUFFER else None
         if release and not withdrawing_partner and s.map not in league_rooms:
@@ -483,7 +495,10 @@ class StrategicPolicy(Policy):
                 return tap("b")
             if self.intent and self.intent.kind == "reorder":
                 from ..trade.preferences import identity
+                # Species alone cannot tell twins apart: with a weaker Haunter already leading, the
+                # stronger one looked promoted, and the reorder was cancelled and restarted forever.
                 ordered = (identity(asdict(s.party[0])) == self.intent.partner_key if self.intent.partner_key
+                           else individual(s.party[0]) == self.order_signature if self.order_signature
                            else s.party[0].species == self.order_species)
                 if self.intent.partner_key and self.collection.project and self.collection.project.get('scoped_partner'):
                     ordered = self.collection.trainee(s, self.collection.project) == 0
@@ -494,10 +509,18 @@ class StrategicPolicy(Policy):
                     return tap("b")
                 target = 0 if self.order_stage == "destination" else self.intent.index
                 return self._select(scr, target)
+            if (s.in_battle and self.intent and self.intent.kind == "switch"
+                    and (self.intent.index == active or not s.party[min(self.intent.index, len(s.party) - 1)].hp)):
+                self.intent = None      # The chosen partner fainted or is already out.
             if self.intent and self.intent.kind in ("switch", "item", "field"):
                 target = self.intent.index if self.intent.kind in ("switch", "field") else self.intent.target
             else:
                 alive = [(p.hp, i) for i, p in enumerate(s.party) if p.hp and i != active]
+                if not alive and s.in_battle and s.party and s.party[active].hp:
+                    # The last partner standing cannot switch to itself. The game answers
+                    # "is already out!" and reopens this menu, so close it and fight on.
+                    self.reason = "No other partner can battle, so keep fighting"
+                    return tap("b")
                 target = max(alive)[1] if alive else active
                 self.intent = Decision("switch", target, reason="Replace the fainted active Pokémon")
                 self.intent_since = s.frame
@@ -641,14 +664,16 @@ class StrategicPolicy(Policy):
                                and (mon.hp < mon.max_hp * 0.8 or mon.status & CURES.get(item, 0))]
                     if choices:
                         return self._use_item(s, max(choices)[1], target)
-        if self.collection.project and len(s.items) >= 18:
+        # A bag this full cannot take a new kind of item, Poké Balls included, so spend the vitamins and
+        # Rare Candies that fill it, whether or not a collection project is under way.
+        if len(s.items) >= 18:
             for item,qty in s.items:
                 if item not in {ITEMS[n] for n in ('RARE_CANDY','HP_UP','PROTEIN','IRON','CARBOS','CALCIUM')}:
                     continue
                 candidates = [i for i,p in enumerate(s.party) if p.level<100]
                 if not candidates:
                     continue
-                parent = self.collection.project.get('parent')
+                parent = (self.collection.project or {}).get('parent')
                 target = next((i for i in candidates if s.party[i].species==parent),max(candidates,key=lambda i:s.party[i].level))
                 signature = (item,qty,s.party[target].species,s.party[target].level)
                 if signature not in self.supply_attempts:
@@ -754,6 +779,7 @@ class StrategicPolicy(Policy):
             target = self.collection.trainee(s, project)
             if target and s.party[target].hp:
                 self.order_species = s.party[target].species
+                self.order_signature = individual(s.party[target])
                 self.order_stage = 'source'
                 self.intent = Decision('reorder',target,reason='Train a partner toward level 100',
                                        partner_key=project.get('trainee_key'))
@@ -781,6 +807,7 @@ class StrategicPolicy(Policy):
             target = self.readiness.get('lead', 0)
             if target and target < len(s.party) and s.party[target].hp:
                 self.order_species = s.party[target].species
+                self.order_signature = individual(s.party[target])
                 self.order_stage = 'source'
                 self.intent = Decision('reorder', target, reason='Lead with the best available matchup')
                 self.intent_since = s.frame
@@ -792,6 +819,7 @@ class StrategicPolicy(Policy):
             if target != 0:
                 self.intent = Decision('reorder', target, reason='Lead the legendary expedition with a strong partner')
                 self.order_species = s.party[target].species
+                self.order_signature = individual(s.party[target])
                 self.order_stage = 'source'
                 self.intent_since = s.frame
                 return tap('start')
@@ -809,6 +837,7 @@ class StrategicPolicy(Policy):
             if target is not None and target != 0:
                 self.intent = Decision("reorder", target, reason="Give the partner the lead position while training")
                 self.order_species = s.party[target].species
+                self.order_signature = individual(s.party[target])
                 self.order_stage = "source"
                 self.intent_since = s.frame
                 return tap("start")
@@ -1192,6 +1221,7 @@ class StrategicPolicy(Policy):
             self.excursion = (goal, self.development_until, 'development')
             if trainee != 0:
                 self.order_species = s.party[trainee].species
+                self.order_signature = individual(s.party[trainee])
                 self.order_stage = 'source'
                 self.intent = Decision('reorder', trainee, reason=goal.reason)
                 self.intent_since = s.frame

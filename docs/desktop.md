@@ -12,11 +12,11 @@ One command with [pipx](https://pipx.pypa.io/stable/installation/), which also n
 pipx install git+https://github.com/afk-sapien/PokeSim.git
 ```
 
-That builds the current default branch. Add `@v0.1.2` to the URL to pin a release, or install a
+That builds the current default branch. Add `@v0.2.0` to the URL to pin a release, or install a
 released wheel without Git:
 
 ```sh
-pipx install https://github.com/afk-sapien/PokeSim/releases/download/v0.1.2/pokesim-0.1.2-py3-none-any.whl
+pipx install https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0/pokesim-0.2.0-py3-none-any.whl
 ```
 
 Without pipx, use `python -m pip install git+https://github.com/afk-sapien/PokeSim.git` inside a
@@ -48,6 +48,10 @@ Prepared adventures run offline. Adding another adventure can reuse an installed
 - A stopped adventure uses no emulator process. Starting it resumes from its saved checkpoint.
 - Keep the computer awake to advance the games. Sleeping or powered-off computers do not accumulate simulated progress.
 - Desktop launch uses an available loopback port, accessible only from your computer. The Library has no account or owner-key step. For remote access, use an authenticated reverse proxy or a trusted private network as described in [self-hosting](self-hosting.md). Anyone who can reach the Library can manage its adventures.
+
+## Notifications
+
+Choose **Notifications** in the Library to get milestones on your phone through [ntfy](https://ntfy.sh). Generate a random topic, subscribe to it in the ntfy app, send a test, and save. No account is needed. The page also chooses which adventures notify and which kinds of news are sent, and changes apply to running adventures right away. See the [guide](guide.md#notifications) for the full list.
 
 ## Simulation pace
 

@@ -27,3 +27,25 @@ def test_old_exit_sample_with_indoor_coordinates_uses_real_outdoor_destination()
     destination = nav._warp(m, WORLD[m]['warps'][1])
     assert ('down', destination) in list(nav.neighbors(source, 0))
     assert ('down', (MAPS['PEWTER_CITY'], 4, 7)) not in list(nav.neighbors(source, 0))
+
+
+def test_a_cave_mouth_on_the_map_edge_only_leaves_by_walking_outward():
+    # Victory Road 2F has two exit squares stacked on its east edge. Stepping from one onto the
+    # other stays inside, so a route that paces between them never reaches Route 23.
+    m = MAPS['VICTORY_ROAD_2F']
+    nav = Navigator()
+    upper, lower = (m, 29, 7), (m, 29, 8)
+    outside = nav._warp(m, WORLD[m]['warps'][1])
+    assert outside[0] == MAPS['ROUTE_23']
+    for start, sideways, other in ((upper, 'down', lower), (lower, 'up', upper)):
+        neighbors = list(nav.neighbors(start, 0))
+        assert ('right', outside) in neighbors
+        assert (sideways, other) in neighbors and (sideways, outside) not in neighbors
+        assert nav.route(start, [outside], 0) == 'right'
+
+
+def test_ladders_on_a_map_edge_still_warp_when_stepped_on():
+    m = MAPS['VICTORY_ROAD_2F']
+    ladder = next(w for w in WORLD[m]['warps'] if w[2] != -1 and (w[0] in (0, WORLD[m]['width'] - 1) or w[1] in (0, WORLD[m]['height'] - 1)))
+    nav = Navigator()
+    assert all(nav._directed_warp(m, ladder, direction) == nav._warp(m, ladder) for direction in ('up', 'down', 'left', 'right'))

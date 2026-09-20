@@ -134,12 +134,17 @@ def teaching_goal(key, title, reason, s):
     move = {"teach_cut": 15, "teach_surf": 57, "teach_strength": 70}[key]
     if not any(move in SPECIES.get(p.species, {}).get("hms", [])
                and (0 in p.moves or replacement_slot(p, move) is not None) for p in s.party):
-        stored = any(move in SPECIES.get(species, {}).get("hms", []) for species, level in s.boxed_pokemon)
+        # Every box counts: the PC can change boxes, and the gift Lapras is rarely in the open one.
+        held = [species for _, species, _, _ in s.stored_pokemon] or [species for species, _ in s.boxed_pokemon]
+        stored = any(move in SPECIES.get(species, {}).get("hms", []) for species in held)
         if stored:
             targets = tuple((m, 13, 4) for m, w in WORLD.items() if "Pokecenter" in w["name"] and w["width"] == 14)
             return Goal("party_" + key.removeprefix("teach_"), "Bring a field-move partner onto the team",
                         "Use Bill’s PC to store a reserve and withdraw a compatible partner", targets, "up", True)
-        if move in SPECIES.get(next((sid for sid, d in SPECIES.items() if d.get('name') == 'LAPRAS'), 0), {}).get('hms', []) and event_set(s.event_flags, 'EVENT_BEAT_SILPH_CO_GIOVANNI'):
+        lapras = next((sid for sid, d in SPECIES.items() if d.get('name') == 'LAPRAS'), 0)
+        # The worker gives one Lapras. A registered Lapras that is no longer held was traded or released.
+        if (move in SPECIES.get(lapras, {}).get('hms', []) and SPECIES.get(lapras, {}).get('dex') not in s.owned
+                and event_set(s.event_flags, 'EVENT_BEAT_SILPH_CO_GIOVANNI')):
             return object_goal("lapras", "Meet the rescued Silph worker", "Accept an accessible Lapras for the missing field move", "SILPH_CO_7F", "SILPH_WORKER_M1")
         name = key.removeprefix('teach_')
         return Goal('catch_' + name, f'Find a {name.title()} partner',
@@ -299,6 +304,9 @@ def journey(snapshot, current):
 
 def healing_goal(snapshot, preferred_map=None):
     candidates = [m for m, w in WORLD.items() if any(o[2] == "SPRITE_NURSE" for o in w["objects"])]
+    if event_set(snapshot.event_flags, "EVENT_BEAT_SILPH_CO_GIOVANNI"):
+        # Once Silph Co is freed its nurse only says thank you. She no longer heals anyone.
+        candidates = [m for m in candidates if m != MAPS["SILPH_CO_9F"]]
     if preferred_map in candidates:
         candidates = [preferred_map]
     elif snapshot.map in candidates:
@@ -309,5 +317,9 @@ def healing_goal(snapshot, preferred_map=None):
         w = WORLD[m]
         nurse = next((o for o in w["objects"] if o[2] == "SPRITE_NURSE"), None)
         if nurse:
-            targets.append((m, nurse[0], nurse[1] + 2))
+            # A Center nurse is spoken to across her counter. The one in Silph Co stands on open floor,
+            # where two squares away only faces an empty tile.
+            below = nurse[1] + 1
+            open_floor = below < w["height"] and w["tiles"][below][nurse[0]] in w["passable"]
+            targets.append((m, nurse[0], below if open_floor else nurse[1] + 2))
     return Goal("heal", "Heal the party", "Restore HP, status, and PP before continuing", tuple(targets), "up", True)

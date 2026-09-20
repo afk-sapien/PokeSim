@@ -58,8 +58,9 @@ class CheckpointStore:
         finally:
             temporary.unlink(missing_ok=True)
 
-    def write_checkpoint(self, state: bytes, metadata: dict) -> Path:
-        path = self.autosave_path()
+    def write_checkpoint(self, state: bytes, metadata: dict, name: str | None = None) -> Path:
+        # A named checkpoint sits outside the rotating autosaves, so it is never pruned or resumed by accident.
+        path = self.states / name if name else self.autosave_path()
         manifest = dict(metadata, format=1, sha256=hashlib.sha256(state).hexdigest())
         manifest_bytes = json.dumps(manifest).encode()
         try:

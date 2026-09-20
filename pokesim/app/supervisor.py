@@ -16,7 +16,7 @@ import time
 
 import httpx
 
-from .registry import identifier
+from .registry import digest, identifier
 from ..runtime.settings import validate_speed
 
 log = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ class Child:
         self.bootstrap = bootstrap
         self.token = bootstrap['token']
         self.generation = bootstrap['generation']
+        self.notified = None
         self.process = None
         self.url = None
         self.logs = deque(maxlen=100)
@@ -144,6 +145,7 @@ class Supervisor:
         self.locks = {}
         self.retries = {}
         self.unhealthy_since = {}
+        self.notifications = None   # installed by the manager: adventure row -> worker notification settings
         self.closed = threading.Event()
         self.thread = None
 
@@ -189,6 +191,10 @@ class Supervisor:
             try:
                 self.assets.prepare(lambda message: self.registry.update(aid, summary={'setup': message}))
                 child.start()
+                try:
+                    self.sync_notifications(aid, child)
+                except Exception:
+                    log.warning('Adventure %s will receive notification settings when it reconnects', aid)
                 return self.registry.update(aid, state='recovering' if recovery else 'running', error=None)
             except Exception as error:
                 with self.guard:
@@ -245,6 +251,28 @@ class Supervisor:
             if actual != speed:
                 self._apply_speed(child, speed)
 
+    def push_notifications(self):
+        """Apply the Library notification settings to running adventures without restarting them."""
+        with self.guard:
+            children = list(self.children.items())
+        pending = []
+        for aid, child in children:
+            try:
+                self.sync_notifications(aid, child)
+            except (RuntimeError, OSError, KeyError, httpx.HTTPError):
+                pending.append(aid)
+                log.warning('Adventure %s will receive notification settings when it reconnects', aid)
+        return pending
+
+    def sync_notifications(self, aid, child):
+        if self.notifications is None or not child.url:
+            return
+        settings = self.notifications(self.registry.adventure(aid))
+        fingerprint = digest(settings)
+        if getattr(child, 'notified', None) != fingerprint:
+            child.request('POST', '/internal/notifications', settings, timeout=5)
+            child.notified = fingerprint
+
     def run_monitor(self):
         self.thread = threading.Thread(target=self._monitor, name='adventure-supervisor', daemon=True)
         self.thread.start()
@@ -284,10 +312,16 @@ class Supervisor:
                     summary = {'activity': game.get('map_name') or 'Adventure in progress',
                                'paused': status.get('paused', False),
                                'frame': status.get('frame'), 'playtime': game.get('playtime'),
-                               'last_response': time.time(), 'league_rewards': status.get('league_rewards')}
+                               'last_response': time.time(), 'league_rewards': status.get('league_rewards'),
+                               'stalled': (status.get('progress') or {}).get('state') == 'stalled'}
                     current = self.registry.adventure(aid)
                     if current['generation'] == child.generation:
                         self.registry.update(aid, summary=summary)
+                    try:
+                        self.sync_notifications(aid, child)
+                    except (RuntimeError, OSError, KeyError, httpx.HTTPError):
+                        # Undelivered notification settings never make a healthy game look stale.
+                        log.warning('Adventure %s has not accepted its notification settings yet', aid)
                 except (RuntimeError, OSError, httpx.HTTPError):
                     since = self.unhealthy_since.setdefault(aid, time.monotonic())
                     log.warning('Adventure %s is not responding', aid)
