@@ -494,10 +494,18 @@ class StrategicPolicy(Policy):
                     return tap("b")
                 target = 0 if self.order_stage == "destination" else self.intent.index
                 return self._select(scr, target)
+            if (s.in_battle and self.intent and self.intent.kind == "switch"
+                    and (self.intent.index == active or not s.party[min(self.intent.index, len(s.party) - 1)].hp)):
+                self.intent = None      # The chosen partner fainted or is already out.
             if self.intent and self.intent.kind in ("switch", "item", "field"):
                 target = self.intent.index if self.intent.kind in ("switch", "field") else self.intent.target
             else:
                 alive = [(p.hp, i) for i, p in enumerate(s.party) if p.hp and i != active]
+                if not alive and s.in_battle and s.party and s.party[active].hp:
+                    # The last partner standing cannot switch to itself. The game answers
+                    # "is already out!" and reopens this menu, so close it and fight on.
+                    self.reason = "No other partner can battle, so keep fighting"
+                    return tap("b")
                 target = max(alive)[1] if alive else active
                 self.intent = Decision("switch", target, reason="Replace the fainted active Pokémon")
                 self.intent_since = s.frame

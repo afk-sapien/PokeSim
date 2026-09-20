@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep fighting with the last partner standing. The party menu used to choose the partner
+  already in battle, which the game refuses, and the battle never ended.
 - Leave edge exits such as cave mouths by walking outward. A run that needed healing paced
   between Victory Road 2F's two east exit squares indefinitely.
 - Sell a spare valuable to raise the Safari Zone entry fee. A run that reached the gate
