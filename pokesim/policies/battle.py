@@ -13,6 +13,7 @@ W_ENEMY_MON = 0xCFE5
 W_PLAYER_DISABLED_MOVE = 0xD06D
 BALLS = (ITEMS["POKE_BALL"], ITEMS["GREAT_BALL"], ITEMS["ULTRA_BALL"])
 HM_MOVES = {15, 19, 57, 70, 148}
+FROZEN = 32
 HEALING = {ITEMS["POTION"]: 20, ITEMS["SUPER_POTION"]: 50, ITEMS["HYPER_POTION"]: 200,
            ITEMS["MAX_POTION"]: 999, ITEMS["FULL_RESTORE"]: 999,
            ITEMS["FRESH_WATER"]: 50, ITEMS["SODA_POP"]: 60, ITEMS["LEMONADE"]: 80}
@@ -329,6 +330,20 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     item_index = healing_item(snapshot.items, me, incoming)
     if item_index is not None:
         return Decision("item", item_index, active, "Recover HP or cure status before attacking")
+    if me.status & FROZEN:
+        # Freeze never thaws by itself in these games. Against a foe that cannot finish the
+        # battle either, such as Normal attacks into a Ghost, choosing FIGHT loops forever.
+        partners = [(mon.level, i) for i, mon in enumerate(snapshot.party)
+                    if i != active and mon.hp > 0 and not mon.status & 39]
+        if partners:
+            return Decision("switch", max(partners)[1], reason="A frozen Pokémon cannot act, so bring in a partner")
+        fainted = [(mon.level, i) for i, mon in enumerate(snapshot.party) if i != active and mon.hp <= 0]
+        revive = next((i for name in ("MAX_REVIVE", "REVIVE") for i, (item, qty) in enumerate(snapshot.items)
+                       if item == ITEMS[name] and qty > 0), None)
+        if fainted and revive is not None:
+            return Decision("item", revive, max(fainted)[1], "Revive a partner because a frozen Pokémon can never act")
+        if snapshot.in_battle == 1:
+            return Decision("run", reason="Leave a battle that a frozen Pokémon cannot finish")
     candidates = []
     unsafe_moves = any(mid and pp and not damage_division_safe(mid, me, enemy)
                        for mid, pp in zip(me.moves, me.pp))

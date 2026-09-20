@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Hand over or revive a partner when the active Pokémon is frozen. Freeze never thaws in these
+  games, and a foe with only Normal attacks could not finish a frozen Ghost, so the battle never ended.
 - Find a Cut, Surf or Strength partner in any PC box and open that box before withdrawing.
   A run whose gift Lapras sat in another box hunted for a Surf partner it could never reach.
 - Keep fighting with the last partner standing. The party menu used to choose the partner
