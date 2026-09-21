@@ -72,7 +72,7 @@ jobs:
           uv run --locked --extra dev --extra browser-test pytest tests/browser -q --basetemp=build/browser-tests
       - name: Retain browser diagnostics on failure
         if: failure() && matrix.python == '3.12'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: browser-diagnostics
           path: build/browser-tests/**/browser-trace.zip
