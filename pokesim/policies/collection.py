@@ -578,8 +578,9 @@ class Collection:
                     continue
                 if box is not None and not storage_exchange_possible(s):
                     continue
-                # Prefer missing evolutions before a general level milestone for this partner.
-                if any(evo['method'] == 'level' and dex(evo['species']) not in s.owned for evo in EVOS.get(sid, [])):
+                # Prefer missing evolutions before a general level milestone for this partner. A stone
+                # counts too: a Weepinbell was being trained to level 100 with Victreebel unregistered.
+                if any(evo['method'] != 'trade' and dex(evo['species']) not in s.owned for evo in EVOS.get(sid, [])):
                     continue
                 add({**reference, 'method': 'train', 'parent': sid, 'family': family,
                      'trainee_key': key, 'box': box, 'initial_level': level, 'target_level': 100,

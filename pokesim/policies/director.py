@@ -17,6 +17,16 @@ def category(project):
     return 'collection'
 
 
+def new_entry(project):
+    """True when finishing the project registers a species the Pokédex does not have yet."""
+    kind = category(project)
+    if kind == 'legendary':
+        return True
+    if kind == 'evolution':
+        return not project.get('upgrade_evolution')
+    return kind == 'collection' and (not project.get('repeat') or bool(project.get('needed_capture')))
+
+
 class AdventureDirector:
     def __init__(self):
         self.recent = []
@@ -43,13 +53,18 @@ class AdventureDirector:
         else:
             kinds = list(groups)
             recent_kinds = [entry['category'] for entry in self.recent]
-            limit = 4 if recent_kinds and recent_kinds[-1] == 'training' else 2
+            # A new Pokédex entry comes before a level milestone. Training to level 100 used to weigh 12
+            # whatever else was on offer, and wild Pokémon stop near level 45, so two adventures spent
+            # most of 400 game hours in Pokémon Mansion while 27 entries they could have had went missing.
+            discovering = any(new_entry(p) for _, p in candidates)
+            limit = 4 if not discovering and recent_kinds and recent_kinds[-1] == 'training' else 2
             if len(kinds) > 1 and len(recent_kinds) >= limit and len(set(recent_kinds[-limit:])) == 1:
                 kinds = [kind for kind in kinds if kind != recent_kinds[-1]]
-            priorities = {'legendary': 8, 'collection': 5, 'evolution': 4, 'training': 12, 'exploration': 1, 'supplies': 1}
+            priorities = {'legendary': 8, 'collection': 8 if discovering else 5, 'evolution': 8 if discovering else 4,
+                          'training': 3 if discovering else 12, 'exploration': 1, 'supplies': 1}
             if groups.get('collection') and all(p.get('repeat') and not p.get('needed_capture') for _, p in groups['collection']):
                 priorities['collection'] = 8 if any(p.get('dv_hunt') for _, p in groups['collection']) else 1
-            weights = [priorities[kind] / (1 if kind == 'training' else 1 + recent_kinds.count(kind)) for kind in kinds]
+            weights = [priorities[kind] / (1 if kind == 'training' and not discovering else 1 + recent_kinds.count(kind)) for kind in kinds]
             chosen = rng.choices(kinds, weights=weights)[0]
         rows = groups[chosen]
         if chosen in ('training', 'evolution') and any(p.get('perfect_partner') for _, p in rows):

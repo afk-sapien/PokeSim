@@ -117,3 +117,21 @@ def test_safe_trainee_keeps_experience_instead_of_an_unneeded_level100_switch():
     assert choose_battle(snapshot, trainee, enemy, 0, training_index=0).kind == 'fight'
     unsafe = replace(trainee, hp=1)
     assert choose_battle(replace(snapshot, party=(unsafe, veteran)), unsafe, enemy, 0, training_index=0).kind == 'switch'
+
+
+def test_a_new_pokedex_entry_comes_before_the_level_100_grind():
+    # Two adventures spent most of 400 game hours training in Pokémon Mansion while 27 entries they
+    # could have had, most of them one evolution away, went missing.
+    d, rng = AdventureDirector(), random.Random(19)
+    rows = [(8, {'method': 'train', 'key': 'grind', 'initial_level': 59}),
+            (3, {'method': 'evolve', 'key': 'victreebel'}),
+            (3, {'method': 'safari', 'key': 'tauros'}),
+            (1, {'method': 'rematch', 'key': 'money'})]
+    selected = Counter(d.select(rows, rng)['key'] for _ in range(500))
+    assert selected['victreebel'] + selected['tauros'] > 330 and 0 < selected['grind'] < 120
+    # An evolution that only improves a registered species is no new entry, so training leads again.
+    settled = [rows[0], (3, {'method': 'evolve', 'key': 'better', 'upgrade_evolution': True}),
+               (1, {'method': 'grass', 'key': 'repeat', 'repeat': True})]
+    d = AdventureDirector()
+    selected = Counter(d.select(settled, rng)['key'] for _ in range(500))
+    assert selected['grind'] > 250

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Put new Pokédex entries before the level 100 grind. While any missing species can be caught or
+  evolved, those projects are chosen about two times in three and training about one in five. It
+  used to be the other way round, and wild Pokémon stop near level 45, so two adventures spent most
+  of 400 game hours in Pokémon Mansion with 27 obtainable entries missing. Once nothing new is on
+  offer, training leads as before.
+- Evolve a partner with a stone before training it to level 100. A Weepinbell was being trained
+  with Victreebel unregistered.
 - Stop building standalone executable bundles. The PyInstaller build, its checks and its workflow are
   removed. Install the Python package with pipx, or run the container.
 
