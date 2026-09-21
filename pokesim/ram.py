@@ -91,13 +91,18 @@ def bcd(b: bytes) -> int:
     return n
 
 
+# Set bit positions per byte value, so a flag array costs one lookup per byte instead of eight
+# shifts. Event arrays are mostly zeroes, and a zero byte then costs nothing at all.
+_SET_BITS = tuple(tuple(bit for bit in range(8) if value & (1 << bit)) for value in range(256))
+
+
 def flag_bits(b: bytes) -> set[int]:
     """Return 1-based indices of set bits in a little-endian flag array."""
     out = set()
     for i, byte in enumerate(b):
-        for bit in range(8):
-            if byte & (1 << bit):
-                out.add(i * 8 + bit + 1)
+        if byte:
+            base = i * 8 + 1
+            out.update(base + bit for bit in _SET_BITS[byte])
     return out
 
 
