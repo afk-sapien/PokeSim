@@ -77,3 +77,31 @@ def test_scenarios_are_found_with_their_settings(tmp_path):
 def test_the_player_gets_going_again(scenario):
     result = play(scenario, ROM)
     assert result['passed'], f'{result["failure"]} on {result["final_map"]}: {result["objective"]} ({result["reason"]})'
+
+
+def test_a_seed_varies_a_checkpoint_run_only_when_the_caller_asks(tmp_path, monkeypatch):
+    # A checkpoint carries the policy's own random state, so four postgame hunts with four seeds
+    # were one hunt repeated four times. Replaying a saved stall still wants the original choices.
+    import random
+    from pokesim import headless
+    from pokesim.headless import HeadlessRun
+    saved = random.Random(99).getstate()
+    monkeypatch.setattr(headless, 'version', lambda name: 'pyboy')
+    monkeypatch.setattr(headless, 'RunMemory', type('M', (), {'from_dict': staticmethod(lambda d: d)}))
+    monkeypatch.setattr(headless.CheckpointStore, 'checkpoint_metadata',
+                        lambda self, path: {'policy_state': {}, 'run_memory': {}, 'frame': 5,
+                                            'rom_sha1': 'rom', 'pyboy_version': 'pyboy'})
+    checkpoint = tmp_path / 'start.state'
+    checkpoint.write_bytes(b'state')
+
+    def rolled(reseed):
+        run = HeadlessRun.__new__(HeadlessRun)
+        run.rom_sha1, run.seed, run.rng = 'rom', 4321, None
+        run.policy = type('P', (), {'rng': random.Random(),
+                                    'load_state_dict': lambda self, data: self.rng.setstate(saved)})()
+        run.pb = type('B', (), {'load_state': lambda self, stream: None})()
+        assert run._load(checkpoint, reseed=reseed)['frame'] == 5
+        return run.policy.rng.random()
+
+    assert rolled(reseed=False) == rolled(reseed=False) == random.Random(99).random()
+    assert rolled(reseed=True) == random.Random(4321).random() != rolled(reseed=False)

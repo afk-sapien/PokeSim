@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Let the seed vary a stall hunt that continues from a checkpoint. A checkpoint carries the policy's
+  own random state, so `tools/find_stalls.py --seed` was ignored and four postgame hunts with four
+  seeds were one hunt repeated four times. Scenario replays still make the original choices.
 - Put new Pokédex entries before the level 100 grind. While any missing species can be caught or
   evolved, those projects are chosen about two times in three and training about one in five. It
   used to be the other way round, and wild Pokémon stop near level 45, so two adventures spent most
