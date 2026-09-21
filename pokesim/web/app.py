@@ -224,7 +224,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get("/frame.jpg")
     def frame():
-        return Response(emu.frame_jpeg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+        return Response(emu.current_frame(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
     @app.get("/stream")
     async def stream():
@@ -234,6 +234,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             seq = -1
             delay = 1.0 / max(1, config.STREAM_FPS)
             while True:
+                emu.watch()     # keep frames being produced for as long as this stream is open
                 if emu.frame_seq != seq:
                     seq = emu.frame_seq
                     data = emu.frame_jpeg

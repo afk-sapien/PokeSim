@@ -38,9 +38,16 @@ SHOT_SCALE = 4
 STREAM_SCALE = 3
 SNAPSHOT_EVERY = 30       # frames
 CHUNK = 4                 # frames per render / pacing step
+WATCH_GRACE = 2.0         # seconds a frame request keeps the stream considered live
 
 
 class Emulator:
+    # Encoding a frame costs far more than emulating one, so only encode while something is
+    # actually asking for frames, and no faster than the stream can show them. Class defaults so
+    # a partially built emulator still ticks.
+    _watch_until = 0.0
+    _last_publish = 0.0
+
     def __init__(self, store, ntfy=None, *, isolated_ram=False):
         self.isolated_ram = isolated_ram
         self.preparation = None
@@ -285,6 +292,26 @@ class Emulator:
         img.save(buf, "PNG", optimize=True)
         return buf.getvalue()
 
+    def watch(self):
+        """Note that something wants frames. Viewers call this as they poll or stream."""
+        self._watch_until = time.monotonic() + WATCH_GRACE
+
+    def current_frame(self, timeout: float = 1.0) -> bytes:
+        """The latest frame, waiting for the first one if the run has only just started."""
+        self.watch()
+        if self.frame_jpeg:
+            return self.frame_jpeg
+        with self.frame_cond:
+            self.frame_cond.wait_for(lambda: bool(self.frame_jpeg), timeout)
+            return self.frame_jpeg
+
+    def _due_to_publish(self, now: float) -> bool:
+        if now >= self._watch_until:
+            return False
+        # A tick step is already about one stream interval at 1x speed, so allow a little slack
+        # rather than dropping every other frame to rounding.
+        return now - self._last_publish >= 0.8 / max(1, config.STREAM_FPS)
+
     def _publish_frame(self):
         img = self._image()
         img = img.resize((img.width * STREAM_SCALE, img.height * STREAM_SCALE), Image.NEAREST)
@@ -303,7 +330,10 @@ class Emulator:
             self.frame += k
             self.play_clock.advance(k)
             n -= k
-            self._publish_frame()
+            now = time.monotonic()
+            if self._due_to_publish(now):
+                self._last_publish = now
+                self._publish_frame()
             if self.frame // SNAPSHOT_EVERY != (self.frame - k) // SNAPSHOT_EVERY:
                 self._observe()
             self._pace(k)
