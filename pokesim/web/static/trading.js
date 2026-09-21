@@ -11,7 +11,6 @@ function side(mon, label) {
 }
 function render(status) {
   if (!status) return
-  $('#edition').textContent = `${String(status.version || 'Kanto').toUpperCase()} VERSION`
   $('#status').textContent = status.connected ? 'Adventures connected' : 'Reconnecting…'
   $('#connection').classList.toggle('is-offline', !status.connected)
   const trading = status.trading || {}

@@ -155,7 +155,6 @@ async function refresh() {
     party = (status.party || []).map((mon) => ({...mon, box: 0, position: mon.slot}))
     if (followActive && storage) { selectedBox = storage.active_box
       followActive = false }
-    if (status.version) $('#edition').textContent = `${status.version.toUpperCase()} VERSION`
     $('#status').textContent = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
     $('#connection').classList.remove('is-offline')
     render()

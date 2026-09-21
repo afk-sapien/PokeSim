@@ -48,7 +48,6 @@
       if (!response.ok) throw new Error('Unavailable')
       const data = await response.json()
       if (data.adventure.id !== PokeSim.adventureId) throw new Error('Wrong adventure')
-      $('#edition').textContent = `${data.adventure.version.toUpperCase()} VERSION`
       $('#status').textContent = 'Connected'
       $('#connection').classList.toggle('is-offline', false)
       $('#trade-connection-note').hidden = true

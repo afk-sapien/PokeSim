@@ -2,6 +2,10 @@
   const $ = selector => document.querySelector(selector)
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
   const page = document.body.dataset.page
+  const connection = (label, offline) => {
+    $('#status').textContent = label
+    $('#connection').classList.toggle('is-offline', offline)
+  }
   const currentId = document.body.dataset.adventure
   let csrf = ''
   let owner = false
@@ -240,8 +244,8 @@
       renderAdventures()
       if (page === 'notifications') renderNotifyAdventures()
       if (page === 'trading') await refreshTrades()
-      $('#connection').textContent = 'Connected'
-    } catch (error) { $('#connection').textContent = 'Reconnecting'
+      connection('Connected', false)
+    } catch (error) { connection('Reconnecting', true)
       notice(error.message, true) }
     finally { refreshing = false }
   }
@@ -381,7 +385,7 @@
       notice('')
       await enter()
     } catch (error) { $('#workspace').hidden = true
-      $('#connection').textContent = 'Reconnecting'
+      connection('Reconnecting', true)
       notice(error.message, true) }
     finally { connecting = false }
   }

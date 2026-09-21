@@ -234,7 +234,6 @@ async function refreshStatus() {
     hunting = (status.plan || []).find((row) => row.species === status.hunting)?.dex ?? null
     $('#connection').classList.remove('is-offline')
     $('#status').textContent = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
-    if (status.version) $('#edition').textContent = `${status.version.toUpperCase()} VERSION`
     $('#sum-owned').innerHTML = `${owned.size} <small>/ 151</small>`
     $('#sum-seen').innerHTML = `${seen.size} <small>/ 151</small>`
     $('#sum-caught').textContent = catchesAvailable() ? count(catches.total) : 'Unavailable'

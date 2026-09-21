@@ -95,7 +95,6 @@ async function refreshState() {
     set('#app-version', 'textContent', `v${state.version || 'unknown'}`)
     const edition = state.strategy?.collection?.version
     if (edition) {
-      $('#edition').textContent = `${edition.toUpperCase()} VERSION`
       set('.screen-corner', 'textContent', `POKÉMON ${edition.toUpperCase()} · GAME BOY`)
       set('#stream', 'alt', `Live Pokémon ${edition} game`)
     }

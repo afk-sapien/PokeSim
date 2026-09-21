@@ -51,7 +51,7 @@ test('library opens automatically with a GET session and never submits fragment 
   assert.equal(view.calls[0].options.method, undefined)
   assert.equal(view.calls.some(call => call.options?.body?.includes('secret-owner')), false)
   assert.equal(view.element('#workspace').hidden, false)
-  assert.equal(view.element('#connection').textContent, 'Connected')
+  assert.equal(view.element('#status').textContent, 'Connected')
   assert.doesNotMatch(fs.readFileSync('pokesim/web/static/library.html', 'utf8'), /owner.key|sign.in/i)
 })
 
@@ -245,11 +245,11 @@ test('startup connection failure recovers automatically but shutdown stays close
   }})
   await settle()
   assert.equal(view.element('#workspace').hidden, true)
-  assert.equal(view.element('#connection').textContent, 'Reconnecting')
+  assert.equal(view.element('#status').textContent, 'Reconnecting')
   view.poll()
   await settle()
   assert.equal(view.element('#workspace').hidden, false)
-  assert.equal(view.element('#connection').textContent, 'Connected')
+  assert.equal(view.element('#status').textContent, 'Connected')
   view.element('#quit').onclick()
   await settle()
   const count = view.calls.length
