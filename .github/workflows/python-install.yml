@@ -32,7 +32,7 @@ jobs:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
         with:
-          version: '0.12.15'
+          version: '0.12.17'
       - run: uv sync --locked --extra dev
       - name: Prepare verified reference data without a private ROM
         run: uv run --locked python tools/prepare_test_data.py
@@ -56,7 +56,7 @@ jobs:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
         with:
-          version: '0.12.15'
+          version: '0.12.17'
       - run: uv sync --locked --extra dev --extra acceleration
       - run: uv run --locked --extra acceleration python tools/prepare_test_data.py
       - name: Verify compiled paths and fallback behavior

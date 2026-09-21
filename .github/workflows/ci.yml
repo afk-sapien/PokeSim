@@ -19,7 +19,7 @@ jobs:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
         with:
-          version: '0.12.15'
+          version: '0.12.17'
       - name: Export the pinned runtime dependencies
         run: uv export --locked --no-dev --no-emit-project --format requirements-txt --output-file runtime-requirements.txt
       - name: Check runtime dependency advisories
@@ -37,7 +37,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
         with:
-          version: '0.12.15'
+          version: '0.12.17'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
