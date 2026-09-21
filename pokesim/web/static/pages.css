@@ -325,11 +325,9 @@ button:disabled { opacity:.45 }
 .watch-layout .game-card { grid-area:game }
 .watch-layout .objective-card { grid-area:goal }
 .watch-layout .party-section { grid-area:team }
-.watch-layout .objective-card { padding:16px 20px }
-.watch-layout .objective-body h2 { font-size:18px }
-.watch-layout #decision { font-size:12px }
-.watch-layout #decision { line-height:1.5 }
-.watch-layout #decision { margin:6px 0 }
+.objective-row #decision { font-size:12px }
+.objective-row #decision { line-height:1.6 }
+.objective-row #decision { margin:6px 0 0 }
 .watch-next { display:flex }
 .watch-next { gap:8px }
 .watch-next { font-size:11px }
@@ -350,7 +348,6 @@ button:disabled { opacity:.45 }
 .watch-layout .mon-title { gap:3px 8px }
 .watch-layout .mon-title h3 { font-size:13px }
 .watch-layout .mon-subtitle { margin:3px 0 6px }
-.watch-layout .mon-subtitle .type-tag { display:none }
 .watch-layout .mon-foot { font-size:8px }
 .watch-layout .xp-label { margin-top:5px }
 .watch-layout .screen img { max-width:400px }

@@ -255,7 +255,10 @@ setInterval(() => { if (!document.hidden) refreshState() }, 2000)
 setInterval(() => { if (!document.hidden) refreshEvents() }, 15000)
 
 function renderIntent(strategy) {
-  set('#next-objective', 'textContent', strategy.next?.title || 'Continue the journey')
+  // Side by side in the plan row, a next step identical to the current one just reads as an echo.
+  const next = strategy.next?.title
+  const repeated = Boolean(next) && next === strategy.objective?.title
+  set('#next-objective', 'textContent', repeated ? 'Still on this one' : next || 'Continue the journey')
 }
 
 function renderPartnerDetail() {
