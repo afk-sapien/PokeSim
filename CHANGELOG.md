@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Stop building standalone executable bundles. The PyInstaller build, its checks and its workflow are
+  removed. Install the Python package with pipx, or run the container.
+
 ## 0.2.1
 
 - Train for the League in Route 23's grass. Training places were found by the overworld's grass

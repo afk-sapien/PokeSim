@@ -162,15 +162,8 @@ The wheel check runs outside the repository and resolves the wheel's declared
 dependencies. It tests the installed launcher, setup assets, duplicate launch, and
 protected shutdown. It needs uv and access to the package index.
 
-After building a native desktop bundle, test its actual downloadable archive:
-
-```sh
-uv run --locked python tools/check_desktop_archive.py
-```
-
-This extracts to a temporary directory and tests that copy. Native runtime checks
-use PyBoy's demonstration ROM and verified reference data. They do not validate
-Pokémon cartridge playback on that platform.
+Native runtime checks use PyBoy's demonstration ROM and verified reference data. They do not
+validate Pokémon cartridge playback on that platform.
 
 For an isolated server installation test:
 

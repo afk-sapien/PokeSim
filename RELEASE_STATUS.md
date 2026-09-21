@@ -6,8 +6,7 @@ The eight outstanding dependency PRs have been squash merged into main.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64
 Docker image and Compose configuration. The `pokesim-desktop` Python command opens
-the Library in your browser. Standalone executable bundles are experimental and
-are not required or advertised for this release.
+the Library in your browser. Standalone executable bundles are no longer built.
 
 The [consolidation validation record](docs/validation/repository-cleanup-20260918.md)
 records the local checks and their scope.
