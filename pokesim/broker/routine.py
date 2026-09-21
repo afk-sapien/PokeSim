@@ -13,6 +13,10 @@ def benefit(inv, incoming):
     new = {incoming.dex, dex} - inv.owned - {None}
     if new:
         return 100 * len(new), f"{inv.instance.title()} registers {' and '.join(DEX_NAMES[n] for n in sorted(new))}"
+    if arrived != incoming.species:
+        # The cable is the only way these evolve, so a swap that triggers one is worth more than
+        # any level or DV upgrade even when the entry is already registered.
+        return 40, f'{inv.instance.title()} evolves {DEX_NAMES[incoming.dex]} into {DEX_NAMES[dex]} on arrival'
     copies = [p for p in inv.party if p['species'] == arrived]
     copies += [p.as_side() for p in inv.stored if p.species == arrived]
     if not copies:

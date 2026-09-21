@@ -93,3 +93,16 @@ def test_listings_explain_last_copy_policy():
     available, = routine.listings(red, allow_last_copies=True)
     assert available['listed']
     assert available['source'] == 'Automatic'
+
+
+def test_a_trade_evolution_is_worth_taking_even_once_the_evolution_is_registered():
+    """The cable is the only way Kadabra evolves, so the swap beats a level or DV upgrade."""
+    from test_broker import KADABRA
+    alakazam = 65
+    red = inv('red', {KADABRA, alakazam}, stored=[(KADABRA, 20), (KADABRA, 25)])
+    incoming = red.spares[0]
+    score, reason = routine.benefit(red, incoming)
+    assert score == 40 and 'Alakazam' in reason
+    # A plain species with nothing to evolve into still scores on its own merits, not on this.
+    plain = inv('red', {ZUBAT}, stored=[(ZUBAT, 20), (ZUBAT, 25)])
+    assert routine.benefit(plain, plain.spares[0])[0] < 40

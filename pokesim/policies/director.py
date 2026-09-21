@@ -57,14 +57,16 @@ class AdventureDirector:
             # whatever else was on offer, and wild Pokémon stop near level 45, so two adventures spent
             # most of 400 game hours in Pokémon Mansion while 27 entries they could have had went missing.
             discovering = any(new_entry(p) for _, p in candidates)
-            limit = 4 if not discovering and recent_kinds and recent_kinds[-1] == 'training' else 2
+            limit = 2
             if len(kinds) > 1 and len(recent_kinds) >= limit and len(set(recent_kinds[-limit:])) == 1:
                 kinds = [kind for kind in kinds if kind != recent_kinds[-1]]
             priorities = {'legendary': 8, 'collection': 8 if discovering else 5, 'evolution': 8 if discovering else 4,
                           'training': 3 if discovering else 12, 'exploration': 1, 'supplies': 1}
             if groups.get('collection') and all(p.get('repeat') and not p.get('needed_capture') for _, p in groups['collection']):
                 priorities['collection'] = 8 if any(p.get('dv_hunt') for _, p in groups['collection']) else 1
-            weights = [priorities[kind] / (1 if kind == 'training' and not discovering else 1 + recent_kinds.count(kind)) for kind in kinds]
+            # Training used to be exempt from this decay, so once it started it kept winning.
+            # Now a finished ten level step lowers its odds and something else gets a turn.
+            weights = [priorities[kind] / (1 + recent_kinds.count(kind)) for kind in kinds]
             chosen = rng.choices(kinds, weights=weights)[0]
         rows = groups[chosen]
         if chosen in ('training', 'evolution') and any(p.get('perfect_partner') for _, p in rows):
