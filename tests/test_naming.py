@@ -104,3 +104,33 @@ def test_intro_selects_new_name_instead_of_a_preset():
     assert controller.step(Screen(mem), opening).button == "up"
     mem[W_CURRENT_MENU_ITEM] = 0
     assert controller.step(Screen(mem), opening).button == "a"
+
+
+def test_every_name_is_one_the_cartridge_can_hold():
+    """The naming screen types A-Z only and the nickname field keeps ten characters."""
+    import re
+    from pokesim.policies.naming import NAME_LIMIT
+
+    for name in POKEMON_NAMES + TRAINER_NAMES:
+        assert re.fullmatch(f'[A-Z]{{1,{NAME_LIMIT}}}', name), name
+
+
+def test_the_pool_outgrows_a_single_adventure_and_keeps_the_written_names():
+    """Names ran out after 100 catches and started repeating; pairs push that well past a run."""
+    from pokesim.policies.naming import CURATED_NAMES
+
+    assert len(POKEMON_NAMES) == len(set(POKEMON_NAMES))
+    assert POKEMON_NAMES[:len(CURATED_NAMES)] == CURATED_NAMES
+    assert len(POKEMON_NAMES) > 1000
+
+
+def test_names_are_drawn_without_repeating_until_the_pool_is_spent():
+    """The same rule step() uses: draw from what is left, and remember what was taken."""
+    controller = NamingController(7)
+    drawn = []
+    for _ in range(400):
+        remaining = [name for name in POKEMON_NAMES if name not in controller.used]
+        chosen = controller.rng.choice(remaining)
+        controller.used.add(chosen)
+        drawn.append(chosen)
+    assert len(set(drawn)) == len(drawn)

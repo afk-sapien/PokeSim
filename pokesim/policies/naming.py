@@ -10,7 +10,14 @@ TRAINER_NAMES = (
     "MORGAN", "PARKER", "QUINN", "REESE", "RILEY", "ROBIN", "ROWAN", "SAGE",
     "SAM", "SKYE", "TAYLOR", "TOBY", "WREN", "ZIGGY",
 )
-POKEMON_NAMES = (
+# The naming screen only types A-Z and the cartridge keeps ten characters, so every name has to
+# be upper case letters and no longer than that.
+NAME_LIMIT = 10
+
+# Hand-written names come first and are never dropped; the pair lists below extend the pool far
+# past the number of Pokemon one adventure can hold, so an adventure stops running out and
+# repeating itself once it has named a hundred of them.
+CURATED_NAMES = (
     "TAXFRAUD", "MEATWIFI", "SOUPCRIME", "LORDHONK", "WETSOCK",
     "BEEFCHIEF", "HAMWIZARD", "EGGLORD", "SIRBURPS", "TOEMAYOR",
     "CRUMBOSS", "GOOSELAW", "BAGELCOP", "MILKTHIEF", "GRAVYBOAT",
@@ -32,6 +39,36 @@ POKEMON_NAMES = (
     "CHUNKMAIL", "BEEFALARM", "GOBLINMATH", "WORMUNION", "BONKSAUCE",
     "TOASTGHOST", "SMALLCLAIM", "SNAILBAIL", "FROGDAD", "CHEESEMAGE",
 )
+NAME_PREFIXES = (
+    "MEAT", "SOUP", "HONK", "BEEF", "EGG", "HAM", "MILK", "BREAD", "GRAVY",
+    "BEAN", "WORM", "FROG", "SNAIL", "TOAST", "CRUMB", "MOP", "SOCK", "SPOON",
+    "FORK", "TUBA", "BONGO", "DIRT", "DUST", "FISH", "SHRIMP", "NACHO", "CORN",
+    "PANTS", "ELBOW", "TOE", "BURP", "SNEEZE", "YAWN", "WOBBLE", "CHONK",
+    "SLOP", "DAMP", "WET", "SOGGY", "FLOOR", "FRIDGE", "GOBLIN", "CHEESE",
+    "GOOSE", "BAGEL", "NOODLE", "PICKLE", "GRUB", "SWAMP", "MOTH",
+)
+NAME_SUFFIXES = (
+    "LORD", "BOSS", "CHIEF", "MAYOR", "WIZARD", "MAGE", "COP", "LAW", "CRIME",
+    "TAX", "DEBT", "JURY", "COURT", "DEPT", "UNION", "GHOST", "DAD", "SMITH",
+    "CEO", "FAX", "MATH", "MODE", "ALARM", "RIOT", "DRAMA", "THIEF", "BAIL",
+    "WATER", "JUICE", "MAIL", "CLERK", "JUDGE", "FUND", "AUDIT",
+)
+
+
+def _paired_names():
+    """Every prefix and suffix join that the cartridge can actually hold."""
+    seen = set(CURATED_NAMES)
+    names = []
+    for prefix in NAME_PREFIXES:
+        for suffix in NAME_SUFFIXES:
+            name = prefix + suffix
+            if len(name) <= NAME_LIMIT and name not in seen:
+                seen.add(name)
+                names.append(name)
+    return tuple(names)
+
+
+POKEMON_NAMES = CURATED_NAMES + _paired_names()
 
 
 class NamingController:
