@@ -11,6 +11,22 @@ const BADGES = ['Boulder', 'Cascade', 'Thunder', 'Rainbow', 'Soul', 'Marsh', 'Vo
 const BADGE_SYMBOLS = ['◆', '◒', '✧', '✿', '♡', '◉', '✷', '❧']
 const LEADERS = ['Brock', 'Misty', 'Lt. Surge', 'Erika', 'Koga', 'Sabrina', 'Blaine', 'Giovanni']
 const TYPE_CLASS = new Set(['normal', 'fighting', 'flying', 'poison', 'ground', 'rock', 'bug', 'ghost', 'fire', 'water', 'grass', 'electric', 'psychic', 'ice', 'dragon'])
+// A cable trade leaves no screenshot behind, so the card drew a placeholder glyph and said
+// nothing about the swap. Draw the two Pokemon instead, with the trainer on the other end.
+function tradeArt(event) {
+  let detail = null
+  try { detail = event.detail ? JSON.parse(event.detail) : null } catch (error) { return '' }
+  if (!detail || detail.kind !== 'trade') return ''
+  const face = (side) => side && side.dex
+    ? `<img loading="lazy" src="${PokeSim.base}/sprites/${Number(side.dex)}.png" alt="${esc(side.name || '')}" width="56" height="56">`
+    : '<span class="unknown-sprite" aria-hidden="true">?</span>'
+  const label = (side) => esc(side && side.nick ? side.nick : '')
+  return `<span class="trade-art">`
+    + `<span class="trade-side"><span class="trade-way">SENT</span>${face(detail.sent)}<small>${label(detail.sent)}</small></span>`
+    + `<span class="trade-swap" aria-hidden="true">\u21c4</span>`
+    + `<span class="trade-side"><span class="trade-way">GOT</span>${face(detail.received)}<small>${label(detail.received)}</small></span>`
+    + `</span>`
+}
 const typeClass = (name) => TYPE_CLASS.has(String(name).toLowerCase()) ? String(name).toLowerCase() : 'normal'
 
 // The planner passes through a gap between projects, and a decision tick can land on a League map
@@ -199,7 +215,7 @@ const EVENT_LABELS = {trade: 'A PARTNER FROM AFAR', badge: 'A BADGE TO REMEMBER'
 function renderEvents() {
   $('#events').innerHTML = eventRows.map((event) => {
     const date = new Date(event.ts * 1000)
-    return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-picture">${event.shot ? `<img loading="lazy" src="${PokeSim.base}/shots/${encodeURIComponent(event.shot)}" alt="Game screen at ${esc(event.title)}" width="160" height="144">` : '<span aria-hidden="true">✧</span>'}<span class="event-label">${EVENT_LABELS[event.type] || 'FROM THE JOURNAL'}</span></div><div class="event-copy"><time datetime="${date.toISOString()}">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} · ${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</time><h3>${esc(event.title)}</h3><p>${esc(event.map)}<span aria-hidden="true">↗</span></p></div></a>`
+    return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-picture">${event.shot ? `<img loading="lazy" src="${PokeSim.base}/shots/${encodeURIComponent(event.shot)}" alt="Game screen at ${esc(event.title)}" width="160" height="144">` : tradeArt(event) || '<span aria-hidden="true">✧</span>'}<span class="event-label">${EVENT_LABELS[event.type] || 'FROM THE JOURNAL'}</span></div><div class="event-copy"><time datetime="${date.toISOString()}">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} · ${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</time><h3>${esc(event.title)}</h3><p>${esc(event.map)}<span aria-hidden="true">↗</span></p></div></a>`
   }).join('') || '<div class="journal-empty"><span>✧</span><h3>The best pages are still unwritten.</h3><p>New moments will find their way here as the adventure unfolds.</p></div>'
   set('#load-more', 'hidden', !moreAvailable || !eventRows.length)
 }

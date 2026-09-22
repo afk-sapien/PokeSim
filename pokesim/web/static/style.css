@@ -42,15 +42,10 @@ h3 { line-height:1.3 }
 .brand { font-weight:750 }
 .brand { font-size:23px }
 .brand { letter-spacing:-1px }
-.brand-mark { display:grid }
-.brand-mark { place-items:center }
 .brand-mark { width:38px }
 .brand-mark { height:38px }
-.brand-mark { background:#bc4734 }
-.brand-mark { color:#fffdf4 }
-.brand-mark { border-radius:11px }
-.brand-mark { font-size:28px }
-.brand-mark { padding-bottom:4px }
+.brand-mark { flex-shrink:0 }
+.brand-mark { display:block }
 .topbar nav { display:flex }
 .topbar nav { gap:26px }
 .topbar nav { margin-left:auto }
@@ -776,8 +771,6 @@ footer>div { margin-left:0 }
 .brand { gap:9px }
 .brand-mark { width:32px }
 .brand-mark { height:32px }
-.brand-mark { font-size:24px }
-.brand-mark { border-radius:9px }
 h1 { font-size:38px }
 .intro-note { display:none }
 .intro-copy { font-size:11px }

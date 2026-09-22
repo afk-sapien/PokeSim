@@ -64,12 +64,59 @@ def _promote(store, record):
         if not store.db.execute('SELECT 1 FROM kv WHERE k=?', (marker,)).fetchone():
             from ..interactions.centers import CENTERS
             location = CENTERS.get(record.get('source_center_map'), {}).get('name', 'Pokémon Center')
-            store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime)
-                VALUES (?,?,?,?,?,?,?,?)''', (time.time(), 'trade', 'Cable Club trade completed',
-                'Both cartridges completed their exchange and saved the result.', 1, 4, location, ''))
+            title, body, detail = _trade_story(record)
+            store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime,detail)
+                VALUES (?,?,?,?,?,?,?,?,?)''', (time.time(), 'trade', title, body, 1, 4, location, '',
+                json.dumps(detail) if detail else None))
             store.db.execute('INSERT INTO kv VALUES (?, ?)', (marker, 'true'))
     return path
 
+
+
+def _traded_mon(side):
+    """Name, species and level from one side of a swap, or None when the record predates this."""
+    if not isinstance(side, dict) or not side.get('struct'):
+        return None
+    from ..ram import SPECIES_NAMES, decode_text
+    from ..trade import boxes
+    try:
+        struct = bytes.fromhex(side['struct'])
+        nickname = decode_text(bytes.fromhex(side['nickname'])) if side.get('nickname') else ''
+    except ValueError:
+        return None
+    if len(struct) < boxes.BOX_STRUCT:
+        return None
+    species = struct[boxes.SPECIES]
+    name = SPECIES_NAMES.get(species, f'species {species}')
+    trainer = ''
+    if side.get('ot_name'):
+        try:
+            trainer = decode_text(bytes.fromhex(side['ot_name']))
+        except ValueError:
+            trainer = ''
+    return {'species': species, 'name': name.title(), 'nick': nickname or name.title(),
+            'level': struct[boxes.LEVEL], 'trainer': trainer}
+
+
+def _trade_story(record):
+    """A journal entry that says what crossed the cable, falling back to the old wording."""
+    generic = ('Cable Club trade completed',
+               'Both cartridges completed their exchange and saved the result.', None)
+    sent, got = _traded_mon(record.get('outgoing')), _traded_mon(record.get('incoming'))
+    if not sent or not got:
+        return generic
+    from ..strategy_data import SPECIES
+    # The checkpoint manifest carries no trainer name, so the names come from the Pokemon: the
+    # original trainer of the one that arrived is the adventure on the other end of the cable.
+    peer = got.get('trainer') or ''
+    title = f"Traded {sent['nick']} for {got['nick']}"
+    origin = f", first trained by {peer}" if peer else ''
+    body = (f"{sent['nick']} the {sent['name']} at level {sent['level']} went down the cable, and "
+            f"{got['nick']} the {got['name']} at level {got['level']} came back{origin}.")
+    detail = {'kind': 'trade', 'peer': peer,
+              'sent': {**sent, 'dex': SPECIES.get(sent['species'], {}).get('dex')},
+              'received': {**got, 'dex': SPECIES.get(got['species'], {}).get('dex')}}
+    return title, body, detail
 
 def recover_storage(store):
     """Reconcile committed files before the emulator chooses its startup checkpoint."""
@@ -239,7 +286,8 @@ class Participant:
         CheckpointStore.atomic_write(target, raw)
         CheckpointStore.atomic_write(cartridge, save)
         record.update(phase='staged', attempt_id=data['attempt_id'], staged={**result,
-                      'state_path': str(target), 'cartridge_save_path': str(cartridge)})
+                      'state_path': str(target), 'cartridge_save_path': str(cartridge)},
+                      incoming=dict(data['incoming']))
         return _save(self.store, record)
 
     def verify_result(self, record, result, state, save, incoming):
