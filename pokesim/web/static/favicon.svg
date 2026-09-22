@@ -1,11 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="pokesim">
   <title>pokesim</title>
-  <rect width="64" height="64" rx="16" fill="#bc4734"/>
-  <!-- The brand mark: a lowercase p and a full stop, drawn rather than set, so the tab icon does
-       not depend on a font being available at 16 pixels. The bowl sits at x-height and the stem
-       carries on below it, which is what separates a p from a b at this size. -->
-  <circle cx="35" cy="27" r="13" fill="#fffdf4"/>
-  <rect x="14" y="14" width="9" height="42" rx="3" fill="#fffdf4"/>
-  <circle cx="35" cy="27" r="5.5" fill="#bc4734"/>
-  <circle cx="52" cy="35" r="5" fill="#fffdf4"/>
+  <rect width="64" height="64" rx="14" fill="#bc4734"/>
+  <!-- A handheld reduced to what survives sixteen pixels: the screen, and one button under it.
+       Anything thinner than about four units disappears at that size, so the pad is gone. -->
+  <rect x="10" y="10" width="44" height="30" rx="5" fill="#fffdf4"/>
+  <circle cx="32" cy="50" r="7" fill="#fffdf4"/>
 </svg>
