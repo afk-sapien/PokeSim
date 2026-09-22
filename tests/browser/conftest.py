@@ -90,6 +90,15 @@ class SyntheticEmulator:
         Image.new('RGB', (160, 144), '#96ad84').save(image, 'JPEG')
         self.frame_jpeg = image.getvalue()
         self.frame_seq = 1
+        self.watched = 0
+
+    def watch(self):
+        """The real emulator only encodes frames while something is asking for them."""
+        self.watched += 1
+
+    def current_frame(self, timeout: float = 1.0) -> bytes:
+        self.watch()
+        return self.frame_jpeg
 
     def status(self):
         return dict(game=self.snapshot.to_dict(), strategy={'collection': {'version': 'red'}},

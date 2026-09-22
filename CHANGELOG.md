@@ -4,6 +4,8 @@
 
 ## 0.3.0
 
+- Stack the plan row on a narrow screen. The three columns it reads across kept their layout at
+  every width, so the live page scrolled sideways on a 320 pixel phone.
 - Stop reading finished Cable Club trades at startup. Every completed exchange kept the whole
   policy snapshot it was staged from, which on a long-running adventure is mostly the learned
   navigation graph, and startup parsed all of them to act on none of them. An adventure with 229

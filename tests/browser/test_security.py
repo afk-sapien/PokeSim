@@ -17,7 +17,7 @@ def test_library_scripts_work_and_injected_inline_script_is_blocked(page, tmp_pa
     with serve(factory) as url:
         page.goto(url)
         page.locator('#workspace').wait_for(state='visible')
-        page.get_by_role('link', name='Settings and backups').click()
+        page.get_by_role('link', name='Settings', exact=True).click()
         page.locator('#max-running').fill('3')
         page.get_by_role('button', name='Save settings', exact=True).click()
         # A string predicate needs eval, which this page's content policy forbids.

@@ -41,7 +41,7 @@ def test_live_columns_and_partner_details(page, live_game, width):
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
 
     team_height = page.locator('#team').bounding_box()['height']
-    partner = page.get_by_role('button', name='View PARTNER 1 moves and stats')
+    partner = page.get_by_role('button', name='View PARTNER 1 battle stats')
     partner.click()
     expect(page.get_by_role('dialog')).to_be_visible()
     page.keyboard.press('ArrowUp')
