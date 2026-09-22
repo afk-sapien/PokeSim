@@ -12,6 +12,32 @@ const BADGE_SYMBOLS = ['◆', '◒', '✧', '✿', '♡', '◉', '✷', '❧']
 const LEADERS = ['Brock', 'Misty', 'Lt. Surge', 'Erika', 'Koga', 'Sabrina', 'Blaine', 'Giovanni']
 const TYPE_CLASS = new Set(['normal', 'fighting', 'flying', 'poison', 'ground', 'rock', 'bug', 'ghost', 'fire', 'water', 'grass', 'electric', 'psychic', 'ice', 'dragon'])
 const typeClass = (name) => TYPE_CLASS.has(String(name).toLowerCase()) ? String(name).toLowerCase() : 'normal'
+
+// The planner passes through a gap between projects, and a decision tick can land on a League map
+// or the ceremony, so the raw objective flickers several times a minute. Hold the last real one:
+// a gap is not a new plan, and a title has to persist to replace the headline.
+const PLANNING = 'collect_plan'
+let shownObjective = null
+let pendingObjective = null
+let pendingSightings = 0
+function steadyObjective(objective) {
+  if (!objective) return shownObjective
+  if (!shownObjective) { shownObjective = objective; return shownObjective }
+  if (objective.id === PLANNING) return shownObjective
+  if (objective.id === shownObjective.id) { pendingObjective = null; pendingSightings = 0; return shownObjective }
+  if (pendingObjective && pendingObjective.id === objective.id) {
+    pendingSightings += 1
+    if (pendingSightings >= 2) {
+      shownObjective = objective
+      pendingObjective = null
+      pendingSightings = 0
+    }
+  } else {
+    pendingObjective = objective
+    pendingSightings = 1
+  }
+  return shownObjective
+}
 let viewerOnly = false
 let paused = false
 let manualMode = false
@@ -125,17 +151,19 @@ async function refreshState() {
     set('#status', 'textContent', manualMode ? 'You’re in control' : paused ? 'Game frozen' : 'Adventure in progress')
     set('#pause', 'textContent', paused && !manualMode ? '▶ Unfreeze' : 'Ⅱ Freeze game')
     const progress = state.progress
-    set('#progress-state', 'textContent', paused ? 'Paused' : ({exploring: 'Exploring', making_progress: 'Making progress', recovering: 'Recovering', stalled: 'Stuck?'}[progress?.state] || 'Exploring'))
+    const strategy = state.strategy
+    const planning = strategy?.objective?.id === PLANNING
+    set('#progress-state', 'textContent', paused ? 'Paused' : planning ? 'Choosing what is next' : ({exploring: 'Exploring', making_progress: 'Making progress', recovering: 'Recovering', stalled: 'Stuck?'}[progress?.state] || 'Exploring'))
     const achievement = progress?.last_achievement
     const age = achievement?.age_seconds || 0
     const since = age < 60 ? 'just now' : age < 3600 ? `${Math.floor(age / 60)}m ago` : `${Math.floor(age / 3600)}h ago`
     set('#last-achievement', 'textContent', achievement ? `Last achievement: ${achievement.title} · ${since}` : 'Waiting for the first achievement.')
-    const strategy = state.strategy
     set('#strategy-panel', 'hidden', !strategy?.objective)
     renderIntent(strategy || {})
-    if (strategy?.objective) {
-      set('#objective', 'textContent', strategy.objective.title)
-      set('#decision', 'textContent', strategy.reason)
+    const steady = steadyObjective(strategy?.objective)
+    if (steady) {
+      set('#objective', 'textContent', steady.title)
+      if (!planning) set('#decision', 'textContent', strategy.reason)
       set('#action-tag', 'textContent', (strategy.action || '').replace(/^./, (letter) => letter.toUpperCase()))
       set('#progress', 'textContent', `${fmt(strategy.visited_tiles)} tiles explored`)
     }
@@ -269,7 +297,7 @@ setInterval(() => { if (!document.hidden) refreshEvents() }, 15000)
 function renderIntent(strategy) {
   // Side by side in the plan row, a next step identical to the current one just reads as an echo.
   const next = strategy.next?.title
-  const repeated = Boolean(next) && next === strategy.objective?.title
+  const repeated = Boolean(next) && next === (shownObjective?.title || strategy.objective?.title)
   set('#next-objective', 'textContent', repeated ? 'Still on this one' : next || 'Continue the journey')
 }
 
