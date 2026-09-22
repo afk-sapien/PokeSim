@@ -4,6 +4,17 @@
 
 ## 0.3.0
 
+- Stop reading finished Cable Club trades at startup. Every completed exchange kept the whole
+  policy snapshot it was staged from, which on a long-running adventure is mostly the learned
+  navigation graph, and startup parsed all of them to act on none of them. An adventure with 229
+  finished trades needed more than three gigabytes to open, missed its readiness deadline, and was
+  started again by the trade recovery waiting on it, which held the machine in that loop until
+  nothing else on it could run. Recovery now reads only unfinished exchanges, releasing a trade
+  drops the snapshot it no longer needs, and records kept by earlier versions are compacted as
+  adventures start.
+- Say why an adventure would not start. The cleanup that stops a worker which never became ready
+  reported its own shutdown deadline instead, so the reason the adventure failed was replaced by a
+  message about stopping it everywhere that error was shown.
 - Train in steps of ten levels instead of aiming straight at 100. Training was also the only kind
   of work exempt from the planner's recency decay, so once it started it kept winning the draw and
   a single partner could hold an adventure for hundreds of game hours while trades and unregistered

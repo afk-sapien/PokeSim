@@ -58,7 +58,13 @@ class Child:
             self.url = f"http://127.0.0.1:{message['port']}"
             return self
         except BaseException:
-            self.stop(timeout=5)
+            try:
+                self.stop(timeout=5)
+            except RuntimeError:
+                # stop() has already terminated the child. Reporting its shutdown
+                # deadline here would bury the reason the worker never came up.
+                log.warning('Worker for %s ignored the shutdown request after a failed start',
+                            self.bootstrap['adventure_id'])
             raise
 
     def _stdout(self):

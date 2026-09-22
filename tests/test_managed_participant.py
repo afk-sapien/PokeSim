@@ -5,7 +5,8 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.app.registry import identifier
-from pokesim.runtime.participant import PREFIX, _promote, recover_storage, Participant
+from pokesim.runtime.participant import (PREFIX, _compact_released, _promote, _records,
+                                          recover_storage, Participant)
 from pokesim.store import Store
 
 
@@ -112,4 +113,43 @@ def test_abort_before_prepare_leaves_a_permanent_tombstone(tmp_path):
     assert store.get(PREFIX + tid)['decision'] == 'ABORT'
     with pytest.raises(ValueError, match='parameters changed'):
         participant.prepare({'id': tid, 'plan_digest': 'late', 'selected_key': 'late'})
+    store.close()
+
+
+def test_startup_never_reads_finished_exchanges(tmp_path):
+    """A released record holds a whole policy snapshot and recovery acts on none of it."""
+    store = Store(tmp_path)
+    record = committed(store)
+    record['phase'] = 'released'
+    store.set(PREFIX + record['id'], record)
+    pending = {'id': identifier(), 'decision': None, 'phase': 'preparing'}
+    store.set(PREFIX + pending['id'], pending)
+    assert [row['id'] for row in _records(store)] == [pending['id']]
+    store.close()
+
+
+def test_release_drops_the_staged_snapshot(tmp_path):
+    store = Store(tmp_path)
+    record = committed(store)
+    recover_storage(store)
+    participant = Participant(SimpleNamespace(store=store, emulator=None),
+                              SimpleNamespace())
+    participant.emu = SimpleNamespace(paused=True, policy=SimpleNamespace(on_restore=lambda: None),
+                                      stuck_since=0)
+    store.set(PREFIX + record['id'], {**store.get(PREFIX + record['id']), 'phase': 'applied'})
+    released = participant.release({'id': record['id']})
+    assert released['phase'] == 'released'
+    assert 'source_metadata' not in store.get(PREFIX + record['id'])
+    store.close()
+
+
+def test_compaction_only_strips_released_snapshots(tmp_path):
+    store = Store(tmp_path)
+    stale = committed(store)
+    stale['phase'] = 'released'
+    store.set(PREFIX + stale['id'], stale)
+    live = committed(store)
+    _compact_released(store)
+    assert 'source_metadata' not in store.get(PREFIX + stale['id'])
+    assert store.get(PREFIX + live['id'])['source_metadata'] == live['source_metadata']
     store.close()

@@ -8,9 +8,16 @@ word lists rather than a list of a hundred, and the live page, top bar and Poké
 overview were rebuilt around what they are actually for. Frames are encoded only for a
 viewer, which takes Max speed from roughly 74x to 314x real time.
 
+It also repairs a startup that an adventure with a long trading history could not
+finish. Each completed Cable Club exchange kept the policy snapshot it was staged
+from, and startup parsed every one of them to act on none of them, so an adventure
+with hundreds of finished trades needed gigabytes to open and was restarted by the
+trade recovery waiting on it. Startup now reads only unfinished exchanges.
+
 This release adds one database column, `events.detail`, applied by the migration the
 store already performs when an adventure opens. Policy state is unchanged and existing
-checkpoints resume untouched.
+checkpoints resume untouched. Finished trade records left by earlier versions shed
+their snapshots as adventures start, in batches, and no save or journal entry changes.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64
 Docker image and Compose configuration. The `pokesim-desktop` Python command opens
@@ -24,8 +31,8 @@ identities, Docker lifecycle checks, and isolated native Python installations on
 Windows x86-64, Intel macOS, Apple Silicon, and Linux x86-64 and ARM64. The workflow
 uploads a draft, verifies every uploaded checksum, and only then publishes it.
 
-This source consolidation does not publish a release or upgrade existing running
-adventures. Older downloadable releases contain the previous single-game app.
+Publishing this release does not upgrade a running application: change the image or
+package where it is deployed. Older downloadable releases contain the previous single-game app.
 See [candidate release notes](docs/release-notes.md), [desktop installation](docs/desktop.md),
 and [self-hosting](docs/self-hosting.md).
 

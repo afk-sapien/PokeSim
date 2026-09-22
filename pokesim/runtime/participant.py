@@ -16,8 +16,16 @@ PREFIX = 'managed_interaction:'
 
 
 def _records(store):
+    """Every unfinished interaction. A released one is inert to both callers.
+
+    Each record keeps the whole policy snapshot it was staged from, so an adventure
+    that has traded for days holds hundreds of megabytes of finished exchanges here.
+    Parsing those on every startup is what the released filter avoids.
+    """
     with store.lock:
-        rows = store.db.execute('SELECT v FROM kv WHERE k LIKE ?', (PREFIX + '%',)).fetchall()
+        rows = store.db.execute("SELECT v FROM kv WHERE k LIKE ? AND "
+                                "COALESCE(json_extract(v, '$.phase'), '') <> 'released'",
+                                (PREFIX + '%',)).fetchall()
     return [json.loads(row[0]) for row in rows]
 
 
@@ -118,10 +126,30 @@ def _trade_story(record):
               'received': {**got, 'dex': SPECIES.get(got['species'], {}).get('dex')}}
     return title, body, detail
 
+
+COMPACT_PER_START = 100
+
+
+def _compact_released(store):
+    """Discard staged snapshots that adventures traded before release stripped them.
+
+    SQLite rewrites the rows itself, so a backlog of finished exchanges never has to
+    be parsed. The batch is capped because each row carries a whole policy snapshot.
+    """
+    with store.lock, store.db:
+        store.db.execute(
+            "UPDATE kv SET v = json_remove(v, '$.source_metadata') WHERE k IN ("
+            "  SELECT k FROM kv WHERE k LIKE ?"
+            "   AND json_extract(v, '$.phase') = 'released'"
+            "   AND json_extract(v, '$.source_metadata') IS NOT NULL"
+            "   LIMIT ?)", (PREFIX + '%', COMPACT_PER_START))
+
+
 def recover_storage(store):
     """Reconcile committed files before the emulator chooses its startup checkpoint."""
     with store.lock:
         store.db.execute('PRAGMA synchronous=FULL')
+    _compact_released(store)
     for record in _records(store):
         if record.get('decision') == 'COMMIT' and record['phase'] != 'released':
             _promote(store, record)
@@ -347,6 +375,9 @@ class Participant:
         self.store.set('interaction_preparation', None)
         self.store.set('trade_hold', None)
         record['phase'] = 'released'
+        # Only an unreleased commit is ever promoted from this snapshot, and it dwarfs
+        # the rest of the record, so a released exchange has no reason to carry it.
+        record.pop('source_metadata', None)
         _save(self.store, record)
         self.emu.paused = False
         self.emu.policy.on_restore()

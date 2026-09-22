@@ -27,6 +27,22 @@ Events gained a `detail` column for this, added by the migration the store alrea
 opens. Trades staged by an older build have no arriving side recorded and keep the previous
 wording.
 
+## An adventure that has traded for weeks can still open
+
+Every completed exchange kept the whole policy snapshot it was staged from — on a well-travelled
+adventure that is mostly the map it has learned, a couple of megabytes each — and startup read and
+parsed all of them to act on none of them. Past a few hundred trades an adventure needed more than
+three gigabytes to open and could not report itself ready in time. The trade recovery that was
+waiting on it then started it again, and again, which is the kind of loop that takes the rest of
+the machine down with it.
+
+Startup now reads only the exchanges that are unfinished, releasing a trade drops the snapshot it
+no longer needs, and the records earlier versions left behind shed theirs as adventures start.
+
+Relatedly, an adventure that failed to start now says why. The cleanup that stops a worker which
+never became ready was reporting its own shutdown deadline instead, so every place that showed the
+error described stopping the adventure rather than the reason it would not run.
+
 ## Max speed is about four times faster
 
 The emulator encoded a JPEG of the game every four frames whether or not a browser was open. At Max
@@ -76,3 +92,8 @@ unchanged and still come first, so nothing already loved is lost.
 Existing adventures carry over untouched. The policy state format is unchanged, and the one
 database change is additive and applied automatically the next time each adventure starts — an
 adventure that is stopped migrates when you start it.
+
+Finished trade records shed their staged snapshots a hundred at a time as an adventure starts, so a
+library with a long trading history settles over its next few starts. Saves, journal entries and
+trade history are untouched; the space is returned to the database file, and `VACUUM` returns it to
+the disk if you want it back sooner.
