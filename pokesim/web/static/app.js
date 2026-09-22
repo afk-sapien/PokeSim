@@ -66,6 +66,15 @@ function renderParty(party) {
     set('#party', 'innerHTML', '<li class="empty-party"><span aria-hidden="true">◌</span><h3>Every team starts somewhere.</h3><p>The first partner will appear here.</p></li>')
     return
   }
+  // Same scale as dv_rating() on the server: five DVs out of 75, HP derived from the rest.
+  const dvStars = (dvs) => {
+    if (!Array.isArray(dvs) || dvs.length !== 5) return null
+    if (!dvs.every((value) => Number.isInteger(value) && value >= 0 && value <= 15)) return null
+    const total = dvs.reduce((sum, value) => sum + value, 0)
+    return total === 75 ? 4 : total >= 60 ? 3 : total >= 38 ? 2 : 1
+  }
+  const emptySlots = (filled) => Array.from({length: Math.max(0, 6 - filled)}, (_, slot) =>
+    `<li class="mon-card empty-slot"><span class="party-slot">${String(filled + slot + 1).padStart(2, '0')}</span><p>Room for one more</p></li>`).join('')
   $('#party').innerHTML = party.map((mon, index) => {
     const hp = clamp(mon.max_hp ? mon.hp / mon.max_hp * 100 : 0)
     const health = hp < 20 ? 'critical' : hp < 50 ? 'low' : 'healthy'
@@ -75,9 +84,12 @@ function renderParty(party) {
     const types = typeNames.map((type) => `<span class="type-tag ${typeClass(type)}">${esc(type)}</span>`).join('')
     const dex = mon.dex ? `No. ${String(mon.dex).padStart(3, '0')}` : 'Partner'
     const status = mon.status_label || (mon.hp ? 'Healthy' : 'Fainted')
+    const moveRows = (mon.move_details || []).map((move) => `<div class="move"><span class="move-type ${typeClass(move.type)}" aria-hidden="true"></span><span class="move-name">${esc(move.name)}</span><small class="${move.pp ? '' : 'depleted'}">${move.pp}/${move.max_pp}</small></div>`).join('')
+    const rating = dvStars(mon.dvs)
+    const stars = rating ? `<span class="dv-stars" title="DV rating ${rating} of 4">${'★'.repeat(rating)}${'☆'.repeat(4 - rating)}</span>` : ''
     const sprite = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png" alt="${esc(mon.name)} portrait" width="96" height="96">` : '<span class="unknown-sprite">?</span>'
-    return `<li class="mon-card ${mon.hp ? '' : 'fainted'}"><div class="mon-main"><div class="sprite-stage ${typeClass(typeNames[0])}">${sprite}<span class="party-slot">${String(index + 1).padStart(2, '0')}</span></div><div class="mon-info"><div class="mon-title"><h3>${esc(name)}</h3><span class="level"><small>LV.</small> ${mon.level}</span></div><div class="mon-subtitle"><span>${dex}${name !== mon.name ? ` · ${esc(mon.name)}` : ''}</span>${types}${status !== 'Healthy' ? `<span class="condition">${esc(status)}</span>` : ''}</div><div class="meter-label"><span>HP <b class="${health}">${mon.hp > 0 ? '●' : '○'}</b></span><span><strong>${fmt(mon.hp)}</strong> / ${fmt(mon.max_hp)}</span></div><progress class="hp-meter ${health}" max="100" value="${hp}" aria-label="${esc(name)} health: ${mon.hp} of ${mon.max_hp}"></progress><div class="meter-label xp-label"><span>XP</span><span>${xp ? xp.max_level ? 'MAX LEVEL' : `${clamp(xp.percent)}%` : 'Unavailable'}</span></div><progress class="xp-meter" max="100" value="${clamp(xp?.percent)}" aria-label="${esc(name)} progress to next level"></progress></div></div><button class="partner-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} moves and stats">Moves & stats <span aria-hidden="true">↗</span></button></li>`
-  }).join('')
+    return `<li class="mon-card ${mon.hp ? '' : 'fainted'}"><div class="mon-main"><div class="sprite-stage ${typeClass(typeNames[0])}">${sprite}<span class="party-slot">${String(index + 1).padStart(2, '0')}</span></div><div class="mon-info"><div class="mon-title"><h3>${esc(name)}</h3><span class="level">${stars}<small>LV.</small> ${mon.level}</span></div><div class="mon-subtitle"><span>${dex}${name !== mon.name ? ` · ${esc(mon.name)}` : ''}</span>${types}${status !== 'Healthy' ? `<span class="condition">${esc(status)}</span>` : ''}</div><div class="meter-label"><span>HP <b class="${health}">${mon.hp > 0 ? '●' : '○'}</b></span><span><strong>${fmt(mon.hp)}</strong> / ${fmt(mon.max_hp)}</span></div><progress class="hp-meter ${health}" max="100" value="${hp}" aria-label="${esc(name)} health: ${mon.hp} of ${mon.max_hp}"></progress><div class="meter-label xp-label"><span>XP</span><span>${xp ? xp.max_level ? 'MAX LEVEL' : `${clamp(xp.percent)}%` : 'Unavailable'}</span></div><progress class="xp-meter" max="100" value="${clamp(xp?.percent)}" aria-label="${esc(name)} progress to next level"></progress></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div><button class="partner-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} battle stats">Battle stats <span aria-hidden="true">↗</span></button></li>`
+  }).join('') + emptySlots(party.length)
 }
 
 async function refreshState() {

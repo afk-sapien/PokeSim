@@ -17,8 +17,7 @@
 .watch-companions .party-section { flex-direction:column }
 .watch-companions .party-section { flex:1 }
 .watch-companions .party { flex:1 }
-.watch-companions .party { grid-auto-rows:minmax(0,190px) }
-.watch-companions .party { align-content:start }
+.watch-companions .party { grid-auto-rows:1fr }
 .watch-companions .mon-card { display:flex }
 .watch-companions .mon-card { flex-direction:column }
 .watch-companions .mon-main { flex:1 }
@@ -112,3 +111,36 @@
 .objective-row .watch-next strong { font-size:14px }
 .objective-row .watch-next strong { font-weight:650 }
 .objective-row .watch-next strong { color:#2f3a2c }
+
+/* Six slots of equal height, so the team column ends level with the game beside it whether the
+   party holds two partners or six. Moves live on the card now, which is what fills that height. */
+.watch-companions .mon-moves { border-top:1px solid #ededE4 }
+.watch-companions .mon-moves { margin-top:auto }
+.watch-companions .mon-moves { padding:9px 12px 3px }
+.watch-companions .mon-moves { display:grid }
+.watch-companions .mon-moves { grid-template-columns:1fr 1fr }
+.watch-companions .mon-moves { gap:4px 12px }
+.watch-companions .mon-moves .move { font-size:9px }
+.watch-companions .mon-moves .move-name { overflow:hidden }
+.watch-companions .mon-moves .move-name { text-overflow:ellipsis }
+.watch-companions .mon-moves .move-name { white-space:nowrap }
+.watch-companions .no-moves { grid-column:1/-1 }
+.watch-companions .no-moves { font-size:9px }
+.watch-companions .no-moves { color:#9a9c90 }
+.dv-stars { color:#c0a23f }
+.dv-stars { font-size:9px }
+.dv-stars { letter-spacing:1px }
+.dv-stars { margin-right:6px }
+.empty-slot { display:flex }
+.empty-slot { flex-direction:column }
+.empty-slot { align-items:center }
+.empty-slot { justify-content:center }
+.empty-slot { gap:7px }
+.empty-slot { background:#faf9f3 }
+.empty-slot { border-style:dashed }
+.empty-slot { box-shadow:none }
+.empty-slot .party-slot { position:static }
+.empty-slot .party-slot { opacity:.5 }
+.empty-slot p { font-size:10px }
+.empty-slot p { color:#a3a598 }
+.empty-slot p { margin:0 }
