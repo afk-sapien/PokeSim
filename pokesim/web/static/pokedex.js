@@ -67,7 +67,7 @@ function sorted(rows) {
 }
 
 function milestoneBadges(dex) {
-  return `<span class="milestone-badges">${maxed.has(dex) ? '<span class="mastery-badge"><span aria-hidden="true">★</span> Lv. 100</span>' : ''}${perfectSpecies.has(dex) ? '<span class="perfect-badge"><span aria-hidden="true">★★★★</span> Perfect DV</span>' : highQualitySpecies.has(dex) ? '<span class="dv-badge dv-stars-3" aria-label="3-star or better DVs found"><span aria-hidden="true">★★★</span> DV found</span>' : ''}</span>`
+  return `<span class="milestone-badges">${maxed.has(dex) ? '<span class="mastery-badge"><span aria-hidden="true">⚑</span> Lv. 100</span>' : ''}${perfectSpecies.has(dex) ? '<span class="perfect-badge"><span aria-hidden="true">★★★★</span> Perfect DV</span>' : highQualitySpecies.has(dex) ? '<span class="dv-badge dv-stars-3" aria-label="3-star or better DVs found"><span aria-hidden="true">★★★</span> DV found</span>' : ''}</span>`
 }
 
 function renderGrid() {
@@ -83,7 +83,7 @@ function renderGrid() {
     const note = RECORD_LABELS[state]
     const caught = caughtCount(entry.dex)
     const counts = `${caught === null ? 'Catch count unavailable' : `Caught ${caught}`} · Have ${copies?.length || 0}`
-    return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${maxed.has(entry.dex) ? ', level 100 star earned' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}, ${counts}" aria-describedby="catch-tracking-note">
+    return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${maxed.has(entry.dex) ? ', level 100 reached' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}, ${counts}" aria-describedby="catch-tracking-note">
       <span class="dex-num">#${num(entry.dex)}</span>
       ${entry.dex === hunting ? '<span class="hunt-flag" title="The current expedition">Hunting</span>' : ''}
       <img loading="lazy" src="${PokeSim.base}/sprites/${entry.dex}.png" alt="" width="72" height="72">
@@ -222,8 +222,6 @@ async function refreshStatus() {
     maxed = new Set(goals.level_100 || [])
     perfectSpecies = new Set(goals.perfect_species || [])
     highQualitySpecies = new Set([...(goals.high_quality_species || []), ...perfectSpecies])
-    $('#sum-three-star').textContent = String(goals.three_star_held || 0)
-    $('#sum-quality').innerHTML = `${highQualitySpecies.size} <small>/ 151</small>`
     $('#sum-maxed').innerHTML = `${maxed.size} <small>/ 151</small>`
     $('#maxed-meter').value = maxed.size
     $('#sum-perfect').textContent = `${goals.perfect_found || 0}${goals.perfect_found ? '+' : ''}`
@@ -234,7 +232,6 @@ async function refreshStatus() {
     hunting = (status.plan || []).find((row) => row.species === status.hunting)?.dex ?? null
     $('#connection').classList.remove('is-offline')
     $('#status').textContent = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
-    if (status.version) $('#edition').textContent = `${status.version.toUpperCase()} VERSION`
     $('#sum-owned').innerHTML = `${owned.size} <small>/ 151</small>`
     $('#sum-seen').innerHTML = `${seen.size} <small>/ 151</small>`
     $('#sum-caught').textContent = catchesAvailable() ? count(catches.total) : 'Unavailable'

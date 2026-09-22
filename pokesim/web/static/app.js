@@ -11,7 +11,49 @@ const BADGES = ['Boulder', 'Cascade', 'Thunder', 'Rainbow', 'Soul', 'Marsh', 'Vo
 const BADGE_SYMBOLS = ['◆', '◒', '✧', '✿', '♡', '◉', '✷', '❧']
 const LEADERS = ['Brock', 'Misty', 'Lt. Surge', 'Erika', 'Koga', 'Sabrina', 'Blaine', 'Giovanni']
 const TYPE_CLASS = new Set(['normal', 'fighting', 'flying', 'poison', 'ground', 'rock', 'bug', 'ghost', 'fire', 'water', 'grass', 'electric', 'psychic', 'ice', 'dragon'])
+// A cable trade leaves no screenshot behind, so the card drew a placeholder glyph and said
+// nothing about the swap. Draw the two Pokemon instead, with the trainer on the other end.
+function tradeArt(event) {
+  let detail = null
+  try { detail = event.detail ? JSON.parse(event.detail) : null } catch (error) { return '' }
+  if (!detail || detail.kind !== 'trade') return ''
+  const face = (side) => side && side.dex
+    ? `<img loading="lazy" src="${PokeSim.base}/sprites/${Number(side.dex)}.png" alt="${esc(side.name || '')}" width="56" height="56">`
+    : '<span class="unknown-sprite" aria-hidden="true">?</span>'
+  const label = (side) => esc(side && side.nick ? side.nick : '')
+  return `<span class="trade-art">`
+    + `<span class="trade-side"><span class="trade-way">SENT</span>${face(detail.sent)}<small>${label(detail.sent)}</small></span>`
+    + `<span class="trade-swap" aria-hidden="true">\u21c4</span>`
+    + `<span class="trade-side"><span class="trade-way">GOT</span>${face(detail.received)}<small>${label(detail.received)}</small></span>`
+    + `</span>`
+}
 const typeClass = (name) => TYPE_CLASS.has(String(name).toLowerCase()) ? String(name).toLowerCase() : 'normal'
+
+// The planner passes through a gap between projects, and a decision tick can land on a League map
+// or the ceremony, so the raw objective flickers several times a minute. Hold the last real one:
+// a gap is not a new plan, and a title has to persist to replace the headline.
+const PLANNING = 'collect_plan'
+let shownObjective = null
+let pendingObjective = null
+let pendingSightings = 0
+function steadyObjective(objective) {
+  if (!objective) return shownObjective
+  if (!shownObjective) { shownObjective = objective; return shownObjective }
+  if (objective.id === PLANNING) return shownObjective
+  if (objective.id === shownObjective.id) { pendingObjective = null; pendingSightings = 0; return shownObjective }
+  if (pendingObjective && pendingObjective.id === objective.id) {
+    pendingSightings += 1
+    if (pendingSightings >= 2) {
+      shownObjective = objective
+      pendingObjective = null
+      pendingSightings = 0
+    }
+  } else {
+    pendingObjective = objective
+    pendingSightings = 1
+  }
+  return shownObjective
+}
 let viewerOnly = false
 let paused = false
 let manualMode = false
@@ -66,6 +108,15 @@ function renderParty(party) {
     set('#party', 'innerHTML', '<li class="empty-party"><span aria-hidden="true">◌</span><h3>Every team starts somewhere.</h3><p>The first partner will appear here.</p></li>')
     return
   }
+  // Same scale as dv_rating() on the server: five DVs out of 75, HP derived from the rest.
+  const dvStars = (dvs) => {
+    if (!Array.isArray(dvs) || dvs.length !== 5) return null
+    if (!dvs.every((value) => Number.isInteger(value) && value >= 0 && value <= 15)) return null
+    const total = dvs.reduce((sum, value) => sum + value, 0)
+    return total === 75 ? 4 : total >= 60 ? 3 : total >= 38 ? 2 : 1
+  }
+  const emptySlots = (filled) => Array.from({length: Math.max(0, 6 - filled)}, (_, slot) =>
+    `<li class="mon-card empty-slot"><span class="party-slot">${String(filled + slot + 1).padStart(2, '0')}</span><p>Room for one more</p></li>`).join('')
   $('#party').innerHTML = party.map((mon, index) => {
     const hp = clamp(mon.max_hp ? mon.hp / mon.max_hp * 100 : 0)
     const health = hp < 20 ? 'critical' : hp < 50 ? 'low' : 'healthy'
@@ -75,9 +126,12 @@ function renderParty(party) {
     const types = typeNames.map((type) => `<span class="type-tag ${typeClass(type)}">${esc(type)}</span>`).join('')
     const dex = mon.dex ? `No. ${String(mon.dex).padStart(3, '0')}` : 'Partner'
     const status = mon.status_label || (mon.hp ? 'Healthy' : 'Fainted')
+    const moveRows = (mon.move_details || []).map((move) => `<div class="move"><span class="move-type ${typeClass(move.type)}" aria-hidden="true"></span><span class="move-name">${esc(move.name)}</span><small class="${move.pp ? '' : 'depleted'}">${move.pp}/${move.max_pp}</small></div>`).join('')
+    const rating = dvStars(mon.dvs)
+    const stars = rating ? `<span class="dv-stars" title="DV rating ${rating} of 4">${'★'.repeat(rating)}${'☆'.repeat(4 - rating)}</span>` : ''
     const sprite = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png" alt="${esc(mon.name)} portrait" width="96" height="96">` : '<span class="unknown-sprite">?</span>'
-    return `<li class="mon-card ${mon.hp ? '' : 'fainted'}"><div class="mon-main"><div class="sprite-stage ${typeClass(typeNames[0])}">${sprite}<span class="party-slot">${String(index + 1).padStart(2, '0')}</span></div><div class="mon-info"><div class="mon-title"><h3>${esc(name)}</h3><span class="level"><small>LV.</small> ${mon.level}</span></div><div class="mon-subtitle"><span>${dex}${name !== mon.name ? ` · ${esc(mon.name)}` : ''}</span>${types}${status !== 'Healthy' ? `<span class="condition">${esc(status)}</span>` : ''}</div><div class="meter-label"><span>HP <b class="${health}">${mon.hp > 0 ? '●' : '○'}</b></span><span><strong>${fmt(mon.hp)}</strong> / ${fmt(mon.max_hp)}</span></div><progress class="hp-meter ${health}" max="100" value="${hp}" aria-label="${esc(name)} health: ${mon.hp} of ${mon.max_hp}"></progress><div class="meter-label xp-label"><span>XP</span><span>${xp ? xp.max_level ? 'MAX LEVEL' : `${clamp(xp.percent)}%` : 'Unavailable'}</span></div><progress class="xp-meter" max="100" value="${clamp(xp?.percent)}" aria-label="${esc(name)} progress to next level"></progress></div></div><button class="partner-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} moves and stats">Moves & stats <span aria-hidden="true">↗</span></button></li>`
-  }).join('')
+    return `<li class="mon-card ${mon.hp ? '' : 'fainted'}"><div class="mon-main"><div class="sprite-stage ${typeClass(typeNames[0])}">${sprite}<span class="party-slot">${String(index + 1).padStart(2, '0')}</span></div><div class="mon-info"><div class="mon-title"><h3>${esc(name)}</h3><span class="level">${stars}<small>LV.</small> ${mon.level}</span></div><div class="mon-subtitle"><span>${dex}${name !== mon.name ? ` · ${esc(mon.name)}` : ''}</span>${types}${status !== 'Healthy' ? `<span class="condition">${esc(status)}</span>` : ''}</div><div class="meter-label"><span>HP <b class="${health}">${mon.hp > 0 ? '●' : '○'}</b></span><span><strong>${fmt(mon.hp)}</strong> / ${fmt(mon.max_hp)}</span></div><progress class="hp-meter ${health}" max="100" value="${hp}" aria-label="${esc(name)} health: ${mon.hp} of ${mon.max_hp}"></progress><div class="meter-label xp-label"><span>XP</span><span>${xp ? xp.max_level ? 'MAX LEVEL' : `${clamp(xp.percent)}%` : 'Unavailable'}</span></div><progress class="xp-meter" max="100" value="${clamp(xp?.percent)}" aria-label="${esc(name)} progress to next level"></progress></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div><button class="partner-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} battle stats">Battle stats <span aria-hidden="true">↗</span></button></li>`
+  }).join('') + emptySlots(party.length)
 }
 
 async function refreshState() {
@@ -95,7 +149,6 @@ async function refreshState() {
     set('#app-version', 'textContent', `v${state.version || 'unknown'}`)
     const edition = state.strategy?.collection?.version
     if (edition) {
-      $('#edition').textContent = `${edition.toUpperCase()} VERSION`
       set('.screen-corner', 'textContent', `POKÉMON ${edition.toUpperCase()} · GAME BOY`)
       set('#stream', 'alt', `Live Pokémon ${edition} game`)
     }
@@ -114,17 +167,19 @@ async function refreshState() {
     set('#status', 'textContent', manualMode ? 'You’re in control' : paused ? 'Game frozen' : 'Adventure in progress')
     set('#pause', 'textContent', paused && !manualMode ? '▶ Unfreeze' : 'Ⅱ Freeze game')
     const progress = state.progress
-    set('#progress-state', 'textContent', paused ? 'Paused' : ({exploring: 'Exploring', making_progress: 'Making progress', recovering: 'Recovering', stalled: 'Stuck?'}[progress?.state] || 'Exploring'))
+    const strategy = state.strategy
+    const planning = strategy?.objective?.id === PLANNING
+    set('#progress-state', 'textContent', paused ? 'Paused' : planning ? 'Choosing what is next' : ({exploring: 'Exploring', making_progress: 'Making progress', recovering: 'Recovering', stalled: 'Stuck?'}[progress?.state] || 'Exploring'))
     const achievement = progress?.last_achievement
     const age = achievement?.age_seconds || 0
     const since = age < 60 ? 'just now' : age < 3600 ? `${Math.floor(age / 60)}m ago` : `${Math.floor(age / 3600)}h ago`
     set('#last-achievement', 'textContent', achievement ? `Last achievement: ${achievement.title} · ${since}` : 'Waiting for the first achievement.')
-    const strategy = state.strategy
     set('#strategy-panel', 'hidden', !strategy?.objective)
     renderIntent(strategy || {})
-    if (strategy?.objective) {
-      set('#objective', 'textContent', strategy.objective.title)
-      set('#decision', 'textContent', strategy.reason)
+    const steady = steadyObjective(strategy?.objective)
+    if (steady) {
+      set('#objective', 'textContent', steady.title)
+      if (!planning) set('#decision', 'textContent', strategy.reason)
       set('#action-tag', 'textContent', (strategy.action || '').replace(/^./, (letter) => letter.toUpperCase()))
       set('#progress', 'textContent', `${fmt(strategy.visited_tiles)} tiles explored`)
     }
@@ -160,7 +215,7 @@ const EVENT_LABELS = {trade: 'A PARTNER FROM AFAR', badge: 'A BADGE TO REMEMBER'
 function renderEvents() {
   $('#events').innerHTML = eventRows.map((event) => {
     const date = new Date(event.ts * 1000)
-    return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-picture">${event.shot ? `<img loading="lazy" src="${PokeSim.base}/shots/${encodeURIComponent(event.shot)}" alt="Game screen at ${esc(event.title)}" width="160" height="144">` : '<span aria-hidden="true">✧</span>'}<span class="event-label">${EVENT_LABELS[event.type] || 'FROM THE JOURNAL'}</span></div><div class="event-copy"><time datetime="${date.toISOString()}">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} · ${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</time><h3>${esc(event.title)}</h3><p>${esc(event.map)}<span aria-hidden="true">↗</span></p></div></a>`
+    return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-picture">${event.shot ? `<img loading="lazy" src="${PokeSim.base}/shots/${encodeURIComponent(event.shot)}" alt="Game screen at ${esc(event.title)}" width="160" height="144">` : tradeArt(event) || '<span aria-hidden="true">✧</span>'}<span class="event-label">${EVENT_LABELS[event.type] || 'FROM THE JOURNAL'}</span></div><div class="event-copy"><time datetime="${date.toISOString()}">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} · ${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</time><h3>${esc(event.title)}</h3><p>${esc(event.map)}<span aria-hidden="true">↗</span></p></div></a>`
   }).join('') || '<div class="journal-empty"><span>✧</span><h3>The best pages are still unwritten.</h3><p>New moments will find their way here as the adventure unfolds.</p></div>'
   set('#load-more', 'hidden', !moreAvailable || !eventRows.length)
 }
@@ -256,7 +311,10 @@ setInterval(() => { if (!document.hidden) refreshState() }, 2000)
 setInterval(() => { if (!document.hidden) refreshEvents() }, 15000)
 
 function renderIntent(strategy) {
-  set('#next-objective', 'textContent', strategy.next?.title || 'Continue the journey')
+  // Side by side in the plan row, a next step identical to the current one just reads as an echo.
+  const next = strategy.next?.title
+  const repeated = Boolean(next) && next === (shownObjective?.title || strategy.objective?.title)
+  set('#next-objective', 'textContent', repeated ? 'Still on this one' : next || 'Continue the journey')
 }
 
 function renderPartnerDetail() {

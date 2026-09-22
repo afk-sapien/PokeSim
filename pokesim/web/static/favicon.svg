@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="pokesim">
+  <title>pokesim</title>
+  <rect width="64" height="64" rx="14" fill="#bc4734"/>
+  <!-- A handheld reduced to what survives sixteen pixels: the screen, and one button under it.
+       Anything thinner than about four units disappears at that size, so the pad is gone. -->
+  <rect x="10" y="10" width="44" height="30" rx="5" fill="#fffdf4"/>
+  <circle cx="32" cy="50" r="7" fill="#fffdf4"/>
+</svg>

@@ -582,8 +582,12 @@ class Collection:
                 # counts too: a Weepinbell was being trained to level 100 with Victreebel unregistered.
                 if any(evo['method'] != 'trade' and dex(evo['species']) not in s.owned for evo in EVOS.get(sid, [])):
                     continue
+                # Aim for the next ten rather than the whole climb. Training to 100 in one project
+                # held a partner for hundreds of game hours while trades and unregistered species
+                # waited; a ten level step finishes, hands the turn back, and resumes later.
                 add({**reference, 'method': 'train', 'parent': sid, 'family': family,
-                     'trainee_key': key, 'box': box, 'initial_level': level, 'target_level': 100,
+                     'trainee_key': key, 'box': box, 'initial_level': level,
+                     'target_level': min(100, level - level % 10 + 10),
                      'perfect_partner': is_perfect(mon),
                      'mastery_needed': any(level_credit(relative) - set(self.milestones.get('level_100', ())) for relative in family)},
                     (1 + level / 20) ** 2)

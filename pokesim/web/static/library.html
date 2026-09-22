@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f5f3ed">
 <title>Your adventures · PokeSim</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/library.css?v=notifications-1">
 <script src="/static/library.js?v=notifications-1" defer></script>
@@ -12,7 +13,7 @@
 </head>
 <body class="library" data-page="${page}" data-adventure="${adventure_id}">
 <a class="skip-link" href="#main">Skip to content</a>
-<header class="topbar"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">p.</span>PokeSim</a><nav aria-label="Application"><a href="/" data-nav="library">Library</a><a href="/trading" data-nav="trading">Trading</a><a href="/notifications" data-nav="notifications">Notifications</a><a href="/settings" data-nav="settings">Settings and backups</a></nav><span id="connection" role="status">Connecting</span></header>
+<header class="topbar"><a class="brand" href="/"><img class="brand-mark" src="/static/favicon.svg" alt="" width="38" height="38">PokeSim</a><nav aria-label="Application"><a href="/" data-nav="library">Library</a><a href="/trading" data-nav="trading">Trading</a><a href="/notifications" data-nav="notifications">Notifications</a><a href="/settings" data-nav="settings">Settings</a></nav><span class="connection" id="connection" role="status"><i></i><span id="status">Connecting</span></span></header>
 <main id="main" class="library-main">
 <p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
 <div id="workspace" hidden>

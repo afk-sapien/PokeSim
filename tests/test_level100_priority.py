@@ -45,7 +45,8 @@ def test_duplicates_train_individually_toward_100_and_completed_partners_are_exc
     projects = [p for _, p in rows if p['method'] == 'train']
     assert len(projects) == 2
     assert {p['initial_level'] for p in projects} == {60, 95}
-    assert all(p['target_level'] == 100 for p in projects)
+    # A step of ten, not the whole climb: level 60 aims at 70, level 95 at 100.
+    assert {p['initial_level']: p['target_level'] for p in projects} == {60: 70, 95: 100}
     assert len({p['key'] for p in projects}) == 2
 
 
@@ -94,7 +95,10 @@ def test_director_prioritizes_training_but_keeps_other_activities():
             (1, {'method': 'grass', 'key': 'repeat', 'repeat': True}),
             (1, {'method': 'rematch', 'key': 'money'})]
     selected = Counter(d.select(rows, rng)['key'] for _ in range(500))
-    assert selected['near100'] > 300
+    # Training leads by a wide margin, but it decays with use now, so it is not exempt from
+    # taking turns the way it was when it could hold a partner for hundreds of game hours.
+    assert selected['near100'] > 250
+    assert selected['near100'] > selected['repeat'] + selected['money']
     assert selected['low'] == 0
     assert selected['repeat'] > 0 and selected['money'] > 0
     assert d.select(rows, rng, urgent=True)['key'] == 'money'
@@ -134,4 +138,23 @@ def test_a_new_pokedex_entry_comes_before_the_level_100_grind():
                (1, {'method': 'grass', 'key': 'repeat', 'repeat': True})]
     d = AdventureDirector()
     selected = Counter(d.select(settled, rng)['key'] for _ in range(500))
-    assert selected['grind'] > 250
+    assert selected['grind'] > 200 and selected['grind'] > selected['better']
+
+
+def test_training_climbs_in_steps_of_ten_and_resumes_from_where_it_stopped():
+    """A finished step re-enters selection aiming ten higher, not at 100 again."""
+    for level, expected in ((37, 40), (40, 50), (60, 70), (95, 100), (99, 100)):
+        rows = candidates(postgame(party=(individual(level, 1),)))
+        projects = [p for _, p in rows if p['method'] == 'train']
+        assert [p['target_level'] for p in projects] == [expected], (level, projects)
+
+
+def test_a_finished_training_step_hands_the_turn_to_other_work():
+    """Training used to be exempt from recency decay, so it never gave the turn back."""
+    d, rng = AdventureDirector(), random.Random(5)
+    rows = [(30, {'method': 'train', 'key': 'grind', 'initial_level': 90}),
+            (3, {'method': 'evolve', 'key': 'upgrade', 'upgrade_evolution': True}),
+            (1, {'method': 'grass', 'key': 'repeat', 'repeat': True})]
+    selected = Counter(d.select(rows, rng)['key'] for _ in range(500))
+    assert selected['grind'] > selected['upgrade']          # still the leading activity
+    assert selected['upgrade'] + selected['repeat'] > 150   # but no longer the only one

@@ -18,13 +18,15 @@ W_ENEMY_MAX_HP = 0xCFF4           # 2 bytes
 W_OPTIONS = 0xD355                # bits 0-2 text speed (1 fast/3 mid/5 slow), bit 6 battle style, bit 7 animations off
 
 
+# A tile decodes to the same string every time, so ask decode_text once per tile id at import
+# rather than 360 times per screen read. Derived from decode_text so the two cannot drift.
+_TILE_CHARS = tuple(decode_text(bytes([tile])) or " " for tile in range(256))
+
+
 def rows(mem) -> list[str]:
     raw = bytes(mem[W_TILEMAP:W_TILEMAP + 20 * 18])
-    out = []
-    for r in range(18):
-        line = raw[r * 20:(r + 1) * 20]
-        out.append("".join(decode_text(bytes([c])) or " " for c in line))
-    return out
+    glyph = _TILE_CHARS.__getitem__
+    return ["".join(map(glyph, raw[r * 20:(r + 1) * 20])) for r in range(18)]
 
 
 class Screen:

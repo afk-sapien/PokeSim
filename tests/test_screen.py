@@ -65,3 +65,26 @@ def test_yes_no_requires_complete_labels_in_the_selected_column():
     memory = menu({4: '     CANCEL', 8: '               YES', 10: '               NO'},
                   (4, 4), top=(4, 4))
     assert not Screen(memory).yes_no
+
+
+def test_tile_table_matches_decode_text_for_every_tile():
+    """rows() reads a precomputed table instead of calling decode_text per tile."""
+    from pokesim.ram import decode_text
+    from pokesim.screen import _TILE_CHARS
+
+    assert len(_TILE_CHARS) == 256
+    for tile in range(256):
+        assert _TILE_CHARS[tile] == (decode_text(bytes([tile])) or " "), hex(tile)
+
+
+def test_rows_decodes_every_tile_value_the_old_way():
+    """A screen covering all 256 tile ids decodes as the per-tile implementation did."""
+    from pokesim.ram import decode_text
+    from pokesim.screen import rows
+
+    mem = bytearray(0x10000)
+    for i in range(360):
+        mem[W_TILEMAP + i] = i % 256
+    expected = ["".join(decode_text(bytes([mem[W_TILEMAP + r * 20 + c]])) or " " for c in range(20))
+                for r in range(18)]
+    assert rows(mem) == expected

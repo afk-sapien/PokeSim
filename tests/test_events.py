@@ -22,6 +22,9 @@ def test_decode_helpers():
     assert decode_text(bytes([0x91, 0x84, 0x83, 0x50, 0x80])) == "RED"
     assert bcd(bytes([0x01, 0x23, 0x45])) == 12345
     assert flag_bits(bytes([0b101, 0b1])) == {1, 3, 9}
+    assert flag_bits(b"") == set()
+    assert flag_bits(bytes(4)) == set()
+    assert flag_bits(b"\xff\xff") == set(range(1, 17))
 
 
 def test_first_snapshot_only_records():

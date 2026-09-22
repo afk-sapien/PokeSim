@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS events (
   map TEXT NOT NULL DEFAULT '',
   playtime TEXT NOT NULL DEFAULT '',
   shot TEXT,
-  state TEXT
+  state TEXT,
+  detail TEXT
 );
 CREATE INDEX IF NOT EXISTS events_ts ON events(ts);
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -53,6 +54,11 @@ class Store:
 
     def _migrate(self):
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(events)")}
+        if "detail" not in cols:
+            # older databases: entries written before events could carry structured detail keep
+            # their text and simply have none of it.
+            self.db.execute("ALTER TABLE events ADD COLUMN detail TEXT")
+            self.db.commit()
         if "priority" not in cols:
             # older databases: add the column and backfill from the priorities events used to have
             self.db.execute("ALTER TABLE events ADD COLUMN priority INTEGER NOT NULL DEFAULT 3")

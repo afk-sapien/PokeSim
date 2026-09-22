@@ -6,15 +6,15 @@ PokeSim plays Pokémon Red and Blue by itself, and you watch it happen in your b
 
 Fair warning: you will get attached to a Lapras named PICKLES, and you will argue with its battle decisions.
 
-![PokeSim running Pokémon Red, with the live game, six teammates, current goal, and all eight badges](docs/images/live-adventure.jpg)
+![PokeSim running Pokémon Red: the live game, six teammates with their moves and DV ratings, all eight badges, and the current plan along the bottom](docs/images/live-adventure.jpg)
 
 *The live adventure: the game, the team, and the plan (allegedly), all in one place.*
 
 ## What you get
 
-Battles, catches, evolutions and the slow march to the Pokémon League, with the current plan shown next to the screen. Keyboard and touch controls are there when you want to steer, and a speed dial from 0.5× up to Max when you want to skip ahead or slow down and actually watch a fight.
+Battles, catches, evolutions and the slow march to the Pokémon League, with the current plan spelled out along the foot of the page: what it is doing, how that is going, and what comes next. Your six travelling companions sit beside the game with their moves, remaining PP and DV rating on the card, no clicking required. Keyboard and touch controls are there when you want to steer, and a speed dial from 0.5× up to Max when you want to skip ahead or slow down and actually watch a fight.
 
-There's a Journal of milestones with screenshots, which you can follow in a feed reader or as phone notifications through [ntfy](https://ntfy.sh). Open the Library, choose **Notifications**, generate a topic and subscribe to it in the ntfy app. There is no account and nothing to edit. After the Hall of Fame it keeps going, working on collection, training and evolution projects.
+There's a Journal of milestones with screenshots — including, when two adventures meet in the Cable Club, which Pokémon crossed and who sent it — and you can follow it in a feed reader or as phone notifications through [ntfy](https://ntfy.sh). Open the Library, choose **Notifications**, generate a topic and subscribe to it in the ntfy app. There is no account and nothing to edit. After the Hall of Fame it keeps going, working on collection, training and evolution projects.
 
 It decides everything locally with ordinary game logic. No model API key, no subscription, no per-move bill.
 
@@ -22,7 +22,7 @@ It decides everything locally with ordinary game logic. No model API key, no sub
 
 Browse all 151 Kanto entries, search by name or type, and see who's registered, who's only been spotted, and who's still out there somewhere.
 
-![The Pokédex showing collection progress, search and filter options, and the original Kanto starters](docs/images/pokedex.jpg)
+![The Pokédex showing registered, seen, caught, level 100 and perfect find counts, search and filter options, and the original Kanto starters](docs/images/pokedex.jpg)
 
 *One more entry. One more reason to check back.*
 
@@ -33,7 +33,7 @@ The PC searches your party and every box at once, sorts by DV rating, and shows 
 
 ![PC storage with all-box search, sorting options, and the strongest party and boxed Pokémon](docs/images/pc-storage.jpg)
 
-*Yes, that Mewtwo is called CORNWIZARD.*
+*Two hundred and forty-one partners across the party and every box, sorted by DV rating. Yes, one of them is called TOADDEBT.*
 
 </details>
 
