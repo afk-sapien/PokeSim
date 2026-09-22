@@ -1,8 +1,16 @@
-# Release preparation: 0.2.1
+# Release preparation: 0.3.0
 
-The current source consolidates the Adventure Library, independent Red and Blue
-adventures, automatic Cable Club trades, updated gameplay policies, and DV ratings.
-The eight outstanding dependency PRs have been squash merged into main.
+The current source changes how an adventure spends its time and what the pages that
+watch it show. Training climbs in ten level steps instead of aiming straight at level
+100 and no longer monopolises the planner, trades that cause an evolution are worth
+taking, a completed Cable Club trade records what crossed, nicknames come from paired
+word lists rather than a list of a hundred, and the live page, top bar and Pokédex
+overview were rebuilt around what they are actually for. Frames are encoded only for a
+viewer, which takes Max speed from roughly 74x to 314x real time.
+
+This release adds one database column, `events.detail`, applied by the migration the
+store already performs when an adventure opens. Policy state is unchanged and existing
+checkpoints resume untouched.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64
 Docker image and Compose configuration. The `pokesim-desktop` Python command opens

@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+## 0.3.0
+
+- Train in steps of ten levels instead of aiming straight at 100. Training was also the only kind
+  of work exempt from the planner's recency decay, so once it started it kept winning the draw and
+  a single partner could hold an adventure for hundreds of game hours while trades and unregistered
+  species waited. It still leads when there is nothing new to register, by 247 draws to 173 in the
+  settled case, rather than by never stopping.
+- Value a trade that triggers an evolution at 40 even when the evolved species is already
+  registered. Kadabra coming back an Alakazam scored nothing once Alakazam was in the book, despite
+  the cable being the only way it can happen.
+- Say what crossed the Cable Club. A completed trade recorded the same sentence every time and drew
+  a placeholder beside it; the entry now names both Pokémon and the trainer on the other end, and
+  the journal card shows the two of them either side of a swap arrow. Events gained a `detail`
+  column for that, added by the store's own migration. Trades staged by an older build keep the
+  previous wording.
+- Build nicknames from prefix and suffix pairs, 1,616 of them instead of 100. An adventure
+  remembers every name it has used, so after a hundred Pokémon the draw fell back to the whole list
+  and began repeating. The written names are unchanged and still come first.
+- Encode a game frame only while something is asking for one, and no faster than the stream shows
+  them. At Max speed the emulator was encoding about 1,100 JPEGs a second for a viewer that shows
+  fifteen, whether or not a browser was open: Max goes from about 74x to about 314x real time.
+- Decode screen tiles and event flags from lookup tables, worth about 14% of a headless run on its
+  own.
+- Simplify the top bar. The adventure bar carried eight items in one row using three different
+  looks for navigation, and the link that left the adventure was bolder than the page you were on.
+  One breadcrumb answers where you are, tabs share one active treatment with the library, and the
+  edition badge that three other places already stated is gone.
+- Give the live page its space back. The plan moves to a full-width row along the foot, the game
+  screen grows from 400 to 560 pixels, and the team column runs the full height beside it with six
+  slots, each card carrying its moves, remaining PP and DV rating.
+- Hold the plan steady. The planner reports its gap between projects as an objective of its own, so
+  the row cycled between the real goal, "Plan the next adventure project" and the ceremony several
+  times a minute.
+- Cut the Pokédex overview to registered, seen, caught, level 100 and perfect finds. Level 100 was
+  labelled and badged with a star, which put a milestone in the same visual language as the DV
+  ratings beside it; it reads as a flag now. Three-star DVs are still recorded, badged and
+  filterable.
+- Give the app a mark of its own, a handheld rather than the `p.` lockup, in the browser tab and
+  the top bar.
 - Let the seed vary a stall hunt that continues from a checkpoint. A checkpoint carries the policy's
   own random state, so `tools/find_stalls.py --seed` was ignored and four postgame hunts with four
   seeds were one hunt repeated four times. Scenario replays still make the original choices.
