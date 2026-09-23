@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.2
+
 - Stop staging backups and imports in the container's `/tmp`. `create_backup` copied `assets`,
   `adventures` and `interactions` into an unqualified `TemporaryDirectory` before writing
   anything, and the shipped Compose file mounts `/tmp` as a 256 MB tmpfs on a read-only root, so

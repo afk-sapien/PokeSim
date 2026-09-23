@@ -1,74 +1,75 @@
-# PokeSim 0.3.1 experimental beta
+# PokeSim 0.3.2 experimental beta
 
-A repair release. Everything here came out of a review of the 0.3.0 source, and two of the
-findings were things every new adventure did to itself in its first three minutes.
+Another repair release, from a review of the parts of 0.3.1 that had never been read: the trade
+coordinator, the broker, and the per-adventure runtime. Everything here is about an application
+that has been running for weeks rather than minutes — what it accumulates, and what it does when
+something will not finish.
 
-## A new adventure stops inventing its own history
+## The backup you are told to take before upgrading could not finish
 
-Start a game and the journal filled up before the game did: two "Blacked out!" entries, with the
-notifications to match, and four starters the player never received. Both came from reading
-cartridge memory before the cartridge had made it mean anything.
+`create_backup` copies `assets`, `adventures` and `interactions` into a staging directory, then
+checksums and zips it. That directory came from `TemporaryDirectory()` with no location, so it
+landed in `/tmp` — which the shipped Compose file mounts as a **256 MB tmpfs** on a read-only
+root. Any library past about a quarter of a gigabyte filled RAM and failed, and a real library
+passes that in a few hours of play. The live server this was found on is 1.6 GB.
 
-`AddPartyMon` raises the party count and writes the species list *before* the nickname screen, and
-only copies the 44-byte struct once naming is over. PokeSim read the species out of that struct, so
-for as long as the naming screen was up — 27 seconds, measured — the new partner read as species 0
-with no HP. That is indistinguishable from a fainted team, so the run recorded a blackout on its
-way out of Oak's lab, and the live page showed the slot as `No Mon`, level 0, fainted, which is the
-ROM's own label for species 0. A counted slot with no struct yet is now held apart from the team it
-is joining, and the live page draws it as a slot that is filling.
+The failure is worse than a failed backup. `create_backup` stops every running adventure before
+it copies and restarts them in its `finally`, so the one operation an operator is told to perform
+before upgrading was the one guaranteed to fail on the deployment that needed it. Both legacy
+import paths had the same defect, one of them extracting up to two gigabytes. All three now stage
+inside the application folder, which is what the restore path and three other callers already
+did.
 
-Separately, the region the Pokédex flags will later occupy holds other values for a couple of
-seconds in Oak's lab, before the Pokédex exists. Read as flags, those values said the player owned
-Bulbasaur, Ivysaur, Charmander and Squirtle at once — Ivysaur is not obtainable there at all — and
-four `Got ...!` entries went into the journal. Registering a species always marks it seen on the
-cartridge, so owned flags are now masked by seen ones, and a half-initialised read registers
-nothing.
+## Trading no longer accumulates forever
 
-Adventures that already recorded these entries keep them. Nothing rewrites a journal that has
-already been written; the fix stops the next one being wrong.
+Every Cable Club attempt writes two save states, two cartridge saves and two screenshots under
+`interactions/` — about half a megabyte — and nothing ever removed them. The live server had 377
+of them, 174 MB. Because a backup copies that whole tree, backup number *k* embedded all *k*
+exchanges' save states.
 
-## The trade checks no longer depend on a flag
+The newest twenty resolved exchanges are now kept. An unresolved one is never touched, whatever
+its age, because recovery still needs its outputs. Nothing reads a resolved interaction: the
+preview refuses a terminal phase and the manager only serves a frame for an exchange that has no
+decision yet. Zero keeps everything, as it does for autosaves and stall bundles. The legacy
+coordinator has kept the last twenty transactions all along; the application one never got it.
 
-After both sides of an exchange are written, and before either is adopted, PokeSim verifies that
-the party, badges, bag, box counts and every untraded slot came through untouched, and that the
-arriving Pokémon is the agreed one down to its struct and original trainer. It also compares a
-checksum just before a staged checkpoint is adopted.
+Separately, every notable event stores a full save state beside its screenshot — roughly 40 MB an
+hour — and `prune_events` has always existed to trim it. But `event_retention_days` was missing
+from the Library's settings whitelist, so a managed adventure could not set it and the pruning
+call was dead code. The live server had 560 MB of event save states across two adventures. It is
+settable per adventure now; the default is still to keep everything.
 
-All of that was written as bare `assert` statements, which `python -O` removes outright. Nothing in
-this project sets `PYTHONOPTIMIZE`, so it never fired — but the one irreversible operation in the
-application should not rest on an interpreter flag. The checks raise now, and name which side
-failed and how.
+## A stuck exchange stops hammering the machine
 
-## The README shows what the application actually renders
+An interrupted exchange that cannot be finished — a participant record lost to a restore, say —
+was re-driven every 30 seconds indefinitely, and every pass restarts the worker through the
+recovery path that deliberately ignores a stop request. That is the same bypass that made the
+September incident unbreakable. The interval now doubles from 30 seconds to a ten-minute ceiling
+and resets on success, and after the third failure the status says the trade is not finishing
+instead of repeating that progress is saved.
 
-Every collection view in the old screenshots had an empty square where each portrait goes, so the
-first thing a reader saw was a Pokédex of blank cards. That is not what the application does: a
-missing portrait has drawn a neutral placeholder with the Pokédex number in it since 0.2.0, and
-those shots simply predated a library with a pack installed.
+Recovery still never gives up. A ceiling would mean abandoning an exchange already committed on
+one side, which is the one path that can actually lose a Pokémon; that needs a design, not a
+constant. The remaining risk is written down in the release status.
 
-Retaken from a run with eight badges, all 151 registered and 240 partners. The live shot is a wild
-battle at 1x rather than whatever frame Max speed happened to land on, the PC is sorted by DV
-rating the way the paragraph beside it claims, and the Journal has a picture of its own.
+Related: `runtime.call` raises `TimeoutError` when the emulator thread has not reached a queued
+operation in 45 seconds, and its message asks the caller to retry. `TimeoutError` is an
+`OSError`, not a `RuntimeError`, so it escaped the handler and became a 500 with a full traceback
+in the worker log. It answers with the retryable status and the explanation now. The live logs
+show it firing during ordinary play, not only around shutdown.
 
-## Also in this release
+## Verification
 
-- The game proxy forwarded a worker's raw body while dropping `content-encoding` from the headers
-  it passes on, so a compressed response would have reached the browser as undeclared gzip. It
-  decodes at the proxy now. Nothing compresses one today, which is the only reason this was
-  invisible.
-- The small print on the Pokédex cards was set between 2.5 and 3.7 to 1 against the card at nine
-  pixels. The line telling you whether you have caught something was the hardest thing on the page
-  to read; every colour now clears 4.5 to 1.
-- `pokesim --help` names its commands. The help listed the flags for serving the library and
-  nothing else, so `adventures`, `import`, `import-pair`, `backup` and `restore` could only be
-  found by reading the source, and the usage line called the program `__main__.py`.
-- Four tools that did nothing of their own are gone: three byte-identical shims around
-  `pokesim.prepare_data` and a copy of `prepare_test_data.py` that differed by one word of
-  docstring. A personal checkout path no longer appears in an error message, and `sample_live.py`
-  asks for a host rather than defaulting to one machine's name.
+A mature save — eight badges, all 151 registered, 1,600 game hours — was replayed forward 900,014
+frames on this build: **no rewinds, no errors, 18 achievements**, and the Pokédex unchanged at
+151. The Pokédex masking added in 0.3.1 was also checked against **54 real checkpoints across 27
+adventures**, with no case where it would hide an entry.
 
 ## Upgrading
 
 Nothing to migrate. No database change, no policy state change, and existing checkpoints resume
-untouched. Replace the image or the package where it is deployed, as usual — publishing a release
-does not upgrade a running application.
+untouched. Replace the image or the package where it is deployed.
+
+Finished interaction directories are pruned the next time an exchange resolves, so a library with
+a long trading history returns that disk space on its own. Existing journals keep every event
+they have already recorded; setting `event_retention_days` only affects pruning from then on.
