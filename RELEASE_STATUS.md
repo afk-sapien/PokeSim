@@ -1,37 +1,31 @@
-# Release preparation: 0.3.2
+# Release preparation: 0.3.3
 
-A repair release over 0.3.1, from a review of the parts that had never been read: the trade
-coordinator, the broker, and the per-adventure runtime. All four fixes concern an application
-that has been running for weeks rather than minutes.
+A single-change release over 0.3.2, addressing the largest remaining source of disk growth.
 
-The most consequential one is that the backup an operator is told to take before upgrading could
-not complete. `create_backup` staged the whole library in an unqualified temporary directory,
-which lands in `/tmp`, and the shipped Compose file mounts `/tmp` as a 256 MB tmpfs on a
-read-only root. The live server's library is 1.6 GB. Worse, the backup stops every running
-adventure first and restarts them in its `finally`, so the operation existed only to fail on the
-deployments that needed it. Both legacy import paths shared the defect. All three now stage
-inside the application folder.
+Every notable journal entry stores a full PyBoy save state so the entry can be rewound to. That
+state is 167 KB of mostly zeroed RAM and it was written raw, and they are only ever added to. On
+the server this was found on, two adventures held 2,836 of them totalling 456 MB — against 68 MB
+of screenshots and 108 MB of autosaves, which are bounded at twenty. That was essentially all of
+the roughly 40 MB an hour an adventure wrote.
 
-Finished Cable Club attempt directories are now pruned to the newest twenty, and an adventure can
-finally set `event_retention_days`, which existed and was validated in the runtime but was
-missing from the Library's whitelist, leaving its pruning call dead. The live server was carrying
-174 MB of resolved interactions across 377 directories and 560 MB of event save states, and
-every backup copied all of it into the archive.
-
-A recovery that cannot finish now backs off from 30 seconds to a ten-minute ceiling instead of
-re-driving every 30 seconds forever, and a participant operation that times out answers with a
-retryable status rather than a 500 and a traceback.
+States are now gzipped, about ten to one. Reading detects the gzip magic, so states written
+before this release still load: an existing library keeps resuming and every journal entry keeps
+its rewind.
 
 There is no database change, no policy state change, and no migration. Existing checkpoints
 resume untouched.
 
 ## What was verified
 
-A mature save — eight badges, all 151 registered, 1,600 game hours, 240 partners — was replayed
-900,014 frames on this build with no rewinds, no errors and 18 achievements, ending with the
-Pokédex unchanged at 151. The Pokédex masking introduced in 0.3.1 was checked against 54 real
-checkpoints across 27 adventures, with no case where it would hide a legitimate entry. The live
-deployment's own worker logs were read for the classes of error these fixes address.
+Measured on a real 167,677-byte state from the live server: 15,826 bytes compressed, and PyBoy
+loaded it back to the correct game state (map, party and Pokédex all intact). Compacting that
+server's existing states took the library from 1.6 GB to 961 MB with the application running and
+no errors. The full suite is 1,300 tests, including a round trip through the compressed format
+and a check that a state written before this release still reads.
+
+Carried over from 0.3.2: a mature save was replayed 900,014 frames with no rewinds, no errors and
+18 achievements, and the Pokédex masking from 0.3.1 was checked against 54 real checkpoints
+across 27 adventures.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64 Docker image and
 Compose configuration. The `pokesim-desktop` Python command opens the Library in your browser.
