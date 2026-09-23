@@ -23,6 +23,18 @@
   `event_retention_days` was missing from the Library's settings whitelist, so a managed
   adventure could not set it and the pruning call was permanently dead. The live server had
   560 MB of event states across two adventures.
+- Answer a busy emulator with a retry instead of an internal error. `runtime.call` raises
+  `TimeoutError` when the emulator thread has not reached a queued participant operation in
+  45 seconds, and its message asks the caller to retry the same operation — but `TimeoutError` is
+  an `OSError`, not a `RuntimeError`, so it escaped the handler's tuple and became a 500 with a
+  full traceback in the worker log. Seen firing during ordinary play on the live server, not only
+  during shutdown.
+- Back off a recovery that keeps failing. An interrupted exchange that cannot be finished — a
+  participant record lost to a restore, say — was re-driven every 30 seconds indefinitely, and
+  each pass starts the worker again through the recovery path that deliberately ignores a stop
+  request. Retries still never give up, because a committed exchange has to be completed on both
+  sides, but the interval now doubles to ten minutes and the status explains itself after the
+  third failure rather than repeating that progress is saved.
 
 ## 0.3.1
 

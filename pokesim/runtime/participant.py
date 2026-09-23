@@ -438,5 +438,7 @@ def install(app, runtime):
         import asyncio
         try:
             return await asyncio.to_thread(runtime.call, lambda: getattr(participant, operation)(data), 45)
-        except (ValueError, RuntimeError, KeyError) as error:
+        except (ValueError, RuntimeError, KeyError, TimeoutError) as error:
+            # TimeoutError is an OSError, not a RuntimeError, so it used to escape as a 500
+            # with a traceback even though its own message asks the caller to retry.
             raise HTTPException(409, str(error)) from error

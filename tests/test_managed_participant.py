@@ -153,3 +153,31 @@ def test_compaction_only_strips_released_snapshots(tmp_path):
     assert 'source_metadata' not in store.get(PREFIX + stale['id'])
     assert store.get(PREFIX + live['id'])['source_metadata'] == live['source_metadata']
     store.close()
+
+
+def test_a_busy_emulator_answers_retryable_rather_than_internal_error(tmp_path):
+    """runtime.call raises TimeoutError when the emulator thread is still busy.
+
+    TimeoutError is an OSError, not a RuntimeError, so it escaped the handler's tuple and
+    surfaced as a 500 with a traceback, even though its own message asks the caller to
+    retry the same operation. This drives the real route, not a copy of it.
+    """
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from pokesim.runtime.participant import install
+
+    app = FastAPI()
+    app.state.bootstrap = {'adventure_id': 'a' * 32, 'generation': 'b' * 32,
+                           'settings': {'data_dir': str(tmp_path)}}
+    store = SimpleNamespace(dir=tmp_path, get=lambda key: None, set=lambda key, value: None)
+
+    def call(function, timeout=30):
+        raise TimeoutError('The operation is still pending. Retry the same operation ID.')
+
+    install(app, SimpleNamespace(call=call, store=store, emulator=SimpleNamespace()))
+    response = TestClient(app).post('/internal/participant/stage', json={})
+    assert response.status_code == 409, response.text
+    assert 'Retry the same operation' in response.json()['detail']
