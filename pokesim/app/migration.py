@@ -41,7 +41,8 @@ def import_directory(manager, source, *, rom=None, name=None, stopped=False):
             asset = manager.assets.install_rom(rom.read_bytes())
             settings = manager.validate_adventure_settings({'starter': starter})
             aid_request = identifier()
-            with tempfile.TemporaryDirectory(prefix='pokesim-import-') as temporary:
+            # Inside the application folder, not /tmp, which the container caps at 256 MB.
+            with tempfile.TemporaryDirectory(prefix='.pokesim-import-', dir=manager.root) as temporary:
                 stage = Path(temporary) / 'adventure'
                 shutil.copytree(data, stage, ignore=shutil.ignore_patterns('runtime.lock', 'desktop.lock'))
                 with closing(sqlite3.connect(stage / 'pokesim.sqlite')) as db:
@@ -67,7 +68,8 @@ def import_directory(manager, source, *, rom=None, name=None, stopped=False):
 
 
 def import_archive(manager, archive):
-    with tempfile.TemporaryDirectory(prefix='pokesim-import-') as temporary:
+    # Up to 2 GB is extracted here, which will not fit the container's 256 MB /tmp.
+    with tempfile.TemporaryDirectory(prefix='.pokesim-import-', dir=manager.root) as temporary:
         root = extract_archive(archive, temporary, max_expanded=2 * 1024**3)
         if (root / 'backup.json').is_file():
             raise ValueError('This is a whole-application backup. Restore it to a new directory with pokesim restore.')

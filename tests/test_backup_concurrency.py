@@ -1,4 +1,5 @@
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -105,3 +106,35 @@ def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, state, ex
         assert manager.registry.adventure(row['id'])['desired_state'] == 'running'
     finally:
         manager.close()
+
+
+def test_backup_and_import_stage_inside_the_library_not_tmp(tmp_path, monkeypatch):
+    """The container mounts /tmp as a 256 MB tmpfs, so staging a library there fails in RAM.
+
+    Every backup and import copies the whole library before it writes anything, which is
+    far larger than 256 MB on any adventure that has been running for a while.
+    """
+    import tempfile
+
+    from pokesim.app import backup as backup_module
+    from pokesim.app import migration as migration_module
+
+    manager = Manager(tmp_path, child_factory=FakeChild)
+    staged = []
+    original = tempfile.TemporaryDirectory
+
+    def record(*args, **kwargs):
+        staged.append(kwargs.get('dir'))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(backup_module.tempfile, 'TemporaryDirectory', record)
+    monkeypatch.setattr(migration_module.tempfile, 'TemporaryDirectory', record)
+    create_backup(manager)
+    assert staged, 'create_backup did not stage anything'
+    for directory in staged:
+        assert directory is not None, 'staging fell back to /tmp'
+        assert tmp_path in Path(directory).resolve().parents or Path(directory).resolve() == tmp_path
+
+    with pytest.raises(Exception):
+        migration_module.import_archive(manager, tmp_path / 'missing.zip')
+    assert all(entry is not None for entry in staged)

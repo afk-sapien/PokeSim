@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Stop staging backups and imports in the container's `/tmp`. `create_backup` copied `assets`,
+  `adventures` and `interactions` into an unqualified `TemporaryDirectory` before writing
+  anything, and the shipped Compose file mounts `/tmp` as a 256 MB tmpfs on a read-only root, so
+  the copy went to RAM and failed on any library past about a quarter of a gigabyte — a library
+  reaches that in a few hours. The backup stops every adventure first and restarts them in its
+  `finally`, so the pre-upgrade backup an operator is told to take was exactly the operation that
+  could not finish. Both legacy import paths had the same defect, including the one that extracts
+  up to two gigabytes. All three now stage inside the application folder, which is what the
+  restore path and three other callers already did.
+
 ## 0.3.1
 
 - Stop reporting a blackout for a Pokémon that is still being named. `AddPartyMon` raises the party

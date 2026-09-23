@@ -77,7 +77,9 @@ def create_backup(manager):
             backups = manager.root / 'backups'
             backups.mkdir(exist_ok=True)
             destination = backups / (bid + '.zip')
-            with tempfile.TemporaryDirectory(prefix='pokesim-backup-') as temporary:
+            # Stage beside the archive, never in /tmp: the container mounts /tmp as a 256 MB
+            # tmpfs, so staging a library of any real size there fails in RAM.
+            with tempfile.TemporaryDirectory(prefix='.pokesim-backup-', dir=backups) as temporary:
                 staging = Path(temporary)
                 with closing(sqlite3.connect(staging / 'app.sqlite')) as target:
                     with manager.registry.lock:
