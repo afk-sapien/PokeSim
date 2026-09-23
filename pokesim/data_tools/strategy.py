@@ -1,6 +1,6 @@
 """Generate strategy data from a checkout of https://github.com/pret/pokered.
 
-Usage: python tools/gen_strategy.py /path/to/pokered
+Usage: python -m pokesim.prepare_data /path/to/pokered
 Only map geometry and game constants are exported, never ROM images.
 """
 import json

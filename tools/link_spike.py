@@ -12,7 +12,7 @@ save file (every PyBoy instance is stopped with ``save=False``).
 
 Run with the project interpreter, which is where PyBoy 2.7 lives::
 
-    /home/ty/Repos/pokesim/.venv/bin/python tools/link_spike.py all --rom roms/pokered.gb
+    .venv/bin/python tools/link_spike.py all --rom roms/pokered.gb
 
 Stages (see ``--help``):
 
@@ -46,7 +46,7 @@ logging.getLogger("pyboy.pyboy").setLevel(logging.ERROR)
 try:
     from pyboy import PyBoy
 except ImportError:  # pragma: no cover - spike
-    sys.exit("pyboy is not importable. Use /home/ty/Repos/pokesim/.venv/bin/python")
+    sys.exit("pyboy is not importable. Run this with the project interpreter, e.g. .venv/bin/python")
 
 
 # --------------------------------------------------------------------------

@@ -1,13 +1,16 @@
 """Record bounded health and adventure evidence from the homeserver."""
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import time
 
 
 REMOTE = r'''
+import os
 import json
+import os
 from pathlib import Path
 import shutil
 import sqlite3
@@ -103,7 +106,8 @@ print(json.dumps(sample))
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--host', default='servarr')
+    parser.add_argument('--host', default=os.environ.get('POKESIM_SAMPLE_HOST'), required='POKESIM_SAMPLE_HOST' not in os.environ,
+                        help='SSH host running the adventures, or set POKESIM_SAMPLE_HOST')
     parser.add_argument('--output', type=Path, default=Path('data/operations/live-samples.json'))
     args = parser.parse_args()
     try:

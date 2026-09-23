@@ -32,6 +32,11 @@
   unencountered species' name sat between 2.5 and 3.7 to 1 against the card, at nine pixels, so the
   line telling you whether you have caught something was the hardest thing on the page to read.
   Every one of them now clears 4.5 to 1.
+- Remove four tools that did nothing of their own. `gen_collection.py`, `gen_strategy.py` and
+  `gen_tables.py` were byte-identical shims around `pokesim.prepare_data`, which the data tools now
+  name directly, and `prepare_desktop_test_data.py` differed from its sibling by one word of
+  docstring. A personal checkout path no longer appears in `link_spike.py`'s error message, and
+  `sample_live.py` asks for a host instead of defaulting to one homeserver's name.
 
 ## 0.3.0
 
