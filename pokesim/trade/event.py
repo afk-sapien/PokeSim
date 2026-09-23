@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from . import boxes, pair
+from .pair import verified
 from .execute import _boot, _publish, _state_bytes, register_arrival
 from ..policies.collection import champion
 from ..strategy_data import MOVES, SPECIES
@@ -108,20 +109,25 @@ def stage(root, transaction, league_rewards=False):
         finally:
             pb.stop(save=False)
         after, _, slots = pair.inspect(rom, target)
-        assert before.party == after.party
-        assert before.badges == after.badges and before.items == after.items
-        assert before.owned <= after.owned
-        assert all(slots[key] == value for key, value in old_slots.items())
+        verified(before.party == after.party, f'{name} party changed')
+        verified(before.badges == after.badges and before.items == after.items,
+                 f'{name} badges or bag changed')
+        verified(before.owned <= after.owned, f'{name} lost Pokédex entries')
+        verified(all(slots[key] == value for key, value in old_slots.items()),
+                 f'{name} changed a box slot that the gift should not touch')
         expected_counts = list(before.box_counts)
         if eligible[name]:
             box, position = eligible[name]
             expected_counts[box - 1] += 1
             actual = slots[(box, position)]
-            assert (actual.struct, actual.nickname, actual.ot_name) == (gift.struct, gift.nickname, gift.ot_name)
-            assert after.owned == before.owned | {SPECIES[gift.species]['dex']}
+            verified((actual.struct, actual.nickname, actual.ot_name)
+                     == (gift.struct, gift.nickname, gift.ot_name),
+                     f'{name} stored a different Pokémon than the gift')
+            verified(after.owned == before.owned | {SPECIES[gift.species]['dex']},
+                     f'{name} Pokédex did not gain exactly the gift')
         else:
-            assert before.owned == after.owned
-        assert tuple(expected_counts) == after.box_counts
+            verified(before.owned == after.owned, f'{name} Pokédex changed without a gift')
+        verified(tuple(expected_counts) == after.box_counts, f'{name} box counts are wrong')
         states[name] = str(target)
         hashes[name] = hashlib.sha256(target.read_bytes()).hexdigest()
     pair.write_json(work / 'result.json', {

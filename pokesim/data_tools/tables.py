@@ -1,6 +1,6 @@
 """Generate pokesim/data/tables.json from pret/pokered constants files.
 
-Usage: python tools/gen_tables.py <dir containing map_constants.asm, pokemon_constants.asm, item_constants.asm>
+Usage: python -m pokesim.prepare_data <dir containing map_constants.asm, pokemon_constants.asm, item_constants.asm>
 """
 import re
 from pathlib import Path

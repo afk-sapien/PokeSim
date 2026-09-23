@@ -80,13 +80,13 @@ main#pokedex { padding-bottom:40px }
 .dex-card img { height:72px }
 .dex-card strong { font-size:14px }
 .dex-card .dex-num { font:9px ui-monospace,monospace }
-.dex-card .dex-num { color:#a0a397 }
+.dex-card .dex-num { color:#737669 }
 .dex-card .dex-num { letter-spacing:1px }
 .dex-card .card-types { display:flex }
 .dex-card .card-types { gap:4px }
 .dex-card .card-types { margin-top:3px }
 .dex-card .card-note { font-size:9px }
-.dex-card .card-note { color:#8b8f82 }
+.dex-card .card-note { color:#72766a }
 .dex-card .card-note { margin-top:6px }
 .dex-card .card-counts { font-size:11px }
 .dex-card .card-counts { color:#53614d }
@@ -94,11 +94,11 @@ main#pokedex { padding-bottom:40px }
 .dex-card .card-counts { font-variant-numeric:tabular-nums }
 .dex-card.caught { border-color:#c3d3b6 }
 .dex-card.caught { background:#fbfdf5 }
-.dex-card.caught .card-note { color:#6f8d5f }
-.dex-card.seen .card-note { color:#b08b3f }
+.dex-card.caught .card-note { color:#637d55 }
+.dex-card.seen .card-note { color:#8f7133 }
 .dex-card.unseen img { filter:grayscale(1) }
 .dex-card.unseen img { opacity:.34 }
-.dex-card.unseen strong { color:#9a9d92 }
+.dex-card.unseen strong { color:#73766a }
 .hunt-flag { position:absolute }
 .hunt-flag { top:8px }
 .hunt-flag { right:8px }

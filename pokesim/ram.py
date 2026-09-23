@@ -128,7 +128,19 @@ class PartyMon:
     trainer_id: int | None = None
 
     @property
+    def pending(self) -> bool:
+        """A counted slot whose 44-byte struct the cartridge has not filled in yet.
+
+        AddPartyMon raises wPartyCount and writes wPartySpecies before the nickname
+        screen, but only copies the struct at wPartyMons afterwards, so a Pokémon
+        being named reads as species 0 for as long as the naming screen is up.
+        """
+        return self.species == 0
+
+    @property
     def name(self) -> str:
+        if self.pending:
+            return "Joining the team"
         return SPECIES_NAMES.get(self.species, f"#{self.species}")
 
 
@@ -253,7 +265,10 @@ class Snapshot:
 
     @property
     def all_fainted(self) -> bool:
-        return bool(self.party) and all(p.hp == 0 for p in self.party)
+        # A Pokémon still on the naming screen reads as an empty struct, so counting it
+        # would report a blackout for a team that has not fought anything yet.
+        decoded = [p for p in self.party if not p.pending]
+        return bool(decoded) and all(p.hp == 0 for p in decoded)
 
     def to_dict(self) -> dict:
         from .pokemon import party_details
@@ -261,7 +276,7 @@ class Snapshot:
             "frame": self.frame, "map": self.map, "map_name": self.map_name, "x": self.x, "y": self.y,
             "badges": self.badge_list,
             "party": [{"species": p.species, "name": p.name, "nick": p.nick, "level": p.level,
-                       "hp": p.hp, "max_hp": p.max_hp, "status": p.status,
+                       "hp": p.hp, "max_hp": p.max_hp, "status": p.status, "pending": p.pending,
                        "types": p.types, "moves": p.moves, "pp": p.pp, **party_details(p)} for p in self.party],
             "hall_of_fame_count": self.hall_of_fame_count, "coins": self.coins,
             "owned": len(self.owned), "seen": len(self.seen), "money": self.money,
@@ -350,14 +365,20 @@ def read_snapshot(mem, frame: int) -> Snapshot:
     items = tuple((raw[i], raw[i + 1]) for i in range(0, len(raw), 2) if raw[i] not in (0, 0xFF))
     in_battle = mem[W_IS_IN_BATTLE]
     stored = read_stored_details(mem)
+    # Every cartridge path that registers a species also marks it seen, so an owned flag
+    # without its seen flag is not Pokédex data at all. Oak's lab leaves other values in
+    # this region for a couple of seconds before the Pokédex exists, which otherwise reads
+    # as owning four starters at once.
+    seen_dex = flag_bits(bytes(mem[W_DEX_SEEN:W_DEX_SEEN + 19]))
+    owned_dex = flag_bits(bytes(mem[W_DEX_OWNED:W_DEX_OWNED + 19])) & seen_dex
     return Snapshot(
         frame=frame,
         map=mem[W_CUR_MAP], x=mem[W_X], y=mem[W_Y],
         badges=mem[W_BADGES],
         saffron_open=bool(mem[W_STATUS_FLAGS1] & 64),
         party=tuple(party),
-        owned=frozenset(flag_bits(bytes(mem[W_DEX_OWNED:W_DEX_OWNED + 19]))),
-        seen=frozenset(flag_bits(bytes(mem[W_DEX_SEEN:W_DEX_SEEN + 19]))),
+        owned=frozenset(owned_dex),
+        seen=frozenset(seen_dex),
         money=bcd(bytes(mem[W_MONEY:W_MONEY + 3])),
         items=items,
         in_battle=in_battle,

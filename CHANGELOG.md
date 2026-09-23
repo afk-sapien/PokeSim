@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+- Stop reporting a blackout for a Pokémon that is still being named. `AddPartyMon` raises the party
+  count and writes the species list before the nickname screen, and only fills the struct at
+  `wPartyMons` once naming is over, so for the 27 seconds that screen is up the new partner reads as
+  species 0 with no HP. That counted as a fainted team, so every new adventure recorded two
+  "Blacked out!" entries on its way out of Oak's lab and sent the matching notifications, and the
+  live page showed the slot as `No Mon`, level 0, fainted. A counted slot the cartridge has not
+  filled in yet is now held apart from the team it is joining.
+- Stop registering four starters the player never received. The region the Pokédex flags will later
+  occupy holds other values for a couple of seconds in Oak's lab, which read as owning Bulbasaur,
+  Ivysaur, Charmander and Squirtle at once and put all four in the journal. Every cartridge path
+  that registers a species also marks it seen, so an owned flag arriving without its seen flag is
+  not Pokédex data and is no longer read as any.
+- Keep the post-trade checks when assertions are turned off. The verification that a staged
+  exchange left the party, badges, bag, box counts and every untraded slot alone, and that the
+  arriving Pokémon is the agreed one down to its struct and original trainer, was written as bare
+  `assert` statements, as was the checksum compared just before a staged checkpoint is adopted.
+  `python -O` removes those outright, which would have marked a corrupted exchange staged and
+  adopted it without a word. They raise now.
+- Decode an adventure's response in the application before forwarding it. The proxy streamed the
+  child's raw bytes while dropping `content-encoding` from the headers it passes on, so any
+  compressed response would have reached the browser as undeclared gzip. Nothing compresses one
+  today, which is the only reason this was invisible.
+- Name the commands in `pokesim --help`. The help listed the flags for serving the library and
+  nothing else, so `adventures`, `import`, `import-pair`, `backup` and `restore` could only be
+  found by reading the source, and the usage line called the program `__main__.py` rather than the
+  command that was installed.
+- Darken the small print on the Pokédex cards. The entry number, the caught and seen notes and an
+  unencountered species' name sat between 2.5 and 3.7 to 1 against the card, at nine pixels, so the
+  line telling you whether you have caught something was the hardest thing on the page to read.
+  Every one of them now clears 4.5 to 1.
+- Remove four tools that did nothing of their own. `gen_collection.py`, `gen_strategy.py` and
+  `gen_tables.py` were byte-identical shims around `pokesim.prepare_data`, which the data tools now
+  name directly, and `prepare_desktop_test_data.py` differed from its sibling by one word of
+  docstring. A personal checkout path no longer appears in `link_spike.py`'s error message, and
+  `sample_live.py` asks for a host instead of defaulting to one homeserver's name.
+
 ## 0.3.0
 
 - Stack the plan row on a narrow screen. The three columns it reads across kept their layout at

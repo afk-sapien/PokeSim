@@ -12,7 +12,17 @@ from ..ram import read_snapshot
 from ..web.pokedex import live_status
 from . import boxes
 from . import preferences
-from .execute import _boot, perform, evolve_on_arrival
+from .execute import TradeError, _boot, perform, evolve_on_arrival
+
+
+def verified(condition, message):
+    """Post-trade checks must survive `python -O`, which strips `assert` outright.
+
+    These run after both states are written and are the last thing standing between a
+    corrupted exchange and a staged one, so they raise instead of asserting.
+    """
+    if not condition:
+        raise TradeError(f'Refusing to stage the exchange: {message}')
 
 
 def write_json(path, data):
@@ -87,16 +97,21 @@ def stage(root, transaction):
         previous, old_slots = before[name]
         sent = deals[0]['give' if index == 0 else 'take']
         selected = (sent['box'], sent['position'])
-        assert previous.party == after.party
-        assert previous.badges == after.badges and previous.box_counts == after.box_counts
-        assert previous.owned <= after.owned
-        assert all(slots[key] == value for key, value in old_slots.items() if key != selected)
+        verified(previous.party == after.party, f'{name} party changed')
+        verified(previous.badges == after.badges and previous.box_counts == after.box_counts,
+                 f'{name} badges or box counts changed')
+        verified(previous.owned <= after.owned, f'{name} lost Pokédex entries')
+        verified(all(slots[key] == value for key, value in old_slots.items() if key != selected),
+                 f'{name} changed a box slot that was not traded')
         moved = result['moved'][index]
-        assert slots[selected].species == moved['received']['species']
+        verified(slots[selected].species == moved['received']['species'],
+                 f'{name} received a different species than the deal recorded')
         other = deals[0]['take' if index == 0 else 'give']
         incoming = before[other['instance']][1][(other['box'], other['position'])]
         expected, _ = evolve_on_arrival(incoming)
-        assert (slots[selected].struct, slots[selected].nickname, slots[selected].ot_name) == (expected.struct, expected.nickname, expected.ot_name)
+        verified((slots[selected].struct, slots[selected].nickname, slots[selected].ot_name)
+                 == (expected.struct, expected.nickname, expected.ot_name),
+                 f'{name} received a Pokémon that does not match the agreed one')
         moved['owned_before'], moved['owned_after'] = len(previous.owned), len(after.owned)
     result.update(status='staged', id=transaction, proposal=deals[0])
     result['hashes'] = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in outputs.items()}

@@ -52,7 +52,8 @@ class Coordinator:
         self.root = root
         self.config = json.loads((root / 'policy.json').read_text())
         self.peers = self.config['peers']
-        assert set(self.peers) == {'red', 'blue'}
+        if set(self.peers) != {'red', 'blue'}:
+            raise ValueError('Legacy pair trading expects exactly a red and a blue peer')
         self.active_path = root / 'active.json'
 
     def worker(self, action, transaction):
@@ -224,7 +225,10 @@ class Coordinator:
                 pairs = []
                 for name, peer in self.peers.items():
                     source = self.root / 'transactions' / active['id'] / 'after' / name / Path(result['states'][name]).name
-                    assert hashlib.sha256(source.read_bytes()).hexdigest() == result['hashes'][name]
+                    # Adoption is the irreversible step, so this integrity check must not
+                    # disappear under `python -O` the way an assert would.
+                    if hashlib.sha256(source.read_bytes()).hexdigest() != result['hashes'][name]:
+                        raise ValueError(f'Staged checkpoint for {name} failed verification')
                     target = Path(peer['data']) / 'states' / source.name
                     pairs += [(source, target), (source.with_suffix('.json'), target.with_suffix('.json'))]
                 active['targets'] = [str(target) for _, target in pairs]

@@ -553,8 +553,11 @@ def create_app(manager, shutdown=lambda: None):
             await client.aclose()
             raise HTTPException(503, 'The adventure is reconnecting') from error
         async def stream():
+            # Decode here rather than forwarding raw bytes: `content-encoding` is not one of
+            # the headers that survive below, so a compressed child response would otherwise
+            # reach the browser as undeclared gzip.
             try:
-                async for chunk in response.aiter_raw():
+                async for chunk in response.aiter_bytes():
                     yield chunk
             finally:
                 await response.aclose()
@@ -584,7 +587,12 @@ def configure_logging(root):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Run one PokeSim application with multiple adventures')
+    parser = argparse.ArgumentParser(
+        prog='pokesim',
+        description='Run one PokeSim application with multiple adventures',
+        epilog='Commands: adventures (list, create, start, stop), import, import-pair, backup, '
+               'restore, desktop, legacy. Each takes its own --help, for example '
+               '"pokesim adventures create --help". Running pokesim with no command serves the library.')
     parser.add_argument('--desktop', action='store_true')
     parser.add_argument('--data-dir', type=Path)
     parser.add_argument('--host')
