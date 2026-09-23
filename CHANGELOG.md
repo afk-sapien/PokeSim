@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Stop storing a save state with journal entries at all. 0.3.4 narrowed this to eight event
+  types; it should have been none. The rewind it powered is refused outright on any adventure
+  that has completed a trade, because `can_rewind` requires no `trade_barrier` and every earlier
+  checkpoint predates the barrier — so two live adventures were holding 456 MB of save states for
+  a button that could not appear on either of them. Going back to a moment is what the twenty
+  rotating autosaves, the League entry checkpoint and the before-stall checkpoint are for, and
+  those are bounded. A journal entry now costs its screenshot, about 3.6 KB. Entries written
+  earlier keep the states they already have, so nothing that rewinds today stops working.
+
 ## 0.3.4
 
 - Keep a save state only for moments worth returning to. A rewind stores a whole emulator save

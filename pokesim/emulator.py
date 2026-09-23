@@ -17,7 +17,7 @@ from pyboy import PyBoy
 from . import __version__, config
 from .build_info import build_info
 from .checkpoints import open_state
-from .events import HIGH, REWINDABLE, Event, RunMemory, diff
+from .events import HIGH, Event, RunMemory, diff
 from . import rewards
 from .legendary import LegendaryRecovery
 from .play_clock import PlayClock
@@ -425,12 +425,11 @@ class Emulator:
             rewards.earn(self.store, self.mem.championships,
                          enabled=getattr(config, 'LEAGUE_REWARDS', False))
         png = self._shot_png()
-        state = None
+        # A journal entry keeps its screenshot, not a save state. Going back to a moment is what
+        # the rotating autosaves are for, and on any adventure that has completed a trade the
+        # rewind is refused anyway, because every earlier checkpoint predates the trade barrier.
         for ev in events:
-            rewindable = ev.type in REWINDABLE
-            if rewindable and state is None:
-                state = self._state_bytes()
-            eid = self.store.add_event(ev, snap, png, state if rewindable else None)
+            eid = self.store.add_event(ev, snap, png, None)
             if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'):
                 self.last_achievement = {'id': eid, 'title': ev.title, 'ts': time.time()}
             if ev.type in PROGRESS_EVENTS:

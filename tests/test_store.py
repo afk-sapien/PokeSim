@@ -89,3 +89,20 @@ def test_save_states_written_before_compression_still_load(tmp_path):
     legacy.write_bytes(raw)
     with open_state(legacy) as handle:
         assert handle.read() == raw
+
+
+def test_a_journal_entry_costs_its_screenshot_and_nothing_else(store):
+    """Going back to a moment is what the rotating autosaves are for.
+
+    A per-entry save state was 167 KB each, and the rewind it powered is refused outright on
+    any adventure that has completed a trade, because every earlier checkpoint predates the
+    trade barrier. Two live adventures were holding 456 MB of them for a button that could
+    not appear on either.
+    """
+    eid = store.add_event(Event('badge', 'Beat Brock!', priority=4), snap(), b'png-bytes', None)
+
+    row = store.event(eid)
+    assert row['shot'], 'the screenshot is the point of a journal entry'
+    assert row['state'] is None
+    assert list(store.states.iterdir()) == []
+    assert (store.shots / row['shot']).read_bytes() == b'png-bytes'
