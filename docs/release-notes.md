@@ -1,35 +1,52 @@
-# PokeSim 0.3.3 experimental beta
+# PokeSim 0.3.4 experimental beta
 
-One change, and it is the largest single source of disk growth in the application.
+Two changes to the same thing: how much an adventure writes to disk just by existing. Together
+they take the journal's storage on a long-running adventure down by about 98%.
 
-## Journal save states are compressed
+## A save state is kept only for moments worth returning to
 
-Every notable journal entry stores a full PyBoy save state so that entry can be rewound to. That
-state is 167 KB of mostly zeroed RAM and it was written raw. They are only ever added to, never
-rewritten, so they accumulate for the life of an adventure.
+Every journal entry that counted as *notable* stored a full emulator save state so that entry
+could be rewound to. That conflated three different questions, because "notable" also decides
+what reaches the Atom feed and what sends a phone notification. A Pokémon reaching level 50 is
+worth reading about. It is not worth a 167 KB snapshot of the entire machine.
 
-On the server this was found on, two adventures were carrying **2,836 of them, 456 MB** — against
-68 MB of the screenshots beside them and 108 MB of autosaves, which are bounded at twenty. That
-is essentially all of the roughly 40 MB an hour an adventure was writing.
+Measured across two live adventures: 2,840 stored states, of which **levelling up was 840 and
+walking into a new map was 421** — 46% between them, and 82% once every other incidental type is
+counted. Badges were 17.
 
-A PyBoy state gzips about ten to one. Measured on a real state from that server: 167,677 bytes to
-15,826, and PyBoy loads the compressed state back to the correct game state. Compacting the
-existing states on that server took its library from 1.6 GB to 961 MB.
+States are now kept for the things that are rare, hard to undo, or that you would want to get in
+front of: badges, Hall of Fame runs, new partners, evolutions, blackouts, stalls and legendary
+retries. Everything else still appears in the journal, the feed and your notifications exactly as
+before — it simply no longer carries a snapshot.
 
-Reading detects the gzip magic, so **states written before this release still load**. An existing
-library keeps resuming and every journal entry written so far keeps its rewind.
+Entries written before this release keep the states they already have, so no rewind that works
+today stops working.
+
+## Those states are compressed (from 0.3.3)
+
+A PyBoy save state is 167 KB of mostly zeroed RAM and was written raw. It gzips about ten to one:
+measured on a real state, 167,677 bytes to 15,826, and PyBoy loads the compressed state back to
+the correct game state. Reading detects the gzip magic, so older uncompressed states still load.
+
+Compacting the existing states on the server this was found on took its library from 1.6 GB to
+961 MB, with the application running.
+
+## Together
+
+That server was writing roughly 40 MB an hour per adventure, nearly all of it these states. With
+both changes a comparable adventure writes on the order of **half a megabyte an hour** for its
+journal, and the historical 456 MB becomes about 8 MB once only the rewindable moments are kept.
 
 ## Upgrading
 
-Nothing to migrate, and no action required — new entries are written compressed from the first
-one.
+Nothing to migrate and no action required. New entries follow the new rules immediately; old ones
+are untouched.
 
-Existing entries are left as they are and keep working. If you want the space back now, gzip the
-`event-*.state` files under each adventure's `states/` directory in place, keeping the same
-filenames; the reader accepts either format. Do that only on a version that includes this
-release, because an older build reads those files raw and its rewind will fail on a compressed
-one.
+If you want the existing space back, gzip the `event-*.state` files under each adventure's
+`states/` directory in place, keeping the same filenames — the reader accepts either format. Do
+that only on 0.3.3 or later, because an older build reads those files raw and its rewind will
+fail on a compressed one.
 
-Autosaves and the policy manifest beside them are deliberately left uncompressed. They are
-bounded at twenty, and the manifest's checksum is recorded over the raw bytes in several places
-including the trade path, so compressing those is a wider change than this one.
+Autosaves and the policy manifest beside them are still uncompressed. They are bounded at twenty,
+and the manifest's checksum is recorded over the raw bytes in several places including the trade
+path, so compressing those is a wider change than this one.

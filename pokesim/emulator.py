@@ -17,7 +17,7 @@ from pyboy import PyBoy
 from . import __version__, config
 from .build_info import build_info
 from .checkpoints import open_state
-from .events import HIGH, Event, RunMemory, diff
+from .events import HIGH, REWINDABLE, Event, RunMemory, diff
 from . import rewards
 from .legendary import LegendaryRecovery
 from .play_clock import PlayClock
@@ -427,9 +427,10 @@ class Emulator:
         png = self._shot_png()
         state = None
         for ev in events:
-            if ev.notable and state is None:
+            rewindable = ev.type in REWINDABLE
+            if rewindable and state is None:
                 state = self._state_bytes()
-            eid = self.store.add_event(ev, snap, png, state if ev.notable else None)
+            eid = self.store.add_event(ev, snap, png, state if rewindable else None)
             if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'):
                 self.last_achievement = {'id': eid, 'title': ev.title, 'ts': time.time()}
             if ev.type in PROGRESS_EVENTS:

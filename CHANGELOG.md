@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.3.4
+
+- Keep a save state only for moments worth returning to. A rewind stores a whole emulator save
+  state, and one was kept for every *notable* entry — which conflated three different questions,
+  because notable also decides what reaches the feed and what sends a notification. Levelling up
+  and walking into a Pokémon Center are worth reading and are not worth a snapshot: across two
+  live adventures they were 1,261 of 2,840 states, and 82% of states belonged to types nobody
+  would rewind to. States are now kept for badges, Hall of Fame runs, new partners, evolutions,
+  blackouts, stalls and legendary retries only. Existing entries keep the states they already
+  have, so no rewind that works today stops working.
+
 ## 0.3.3
 
 - Compress the save state kept with every notable journal entry. A PyBoy state is 167 KB of

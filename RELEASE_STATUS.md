@@ -1,12 +1,20 @@
-# Release preparation: 0.3.3
+# Release preparation: 0.3.4
 
-A single-change release over 0.3.2, addressing the largest remaining source of disk growth.
+Two changes over 0.3.2, both about how much an adventure writes to disk just by existing.
+Together they reduce the journal's storage on a long-running adventure by about 98%.
 
 Every notable journal entry stores a full PyBoy save state so the entry can be rewound to. That
 state is 167 KB of mostly zeroed RAM and it was written raw, and they are only ever added to. On
 the server this was found on, two adventures held 2,836 of them totalling 456 MB — against 68 MB
 of screenshots and 108 MB of autosaves, which are bounded at twenty. That was essentially all of
 the roughly 40 MB an hour an adventure wrote.
+
+A save state was kept for every *notable* journal entry, which conflated three questions: notable
+also decides what reaches the feed and what sends a notification. Across two live adventures,
+levelling up accounted for 840 of 2,840 states and entering a map for 421; 82% belonged to types
+nobody would rewind to. States are now kept only for badges, Hall of Fame runs, new partners,
+evolutions, blackouts, stalls and legendary retries. Entries written earlier keep the states they
+already have.
 
 States are now gzipped, about ten to one. Reading detects the gzip magic, so states written
 before this release still load: an existing library keeps resuming and every journal entry keeps
@@ -20,7 +28,7 @@ resume untouched.
 Measured on a real 167,677-byte state from the live server: 15,826 bytes compressed, and PyBoy
 loaded it back to the correct game state (map, party and Pokédex all intact). Compacting that
 server's existing states took the library from 1.6 GB to 961 MB with the application running and
-no errors. The full suite is 1,300 tests, including a round trip through the compressed format
+no errors. The full suite is 1,302 tests, including a round trip through the compressed format
 and a check that a state written before this release still reads.
 
 Carried over from 0.3.2: a mature save was replayed 900,014 frames with no rewinds, no errors and

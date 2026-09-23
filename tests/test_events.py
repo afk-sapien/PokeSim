@@ -299,3 +299,28 @@ def test_owned_without_seen_is_not_pokedex_data():
     mem[W_DEX_SEEN] = 0b00000001            # once Bulbasaur is genuinely registered
     snapshot = read_snapshot(mem, 0)
     assert snapshot.owned == frozenset({1}) and snapshot.seen == frozenset({1})
+
+
+def test_only_moments_worth_returning_to_keep_a_save_state():
+    """A rewind costs a whole emulator save state, so it is not for every journal entry.
+
+    On a long-running adventure, levelling up and walking into a Pokémon Center were 82%
+    of the states on disk and neither is a moment anyone would rewind to.
+    """
+    from pokesim.events import REWINDABLE
+
+    for kind in ('badge', 'champion', 'catch', 'obtain', 'evolve', 'blackout'):
+        assert kind in REWINDABLE, kind
+    for kind in ('level', 'map', 'playtime', 'item', 'money', 'release', 'faint', 'seen', 'trade'):
+        assert kind not in REWINDABLE, kind
+
+
+def test_a_level_up_is_still_notable_but_no_longer_snapshotted():
+    """Being worth reading and being worth returning to are different questions."""
+    from pokesim.events import NOTABLE_PRIORITY, REWINDABLE
+
+    level = Event('level', 'PICKLES grew to level 50', priority=NORMAL)
+    badge = Event('badge', 'Beat Brock!', priority=URGENT)
+    assert level.notable and level.priority >= NOTABLE_PRIORITY
+    assert level.type not in REWINDABLE
+    assert badge.notable and badge.type in REWINDABLE

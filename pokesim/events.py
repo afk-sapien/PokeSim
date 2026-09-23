@@ -20,10 +20,17 @@ MONEY_MILESTONES = (10_000, 50_000, 100_000, 250_000, 500_000, 999_999)
 PLAYTIME_MILESTONE_HOURS = 10
 
 # Priority scale (same as ntfy's): 5 urgent, 4 high, 3 normal, 2 low, 1 minimal.
-# Events at NOTABLE_PRIORITY or above are "notable": they get a save state, go to the feed by default
-# and are pushed to ntfy (subject to NTFY_MIN_PRIORITY). MINIMAL ones only show on the timeline.
+# Events at NOTABLE_PRIORITY or above are "notable": they go to the feed by default and are
+# pushed to ntfy (subject to NTFY_MIN_PRIORITY). MINIMAL ones only show on the timeline.
 URGENT, HIGH, NORMAL, LOW, MINIMAL = 5, 4, 3, 2, 1
 NOTABLE_PRIORITY = LOW
+
+# Being worth reading is not the same as being worth returning to. A rewind stores a whole
+# emulator save state, so it is kept only for moments that are rare and hard to undo: a badge,
+# a Hall of Fame run, a new partner, an evolution, and the two things you would want to get in
+# front of. Levelling up and walking into a Pokémon Center are neither, and on a long-running
+# adventure they were 82% of the states on disk.
+REWINDABLE = {'badge', 'champion', 'catch', 'obtain', 'evolve', 'blackout', 'stall', 'legendary_retry'}
 LEGENDARY_DEX = {144, 145, 146, 150, 151}       # the birds, Mewtwo, Mew
 ELITE_FOUR = {33, 44, 46, 47}                    # Bruno, Lorelei, Agatha, Lance (trainer classes)
 
