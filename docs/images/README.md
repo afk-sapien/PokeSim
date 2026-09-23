@@ -1,25 +1,29 @@
 # README screenshots
 
-Captured September 21, 2026 from the running Red adventure (eight badges, 138 of 151
-registered, 26 League wins, 735 game hours). These are browser screenshots of actual
-game state, not mockups or generated art. The live simulation continued running during
-capture, so `journal.png` predates the others.
+Captured September 23, 2026 from a running Red adventure (eight badges, all 151 registered,
+283 League wins, 1,603 game hours, 240 partners across the party and twelve boxes). These are
+browser screenshots of actual game state, not mockups or generated art. The live simulation
+continued running during capture, so the Journal entries are a few minutes ahead of the rest.
 
-The capture browser reported the tab as hidden, and the viewer stops fetching frames
-for a hidden tab on purpose, so `document.hidden` was overridden for the live shot and
-the page then loaded its own frames as usual. Page zoom was reduced to fit each view
-into one capture.
+Captured at a 1280 pixel viewport and twice that pixel density, then halved, so the Game Boy
+screen and the portraits stay sharp. The viewer stops fetching frames for a hidden tab on
+purpose, so `document.hidden` was overridden for the live shot and the page then loaded its own
+frames as usual. The live shot was taken during a wild battle, with the pace at 1x rather than
+Max, because at Max speed the screen is wherever the run happened to be that frame.
 
 | File | View |
 | --- | --- |
-| `live-adventure.png` | Live game, six teammates with moves and DV ratings, and the plan across the foot |
-| `pokedex.png` | Registered, seen, caught, level 100 and perfect find counts, and the first species rows |
-| `pc-storage.png` | Party and all boxes, sorted by power with the strongest first |
-| `journal.png` | Recent highlights, game screenshots, and milestones |
+| `live-adventure.jpg` | A wild Onix battle, six teammates with moves, PP and DV ratings, and the plan across the foot |
+| `journal.jpg` | Highlights: an evolution, the League victory, and the Elite Four, each with its own screenshot |
+| `pokedex.jpg` | Registered, seen, catches tracked, level 100 and perfect find counts, and the first species rows |
+| `pc-storage.jpg` | Party and all boxes, sorted by DV star rating with the best first |
 
-The running build includes development work ahead of the release it displays, so its
-displayed version alone does not identify all of those changes. Portraits come from an
-optional local pack and are not included in PokeSim downloads.
+Only the JPEGs are kept. The README embeds these files directly, so an unreferenced PNG of the
+same view is weight in the source package for nothing.
+
+Portraits come from an optional local pack and are not included in PokeSim downloads. Without
+one, every card shows a neutral placeholder with the Pokédex number in it, so retake these
+against a library that has a pack installed or the collection pages will undersell themselves.
 
 Keep screenshots free of browser chrome, local file paths, credentials, and private
 settings. Use actual interface controls to choose a view without altering game state.

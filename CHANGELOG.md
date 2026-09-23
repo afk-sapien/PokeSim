@@ -37,6 +37,13 @@
   name directly, and `prepare_desktop_test_data.py` differed from its sibling by one word of
   docstring. A personal checkout path no longer appears in `link_spike.py`'s error message, and
   `sample_live.py` asks for a host instead of defaulting to one homeserver's name.
+- Retake the README screenshots against a library that has a portrait pack installed. Every
+  collection view in the old set showed empty squares where the portraits go, which is what a
+  reader saw first and is not what the application does: a missing portrait has drawn a numbered
+  placeholder since 0.2.0. The live shot is now a battle at 1x rather than whatever frame Max
+  speed happened to be on, the PC is sorted by DV rating the way the text beside it claims, the
+  Journal has a picture of its own for the first time, and the unreferenced PNG copy of each view
+  is gone from the source package.
 
 ## 0.3.0
 

@@ -6,25 +6,31 @@ PokeSim plays Pokémon Red and Blue by itself, and you watch it happen in your b
 
 Fair warning: you will get attached to a Lapras named PICKLES, and you will argue with its battle decisions.
 
-![PokeSim running Pokémon Red: the live game, six teammates with their moves and DV ratings, all eight badges, and the current plan along the bottom](docs/images/live-adventure.jpg)
+![PokeSim running Pokémon Red: a wild Onix battle in Victory Road, six teammates with their moves, PP and DV ratings, all eight badges, and the current plan along the bottom](docs/images/live-adventure.jpg)
 
-*The live adventure: the game, the team, and the plan (allegedly), all in one place.*
+*The live adventure: the game, the team, and the plan (allegedly), all in one place. DAMPSTEVE has this one.*
 
 ## What you get
 
 Battles, catches, evolutions and the slow march to the Pokémon League, with the current plan spelled out along the foot of the page: what it is doing, how that is going, and what comes next. Your six travelling companions sit beside the game with their moves, remaining PP and DV rating on the card, no clicking required. Keyboard and touch controls are there when you want to steer, and a speed dial from 0.5× up to Max when you want to skip ahead or slow down and actually watch a fight.
 
-There's a Journal of milestones with screenshots — including, when two adventures meet in the Cable Club, which Pokémon crossed and who sent it — and you can follow it in a feed reader or as phone notifications through [ntfy](https://ntfy.sh). Open the Library, choose **Notifications**, generate a topic and subscribe to it in the ntfy app. There is no account and nothing to edit. After the Hall of Fame it keeps going, working on collection, training and evolution projects.
+There's a Journal of milestones with screenshots — including, when two adventures meet in the Cable Club, which Pokémon crossed and who sent it — and you can follow it in a feed reader or as phone notifications through [ntfy](https://ntfy.sh).
+
+![The Journal showing an evolution, a League victory, and the Elite Four, each with the game screenshot from the moment it happened](docs/images/journal.jpg)
+
+*It keeps its own notes, so you can catch up on what you missed.*
+
+Open the Library, choose **Notifications**, generate a topic and subscribe to it in the ntfy app. There is no account and nothing to edit. After the Hall of Fame it keeps going, working on collection, training and evolution projects.
 
 It decides everything locally with ordinary game logic. No model API key, no subscription, no per-move bill.
 
 ## The collection is half the fun
 
-Browse all 151 Kanto entries, search by name or type, and see who's registered, who's only been spotted, and who's still out there somewhere.
+Browse all 151 Kanto entries, search by name or type, and see who's registered, who's only been spotted, and who's still out there somewhere. Fill it and the counts keep going: how many have reached level 100, and how many turned out to be perfect.
 
-![The Pokédex showing registered, seen, caught, level 100 and perfect find counts, search and filter options, and the original Kanto starters](docs/images/pokedex.jpg)
+![The Pokédex showing 151 of 151 registered and seen, catches tracked, level 100 and perfect find counts, search and filter options, and the original Kanto starters](docs/images/pokedex.jpg)
 
-*One more entry. One more reason to check back.*
+*All 151 registered, 73 of them at level 100, and not one perfect catch yet. One more reason to check back.*
 
 The PC searches your party and every box at once, sorts by DV rating, and shows each partner's stats and training. Four stars means perfect DVs.
 
@@ -33,7 +39,7 @@ The PC searches your party and every box at once, sorts by DV rating, and shows 
 
 ![PC storage with all-box search, sorting options, and the strongest party and boxed Pokémon](docs/images/pc-storage.jpg)
 
-*Two hundred and forty-one partners across the party and every box, sorted by DV rating. Yes, one of them is called TOADDEBT.*
+*Two hundred and forty partners across the party and every box, sorted by DV rating. Yes, one of them is called TROUSERBAT.*
 
 </details>
 
