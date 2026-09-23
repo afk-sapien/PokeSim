@@ -20,6 +20,10 @@
   `assert` statements, as was the checksum compared just before a staged checkpoint is adopted.
   `python -O` removes those outright, which would have marked a corrupted exchange staged and
   adopted it without a word. They raise now.
+- Decode an adventure's response in the application before forwarding it. The proxy streamed the
+  child's raw bytes while dropping `content-encoding` from the headers it passes on, so any
+  compressed response would have reached the browser as undeclared gzip. Nothing compresses one
+  today, which is the only reason this was invisible.
 
 ## 0.3.0
 

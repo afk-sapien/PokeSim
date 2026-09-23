@@ -553,8 +553,11 @@ def create_app(manager, shutdown=lambda: None):
             await client.aclose()
             raise HTTPException(503, 'The adventure is reconnecting') from error
         async def stream():
+            # Decode here rather than forwarding raw bytes: `content-encoding` is not one of
+            # the headers that survive below, so a compressed child response would otherwise
+            # reach the browser as undeclared gzip.
             try:
-                async for chunk in response.aiter_raw():
+                async for chunk in response.aiter_bytes():
                     yield chunk
             finally:
                 await response.aclose()
