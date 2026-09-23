@@ -28,6 +28,10 @@
   nothing else, so `adventures`, `import`, `import-pair`, `backup` and `restore` could only be
   found by reading the source, and the usage line called the program `__main__.py` rather than the
   command that was installed.
+- Darken the small print on the Pokédex cards. The entry number, the caught and seen notes and an
+  unencountered species' name sat between 2.5 and 3.7 to 1 against the card, at nine pixels, so the
+  line telling you whether you have caught something was the hardest thing on the page to read.
+  Every one of them now clears 4.5 to 1.
 
 ## 0.3.0
 
