@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.1
+
 - Stop reporting a blackout for a Pokémon that is still being named. `AddPartyMon` raises the party
   count and writes the species list before the nickname screen, and only fills the struct at
   `wPartyMons` once naming is over, so for the 27 seconds that screen is up the new partner reads as

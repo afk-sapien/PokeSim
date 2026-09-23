@@ -1,46 +1,55 @@
-# Release preparation: 0.3.0
+# Release preparation: 0.3.1
 
-The current source changes how an adventure spends its time and what the pages that
-watch it show. Training climbs in ten level steps instead of aiming straight at level
-100 and no longer monopolises the planner, trades that cause an evolution are worth
-taking, a completed Cable Club trade records what crossed, nicknames come from paired
-word lists rather than a list of a hundred, and the live page, top bar and Pokédex
-overview were rebuilt around what they are actually for. Frames are encoded only for a
-viewer, which takes Max speed from roughly 74x to 314x real time.
+This is a repair release over 0.3.0. It came out of a review of that source rather than new
+gameplay work, and the two findings worth the release are things every new adventure did to
+itself in its first three minutes.
 
-It also repairs a startup that an adventure with a long trading history could not
-finish. Each completed Cable Club exchange kept the policy snapshot it was staged
-from, and startup parsed every one of them to act on none of them, so an adventure
-with hundreds of finished trades needed gigabytes to open and was restarted by the
-trade recovery waiting on it. Startup now reads only unfinished exchanges.
+A Pokémon on the nickname screen is counted by the cartridge before its 44-byte struct is
+written, so for 27 seconds it read as species 0 with no HP. That looked like a team that had
+fainted, so a new adventure recorded two "Blacked out!" entries, sent the matching
+notifications, and showed the new partner as `No Mon`, level 0, fainted. Separately, the memory
+the Pokédex flags will later occupy holds other values in Oak's lab before the Pokédex exists,
+which read as owning four starters at once and put all four in the journal. Both are fixed by
+not trusting memory the cartridge has not made meaningful yet, and both were verified against
+Red on a scratch library: the opening journal goes from seven entries to one.
 
-This release adds one database column, `events.detail`, applied by the migration the
-store already performs when an adventure opens. Policy state is unchanged and existing
-checkpoints resume untouched. Finished trade records left by earlier versions shed
-their snapshots as adventures start, in batches, and no save or journal entry changes.
+The post-trade verification — party, badges, bag, box counts, untraded slots, and the arriving
+Pokémon down to its struct and original trainer, plus the checksum compared before adoption —
+was written as bare `assert` statements, which `python -O` removes. Nothing here sets
+`PYTHONOPTIMIZE`, so it never fired, but those checks now raise.
 
-The release targets are a Python wheel and source archive, plus a Linux amd64
-Docker image and Compose configuration. The `pokesim-desktop` Python command opens
-the Library in your browser. Standalone executable bundles are no longer built.
+The README screenshots were retaken. The old set showed empty squares where portraits go, which
+is not what the application renders; a missing portrait has drawn a numbered placeholder since
+0.2.0.
 
-The [consolidation validation record](docs/validation/repository-cleanup-20260918.md)
-records the local checks and their scope.
+There is no database change, no policy state change, and no migration. Existing checkpoints
+resume untouched. Adventures that already recorded the false opening entries keep them: nothing
+rewrites a journal that has already been written.
 
-Publication is gated on Python and browser regression checks, clean package
-identities, Docker lifecycle checks, and isolated native Python installations on
-Windows x86-64, Intel macOS, Apple Silicon, and Linux x86-64 and ARM64. The workflow
-uploads a draft, verifies every uploaded checksum, and only then publishes it.
+The release targets are a Python wheel and source archive, plus a Linux amd64 Docker image and
+Compose configuration. The `pokesim-desktop` Python command opens the Library in your browser.
+Standalone executable bundles are no longer built.
 
-Publishing this release does not upgrade a running application: change the image or
-package where it is deployed. Older downloadable releases contain the previous single-game app.
-See [candidate release notes](docs/release-notes.md), [desktop installation](docs/desktop.md),
-and [self-hosting](docs/self-hosting.md).
+Publication is gated on Python and browser regression checks, clean package identities, Docker
+lifecycle checks, and isolated native Python installations on Windows x86-64, Intel macOS, Apple
+Silicon, and Linux x86-64 and ARM64. The workflow uploads a draft, verifies every uploaded
+checksum, and only then publishes it.
 
-Gameplay remains an experimental beta. Synthetic tests and demonstration-ROM
-worker checks do not establish uninterrupted multi-day cartridge gameplay on all
-platforms. Existing private gameplay and cable-trading receipts retain their
-original scope. Back up the complete library before upgrading. Import legacy
-adventures into a new application folder with the old application stopped.
+Publishing this release does not upgrade a running application: change the image or package
+where it is deployed. See [release notes](docs/release-notes.md),
+[desktop installation](docs/desktop.md), and [self-hosting](docs/self-hosting.md).
 
-[Historical release and deployment records](docs/history/releases-through-rc31.md)
-remain available for earlier version receipts and their limitations.
+Gameplay remains an experimental beta. Synthetic tests and demonstration-ROM worker checks do
+not establish uninterrupted multi-day cartridge gameplay on all platforms. Existing private
+gameplay and cable-trading receipts retain their original scope. Back up the complete library
+before upgrading. Import legacy adventures into a new application folder with the old
+application stopped.
+
+Two limits found during the same review are not addressed here. Event screenshots are captured
+without checking that the frame is not blank, so a milestone caught during a fade can be a
+solid white or solid black card in the journal — one is visible in the shipped Journal image.
+The project also has no linter, formatter or type checker, and 15% of its functions carry return
+annotations.
+
+[Historical release and deployment records](docs/history/releases-through-rc31.md) remain
+available for earlier version receipts and their limitations.

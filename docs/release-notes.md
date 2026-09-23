@@ -1,99 +1,74 @@
-# PokeSim 0.3.0 experimental beta
+# PokeSim 0.3.1 experimental beta
 
-This release is about an adventure spending its time well, and about the page you watch it on
-saying more while doing less work.
+A repair release. Everything here came out of a review of the 0.3.0 source, and two of the
+findings were things every new adventure did to itself in its first three minutes.
 
-## It stops grinding one Pokémon forever
+## A new adventure stops inventing its own history
 
-A training project aimed straight at level 100, and training was the only kind of work exempt from
-the planner's recency decay — so once it started, it kept winning the draw. One partner could hold
-an adventure for hundreds of game hours while trades and unregistered species waited their turn.
+Start a game and the journal filled up before the game did: two "Blacked out!" entries, with the
+notifications to match, and four starters the player never received. Both came from reading
+cartridge memory before the cartridge had made it mean anything.
 
-Training now aims at the next multiple of ten. Finishing a step ends the project and hands the turn
-back, then picks it up again later. It still leads when there is nothing new to register, by 247
-draws to 173 in the settled case, rather than by never stopping.
+`AddPartyMon` raises the party count and writes the species list *before* the nickname screen, and
+only copies the 44-byte struct once naming is over. PokeSim read the species out of that struct, so
+for as long as the naming screen was up — 27 seconds, measured — the new partner read as species 0
+with no HP. That is indistinguishable from a fainted team, so the run recorded a blackout on its
+way out of Oak's lab, and the live page showed the slot as `No Mon`, level 0, fainted, which is the
+ROM's own label for species 0. A counted slot with no struct yet is now held apart from the team it
+is joining, and the live page draws it as a slot that is filling.
 
-Trades that trigger an evolution are also worth taking now even when the evolved species is already
-registered. A Kadabra that would come back an Alakazam scored nothing once Alakazam was in the
-book, despite the cable being the only way it can happen.
+Separately, the region the Pokédex flags will later occupy holds other values for a couple of
+seconds in Oak's lab, before the Pokédex exists. Read as flags, those values said the player owned
+Bulbasaur, Ivysaur, Charmander and Squirtle at once — Ivysaur is not obtainable there at all — and
+four `Got ...!` entries went into the journal. Registering a species always marks it seen on the
+cartridge, so owned flags are now masked by seen ones, and a half-initialised read registers
+nothing.
 
-## The Cable Club leaves a record
+Adventures that already recorded these entries keep them. Nothing rewrites a journal that has
+already been written; the fix stops the next one being wrong.
 
-A completed trade used to read "Both cartridges completed their exchange and saved the result",
-every time, with a placeholder where a screenshot would be. It now names both Pokémon and the
-trainer on the other end, and the journal card shows the two of them either side of a swap arrow.
+## The trade checks no longer depend on a flag
 
-Events gained a `detail` column for this, added by the migration the store already performs when it
-opens. Trades staged by an older build have no arriving side recorded and keep the previous
-wording.
+After both sides of an exchange are written, and before either is adopted, PokeSim verifies that
+the party, badges, bag, box counts and every untraded slot came through untouched, and that the
+arriving Pokémon is the agreed one down to its struct and original trainer. It also compares a
+checksum just before a staged checkpoint is adopted.
 
-## An adventure that has traded for weeks can still open
+All of that was written as bare `assert` statements, which `python -O` removes outright. Nothing in
+this project sets `PYTHONOPTIMIZE`, so it never fired — but the one irreversible operation in the
+application should not rest on an interpreter flag. The checks raise now, and name which side
+failed and how.
 
-Every completed exchange kept the whole policy snapshot it was staged from — on a well-travelled
-adventure that is mostly the map it has learned, a couple of megabytes each — and startup read and
-parsed all of them to act on none of them. Past a few hundred trades an adventure needed more than
-three gigabytes to open and could not report itself ready in time. The trade recovery that was
-waiting on it then started it again, and again, which is the kind of loop that takes the rest of
-the machine down with it.
+## The README shows what the application actually renders
 
-Startup now reads only the exchanges that are unfinished, releasing a trade drops the snapshot it
-no longer needs, and the records earlier versions left behind shed theirs as adventures start.
+Every collection view in the old screenshots had an empty square where each portrait goes, so the
+first thing a reader saw was a Pokédex of blank cards. That is not what the application does: a
+missing portrait has drawn a neutral placeholder with the Pokédex number in it since 0.2.0, and
+those shots simply predated a library with a pack installed.
 
-Relatedly, an adventure that failed to start now says why. The cleanup that stops a worker which
-never became ready was reporting its own shutdown deadline instead, so every place that showed the
-error described stopping the adventure rather than the reason it would not run.
-
-## Max speed is about four times faster
-
-The emulator encoded a JPEG of the game every four frames whether or not a browser was open. At Max
-speed that is roughly 1,100 encodes a second for a stream that shows fifteen. Frames are now
-encoded only while something is asking for them, and no faster than the stream can show them, which
-takes Max from about 74x to about 314x real time. Screen tiles and event flags also decode from
-lookup tables, worth about 14% of a headless run on its own.
-
-## The interface says more
-
-- **The live page.** The plan moved to a full-width row along the foot — what it is doing, how that
-  is going, what comes next — which hands the upper half to the game and the team. The screen grew
-  from 400 to 560 pixels and the team column runs the full height beside it, six slots, each card
-  carrying its moves, remaining PP and DV rating without a click. The plan also stops flickering:
-  the planner reports its gap between projects as an objective of its own, so the row used to cycle
-  between the real goal and "Plan the next adventure project" several times a minute.
-- **The top bar.** The adventure bar carried eight items in one row using three different looks for
-  navigation, and the link that left the adventure was bolder than the page you were on. One
-  breadcrumb answers where you are, tabs share a single active treatment with the library, and the
-  edition badge that three other places already stated is gone.
-- **The Pokédex.** Seven tallies become five: registered, seen, caught, level 100 and perfect
-  finds. Level 100 was labelled and badged with a star, which put a milestone in the same visual
-  language as the DV ratings beside it; it reads as a flag now. Three-star DVs are still recorded,
-  still badged on an entry and still filterable.
-- **A mark of its own.** A handheld in the browser tab and the top bar, rather than the `p.`
-  lockup.
-
-## Nicknames stop repeating
-
-An adventure remembers every name it has used, so after a hundred Pokémon the draw fell back to the
-whole list and quietly began handing out duplicates. Names are now built from prefix and suffix
-pairs — 1,616 of them, filtered to the ten characters a cartridge holds. The written names are
-unchanged and still come first, so nothing already loved is lost.
+Retaken from a run with eight badges, all 151 registered and 240 partners. The live shot is a wild
+battle at 1x rather than whatever frame Max speed happened to land on, the PC is sorted by DV
+rating the way the paragraph beside it claims, and the Journal has a picture of its own.
 
 ## Also in this release
 
-- A stall hunt that continues from a checkpoint honours `--seed` again. A checkpoint carries the
-  policy's own random state, so four postgame hunts with four seeds were one hunt repeated four
-  times. Scenario replays still make the original choices.
-- New Pokédex entries come before the level 100 grind, and a partner with a stone evolution
-  available is evolved before being trained.
-- Standalone executable bundles are no longer built. Install the Python package with pipx, or run
-  the container.
+- The game proxy forwarded a worker's raw body while dropping `content-encoding` from the headers
+  it passes on, so a compressed response would have reached the browser as undeclared gzip. It
+  decodes at the proxy now. Nothing compresses one today, which is the only reason this was
+  invisible.
+- The small print on the Pokédex cards was set between 2.5 and 3.7 to 1 against the card at nine
+  pixels. The line telling you whether you have caught something was the hardest thing on the page
+  to read; every colour now clears 4.5 to 1.
+- `pokesim --help` names its commands. The help listed the flags for serving the library and
+  nothing else, so `adventures`, `import`, `import-pair`, `backup` and `restore` could only be
+  found by reading the source, and the usage line called the program `__main__.py`.
+- Four tools that did nothing of their own are gone: three byte-identical shims around
+  `pokesim.prepare_data` and a copy of `prepare_test_data.py` that differed by one word of
+  docstring. A personal checkout path no longer appears in an error message, and `sample_live.py`
+  asks for a host rather than defaulting to one machine's name.
 
 ## Upgrading
 
-Existing adventures carry over untouched. The policy state format is unchanged, and the one
-database change is additive and applied automatically the next time each adventure starts — an
-adventure that is stopped migrates when you start it.
-
-Finished trade records shed their staged snapshots a hundred at a time as an adventure starts, so a
-library with a long trading history settles over its next few starts. Saves, journal entries and
-trade history are untouched; the space is returned to the database file, and `VACUUM` returns it to
-the disk if you want it back sooner.
+Nothing to migrate. No database change, no policy state change, and existing checkpoints resume
+untouched. Replace the image or the package where it is deployed, as usual — publishing a release
+does not upgrade a running application.
