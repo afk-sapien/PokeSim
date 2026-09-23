@@ -251,3 +251,51 @@ def test_redeposit_cancels_arrival_credit_before_real_release():
     assert memory.party_arrivals == []
     released = dataclasses.replace(deposited, frame=190, stored_pokemon=())
     assert 'release' in types(diff(deposited, released, memory))
+
+
+def test_pokemon_on_the_naming_screen_is_not_a_blackout():
+    """AddPartyMon counts a new Pokémon before it writes the struct at wPartyMons.
+
+    For as long as the nickname screen is up the slot reads as species 0 with no HP,
+    which used to look like a party that had fainted on the way out of Oak's lab.
+    """
+    mem = RunMemory(seen_maps={1})
+    empty = snap(party=(), owned=frozenset(), seen=frozenset())
+    naming = snap(party=(PartyMon(0, 0, 0, 0, ""),), owned=frozenset(), seen=frozenset())
+    assert not naming.all_fainted
+    assert types(diff(empty, naming, mem)) == []
+    named = snap(party=(PartyMon(0x99, 19, 19, 5, "BULBASAUR"),), owned=frozenset({1}), seen=frozenset({1}))
+    assert types(diff(naming, named, mem)) == ["obtain"]
+
+
+def test_a_pending_slot_does_not_hide_a_real_blackout():
+    mem = RunMemory(seen_maps={1})
+    prev = snap(party=(PartyMon(0x99, 20, 20, 9, "BULBASAUR"),))
+    cur = snap(party=(PartyMon(0x99, 0, 20, 9, "BULBASAUR"), PartyMon(0, 0, 0, 0, "")))
+    assert cur.all_fainted
+    assert types(diff(prev, cur, mem)) == ["blackout"]
+
+
+def test_pending_slot_is_labelled_rather_than_named_after_species_zero():
+    mon = PartyMon(0, 0, 0, 0, "")
+    assert mon.pending and mon.name == "Joining the team"
+    assert not PartyMon(0x99, 20, 20, 5, "BULBASAUR").pending
+    entry = snap(party=(mon,)).to_dict()["party"][0]
+    assert entry["pending"] is True
+
+
+def test_owned_without_seen_is_not_pokedex_data():
+    """Oak's lab leaves other values where the Pokédex flags will later live.
+
+    The cartridge always sets the seen flag alongside the owned flag, so a read with
+    owned entries and no matching seen entries is a half-initialised region, not four
+    free starters.
+    """
+    from pokesim.ram import W_DEX_OWNED, W_DEX_SEEN, read_snapshot
+
+    mem = bytearray(0x10000)
+    mem[W_DEX_OWNED] = 0b01001011           # dex 1, 2, 4 and 7, exactly what Oak's lab leaves
+    assert read_snapshot(mem, 0).owned == frozenset()
+    mem[W_DEX_SEEN] = 0b00000001            # once Bulbasaur is genuinely registered
+    snapshot = read_snapshot(mem, 0)
+    assert snapshot.owned == frozenset({1}) and snapshot.seen == frozenset({1})

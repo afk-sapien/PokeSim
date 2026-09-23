@@ -117,7 +117,12 @@ function renderParty(party) {
   }
   const emptySlots = (filled) => Array.from({length: Math.max(0, 6 - filled)}, (_, slot) =>
     `<li class="mon-card empty-slot"><span class="party-slot">${String(filled + slot + 1).padStart(2, '0')}</span><p>Room for one more</p></li>`).join('')
+  // A Pokémon on the naming screen is counted before the cartridge writes its stats,
+  // so show the slot as arriving rather than as a fainted level 0 nobody.
+  const pendingSlot = (index) =>
+    `<li class="mon-card empty-slot"><span class="party-slot">${String(index + 1).padStart(2, '0')}</span><p>Joining the team…</p></li>`
   $('#party').innerHTML = party.map((mon, index) => {
+    if (mon.pending) return pendingSlot(index)
     const hp = clamp(mon.max_hp ? mon.hp / mon.max_hp * 100 : 0)
     const health = hp < 20 ? 'critical' : hp < 50 ? 'low' : 'healthy'
     const xp = mon.experience

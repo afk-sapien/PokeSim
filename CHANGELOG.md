@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Stop reporting a blackout for a Pokémon that is still being named. `AddPartyMon` raises the party
+  count and writes the species list before the nickname screen, and only fills the struct at
+  `wPartyMons` once naming is over, so for the 27 seconds that screen is up the new partner reads as
+  species 0 with no HP. That counted as a fainted team, so every new adventure recorded two
+  "Blacked out!" entries on its way out of Oak's lab and sent the matching notifications, and the
+  live page showed the slot as `No Mon`, level 0, fainted. A counted slot the cartridge has not
+  filled in yet is now held apart from the team it is joining.
+- Stop registering four starters the player never received. The region the Pokédex flags will later
+  occupy holds other values for a couple of seconds in Oak's lab, which read as owning Bulbasaur,
+  Ivysaur, Charmander and Squirtle at once and put all four in the journal. Every cartridge path
+  that registers a species also marks it seen, so an owned flag arriving without its seen flag is
+  not Pokédex data and is no longer read as any.
+
 ## 0.3.0
 
 - Stack the plan row on a narrow screen. The three columns it reads across kept their layout at
