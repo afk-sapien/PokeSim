@@ -24,6 +24,10 @@
   child's raw bytes while dropping `content-encoding` from the headers it passes on, so any
   compressed response would have reached the browser as undeclared gzip. Nothing compresses one
   today, which is the only reason this was invisible.
+- Name the commands in `pokesim --help`. The help listed the flags for serving the library and
+  nothing else, so `adventures`, `import`, `import-pair`, `backup` and `restore` could only be
+  found by reading the source, and the usage line called the program `__main__.py` rather than the
+  command that was installed.
 
 ## 0.3.0
 
