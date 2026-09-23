@@ -85,7 +85,8 @@ class Manager:
     @staticmethod
     def validate_adventure_settings(values):
         allowed = {'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
-                   'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards', 'mew_event'}
+                   'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards',
+                   'mew_event', 'event_retention_days'}
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError('Unsupported adventure settings')
         result = {'starter': 'random', 'policy': 'strategic', 'auto_start': False, **values}
@@ -96,7 +97,10 @@ class Manager:
         for name in ('auto_start', 'fast_text', 'battle_animations', 'viewer_only', 'league_rewards', 'mew_event'):
             if name in result and type(result[name]) is not bool:
                 raise ValueError(f'{name} must be a boolean')
-        for name, low, high in [('autosave_seconds', 1, 86400), ('keep_autosaves', 1, 10000), ('stream_fps', 1, 60)]:
+        # Every notable event keeps a full save state beside its screenshot, which is about
+        # 40 MB an hour, so an adventure needs a way to bound its own journal. Zero keeps all.
+        for name, low, high in [('autosave_seconds', 1, 86400), ('keep_autosaves', 1, 10000),
+                                ('stream_fps', 1, 60), ('event_retention_days', 0, 36500)]:
             if name in result and (type(result[name]) is not int or not low <= result[name] <= high):
                 raise ValueError(f'{name} must be between {low} and {high}')
         if result.get('seed') is not None and type(result['seed']) is not int:

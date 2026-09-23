@@ -205,3 +205,28 @@ def test_pace_is_a_global_setting_and_rejects_per_adventure_edits(client):
     response = client.patch(route, json={'settings': {'auto_start': True}}, headers=headers)
     assert response.status_code == 200
     assert 'speed' not in response.json()['settings']
+
+
+def test_event_retention_is_configurable_per_adventure():
+    """Every notable event stores a full save state, so the journal grows ~40 MB an hour.
+
+    The setting existed in the runtime and was validated there, but the Library's own
+    whitelist left it out, so a managed adventure could never bound its own history.
+    """
+    settings = Manager.validate_adventure_settings({'event_retention_days': 30})
+    assert settings['event_retention_days'] == 30
+    assert Manager.validate_adventure_settings({'event_retention_days': 0})['event_retention_days'] == 0
+    for invalid in (-1, 40000, 'thirty', 1.5):
+        with pytest.raises(ValueError):
+            Manager.validate_adventure_settings({'event_retention_days': invalid})
+
+
+def test_runtime_accepts_the_retention_setting_the_library_now_sends(tmp_path):
+    """The supervisor passes adventure settings straight into the worker bootstrap."""
+    from pokesim.runtime.settings import SimulationSettings
+
+    rom = tmp_path / 'rom.gb'
+    rom.write_bytes(b'\x00')
+    settings = SimulationSettings(rom_path=str(rom), data_dir=str(tmp_path),
+                                  game_data_dir=str(tmp_path), event_retention_days=30)
+    assert settings.event_retention_days == 30

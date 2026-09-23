@@ -505,3 +505,63 @@ def test_historical_trade_without_details_does_not_guess_from_current_inventory(
         assert entry['sent'] is None
         assert entry['received'] is None
         assert not (setup.manager.root / 'adventures' / aid / 'pokesim.sqlite').exists()
+
+
+def test_resolved_interaction_directories_are_pruned_but_unresolved_ones_are_kept(setup):
+    """Each attempt keeps two save states, two cartridge saves and two screenshots.
+
+    Nothing reads them once the exchange is resolved, and every backup copies the whole
+    tree, so a library that has traded for months otherwise carries all of it forever.
+    """
+    root = setup.manager.root / 'interactions'
+    for index in range(25):
+        attempt = root / f'old-{index:02d}' / 'attempts' / 'a'
+        attempt.mkdir(parents=True)
+        (attempt / 'plan.json').write_bytes(b'{}')
+
+    row = setup.coordinator.propose(setup.data)
+    live = root / row['id'] / 'attempts' / row['plan']['attempt_id']
+    live.mkdir(parents=True, exist_ok=True)
+    (live / 'plan.json').write_bytes(b'{}')
+
+    removed = setup.coordinator._prune_interactions(keep=10)
+    remaining = {path.name for path in root.iterdir() if path.is_dir()}
+    assert removed == 15
+    assert row['id'] in remaining, 'an unresolved exchange must keep its outputs for recovery'
+    assert len(remaining) == 11
+    assert 'old-24' in remaining and 'old-00' not in remaining
+
+
+def test_pruning_keeps_everything_when_retention_is_zero(setup):
+    """Zero means unlimited here, the same as it does for autosaves and stall bundles."""
+    root = setup.manager.root / 'interactions'
+    for index in range(3):
+        (root / f'old-{index}').mkdir(parents=True)
+    assert setup.coordinator._prune_interactions(keep=0) == 0
+    assert len([path for path in root.iterdir() if path.is_dir()]) == 3
+
+
+def test_a_failing_recovery_backs_off_instead_of_retrying_every_thirty_seconds(setup):
+    """A recovery that cannot succeed used to be re-driven twice a minute forever.
+
+    Each pass calls supervisor.start(recovery=True), so the churn also restarts a worker
+    the operator had stopped. Retries still never give up — a committed exchange has to be
+    finished on both sides — they just stop consuming the machine while they wait.
+    """
+    coordinator = setup.coordinator
+    tid = 'c' * 32
+    assert coordinator.recovery_delay(tid) == 30
+
+    for expected in (30, 60, 120, 240, 480, 600, 600):
+        coordinator.recovery_failures[tid] = coordinator.recovery_failures.get(tid, 0) + 1
+        assert coordinator.recovery_delay(tid) == expected
+
+    coordinator.recovery_failures.pop(tid, None)
+    assert coordinator.recovery_delay(tid) == 30
+
+
+def test_a_successful_recovery_clears_the_backoff(setup):
+    row = setup.coordinator.propose(setup.data)
+    setup.coordinator.recovery_failures[row['id']] = 4
+    setup.coordinator.recover_one(row['id'])
+    assert row['id'] not in setup.coordinator.recovery_failures

@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -21,6 +22,11 @@ from .registry import digest, identifier, validate_id
 log = logging.getLogger(__name__)
 TERMINAL = {'completed', 'aborted'}
 COOLDOWN_SECONDS = 300
+# Each attempt keeps two save states, two cartridge saves and two screenshots, so the tree
+# grows by about half a megabyte per exchange and every backup copies all of it.
+KEEP_INTERACTIONS = 20
+RECOVERY_BACKOFF_SECONDS = 30
+RECOVERY_BACKOFF_MAX = 600
 
 
 def _display_number(value, maximum):
@@ -66,6 +72,7 @@ class Coordinator:
         self.previews = {}
         self.last_message = 'Your adventures will trade automatically when a useful exchange is ready.'
         self.next_recovery_at = 0
+        self.recovery_failures = {}
         self.prepare_timeout = 900
         self.prepare_poll = 1
         self.session_timeout = 960
@@ -529,6 +536,7 @@ class Coordinator:
                 self.manager.notifications.trade_completed(row, manifest.get('display') or {})
             except Exception:
                 log.exception('Could not announce trade %s', tid)
+        self._prune_interactions()
         for aid in plan['participants']:
             self.previews.pop(aid, None)
             if self.registry.adventure(aid)['desired_state'] == 'stopped':
@@ -537,13 +545,52 @@ class Coordinator:
                 self.registry.update(aid, state='running', error=None)
         return row
 
+    def _prune_interactions(self, keep=KEEP_INTERACTIONS):
+        """Keep the newest resolved attempt directories and drop the rest.
+
+        Nothing reads a resolved interaction's files: `preview` refuses a terminal phase and
+        the manager only serves a frame for a row that has no decision yet. An unresolved
+        interaction is never touched, whatever its age, because recovery still needs it.
+        """
+        root = self.manager.root / 'interactions'
+        if not root.is_dir():
+            return 0
+        unresolved = {row['id'] for row in self.registry.transactions(unresolved=True)}
+        resolved = [path for path in root.iterdir() if path.is_dir() and path.name not in unresolved]
+        resolved.sort(key=lambda path: path.stat().st_mtime)
+        removed = 0
+        # keep=0 retains everything, matching prune_autosaves and the stall bundles.
+        for path in resolved[:-keep] if keep > 0 else []:
+            try:
+                shutil.rmtree(path)
+                removed += 1
+            except OSError:
+                log.exception('Cannot remove the finished interaction directory %s', path)
+        if removed:
+            log.info('removed %d finished interaction directories', removed)
+        return removed
+
     def recover_one(self, tid):
         with self.execution:
             row = self.registry.transaction(tid)
             try:
-                return self._recover(row)
+                result = self._recover(row)
             except Exception as error:
+                self.recovery_failures[tid] = self.recovery_failures.get(tid, 0) + 1
                 return self.registry.update_transaction(tid, phase='recovering', error=str(error))
+            self.recovery_failures.pop(tid, None)
+            return result
+
+    def recovery_delay(self, tid):
+        """Back off a repeatedly failing recovery instead of retrying twice a minute forever.
+
+        A recovery that cannot succeed — a participant record lost to a restore, say — used
+        to be re-driven every 30 seconds indefinitely, and each pass starts the worker again.
+        Retries still never stop, because a committed exchange has to be finished on both
+        sides, but they stop consuming the machine while they wait for an operator.
+        """
+        failures = self.recovery_failures.get(tid, 0)
+        return min(RECOVERY_BACKOFF_SECONDS * 2 ** max(0, failures - 1), RECOVERY_BACKOFF_MAX)
 
     def recover(self):
         for row in self.registry.transactions(unresolved=True):
@@ -616,9 +663,13 @@ class Coordinator:
             if pending[0]['phase'] != 'recovering':
                 return None
             if time.monotonic() >= self.next_recovery_at:
-                self.next_recovery_at = time.monotonic() + 30
-                self.last_message = 'Finishing an interrupted trade. Your progress is saved.'
-                return self.recover_one(pending[0]['id'])
+                tid = pending[0]['id']
+                self.next_recovery_at = time.monotonic() + self.recovery_delay(tid)
+                failures = self.recovery_failures.get(tid, 0)
+                self.last_message = ('Finishing an interrupted trade. Your progress is saved.' if failures < 3 else
+                                     'An interrupted trade is not finishing. Both adventures keep their saves, '
+                                     'and it will keep trying more slowly. Check the logs.')
+                return self.recover_one(tid)
             return None
         history = self.registry.transactions()
         last = {}

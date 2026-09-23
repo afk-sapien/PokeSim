@@ -11,6 +11,18 @@
   could not finish. Both legacy import paths had the same defect, including the one that extracts
   up to two gigabytes. All three now stage inside the application folder, which is what the
   restore path and three other callers already did.
+- Delete the attempt directories of finished Cable Club exchanges. Every attempt keeps two save
+  states, two cartridge saves and two screenshots — about half a megabyte — and nothing ever
+  removed them, so `interactions/` grew with every exchange and every backup copied the whole
+  accumulated tree into its archive. The live server had 377 of them, 174 MB. The newest twenty
+  resolved exchanges are kept, an unresolved one is never touched whatever its age because
+  recovery still needs its outputs, and zero means keep everything, as it does for autosaves and
+  stall bundles. The legacy coordinator already did this; the application one never got it.
+- Let an adventure bound its own journal. Every notable event stores a full save state beside its
+  screenshot, about 40 MB an hour, and `prune_events` has always existed to trim it — but
+  `event_retention_days` was missing from the Library's settings whitelist, so a managed
+  adventure could not set it and the pruning call was permanently dead. The live server had
+  560 MB of event states across two adventures.
 
 ## 0.3.1
 
