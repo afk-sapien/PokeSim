@@ -16,6 +16,7 @@ from pyboy import PyBoy
 
 from . import __version__, config
 from .build_info import build_info
+from .checkpoints import open_state
 from .events import HIGH, Event, RunMemory, diff
 from . import rewards
 from .legendary import LegendaryRecovery
@@ -242,7 +243,7 @@ class Emulator:
                 raise ValueError("Checkpoint requires a different PyBoy version")
             if metadata.get("policy") != config.POLICY:
                 raise ValueError("Checkpoint requires a different policy")
-        with open(path, "rb") as f:
+        with open_state(path) as f:
             self.pb.load_state(f)
         if metadata:
             self.policy.load_state_dict(metadata["policy_state"])

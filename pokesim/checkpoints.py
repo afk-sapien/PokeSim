@@ -1,7 +1,9 @@
 """Checkpoint files, manifests, validation, and retention independent of SQLite."""
 from __future__ import annotations
 
+import gzip
 import hashlib
+import io
 import json
 import logging
 import os
@@ -13,6 +15,35 @@ from pathlib import Path
 from .platform_io import sync_directory
 
 log = logging.getLogger(__name__)
+GZIP_MAGIC = b'\x1f\x8b'
+
+
+def compress_state(raw: bytes) -> bytes:
+    """A PyBoy save state is mostly zeroed RAM and compresses about thirteen to one.
+
+    167 KB becomes roughly 13 KB, which matters because one is kept for every notable
+    journal entry and they are never rewritten, only accumulated.
+    """
+    return gzip.compress(raw, compresslevel=6, mtime=0)
+
+
+def open_state(path: Path):
+    """Open a save state for PyBoy, transparently handling a compressed one.
+
+    States written before compression stay readable, so an existing library keeps
+    resuming and every old journal entry keeps its rewind.
+    """
+    handle = open(path, 'rb')
+    try:
+        if handle.read(2) != GZIP_MAGIC:
+            handle.seek(0)
+            return handle
+    except BaseException:
+        handle.close()
+        raise
+    with handle:
+        handle.seek(0)
+        return io.BytesIO(gzip.decompress(handle.read()))
 
 
 class CheckpointStore:

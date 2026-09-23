@@ -39,7 +39,10 @@ def test_failed_event_write_rolls_back_and_allows_retry(store, monkeypatch, atta
     eid = store.add_event(event, snap(), b'image', b'state')
     assert len(store.events()) == 1
     assert (store.shots / store.event(eid)['shot']).read_bytes() == b'image'
-    assert (store.states / store.event(eid)['state']).read_bytes() == b'state'
+    # The state is stored compressed, so read it the way the emulator does.
+    from pokesim.checkpoints import open_state
+    with open_state(store.states / store.event(eid)['state']) as handle:
+        assert handle.read() == b'state'
 
 
 def test_failed_event_update_rolls_back_attachments(store):
@@ -55,3 +58,34 @@ def test_failed_event_update_rolls_back_attachments(store):
     assert store.events() == []
     assert list(store.shots.iterdir()) == []
     assert list(store.states.iterdir()) == []
+
+
+def test_event_save_states_are_stored_compressed(store):
+    """A notable entry keeps a full 167 KB save state so the journal can rewind to it.
+
+    They are only ever added to, never rewritten, so uncompressed they dominate an
+    adventure's disk: a live server was carrying 456 MB of them across two adventures.
+    A PyBoy state is mostly zeroed RAM and compresses about ten to one.
+    """
+    from pokesim.checkpoints import GZIP_MAGIC, open_state
+
+    raw = bytes(256) * 655
+    event = Event('badge', 'Beat Brock!', priority=4)
+    eid = store.add_event(event, snap(), b'png-bytes', raw)
+
+    written = store.states / f'event-{eid}.state'
+    assert written.read_bytes()[:2] == GZIP_MAGIC
+    assert written.stat().st_size < len(raw) // 4
+    with open_state(written) as handle:
+        assert handle.read() == raw
+
+
+def test_save_states_written_before_compression_still_load(tmp_path):
+    """An existing library must keep resuming and every old journal entry keep its rewind."""
+    from pokesim.checkpoints import open_state
+
+    raw = bytes(range(256)) * 32
+    legacy = tmp_path / 'auto-v1-legacy.state'
+    legacy.write_bytes(raw)
+    with open_state(legacy) as handle:
+        assert handle.read() == raw

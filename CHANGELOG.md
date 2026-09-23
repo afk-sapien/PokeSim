@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compress the save state kept with every notable journal entry. A PyBoy state is 167 KB of
+  mostly zeroed RAM and gzips about ten to one; one is stored for each notable entry so the
+  journal can rewind to that moment, and they are only ever added to. A live server was carrying
+  456 MB of them across two adventures — 2,836 states against 68 MB of screenshots — which is
+  where essentially all of the "40 MB an hour" went. States written before this release stay
+  readable, so an existing library keeps resuming and every old entry keeps its rewind.
+
 ## 0.3.2
 
 - Stop staging backups and imports in the container's `/tmp`. `create_backup` copied `assets`,

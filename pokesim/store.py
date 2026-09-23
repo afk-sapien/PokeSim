@@ -9,7 +9,7 @@ import threading
 import time
 from pathlib import Path
 
-from .checkpoints import CheckpointStore
+from .checkpoints import CheckpointStore, compress_state
 
 log = logging.getLogger(__name__)
 
@@ -87,8 +87,12 @@ class Store:
                         record(self.db, snapshot, ev.title, eid)
                     shot = f"{eid}.png" if shot_png else None
                     state = f"event-{eid}.state" if state_bytes else None
+                    # A save state is about 167 KB of mostly zeroed RAM and compresses
+                    # roughly thirteen to one. One is kept for every notable entry and they
+                    # are only ever added to, so uncompressed they dominate an adventure's disk.
                     for directory, name, data in (
-                        (self.shots, shot, shot_png), (self.states, state, state_bytes)
+                        (self.shots, shot, shot_png),
+                        (self.states, state, compress_state(state_bytes) if state_bytes else None),
                     ):
                         if name:
                             path = directory / name
