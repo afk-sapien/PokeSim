@@ -14,6 +14,12 @@
   Ivysaur, Charmander and Squirtle at once and put all four in the journal. Every cartridge path
   that registers a species also marks it seen, so an owned flag arriving without its seen flag is
   not Pokédex data and is no longer read as any.
+- Keep the post-trade checks when assertions are turned off. The verification that a staged
+  exchange left the party, badges, bag, box counts and every untraded slot alone, and that the
+  arriving Pokémon is the agreed one down to its struct and original trainer, was written as bare
+  `assert` statements, as was the checksum compared just before a staged checkpoint is adopted.
+  `python -O` removes those outright, which would have marked a corrupted exchange staged and
+  adopted it without a word. They raise now.
 
 ## 0.3.0
 
