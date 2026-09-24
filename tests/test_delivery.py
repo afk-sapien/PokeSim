@@ -35,10 +35,10 @@ def test_the_stamp_follows_the_file(tmp_path, monkeypatch):
 def test_every_page_preloads_the_panel_font():
     # The preload only helps if it names the exact address tokens.css asks for,
     # version included; bump both together when the font changes.
-    font = re.search(r'url\("(fonts/pokesim-panel\.woff2[^"]*)"\)', (pages.STATIC / 'tokens.css').read_text())[1]
+    font = re.search(r'url\("(fonts/pokesim-panel\.woff2[^"]*)"\)', (pages.STATIC / 'tokens.css').read_text(encoding='utf-8'))[1]
     for name in ('index.html', 'pc.html', 'pokedex.html', 'journal.html', 'event.html',
                  'trading.html', 'adventure-trading.html', 'library.html'):
-        assert f'{font}" as="font"' in (pages.STATIC / name).read_text()
+        assert f'{font}" as="font"' in (pages.STATIC / name).read_text(encoding='utf-8')
 
 
 def test_accepted_sockets_inherit_no_delay():
