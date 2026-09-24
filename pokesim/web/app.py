@@ -163,6 +163,10 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return store.events(limit=min(limit, 500), notable_only=not all and not min_priority,
                             types=types.split(",") if types else None, before=before, min_priority=min_priority)
 
+    @app.get("/api/progress")
+    def progress():
+        return store.progress()
+
     @app.get("/api/events/{eid}")
     def event(eid: int):
         ev = store.event(eid)

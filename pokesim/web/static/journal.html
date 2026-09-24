@@ -15,7 +15,7 @@
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=panel-8">
-<link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=panel-2">
+<link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=panel-3">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="journal">
@@ -34,6 +34,11 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="who"><p class="micro">The Kanto journal</p><h1>Notes from the road</h1><p class="lede">The catches, close calls, and little victories along the way.</p></div>
 </header>
 
+<section class="progress" id="progress" aria-labelledby="progress-heading" hidden>
+<div class="column-head"><h2 class="legend legend--ink" id="progress-heading">The road so far</h2><span class="micro" id="progress-span"></span></div>
+<div class="progress-panel" id="progress-charts"></div>
+</section>
+
 <section class="journal" id="journal" aria-labelledby="journal-heading">
 <div class="column-head journal-top"><h2 class="legend legend--ink" id="journal-heading">Adventure history</h2><div class="filters journal-filters" role="group" aria-label="Filter the journal"><button data-filter="highlights" class="active" aria-pressed="true">Highlights</button><button data-filter="team" aria-pressed="false">The team</button><button data-filter="all" aria-pressed="false">Everything</button></div></div>
 <div class="events log" id="events"><p class="journal-empty">Opening the journal…</p></div>
@@ -51,5 +56,6 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="${game_base}/static/app.js?v=panel-2"></script>
+<script src="${game_base}/static/progress.js?v=1"></script>
 </body>
 </html>

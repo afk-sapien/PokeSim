@@ -9,6 +9,7 @@ import threading
 import time
 from pathlib import Path
 
+from . import progress
 from .checkpoints import CheckpointStore, compress_state
 
 log = logging.getLogger(__name__)
@@ -50,6 +51,9 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
         self._migrate()
+        with self.db:
+            self.db.executescript(progress.SCHEMA)
+            progress.backfill(self.db)
         self.lock = threading.Lock()
 
     def _migrate(self):
@@ -82,9 +86,11 @@ class Store:
                         (ts, ev.type, ev.title, ev.body, int(ev.notable), int(ev.priority), snapshot.map_name,
                          "%d:%02d:%02d" % snapshot.playtime))
                     eid = cur.lastrowid
+                    won = False
                     if ev.type == 'champion':
                         from .league_partners import record
-                        record(self.db, snapshot, ev.title, eid)
+                        won = record(self.db, snapshot, ev.title, eid)
+                    progress.record(self.db, ts, snapshot, won)
                     shot = f"{eid}.png" if shot_png else None
                     state = f"event-{eid}.state" if state_bytes else None
                     # A save state is about 167 KB of mostly zeroed RAM and compresses
@@ -143,6 +149,10 @@ class Store:
         with self.lock:
             r = self.db.execute("SELECT * FROM events WHERE id=?", (eid,)).fetchone()
         return dict(r) if r else None
+
+    def progress(self) -> list[dict]:
+        with self.lock:
+            return progress.history(self.db)
 
     def counts(self) -> dict:
         with self.lock:

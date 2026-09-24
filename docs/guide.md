@@ -22,6 +22,7 @@ Follow the current [installation instructions](../README.md) and [operations gui
 | `/events/{id}` | one event and screenshot, with rewind available when a saved state and access policy allow it |
 | `/api/state` | JSON: emulator status + parsed game state |
 | `/api/events` | JSON event list (`limit`, `all`, `types`, `min_priority`, `before`) |
+| `/api/progress` | JSON history of badges, Pokédex owned and seen, and League wins, one row per change |
 | `/api/control` | POST an `action` and optional `value`. Actions: `pause`, `resume`, `take_control`, `save`, `restart`, `speed`, `load_state`, `press` |
 
 ## Notifications

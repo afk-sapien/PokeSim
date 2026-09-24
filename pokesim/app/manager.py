@@ -38,7 +38,7 @@ log = logging.getLogger(__name__)
 STATIC = Path(__file__).parents[1] / 'web' / 'static'
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
-                   'api/state', 'api/events', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml'}
+                   'api/state', 'api/events', 'api/progress', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml'}
 
 
 def public_game_path(method, path):

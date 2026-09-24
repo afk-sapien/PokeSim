@@ -53,7 +53,7 @@ def test_private_worker_routes_never_receive_browser_requests(managed, method, p
 
 
 @pytest.mark.parametrize('method,path', [
-    ('GET', ''), ('GET', 'api/state'), ('GET', 'api/events/42'), ('GET', 'events/42'),
+    ('GET', ''), ('GET', 'api/state'), ('GET', 'api/events/42'), ('GET', 'events/42'), ('GET', 'api/progress'),
     ('GET', 'static/screen.js'), ('GET', 'shots/42.png'), ('GET', 'stream'),
     ('GET', 'feed.xml'), ('HEAD', 'frame.jpg'), ('POST', 'api/control'),
     ('POST', 'api/trading/preferences'),

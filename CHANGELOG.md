@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The Journal opens with the road so far: Pokédex registered, badges and League wins over time,
+  one step line each on a shared clock. Adventures from before this release are rebuilt once from
+  their Journal entries; seen counts start with this release.
+- Finished exchanges stop piling up on disk. Aborted exchanges drop their staged snapshot as released
+  ones do, only the newest twenty finished exchange folders are kept, and an adventure database with
+  more than 32 MB of free pages is compacted when the adventure starts.
+
 ## 0.3.8
 
 - Journal screenshots no longer catch a fade. An entry recorded on a blank screen keeps waiting,

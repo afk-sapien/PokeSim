@@ -1,0 +1,78 @@
+"""The adventure's headline numbers over time, recorded with the journal and rebuilt from it."""
+import sqlite3
+from types import SimpleNamespace
+
+from fastapi.testclient import TestClient
+
+from pokesim.events import Event
+from pokesim.ram import HALL_OF_FAME_MAP
+from pokesim.store import Store
+from pokesim.web.app import create_app
+from test_events import snap
+
+
+def history(store):
+    return [(row['badges'], row['owned'], row['seen'], row['league']) for row in store.progress()]
+
+
+def test_a_row_is_written_only_when_a_number_changes(tmp_path):
+    store = Store(tmp_path)
+    store.add_event(Event('map', 'Pallet Town', ''), snap(), None, None)
+    store.add_event(Event('map', 'Route 1', ''), snap(), None, None)
+    store.add_event(Event('seen', 'Saw PIDGEY', ''), snap(seen=frozenset({1, 16})), None, None)
+    store.add_event(Event('catch', 'Caught PIDGEY', ''), snap(owned=frozenset({1, 16}), seen=frozenset({1, 16})),
+                    None, None)
+    store.add_event(Event('badge', 'Boulder Badge', ''), snap(badges=1, owned=frozenset({1, 16}),
+                                                                   seen=frozenset({1, 16})), None, None)
+    assert history(store) == [(0, 1, 1, 0), (0, 1, 2, 0), (0, 2, 2, 0), (1, 2, 2, 0)]
+    assert all(row['ts'] > 0 for row in store.progress())
+
+
+def test_a_league_victory_counts_once_even_when_replayed(tmp_path):
+    store = Store(tmp_path)
+    hall = snap(map=HALL_OF_FAME_MAP, badges=255)
+    for number in (1, 1, 2):
+        store.add_event(Event('champion', f'Champion! League victory #{number}'), hall, None, None)
+    assert [row[3] for row in history(store)] == [1, 2]
+
+
+def test_an_unstarted_or_invalid_screen_is_not_recorded(tmp_path):
+    store = Store(tmp_path)
+    store.add_event(Event('map', 'Title', ''), snap(map=0, party=(), playtime=(0, 0, 0)), None, None)
+    assert store.progress() == []
+
+
+def journal(path, rows):
+    db = sqlite3.connect(path / 'pokesim.sqlite')
+    db.execute("CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, type TEXT NOT NULL, "
+               "title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', notable INTEGER NOT NULL DEFAULT 1, "
+               "map TEXT NOT NULL DEFAULT '', playtime TEXT NOT NULL DEFAULT '', shot TEXT, state TEXT)")
+    db.executemany('INSERT INTO events(ts, type, title, body) VALUES (?,?,?,?)', rows)
+    db.commit()
+    db.close()
+
+
+def test_an_older_adventure_is_rebuilt_from_its_journal(tmp_path):
+    journal(tmp_path, [
+        (10, 'catch', 'Caught PIDGEY', 'A level 3 PIDGEY on Route 1. Pokédex: 2 owned.'),
+        (20, 'level', 'PIDGEY grew', 'Level 4.'),
+        (30, 'badge', 'Beat Brock! Got the Boulder Badge', '1/8 badges after 1h of play.'),
+        (40, 'playtime', '10 hours of play time', '20 owned, 3 badges, on Route 9.'),
+        (50, 'champion', 'Champion! League victory #1', 'The Hall of Fame.'),
+        (60, 'champion', 'Champion! League victory #1', 'Replayed after a rewind.'),
+        (70, 'obtain', 'Got LAPRAS', 'New Pokédex entry on Silph Co. 7F. 21 owned.'),
+    ])
+    store = Store(tmp_path)
+    assert [(row['ts'], row['badges'], row['owned'], row['seen'], row['league']) for row in store.progress()] == [
+        (10, 0, 2, None, 0), (30, 1, 2, None, 0), (40, 3, 20, None, 0), (50, 3, 20, None, 1),
+        (70, 3, 21, None, 1)]
+    store.db.close()
+    assert len(Store(tmp_path).progress()) == 5
+
+
+def test_the_game_serves_the_history(tmp_path):
+    store = Store(tmp_path)
+    store.add_event(Event('catch', 'Caught PIDGEY', ''), snap(owned=frozenset({1, 16})), None, None)
+    client = TestClient(create_app(SimpleNamespace(status=lambda: {}), store))
+    [row] = client.get('/api/progress').json()
+    assert (row['badges'], row['owned'], row['league']) == (0, 2, 0)
