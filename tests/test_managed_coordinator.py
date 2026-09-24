@@ -565,3 +565,70 @@ def test_a_successful_recovery_clears_the_backoff(setup):
     setup.coordinator.recovery_failures[row['id']] = 4
     setup.coordinator.recover_one(row['id'])
     assert row['id'] not in setup.coordinator.recovery_failures
+
+
+def test_a_slow_inventory_blocks_neither_the_trading_page_nor_adventure_starts(setup):
+    c = setup.coordinator
+    left = setup.peers[setup.data['left_id']]
+    asked, answer = threading.Event(), threading.Event()
+    original = left.request
+
+    def slow(method, path, data=None, timeout=None):
+        if path.endswith('/inventory'):
+            asked.set()
+            assert answer.wait(10)
+        return original(method, path, data, timeout)
+
+    left.request = slow
+    result = {}
+    worker = threading.Thread(target=lambda: result.update(row=c.propose(setup.data)))
+    worker.start()
+    assert asked.wait(10)
+    try:
+        # The page and a start both answer while the worker is still thinking.
+        for lock in (c.view_guard, c.guard, setup.manager.maintenance):
+            acquired = []
+            reader = threading.Thread(target=lambda: acquired.append(lock.acquire(timeout=1) and lock.release() is None))
+            reader.start()
+            reader.join()
+            assert acquired == [True]
+        assert c.status()['active'] == []
+        assert c.preview(setup.data['left_id']) is None
+    finally:
+        answer.set()
+        worker.join(10)
+    assert result['row']['phase'] and c.reserved(setup.data['left_id'])
+
+
+def test_an_exchange_started_meanwhile_wins_over_a_slow_proposal(setup):
+    c = setup.coordinator
+    left = setup.peers[setup.data['left_id']]
+    original = left.request
+    first = []
+
+    def racing(method, path, data=None, timeout=None):
+        if path.endswith('/inventory') and not first:
+            first.append(True)
+            c.propose({**setup.data, 'request_id': identifier()})
+        return original(method, path, data, timeout)
+
+    left.request = racing
+    with pytest.raises(ValueError, match='current Cable Club'):
+        c.propose(setup.data)
+    assert len(setup.registry.transactions(unresolved=True)) == 1
+
+
+def test_an_adventure_stopped_meanwhile_cancels_a_slow_proposal(setup):
+    c = setup.coordinator
+    left = setup.peers[setup.data['left_id']]
+    original = left.request
+
+    def stopping(method, path, data=None, timeout=None):
+        if path.endswith('/inventory'):
+            setup.registry.update(setup.data['right_id'], state='stopped', desired_state='stopped')
+        return original(method, path, data, timeout)
+
+    left.request = stopping
+    with pytest.raises(ValueError, match='must be running'):
+        c.propose(setup.data)
+    assert setup.registry.transactions(unresolved=True) == []

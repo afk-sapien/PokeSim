@@ -63,7 +63,10 @@ class Coordinator:
     def __init__(self, manager):
         self.manager = manager
         self.registry = manager.registry
+        # guard orders changes to exchanges and may be held across worker calls. view_guard only
+        # covers the in-memory display caches, so the trading page never waits on a worker.
         self.guard = threading.RLock()
+        self.view_guard = threading.Lock()
         self.execution = threading.Lock()
         self.closed = threading.Event()
         self.scheduler = None
@@ -129,7 +132,7 @@ class Coordinator:
 
     def _trade_display(self, row, receipts=None, manifest=None):
         result = manifest if manifest is not None else row.get('result') or {}
-        with self.guard:
+        with self.view_guard:
             cached = self.display_cache.get(row['id'])
         if receipts is None and cached and cached[0] == row['updated_at']:
             return cached[1]
@@ -182,7 +185,7 @@ class Coordinator:
                     received = None
             display[aid] = {'sent': sent[aid], 'received': received}
         if row['phase'] in TERMINAL:
-            with self.guard:
+            with self.view_guard:
                 if len(self.display_cache) >= 128:
                     self.display_cache.pop(next(iter(self.display_cache)))
                 self.display_cache[row['id']] = (row['updated_at'], display)
@@ -297,51 +300,65 @@ class Coordinator:
                 raise ValueError('Select an eligible individual Pokémon')
         if selection['left_id'] == selection['right_id']:
             raise ValueError('Choose two different adventures')
+        # Asking a worker for its inventory can take up to 55 seconds, and the maintenance lock also
+        # admits adventure starts, so the inventories are read with no lock held. Everything they
+        # were checked against is checked again, under the locks, before the exchange is recorded.
         with self.manager.maintenance, self.guard:
-            try:
-                existing = self.registry.transaction(tid)
-            except KeyError:
-                existing = None
+            existing = self._admit(tid, selection)
+        if existing:
+            return existing
+        participants = [selection['left_id'], selection['right_id']]
+        display_offers = {}
+        selected_inventories = []
+        selected_offers = []
+        for side, aid in zip(('left', 'right'), participants):
+            inventory = self.inventory(aid)
+            if inventory.get('holding'):
+                raise ValueError('An adventure is already held for an exchange')
+            eligible = {mon.get('trade_key') for mon in inventory.get('offers', [])}
+            if selection[side + '_key'] not in eligible:
+                raise ValueError('This Pokémon is no longer eligible. Check its locks and trade preferences.')
+            selected_offer = next(mon for mon in inventory['offers'] if mon.get('trade_key') == selection[side + '_key'])
+            selected_inventories.append(inventory)
+            selected_offers.append(selected_offer)
+            display_offers[aid] = self._mon_display(selected_offer)
+        left, right = selected_inventories
+        give, take = selected_offers
+        if not self._last_copies_useful(give, take, self._benefit(left, take), self._benefit(right, give)):
+            raise ValueError('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
+        with self.manager.maintenance, self.guard:
+            existing = self._admit(tid, selection)
             if existing:
-                if any(existing['plan'][name] != value for name, value in selection.items()):
-                    raise ValueError('This request ID already belongs to another exchange')
                 return existing
-            if self.closed.is_set() or self.manager.suspended:
-                raise ValueError('Trading is paused for application maintenance')
-            if self.registry.transactions(unresolved=True):
-                raise ValueError('Resolve the current Cable Club exchange before starting another')
-            participants = [selection['left_id'], selection['right_id']]
-            campaigns = {}
-            display_offers = {}
-            selected_inventories = []
-            selected_offers = []
-            for side, aid in zip(('left', 'right'), participants):
-                game = self.registry.adventure(aid)
-                if game['archived'] or game['state'] != 'running' or game['desired_state'] != 'running':
-                    raise ValueError('Both adventures must be running before an exchange')
-                if (game.get('provenance') or {}).get('trading_blocked'):
-                    raise ValueError(game['provenance'].get('reason') or 'This imported adventure needs its legacy peers reconciled before trading')
-                if game['version'] not in {'red', 'blue'}:
-                    raise ValueError('This Cable Club adapter supports Red and Blue')
-                inventory = self.inventory(aid)
-                if inventory.get('holding'):
-                    raise ValueError('An adventure is already held for an exchange')
-                eligible = {mon.get('trade_key') for mon in inventory.get('offers', [])}
-                if selection[side + '_key'] not in eligible:
-                    raise ValueError('This Pokémon is no longer eligible. Check its locks and trade preferences.')
-                selected_offer = next(mon for mon in inventory['offers'] if mon.get('trade_key') == selection[side + '_key'])
-                selected_inventories.append(inventory)
-                selected_offers.append(selected_offer)
-                display_offers[aid] = self._mon_display(selected_offer)
-                campaigns[aid] = game['campaign_id']
-            left, right = selected_inventories
-            give, take = selected_offers
-            if not self._last_copies_useful(give, take, self._benefit(left, take), self._benefit(right, give)):
-                raise ValueError('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
+            campaigns = {aid: self.registry.adventure(aid)['campaign_id'] for aid in participants}
             plan = {**selection, 'participants': participants, 'campaign_ids': campaigns,
                     'attempt_id': identifier(), 'kind': 'cable_trade', 'display_offers': display_offers}
             plan['plan_digest'] = digest(plan)
             return self.registry.create_transaction(tid, plan)
+
+    def _admit(self, tid, selection):
+        """The exchange already recorded under this request ID, or None if a new one may start."""
+        try:
+            existing = self.registry.transaction(tid)
+        except KeyError:
+            existing = None
+        if existing:
+            if any(existing['plan'][name] != value for name, value in selection.items()):
+                raise ValueError('This request ID already belongs to another exchange')
+            return existing
+        if self.closed.is_set() or self.manager.suspended:
+            raise ValueError('Trading is paused for application maintenance')
+        if self.registry.transactions(unresolved=True):
+            raise ValueError('Resolve the current Cable Club exchange before starting another')
+        for aid in (selection['left_id'], selection['right_id']):
+            game = self.registry.adventure(aid)
+            if game['archived'] or game['state'] != 'running' or game['desired_state'] != 'running':
+                raise ValueError('Both adventures must be running before an exchange')
+            if (game.get('provenance') or {}).get('trading_blocked'):
+                raise ValueError(game['provenance'].get('reason') or 'This imported adventure needs its legacy peers reconciled before trading')
+            if game['version'] not in {'red', 'blue'}:
+                raise ValueError('This Cable Club adapter supports Red and Blue')
+        return None
 
     def _prepare(self, row):
         deadline = time.monotonic() + self.prepare_timeout
@@ -411,7 +428,7 @@ class Coordinator:
                         index = row['plan']['participants'].index(aid)
                         expected = output / ('left.jpg' if index == 0 else 'right.jpg')
                         if Path(preview['preview_path']).resolve() == expected.resolve():
-                            with self.guard:
+                            with self.view_guard:
                                 self.previews[aid] = {key: preview.get(key) for key in ('frame', 'map', 'x', 'y', 'side')}
                                 self.previews[aid].update(interaction_id=row['id'], attempt_id=row['plan']['attempt_id'],
                                                          phase=phase, preview_path=str(expected), updated_at=time.time())
@@ -715,9 +732,13 @@ class Coordinator:
         candidates = []
         for index, (left_id, left) in enumerate(inventories):
             for right_id, right in inventories[index + 1:]:
-                for give in left.get('offers', []):
-                    for take in right.get('offers', []):
-                        mine, theirs = self._benefit(left, take), self._benefit(right, give)
+                # Each benefit scans a whole library, so score every offer once per pair
+                # rather than once per combination.
+                gives, takes = left.get('offers', []), right.get('offers', [])
+                theirs_by_give = [self._benefit(right, give) for give in gives]
+                mine_by_take = [self._benefit(left, take) for take in takes]
+                for give, theirs in zip(gives, theirs_by_give):
+                    for take, mine in zip(takes, mine_by_take):
                         if not mine + theirs or not self._last_copies_useful(give, take, mine, theirs):
                             continue
                         # Do not circulate the same individual for repeat quality gains.
@@ -756,11 +777,11 @@ class Coordinator:
         self.scheduler.start()
 
     def preview(self, aid):
-        with self.guard:
-            preview = self.previews.get(aid)
-            if preview and self.registry.transaction(preview['interaction_id'])['phase'] not in TERMINAL:
-                return dict(preview)
-            return None
+        with self.view_guard:
+            preview = dict(self.previews.get(aid) or {})
+        if preview and self.registry.transaction(preview['interaction_id'])['phase'] not in TERMINAL:
+            return preview
+        return None
 
     def close(self):
         self.closed.set()
