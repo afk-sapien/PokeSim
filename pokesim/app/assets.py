@@ -1,5 +1,6 @@
 """Verified shared ROMs and reference data, independent of adventure state."""
 import hashlib
+import logging
 import shutil
 import tempfile
 from pathlib import Path
@@ -8,6 +9,8 @@ import threading
 from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, ROM_NAMES, ensure_game_data
 from .. import game_data
+
+log = logging.getLogger(__name__)
 
 
 class Assets:
@@ -33,7 +36,39 @@ class Assets:
         else:
             CheckpointStore.atomic_write(path, raw)
         version = 'blue' if 'Blue' in ROM_NAMES[sha1] else 'red'
+        self.install_portraits(raw)
         return self.registry.add_rom(sha256, sha1, version)
+
+    def install_portraits(self, raw) -> int:
+        """Decode the 151 front portraits out of the cartridge the owner just supplied.
+
+        The artwork is in their own ROM, so nothing is shipped and nothing is downloaded.
+        An existing file is never replaced, so a hand-installed pack still wins.
+        """
+        from ..sprites import extract
+        from ..strategy_data import SPECIES
+
+        directory = self.root / 'sprites'
+        directory.mkdir(parents=True, exist_ok=True)
+        written = 0
+        try:
+            portraits = extract(bytes(raw), SPECIES)
+        except Exception:
+            log.exception('Could not read portraits from this ROM; the placeholder stays in use')
+            return 0
+        for dex, png in portraits.items():
+            path = directory / f'{dex}.png'
+            if path.exists():
+                continue
+            try:
+                CheckpointStore.atomic_write(path, png)
+                written += 1
+            except OSError:
+                log.exception('Could not write the portrait for %s', dex)
+                break
+        if written:
+            log.info('extracted %d portraits from the cartridge', written)
+        return written
 
     def rom_path(self, rom_id):
         if rom_id not in {item['id'] for item in self.registry.roms()}:

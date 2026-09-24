@@ -85,7 +85,7 @@ This is the short version of what the release downloads. Save it as `compose.yam
 ```yaml
 services:
   pokesim:
-    image: ghcr.io/afk-sapien/pokesim:0.3.4
+    image: ghcr.io/afk-sapien/pokesim:0.3.5
     container_name: pokesim
     ports:
       - "127.0.0.1:8930:8000"
@@ -133,6 +133,10 @@ Found a strange decision, or have an idea that would make it more fun? [Open an 
 
 PokeSim is an unofficial fan project with no connection to Pokémon's rights holders. The code is [MIT licensed](LICENSE). ROMs, portrait packs and generated game data are yours and aren't distributed here.
 
-The screenshots use a portrait pack that isn't included. To use your own, drop `1.png` through `151.png` into the application's `assets/sprites` folder and every adventure will pick them up. Without them you get a neutral placeholder.
+Portraits come out of your own cartridge. When you add a ROM, PokeSim decodes all 151 front
+sprites from it and keeps them in the application's `assets/sprites` folder, so the Pokédex
+and the PC are illustrated without you finding artwork anywhere. Nothing is shipped and nothing
+is fetched for this. Drop your own `1.png` through `151.png` in that folder to override any of
+them; a file that is already there is never replaced.
 
 AI coding assistance was used while building and testing this. The automatic player itself is plain local rules, not a model. See [third-party notices](THIRD_PARTY_NOTICES.md) and [dependency licensing](docs/licensing.md).
