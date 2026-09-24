@@ -108,6 +108,16 @@ class Store:
                 raise
         return eid
 
+    def replace_shot(self, eid: int, png: bytes):
+        """Swap an entry's screenshot for a better one, taken moments later."""
+        with self.lock:
+            path = self.shots / f"{eid}.png"
+            partial = path.with_suffix(".png.tmp")
+            partial.write_bytes(png)
+            partial.replace(path)
+            with self.db:
+                self.db.execute("UPDATE events SET shot=? WHERE id=?", (path.name, eid))
+
     def events(self, limit=50, notable_only=False, types=None, before=None, min_priority=None) -> list[dict]:
         q, args = "SELECT * FROM events", []
         conds = []

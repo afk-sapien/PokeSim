@@ -39,6 +39,15 @@ SHOT_SCALE = 4
 SNAPSHOT_EVERY = 30       # frames
 CHUNK = 4                 # frames per render / pacing step
 WATCH_GRACE = 2.0         # seconds a frame request keeps the stream considered live
+RETAKE_FRAMES = 600       # how long a journal screenshot waits for a fade or warp to end
+BLANK_SHARE = 0.98        # a frame this much one colour shows nothing worth keeping
+
+
+def blank_frame(image) -> bool:
+    """True for a frame caught mid-fade or mid-warp: nearly every pixel one colour."""
+    pixels = image.width * image.height
+    colors = image.getcolors(pixels)
+    return bool(colors) and max(count for count, _ in colors) >= BLANK_SHARE * pixels
 
 
 class Emulator:
@@ -47,6 +56,10 @@ class Emulator:
     # a partially built emulator still ticks.
     _watch_until = 0.0
     _last_publish = 0.0
+    # Journal entries whose screenshot caught a blank frame, as (event id, event), and the
+    # frame after which whatever is on screen is kept anyway.
+    _retakes = ()
+    _retake_until = 0
 
     def __init__(self, store, ntfy=None, *, isolated_ram=False):
         self.isolated_ram = isolated_ram
@@ -285,8 +298,8 @@ class Emulator:
     def _image(self) -> Image.Image:
         return self.pb.screen.image.convert("RGB")
 
-    def _shot_png(self) -> bytes:
-        img = self._image()
+    def _shot_png(self, img=None) -> bytes:
+        img = self._image() if img is None else img
         img = img.resize((img.width * SHOT_SCALE, img.height * SHOT_SCALE), Image.NEAREST)
         buf = io.BytesIO()
         img.save(buf, "PNG", optimize=True)
@@ -351,6 +364,7 @@ class Emulator:
             time.sleep(self._target - now)
 
     def _observe(self):
+        self._retake_shots()
         snap = read_snapshot(self.pb.memory, self.frame)
         if snap.started:
             self.play_clock.seed(snap.playtime_seconds)
@@ -423,7 +437,9 @@ class Emulator:
         if any(ev.type == 'champion' for ev in events):
             rewards.earn(self.store, self.mem.championships,
                          enabled=getattr(config, 'LEAGUE_REWARDS', False))
-        png = self._shot_png()
+        image = self._image()
+        blank = blank_frame(image)
+        png = self._shot_png(image)
         # A journal entry keeps its screenshot, not a save state. Going back to a moment is what
         # the rotating autosaves are for, and on any adventure that has completed a trade the
         # rewind is refused anyway, because every earlier checkpoint predates the trade barrier.
@@ -436,9 +452,35 @@ class Emulator:
             if ev.type in PROGRESS_EVENTS and getattr(self, 'stall', None):
                 self.stall.progress(self.frame, time.time())
             log.info("event #%d %s p%d: %s", eid, ev.type, ev.priority, ev.title)
-            if ev.notable and self.ntfy and self.ntfy.wants(ev):
-                self.ntfy.send(ev.title, ev.body, tags=ev.tags, priority=ev.priority, image=png,
-                               click=f"{config.PUBLIC_URL}/events/{eid}")
+            if blank:
+                # Badges, warps and catches often land during a fade. Keep the entry now and
+                # take its picture, and push it, once the screen shows something again.
+                self._retakes = (*self._retakes, (eid, ev))
+                self._retake_until = self.frame + RETAKE_FRAMES
+            else:
+                self._push(eid, ev, png)
+
+    def _push(self, eid, ev, png):
+        if ev.notable and self.ntfy and self.ntfy.wants(ev):
+            self.ntfy.send(ev.title, ev.body, tags=ev.tags, priority=ev.priority, image=png,
+                           click=f"{config.PUBLIC_URL}/events/{eid}")
+
+    def _retake_shots(self):
+        if not self._retakes:
+            return
+        image = self._image()
+        blank = blank_frame(image)
+        if blank and self.frame < self._retake_until:
+            return
+        png = self._shot_png(image)
+        retakes, self._retakes = self._retakes, ()
+        for eid, ev in retakes:
+            if not blank:
+                try:
+                    self.store.replace_shot(eid, png)
+                except OSError:
+                    log.exception("cannot retake the screenshot for event #%d", eid)
+            self._push(eid, ev, png)
 
     def _enforce_options(self):
         """Keep text speed FAST (random menu presses can set it to SLOW) and optionally animations off."""
