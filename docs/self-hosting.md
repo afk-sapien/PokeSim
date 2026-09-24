@@ -22,7 +22,7 @@ and `.../env.example` always resolve to it, so the commands below never go stale
 version instead, name its tag:
 
 ```sh
-POKESIM_RELEASE=v0.3.8
+POKESIM_RELEASE=v0.4.0
 curl -fL --retry 3 -o compose.yaml "https://github.com/afk-sapien/PokeSim/releases/download/$POKESIM_RELEASE/compose.yaml"
 mkdir -p pokesim-app
 sudo chown 10001:10001 pokesim-app
@@ -63,7 +63,7 @@ still needs internet access unless the reference archive is supplied locally.
 | `PUBLIC_URL=http://localhost:8930` | Exact browser address, including scheme and port |
 | `HTTP_PORT=8930` | Host port mapped to the manager |
 | `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
-| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.3.8` | Exact published image version, overridden by `compose.build.yaml` for source builds |
+| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.0` | Exact published image version, overridden by `compose.build.yaml` for source builds |
 
 Phone notifications need no setting here. Open the Library, choose **Notifications**, generate a topic, and subscribe to it in the [ntfy](https://ntfy.sh) app. See the [guide](guide.md#notifications). `NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY`, and `NTFY_MUTE` are still read from the environment as defaults until notifications are saved in the Library.
 

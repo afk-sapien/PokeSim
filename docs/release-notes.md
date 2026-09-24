@@ -1,27 +1,30 @@
-# PokeSim 0.3.8 experimental beta
+# PokeSim 0.4.0 experimental beta
 
-Fewer black cards in the Journal, and a trading page that stays up.
+See how far each adventure has come, and stop finished trades filling the disk.
 
-## Journal pictures
+## The road so far
 
-Badges, warps and catches often happen while the screen is fading, so their Journal card used to
-be a solid black or white square. Now an entry that lands on a blank screen waits, up to ten
-seconds of game time, for the picture to come back, and uses that one. Its phone notification waits
-with it, so the picture on your phone matches. A place that really is dark, like a cave without
-Flash, keeps what it has after the wait.
+The Journal now opens with three small charts: Pokédex registered, badges, and League wins, each
+drawn over the days the adventure has run. They share one clock, so you can see when a run raced
+through the gyms and when it settled into collecting.
 
-Cards already stored blank stay as they are.
+Adventures from before this release are rebuilt from their Journal the first time they start, so
+their charts begin on day one. A League win replayed after a rewind counts once.
 
-## Trading
+## Storage
 
-Starting a trade asks both adventures what they can offer, and a busy adventure can take close to a
-minute to answer. While it thought, the trading page went blank and starting an
-adventure had to wait. Now nothing waits on that answer: the page keeps loading, and the trade is
-double-checked before it is recorded, so an adventure stopped in the meantime is never traded.
+A busy adventure used to add about 100 MB a day. Most of it came from finished trades, which kept
+their files and a copy of their game state long after they were done. Now, each time an adventure
+starts:
 
-Picking which trade to make next is about eleven times faster, which the manager does every ten
-seconds while adventures run.
+- only the files of its newest twenty finished trades are kept;
+- trades that were called off drop their copy of the game state, as completed ones already did;
+- once a lot of space inside its database is empty, the database is compacted and gives that
+  space back.
+
+On the home server that frees about 350 MB for each of the two busiest adventures.
 
 ## Upgrading
 
-Nothing to migrate: no database, save or policy change.
+Nothing to do. The first start after upgrading adds the chart history and may take a few seconds
+longer while a large database is compacted. Back up the library first, as always.

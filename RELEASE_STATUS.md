@@ -1,22 +1,24 @@
-# Release preparation: 0.3.8
+# Release preparation: 0.4.0
 
-A reliability release. Journal entries recorded during a fade or a warp now retake their screenshot
-once the screen shows something, for up to 600 frames, and hold their ntfy push until then; a screen
-that stays dark, such as an unlit cave, keeps what it has at the deadline. The trading coordinator
-reads worker inventories for a proposal with no lock held and re-checks every admission condition
-under the locks before recording the exchange; its display caches have their own lock, so the
-trading page no longer waits on a worker. The scheduler scores each offer once per adventure pair
-instead of once per combination. Ruff runs the Pyflakes rules in CI.
+A visible-progress and storage release. Each journal entry now writes a `progress` row (badges,
+Pokédex owned and seen, League wins) in the same transaction and from the same snapshot, whenever
+one of those numbers changes; `/api/progress` serves the history and the Journal charts it as step
+lines against real time. Databases that predate the table are backfilled once from the counts
+their entries spelled out. At start, `recover_storage` strips staged snapshots from aborted as well
+as released exchanges, removes all but the newest twenty finished exchange folders, and vacuums
+the adventure database when more than 32 MB of it is free pages.
 
-There is no database change, no policy state change, and no migration.
+There is one additive table (`progress`), created on open. There is no policy state change and no
+migration to run; an older release ignores the table.
 
 ## What was verified
 
-The suite is 1,323 tests, plus the JavaScript and browser tests. New tests cover a blank screenshot
-retaken when the fade ends, a screen that stays blank kept at the deadline, a clear screen pushed at
-once, the trading page and adventure starts answering while a worker's inventory is slow, and a
-proposal refused when another exchange or a stopped adventure arrives meanwhile. The scheduler's
-candidate search for two 246-slot libraries fell from 2.06 s to 0.19 s.
+The suite is 1,327 tests, plus 76 JavaScript tests and 18 browser tests. New tests cover a row
+written only when a number changes, a League victory replayed after a rewind counting once, a title
+screen never recorded, a journal backfilled from its entries and not twice, the route through the
+Library's proxy, the chart's step geometry, and pruning, compaction and aborted-snapshot stripping.
+Red's live journal (about 9,700 entries) backfills to 211 rows and renders without horizontal scroll at
+390 px in light and dark.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64 Docker image and
 Compose configuration. The `pokesim-desktop` Python command opens the Library in your browser.
@@ -47,6 +49,12 @@ it is deployed. See [release notes](docs/release-notes.md),
   part of the Library deployment; do not expose it beyond a trusted network.
 - **Journal screenshots already stored blank are not repaired**, including the one in the shipped
   Journal image. Only new entries are retaken.
+- **Seen counts start with this release.** Journal entries never recorded them, so backfilled
+  history has badges, Pokédex owned and League wins only.
+- **Hall of Fame teams still do not rotate.** A rematch fights with whichever six remain in the
+  party. Choosing a varied team is a gameplay change that needs its own endurance run.
+- **Legacy per-entry rewind states are kept** (about 24 MB for the busiest adventure). They stopped
+  growing in an earlier release and are what lets an old Journal entry rewind.
 - **No formatter or type checker.** Ruff runs the Pyflakes rules only, and 15% of functions carry
   return annotations.
 

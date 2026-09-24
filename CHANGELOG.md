@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0
+
 - The Journal opens with the road so far: Pokédex registered, badges and League wins over time,
   one step line each on a shared clock. Adventures from before this release are rebuilt once from
   their Journal entries; seen counts start with this release.
