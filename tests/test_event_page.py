@@ -36,10 +36,12 @@ def test_event_content_is_text_and_state_is_data():
     assert not any('onclick' in attrs or 'onerror' in attrs for _, attrs in page.tags)
     assert [attrs for tag, attrs in page.tags if tag == 'img'] == [
         {'class': 'shot', 'src': '/shots/' + event['shot'], 'alt': ''}]
-    assert [attrs for tag, attrs in page.tags if tag == 'button'] == [
+    assert [attrs for tag, attrs in page.tags
+            if tag == 'button' and 'data-theme-choice' not in attrs] == [
         {'id': 'rewind', 'data-state': event['state']}]
     assert [attrs for tag, attrs in page.tags if tag == 'script'] == [
-        {'src': '/static/routes.js'}, {'src': '/static/event.js', 'defer': None}]
+        {'src': '/static/routes.js'}, {'src': '/static/panel.js?v=panel-3'},
+        {'src': '/static/event.js?v=panel-2', 'defer': None}]
     assert not any(tag in {'b', 'svg'} for tag, _ in page.tags)
 
 

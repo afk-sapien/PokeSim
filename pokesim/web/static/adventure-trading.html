@@ -1,40 +1,58 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="auto">
 <head>
 <meta charset="utf-8">
 <meta name="pokesim-base" content="${game_base}">
 <meta name="pokesim-adventure" content="${adventure_id}">
 <script src="${game_base}/static/routes.js"></script>
+<script src="${game_base}/static/panel.js?v=panel-3"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#f5f3ed">
+<meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#20241F" media="(prefers-color-scheme: dark)">
 <meta name="description" content="Automatic trading activity and completed exchanges for this adventure.">
 <title>${adventure_name} trading · pokesim</title>
 <link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
-<link rel="stylesheet" href="${game_base}/static/style.css?v=watch-2">
-<link rel="stylesheet" href="${game_base}/static/pokedex.css?v=pages-1">
-<link rel="stylesheet" href="${game_base}/static/pages.css?v=locks-1">
-<link rel="stylesheet" href="${game_base}/static/adventure-trading.css?v=compact-1">
+<link rel="stylesheet" href="${game_base}/static/panel.css?v=panel-8">
+<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=panel-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
 <a class="skip-link" href="#main">Skip to trading.</a>
-<header class="topbar">
-<a class="brand" href="${game_base}/" aria-label="pokesim home"><img class="brand-mark" src="${game_base}/static/favicon.svg" alt="" width="38" height="38">pokesim</a>
-${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a><a href="${game_base}/pokedex">Pokédex</a><a href="${game_base}/pc">PC</a><a href="${game_base}/trading" class="nav-current" aria-current="page">Trading</a><a href="${game_base}/journal">Journal</a></nav>
-<span class="connection" id="connection"><i></i><span id="status">Connecting</span></span>
+
+<header class="rail">
+<div class="shell rail-inner">
+<a class="brandplate" href="${game_base}/" aria-label="pokesim home"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model" id="app-version"></span></span></a>
+${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a><a href="${game_base}/pokedex">Pokédex</a><a href="${game_base}/pc">PC</a><a href="${game_base}/trading" aria-current="page">Trading</a><a href="${game_base}/journal">Journal</a></nav>
+<span class="connection" id="connection"><i class="lamp" aria-hidden="true"></i><span id="status">Connecting</span></span>
+</div>
 </header>
-<main id="main" class="page-main">
-<section class="page-intro"><div><p class="eyebrow"><span class="tiny-dot"></span> ${adventure_name}</p><h1>This adventure’s trades.</h1><p class="intro-copy">Useful exchanges happen automatically with other adventures. Your team and locked Pokémon stay protected.</p></div></section>
-<section class="trade-overview" aria-label="Automatic trading status"><div><span class="eyebrow">AUTOMATIC TRADING</span><h2 id="trade-status">Connecting…</h2><p id="trade-activity">Checking this adventure’s trades.</p></div><a class="trade-pc-link" href="${game_base}/pc?scope=all">View this adventure’s Pokémon ↗</a></section>
+
+<main id="main" class="shell">
+<header class="identity page-head">
+<div class="who"><p class="micro">${adventure_name}</p><h1>This adventure’s trades</h1><p class="page-lede">Useful exchanges happen automatically with other adventures. Your team and locked Pokémon stay protected.</p></div>
+</header>
+
+<section class="trade-overview" aria-label="Automatic trading status">
+<div class="trade-overview-read"><p class="micro"><i class="lamp" id="trade-lamp" aria-hidden="true"></i>Automatic trading</p><h2 class="headline" id="trade-status">Connecting…</h2><p class="body" id="trade-activity">Checking this adventure’s trades.</p></div>
+<a class="key trade-pc-link" href="${game_base}/pc?scope=all">Open its PC <span aria-hidden="true">↗</span></a>
+</section>
 <p id="trade-connection-note" class="trade-notice" role="status" hidden></p>
-<section id="current-exchange-section" aria-labelledby="current-heading"><div class="section-heading"><h2 id="current-heading">Current exchange</h2></div><div id="trade-active" aria-live="polite">Checking for an exchange…</div></section>
-<section aria-labelledby="history-heading"><div class="section-heading"><h2 id="history-heading">Recent completed trades</h2><span class="count-pill" id="trade-history-count"></span></div><div id="trade-history" aria-live="polite">Loading this adventure’s history…</div></section>
-<section id="trade-failures-section" aria-labelledby="failures-heading" hidden><details class="cable-attempts"><summary id="failures-heading">Recent attempts that did not complete</summary><div id="trade-failures" aria-live="polite"></div></details></section>
+
+<section id="current-exchange-section" class="trade-section" aria-labelledby="current-heading"><div class="section-head"><h2 class="legend legend--ink" id="current-heading">Current exchange</h2></div><div id="trade-active" class="deal-list" aria-live="polite">Checking for an exchange…</div></section>
+<section class="trade-section" aria-labelledby="history-heading"><div class="section-head"><h2 class="legend legend--ink" id="history-heading">Recent completed trades</h2><span class="micro" id="trade-history-count"></span></div><div id="trade-history" class="deal-list" aria-live="polite">Loading this adventure’s history…</div></section>
+<section id="trade-failures-section" class="trade-section" aria-labelledby="failures-heading" hidden><details class="attempts cable-attempts"><summary id="failures-heading">Recent attempts that did not complete</summary><div id="trade-failures" class="deal-list" aria-live="polite"></div></details></section>
 </main>
-<footer><span id="app-version"></span><a class="brand footer-brand" href="${game_base}/">pokesim<span class="tiny-dot"></span></a><p>A small window into a very big adventure.</p><div><a href="${game_base}/feed.xml">Subscribe via Atom ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">Project on GitHub ↗</a></div></footer>
+
+<footer class="plate-foot">
+<div class="shell">
+<p>A small window into a very big adventure.</p>
+<div class="theme" role="group" aria-label="Colour theme"><button data-theme-choice="light" aria-pressed="false">Light</button><button data-theme-choice="auto" aria-pressed="false">Auto</button><button data-theme-choice="dark" aria-pressed="false">Dark</button></div>
+<div class="links"><a href="${game_base}/feed.xml">Atom feed ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">GitHub ↗</a></div>
+</div>
+</footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="${game_base}/static/adventure-trading.js?v=compact-1"></script>
+<script src="${game_base}/static/adventure-trading.js?v=panel-2"></script>
 </body>
 </html>

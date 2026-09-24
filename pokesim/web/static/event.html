@@ -1,20 +1,57 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="auto">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="pokesim-base" content="${game_base}">
 <meta name="pokesim-adventure" content="${adventure_id}">
+<script src="${game_base}/static/routes.js"></script>
+<script src="${game_base}/static/panel.js?v=panel-3"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#20241F" media="(prefers-color-scheme: dark)">
 <title>${title} · pokesim</title>
 <link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
-<link rel="stylesheet" href="${game_base}/static/style.css">
-<script src="${game_base}/static/routes.js"></script>
-<script src="${game_base}/static/event.js" defer></script>
+<link rel="stylesheet" href="${game_base}/static/panel.css?v=panel-8">
+<link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=panel-2">
+<script src="${game_base}/static/event.js?v=panel-2" defer></script>
 </head>
-<body class="event">
-<header class="topbar">${library_nav}</header>
-<main><a href="${game_base}/journal">Back to the journal</a><h1>${title}</h1>
-<p class="meta">${timestamp} · ${location} · play time ${playtime} · ${event_type} · priority ${priority}</p>
-<p>${body}</p>${screenshot}<p>${rewind}</p><p id="rewind-error" role="alert" hidden></p>
-</main></body></html>
+<body class="event" data-page="event">
+<a class="skip-link" href="#main">Skip to the journal entry.</a>
+
+<header class="rail">
+<div class="shell rail-inner">
+<a class="brandplate" href="${game_base}/" aria-label="pokesim home"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span></span></a>
+${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a><a href="${game_base}/pokedex">Pokédex</a><a href="${game_base}/pc">PC</a><a href="${game_base}/trading">Trading</a><a href="${game_base}/journal">Journal</a></nav>
+</div>
+</header>
+
+<main id="main" class="shell">
+<header class="identity page-head">
+<div class="who"><a class="back micro" href="${game_base}/journal">← Back to the journal</a><p class="micro">Journal entry · ${event_type}</p><h1>${title}</h1></div>
+</header>
+
+<article class="entry">
+<div class="entry-frame">${screenshot}</div>
+<div class="entry-sheet">
+<dl class="spec">
+<div><dt>Logged</dt><dd><time id="logged" datetime="${timestamp}">${timestamp}</time></dd></div>
+<div><dt>Location</dt><dd>${location}</dd></div>
+<div><dt>Play time</dt><dd>${playtime}</dd></div>
+<div><dt>Priority</dt><dd>${priority}</dd></div>
+</dl>
+<p class="entry-body">${body}</p>
+<div class="entry-rewind">${rewind}<p id="rewind-error" role="alert" hidden></p></div>
+</div>
+</article>
+</main>
+
+<footer class="plate-foot">
+<div class="shell">
+<p>A small window into a very big adventure.</p>
+<div class="theme" role="group" aria-label="Colour theme"><button data-theme-choice="light" aria-pressed="false">Light</button><button data-theme-choice="auto" aria-pressed="false">Auto</button><button data-theme-choice="dark" aria-pressed="false">Dark</button></div>
+<div class="links"><a href="${game_base}/feed.xml">Atom feed ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">GitHub ↗</a></div>
+</div>
+</footer>
+</body>
+</html>

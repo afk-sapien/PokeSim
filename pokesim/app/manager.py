@@ -500,7 +500,7 @@ def create_app(manager, shutdown=lambda: None):
             return JSONResponse(manager.coordinator.adventure_status(aid))
         if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
             asset = path.removeprefix('static/')
-            if asset in {'routes.js', 'tokens.css', 'style.css', 'pokedex.css', 'pages.css',
+            if asset in {'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css',
                          'adventure-trading.js', 'fonts/pokesim-panel.woff2'}:
                 return FileResponse(STATIC / asset)
         sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)

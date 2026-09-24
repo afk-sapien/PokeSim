@@ -1,0 +1,163 @@
+/* ==========================================================================
+   PokeSim — "Bench Instrument", the desktop launcher.
+
+   Loads after tokens.css and panel.css, and only on desktop.html, which the
+   desktop app serves from /desktop/assets/. One narrow column: what this is,
+   the setup panel, two notes, and where the files live.
+   ========================================================================== */
+
+.desktop-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--s5);
+  max-width: 760px;
+  padding-top: var(--s7);
+}
+
+.desk-head { display: grid; gap: var(--s3); }
+/* The title is a sentence, so it takes the text face at display size rather
+   than the pixel face. */
+.desk-head h1 {
+  font: 700 36px / 1.15 var(--font-text);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.lede { max-width: 56ch; font-size: 17px; color: var(--ink-2); text-wrap: pretty; }
+
+/* ---- setup panel ------------------------------------------------------- */
+.setup-card { display: grid; grid-template-columns: minmax(0, 1fr); }
+.setup-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  min-height: 64px;
+  padding: var(--s3) var(--s4);
+  background: var(--panel-2);
+  border-bottom: var(--hair) solid var(--rule-faint);
+}
+.setup-head .step {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 40px;
+  background: var(--well);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--well-inset);
+  color: var(--signal);
+}
+.setup-head h2 { font: 600 18px / 1.3 var(--font-text); }
+
+.setup-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); padding: var(--s5) var(--s4); }
+#setup { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+#setup[hidden] { display: none; }
+#setup .note { margin-bottom: var(--s3); }
+#setup .key { justify-self: start; margin-top: var(--s2); }
+
+.field { display: block; }
+.well-input {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  background: var(--well);
+  border: var(--hair) solid var(--rule);
+  border-radius: 0;
+  box-shadow: var(--well-inset);
+  color: var(--ink);
+  font: 15px / 1.3 var(--font-text);
+}
+input.well-input[type="file"] { padding: var(--s1) var(--s2); font-size: 14px; }
+input.well-input::file-selector-button {
+  margin-right: var(--s3);
+  min-height: 34px;
+  padding: 0 var(--s3);
+  background: var(--panel-2);
+  border: var(--hair) solid var(--rule);
+  border-radius: 0;
+  box-shadow: var(--key-inset);
+  font: var(--f-label) / 1 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--ink);
+  cursor: pointer;
+}
+.note { font-size: 13px; line-height: 1.5; color: var(--ink-3); }
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  background: var(--well);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--well-inset);
+  font-size: 15px;
+}
+.progress .lamp { flex: none; }
+.error {
+  padding: var(--s3) var(--s4);
+  background: var(--panel-2);
+  border-left: 3px solid var(--crit-lamp);
+  color: var(--crit);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  padding: var(--s4);
+  background: var(--panel-2);
+  border-top: var(--hair) solid var(--rule-faint);
+}
+.setup-actions #quit { margin-left: auto; }
+
+/* ---- notes and files --------------------------------------------------- */
+.notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
+.notes .panel { display: grid; align-content: start; gap: var(--s2); padding: var(--s4); }
+.notes h3 { font: 600 16px / 1.3 var(--font-text); }
+.notes p:last-child { font-size: 14px; color: var(--ink-2); }
+
+.files > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 48px;
+  padding: 0 var(--s4);
+  cursor: pointer;
+  list-style: none;
+  font: var(--f-label) / 1 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.files > summary::-webkit-details-marker { display: none; }
+.files > summary::before { content: "\25B6"; font: 8px / 1 var(--font-panel); color: var(--ink-3); }
+.files[open] > summary::before { transform: rotate(90deg); }
+.files[open] > summary { border-bottom: var(--hair) solid var(--rule-faint); }
+.files-body { display: grid; gap: var(--s3); padding: var(--s4); font-size: 14px; color: var(--ink-2); }
+.files code { font: 13px / 1.4 var(--font-mono); color: var(--ink); }
+#data-dir {
+  display: block;
+  padding: var(--s2) var(--s3);
+  background: var(--well);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--well-inset);
+  overflow-wrap: anywhere;
+}
+#data-dir:empty { display: none; }
+
+/* The rail has no tabs here, so it is one short row at every width. */
+.desktop .rail-inner { min-height: 56px; align-items: center; }
+
+@media (max-width: 640px) {
+  .desktop-main { padding-top: var(--s5); gap: var(--s4); }
+  .desk-head h1 { font-size: 28px; }
+  .lede { font-size: 15px; }
+  .notes { grid-template-columns: minmax(0, 1fr); }
+  .setup-body { padding: var(--s4); }
+  #setup .key, .setup-actions .key { width: 100%; min-height: 44px; }
+  .setup-actions #quit { margin-left: 0; }
+}

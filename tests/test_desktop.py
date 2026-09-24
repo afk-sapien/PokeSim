@@ -125,6 +125,11 @@ def test_first_run_and_browser_assets_work_without_game_data(launcher):
     assert page.headers['cache-control'] == 'no-store'
     assert client.get('/desktop/assets/desktop.js').status_code == 200
     assert client.get('/desktop/assets/desktop.css').status_code == 200
+    for asset in ('tokens.css', 'panel.css', 'panel.js', 'panel-desktop.css', 'favicon.svg'):
+        assert f'/desktop/assets/{asset}' in page.text
+        assert client.get(f'/desktop/assets/{asset}').status_code == 200
+    # tokens.css names the panel face relative to itself.
+    assert client.get('/desktop/assets/fonts/pokesim-panel.woff2').status_code == 200
     assert client.get('/desktop/status').json()['state'] == 'setup'
     adventure.start.assert_not_called()
 

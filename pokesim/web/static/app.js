@@ -8,9 +8,7 @@ function set(selector, property, value) {
 const fmt = (value) => Number(value || 0).toLocaleString()
 const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0))
 const BADGES = ['Boulder', 'Cascade', 'Thunder', 'Rainbow', 'Soul', 'Marsh', 'Volcano', 'Earth']
-const BADGE_SYMBOLS = ['◆', '◒', '✧', '✿', '♡', '◉', '✷', '❧']
 const LEADERS = ['Brock', 'Misty', 'Lt. Surge', 'Erika', 'Koga', 'Sabrina', 'Blaine', 'Giovanni']
-const TYPE_CLASS = new Set(['normal', 'fighting', 'flying', 'poison', 'ground', 'rock', 'bug', 'ghost', 'fire', 'water', 'grass', 'electric', 'psychic', 'ice', 'dragon'])
 // A cable trade leaves no screenshot behind, so the card drew a placeholder glyph and said
 // nothing about the swap. Draw the two Pokemon instead, with the trainer on the other end.
 function tradeArt(event) {
@@ -22,12 +20,11 @@ function tradeArt(event) {
     : '<span class="unknown-sprite" aria-hidden="true">?</span>'
   const label = (side) => esc(side && side.nick ? side.nick : '')
   return `<span class="trade-art">`
-    + `<span class="trade-side"><span class="trade-way">SENT</span>${face(detail.sent)}<small>${label(detail.sent)}</small></span>`
-    + `<span class="trade-swap" aria-hidden="true">\u21c4</span>`
-    + `<span class="trade-side"><span class="trade-way">GOT</span>${face(detail.received)}<small>${label(detail.received)}</small></span>`
+    + `<span class="trade-side"><span class="trade-way">Sent</span>${face(detail.sent)}<small>${label(detail.sent)}</small></span>`
+    + `<span class="trade-swap" aria-hidden="true">\u2192</span>`
+    + `<span class="trade-side"><span class="trade-way">Got</span>${face(detail.received)}<small>${label(detail.received)}</small></span>`
     + `</span>`
 }
-const typeClass = (name) => TYPE_CLASS.has(String(name).toLowerCase()) ? String(name).toLowerCase() : 'normal'
 
 // The planner passes through a gap between projects, and a decision tick can land on a League map
 // or the ceremony, so the raw objective flickers several times a minute. Hold the last real one:
@@ -105,7 +102,7 @@ function renderParty(party) {
   partySignature = signature
   set('#party-count', 'textContent', `${party.length} / 6`)
   if (!party.length) {
-    set('#party', 'innerHTML', '<li class="empty-party"><span aria-hidden="true">◌</span><h3>Every team starts somewhere.</h3><p>The first partner will appear here.</p></li>')
+    set('#party', 'innerHTML', '<li class="mon mon--empty"><div class="mon-plate"><div class="plate plate--bay"><span class="plate-num">01</span></div></div><div class="mon-body"><p class="micro">Every team starts somewhere</p><p>The first partner will appear here.</p></div></li>')
     return
   }
   // Same scale as dv_rating() on the server: five DVs out of 75, HP derived from the rest.
@@ -115,29 +112,42 @@ function renderParty(party) {
     const total = dvs.reduce((sum, value) => sum + value, 0)
     return total === 75 ? 4 : total >= 60 ? 3 : total >= 38 ? 2 : 1
   }
+  const slotNo = (index) => String(index + 1).padStart(2, '0')
+  const openBay = (index, title, note) =>
+    `<li class="mon mon--empty"><div class="mon-plate"><div class="plate plate--bay"><span class="plate-num">${slotNo(index)}</span></div></div><div class="mon-body"><p class="micro">${title}</p><p>${note}</p></div></li>`
   const emptySlots = (filled) => Array.from({length: Math.max(0, 6 - filled)}, (_, slot) =>
-    `<li class="mon-card empty-slot"><span class="party-slot">${String(filled + slot + 1).padStart(2, '0')}</span><p>Room for one more</p></li>`).join('')
+    openBay(filled + slot, `Slot ${slotNo(filled + slot)}`, 'Room for one more')).join('')
   // A Pokémon on the naming screen is counted before the cartridge writes its stats,
   // so show the slot as arriving rather than as a fainted level 0 nobody.
-  const pendingSlot = (index) =>
-    `<li class="mon-card empty-slot"><span class="party-slot">${String(index + 1).padStart(2, '0')}</span><p>Joining the team…</p></li>`
+  const pendingSlot = (index) => openBay(index, `Slot ${slotNo(index)}`, 'Joining the team…')
+  // Sixteen cells, and a cell only lights once it is earned, so a sliver of HP
+  // still shows one lit cell rather than an empty meter.
+  const meter = (percent, level, label) => {
+    const lit = percent > 0 ? Math.max(1, Math.round(percent / 100 * 16)) : 0
+    return `<div class="meter" data-level="${level}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(percent)}" aria-label="${label}">${Array.from({length: 16}, (_, i) => `<i${i < lit ? ' class="on"' : ''}></i>`).join('')}</div>`
+  }
   $('#party').innerHTML = party.map((mon, index) => {
     if (mon.pending) return pendingSlot(index)
     const hp = clamp(mon.max_hp ? mon.hp / mon.max_hp * 100 : 0)
-    const health = hp < 20 ? 'critical' : hp < 50 ? 'low' : 'healthy'
+    const health = hp < 20 ? 'crit' : hp < 50 ? 'warn' : 'ok'
     const xp = mon.experience
     const name = mon.nick && mon.nick.toUpperCase() !== mon.name.toUpperCase() ? mon.nick : mon.name
-    const typeNames = mon.type_names || []
-    const types = typeNames.map((type) => `<span class="type-tag ${typeClass(type)}">${esc(type)}</span>`).join('')
-    const dex = mon.dex ? `No. ${String(mon.dex).padStart(3, '0')}` : 'Partner'
+    const types = (mon.type_names || []).map((type) => `<span class="tag">${esc(type)}</span>`).join('')
+    const dex = mon.dex ? `<span class="micro dexno">No.${String(mon.dex).padStart(3, '0')}</span>` : ''
     const status = mon.status_label || (mon.hp ? 'Healthy' : 'Fainted')
-    const moveRows = (mon.move_details || []).map((move) => `<div class="move"><span class="move-type ${typeClass(move.type)}" aria-hidden="true"></span><span class="move-name">${esc(move.name)}</span><small class="${move.pp ? '' : 'depleted'}">${move.pp}/${move.max_pp}</small></div>`).join('')
+    const statusTag = status !== 'Healthy' ? `<span class="tag ${mon.hp ? 'tag--warn' : 'tag--crit'}">${esc(status)}</span>` : ''
+    const moveRows = (mon.move_details || []).map((move) => `<div class="move" title="${esc(move.name)} · ${esc(move.type || '')} · ${move.pp}/${move.max_pp} PP"><span class="nm">${esc(move.name)}</span><span class="pp${move.pp ? '' : ' empty'}">${move.pp}</span></div>`).join('')
     const rating = dvStars(mon.dvs)
-    const stars = rating ? `<span class="dv-stars" title="DV rating ${rating} of 4">${'★'.repeat(rating)}${'☆'.repeat(4 - rating)}</span>` : ''
-    const sprite = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png" alt="${esc(mon.name)} portrait" width="96" height="96">` : '<span class="unknown-sprite">?</span>'
-    return `<li class="mon-card ${mon.hp ? '' : 'fainted'}"><div class="mon-main"><div class="sprite-stage ${typeClass(typeNames[0])}">${sprite}<span class="party-slot">${String(index + 1).padStart(2, '0')}</span></div><div class="mon-info"><div class="mon-title"><h3>${esc(name)}</h3><span class="level">${stars}<small>LV.</small> ${mon.level}</span></div><div class="mon-subtitle"><span>${dex}${name !== mon.name ? ` · ${esc(mon.name)}` : ''}</span>${types}${status !== 'Healthy' ? `<span class="condition">${esc(status)}</span>` : ''}</div><div class="meter-label"><span>HP <b class="${health}">${mon.hp > 0 ? '●' : '○'}</b></span><span><strong>${fmt(mon.hp)}</strong> / ${fmt(mon.max_hp)}</span></div><progress class="hp-meter ${health}" max="100" value="${hp}" aria-label="${esc(name)} health: ${mon.hp} of ${mon.max_hp}"></progress><div class="meter-label xp-label"><span>XP</span><span>${xp ? xp.max_level ? 'MAX LEVEL' : `${clamp(xp.percent)}%` : 'Unavailable'}</span></div><progress class="xp-meter" max="100" value="${clamp(xp?.percent)}" aria-label="${esc(name)} progress to next level"></progress></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div><button class="partner-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} battle stats">Battle stats <span aria-hidden="true">↗</span></button></li>`
+    const dvLamps = rating ? `<span class="dv" title="DV rating ${rating} of 4" role="img" aria-label="DV rating ${rating} of 4">${Array.from({length: 4}, (_, i) => `<i class="lamp"${i < rating ? ' data-on="signal"' : ''}></i>`).join('')}</span>` : ''
+    const sprite = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png" alt="${esc(mon.name)} portrait">` : `<span class="plate-num">?</span>`
+    const xpText = xp ? xp.max_level ? 'MAX' : `${Math.floor(clamp(xp.percent))}%` : '—'
+    return `<li class="mon${mon.hp ? '' : ' mon--fainted'}"><div class="mon-plate"><div class="plate plate--bay">${sprite}</div></div><div class="mon-body"><div class="mon-head"><span class="slotno">${slotNo(index)}</span><h3 class="name">${esc(name)}</h3><span class="spacer"></span>${dvLamps}<span class="lv"><em>LV</em>${mon.level}</span><button class="mon-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} battle stats"><span aria-hidden="true">↗</span></button></div><div class="mon-id">${dex}<span class="micro">${esc(mon.name)}</span>${types}${statusTag}</div><div class="mon-lower"><div class="mon-meters"><div class="meter-row"><span class="micro">HP</span>${meter(hp, health, `${esc(name)} health: ${mon.hp} of ${mon.max_hp}`)}<span class="value">${fmt(mon.hp)}/${fmt(mon.max_hp)}</span></div><div class="meter-row"><span class="micro">XP</span>${meter(clamp(xp?.percent), 'signal', `${esc(name)} progress to next level`)}<span class="value">${xpText}</span></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div></div></div></li>`
   }).join('') + emptySlots(party.length)
+  fitSprites($('#party'))
 }
+
+// Portrait scaling is shared; see panel.js.
+const fitSprites = (root) => globalThis.Panel?.fitSprites?.(root)
 
 async function refreshState() {
   if (stateBusy) return
@@ -170,7 +180,7 @@ async function refreshState() {
     $('#connection').classList.toggle('is-paused', paused)
     $('#connection').classList.remove('is-offline')
     set('#status', 'textContent', manualMode ? 'You’re in control' : paused ? 'Game frozen' : 'Adventure in progress')
-    set('#pause', 'textContent', paused && !manualMode ? '▶ Unfreeze' : 'Ⅱ Freeze game')
+    set('#pause', 'textContent', paused && !manualMode ? 'Unfreeze' : 'Freeze')
     const progress = state.progress
     const strategy = state.strategy
     const planning = strategy?.objective?.id === PLANNING
@@ -199,14 +209,14 @@ async function refreshState() {
     set('#clock-note', 'textContent', clock?.lower_bound ? 'Earlier time hit the game limit' : '')
     set('#trainer-name', 'textContent', game.player_name || 'A new trainer')
     set('#trainer-rival', 'textContent', game.rival_name ? `Rival: ${game.rival_name}` : 'A new story begins')
-    set('#dex-count', 'innerHTML', `${game.owned} <small>/ 151</small>`)
+    set('#dex-count', 'innerHTML', `${fmt(game.owned)}<span class="unit">/151</span>`)
     set('#dex-count', 'title', `${game.seen} Pokémon seen`)
     set('#league-wins', 'textContent', fmt(state.league_rewards?.wins ?? game.hall_of_fame_count ?? 0))
     set('#money', 'textContent', `₽${fmt(game.money)}`)
     set('#areas', 'textContent', fmt(state.areas_discovered))
     const earned = game.badges || []
     set('#badge-count', 'textContent', `${earned.length} / 8`)
-    set('#badges', 'innerHTML', BADGES.map((badge, i) => `<div class="badge ${earned.includes(badge) ? 'earned' : ''}" title="${badge} Badge · ${LEADERS[i]} · ${earned.includes(badge) ? 'Earned' : 'Still ahead'}"><span class="badge-icon badge-${i}" aria-hidden="true">${BADGE_SYMBOLS[i]}</span><span>${badge}</span><small>${earned.includes(badge) ? 'EARNED' : String(i + 1).padStart(2, '0')}</small></div>`).join(''))
+    set('#badges', 'innerHTML', BADGES.map((badge, i) => `<i class="lamp"${earned.includes(badge) ? ' data-on="signal"' : ''} role="img" aria-label="${badge} Badge, ${earned.includes(badge) ? 'earned' : 'still ahead'}" title="${badge} Badge · ${LEADERS[i]} · ${earned.includes(badge) ? 'Earned' : 'Still ahead'}"></i>`).join(''))
     renderParty(game.party)
   } catch (_) {
     set('#status', 'textContent', 'Reconnecting…')
@@ -217,11 +227,18 @@ async function refreshState() {
 }
 
 const EVENT_LABELS = {trade: 'A PARTNER FROM AFAR', badge: 'A BADGE TO REMEMBER', catch: 'A NEW FRIEND', evolve: 'GROWING TOGETHER', obtain: 'A NEW COMPANION', map: 'SOMEWHERE NEW', level: 'A LITTLE STRONGER', blackout: 'A FRESH START', champion: 'HALL OF FAME', item: 'A GOOD FIND', trainer: 'CHALLENGE ACCEPTED', seen: 'FIRST SIGHTING', playtime: 'TIME WELL SPENT'}
+// Each entry's lamp says what kind of moment it was, so the log can be skimmed by colour
+// as well as read: milestones in signal, the team in green, a blackout in red.
+const EVENT_LAMPS = {badge: 'signal', champion: 'signal', catch: 'ok', obtain: 'ok', trade: 'ok', evolve: 'ok', level: 'ok', blackout: 'crit', trainer: 'warn'}
 function renderEvents() {
   $('#events').innerHTML = eventRows.map((event) => {
     const date = new Date(event.ts * 1000)
-    return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-picture">${event.shot ? `<img loading="lazy" src="${PokeSim.base}/shots/${encodeURIComponent(event.shot)}" alt="Game screen at ${esc(event.title)}" width="160" height="144">` : tradeArt(event) || '<span aria-hidden="true">✧</span>'}<span class="event-label">${EVENT_LABELS[event.type] || 'FROM THE JOURNAL'}</span></div><div class="event-copy"><time datetime="${date.toISOString()}">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} · ${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</time><h3>${esc(event.title)}</h3><p>${esc(event.map)}<span aria-hidden="true">↗</span></p></div></a>`
-  }).join('') || '<div class="journal-empty"><span>✧</span><h3>The best pages are still unwritten.</h3><p>New moments will find their way here as the adventure unfolds.</p></div>'
+    const lamp = EVENT_LAMPS[event.type] ? ` data-on="${EVENT_LAMPS[event.type]}"` : ''
+    const picture = event.shot
+      ? `<img loading="lazy" src="${PokeSim.base}/shots/${encodeURIComponent(event.shot)}" alt="Game screen at ${esc(event.title)}" width="160" height="144">`
+      : tradeArt(event) || '<span class="no-frame">No screen kept</span>'
+    return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-time"><i class="lamp"${lamp} aria-hidden="true"></i><time datetime="${date.toISOString()}"><span class="day">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</span><span class="clock">${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</span></time></div><div class="event-picture${event.shot ? '' : ' is-art'}">${picture}</div><div class="event-copy"><span class="event-label">${EVENT_LABELS[event.type] || 'FROM THE JOURNAL'}</span><h3>${esc(event.title)}</h3><span class="event-where">${esc(event.map)}</span></div><span class="event-go" aria-hidden="true">↗</span></a>`
+  }).join('') || '<div class="journal-empty"><p class="micro">Nothing logged yet</p><h3>The best pages are still unwritten.</h3><p>New moments will find their way here as the adventure unfolds.</p></div>'
   set('#load-more', 'hidden', !moreAvailable || !eventRows.length)
 }
 
@@ -332,9 +349,11 @@ function renderPartnerDetail() {
   }
   const name = mon.nick || mon.name
   const xp = mon.experience
-  const moves = (mon.move_details || []).map((move) => `<div class="move"><span class="move-type ${typeClass(move.type)}" aria-hidden="true"></span><span>${esc(move.name)}</span><small class="${move.pp ? '' : 'depleted'}">${move.pp}/${move.max_pp} PP</small></div>`).join('')
+  const moves = (mon.move_details || []).map((move) => `<div class="move"><span class="nm">${esc(move.name)}</span><span class="pp${move.pp ? '' : ' empty'}">${move.pp}/${move.max_pp} PP</span></div>`).join('')
   const stats = Object.entries(mon.stats || {}).map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${fmt(value)}</dd></div>`).join('')
-  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head">${mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png" alt="" width="96" height="96">` : ''}<p class="eyebrow">PARTNER ${selectedPartner.index + 1} · LEVEL ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><p>${esc(mon.name)} · ${mon.hp} / ${mon.max_hp} HP · ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><h3>Moves</h3><div class="moves">${moves || '<p>No moves yet.</p>'}</div><h3>Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${xp.max_level ? 'MAX LEVEL' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}`)
+  const portrait = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png" alt="">` : '<span class="plate-num">?</span>'
+  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay">${portrait}</div><p class="micro">Partner ${selectedPartner.index + 1} · Level ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><p>${esc(mon.name)} · ${mon.hp} / ${mon.max_hp} HP · ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><section><h3 class="micro">Moves</h3><div class="moves">${moves || '<p class="no-moves">No moves yet.</p>'}</div></section><section><h3 class="micro">Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${xp.max_level ? 'MAX LEVEL' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}</section>`)
+  fitSprites($('#partner-detail-content'))
 }
 $('#party')?.addEventListener('click', (event) => {
   const button = event.target.closest('[data-partner]')

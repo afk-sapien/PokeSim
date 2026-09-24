@@ -1,0 +1,405 @@
+/* ==========================================================================
+   PokeSim — "Bench Instrument", the journal and a single journal entry.
+
+   Loads after tokens.css and panel.css, and only on journal.html and
+   event.html. The journal is a log: one milled panel, one line per moment,
+   read top to bottom like a flight recorder. Each line carries a lamp, so the
+   log can be skimmed by colour before it is read.
+
+   Game frames are 160x144 and are always shown at a whole multiple of that
+   (1x in the log, up to 3x on an entry) with pixelated scaling.
+   ========================================================================== */
+
+
+/* ---- page head --------------------------------------------------------- */
+.page-head { align-items: flex-end; }
+.page-head .lede { margin-top: var(--s3); max-width: 60ch; color: var(--ink-2); }
+.page-head .back {
+  display: inline-block;
+  margin-bottom: var(--s4);
+  color: var(--link);
+}
+
+
+/* ---- segmented filter -------------------------------------------------
+   Three mutually exclusive views, set as one recessed slot of keys. The
+   pressed key is raised and lit, and carries aria-pressed. */
+.filters {
+  display: flex;
+  background: var(--well);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--well-inset);
+}
+.filters button {
+  min-height: 40px;
+  padding: 0 var(--s4);
+  background: none;
+  border: 0;
+  border-left: var(--hair) solid var(--rule-faint);
+  font: var(--f-label) / 1 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+.filters button:first-child { border-left: 0; }
+.filters button:hover { color: var(--ink); }
+.filters button[aria-pressed="true"] {
+  background: var(--panel);
+  color: var(--signal);
+  box-shadow: var(--key-inset), inset 0 -3px 0 var(--signal);
+}
+
+.journal-top { margin-bottom: var(--s3); }
+
+
+/* ---- the log ----------------------------------------------------------- */
+.log {
+  display: grid;
+  background: var(--panel);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--key-inset);
+}
+
+/* One line of the log: when, what it looked like, what happened, and a mark
+   that says the whole line opens the entry. */
+.event-card {
+  display: grid;
+  grid-template-columns: 128px auto minmax(0, 1fr) 48px;
+  grid-template-areas: "time frame copy go";
+  align-items: stretch;
+  color: var(--ink);
+  text-decoration: none;
+  border-top: var(--hair) solid var(--rule-faint);
+  transition: background var(--t);
+}
+.event-card:first-child { border-top: 0; }
+.event-card:hover { background: var(--panel-2); text-decoration: none; }
+.event-card:focus-visible { outline-offset: -2px; box-shadow: inset 0 0 0 4px var(--focus-halo); }
+
+/* The time column is a strip of well down the left edge, so the lamps line
+   up into a single readable rail. */
+.event-time {
+  grid-area: time;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s4);
+  background: var(--panel-2);
+  border-right: var(--hair) solid var(--rule-faint);
+}
+.event-time .lamp { margin-top: 3px; }
+.event-time time { display: grid; gap: var(--s1); }
+.event-time .day {
+  font: var(--f-label) / 1.2 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.event-time .clock {
+  font: var(--f-micro) / 1.2 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A frame is held in a slim black bezel, like the live screen. */
+.event-picture {
+  grid-area: frame;
+  align-self: start;
+  display: grid;
+  place-items: center;
+  width: calc(160px + 8px);
+  height: calc(144px + 8px);
+  margin: var(--s3) 0 var(--s3) var(--s4);
+  padding: 4px;
+  background: var(--bezel);
+  border: var(--hair) solid var(--rule);
+}
+.event-picture img {
+  width: 160px;
+  height: 144px;
+  image-rendering: pixelated;
+}
+/* A cable trade keeps no frame, so the two Pokémon stand in for one, on the
+   same pale slide the portraits use. */
+.event-picture.is-art {
+  background: var(--plate);
+  background-image: radial-gradient(var(--plate-grid) 0.5px, transparent 0.5px);
+  background-size: 4px 4px;
+  box-shadow: var(--well-inset);
+}
+.trade-art { display: flex; align-items: center; gap: var(--s1); }
+.trade-side { display: grid; justify-items: center; gap: 2px; min-width: 0; }
+.trade-side img { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; }
+.trade-way,
+.trade-side small {
+  font: var(--f-micro) / 1.2 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--plate-ink);
+}
+.trade-side small { max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trade-swap { font: var(--f-legend) / 1 var(--font-panel); color: var(--plate-ink); }
+.unknown-sprite {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  font: var(--f-read) / 1 var(--font-panel);
+  color: var(--plate-ink);
+}
+/* No frame and no trade: an empty recess rather than a dark screen. */
+.event-picture:has(> .no-frame) {
+  background: var(--panel-2);
+  border: var(--hair) dashed var(--rule);
+}
+.no-frame {
+  padding: var(--s3);
+  font: var(--f-micro) / 1.4 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-align: center;
+}
+
+.event-copy {
+  grid-area: copy;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s2);
+  min-width: 0;
+  padding: var(--s4) var(--s5);
+}
+.event-label {
+  font: var(--f-micro) / 1.4 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.event-badge .event-label,
+.event-champion .event-label { color: var(--signal); }
+.event-blackout .event-label { color: var(--crit); }
+.event-copy h3 {
+  font: var(--f-read) / 1.2 var(--font-panel);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.event-where { font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+
+.event-go {
+  grid-area: go;
+  display: grid;
+  place-items: center;
+  border-left: var(--hair) solid var(--rule-faint);
+  font: var(--f-legend) / 1 var(--font-panel);
+  color: var(--ink-3);
+}
+.event-card:hover .event-go { color: var(--signal); background: var(--panel); }
+
+/* Empty, loading and error states sit inside the same panel as the log. */
+.journal-empty { padding: var(--s6) var(--s5); color: var(--ink-2); }
+.journal-empty h3 { margin: var(--s2) 0; font: var(--f-legend) / 1.3 var(--font-panel); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); }
+
+.load-more { width: 100%; height: auto; min-height: 44px; margin-top: var(--s3); padding-block: var(--s2); line-height: 1.3; white-space: normal; }
+
+
+/* ---- a single entry ---------------------------------------------------- */
+.entry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s5);
+  align-items: stretch;
+}
+.entry-frame {
+  display: grid;
+  place-items: center;
+  padding: var(--s3);
+  background: var(--bezel);
+  border: var(--hair) solid var(--rule);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.entry-frame .shot {
+  display: block;
+  width: 480px;
+  height: 432px;
+  image-rendering: pixelated;
+}
+.entry-frame:empty {
+  width: calc(320px + 2 * var(--s3) + 2px);
+  aspect-ratio: 10 / 9;
+  background: var(--panel-2);
+  border-style: dashed;
+  box-shadow: none;
+}
+.entry-frame:empty::before {
+  content: "No screen was kept for this moment";
+  padding: var(--s4);
+  font: var(--f-micro) / 1.5 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--ink-3);
+}
+
+.entry-sheet {
+  display: grid;
+  align-content: start;
+  background: var(--panel);
+  border: var(--hair) solid var(--rule);
+  border-left: 3px solid var(--signal);
+  box-shadow: var(--key-inset);
+}
+.spec {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: var(--hair) solid var(--rule-faint);
+}
+.spec > div {
+  display: grid;
+  align-content: start;
+  gap: var(--s2);
+  padding: var(--s4);
+  border-top: var(--hair) solid var(--rule-faint);
+  min-width: 0;
+}
+.spec > div:nth-child(-n + 2) { border-top: 0; }
+.spec > div:nth-child(even) { border-left: var(--hair) solid var(--rule-faint); }
+.spec dt {
+  font: var(--f-micro) / 1 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.spec dd {
+  font: var(--f-legend) / 1.3 var(--font-panel);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.entry-body { padding: var(--s4); max-width: 64ch; color: var(--ink-2); }
+.entry-body:empty { display: none; }
+.entry-rewind { display: grid; gap: var(--s3); padding: var(--s4); border-top: var(--hair) solid var(--rule-faint); }
+.entry-rewind:has(> p[hidden]:only-child) { display: none; }
+
+/* The server renders this button bare, so it is styled by its id as the
+   panel's one primary key. */
+#rewind {
+  justify-self: start;
+  min-height: 44px;
+  padding: var(--s2) var(--s4);
+  background: var(--signal);
+  border: var(--hair) solid var(--signal);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.22), inset -1px -1px 0 rgba(0, 0, 0, 0.30);
+  font: var(--f-legend) / 1.2 var(--font-panel);
+  letter-spacing: var(--track-legend);
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--focus-halo);
+  cursor: pointer;
+}
+#rewind:hover { filter: brightness(1.12); }
+#rewind:disabled { opacity: 0.45; cursor: progress; }
+#rewind-error {
+  padding: var(--s3);
+  border-left: 3px solid var(--crit-lamp);
+  background: var(--panel-2);
+  font-size: 14px;
+  color: var(--crit);
+}
+
+
+/* ---- responsive -------------------------------------------------------
+   1100px  an entry's frame drops from 3x to 2x.
+    860px  an entry stacks, frame above the sheet.
+    640px  a log line loses its time column; the time rides above the copy.
+    560px  a log line stacks and its frame goes to 2x.
+    380px  the smallest phones get 1x frames, the only whole multiple that fits.
+   ========================================================================== */
+
+@media (max-width: 1100px) {
+  .entry-frame .shot { width: 320px; height: 288px; }
+}
+
+@media (max-width: 860px) {
+  .entry { grid-template-columns: minmax(0, 1fr); }
+  .entry-frame:empty { width: 100%; aspect-ratio: auto; }
+}
+
+@media (max-width: 640px) {
+  .journal-top { flex-wrap: wrap; padding-block: var(--s2); }
+  .filters { width: 100%; }
+  .filters button { flex: 1 1 0; min-height: 44px; padding: 0 var(--s2); }
+
+  .event-card {
+    grid-template-columns: auto minmax(0, 1fr) 40px;
+    grid-template-areas: "frame time go" "frame copy go";
+    grid-template-rows: auto 1fr;
+  }
+  .event-time {
+    align-items: center;
+    padding: var(--s3) var(--s4) 0;
+    background: none;
+    border-right: 0;
+  }
+  .event-time .lamp { margin-top: 0; }
+  .event-time time { display: flex; gap: var(--s2); }
+  .event-picture { grid-row: 1 / span 2; margin: var(--s3) 0 var(--s3) var(--s3); }
+  .event-copy { justify-content: flex-start; padding: var(--s2) var(--s4) var(--s3); }
+  .event-copy h3 { font-size: var(--f-legend); line-height: 1.3; }
+
+  .spec { grid-template-columns: minmax(0, 1fr); }
+  .spec > div:nth-child(2) { border-top: var(--hair) solid var(--rule-faint); }
+  .spec > div:nth-child(even) { border-left: 0; }
+  .entry-frame { padding: var(--s2); }
+  #rewind { justify-self: stretch; }
+}
+
+@media (max-width: 560px) {
+  .event-card {
+    grid-template-columns: minmax(0, 1fr) 40px;
+    grid-template-areas: "time go" "frame frame" "copy copy";
+    grid-template-rows: auto;
+  }
+  .event-time { padding: var(--s3) var(--s3) 0; }
+  .event-go { border-left: 0; }
+  .event-picture {
+    grid-row: auto;
+    justify-self: center;
+    width: calc(320px + 8px);
+    height: calc(288px + 8px);
+    margin: var(--s3) var(--s3) 0;
+  }
+  .event-picture img { width: 320px; height: 288px; }
+  /* A stacked line with nothing to show gets a slim strip, not a 2x hole. */
+  .event-picture:has(> .no-frame) { width: 100%; height: auto; }
+  .event-picture.is-art .trade-side img,
+  .event-picture.is-art .unknown-sprite { width: 112px; height: 112px; }
+  .event-picture.is-art .trade-side small { max-width: 112px; }
+  .event-copy { padding: var(--s3); }
+}
+
+@media (max-width: 380px) {
+  .event-picture { width: calc(160px + 8px); height: calc(144px + 8px); }
+  .event-picture img { width: 160px; height: 144px; }
+  .event-picture.is-art .trade-side img,
+  .event-picture.is-art .unknown-sprite { width: 56px; height: 56px; }
+  .event-picture.is-art .trade-side small { max-width: 64px; }
+  .entry-frame .shot { width: 160px; height: 144px; }
+  .entry-frame:empty { width: 100%; }
+}
+
+@media (max-width: 380px) {
+  .filters button { padding: 0 var(--s1); letter-spacing: 0.04em; white-space: nowrap; }
+}
+
+@media (forced-colors: active) {
+  .log, .entry-sheet, .filters { border: 1px solid CanvasText; box-shadow: none; }
+  .filters button[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+}

@@ -33,9 +33,22 @@ def test_live_columns_and_partner_details(page, live_game, width):
     game_box = page.locator('.game-card').bounding_box()
     team_box = page.locator('.watch-companions').bounding_box()
     trainer_box = page.locator('#journey-progress').bounding_box()
-    if width > 850:
-        assert abs(game_box['y'] - team_box['y']) < 1
-        assert abs(game_box['height'] - team_box['height']) < 1
+    plan_box = page.locator('#strategy-panel').bounding_box()
+    if width >= 1280:
+        # Side by side, the screen's housing tops out level with the first bay
+        # and the stage and the party end on the same line.
+        first_bay = page.locator('#party > li').first.bounding_box()
+        last_bay = page.locator('#party > li').last.bounding_box()
+        assert abs(page.locator('.bezel').bounding_box()['y'] - first_bay['y']) < 1
+        assert abs(game_box['y'] + game_box['height'] - (last_bay['y'] + last_bay['height'])) < 1
+        assert abs(game_box['x'] + game_box['width'] - team_box['x']) <= 32
+    else:
+        # Stacked, the party follows the stage.
+        assert team_box['y'] >= game_box['y'] + game_box['height']
+    # The plan is its own full-width row under both.
+    assert plan_box['y'] >= max(game_box['y'] + game_box['height'], team_box['y'] + team_box['height'])
+    assert abs(plan_box['x'] - min(game_box['x'], team_box['x'])) < 1
+    assert abs(plan_box['x'] + plan_box['width'] - max(game_box['x'] + game_box['width'], team_box['x'] + team_box['width'])) < 1
     # The trainer, badge and totals summary sits above the game and party panels.
     assert trainer_box['y'] + trainer_box['height'] <= min(game_box['y'], team_box['y'])
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')

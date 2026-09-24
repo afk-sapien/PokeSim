@@ -21,3 +21,11 @@ if (rewind) rewind.addEventListener('click', async () => {
     rewind.disabled = false
   }
 })
+
+// The server writes the moment in UTC; show it in the reader's own time.
+const logged = document.querySelector('#logged')
+const when = new Date(logged?.dateTime || '')
+if (logged && !Number.isNaN(when.getTime())) {
+  logged.textContent = when.toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'})
+  logged.title = logged.dateTime
+}

@@ -168,7 +168,7 @@ def test_game_trading_stays_scoped_and_available_when_stopped(client):
     assert f'href="{base}/trading"' in response.text
     assert f'href="{base}/pc?scope=all"' in response.text
     assert 'href="/trading"' not in response.text
-    for asset in ('adventure-trading.js', 'routes.js', 'style.css', 'pages.css', 'pokedex.css'):
+    for asset in ('adventure-trading.js', 'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css'):
         assert client.get(base + '/static/' + asset).status_code == 200
     data = client.get(base + '/api/interactions').json()
     assert data['adventure']['id'] == a['id']

@@ -61,14 +61,25 @@ function ratingLabel(mon) {
     ? `${mon.dv_stars}-star DVs` : 'DV rating unavailable'
 }
 
+// Four lamps, lit to the star count; the stars stay in the text for copy and search.
 function ratingBadge(mon) {
   if (!Number.isInteger(mon.dv_stars) || mon.dv_stars < 1 || mon.dv_stars > 4) return '<span class="dv-badge dv-unknown">DVs unknown</span>'
-  return `<span class="dv-badge dv-stars-${mon.dv_stars}" aria-label="${ratingLabel(mon)}" title="${mon.dv_total} / 75 DVs · ${mon.dv_percent}%"><span aria-hidden="true">${'★'.repeat(mon.dv_stars)}${'☆'.repeat(4 - mon.dv_stars)}</span> ${mon.dv_stars === 4 ? 'Perfect DV' : 'DV'}</span>`
+  const lamps = Array.from({length: 4}, (_, i) => `<i class="lamp"${i < mon.dv_stars ? ' data-on="signal"' : ''}></i>`).join('')
+  return `<span class="dv-badge dv-stars-${mon.dv_stars}" aria-label="${ratingLabel(mon)}" title="${mon.dv_total} / 75 DVs · ${mon.dv_percent}%"><span class="dv" aria-hidden="true">${lamps}</span><span class="vh">${'★'.repeat(mon.dv_stars)}${'☆'.repeat(4 - mon.dv_stars)}</span> ${mon.dv_stars === 4 ? 'Perfect DV' : 'DV'}</span>`
 }
 
 function lockBadge(mon) {
-  return isLocked(mon) ? '<span class="pc-lock-badge"><span aria-hidden="true">🔒</span> Locked</span>' : ''
+  return isLocked(mon) ? '<span class="pc-lock-badge">Locked</span>' : ''
 }
+
+// A slot's fill as discrete cells, one per slot.
+function fillMeter(count, size) {
+  const level = count >= size ? 'warn' : 'signal'
+  return `<span class="meter" data-level="${level}" aria-hidden="true">${Array.from({length: size}, (_, i) => `<i${i < count ? ' class="on"' : ''}></i>`).join('')}</span>`
+}
+
+// Portrait scaling is shared; see panel.js.
+const fitSprites = (root) => globalThis.Panel?.fitSprites?.(root)
 
 function render() {
   const counts = storage?.box_counts || Array(12).fill(0)
@@ -113,35 +124,37 @@ function render() {
   $('#mobile-box').innerHTML = `<option value="0">Party · ${party.length} / 6</option>` + counts.map((count, index) => `<option value="${index + 1}">Box ${index + 1} · ${count} / 20${index + 1 === storage?.active_box ? ' · Receiving catches' : ''}</option>`).join('')
   $('#mobile-box').value = String(selectedBox)
   const focusedBox = document.activeElement?.dataset.box
-  $('#box-picker').innerHTML = `<button data-box="0" aria-pressed="${selectedBox === 0}" class="${selectedBox === 0 ? 'selected' : ''}"><span>Party</span><small>${party.length} / 6</small></button>` + counts.map((count, index) => `<button data-box="${index + 1}" aria-pressed="${index + 1 === selectedBox}" class="${index + 1 === selectedBox ? 'selected' : ''}"><span>Box ${index + 1}${index + 1 === storage?.active_box ? ' ●' : ''}</span><small>${count} / 20</small></button>`).join('')
+  $('#box-picker').innerHTML = `<button data-box="0" aria-pressed="${selectedBox === 0}" class="${selectedBox === 0 ? 'selected' : ''}"><span class="bp-name">Party</span><small>${party.length} / 6</small>${fillMeter(party.length, 6)}</button>` + counts.map((count, index) => `<button data-box="${index + 1}" aria-pressed="${index + 1 === selectedBox}" class="${index + 1 === selectedBox ? 'selected' : ''}"><span class="bp-name">Box ${index + 1}${index + 1 === storage?.active_box ? '<i class="lamp" data-on="ok" title="Receiving new catches"></i><span class="vh"> · receiving catches</span>' : ''}</span><small>${count} / 20</small>${fillMeter(count, 20)}</button>`).join('')
   if (focusedBox) $(`[data-box="${focusedBox}"]`)?.focus()
   const focusedMon = document.activeElement?.dataset.mon
-  const card = (mon, index) => `<button class="pc-mon${mon.perfect_dvs ? ' perfect-entry' : ''}" data-mon="${index}" aria-label="${esc(mon.nick || mon.name)}, level ${mon.level}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${', ' + ratingLabel(mon)}${isLocked(mon) ? ', locked' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}"><span class="eyebrow">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || index + 1}</span><img loading="lazy" src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt="" width="72" height="72"><strong>${esc(mon.nick || mon.name)}${lockBadge(mon)}${ratingBadge(mon)}</strong><small>${esc(mon.name)} · Lv. ${mon.level}</small>${all ? `<span class="pc-metrics"><span class="pc-power">Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Elite Four wins <b>${Number.isFinite(mon.elite_four_wins) ? mon.elite_four_wins.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span>` : ''}</button>`
+  const card = (mon, index) => `<button class="pc-mon${mon.perfect_dvs ? ' perfect-entry' : ''}" data-mon="${index}" aria-label="${esc(mon.nick || mon.name)}, level ${mon.level}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${', ' + ratingLabel(mon)}${isLocked(mon) ? ', locked' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}"><span class="pc-slot">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || index + 1}</span><span class="plate pc-plate"><img loading="lazy" src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt=""></span><span class="pc-mon-body"><strong class="pc-name">${esc(mon.nick || mon.name)}</strong><small class="pc-sub">${esc(mon.name)} · Lv. ${mon.level}</small><span class="pc-tags">${ratingBadge(mon)}${lockBadge(mon)}</span></span>${all ? `<span class="pc-metrics"><span class="pc-power">Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Elite Four wins <b>${Number.isFinite(mon.elite_four_wins) ? mon.elite_four_wins.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span>` : ''}</button>`
   if (all) {
     $('#pc-grid').innerHTML = residents.map(card).join('') || '<p class="dex-empty">No Pokémon match these filters.</p>'
   } else {
     $('#pc-grid').innerHTML = Array.from({length: selectedBox === 0 ? 6 : 20}, (_, slot) => {
       const index = residents.findIndex(mon => mon.position === slot + 1)
-      return index >= 0 ? card(residents[index], index) : `<div class="pc-empty-slot"><span class="eyebrow">SLOT ${slot + 1}</span></div>`
+      return index >= 0 ? card(residents[index], index) : `<div class="pc-empty-slot"><span class="pc-slot">SLOT ${slot + 1}</span></div>`
     }).join('')
     if ((query || rating !== 'all') && !residents.length) $('#pc-grid').innerHTML = '<p class="dex-empty">No partners match these filters here.</p>'
   }
   if (focusedMon) $(`[data-mon="${focusedMon}"]`)?.focus()
+  fitSprites($('#pc-grid'))
 }
 
 function detail(mon) {
   detailKey = mon.trade_key
   const labels = ['HP', 'Attack', 'Defense', 'Speed', 'Special']
   const known = mon.dvs?.length === 5 && mon.stat_exp?.length === 5
-  $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt="" width="96" height="96"><p class="eyebrow">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>${ratingBadge(mon)}${mon.perfect_dvs ? '<p class="detail-meta">All five DVs are 15. Preserved from automatic release and trading.</p>' : ''}<p>${esc(mon.name)} · Level ${mon.level}</p></div>
+  $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><div class="plate plate--bay"><img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt=""></div><p class="micro">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>${ratingBadge(mon)}${mon.perfect_dvs ? '<p class="detail-meta">All five DVs are 15. Preserved from automatic release and trading.</p>' : ''}<p>${esc(mon.name)} · Level ${mon.level}</p></div>
     <p class="detail-meta">DV stars measure fixed potential using the total of all five DVs, including derived HP, out of 75. 1★: 0–37, 2★: 38–59, 3★: 60–74, 4★: 75 (perfect). Level and training do not affect this rating.</p>
     ${known ? `<table class="individual-stats"><caption>Calculated stats, potential, and training</caption><thead><tr><th>Stat</th><th>Value</th><th>DV / 15</th><th>Stat experience</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[i]}</td><td>${mon.stat_exp[i].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')} / 75</td><td>${formatTotal(mon, 'stat_exp')} / 327,675</td></tr></tfoot></table><p class="detail-meta">Total DVs include HP, which is derived from the other four DVs. DVs are fixed. Stat experience grows through training, up to 65,535 in each stat.</p>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'}
     <p class="detail-meta">Power = max HP + Attack + Defense + Speed + Special. Values are calculated at this level from species, DVs, and stat experience, as on PC withdrawal. Moves, type matchups, and battle bonuses are not included.</p>
     <p class="detail-meta"><strong>Elite Four wins: ${Number.isFinite(mon.elite_four_wins) ? mon.elite_four_wins.toLocaleString() : 'Unavailable'}</strong>. One win for being in the Hall of Fame party after defeating the Elite Four and Champion. Includes verified saved victories and follows this Pokémon through trades. Missing historical records are not estimated.</p>
     <p class="detail-meta">${Number(mon.experience || 0).toLocaleString()} total experience</p>
-    ${mon.dex ? `<a class="dex-open" href="${PokeSim.base}/pokedex#${String(mon.dex).padStart(3, '0')}">View ${esc(mon.name)} in the Pokédex ↗</a>` : ''}`
+    ${mon.dex ? `<a class="dex-open key" href="${PokeSim.base}/pokedex#${String(mon.dex).padStart(3, '0')}">View ${esc(mon.name)} in the Pokédex ↗</a>` : ''}`
   $('#pc-trade-action').innerHTML = globalThis.TradeUI?.control(detailKey) || ''
   $('#pc-detail').showModal()
+  fitSprites($('#pc-detail-body'))
 }
 
 async function refresh() {

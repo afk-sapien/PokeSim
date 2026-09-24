@@ -7,6 +7,16 @@
     $('#connection').classList.toggle('is-offline', offline)
   }
   const currentId = document.body.dataset.adventure
+  // Trade portraits are cartridge art (56px and under) or 96px installed packs.
+  // Scale each by the largest whole number that fits its plate so pixels stay square.
+  document.addEventListener('load', event => {
+    const img = event.target
+    const frame = img?.tagName === 'IMG' ? img.closest('.plate') : null
+    if (!frame || !img.naturalWidth) return
+    const scale = Math.max(1, Math.floor(frame.clientWidth / Math.max(img.naturalWidth, img.naturalHeight)))
+    img.style.width = `${img.naturalWidth * scale}px`
+    img.style.height = `${img.naturalHeight * scale}px`
+  }, true)
   let csrf = ''
   let owner = false
   let adventures = []
@@ -85,11 +95,15 @@
     const summary = game.summary || {}
     const activity = summary.message || summary.activity || summary.game?.location || summary.map || (active ? 'Adventure in progress' : 'Your saves are waiting here')
     const wins = summary.league_rewards?.wins
-    const league = Number.isInteger(wins) ? `<p class="section-note">${wins.toLocaleString()} League ${wins === 1 ? 'win' : 'wins'}</p>` : ''
+    const league = Number.isInteger(wins) ? `<p class="card-stat micro">${wins.toLocaleString()} League ${wins === 1 ? 'win' : 'wins'}</p>` : ''
     const provenance = game.provenance?.trading_blocked ? `<p class="card-error">${esc(game.provenance.reason || 'Legacy trade history needs reconciliation before trading.')}</p>` : ''
     const stalled = active && summary.stalled ? '<p class="card-error">Stuck? No progress for a while. Open the adventure to see its objective.</p>' : ''
     const failure = game.error ? `<p class="card-error">${esc(typeof game.error === 'string' ? game.error : JSON.stringify(game.error))}</p>` : ''
-    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}">${active ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${esc(game.name)} game screen" loading="lazy" width="160" height="144"></div>` : ''}<div class="card-banner"><span class="eyebrow">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="state-pill">${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></div><div class="card-body"><h2>${esc(game.name)}</h2><p>${esc(activity)}</p>${league}${stalled}${failure}${provenance}${game.archived ? '<p class="section-note">Archived adventures keep all their saves.</p>' : ''}<div class="card-actions"><a class="primary-button" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'} ↗</a>${game.archived ? `<button data-action="restore" data-id="${esc(game.id)}" data-owner>Restore</button>` : `<button data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${transitional ? 'disabled data-blocked' : ''}>${transitional ? esc(game.state) : active ? 'Save and stop' : 'Start'}</button><button data-action="settings" data-id="${esc(game.id)}" data-owner>Settings</button>${!active && !transitional ? `<button data-action="archive" data-id="${esc(game.id)}" data-owner>Archive</button>` : ''}`}</div></div></article>`
+    const lamp = game.archived ? '' : failure || game.state === 'error' ? 'crit' : transitional || (active && summary.stalled) ? 'warn' : active ? 'ok' : ''
+    const screen = active
+      ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${esc(game.name)} game screen" loading="lazy" width="160" height="144"></div>`
+      : `<div class="card-screen card-screen--off"><span class="micro">${game.archived ? 'Archived' : 'Saved · not running'}</span></div>`
+    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${stalled}${failure}${provenance}${game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'} ↗</a>${game.archived ? `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner>Restore</button>` : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${transitional ? 'disabled data-blocked' : ''}>${transitional ? esc(game.state) : active ? 'Save and stop' : 'Start'}</button><button class="key" data-action="settings" data-id="${esc(game.id)}" data-owner>Settings</button>${!active && !transitional ? `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner>Archive</button>` : ''}`}</div></article>`
   }
   function renderAdventures() {
     const visible = adventures.filter(game => $('#show-archived').checked || !game.archived)
@@ -139,15 +153,15 @@
     const title = game ? `<a href="${gameUrl(id)}trading">${esc(game.name)} ↗</a>` : 'Adventure unavailable'
     const label = completed ? 'Received' : failed ? 'Planned to receive' : 'Receiving'
     const dex = Number.isInteger(mon?.dex) && mon.dex >= 1 && mon.dex <= 151 ? mon.dex : null
-    const sprite = dex && game ? `<img src="${gameUrl(id)}sprites/${dex}.png" alt="" width="64" height="64" loading="lazy">`
-      : '<span class="exchange-placeholder" aria-hidden="true">?</span>'
+    const sprite = dex && game ? `<div class="plate plate--trade"><img src="${gameUrl(id)}sprites/${dex}.png" alt="" loading="lazy"></div>`
+      : '<div class="plate plate--trade exchange-placeholder" aria-hidden="true"><span class="plate-num">?</span></div>'
     const name = mon?.name ? esc(mon.name) : 'Pokémon details unavailable'
     const nickname = mon?.nickname && mon.nickname.toLowerCase() !== mon.name?.toLowerCase()
       ? `<p class="exchange-nickname">“${esc(mon.nickname)}”</p>` : ''
     const level = Number.isInteger(mon?.level) && mon.level >= 1 && mon.level <= 100 ? ` · Lv. ${mon.level}` : ''
     const evolution = completed && mon?.evolved_from?.name
       ? `<p class="exchange-evolution">✦ ${esc(mon.evolved_from.name)} → ${name}</p>` : ''
-    return `<section class="exchange-partner"><h3>${title}</h3><div class="exchange-pokemon">${sprite}<div><p class="eyebrow">${label}${level}</p><strong>${name}</strong>${nickname}${evolution}</div></div></section>`
+    return `<section class="exchange-partner"><h3>${title}</h3><div class="exchange-pokemon">${sprite}<div class="exchange-text"><p class="micro">${label}${level}</p><strong>${name}</strong>${nickname}${evolution}</div></div></section>`
   }
   function describeTrade(trade, completed = false) {
     const leftId = trade.left_id || trade.participants?.[0] || trade.plan?.left_id
@@ -155,13 +169,13 @@
     const left = adventures.find(game => game.id === leftId)?.name || 'First adventure'
     const right = adventures.find(game => game.id === rightId)?.name || 'Second adventure'
     const failed = trade.phase === 'aborted'
-    const time = (completed || failed) && trade.updated_at ? `<p class="section-note">${esc(dateLabel(trade.updated_at))}</p>` : ''
-    const reason = failed ? `<p>${esc(trade.failure_reason || 'The exchange could not finish safely.')}</p>` : ''
+    const time = (completed || failed) && trade.updated_at ? `<p class="micro">${esc(dateLabel(trade.updated_at))}</p>` : ''
+    const reason = failed ? `<p class="exchange-reason">${esc(trade.failure_reason || 'The exchange could not finish safely.')}</p>` : ''
     const label = failed ? 'Trade did not complete' : completed ? 'Trade completed' : tradePhase(trade)
     const display = trade.display || {}
-    const pair = failed ? `<strong>${esc(left)} ↔ ${esc(right)}</strong>`
+    const pair = failed ? `<strong class="exchange-failed">${esc(left)} ↔ ${esc(right)}</strong>`
       : `<div class="exchange-pair">${tradePartner(leftId, display[leftId]?.received, completed, failed)}<span class="exchange-arrow" aria-hidden="true">⇄</span>${tradePartner(rightId, display[rightId]?.received, completed, failed)}</div>`
-    return `<article class="exchange${completed ? ' exchange-completed' : ''}"><header class="exchange-heading"><span class="state-pill">${esc(label)}</span>${time}</header>${pair}${reason}</article>`
+    return `<article class="exchange${completed ? ' exchange-completed' : ''}"><header class="exchange-heading"><span class="tag state-pill${failed ? ' tag--crit' : ''}">${esc(label)}</span>${time}</header>${pair}${reason}</article>`
   }
   async function refreshTrades() {
     const data = await api('/api/v1/interactions')

@@ -1,0 +1,470 @@
+/* ==========================================================================
+   PokeSim — "Bench Instrument", the library pages.
+
+   Loads after tokens.css and panel.css, and only on library.html (the manager's
+   library, stopped adventure, trading, notifications and settings views).
+   Everything here is built from panel.css primitives; nothing sets a colour,
+   size or space that is not a token.
+
+   Contents
+     1  page head, toolbar, notice
+     2  adventure cards
+     3  trading
+     4  forms and settings panels
+     5  dialogs
+     6  responsive
+   ========================================================================== */
+
+
+/* ==========================================================================
+   1  PAGE HEAD, TOOLBAR, NOTICE
+   ========================================================================== */
+
+.library-main,
+#workspace,
+[data-view] { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--s5); min-width: 0; }
+.library-main { padding-top: var(--s6); }
+[data-view][hidden] { display: none; }
+
+/* Label, title, one line of why; an action sits on the right, level with the
+   title's baseline. */
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--s4) var(--s6);
+  padding-bottom: var(--s5);
+  border-bottom: var(--hair) solid var(--rule);
+}
+.page-title { display: grid; gap: var(--s2); min-width: 0; flex: 1 1 420px; }
+.page-title h1 {
+  font: var(--f-title) / 1.1 var(--font-panel);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.lede { max-width: 62ch; color: var(--ink-2); }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s5);
+  margin-top: calc(-1 * var(--s2));
+}
+
+.notice {
+  padding: var(--s3) var(--s4);
+  background: var(--panel);
+  border: var(--hair) solid var(--rule);
+  border-left: 3px solid var(--ok-lamp);
+  box-shadow: var(--key-inset);
+  font-size: 14px;
+}
+.notice.error { border-left-color: var(--crit-lamp); color: var(--crit); }
+
+.back-link a,
+.backups a {
+  font: var(--f-micro) / 1.4 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+}
+
+.empty-state { display: grid; justify-items: start; gap: var(--s3); padding: var(--s6); }
+.empty-state h2 { font: var(--f-read) / 1.2 var(--font-panel); letter-spacing: 0.04em; text-transform: uppercase; }
+.empty-state p:not(.legend) { max-width: 60ch; color: var(--ink-2); }
+.empty-state .key { margin-top: var(--s2); }
+
+
+/* ==========================================================================
+   2  ADVENTURE CARDS
+   Banner, screen, who and what, keys. The screen is the cartridge's own
+   160x144 frame at a whole-number scale, never stretched to the card.
+   ========================================================================== */
+
+.adventure-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: var(--s5);
+}
+.adventure-grid--single { grid-template-columns: minmax(0, 420px); }
+
+.adventure-card {
+  container: card / inline-size;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  min-width: 0;
+  background: var(--panel);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--key-inset);
+}
+
+.card-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: 44px;
+  padding: 0 var(--s4);
+  border-bottom: var(--hair) solid var(--rule-faint);
+}
+.state-pill { display: inline-flex; align-items: center; gap: var(--s2); }
+.state-pill .lamp { width: 8px; height: 8px; }
+
+.card-screen {
+  display: grid;
+  place-items: center;
+  height: calc(144px + 2 * var(--s4));
+  padding: var(--s4);
+  background: var(--bezel);
+  border-bottom: var(--hair) solid var(--rule);
+  overflow: hidden;
+}
+.card-screen img {
+  width: 160px;
+  height: 144px;
+  max-width: none;
+  image-rendering: pixelated;
+  background: #0E100C;
+}
+/* A stopped adventure keeps the same screen box, so titles and buttons
+   line up across a row whatever each adventure is doing. */
+.card-screen--off { background: var(--well); box-shadow: var(--well-inset); }
+.card-screen--off .micro { color: var(--ink-3); }
+@container card (min-width: 354px) {
+  .card-screen { height: calc(288px + 2 * var(--s4)); }
+  .card-screen img { width: 320px; height: 288px; }
+}
+
+.card-body { display: grid; align-content: start; gap: var(--s2); padding: var(--s4); min-width: 0; }
+.card-body h2 {
+  font: var(--f-read) / 1.1 var(--font-panel);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.card-activity { color: var(--ink-2); font-size: 14px; line-height: 1.5; }
+.card-stat { color: var(--ink-2); }
+.card-note { font-size: 13px; color: var(--ink-3); }
+.card-error {
+  padding: var(--s2) var(--s3);
+  border-left: 3px solid var(--crit-lamp);
+  background: var(--panel-2);
+  color: var(--crit);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* One key to go in, then the housekeeping keys sharing a row in the mono
+   voice so three of them fit a narrow card without wrapping mid-label. */
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  padding: var(--s4);
+  border-top: var(--hair) solid var(--rule-faint);
+  background: var(--panel-2);
+}
+.card-actions .key { flex: 1 1 auto; }
+.card-actions .key--primary { flex-basis: 100%; }
+.card-actions button.key {
+  min-height: 40px;
+  padding: 0 var(--s3);
+  font: var(--f-label) / 1 var(--font-mono);
+  letter-spacing: var(--track-micro);
+}
+
+
+/* ==========================================================================
+   3  TRADING
+   ========================================================================== */
+
+.status-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s5);
+  padding: var(--s3) var(--s4);
+}
+.status-strip .micro { display: inline-flex; align-items: center; gap: var(--s2); color: var(--ink); }
+.status-strip p { font-size: 14px; color: var(--ink-2); }
+
+.block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); min-width: 0; }
+.block > .column-head { position: static; margin-bottom: 0; }
+
+.exchanges { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr)); gap: var(--s3); color: var(--ink-2); }
+.exchanges > p { grid-column: 1 / -1; }
+.exchange {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  background: var(--panel);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--key-inset);
+}
+.exchange-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s2) var(--s4);
+  border-bottom: var(--hair) solid var(--rule-faint);
+  background: var(--panel-2);
+}
+.exchange-completed .state-pill { color: var(--ok); border-color: var(--ok); }
+.exchange-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+}
+.exchange-arrow {
+  display: grid;
+  place-items: center;
+  padding: 0 var(--s3);
+  border-inline: var(--hair) solid var(--rule-faint);
+  font: var(--f-read) / 1 var(--font-text);
+  color: var(--ink-3);
+}
+.exchange-partner { display: grid; gap: var(--s3); padding: var(--s4); min-width: 0; }
+.exchange-partner h3 { font: 600 14px / 1.3 var(--font-text); overflow-wrap: anywhere; }
+.exchange-pokemon { display: flex; align-items: center; gap: var(--s4); min-width: 0; }
+.plate--trade { flex: none; width: calc(var(--sprite-2x) + 2px); height: calc(var(--sprite-2x) + 2px); }
+.exchange-placeholder .plate-num { color: var(--ink-3); }
+.exchange-text { display: grid; gap: var(--s1); min-width: 0; }
+.exchange-text strong {
+  font: var(--f-legend) / 1.2 var(--font-panel);
+  letter-spacing: var(--track-legend);
+  text-transform: uppercase;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.exchange-nickname { font-size: 13px; color: var(--ink-2); }
+.exchange-evolution { font: var(--f-micro) / 1.4 var(--font-mono); letter-spacing: 0.04em; color: var(--signal); }
+.exchange-failed { display: block; padding: var(--s3) var(--s4) 0; font-weight: 600; color: var(--ink); }
+.exchange-reason { padding: var(--s2) var(--s4) var(--s4); font-size: 14px; color: var(--ink-2); }
+
+.disclosure details > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 48px;
+  padding: 0 var(--s4);
+  cursor: pointer;
+  list-style: none;
+  font: var(--f-label) / 1 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.disclosure details > summary::-webkit-details-marker { display: none; }
+.disclosure details > summary::before { content: "\25B6"; font: 8px / 1 var(--font-panel); color: var(--ink-3); }
+.disclosure details[open] > summary::before { transform: rotate(90deg); }
+.disclosure details[open] > summary { border-bottom: var(--hair) solid var(--rule-faint); }
+.disclosure #trade-failures { padding: var(--s4); }
+
+
+/* ==========================================================================
+   4  FORMS AND SETTINGS PANELS
+   ========================================================================== */
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  align-items: stretch;
+  gap: var(--s5);
+}
+/* Four panels would leave one alone on a second row of three, so they
+   pair up two by two instead. */
+.settings-grid:has(> .panel:nth-child(4):last-child) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+}
+/* Panels in a row share a height; the body takes the extra. */
+.settings-grid > .panel { display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.panel-head {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 var(--s4);
+  border-bottom: var(--hair) solid var(--rule-faint);
+  background: var(--panel-2);
+}
+.panel-body { display: grid; align-content: start; justify-items: start; gap: var(--s4); padding: var(--s4); min-width: 0; }
+.panel-body > p:not(.note):not(.dialog-feedback):not(.notify-subscribe) { color: var(--ink-2); }
+.panel-body > *,
+.stack > * { max-width: 100%; }
+.stack { display: grid; justify-items: start; gap: var(--s4); width: 100%; }
+.note { font-size: 13px; line-height: 1.5; color: var(--ink-3); }
+
+/* A labelled input: the silkscreen label above a recessed well. */
+.field { display: grid; gap: var(--s1); width: 100%; }
+.field input:not([type="checkbox"]),
+.field select {
+  width: 100%;
+  min-height: 40px;
+  padding: var(--s2) var(--s3);
+  background: var(--well);
+  border: var(--hair) solid var(--rule);
+  border-radius: 0;
+  box-shadow: var(--well-inset);
+  color: var(--ink);
+  font: 15px / 1.3 var(--font-text);
+}
+.field input[type="file"] { padding: var(--s1) var(--s2); font-size: 14px; }
+.field input[type="file"]::file-selector-button {
+  margin-right: var(--s3);
+  min-height: 30px;
+  padding: 0 var(--s3);
+  background: var(--panel-2);
+  border: var(--hair) solid var(--rule);
+  border-radius: 0;
+  box-shadow: var(--key-inset);
+  font: var(--f-label) / 1 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--ink);
+  cursor: pointer;
+}
+.field input::placeholder { color: var(--ink-3); opacity: 1; }
+.field input:disabled,
+.field select:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* A checkbox row. The box is square and hard-edged like everything else. */
+.check,
+.inline-label {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s3);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  cursor: pointer;
+}
+.check input,
+.inline-label input {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  background: var(--well);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--well-inset);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.check input:checked::after,
+.inline-label input:checked::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background: var(--signal);
+}
+.check input:disabled,
+.inline-label input:disabled { opacity: 0.5; cursor: not-allowed; }
+.inline-label small { display: block; font-size: 13px; color: var(--ink-3); }
+.toolbar .check { align-items: center; }
+
+.notify-choices { display: grid; gap: var(--s3); width: 100%; }
+.notify-subscribe { font-size: 14px; overflow-wrap: anywhere; }
+.notify-subscribe:empty { display: none; }
+
+.key--danger { color: var(--crit); border-color: var(--crit); }
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: var(--hair) solid var(--rule);
+}
+.form-result { font-size: 14px; color: var(--ink-2); }
+.dialog-feedback { font-size: 14px; color: var(--crit); }
+.dialog-feedback:empty { display: none; }
+
+
+/* ==========================================================================
+   5  DIALOGS
+   A sheet is a panel lifted off the chassis by a hard offset, like the
+   partner detail on the live page.
+   ========================================================================== */
+
+.sheet {
+  width: min(520px, calc(100vw - 2 * var(--s4)));
+  max-height: calc(100vh - 2 * var(--s5));
+  padding: 0;
+  background: var(--panel);
+  color: var(--ink);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--key-inset), 6px 6px 0 var(--bevel-lo);
+}
+.sheet::backdrop { background: rgba(10, 12, 10, 0.55); }
+.sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: 56px;
+  padding: 0 var(--s2) 0 var(--s4);
+  background: var(--panel-2);
+  border-bottom: var(--hair) solid var(--rule);
+}
+.sheet-body { display: grid; gap: var(--s4); padding: var(--s4); }
+.sheet-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--s3) var(--s4);
+  background: var(--panel-2);
+  border-top: var(--hair) solid var(--rule);
+}
+.key--close { width: 40px; padding: 0; font: 22px / 1 var(--font-text); }
+
+
+/* ==========================================================================
+   6  RESPONSIVE
+   The rail's own breakpoints live in panel.css. This page has four tabs, so
+   they stay in the display face down to 400px.
+   ========================================================================== */
+
+@media (max-width: 1100px) {
+  .library-main { padding-top: var(--s5); }
+}
+
+@media (max-width: 640px) {
+  .library-main { gap: var(--s4); padding-top: var(--s4); }
+  #workspace, [data-view] { gap: var(--s4); }
+  .page-head { padding-bottom: var(--s4); gap: var(--s4); }
+  .page-head > .key { width: 100%; min-height: 44px; }
+  .page-title h1 { font-size: var(--f-read); }
+  .lede { font-size: 14px; }
+  .adventure-grid, .settings-grid { gap: var(--s4); }
+  .adventure-grid--single { grid-template-columns: minmax(0, 1fr); }
+  .empty-state { padding: var(--s4); }
+  .card-actions .key { min-height: 44px; }
+
+  .exchange-pair { grid-template-columns: minmax(0, 1fr); }
+  .exchange-arrow { padding: var(--s1) 0; border-inline: 0; border-block: var(--hair) solid var(--rule-faint); }
+  .form-actions .key { flex: 1 1 100%; min-height: 44px; }
+  /* Long key labels wrap rather than push a narrow panel sideways. */
+  .panel-body .key,
+  .form-actions .key { width: 100%; min-height: 44px; padding-block: var(--s2); white-space: normal; text-align: center; line-height: 1.25; }
+  .sheet-foot .key { width: 100%; min-height: 44px; }
+}
+
+@media (min-width: 401px) and (max-width: 640px) {
+  .library .rail nav a { font: var(--f-legend) / 1 var(--font-panel); letter-spacing: 0.04em; }
+}
+
+@media (forced-colors: active) {
+  .adventure-card, .exchange, .sheet, .check input, .inline-label input { border: 1px solid CanvasText; box-shadow: none; }
+  .check input:checked::after, .inline-label input:checked::after { background: Highlight; }
+}

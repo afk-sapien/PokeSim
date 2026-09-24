@@ -135,7 +135,7 @@ def test_local_trade_page_navigation_and_disconnected_state(game):
     client, _, _ = game
     page = client.get('/trading')
     assert page.status_code == 200
-    assert '/static/style.css' in page.text and '/static/trading.js' in page.text
+    assert '/static/panel-trading.css' in page.text and '/static/trading.js' in page.text
     assert 'Trade broker' not in page.text
     for path in ('/', '/pc', '/pokedex', '/journal'):
         assert 'href="/trading"' in client.get(path).text

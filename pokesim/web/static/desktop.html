@@ -1,46 +1,69 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="auto">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#f5f3ed">
+<meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#20241F" media="(prefers-color-scheme: dark)">
 <meta name="pokesim-token" content="__TOKEN__">
 <title>PokeSim · Your desktop adventure</title>
-<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/desktop/assets/desktop.css">
+<link rel="icon" href="/desktop/assets/favicon.svg" type="image/svg+xml">
+<script src="/desktop/assets/panel.js?v=panel-3"></script>
+<link rel="stylesheet" href="/desktop/assets/tokens.css?v=panel-1">
+<link rel="stylesheet" href="/desktop/assets/panel.css?v=panel-8">
+<link rel="stylesheet" href="/desktop/assets/panel-desktop.css?v=panel-1">
 <script src="/desktop/assets/desktop.js" defer></script>
 </head>
-<body>
-<main>
-<header><span class="brand">p.</span><span>POKESIM <small>DESKTOP EDITION</small></span></header>
-<p class="eyebrow">A LITTLE WINDOW INTO KANTO</p>
-<h1>Your adventure.<br>Your own little corner.</h1>
-<p class="intro">A team to check in on. A world that keeps moving.<br>All right here on your computer.</p>
-<section class="card" aria-labelledby="setup-title">
-<div class="card-heading"><span class="step" aria-hidden="true">01</span><h2 id="setup-title">Bring your game. We’ll do the setup.</h2></div>
+<body class="desktop">
+<header class="rail">
+<div class="shell rail-inner">
+<span class="brandplate"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model">Desktop edition</span></span></span>
+</div>
+</header>
+
+<main id="main" class="shell desktop-main">
+<header class="desk-head">
+<p class="micro">A little window into Kanto</p>
+<h1>Your adventure. Your own little corner.</h1>
+<p class="lede">A team to check in on. A world that keeps moving. All right here on your computer.</p>
+</header>
+
+<section class="panel setup-card" aria-labelledby="setup-title">
+<div class="setup-head"><span class="step readout" aria-hidden="true">01</span><h2 id="setup-title">Bring your game. We’ll do the setup.</h2></div>
+<div class="setup-body">
 <form id="setup" hidden>
-<label class="file-label" for="rom">Choose your Pokémon ROM</label>
-<input id="rom" type="file" accept=".gb,.gbc" required aria-describedby="rom-help">
-<p id="rom-help" class="hint">A clean Pokémon Red (USA, Europe) .gb file. Blue is experimental. Your file stays on this computer. A copy is kept with your adventure.</p>
-<label for="starter">Your first partner</label>
-<select id="starter"><option value="random">Surprise me</option><option value="bulbasaur">Bulbasaur</option><option value="charmander">Charmander</option><option value="squirtle">Squirtle</option></select>
-<p class="hint">First setup downloads about 2 MB of reference data to prepare maps and the Pokédex. No ROM is downloaded.</p>
-<button class="primary" id="begin" type="submit">Start my adventure ↗</button>
+<label class="field" for="rom"><span class="micro">Choose your Pokémon ROM</span></label>
+<input id="rom" class="well-input" type="file" accept=".gb,.gbc" required aria-describedby="rom-help">
+<p id="rom-help" class="note">A clean Pokémon Red (USA, Europe) .gb file. Blue is experimental. Your file stays on this computer. A copy is kept with your adventure.</p>
+<label class="field" for="starter"><span class="micro">Your first partner</span></label>
+<select id="starter" class="well-input"><option value="random">Surprise me</option><option value="bulbasaur">Bulbasaur</option><option value="charmander">Charmander</option><option value="squirtle">Squirtle</option></select>
+<p class="note">First setup downloads about 2 MB of reference data to prepare maps and the Pokédex. No ROM is downloaded.</p>
+<button class="key key--primary" id="begin" type="submit">Start my adventure ↗</button>
 </form>
-<div id="progress" role="status" aria-live="polite"><p id="message">Connecting to PokeSim…</p></div>
-<p id="error" role="alert" hidden></p>
-<div class="actions">
-<a class="primary" id="open" href="/" hidden>Open my adventure ↗</a>
-<button id="retry" hidden>Try again</button>
-<button id="quit" type="button">Quit PokeSim</button>
+<div id="progress" class="progress" role="status" aria-live="polite"><i class="lamp lamp--blink" data-on="ok" aria-hidden="true"></i><p id="message">Connecting to PokeSim…</p></div>
+<p id="error" class="error" role="alert" hidden></p>
+</div>
+<div class="setup-actions">
+<a class="key key--primary" id="open" href="/" hidden>Open my adventure ↗</a>
+<button class="key" id="retry" hidden>Try again</button>
+<button class="key" id="quit" type="button">Quit PokeSim</button>
 </div>
 </section>
+
 <section class="notes" aria-label="How desktop play works">
-<div><h3>Come back whenever.</h3><p>Launch PokeSim again to resume. Closing a browser tab keeps the adventure running. Use <strong>Save and quit</strong> here to stop it.</p></div>
-<div><h3>A little time away.</h3><p>Your computer needs to stay awake for the adventure to continue. PokeSim resumes when it wakes, with no simulated progress during sleep.</p></div>
+<div class="panel"><p class="micro">Resuming</p><h3>Come back whenever.</h3><p>Launch PokeSim again to resume. Closing a browser tab keeps the adventure running. Use <strong>Save and quit</strong> here to stop it.</p></div>
+<div class="panel"><p class="micro">Sleep</p><h3>A little time away.</h3><p>Your computer needs to stay awake for the adventure to continue. PokeSim resumes when it wakes, with no simulated progress during sleep.</p></div>
 </section>
-<details><summary>Your files & troubleshooting</summary><p>Settings, your ROM copy, saves, and logs live here:</p><code id="data-dir"></code><p>Back up this whole folder after quitting PokeSim. If setup fails, check your internet connection and try again. Details are in <code>desktop.log</code>.</p></details>
-<footer>LOCAL PLAY. NO ACCOUNT. NO SUBSCRIPTION.<span>Pokémon Red & Blue · Experimental beta</span></footer>
+
+<details class="panel files"><summary>Your files &amp; troubleshooting</summary><div class="files-body"><p>Settings, your ROM copy, saves, and logs live here:</p><code id="data-dir"></code><p>Back up this whole folder after quitting PokeSim. If setup fails, check your internet connection and try again. Details are in <code>desktop.log</code>.</p></div></details>
 </main>
+
+<footer class="plate-foot">
+<div class="shell">
+<p>Local play. No account. No subscription.</p>
+<div class="theme" role="group" aria-label="Colour theme"><button data-theme-choice="light" aria-pressed="false">Light</button><button data-theme-choice="auto" aria-pressed="false">Auto</button><button data-theme-choice="dark" aria-pressed="false">Dark</button></div>
+<div class="links"><span class="micro">Pokémon Red &amp; Blue · Experimental beta</span></div>
+</div>
+</footer>
 </body>
 </html>

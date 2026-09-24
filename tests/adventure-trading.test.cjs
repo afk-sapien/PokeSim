@@ -104,7 +104,7 @@ test('completed cards show the exact sent and received Pokemon with scoped sprit
   assert.match(html, /You received/)
   assert.match(html, /\/sprites\/67.png/)
   assert.match(html, /\/sprites\/68.png/)
-  assert.match(html, /src="\/games\/red\/sprites\/68.png" alt="" width="64" height="64"/)
+  assert.match(html, /<div class="plate plate--bay"><img src="\/games\/red\/sprites\/68.png" alt=""/)
   assert.match(html, /STRONG &lt.GUY&gt./)
   assert.match(html, /BIG ARMS/)
   assert.match(html, /Lv. 42/)

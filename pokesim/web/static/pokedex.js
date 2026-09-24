@@ -3,9 +3,18 @@ const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': 
 const num = (dex) => String(dex).padStart(3, '0')
 const TYPE_CLASS = new Set(['normal', 'fighting', 'flying', 'poison', 'ground', 'rock', 'bug', 'ghost', 'fire', 'water', 'grass', 'electric', 'psychic', 'ice', 'dragon'])
 const typeClass = (name) => TYPE_CLASS.has(String(name).toLowerCase()) ? String(name).toLowerCase() : 'normal'
-const typeTags = (types) => types.map((type) => `<span class="type-tag ${typeClass(type)}">${esc(type)}</span>`).join('')
+const typeTags = (types) => types.map((type) => `<span class="tag type-${typeClass(type)}">${esc(type)}</span>`).join('')
+// Base stats count in cells of ten, so the tallest Gen 1 stat (190) fills the meter.
 const MAX_STAT = 190
+const STAT_CELLS = 19
+const BANK_CELLS = 20
 const RECORD_LABELS = {caught: 'In Pokédex', seen: 'Seen', unseen: 'Not encountered'}
+const RECORD_LAMPS = {caught: 'ok', seen: 'signal', unseen: ''}
+const cells = (on, total) => Array.from({length: total}, (_, i) => i < on ? '<i class="on"></i>' : '<i></i>').join('')
+const outOf = (n) => `${n}<span class="unit">/151</span>`
+function paintBank(selector, value) {
+  $(selector).innerHTML = cells(value > 0 ? Math.max(1, Math.round(value / 151 * BANK_CELLS)) : 0, BANK_CELLS)
+}
 const PLAN_LABELS = {available: 'Possible in this run', caught: 'Already registered', external: 'Needs another game', unavailable: 'Out of reach for now'}
 
 let entries = []
@@ -67,7 +76,7 @@ function sorted(rows) {
 }
 
 function milestoneBadges(dex) {
-  return `<span class="milestone-badges">${maxed.has(dex) ? '<span class="mastery-badge"><span aria-hidden="true">⚑</span> Lv. 100</span>' : ''}${perfectSpecies.has(dex) ? '<span class="perfect-badge"><span aria-hidden="true">★★★★</span> Perfect DV</span>' : highQualitySpecies.has(dex) ? '<span class="dv-badge dv-stars-3" aria-label="3-star or better DVs found"><span aria-hidden="true">★★★</span> DV found</span>' : ''}</span>`
+  return `<span class="milestone-badges">${maxed.has(dex) ? '<span class="tag tag--warn mastery-badge"><span aria-hidden="true">⚑</span> Lv. 100</span>' : ''}${perfectSpecies.has(dex) ? '<span class="tag tag--signal perfect-badge"><span aria-hidden="true">★★★★</span> Perfect DV</span>' : highQualitySpecies.has(dex) ? '<span class="tag tag--ok dv-badge dv-stars-3" aria-label="3-star or better DVs found"><span aria-hidden="true">★★★</span> DV found</span>' : ''}</span>`
 }
 
 function renderGrid() {
@@ -84,32 +93,30 @@ function renderGrid() {
     const caught = caughtCount(entry.dex)
     const counts = `${caught === null ? 'Catch count unavailable' : `Caught ${caught}`} · Have ${copies?.length || 0}`
     return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${maxed.has(entry.dex) ? ', level 100 reached' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}, ${counts}" aria-describedby="catch-tracking-note">
-      <span class="dex-num">#${num(entry.dex)}</span>
-      ${entry.dex === hunting ? '<span class="hunt-flag" title="The current expedition">Hunting</span>' : ''}
-      <img loading="lazy" src="${PokeSim.base}/sprites/${entry.dex}.png" alt="" width="72" height="72">
-      <strong>${esc(entry.name)}</strong>${milestoneBadges(entry.dex)}
-      <span class="card-types">${typeTags(entry.types)}</span>
+      <span class="dex-top"><span class="dex-num">${num(entry.dex)}</span>${entry.dex === hunting ? '<span class="tag tag--crit hunt-flag" title="The current expedition">Hunting</span>' : ''}<span class="card-note"><i class="lamp"${RECORD_LAMPS[state] ? ` data-on="${RECORD_LAMPS[state]}"` : ''} aria-hidden="true"></i>${esc(note)}</span></span>
+      <span class="plate plate--card"><img loading="lazy" src="${PokeSim.base}/sprites/${entry.dex}.png" alt="" width="56" height="56"></span>
+      <span class="dex-body"><strong class="dex-name">${esc(entry.name)}</strong><span class="card-types">${typeTags(entry.types)}</span>${milestoneBadges(entry.dex)}</span>
       <span class="card-counts">${counts}</span>
-      <span class="card-note">${esc(note)}</span>
     </button>`
   }).join('') || '<p class="dex-empty">Nobody matches that search. Try another name, type, or filter.</p>'
+  fitSprites($('#grid'))
 }
 
 function statRow(label, value) {
-  const width = Math.min(100, Math.round(value / MAX_STAT * 100))
-  return `<div class="stat-row"><span>${esc(label)}</span><span class="stat-bar"><i style="width:${width}%"></i></span><b>${value}</b></div>`
+  const on = Math.max(1, Math.min(STAT_CELLS, Math.round(value / MAX_STAT * STAT_CELLS)))
+  return `<div class="stat-row"><span class="micro">${esc(label)}</span><span class="meter" data-level="signal" aria-hidden="true">${cells(on, STAT_CELLS)}</span><b>${value}</b></div>`
 }
 
 function chip(step, direction) {
   return `<button class="evo-chip" data-dex="${step.dex}">
-    <img loading="lazy" src="${PokeSim.base}/sprites/${step.dex}.png" alt="" width="44" height="44">
-    <span><strong>${esc(step.name)}</strong><small>${direction} · ${esc(step.label)}</small></span></button>`
+    <span class="plate plate--chip"><img loading="lazy" src="${PokeSim.base}/sprites/${step.dex}.png" alt="" width="56" height="56"></span>
+    <span><span class="micro">${direction}</span><strong>${esc(step.name)}</strong><small>${esc(step.label)}</small></span></button>`
 }
 
 function placeLine(place) {
   const extra = [place.level_range, place.rod ? `${place.rod}` : null,
                  place.gives ? `Trade a ${place.gives}` : null, place.item ? `From the ${place.item}` : null]
-  return `<li><span class="place-method ${esc(place.method)}">${esc(place.method_label)}</span>
+  return `<li><span class="tag place-method ${esc(place.method)}">${esc(place.method_label)}</span>
     <strong>${esc(place.map_name)}</strong><small>${extra.filter(Boolean).map(esc).join(' · ')}</small></li>`
 }
 
@@ -128,20 +135,20 @@ function renderDetail(dex, refresh = false) {
   const partyCount = copies.filter(copy => copy.where.startsWith('Party slot ')).length
   const pcCount = copies.filter(copy => copy.where.startsWith('Box ')).length
   const moves = entry.moves.map((move) => `<tr><td>${move.level ? `Lv. ${move.level}` : 'Start'}</td><td>${esc(move.name)}</td>
-    <td><span class="type-tag ${typeClass(move.type)}">${esc(move.type)}</span></td><td>${move.power || 'N/A'}</td><td>${move.accuracy ?? 'N/A'}%</td><td>${move.pp ?? 'N/A'}</td></tr>`).join('')
+    <td><span class="tag type-${typeClass(move.type)}">${esc(move.type)}</span></td><td>${move.power || 'N/A'}</td><td>${move.accuracy ?? 'N/A'}%</td><td>${move.pp ?? 'N/A'}</td></tr>`).join('')
   $('#detail-body').innerHTML = `
-    <header class="detail-head ${typeClass(entry.types[0])}">
-      <img src="${PokeSim.base}/sprites/${dex}.png" alt="${esc(entry.name)}" width="112" height="112">
-      <div><span class="eyebrow">NO. ${num(dex)}${entry.dex === hunting ? ' · CURRENT EXPEDITION' : ''}</span>
-        <h2 id="detail-name">${esc(entry.name)}</h2>${milestoneBadges(entry.dex)}
+    <header class="detail-head">
+      <span class="plate plate--hero"><img src="${PokeSim.base}/sprites/${dex}.png" alt="${esc(entry.name)}" width="56" height="56"></span>
+      <div class="detail-id"><span class="micro eyebrow">No. ${num(dex)}${entry.dex === hunting ? ' · Current expedition' : ''}</span>
+        <h2 id="detail-name">${esc(entry.name)}</h2>
         <div class="detail-types">${typeTags(entry.types)}</div>
-        <span class="record-pill ${state}">${RECORD_LABELS[state]}</span></div>
+        <span class="record-pill ${state}"><i class="lamp"${RECORD_LAMPS[state] ? ` data-on="${RECORD_LAMPS[state]}"` : ''} aria-hidden="true"></i>${RECORD_LABELS[state]}</span>${milestoneBadges(entry.dex)}</div>
     </header>
     <section class="detail-section" aria-label="Collection counts">
       <dl class="collection-counts"><div><dt>Caught</dt><dd${catchesAvailable() ? '' : ' class="count-unavailable"'}>${caughtCount(dex) ?? 'Unavailable'}</dd></div><div><dt>Have</dt><dd>${copies.length}</dd></div></dl>
       <p class="detail-meta">Party ${partyCount} · PC ${pcCount}</p>
       <p class="detail-meta">${esc(trackingNote())}</p>
-      <div class="link-row"><a href="${PokeSim.base}/pc?scope=all&q=%23${num(dex)}&sort=power&order=desc">View in PC ↗</a></div>
+      <div class="link-row"><a class="key" href="${PokeSim.base}/pc?scope=all&q=%23${num(dex)}&sort=power&order=desc">View in PC ↗</a></div>
     </section>
     ${project && state !== 'caught' ? `<p class="plan-note"><b>${esc(PLAN_LABELS[project.status] || 'Status')}</b> ${esc(project.reason || '')}</p>` : ''}
     ${copies.length ? `<section class="detail-section"><h3>With you right now</h3><ul class="copy-list">${copies.map((copy) =>
@@ -162,16 +169,20 @@ function renderDetail(dex, refresh = false) {
       <div class="move-scroll"><table class="move-table"><thead><tr><th>When</th><th>Move</th><th>Type</th><th>Power</th><th>Acc.</th><th>PP</th></tr></thead><tbody>${moves}</tbody></table></div>
     </section>
     <section class="detail-section"><h3>Read more</h3><div class="link-row">
-      <a href="${esc(entry.links.bulbapedia)}" target="_blank" rel="noreferrer">Bulbapedia ↗</a>
-      <a href="${esc(entry.links.serebii)}" target="_blank" rel="noreferrer">Serebii Red &amp; Blue dex ↗</a>
-      <a href="${esc(entry.links.wikipedia)}" target="_blank" rel="noreferrer">Wikipedia ↗</a>
+      <a class="key" href="${esc(entry.links.bulbapedia)}" target="_blank" rel="noreferrer">Bulbapedia ↗</a>
+      <a class="key" href="${esc(entry.links.serebii)}" target="_blank" rel="noreferrer">Serebii ↗</a>
+      <a class="key" href="${esc(entry.links.wikipedia)}" target="_blank" rel="noreferrer">Wikipedia ↗</a>
     </div></section>`
+  fitSprites($('#detail-body'))
   $('#detail').hidden = false
   $('#backdrop').hidden = false
   $('#detail').scrollTop = refresh ? previousScroll : 0
   if (!refresh) $('#close-detail').focus()
   history.replaceState(null, '', `#${num(dex)}`)
 }
+
+// Portrait scaling is shared; see panel.js.
+const fitSprites = (root) => globalThis.Panel?.fitSprites?.(root)
 
 function closeDetail() {
   openDex = null
@@ -222,8 +233,9 @@ async function refreshStatus() {
     maxed = new Set(goals.level_100 || [])
     perfectSpecies = new Set(goals.perfect_species || [])
     highQualitySpecies = new Set([...(goals.high_quality_species || []), ...perfectSpecies])
-    $('#sum-maxed').innerHTML = `${maxed.size} <small>/ 151</small>`
+    $('#sum-maxed').innerHTML = outOf(maxed.size)
     $('#maxed-meter').value = maxed.size
+    paintBank('#maxed-cells', maxed.size)
     $('#sum-perfect').textContent = `${goals.perfect_found || 0}${goals.perfect_found ? '+' : ''}`
     $('#perfect-note').textContent = `${perfectSpecies.size} species discovered · ${goals.perfect_held || 0} perfect partners with you. Confirmed minimum.`
     owned = new Set(status.owned || [])
@@ -232,13 +244,16 @@ async function refreshStatus() {
     hunting = (status.plan || []).find((row) => row.species === status.hunting)?.dex ?? null
     $('#connection').classList.remove('is-offline')
     $('#status').textContent = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
-    $('#sum-owned').innerHTML = `${owned.size} <small>/ 151</small>`
-    $('#sum-seen').innerHTML = `${seen.size} <small>/ 151</small>`
+    $('#sum-owned').innerHTML = outOf(owned.size)
+    $('#sum-seen').innerHTML = outOf(seen.size)
     $('#sum-caught').textContent = catchesAvailable() ? count(catches.total) : 'Unavailable'
+    $('#sum-caught').classList[catchesAvailable() ? 'remove' : 'add']('is-word')
     $('#sum-caught-label').textContent = catches?.complete_history ? 'Total caught' : 'Catches tracked'
     $('#catch-tracking-note').textContent = trackingNote()
     $('#owned-meter').value = owned.size
     $('#seen-meter').value = seen.size
+    paintBank('#owned-cells', owned.size)
+    paintBank('#seen-cells', seen.size)
     renderHolders(status)
     renderGrid()
     if (openDex !== null) renderDetail(openDex, true)
