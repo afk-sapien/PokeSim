@@ -50,7 +50,8 @@ def public_game_path(method, path):
         return True
     if any(part in {'', '.', '..'} for part in path.split('/')):
         return False
-    return bool(re.fullmatch(r'(?:api/events|events)/[0-9]+|(?:sprites|shots)/[0-9]+\.png|static/[A-Za-z0-9_.-]+', path))
+    return bool(re.fullmatch(r'(?:api/events|events)/[0-9]+|(?:sprites|shots)/[0-9]+\.png'
+                             r'|static/[A-Za-z0-9_.-]+|static/fonts/[A-Za-z0-9_.-]+', path))
 
 
 class Manager:
@@ -499,7 +500,8 @@ def create_app(manager, shutdown=lambda: None):
             return JSONResponse(manager.coordinator.adventure_status(aid))
         if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
             asset = path.removeprefix('static/')
-            if asset in {'routes.js', 'style.css', 'pokedex.css', 'pages.css', 'adventure-trading.js'}:
+            if asset in {'routes.js', 'tokens.css', 'style.css', 'pokedex.css', 'pages.css',
+                         'adventure-trading.js', 'fonts/pokesim-panel.woff2'}:
                 return FileResponse(STATIC / asset)
         sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)
         if sprite and request.method in {'GET', 'HEAD'}:

@@ -1,0 +1,256 @@
+/* Bench Instrument design tokens.
+
+   Loaded before every other stylesheet so a component can be converted one at a
+   time: anything not yet converted simply ignores these.
+
+   Rules this layer assumes, and that the components enforce:
+     - no border-radius anywhere; a panel is milled, not moulded
+     - no blurred shadows; depth is a 1px bevel or a hard offset lip
+     - meters count in discrete cells, never a smooth bar
+     - the display face never sets a sentence, and never below 16px
+     - every text pair clears 4.5:1 and every non-text pair 3:1, in both themes
+
+   Themes: [data-theme="light"|"dark"|"auto"] on <html>, auto following the system.
+*/
+/* --------------------------------------------------------------------------
+   0  THE DISPLAY FACE
+
+   "PokeSim Panel" is a 5x7 monospaced pixel face drawn for this project from
+   a bitmap source, so it ships under PokeSim's own MIT licence with no third
+   party to audit and nothing of Nintendo's in it. 2.5 KB as woff2.
+
+   One design pixel is 1/8 em, so font sizes that are multiples of 8 render as
+   perfectly square, unblurred pixels. Use 8 / 16 / 24 / 32 / 40 and nothing
+   between them.
+
+   PRODUCTION: keep only the url() source. The data: source exists so this
+   prototype works when opened straight off the disk with file://, and would
+   otherwise need `font-src 'self' data:` added to the CSP.
+   -------------------------------------------------------------------------- */
+@font-face {
+  font-family: "PokeSim Panel";
+  src: url("fonts/pokesim-panel.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+
+/* ==========================================================================
+   1  TOKENS
+   ========================================================================== */
+
+:root {
+  /* -- type ---------------------------------------------------------------
+     Three voices and no more.
+       panel   the display face. Numerals, legends, names, headings. Never a
+               paragraph, never below 16px except the chassis marks.
+       mono    JetBrains Mono (OFL 1.1, self-hosted) for micro-labels and any
+               string that needs lowercase at a small size.
+       text    Inter (OFL 1.1, self-hosted, variable, ~110 KB woff2) for every
+               sentence a human has to read.
+     Both fallbacks below are system stacks, so the page is never unstyled. */
+  --font-panel: "PokeSim Panel", "Courier New", monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-text: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --f-chassis: 8px;    /* panel font. Model plates, registration marks only. */
+  --f-micro: 11px;     /* mono.  Silkscreen micro-labels, PP counts.         */
+  --f-label: 12px;     /* mono.  Form labels, table headers, captions.       */
+  --f-body: 15px;      /* text.  Paragraphs. Line height 1.55.               */
+  --f-legend: 16px;    /* panel. Section legends, nav keys, Pokemon names.   */
+  --f-read: 24px;      /* panel. Card values, levels, dex numbers.           */
+  --f-hero: 32px;      /* panel. Page-level readouts.                        */
+  --f-title: 40px;     /* panel. Page identity. Drops to 24px under 640px.   */
+
+  --track-legend: 0.10em;   /* silkscreen is always letterspaced */
+  --track-micro: 0.12em;
+
+  /* -- space --------------------------------------------------------------
+     4px base, because the display face's pixel is 2px at 16px and 4px at 32px.
+     Everything on the page lands on this grid. */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 64px;
+
+  /* -- border, corner, shadow --------------------------------------------
+     Hairlines are 1px and never anything else. Corners are square, with no
+     exceptions: radius is not a token because there is nothing to tune.
+     There are no drop shadows. A panel's depth comes from a two-tone inset
+     bevel, and the only outer glow belongs to a lit lamp. */
+  --hair: 1px;
+  --bezel-wall: 10px;
+  /* How much chrome is pinned to the top of the window. Sticky column headers
+     read this, so the rail's height only has to be stated once per layout. */
+  --rail-h: 57px;
+  /* A Gen 1 front sprite is at most 56x56 of 2bpp art, so every portrait well
+     is an exact integer multiple of it and renders with pixelated scaling. */
+  --sprite-2x: 112px;
+  --key-inset: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
+  --well-inset: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
+
+  /* -- motion -------------------------------------------------------------
+     Instruments do not ease. Transitions are 80ms and linear, or absent.
+     The only thing that moves on its own is the LIVE lamp, and it steps
+     rather than fades, because a lamp is on or it is off. */
+  --t: 80ms linear;
+}
+
+/* ---- light: the panel under lab light ------------------------------------
+   Every text pair below is >= 4.5:1 and every graphical pair >= 3:1.
+   Verified by scratchpad/contrast.py, not estimated.
+
+   ink       #191C1A  chassis 10.69  panel 13.51  panel-2 12.28  well  9.33
+   ink-2     #3B3F39  chassis  6.68  panel  8.44  panel-2  7.68  well  5.83
+   ink-3     #4B4F48  chassis  5.20  panel  6.58  panel-2  5.98  well  4.54
+   signal    #8A3110  chassis  5.17  panel  6.54  panel-2  5.94  well  4.51
+   ok        #24572F  chassis  5.27  panel  6.66  panel-2  6.06  well  4.60
+   warn      #634707  chassis  5.37  panel  6.78  panel-2  6.17  well  4.68
+   crit      #93201A  chassis  5.31  panel  6.71  panel-2  6.10  well  4.63
+   link      #184A63  chassis  5.94  panel  7.51  panel-2  6.83  well  5.19
+   bezel-ink #8E9A6B  on bezel 6.03
+   rule vs panel 4.19, rule vs chassis 3.31, focus vs panel 6.54,
+   focus vs chassis 5.17, focus vs well 4.51, focus halo vs bezel 16.32,
+   lit vs unlit meter cell 4.33 - 4.54                                       */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --chassis: #CFCCC2;
+  --panel: #E7E4DB;
+  --panel-2: #DDDAD0;
+  --well: #C2BFB4;
+  --bezel: #14170F;
+  --bezel-ink: #8E9A6B;
+
+  --ink: #191C1A;
+  --ink-2: #3B3F39;
+  --ink-3: #4B4F48;
+
+  --signal: #8A3110;
+  --signal-lamp: #C2521E;
+  --ok: #24572F;
+  --ok-lamp: #2E7A3D;
+  --warn: #634707;
+  --warn-lamp: #A67B10;
+  --crit: #93201A;
+  --crit-lamp: #C22C22;
+  --link: #184A63;
+
+  --rule: #6E6B63;
+  --rule-faint: #B6B3A9;
+  --cell-off: #BFBCB1;
+
+  --bevel-hi: rgba(255, 255, 255, 0.60);
+  --bevel-lo: rgba(28, 26, 20, 0.16);
+  --wash: rgba(138, 49, 16, 0.10);
+  --focus: #8A3110;
+  --focus-halo: #F5F3EC;
+  --stipple: rgba(28, 26, 20, 0.14);
+
+  /* The portrait well is a backlit slide, not a hole. A ripped 2bpp sprite has
+     its lightest shade as the background and its darkest as the outline, so it
+     needs a pale ground in BOTH themes or the outline disappears at night. */
+  --plate: #D4D1C6;
+  --plate-ink: #3B3F39;
+  --plate-grid: rgba(28, 26, 20, 0.16);
+}
+
+/* ---- dark: the same instrument at 3am -------------------------------------
+   Not an inversion. The chassis stops reflecting, the silkscreen goes dim,
+   and the lamps and readouts carry the panel. Nothing is pure white and no
+   large field is bright, because this runs on a monitor all night.
+
+   ink       #DEE1D8  chassis 14.83  panel 13.25  panel-2 11.90  well 15.34
+   ink-2     #AEB2A9  chassis  9.10  panel  8.14  panel-2  7.30  well  9.41
+   ink-3     #8D9289  chassis  6.17  panel  5.52  panel-2  4.95  well  6.38
+   signal    #F0913F  chassis  8.25  panel  7.37  panel-2  6.62  well  8.53
+   ok        #72C983  chassis  9.72  panel  8.68  panel-2  7.80  well 10.05
+   warn      #DDB350  chassis  9.94  panel  8.88  panel-2  7.98  well 10.28
+   crit      #F0776A  chassis  7.06  panel  6.31  panel-2  5.66  well  7.30
+   link      #7DBFDE  chassis  9.70  panel  8.67  panel-2  7.78  well 10.03
+   bezel-ink #8E9A6B  on bezel 6.98
+   rule vs panel 3.51, rule vs chassis 3.93, focus vs panel 7.37,
+   focus vs chassis 8.25, focus vs well 8.53, focus vs bezel 8.83,
+   lit vs unlit meter cell 4.90 - 6.90                                       */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --chassis: #0A0C0A;
+  --panel: #171A18;
+  --panel-2: #20241F;
+  --well: #050605;
+  --bezel: #000000;
+  --bezel-ink: #8E9A6B;
+
+  --ink: #DEE1D8;
+  --ink-2: #AEB2A9;
+  --ink-3: #8D9289;
+
+  --signal: #F0913F;
+  --signal-lamp: #F0913F;
+  --ok: #72C983;
+  --ok-lamp: #72C983;
+  --warn: #DDB350;
+  --warn-lamp: #DDB350;
+  --crit: #F0776A;
+  --crit-lamp: #F0776A;
+  --link: #7DBFDE;
+
+  --rule: #6C7169;
+  --rule-faint: #31352F;
+  --cell-off: #2B2F2A;
+
+  --bevel-hi: rgba(224, 232, 216, 0.07);
+  --bevel-lo: rgba(0, 0, 0, 0.75);
+  --wash: rgba(240, 145, 63, 0.14);
+  --focus: #F0913F;
+  --focus-halo: #0A0C0A;
+  --stipple: rgba(224, 232, 216, 0.10);
+
+  /* Dimmed rather than inverted: mid grey, so a dark sprite outline still
+     reads and thirty of them do not glare at 3am. */
+  --plate: #8F8C84;
+  --plate-ink: #191C1A;
+  --plate-grid: rgba(0, 0, 0, 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] {
+    color-scheme: dark;
+    --chassis: #0A0C0A;
+    --panel: #171A18;
+    --panel-2: #20241F;
+    --well: #050605;
+    --bezel: #000000;
+    --ink: #DEE1D8;
+    --ink-2: #AEB2A9;
+    --ink-3: #8D9289;
+    --signal: #F0913F;
+    --signal-lamp: #F0913F;
+    --ok: #72C983;
+    --ok-lamp: #72C983;
+    --warn: #DDB350;
+    --warn-lamp: #DDB350;
+    --crit: #F0776A;
+    --crit-lamp: #F0776A;
+    --link: #7DBFDE;
+    --rule: #6C7169;
+    --rule-faint: #31352F;
+    --cell-off: #2B2F2A;
+    --bevel-hi: rgba(224, 232, 216, 0.07);
+    --bevel-lo: rgba(0, 0, 0, 0.75);
+    --wash: rgba(240, 145, 63, 0.14);
+    --focus: #F0913F;
+    --focus-halo: #0A0C0A;
+    --stipple: rgba(224, 232, 216, 0.10);
+    --plate: #8F8C84;
+    --plate-ink: #191C1A;
+    --plate-grid: rgba(0, 0, 0, 0.22);
+  }
+}
