@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.3.5
+
+- Read the 151 front portraits out of your own cartridge. Adding a ROM now decodes every front
+  sprite from it into `assets/sprites`, so the Pokédex and the PC are illustrated without anyone
+  hunting for artwork. Nothing is shipped and nothing is fetched for this — the pictures were
+  always in the ROM you supplied. A file already in that folder is never replaced, so a
+  hand-installed pack still wins. The decoder is a port of pret/pokered's `home/uncompress.asm`
+  and every one of the 151 matches that project's reference art pixel for pixel, including Mew,
+  whose header sits outside the base-stats table because it was squeezed into 300 bytes of
+  leftover space late in development.
 - Stop storing a save state with journal entries at all. 0.3.4 narrowed this to eight event
   types; it should have been none. The rewind it powered is refused outright on any adventure
   that has completed a trade, because `can_rewind` requires no `trade_barrier` and every earlier

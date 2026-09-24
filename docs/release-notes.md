@@ -1,52 +1,52 @@
-# PokeSim 0.3.4 experimental beta
+# PokeSim 0.3.5 experimental beta
 
-Two changes to the same thing: how much an adventure writes to disk just by existing. Together
-they take the journal's storage on a long-running adventure down by about 98%.
+The collection pages are illustrated out of the box, and the journal stops keeping save states.
 
-## A save state is kept only for moments worth returning to
+## Portraits come out of your own cartridge
 
-Every journal entry that counted as *notable* stored a full emulator save state so that entry
-could be rewound to. That conflated three different questions, because "notable" also decides
-what reaches the Atom feed and what sends a phone notification. A Pokémon reaching level 50 is
-worth reading about. It is not worth a 167 KB snapshot of the entire machine.
+The Pokédex and the PC have always shown a neutral numbered placeholder unless you went and found
+artwork yourself and dropped 151 files into `assets/sprites`. Almost nobody did, so the two pages
+that are most of the appeal looked half-finished.
 
-Measured across two live adventures: 2,840 stored states, of which **levelling up was 840 and
-walking into a new map was 421** — 46% between them, and 82% once every other incidental type is
-counted. Badges were 17.
+The pictures were in the ROM the whole time. Adding a ROM now decodes all 151 front sprites from
+it into `assets/sprites`, and every adventure shares them. Nothing is shipped with the
+application and nothing is downloaded for this — it is your cartridge, read on your machine, and
+the images never leave it. A file already in that folder is never replaced, so if you have
+installed your own pack it still wins, and an adventure's own `sprites` folder still overrides
+individual entries.
 
-States are now kept for the things that are rare, hard to undo, or that you would want to get in
-front of: badges, Hall of Fame runs, new partners, evolutions, blackouts, stalls and legendary
-retries. Everything else still appears in the journal, the feed and your notifications exactly as
-before — it simply no longer carries a snapshot.
+The decoder is a port of pret/pokered's `home/uncompress.asm`. A Generation I picture is two 1bpp
+chunks, each written two bits at a time down byte-columns across four passes, then differentially
+decoded row by row and merged. **All 151 match that project's reference art pixel for pixel**,
+which the test suite checks wherever a ROM and a reference checkout are both present.
 
-Entries written before this release keep the states they already have, so no rewind that works
-today stops working.
+Mew needed its own path: its header sits outside the base-stats table, at `0x0425B`, because it
+was added late — in Shigeki Morimoto's words, slotted into "a miniscule 300 bytes of free space"
+left over when the debug features came out.
 
-## Those states are compressed (from 0.3.3)
+The lightest of the four shades is written transparent rather than white, so one portrait sits
+correctly on a light page and a dark one.
 
-A PyBoy save state is 167 KB of mostly zeroed RAM and was written raw. It gzips about ten to one:
-measured on a real state, 167,677 bytes to 15,826, and PyBoy loads the compressed state back to
-the correct game state. Reading detects the gzip magic, so older uncompressed states still load.
+## A journal entry no longer keeps a save state
 
-Compacting the existing states on the server this was found on took its library from 1.6 GB to
-961 MB, with the application running.
+0.3.4 narrowed this to eight event types. It should have been none.
 
-## Together
+The rewind those states power is refused outright on any adventure that has completed a Cable
+Club trade: the button is gated on there being no trade barrier, and every checkpoint older than
+the barrier is rejected on load anyway. On the server this was found on, both adventures had a
+barrier — so 456 MB of save states existed for a button that could not appear on either of them.
 
-That server was writing roughly 40 MB an hour per adventure, nearly all of it these states. With
-both changes a comparable adventure writes on the order of **half a megabyte an hour** for its
-journal, and the historical 456 MB becomes about 8 MB once only the rewindable moments are kept.
+Going back to a moment is already covered, and by bounded things: twenty rotating autosaves a
+minute apart, a League entry checkpoint, a before-stall checkpoint, and the save-state list the
+interface already offers. A journal entry now costs its screenshot, about 3.6 KB against 167 KB.
+
+Entries written earlier keep the states they have, so any rewind that works today keeps working.
 
 ## Upgrading
 
-Nothing to migrate and no action required. New entries follow the new rules immediately; old ones
-are untouched.
+Nothing to migrate. Portraits appear the next time a ROM is added; to get them for a ROM already
+installed, remove and re-add it, or drop the files in yourself.
 
-If you want the existing space back, gzip the `event-*.state` files under each adventure's
-`states/` directory in place, keeping the same filenames — the reader accepts either format. Do
-that only on 0.3.3 or later, because an older build reads those files raw and its rewind will
-fail on a compressed one.
-
-Autosaves and the policy manifest beside them are still uncompressed. They are bounded at twenty,
-and the manifest's checksum is recorded over the raw bytes in several places including the trade
-path, so compressing those is a wider change than this one.
+Existing journal entries are untouched. If you want the space back from the states already on
+disk, delete `event-*.state` under each adventure's `states/` directory — the journal keeps its
+entries and its screenshots, and only the rewind on those particular entries goes away.

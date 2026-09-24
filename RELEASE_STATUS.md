@@ -1,39 +1,31 @@
-# Release preparation: 0.3.4
+# Release preparation: 0.3.5
 
-Two changes over 0.3.2, both about how much an adventure writes to disk just by existing.
-Together they reduce the journal's storage on a long-running adventure by about 98%.
+Two changes. Portraits are now read out of the owner's own cartridge, and journal entries stop
+keeping a save state.
 
-Every notable journal entry stores a full PyBoy save state so the entry can be rewound to. That
-state is 167 KB of mostly zeroed RAM and it was written raw, and they are only ever added to. On
-the server this was found on, two adventures held 2,836 of them totalling 456 MB — against 68 MB
-of screenshots and 108 MB of autosaves, which are bounded at twenty. That was essentially all of
-the roughly 40 MB an hour an adventure wrote.
+Adding a ROM decodes all 151 front sprites from it into `assets/sprites`. Nothing is shipped and
+nothing is downloaded: the artwork was always in the supplied ROM. A file already in that folder
+is never replaced, so a hand-installed pack still wins. The decoder is a port of pret/pokered's
+`home/uncompress.asm`; Mew is read from its own header at `0x0425B`, outside the base-stats table.
 
-A save state was kept for every *notable* journal entry, which conflated three questions: notable
-also decides what reaches the feed and what sends a notification. Across two live adventures,
-levelling up accounted for 840 of 2,840 states and entering a map for 421; 82% belonged to types
-nobody would rewind to. States are now kept only for badges, Hall of Fame runs, new partners,
-evolutions, blackouts, stalls and legendary retries. Entries written earlier keep the states they
-already have.
-
-States are now gzipped, about ten to one. Reading detects the gzip magic, so states written
-before this release still load: an existing library keeps resuming and every journal entry keeps
-its rewind.
+0.3.4 narrowed per-entry save states to eight event types; this removes them. The rewind they
+powered is refused on any adventure that has completed a trade, because the button requires no
+trade barrier and every earlier checkpoint predates it — so two live adventures were holding
+456 MB of states for a button that could not appear. Recovery is already covered by twenty
+rotating autosaves, the League entry checkpoint and the before-stall checkpoint, all bounded.
 
 There is no database change, no policy state change, and no migration. Existing checkpoints
-resume untouched.
+resume untouched, and journal entries written earlier keep the states they have.
 
 ## What was verified
 
-Measured on a real 167,677-byte state from the live server: 15,826 bytes compressed, and PyBoy
-loaded it back to the correct game state (map, party and Pokédex all intact). Compacting that
-server's existing states took the library from 1.6 GB to 961 MB with the application running and
-no errors. The full suite is 1,302 tests, including a round trip through the compressed format
-and a check that a state written before this release still reads.
+All 151 portraits decoded from a real Red cartridge match pret/pokered's reference art **pixel
+for pixel** at the pinned revision, Mew included; the suite asserts this wherever a ROM and a
+reference checkout are both present, and skips otherwise. Installing a ROM over an existing
+hand-placed portrait leaves that file untouched. The suite is 1,306 tests.
 
-Carried over from 0.3.2: a mature save was replayed 900,014 frames with no rewinds, no errors and
-18 achievements, and the Pokédex masking from 0.3.1 was checked against 54 real checkpoints
-across 27 adventures.
+Carried over: a mature save replayed 900,014 frames with no rewinds and no errors, and the
+Pokédex masking from 0.3.1 checked against 54 real checkpoints across 27 adventures.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64 Docker image and
 Compose configuration. The `pokesim-desktop` Python command opens the Library in your browser.
