@@ -4,7 +4,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import logging
 from pathlib import Path
+import shutil
 import time
 
 from fastapi import HTTPException, Request
@@ -13,6 +15,10 @@ from ..checkpoints import CheckpointStore
 from ..app.registry import digest, validate_id
 
 PREFIX = 'managed_interaction:'
+FINAL = ('released', 'aborted')
+KEEP_FINISHED = 20
+RECLAIM_BYTES = 32 * 2 ** 20
+log = logging.getLogger(__name__)
 
 
 def _records(store):
@@ -131,18 +137,68 @@ COMPACT_PER_START = 100
 
 
 def _compact_released(store):
-    """Discard staged snapshots that adventures traded before release stripped them.
+    """Discard staged snapshots that finished exchanges kept from older versions.
 
-    SQLite rewrites the rows itself, so a backlog of finished exchanges never has to
-    be parsed. The batch is capped because each row carries a whole policy snapshot.
+    Released and aborted exchanges never promote their snapshot again. SQLite rewrites
+    the rows itself, so a backlog of finished exchanges never has to be parsed. The batch
+    is capped because each row carries a whole policy snapshot.
     """
     with store.lock, store.db:
         store.db.execute(
             "UPDATE kv SET v = json_remove(v, '$.source_metadata') WHERE k IN ("
             "  SELECT k FROM kv WHERE k LIKE ?"
-            "   AND json_extract(v, '$.phase') = 'released'"
+            "   AND json_extract(v, '$.phase') IN (?, ?)"
             "   AND json_extract(v, '$.source_metadata') IS NOT NULL"
-            "   LIMIT ?)", (PREFIX + '%', COMPACT_PER_START))
+            "   LIMIT ?)", (PREFIX + '%', *FINAL, COMPACT_PER_START))
+
+
+def _prune_finished(store, keep=KEEP_FINISHED):
+    """Drop the checkpoint files of all but the newest finished exchanges.
+
+    A released exchange was promoted into the adventure's own saves and an aborted one
+    went back to its source save, so nothing reads these files again. A folder whose
+    exchange is unfinished, or has no record at all, is left alone.
+    """
+    root = store.dir / 'interactions'
+    if not root.is_dir():
+        return 0
+    with store.lock:
+        finished = {row[0][len(PREFIX):] for row in store.db.execute(
+            "SELECT k FROM kv WHERE k LIKE ? AND json_extract(v, '$.phase') IN (?, ?)",
+            (PREFIX + '%', *FINAL))}
+    folders = sorted((path for path in root.iterdir() if path.is_dir() and path.name in finished),
+                     key=lambda path: path.stat().st_mtime)
+    removed = 0
+    for path in folders[:-keep] if keep > 0 else []:
+        try:
+            shutil.rmtree(path)
+            removed += 1
+        except OSError:
+            log.exception('Cannot remove the finished exchange folder %s', path)
+    if removed:
+        log.info('removed %d finished exchange folders', removed)
+    return removed
+
+
+def _reclaim(store, threshold=RECLAIM_BYTES):
+    """Give back the pages that stripped snapshots and rewritten policy state left empty.
+
+    SQLite reuses free pages but never returns them, so a database that once held
+    hundreds of finished snapshots stays that size. Rebuilding it takes about as long
+    as copying the live data, which is a few megabytes, and only happens past the threshold.
+    """
+    with store.lock:
+        free, size = (store.db.execute(f'PRAGMA {name}').fetchone()[0]
+                      for name in ('freelist_count', 'page_size'))
+        if free * size < threshold:
+            return 0
+        try:
+            store.db.execute('VACUUM')
+        except Exception:
+            log.exception('Cannot reclaim free space in the adventure database')
+            return 0
+    log.info('reclaimed %d MB of free database space', free * size // 2 ** 20)
+    return free * size
 
 
 def recover_storage(store):
@@ -150,6 +206,8 @@ def recover_storage(store):
     with store.lock:
         store.db.execute('PRAGMA synchronous=FULL')
     _compact_released(store)
+    _prune_finished(store)
+    _reclaim(store)
     for record in _records(store):
         if record.get('decision') == 'COMMIT' and record['phase'] != 'released':
             _promote(store, record)
@@ -411,6 +469,8 @@ class Participant:
         self.emu.manual_mode = record.get('was_manual', False)
         self.emu.policy.on_restore()
         record['phase'] = 'aborted'
+        # Like a release: the snapshot is only ever promoted by a commit.
+        record.pop('source_metadata', None)
         return _save(self.store, record)
 
 
