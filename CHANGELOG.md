@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.3.7
+
+- Pages load fast. Pooled worker connections and `TCP_NODELAY` remove a ~40 ms stall on every
+  proxied request; assets are fingerprinted and cached for a year; responses are gzipped. Local
+  game requests go from 21–45 ms to 2–5 ms, and a repeat visit to the live page from about 1 MB
+  to 30 KB.
+- Pages hold still while they load. The scrollbar track is reserved, the status pill and the
+  adventure switcher have fixed slots, and the version is printed by the server. Worst layout
+  shift goes from 0.96 to 0.02.
+- The live screen streams native PNG frames. `/frame.jpg` and `/stream` keep their paths but now
+  carry `image/png`.
+- Polish: a cleaner Library › adventure trail, correctly spaced digits and punctuation in the
+  panel font, one-line Pokédex card heads, matching dropdowns on every page.
+
 ## 0.3.6
 
 - Every page moves onto one instrument-panel design: shared tokens, one component sheet and a

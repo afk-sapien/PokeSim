@@ -1,21 +1,26 @@
-# Release preparation: 0.3.6
+# Release preparation: 0.3.7
 
-An interface release. Every page now loads `tokens.css`, the shared `panel.css` and `panel.js`,
-and one page sheet, in place of six stylesheets that had drifted apart. The layouts were then
-checked for boxes that should line up and did not: the live screen against the party, the plan
-across the page, settings panels, library cards, journal entries and the PC's box list.
+A speed and steadiness release. The manager now pools its connections to adventure workers and
+every listener sets `TCP_NODELAY`; without it, accepted sockets waited on delayed ACKs and each
+proxied keep-alive reply stalled about 40 ms. Static assets carry a stamp of their own bytes and
+are cached immutably; HTML is `no-store`, sprites and shots are private. Responses over 1 KB are
+gzipped, except the MJPEG-style frame stream. Live frames are native PNG at compression level 1.
 
-There is no database change, no policy state change, and no migration. The stopped-adventure
-page's static whitelist now serves `panel.css`, `panel.js` and `panel-trading.css` in place of
-the deleted sheets.
+Pages no longer rearrange as data arrives: the scrollbar gutter is reserved, the shell is at least
+a window tall, the status pill and adventure switcher have fixed widths, the version is
+server-rendered, and fields the PC hides start hidden. The panel font's side bearings now match
+its outlines, and its URL carries `?v=2` so cached copies are replaced.
+
+There is no database change, no policy state change, and no migration. `/frame.jpg` and `/stream`
+keep their paths but now carry `image/png` frames.
 
 ## What was verified
 
-The suite is 1,311 tests, plus 18 browser tests. The live-page browser test asserts, at 1280,
-900, 390 and 320px, that the screen and the last bay end on the same pixel side by side, and
-that the plan spans the full width under both. A Playwright sweep of twelve pages at
-1440/390/320 in both themes found no horizontal overflow, console errors or failed requests,
-and an alignment audit at 1440/1024/390 found no uneven rows or truncated text.
+The suite is 1,315 tests, 72 JavaScript tests and 18 browser tests. Measured on a local
+manager with a real Red adventure: proxied game requests fell from 21–45 ms to 2–5 ms, the
+Pokédex reference from 84 ms to 6 ms, and a repeat visit to the live page transfers 30 KB instead
+of about 1 MB. A layout-shift profiler across nine pages at 1440 and 390px found a worst
+cumulative shift of 0.02, against 0.96 on 0.3.6.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64 Docker image and
 Compose configuration. The `pokesim-desktop` Python command opens the Library in your browser.
