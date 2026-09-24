@@ -1,52 +1,37 @@
-# PokeSim 0.3.5 experimental beta
+# PokeSim 0.3.6 experimental beta
 
-The collection pages are illustrated out of the box, and the journal stops keeping save states.
+Every page is redrawn as one instrument panel, and the boxes on it finally line up.
 
-## Portraits come out of your own cartridge
+## One design across the whole site
 
-The Pokédex and the PC have always shown a neutral numbered placeholder unless you went and found
-artwork yourself and dropped 151 files into `assets/sprites`. Almost nobody did, so the two pages
-that are most of the appeal looked half-finished.
+The live page, Pokédex, PC, trading, journal, library, settings and the desktop launcher used to
+carry six stylesheets that had grown apart. They now share one set of tokens and one component
+sheet: square edges, hard bevels, meters drawn as discrete cells, and a 5x7 pixel face for names
+and readouts. There is a light and a dark theme, and the switch sits in the footer; it follows
+your system until you pick one.
 
-The pictures were in the ROM the whole time. Adding a ROM now decodes all 151 front sprites from
-it into `assets/sprites`, and every adventure shares them. Nothing is shipped with the
-application and nothing is downloaded for this — it is your cartridge, read on your machine, and
-the images never leave it. A file already in that folder is never replaced, so if you have
-installed your own pack it still wins, and an adventure's own `sprites` folder still overrides
-individual entries.
+Portraits scale by whole pixels only, so a Game Boy sprite is never smeared. A 96-pixel pack whose
+art sits in the middle 56 pixels is recognised and scaled as 56-pixel art, so hand-installed packs
+and the portraits read from your cartridge come out the same size.
 
-The decoder is a port of pret/pokered's `home/uncompress.asm`. A Generation I picture is two 1bpp
-chunks, each written two bits at a time down byte-columns across four passes, then differentially
-decoded row by row and merged. **All 151 match that project's reference art pixel for pixel**,
-which the test suite checks wherever a ROM and a reference checkout are both present.
+## Things line up
 
-Mew needed its own path: its header sits outside the base-stats table, at `0x0425B`, because it
-was added late — in Shigeki Morimoto's words, slotted into "a miniscule 300 bytes of free space"
-left over when the debug features came out.
-
-The lightest of the four shades is written transparent rather than white, so one portrait sits
-correctly on a light page and a dark one.
-
-## A journal entry no longer keeps a save state
-
-0.3.4 narrowed this to eight event types. It should have been none.
-
-The rewind those states power is refused outright on any adventure that has completed a Cable
-Club trade: the button is gated on there being no trade barrier, and every checkpoint older than
-the barrier is rejected on load anyway. On the server this was found on, both adventures had a
-barrier — so 456 MB of save states existed for a button that could not appear on either of them.
-
-Going back to a moment is already covered, and by bounded things: twenty rotating autosaves a
-minute apart, a League entry checkpoint, a before-stall checkpoint, and the save-state list the
-interface already offers. A journal entry now costs its screenshot, about 3.6 KB against 167 KB.
-
-Entries written earlier keep the states they have, so any rewind that works today keeps working.
+- **Live page.** The game screen and the six party bays end on the same line. The screen keeps
+  the Game Boy's 10:9 shape at every width and never letterboxes; spare height becomes bezel.
+  The plan is its own row across the full page. Under 1280px the screen and the party stack, and
+  the party runs two abreast while it fits.
+- **Party bays** keep one height. Moves show only when a bay is wide enough to hold them on two
+  rows; the details dialog always has them. Long names fit on a phone.
+- **PC.** The party and box list is wider, with larger names and counts, and at desktop width it
+  starts and ends level with a full box of twenty.
+- **Library.** A stopped adventure keeps the same screen space as a running one, so titles and
+  buttons line up across a row.
+- **Settings and notifications.** Panels in a row share a height; the four settings panels sit
+  two by two.
+- **Journal entries.** The details sheet stands as tall as the screenshot beside it, and the
+  logged time shows in your own time zone.
 
 ## Upgrading
 
-Nothing to migrate. Portraits appear the next time a ROM is added; to get them for a ROM already
-installed, remove and re-add it, or drop the files in yourself.
-
-Existing journal entries are untouched. If you want the space back from the states already on
-disk, delete `event-*.state` under each adventure's `states/` directory — the journal keeps its
-entries and its screenshots, and only the rewind on those particular entries goes away.
+Nothing to migrate: no database, save or policy change. Browsers pick up the new stylesheets on
+their own, because every changed stylesheet and script has a new version in its URL.

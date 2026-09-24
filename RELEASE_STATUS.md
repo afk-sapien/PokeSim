@@ -1,35 +1,24 @@
-# Release preparation: 0.3.5
+# Release preparation: 0.3.6
 
-Two changes. Portraits are now read out of the owner's own cartridge, and journal entries stop
-keeping a save state.
+An interface release. Every page now loads `tokens.css`, the shared `panel.css` and `panel.js`,
+and one page sheet, in place of six stylesheets that had drifted apart. The layouts were then
+checked for boxes that should line up and did not: the live screen against the party, the plan
+across the page, settings panels, library cards, journal entries and the PC's box list.
 
-Adding a ROM decodes all 151 front sprites from it into `assets/sprites`. Nothing is shipped and
-nothing is downloaded: the artwork was always in the supplied ROM. A file already in that folder
-is never replaced, so a hand-installed pack still wins. The decoder is a port of pret/pokered's
-`home/uncompress.asm`; Mew is read from its own header at `0x0425B`, outside the base-stats table.
-
-0.3.4 narrowed per-entry save states to eight event types; this removes them. The rewind they
-powered is refused on any adventure that has completed a trade, because the button requires no
-trade barrier and every earlier checkpoint predates it — so two live adventures were holding
-456 MB of states for a button that could not appear. Recovery is already covered by twenty
-rotating autosaves, the League entry checkpoint and the before-stall checkpoint, all bounded.
-
-There is no database change, no policy state change, and no migration. Existing checkpoints
-resume untouched, and journal entries written earlier keep the states they have.
+There is no database change, no policy state change, and no migration. The stopped-adventure
+page's static whitelist now serves `panel.css`, `panel.js` and `panel-trading.css` in place of
+the deleted sheets.
 
 ## What was verified
 
-All 151 portraits decoded from a real Red cartridge match pret/pokered's reference art **pixel
-for pixel** at the pinned revision, Mew included; the suite asserts this wherever a ROM and a
-reference checkout are both present, and skips otherwise. Installing a ROM over an existing
-hand-placed portrait leaves that file untouched. The suite is 1,306 tests.
-
-Carried over: a mature save replayed 900,014 frames with no rewinds and no errors, and the
-Pokédex masking from 0.3.1 checked against 54 real checkpoints across 27 adventures.
+The suite is 1,311 tests, plus 18 browser tests. The live-page browser test asserts, at 1280,
+900, 390 and 320px, that the screen and the last bay end on the same pixel side by side, and
+that the plan spans the full width under both. A Playwright sweep of twelve pages at
+1440/390/320 in both themes found no horizontal overflow, console errors or failed requests,
+and an alignment audit at 1440/1024/390 found no uneven rows or truncated text.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64 Docker image and
 Compose configuration. The `pokesim-desktop` Python command opens the Library in your browser.
-Standalone executable bundles are no longer built.
 
 Publication is gated on Python and browser regression checks, clean package identities, Docker
 lifecycle checks, and isolated native Python installations on Windows x86-64, Intel macOS, Apple

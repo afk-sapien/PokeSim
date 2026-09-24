@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.3.6
+
+- Every page moves onto one instrument-panel design: shared tokens, one component sheet and a
+  light and a dark theme. Six drifting stylesheets are gone.
+- Boxes line up. The live screen and the six party bays end on the same line and the plan spans
+  the page; settings panels, library cards, journal entries and the PC's box list are sized to
+  their neighbours.
+- Portraits scale by whole pixels everywhere, from one shared scaler.
+
 ## 0.3.5
 
 - Read the 151 front portraits out of your own cartridge. Adding a ROM now decodes every front
