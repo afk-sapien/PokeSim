@@ -7,7 +7,7 @@ from importlib.metadata import version
 import io
 from pathlib import Path
 
-from .cable_metadata import ADAPTER_ID, BUILDS
+from .cable_metadata import BUILDS
 
 
 class CableError(RuntimeError):

@@ -256,7 +256,7 @@ def test_strength_is_only_used_when_a_boulder_push_is_actually_planned():
 
     # No push available: the run must not sit in the Strength menu.
     with patch.object(type(p.boulders), 'route', return_value=None):
-        action = p.step(PolicyContext(s, 0, 0, memory))[0]
+        p.step(PolicyContext(s, 0, 0, memory))
     assert p.mode != 'using Strength'
 
     # A push is available: Strength is activated so the boulder can be moved.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pokesim"
-version = "0.3.7"
+version = "0.3.8"
 description = "One application for autonomous Pokémon Red and Blue adventures with live views and cable trading"
 readme = "README.md"
 license = "MIT"
@@ -44,3 +44,15 @@ pokesim = ["web/static/*", "web/static/fonts/*", "broker/static/*", "_build.json
 
 [tool.setuptools.packages.find]
 include = ["pokesim*"]
+
+[tool.ruff]
+line-length = 130
+extend-exclude = [".reference", "build"]
+
+[tool.ruff.lint]
+# Pyflakes and syntax errors: the checks that find real mistakes without restyling the code.
+select = ["E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest fixtures are imported and then named as test parameters.
+"tests/*" = ["F811", "F401"]

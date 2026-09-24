@@ -2,7 +2,6 @@
 import hashlib
 import json
 import sqlite3
-from pathlib import Path
 
 from . import boxes, pair
 from .pair import verified

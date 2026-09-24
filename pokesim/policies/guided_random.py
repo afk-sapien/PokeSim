@@ -35,7 +35,6 @@ class GuidedRandomPolicy(Policy):
 
     def _walk(self, ctx: PolicyContext) -> list[Action]:
         r = self.rng
-        s = ctx.snapshot
         if ctx.stuck_seconds > 60:
             # try harder to leave: long holds in fresh directions, close whatever might be open
             self.mode = "unstick"

@@ -11,7 +11,11 @@ local checks, copied-save comparisons, and their limits.
 uv run --locked --extra dev pytest --ignore=tests/test_rom.py -q
 uv run --locked python tools/check_web.py
 uv run --locked python tools/check_docs.py
+uvx ruff==0.16.9 check pokesim tests tools
 ```
+
+Ruff runs the Pyflakes checks only: unused names, undefined names and names used before
+they are assigned. It does not restyle the code.
 
 The default suite skips the opt-in real-browser tests. The Node tests check isolated
 browser logic. Lifecycle tests cover final-save failure, startup cleanup, process locks,

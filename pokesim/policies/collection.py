@@ -1,12 +1,10 @@
 """Bounded collecting expeditions and evolution projects for a continuing adventure."""
-import json
 import time
 from collections import Counter
 from dataclasses import asdict
 from ..duplicates import quality, dv_quality
 from functools import lru_cache
 from ..game_data import load
-from pathlib import Path
 
 from .progression import GRASS_TILES, Goal, object_goal, at
 from .navigation import DIRS
@@ -560,7 +558,6 @@ class Collection:
         if self.completed_champion:
             counts = Counter(sid for sid, level, box in held)
             individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
-            identities = Counter(identity(mon) for mon in individuals)
             preferences = self.trade_preferences()
             for mon in individuals:
                 sid, level, box = mon['species'], mon['level'], mon.get('box')

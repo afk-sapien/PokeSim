@@ -6,8 +6,7 @@ against the community RAM map and verified in-emulator (see tests/).
 from __future__ import annotations
 
 from .game_data import load
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
+from dataclasses import asdict, dataclass
 
 TABLES = load("tables.json")
 MAP_NAMES = {int(k): v for k, v in TABLES["maps"].items()}

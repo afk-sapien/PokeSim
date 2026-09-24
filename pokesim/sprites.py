@@ -11,7 +11,6 @@ was squeezed into 300 bytes of leftover space late in development.
 """
 from __future__ import annotations
 
-import io
 import zlib
 
 BASE_STATS = 0x383DE

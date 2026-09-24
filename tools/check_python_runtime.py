@@ -1,5 +1,4 @@
 """Check installed Python workers and real child-process supervision using PyBoy's demo."""
-import json
 from pathlib import Path
 import secrets
 import sys

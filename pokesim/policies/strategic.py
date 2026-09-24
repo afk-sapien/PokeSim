@@ -4,8 +4,7 @@ from dataclasses import asdict
 
 from .base import Action, Policy
 from .battle import (BALLS, CURES, HEALING, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
-                     healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, shopping_item,
-                     useful_capture)
+                     healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .pickups import Pickups

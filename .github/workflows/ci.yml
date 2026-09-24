@@ -24,6 +24,15 @@ jobs:
         run: uv export --locked --no-dev --no-emit-project --format requirements-txt --output-file runtime-requirements.txt
       - name: Check runtime dependency advisories
         run: uvx pip-audit==2.10.1 --require-hashes --disable-pip -r runtime-requirements.txt
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
+        with:
+          version: '0.12.17'
+      - run: uvx ruff==0.16.9 check pokesim tests tools
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20

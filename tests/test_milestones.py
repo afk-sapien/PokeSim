@@ -207,8 +207,8 @@ def test_perfect_duplicates_are_neither_released_nor_traded_even_when_offered():
     s = snapshot([perfect, replace(perfect, position=1)], party=(partner(1, 99),))
     assert release_target(s) is None
     payload = live_status(s.to_dict())
-    for mon in payload['storage']['pokemon']:
-        mon['trade_preference'] = 'offered'
+    for entry in payload['storage']['pokemon']:
+        entry['trade_preference'] = 'offered'
     inv = normalise('red', '', payload)
     assert not offers(inv, allow_last_copies=True)
     assert all(not row['listed'] and 'Perfect DV' in row['reason'] for row in listings(inv) if row['box'])

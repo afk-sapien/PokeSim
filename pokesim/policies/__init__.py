@@ -4,6 +4,7 @@ from .smart_random import SmartRandomPolicy
 from .strategic import StrategicPolicy
 
 POLICIES = {"guided_random": GuidedRandomPolicy, "smart_random": SmartRandomPolicy, "strategic": StrategicPolicy}
+__all__ = ["Action", "Policy", "PolicyContext", "POLICIES", "make_policy"]
 
 
 def make_policy(name: str, seed=None) -> Policy:

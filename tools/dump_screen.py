@@ -46,7 +46,6 @@ press("a", 8, 30); print("=== after A (move menu?) ===\n" + screen_text(pb.memor
 press("b", 8, 30); press("down", 8, 30); press("a", 8, 30); print("=== ITEM menu ===\n" + screen_text(pb.memory))
 press("b", 8, 30); press("right", 8, 30); press("a", 8, 30); print("=== PKMN menu ===\n" + screen_text(pb.memory))
 press("b", 8, 30); press("b", 8, 30); print("=== back ===\n" + screen_text(pb.memory)[-120:])
-import struct
 m = pb.memory
 print("wCurrentMenuItem CC26=", m[0xCC26], "wMaxMenuItem CC28=", m[0xCC28], "wMenuWatchedKeys CC29=", m[0xCC29], "wTopMenuItemY CC24=", m[0xCC24], "X CC25=", m[0xCC25])
 print("enemy hp", (m[0xCFE6]<<8)|m[0xCFE7], "/", (m[0xCFF4]<<8)|m[0xCFF5], "options D355=", hex(m[0xD355]))

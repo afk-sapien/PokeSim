@@ -3,9 +3,7 @@
 Usage: python -m pokesim.prepare_data /path/to/pokered
 Only map geometry and game constants are exported, never ROM images.
 """
-import json
 import re
-from pathlib import Path
 
 
 def generate(src, revision):

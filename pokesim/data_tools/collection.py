@@ -1,8 +1,5 @@
 """Build version-specific collection sources from the pret/pokered checkout."""
-import json
 import re
-import sys
-from pathlib import Path
 
 
 def version_text(text, version):

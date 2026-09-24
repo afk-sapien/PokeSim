@@ -107,7 +107,7 @@ def main():
         def proxy_state():
             with request('/api/state') as response:
                 return json.load(response)
-        state = healthy(proxy_state)
+        healthy(proxy_state)
         report['checks']['tls_verified'] = True
         protected = ['/', '/api/state', '/api/control', '/stream', '/frame.jpg', '/feed.xml', '/shots/1.png', '/healthz']
         for path in protected:

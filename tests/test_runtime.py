@@ -82,7 +82,6 @@ def test_runtime_call_runs_on_emulator_thread_and_reports_exceptions():
     from pokesim.emulator import Emulator
     emu = object.__new__(Emulator)
     emu.commands = queue.Queue()
-    received = []
 
     def run():
         for _ in range(2):

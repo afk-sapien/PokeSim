@@ -3,7 +3,6 @@
 Usage: python -m pokesim.prepare_data <dir containing map_constants.asm, pokemon_constants.asm, item_constants.asm>
 """
 import re
-from pathlib import Path
 
 
 def pretty(name: str) -> str:

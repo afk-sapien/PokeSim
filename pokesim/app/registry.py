@@ -138,7 +138,7 @@ class Registry:
 
     def request_lifecycle(self, aid, action, request_id):
         validate_id(request_id)
-        adventure = self.adventure(aid)
+        self.adventure(aid)  # an unknown adventure raises KeyError here
         if action not in {'start', 'stop'}:
             raise ValueError('Unknown lifecycle action')
         fingerprint = digest({'adventure_id': aid, 'action': action})

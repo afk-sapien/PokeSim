@@ -1,6 +1,5 @@
 """Versioned constants generated from the Pokémon Red disassembly."""
 from .game_data import load
-from pathlib import Path
 
 DATA = load("strategy.json")
 MOVES = {int(k): v for k, v in DATA["moves"].items()}

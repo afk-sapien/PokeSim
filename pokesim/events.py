@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from .game_data import load
 from .ground_items import ground_item
 from .strategy_data import DATA as STRATEGY_DATA, WORLD
-from pathlib import Path
 from typing import Callable
 
 from .ram import (BADGES, DEX_NAMES, HALL_OF_FAME_MAP, ITEM_NAMES, KEY_ITEM_IDS, LEADERS, NOTABLE_TRAINERS,
