@@ -12,6 +12,7 @@
 <meta name="description" content="Browse species, learn their moves, and find where to meet them.">
 <title>The Kanto Pokédex. · pokesim</title>
 <link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=panel-8">
 <link rel="stylesheet" href="${game_base}/static/panel-pokedex.css?v=panel-1">
@@ -22,7 +23,7 @@
 
 <header class="rail">
 <div class="shell rail-inner">
-<a class="brandplate" href="${game_base}/" aria-label="pokesim home"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model" id="app-version"></span></span></a>
+<a class="brandplate" href="${game_base}/" aria-label="pokesim home"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model" id="app-version">${app_version}</span></span></a>
 ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a><a href="${game_base}/pokedex" aria-current="page">Pokédex</a><a href="${game_base}/pc">PC</a><a href="${game_base}/trading">Trading</a><a href="${game_base}/journal">Journal</a></nav>
 <span class="connection" id="connection"><i class="lamp" aria-hidden="true"></i><span id="status">Connecting</span></span>
 </div>
@@ -37,7 +38,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <section class="bank" aria-label="Pokédex progress">
 <div class="bank-cell"><span class="micro">Registered</span><strong class="readout" id="sum-owned">0<span class="unit">/151</span></strong><span class="meter" id="owned-cells" data-level="ok" aria-hidden="true"></span><progress class="vh" id="owned-meter" max="151" value="0" aria-label="Pokémon registered"></progress></div>
 <div class="bank-cell"><span class="micro">Seen</span><strong class="readout" id="sum-seen">0<span class="unit">/151</span></strong><span class="meter" id="seen-cells" data-level="signal" aria-hidden="true"></span><progress class="vh" id="seen-meter" max="151" value="0" aria-label="Pokémon seen"></progress></div>
-<div class="bank-cell"><span class="micro" id="sum-caught-label">Catches tracked</span><strong class="readout" id="sum-caught">0</strong><span class="bank-note">Details under About these counts</span></div>
+<div class="bank-cell"><span class="micro" id="sum-caught-label">Catches tracked</span><strong class="readout" id="sum-caught">0</strong><span class="bank-note" id="sum-caught-note">Since tracking began</span></div>
 <div class="bank-cell"><span class="micro">Level 100</span><strong class="readout" id="sum-maxed">0<span class="unit">/151</span></strong><span class="meter" id="maxed-cells" data-level="warn" aria-hidden="true"></span><progress class="vh" id="maxed-meter" max="151" value="0" aria-label="Pokédex level 100 milestones"></progress></div>
 <div class="bank-cell"><span class="micro">Perfect finds</span><strong class="readout" id="sum-perfect">0</strong><span class="bank-note">Every DV at 15</span></div>
 </section>

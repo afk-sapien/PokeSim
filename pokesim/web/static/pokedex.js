@@ -8,7 +8,7 @@ const typeTags = (types) => types.map((type) => `<span class="tag type-${typeCla
 const MAX_STAT = 190
 const STAT_CELLS = 19
 const BANK_CELLS = 20
-const RECORD_LABELS = {caught: 'In Pokédex', seen: 'Seen', unseen: 'Not encountered'}
+const RECORD_LABELS = {caught: 'In Pokédex', seen: 'Seen', unseen: 'Unseen'}
 const RECORD_LAMPS = {caught: 'ok', seen: 'signal', unseen: ''}
 const cells = (on, total) => Array.from({length: total}, (_, i) => i < on ? '<i class="on"></i>' : '<i></i>').join('')
 const outOf = (n) => `${n}<span class="unit">/151</span>`
@@ -93,7 +93,10 @@ function renderGrid() {
     const caught = caughtCount(entry.dex)
     const counts = `${caught === null ? 'Catch count unavailable' : `Caught ${caught}`} · Have ${copies?.length || 0}`
     return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${maxed.has(entry.dex) ? ', level 100 reached' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}, ${counts}" aria-describedby="catch-tracking-note">
-      <span class="dex-top"><span class="dex-num">${num(entry.dex)}</span>${entry.dex === hunting ? '<span class="tag tag--crit hunt-flag" title="The current expedition">Hunting</span>' : ''}<span class="card-note"><i class="lamp"${RECORD_LAMPS[state] ? ` data-on="${RECORD_LAMPS[state]}"` : ''} aria-hidden="true"></i>${esc(note)}</span></span>
+      <span class="dex-top"><span class="dex-num">${num(entry.dex)}</span>${entry.dex === hunting
+        // The hunt flag takes the note's place, so the head stays one line.
+        ? '<span class="tag tag--crit hunt-flag" title="The current expedition">Hunting</span>'
+        : `<span class="card-note"><i class="lamp"${RECORD_LAMPS[state] ? ` data-on="${RECORD_LAMPS[state]}"` : ''} aria-hidden="true"></i>${esc(note)}</span>`}</span>
       <span class="plate plate--card"><img loading="lazy" src="${PokeSim.base}/sprites/${entry.dex}.png" alt="" width="56" height="56"></span>
       <span class="dex-body"><strong class="dex-name">${esc(entry.name)}</strong><span class="card-types">${typeTags(entry.types)}</span>${milestoneBadges(entry.dex)}</span>
       <span class="card-counts">${counts}</span>
@@ -223,11 +226,15 @@ async function loadReference() {
   $('#type-filter').innerHTML = '<option value="all">Every type</option>' + types.map((type) => `<option value="${esc(type)}">${esc(type)}</option>`).join('')
 }
 
-async function refreshStatus() {
+async function fetchStatus() {
+  const response = await PokeSim.fetch('/api/pokedex/status', {cache: 'no-store'})
+  if (!response.ok) throw new Error('Unavailable')
+  return response.json()
+}
+
+async function refreshStatus(pending = fetchStatus()) {
   try {
-    const response = await PokeSim.fetch('/api/pokedex/status', {cache: 'no-store'})
-    if (!response.ok) throw new Error('Unavailable')
-    const status = await response.json()
+    const status = await pending
     catches = status.catches || null
     const goals = status.milestones || {}
     maxed = new Set(goals.level_100 || [])
@@ -243,12 +250,14 @@ async function refreshStatus() {
     plan = new Map((status.plan || []).map((row) => [row.dex, row]))
     hunting = (status.plan || []).find((row) => row.species === status.hunting)?.dex ?? null
     $('#connection').classList.remove('is-offline')
-    $('#status').textContent = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
+    $('#status').textContent = status.started ? 'Running' : 'Waiting'
+    $('#connection').title = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
     $('#sum-owned').innerHTML = outOf(owned.size)
     $('#sum-seen').innerHTML = outOf(seen.size)
     $('#sum-caught').textContent = catchesAvailable() ? count(catches.total) : 'Unavailable'
     $('#sum-caught').classList[catchesAvailable() ? 'remove' : 'add']('is-word')
     $('#sum-caught-label').textContent = catches?.complete_history ? 'Total caught' : 'Catches tracked'
+    $('#sum-caught-note').textContent = !catchesAvailable() ? 'Not tracked for this game' : catches?.complete_history ? 'Every catch this run' : 'Since tracking began'
     $('#catch-tracking-note').textContent = trackingNote()
     $('#owned-meter').value = owned.size
     $('#seen-meter').value = seen.size
@@ -260,6 +269,7 @@ async function refreshStatus() {
   } catch (_) {
     $('#connection').classList.add('is-offline')
     $('#status').textContent = 'Reconnecting…'
+    $('#connection').title = ''
   }
 }
 
@@ -290,13 +300,16 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowRight') step(1)
 })
 
+// One status request serves both the first paint and the grid once the reference lands.
+const firstStatus = fetchStatus()
+firstStatus.catch(() => {})
 loadReference().then(() => {
   renderGrid()
-  refreshStatus()
+  refreshStatus(firstStatus)
   const requested = Number(location.hash.replace('#', ''))
   if (requested >= 1 && requested <= 151) renderDetail(requested)
 }).catch(() => {
   $('#grid').innerHTML = '<p class="dex-empty">The Pokédex data could not be loaded. Refresh to try again.</p>'
 })
-refreshStatus()
+refreshStatus(firstStatus)
 setInterval(() => { if (!document.hidden) refreshStatus() }, 12000)

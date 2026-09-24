@@ -184,13 +184,13 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
-  flex-wrap: wrap;
-  row-gap: var(--s1);
   min-height: 36px;
+  white-space: nowrap;
   padding: var(--s2) var(--s3);
   border-bottom: var(--hair) solid var(--rule-faint);
 }
 .dex-num { font: var(--f-legend) / 1 var(--font-panel); letter-spacing: 0.06em; color: var(--ink-2); }
+.hunt-flag { margin-left: auto; }
 .card-note {
   display: inline-flex;
   align-items: center;
@@ -253,7 +253,7 @@
   right: 0;
   bottom: 0;
   z-index: 30;
-  width: min(600px, 100vw);
+  width: min(600px, 100%);
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--panel);
@@ -449,7 +449,7 @@
   .dex-body { padding: var(--s2); }
   .card-counts { padding: var(--s2); }
 
-  .detail-panel { width: 100vw; border-left: 0; box-shadow: none; }
+  .detail-panel { width: 100%; border-left: 0; box-shadow: none; }
   .detail-nav { padding: var(--s2) var(--s3); }
   .detail-hint { visibility: hidden; }
   #detail-body { padding: 0 var(--s3) var(--s6); }

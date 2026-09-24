@@ -23,6 +23,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.background import BackgroundTask
 
 from ..checkpoints import CheckpointStore
@@ -190,6 +191,31 @@ async def json_body(request, limit=65536):
     return value
 
 
+GAME_ASSET = re.compile(r'/games/[A-Za-z0-9_-]+/(static|sprites|shots)/')
+
+
+def cache_policy(path, query, content_type):
+    """How long a browser may reuse a response without asking again.
+
+    Pages reference their stylesheets and scripts with a ?v= stamp that changes with
+    the file, so those never need a round trip. Everything live stays uncached.
+    """
+    game = GAME_ASSET.match(path)
+    kind = game[1] if game else ('static' if path.startswith('/static/') else None)
+    if kind == 'static':
+        if 'v=' in query:
+            return 'public, max-age=31536000, immutable'
+        if path.endswith('.woff2'):
+            return 'public, max-age=604800'
+        return 'no-cache'
+    if kind == 'sprites' and content_type.startswith('image/png'):
+        return 'private, max-age=86400'
+    if kind == 'shots':
+        # Event numbers can be reused after a rollback, so ask before reusing a shot.
+        return 'private, no-cache'
+    return 'no-store'
+
+
 def create_app(manager, shutdown=lambda: None):
     @asynccontextmanager
     async def lifespan(app):
@@ -204,9 +230,14 @@ def create_app(manager, shutdown=lambda: None):
             if manager.tasks:
                 await asyncio.gather(*list(manager.tasks), return_exceptions=True)
             await asyncio.to_thread(manager.close)
+            if app.state.children is not None:
+                await app.state.children.aclose()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.manager = manager
+    # One pooled client for every proxied game request. Building a client loads a TLS
+    # context, which alone cost 20 to 60 ms a request, and a fresh one reconnects each time.
+    app.state.children = None
 
     @app.exception_handler(ValueError)
     async def invalid(request, error):
@@ -238,9 +269,14 @@ def create_app(manager, shutdown=lambda: None):
                 return JSONResponse({'detail': 'Reload this page before making changes'}, status_code=403)
         response = await call_next(request)
         protect_response(response)
-        if not request.url.path.startswith('/static/'):
-            response.headers['Cache-Control'] = 'no-store'
+        response.headers['Cache-Control'] = cache_policy(
+            request.url.path, request.url.query, response.headers.get('content-type', ''))
         return response
+
+    # Compress text on the way out. Frames and portraits are already compressed, and
+    # the live stream must reach the browser frame by frame.
+    app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6,
+                       exclude_content_types=(*DEFAULT_EXCLUDED_CONTENT_TYPES, 'multipart/x-mixed-replace'))
 
     app.mount('/static', StaticFiles(directory=STATIC), name='static')
 
@@ -548,7 +584,11 @@ def create_app(manager, shutdown=lambda: None):
         body = bytes(body)
         if request.method == 'POST' and manager.coordinator.reserved(aid):
             raise HTTPException(409, 'A trade holds this adventure')
-        client = httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(20, read=30))
+        if app.state.children is None:
+            app.state.children = httpx.AsyncClient(
+                trust_env=False, timeout=httpx.Timeout(20, read=30),
+                limits=httpx.Limits(max_connections=None, max_keepalive_connections=32))
+        client = app.state.children
         target = httpx.URL(child.url).copy_with(path='/' + path, query=request.scope['query_string'])
         headers = {'Authorization': 'Bearer ' + child.token}
         if request.headers.get('content-type'):
@@ -556,7 +596,6 @@ def create_app(manager, shutdown=lambda: None):
         try:
             response = await client.send(client.build_request(request.method, target, content=body, headers=headers), stream=True)
         except httpx.HTTPError as error:
-            await client.aclose()
             raise HTTPException(503, 'The adventure is reconnecting') from error
         async def stream():
             # Decode here rather than forwarding raw bytes: `content-encoding` is not one of
@@ -567,7 +606,6 @@ def create_app(manager, shutdown=lambda: None):
                     yield chunk
             finally:
                 await response.aclose()
-                await client.aclose()
         safe_headers = {key: value for key, value in response.headers.items()
                         if key.lower() in {'content-type', 'cache-control', 'location'}}
         return StreamingResponse(stream(), status_code=response.status_code, headers=safe_headers)
@@ -619,6 +657,9 @@ def main(argv=None):
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         else:
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Accepted sockets inherit this. Without it every response on a reused
+        # connection waits out a 40 ms delayed acknowledgement before its body is sent.
+        listener.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         listener.bind((host, port))
         listener.listen(128)
         actual_port = listener.getsockname()[1]

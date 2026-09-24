@@ -53,6 +53,7 @@
       const data = await response.json()
       if (data.adventure.id !== PokeSim.adventureId) throw new Error('Wrong adventure')
       $('#status').textContent = 'Connected'
+      $('#connection').title = ''
       $('#connection').classList.toggle('is-offline', false)
       $('#trade-connection-note').hidden = true
       const running = data.adventure.state === 'running' && !data.adventure.archived
@@ -75,6 +76,7 @@
       globalThis.Panel?.fitSprites?.(document)
     } catch (_) {
       $('#status').textContent = 'Reconnecting…'
+      $('#connection').title = ''
       $('#connection').classList.toggle('is-offline', true)
       setLamp('crit')
       $('#trade-connection-note').textContent = 'This adventure’s trading updates are reconnecting. Any displayed history is from the last successful update.'

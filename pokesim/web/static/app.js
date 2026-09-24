@@ -179,7 +179,8 @@ async function refreshState() {
     set('#control-hint', 'textContent', manualMode ? 'Play at normal speed. Let AI play when you’re ready to hand it back.' : 'Press any game control to pause the AI and take over.')
     $('#connection').classList.toggle('is-paused', paused)
     $('#connection').classList.remove('is-offline')
-    set('#status', 'textContent', manualMode ? 'You’re in control' : paused ? 'Game frozen' : 'Adventure in progress')
+    set('#status', 'textContent', manualMode ? 'In control' : paused ? 'Frozen' : 'Running')
+    $('#connection').title = manualMode ? 'You’re in control' : paused ? 'Game frozen' : 'Adventure in progress'
     set('#pause', 'textContent', paused && !manualMode ? 'Unfreeze' : 'Freeze')
     const progress = state.progress
     const strategy = state.strategy
@@ -220,6 +221,7 @@ async function refreshState() {
     renderParty(game.party)
   } catch (_) {
     set('#status', 'textContent', 'Reconnecting…')
+    $('#connection').title = ''
     $('#connection').classList.add('is-offline')
   } finally {
     stateBusy = false
@@ -237,7 +239,7 @@ function renderEvents() {
     const picture = event.shot
       ? `<img loading="lazy" src="${PokeSim.base}/shots/${encodeURIComponent(event.shot)}" alt="Game screen at ${esc(event.title)}" width="160" height="144">`
       : tradeArt(event) || '<span class="no-frame">No screen kept</span>'
-    return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-time"><i class="lamp"${lamp} aria-hidden="true"></i><time datetime="${date.toISOString()}"><span class="day">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</span><span class="clock">${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</span></time></div><div class="event-picture${event.shot ? '' : ' is-art'}">${picture}</div><div class="event-copy"><span class="event-label">${EVENT_LABELS[event.type] || 'FROM THE JOURNAL'}</span><h3>${esc(event.title)}</h3><span class="event-where">${esc(event.map)}</span></div><span class="event-go" aria-hidden="true">↗</span></a>`
+    return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-time"><i class="lamp"${lamp} aria-hidden="true"></i><time datetime="${date.toISOString()}"><span class="day">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</span><span class="clock">${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</span></time></div><div class="event-picture${event.shot ? '' : ' is-art'}">${picture}</div><div class="event-copy"><span class="event-label">${EVENT_LABELS[event.type] || 'FROM THE JOURNAL'}</span><h3>${esc(event.title)}</h3>${event.map && !String(event.title).toLowerCase().includes(String(event.map).toLowerCase()) ? `<span class="event-where">${esc(event.map)}</span>` : ''}</div><span class="event-go" aria-hidden="true">↗</span></a>`
   }).join('') || '<div class="journal-empty"><p class="micro">Nothing logged yet</p><h3>The best pages are still unwritten.</h3><p>New moments will find their way here as the adventure unfolds.</p></div>'
   set('#load-more', 'hidden', !moreAvailable || !eventRows.length)
 }

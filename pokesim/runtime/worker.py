@@ -144,6 +144,8 @@ def serve(bootstrap, parent_stream, ready_stream):
         from .participant import install
         install(app, runtime)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            # Accepted sockets inherit this; see the manager's listener.
+            listener.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             listener.bind(('127.0.0.1', 0))
             listener.listen(128)
             port = listener.getsockname()[1]

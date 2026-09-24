@@ -27,7 +27,10 @@
 *::before,
 *::after { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+/* Reserve the scrollbar's track on every page, so a page that grows past the
+   window once its data arrives, or a short page next to a long one, keeps the
+   same width and nothing slides sideways. */
+html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; }
 
 body {
   margin: 0;
@@ -75,7 +78,9 @@ a:hover { text-decoration-thickness: 2px; }
   margin: 0 auto;
   padding-inline: var(--s6);
 }
-main.shell { flex: 1 0 auto; padding-bottom: var(--s6); }
+/* At least a window tall, so the footer starts below the fold instead of
+   painting at the bottom of the empty page and being pushed away by the data. */
+main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
 
 .vh {
   position: absolute;
@@ -315,57 +320,68 @@ main.shell { flex: 1 0 auto; padding-bottom: var(--s6); }
 }
 .brandplate .model:empty { display: none; }
 
-/* The managed app's trail, "Library > adventure", as a stamped label and a
-   recessed slot. Absent entirely in standalone mode, and the rail closes up. */
+/* The managed app's trail, "Library > adventure", set like the brandplate: a
+   small stamped way back above the adventure's name, which is itself the
+   switcher. Absent entirely in standalone mode, and the rail closes up. */
 .breadcrumb {
   display: flex;
-  align-items: center;
-  gap: var(--s2);
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s1);
+  flex: none;
   min-width: 0;
   padding-left: var(--s5);
   border-left: var(--hair) solid var(--rule-faint);
 }
 .breadcrumb > a {
+  align-self: flex-start;
   font: var(--f-micro) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
   text-transform: uppercase;
-  color: var(--ink-2);
+  color: var(--ink-3);
+  text-decoration: none;
 }
-.breadcrumb-mark { color: var(--ink-3); font: var(--f-micro) / 1 var(--font-mono); }
+.breadcrumb > a::before { content: "\2039\00a0"; }
+.breadcrumb > a:hover { color: var(--ink); text-decoration: none; }
+.breadcrumb-mark { display: none; }
 .adventure-switch {
   position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
-  background: var(--well);
-  border: var(--hair) solid var(--rule);
-  box-shadow: var(--well-inset);
 }
 .adventure-switch select {
   appearance: none;
   min-width: 0;
-  max-width: 280px;
-  height: 32px;
-  padding: 0 var(--s6) 0 var(--s3);
+  /* A fixed width: a select sizes to its longest option, which would widen it
+     once routes.js lists the other adventures. */
+  width: 13rem;
+  height: 22px;
+  margin-left: calc(-1 * var(--s2));
+  padding: 0 var(--s5) 0 var(--s2);
   background: none;
-  border: 0;
-  font: var(--f-label) / 1 var(--font-mono);
-  letter-spacing: 0.04em;
+  border: var(--hair) solid transparent;
+  font: var(--f-legend) / 1 var(--font-panel);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--ink);
   cursor: pointer;
+  transition: background var(--t), border-color var(--t);
 }
+.adventure-switch select:hover { background: var(--panel); border-color: var(--rule-faint); }
+.adventure-switch select option { font: var(--f-label) / 1.4 var(--font-mono); text-transform: none; }
 .adventure-switch::after {
   content: "\25BC";
   position: absolute;
-  right: var(--s3);
+  right: var(--s2);
   font: 8px / 1 var(--font-panel);
   color: var(--ink-3);
   pointer-events: none;
 }
 
-.rail nav {
+.rail nav:not(.breadcrumb) {
   display: flex;
   align-items: stretch;
   margin-left: auto;
@@ -373,8 +389,8 @@ main.shell { flex: 1 0 auto; padding-bottom: var(--s6); }
   overflow-x: auto;
   scrollbar-width: none;
 }
-.rail nav::-webkit-scrollbar { display: none; }
-.rail nav a {
+.rail nav:not(.breadcrumb)::-webkit-scrollbar { display: none; }
+.rail nav:not(.breadcrumb) a {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -387,11 +403,11 @@ main.shell { flex: 1 0 auto; padding-bottom: var(--s6); }
   text-decoration: none;
   transition: background var(--t), color var(--t);
 }
-.rail nav a:last-child { border-right: var(--hair) solid var(--rule-faint); }
-.rail nav a:hover { background: var(--panel); color: var(--ink); }
+.rail nav:not(.breadcrumb) a:last-child { border-right: var(--hair) solid var(--rule-faint); }
+.rail nav:not(.breadcrumb) a:hover { background: var(--panel); color: var(--ink); }
 /* The current tab is a depressed key with a lit strip under it: inset as well
    as coloured, and it carries aria-current. */
-.rail nav a[aria-current] {
+.rail nav:not(.breadcrumb) a[aria-current] {
   background: var(--well);
   color: var(--ink);
   box-shadow: inset 0 -3px 0 var(--signal), inset 1px 1px 0 var(--bevel-lo);
@@ -407,6 +423,10 @@ main.shell { flex: 1 0 auto; padding-bottom: var(--s6); }
   text-transform: uppercase;
   color: var(--ink-2);
   white-space: nowrap;
+  /* One slot for every state, from Live to Reconnecting…, so the tabs beside it
+     never move when the status changes. */
+  width: 120px;
+  justify-content: flex-end;
 }
 /* app.js only toggles a class; the lamp colour follows it. */
 .connection .lamp { background: var(--ok-lamp); box-shadow: inset 0 0 0 1px var(--rule), 0 0 6px -1px var(--ok-lamp); }
@@ -426,7 +446,8 @@ main.shell { flex: 1 0 auto; padding-bottom: var(--s6); }
 .identity .who { min-width: 0; }
 .identity h1 {
   margin-top: var(--s2);
-  font: var(--f-title) / 1 var(--font-panel);
+  /* A touch of leading, so a title that wraps on a phone does not touch itself. */
+  font: var(--f-title) / 1.1 var(--font-panel);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   overflow-wrap: anywhere;
@@ -935,7 +956,7 @@ main.shell { flex: 1 0 auto; padding-bottom: var(--s6); }
    ========================================================================== */
 
 .partner-detail {
-  width: min(560px, calc(100vw - 2 * var(--s4)));
+  width: min(560px, calc(100% - 2 * var(--s4)));
   max-height: calc(100vh - 2 * var(--s6));
   padding: 0;
   background: var(--panel);
@@ -979,7 +1000,7 @@ main.shell { flex: 1 0 auto; padding-bottom: var(--s6); }
   bottom: var(--s5);
   z-index: 50;
   transform: translateX(-50%);
-  max-width: calc(100vw - 2 * var(--s4));
+  max-width: calc(100% - 2 * var(--s4));
   padding: var(--s3) var(--s4);
   background: var(--panel);
   border: var(--hair) solid var(--rule);
@@ -1029,15 +1050,15 @@ main.shell { flex: 1 0 auto; padding-bottom: var(--s6); }
   .shell { padding-inline: var(--s5); }
 
   .rail-inner { flex-wrap: wrap; column-gap: var(--s4); }
-  .rail nav {
+  .rail nav:not(.breadcrumb) {
     order: 3;
     width: 100%;
     margin-left: 0;
     border-top: var(--hair) solid var(--rule-faint);
   }
-  .rail nav a { flex: 1 0 auto; justify-content: center; min-height: 44px; }
-  .rail nav a:first-child { border-left: 0; }
-  .rail nav a:last-child { border-right: 0; }
+  .rail nav:not(.breadcrumb) a { flex: 1 0 auto; justify-content: center; min-height: 44px; }
+  .rail nav:not(.breadcrumb) a:first-child { border-left: 0; }
+  .rail nav:not(.breadcrumb) a:last-child { border-right: 0; }
   .connection { margin-left: auto; }
 
   .brandplate { min-height: 56px; }
@@ -1075,16 +1096,19 @@ main.shell { flex: 1 0 auto; padding-bottom: var(--s6); }
      adventure slot scroll away and only the tab strip stays on screen. */
   .rail-inner { min-height: 0; row-gap: 0; }
   .brandplate { min-height: 52px; }
-  .breadcrumb { order: 2; width: 100%; padding: 0 0 var(--s3); border-left: 0; }
+  /* One line on a phone: the way back, then the switcher filling the rest as
+     a full-size touch target. */
+  .breadcrumb { order: 2; flex-direction: row; align-items: center; gap: var(--s3); width: 100%; padding: 0 0 var(--s2); border-left: 0; }
+  .breadcrumb > a { align-self: center; padding: var(--s3) 0; }
   .adventure-switch { flex: 1; }
-  .adventure-switch select { width: 100%; max-width: none; height: 40px; }
-  .rail nav {
+  .adventure-switch select { width: 100%; height: 40px; margin-left: 0; background: var(--well); border-color: var(--rule); box-shadow: var(--well-inset); }
+  .rail nav:not(.breadcrumb) {
     margin-inline: calc(-1 * var(--s4));
     width: calc(100% + 2 * var(--s4));
   }
   /* Five tabs in the display face need 380px; in the mono voice they fit a
      320px phone with room to spare, still as a full-height key each. */
-  .rail nav a {
+  .rail nav:not(.breadcrumb) a {
     flex: 1 1 0;
     padding: 0 var(--s1);
     font: var(--f-label) / 1 var(--font-mono);
@@ -1168,10 +1192,10 @@ main.shell { flex: 1 0 auto; padding-bottom: var(--s6); }
   .lamp[data-on]:not([data-on=""]) { background: Highlight; }
   .meter i.on { background: Highlight; }
   .meter i { background: Canvas; }
-  .rail nav a[aria-current] { box-shadow: none; outline: 2px solid Highlight; outline-offset: -2px; }
+  .rail nav:not(.breadcrumb) a[aria-current] { box-shadow: none; outline: 2px solid Highlight; outline-offset: -2px; }
 }
 
 /* A 320px phone: tighten the tab type so "Journal" is not cut off. */
 @media (max-width: 360px) {
-  .rail nav a { padding: 0 2px; letter-spacing: 0.01em; }
+  .rail nav:not(.breadcrumb) a { padding: 0 2px; letter-spacing: 0.01em; }
 }

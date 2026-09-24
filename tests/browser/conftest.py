@@ -87,8 +87,8 @@ class SyntheticEmulator:
                                  stored_pokemon=tuple((p.box, p.species, p.level, p.nick) for p in boxed),
                                  box_counts=(2,) + (0,) * 11)
         image = io.BytesIO()
-        Image.new('RGB', (160, 144), '#96ad84').save(image, 'JPEG')
-        self.frame_jpeg = image.getvalue()
+        Image.new('RGB', (160, 144), '#96ad84').save(image, 'PNG')
+        self.frame_image = image.getvalue()
         self.frame_seq = 1
         self.watched = 0
 
@@ -98,7 +98,7 @@ class SyntheticEmulator:
 
     def current_frame(self, timeout: float = 1.0) -> bytes:
         self.watch()
-        return self.frame_jpeg
+        return self.frame_image
 
     def status(self):
         return dict(game=self.snapshot.to_dict(), strategy={'collection': {'version': 'red'}},

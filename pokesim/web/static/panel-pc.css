@@ -43,11 +43,24 @@
   border: var(--hair) solid var(--rule);
   border-radius: 0;
   box-shadow: var(--well-inset);
-  font: 14px / 1 var(--font-mono);
+  appearance: none;
+  /* The same text face and caret as the Pokédex filters. */
+  font: var(--f-body) / 1 var(--font-text);
   color: var(--ink);
 }
-.field select { padding-right: var(--s2); cursor: pointer; }
 .field input::placeholder { color: var(--ink-3); }
+.select { position: relative; display: block; }
+.select select { padding-right: var(--s6); text-overflow: ellipsis; cursor: pointer; }
+.select::after {
+  content: "\25BC";
+  position: absolute;
+  top: 50%;
+  right: var(--s3);
+  transform: translateY(-50%);
+  font-size: 9px;
+  color: var(--ink-3);
+  pointer-events: none;
+}
 
 /* ---- summary and toolbar ----------------------------------------------- */
 .pc-summary .stat:last-child { justify-content: flex-end; }
@@ -266,7 +279,7 @@
 
 /* ---- detail dialog ----------------------------------------------------- */
 .pc-detail {
-  width: min(600px, calc(100vw - 2 * var(--s4)));
+  width: min(600px, calc(100% - 2 * var(--s4)));
   max-height: calc(100vh - 2 * var(--s6));
   padding: 0;
   background: var(--panel);
@@ -372,6 +385,9 @@
   .segmented button { flex: 1; }
 }
 @media (max-width: 640px) {
+  /* Stored and new catches share the first row; the view switch takes the second. */
+  .pc-summary .stat:first-child { grid-column: auto; }
+  .pc-summary .stat:nth-child(2) { border-top: 0; }
   .pc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pc-all-grid { grid-template-columns: minmax(0, 1fr); }
   .pc-toolbar { padding: var(--s3); }

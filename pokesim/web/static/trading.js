@@ -21,7 +21,8 @@ function head(title, count = '') {
 const fitSprites = (root) => globalThis.Panel?.fitSprites?.(root)
 function render(status) {
   if (!status) return
-  $('#status').textContent = status.connected ? 'Adventures connected' : 'Reconnecting…'
+  $('#status').textContent = status.connected ? 'Connected' : 'Reconnecting…'
+  $('#connection').title = status.connected ? 'Adventures connected' : ''
   $('#connection').classList.toggle('is-offline', !status.connected)
   const trading = status.trading || {}
   const lamp = $('#trade-lamp')

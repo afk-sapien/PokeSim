@@ -122,7 +122,8 @@
       cardSignatures.set(game.id, markup)
     }
     $('#empty').hidden = Boolean(visible.length)
-    $('#running-summary').textContent = `${adventures.filter(running).length} running · ${adventures.filter(game => !game.archived).length} adventures`
+    const kept = adventures.filter(game => !game.archived).length
+    $('#running-summary').textContent = `${adventures.filter(running).length} running · ${kept} ${kept === 1 ? 'adventure' : 'adventures'}`
     if (page === 'stopped') {
       const game = adventures.find(item => item.id === currentId)
       $('#stopped-title').textContent = game?.name || 'Adventure unavailable'
@@ -259,7 +260,7 @@
       if (page === 'notifications') renderNotifyAdventures()
       if (page === 'trading') await refreshTrades()
       connection('Connected', false)
-    } catch (error) { connection('Reconnecting', true)
+    } catch (error) { connection('Reconnecting…', true)
       notice(error.message, true) }
     finally { refreshing = false }
   }
@@ -399,7 +400,7 @@
       notice('')
       await enter()
     } catch (error) { $('#workspace').hidden = true
-      connection('Reconnecting', true)
+      connection('Reconnecting…', true)
       notice(error.message, true) }
     finally { connecting = false }
   }

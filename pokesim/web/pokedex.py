@@ -5,6 +5,7 @@ this reference with live Pokédex flags, the party, and the storage boxes.
 """
 from __future__ import annotations
 
+import json
 from functools import lru_cache
 from urllib.parse import quote
 
@@ -111,6 +112,12 @@ def reference(version: str = DEFAULT_VERSION) -> dict:
             "links": links(name, mon["dex"]),
         })
     return {"version": version, "count": len(entries), "entries": entries}
+
+
+@lru_cache(maxsize=len(VERSIONS) or 1)
+def reference_json(version: str = DEFAULT_VERSION) -> bytes:
+    """The reference encoded once. It never changes while the process runs."""
+    return json.dumps(reference(version), ensure_ascii=False, separators=(",", ":")).encode()
 
 
 # Cut and Strength partners live in reachable grass and caves. Every wild Surf partner is behind water.

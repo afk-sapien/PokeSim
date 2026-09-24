@@ -29,7 +29,7 @@
    -------------------------------------------------------------------------- */
 @font-face {
   font-family: "PokeSim Panel";
-  src: url("fonts/pokesim-panel.woff2") format("woff2");
+  src: url("fonts/pokesim-panel.woff2?v=2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: block;

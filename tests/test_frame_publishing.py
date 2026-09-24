@@ -56,7 +56,7 @@ def test_watching_lapses_after_the_grace_period():
 
 def test_current_frame_marks_interest_and_returns_the_latest():
     emu = emulator()
-    emu.frame_jpeg = b'jpeg'
+    emu.frame_image = b'jpeg'
     assert emu.current_frame() == b'jpeg'
     emu._tick(60)
     assert emu._publish_frame.call_count > 0

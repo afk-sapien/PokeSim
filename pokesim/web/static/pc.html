@@ -12,6 +12,7 @@
 <meta name="description" content="Explore your party and boxes and inspect each Pokémon’s natural potential and training.">
 <title>PC · pokesim</title>
 <link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=panel-8">
 <link rel="stylesheet" href="${game_base}/static/panel-pc.css?v=panel-4">
@@ -22,7 +23,7 @@
 
 <header class="rail">
 <div class="shell rail-inner">
-<a class="brandplate" href="${game_base}/" aria-label="pokesim home"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model" id="app-version"></span></span></a>
+<a class="brandplate" href="${game_base}/" aria-label="pokesim home"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model" id="app-version">${app_version}</span></span></a>
 ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a><a href="${game_base}/pokedex">Pokédex</a><a href="${game_base}/pc" aria-current="page">PC</a><a href="${game_base}/trading">Trading</a><a href="${game_base}/journal">Journal</a></nav>
 <span class="connection" id="connection"><i class="lamp" aria-hidden="true"></i><span id="status">Connecting</span></span>
 </div>
@@ -40,10 +41,10 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <div class="pc-toolbar panel">
 <label class="field field--grow" for="pc-search"><span class="micro">Find Pokémon</span><input id="pc-search" type="search" placeholder="Name or Pokédex number" autocomplete="off"></label>
-<label class="field" for="pc-rating"><span class="micro">DV rating</span><select id="pc-rating"><option value="all">All ratings</option><option value="3plus">3★ and better</option><option value="4">4★ Perfect</option><option value="3">3★</option><option value="2">2★</option><option value="1">1★</option><option value="unknown">Unknown DVs</option></select></label>
+<label class="field" for="pc-rating"><span class="micro">DV rating</span><span class="select"><select id="pc-rating"><option value="all">All ratings</option><option value="3plus">3★ and better</option><option value="4">4★ Perfect</option><option value="3">3★</option><option value="2">2★</option><option value="1">1★</option><option value="unknown">Unknown DVs</option></select></span></label>
 <input id="pc-scope" type="hidden" value="box">
-<label class="field" id="pc-sort-control" for="pc-sort"><span class="micro">Sort by</span><select id="pc-sort"><option value="box">Location and slot</option><option value="power">Power (total stats)</option><option value="level">Level</option><option value="HP">Max HP</option><option value="Attack">Attack</option><option value="Defense">Defense</option><option value="Speed">Speed</option><option value="Special">Special</option><option value="elite_four_wins">Elite Four wins</option><option value="dv_stars">DV star rating</option><option value="dvs">Total DVs</option><option value="stat_exp">Total stat experience</option><option value="experience">Total experience</option><option value="dex">Pokédex number</option><option value="name">Species name</option><option value="nick">Nickname</option></select></label>
-<label class="field" id="pc-order-control" for="pc-order"><span class="micro">Order</span><select id="pc-order"><option value="asc">Lowest first</option><option value="desc">Highest first</option></select></label>
+<label class="field" id="pc-sort-control" hidden for="pc-sort"><span class="micro">Sort by</span><span class="select"><select id="pc-sort"><option value="box">Location and slot</option><option value="power">Power (total stats)</option><option value="level">Level</option><option value="HP">Max HP</option><option value="Attack">Attack</option><option value="Defense">Defense</option><option value="Speed">Speed</option><option value="Special">Special</option><option value="elite_four_wins">Elite Four wins</option><option value="dv_stars">DV star rating</option><option value="dvs">Total DVs</option><option value="stat_exp">Total stat experience</option><option value="experience">Total experience</option><option value="dex">Pokédex number</option><option value="name">Species name</option><option value="nick">Nickname</option></select></span></label>
+<label class="field" id="pc-order-control" hidden for="pc-order"><span class="micro">Order</span><span class="select"><select id="pc-order"><option value="asc">Lowest first</option><option value="desc">Highest first</option></select></span></label>
 <span class="pc-count micro" id="pc-count">0 Pokémon</span>
 </div>
 
@@ -54,7 +55,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div id="box-picker" class="box-picker" role="group" aria-label="Choose party or a storage box"></div>
 </aside>
 <div class="pc-content">
-<div class="column-head pc-head"><div class="pc-head-title"><h2 class="legend legend--ink" id="pc-heading">Box 1</h2><span class="micro" id="pc-note">Stored partners</span></div><details id="pc-power-note" class="pc-power-note"><summary class="micro">About power</summary><p>Power totals max HP, Attack, Defense, Speed, and Special. Open a Pokémon to see its stats, DVs, and training.</p></details></div>
+<div class="column-head pc-head"><div class="pc-head-title"><h2 class="legend legend--ink" id="pc-heading">Box 1</h2><span class="micro" id="pc-note">Stored partners</span></div><details id="pc-power-note" class="pc-power-note" hidden><summary class="micro">About power</summary><p>Power totals max HP, Attack, Defense, Speed, and Special. Open a Pokémon to see its stats, DVs, and training.</p></details></div>
 <div id="pc-grid" class="pc-grid"><p class="dex-empty">Opening the PC…</p></div>
 </div>
 </section>

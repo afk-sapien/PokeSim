@@ -36,7 +36,7 @@ def test_managed_pages_scope_all_game_resources_and_navigation(tmp_path, path):
     response = client.get(path)
     assert response.status_code == 200
     urls = Links(response.text).urls
-    assert '/games/red-two/static/routes.js' in urls
+    assert '/games/red-two/static/routes.js' in {url.partition('?')[0] for url in urls}
     assert '/games/red-two/journal' in urls
     assert '${' not in response.text
     assert all(url.startswith(('/games/red-two/', '#', 'https://')) or url == '/' for url in urls)
@@ -46,7 +46,7 @@ def test_managed_pages_scope_all_game_resources_and_navigation(tmp_path, path):
 
 def test_standalone_html_and_redirects_keep_root_routes(tmp_path):
     client = TestClient(app(tmp_path))
-    assert '/static/routes.js' in Links(client.get('/').text).urls
+    assert '/static/routes.js' in {url.partition('?')[0] for url in Links(client.get('/').text).urls}
     assert 'id="adventure-switcher"' not in client.get('/').text
     assert client.get('/team', follow_redirects=False).headers['location'] == '/#team'
     assert client.get('/trading').status_code == 200

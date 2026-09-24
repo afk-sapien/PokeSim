@@ -245,7 +245,7 @@ test('startup connection failure recovers automatically but shutdown stays close
   }})
   await settle()
   assert.equal(view.element('#workspace').hidden, true)
-  assert.equal(view.element('#status').textContent, 'Reconnecting')
+  assert.equal(view.element('#status').textContent, 'Reconnecting…')
   view.poll()
   await settle()
   assert.equal(view.element('#workspace').hidden, false)

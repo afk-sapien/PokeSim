@@ -285,6 +285,7 @@ def legacy_main(argv=None):
                 return
             raise SystemExit(f'PokeSim is already starting or stopping. Try again shortly. Data folder: {root}')
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             listener.bind(('127.0.0.1', 0))
             listener.listen(128)
             port = listener.getsockname()[1]

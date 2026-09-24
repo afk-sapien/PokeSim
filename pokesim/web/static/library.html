@@ -8,6 +8,7 @@
 <title>Your adventures · PokeSim</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <script src="/static/panel.js?v=panel-3"></script>
+<link rel="preload" href="/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="/static/panel.css?v=panel-8">
 <link rel="stylesheet" href="/static/panel-library.css?v=panel-2">
@@ -18,7 +19,7 @@
 
 <header class="rail">
 <div class="shell rail-inner">
-<a class="brandplate" href="/" aria-label="PokeSim library"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span></span></a>
+<a class="brandplate" href="/" aria-label="PokeSim library"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model">${app_version}</span></span></a>
 <nav aria-label="Application"><a href="/" data-nav="library">Library</a><a href="/trading" data-nav="trading">Trading</a><a href="/notifications" data-nav="notifications">Notifications</a><a href="/settings" data-nav="settings">Settings</a></nav>
 <span class="connection" id="connection" role="status"><i class="lamp" aria-hidden="true"></i><span id="status">Connecting</span></span>
 </div>

@@ -168,11 +168,13 @@ async function refresh() {
     party = (status.party || []).map((mon) => ({...mon, box: 0, position: mon.slot}))
     if (followActive && storage) { selectedBox = storage.active_box
       followActive = false }
-    $('#status').textContent = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
+    $('#status').textContent = status.started ? 'Running' : 'Waiting'
+    $('#connection').title = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
     $('#connection').classList.remove('is-offline')
     render()
   } catch (_) {
     $('#status').textContent = 'Reconnecting…'
+    $('#connection').title = ''
     $('#connection').classList.add('is-offline')
   } finally { busy = false }
 }

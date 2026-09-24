@@ -36,7 +36,6 @@ BEFORE_STALL_CHECKPOINT = 'before-stall.state'
 log = logging.getLogger("pokesim.emu")
 
 SHOT_SCALE = 4
-STREAM_SCALE = 3
 SNAPSHOT_EVERY = 30       # frames
 CHUNK = 4                 # frames per render / pacing step
 WATCH_GRACE = 2.0         # seconds a frame request keeps the stream considered live
@@ -64,7 +63,7 @@ class Emulator:
         self.policy.trade_preferences = store.trade_preferences
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
-        self.frame_jpeg: bytes = b""
+        self.frame_image: bytes = b""
         self.frame_seq = 0
         self.frame = 0
         self.play_clock = PlayClock(store.get("play_clock", {}))
@@ -300,11 +299,11 @@ class Emulator:
     def current_frame(self, timeout: float = 1.0) -> bytes:
         """The latest frame, waiting for the first one if the run has only just started."""
         self.watch()
-        if self.frame_jpeg:
-            return self.frame_jpeg
+        if self.frame_image:
+            return self.frame_image
         with self.frame_cond:
-            self.frame_cond.wait_for(lambda: bool(self.frame_jpeg), timeout)
-            return self.frame_jpeg
+            self.frame_cond.wait_for(lambda: bool(self.frame_image), timeout)
+            return self.frame_image
 
     def _due_to_publish(self, now: float) -> bool:
         if now >= self._watch_until:
@@ -314,12 +313,12 @@ class Emulator:
         return now - self._last_publish >= 0.8 / max(1, config.STREAM_FPS)
 
     def _publish_frame(self):
-        img = self._image()
-        img = img.resize((img.width * STREAM_SCALE, img.height * STREAM_SCALE), Image.NEAREST)
+        # Native size, lossless: about 3 KB against 90 KB for an upscaled JPEG, and
+        # quicker to encode. The page scales it up with crisp pixels.
         buf = io.BytesIO()
-        img.save(buf, "JPEG", quality=85)
+        self._image().save(buf, "PNG", compress_level=1)
         with self.frame_cond:
-            self.frame_jpeg = buf.getvalue()
+            self.frame_image = buf.getvalue()
             self.frame_seq += 1
             self.frame_cond.notify_all()
 

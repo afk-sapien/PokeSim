@@ -17,7 +17,7 @@ from .. import config
 from ..policies.base import BUTTONS
 from .event_page import render_event
 from .feed import render_feed
-from .pokedex import DEFAULT_VERSION, VERSIONS, live_status, reference
+from .pokedex import DEFAULT_VERSION, VERSIONS, live_status, reference_json
 from . import trading
 from .pages import render_game_page
 from ..trade import preferences
@@ -85,7 +85,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             version = collection.get("version") or DEFAULT_VERSION
         if version not in VERSIONS:
             raise HTTPException(400, "Unknown game version")
-        return reference(version)
+        return Response(reference_json(version), media_type="application/json")
 
     @app.get("/api/pokedex/status")
     def pokedex_status():
@@ -224,7 +224,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get("/frame.jpg")
     def frame():
-        return Response(emu.current_frame(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+        return Response(emu.current_frame(), media_type="image/png", headers={"Cache-Control": "no-store"})
 
     @app.get("/stream")
     async def stream():
@@ -237,8 +237,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                 emu.watch()     # keep frames being produced for as long as this stream is open
                 if emu.frame_seq != seq:
                     seq = emu.frame_seq
-                    data = emu.frame_jpeg
-                    yield (f"--{boundary}\r\nContent-Type: image/jpeg\r\nContent-Length: {len(data)}\r\n\r\n").encode() + data + b"\r\n"
+                    data = emu.frame_image
+                    yield (f"--{boundary}\r\nContent-Type: image/png\r\nContent-Length: {len(data)}\r\n\r\n").encode() + data + b"\r\n"
                 await asyncio.sleep(delay)
 
         return StreamingResponse(gen(), media_type=f"multipart/x-mixed-replace; boundary={boundary}",

@@ -167,7 +167,7 @@
   border-top: var(--hair) solid var(--rule-faint);
   background: var(--panel-2);
 }
-.card-actions .key { flex: 1 1 auto; }
+.card-actions .key { flex: 1 1 0; }
 .card-actions .key--primary { flex-basis: 100%; }
 .card-actions button.key {
   min-height: 40px;
@@ -328,6 +328,18 @@
 }
 .field input::placeholder { color: var(--ink-3); opacity: 1; }
 .field input:disabled,
+.field select {
+  appearance: none;
+  padding-right: var(--s6);
+  cursor: pointer;
+  /* The shared solid caret, drawn as two half triangles because a select
+     cannot carry a pseudo-element. */
+  background-image: linear-gradient(to bottom left, var(--ink-3) 50%, transparent 50%),
+                    linear-gradient(to bottom right, var(--ink-3) 50%, transparent 50%);
+  background-size: 4px 4px;
+  background-position: right 18px center, right 14px center;
+  background-repeat: no-repeat;
+}
 .field select:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* A checkbox row. The box is square and hard-edged like everything else. */
@@ -394,7 +406,7 @@
    ========================================================================== */
 
 .sheet {
-  width: min(520px, calc(100vw - 2 * var(--s4)));
+  width: min(520px, calc(100% - 2 * var(--s4)));
   max-height: calc(100vh - 2 * var(--s5));
   padding: 0;
   background: var(--panel);

@@ -1,3 +1,4 @@
+import re
 from html.parser import HTMLParser
 from unittest.mock import Mock
 
@@ -39,9 +40,11 @@ def test_event_content_is_text_and_state_is_data():
     assert [attrs for tag, attrs in page.tags
             if tag == 'button' and 'data-theme-choice' not in attrs] == [
         {'id': 'rewind', 'data-state': event['state']}]
-    assert [attrs for tag, attrs in page.tags if tag == 'script'] == [
-        {'src': '/static/routes.js'}, {'src': '/static/panel.js?v=panel-3'},
-        {'src': '/static/event.js?v=panel-2', 'defer': None}]
+    scripts = [attrs for tag, attrs in page.tags if tag == 'script']
+    assert [{**attrs, 'src': attrs['src'].partition('?')[0]} for attrs in scripts] == [
+        {'src': '/static/routes.js'}, {'src': '/static/panel.js'},
+        {'src': '/static/event.js', 'defer': None}]
+    assert all(re.fullmatch(r'[^?]+\?v=[0-9a-f]{12}', attrs['src']) for attrs in scripts)
     assert not any(tag in {'b', 'svg'} for tag, _ in page.tags)
 
 
