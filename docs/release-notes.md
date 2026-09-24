@@ -1,41 +1,27 @@
-# PokeSim 0.3.7 experimental beta
+# PokeSim 0.3.8 experimental beta
 
-Every page loads fast and holds still while it does.
+Fewer black cards in the Journal, and a trading page that stays up.
 
-## Fast
+## Journal pictures
 
-Each request to an adventure used to wait about 40 ms for nothing: the connection between the
-manager and an adventure's worker held back small replies, waiting on an acknowledgement. That
-is gone, and the manager now reuses its connections instead of opening one per request. On a
-local machine a game request takes 2–5 ms instead of 21–45 ms.
+Badges, warps and catches often happen while the screen is fading, so their Journal card used to
+be a solid black or white square. Now an entry that lands on a blank screen waits, up to ten
+seconds of game time, for the picture to come back, and uses that one. Its phone notification waits
+with it, so the picture on your phone matches. A place that really is dark, like a cave without
+Flash, keeps what it has after the wait.
 
-Stylesheets, scripts and the font are now fingerprinted, so your browser keeps them for a year
-and only fetches one again when it actually changes. Everything larger than a kilobyte is
-compressed. A repeat visit to the live page transfers about 30 KB instead of about 1 MB, which
-you will notice most on a phone or away from home.
+Cards already stored blank stay as they are.
 
-## Steady
+## Trading
 
-Switching pages used to make the whole interface shuffle for a moment: the scrollbar appeared
-and pushed everything sideways, the footer jumped, the status pill changed width and shoved the
-tabs, and the adventure picker widened once it had loaded. Each of those now has its place from
-the first frame. The worst page moved 0.96 by the browser's own layout-shift measure; the worst
-now moves 0.02.
+Starting a trade asks both adventures what they can offer, and a busy adventure can take close to a
+minute to answer. While it thought, the trading page went blank and starting an
+adventure had to wait. Now nothing waits on that answer: the page keeps loading, and the trade is
+double-checked before it is recorded, so an adventure stopped in the meantime is never traded.
 
-## Tidier
-
-- **The Library › adventure trail** sits under the name like the version sits under PokeSim,
-  instead of borrowing the tab styling. On a phone it is one row.
-- **Digits and punctuation** are spaced properly in the panel face: `010`, `12/151` and `01:32`
-  no longer have a gap after every 1 or colon.
-- **Pokédex cards** keep a one-line header (Unseen, Seen, In Pokédex or Hunting), so rows line
-  up again.
-- **Dropdowns** on the PC, Library and Settings pages match the Pokédex ones.
-- The status pill says **Running** rather than a second "Live", the Library says "1 adventure",
-  and journal entries stop repeating the place they are named after.
+Picking which trade to make next is about eleven times faster, which the manager does every ten
+seconds while adventures run.
 
 ## Upgrading
 
-Nothing to migrate: no database, save or policy change. Browsers pick up the new files on their
-own. Anything reading `/frame.jpg` or `/stream` directly now receives PNG frames at the same
-paths.
+Nothing to migrate: no database, save or policy change.

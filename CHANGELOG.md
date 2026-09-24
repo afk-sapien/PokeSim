@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.3.8
+
+- Journal screenshots no longer catch a fade. An entry recorded on a blank screen keeps waiting,
+  up to ten seconds of game time, for a frame that shows something, and its ntfy push waits with it.
+- The trading page never waits on an adventure worker. Inventories for a new exchange are read with
+  no lock held and checked again before the exchange is recorded, so a slow worker no longer blanks
+  the page or holds up adventure starts for up to 110 seconds.
+- Automatic trade matching is about eleven times faster: 0.19 s instead of 2.1 s for a pair of full
+  libraries, every ten seconds, in the manager process.
+- Ruff checks the Python code for unused and undefined names in CI.
+
 ## 0.3.7
 
 - Pages load fast. Pooled worker connections and `TCP_NODELAY` remove a ~40 ms stall on every
