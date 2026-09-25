@@ -1,14 +1,21 @@
-# PokeSim 0.4.1 experimental beta
+# PokeSim 0.4.2 experimental beta
 
-The Journal's new charts now show up.
+The Journal's charts follow the goals that take weeks, not the ones done by the first evening.
 
 ## The road so far
 
-0.4.0 added three charts to the top of the Journal: Pokédex registered, badges, and League wins
-over the days the adventure has run. They never appeared. The page script that keeps the live
-view up to date also runs on the Journal, and it wrote the live page's "tiles explored" count into
-the chart section, which it mistook for its own. The section has its own name now, so the charts
-draw as intended. The history behind them was recorded all along, so nothing is missing.
+Badges are all earned within the first day or so, which left their chart a flat line for the rest
+of the adventure. It is replaced by two long goals, counted exactly as the Pokédex counts them:
+
+- **Level 100 species**, out of 151. Reaching level 100 also marks that Pokémon's earlier forms.
+- **Perfect finds**, partners with every DV at 15.
+
+Pokédex registered and League wins stay. The Journal never wrote down the two new counts, so their
+lines begin when you upgrade, at the numbers the adventure already has.
+
+## Pokédex
+
+The "About these counts" panel below the totals is gone. It left an awkward gap on the page.
 
 ## Upgrading
 

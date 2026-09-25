@@ -1,17 +1,17 @@
-# Release preparation: 0.4.1
+# Release preparation: 0.4.2
 
-A one-fix patch. The Journal's chart section was `id="progress"`, the id the live page gives its
-exploration count, and `app.js`, which runs on every adventure page, wrote "N tiles explored" into
-it on each refresh, so 0.4.0's charts never drew. The section is now `#road`. The `progress` table
-and `/api/progress` were unaffected and have been recording since 0.4.0 was deployed.
-
-There is no schema, policy or migration change.
+The Journal's road-so-far charts drop badges, which are complete within the first day, for level
+100 species and perfect finds, read from the same `pokedex-milestones-v1` record the Pokédex
+shows. The `progress` table gains nullable `level100` and `perfect` columns, added on open; a row
+is written in the transaction that stores a milestone change, carrying the game's own counts from
+the previous row. 0.4.1 ignores the new columns. The Pokédex loses its "About these counts" panel.
 
 ## What was verified
 
-1,333 Python tests pass (67 skipped), plus 76 JavaScript tests. A new test fails if any
-element in the chart section shares an id that `app.js` writes by id, and fails against 0.4.0's
-Journal page.
+1,335 Python tests pass (67 skipped), plus 76 JavaScript tests and 18 browser tests. New tests
+cover a row following each level 100 or perfect-find change and not otherwise, no row before an
+adventure's first, the long goals carried through later journal rows, and a 0.4.0 table gaining
+the columns empty.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64 Docker image and
 Compose configuration. The `pokesim-desktop` Python command opens the Library in your browser.
@@ -42,8 +42,8 @@ it is deployed. See [release notes](docs/release-notes.md),
   part of the Library deployment; do not expose it beyond a trusted network.
 - **Journal screenshots already stored blank are not repaired**, including the one in the shipped
   Journal image. Only new entries are retaken.
-- **Seen counts start with this release.** Journal entries never recorded them, so backfilled
-  history has badges, Pokédex owned and League wins only.
+- **Seen counts, level 100 species and perfect finds have no backfill.** Journal entries never
+  recorded them, so their history starts with 0.4.0 (seen) and 0.4.2 (the other two).
 - **Hall of Fame teams still do not rotate.** A rematch fights with whichever six remain in the
   party. Choosing a varied team is a gameplay change that needs its own endurance run.
 - **Legacy per-entry rewind states are kept** (about 24 MB for the busiest adventure). They stopped

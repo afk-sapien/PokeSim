@@ -85,7 +85,7 @@ This is the short version of what the release downloads. Save it as `compose.yam
 ```yaml
 services:
   pokesim:
-    image: ghcr.io/afk-sapien/pokesim:0.4.1
+    image: ghcr.io/afk-sapien/pokesim:0.4.2
     container_name: pokesim
     ports:
       - "127.0.0.1:8930:8000"
