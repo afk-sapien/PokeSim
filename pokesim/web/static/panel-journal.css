@@ -58,7 +58,7 @@
    The journal's headline numbers as step lines on one shared clock, read
    like strip-chart pens: a label and the current value, then the trace. */
 .progress { margin-bottom: var(--s6); }
-#progress-span { white-space: nowrap; }
+#road-span { white-space: nowrap; }
 .progress-panel {
   display: grid;
   background: var(--panel);

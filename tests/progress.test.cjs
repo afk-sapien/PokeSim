@@ -45,11 +45,11 @@ test('league wins scale to their own best and a rewind shows as a drop', () => {
 test('the section stays hidden until there is history, then describes each line', () => {
   const {Progress, element} = load(true)
   Progress.render([])
-  assert.equal(element('#progress').hidden, true)
+  assert.equal(element('#road').hidden, true)
   Progress.render([{ts: 0, owned: 1, badges: 0, league: 0}, {ts: 86400 * 3, owned: 40, badges: 3, league: 0}], 86400 * 3)
-  assert.equal(element('#progress').hidden, false)
-  assert.match(element('#progress-span').textContent, /· 3 days$/)
-  const html = element('#progress-charts').innerHTML
+  assert.equal(element('#road').hidden, false)
+  assert.match(element('#road-span').textContent, /· 3 days$/)
+  const html = element('#road-charts').innerHTML
   assert.match(html, /aria-label="Pokédex registered: from 1 to 40"/)
   assert.match(html, /aria-label="League wins: 0 throughout"/)
   assert.match(html, />40<span class="unit">\/151<\/span>/)

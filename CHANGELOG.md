@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The Journal's road-so-far charts now show. Their section shared an id with the live page's
+  exploration count, which the shared page script wrote into it, replacing the charts with a line of text.
+
 ## 0.4.0
 
 - The Journal opens with the road so far: Pokédex registered, badges and League wins over time,

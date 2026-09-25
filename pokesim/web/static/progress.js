@@ -37,14 +37,14 @@
   const day = (ts) => new Date(ts * 1000).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})
 
   function render(rows, now = Date.now() / 1000) {
-    const section = document.querySelector('#progress')
+    const section = document.querySelector('#road')
     if (!section) return
     section.hidden = !rows.length
     if (!rows.length) return
     const until = Math.max(now, rows.at(-1).ts)
     const days = Math.max(1, Math.round((until - rows[0].ts) / 86400))
-    document.querySelector('#progress-span').textContent = `Since ${day(rows[0].ts)} · ${days} ${days === 1 ? 'day' : 'days'}`
-    document.querySelector('#progress-charts').innerHTML = describe(rows, until).map((series) => {
+    document.querySelector('#road-span').textContent = `Since ${day(rows[0].ts)} · ${days} ${days === 1 ? 'day' : 'days'}`
+    document.querySelector('#road-charts').innerHTML = describe(rows, until).map((series) => {
       const summary = series.first === series.last ? `${series.label}: ${series.last} throughout` : `${series.label}: from ${series.first} to ${series.last}`
       return `<div class="progress-row progress-${series.key}"><div class="progress-label"><span class="micro">${esc(series.label)}</span><strong class="readout">${Number(series.last).toLocaleString()}${series.max && series.key !== 'league' ? `<span class="unit">/${series.max}</span>` : ''}</strong></div><svg class="progress-chart" viewBox="0 0 ${WIDTH} ${HEIGHT}" preserveAspectRatio="none" role="img" aria-label="${esc(summary)}"><path d="${series.path}" vector-effect="non-scaling-stroke"></path></svg></div>`
     }).join('')
@@ -52,7 +52,7 @@
 
   let busy = false
   async function refresh() {
-    if (busy || !document.querySelector('#progress')) return
+    if (busy || !document.querySelector('#road')) return
     busy = true
     try {
       const response = await PokeSim.fetch('/api/progress', {cache: 'no-store'})
@@ -65,7 +65,7 @@
   }
 
   globalThis.Progress = {stepPath, describe, render, refresh, WIDTH, HEIGHT}
-  if (document.querySelector('#progress')) {
+  if (document.querySelector('#road')) {
     refresh()
     setInterval(() => { if (!document.hidden) refresh() }, 60000)
   }

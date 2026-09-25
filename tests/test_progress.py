@@ -76,3 +76,14 @@ def test_the_game_serves_the_history(tmp_path):
     client = TestClient(create_app(SimpleNamespace(status=lambda: {}), store))
     [row] = client.get('/api/progress').json()
     assert (row['badges'], row['owned'], row['league']) == (0, 2, 0)
+
+
+def test_the_journal_chart_uses_no_id_the_shared_page_script_writes(tmp_path):
+    # app.js runs on every adventure page and fills elements by id. It once wrote the live page's
+    # "tiles explored" line into the Journal's chart section, which shared its id, and erased it.
+    import re
+    from pathlib import Path
+    static = Path(__file__).parents[1] / 'pokesim/web/static'
+    written = set(re.findall(r"set\('#([\w-]+)'", (static / 'app.js').read_text()))
+    chart = re.search(r'<section class="progress".*?</section>', (static / 'journal.html').read_text(), re.S)[0]
+    assert written.isdisjoint(re.findall(r'id="([\w-]+)"', chart))
