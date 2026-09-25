@@ -46,3 +46,32 @@ def test_pokedex_panel_fits_and_scales_portraits(page, game, width):
     expect(page.locator('#detail-name')).to_have_text('Ivysaur')
     page.keyboard.press('Escape')
     expect(page.locator('#detail')).to_be_hidden()
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_scrolled_content_never_shows_between_the_rail_and_what_is_pinned_under_it(page, game, width):
+    url, _, _, _ = game
+
+    def with_breadcrumb(route):
+        # A Library adventure page opens its rail with the breadcrumb, which this server omits.
+        body = route.fetch().text().replace('<nav aria-label="Main navigation">',
+            '<nav class="breadcrumb" aria-label="Breadcrumb"><a href="/">Library</a>'
+            '<span class="adventure-switch"><select aria-label="Switch adventure"><option>Red</option>'
+            '</select></span></nav><nav aria-label="Main navigation">', 1)
+        route.fulfill(body=body, content_type='text/html')
+
+    page.route('**/pokedex', with_breadcrumb)
+    page.set_viewport_size({'width': width, 'height': 800})
+    page.goto(url + '/pokedex')
+    expect(page.locator('.dex-card')).to_have_count(151)
+    page.evaluate('window.scrollTo(0, 2400)')
+    rail = page.locator('.rail').bounding_box()
+    if width < 640:
+        # A phone pins only the tab strip. The game page's first nav is the Library
+        # breadcrumb, which was measured instead, so all three rows stayed pinned.
+        tabs = page.locator('.rail nav:not(.breadcrumb)').bounding_box()
+        assert rail['y'] < 0 and abs(tabs['y']) < 2
+    else:
+        # The filter strip sits on the rail's lip, with no gap for cards to show through.
+        filters = page.locator('.filters').bounding_box()
+        assert filters['y'] - (rail['y'] + rail['height']) <= 4

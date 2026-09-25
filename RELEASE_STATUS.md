@@ -1,16 +1,17 @@
-# Release preparation: 0.4.3
+# Release preparation: 0.4.4
 
-The postgame director now chooses only from projects that register a missing Pokédex entry
-whenever one is available, instead of weighting them. Urgent money still sends it to a rematch. A
-level-evolution project records the experience its partner gains, so a turn that reaches its time
-budget is advanced rather than deferred as a failure, and it gets the training budget. No data or
-schema change.
+Scrolling fixes. The Pokédex filter strip is pinned at the rail's height instead of 8px below it.
+`panel.js` measures the tab strip with `nav:not(.breadcrumb)`; on Library adventure pages the
+first nav is the breadcrumb, so the phone rail never collapsed to its tabs. PC storage's box list
+has a viewport-height ceiling and its own scroll on wide screens. Asset versions are bumped so
+browsers fetch the new files. No data or schema change.
 
 ## What was verified
 
-1,337 Python tests pass (67 skipped), plus 76 JavaScript tests. New tests cover a missing species
-winning every selection over DV hunts, rematches and training, urgent money still choosing a
-rematch, and a timed-out Dragonair turn that gained experience ending as advanced with no backoff.
+1,337 Python tests pass (69 skipped, the new browser cases among them), plus 76 JavaScript tests and 20 browser tests. A new browser
+test scrolls the Pokédex at 1440 and 390 pixels, with the Library breadcrumb in the rail as a
+managed adventure renders it: the filter strip must sit on the rail's lip, and a phone must pin
+only the tab strip. Both cases fail on 0.4.3.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64 Docker image and
 Compose configuration. The `pokesim-desktop` Python command opens the Library in your browser.

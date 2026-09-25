@@ -1,21 +1,21 @@
-# PokeSim 0.4.3 experimental beta
+# PokeSim 0.4.4 experimental beta
 
-Finishing the Pokédex comes first again.
+Scrolling that stays tidy.
 
-## Missing entries win
+## Pokédex
 
-When a project would register a species the Pokédex does not have, the player now picks only from
-those projects. Before, they were just more likely, so DV hunts, League rematches and the rule
-against doing the same kind of thing twice kept taking turns. Both test adventures passed 1,500
-game hours with a Dragonair in the PC and Dragonite unregistered. League rematches still come first
-when money runs out.
+The find and filter strip still stays with you as you scroll, but it now sits right against the
+top bar. Before, a thin gap between them let the cards show through as they went by.
 
-## Level evolutions keep their progress
+## Phones
 
-Training a partner toward a level evolution ran in short turns, and a turn that ran out of time
-counted as a failure even when the partner had gained levels throughout. Each failure doubled the
-wait before trying again. Those turns now count the experience gained, run as long as a training
-step, and can be picked again straight away.
+Adventure pages pin only the tab strip at the top again, the way the Library does, instead of the
+whole three-row header. That gives back about a sixth of the screen.
+
+## PC
+
+On wide screens the list of boxes scrolls on its own when it is taller than the window, so the
+lower boxes are always within reach and the top of the list no longer hides under the header.
 
 ## Upgrading
 

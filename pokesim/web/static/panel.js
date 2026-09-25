@@ -24,7 +24,8 @@
   // tab strip showing. Sticky column headers read --rail-h to sit below it.
   function wireRail() {
     const rail = document.querySelector('.rail')
-    const nav = rail?.querySelector('nav')
+    // The first nav on a game page is the Library breadcrumb, not the tab strip.
+    const nav = rail?.querySelector('nav:not(.breadcrumb)')
     if (!rail || !nav) return
     const measure = () => {
       const stacked = nav.offsetTop > 0 && nav.offsetWidth >= rail.offsetWidth - 1

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.4.4
+
+- The Pokédex filter strip pins flush against the top rail. A gap between them let the cards
+  show through as they scrolled past.
+- On a phone, adventure pages pin only the tab strip again, as the Library does. The rail's script
+  measured the Library breadcrumb instead of the tabs, so all three rows stayed pinned, about a
+  sixth of the screen.
+- PC storage's box list scrolls inside the window on wide screens, so its top no longer slides
+  under the rail while the lower boxes are out of reach.
+
 ## 0.4.3
 
 - A missing Pokédex entry now always comes first. Weighting it only raised its odds, so DV hunts,

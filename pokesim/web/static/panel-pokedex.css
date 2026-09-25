@@ -47,10 +47,11 @@
 
 /* ---- filter strip ------------------------------------------------------
    Pinned under the rail on wide screens so a filter is always one reach
-   away while scrolling 151 cards. Label over control, 44px targets. */
+   away while scrolling 151 cards. Label over control, 44px targets. It sits
+   flush against the rail's lip: a gap between them showed cards sliding past. */
 .filters {
   position: sticky;
-  top: calc(var(--rail-h, 0px) + var(--s2));
+  top: var(--rail-h, 0px);
   z-index: 10;
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr)) auto;
