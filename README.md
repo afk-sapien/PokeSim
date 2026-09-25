@@ -4,19 +4,19 @@
 
 PokeSim plays Pokémon Red and Blue by itself, and you watch it happen in your browser. Leave it running and come back to a new catch, an evolution, or a badge you didn't see it earn. Take the controls whenever you want, then hand the game back.
 
-Fair warning: you will get attached to a Lapras named PICKLES, and you will argue with its battle decisions.
+Fair warning: you will get attached to a Lapras named WOBBLECOP, and you will argue with its battle decisions.
 
-![PokeSim running Pokémon Red: a wild Onix battle in Victory Road, six teammates with their moves, PP and DV ratings, all eight badges, and the current plan along the bottom](docs/images/live-adventure.jpg)
+![PokeSim running Pokémon Red: the Champion battle, with the rival sending out Rhydon against a level 100 Lapras, six teammates with their HP, experience and levels, all eight badges, and the current plan along the bottom](docs/images/live-adventure.jpg)
 
-*The live adventure: the game, the team, and the plan (allegedly), all in one place. DAMPSTEVE has this one.*
+*The live adventure: the game, the team, and the plan (allegedly), all in one place. League rematch number 135, and WOBBLECOP has this one.*
 
 ## What you get
 
-Battles, catches, evolutions and the slow march to the Pokémon League, with the current plan spelled out along the foot of the page: what it is doing, how that is going, and what comes next. Your six travelling companions sit beside the game with their moves, remaining PP and DV rating on the card, no clicking required. Keyboard and touch controls are there when you want to steer, and a speed dial from 0.5× up to Max when you want to skip ahead or slow down and actually watch a fight.
+Battles, catches, evolutions and the slow march to the Pokémon League, with the current plan spelled out along the foot of the page: what it is doing, how that is going, and what comes next. Your six travelling companions sit beside the game with their health, experience and DV rating on the card, and one tap opens a partner's moves, remaining PP and battle stats. Keyboard and touch controls are there when you want to steer, and a speed dial from 0.5× up to Max when you want to skip ahead or slow down and actually watch a fight.
 
-There's a Journal of milestones with screenshots — including, when two adventures meet in the Cable Club, which Pokémon crossed and who sent it — and you can follow it in a feed reader or as phone notifications through [ntfy](https://ntfy.sh).
+There's a Journal of milestones with screenshots — including, when two adventures meet in the Cable Club, which Pokémon crossed and who sent it — and you can follow it in a feed reader or as phone notifications through [ntfy](https://ntfy.sh). It opens with the road so far: Pokédex registrations, badges and League wins charted over every day the adventure has run.
 
-![The Journal showing an evolution, a League victory, and the Elite Four, each with the game screenshot from the moment it happened](docs/images/journal.jpg)
+![The Journal: charts of Pokédex registrations, badges and League wins over the whole adventure, then the latest milestones, each with the game screenshot from the moment it happened](docs/images/journal.jpg)
 
 *It keeps its own notes, so you can catch up on what you missed.*
 
@@ -28,18 +28,18 @@ It decides everything locally with ordinary game logic. No model API key, no sub
 
 Browse all 151 Kanto entries, search by name or type, and see who's registered, who's only been spotted, and who's still out there somewhere. Fill it and the counts keep going: how many have reached level 100, and how many turned out to be perfect.
 
-![The Pokédex showing 151 of 151 registered and seen, catches tracked, level 100 and perfect find counts, search and filter options, and the original Kanto starters](docs/images/pokedex.jpg)
+![The Pokédex showing 149 of 151 registered and 150 seen, 2,209 catches, level 100 and perfect find counts, search and filter options, and the original Kanto starters](docs/images/pokedex.jpg)
 
-*All 151 registered, 73 of them at level 100, and not one perfect catch yet. One more reason to check back.*
+*Two short of a full Pokédex, 111 species at level 100, and not one perfect catch yet. One more reason to check back.*
 
 The PC searches your party and every box at once, sorts by DV rating, and shows each partner's stats and training. Four stars means perfect DVs.
 
 <details>
 <summary><strong>Look inside the PC</strong></summary>
 
-![PC storage with all-box search, sorting options, and the strongest party and boxed Pokémon](docs/images/pc-storage.jpg)
+![PC storage searching the party and every box at once, sorted by DV star rating with the best first](docs/images/pc-storage.jpg)
 
-*Two hundred and forty partners across the party and every box, sorted by DV rating. Yes, one of them is called TROUSERBAT.*
+*Two hundred and forty partners across the party and every box, sorted by DV rating. Yes, the Mr. Mime is called WOBBLEMODE.*
 
 </details>
 
@@ -110,7 +110,7 @@ The data folder must be writable by user 10001, which is what the `chown` above 
 
 See [self-hosting](docs/self-hosting.md) for upgrades, offline image archives and building from source.
 
-Either way, the games keep running when you close the tab, and your computer has to stay awake for them to get anywhere. Use **Save and quit** to stop everything cleanly.
+Either way, the games keep running when you close the tab, and your computer has to stay awake for them to get anywhere. Use **Save and quit** to stop everything cleanly. A busy adventure no longer eats disk while it does: finished trades keep only their newest twenty, and the database gives back empty space each time it starts.
 
 **One thing worth knowing about access:** there's no login. Anyone who can reach the Library can manage it, so both the desktop launch and the default Docker port stay on localhost. If you want it reachable from elsewhere, put it behind an authenticated HTTPS proxy or keep it on a private network, and set `PUBLIC_URL` to the address you'll actually use.
 
