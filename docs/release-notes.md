@@ -1,21 +1,21 @@
-# PokeSim 0.4.2 experimental beta
+# PokeSim 0.4.3 experimental beta
 
-The Journal's charts follow the goals that take weeks, not the ones done by the first evening.
+Finishing the Pokédex comes first again.
 
-## The road so far
+## Missing entries win
 
-Badges are all earned within the first day or so, which left their chart a flat line for the rest
-of the adventure. It is replaced by two long goals, counted exactly as the Pokédex counts them:
+When a project would register a species the Pokédex does not have, the player now picks only from
+those projects. Before, they were just more likely, so DV hunts, League rematches and the rule
+against doing the same kind of thing twice kept taking turns. Both test adventures passed 1,500
+game hours with a Dragonair in the PC and Dragonite unregistered. League rematches still come first
+when money runs out.
 
-- **Level 100 species**, out of 151. Reaching level 100 also marks that Pokémon's earlier forms.
-- **Perfect finds**, partners with every DV at 15.
+## Level evolutions keep their progress
 
-Pokédex registered and League wins stay. The Journal never wrote down the two new counts, so their
-lines begin when you upgrade, at the numbers the adventure already has.
-
-## Pokédex
-
-The "About these counts" panel below the totals is gone. It left an awkward gap on the page.
+Training a partner toward a level evolution ran in short turns, and a turn that ran out of time
+counted as a failure even when the partner had gained levels throughout. Each failure doubled the
+wait before trying again. Those turns now count the experience gained, run as long as a training
+step, and can be picked again straight away.
 
 ## Upgrading
 

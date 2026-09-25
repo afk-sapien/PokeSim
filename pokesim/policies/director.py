@@ -45,6 +45,11 @@ class AdventureDirector:
         self.completed = dict(data.get('completed', {}))
 
     def select(self, candidates, rng, urgent=False):
+        # Completing the Pokédex comes first, not merely more often. Weighting it let DV hunts,
+        # rematches and the variety rule take two turns in three, and both adventures reached 1,500
+        # game hours with Dragonite one evolution away.
+        if not (urgent and any(category(p) == 'supplies' for _, p in candidates)):
+            candidates = [(w, p) for w, p in candidates if new_entry(p)] or candidates
         groups = {}
         for weight, project in candidates:
             groups.setdefault(category(project), []).append((weight, project))
@@ -99,7 +104,7 @@ class AdventureDirector:
             self.failures.pop(key, None)
             if success:
                 self.completed[kind] = self.completed.get(kind, 0) + 1
-            retry = 0 if success else elapsed + 60000
+            retry = 0 if success or new_entry(project) else elapsed + 60000
         else:
             count = min(4, self.failures.pop(key, 0) + 1)
             self.failures[key] = count

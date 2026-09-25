@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.4.3
+
+- A missing Pokédex entry now always comes first. Weighting it only raised its odds, so DV hunts,
+  rematches and the rule against repeating an activity kept taking turns, and two adventures passed
+  1,500 game hours with Dragonite one evolution away. Rematches still come first when money runs out.
+- Training toward a level evolution counts as progress. A turn that ended on time was deferred as a
+  failure, with a longer wait each time, even while the partner gained levels all turn. Those turns
+  now last as long as a training step and can be picked again straight away.
+
 ## 0.4.2
 
 - The road so far charts the long goals. Badges are done within the first day, so their line

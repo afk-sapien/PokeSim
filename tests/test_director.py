@@ -14,7 +14,7 @@ from test_strategy import flags, mon
 
 def test_restarts_preserve_category_rotation_and_repeated_failure_backoff():
     director = AdventureDirector()
-    catch = {'method': 'grass', 'species': sid(16), 'key': 'pidgey'}
+    catch = {'method': 'grass', 'species': sid(16), 'key': 'pidgey', 'repeat': True}
     train = {'method': 'train', 'parent': sid(113), 'key': 'chansey'}
     director.select([(1, catch)], random.Random(1))
     director.select([(1, catch)], random.Random(1))

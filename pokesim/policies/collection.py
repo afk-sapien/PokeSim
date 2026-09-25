@@ -245,6 +245,15 @@ class Collection:
                     token = (mon.species, mon.level, mon.experience)
                 else:
                     token = None
+            elif project['method'] == 'evolve' and project.get('evolution', {}).get('method') == 'level':
+                # Experience toward a level evolution is progress. Without it a Dragonair that gained
+                # levels all turn was deferred as a failure, and each failure doubled its wait.
+                trainee = self.trainee(s, project)
+                if trainee is not None:
+                    mon = s.party[trainee]
+                    baseline = project.setdefault('initial_experience', mon.experience)
+                    gains = project.setdefault('gains', {})
+                    gains['experience'] = max(gains.get('experience', 0), mon.experience - baseline)
             if project['method'] == 'train':
                 active = (trainee is not None and not suspended
                           and (training_active if training_active is not None else training_ready))
@@ -632,7 +641,7 @@ class Collection:
         self.project_maps = [s.map]
         self.project_flags = list(s.event_flags)
         self.progress_token = None
-        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project['method'] == 'trade' else training.TRAINING_BUDGET if self.project['method']=='train' else 108000 if self.project.get('dv_hunt') else 36000 if self.completed_champion else PROJECT_BUDGET
+        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project['method'] == 'trade' else training.TRAINING_BUDGET if self.project['method']=='train' or self.project['method']=='evolve' and self.project['evolution']['method']=='level' else 108000 if self.project.get('dv_hunt') else 36000 if self.completed_champion else PROJECT_BUDGET
         nav.path.clear()
         return self.goal(s)
 

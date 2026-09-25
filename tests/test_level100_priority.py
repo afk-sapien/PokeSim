@@ -5,7 +5,7 @@ from dataclasses import asdict, replace
 from unittest.mock import Mock
 
 from pokesim.policies.battle import choose_battle
-from pokesim.policies.collection import Collection
+from pokesim.policies.collection import EVOS, Collection
 from pokesim.policies.director import AdventureDirector
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
@@ -132,7 +132,8 @@ def test_a_new_pokedex_entry_comes_before_the_level_100_grind():
             (3, {'method': 'safari', 'key': 'tauros'}),
             (1, {'method': 'rematch', 'key': 'money'})]
     selected = Counter(d.select(rows, rng)['key'] for _ in range(500))
-    assert selected['victreebel'] + selected['tauros'] > 330 and 0 < selected['grind'] < 120
+    assert selected['victreebel'] + selected['tauros'] == 500
+    assert selected['victreebel'] > 100 and selected['tauros'] > 100
     # An evolution that only improves a registered species is no new entry, so training leads again.
     settled = [rows[0], (3, {'method': 'evolve', 'key': 'better', 'upgrade_evolution': True}),
                (1, {'method': 'grass', 'key': 'repeat', 'repeat': True})]
@@ -158,3 +159,36 @@ def test_a_finished_training_step_hands_the_turn_to_other_work():
     selected = Counter(d.select(rows, rng)['key'] for _ in range(500))
     assert selected['grind'] > selected['upgrade']          # still the leading activity
     assert selected['upgrade'] + selected['repeat'] > 150   # but no longer the only one
+
+
+def test_a_missing_species_always_wins_over_hunts_rematches_and_the_grind():
+    # Red and Blue passed 1,500 game hours with Dragonite one evolution away: DV hunts, rematches
+    # and the variety rule kept taking turns from the Dragonair.
+    d, rng = AdventureDirector(), random.Random(3)
+    rows = [(3, {'method': 'evolve', 'key': 'dragonite'}),
+            (8, {'method': 'train', 'key': 'grind', 'initial_level': 90}),
+            (5, {'method': 'safari', 'key': 'hunt', 'repeat': True, 'dv_hunt': True}),
+            (10, {'method': 'rematch', 'key': 'money'})]
+    assert {d.select(rows, rng)['key'] for _ in range(50)} == {'dragonite'}
+    # Money still comes first when it has run out.
+    assert d.select(rows, rng, urgent=True)['key'] == 'money'
+
+
+def test_a_level_evolution_turn_that_gains_experience_is_progress_not_a_failure():
+    dragonair = individual(44, 1, 148)
+    c = Collection()
+    c.completed_champion = True
+    project = {'species': sid(149), 'parent': dragonair.species, 'method': 'evolve',
+               'evolution': EVOS[dragonair.species][0], 'box': None,
+               'trainee_key': identity(asdict(dragonair)), 'family': [dragonair.species, sid(149)],
+               'scoped_partner': True, 'key': 'dragonite'}
+    c.project, c.remaining = project, 120
+    snapshot = replace(postgame(party=(dragonair,)), owned=frozenset(range(1, 152)) - {149})
+    c.observe(replace(snapshot, frame=0))
+    stronger = replace(dragonair, experience=dragonair.experience + 5000)
+    c.observe(replace(snapshot, frame=120, party=(stronger,)))
+    c.observe(replace(snapshot, frame=240, party=(stronger,)))
+    assert c.project is None
+    assert c.director.outcomes[-1]['status'] == 'advanced'
+    assert 'dragonite' not in c.director.failures
+    assert 'dragonite' not in c.attempts   # free to take the next turn straight away

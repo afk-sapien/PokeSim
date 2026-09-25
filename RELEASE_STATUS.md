@@ -1,17 +1,16 @@
-# Release preparation: 0.4.2
+# Release preparation: 0.4.3
 
-The Journal's road-so-far charts drop badges, which are complete within the first day, for level
-100 species and perfect finds, read from the same `pokedex-milestones-v1` record the Pokédex
-shows. The `progress` table gains nullable `level100` and `perfect` columns, added on open; a row
-is written in the transaction that stores a milestone change, carrying the game's own counts from
-the previous row. 0.4.1 ignores the new columns. The Pokédex loses its "About these counts" panel.
+The postgame director now chooses only from projects that register a missing Pokédex entry
+whenever one is available, instead of weighting them. Urgent money still sends it to a rematch. A
+level-evolution project records the experience its partner gains, so a turn that reaches its time
+budget is advanced rather than deferred as a failure, and it gets the training budget. No data or
+schema change.
 
 ## What was verified
 
-1,335 Python tests pass (67 skipped), plus 76 JavaScript tests and 18 browser tests. New tests
-cover a row following each level 100 or perfect-find change and not otherwise, no row before an
-adventure's first, the long goals carried through later journal rows, and a 0.4.0 table gaining
-the columns empty.
+1,337 Python tests pass (67 skipped), plus 76 JavaScript tests. New tests cover a missing species
+winning every selection over DV hunts, rematches and training, urgent money still choosing a
+rematch, and a timed-out Dragonair turn that gained experience ending as advanced with no backoff.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64 Docker image and
 Compose configuration. The `pokesim-desktop` Python command opens the Library in your browser.
