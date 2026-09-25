@@ -87,3 +87,35 @@ def test_the_journal_chart_uses_no_id_the_shared_page_script_writes(tmp_path):
     written = set(re.findall(r"set\('#([\w-]+)'", (static / 'app.js').read_text()))
     chart = re.search(r'<section class="progress".*?</section>', (static / 'journal.html').read_text(), re.S)[0]
     assert written.isdisjoint(re.findall(r'id="([\w-]+)"', chart))
+
+
+def goals(store):
+    return [(row['level100'], row['perfect']) for row in store.progress()]
+
+
+def test_a_row_follows_each_new_level_100_or_perfect_find(tmp_path):
+    from pokesim.milestones import KEY, empty
+    from pokesim import progress
+    store = Store(tmp_path)
+    progress.goals_changed(store.db, 1)
+    assert store.progress() == []  # nothing to carry before the adventure's first row
+    store.add_event(Event('catch', 'Caught PIDGEY', ''), snap(owned=frozenset({1, 16})), None, None)
+    for level_100, groups in ((['16'], {}), (['16'], {}), (['16', '17'], {'1:16': 1})):
+        store.set(KEY, {**empty(), 'level_100': level_100, 'perfect_groups': groups})
+        with store.db:
+            progress.goals_changed(store.db, 2)
+    assert goals(store) == [(0, 0), (1, 0), (2, 1)]
+    assert history(store)[-1] == (0, 2, 1, 0)
+    store.add_event(Event('badge', 'Boulder Badge', ''), snap(badges=1, owned=frozenset({1, 16})), None, None)
+    assert goals(store)[-1] == (2, 1)
+
+
+def test_a_040_table_gains_the_long_goals_empty(tmp_path):
+    db = sqlite3.connect(tmp_path / 'pokesim.sqlite')
+    db.execute('CREATE TABLE progress (ts REAL NOT NULL, badges INTEGER NOT NULL, owned INTEGER NOT NULL, '
+               'seen INTEGER, league INTEGER NOT NULL)')
+    db.execute('INSERT INTO progress VALUES (1, 8, 149, 150, 134)')
+    db.commit()
+    db.close()
+    [row] = Store(tmp_path).progress()
+    assert (row['owned'], row['league'], row['level100'], row['perfect']) == (149, 134, None, None)

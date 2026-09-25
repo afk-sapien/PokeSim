@@ -14,9 +14,9 @@ Fair warning: you will get attached to a Lapras named WOBBLECOP, and you will ar
 
 Battles, catches, evolutions and the slow march to the Pokémon League, with the current plan spelled out along the foot of the page: what it is doing, how that is going, and what comes next. Your six travelling companions sit beside the game with their health, experience and DV rating on the card, and one tap opens a partner's moves, remaining PP and battle stats. Keyboard and touch controls are there when you want to steer, and a speed dial from 0.5× up to Max when you want to skip ahead or slow down and actually watch a fight.
 
-There's a Journal of milestones with screenshots — including, when two adventures meet in the Cable Club, which Pokémon crossed and who sent it — and you can follow it in a feed reader or as phone notifications through [ntfy](https://ntfy.sh). It opens with the road so far: Pokédex registrations, badges and League wins charted over every day the adventure has run.
+There's a Journal of milestones with screenshots — including, when two adventures meet in the Cable Club, which Pokémon crossed and who sent it — and you can follow it in a feed reader or as phone notifications through [ntfy](https://ntfy.sh). It opens with the road so far: Pokédex registrations, level 100 species, perfect finds and League wins charted over every day the adventure has run.
 
-![The Journal: charts of Pokédex registrations, badges and League wins over the whole adventure, then the latest milestones, each with the game screenshot from the moment it happened](docs/images/journal.jpg)
+![The Journal: charts of the adventure's progress over its whole run, then the latest milestones, each with the game screenshot from the moment it happened](docs/images/journal.jpg)
 
 *It keeps its own notes, so you can catch up on what you missed.*
 

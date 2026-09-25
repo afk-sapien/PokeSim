@@ -5,9 +5,12 @@
   const HEIGHT = 64
   // Keeps a line at zero or at its best clear of the edges, so its stroke is never cut in half.
   const INSET = 3
+  // Badges are over within the first day, so the long goals take their place. A series without
+  // a max scales to its own best and shows no denominator.
   const SERIES = [
     {key: 'owned', label: 'Pokédex registered', max: 151},
-    {key: 'badges', label: 'Badges', max: 8},
+    {key: 'level100', label: 'Level 100 species', max: 151},
+    {key: 'perfect', label: 'Perfect finds'},
     {key: 'league', label: 'League wins'},
   ]
 
@@ -30,7 +33,7 @@
       const first = values[0] ?? 0
       const last = values.at(-1) ?? 0
       const max = series.max || Math.max(1, ...values)
-      return {...series, first, last, max, path: stepPath(rows, series.key, start, until, max)}
+      return {...series, first, last, max, fixed: Boolean(series.max), path: stepPath(rows, series.key, start, until, max)}
     })
   }
 
@@ -46,7 +49,7 @@
     document.querySelector('#road-span').textContent = `Since ${day(rows[0].ts)} · ${days} ${days === 1 ? 'day' : 'days'}`
     document.querySelector('#road-charts').innerHTML = describe(rows, until).map((series) => {
       const summary = series.first === series.last ? `${series.label}: ${series.last} throughout` : `${series.label}: from ${series.first} to ${series.last}`
-      return `<div class="progress-row progress-${series.key}"><div class="progress-label"><span class="micro">${esc(series.label)}</span><strong class="readout">${Number(series.last).toLocaleString()}${series.max && series.key !== 'league' ? `<span class="unit">/${series.max}</span>` : ''}</strong></div><svg class="progress-chart" viewBox="0 0 ${WIDTH} ${HEIGHT}" preserveAspectRatio="none" role="img" aria-label="${esc(summary)}"><path d="${series.path}" vector-effect="non-scaling-stroke"></path></svg></div>`
+      return `<div class="progress-row progress-${series.key}"><div class="progress-label"><span class="micro">${esc(series.label)}</span><strong class="readout">${Number(series.last).toLocaleString()}${series.fixed ? `<span class="unit">/${series.max}</span>` : ''}</strong></div><svg class="progress-chart" viewBox="0 0 ${WIDTH} ${HEIGHT}" preserveAspectRatio="none" role="img" aria-label="${esc(summary)}"><path d="${series.path}" vector-effect="non-scaling-stroke"></path></svg></div>`
     }).join('')
   }
 

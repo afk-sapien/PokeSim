@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The road so far charts the long goals. Badges are done within the first day, so their line
+  gives way to level 100 species and perfect finds, counted the way the Pokédex counts them. Their
+  history starts with this release; the journal never recorded them.
+- The Pokédex drops the "About these counts" panel below the totals.
+
 ## 0.4.1
 
 - The Journal's road-so-far charts now show. Their section shared an id with the live page's

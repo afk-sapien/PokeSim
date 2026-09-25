@@ -45,40 +45,6 @@
   color: var(--ink-3);
 }
 
-/* ---- about these counts ------------------------------------------------- */
-.dex-count-help {
-  margin-top: var(--s2);
-  background: var(--panel-2);
-  border: var(--hair) solid var(--rule);
-}
-.dex-count-help summary {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  min-height: 44px;
-  padding: 0 var(--s4);
-  font: var(--f-micro) / 1 var(--font-mono);
-  letter-spacing: var(--track-micro);
-  text-transform: uppercase;
-  color: var(--ink-2);
-  cursor: pointer;
-  list-style: none;
-}
-.dex-count-help summary::-webkit-details-marker { display: none; }
-.dex-count-help summary::before { content: "\25B6"; font-size: 9px; color: var(--ink-3); }
-.dex-count-help[open] summary::before { content: "\25BC"; }
-.dex-count-help summary:hover { color: var(--ink); }
-.dex-count-notes {
-  display: grid;
-  gap: var(--s3);
-  max-width: 76ch;
-  padding: var(--s2) var(--s4) var(--s5) calc(var(--s4) + 17px);
-  color: var(--ink-2);
-  font-size: var(--f-body);
-  line-height: 1.55;
-}
-#catch-tracking-note { color: var(--ink); }
-
 /* ---- filter strip ------------------------------------------------------
    Pinned under the rail on wide screens so a filter is always one reach
    away while scrolling 151 cards. Label over control, 44px targets. */

@@ -3,7 +3,9 @@ from collections import Counter
 from dataclasses import asdict
 from functools import lru_cache
 import json
+import time
 
+from . import progress
 from .game_data import load
 from .pokemon import dv_rating
 from .strategy_data import SPECIES
@@ -66,6 +68,7 @@ def record_capture(db, species, trainer_id):
     value['perfect_catches'] += 1
     value['perfect_species'] = sorted(set(value['perfect_species']) | {SPECIES[species]['dex']})
     db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
+    progress.goals_changed(db, time.time())
 
 
 class MilestoneTracker:
@@ -116,6 +119,7 @@ class MilestoneTracker:
             for group, count in groups.items():
                 value['perfect_groups'][group] = max(count, value['perfect_groups'].get(group, 0))
             self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
+            progress.goals_changed(self.store.db, time.time())
         self.confirmed = token
 
 

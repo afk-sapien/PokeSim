@@ -1,8 +1,11 @@
 """The headline numbers of an adventure over time: one row each time one of them changes.
 
-Every change already reaches the journal (a new Pokédex entry, a badge, a League win), so a
-row is written in the same transaction as the entry that announced it, from the same snapshot.
+Every change to the game's own counts already reaches the journal (a new Pokédex entry, a badge,
+a League win), so a row is written in the same transaction as the entry that announced it, from
+the same snapshot. Level 100 species and perfect finds are the long goals, recorded by the
+milestone tracker; a row follows each change to them, in the transaction that stored it.
 """
+import json
 import re
 
 SCHEMA = """
@@ -11,15 +14,41 @@ CREATE TABLE IF NOT EXISTS progress (
   badges INTEGER NOT NULL,
   owned INTEGER NOT NULL,
   seen INTEGER,
-  league INTEGER NOT NULL
+  league INTEGER NOT NULL,
+  level100 INTEGER,
+  perfect INTEGER
 );
 """
-FIELDS = ('badges', 'owned', 'seen', 'league')
+FIELDS = ('badges', 'owned', 'seen', 'league', 'level100', 'perfect')
+COLUMNS = ', '.join(FIELDS)
+
+
+def migrate(db):
+    # 0.4.0 tables predate the long goals; their rows keep none, so those lines start at upgrade.
+    columns = {row[1] for row in db.execute('PRAGMA table_info(progress)')}
+    for name in ('level100', 'perfect'):
+        if name not in columns:
+            db.execute(f'ALTER TABLE progress ADD COLUMN {name} INTEGER')
 
 
 def _last(db):
-    row = db.execute('SELECT badges, owned, seen, league FROM progress ORDER BY rowid DESC LIMIT 1').fetchone()
+    row = db.execute(f'SELECT {COLUMNS} FROM progress ORDER BY rowid DESC LIMIT 1').fetchone()
     return tuple(row) if row else None
+
+
+def _goals(db):
+    """Level 100 species and perfect finds, as the Pokédex counts them."""
+    from .milestones import KEY
+    row = db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
+    value = json.loads(row[0]) if row else {}
+    return len(value.get('level_100', ())), sum(value.get('perfect_groups', {}).values())
+
+
+def _write(db, ts, row, previous):
+    if row == previous:
+        return False
+    db.execute(f'INSERT INTO progress(ts, {COLUMNS}) VALUES (?,?,?,?,?,?,?)', (ts, *row))
+    return True
 
 
 def record(db, ts, snapshot, won=False):
@@ -28,11 +57,17 @@ def record(db, ts, snapshot, won=False):
         return False
     previous = _last(db)
     league = (previous[3] if previous else 0) + int(won)
-    row = (bin(snapshot.badges).count('1'), len(snapshot.owned), len(snapshot.seen), league)
-    if row == previous:
+    row = (bin(snapshot.badges).count('1'), len(snapshot.owned), len(snapshot.seen), league, *_goals(db))
+    return _write(db, ts, row, previous)
+
+
+def goals_changed(db, ts):
+    """Run in the transaction that stored new milestones. Waits for the adventure's first row,
+    which carries the game's own counts."""
+    previous = _last(db)
+    if previous is None:
         return False
-    db.execute('INSERT INTO progress(ts, badges, owned, seen, league) VALUES (?,?,?,?,?)', (ts, *row))
-    return True
+    return _write(db, ts, (*previous[:4], *_goals(db)), previous)
 
 
 OWNED = re.compile(r'\b(\d{1,3}) owned\b')
@@ -71,4 +106,4 @@ def backfill(db):
 
 def history(db):
     return [dict(zip(('ts', *FIELDS), row)) for row in
-            db.execute('SELECT ts, badges, owned, seen, league FROM progress ORDER BY rowid')]
+            db.execute(f'SELECT ts, {COLUMNS} FROM progress ORDER BY rowid')]

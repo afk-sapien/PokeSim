@@ -83,8 +83,9 @@
   box-shadow: var(--well-inset);
 }
 .progress-chart path { fill: none; stroke: var(--ok); stroke-width: 2; stroke-linejoin: round; }
-.progress-badges .progress-chart path { stroke: var(--signal); }
-.progress-league .progress-chart path { stroke: var(--warn); }
+.progress-level100 .progress-chart path { stroke: var(--warn); }
+.progress-perfect .progress-chart path { stroke: var(--ink-2); }
+.progress-league .progress-chart path { stroke: var(--signal); }
 
 
 /* ---- the log ----------------------------------------------------------- */

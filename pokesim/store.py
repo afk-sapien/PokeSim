@@ -53,6 +53,7 @@ class Store:
         self._migrate()
         with self.db:
             self.db.executescript(progress.SCHEMA)
+            progress.migrate(self.db)
             progress.backfill(self.db)
         self.lock = threading.Lock()
 

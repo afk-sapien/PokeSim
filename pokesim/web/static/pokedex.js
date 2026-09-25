@@ -244,7 +244,6 @@ async function refreshStatus(pending = fetchStatus()) {
     $('#maxed-meter').value = maxed.size
     paintBank('#maxed-cells', maxed.size)
     $('#sum-perfect').textContent = `${goals.perfect_found || 0}${goals.perfect_found ? '+' : ''}`
-    $('#perfect-note').textContent = `${perfectSpecies.size} species discovered · ${goals.perfect_held || 0} perfect partners with you. Confirmed minimum.`
     owned = new Set(status.owned || [])
     seen = new Set(status.seen || [])
     plan = new Map((status.plan || []).map((row) => [row.dex, row]))
