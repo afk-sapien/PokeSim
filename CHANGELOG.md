@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.1
+
 - The Journal's road-so-far charts now show. Their section shared an id with the live page's
   exploration count, which the shared page script wrote into it, replacing the charts with a line of text.
 

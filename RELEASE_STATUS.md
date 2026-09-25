@@ -1,24 +1,17 @@
-# Release preparation: 0.4.0
+# Release preparation: 0.4.1
 
-A visible-progress and storage release. Each journal entry now writes a `progress` row (badges,
-Pokédex owned and seen, League wins) in the same transaction and from the same snapshot, whenever
-one of those numbers changes; `/api/progress` serves the history and the Journal charts it as step
-lines against real time. Databases that predate the table are backfilled once from the counts
-their entries spelled out. At start, `recover_storage` strips staged snapshots from aborted as well
-as released exchanges, removes all but the newest twenty finished exchange folders, and vacuums
-the adventure database when more than 32 MB of it is free pages.
+A one-fix patch. The Journal's chart section was `id="progress"`, the id the live page gives its
+exploration count, and `app.js`, which runs on every adventure page, wrote "N tiles explored" into
+it on each refresh, so 0.4.0's charts never drew. The section is now `#road`. The `progress` table
+and `/api/progress` were unaffected and have been recording since 0.4.0 was deployed.
 
-There is one additive table (`progress`), created on open. There is no policy state change and no
-migration to run; an older release ignores the table.
+There is no schema, policy or migration change.
 
 ## What was verified
 
-The suite is 1,327 tests, plus 76 JavaScript tests and 18 browser tests. New tests cover a row
-written only when a number changes, a League victory replayed after a rewind counting once, a title
-screen never recorded, a journal backfilled from its entries and not twice, the route through the
-Library's proxy, the chart's step geometry, and pruning, compaction and aborted-snapshot stripping.
-Red's live journal (about 9,700 entries) backfills to 211 rows and renders without horizontal scroll at
-390 px in light and dark.
+1,333 Python tests pass (67 skipped), plus 76 JavaScript tests. A new test fails if any
+element in the chart section shares an id that `app.js` writes by id, and fails against 0.4.0's
+Journal page.
 
 The release targets are a Python wheel and source archive, plus a Linux amd64 Docker image and
 Compose configuration. The `pokesim-desktop` Python command opens the Library in your browser.

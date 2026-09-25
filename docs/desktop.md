@@ -12,11 +12,11 @@ One command with [pipx](https://pipx.pypa.io/stable/installation/), which also n
 pipx install git+https://github.com/afk-sapien/PokeSim.git
 ```
 
-That builds the current default branch. Add `@v0.4.0` to the URL to pin a release, or install a
+That builds the current default branch. Add `@v0.4.1` to the URL to pin a release, or install a
 released wheel without Git:
 
 ```sh
-pipx install https://github.com/afk-sapien/PokeSim/releases/download/v0.4.0/pokesim-0.4.0-py3-none-any.whl
+pipx install https://github.com/afk-sapien/PokeSim/releases/download/v0.4.1/pokesim-0.4.1-py3-none-any.whl
 ```
 
 Without pipx, use `python -m pip install git+https://github.com/afk-sapien/PokeSim.git` inside a
