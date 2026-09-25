@@ -28,7 +28,7 @@ It decides everything locally with ordinary game logic. No model API key, no sub
 
 Browse all 151 Kanto entries, search by name or type, and see who's registered, who's only been spotted, and who's still out there somewhere. Fill it and the counts keep going: how many have reached level 100, and how many turned out to be perfect.
 
-![The Pokédex showing 149 of 151 registered and 150 seen, 2,209 catches, level 100 and perfect find counts, search and filter options, and the original Kanto starters](docs/images/pokedex.jpg)
+![The Pokédex showing 149 of 151 registered and 150 seen, 2,232 catches, level 100 and perfect find counts, search and filter options, and the original Kanto starters](docs/images/pokedex.jpg)
 
 *Two short of a full Pokédex, 111 species at level 100, and not one perfect catch yet. One more reason to check back.*
 
