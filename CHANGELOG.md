@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.4.5
+
+- Add user-account installers for macOS, Linux, and Windows that manage Python 3.12
+  and install the released wheel without Git or pipx.
+- Add a Docker quick-start configuration with a persistent named volume, removing
+  manual data-folder ownership steps for new installations. Existing bind mounts keep
+  their defaults. Local browser URLs now follow custom HTTP ports automatically.
+- Refresh installation, updates, backups, and troubleshooting guides, and move retired
+  single-game instructions into the historical archive.
+- Test installer retries and the Docker quick-start lifecycle in CI, isolate smoke tests
+  from inherited Compose settings, and preserve named volumes in the HTTPS proxy recipe.
+- Include versioned installers and quick-start configuration in release downloads. Keep
+  releases in draft until all uploads are verified, so install commands keep working
+  while the next release is built.
+
 ## 0.4.4
 
 - The Pokédex filter strip pins flush against the top rail. A gap between them let the cards

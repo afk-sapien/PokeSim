@@ -1,92 +1,93 @@
-Operating pokesim
+# Operating PokeSim
 
-Use one process and one container per data directory. Desktop and server runtimes take an exclusive `adventure.lock` in the game data directory. A second runtime fails before opening the database. Never remove the lock file while a runtime is active. The operating system releases the lock when its process exits. The examples below assume the default `./data` directory. Substitute the actual `DATA_PATH` for a customized installation.
+These instructions cover the current Adventure Library. Older single-game instructions
+are preserved in the [legacy operations archive](history/operations-legacy.md).
+For installation, ports, permissions, and remote access, use [self-hosting](self-hosting.md).
 
-**Permissions and startup**
+## Start and stop
 
-The image runs as user and group 10001. Create the bind mount before starting it. For an existing installation, stop the app and back up its data before adjusting ownership:
+Desktop: run the launch command printed by the installer, or `pokesim-desktop` after
+setting up PATH. Choose **Save and quit** to save all adventures and close the application.
+Closing the browser tab leaves the application running.
 
-```sh
-docker compose stop
-sudo chown -R 10001:10001 ./data
-docker compose up -d
-```
-
-Apply this only to pokesim's data directory. Do not change ownership of your ROM library. The container needs read access to its one mounted ROM file.
-
-Compose reads `.env`. The source command reads environment variables directly and uses `ROM_PATH` and `DATA_DIR` instead of Compose's host settings `ROM_FILE` and `DATA_PATH`. Native source mode defaults to port 8000 and localhost. Set `HOST` deliberately for another interface.
-
-The primary tested ROM SHA-1 is `ea9bcae617fdf159b045185467ae58b2e4a48b9a` for Red (USA, Europe). Blue's recognized SHA-1 is `d7037c83e1ae5b39bde3c30787637ba1d4c48ce2`, with experimental support. Check your own file using `sha1sum roms/pokered.gb`. No ROM download is provided.
-
-**Backup and restore**
-
-A backup must include the entire data directory. New autosaves consist of a `.state` file and matching `.json` manifest. The manifest carries policy and run memory paired with that exact state. The `game-data` directory holds the locally generated dataset and source manifest. Keep it in the backup too. SQLite stores event history and compatibility data for older saves. Screenshots and event states live in separate directories.
-
-For a cold backup using the default directory:
+Docker: run commands from the installation folder containing your Compose file:
 
 ```sh
-docker compose stop
-sudo tar -czf pokesim-backup.tar.gz data
-cp .env pokesim-backup.env
-chmod 600 pokesim-backup.env
-docker compose start
-```
-
-Move the backup and its settings to your normal backup destination. Do not commit either file. Settings can contain a notification token. Stop the app even if the game is paused so all files form one consistent backup.
-
-Restore into a new directory without overwriting the original:
-
-```sh
-mkdir restored
-sudo tar -xzf pokesim-backup.tar.gz -C restored
-sudo chown -R 10001:10001 restored/data
-```
-
-Point `DATA_PATH` at `./restored/data` and use the matching previous image for the first boot. Confirm the expected game, policy state, journal, and screenshots before resuming an upgrade. Disable `NTFY_URL` in a test copy to avoid duplicate notifications. A backup rehearsal should use a separate Compose project and port.
-
-**Upgrades and rollback**
-
-For source builds, use the additional `-f compose.build.yaml` file and `--build`. Make a backup and record the current Git commit. Preserve the currently running image before rebuilding:
-
-```sh
-docker image tag "$(docker compose images -q pokesim)" pokesim:before-upgrade
+docker compose up -d --wait
+docker compose ps
+docker compose logs --tail=100 pokesim
 docker compose stop
 ```
 
-Take the backup, check out the desired reviewed revision, and run `docker compose -f compose.yaml -f compose.build.yaml up -d --build`. For new GHCR releases, set the exact version tag in `POKESIM_IMAGE`, then run `docker compose pull` and `docker compose up -d --no-build`. See [container installation](self-hosting.md#install-a-published-container). The checksummed image archive remains available for offline loading with `docker load` and `docker compose up -d --pull never --no-build`.
+Use the same Compose files and project name every time. One manager owns the complete
+library and starts one child process for each running adventure. Never run two managers
+against the same library or remove their lock files while they are running.
 
-Rollback can require both the previous image and its matching data backup. A database or save-state format may have changed. Point `DATA_PATH` at a restored backup and set `POKESIM_IMAGE=pokesim:before-upgrade`, then run `docker compose up -d --no-build`. Never use `--build` when starting an old image for rollback.
+## Where your data lives
 
-Legacy autosaves without manifests remain readable, but their ROM identity and paired policy memory cannot be verified. Keep the original data backup when migrating. Newly written checkpoints require the same ROM hash, PyBoy version, and policy name. Application checkpoint format 1 is the current compatibility boundary. Event rewinds from legacy event saves retain current learned policy memory and the existing journal.
+The [desktop guide](desktop.md#your-files-and-backups) lists platform-specific application folders.
+Docker stores the entire library under `/data` inside the container:
 
-**Access and reverse proxies**
+- The new quick-start file uses a persistent named volume, normally `pokesim_pokesim-data` when your installation folder is named `pokesim`.
+- The original Compose file uses the host folder `./pokesim-app` by default.
+- An explicit `DATA_PATH` in `.env` overrides either default.
 
-The default published port binds to localhost. This works for a proxy running on the same host. A proxy in another container needs a deliberately configured shared network or access to the host's chosen LAN address. Do not assume that its localhost points at pokesim.
+Keep the registry, installed ROMs, shared assets, all adventures, and interaction records
+together. Do not copy one trading participant's saves in isolation. Renaming the Compose
+project can select a different volume and make an existing library appear empty.
+`docker compose down` keeps the volume. `docker compose down --volumes` deletes it.
 
-For remote control, place authentication and TLS in front of the entire service. Protect the API, stream, event pages, and screenshots as well as the homepage. Do not expose the backend port separately. Feed readers and notification links must be able to authenticate through the same access boundary.
+## Back up and restore
 
-`VIEWER_ONLY=1` denies every request to `/api/control` and hides game controls. It also denies `/api/states`. Viewing remains unauthenticated unless protected by your proxy. Limit traffic and simultaneous streams in the proxy before exposing a viewing instance to a large audience.
+Open **Settings and backups** in the Library, create a backup, then download the ZIP to
+another location. The application coordinates saving and captures a consistent library.
+A backup left only inside the application's data storage does not protect against losing
+that storage. Backups contain your private ROMs, saves, and notification settings. Keep
+them private and do not attach them to issue reports.
 
-MJPEG streaming needs response buffering disabled and a long read timeout. The app sends `X-Accel-Buffering: no`. Configure the equivalent options in your proxy and test with an active browser stream. Use the [authenticated Caddy recipe](proxy.md) for a complete deployment example.
+For a cold copy of a host folder, stop the whole application first, then copy the entire
+folder. Pausing an adventure is not equivalent to stopping the manager. For a named volume,
+use the Library's downloadable backup instead of looking for a host `./data` folder.
 
-**Health and recovery**
+Restore a downloaded ZIP into a new, empty application directory with the application
+stopped:
 
-`/healthz` returns 200 while the emulator thread is alive and recently active. A deliberate pause is healthy. A stopped worker or stale activity returns 503. Ten consecutive loop failures stop the worker, and the server exits unsuccessfully so the container restart policy can act. A Docker unhealthy status alone does not trigger `restart: unless-stopped`.
+```sh
+pokesim restore "/path/to/backup.zip" --data-dir "/path/to/restored-library"
+pokesim-desktop --data-dir "/path/to/restored-library"
+```
 
-If startup rejects a save, inspect `docker compose logs --tail=100 pokesim`. The app tries older compatible autosaves and fails if none can be loaded. Restore a backup, use the matching PyBoy version and ROM, or choose a new data directory if you intentionally want a new adventure. Do not delete the only copy of an incompatible save.
+The restore command checks the archive and refuses a nonempty destination. Keep the
+original library and backup until the restored adventures, journal, and progress have
+been verified. Use the matching application version for the first recovery boot.
+For Docker, the same `pokesim restore` command runs in a temporary container with the
+backup mounted read-only and a fresh writable destination. See the
+[recovery guidance](self-hosting.md#migration-and-recovery).
 
-Controls that reset the game require confirmation in the UI. Restart keeps the event journal but clears rotating autosaves. Keep an external backup if you want to retain the old run.
+## Update and roll back
 
-**Storage and outbound traffic**
+Create and download a backup, then stop the app. For a native installation, follow
+[desktop updates](desktop.md#update-or-remove). For Docker, follow
+[container updates](self-hosting.md#back-up-update-and-remove). Preserve your selected data
+mount, project name, and `.env` settings. Release image tags and wheel URLs pin versions,
+so pulling or upgrading the same URL does not automatically select the newest release.
 
-Autosaves rotate according to `KEEP_AUTOSAVES`. Their manifests rotate with them. Event history, screenshots, and event states grow without a limit when `EVENT_RETENTION_DAYS=0`. Positive retention permanently deletes expired entries and their attachments during autosaving, so links to those events eventually return 404. Recent autosaves are retained separately.
+A rollback may require both the previous application version and its matching backup.
+Do not run an older version against a library modified by a newer version unless that
+release explicitly supports it. Restore into a separate location to preserve current progress.
 
-Compose caps container logs at three files of 10 MB each. Monitor available disk space and back up before experimenting with retention. An interrupted write leaves a complete old checkpoint available. A full disk can still prevent new progress from being saved.
+## Health, storage, and recovery
 
-ntfy is the optional outbound application integration, set up on the Library's Notifications page. When enabled, it sends adventure names, event titles, descriptions, priorities, screenshots, and links to the configured destination. The topic and optional access token are stored in the application database, are included in full backups, and are never returned to the browser. `NTFY_*` environment variables only provide defaults until the page is saved. Without ntfy, the runtime does not require a model service or a notification account. Offline acceptance testing is tracked in the release status.
+The manager's `/health/ready` endpoint reports readiness. Docker checks it automatically.
+Inspect individual adventure failures in the Library and startup failures in the container
+logs. Docker marks failed health checks as unhealthy, but that alone does not restart a
+still-running container.
 
-**Moving from 0.1.0 to 0.2.0rc3**
+Check free disk space when saving or setup fails. Keep the complete application and
+interaction records together after an interrupted trade, then restart to let the manager
+finish its recorded decision. Never bypass a committed trade by restoring only one game.
 
-Version 0.1.0 bundled game data in the image. Version 0.2.0rc3 reads a generated bundle from the data volume. Before upgrading, stop and back up the old installation. Prepare the source checkout from the README, select the new image, then run `docker compose --profile setup run --rm prepare-data` before starting the new app. This adds game data without replacing saves or the journal. The old PyBoy 2.7.0 checkpoints remain compatible.
-
-For rollback, stop the new app and restore the complete pre-upgrade backup into a separate directory, then start the preserved 0.1.0 image against it. Do not rely on downgrading against a mutated data directory. Legacy bundled assets are for private regression testing only and are not part of the new release artifact.
+Container logs rotate at three files of 10 MB each. Backups and adventure history can
+still consume disk space, so keep an eye on storage and move downloaded backups to your
+normal backup destination. Phone notifications are configured in the Library and are
+included in full backups. Disable them when running a test copy to avoid duplicate alerts.

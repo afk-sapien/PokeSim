@@ -6,26 +6,78 @@ Install PokeSim as a Python package to run it on your desktop, or use one Docker
 
 ## Install
 
-One command with [pipx](https://pipx.pypa.io/stable/installation/), which also needs Git:
+### Automatic setup
+
+Use a normal user terminal. The installer downloads [uv](https://docs.astral.sh/uv/),
+managed Python 3.12, the released PokeSim wheel, and its dependencies. It does not need Git,
+a system Python installation, administrator access, or a ROM during installation.
+It checks that the installed launcher loads and prints its full path, which works even
+when your terminal has not picked up a PATH change yet. Installation does not start a server.
+
+macOS and Linux, with curl installed:
 
 ```sh
-pipx install git+https://github.com/afk-sapien/PokeSim.git
+curl -fsSL https://github.com/afk-sapien/PokeSim/releases/latest/download/install.sh | sh
 ```
 
-That builds the current default branch. Add `@v0.4.4` to the URL to pin a release, or install a
-released wheel without Git:
+Windows PowerShell:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/afk-sapien/PokeSim/releases/latest/download/install.ps1 | iex"
+```
+
+These commands execute the downloaded script. To review it first, download
+[install.sh](../install.sh) or [install.ps1](../install.ps1), read it, then run
+`sh install.sh` or `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1`.
+The PowerShell execution-policy option applies to that process only.
+
+The scripts reuse uv if installed. Otherwise they install it in `~/.local/bin`, with
+no shell-profile changes. Follow the printed `uv tool update-shell` command and open
+a new terminal to use the short `pokesim-desktop` command. You can also always use the
+full launch command printed by the installer.
+
+### Install manually
+
+With [uv](https://docs.astral.sh/uv/getting-started/installation/), which can also download Python:
 
 ```sh
-pipx install https://github.com/afk-sapien/PokeSim/releases/download/v0.4.4/pokesim-0.4.4-py3-none-any.whl
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.5/pokesim-0.4.5-py3-none-any.whl
+uv tool update-shell
 ```
 
-Without pipx, use `python -m pip install git+https://github.com/afk-sapien/PokeSim.git` inside a
-virtual environment. Upgrade with `pipx upgrade pokesim`, which installs a newer version number, or
-`pipx reinstall pokesim` to rebuild the current default branch. Remove it with `pipx uninstall pokesim`.
+With [pipx](https://pipx.pypa.io/stable/installation/) and Python 3.12 already installed:
 
-From a source checkout, [uv](https://docs.astral.sh/uv/getting-started/installation/) runs it
-without installing: `uv run --python 3.12 --locked pokesim-desktop`, or
-`uv tool install --python 3.12 .` for an installed command.
+```sh
+pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.5/pokesim-0.4.5-py3-none-any.whl
+pipx ensurepath
+```
+
+On Windows, replace `python3.12` with the full path to your Python 3.12 `python.exe`. Open a new terminal after either PATH setup
+command. A released wheel needs no Git. Do not use `pip install pokesim` from PyPI,
+which is not the release channel documented by this project.
+
+Without uv or pipx, create a virtual environment with Python 3.12, activate it, and
+use `python -m pip install` with the wheel URL above. Avoid installing into system Python.
+
+### Update or remove
+
+Choose **Save and quit** before updating, and keep a backup from **Settings and backups**.
+Rerun the automatic installer to install the version it selects. For manual installations,
+run `uv tool install --python 3.12 --managed-python --upgrade NEW_WHEEL_URL` or
+`pipx install --force NEW_WHEEL_URL`, using the wheel from the desired
+[release](https://github.com/afk-sapien/PokeSim/releases).
+A wheel URL pins a version. `pipx upgrade pokesim` or `uv tool upgrade pokesim` alone
+does not select a new GitHub release URL.
+
+Remove the installed application with `uv tool uninstall pokesim` or `pipx uninstall pokesim`,
+matching the installer you used. Your library and saves remain in the application folder.
+
+### From source
+
+To work on the current checkout, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+With uv, run `uv run --python 3.12 --locked pokesim-desktop` from the checkout, or
+`uv tool install --python 3.12 .` for an installed command. Git URL installs build the
+current default branch and require Git, so the released wheel is simpler for ordinary use.
 
 ## First launch
 
@@ -160,9 +212,13 @@ when Numba is installed. Restart the application after changing this setting.
 
 The [Python install workflow](https://github.com/afk-sapien/PokeSim/actions/workflows/python-install.yml) builds and installs the wheel in a fresh environment on Windows x86-64, Intel macOS, Apple Silicon, and Linux x86-64 and ARM64. It checks the installed launcher and actual native worker processes using PyBoy's demonstration ROM. A successful run establishes validation for that platform. Other CPUs require compatible native dependencies and are not covered by this matrix.
 
-This overhaul is development work. Older public releases do not contain the new library. Install this checkout until a package release containing it is published.
-
 ## Troubleshooting
+
+- **`pokesim-desktop` or `uv` is not recognized:** Use the full path printed by the installer. Run its `uv tool update-shell` command and open a new terminal. For pipx, use `pipx ensurepath`.
+- **An executable already exists from another installer:** Keep using that installer, or uninstall its PokeSim package before switching between pipx and uv. Uninstalling the package keeps your library and saves.
+- **Python version, compiler, or PyBoy build error:** Use the automatic installer or the manual uv command above to select Python 3.12. A newer system Python may lack compatible dependency wheels on your platform. Include your OS, CPU, and the complete error in a [support request](../SUPPORT.md).
+- **`externally-managed-environment`:** Use the installer, uv, pipx, or a virtual environment. Do not use sudo pip or override your system's package protections.
+- **Download or certificate error:** Check your connection and any proxy configuration, then retry. Do not disable TLS verification.
 
 - **No browser opens:** Run `pokesim-desktop --no-browser` and open the reported address. The Library opens directly.
 - **Reference setup fails:** Retry with internet access. For offline setup, pass `--reference-archive "/path/to/reference.zip"`. Use the pinned [reference ZIP](https://codeload.github.com/pret/pokered/zip/a1a22aaf84d1675bcdbaeb194592379d586d838e), with SHA-256 `d651b4495b353b1521b42494e635aae2ffe9c89c3609f8cf166975c0bc723fcc`.

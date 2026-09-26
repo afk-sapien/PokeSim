@@ -43,6 +43,8 @@ jobs:
         run: uv run --locked python tools/check_package.py
       - name: Install wheel and test Library and native workers outside the checkout
         run: uv run --locked python tools/check_python_install.py
+      - name: Verify the user-facing installer and repeat installation
+        run: uv run --locked python tools/check_installer.py
   acceleration:
     timeout-minutes: 15
     runs-on: ubuntu-22.04

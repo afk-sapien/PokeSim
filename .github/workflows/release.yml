@@ -1,11 +1,9 @@
 name: Publish public release
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag of an existing GitHub release, for example v0.1.0
+        description: Tag of an existing draft GitHub release, for example v0.4.5
         required: true
         type: string
 permissions:
@@ -59,8 +57,9 @@ jobs:
                   release = json.load(response)
           except HTTPError as error:
               if error.code == 404:
-                  raise SystemExit('Create and publish the GitHub release for this tag first')
+                  raise SystemExit('Create the draft GitHub release for this tag first')
               raise
+          assert release['draft'], 'Only draft releases can be built and published'
           assert not any(asset['name'] == 'image-linux-amd64.tar.gz' for asset in release['assets']), \
               'This version already has published downloads. Publish a new version.'
           revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
@@ -122,6 +121,7 @@ jobs:
         run: |
           docker build --platform linux/amd64 --build-arg VERSION="$VERSION" --build-arg REVISION="$REVISION" -t "$IMAGE" .
           python tools/check_container.py "$IMAGE"
+          python tools/check_quickstart.py "$IMAGE"
       - name: Publish image and verify anonymous access
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
@@ -146,7 +146,7 @@ jobs:
           mkdir -p release
           docker save "$IMAGE" | gzip > release/image-linux-amd64.tar.gz
           cp dist/* release/
-          cp compose.yaml release/compose.yaml
+          cp compose.yaml compose.quickstart.yaml install.sh install.ps1 release/
           cp .env.example release/env.example
           docker run --rm --network none "$IMAGE" cat /usr/share/pokesim/python-dependencies.json > release/python-dependencies.json
           docker image inspect "$IMAGE" --format '{{json .}}' > release/image-metadata.json
@@ -173,6 +173,7 @@ jobs:
               with path.open('rb') as stream:
                   digest = 'sha256:' + hashlib.file_digest(stream, 'sha256').hexdigest()
               assert assets[path.name]['digest'] == digest, f'Upload verification failed: {path.name}'
-          subprocess.run(['gh', 'release', 'edit', tag,
-                          '--prerelease=' + str('rc' in tag).lower()], check=True)
+          subprocess.run(['gh', 'release', 'edit', tag, '--draft=false',
+                          '--prerelease=' + str('rc' in tag).lower(),
+                          '--latest=' + str('rc' not in tag).lower()], check=True)
           PY

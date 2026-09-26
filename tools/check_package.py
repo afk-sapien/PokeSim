@@ -97,7 +97,8 @@ for artifact in artifacts:
             identity = json.load(archive.extractfile(f'pokesim-{release_version}/pokesim/_build.json'))
         assert {'uv.lock', 'setup.py', 'THIRD_PARTY_NOTICES.md', 'RELEASE_STATUS.md',
                 'Dockerfile', '.dockerignore', '.env.example', 'compose.yaml',
-                'compose.build.yaml', 'compose.proxy.yaml', 'deploy/Caddyfile',
+                'compose.build.yaml', 'compose.proxy.yaml', 'compose.quickstart.yaml',
+                'install.sh', 'install.ps1', 'deploy/Caddyfile',
                 'docs/README.md', 'docs/images/live-adventure.jpg',
                 'docs/images/pc-storage.jpg', 'docs/images/pokedex.jpg',
                 'docs/images/journal.jpg',

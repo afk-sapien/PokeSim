@@ -95,6 +95,8 @@ jobs:
       - run: docker build --pull -t pokesim:ci .
       - name: Verify the Compose installation and save lifecycle
         run: python tools/check_container.py pokesim:ci
+      - name: Verify the new-user Docker setup and persistent volume
+        run: python tools/check_quickstart.py pokesim:ci
       - name: Verify the authenticated HTTPS proxy
         run: python tools/check_proxy_boundary.py pokesim:ci
       - name: Reject fixable high and critical image vulnerabilities

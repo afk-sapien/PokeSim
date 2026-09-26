@@ -1,3 +1,4 @@
+# For new installations. Existing bind-mount installations use compose.yaml.
 services:
   pokesim:
     image: ${POKESIM_IMAGE:-ghcr.io/afk-sapien/pokesim:0.4.5}
@@ -15,7 +16,7 @@ services:
       NTFY_MIN_PRIORITY: ${NTFY_MIN_PRIORITY:-2}
       NTFY_MUTE: ${NTFY_MUTE:-}
     volumes:
-      - ${DATA_PATH:-./pokesim-app}:/data
+      - ${DATA_PATH:-pokesim-data}:/data
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
@@ -28,3 +29,6 @@ services:
         max-size: 10m
         max-file: "3"
     stop_grace_period: 90s
+
+volumes:
+  pokesim-data:

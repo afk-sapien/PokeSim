@@ -8,21 +8,28 @@ available as a checksummed release download for offline loading.
 ## Trigger and checks
 
 Ordinary branch pushes and pull requests do not publish anything. When ready to
-release, update `pyproject.toml`, the lockfile, Docker defaults, and release notes
-for the chosen version. Commit and merge the reviewed changes to `main`. Then create
-and publish a GitHub release for a new `v<version>` tag on that commit, using
-`docs/release-notes.md` as its description:
+release, update `pyproject.toml`, the lockfile, both installer version defaults,
+Docker defaults, and release notes for the chosen version. Commit and merge the
+reviewed changes to `main`. Push a new `v<version>` tag for that exact commit, then
+create a draft release and start the publishing workflow:
 
 ```sh
-gh release create v0.1.0 --target main --title "PokeSim 0.1.0" --notes-file docs/release-notes.md
+git tag v0.4.5
+git push origin v0.4.5
+gh release create v0.4.5 --verify-tag --draft --title "PokeSim 0.4.5" --notes-file docs/release-notes.md
+gh workflow run release.yml --ref main -f tag=v0.4.5
 ```
 
-Publishing the release automatically starts the **Publish public release**
-workflow, which attaches the downloads. A bare tag push does not publish anything.
-The tag must match the package version and release notes heading.
+Use the actual next version when following these examples. A tag push alone does
+not publish anything. The tag must match the package version and release notes heading.
+Only draft releases can be built. The workflow publishes the draft after every upload
+has been verified, so `/releases/latest/download/` continues to serve the previous
+completed stable release throughout validation. Public installation commands use those
+release asset URLs rather than files from `main`.
 
-To retry a failed run, start that workflow manually with the release's tag. It
-refuses a version whose downloads are already attached.
+To retry a failed run, start the workflow manually with the unchanged draft's tag.
+It refuses a version whose final image download is already attached, so inspect a
+failure during the final upload before retrying. Never move a published tag.
 
 The workflow validates Python installation on all configured targets, runs Python
 and browser tests, builds the wheel and source package, and builds and tests the
@@ -33,8 +40,12 @@ repository secret is needed. The publishing job has `packages: write` and
 
 It next pulls the image using an empty Docker credentials directory and verifies
 that it has the same image ID as the tested build. Release assembly records the
-registry digest, image ID, source revision, platform, and file checksums. Both
-`compose.yaml` and `env.example` select the exact version. The workflow uploads the
+registry digest, image ID, source revision, platform, and file checksums.
+`compose.yaml`, `compose.quickstart.yaml`, and `env.example` select the exact image version.
+The `install.sh` and `install.ps1` downloads select the matching wheel version and are
+included in the checksums. The Python matrix exercises both installer scripts on their
+respective platforms, including repeat installation. The container checks exercise a
+fresh named volume and verify that it survives container removal and recreation. The workflow uploads the
 downloads to the release and verifies every uploaded checksum. Versions containing
 `rc` are marked as prereleases. No floating `latest` tag is published.
 
@@ -54,9 +65,9 @@ policies that prohibit package creation must be resolved before the first releas
 
 ## Failed runs and retries
 
-A failed check before image publication leaves GHCR unchanged, but the GitHub
-release stays visible without downloads. Once the image has been pushed, a later
-failure can leave that image in GHCR with an incomplete asset list. Inspect the
+A failed check before image publication leaves GHCR unchanged and the GitHub
+release remains a private draft. The previous completed stable release stays latest. Once the image has been pushed, a later
+failure can leave that image in GHCR with an incomplete draft asset list. Inspect the
 failure and rerun the workflow manually against the same unchanged tag. It replaces
 partial assets and checks the complete asset set. Never move a published tag. Fix
 released software in a new version.

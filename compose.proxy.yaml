@@ -40,5 +40,7 @@ networks:
   edge:
   outbound:
 volumes:
+  # Required when compose.yaml is the downloaded named-volume quick start.
+  pokesim-data:
   proxy-data:
   proxy-config:

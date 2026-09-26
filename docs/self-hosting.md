@@ -4,66 +4,166 @@
 
 One manager serves the browser, owns the library, and starts one child process per running adventure. Several Red or Blue games can run inside one container. Cable trading uses an additional temporary paired emulator process. Set capacity according to available CPU, memory, and storage.
 
-Use a published GHCR image as described below, or build and start using the [README instructions](../README.md#in-one-docker-container). The container runs as UID and GID 10001, with a read-only root filesystem. Its `/data` volume contains the complete application. Reference setup writes verified shared assets there on first use.
+The container runs as UID and GID 10001, with a read-only root filesystem. Its `/data`
+volume contains the complete application. Reference setup writes verified shared assets
+there when you add your first ROM.
 
-### Install a published container
+### First installation
 
-The next release will publish a versioned Linux amd64 image at `ghcr.io/afk-sapien/pokesim`.
-This candidate is not published yet. Until it is, use the source build in the README.
-Older retired releases do not provide this registry installation.
-
-Once a release is published, choose its exact tag from the
-[release page](https://github.com/afk-sapien/PokeSim/releases). In a new installation
-folder, download that release's configuration. The version below is an example for
-the upcoming candidate and will work only after it is published:
-
-For the newest release, `https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.yaml`
-and `.../env.example` always resolve to it, so the commands below never go stale. To pin an exact
-version instead, name its tag:
+Install [Docker Engine with Compose](https://docs.docker.com/engine/install/) on Linux,
+or [Docker Desktop](https://docs.docker.com/desktop/) on Windows or macOS, and start it.
+Check both commands before continuing:
 
 ```sh
-POKESIM_RELEASE=v0.4.4
-curl -fL --retry 3 -o compose.yaml "https://github.com/afk-sapien/PokeSim/releases/download/$POKESIM_RELEASE/compose.yaml"
-mkdir -p pokesim-app
-sudo chown 10001:10001 pokesim-app
-docker compose up -d
+docker version
+docker compose version
 ```
 
-Every setting below has a default inside `compose.yaml`, so a `.env` file is optional. Add one next
-to `compose.yaml` to change any of them, and download that release's `env.example` as a starting
-point. Settings kept in `.env` survive replacing `compose.yaml` when you upgrade.
+The published image targets **Linux amd64**. Docker Desktop must use Linux containers.
+For Apple Silicon and Linux ARM64, the [native installer](desktop.md) is the recommended
+path. ARM64 container images are not currently published. There is no established minimum
+hardware specification. Start with one adventure at 1× and add more as resources allow.
 
-Open [localhost:8930](http://localhost:8930) and supply your ROM through the Library.
-You need Docker Engine with Compose on a Linux amd64 host, or Docker Desktop
-configured for Linux containers on an x86-64 computer. Native ARM64 container
-images are not part of this release pipeline. Python installation remains available
-for supported ARM64 systems.
+Create a new installation folder, then download the quick-start configuration:
 
-The release's Compose and environment files select the exact image version. There
-is no floating `latest` tag and no automatic upgrade of an existing installation.
-Public image pulls need no GitHub account, access token, Git clone, or local build.
+```sh
+mkdir pokesim
+cd pokesim
+curl -fL --retry 3 -o compose.yaml https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.quickstart.yaml
+docker compose up -d --wait
+```
 
-For an upgrade, back up and stop the application, review the release notes, and set
-`POKESIM_IMAGE` in your existing `.env` to the new version. Preserve your data path
-and other settings. Then run `docker compose pull` and `docker compose up -d`.
-Review any Compose changes in the new release before restarting.
+On Windows PowerShell, use `curl.exe` for that download. Open
+[localhost:8930](http://localhost:8930) **on the Docker host** and supply your ROM in the
+Library. Docker pulls the public, versioned image without a registry login or source build.
+The first download can take several minutes. `--wait` reports startup or health failures.
 
-The release also retains `image-linux-amd64.tar.gz` for offline image loading.
-Download it and `SHA256SUMS` from the same release, verify with
+The quick-start file uses a Docker-managed `pokesim-data` volume. Docker initializes its
+ownership from the image, so you do not need `mkdir`, `chown`, or administrator access to
+prepare a data folder. Keep the installation directory and its name stable. Compose uses
+that name to select the volume. Renaming it or changing `--project-name` selects a different
+library. `docker compose down` preserves the volume. **Do not use `down --volumes` or prune
+this volume if you want to keep your saves.**
+
+The latest-download URLs select the newest completed stable release. Its installers and
+Compose files pin that release's wheel and image. To pin a configuration yourself, replace
+`latest/download` with `download/v0.4.5` in the download URL. Draft releases stay hidden
+until all their downloads are verified, so preparing the next version does not interrupt
+these install commands.
+
+### Existing installations and custom data folders
+
+The original `compose.yaml` still defaults to `./pokesim-app`. Keep using it for existing
+bind-mount libraries. Replacing it with the quick-start file without setting `DATA_PATH`
+would open an empty Docker volume instead of your existing library.
+
+For a new bind-mount installation, download the original release configuration:
+
+```sh
+curl -fL --retry 3 -o compose.yaml https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.yaml
+mkdir -p pokesim-app
+sudo chown 10001:10001 pokesim-app
+docker compose up -d --wait
+```
+
+Those ownership commands are for a regular Linux Docker Engine installation. Docker
+Desktop, rootless Docker, and SELinux hosts have different bind-mount permission rules.
+Use the quick-start named volume for a new library if you do not need a host folder.
+Do not recursively change ownership of unrelated folders or use world-writable permissions.
+
+### Configure ports and remote access
+
+Settings are optional. Put overrides in a `.env` file beside `compose.yaml`. For example,
+if port 8930 is busy, use:
+
+```dotenv
+HTTP_PORT=8931
+```
+
+The configurations in this checkout derive the default local `PUBLIC_URL` from `HTTP_PORT`.
+With an older release configuration, also set `PUBLIC_URL=http://localhost:8931`.
+Open [localhost:8931](http://localhost:8931) after `docker compose up -d --wait`.
+
+On a remote server, localhost refers to the server. An SSH tunnel keeps the default
+local-only binding. Run this on the computer with your browser:
+
+```sh
+ssh -L 8930:127.0.0.1:8930 user@your-server
+```
+
+Then open [localhost:8930](http://localhost:8930) on that computer. For a trusted LAN,
+set both `BIND_ADDRESS=0.0.0.0` and `PUBLIC_URL=http://YOUR_SERVER_IP:8930`, then recreate
+the container. Anyone who can reach that address can manage the library. Use authenticated
+HTTPS for broader access. Setting `PUBLIC_URL` alone does not expose the listening port.
+
+### Back up, update, and remove
+
+Use **Settings and backups** in the Library to download a consistent backup, then stop
+the app with `docker compose stop`. Keep the backup outside the container and volume.
+Set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:NEW_VERSION` in `.env`, preserving your other
+settings, then run:
+
+```sh
+docker compose pull
+docker compose up -d --wait
+docker compose logs --tail=50 pokesim
+```
+
+Choose a real version from the [release page](https://github.com/afk-sapien/PokeSim/releases).
+The configuration pins its image version. Pulling alone does not select a newer release.
+Review release notes and configuration changes before updating. Do not replace your
+`.env` with `env.example`, which would reset your data path and other settings.
+
+To remove the service while retaining its library, run `docker compose down`.
+For backup and restore details, see [operations](operations.md).
+
+### Build the current source
+
+From a source checkout, use both files for building and starting:
+
+```sh
+docker compose -f compose.quickstart.yaml -f compose.build.yaml up -d --build --wait
+```
+
+This builds locally and initializes a named volume. There is no separate `prepare-data`
+service for the current application. Add your ROM in the Library. For an existing
+bind-mount installation, use `compose.yaml` instead of `compose.quickstart.yaml` in both
+commands. Use the same file arguments for subsequent stop, logs, and update commands.
+
+### Offline image loading
+
+The release retains `image-linux-amd64.tar.gz` for offline loading. Download it and
+`SHA256SUMS` from the same release, verify the image checksum with
 `sha256sum --ignore-missing -c SHA256SUMS`, then run
-`docker load -i image-linux-amd64.tar.gz` and `docker compose up -d --pull never`.
+`docker load -i image-linux-amd64.tar.gz` and `docker compose up -d --pull never --wait`.
 The loaded archive has the same versioned GHCR tag. Initial reference preparation
 still needs internet access unless the reference archive is supplied locally.
+
+### Troubleshooting startup
+
+Run `docker compose ps -a` and `docker compose logs --tail=100 pokesim` from your
+installation folder. Include those outputs, your OS and CPU, and `docker compose version`
+in a [support request](../SUPPORT.md). Remove private paths or tokens before sharing.
+
+- **Cannot connect to the Docker daemon:** Start Docker Desktop or the Docker service. On Linux, check your user's access to Docker according to its installation guide.
+- **Unknown `compose` or `--wait`:** Install or update the Docker Compose v2 plugin. The old `docker-compose` v1 command is not the supported path.
+- **No matching manifest for ARM64:** Use the native installer. The published container is amd64 only.
+- **Permission denied under `/data`:** For a new installation, use the named-volume quick start. For an existing bind mount, check ownership for container UID 10001 and any SELinux or rootless mapping rules.
+- **Port is already allocated:** Change `HTTP_PORT` as shown above and recreate the container.
+- **Library works on the server but not another computer:** Use the SSH tunnel or configure both the bind address and public URL.
+- **Host or Origin rejected:** Open the exact `PUBLIC_URL`, including its hostname and port. `localhost` and `127.0.0.1` are different hosts.
+- **An empty Library appears after an update:** Stop the service and check your Compose project name and `DATA_PATH`. Restore the original mount before creating any new adventures.
+- **First ROM setup fails:** Initial setup downloads a pinned reference archive. Check connectivity and the error shown in the Library. Prepared adventures can run offline.
 
 ### Settings
 
 | Setting | Purpose |
 | --- | --- |
-| `DATA_PATH=./pokesim-app` | Persistent application folder containing all adventures |
+| `DATA_PATH` | Quick start defaults to named volume `pokesim-data`. Original Compose defaults to host folder `./pokesim-app` |
 | `PUBLIC_URL=http://localhost:8930` | Exact browser address, including scheme and port |
 | `HTTP_PORT=8930` | Host port mapped to the manager |
 | `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
-| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.4` | Exact published image version, overridden by `compose.build.yaml` for source builds |
+| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.5` | Exact published image version, overridden by `compose.build.yaml` for source builds |
 
 Phone notifications need no setting here. Open the Library, choose **Notifications**, generate a topic, and subscribe to it in the [ntfy](https://ntfy.sh) app. See the [guide](guide.md#notifications). `NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY`, and `NTFY_MUTE` are still read from the environment as defaults until notifications are saved in the Library.
 
@@ -103,7 +203,7 @@ pokesim import-pair --red /path/to/old-red --blue /path/to/old-blue --red-rom /p
 
 Stop both legacy adventures, their coordinator, and the destination application first. The paired import verifies exact matching completion history, latest trade barriers, verified checkpoints, and retained coordinator evidence before registering either copied adventure. Missing or mismatched evidence fails the import and cannot be bypassed by clearing a protection flag. Source saves, databases, and coordinator evidence remain unchanged. The importer opens coordination lock files, so use writable backup copies when the originals must remain read-only. Keep those original services stopped after migration to avoid running duplicate ownership histories.
 
-The previous single-game Compose file remains at `compose.legacy.yaml` and its settings at `.env.legacy.example`. With the new image, its explicit `legacy` command continues to use environment configuration. Existing deployment examples under `deploy/` describe the legacy separate broker and trader. They are not components of the new managed application.
+The previous single-game Compose file remains at `compose.legacy.yaml`. Its settings are documented in the [legacy operations archive](history/operations-legacy.md). With the new image, its explicit `legacy` command continues to use environment configuration. Existing deployment examples under `deploy/` describe the legacy separate broker and trader. They are not components of the new managed application.
 
 Restore a complete backup into an empty application directory. Recovery needs the registry, adventure files, and interaction decisions together. If a trade had committed before a crash, recovery applies its recorded results instead of rerunning the cable exchange.
 
@@ -111,100 +211,4 @@ Restore a complete backup into an empty application directory. Recovery needs th
 
 Native source launch depends on the availability of Python, PyBoy, and its native dependencies for the host. Docker packages those dependencies for a Linux target. Neither the manager nor the simulation protocol requires x86-64. The Python install workflow covers multiple OS and CPU targets, with actual passing results required before claiming support for a release.
 
-## Historical prebuilt release
-
-The instructions below are retained only for existing **v0.2.0rc6** installations.
-This release is retired and should not be used for a new installation. Use the
-current application instructions above. Keep historical source, images, and
-configuration together when recovering an old installation.
-
-## Install the prebuilt v0.2.0rc6 release
-
-The prebuilt release supports **Linux amd64** with Docker Engine and the Compose plugin. Supply your own clean Pokémon Red (USA, Europe) ROM. Pokémon ROMs, sprites, and game datasets are not bundled. The PyBoy dependency includes its own small demo ROM, which cannot replace your Pokémon ROM. Blue and ARM do not yet have equivalent release validation.
-
-Clone the public release source:
-
-```sh
-git clone --branch v0.2.0rc6 --depth 1 https://github.com/afk-sapien/PokeSim.git pokesim
-cd pokesim
-cp .env.example .env
-mkdir -p roms data
-sudo chown 10001:10001 data
-```
-
-Place your ROM at `roms/pokered.gb`. Create a local reference checkout for data preparation:
-
-```sh
-git clone https://github.com/pret/pokered .reference/pokered
-git -C .reference/pokered checkout a1a22aaf84d1675bcdbaeb194592379d586d838e
-```
-
-Download the prebuilt image and verify its checksum. These public downloads require no GitHub account, token, or registry login:
-
-```sh
-curl -fL --retry 3 -o image-linux-amd64.tar.gz https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc6/image-linux-amd64.tar.gz
-curl -fL --retry 3 -o SHA256SUMS https://github.com/afk-sapien/PokeSim/releases/download/v0.2.0rc6/SHA256SUMS
-sha256sum --ignore-missing -c SHA256SUMS
-```
-
-Confirm that the image archive reports `OK`, then load and start it:
-
-```sh
-docker load -i image-linux-amd64.tar.gz
-docker compose --profile setup run --rm --pull never prepare-data
-docker compose up -d --pull never
-docker compose logs --tail=50 pokesim
-```
-
-Open [localhost:8930](http://localhost:8930). The archive loads the exact image tag `pokesim:0.2.0rc6`. Releases are distributed as downloadable Docker archives, so there is no `docker compose pull` step. The [release page](https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0rc6) also provides source packages, Compose files, a dependency inventory, and a manifest with the image ID and source revision.
-
-The setup command parses the pinned source checkout and writes verified game data into `./data`. It does not build or download a ROM. The runtime uses the local data afterward and does not require that source checkout or internet access unless notifications are enabled.
-
-Progress, policy memory, screenshots, and the journal live in `./data`. The container runs as user and group 10001 with a read-only root filesystem and read-only ROM. Do not point two running containers at the same data directory.
-
-## Access and controls
-
-`/pokedex` browses all 151 Kanto entries with types, base stats, the level-up learnset, evolution family, and where each one can be found, next to what this run has registered and everyone waiting in the storage boxes. Entry data comes from your locally prepared game data. Each entry also links out to Bulbapedia, Serebii, and Wikipedia. Portraits use the optional local pack described below and fall back to a neutral placeholder.
-
-The browser displays up to 10 frames per second independently of game speed. It waits for each image to download and decode before requesting another, retains the last good image during a connection failure, and retries automatically. Hidden tabs stop downloading game images. The `/stream` MJPEG endpoint remains available for other clients.
-
-The default port is accessible only on the Docker host. For remote access, use the [authenticated HTTPS proxy recipe](proxy.md) or a private network. The app has no built-in authentication. Anyone who can reach an instance with controls enabled can control, reset, and rewind its game.
-
-Set `VIEWER_ONLY=1` in `.env` to disable every game control endpoint, then recreate the container. This does not authenticate viewers.
-
-## Useful settings
-
-Edit `.env`, then run `docker compose up -d --pull never`.
-
-| Setting | Default | Purpose |
-| --- | --- | --- |
-| `ROM_FILE` | `./roms/pokered.gb` | ROM path on the host |
-| `DATA_PATH` | `./data` | Persistent game and journal data |
-| `HTTP_PORT` | `8930` | Browser port |
-| `BIND_ADDRESS` | `127.0.0.1` | Interface to listen on |
-| `PUBLIC_URL` | `http://localhost:8930` | Links in feeds and notifications |
-| `SPEED` | `1` | Game speed, 0 means unlimited |
-| `VIEWER_ONLY` | `0` | 1 disables controls |
-| `NTFY_URL` | empty | Optional notification destination for this historical single-game release. The current application uses the Library's Notifications page |
-| `EVENT_RETENTION_DAYS` | `0` | History retention, 0 keeps everything |
-| `KEEP_AUTOSAVES` | `20` | Recent autosave pairs to retain |
-
-Unlimited speed can use a full CPU core. Long-term memory, storage, and viewer bandwidth validation remains incomplete. No minimum hardware specification is established yet.
-
-## Keep your adventure
-
-Back up the complete data directory while the container is stopped. Before an upgrade, preserve that backup and the old image. New autosaves pair the game state with policy memory, a checksum, ROM identity, and the pinned PyBoy version. Startup can fall back to an earlier compatible save if the newest one is corrupt.
-
-See [backup, restore, upgrades, rollback, and troubleshooting](operations.md). Event history and screenshots are kept indefinitely unless you explicitly configure retention.
-
-## Build from source
-
-After preparing the ROM, data directory, and source checkout above:
-
-```sh
-docker compose -f compose.yaml -f compose.build.yaml build
-docker compose -f compose.yaml -f compose.build.yaml --profile setup run --rm prepare-data
-docker compose -f compose.yaml -f compose.build.yaml up -d
-```
-
-For native development, follow [CONTRIBUTING.md](../CONTRIBUTING.md).
+Historical instructions for retired v0.2.0rc6 installations are kept in the [archive](history/self-hosting-rc6.md).

@@ -22,6 +22,12 @@ body:
       label: Host OS and CPU architecture
     validations:
       required: true
+  - type: textarea
+    id: installation
+    attributes:
+      label: Installation method and command
+      description: For setup problems, include the exact command, terminal, and complete error. Say whether you used the automatic installer, pipx, uv, Docker, or source. Never include tokens.
+      render: text
   - type: input
     id: rom
     attributes:

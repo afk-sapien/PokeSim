@@ -44,6 +44,9 @@ def assets(tmp_path):
                                          '  prepare-data:\n'
                                          '    image: ${POKESIM_IMAGE:-pokesim:local}\n')
     (tmp_path / 'env.example').write_text('POKESIM_IMAGE=pokesim:local\n')
+    root = Path(__file__).resolve().parents[1]
+    for name in ('compose.quickstart.yaml', 'install.sh', 'install.ps1'):
+        (tmp_path / name).write_text((root / name).read_text())
     return tmp_path
 
 
@@ -64,6 +67,22 @@ def test_complete_release_checksums_cover_every_download_and_manifest(assets):
 def test_missing_native_target_blocks_release(assets):
     (assets / DESKTOP_ARCHIVES[0]).unlink()
     with pytest.raises(ValueError, match='Missing release assets'):
+        assemble(assets, VERSION, REVISION)
+    assert not (assets / 'manifest.json').exists()
+
+
+@pytest.mark.parametrize('name', ['install.sh', 'install.ps1', 'compose.quickstart.yaml'])
+def test_missing_setup_download_blocks_release(assets, name):
+    (assets / name).unlink()
+    with pytest.raises(ValueError, match='Missing release assets'):
+        assemble(assets, VERSION, REVISION)
+    assert not (assets / 'manifest.json').exists()
+
+
+@pytest.mark.parametrize('name', ['install.sh', 'install.ps1'])
+def test_unversioned_installer_blocks_release(assets, name):
+    (assets / name).write_text('no version marker\n')
+    with pytest.raises(ValueError, match='must select exactly one release version'):
         assemble(assets, VERSION, REVISION)
     assert not (assets / 'manifest.json').exists()
 
@@ -143,6 +162,9 @@ def test_registry_release_pins_configuration_and_records_digest(registry_assets)
     assert manifest['image_digest'] == 'ghcr.io/afk-sapien/pokesim@sha256:' + 'b' * 64
     assert '${POKESIM_IMAGE:-' + image + '}' in (registry_assets / 'compose.yaml').read_text()
     assert f'POKESIM_IMAGE={image}\n' in (registry_assets / 'env.example').read_text()
+    assert '${POKESIM_IMAGE:-' + image + '}' in (registry_assets / 'compose.quickstart.yaml').read_text()
+    assert f'    version={VERSION}\n' in (registry_assets / 'install.sh').read_text()
+    assert f"$version = '{VERSION}'\n" in (registry_assets / 'install.ps1').read_text()
     sums = dict(line.split('  ', 1)[::-1]
                 for line in (registry_assets / 'SHA256SUMS').read_text().splitlines())
     assert set(sums) == {path.name for path in registry_assets.iterdir()} - {'SHA256SUMS'}

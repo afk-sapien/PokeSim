@@ -8,7 +8,7 @@ This index separates current instructions, future plans, and historical evidence
 | Topic | Guide |
 | --- | --- |
 | Python desktop setup and save locations | [Desktop](desktop.md) |
-| Current server installation | [Server setup](../README.md#in-one-docker-container) |
+| Current server installation | [Server setup](self-hosting.md#first-installation) |
 | Prebuilt release image | [Docker and migration](self-hosting.md) |
 | Publishing Python and Docker releases | [Release workflow and GHCR setup](publishing.md) |
 | DV ratings, level 100 stars, and perfect finds | [Collection goals](collection-goals.md) |

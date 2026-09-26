@@ -1,29 +1,29 @@
-# Release preparation: 0.4.4
+# Release preparation: 0.4.5
 
-Scrolling fixes. The Pokédex filter strip is pinned at the rail's height instead of 8px below it.
-`panel.js` measures the tab strip with `nav:not(.breadcrumb)`; on Library adventure pages the
-first nav is the breadcrumb, so the phone rail never collapsed to its tabs. PC storage's box list
-has a viewport-height ceiling and its own scroll on wide screens. Asset versions are bumped so
-browsers fetch the new files. No data or schema change.
+This release simplifies desktop and Docker installation. User-account installers handle
+Python 3.12 and the released wheel. New Docker libraries can use a named volume without
+manual ownership preparation. Existing bind-mount libraries keep their data paths.
 
-## What was verified
+The setup review fixes isolate Docker smoke tests from inherited Compose settings, preserve
+the named volume when enabling the HTTPS proxy, and serve public install commands from
+completed releases instead of the development branch. Publication verifies a draft's downloads
+before making it the latest release. No application save or schema change is introduced.
 
-1,337 Python tests pass (69 skipped, the new browser cases among them), plus 76 JavaScript tests and 20 browser tests. A new browser
-test scrolls the Pokédex at 1440 and 390 pixels, with the Library breadcrumb in the rail as a
-managed adventure renders it: the filter strip must sit on the rail's lip, and a phone must pin
-only the tab strip. Both cases fail on 0.4.3.
+## Validation
 
-The release targets are a Python wheel and source archive, plus a Linux amd64 Docker image and
-Compose configuration. The `pokesim-desktop` Python command opens the Library in your browser.
+Local verification passed 1,348 Python tests with 69 skipped, plus JavaScript checks,
+lint, package validation, an installed-wheel launcher and repeat-installation smoke test,
+and the Docker named-volume lifecycle check. Focused regression tests cover configuration
+isolation and proxy storage preservation.
 
-Publication is gated on Python and browser regression checks, clean package identities, Docker
-lifecycle checks, and isolated native Python installations on Windows x86-64, Intel macOS, Apple
-Silicon, and Linux x86-64 and ARM64. The workflow uploads a draft, verifies every uploaded
-checksum, and only then publishes it.
+Release workflow validation covers installer retries, configuration isolation,
+proxy volume preservation, package resources, and Docker startup and persistence. The release
+workflow also gates publication on the full Python and browser suites, native installation
+on Windows x86-64, Intel macOS, Apple Silicon, Linux x86-64 and ARM64, and container lifecycle
+checks. Test results and the deployed version are recorded after those checks complete.
 
-Publishing this release does not upgrade a running application: change the image or package where
-it is deployed. See [release notes](docs/release-notes.md),
-[desktop installation](docs/desktop.md), and [self-hosting](docs/self-hosting.md).
+See [release notes](docs/release-notes.md), [desktop installation](docs/desktop.md), and
+[self-hosting](docs/self-hosting.md).
 
 ## Known limits, deliberately not addressed here
 

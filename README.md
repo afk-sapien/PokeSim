@@ -51,64 +51,47 @@ PokeSim ships no ROMs and downloads none. You supply your own clean copy of Pok√
 
 ## Running it
 
-On your own computer, with [pipx](https://pipx.pypa.io/stable/installation/) and Git:
+On your own computer, paste the command for your system into a terminal. The installer
+sets up uv, Python 3.12, and the released PokeSim package for your user account.
+You do not need to install Python, pipx, Git, or Docker first. Internet access is required.
+
+**macOS or Linux:**
 
 ```sh
-pipx install git+https://github.com/afk-sapien/PokeSim.git
-pokesim-desktop
+curl -fsSL https://github.com/afk-sapien/PokeSim/releases/latest/download/install.sh | sh
 ```
 
-Your browser opens the Library, where you add your ROM and start an adventure. Python 3.11 or newer, tested on 3.12. Without pipx, `python -m pip install git+https://github.com/afk-sapien/PokeSim.git` in a virtual environment does the same thing. `pipx upgrade pokesim` updates it later. The [desktop guide](docs/desktop.md) has released wheels, pinned versions, data locations and troubleshooting.
+**Windows PowerShell:**
 
-On a server, with Docker:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/afk-sapien/PokeSim/releases/latest/download/install.ps1 | iex"
+```
+
+Run the launch command printed at the end. Your browser opens the Library, where you add
+your ROM and start an adventure. Run as your normal user, without sudo or an administrator
+terminal. The [desktop guide](docs/desktop.md) explains what the scripts download, how to
+review them first, manual installation, updates, and troubleshooting.
+
+**On a server or with Docker Desktop:** use Linux containers on an x86-64 computer.
+Create a new folder for this installation, download the quick-start file as `compose.yaml`,
+then start it:
 
 ```sh
-curl -fLO https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.yaml
-mkdir -p pokesim-app
-sudo chown 10001:10001 pokesim-app
-docker compose up -d
+mkdir pokesim
+cd pokesim
+curl -fL --retry 3 -o compose.yaml https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.quickstart.yaml
+docker compose up -d --wait
 ```
 
-That pulls the published image, so there's nothing to build and no registry login. Open [localhost:8930](http://localhost:8930) and create your first adventure.
+In Windows PowerShell, use `curl.exe` for the download command. Open
+[localhost:8930](http://localhost:8930) and create your first adventure. Docker manages a
+persistent volume, so there is no data-folder creation or ownership command. Keep this
+installation folder in the same location and use it for future Compose commands.
 
-To change the port, the data folder or the address you browse to, put the settings in a `.env` file
-next to `compose.yaml`. [env.example](https://github.com/afk-sapien/PokeSim/releases/latest/download/env.example)
-from the same release lists them all. It's optional, and settings kept there survive replacing
-`compose.yaml` on your next upgrade.
-
-<details>
-<summary>Rather write the Compose file yourself?</summary>
-
-This is the short version of what the release downloads. Save it as `compose.yaml`, create the
-`pokesim-app` folder as above, and run `docker compose up -d`:
-
-```yaml
-services:
-  pokesim:
-    image: ghcr.io/afk-sapien/pokesim:0.4.4
-    container_name: pokesim
-    ports:
-      - "127.0.0.1:8930:8000"
-    environment:
-      PUBLIC_URL: http://localhost:8930
-    volumes:
-      - ./pokesim-app:/data
-    restart: unless-stopped
-    init: true
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    tmpfs:
-      - /tmp:size=256m,mode=1777
-    stop_grace_period: 90s
-```
-
-The data folder must be writable by user 10001, which is what the `chown` above does. Change
-`PUBLIC_URL` to the address you'll open in your browser, and keep the published port matching it.
-
-</details>
-
-See [self-hosting](docs/self-hosting.md) for upgrades, offline image archives and building from source.
+For updates, save a backup from **Settings and backups**, then follow
+[self-hosting](docs/self-hosting.md). That guide also covers remote access, custom ports,
+source builds, and existing bind-mount installations. **Existing Docker users:** keep your
+current Compose file and data mount. The quick-start file is for new libraries.
 
 Either way, the games keep running when you close the tab, and your computer has to stay awake for them to get anywhere. Use **Save and quit** to stop everything cleanly. A busy adventure no longer eats disk while it does: finished trades keep only their newest twenty, and the database gives back empty space each time it starts.
 

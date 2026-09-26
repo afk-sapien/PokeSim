@@ -37,7 +37,8 @@ def assemble(root, version, revision, *, include_desktop=True, image=None):
     wheel = f'pokesim-{version}-py3-none-any.whl'
     source = f'pokesim-{version}.tar.gz'
     required = {wheel, source, 'image-linux-amd64.tar.gz', 'image-metadata.json',
-                'python-dependencies.json', 'compose.yaml', 'env.example'}
+                'python-dependencies.json', 'compose.yaml', 'compose.quickstart.yaml',
+                'install.sh', 'install.ps1', 'env.example'}
     for name in archives:
         required.update({name, name + '.sha256', name + '.json'})
     missing = sorted(name for name in required if not (root / name).is_file())
@@ -94,13 +95,23 @@ def assemble(root, version, revision, *, include_desktop=True, image=None):
         raise ValueError('Release settings must select exactly one image')
     settings.write_text(re.sub(r'^POKESIM_IMAGE=.*$', f'POKESIM_IMAGE={image}',
                               contents, flags=re.M), encoding='utf-8')
-    compose = root / 'compose.yaml'
-    contents = compose.read_text()
     image_default = r'\$\{POKESIM_IMAGE:-[^}\s]+\}'
-    if len(re.findall(image_default, contents)) not in (1, 2):
-        raise ValueError('Release Compose must select the versioned application image')
-    compose.write_text(re.sub(image_default, '${POKESIM_IMAGE:-' + image + '}', contents),
-                       encoding='utf-8')
+    for name in ('compose.yaml', 'compose.quickstart.yaml'):
+        compose = root / name
+        contents = compose.read_text()
+        if len(re.findall(image_default, contents)) not in (1, 2):
+            raise ValueError('Release Compose must select the versioned application image')
+        compose.write_text(re.sub(image_default, '${POKESIM_IMAGE:-' + image + '}', contents),
+                          encoding='utf-8')
+    for name, pattern, replacement in (
+        ('install.sh', r'^    version=[^\n]+$', '    version=' + version),
+        ('install.ps1', r"^\$version = '[^']+'$", "$version = '" + version + "'"),
+    ):
+        installer = root / name
+        contents, count = re.subn(pattern, lambda match: replacement, installer.read_text(), flags=re.M)
+        if count != 1:
+            raise ValueError(f'{name} must select exactly one release version')
+        installer.write_text(contents, encoding='utf-8')
     if include_desktop:
         (root / 'desktop-manifest.json').write_text(json.dumps({
             'version': version, 'revision': revision, 'archives': desktop,

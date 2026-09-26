@@ -2,7 +2,7 @@ Authenticated HTTPS deployment
 
 This recipe protects the homepage, controls, API, feed, screenshots, and stream with the same authentication boundary. The application has no published backend port. Caddy terminates TLS and streams MJPEG without buffering. Docker Compose 2.24.4 or newer is required for the port reset used by the example.
 
-Prepare the application data directory and its ownership using the README first.
+Start with a working direct deployment from the README first.
 This advanced recipe also needs `compose.proxy.yaml`, `deploy/Caddyfile`,
 `deploy/proxy.env.example`, and the entire `deploy/proxy` folder from the source archive matching your installed release.
 If you installed only the prebuilt release assets, copy those files into your
@@ -16,7 +16,14 @@ chmod 600 .env.proxy
 docker run --rm -it --network none caddy:2.11.4-alpine caddy hash-password
 ```
 
-Enter a password interactively. Copy the resulting hash into `AUTH_HASH` in `.env.proxy`, using single quotes around the hash. Set `AUTH_USER` and `DATA_PATH`. Use the existing Adventure Library directory, normally `./pokesim-app`. Do not point it at a legacy single-adventure `./data` folder. Import legacy saves through the library instead. Copy the exact `POKESIM_IMAGE` setting from your working `.env` too, since `.env.proxy` replaces it for these commands. For the localhost example, keep the supplied address and port defaults.
+Enter a password interactively. Copy the resulting hash into `AUTH_HASH` in `.env.proxy`, using single quotes around the hash. Set `AUTH_USER` and preserve the direct deployment's storage choice:
+
+- For the named-volume quick start, keep `DATA_PATH=pokesim-data`. Run from the same installation folder with the same Compose project name so the existing volume is reused.
+- For an original bind-mount installation, set `DATA_PATH=./pokesim-app` or your existing custom path.
+
+Do not point the manager at a legacy single-adventure `./data` folder. Import legacy saves through the Library instead. Copy the exact `POKESIM_IMAGE` from your working `.env`, or the image tag shown by `docker compose config --images` if you have no `.env`. The `.env.proxy` file replaces your normal environment settings for these commands. For the localhost example, keep the supplied address and port defaults.
+
+Use `docker compose --env-file .env.proxy -f compose.proxy.yaml config --quiet` to check the configuration before starting. The proxy file declares the application volume as well as its own certificate volumes.
 
 ```sh
 docker compose --env-file .env.proxy -f compose.proxy.yaml build --pull proxy
