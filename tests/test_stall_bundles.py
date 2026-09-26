@@ -1,5 +1,7 @@
 """A stall keeps the moment it was noticed and the save from before it began."""
 import json
+import os
+from pathlib import Path
 from types import SimpleNamespace
 
 from pokesim import config
@@ -23,6 +25,27 @@ def test_a_kept_autosave_outlives_pruning_and_still_validates(tmp_path):
     # Keeping a newer save replaces the old one instead of failing on the existing name.
     store.keep_as(store.latest_state(), BEFORE_STALL_CHECKPOINT)
     assert kept.read_bytes() == b'later 2' and len(store.autosaves()) == 2
+
+
+def test_equal_filesystem_timestamps_keep_the_newest_autosave(tmp_path, monkeypatch):
+    store = CheckpointStore(tmp_path / 'states')
+    stamps = iter((9, 10, 11))
+    monkeypatch.setattr('pokesim.checkpoints.time.time_ns', lambda: next(stamps))
+    saves = [store.write_checkpoint(str(index).encode(), MANIFEST) for index in range(3)]
+    for path in saves:
+        os.utime(path, ns=(1_000_000_000, 1_000_000_000))
+    original_glob = Path.glob
+
+    def reordered_glob(path, pattern):
+        if path == store.states and pattern == 'auto-*.state':
+            return iter((saves[2], saves[0], saves[1]))
+        return original_glob(path, pattern)
+
+    monkeypatch.setattr(Path, 'glob', reordered_glob)
+    assert store.latest_state() == saves[2]
+    store.prune_autosaves(2)
+    assert not saves[0].exists()
+    assert saves[1].exists() and saves[2].exists()
 
 
 def test_a_stall_bundle_holds_both_saves_and_old_bundles_are_dropped(tmp_path, monkeypatch):

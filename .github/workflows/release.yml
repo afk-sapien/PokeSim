@@ -15,10 +15,14 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      # GitHub exposes draft releases only to identities with push access.
+      contents: write
     outputs:
       image: ${{ steps.release.outputs.image }}
       version: ${{ steps.release.outputs.version }}
       revision: ${{ steps.release.outputs.revision }}
+      release_id: ${{ steps.release.outputs.release_id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -40,7 +44,6 @@ jobs:
           import subprocess
           import tomllib
           from urllib.request import Request, urlopen
-          from urllib.error import HTTPError
           tag = os.environ['RELEASE_TAG']
           assert re.fullmatch(r'v\d+\.\d+\.\d+(?:rc\d+)?', tag), 'Invalid release tag'
           version = tomllib.load(open('pyproject.toml', 'rb'))['project']['version']
@@ -52,19 +55,25 @@ jobs:
           headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'}
           with urlopen(Request('https://api.github.com/repos/' + repo, headers=headers)) as response:
               assert json.load(response)['visibility'] == 'public', 'This workflow publishes only reviewed public source'
-          try:
-              with urlopen(Request(f'https://api.github.com/repos/{repo}/releases/tags/{tag}', headers=headers)) as response:
-                  release = json.load(response)
-          except HTTPError as error:
-              if error.code == 404:
-                  raise SystemExit('Create the draft GitHub release for this tag first')
-              raise
+          releases = []
+          page = 1
+          while True:
+              url = f'https://api.github.com/repos/{repo}/releases?per_page=100&page={page}'
+              with urlopen(Request(url, headers=headers)) as response:
+                  batch = json.load(response)
+              releases.extend(release for release in batch if release['tag_name'] == tag)
+              if len(batch) < 100:
+                  break
+              page += 1
+          assert len(releases) == 1, 'Create exactly one draft GitHub release for this tag first'
+          release = releases[0]
           assert release['draft'], 'Only draft releases can be built and published'
           assert not any(asset['name'] == 'image-linux-amd64.tar.gz' for asset in release['assets']), \
               'This version already has published downloads. Publish a new version.'
           revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write(f'image=ghcr.io/{repo.lower()}:{version}\nversion={version}\nrevision={revision}\n')
+              output.write(f'release_id={release["id"]}\n')
           PY
   python-install:
     needs: validate
@@ -154,6 +163,7 @@ jobs:
       - name: Upload and verify the release downloads
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_ID: ${{ needs.validate.outputs.release_id }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "$RELEASE_TAG" release/* --clobber
@@ -165,7 +175,9 @@ jobs:
           import subprocess
           tag = os.environ['RELEASE_TAG']
           repo = os.environ['GITHUB_REPOSITORY']
-          release = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/releases/tags/{tag}']))
+          release_id = os.environ['RELEASE_ID']
+          release = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/releases/{release_id}']))
+          assert release['draft'] and release['tag_name'] == tag, 'Release identity changed during the build'
           assets = {asset['name']: asset for asset in release['assets']}
           files = list(Path('release').iterdir())
           assert set(assets) == {path.name for path in files}, 'Uploaded asset set is incomplete'

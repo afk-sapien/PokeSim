@@ -55,7 +55,13 @@ class CheckpointStore:
         return self.states / f"auto-v1-{time.time_ns()}.state"
 
     def autosaves(self) -> list[Path]:
-        return sorted(self.states.glob("auto-*.state"), key=lambda p: p.stat().st_mtime_ns)
+        def order(path):
+            # Filesystems can give consecutive saves the same modification time.
+            # The generated filename retains their higher-resolution creation order.
+            stamp = path.stem.removeprefix('auto-v1-')
+            return path.stat().st_mtime_ns, int(stamp) if stamp.isdecimal() else 0, path.name
+
+        return sorted(self.states.glob("auto-*.state"), key=order)
 
     def latest_state(self) -> Path | None:
         saves = self.autosaves()

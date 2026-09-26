@@ -7,11 +7,12 @@ manual ownership preparation. Existing bind-mount libraries keep their data path
 The setup review fixes isolate Docker smoke tests from inherited Compose settings, preserve
 the named volume when enabling the HTTPS proxy, and serve public install commands from
 completed releases instead of the development branch. Publication verifies a draft's downloads
-before making it the latest release. No application save or schema change is introduced.
+before making it the latest release. An autosave ordering fix resolves equal filesystem timestamps deterministically.
+No save-format or schema change is introduced.
 
 ## Validation
 
-Local verification passed 1,348 Python tests with 69 skipped, plus JavaScript checks,
+Local verification passed 1,349 Python tests with 69 skipped, plus JavaScript checks,
 lint, package validation, an installed-wheel launcher and repeat-installation smoke test,
 and the Docker named-volume lifecycle check. Focused regression tests cover configuration
 isolation and proxy storage preservation.

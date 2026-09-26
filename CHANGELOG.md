@@ -4,6 +4,8 @@
 
 ## 0.4.5
 
+- Resolve equal filesystem timestamps using autosave filename timestamps, so selecting
+  and pruning saves consistently keeps the newest checkpoint.
 - Add user-account installers for macOS, Linux, and Windows that manage Python 3.12
   and install the released wheel without Git or pipx.
 - Add a Docker quick-start configuration with a persistent named volume, removing

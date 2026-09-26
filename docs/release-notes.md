@@ -23,6 +23,11 @@ describe the current Adventure Library. Retired single-game instructions are arc
 Installer scripts and the quick-start Compose file are included in the checksummed release
 downloads. The release remains a draft until all downloads are verified.
 
+## Autosave reliability
+
+When consecutive saves receive the same filesystem timestamp, PokeSim now uses their
+creation timestamps in the filenames to select and retain the newest save consistently.
+
 ## Upgrading
 
 Back up the complete library, stop PokeSim, and select version 0.4.5. Keep your existing

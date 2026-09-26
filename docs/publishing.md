@@ -36,7 +36,8 @@ and browser tests, builds the wheel and source package, and builds and tests the
 Linux amd64 image. Only then does it log in to GHCR with the repository's temporary
 `GITHUB_TOKEN` and push the exact version tag. No personal access token or added
 repository secret is needed. The publishing job has `packages: write` and
-`contents: write`, while other jobs retain read-only repository access.
+`contents: write`. Draft validation also needs `contents: write` because GitHub only
+exposes draft releases to identities with push access. Test jobs retain read-only access.
 
 It next pulls the image using an empty Docker credentials directory and verifies
 that it has the same image ID as the tested build. Release assembly records the
