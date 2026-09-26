@@ -66,12 +66,15 @@ def main():
                 else:
                     code += 'assert p.read_text() == "retained library"\n'
                 compose('exec', '-T', 'pokesim', 'python', '-c', code)
+                if attempt == 0:
+                    probe = (ROOT / 'tools/check_first_run.py').read_text()
+                    compose('exec', '-T', 'pokesim', 'python', '-c', probe, '--data-dir', '/data')
                 container = compose('ps', '-q', 'pokesim', capture=True).stdout.strip()
                 compose('stop')
                 inspected = json.loads(subprocess.check_output(['docker', 'inspect', container], text=True))[0]
                 assert inspected['State']['ExitCode'] in (0, 143)
                 compose('down')
-            print('Docker quick start passed: fresh volume, non-root writes, custom port, health, shutdown, and persistence')
+            print('Docker quick start passed: first ROM setup, fresh volume, non-root writes, custom port, health, shutdown, and persistence')
         except BaseException:
             compose('logs', '--no-color', '--tail=100')
             raise

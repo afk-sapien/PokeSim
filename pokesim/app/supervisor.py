@@ -196,6 +196,7 @@ class Supervisor:
                 self.registry.update(aid, state='starting', generation=generation, error=None)
             try:
                 self.assets.prepare(lambda message: self.registry.update(aid, summary={'setup': message}))
+                self.assets.install_portraits(Path(settings['rom_path']).read_bytes())
                 child.start()
                 try:
                     self.sync_notifications(aid, child)

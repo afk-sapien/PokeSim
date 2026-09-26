@@ -1,27 +1,21 @@
-# Release preparation: 0.4.5
+# Release preparation: 0.4.6
 
-This release simplifies desktop and Docker installation. User-account installers handle
-Python 3.12 and the released wheel. New Docker libraries can use a named volume without
-manual ownership preparation. Existing bind-mount libraries keep their data paths.
-
-The setup review fixes isolate Docker smoke tests from inherited Compose settings, preserve
-the named volume when enabling the HTTPS proxy, and serve public install commands from
-completed releases instead of the development branch. Publication verifies a draft's downloads
-before making it the latest release. An autosave ordering fix resolves equal filesystem timestamps deterministically.
-No save-format or schema change is introduced.
+This release fixes first ROM uploads on fresh Docker and native installations. Uploads
+register the cartridge without loading legacy game data. Automatic adventure setup
+prepares the library's reference data before portrait generation and worker startup.
+Existing custom portraits are preserved. No save-format or schema change is introduced.
 
 ## Validation
 
-Local verification passed 1,349 Python tests with 69 skipped, plus JavaScript checks,
-lint, package validation, an installed-wheel launcher and repeat-installation smoke test,
-and the Docker named-volume lifecycle check. Focused regression tests cover configuration
-isolation and proxy storage preservation.
+The new first-run regression reproduced the reported upload error before the fix.
+Local validation passed 1,350 Python tests with 69 skipped, JavaScript and documentation
+checks, lint, and wheel and source-package validation. A private Red ROM check verified
+all 151 portraits, worker startup, saving, and restart in a fresh library.
 
-Release workflow validation covers installer retries, configuration isolation,
-proxy volume preservation, package resources, and Docker startup and persistence. The release
-workflow also gates publication on the full Python and browser suites, native installation
-on Windows x86-64, Intel macOS, Apple Silicon, Linux x86-64 and ARM64, and container lifecycle
-checks. Test results and the deployed version are recorded after those checks complete.
+The rebuilt Docker image passed the first-run check in an empty volume, including
+automatic reference download, worker startup, saving, offline restart, custom portrait
+preservation, and container recreation. The release workflow gates publication on Python
+and browser tests, native installation checks, and these Docker lifecycle checks.
 
 See [release notes](docs/release-notes.md), [desktop installation](docs/desktop.md), and
 [self-hosting](docs/self-hosting.md).

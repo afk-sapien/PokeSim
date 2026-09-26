@@ -28,6 +28,8 @@ def test_queued_start_waits_until_backup_finishes_copying(tmp_path, monkeypatch)
     manager.registry.request_lifecycle(row['id'], 'start', identifier())
     monkeypatch.setattr(manager.assets, 'rom_path', lambda rid: tmp_path / 'fixture.gb')
     monkeypatch.setattr(manager.assets, 'prepare', lambda report: tmp_path)
+    monkeypatch.setattr(manager.assets, 'install_portraits', lambda raw: 0)
+    (tmp_path / 'fixture.gb').write_bytes(b'fake')
     original_copy = backup.shutil.copytree
 
     def copytree(source, destination, *args, **kwargs):
@@ -95,6 +97,8 @@ def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, state, ex
     manager.registry.request_lifecycle(row['id'], 'start', identifier())
     monkeypatch.setattr(manager.assets, 'rom_path', lambda rid: tmp_path / 'fixture.gb')
     monkeypatch.setattr(manager.assets, 'prepare', lambda report: tmp_path)
+    monkeypatch.setattr(manager.assets, 'install_portraits', lambda raw: 0)
+    (tmp_path / 'fixture.gb').write_bytes(b'fake')
     try:
         manager.supervisor.start(row['id'])
         original = manager.supervisor.child(row['id'])

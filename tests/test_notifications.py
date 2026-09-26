@@ -206,7 +206,9 @@ def test_running_adventures_receive_changes_without_restarting(client):
     client, manager = client
     supervisor = manager.supervisor
     supervisor.assets = SimpleNamespace(rom_path=lambda rid: manager.root / 'rom.gb', game_data_dir=manager.root,
-                                        prepare=lambda report: None, cancelled=supervisor.assets.cancelled)
+                                        prepare=lambda report: None, install_portraits=lambda raw: 0,
+                                        cancelled=supervisor.assets.cancelled)
+    (manager.root / 'rom.gb').write_bytes(b'fake')
     red, blue = adventure(manager, 'Red'), adventure(manager, 'Blue')
     received = {red: [], blue: []}
     original = FakeChild.start

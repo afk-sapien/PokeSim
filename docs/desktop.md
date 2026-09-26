@@ -41,14 +41,14 @@ full launch command printed by the installer.
 With [uv](https://docs.astral.sh/uv/getting-started/installation/), which can also download Python:
 
 ```sh
-uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.5/pokesim-0.4.5-py3-none-any.whl
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.6/pokesim-0.4.6-py3-none-any.whl
 uv tool update-shell
 ```
 
 With [pipx](https://pipx.pypa.io/stable/installation/) and Python 3.12 already installed:
 
 ```sh
-pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.5/pokesim-0.4.5-py3-none-any.whl
+pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.6/pokesim-0.4.6-py3-none-any.whl
 pipx ensurepath
 ```
 
@@ -152,8 +152,8 @@ including wins earned with rewards disabled, independently of reward counts.
 
 The application folder contains its registry, installed assets, all adventure directories, interaction recovery records, and backups.
 
-Adding a ROM decodes all 151 front portraits from it into `assets/sprites` inside this
-application folder, so the collection pages are illustrated straight away. Every adventure shares
+Starting an adventure decodes all 151 front portraits from its ROM into `assets/sprites`
+after automatic reference setup. Every adventure shares
 these images, including games created later. To use different artwork, place `1.png` through
 `151.png` there yourself: an existing file is never overwritten. An adventure's own `sprites`
 folder still overrides individual portraits. Everything stays local and is included in

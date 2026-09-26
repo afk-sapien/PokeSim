@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag of an existing draft GitHub release, for example v0.4.5
+        description: Tag of an existing draft GitHub release, for example v0.4.6
         required: true
         type: string
 permissions:

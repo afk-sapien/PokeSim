@@ -6,7 +6,7 @@ One manager serves the browser, owns the library, and starts one child process p
 
 The container runs as UID and GID 10001, with a read-only root filesystem. Its `/data`
 volume contains the complete application. Reference setup writes verified shared assets
-there when you add your first ROM.
+there when you start your first adventure.
 
 ### First installation
 
@@ -47,7 +47,7 @@ this volume if you want to keep your saves.**
 
 The latest-download URLs select the newest completed stable release. Its installers and
 Compose files pin that release's wheel and image. To pin a configuration yourself, replace
-`latest/download` with `download/v0.4.5` in the download URL. Draft releases stay hidden
+`latest/download` with `download/v0.4.6` in the download URL. Draft releases stay hidden
 until all their downloads are verified, so preparing the next version does not interrupt
 these install commands.
 
@@ -153,7 +153,8 @@ in a [support request](../SUPPORT.md). Remove private paths or tokens before sha
 - **Library works on the server but not another computer:** Use the SSH tunnel or configure both the bind address and public URL.
 - **Host or Origin rejected:** Open the exact `PUBLIC_URL`, including its hostname and port. `localhost` and `127.0.0.1` are different hosts.
 - **An empty Library appears after an update:** Stop the service and check your Compose project name and `DATA_PATH`. Restore the original mount before creating any new adventures.
-- **First ROM setup fails:** Initial setup downloads a pinned reference archive. Check connectivity and the error shown in the Library. Prepared adventures can run offline.
+- **ROM upload asks for prepare-data:** Update to 0.4.6 or newer and retry the upload. Earlier versions could try to generate portraits before automatic reference setup.
+- **First adventure setup fails:** Starting the first adventure downloads a pinned reference archive and generates portraits. Check connectivity and the error shown in the Library. Prepared adventures can run offline.
 
 ### Settings
 
@@ -163,7 +164,7 @@ in a [support request](../SUPPORT.md). Remove private paths or tokens before sha
 | `PUBLIC_URL=http://localhost:8930` | Exact browser address, including scheme and port |
 | `HTTP_PORT=8930` | Host port mapped to the manager |
 | `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
-| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.5` | Exact published image version, overridden by `compose.build.yaml` for source builds |
+| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.6` | Exact published image version, overridden by `compose.build.yaml` for source builds |
 
 Phone notifications need no setting here. Open the Library, choose **Notifications**, generate a topic, and subscribe to it in the [ntfy](https://ntfy.sh) app. See the [guide](guide.md#notifications). `NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY`, and `NTFY_MUTE` are still read from the environment as defaults until notifications are saved in the Library.
 

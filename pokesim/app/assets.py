@@ -36,7 +36,6 @@ class Assets:
         else:
             CheckpointStore.atomic_write(path, raw)
         version = 'blue' if 'Blue' in ROM_NAMES[sha1] else 'red'
-        self.install_portraits(raw)
         return self.registry.add_rom(sha256, sha1, version)
 
     def install_portraits(self, raw) -> int:
@@ -46,13 +45,14 @@ class Assets:
         An existing file is never replaced, so a hand-installed pack still wins.
         """
         from ..sprites import extract
-        from ..strategy_data import SPECIES
+        data = game_data.load('strategy.json', directory=self.game_data_dir)
+        species = {int(key): value for key, value in data['species'].items()}
 
         directory = self.root / 'sprites'
         directory.mkdir(parents=True, exist_ok=True)
         written = 0
         try:
-            portraits = extract(bytes(raw), SPECIES)
+            portraits = extract(bytes(raw), species)
         except Exception:
             log.exception('Could not read portraits from this ROM; the placeholder stays in use')
             return 0

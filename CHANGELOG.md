@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.6
+
+- Fix the first ROM upload on fresh Docker and native installations. Generate portraits
+  after automatic adventure setup, using the library's verified reference data instead
+  of the legacy data directory. No manual prepare-data command is needed.
+- Gate Docker releases on first ROM upload, automatic reference setup, portrait generation,
+  worker startup, saving, and restart in an empty library without legacy game data.
+
 ## 0.4.5
 
 - Resolve equal filesystem timestamps using autosave filename timestamps, so selecting

@@ -99,9 +99,11 @@ def test_installing_a_rom_lays_down_portraits_without_replacing_a_supplied_pack(
     from types import SimpleNamespace
 
     from pokesim.app.assets import Assets
+    from pokesim import game_data
 
     registry = SimpleNamespace(root=tmp_path, add_rom=lambda *a: {'id': a[0]}, roms=lambda: [])
-    assets = Assets(registry)
+    assets = Assets(registry, game_data_dir=game_data.directory())
+    assets.prepare()
     mine = assets.root / 'sprites' / '1.png'
     mine.parent.mkdir(parents=True, exist_ok=True)
     mine.write_bytes(b'a pack the owner installed by hand')

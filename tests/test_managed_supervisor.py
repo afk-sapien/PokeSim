@@ -32,7 +32,8 @@ def supervisor(tmp_path):
     rom = tmp_path / 'rom.gb'
     rom.write_bytes(b'fake')
     assets = SimpleNamespace(rom_path=lambda rid: rom, game_data_dir=tmp_path,
-                             prepare=lambda report: tmp_path, cancelled=threading.Event())
+                             prepare=lambda report: tmp_path, install_portraits=lambda raw: 0,
+                             cancelled=threading.Event())
     supervisor = Supervisor(registry, assets, 'http://127.0.0.1:8000', FakeChild)
     yield supervisor
     supervisor.close()
