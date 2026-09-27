@@ -36,10 +36,10 @@ def goal(project):
     target = COURSE[index]
     town = WORLD[target[0]]['name'].replace('Town', ' Town').replace('City', ' City')
     if index == 0:
-        return Goal('collect_marathon', 'Head to the marathon start',
-                    'Meet at Pallet Town. The clock starts at the starting line', (target,))
-    return Goal('collect_marathon', f'Kanto Marathon: {town}',
-                f'Checkpoint {index} of {len(COURSE) - 1} · '
+        return Goal('collect_marathon', 'Kanto Marathon',
+                    'Head to Pallet Town. The clock starts at the starting line', (target,))
+    return Goal('collect_marathon', 'Kanto Marathon',
+                f'{town} · Checkpoint {index} of {len(COURSE) - 1} · '
                 f'{duration(project["race_frames"])} · {project["gains"]["steps"]:,} recorded steps', (target,))
 
 

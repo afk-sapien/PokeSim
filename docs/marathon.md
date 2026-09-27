@@ -30,8 +30,8 @@ where the same party is observed recovering HP, PP, or status, once per visit.
 
 ## When the player races
 
-A marathon becomes eligible after four completed postgame projects, with access
-to Cut and open Saffron gates. It has a low selection weight. Missing Pokédex
+A marathon becomes eligible after becoming Champion and finishing four projects,
+with access to Cut and open Saffron gates. It has a low selection weight. Missing Pokédex
 entries and urgent supply projects take precedence. Each attempt is followed by
 at least six simulated hours before another can be selected.
 

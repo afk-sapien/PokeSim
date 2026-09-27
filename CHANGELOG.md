@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.11
+## 0.4.12
 
 - Add an occasional Kanto Marathon after the Champion victory. Follow an ordered
   seven-town course, record steps, battles, healing stops, and time, and celebrate

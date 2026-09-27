@@ -119,6 +119,8 @@ def test_restart_preserves_race_and_does_not_count_a_gap_or_repeat_start():
     assert restored.project['race_frames'] == 60
     assert not restored.take_activity_events()
     assert restored.goal(checkpoint(1)).targets == (marathon.COURSE[2],)
+    assert restored.goal(checkpoint(1)).title == 'Kanto Marathon'
+    assert 'Pewter City' in restored.goal(checkpoint(1)).reason
 
 
 def test_clock_includes_detours_but_stationary_runs_end_without_a_finish():

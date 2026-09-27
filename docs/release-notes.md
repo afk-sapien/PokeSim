@@ -1,4 +1,4 @@
-# PokeSim 0.4.11 experimental beta
+# PokeSim 0.4.12 experimental beta
 
 The automatic player can now take an occasional break for the Kanto Marathon.
 
@@ -18,7 +18,7 @@ Both Red and Blue completed the full course in local copied-save replays. See th
 
 ## Upgrading
 
-Back up the library and select `ghcr.io/afk-sapien/pokesim:0.4.11` in your Compose file,
+Back up the library and select `ghcr.io/afk-sapien/pokesim:0.4.12` in your Compose file,
 then run `docker compose pull` and `docker compose up -d --wait`. Keep your existing
 data mount and project name. Native installations can rerun the installer.
 

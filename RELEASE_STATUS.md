@@ -1,4 +1,4 @@
-# Release status: 0.4.11
+# Release status: 0.4.12
 
 This release adds the Kanto Marathon, an occasional postgame race with ordered
 checkpoints, measured progress, saved records, and short journal reports.
@@ -17,7 +17,9 @@ Red finished in 17:47 with 1,228 recorded steps and 17 battles. Blue finished in
 13:38 with 1,243 recorded steps and 13 battles. These times exclude travel to the
 starting line. See the [sanitized replay receipt](docs/validation/marathon-replays.json).
 
-Publication and deployment checks are pending for this candidate.
+The unpublished 0.4.11 candidate was canceled during native installation checks
+to correct the live checkpoint display. It was never published or deployed.
+Publication and deployment checks are pending for 0.4.12.
 
 ## Known limits, deliberately not addressed here
 
