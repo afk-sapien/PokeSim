@@ -1,4 +1,4 @@
-# Release preparation: 0.4.7
+# Release status: 0.4.7
 
 This release fixes Game Corner prize confirmation, replaces the raw stat-sum ranking
 with a weighted Power score, and defaults All Pokémon to highest Power first.
@@ -30,6 +30,19 @@ checks, and Docker first-upload, save, and restart checks.
 
 See [release notes](docs/release-notes.md), [Pokémon stats](docs/pokemon-stats.md), and
 [self-hosting](docs/self-hosting.md).
+
+## Publication and deployment
+
+[PokeSim 0.4.7](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.7) is published.
+All native installation, browser, Docker lifecycle, and anonymous image checks passed.
+The existing home-server installation was backed up, upgraded, and verified healthy.
+Both live adventures reached 151 of 151 registrations. Blue purchased Porygon, then
+normal automatic trading exchanged it for Red's Ekans. The physical Porygon is now
+in Red, and both Pokédexes retain the registration. No cartridge state was edited to
+produce this result. The archived adventure remained stopped.
+
+The live browser shows the compact Pokémon popup, the new Power scores, and highest
+Power first when entering All Pokémon. See the [sanitized validation receipt](docs/validation/release-0.4.7.json).
 
 ## Known limits, deliberately not addressed here
 
