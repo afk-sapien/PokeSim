@@ -1,0 +1,89 @@
+{
+  "version": "0.4.12",
+  "revision": "0aa5ed5bb316fcbbe33128ee0ef5b83802edc52b",
+  "core_version": "0.1.2",
+  "release_url": "https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.12",
+  "workflow_url": "https://github.com/afk-sapien/PokeSim/actions/runs/36336469611",
+  "image": "ghcr.io/afk-sapien/pokesim:0.4.12",
+  "validation": {
+    "local_python_passed": 1393,
+    "local_optional_skipped": 69,
+    "marathon_regressions_passed": 11,
+    "checkpoint_browser_widths": [
+      1280,
+      390,
+      320
+    ],
+    "release_python_passed": 1381,
+    "release_optional_skipped": 63,
+    "browser_passed": 23,
+    "native_installation": "passed on all five platforms",
+    "container_lifecycle": "passed",
+    "anonymous_image_access": "passed",
+    "package_checks": "passed",
+    "docs_javascript_and_lint": "passed"
+  },
+  "replays": {
+    "red": {
+      "last": {
+        "finished": true,
+        "frames": 64024,
+        "steps": 1228,
+        "battles": 17,
+        "healing_stops": 0,
+        "checkpoints": 11
+      },
+      "completed": 1,
+      "best_frames": 64024
+    },
+    "blue": {
+      "last": {
+        "finished": true,
+        "frames": 49110,
+        "steps": 1243,
+        "battles": 13,
+        "healing_stops": 0,
+        "checkpoints": 11
+      },
+      "completed": 1,
+      "best_frames": 49110
+    }
+  },
+  "unpublished_candidate": {
+    "version": "0.4.11",
+    "result": "Canceled before publication to correct live checkpoint display",
+    "deployed": false
+  },
+  "workflow_result": "success",
+  "image_digest": "sha256:2aed5b1174930ac4439b4daa69c3ee9d207c34e9c89fd956fa875548ff08e8b5",
+  "deployment": {
+    "previous_version": "0.4.10",
+    "cold_backup_verified": true,
+    "healthy": true,
+    "marathon_fields_verified": true,
+    "adventures": [
+      {
+        "name": "Red",
+        "state": "running",
+        "archived": false,
+        "error": null,
+        "owned": 151,
+        "frames_advanced": 58178
+      },
+      {
+        "name": "Blue",
+        "state": "running",
+        "archived": false,
+        "error": null,
+        "owned": 151,
+        "frames_advanced": 54332
+      },
+      {
+        "name": "Bababa",
+        "state": "stopped",
+        "archived": true,
+        "error": null
+      }
+    ]
+  }
+}

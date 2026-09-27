@@ -19,7 +19,15 @@ starting line. See the [sanitized replay receipt](docs/validation/marathon-repla
 
 The unpublished 0.4.11 candidate was canceled during native installation checks
 to correct the live checkpoint display. It was never published or deployed.
-Publication and deployment checks are pending for 0.4.12.
+The published source passed 1,381 Python tests with 63 optional tests skipped,
+and all 23 browser tests. All five native platforms, package checks, Docker
+lifecycle tests, and anonymous image access passed.
+
+[PokeSim 0.4.12](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.12) is published.
+The home server was cold-backed up and upgraded from 0.4.10. Both adventures
+resumed without errors, advanced after startup, and retain 151 of 151 registrations.
+Live API checks confirm the new marathon fields. The archived adventure remains
+stopped. See the [sanitized validation receipt](docs/validation/release-0.4.12.json).
 
 ## Known limits, deliberately not addressed here
 
