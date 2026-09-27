@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.14
+
+- Split Journal into Entries and Stats with matching segmented navigation.
+- Track collection power, strongest-six power, average DVs and level, catches,
+  recorded steps, battles, observed damage, marathons, and game hours.
+- Preserve activity totals across restarts and checkpoint restores. Keep hourly
+  trend samples for 30 days and daily samples afterward with bounded chart responses.
+- Label chart scales, reveal small collection improvements, and leave gaps for
+  missing measurements. Express DV changes in percentage points.
+- Preserve collection measurements when saving immediately after restart and retry
+  failed statistics transactions without losing capture counts.
+- Route Journal Stats correctly through the multi-adventure manager.
+
 ## 0.4.13
 
 - Give all Generation I type badges a shared color palette on the live team,

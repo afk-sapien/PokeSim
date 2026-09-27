@@ -42,7 +42,7 @@
     if (!switcher) return
     switcher.onchange = () => {
       const page = location.pathname.slice(base.length)
-      const next = ['/', '/pc', '/pokedex', '/journal', '/trading'].includes(page) ? page : '/'
+      const next = ['/', '/pc', '/pokedex', '/journal', '/journal/stats', '/trading'].includes(page) ? page : '/'
       location.href = `/games/${encodeURIComponent(switcher.value)}${next}`
     }
     try {

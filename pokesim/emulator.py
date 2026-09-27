@@ -68,6 +68,8 @@ class Emulator:
         self.ntfy = ntfy
         from .milestones import MilestoneTracker
         self.milestones = MilestoneTracker(store)
+        from .statistics import StatisticsTracker
+        self.statistics = StatisticsTracker(store)
         self.rom = Path(config.ROM_PATH)
         self.speed = config.SPEED
         self.paused = False
@@ -278,6 +280,8 @@ class Emulator:
     def _reset_transient(self, *, clear_observation=False):
         """Discard queued input and recovery timers without erasing durable progress."""
         self.policy.on_restore()
+        if hasattr(self, 'statistics'):
+            self.statistics.reset_baseline()
         self.input_epoch = getattr(self, 'input_epoch', 0) + 1
         self.stuck_since = self.last_reload = time.time()
         self.last_pos = None
@@ -405,6 +409,8 @@ class Emulator:
             if restored_legendary:
                 snap = read_snapshot(self.pb.memory, self.frame)
                 self.prev_snapshot = snap
+        if hasattr(self, 'statistics'):
+            self.statistics.observe(snap, self.pb.memory)
         if hasattr(self, 'milestones'):
             self.milestones.observe(snap)
             if hasattr(self.policy, 'collection'):
@@ -507,6 +513,8 @@ class Emulator:
         if self.store.get("trade_hold") and not trade_prepare:
             return
         self.store.set("play_clock", self.play_clock.state_dict())
+        if hasattr(self, 'statistics'):
+            self.statistics.flush()
         snap = self.snapshot
         battle_since = getattr(self, 'battle_since', None)
         if battle_since and not trade_prepare and (time.time() - battle_since > config.BATTLE_TIMEOUT_SECONDS / 3
@@ -556,6 +564,8 @@ class Emulator:
             self.pb = self._boot()
             self.prev_snapshot = None
             self.policy.on_restore()
+            if hasattr(self, 'statistics'):
+                self.statistics.reset_baseline()
             self.input_epoch += 1
         now = time.time()
         self.stuck_since = self.last_reload = now
@@ -692,6 +702,8 @@ class Emulator:
         self.store.set('trade_hold', None)
         self.paused = False
         self.policy.on_restore()
+        if hasattr(self, 'statistics'):
+            self.statistics.reset_baseline()
         self.stuck_since = time.time()
         return {'id': transaction, 'phase': 'released'}
 
@@ -741,6 +753,8 @@ class Emulator:
         elif name in ("take_control", "press"):
             if not self.manual_mode:
                 self.policy.on_restore()
+                if hasattr(self, 'statistics'):
+                    self.statistics.reset_baseline()
             self.manual_mode = True
             self.paused = True
             if name == "press" and arg in BUTTONS:
@@ -763,9 +777,14 @@ class Emulator:
                 log.info("loaded %s", p.name)
         elif name == "restart":
             log.warning("restarting run from power-on")
+            if hasattr(self, 'statistics'):
+                self.statistics.flush()
+                self.statistics.reset_baseline()
             self.pb.stop(save=False)
             if getattr(self, 'catch_tracker', None) is not None:
                 self.catch_tracker.reset()
+                if hasattr(self, 'statistics'):
+                    self.statistics.flush()
             for p in self.store.states.glob("auto-*.state"):
                 p.unlink()
                 p.with_suffix(".json").unlink(missing_ok=True)

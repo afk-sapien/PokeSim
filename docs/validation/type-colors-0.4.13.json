@@ -1,0 +1,29 @@
+{
+  "source_revision": "07befbdd988823c5b3195f4c9109ec4b3cb5f779",
+  "ci_url": "https://github.com/afk-sapien/PokeSim/actions/runs/36348052051",
+  "native_validation_url": "https://github.com/afk-sapien/PokeSim/actions/runs/36348052144",
+  "python_passed": 1381,
+  "optional_skipped": 63,
+  "browser_passed": 23,
+  "native_platforms_passed": 5,
+  "container_lifecycle": "passed",
+  "quickstart": "passed",
+  "page_theme_width_combinations": 18,
+  "themes": [
+    "light",
+    "dark",
+    "auto"
+  ],
+  "viewport_widths": [
+    1280,
+    320
+  ],
+  "minimum_type_text_contrast": 8.49,
+  "type_count": 15,
+  "pages": [
+    "Live team",
+    "Pokedex",
+    "PC"
+  ],
+  "detail_windows_checked": true
+}

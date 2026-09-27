@@ -1,20 +1,23 @@
-# Release status: 0.4.13
+# Release status: 0.4.14 candidate
 
-This release adds consistent colored type badges to the live team, Pokédex, and PC.
-The shared palette covers all 15 Generation I types, with a neutral unknown label.
-Existing saves remain compatible. Core remains at 0.1.2.
+This release adds Journal Entries and Stats, durable activity totals, collection
+trends, and consistent type colors. Existing saves remain compatible. Core remains
+at 0.1.2. See the [release notes](docs/release-notes.md).
 
-See the [release notes](docs/release-notes.md) for installation details.
+## Review and validation
 
-## Validation and publication
+Code review fixed collection measurements being dropped by an early save after
+restart, failed writes consuming capture deltas in memory, and historical values
+being displayed as current when the latest measurement was unavailable.
 
-The relevant Pokédex and investment tests passed all 34 checks, and the JavaScript
-checks passed. Chromium inspection covered all three pages and their detail windows
-at 1280 and 320 pixels in light, dark, and automatic themes, for 18 combinations.
-There were no browser script errors or horizontal overflow. All type labels have
-at least 8.49:1 text contrast with their background.
+UI review replaced plain Journal links with panel tabs, added labeled chart
+scales and a date range, made small DV changes visible, and corrected DV deltas
+to percentage points. Desktop and phone layouts keep the text readable.
 
-Publication and deployment checks are pending for this candidate.
+Local validation passed 1,404 Python tests with 75 optional tests skipped and
+all 26 browser checks. JavaScript, Ruff, documentation links, and package
+validation passed. The history stress check covered 100,000 hours with bounded
+responses. Release workflow validation and publication are pending.
 
 ## Known limits, deliberately not addressed here
 

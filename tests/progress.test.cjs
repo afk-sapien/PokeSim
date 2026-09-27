@@ -59,3 +59,19 @@ test('the section stays hidden until there is history, then describes each line'
   assert.match(html, />1<\/strong>/)
   assert.doesNotMatch(html, /Badges/)
 })
+
+test('missing observations leave gaps instead of extending a stale value', () => {
+  const {Progress} = load()
+  const rows = [{ts: 0, power: 5}, {ts: 20, power: null}, {ts: 50, power: 10}]
+  assert.equal(Progress.stepPath(rows, 'power', 0, 100, 10), 'M0.0,32.0H120.0M300.0,3.0H600')
+  assert.equal(Progress.stepPath(rows.slice(0, 2), 'power', 0, 100, 10), 'M0.0,32.0H120.0')
+})
+
+test('focused DV scale shows small improvements within labeled bounds', () => {
+  const {Progress} = load()
+  const [series] = Progress.describe([{ts: 0, dv: 68}, {ts: 10, dv: 69}], 10,
+    [{key: 'dv', max: 100, zoom: true}])
+  assert.equal(series.min, 67)
+  assert.equal(series.max, 70)
+  assert.equal(series.path, 'M0.0,41.7H600.0V22.3H600')
+})

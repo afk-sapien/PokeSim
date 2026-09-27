@@ -85,7 +85,7 @@ def test_the_journal_chart_uses_no_id_the_shared_page_script_writes(tmp_path):
     from pathlib import Path
     static = Path(__file__).parents[1] / 'pokesim/web/static'
     written = set(re.findall(r"set\('#([\w-]+)'", (static / 'app.js').read_text()))
-    chart = re.search(r'<section class="progress".*?</section>', (static / 'journal.html').read_text(), re.S)[0]
+    chart = re.search(r'<section class="progress".*?</section>', (static / 'statistics.html').read_text(), re.S)[0]
     assert written.isdisjoint(re.findall(r'id="([\w-]+)"', chart))
 
 
@@ -119,3 +119,14 @@ def test_a_040_table_gains_the_long_goals_empty(tmp_path):
     db.close()
     [row] = Store(tmp_path).progress()
     assert (row['owned'], row['league'], row['level100'], row['perfect']) == (149, 134, None, None)
+
+
+def test_old_milestone_history_is_bounded_without_losing_endpoints(tmp_path):
+    store = Store(tmp_path)
+    with store.db:
+        store.db.executemany('INSERT INTO progress(ts, badges, owned, seen, league) VALUES (?, 8, 151, 151, ?)',
+                             ((index, index) for index in range(10000)))
+    rows = store.progress()
+    assert len(rows) <= 600
+    assert rows[0]['league'] == 0
+    assert rows[-1]['league'] == 9999

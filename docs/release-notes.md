@@ -1,18 +1,24 @@
-# PokeSim 0.4.13 experimental beta
+# PokeSim 0.4.14 experimental beta
 
-Recognize Pokémon types at a glance with consistent colored badges.
+Follow your adventure's long-term progress in the new Journal Stats page.
 
-- Grass is green, Poison is purple, and every Generation I type has its own color.
-- Badges appear on live team cards and details, Pokédex cards and details,
-  Pokédex move types, and PC cards and details.
-- Type names remain visible, with high text contrast in light and dark themes.
-  The layout also fits 320-pixel phone screens.
+- Journal has separate Entries and Stats pages with matching panel tabs.
+- Track total collection power, strongest-six power, average DVs and level,
+  Pokémon held and caught, steps, battles, marathons, game hours, and observed damage.
+- Existing Pokédex, level 100, perfect-find, and League history remains available.
+- Charts have labeled scales and a date range. Missing measurements stay unknown.
+- Colored Pokémon type badges appear across the live team, Pokédex, and PC.
+
+New activity tracking begins with this update. Existing verified capture receipts
+and marathon journal records are included. Steps and damage are sampled totals.
+See [adventure statistics](adventure-statistics.md) for counting and retention rules.
 
 ## Upgrading
 
-Back up the library and select `ghcr.io/afk-sapien/pokesim:0.4.13` in your Compose file,
+Back up the complete library and select `ghcr.io/afk-sapien/pokesim:0.4.14` in Compose,
 then run `docker compose pull` and `docker compose up -d --wait`. Keep your existing
 data mount and project name. Native installations can rerun the installer.
 
-Existing saves remain compatible. There is no database migration. Core remains at 0.1.2.
-Docker images remain Linux amd64. Use the native Python installer on supported ARM64 systems.
+Existing saves remain compatible. Startup adds a statistics history table and an
+index to each adventure database. Core remains at 0.1.2. Docker images remain
+Linux amd64. Use the native Python installer on supported ARM64 systems.

@@ -74,6 +74,15 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def journal_page():
         return page('journal.html')
 
+    @app.get('/journal/stats', response_class=HTMLResponse)
+    def statistics_page():
+        return page('statistics.html')
+
+    @app.get('/api/statistics')
+    def statistics():
+        from ..statistics import status
+        return status(store)
+
     @app.get('/trading', response_class=HTMLResponse)
     def trading_page():
         return page('adventure-trading.html' if base_path else 'trading.html')

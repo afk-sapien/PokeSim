@@ -438,3 +438,52 @@
   .log, .entry-sheet, .filters { border: 1px solid CanvasText; box-shadow: none; }
   .filters button[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
 }
+
+/* Journal subpages use the same panel keys as the main navigation. */
+.journal-pages { display: grid }
+.journal-pages { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+.journal-pages { width: min(100%, 320px) }
+.journal-pages { margin-bottom: var(--s5) }
+.journal-pages { background: var(--panel-2) }
+.journal-pages { border: var(--hair) solid var(--rule) }
+.journal-pages { box-shadow: var(--key-inset) }
+.journal-pages a { display: flex }
+.journal-pages a { align-items: center }
+.journal-pages a { justify-content: center }
+.journal-pages a { min-height: 48px }
+.journal-pages a { padding: var(--s2) var(--s4) }
+.journal-pages a { font: var(--f-legend) / 1 var(--font-panel) }
+.journal-pages a { letter-spacing: var(--track-legend) }
+.journal-pages a { text-transform: uppercase }
+.journal-pages a { color: var(--ink-2) }
+.journal-pages a { text-decoration: none }
+.journal-pages a { transition: background var(--t), color var(--t) }
+.journal-pages a + a { border-left: var(--hair) solid var(--rule) }
+.journal-pages a:hover { background: var(--panel) }
+.journal-pages a:hover { color: var(--ink) }
+.journal-pages a[aria-current="page"] { background: var(--well) }
+.journal-pages a[aria-current="page"] { color: var(--ink) }
+.journal-pages a[aria-current="page"] { box-shadow: var(--well-inset), inset 0 -3px 0 var(--signal) }
+.journal-pages a:focus-visible { outline-offset: -4px }
+@media (forced-colors: active) {
+  .journal-pages { border-color: CanvasText }
+  .journal-pages a[aria-current="page"] { outline: 2px solid Highlight }
+  .journal-pages a[aria-current="page"] { outline-offset: -4px }
+}
+.statistics-section { margin-block: var(--s5) }
+.progress-label { min-width: 0 }
+.progress-label .readout { overflow-wrap: anywhere }
+@media (max-width: 520px) {
+  #road .column-head { flex-wrap: wrap }
+  #road .column-head { gap: var(--s2) }
+  #road-heading { flex-basis: 100% }
+}
+
+.trend { min-width: 0 }
+.trend-scale { display: block }
+.trend-scale { margin-bottom: var(--s1) }
+.trend-scale { color: var(--ink-2) }
+#statistics-window { margin-top: var(--s2) }
+
+.progress-label .readout { white-space: normal }
+.progress-label .readout--missing { font-size: var(--f-legend) }

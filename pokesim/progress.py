@@ -105,5 +105,11 @@ def backfill(db):
 
 
 def history(db):
+    count, first, last = db.execute('SELECT COUNT(*), MIN(rowid), MAX(rowid) FROM progress').fetchone()
+    if count > 600:
+        return [dict(zip(('ts', *FIELDS), row)) for row in db.execute(
+            f'SELECT ts, {COLUMNS} FROM progress WHERE rowid IN ('
+            'SELECT MAX(rowid) FROM progress GROUP BY CAST((rowid - ?) / ? AS INTEGER) '
+            'UNION SELECT MIN(rowid) FROM progress) ORDER BY rowid', (first, (last - first + 598) // 598))]
     return [dict(zip(('ts', *FIELDS), row)) for row in
             db.execute(f'SELECT ts, {COLUMNS} FROM progress ORDER BY rowid')]

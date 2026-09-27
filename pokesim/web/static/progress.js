@@ -15,25 +15,41 @@
   ]
 
   // A step line holds each value until the next row changes it, then runs on to `until`.
-  function stepPath(rows, key, start, until, max) {
+  function stepPath(rows, key, start, until, max, min = 0) {
     const span = Math.max(until - start, 1)
     const x = (ts) => (Math.min(Math.max(ts, start), until) - start) / span * WIDTH
-    const y = (value) => HEIGHT - INSET - Math.min(value, max) / max * (HEIGHT - 2 * INSET)
-    const points = rows.filter((row) => row[key] != null)
-    if (!points.length) return ''
-    let path = `M${x(points[0].ts).toFixed(1)},${y(points[0][key]).toFixed(1)}`
-    for (const row of points.slice(1)) path += `H${x(row.ts).toFixed(1)}V${y(row[key]).toFixed(1)}`
-    return path + `H${WIDTH}`
+    const y = (value) => HEIGHT - INSET - (Math.min(Math.max(value, min), max) - min) / Math.max(max - min, 1e-9) * (HEIGHT - 2 * INSET)
+    let path = ''
+    let active = false
+    for (const row of rows) {
+      if (row[key] == null) {
+        if (active) path += `H${x(row.ts).toFixed(1)}`
+        active = false
+        continue
+      }
+      const point = `${x(row.ts).toFixed(1)},${y(row[key]).toFixed(1)}`
+      path += active ? `H${x(row.ts).toFixed(1)}V${y(row[key]).toFixed(1)}` : `M${point}`
+      active = true
+    }
+    return path + (active ? `H${WIDTH}` : '')
   }
 
-  function describe(rows, until) {
+  function describe(rows, until, seriesList = SERIES) {
     const start = rows[0].ts
-    return SERIES.map((series) => {
+    return seriesList.map((series) => {
       const values = rows.map((row) => row[series.key]).filter((value) => value != null)
       const first = values[0] ?? 0
       const last = values.at(-1) ?? 0
-      const max = series.max || Math.max(1, ...values)
-      return {...series, first, last, max, fixed: Boolean(series.max), path: stepPath(rows, series.key, start, until, max)}
+      let max = series.max || values.reduce((best, value) => Math.max(best, value), 1)
+      let min = 0
+      if (series.zoom && values.length) {
+        const low = values.reduce((best, value) => Math.min(best, value), values[0])
+        const high = values.reduce((best, value) => Math.max(best, value), values[0])
+        const padding = Math.max(1, (high - low) * 0.1)
+        min = Math.max(0, low - padding)
+        max = Math.min(series.max || Infinity, high + padding)
+      }
+      return {...series, min, available: values.length > 0, first, last, max, fixed: Boolean(series.max), path: stepPath(rows, series.key, start, until, max, min)}
     })
   }
 

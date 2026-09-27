@@ -55,6 +55,8 @@ class Store:
             self.db.executescript(progress.SCHEMA)
             progress.migrate(self.db)
             progress.backfill(self.db)
+            from .statistics import initialize
+            initialize(self.db)
         self.lock = threading.Lock()
 
     def _migrate(self):
