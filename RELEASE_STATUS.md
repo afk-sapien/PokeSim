@@ -10,14 +10,19 @@ and [release notes](docs/release-notes.md) for installation details.
 ## Validation and publication
 
 Core passed all 40 tests, including exhaustive enumeration of all 65,536 DV
-combinations, and CI on Python 3.11, 3.12, and 3.13. PokeSim's focused investment,
-collection, release, and trade checks passed. All 20 browser tests passed, including
-compact details at desktop and phone widths. The final local regression suite
-passed 1,377 tests with 69 optional tests skipped against the pinned public Core
-0.1.2 wheel. Release gates remain pending.
+combinations, and CI on Python 3.11, 3.12, and 3.13. The local PokeSim suite passed
+1,377 tests with 69 optional tests skipped. A later trade-control correction passed
+all 73 targeted investment and trading tests.
 
-The release is being prepared. The last verified deployment is
-[0.4.8](docs/validation/release-0.4.8.json).
+The exact published source passed 1,370 Python tests with 60 optional tests skipped,
+and all 20 browser tests, including compact details at desktop and phone widths.
+Native installation, Docker lifecycle, package, and anonymous image checks passed.
+
+[PokeSim 0.4.10](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.10) is published.
+The home server was cold-backed up and upgraded from 0.4.8. The healthy container
+uses Core 0.1.2 and serves the new rarity and potential Power fields. Red and Blue
+resumed without errors and retain 151 of 151 registrations. The archived adventure
+remained stopped. See the [sanitized validation receipt](docs/validation/release-0.4.10.json).
 
 ## Known limits, deliberately not addressed here
 
