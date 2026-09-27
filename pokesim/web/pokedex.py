@@ -145,6 +145,12 @@ def field_move_partners(game: dict) -> set[int]:
     return keep
 
 
+def species_types(species):
+    """Storage has no live type bytes, so display the species' permanent typing."""
+    return list(dict.fromkeys(TYPES.get(kind, 'Unknown')
+                              for kind in SPECIES.get(species, {}).get('types', ())))
+
+
 def live_status(game: dict | None, collection: dict | None = None, *, league_rewards=None) -> dict:
     """The parts of a snapshot a Pokédex reader needs, without the rest of the state payload."""
     # Only the fields the page reads: the planner's entries repeat on every poll.
@@ -173,6 +179,7 @@ def live_status(game: dict | None, collection: dict | None = None, *, league_rew
         "player_name": game.get("player_name", ""), "playtime": game.get("playtime", ""),
         "party": [{"dex": mon.get("dex"), "species": mon["species"], "name": mon["name"], "nick": mon["nick"],
                    "level": mon["level"], "hp": mon["hp"], "max_hp": mon["max_hp"],
+                   "type_names": species_types(mon["species"]),
                    "moves": mon.get("moves", ()), "dvs": mon.get("dvs", ()),
                    "stat_exp": mon.get("stat_exp", ()),
                    **({'trainer_id': mon['trainer_id']} if mon.get('trainer_id') is not None else {}),
@@ -180,7 +187,8 @@ def live_status(game: dict | None, collection: dict | None = None, *, league_rew
                    "status_label": mon.get("status_label"), "slot": slot + 1, **stored_strength(mon), **assessment(mon)}
                   for slot, mon in enumerate(game.get("party", []))],
         "storage": {**storage,
-                    "pokemon": [{**mon, "dex": dex_of.get(mon["species"]), **stored_strength(mon), **assessment(mon)}
+                    "pokemon": [{**mon, "dex": dex_of.get(mon["species"]),
+                                 "type_names": species_types(mon["species"]), **stored_strength(mon), **assessment(mon)}
                                 for mon in storage.get("pokemon", [])]}
         if storage else None,
         **plan,

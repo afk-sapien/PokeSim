@@ -2,7 +2,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const test = require('node:test')
 const vm = require('node:vm')
-const source = fs.readFileSync('pokesim/web/static/pokedex.js', 'utf8')
+const source = fs.readFileSync('pokesim/web/static/types.js', 'utf8') + '\n{}\n' + fs.readFileSync('pokesim/web/static/pokedex.js', 'utf8')
 
 function view() {
   const elements = new Map()

@@ -1,33 +1,20 @@
-# Release status: 0.4.12
+# Release status: 0.4.13
 
-This release adds the Kanto Marathon, an occasional postgame race with ordered
-checkpoints, measured progress, saved records, and short journal reports.
+This release adds consistent colored type badges to the live team, Pokédex, and PC.
+The shared palette covers all 15 Generation I types, with a neutral unknown label.
 Existing saves remain compatible. Core remains at 0.1.2.
 
-See the [marathon guide](docs/marathon.md) and
-[release notes](docs/release-notes.md) for details.
+See the [release notes](docs/release-notes.md) for installation details.
 
 ## Validation and publication
 
-The local suite passed 1,393 tests with 69 optional tests skipped. All 11 marathon
-regressions, JavaScript checks, lint, and documentation links passed.
+The relevant Pokédex and investment tests passed all 34 checks, and the JavaScript
+checks passed. Chromium inspection covered all three pages and their detail windows
+at 1280 and 320 pixels in light, dark, and automatic themes, for 18 combinations.
+There were no browser script errors or horizontal overflow. All type labels have
+at least 8.49:1 text contrast with their background.
 
-Copied Red and Blue saves completed the entire course using normal button inputs.
-Red finished in 17:47 with 1,228 recorded steps and 17 battles. Blue finished in
-13:38 with 1,243 recorded steps and 13 battles. These times exclude travel to the
-starting line. See the [sanitized replay receipt](docs/validation/marathon-replays.json).
-
-The unpublished 0.4.11 candidate was canceled during native installation checks
-to correct the live checkpoint display. It was never published or deployed.
-The published source passed 1,381 Python tests with 63 optional tests skipped,
-and all 23 browser tests. All five native platforms, package checks, Docker
-lifecycle tests, and anonymous image access passed.
-
-[PokeSim 0.4.12](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.12) is published.
-The home server was cold-backed up and upgraded from 0.4.10. Both adventures
-resumed without errors, advanced after startup, and retain 151 of 151 registrations.
-Live API checks confirm the new marathon fields. The archived adventure remains
-stopped. See the [sanitized validation receipt](docs/validation/release-0.4.12.json).
+Publication and deployment checks are pending for this candidate.
 
 ## Known limits, deliberately not addressed here
 

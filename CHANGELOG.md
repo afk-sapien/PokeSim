@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.13
+
+- Give all Generation I type badges a shared color palette on the live team,
+  Pokédex, and PC, including Pokémon details and Pokédex move types.
+- Include permanent species typing for party and stored Pokémon in the PC API.
+  Keep text labels and high contrast in light, dark, and automatic themes.
+
 ## 0.4.12
 
 - Add an occasional Kanto Marathon after the Champion victory. Follow an ordered

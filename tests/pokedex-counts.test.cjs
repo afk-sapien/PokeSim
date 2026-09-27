@@ -2,7 +2,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const test = require('node:test')
 const vm = require('node:vm')
-const source = fs.readFileSync('pokesim/web/static/pokedex.js', 'utf8')
+const source = fs.readFileSync('pokesim/web/static/types.js', 'utf8') + '\n{}\n' + fs.readFileSync('pokesim/web/static/pokedex.js', 'utf8')
 
 const entry = (dex, name) => ({dex, name, types: ['Electric'], stats: {HP: 35}, total: 320,
   catch_rate: 190, growth: 'Medium', moves: [], evolves_from: [], evolves_to: [], locations: [],

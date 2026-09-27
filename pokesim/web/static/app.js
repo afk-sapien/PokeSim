@@ -132,7 +132,7 @@ function renderParty(party) {
     const health = hp < 20 ? 'crit' : hp < 50 ? 'warn' : 'ok'
     const xp = mon.experience
     const name = mon.nick && mon.nick.toUpperCase() !== mon.name.toUpperCase() ? mon.nick : mon.name
-    const types = (mon.type_names || []).map((type) => `<span class="tag">${esc(type)}</span>`).join('')
+    const types = PokemonTypes.badges(mon.type_names)
     const dex = mon.dex ? `<span class="micro dexno">No.${String(mon.dex).padStart(3, '0')}</span>` : ''
     const status = mon.status_label || (mon.hp ? 'Healthy' : 'Fainted')
     const statusTag = status !== 'Healthy' ? `<span class="tag ${mon.hp ? 'tag--warn' : 'tag--crit'}">${esc(status)}</span>` : ''
@@ -354,7 +354,7 @@ function renderPartnerDetail() {
   const moves = (mon.move_details || []).map((move) => `<div class="move"><span class="nm">${esc(move.name)}</span><span class="pp${move.pp ? '' : ' empty'}">${move.pp}/${move.max_pp} PP</span></div>`).join('')
   const stats = Object.entries(mon.stats || {}).map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${fmt(value)}</dd></div>`).join('')
   const portrait = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png" alt="">` : '<span class="plate-num">?</span>'
-  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay">${portrait}</div><p class="micro">Partner ${selectedPartner.index + 1} · Level ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><p>${esc(mon.name)} · ${mon.hp} / ${mon.max_hp} HP · ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><section><h3 class="micro">Moves</h3><div class="moves">${moves || '<p class="no-moves">No moves yet.</p>'}</div></section><section><h3 class="micro">Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${xp.max_level ? 'MAX LEVEL' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}</section>`)
+  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay">${portrait}</div><p class="micro">Partner ${selectedPartner.index + 1} · Level ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><div class="type-tags">${PokemonTypes.badges(mon.type_names)}</div><p>${esc(mon.name)} · ${mon.hp} / ${mon.max_hp} HP · ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><section><h3 class="micro">Moves</h3><div class="moves">${moves || '<p class="no-moves">No moves yet.</p>'}</div></section><section><h3 class="micro">Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${xp.max_level ? 'MAX LEVEL' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}</section>`)
   fitSprites($('#partner-detail-content'))
 }
 $('#party')?.addEventListener('click', (event) => {

@@ -1,9 +1,7 @@
 const $ = (selector) => document.querySelector(selector)
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]))
 const num = (dex) => String(dex).padStart(3, '0')
-const TYPE_CLASS = new Set(['normal', 'fighting', 'flying', 'poison', 'ground', 'rock', 'bug', 'ghost', 'fire', 'water', 'grass', 'electric', 'psychic', 'ice', 'dragon'])
-const typeClass = (name) => TYPE_CLASS.has(String(name).toLowerCase()) ? String(name).toLowerCase() : 'normal'
-const typeTags = (types) => types.map((type) => `<span class="tag type-${typeClass(type)}">${esc(type)}</span>`).join('')
+const typeTags = (types) => PokemonTypes.badges(types)
 // Base stats count in cells of ten, so the tallest Gen 1 stat (190) fills the meter.
 const MAX_STAT = 190
 const STAT_CELLS = 19
@@ -138,7 +136,7 @@ function renderDetail(dex, refresh = false) {
   const partyCount = copies.filter(copy => copy.where.startsWith('Party slot ')).length
   const pcCount = copies.filter(copy => copy.where.startsWith('Box ')).length
   const moves = entry.moves.map((move) => `<tr><td>${move.level ? `Lv. ${move.level}` : 'Start'}</td><td>${esc(move.name)}</td>
-    <td><span class="tag type-${typeClass(move.type)}">${esc(move.type)}</span></td><td>${move.power || 'N/A'}</td><td>${move.accuracy ?? 'N/A'}%</td><td>${move.pp ?? 'N/A'}</td></tr>`).join('')
+    <td>${typeTags([move.type])}</td><td>${move.power || 'N/A'}</td><td>${move.accuracy ?? 'N/A'}%</td><td>${move.pp ?? 'N/A'}</td></tr>`).join('')
   $('#detail-body').innerHTML = `
     <header class="detail-head">
       <span class="plate plate--hero"><img src="${PokeSim.base}/sprites/${dex}.png" alt="${esc(entry.name)}" width="56" height="56"></span>

@@ -5,6 +5,7 @@
 <meta name="pokesim-base" content="${game_base}">
 <meta name="pokesim-adventure" content="${adventure_id}">
 <script src="${game_base}/static/routes.js"></script>
+<script src="${game_base}/static/types.js?v=1"></script>
 <script src="${game_base}/static/panel.js?v=panel-4"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
@@ -17,6 +18,7 @@
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=panel-8">
 <link rel="stylesheet" href="${game_base}/static/panel-pokedex.css?v=panel-2">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
+<link rel="stylesheet" href="${game_base}/static/types.css?v=1">
 </head>
 <body data-page="pokedex">
 <a class="skip-link" href="#main">Skip to the kanto pokédex.</a>
@@ -84,6 +86,6 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </aside>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="${game_base}/static/pokedex.js?v=panel-2"></script>
+<script src="${game_base}/static/pokedex.js?v=types-1"></script>
 </body>
 </html>

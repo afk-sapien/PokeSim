@@ -1,0 +1,24 @@
+/* Solid backgrounds keep small type labels legible in every theme. */
+.tag.type-badge { background: var(--type-bg, #deddd5) }
+.tag.type-badge { color: #202820 }
+.tag.type-badge { border-color: color-mix(in srgb, var(--type-bg, #deddd5) 65%, #202820) }
+.tag.type-badge { font-weight: 700 }
+.type-normal { --type-bg: #deddd5 }
+.type-fighting { --type-bg: #e8b7a7 }
+.type-flying { --type-bg: #d5d5f3 }
+.type-poison { --type-bg: #e3c1ed }
+.type-ground { --type-bg: #e5cc9c }
+.type-rock { --type-bg: #d6c8a5 }
+.type-bug { --type-bg: #d4dfa0 }
+.type-ghost { --type-bg: #c8c1e8 }
+.type-fire { --type-bg: #f4c09b }
+.type-water { --type-bg: #b7d5f2 }
+.type-grass { --type-bg: #c5e5b5 }
+.type-electric { --type-bg: #f3e39a }
+.type-psychic { --type-bg: #f0bfd3 }
+.type-ice { --type-bg: #bfe8e5 }
+.type-dragon { --type-bg: #c4c8f5 }
+.type-tags { display: flex }
+.type-tags { flex-wrap: wrap }
+.type-tags { gap: 4px }
+.pc-mon-body > .type-tags { margin-top: 4px }
