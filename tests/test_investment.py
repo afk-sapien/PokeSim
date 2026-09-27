@@ -49,15 +49,20 @@ def test_rare_find_is_not_released_even_with_a_better_copy():
 
 
 def test_automatic_trade_protects_rare_candidate_and_trained_veteran():
+    from pokesim.broker.routine import listings
     s = snapshot([stored(0, level=5, dvs=RARE), stored(1, level=100, dvs=POOR)])
     payload = json.loads(json.dumps(live_status(s.to_dict(), None)))
     inv = normalise('red', 'http://red', payload)
     assert inv.tradeable == inv.spares == ()
+    assert all(row['can_offer'] and not row['listed'] for row in listings(inv))
     payload['storage']['pokemon'][0]['trade_preference'] = 'offered'
     inv = normalise('red', 'http://red', payload)
     assert len(inv.tradeable) == 1 and inv.tradeable[0].position == 1
     payload['storage']['pokemon'][0]['trade_preference'] = 'locked'
-    assert not normalise('red', 'http://red', payload).tradeable
+    locked = normalise('red', 'http://red', payload)
+    assert not locked.tradeable
+    assert not listings(locked)[0]['can_offer']
+    assert not listings(normalise('red', 'http://red', payload, protected=(0x99,)))[1]['can_offer']
 
 
 def test_hunting_budget_then_training_and_no_delay_for_unavailable_species():

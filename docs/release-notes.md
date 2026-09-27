@@ -1,4 +1,4 @@
-# PokeSim 0.4.9 experimental beta
+# PokeSim 0.4.10 experimental beta
 
 Use DV rarity and long-term potential to choose which Pokémon deserve training.
 
@@ -23,7 +23,7 @@ species at level 100 with maximum training. See [Pokémon stats](pokemon-stats.m
 
 ## Upgrading
 
-Back up the library and select `ghcr.io/afk-sapien/pokesim:0.4.9` in your Compose file,
+Back up the library and select `ghcr.io/afk-sapien/pokesim:0.4.10` in your Compose file,
 then run `docker compose pull` and `docker compose up -d --wait`. Keep your existing
 data mount and project name. Native installations can rerun the installer.
 

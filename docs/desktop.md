@@ -41,14 +41,14 @@ full launch command printed by the installer.
 With [uv](https://docs.astral.sh/uv/getting-started/installation/), which can also download Python:
 
 ```sh
-uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.9/pokesim-0.4.9-py3-none-any.whl
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.10/pokesim-0.4.10-py3-none-any.whl
 uv tool update-shell
 ```
 
 With [pipx](https://pipx.pypa.io/stable/installation/) and Python 3.12 already installed:
 
 ```sh
-pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.9/pokesim-0.4.9-py3-none-any.whl
+pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.10/pokesim-0.4.10-py3-none-any.whl
 pipx ensurepath
 ```
 

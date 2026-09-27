@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.9
+## 0.4.10
 
 - Add estimated DV rarity and fully trained potential Power to Pokémon details,
   using the shared probability API in PokeSim Core 0.1.2.

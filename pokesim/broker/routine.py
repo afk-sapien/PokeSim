@@ -61,7 +61,9 @@ def listings(inv, allow_last_copies=False):
         rows.append({**mon.as_side(), 'perfect_dvs': perfect, 'preference': mon.trade_preference,
                      'locked': mon.trade_preference == 'locked',
                      'listed': slot in eligible, 'reason': reason,
-                     'can_offer': slot in tradeable and (inv.held[mon.species] > 1 or allow_last_copies)
+                     'can_offer': (slot in tradeable or mon.investment_protected
+                                   and not perfect and not mon.trade_ambiguous and mon.trade_preference != 'locked')
+                     and (inv.held[mon.species] > 1 or allow_last_copies)
                      or mon.trade_preference == 'withdrawn',
                      'editable': bool(mon.trade_key) and not mon.trade_ambiguous,
                      'source': 'Selected by you' if mon.trade_preference == 'offered' else 'Automatic'})

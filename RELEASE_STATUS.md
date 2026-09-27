@@ -1,4 +1,4 @@
-# Release status: 0.4.9
+# Release status: 0.4.10
 
 This release adds DV rarity and potential Power, training investment rules, a
 bounded hunt budget, and protection for rare finds and trained veterans. Shared

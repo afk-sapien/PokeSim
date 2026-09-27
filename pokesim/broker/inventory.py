@@ -45,6 +45,7 @@ class Copy:
     trade_key: str | None = None
     trade_preference: str = 'auto'
     trade_ambiguous: bool = False
+    investment_protected: bool = False
 
     @property
     def label(self) -> str:
@@ -145,11 +146,15 @@ def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory
                                nick=mon.get('nick', ''), name=mon.get('name', ''),
                                dvs=tuple(mon.get('dvs', ())), stat_exp=tuple(mon.get('stat_exp', ())),
                                trade_key=mon.get('trade_key'), trade_preference=mon.get('trade_preference', 'auto'),
-                               trade_ambiguous=mon.get('trade_ambiguous', False))
+                               trade_ambiguous=mon.get('trade_ambiguous', False),
+                               investment_protected=(mon['box'], mon['position']) in investment_slots)
     boxes = placed(stored)
+    investment_slots = {(mon['box'], mon['position']) for mon in boxes
+                        if mon['species'] not in off_limits and automatic_trade_protected(mon, party + boxes)}
     available = [mon for mon in boxes if not is_perfect(mon) and mon.get('trade_preference') not in ('withdrawn', 'locked')
                  and not mon.get('trade_ambiguous')
-                 and (mon.get('trade_preference') == 'offered' or not automatic_trade_protected(mon, party + boxes))]
+                 and (mon.get('trade_preference') == 'offered'
+                      or (mon['box'], mon['position']) not in investment_slots)]
     available_slots = {(mon['box'], mon['position']) for mon in available}
     return Inventory(
         instance=instance, url=url, started=True,
