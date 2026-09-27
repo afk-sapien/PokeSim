@@ -3,6 +3,8 @@ import os
 from urllib.parse import urlsplit
 from pathlib import Path
 
+from pokisim_core.rom import KNOWN_ROM_SHA1 as KNOWN_ROM_SHA1
+
 
 def _env(name, default):
     return os.environ.get(name, default)
@@ -34,12 +36,6 @@ STALL_ALERT_REPEAT_HOURS = int(_env("STALL_ALERT_REPEAT_HOURS", "6"))
 KEEP_STALL_BUNDLES = int(_env("KEEP_STALL_BUNDLES", "5"))
 STREAM_FPS = int(_env("STREAM_FPS", "15"))
 FEED_TITLE = _env("FEED_TITLE", "pokesim")
-
-# Clean Pokemon Red (USA, Europe) dump. A mismatch is only a warning.
-KNOWN_ROM_SHA1 = {
-    "ea9bcae617fdf159b045185467ae58b2e4a48b9a": "Pokemon Red (USA, Europe)",
-    "d7037c83e1ae5b39bde3c30787637ba1d4c48ce2": "Pokemon Blue (USA, Europe)",
-}
 
 HOST = _env("HOST", "127.0.0.1")
 VIEWER_ONLY = _env("VIEWER_ONLY", "0") == "1"

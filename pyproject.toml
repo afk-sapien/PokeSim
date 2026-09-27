@@ -11,6 +11,7 @@ license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11"
 dependencies = [
+  "pokisim-core @ https://github.com/afk-sapien/pokisim-core/releases/download/v0.1.0/pokisim_core-0.1.0-py3-none-any.whl#sha256=362c1670b15604355b78eb4ac68f38d42a916e509783f5b17c5790f31e4e3d25",
   "pyboy==2.7.0",
   "fastapi>=0.110",
   "uvicorn[standard]>=0.53.0",

@@ -5,6 +5,48 @@ against the community RAM map and verified in-emulator (see tests/).
 """
 from __future__ import annotations
 
+from pokisim_core import gen1 as core_gen1
+from pokisim_core.gen1 import (
+    W_TILEMAP as W_TILEMAP,
+    W_ENEMY_SPECIES2 as W_ENEMY_SPECIES2,
+    W_ENEMY_MON as W_ENEMY_MON,
+    W_ENEMY_LEVEL as W_ENEMY_LEVEL,
+    W_TRAINER_CLASS as W_TRAINER_CLASS,
+    W_IS_IN_BATTLE as W_IS_IN_BATTLE,
+    W_CUR_OPPONENT as W_CUR_OPPONENT,
+    W_BATTLE_TYPE as W_BATTLE_TYPE,
+    W_PLAYER_NAME as W_PLAYER_NAME,
+    W_PARTY_COUNT as W_PARTY_COUNT,
+    W_PARTY_SPECIES as W_PARTY_SPECIES,
+    W_PARTY_MONS as W_PARTY_MONS,
+    W_PARTY_NICKS as W_PARTY_NICKS,
+    W_DEX_OWNED as W_DEX_OWNED,
+    W_DEX_SEEN as W_DEX_SEEN,
+    W_NUM_BAG_ITEMS as W_NUM_BAG_ITEMS,
+    W_BAG_ITEMS as W_BAG_ITEMS,
+    W_MONEY as W_MONEY,
+    W_RIVAL_NAME as W_RIVAL_NAME,
+    W_BADGES as W_BADGES,
+    W_CUR_MAP as W_CUR_MAP,
+    W_Y as W_Y,
+    W_X as W_X,
+    W_CURRENT_BOX as W_CURRENT_BOX,
+    W_BOX_COUNT as W_BOX_COUNT,
+    BOX_CAPACITY as BOX_CAPACITY,
+    BOX_COUNT as BOX_COUNT,
+    BOX_DATA_SIZE as BOX_DATA_SIZE,
+    W_TOGGLE_OBJECT_FLAGS as W_TOGGLE_OBJECT_FLAGS,
+    W_EVENT_FLAGS as W_EVENT_FLAGS,
+    W_STATUS_FLAGS1 as W_STATUS_FLAGS1,
+    W_PLAYTIME_H as W_PLAYTIME_H,
+    PARTY_STRUCT as PARTY_STRUCT,
+    TILE_BOX_TL as TILE_BOX_TL,
+    decode_text as decode_text,
+    bcd as bcd,
+    flag_bits as flag_bits,
+    individual_data as individual_data,
+)
+
 from .game_data import load
 from dataclasses import asdict, dataclass
 
@@ -20,89 +62,6 @@ LEADERS = TABLES["leaders"]
 KEY_ITEM_IDS = set(TABLES["key_item_ids"])
 NOTABLE_TRAINERS = set(TABLES["notable_trainers"])
 HALL_OF_FAME_MAP = TABLES["hall_of_fame_map"]
-
-# --- WRAM ---
-W_TILEMAP = 0xC3A0          # 20x18 screen tiles
-W_ENEMY_SPECIES2 = 0xCFD8
-W_ENEMY_MON = 0xCFE5        # enemy battle struct: species at +0
-W_ENEMY_LEVEL = 0xCFF3
-W_TRAINER_CLASS = 0xD031
-W_IS_IN_BATTLE = 0xD057     # 0 none, 1 wild, 2 trainer, 0xFF lost
-W_CUR_OPPONENT = 0xD059     # species (wild) or 200 + trainer class
-W_BATTLE_TYPE = 0xD05A      # 0 normal, 1 old man, 2 safari
-W_PLAYER_NAME = 0xD158      # 11 bytes, 0x50 terminated
-W_PARTY_COUNT = 0xD163
-W_PARTY_SPECIES = 0xD164    # 6 + 0xFF
-W_PARTY_MONS = 0xD16B       # 6 x 44-byte party structs
-W_PARTY_NICKS = 0xD2B5      # 6 x 11 bytes
-W_DEX_OWNED = 0xD2F7        # 19 bytes flag array
-W_DEX_SEEN = 0xD30A         # 19 bytes flag array
-W_NUM_BAG_ITEMS = 0xD31D
-W_BAG_ITEMS = 0xD31E        # (id, qty) pairs, 0xFF terminated, max 20
-W_MONEY = 0xD347            # 3 bytes BCD
-W_RIVAL_NAME = 0xD34A
-W_BADGES = 0xD356
-W_CUR_MAP = 0xD35E
-W_Y = 0xD361
-W_X = 0xD362
-W_CURRENT_BOX = 0xD5A0
-W_BOX_COUNT = 0xDA80
-BOX_CAPACITY = 20
-BOX_COUNT = 12
-BOX_DATA_SIZE = 1122
-W_TOGGLE_OBJECT_FLAGS = 0xD5A6  # 32 bytes, set bits hide objects
-W_EVENT_FLAGS = 0xD747      # .. 0xD886
-W_STATUS_FLAGS1 = W_EVENT_FLAGS - 31
-W_PLAYTIME_H = 0xDA41       # hours, maxed, minutes, seconds, frames
-PARTY_STRUCT = 44
-
-# Text box border tiles (font tileset)
-TILE_BOX_TL = 0x79
-
-_CHARS = {0x50: "", 0x7F: " ", 0xBA: "é", 0xE0: "'", 0xE3: "-", 0xE6: "?", 0xE7: "!", 0xE8: ".",
-          0xEF: "♂", 0xF4: ",", 0xF5: "♀", 0xF2: ".", 0xF1: "×", 0xE1: "PK", 0xE2: "MN", 0xF0: "$"}
-
-
-def decode_text(b: bytes) -> str:
-    out = []
-    for c in b:
-        if c == 0x50:
-            break
-        if 0x80 <= c <= 0x99:
-            out.append(chr(ord("A") + c - 0x80))
-        elif 0xA0 <= c <= 0xB9:
-            out.append(chr(ord("a") + c - 0xA0))
-        elif 0xF6 <= c <= 0xFF:
-            out.append(chr(ord("0") + c - 0xF6))
-        elif c in _CHARS:
-            out.append(_CHARS[c])
-        elif c == 0:
-            break
-        elif c >= 0x60:
-            out.append("?")     # unmapped glyph (symbols, ROM-hack fonts): keep the length, don't drop the name
-    return "".join(out).strip()
-
-
-def bcd(b: bytes) -> int:
-    n = 0
-    for c in b:
-        n = n * 100 + (c >> 4) * 10 + (c & 0xF)
-    return n
-
-
-# Set bit positions per byte value, so a flag array costs one lookup per byte instead of eight
-# shifts. Event arrays are mostly zeroes, and a zero byte then costs nothing at all.
-_SET_BITS = tuple(tuple(bit for bit in range(8) if value & (1 << bit)) for value in range(256))
-
-
-def flag_bits(b: bytes) -> set[int]:
-    """Return 1-based indices of set bits in a little-endian flag array."""
-    out = set()
-    for i, byte in enumerate(b):
-        if byte:
-            base = i * 8 + 1
-            out.update(base + bit for bit in _SET_BITS[byte])
-    return out
 
 
 @dataclass(frozen=True)
@@ -155,17 +114,6 @@ class StoredMon:
     dvs: tuple[int, ...]
     stat_exp: tuple[int, ...]
     trainer_id: int | None = None
-
-
-def individual_data(struct):
-    """Decode shared party/box fields, with stats ordered HP, Attack, Defense, Speed, Special."""
-    attack, defense = struct[27] >> 4, struct[27] & 15
-    speed, special = struct[28] >> 4, struct[28] & 15
-    hp = ((attack & 1) << 3) | ((defense & 1) << 2) | ((speed & 1) << 1) | (special & 1)
-    return {'moves': tuple(struct[8:12]), 'trainer_id': int.from_bytes(struct[12:14], 'big'),
-            'experience': int.from_bytes(struct[14:17], 'big'),
-            'dvs': (hp, attack, defense, speed, special),
-            'stat_exp': tuple(int.from_bytes(struct[i:i + 2], 'big') for i in range(17, 27, 2))}
 
 
 @dataclass(frozen=True)
@@ -343,25 +291,9 @@ def read_stored_details(mem):
 
 def read_snapshot(mem, frame: int) -> Snapshot:
     """mem: anything supporting mem[addr] and mem[a:b] over the GB address space (pyboy.memory)."""
-    count = min(mem[W_PARTY_COUNT], 6)
-    party = []
     from .strategy_data import MOVES as MOVE_DATA
-    for i in range(count):
-        base = W_PARTY_MONS + i * PARTY_STRUCT
-        s = bytes(mem[base:base + PARTY_STRUCT])
-        nick = decode_text(bytes(mem[W_PARTY_NICKS + i * 11:W_PARTY_NICKS + i * 11 + 11]))
-        party.append(PartyMon(species=s[0], hp=(s[1] << 8) | s[2], max_hp=(s[0x22] << 8) | s[0x23],
-                              level=s[0x21], nick=nick, status=s[4], types=(s[5], s[6]),
-                              pp=tuple(v & 0x3F for v in s[29:33]),
-                              attack=int.from_bytes(s[36:38], "big"), defense=int.from_bytes(s[38:40], "big"),
-                              speed=int.from_bytes(s[40:42], "big"), special=int.from_bytes(s[42:44], "big"),
-                              **individual_data(s),
-                              max_pp=tuple(MOVE_DATA.get(mid, {}).get("pp", 0) +
-                                           min(7, MOVE_DATA.get(mid, {}).get("pp", 0) // 5) * (s[29 + j] >> 6)
-                                           for j, mid in enumerate(s[8:12]))))
-    n_items = min(mem[W_NUM_BAG_ITEMS], 20)
-    raw = bytes(mem[W_BAG_ITEMS:W_BAG_ITEMS + n_items * 2]) if n_items else b""
-    items = tuple((raw[i], raw[i + 1]) for i in range(0, len(raw), 2) if raw[i] not in (0, 0xFF))
+    party = tuple(PartyMon(**mon) for mon in core_gen1.read_party(mem, move_data=MOVE_DATA))
+    items = core_gen1.read_bag(mem)
     in_battle = mem[W_IS_IN_BATTLE]
     stored = read_stored_details(mem)
     # Every cartridge path that registers a species also marks it seen, so an owned flag
@@ -375,7 +307,7 @@ def read_snapshot(mem, frame: int) -> Snapshot:
         map=mem[W_CUR_MAP], x=mem[W_X], y=mem[W_Y],
         badges=mem[W_BADGES],
         saffron_open=bool(mem[W_STATUS_FLAGS1] & 64),
-        party=tuple(party),
+        party=party,
         owned=frozenset(owned_dex),
         seen=frozenset(seen_dex),
         money=bcd(bytes(mem[W_MONEY:W_MONEY + 3])),
