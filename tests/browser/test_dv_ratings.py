@@ -11,7 +11,7 @@ from test_flows import expect
 def test_dv_appraisals_across_pc_and_pokedex(page, game, width):
     url, store, emu, _ = game
     s = emu.snapshot
-    emu.snapshot = replace(s, party=(replace(s.party[0], dvs=(12,) * 5, stat_exp=(65535,) * 5),),
+    emu.snapshot = replace(s, party=(replace(s.party[0], dvs=(15, 15, 13, 13, 9), stat_exp=(65535,) * 5),),
                            stored_details=(replace(s.stored_details[0], dvs=(15,) * 5),
                                            replace(s.stored_details[1], dvs=())))
     tracker = MilestoneTracker(store)
@@ -36,6 +36,9 @@ def test_dv_appraisals_across_pc_and_pokedex(page, game, width):
     expect(page.locator('#pc-detail')).to_be_visible()
     expect(page.locator('#pc-detail-body .individual-stats')).to_be_visible()
     expect(page.get_by_role('link', name='Stats guide')).to_be_visible()
+    expect(page.locator('#pc-detail-body')).to_contain_text('DV quality (est.): top 0.417%')
+    expect(page.locator('#pc-detail-body')).to_contain_text('Higher roll: 0.27%')
+    expect(page.locator('#pc-detail-body')).to_contain_text('Potential Power:')
     expect(page.locator('#pc-detail-body')).not_to_contain_text('Level and training do not affect this rating.')
     assert page.locator('#pc-detail').evaluate('(dialog) => dialog.scrollWidth <= dialog.clientWidth')
     page.screenshot(path=f'/tmp/pokesim-stats-detail-{width}.png', full_page=True)

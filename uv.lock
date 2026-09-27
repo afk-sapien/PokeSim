@@ -600,7 +600,7 @@ wheels = [
 
 [[package]]
 name = "pokesim"
-version = "0.4.8"
+version = "0.4.9"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -632,7 +632,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "pillow", specifier = ">=10" },
     { name = "playwright", marker = "extra == 'browser-test'", specifier = ">=1.50" },
-    { name = "pokesim-core", url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.1/pokesim_core-0.1.1-py3-none-any.whl" },
+    { name = "pokesim-core", url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.2/pokesim_core-0.1.2-py3-none-any.whl" },
     { name = "pyboy", specifier = "==2.7.0" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.53.0" },
@@ -641,10 +641,10 @@ provides-extras = ["dev", "browser-test", "acceleration"]
 
 [[package]]
 name = "pokesim-core"
-version = "0.1.1"
-source = { url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.1/pokesim_core-0.1.1-py3-none-any.whl" }
+version = "0.1.2"
+source = { url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.2/pokesim_core-0.1.2-py3-none-any.whl" }
 wheels = [
-    { url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.1/pokesim_core-0.1.1-py3-none-any.whl", hash = "sha256:3a984131afe3336f652ba6e0c559e63875093f13d0d9223a2ef192787b35da2c" },
+    { url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.2/pokesim_core-0.1.2-py3-none-any.whl", hash = "sha256:19d2b54450c1291a0c77766bab6195ab337d4fed66dde3f7a06b12ed2a895b37" },
 ]
 
 [package.metadata]

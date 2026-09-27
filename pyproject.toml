@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pokesim"
-version = "0.4.8"
+version = "0.4.9"
 description = "One application for autonomous Pokémon Red and Blue adventures with live views and cable trading"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11"
 dependencies = [
-  "pokesim-core @ https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.1/pokesim_core-0.1.1-py3-none-any.whl#sha256=3a984131afe3336f652ba6e0c559e63875093f13d0d9223a2ef192787b35da2c",
+  "pokesim-core @ https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.2/pokesim_core-0.1.2-py3-none-any.whl#sha256=19d2b54450c1291a0c77766bab6195ab337d4fed66dde3f7a06b12ed2a895b37",
   "pyboy==2.7.0",
   "fastapi>=0.110",
   "uvicorn[standard]>=0.53.0",

@@ -13,10 +13,10 @@ from test_collection import sid
 from test_duplicates import snapshot, stored
 
 
-def test_low_level_high_dv_copy_is_kept_and_lower_dv_spare_is_released():
+def test_low_level_high_dv_copy_and_trained_veteran_are_both_kept():
     low = stored(0, level=3, dvs=(13, 15, 13, 15, 15))
     high = stored(1, level=100, dvs=(0,) * 5)
-    assert release_target(snapshot([low, high])) == (0, 1)
+    assert release_target(snapshot([low, high])) is None
     assert release_target(snapshot([low, high]), reserved={(0, 1)}) is None
 
 

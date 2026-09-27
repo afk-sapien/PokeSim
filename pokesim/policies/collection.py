@@ -2,7 +2,8 @@
 import time
 from collections import Counter
 from dataclasses import asdict
-from ..duplicates import quality, dv_quality
+from ..duplicates import quality
+from ..investment import automatic_trade_protected, training_investment, potential_power, assessment, GOOD_TAIL, SEARCH_BUDGET
 from functools import lru_cache
 from ..game_data import load
 
@@ -128,6 +129,7 @@ class Collection:
         self.milestones = {}
         self.last_repeat = {}
         self.last_hunt = {}
+        self.quality_searches = {}
         self.peer_demand = {}
         self.demand_until = 0
 
@@ -159,7 +161,7 @@ class Collection:
         return project.get('species') if project.get('repeat') else None
 
     def state_dict(self):
-        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','attempts','elapsed','eevee_choice','dojo_choice','history','completed_champion','idle_frames','project_maps','project_flags','last_repeat','last_hunt')},
+        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','attempts','elapsed','eevee_choice','dojo_choice','history','completed_champion','idle_frames','project_maps','project_flags','last_repeat','last_hunt','quality_searches')},
                 'director': self.director.state_dict()}
 
     def load(self, data):
@@ -191,6 +193,7 @@ class Collection:
         if not self.project:
             return False
         project = self.project
+        self.record_quality_search()
         label = name(project['species']) if project.get('species') else project['method'].title()
         progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
         self.attempts[project.get('key', label)] = self.director.finish(
@@ -205,6 +208,12 @@ class Collection:
         self.project_flags = []
         self.progress_token = None
         return True
+
+    def record_quality_search(self):
+        project = self.project or {}
+        if project.get('dv_hunt') and project.get('species'):
+            key = str(project['species'])
+            self.quality_searches[key] = min(SEARCH_BUDGET, self.quality_searches.get(key, 0) + 1)
 
     def observe(self,s, suspended=False, training_ready=True, training_active=None):
         delta = max(0,min(120,s.frame - self.last_frame)) if self.last_frame is not None else 0
@@ -304,6 +313,7 @@ class Collection:
                 self.abandon(training_reason)
                 return
             if finished or (self.remaining <= 0 and (project['method'] != 'train' or not s.in_battle)):
+                self.record_quality_search()
                 if finished and project.get('repeat'):
                     self.last_repeat[str(target)] = self.elapsed
                 label = name(target) if target else item.replace('_',' ').title() if item else self.project['method'].title()
@@ -448,6 +458,12 @@ class Collection:
                         weight /= 1 + project['travel_distance'] / 80
                     candidates.append((weight,{**project,'key':key}))
         sources = self.sources()
+        held_individuals = [asdict(mon) for mon in s.party] + s.storage_entries()
+        best_tails = {}
+        for mon in held_individuals:
+            tail = assessment(mon)['dv_top_percent']
+            if tail is not None:
+                best_tails[mon['species']] = min(best_tails.get(mon['species'], 100), tail)
         searched = set()
         distance_to = nav.distance_lookup((s.map, s.x, s.y), s.frame)
         plateau_maps = {MAPS[n] for n in ('INDIGO_PLATEAU', 'INDIGO_PLATEAU_LOBBY',
@@ -510,6 +526,11 @@ class Collection:
                                    dv_hunt=not project['needed_capture'],
                                    last_hunt=self.last_hunt.get(str(sid), -1),
                                    capture_priority=self.capture_weight(s, sid))
+                    tail = best_tails.get(sid)
+                    project['quality_search_needed'] = bool(tail is not None and tail > GOOD_TAIL * 100
+                                                            and self.quality_searches.get(str(sid), 0) < SEARCH_BUDGET)
+                    if tail is not None:
+                        project['capture_priority'] *= max(0.1, min(3, tail / (GOOD_TAIL * 100)))
                 if offered is not None:
                     project.update(parent=source['give'], box=offered.get('box'),
                                    give_key=identity(offered))
@@ -527,9 +548,9 @@ class Collection:
                 add(project, 5 if legendary_project(project) else weight / (1+distance/40))
         individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
         preferences = self.trade_preferences()
-        best_dvs = {}
+        best_potential = {}
         for mon in individuals:
-            best_dvs[mon['species']] = max(best_dvs.get(mon['species'], (-1, -1)), dv_quality(mon))
+            best_potential[mon['species']] = max(best_potential.get(mon['species'], -1), potential_power(mon) or -1)
         for sid in dict.fromkeys(mon['species'] for mon in individuals):
             copies = [mon for mon in individuals if mon['species'] == sid
                       and preferences.get(identity(mon), {}).get('state') != 'offered']
@@ -543,8 +564,10 @@ class Collection:
                 if evo['method'] == 'trade':
                     continue
                 registered = dex(evo['species']) in s.owned
-                upgrade = (self.completed_champion and key and dv_quality(mon) > (-1, -1)
-                           and dv_quality(mon) > best_dvs.get(evo['species'], (-1, -1)))
+                evolved = dict(mon, species=evo['species'])
+                upgrade = (self.completed_champion and key and potential_power(evolved) is not None
+                           and potential_power(evolved) > best_potential.get(evo['species'], -1)
+                           and training_investment(evolved, individuals)['eligible'])
                 if registered and not upgrade:
                     continue
                 if (dex(sid) == 133 and self.eevee_choice not in s.owned
@@ -565,6 +588,7 @@ class Collection:
                     continue
                 add(project, 3)
         if self.completed_champion:
+            huntable = {p['species'] for _, p in candidates if p.get('dv_hunt')}
             counts = Counter(sid for sid, level, box in held)
             individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
             preferences = self.trade_preferences()
@@ -574,7 +598,7 @@ class Collection:
                 key = identity(mon)
                 if counts[sid] <= self.demand().get(dex(sid), 0):
                     continue
-                if dv_quality(mon) < best_dvs[sid]:
+                if (potential_power(mon) or -1) < best_potential[sid]:
                     continue
                 if level >= 100 or preferences.get(key, {}).get('state') == 'offered':
                     continue
@@ -588,15 +612,21 @@ class Collection:
                 # counts too: a Weepinbell was being trained to level 100 with Victreebel unregistered.
                 if any(evo['method'] != 'trade' and dex(evo['species']) not in s.owned for evo in EVOS.get(sid, [])):
                     continue
+                investment = training_investment(mon, individuals, hunt_available=sid in huntable,
+                                                 searches=self.quality_searches.get(str(sid), 0))
+                if not investment['eligible']:
+                    continue
                 # Aim for the next ten rather than the whole climb. Training to 100 in one project
                 # held a partner for hundreds of game hours while trades and unregistered species
                 # waited; a ten level step finishes, hands the turn back, and resumes later.
                 add({**reference, 'method': 'train', 'parent': sid, 'family': family,
                      'trainee_key': key, 'box': box, 'initial_level': level,
                      'target_level': min(100, level - level % 10 + 10),
+                     'investment_priority': investment['priority'],
+                     'investment_reason': investment['reason'],
                      'perfect_partner': is_perfect(mon),
                      'mastery_needed': any(level_credit(relative) - set(self.milestones.get('level_100', ())) for relative in family)},
-                    (1 + level / 20) ** 2)
+                    investment['weight'])
             add({'method':'rematch','hof_count':s.hall_of_fame_count}, 10 if s.money < 10000 else 2)
             porygon = next(sid for sid,mon in SPECIES.items() if mon['dex']==137)
             if 137 not in s.owned and (s.money >= 20000 or s.coins >= (9999 if self.version=='red' else 6500)):
@@ -740,7 +770,8 @@ class Collection:
         candidates = []
         for mon in rows:
             key = identity(mon)
-            if mon['species'] != project['give'] or is_perfect(mon):
+            if (mon['species'] != project['give'] or is_perfect(mon)
+                    or automatic_trade_protected(mon, rows)):
                 continue
             if project.get('give_key') and key != project['give_key']:
                 continue

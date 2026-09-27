@@ -6,7 +6,8 @@ and its import name is `pokesim_core`.
 
 PokeSim uses `pokesim_core.gen1` for Red and Blue WRAM addresses, text and numeric
 decoding, individual Pokémon fields, party reads, and bag reads. Its known ROM
-hashes come from `pokesim_core.rom`.
+hashes come from `pokesim_core.rom`. `pokesim_core.dvs` supplies the reusable
+DV-total probability reference model, with training and retention policy in PokeSim.
 
 The existing `pokesim.ram` imports remain compatible. It re-exports shared
 constants and helpers, wraps decoded party dictionaries in `PartyMon`, and
@@ -23,7 +24,7 @@ coverage there. PokeSim's compatibility tests check the boundary between those
 shared values and its existing application types. Keep gameplay decisions, Power
 ranking, UI copy, trading, and save recovery in PokeSim.
 
-Both projects currently pin Core 0.1.1. Publish a compatible Core release, then
+PokeSim pins Core 0.1.2. Each consumer records its reviewed dependency version. Publish a compatible Core release, then
 update and validate each consumer's dependency pin. Core improvements reach both
 applications through those reviewed package updates.
 

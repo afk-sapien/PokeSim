@@ -298,3 +298,15 @@ test('All Pokemon defaults to power descending on entry and direct links', async
     assert.deepEqual(view.rows().map(row => row.stat_total), [1725, 1533, 1499, undefined])
   }
 })
+
+test('DV probability labels stay compact and retain very rare nonzero tails', async () => {
+  const view = pc([mon(1, 1, 5, {power: 20, potential_power: 3200,
+    dv_top_percent: 100 / 65536, dv_better_percent: 0})])
+  await view.ready()
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  const detail = view.element('#pc-detail-body').innerHTML
+  assert.match(detail, /Potential Power: 3,200/)
+  assert.match(detail, /DV quality \(est\.\): top 0\.00153%/)
+  assert.match(detail, /Higher roll: 0%/)
+  assert.doesNotMatch(detail, /65,536|uniform|independent fifth/)
+})

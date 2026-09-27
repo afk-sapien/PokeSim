@@ -22,8 +22,9 @@ def individual(level, trainer, species=113):
     return mon(species=sid(species), level=level, trainer_id=trainer, dvs=(15, 1, 3, 5, 7))
 
 
-def candidates(snapshot):
+def candidates(snapshot, searches=0):
     c = Collection()
+    c.quality_searches = {str(mon.species): searches for mon in snapshot.party}
     nav = Navigator()
     nav.visits = {(m, 0, 0): 1 for m in WORLD}
     nav.distance_lookup = Mock(return_value=lambda targets: 10 if targets else None)
@@ -40,14 +41,9 @@ def postgame(**changes):
                  **changes)
 
 
-def test_duplicates_train_individually_toward_100_and_completed_partners_are_excluded():
+def test_completed_equal_potential_partner_prevents_redundant_training():
     rows = candidates(postgame(party=(individual(100, 1), individual(95, 2), individual(60, 3))))
-    projects = [p for _, p in rows if p['method'] == 'train']
-    assert len(projects) == 2
-    assert {p['initial_level'] for p in projects} == {60, 95}
-    # A step of ten, not the whole climb: level 60 aims at 70, level 95 at 100.
-    assert {p['initial_level']: p['target_level'] for p in projects} == {60: 70, 95: 100}
-    assert len({p['key'] for p in projects}) == 2
+    assert not any(p['method'] == 'train' for _, p in rows)
 
 
 def test_training_identity_survives_evolution_and_does_not_match_another_copy():
@@ -145,7 +141,7 @@ def test_a_new_pokedex_entry_comes_before_the_level_100_grind():
 def test_training_climbs_in_steps_of_ten_and_resumes_from_where_it_stopped():
     """A finished step re-enters selection aiming ten higher, not at 100 again."""
     for level, expected in ((37, 40), (40, 50), (60, 70), (95, 100), (99, 100)):
-        rows = candidates(postgame(party=(individual(level, 1),)))
+        rows = candidates(postgame(party=(individual(level, 1),)), searches=3)
         projects = [p for _, p in rows if p['method'] == 'train']
         assert [p['target_level'] for p in projects] == [expected], (level, projects)
 

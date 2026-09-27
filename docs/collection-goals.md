@@ -52,8 +52,9 @@ The effect respects reduced-motion preferences. Their actual species also receiv
 a Pokédex badge. Evolving a perfect Bulbasaur records Ivysaur when it is observed,
 then Venusaur when it is observed. It does not invent sightings of other forms.
 
-The automatic player keeps perfect individuals alongside its best practical
-partner of each species. Automatic release, NPC exchanges, and peer trade offers
+The automatic player keeps perfect individuals alongside the best future and
+current partners of each species. Rare-find protection and bounded hunting before
+training are described in the [investment guide](pokemon-stats.md#training). Automatic release, NPC exchanges, and peer trade offers
 exclude them. Repeat expeditions continue looking for rare partners after the
 ordinary Pokédex is complete, while training and supply trips still have priority.
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.9
+
+- Add estimated DV rarity and fully trained potential Power to Pokémon details,
+  using the shared probability API in PokeSim Core 0.1.2.
+- Prioritize strong DV candidates for training, require meaningful potential gains
+  before retraining duplicates, and bound hunting before training ordinary partners.
+- Keep trained veterans until their replacements catch up. Protect rare finds from
+  automatic release and trading, with existing locks and explicit offers respected.
+
 ## 0.4.8
 
 - Use PokeSim Core 0.1.1 for ROM identities, memory addresses, text and numeric

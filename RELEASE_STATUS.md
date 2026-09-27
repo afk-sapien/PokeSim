@@ -1,31 +1,23 @@
-# Release status: 0.4.8
+# Release status: 0.4.9
 
-PokeSim now uses PokeSim Core 0.1.1 for shared ROM identities and game memory
-decoding. PokeAgent Bench pins the same Core release. PokeSim retains its existing
-application types, gameplay policies, emulator lifecycle, saves, trading, and UI.
-No save-format or database migration is introduced.
+This release adds DV rarity and potential Power, training investment rules, a
+bounded hunt budget, and protection for rare finds and trained veterans. Shared
+probability math comes from Core 0.1.2. Existing saves remain compatible.
 
-See [shared core](docs/shared-core.md) for ownership and coordinated upgrades,
+See [Pokémon stats](docs/pokemon-stats.md) for the model and policy cutoffs,
 and [release notes](docs/release-notes.md) for installation details.
 
 ## Validation and publication
 
-The Core integration in [PR #27](https://github.com/afk-sapien/PokeSim/pull/27)
-passed all CI checks, including Python 3.11, 3.12, and 3.14, container lifecycle,
-and native installation on Linux, Windows, Intel Mac, and Apple Silicon Mac.
-Local Core compatibility and screen regression checks passed all 16 tests.
-The wheel and source package resource checks passed.
+Core passed all 40 tests, including exhaustive enumeration of all 65,536 DV
+combinations, and CI on Python 3.11, 3.12, and 3.13. PokeSim's focused investment,
+collection, release, and trade checks passed. All 20 browser tests passed, including
+compact details at desktop and phone widths. The final local regression suite
+passed 1,377 tests with 69 optional tests skipped against the pinned public Core
+0.1.2 wheel. Release gates remain pending.
 
-[PokeSim 0.4.8](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.8) is published.
-The exact tagged source passed 1,356 Python tests with 60 optional tests skipped,
-and all 20 browser tests. Native installation, package, Docker lifecycle, and
-anonymous image access checks all passed.
-
-The home server was cold-backed up and upgraded from 0.4.7. The healthy container
-reports PokeSim 0.4.8 and Core 0.1.1, with shared decoder imports verified directly.
-Red and Blue resumed without errors, both retaining 151 of 151 registrations and
-Porygon ownership records. The archived adventure remained stopped.
-See the [sanitized validation receipt](docs/validation/release-0.4.8.json).
+The release is being prepared. The last verified deployment is
+[0.4.8](docs/validation/release-0.4.8.json).
 
 ## Known limits, deliberately not addressed here
 

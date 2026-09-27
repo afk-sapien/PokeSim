@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 import httpx
 
 from ..duplicates import spare_entries
+from ..investment import automatic_trade_protected
 from ..milestones import is_perfect
 
 DEFAULT_INSTANCES = 'red=http://127.0.0.1:8930,blue=http://127.0.0.1:8940'
@@ -147,7 +148,8 @@ def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory
                                trade_ambiguous=mon.get('trade_ambiguous', False))
     boxes = placed(stored)
     available = [mon for mon in boxes if not is_perfect(mon) and mon.get('trade_preference') not in ('withdrawn', 'locked')
-                 and not mon.get('trade_ambiguous')]
+                 and not mon.get('trade_ambiguous')
+                 and (mon.get('trade_preference') == 'offered' or not automatic_trade_protected(mon, party + boxes))]
     available_slots = {(mon['box'], mon['position']) for mon in available}
     return Inventory(
         instance=instance, url=url, started=True,

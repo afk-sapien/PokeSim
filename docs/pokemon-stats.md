@@ -50,10 +50,62 @@ DVs. The displayed total includes all five, for a maximum of 75. DV stars summar
 that total: 1 star for 0–37, 2 for 38–59, 3 for 60–74, and 4 for a perfect 75.
 Level and training do not affect the star rating.
 
+## DV rarity and potential Power
+
+**DV quality (est.)** is the percentage of uniformly weighted DV combinations
+with a total at least as high as this partner's. Lower is rarer. **Higher roll**
+is the percentage with a strictly higher total. The existing percentage of
+maximum DV points is not a percentile.
+
+PokeSim Core enumerates all 65,536 combinations of Attack, Defense, Speed, and
+Special, each from 0 to 15, deriving HP from their low bits. HP is never treated
+as an independent fifth roll. A 65/75 total has an inclusive tail of about
+0.417% and a strictly better tail of about 0.270%. Perfect DVs have an inclusive
+tail of 1/65,536 and no strictly better outcome. Invalid or inconsistent DVs
+receive no rarity estimate.
+
+This is a uniform reference model. Cartridge RNG timing and acquisition methods
+can affect observed odds. These values do not include the chance of encountering
+a species, catching it, or finding an exact individual. They are not predictions
+of how long a hunt will take.
+
+**Potential Power** applies the Power formula at level 100 and maximum stat
+experience, holding this individual's species and DVs fixed. It does not predict
+an evolution or include moves and matchups. Compare potential within a species
+when considering a replacement. Current Power still measures present strength.
+
 ## Training
 
 Stat experience grows through training, up to 65,535 in each of the five stats.
 Reaching level 100 does not by itself mean every stat has maximum training.
+
+Optional postgame training now considers rarity and investment:
+
+- Top-0.5% candidates have the highest non-perfect training priority, followed
+  by top-5% candidates, then ordinary candidates. Perfect partners retain priority.
+- For lower-level candidates outside the top 5%, a reachable repeatable hunt can
+  take up to three expeditions before training proceeds. Failed or abandoned
+  hunts count, and the budget persists in checkpoints. There is no hunt delay
+  without a currently available hunt or for a partner already at level 80.
+- A duplicate of an existing level-100 partner needs at least 2% more potential
+  Power to justify training again. Perfect finds are the collection exception.
+- Within a quality tier, remaining experience to level 100, replacement gain,
+  and travel distance affect selection. These weights estimate effort, not hours.
+  Ten-level training steps and activity rotation remain in place.
+- Missing Pokédex entries and urgent supplies keep their existing precedence.
+
+Automatic release keeps both the best potential and the strongest current copy
+of each species. A veteran becomes expendable only after another copy catches
+up in current Power. Every top-0.5% find remains protected from automatic release.
+Automatic peer and NPC trading also protect these rare finds, the strongest
+known partner at level 80 or above, and a meaningful replacement for that partner.
+An explicit peer offer can override investment protection, while existing locks
+and perfect-Pokémon protections still apply. Unknown data never earns a rarity
+classification, and legacy inventories retain their conservative fallback.
+
+These cutoffs are PokeSim policy choices, not mechanics of the original game.
+All detailed explanations remain in this guide. Pokémon details show only the
+compact rarity estimate and potential Power alongside their existing stats.
 
 ## Elite Four wins
 

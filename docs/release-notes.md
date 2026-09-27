@@ -1,27 +1,32 @@
-# PokeSim 0.4.8 experimental beta
+# PokeSim 0.4.9 experimental beta
 
-PokeSim now uses [PokeSim Core](https://github.com/afk-sapien/pokesim-core), the
-shared package also used by PokeAgent Bench.
+Use DV rarity and long-term potential to choose which Pokémon deserve training.
 
-## Shared game data decoding
+## Smarter investment
 
-Core 0.1.1 supplies ROM identities, Red and Blue memory addresses, text and numeric
-decoding, individual Pokémon fields, and party and bag reads. Shared decoding
-fixes can now be maintained in one package and adopted by both applications.
+- Show estimated DV quality, chance of a higher roll, and potential Power in
+  compact Pokémon details. Full explanations stay in the repository stats guide.
+- Favor exceptional DV candidates, even at low levels. Require at least 2% more
+  potential Power before training a replacement for a level-100 partner, with
+  perfect finds kept as the collection exception.
+- Search for better ordinary candidates for at most three expeditions before
+  proceeding with training. The budget survives restarts, and difficult-to-replace
+  partners and already developed partners can train without this delay.
+- Keep both future potential and current strength. A veteran can be released only
+  once another copy catches up in current Power. Protect top-0.5% finds from
+  automatic release and trading. Explicit offers can override investment protection,
+  while locks and perfect-Pokémon protections remain in force.
 
-PokeSim keeps its UI, automation, trading, emulator lifecycle, and save management.
-Native installers and Docker install the pinned Core package automatically.
-No additional setup, save-format change, or database migration is required.
-
-See the [shared-core guide](shared-core.md) for ownership and coordinated updates.
+The shared DV math lives in PokeSim Core 0.1.2. Probabilities use a uniform reference
+model, not measured cartridge encounter odds. Potential Power compares the same
+species at level 100 with maximum training. See [Pokémon stats](pokemon-stats.md).
 
 ## Upgrading
 
-Back up the library and select `ghcr.io/afk-sapien/pokesim:0.4.8` in your Compose file,
+Back up the library and select `ghcr.io/afk-sapien/pokesim:0.4.9` in your Compose file,
 then run `docker compose pull` and `docker compose up -d --wait`. Keep your existing
 data mount and project name. Native installations can rerun the installer.
 
-This release includes the first-upload setup fix from 0.4.6 and the Porygon,
-Power ranking, and compact Pokémon details improvements from 0.4.7.
-
+Existing adventures and checkpoints remain compatible. The optional search-budget
+field starts empty in older checkpoints. No database migration is introduced.
 Docker images remain Linux amd64. Use the native Python installer on supported ARM64 systems.

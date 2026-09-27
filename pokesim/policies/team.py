@@ -32,8 +32,8 @@ def storage_headroom(s):
 def spare_copies(s, protected=()):
     """Boxed duplicates that can be given up, as (box, position, level).
 
-    Keep the best DVs, then level, training, moves and experience. Party members stay
-    on the team and win exact ties. Species in `protected` are never offered.
+    Keep future potential, the strongest current partner, and rare finds. Party
+    members stay on the team and win exact ties. Species in `protected` are never offered.
     """
     return [(mon['box'], mon['position'], mon['level']) for mon in
             spare_entries([asdict(mon) for mon in s.party], s.storage_entries(), protected)]

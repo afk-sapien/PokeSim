@@ -76,13 +76,21 @@ class AdventureDirector:
         rows = groups[chosen]
         if chosen in ('training', 'evolution') and any(p.get('perfect_partner') for _, p in rows):
             rows = [(weight, p) for weight, p in rows if p.get('perfect_partner')]
-        elif chosen == 'training' and any(p.get('mastery_needed') for _, p in rows):
-            rows = [(weight, p) for weight, p in rows if p.get('mastery_needed')]
         if chosen == 'training':
-            # Finish the closest partners before spreading experience to lower levels.
-            highest = max(p.get('initial_level', 0) for _, p in rows)
-            rows = [(weight, p) for weight, p in rows if p.get('initial_level', 0) >= highest - 5]
+            if any('investment_priority' in p for _, p in rows):
+                highest = max(p.get('investment_priority', 1) for _, p in rows)
+                rows = [(weight, p) for weight, p in rows if p.get('investment_priority', 1) == highest]
+                if any(p.get('mastery_needed') for _, p in rows):
+                    rows = [(weight, p) for weight, p in rows if p.get('mastery_needed')]
+            else:
+                # Preserve selection for legacy candidates without individual assessment.
+                if not any(p.get('perfect_partner') for _, p in rows) and any(p.get('mastery_needed') for _, p in rows):
+                    rows = [(weight, p) for weight, p in rows if p.get('mastery_needed')]
+                highest = max(p.get('initial_level', 0) for _, p in rows)
+                rows = [(weight, p) for weight, p in rows if p.get('initial_level', 0) >= highest - 5]
         if chosen == 'collection' and all(p.get('dv_hunt') for _, p in rows):
+            if any(p.get('quality_search_needed') for _, p in rows):
+                rows = [(weight, p) for weight, p in rows if p.get('quality_search_needed')]
             # Rotate through reachable species, then choose a route for that species.
             # Many encounter locations must not buy a species more turns.
             oldest = min(p.get('last_hunt', -1) for _, p in rows)
