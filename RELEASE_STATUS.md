@@ -17,7 +17,12 @@ to percentage points. Desktop and phone layouts keep the text readable.
 Local validation passed 1,404 Python tests with 75 optional tests skipped and
 all 26 browser checks. JavaScript, Ruff, documentation links, and package
 validation passed. The history stress check covered 100,000 hours with bounded
-responses. Release workflow validation and publication are pending.
+responses. CI passed on Python 3.11, 3.12, and 3.14. All five native platforms and the
+acceleration check passed. The final Docker image passed lifecycle and fresh
+quickstart checks. See the [validation record](docs/validation/journal-stats-0.4.14.json).
+
+The version tag and draft release are prepared. Public publication remains
+pending the required workflow authorization.
 
 ## Known limits, deliberately not addressed here
 
