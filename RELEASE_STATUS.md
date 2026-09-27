@@ -1,28 +1,23 @@
-# Release status: 0.4.10
+# Release status: 0.4.11
 
-This release adds DV rarity and potential Power, training investment rules, a
-bounded hunt budget, and protection for rare finds and trained veterans. Shared
-probability math comes from Core 0.1.2. Existing saves remain compatible.
+This release adds the Kanto Marathon, an occasional postgame race with ordered
+checkpoints, measured progress, saved records, and short journal reports.
+Existing saves remain compatible. Core remains at 0.1.2.
 
-See [Pokémon stats](docs/pokemon-stats.md) for the model and policy cutoffs,
-and [release notes](docs/release-notes.md) for installation details.
+See the [marathon guide](docs/marathon.md) and
+[release notes](docs/release-notes.md) for details.
 
 ## Validation and publication
 
-Core passed all 40 tests, including exhaustive enumeration of all 65,536 DV
-combinations, and CI on Python 3.11, 3.12, and 3.13. The local PokeSim suite passed
-1,377 tests with 69 optional tests skipped. A later trade-control correction passed
-all 73 targeted investment and trading tests.
+The local suite passed 1,393 tests with 69 optional tests skipped. All 11 marathon
+regressions, JavaScript checks, lint, and documentation links passed.
 
-The exact published source passed 1,370 Python tests with 60 optional tests skipped,
-and all 20 browser tests, including compact details at desktop and phone widths.
-Native installation, Docker lifecycle, package, and anonymous image checks passed.
+Copied Red and Blue saves completed the entire course using normal button inputs.
+Red finished in 17:47 with 1,228 recorded steps and 17 battles. Blue finished in
+13:38 with 1,243 recorded steps and 13 battles. These times exclude travel to the
+starting line. See the [sanitized replay receipt](docs/validation/marathon-replays.json).
 
-[PokeSim 0.4.10](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.10) is published.
-The home server was cold-backed up and upgraded from 0.4.8. The healthy container
-uses Core 0.1.2 and serves the new rarity and potential Power fields. Red and Blue
-resumed without errors and retain 151 of 151 registrations. The archived adventure
-remained stopped. See the [sanitized validation receipt](docs/validation/release-0.4.10.json).
+Publication and deployment checks are pending for this candidate.
 
 ## Known limits, deliberately not addressed here
 
@@ -50,7 +45,7 @@ remained stopped. See the [sanitized validation receipt](docs/validation/release
 - **No formatter or type checker.** Ruff runs the Pyflakes rules only, and 15% of functions carry
   return annotations.
 
-Gameplay remains an experimental beta. Synthetic tests, two copied-save purchase replays, and
+Gameplay remains an experimental beta. Synthetic tests, copied-save marathon and purchase replays, and
 demonstration-ROM worker checks do not establish uninterrupted multi-day cartridge gameplay on
 all platforms. Existing private gameplay and cable-trading receipts retain their original scope.
 Back up the complete library before upgrading. Import legacy adventures into a new application

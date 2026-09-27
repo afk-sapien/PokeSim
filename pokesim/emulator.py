@@ -824,6 +824,10 @@ class Emulator:
                     ctx = PolicyContext(snap, time.time() - self.stuck_since, time.time(), self.pb.memory)
                     preparation = getattr(self, 'preparation', None)
                     pending = list(preparation.step(ctx) if preparation else self.policy.step(ctx))
+                    if not preparation and hasattr(self.policy, 'collection'):
+                        activity_events = self.policy.collection.take_activity_events()
+                        if activity_events:
+                            self._handle_events(activity_events, snap)
                     if self.paused:
                         continue
                     pending = pending or [Action(None, 0, 12)]

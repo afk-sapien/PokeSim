@@ -237,7 +237,7 @@ class StrategicPolicy(Policy):
         self.decisions += 1
         # PC transfers briefly combine a new partner with the old slot's level.
         # Accept training gains in battle or after returning to the overworld.
-        self.collection.observe(s, suspended=self.pickups.active is not None,
+        self.collection.observe(s, overworld=kind == 'overworld', suspended=self.pickups.active is not None,
                                 training_ready=bool(s.in_battle) or kind == 'overworld',
                                 training_active=(self.goal.key == 'collect_train' and not self.heal_latch
                                                  and not needs_healing(s.party)
@@ -707,7 +707,7 @@ class StrategicPolicy(Policy):
             if collection_goal:
                 self.next_goal = goal.to_dict() if not goal.key.startswith(('collect_', 'party_collection')) else self.next_goal
                 goal = collection_goal
-        pickup = None if legendary_project(self.collection.project) else self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
+        pickup = None if legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon' else self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
         if pickup and not self.heal_latch and not in_league:
             self.next_goal = goal.to_dict()
             goal = pickup
@@ -958,10 +958,10 @@ class StrategicPolicy(Policy):
                 social = None if goal.key.startswith(("collect_", "party_collection")) else self._purposeful_detour(s, mem, goal)
                 if social:
                     return social
-                social = None if goal.key == 'collect_pickup' or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else self._social_interaction(s, mem)
+                social = None if goal.key == 'collect_pickup' or (self.collection.project or {}).get('method') in ('train', 'marathon') or legendary_project(self.collection.project) else self._social_interaction(s, mem)
                 if social:
                     return social
-            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup", "collect_hunt") or (self.collection.project or {}).get('method') == 'train' or legendary_project(self.collection.project) else EXPLORATION_CHANCE
+            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup", "collect_hunt") or (self.collection.project or {}).get('method') in ('train', 'marathon') or legendary_project(self.collection.project) else EXPLORATION_CHANCE
             if s.map in MANSION_MAPS:
                 direction = self.mansion.route(s, goal.targets, self.nav)
                 if direction == "switch":

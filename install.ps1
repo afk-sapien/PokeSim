@@ -1,6 +1,6 @@
 # Install the released application for the current Windows user.
 $ErrorActionPreference = 'Stop'
-$version = '0.4.10'
+$version = '0.4.11'
 $package = $env:POKESIM_INSTALL_PACKAGE
 if (-not $package) {
     $package = "https://github.com/afk-sapien/PokeSim/releases/download/v$version/pokesim-$version-py3-none-any.whl"

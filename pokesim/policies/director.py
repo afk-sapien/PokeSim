@@ -6,6 +6,8 @@ def category(project):
     if project.get('legendary'):
         return 'legendary'
     method = project['method']
+    if method == 'marathon':
+        return 'recreation'
     if method == 'evolve':
         return 'evolution'
     if method == 'train':
@@ -66,7 +68,7 @@ class AdventureDirector:
             if len(kinds) > 1 and len(recent_kinds) >= limit and len(set(recent_kinds[-limit:])) == 1:
                 kinds = [kind for kind in kinds if kind != recent_kinds[-1]]
             priorities = {'legendary': 8, 'collection': 8 if discovering else 5, 'evolution': 8 if discovering else 4,
-                          'training': 3 if discovering else 12, 'exploration': 1, 'supplies': 1}
+                          'training': 3 if discovering else 12, 'exploration': 1, 'supplies': 1, 'recreation': 1}
             if groups.get('collection') and all(p.get('repeat') and not p.get('needed_capture') for _, p in groups['collection']):
                 priorities['collection'] = 8 if any(p.get('dv_hunt') for _, p in groups['collection']) else 1
             # Training used to be exempt from this decay, so once it started it kept winning.

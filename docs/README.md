@@ -12,6 +12,7 @@ This index separates current instructions, future plans, and historical evidence
 | Prebuilt release image | [Docker and migration](self-hosting.md) |
 | Publishing Python and Docker releases | [Release workflow and GHCR setup](publishing.md) |
 | Collection milestones, level 100 stars, and perfect finds | [Collection goals](collection-goals.md) |
+| Postgame races, checkpoints, and finish reports | [Kanto Marathon](marathon.md) |
 | Gameplay, settings, and APIs | [Feature guide](guide.md) |
 | Power, stats, DVs, training, and individual victory counts | [Pokémon stats and Power](pokemon-stats.md) |
 | Collection browsing, sorting, and Pokémon locks | [PC storage](pc-storage.md) |

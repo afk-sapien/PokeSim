@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.11
+
+- Add an occasional Kanto Marathon after the Champion victory. Follow an ordered
+  seven-town course, record steps, battles, healing stops, and time, and celebrate
+  with a short journal entry and screenshot.
+- Save marathon progress and personal bests across restarts. Keep missing Pokédex
+  entries and urgent supplies ahead of recreation, with bounded attempts and a
+  six-hour game-time interval between races.
+
 ## 0.4.10
 
 - Add estimated DV rarity and fully trained potential Power to Pokémon details,

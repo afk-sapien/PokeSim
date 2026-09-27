@@ -10,7 +10,7 @@ from ..game_data import load
 from .progression import GRASS_TILES, Goal, object_goal, at
 from .navigation import DIRS
 from .director import AdventureDirector
-from . import training
+from . import training, marathon
 from ..milestones import is_perfect, level_credit
 from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, EVENTS, event_set, object_hidden
 
@@ -132,6 +132,10 @@ class Collection:
         self.quality_searches = {}
         self.peer_demand = {}
         self.demand_until = 0
+        self.next_marathon = 0
+        self.marathon_records = {}
+        self.activity_events = []
+        self.marathon_previous = None
 
     def demand(self):
         return self.peer_demand if time.monotonic() < self.demand_until else {}
@@ -161,14 +165,18 @@ class Collection:
         return project.get('species') if project.get('repeat') else None
 
     def state_dict(self):
-        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','attempts','elapsed','eevee_choice','dojo_choice','history','completed_champion','idle_frames','project_maps','project_flags','last_repeat','last_hunt','quality_searches')},
+        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','attempts','elapsed','eevee_choice','dojo_choice','history','completed_champion','idle_frames','project_maps','project_flags','last_repeat','last_hunt','quality_searches','next_marathon','marathon_records','activity_events')},
                 'director': self.director.state_dict()}
 
     def load(self, data):
+        self.next_marathon = data.get('next_marathon', 0)
+        self.marathon_records = data.get('marathon_records', {})
+        self.activity_events = data.get('activity_events', [])
         for key in self.state_dict():
             if key in data and key != 'director':
                 setattr(self,key,data[key])
         self.director.load(data.get('director', {}))
+        self.marathon_previous = None
         if self.eevee_choice not in (134, 135, 136):
             self.eevee_choice = 134
         if self.dojo_choice not in (106, 107):
@@ -194,6 +202,7 @@ class Collection:
             return False
         project = self.project
         self.record_quality_search()
+        self.finish_marathon(False)
         label = name(project['species']) if project.get('species') else project['method'].title()
         progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
         self.attempts[project.get('key', label)] = self.director.finish(
@@ -209,13 +218,35 @@ class Collection:
         self.progress_token = None
         return True
 
+    def finish_marathon(self, finished):
+        project = self.project
+        if not project or project['method'] != 'marathon':
+            return
+        self.marathon_records['last'] = {
+            'finished': finished, 'frames': project['race_frames'], **project['gains']}
+        if finished:
+            self.marathon_records['completed'] = self.marathon_records.get('completed', 0) + 1
+            self.marathon_records['best_frames'] = min(
+                self.marathon_records.get('best_frames', project['race_frames']), project['race_frames'])
+        self.activity_events.append({
+            'type': 'marathon', 'title': 'Kanto Marathon finished!' if finished else 'Kanto Marathon called off',
+            'body': marathon.report(project, finished), 'priority': 2, 'tags': 'runner'})
+        self.next_marathon = self.elapsed + marathon.INTERVAL
+        self.marathon_previous = None
+
+    def take_activity_events(self):
+        from ..events import Event
+        events = [Event(**row) for row in self.activity_events]
+        self.activity_events = []
+        return events
+
     def record_quality_search(self):
         project = self.project or {}
         if project.get('dv_hunt') and project.get('species'):
             key = str(project['species'])
             self.quality_searches[key] = min(SEARCH_BUDGET, self.quality_searches.get(key, 0) + 1)
 
-    def observe(self,s, suspended=False, training_ready=True, training_active=None):
+    def observe(self,s, suspended=False, training_ready=True, training_active=None, overworld=True):
         delta = max(0,min(120,s.frame - self.last_frame)) if self.last_frame is not None else 0
         self.last_frame = s.frame
         self.elapsed += delta
@@ -225,9 +256,23 @@ class Collection:
             if event_set(s.event_flags, flag):
                 self.dojo_choice = chosen
         self.attempts = {key: deadline for key, deadline in self.attempts.items() if deadline > self.elapsed}
-        if self.project and (not suspended or self.project['method'] == 'train'):
+        if self.project and (not suspended or self.project['method'] in ('train', 'marathon')):
             project = self.project
             training_reason = None
+            marathon_finished = False
+            if project['method'] == 'marathon':
+                before = project['checkpoint']
+                progressed, marathon_finished = marathon.observe(
+                    project, s, delta, self.marathon_previous, overworld)
+                self.marathon_previous = s if s.valid else None
+                if progressed:
+                    self.idle_frames = 0
+                if before == 0 and project['checkpoint'] == 1:
+                    self.activity_events.append({
+                        'type': 'marathon', 'title': 'The Kanto Marathon is on!',
+                        'body': 'Pallet Town to Celadon and back, with 11 checkpoints. '
+                                'Wild Pokémon have not agreed to stay off the course.',
+                        'priority': 2, 'tags': 'runner'})
             if project['method'] != 'train':
                 self.remaining -= delta
             if len(self.project_flags) != len(s.event_flags):
@@ -307,6 +352,8 @@ class Collection:
                 finished = (s.map,s.x,s.y) == tuple(self.project['target'])
             if self.project['method']=='rematch':
                 finished = s.hall_of_fame_count > self.project['hof_count'] or s.map == MAPS['HALL_OF_FAME']
+            if project['method'] == 'marathon':
+                finished = marathon_finished
             if project['method'] == 'train':
                 finished = trainee is not None and s.party[trainee].level >= project['target_level']
             if training_reason and not s.in_battle and not finished:
@@ -314,6 +361,7 @@ class Collection:
                 return
             if finished or (self.remaining <= 0 and (project['method'] != 'train' or not s.in_battle)):
                 self.record_quality_search()
+                self.finish_marathon(bool(finished))
                 if finished and project.get('repeat'):
                     self.last_repeat[str(target)] = self.elapsed
                 label = name(target) if target else item.replace('_',' ').title() if item else self.project['method'].title()
@@ -419,6 +467,7 @@ class Collection:
                 'history':self.history, 'director': self.director.state_dict(),
                 'peer_requests': self.demand(),
                 'training': training.details(self.project, self.remaining),
+                'marathon': self.marathon_records,
                 'reason':'Collect, evolve, train, and explore in bounded projects. Repeated failures wait longer before retrying.'}
 
     def choose(self,s,nav,rng,main):
@@ -627,6 +676,9 @@ class Collection:
                      'perfect_partner': is_perfect(mon),
                      'mastery_needed': any(level_credit(relative) - set(self.milestones.get('level_100', ())) for relative in family)},
                     investment['weight'])
+            if (self.elapsed >= self.next_marathon and s.saffron_open and nav.can_cut
+                    and sum(self.director.completed.values()) >= 4):
+                add(marathon.candidate(), 1)
             add({'method':'rematch','hof_count':s.hall_of_fame_count}, 10 if s.money < 10000 else 2)
             porygon = next(sid for sid,mon in SPECIES.items() if mon['dex']==137)
             if 137 not in s.owned and (s.money >= 20000 or s.coins >= (9999 if self.version=='red' else 6500)):
@@ -664,6 +716,9 @@ class Collection:
         self.project = (self.director.select(candidates, rng, urgent=s.money < 10000)
                         if self.completed_champion else
                         rng.choices([p for w,p in candidates],weights=[w for w,p in candidates])[0])
+        if self.project['method'] == 'marathon':
+            self.next_marathon = self.elapsed + marathon.INTERVAL
+            self.marathon_previous = None
         if self.project.get('dv_hunt'):
             self.last_hunt[str(self.project['species'])] = self.elapsed
         self.project['initial_owned'] = list(s.owned)
@@ -672,11 +727,15 @@ class Collection:
         self.project_flags = list(s.event_flags)
         self.progress_token = None
         self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project['method'] == 'trade' else training.TRAINING_BUDGET if self.project['method']=='train' or self.project['method']=='evolve' and self.project['evolution']['method']=='level' else 108000 if self.project.get('dv_hunt') else 36000 if self.completed_champion else PROJECT_BUDGET
+        if self.project['method'] == 'marathon':
+            self.remaining = marathon.BUDGET
         nav.path.clear()
         return self.goal(s)
 
     def project_goal(self,s,p):
         mode=p['method']
+        if mode == 'marathon':
+            return marathon.goal(p)
         sid=p.get('species')
         if mode in ('grass','surf','fish','safari'):
             points=tiles(p)
