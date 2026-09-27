@@ -1,12 +1,12 @@
 # Shared game core
 
-[PokiSim Core](https://github.com/afk-sapien/pokisim-core) is the Python package
-shared by PokeSim and PokeAgent Bench. Its distribution name is `pokisim-core`
-and its import name is `pokisim_core`.
+[PokeSim Core](https://github.com/afk-sapien/pokesim-core) is the Python package
+shared by PokeSim and PokeAgent Bench. Its distribution name is `pokesim-core`
+and its import name is `pokesim_core`.
 
-PokeSim uses `pokisim_core.gen1` for Red and Blue WRAM addresses, text and numeric
+PokeSim uses `pokesim_core.gen1` for Red and Blue WRAM addresses, text and numeric
 decoding, individual Pokémon fields, party reads, and bag reads. Its known ROM
-hashes come from `pokisim_core.rom`.
+hashes come from `pokesim_core.rom`.
 
 The existing `pokesim.ram` imports remain compatible. It re-exports shared
 constants and helpers, wraps decoded party dictionaries in `PartyMon`, and
@@ -40,7 +40,7 @@ Use a separate development environment to test an unpublished core checkout:
 ```sh
 uv venv /tmp/pokesim-core-dev
 uv pip install --python /tmp/pokesim-core-dev/bin/python -e '.[dev]'
-uv pip install --python /tmp/pokesim-core-dev/bin/python --reinstall -e ../pokisim-core
+uv pip install --python /tmp/pokesim-core-dev/bin/python --reinstall -e ../pokesim-core
 /tmp/pokesim-core-dev/bin/python -m pytest tests/test_shared_core.py -q
 ```
 

@@ -1,6 +1,6 @@
 """Compatibility at the boundary between shared decoding and application state."""
-from pokisim_core import gen1
-from pokisim_core.rom import KNOWN_ROM_SHA1
+from pokesim_core import gen1
+from pokesim_core.rom import KNOWN_ROM_SHA1
 
 from pokesim import config, ram
 

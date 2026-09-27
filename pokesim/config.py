@@ -3,7 +3,7 @@ import os
 from urllib.parse import urlsplit
 from pathlib import Path
 
-from pokisim_core.rom import KNOWN_ROM_SHA1 as KNOWN_ROM_SHA1
+from pokesim_core.rom import KNOWN_ROM_SHA1 as KNOWN_ROM_SHA1
 
 
 def _env(name, default):

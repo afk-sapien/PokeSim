@@ -5,8 +5,8 @@ against the community RAM map and verified in-emulator (see tests/).
 """
 from __future__ import annotations
 
-from pokisim_core import gen1 as core_gen1
-from pokisim_core.gen1 import (
+from pokesim_core import gen1 as core_gen1
+from pokesim_core.gen1 import (
     W_TILEMAP as W_TILEMAP,
     W_ENEMY_SPECIES2 as W_ENEMY_SPECIES2,
     W_ENEMY_MON as W_ENEMY_MON,
