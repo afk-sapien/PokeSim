@@ -110,6 +110,8 @@ class Emulator:
         fresh = (not store.autosaves() and not store.events(limit=1)
                  and (isolated_ram or not Path(str(self.rom) + '.ram').exists()))
         self.catch_tracker = CatchTracker(store, self.rom_sha1, fresh=fresh)
+        from .legendary_returns import StepTracker
+        self.step_tracker = StepTracker(store, self.rom_sha1)
         if hasattr(self.policy, "collection"):
             self.policy.collection.version = "blue" if "Blue" in self.rom_note else "red"
         if hasattr(self.policy, "nav"):
@@ -143,6 +145,8 @@ class Emulator:
         tracker = getattr(self, 'catch_tracker', None)
         if tracker is not None:
             tracker.attach(pb)
+        if getattr(self, 'step_tracker', None) is not None:
+            self.step_tracker.attach(pb)
         return pb
 
     def start(self):
@@ -280,6 +284,11 @@ class Emulator:
     def _reset_transient(self, *, clear_observation=False):
         """Discard queued input and recovery timers without erasing durable progress."""
         self.policy.on_restore()
+        if hasattr(self.policy, 'collection') and hasattr(self, 'store'):
+            from .legendary_returns import claims
+            ready, closed = claims(self.store)
+            self.policy.collection.returned_legendaries = ready
+            self.policy.collection.closed_legendaries = closed
         if hasattr(self, 'statistics'):
             self.statistics.reset_baseline()
         self.input_epoch = getattr(self, 'input_epoch', 0) + 1
@@ -404,7 +413,20 @@ class Emulator:
         restored_legendary = False
         if (self.rom_sha1 in config.KNOWN_ROM_SHA1 and not self.manual_mode
                 and not self.store.get('trade_hold')):
-            recovery_events, restored_legendary = self.legendary_recovery.observe(snap, self.pb.memory)
+            from .legendary_returns import observe as returns_observe, claims
+            if hasattr(self, 'step_tracker'):
+                self.step_tracker.flush()
+            return_events, restored_legendary = returns_observe(self.store, snap, self.pb.memory)
+            events += return_events
+            if restored_legendary:
+                snap = read_snapshot(self.pb.memory, self.frame)
+            ready, closed = claims(self.store)
+            if hasattr(self.policy, 'collection'):
+                self.policy.collection.returned_legendaries = ready
+                self.policy.collection.closed_legendaries = closed
+            recovery_events, recovered = self.legendary_recovery.observe(
+                snap, self.pb.memory, repeat=ready, blocked=closed)
+            restored_legendary |= recovered
             events += recovery_events
             if restored_legendary:
                 snap = read_snapshot(self.pb.memory, self.frame)
@@ -513,6 +535,8 @@ class Emulator:
         if self.store.get("trade_hold") and not trade_prepare:
             return
         self.store.set("play_clock", self.play_clock.state_dict())
+        if hasattr(self, 'step_tracker'):
+            self.step_tracker.flush(force=True)
         if hasattr(self, 'statistics'):
             self.statistics.flush()
         snap = self.snapshot

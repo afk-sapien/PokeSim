@@ -55,3 +55,20 @@ def test_unavailable_current_value_is_not_replaced_by_historical_value(page, gam
     expect(dv).to_contain_text('+1 pp since first record')
     expect(dv.locator('.trend-scale')).to_have_text('67 to 70%')
     expect(page.locator('#statistics-window')).not_to_be_empty()
+
+
+@pytest.mark.parametrize('width', [320, 1280])
+def test_legendary_return_progress_is_readable_and_lists_available_hunts(page, game, width):
+    from pokesim.legendary_returns import KEY, STEPS
+    url, store, _, _ = game
+    store.set(STEPS, {'available': True, 'total': 1250000, 'started_at': time.time()})
+    store.set(KEY, {'cycle': 1, 'interval': 1000000, 'next_at': 2000000,
+                   'tickets': {'150': {'state': 'available', 'cycle': 1}}})
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(url + '/journal/stats')
+    expect(page.locator('#legendary-returns')).to_be_visible()
+    expect(page.locator('#legendary-summary')).to_have_text('750,000 steps until the next return')
+    expect(page.locator('#legendary-ready')).to_have_text('Ready to revisit: Mewtwo.')
+    expect(page.locator('#legendary-meter')).to_have_attribute('value', '250000')
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    page.screenshot(path=f'/tmp/pokesim-legendary-returns-{width}.png', full_page=True)

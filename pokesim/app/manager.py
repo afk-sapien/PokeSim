@@ -88,7 +88,7 @@ class Manager:
     def validate_adventure_settings(values):
         allowed = {'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
                    'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards',
-                   'mew_event', 'event_retention_days'}
+                   'mew_event', 'legendary_return_steps', 'event_retention_days'}
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError('Unsupported adventure settings')
         result = {'starter': 'random', 'policy': 'strategic', 'auto_start': False, **values}
@@ -102,7 +102,7 @@ class Manager:
         # Every notable event keeps a full save state beside its screenshot, which is about
         # 40 MB an hour, so an adventure needs a way to bound its own journal. Zero keeps all.
         for name, low, high in [('autosave_seconds', 1, 86400), ('keep_autosaves', 1, 10000),
-                                ('stream_fps', 1, 60), ('event_retention_days', 0, 36500)]:
+                                ('stream_fps', 1, 60), ('legendary_return_steps', 0, 1000000000), ('event_retention_days', 0, 36500)]:
             if name in result and (type(result[name]) is not int or not low <= result[name] <= high):
                 raise ValueError(f'{name} must be between {low} and {high}')
         if result.get('seed') is not None and type(result['seed']) is not int:
@@ -348,6 +348,7 @@ def create_app(manager, shutdown=lambda: None):
             'starter': data.get('starter', 'random'),
             'league_rewards': data.get('league_rewards', True),
             'mew_event': data.get('mew_event', True),
+            'legendary_return_steps': data.get('legendary_return_steps', 1000000),
         })
         return manager.registry.create(data.get('name', ''), data.get('rom_id', ''), settings,
                                        data.get('request_id', identifier()))

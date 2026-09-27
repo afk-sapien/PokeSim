@@ -230,3 +230,12 @@ def test_runtime_accepts_the_retention_setting_the_library_now_sends(tmp_path):
     settings = SimulationSettings(rom_path=str(rom), data_dir=str(tmp_path),
                                   game_data_dir=str(tmp_path), event_retention_days=30)
     assert settings.event_retention_days == 30
+
+
+def test_legendary_return_interval_validation():
+    from pokesim.app.manager import Manager
+    assert Manager.validate_adventure_settings({'legendary_return_steps': 0})['legendary_return_steps'] == 0
+    assert Manager.validate_adventure_settings({'legendary_return_steps': 1000000})['legendary_return_steps'] == 1000000
+    for value in (-1, True, 0.5, '1000000', 1000000001):
+        with pytest.raises(ValueError):
+            Manager.validate_adventure_settings({'legendary_return_steps': value})

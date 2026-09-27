@@ -438,6 +438,9 @@ class StrategicPolicy(Policy):
             return self._select(scr, 0)
         if kind == "battle":
             me, enemy = read_battler(mem, W_BATTLE_MON), read_battler(mem, W_ENEMY_MON)
+            if s.in_battle == 1 and SPECIES.get(enemy.species, {}).get('dex') in getattr(self.collection, 'closed_legendaries', ()):
+                self.reason = 'This legendary return was already caught. Wait for the next walking milestone'
+                return self._root(scr, 'run')
             key = (s.enemy_species, s.enemy_level, enemy.max_hp)
             if key != self.battle_key:
                 self.used_status.clear()

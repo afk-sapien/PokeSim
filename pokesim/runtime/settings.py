@@ -26,6 +26,7 @@ class SimulationSettings:
     viewer_only: bool = False
     league_rewards: bool = False
     mew_event: bool = False
+    legendary_return_steps: int = 1000000
     seed: int | None = None
     fast_text: bool = True
     battle_animations: bool = True
@@ -62,6 +63,7 @@ class SimulationSettings:
             'speed': (0, 16), 'autosave_seconds': (1, 86400),
             'keep_autosaves': (1, 10000), 'stuck_reload_seconds': (1, 604800),
             'battle_timeout_seconds': (1, 604800), 'stream_fps': (1, 60),
+            'legendary_return_steps': (0, 1000000000),
             'event_retention_days': (0, 36500), 'ntfy_min_priority': (1, 5),
         }
         for name, (low, high) in ranges.items():

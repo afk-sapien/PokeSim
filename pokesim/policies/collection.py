@@ -31,7 +31,8 @@ def held_count(snapshot, species):
 
 def legendary_project(project):
     return bool(project and project.get('method') == 'static'
-                and SPECIES.get(project.get('species'), {}).get('dex') in (144, 145, 146, 150))
+                and (SPECIES.get(project.get('species'), {}).get('dex') in (144, 145, 146, 150)
+                     or project.get('fragment') in ('ARTICUNO', 'ZAPDOS', 'MOLTRES', 'MEWTWO')))
 
 
 RODS = {'OLD_ROD': 'VERMILION_OLD_ROD_HOUSE', 'GOOD_ROD': 'FUCHSIA_GOOD_ROD_HOUSE', 'SUPER_ROD': 'ROUTE_12_SUPER_ROD_HOUSE'}
@@ -159,6 +160,8 @@ class Collection:
         return weight
 
     def repeat_target(self, species, map_id=None):
+        if dex(species) in getattr(self, 'returned_legendaries', ()):
+            return species
         project = self.project or {}
         if project.get('dv_hunt') and map_id == project.get('map'):
             return species
@@ -329,7 +332,9 @@ class Collection:
                 self.progress_token = token
                 self.was_in_battle = bool(s.in_battle)
             target = self.project.get('species')
-            if (legendary_project(project) and not s.in_battle and dex(target) not in s.owned
+            if (legendary_project(project) and not s.in_battle
+                    and (dex(target) not in s.owned or project.get('legendary_return')
+                         and dex(target) in getattr(self, 'returned_legendaries', ()))
                     and project.get('flag') and event_set(s.event_flags, project['flag'])):
                 self.abandon('Legendary encounter ended without a catch')
                 return
@@ -339,6 +344,8 @@ class Collection:
                 caught = max(0, held_count(s, target) - project['initial_count'])
                 project.setdefault('gains', {})['catches'] = max(project.get('gains', {}).get('catches', 0), caught)
                 finished = caught >= project.get('catch_goal', 1)
+            if project.get('legendary_return'):
+                finished = dex(target) not in getattr(self, 'returned_legendaries', ())
             if project.get('upgrade_evolution'):
                 index = self.trainee(s, project)
                 finished = index is not None and s.party[index].species == target
@@ -386,6 +393,9 @@ class Collection:
         return {int(k):v for k,v in DATA['versions'].get(self.version, {}).items()}
 
     def available(self,s,source):
+        legendary = {'ARTICUNO': 144, 'ZAPDOS': 145, 'MOLTRES': 146, 'MEWTWO': 150}
+        if legendary.get(source.get('fragment')) in getattr(self, 'closed_legendaries', ()):
+            return False
         mode = source['method']
         bag = dict(s.items)
         if source.get('fragment') == 'ARTICUNO' and not any(70 in p.moves for p in s.party):
@@ -531,6 +541,7 @@ class Collection:
         for sid,rows in sources.items():
             if dex(sid) in s.owned:
                 rows = [source for source in rows if source['method'] in REPEATABLE
+                        or legendary_project(source) and dex(sid) in getattr(self, 'returned_legendaries', ())
                         or source['method'] == 'gift'
                         and dex(sid) in (106, 107) and dex(sid) == self.dojo_choice]
             for source in rows:
@@ -585,6 +596,8 @@ class Collection:
                                    give_key=identity(offered))
                 if legendary_project(project):
                     project['legendary'] = True
+                    if dex(sid) in getattr(self, 'returned_legendaries', ()):
+                        project.update(legendary_return=True, repeat=True, initial_count=held_count(s, sid), catch_goal=1)
                 goal = self.project_goal(s,project)
                 if not goal or not goal.targets:
                     continue

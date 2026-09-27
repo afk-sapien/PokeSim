@@ -487,3 +487,17 @@
 
 .progress-label .readout { white-space: normal }
 .progress-label .readout--missing { font-size: var(--f-legend) }
+
+.legendary-progress { padding: var(--s4) }
+.legendary-progress progress { width: 100% }
+.legendary-progress progress { accent-color: var(--signal) }
+.legendary-progress .readout { white-space: normal }
+
+#legendary-summary .note { display: block }
+.legendary-progress progress { appearance: none }
+.legendary-progress progress { border: 0 }
+.legendary-progress progress { border-radius: 0 }
+.legendary-progress progress { height: 12px }
+.legendary-progress progress::-webkit-progress-bar { background: var(--cell-off) }
+.legendary-progress progress::-webkit-progress-value { background: repeating-linear-gradient(to right, var(--signal) 0, var(--signal) 8px, transparent 8px, transparent 10px) }
+.legendary-progress progress::-moz-progress-bar { background: repeating-linear-gradient(to right, var(--signal) 0, var(--signal) 8px, transparent 8px, transparent 10px) }

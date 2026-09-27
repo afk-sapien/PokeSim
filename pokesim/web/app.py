@@ -81,7 +81,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     @app.get('/api/statistics')
     def statistics():
         from ..statistics import status
-        return status(store)
+        from ..legendary_returns import status as returns_status
+        return {**status(store), 'legendary_returns': returns_status(store)}
 
     @app.get('/trading', response_class=HTMLResponse)
     def trading_page():

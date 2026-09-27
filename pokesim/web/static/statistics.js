@@ -25,6 +25,19 @@
   ]
   const number = value => Number(value).toLocaleString(undefined, {maximumFractionDigits: 1})
   function render(data) {
+    const returns = data.legendary_returns
+    const panel = document.querySelector('#legendary-returns')
+    panel.hidden = !returns?.enabled || !returns.available
+    if (!panel.hidden) {
+      const names = {144: 'Articuno', 145: 'Zapdos', 146: 'Moltres', 150: 'Mewtwo'}
+      document.querySelector('#legendary-remaining').textContent = number(returns.remaining)
+      const meter = document.querySelector('#legendary-meter')
+      meter.max = returns.interval
+      meter.value = returns.progress
+      document.querySelector('#legendary-ready').textContent = returns.ready.length
+        ? `Ready to revisit: ${returns.ready.map(dex => names[dex]).join(', ')}.`
+        : `${number(returns.steps)} completed steps tracked. Previously acquired legendaries return at their original locations.`
+    }
     const status = document.querySelector('#statistics-status')
     const target = document.querySelector('#statistics-charts')
     if (!data.history.length) {

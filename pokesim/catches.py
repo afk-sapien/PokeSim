@@ -80,6 +80,9 @@ def record_receipt(db, fingerprint, dex, *, perfect=False, species=None, trainer
     key = str(dex)
     value['counts'][key] = value['counts'].get(key, 0) + 1
     value['total'] += 1
+    if dex in (144, 145, 146, 150):
+        from .legendary_returns import consume
+        consume(db, dex)
     if perfect:
         from .milestones import record_capture
         record_capture(db, species, trainer_id)

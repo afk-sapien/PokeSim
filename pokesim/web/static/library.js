@@ -293,6 +293,8 @@
         input.toggleAttribute('data-blocked', running(game))
         input.disabled = running(game)
       }
+      $('#settings-legendary-steps').value = game.settings?.legendary_return_steps ?? 1000000
+      $('#settings-legendary-steps').disabled = running(game)
       $('#adventure-settings').showModal()
       return
     }
@@ -322,7 +324,7 @@
   $('#adventure-settings-form').onsubmit = event => { event.preventDefault()
     act(async () => {
       const game = adventures.find(item => item.id === $('#settings-id').value)
-      const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked} : {}
+      const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value)} : {}
       await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
         settings: {auto_start: $('#settings-autostart').checked, ...rewards}}, 'PATCH')
       $('#adventure-settings').close()

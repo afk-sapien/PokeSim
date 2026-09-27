@@ -66,3 +66,10 @@ are shown in percentage points. Missing measurements leave gaps in the lines. Th
 browser. Existing journal milestone history is also bounded when served.
 
 New measurements are not projected backward onto earlier journal entries.
+
+## Legendary returns
+
+A compact panel shows completed-step progress toward the next legendary return
+and the encounters ready to revisit. This uses the cartridge step counter rather
+than the older sampled steps chart. See [Legendary returns](legendary-returns.md)
+for the milestone rules and settings.

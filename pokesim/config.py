@@ -39,6 +39,7 @@ FEED_TITLE = _env("FEED_TITLE", "pokesim")
 
 HOST = _env("HOST", "127.0.0.1")
 VIEWER_ONLY = _env("VIEWER_ONLY", "0") == "1"
+LEGENDARY_RETURN_STEPS = int(_env("LEGENDARY_RETURN_STEPS", "1000000"))
 EVENT_RETENTION_DAYS = int(_env("EVENT_RETENTION_DAYS", "0"))
 
 
@@ -58,6 +59,7 @@ def validate():
         "STREAM_FPS": (STREAM_FPS, 1, 60),
         "NTFY_MIN_PRIORITY": (NTFY_MIN_PRIORITY, 1, 5),
         "EVENT_RETENTION_DAYS": (EVENT_RETENTION_DAYS, 0, 36500),
+        "LEGENDARY_RETURN_STEPS": (LEGENDARY_RETURN_STEPS, 0, 1000000000),
     }
     for name, (value, low, high) in ranges.items():
         if not math.isfinite(value) or not low <= value <= high:

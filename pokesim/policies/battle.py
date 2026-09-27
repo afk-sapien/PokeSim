@@ -299,16 +299,16 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     allowed_capture = capture_species is None or enemy.species == capture_species or legendary
     useful = useful and allowed_capture
     collection_target = (collect_missing or legendary) and missing_species and allowed_capture
-    repeat_target = enemy.species == repeat_species and not missing_species and not legendary
+    repeat_target = enemy.species == repeat_species and not missing_species
     collection_target |= repeat_target
-    capture_limit = 5 if repeat_target else 50 if legendary else 20
+    capture_limit = 50 if legendary else 5 if repeat_target else 20
     master = next((i for i,(item,qty) in enumerate(snapshot.items) if item==ITEMS['MASTER_BALL'] and qty),None)
-    if (snapshot.in_battle == 1 and snapshot.battle_type == 0 and legendary and missing_species
+    if (snapshot.in_battle == 1 and snapshot.battle_type == 0 and legendary and (missing_species or repeat_target)
             and (not snapshot.can_catch or not balls and master is None or catch_attempts >= capture_limit)):
         return Decision('run', reason='Retreat and prepare another legendary attempt with balls and storage space')
     if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and collection_target and catch_attempts < capture_limit and (balls or legendary and master is not None):
         if legendary and master is not None:
-            return Decision('item',master,reason='Secure the missing legendary with the Master Ball')
+            return Decision('item',master,reason='Secure the legendary with the Master Ball')
         healing = healing_item(snapshot.items,me,incoming)
         if me.hp <= incoming * 1.5 and healing is not None:
             return Decision('item',healing,active,'Keep the catcher healthy while preserving the wild Pokémon')
@@ -329,7 +329,8 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
                      and 0 < damage(me.moves[i],me,enemy) * 2.5 < enemy.hp]
         if not legendary and enemy.hp > enemy.max_hp*0.4 and weakening and not enemy.status:
             return Decision('fight',max(weakening)[1],reason='Use a gentle attack with a margin for critical damage')
-        return Decision('item',balls[-1][0],reason='Catch another partner for the collection or a useful trade' if repeat_target
+        return Decision('item',balls[-1][0],reason='Catch the returned legendary' if repeat_target and legendary
+                        else 'Catch another partner for the collection or a useful trade' if repeat_target
                         else 'Catch the missing Pokédex entry without risking a knockout')
     if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and useful and balls and safe and catch_attempts < (12 if required else 5):
         if enemy.hp <= enemy.max_hp * 0.35 or enemy.status or not moves:

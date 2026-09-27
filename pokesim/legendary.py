@@ -34,7 +34,7 @@ class LegendaryRecovery:
     def state_dict(self):
         return deepcopy({'pending': self.pending, 'attempts': self.attempts})
 
-    def observe(self, snapshot, memory):
+    def observe(self, snapshot, memory, *, repeat=(), blocked=()):
         """Only change flags for an unloaded room, after a bounded retry delay."""
         s = snapshot
         delta = max(0, min(120, s.frame - self.last_frame)) if self.last_frame is not None else 0
@@ -46,7 +46,7 @@ class LegendaryRecovery:
         for dex, room, obj, flag in ENCOUNTERS:
             key = str(dex)
             # The owned bit stays set after a trade or release. This is not a source of duplicates.
-            if dex in s.owned:
+            if dex in blocked or dex in s.owned and dex not in repeat:
                 self.pending.pop(key, None)
                 continue
             resolved = event_set(s.event_flags, flag) or object_hidden(s, room, obj)

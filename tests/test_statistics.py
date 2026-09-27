@@ -133,7 +133,10 @@ def test_stats_routes_are_scoped_and_entries_do_not_load_charts(tmp_path):
     assert 'progress.js' not in entries
     assert '/games/red/static/statistics.js' in stats
     assert 'aria-current="page">Stats' in stats
-    assert client.get('/api/statistics').json() == {
+    result = client.get('/api/statistics').json()
+    returns = result.pop('legendary_returns')
+    assert returns['interval'] == 1000000 and not returns['available']
+    assert result == {
         'started_at': None, 'updated_at': None, 'current': {}, 'history': []}
 
 
