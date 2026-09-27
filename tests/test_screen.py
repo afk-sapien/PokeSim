@@ -1,3 +1,5 @@
+import pytest
+
 from pokesim.ram import W_TILEMAP
 from pokesim.screen import Screen
 
@@ -65,6 +67,49 @@ def test_yes_no_requires_complete_labels_in_the_selected_column():
     memory = menu({4: '     CANCEL', 8: '               YES', 10: '               NO'},
                   (4, 4), top=(4, 4))
     assert not Screen(memory).yes_no
+
+
+@pytest.mark.parametrize('prize', ['SCYTHER', 'PINSIR'])
+@pytest.mark.parametrize('index', [0, 1])
+def test_prize_confirmation_uses_active_cursor_over_visible_prize_cursor(prize, index):
+    from pokesim.policies.progression import Goal
+    from pokesim.policies.strategic import StrategicPolicy
+    from test_events import snap
+    from test_strategy import menu
+
+    memory = menu({4: f'  {prize}', 6: '  DRATINI',
+                   8: '  PORYGON     ? YES?', 10: '  NO THANKS   ? NO ?',
+                   14: ' So, you want', 16: ' PORYGON?'},
+                  (15, 8 + 2 * index), index=index, top=(15, 8))
+    memory[W_TILEMAP + 8 * 20 + 1] = 0xED
+    screen = Screen(memory)
+    snapshot = snap(textbox=True)
+    assert screen.cursor == (15, 8 + 2 * index)
+    assert screen.kind(snapshot) == 'yes_no'
+
+    policy = StrategicPolicy(0)
+    policy.goal = Goal('collect_prize', 'Collect Porygon', 'Exchange saved coins')
+    action = policy._dispatch(snapshot, screen, screen.kind(snapshot), memory)[0]
+    assert action.button == ('a' if index == 0 else 'up')
+
+
+def test_cursor_fallback_preserves_menus_with_single_row_spacing():
+    from test_strategy import menu
+
+    memory = menu({13: '      TACKLE', 14: '      GROWL'},
+                  (5, 14), index=1, top=(5, 13))
+    assert Screen(memory).cursor == (5, 14)
+
+
+def test_menu_coordinates_without_visible_cursor_do_not_create_one():
+    from pokesim.screen import W_TOP_MENU_X, W_TOP_MENU_Y
+    from test_events import snap
+
+    memory = fake_mem({8: '                YES', 10: '                NO'})
+    memory[W_TOP_MENU_X], memory[W_TOP_MENU_Y] = (15, 8)
+    screen = Screen(memory)
+    assert screen.cursor is None
+    assert screen.kind(snap(textbox=True)) == 'dialogue'
 
 
 def test_tile_table_matches_decode_text_for_every_tile():

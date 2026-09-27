@@ -1,8 +1,8 @@
 # First-trade review history
 
 Historical proposals and approvals from September 14 and 15, 2026. For current
-installation and eligibility rules, see [automatic trading](automatic-trading.md)
-and [PC offers and locks](pc-trading.md). Version and live-status statements below
+installation and eligibility rules, see [automatic trading](automatic-trading.md), [trade offers](trading.md#offers), and [Pokémon locks](pc-storage.md#pokémon-locks).
+Version and live-status statements below
 describe the original review, not a fresh observation.
 
 # Live automatic trading authorized

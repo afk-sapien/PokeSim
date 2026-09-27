@@ -155,23 +155,6 @@
 .pc-head { margin-bottom: var(--s3); }
 .pc-head-title { display: flex; align-items: baseline; gap: var(--s3); min-width: 0; flex-wrap: wrap; }
 .pc-head .micro#pc-note { color: var(--ink-2); }
-.pc-power-note { position: relative; }
-.pc-power-note[hidden] { display: none; }
-.pc-power-note summary { cursor: pointer; padding: var(--s2) 0; color: var(--ink-2); }
-.pc-power-note p {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  z-index: 6;
-  width: min(320px, 80vw);
-  padding: var(--s3);
-  background: var(--panel);
-  border: var(--hair) solid var(--rule);
-  box-shadow: 4px 4px 0 var(--bevel-lo);
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--ink-2);
-}
 
 .pc-grid {
   display: grid;

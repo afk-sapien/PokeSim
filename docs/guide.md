@@ -93,7 +93,7 @@ settings in the browser.
 | `HOST` / `PORT` | `127.0.0.1` / `8000` | native service bind address and port |
 | `VIEWER_ONLY` | `0` | disable browser game controls and preference writes |
 | `EVENT_RETENTION_DAYS` | `0` | journal retention, with `0` keeping all history |
-| `TRADING_URL` / `TRADING_INSTANCE` | empty | broker URL and instance key for [game-local trading](pc-trading.md) |
+| `TRADING_URL` / `TRADING_INSTANCE` | empty | broker URL and instance key for [trading](trading.md#connecting-an-installation) |
 | `TRADE_TOKEN` | empty | scoped peer authentication for [automatic exchanges](automatic-trading.md) |
 | `STREAM_FPS` | `15` | MJPEG frame rate |
 

@@ -1,23 +1,34 @@
-# Release preparation: 0.4.6
+# Release preparation: 0.4.7
 
-This release fixes first ROM uploads on fresh Docker and native installations. Uploads
-register the cartridge without loading legacy game data. Automatic adventure setup
-prepares the library's reference data before portrait generation and worker startup.
-Existing custom portraits are preserved. No save-format or schema change is introduced.
+This release fixes Game Corner prize confirmation, replaces the raw stat-sum ranking
+with a weighted Power score, and defaults All Pokémon to highest Power first.
+Long stat explanations move from Pokémon details into separate repository guides for
+Pokémon stats, PC storage, and trading. No save-format or schema change is introduced.
 
 ## Validation
 
-The new first-run regression reproduced the reported upload error before the fix.
-Local validation passed 1,350 Python tests with 69 skipped, JavaScript and documentation
-checks, lint, and wheel and source-package validation. A private Red ROM check verified
-all 151 portraits, worker startup, saving, and restart in a fresh library.
+The Game Corner can leave two visible cursors when its Yes/No confirmation opens.
+The fix selects the visible cursor identified by the active menu state. Regression
+cases cover both Red and Blue prize lists, both confirmation choices, and fallback
+behavior for other menu layouts.
 
-The rebuilt Docker image passed the first-run check in an empty volume, including
-automatic reference download, worker startup, saving, offline restart, custom portrait
-preservation, and container recreation. The release workflow gates publication on Python
-and browser tests, native installation checks, and these Docker lifecycle checks.
+Private replays of both existing home-server saves completed Porygon purchases,
+reached 151 of 151 registrations, deducted the correct coins, and returned to the
+overworld. The live saves were not edited for these checks. Targeted screen,
+controller, and navigation tests passed 323 checks.
 
-See [release notes](docs/release-notes.md), [desktop installation](docs/desktop.md), and
+The stats checks cover all 151 species at equal training, the actual reported Blue
+individuals, unavailable data, and consistent party and box values. Browser checks
+cover default sorting and compact details at desktop and mobile widths.
+
+The isolated release source passed 1,352 Python tests with 60 optional tests skipped,
+plus all 20 browser tests. JavaScript, documentation, Ruff lint, wheel, and source
+package checks also passed. Unrelated shared-core work was excluded from this source.
+
+The release workflow gates publication on Python and browser tests, native installation
+checks, and Docker first-upload, save, and restart checks.
+
+See [release notes](docs/release-notes.md), [Pokémon stats](docs/pokemon-stats.md), and
 [self-hosting](docs/self-hosting.md).
 
 ## Known limits, deliberately not addressed here
@@ -46,7 +57,7 @@ See [release notes](docs/release-notes.md), [desktop installation](docs/desktop.
 - **No formatter or type checker.** Ruff runs the Pyflakes rules only, and 15% of functions carry
   return annotations.
 
-Gameplay remains an experimental beta. Synthetic tests, a single mature-save replay and
+Gameplay remains an experimental beta. Synthetic tests, two copied-save purchase replays, and
 demonstration-ROM worker checks do not establish uninterrupted multi-day cartridge gameplay on
 all platforms. Existing private gameplay and cable-trading receipts retain their original scope.
 Back up the complete library before upgrading. Import legacy adventures into a new application

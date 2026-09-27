@@ -107,20 +107,23 @@ test('all Pokemon power sorting ranks every box independently of box filters', a
 })
 
 test('power bookmarks survive refresh and details show the five stat breakdown', async () => {
-  const view = pc([mon(2, 1, 50, {power: 415,
+  const view = pc([mon(2, 1, 50, {power: 144, stat_total: 415,
     calculated_stats: {HP: 110, Attack: 75, Defense: 50, Speed: 110, Special: 70}}),
   mon(1, 1, 100, {power: null})], '?scope=all&sort=power&order=desc')
   await view.ready()
   await view.refresh()
-  assert.equal(view.rows()[0].power, 415)
+  assert.equal(view.rows()[0].power, 144)
   assert.match(view.url(), /scope=all&sort=power&order=desc/)
-  assert.match(view.element('#pc-grid').innerHTML, /Power <b>415/)
+  assert.match(view.element('#pc-grid').innerHTML, /Power <b>144/)
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
   const detail = view.element('#pc-detail-body').innerHTML
+  assert.match(detail, /Total<\/th><td>415/)
+  assert.match(detail, /Power: 144/)
   assert.match(detail, /HP<\/th><td>110/)
   assert.match(detail, /Attack<\/th><td>75/)
   assert.match(detail, /Special<\/th><td>70/)
-  assert.match(detail, /Power = max HP \+ Attack \+ Defense \+ Speed \+ Special/)
+  assert.match(detail, /pokemon-stats\.md/)
+  assert.doesNotMatch(detail, /Power =|Total DVs include|Missing historical records|DV stars measure/)
 })
 
 test('party joins every combined sort without changing source data', async () => {
@@ -240,7 +243,7 @@ test('DV ratings filter, sort, bookmark, and explain partners in every view', as
   assert.match(view.element('#pc-grid').innerHTML, /★★★★/)
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '1'}})}})
   assert.match(view.element('#pc-detail-body').innerHTML, /70 \/ 75 DVs · 93.3%/)
-  assert.match(view.element('#pc-detail-body').innerHTML, /Level and training do not affect/)
+  assert.match(view.element('#pc-detail-body').innerHTML, /Stats guide/)
   view.element('#pc-rating').value = '3'
   view.element('#pc-rating').oninput()
   await view.refresh()
@@ -275,4 +278,23 @@ test('Elite Four wins sort across the party and boxes with unknown totals last',
   assert.deepEqual(view.rows().map(p => p.elite_four_wins), [2, 7, null])
   view.element('#pc-grid').onclick({target: {closest: selector => selector === '[data-mon]' ? {dataset: {mon: '0'}} : null}})
   assert.match(view.element('#pc-detail-body').innerHTML, /Elite Four wins: 2/)
+})
+
+
+test('All Pokemon defaults to power descending on entry and direct links', async () => {
+  const pokemon = [mon(1, 1, 100, {power: 2614, stat_total: 1533}),
+    mon(2, 1, 100, {power: 4575, stat_total: 1725}),
+    mon(3, 1, 100, {power: 3291, stat_total: 1499}), mon(4, 1, 100, {power: null})]
+  for (const search of ['', '?scope=all', '?scope=all&sort=invalid']) {
+    const view = pc(pokemon, search)
+    await view.ready()
+    if (!search.includes('scope=all')) view.element('#pc-all-view').onclick()
+    assert.equal(view.element('#pc-sort').value, 'power')
+    assert.equal(view.element('#pc-order').value, 'desc')
+    assert.deepEqual(view.rows().map(row => row.power), [4575, 3291, 2614, null])
+    await view.refresh()
+    assert.deepEqual(view.rows().map(row => row.power), [4575, 3291, 2614, null])
+    view.sort('stat_total')
+    assert.deepEqual(view.rows().map(row => row.stat_total), [1725, 1533, 1499, undefined])
+  }
 })

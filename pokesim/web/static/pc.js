@@ -14,8 +14,8 @@ let viewQueries = {box: '', all: ''}
 $('#pc-search').value = params.get('q') || ''
 $('#pc-scope').value = params.get('scope') === 'all' ? 'all' : 'box'
 viewQueries[$('#pc-scope').value] = $('#pc-search').value
-const sortDefaults = {box: 'asc', power: 'desc', level: 'desc', HP: 'desc', Attack: 'desc', Defense: 'desc', Speed: 'desc', Special: 'desc', elite_four_wins: 'desc', dv_stars: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
-$('#pc-sort').value = Object.hasOwn(sortDefaults, params.get('sort')) ? params.get('sort') : 'box'
+const sortDefaults = {box: 'asc', power: 'desc', stat_total: 'desc', level: 'desc', HP: 'desc', Attack: 'desc', Defense: 'desc', Speed: 'desc', Special: 'desc', elite_four_wins: 'desc', dv_stars: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
+$('#pc-sort').value = Object.hasOwn(sortDefaults, params.get('sort')) ? params.get('sort') : 'power'
 $('#pc-order').value = ['asc', 'desc'].includes(params.get('order')) ? params.get('order') : sortDefaults[$('#pc-sort').value]
 
 function statTotal(mon, field) {
@@ -113,7 +113,6 @@ function render() {
   $('#pc-sidebar').hidden = all
   $('#pc-sort-control').hidden = !all
   $('#pc-order-control').hidden = !all
-  $('#pc-power-note').hidden = !all
   $('#pc-workspace').classList.toggle('pc-workspace-all', all)
   $('#pc-grid').classList.toggle('pc-all-grid', all)
   $('#pc-boxes-view').setAttribute('aria-pressed', String(!all))
@@ -145,13 +144,13 @@ function detail(mon) {
   detailKey = mon.trade_key
   const labels = ['HP', 'Attack', 'Defense', 'Speed', 'Special']
   const known = mon.dvs?.length === 5 && mon.stat_exp?.length === 5
-  $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><div class="plate plate--bay"><img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt=""></div><p class="micro">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>${ratingBadge(mon)}${mon.perfect_dvs ? '<p class="detail-meta">All five DVs are 15. Preserved from automatic release and trading.</p>' : ''}<p>${esc(mon.name)} · Level ${mon.level}</p></div>
-    <p class="detail-meta">DV stars measure fixed potential using the total of all five DVs, including derived HP, out of 75. 1★: 0–37, 2★: 38–59, 3★: 60–74, 4★: 75 (perfect). Level and training do not affect this rating.</p>
-    ${known ? `<table class="individual-stats"><caption>Calculated stats, potential, and training</caption><thead><tr><th>Stat</th><th>Value</th><th>DV / 15</th><th>Stat experience</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[i]}</td><td>${mon.stat_exp[i].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')} / 75</td><td>${formatTotal(mon, 'stat_exp')} / 327,675</td></tr></tfoot></table><p class="detail-meta">Total DVs include HP, which is derived from the other four DVs. DVs are fixed. Stat experience grows through training, up to 65,535 in each stat.</p>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'}
-    <p class="detail-meta">Power = max HP + Attack + Defense + Speed + Special. Values are calculated at this level from species, DVs, and stat experience, as on PC withdrawal. Moves, type matchups, and battle bonuses are not included.</p>
-    <p class="detail-meta"><strong>Elite Four wins: ${Number.isFinite(mon.elite_four_wins) ? mon.elite_four_wins.toLocaleString() : 'Unavailable'}</strong>. One win for being in the Hall of Fame party after defeating the Elite Four and Champion. Includes verified saved victories and follows this Pokémon through trades. Missing historical records are not estimated.</p>
+  $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><div class="plate plate--bay"><img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png" alt=""></div><p class="micro">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>${ratingBadge(mon)}${mon.perfect_dvs ? '<p class="detail-meta">Protected from automatic release and trading.</p>' : ''}<p>${esc(mon.name)} · Level ${mon.level}</p></div>
+    ${known ? `<table class="individual-stats"><caption>Stats</caption><thead><tr><th>Stat</th><th>Value</th><th>DV</th><th>Stat exp.</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[i]}</td><td>${mon.stat_exp[i].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.stat_total) ? mon.stat_total.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')}</td><td>${formatTotal(mon, 'stat_exp')}</td></tr></tfoot></table>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'}
+    <p class="detail-meta"><strong>Power: ${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</strong></p>
+    <p class="detail-meta"><strong>Elite Four wins: ${Number.isFinite(mon.elite_four_wins) ? mon.elite_four_wins.toLocaleString() : 'Unavailable'}</strong></p>
     <p class="detail-meta">${Number(mon.experience || 0).toLocaleString()} total experience</p>
-    ${mon.dex ? `<a class="dex-open key" href="${PokeSim.base}/pokedex#${String(mon.dex).padStart(3, '0')}">View ${esc(mon.name)} in the Pokédex ↗</a>` : ''}`
+    <a class="dex-open key" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer">Stats guide ↗</a>
+    ${mon.dex ? `<a class="dex-open key" href="${PokeSim.base}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex ↗</a>` : ''}`
   $('#pc-trade-action').innerHTML = globalThis.TradeUI?.control(detailKey) || ''
   $('#pc-detail').showModal()
   fitSprites($('#pc-detail-body'))

@@ -11,9 +11,11 @@ This index separates current instructions, future plans, and historical evidence
 | Current server installation | [Server setup](self-hosting.md#first-installation) |
 | Prebuilt release image | [Docker and migration](self-hosting.md) |
 | Publishing Python and Docker releases | [Release workflow and GHCR setup](publishing.md) |
-| DV ratings, level 100 stars, and perfect finds | [Collection goals](collection-goals.md) |
+| Collection milestones, level 100 stars, and perfect finds | [Collection goals](collection-goals.md) |
 | Gameplay, settings, and APIs | [Feature guide](guide.md) |
-| PC views, offers, and Pokémon locks | [PC and trading](pc-trading.md) |
+| Power, stats, DVs, training, and individual victory counts | [Pokémon stats and Power](pokemon-stats.md) |
+| Collection browsing, sorting, and Pokémon locks | [PC storage](pc-storage.md) |
+| Trading screen, offers, and broker connections | [Trading](trading.md) |
 | Automatic library exchanges | [Automatic trading](automatic-trading.md) |
 | Backups, upgrades, recovery, and storage | [Operations](operations.md) |
 | Authenticated remote access | [HTTPS proxy](proxy.md) |

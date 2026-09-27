@@ -1,5 +1,5 @@
 """Presentation data for the party, including the original game's XP curves."""
-from math import isqrt
+from math import isqrt, sqrt
 
 from .strategy_data import MOVES, SPECIES
 
@@ -23,7 +23,8 @@ def dv_rating(mon):
 def stored_strength(mon):
     """Calculate withdrawal stats using the pinned pokered home/move_mon.asm CalcStat.
 
-    Power sums the five stats at the current level, with no battle modifiers.
+    Power estimates overall strength from offense, durability, and speed.
+    Stat total preserves the unweighted sum of the five stats.
     Older snapshots without individual data have no score.
     """
     species = SPECIES.get(mon.get('species'))
@@ -34,7 +35,7 @@ def stored_strength(mon):
             or not isinstance(training, (list, tuple)) or len(training) != 5
             or any(type(v) is not int or not 0 <= v <= 15 for v in dvs)
             or any(type(v) is not int or not 0 <= v <= 65535 for v in training)):
-        return {'calculated_stats': None, 'power': None}
+        return {'calculated_stats': None, 'stat_total': None, 'power': None}
     stats = {}
     for index, (label, base, dv, exp) in enumerate(zip(STAT_NAMES, species['stats'], dvs, training)):
         # The cartridge rounds the square root up and caps it before division.
@@ -42,7 +43,12 @@ def stored_strength(mon):
         bonus = min(255, root + (root * root < exp)) // 4
         value = ((base + dv) * 2 + bonus) * level // 100
         stats[label] = min(999, value + (level + 10 if index == 0 else 5))
-    return {'calculated_stats': stats, 'power': sum(stats.values())}
+    hp, attack, defense, speed, special = (stats[name] for name in STAT_NAMES)
+    offense = (3 * max(attack, special) + min(attack, special)) / 4
+    # Equal physical and special exposure limits the benefit of one huge defense.
+    durability = 2 * defense * special / (defense + special)
+    power = int(offense * sqrt(hp * durability) * (1 + speed / 500) / 50)
+    return {'calculated_stats': stats, 'stat_total': sum(stats.values()), 'power': power}
 
 
 

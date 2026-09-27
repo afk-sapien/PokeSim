@@ -14,10 +14,10 @@ reviewed changes to `main`. Push a new `v<version>` tag for that exact commit, t
 create a draft release and start the publishing workflow:
 
 ```sh
-git tag v0.4.6
-git push origin v0.4.6
-gh release create v0.4.6 --verify-tag --draft --title "PokeSim 0.4.6" --notes-file docs/release-notes.md
-gh workflow run release.yml --ref main -f tag=v0.4.6
+git tag v0.4.7
+git push origin v0.4.7
+gh release create v0.4.7 --verify-tag --draft --title "PokeSim 0.4.7" --notes-file docs/release-notes.md
+gh workflow run release.yml --ref main -f tag=v0.4.7
 ```
 
 Use the actual next version when following these examples. A tag push alone does

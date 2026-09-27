@@ -36,11 +36,15 @@ class Screen:
         self.rows = rows(mem)
         self.text = "\n".join(self.rows)
         raw = bytes(mem[W_TILEMAP:W_TILEMAP + 360])
-        self.cursor = next(((i % 20, i // 20) for i, tile in enumerate(raw) if tile == 0xED), None)
         self.menu_index = mem[W_CURRENT_MENU_ITEM]
         self.scroll = mem[W_LIST_SCROLL_OFFSET]
         self.top_x = mem[W_TOP_MENU_X]
         self.top_y = mem[W_TOP_MENU_Y]
+        cursors = [(i % 20, i // 20) for i, tile in enumerate(raw) if tile == 0xED]
+        # Confirmation overlays can leave the underlying menu's cursor visible.
+        # Prefer the active menu's selected tile, but still require a visible cursor.
+        active_cursor = (self.top_x, self.top_y + 2 * self.menu_index)
+        self.cursor = active_cursor if active_cursor in cursors else next(iter(cursors), None)
 
     def kind(self, snapshot) -> str:
         """Classify visible input states. A filled cursor confirms a menu is accepting input."""

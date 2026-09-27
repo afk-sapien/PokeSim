@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.4.7
+
+- Fix Game Corner prize confirmation when an older menu cursor remains visible.
+  Adventures with enough coins can finish purchasing Porygon instead of timing out.
+
+- Keep Pokémon details focused on stats and counts. Move DV, training, ranking, and
+  victory-count explanations to the linked Pokémon stats guide. Separate stats,
+  PC storage, and trading into clearly named documentation pages.
+- Default All Pokémon to highest Power first. Calculate Power from offense,
+  durability, and speed instead of adding stats equally, and keep Stat total as
+  a separate sort and API field.
 
 ## 0.4.6
 
