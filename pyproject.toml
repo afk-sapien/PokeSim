@@ -11,6 +11,7 @@ license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11"
 dependencies = [
+  "pokesim-core @ https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.1/pokesim_core-0.1.1-py3-none-any.whl#sha256=3a984131afe3336f652ba6e0c559e63875093f13d0d9223a2ef192787b35da2c",
   "pyboy==2.7.0",
   "fastapi>=0.110",
   "uvicorn[standard]>=0.53.0",

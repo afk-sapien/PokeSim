@@ -608,6 +608,7 @@ dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pillow" },
+    { name = "pokesim-core" },
     { name = "pyboy" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -631,11 +632,29 @@ requires-dist = [
     { name = "numpy" },
     { name = "pillow", specifier = ">=10" },
     { name = "playwright", marker = "extra == 'browser-test'", specifier = ">=1.50" },
+    { name = "pokesim-core", url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.1/pokesim_core-0.1.1-py3-none-any.whl" },
     { name = "pyboy", specifier = "==2.7.0" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.53.0" },
 ]
 provides-extras = ["dev", "browser-test", "acceleration"]
+
+[[package]]
+name = "pokesim-core"
+version = "0.1.1"
+source = { url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.1/pokesim_core-0.1.1-py3-none-any.whl" }
+wheels = [
+    { url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.1/pokesim_core-0.1.1-py3-none-any.whl", hash = "sha256:3a984131afe3336f652ba6e0c559e63875093f13d0d9223a2ef192787b35da2c" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pillow", marker = "extra == 'emulator'", specifier = ">=10,<13" },
+    { name = "pyboy", marker = "extra == 'emulator'", specifier = "==2.7.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<10" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11,<1" },
+]
+provides-extras = ["emulator", "dev"]
 
 [[package]]
 name = "pyboy"
