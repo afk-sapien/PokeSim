@@ -6,6 +6,7 @@ The application manager owns the Adventure Library and supervises one worker per
 
 | Area | Owner | Boundary |
 | --- | --- | --- |
+| Shared game decoding | `pokesim_core.gen1`, `pokesim_core.rom` | Owns ROM identities, WRAM constants, text and numeric decoding, and party and bag reads. PokeSim wraps these in its application types. See [Shared game core](shared-core.md). |
 | Library ownership | `pokesim/app/manager.py`, `pokesim/app/supervisor.py` | Owns the library and supervises independent adventure workers. |
 | Runtime ownership | `pokesim/runtime/simulation.py`, `pokesim/runtime/legacy.py` | Opens storage and emulator, retains directory locks through shutdown, and reports final-save errors. Legacy mode keeps its separate owner. |
 | Shopping controller | `pokesim/policies/shopping.py` | Owns buying, selling, and restocking state. Returns menu decisions and supply plans from explicit snapshot, goal, and project inputs. |

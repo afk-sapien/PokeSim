@@ -16,6 +16,17 @@ gameplay policies, recovery, trading, and the application UI remain in PokeSim.
 PokeSim retains its existing emulator runtime for those application behaviors.
 The benchmark can use the core's optional emulator adapter independently.
 
+## Where fixes belong
+
+Fix shared ROM facts and memory decoding in the Core repository, with regression
+coverage there. PokeSim's compatibility tests check the boundary between those
+shared values and its existing application types. Keep gameplay decisions, Power
+ranking, UI copy, trading, and save recovery in PokeSim.
+
+Both projects currently pin Core 0.1.1. Publish a compatible Core release, then
+update and validate each consumer's dependency pin. Core improvements reach both
+applications through those reviewed package updates.
+
 ## Installing and updating
 
 Normal PokeSim installation installs the shared package automatically.

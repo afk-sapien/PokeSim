@@ -26,6 +26,7 @@ This index separates current instructions, future plans, and historical evidence
 | --- | --- |
 | Setup, checks, and repository layout | [Contributing](../CONTRIBUTING.md) |
 | Browser, lifecycle, and copied-save checks | [Validation guide](testing.md) |
+| Shared decoding, package ownership, and coordinated updates | [Shared game core](shared-core.md) |
 | Module ownership and refactoring | [Architecture](architecture.md) |
 | Source changes by version | [Changelog](../CHANGELOG.md) |
 | Recorded deployments and known limits | [Release status](../RELEASE_STATUS.md) |

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.8
+
+- Use PokeSim Core 0.1.1 for ROM identities, memory addresses, text and numeric
+  decoding, individual Pokémon fields, and party and bag reads. PokeSim and
+  PokeAgent Bench now consume the same versioned implementation.
+- Install Core automatically with the native package and Docker image. Preserve
+  existing adventures, saves, trading, automation, and application data types.
+
 ## 0.4.7
 
 - Fix Game Corner prize confirmation when an older menu cursor remains visible.

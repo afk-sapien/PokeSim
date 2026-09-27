@@ -1,48 +1,25 @@
-# Release status: 0.4.7
+# Release status: 0.4.8
 
-This release fixes Game Corner prize confirmation, replaces the raw stat-sum ranking
-with a weighted Power score, and defaults All Pokémon to highest Power first.
-Long stat explanations move from Pokémon details into separate repository guides for
-Pokémon stats, PC storage, and trading. No save-format or schema change is introduced.
+PokeSim now uses PokeSim Core 0.1.1 for shared ROM identities and game memory
+decoding. PokeAgent Bench pins the same Core release. PokeSim retains its existing
+application types, gameplay policies, emulator lifecycle, saves, trading, and UI.
+No save-format or database migration is introduced.
 
-## Validation
+See [shared core](docs/shared-core.md) for ownership and coordinated upgrades,
+and [release notes](docs/release-notes.md) for installation details.
 
-The Game Corner can leave two visible cursors when its Yes/No confirmation opens.
-The fix selects the visible cursor identified by the active menu state. Regression
-cases cover both Red and Blue prize lists, both confirmation choices, and fallback
-behavior for other menu layouts.
+## Validation and publication
 
-Private replays of both existing home-server saves completed Porygon purchases,
-reached 151 of 151 registrations, deducted the correct coins, and returned to the
-overworld. The live saves were not edited for these checks. Targeted screen,
-controller, and navigation tests passed 323 checks.
+The Core integration in [PR #27](https://github.com/afk-sapien/PokeSim/pull/27)
+passed all CI checks, including Python 3.11, 3.12, and 3.14, container lifecycle,
+and native installation on Linux, Windows, Intel Mac, and Apple Silicon Mac.
+Local Core compatibility and screen regression checks passed all 16 tests.
+The wheel and source package resource checks passed.
 
-The stats checks cover all 151 species at equal training, the actual reported Blue
-individuals, unavailable data, and consistent party and box values. Browser checks
-cover default sorting and compact details at desktop and mobile widths.
-
-The isolated release source passed 1,352 Python tests with 60 optional tests skipped,
-plus all 20 browser tests. JavaScript, documentation, Ruff lint, wheel, and source
-package checks also passed. Unrelated shared-core work was excluded from this source.
-
-The release workflow gates publication on Python and browser tests, native installation
-checks, and Docker first-upload, save, and restart checks.
-
-See [release notes](docs/release-notes.md), [Pokémon stats](docs/pokemon-stats.md), and
-[self-hosting](docs/self-hosting.md).
-
-## Publication and deployment
-
-[PokeSim 0.4.7](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.7) is published.
-All native installation, browser, Docker lifecycle, and anonymous image checks passed.
-The existing home-server installation was backed up, upgraded, and verified healthy.
-Both live adventures reached 151 of 151 registrations. Blue purchased Porygon, then
-normal automatic trading exchanged it for Red's Ekans. The physical Porygon is now
-in Red, and both Pokédexes retain the registration. No cartridge state was edited to
-produce this result. The archived adventure remained stopped.
-
-The live browser shows the compact Pokémon popup, the new Power scores, and highest
-Power first when entering All Pokémon. See the [sanitized validation receipt](docs/validation/release-0.4.7.json).
+The 0.4.8 release is being prepared. Publication remains gated on the release
+workflow's Python, browser, native installation, package, and Docker checks.
+The last verified deployment is [0.4.7](docs/validation/release-0.4.7.json), where
+both live adventures reached 151 of 151 registrations.
 
 ## Known limits, deliberately not addressed here
 
