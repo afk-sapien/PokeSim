@@ -97,7 +97,8 @@ def stage(root, transaction, league_rewards=False):
                 boxes.write_slot(pb.memory, box, position, gift)
                 register_arrival(pb.memory, species)
                 gifts.append({'instance': name, 'name': SPECIES[species]['name'].title(), 'species': species,
-                              'ordinal': ordinal, 'level': 5, 'box': box, 'position': position})
+                              'ordinal': ordinal, 'level': 5, 'box': box, 'position': position,
+                              'dvs': list(gift.struct[27:29]), 'trainer_id': int.from_bytes(gift.struct[12:14], 'big')})
                 if league_rewards:
                     memory = dict(metadata.get('run_memory', {}))
                     memory['championships'] = max(memory.get('championships', 0), rewards.championship_count(claims[name]))
@@ -153,11 +154,22 @@ def journal(root, transaction):
                         raise ValueError('Reward claim is out of order')
                     value['delivered'] = gift['ordinal']
                     rewards.save(db, value)
-                    db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'obtain',?,?,1,4,'Championship reward','')",
+                    entry = db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'obtain',?,?,1,4,'Championship reward','')",
                                (f"Received {gift['name']} for Championship #{gift['ordinal']}",
                                 f"A level-5 {gift['name']} joined the PC. Each League victory earns a random PokeSim reward."))
                 elif name in recipients:
                     db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (EVENT_KEY, json.dumps(transaction)))
-                    db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'obtain',?,?,1,4,'Final rival reward','')",
+                    entry = db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'obtain',?,?,1,4,'Final rival reward','')",
                                ('Received Mew for defeating the final rival',
                                 'A one-time level-5 Mew joined the PC after defeating the rival who held the Champion title. Rematches do not award another Mew.'))
+                if name in recipients:
+                    from ..catches import initialize, record_receipt
+                    gift = next(g for g in result['gifts'] if g['instance'] == name)
+                    species = gift.get('species', MEW if result.get('kind') != 'league_reward' else None)
+                    if species is None:
+                        species = next(sid for sid, mon in SPECIES.items()
+                                       if mon['name'].casefold() == gift['name'].casefold())
+                    initialize(db)
+                    record_receipt(db, f'gift-event:{entry.lastrowid}', SPECIES[species]['dex'],
+                                   species=species, trainer_id=gift.get('trainer_id'),
+                                   perfect=gift.get('dvs') == [255, 255])

@@ -1,8 +1,9 @@
-"""Durable capture receipts from verified cartridge capture completion."""
+"""Durable catch bookkeeping for cartridge captures and committed custom gifts."""
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 
 KEY = 'capture-statistics-v1'
@@ -24,12 +25,12 @@ class CatchTracker:
         self.store = store
         self.supported = rom_sha1 in SUPPORTED
         with store.lock, store.db:
-            store.db.execute('CREATE TABLE IF NOT EXISTS capture_receipts '
-                             '(fingerprint TEXT PRIMARY KEY, dex INTEGER NOT NULL, recorded_at REAL NOT NULL)')
             row = store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
             value = json.loads(row[0]) if row else self.empty(fresh)
+            initialize(store.db)
             value['available'] = self.supported
             store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
+            backfill_gifts(store.db)
 
     def empty(self, fresh):
         return {'counts': {}, 'total': 0, 'started_at': time.time(),
@@ -62,18 +63,62 @@ class CatchTracker:
                     species=species, trainer_id=int.from_bytes(bytes(memory[0xd359:0xd35b]), 'big'))
 
     def record(self, fingerprint, dex, *, perfect=False, species=None, trainer_id=None):
-        if not 1 <= dex <= 151:
-            raise ValueError('Capture has an invalid Pokédex number')
         with self.store.lock, self.store.db:
-            inserted = self.store.db.execute('INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
-                                            (fingerprint, dex, time.time())).rowcount
-            if not inserted:
-                return
-            value = json.loads(self.store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
-            key = str(dex)
-            value['counts'][key] = value['counts'].get(key, 0) + 1
-            value['total'] += 1
-            if perfect:
-                from .milestones import record_capture
-                record_capture(self.store.db, species, trainer_id)
-            self.store.db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+            record_receipt(self.store.db, fingerprint, dex, perfect=perfect,
+                           species=species, trainer_id=trainer_id)
+
+
+def record_receipt(db, fingerprint, dex, *, perfect=False, species=None, trainer_id=None):
+    """Record once inside the caller transaction."""
+    if not 1 <= dex <= 151:
+        raise ValueError('Capture has an invalid Pokédex number')
+    inserted = db.execute('INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
+                          (fingerprint, dex, time.time())).rowcount
+    if not inserted:
+        return
+    value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
+    key = str(dex)
+    value['counts'][key] = value['counts'].get(key, 0) + 1
+    value['total'] += 1
+    if perfect:
+        from .milestones import record_capture
+        record_capture(db, species, trainer_id)
+    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+
+
+def initialize(db):
+    db.execute('CREATE TABLE IF NOT EXISTS capture_receipts '
+               '(fingerprint TEXT PRIMARY KEY, dex INTEGER NOT NULL, recorded_at REAL NOT NULL)')
+    db.execute('INSERT OR IGNORE INTO kv VALUES (?, ?)',
+               (KEY, json.dumps({'counts': {}, 'total': 0, 'started_at': time.time(),
+                                 'complete_history': False, 'available': False})))
+
+
+def record_gift(db, event_id, species, slot=None):
+    """Count a committed custom gift using its durable journal identity."""
+    from .strategy_data import SPECIES
+    initialize(db)
+    record_receipt(db, f'gift-event:{event_id}', SPECIES[species]['dex'],
+                   perfect=bool(slot and slot.struct[27:29] == bytes((255, 255))),
+                   species=species,
+                   trainer_id=int.from_bytes(slot.struct[12:14], 'big') if slot else None)
+
+
+def backfill_gifts(db):
+    """Recover verified journal gifts once, without guessing from current ownership."""
+    from .strategy_data import SPECIES
+    marker = 'capture-gift-backfill-v1'
+    if db.execute('SELECT 1 FROM kv WHERE k=?', (marker,)).fetchone():
+        return
+    names = {mon['name'].casefold(): sid for sid, mon in SPECIES.items()}
+    for event_id, title in db.execute("SELECT id, title FROM events WHERE type='obtain'"):
+        match = re.fullmatch(r'Received .+ \(([^()]+)\) for League reward #\d+', title)
+        if not match:
+            match = re.fullmatch(r'Received (.+) for Championship #\d+', title)
+        species = names.get(match[1].casefold()) if match else None
+        if title in ('Received Mew from the custom PokeSim event',
+                     'Received Mew for defeating the final rival'):
+            species = names.get('mew')
+        if species is not None:
+            record_gift(db, event_id, species)
+    db.execute('INSERT INTO kv VALUES (?, ?)', (marker, 'true'))

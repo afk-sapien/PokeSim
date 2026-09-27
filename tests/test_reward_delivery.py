@@ -120,3 +120,51 @@ def test_reward_recovery_refuses_corruption_and_newer_trade(tmp_path):
         assert store.get(PENDING)['phase'] == 'committed'
     finally:
         store.close()
+
+
+@pytest.mark.parametrize('fail_receipt', [False, True])
+def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, fail_receipt):
+    import sqlite3
+    from pokesim import ram
+    from pokesim.catches import CatchTracker, SUPPORTED, status
+    from pokesim.runtime import reward_delivery
+    from test_trade_save import Memory, populate
+
+    store = Store(tmp_path)
+    try:
+        CatchTracker(store, sorted(SUPPORTED)[0])
+        rewards.earn(store, 1)
+        before = snap(hall_of_fame_count=1, box_counts=(0,) * 12)
+        memory = populate(Memory(), contents=())
+        clone_memory = populate(Memory(), contents=())
+        species = select_reward(before, rewards.ledger(store.db), True, league_rewards=True)[2]
+        from pokesim.strategy_data import SPECIES
+        after = replace(before, box_counts=(1,) + (0,) * 11, owned=before.owned | {SPECIES[species]['dex']})
+        monkeypatch.setattr(ram, 'read_snapshot', lambda mem, _: before if mem is memory else after)
+        clone = SimpleNamespace(memory=clone_memory, load_state=lambda _: None,
+                                save_state=lambda stream: stream.write(b'reward-checkpoint'), stop=lambda **_: None)
+        monkeypatch.setattr(store, 'latest_state', lambda: tmp_path / 'source.state')
+        monkeypatch.setattr(store, 'checkpoint_metadata', lambda _: {'run_memory': {}})
+        emu = SimpleNamespace(store=store, paused=False, manual_mode=False, pb=SimpleNamespace(memory=memory),
+                              frame=100, _state_bytes=lambda: b'source', _autosave=lambda: None,
+                              _boot=lambda: clone, _load_state_file=lambda _: None,
+                              policy=SimpleNamespace(on_restore=lambda: None), input_epoch=0)
+        if fail_receipt:
+            store.db.execute("CREATE TRIGGER reject_gift BEFORE INSERT ON capture_receipts "
+                             "BEGIN SELECT RAISE(ABORT, 'receipt failed')" + chr(59) + " END")
+            with pytest.raises(sqlite3.IntegrityError, match='receipt failed'):
+                deliver(emu, league_rewards=True)
+            assert rewards.status(store)['delivered'] == 0
+            assert status(store)['total'] == 0
+            assert store.events() == []
+            assert store.get(PENDING)['decision'] is None
+        else:
+            result = deliver(emu, league_rewards=True)
+            assert result['decision'] == 'COMMIT'
+            assert rewards.status(store)['delivered'] == 1
+            assert status(store)['counts'] == {str(SPECIES[species]['dex']): 1}
+            assert reward_delivery.recover_storage(store) is None
+            CatchTracker(store, sorted(SUPPORTED)[0])
+            assert status(store)['total'] == 1
+    finally:
+        store.close()

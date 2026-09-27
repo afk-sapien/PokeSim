@@ -24,8 +24,9 @@ number held provide context for those changes.
 ## Activity
 
 - Pokémon caught comes from verified capture receipts, including duplicate
-  species. Gifts and trades are not catches. Existing receipts seed the total.
-  History from before capture tracking was installed is not estimated.
+  species, committed League reward gifts, and the custom Mew gift. Trades do not
+  count as catches. Existing receipts and saved custom reward journal entries
+  seed the total once. Other missing history is not estimated.
 - Marathons completed counts finished races in the durable journal, including
   existing races. Abandoned races are excluded.
 - Recorded steps count adjacent movement observed on the same map. Map changes,

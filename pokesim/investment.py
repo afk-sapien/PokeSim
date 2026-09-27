@@ -65,6 +65,8 @@ def automatic_trade_protected(mon, copies):
     if rare_find(mon):
         return True
     peers = [other for other in copies if other['species'] == mon['species']]
+    if SPECIES.get(mon['species'], {}).get('dex') in (144, 145, 146, 150, 151) and len(peers) == 1:
+        return True
     champion = veteran(peers)
     if champion is mon and mon['level'] >= 80:
         return True

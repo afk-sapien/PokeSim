@@ -152,3 +152,20 @@ def test_registered_evolution_does_not_bypass_small_upgrade_threshold():
     assert 0 < gain < 0.02
     rows = candidates(postgame(party=(newer, older)))
     assert not any(p['method'] == 'evolve' and p['parent'] == newer.species for _, p in rows)
+
+
+def test_last_legendary_is_not_automatically_offered_even_with_unknown_dvs():
+    from pokesim.broker.routine import offers, listings
+    from pokesim.strategy_data import SPECIES
+    for dex in (144, 145, 146, 150, 151):
+        species = next(sid for sid, row in SPECIES.items() if row['dex'] == dex)
+        mon = {'species': species, 'dex': dex, 'level': 70, 'box': 1, 'position': 1}
+        payload = {'started': True, 'owned': [dex], 'storage': {'pokemon': [mon]}}
+        inv = normalise('red', '', payload)
+        assert offers(inv, True) == ()
+        assert listings(inv, True)[0]['can_offer']
+        mon['trade_preference'] = 'offered'
+        assert len(offers(normalise('red', '', payload), True)) == 1
+        mon['trade_preference'] = 'auto'
+        payload['party'] = [dict(mon, level=80)]
+        assert len(offers(normalise('red', '', payload), True)) == 1

@@ -141,6 +141,8 @@ def test_final_rival_win_delivers_one_mew_before_hall_of_fame_and_survives_retri
         store = Store(pair.PAIR_ROOT / name)
         assert rewards.status(store) == {'earned': 3, 'delivered': 0, 'pending': 3, 'wins': 3, 'unlocks': []}
         assert len(store.events()) == 1
+        from pokesim.catches import status as catches
+        assert catches(store)['counts'] == {'151': 1}
         store.close()
     # Even a checkpoint from before receiving or trading Mew cannot earn it again.
     event.stage(tmp_path, '2')

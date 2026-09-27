@@ -163,6 +163,8 @@ def test_reward_journal_consumes_one_claim_once_and_preserves_next_claim(tmp_pat
         event.journal(tmp_path, transaction)
         store = Store(pair.PAIR_ROOT / 'red')
         assert rewards.status(store)['delivered'] == ordinal
+        from pokesim.catches import status as catches
+        assert catches(store)['counts'] == {'133': ordinal}
         assert len(store.events()) == ordinal
         store.close()
     store = Store(pair.PAIR_ROOT / 'blue')

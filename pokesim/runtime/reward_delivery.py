@@ -141,10 +141,12 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
             title = 'Received Mew from the custom PokeSim event'
         _put(emu.store.db, BARRIER, identifier)
         _put(emu.store.db, PENDING, {**record, 'decision': 'COMMIT', 'phase': 'committed'})
-        emu.store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime)
+        event = emu.store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime)
             VALUES (?,?,?,?,?,?,?,?)''', (time.time(), 'obtain', title,
             'An optional custom PokeSim gift joined the PC. This is separate from Cable Club trading.',
             1, 4, before.map_name, ''))
+        from ..catches import record_gift
+        record_gift(emu.store.db, event.lastrowid, species, gift)
     try:
         path = recover_storage(emu.store)
         emu._load_state_file(path)

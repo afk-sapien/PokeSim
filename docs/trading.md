@@ -61,3 +61,8 @@ from the same revision so displayed offers and checkpoint validation agree.
 
 When disconnected, the UI disables offer controls, shows a reconnecting message,
 and preserves saved choices. `VIEWER_ONLY` blocks preference writes on the server.
+
+Automatic trades preserve the last held Articuno, Zapdos, Moltres, Mewtwo, or
+Mew in each adventure, even when another adventure needs its Pokédex entry.
+An explicit Offer for trade can override this protection for a boxed partner.
+Party, perfect DV, and locked partner protections still apply.

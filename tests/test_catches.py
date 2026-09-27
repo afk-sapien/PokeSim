@@ -136,3 +136,58 @@ def test_totals_are_atomic_with_receipts(tracking):
         assert status(store)['total'] == 0
     finally:
         store.db = original
+
+
+def test_historical_custom_gifts_backfill_once_without_guessing_other_obtains(tmp_path):
+    from pokesim.events import Event
+    from test_events import snap
+    store = Store(tmp_path)
+    titles = [
+        'Received BEAN (Eevee) for League reward #1',
+        'Received Bulbasaur for Championship #2',
+        'Received Mew from the custom PokeSim event',
+        'Received Lapras',
+        'Received BEAN (Unknown) for League reward #3',
+    ]
+    for title in titles:
+        store.add_event(Event('obtain', title), snap(), None, None)
+    tracker = CatchTracker(store, sorted(SUPPORTED)[0])
+    tracker.completed(capture())
+    assert status(store)['counts'] == {'133': 1, '1': 1, '151': 1, '25': 1}
+    assert status(store)['total'] == 4
+    store.close()
+    store = Store(tmp_path)
+    try:
+        tracker = CatchTracker(store, sorted(SUPPORTED)[0])
+        assert status(store)['total'] == 4
+        tracker.reset()
+        CatchTracker(store, sorted(SUPPORTED)[0])
+        assert status(store)['total'] == 0
+    finally:
+        store.close()
+
+
+def test_gift_receipts_update_species_stats_and_perfect_milestones_once(tracking):
+    from dataclasses import replace
+    from pokesim.catches import record_gift
+    from pokesim.trade.event import gift_slot
+    from pokesim.milestones import status as milestones
+    from pokesim.statistics import StatisticsTracker
+    from test_statistics import observe
+    store, _ = tracking
+    gift = gift_slot('perfect', 153)
+    gift = replace(gift, struct=gift.struct[:27] + bytes((255, 255)) + gift.struct[29:])
+    with store.db:
+        record_gift(store.db, 100, 153, gift)
+        record_gift(store.db, 100, 153, gift)
+    assert status(store)['counts'] == {'1': 1}
+    assert milestones(store)['perfect_catches'] == 1
+    tracker = StatisticsTracker(store)
+    observe(tracker, 0)
+    observe(tracker, 30, now=131)
+    assert tracker.value['current']['captures'] == 1
+    with store.db:
+        record_gift(store.db, 101, 153)
+    tracker.flush(now=200)
+    tracker.flush(now=201)
+    assert tracker.value['current']['captures'] == 2
