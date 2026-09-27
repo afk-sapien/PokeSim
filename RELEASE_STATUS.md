@@ -16,10 +16,16 @@ and native installation on Linux, Windows, Intel Mac, and Apple Silicon Mac.
 Local Core compatibility and screen regression checks passed all 16 tests.
 The wheel and source package resource checks passed.
 
-The 0.4.8 release is being prepared. Publication remains gated on the release
-workflow's Python, browser, native installation, package, and Docker checks.
-The last verified deployment is [0.4.7](docs/validation/release-0.4.7.json), where
-both live adventures reached 151 of 151 registrations.
+[PokeSim 0.4.8](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.8) is published.
+The exact tagged source passed 1,356 Python tests with 60 optional tests skipped,
+and all 20 browser tests. Native installation, package, Docker lifecycle, and
+anonymous image access checks all passed.
+
+The home server was cold-backed up and upgraded from 0.4.7. The healthy container
+reports PokeSim 0.4.8 and Core 0.1.1, with shared decoder imports verified directly.
+Red and Blue resumed without errors, both retaining 151 of 151 registrations and
+Porygon ownership records. The archived adventure remained stopped.
+See the [sanitized validation receipt](docs/validation/release-0.4.8.json).
 
 ## Known limits, deliberately not addressed here
 
