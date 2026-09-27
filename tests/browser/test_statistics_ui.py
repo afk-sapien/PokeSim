@@ -3,7 +3,7 @@ from dataclasses import replace
 import time
 
 import pytest
-from playwright.sync_api import expect
+from test_flows import expect
 
 from pokesim.statistics import StatisticsTracker
 
