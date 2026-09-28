@@ -43,14 +43,9 @@ Browse all 151 Kanto entries, search by name or type, and see who's registered, 
 
 The PC searches your party and every box at once. All Pokémon starts with the strongest partners first, with other sort options and DV filters when you want to find a promising trainee. Four stars means perfect DVs.
 
-<details>
-<summary><strong>Look inside the PC</strong></summary>
-
 ![All Pokémon in the PC, sorted by power with colored types, DV ratings, and partners from the party and every box](docs/images/pc-storage.jpg)
 
 *Your strongest partners up front, with the next promising trainee waiting somewhere in the boxes.*
-
-</details>
 
 You can run several adventures at once, Red and Blue side by side, each with its own saves. Eligible games trade with each other through the actual Cable Club, so trade evolutions work the way they always did. The [desktop and trading guide](docs/desktop.md) covers that.
 
