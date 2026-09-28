@@ -1,29 +1,28 @@
 # README screenshots
 
-Captured September 24, 2026 from a running Red adventure (eight badges, 149 of 151 registered,
-135 League wins, 1,391 game hours, 240 partners across the party and twelve boxes). These are
-browser screenshots of actual game state, not mockups or generated art. The live simulation
-continued running during capture, so the views are a few minutes apart.
+Captured September 27, 2026 from a running Red adventure with all eight badges,
+151 species registered, 137 species recorded at level 100, and more than 2,200
+game hours. These are browser screenshots of actual game state, not mockups or
+generated art. The owner approved using these game views in the public README.
+The simulation was running for the final captures, so the views are a few minutes apart.
 
-Captured at a 1280 pixel viewport and twice that pixel density, then halved, so the Game Boy
-screen and the portraits stay sharp. The viewer stops fetching frames for a hidden tab on
-purpose, so `document.hidden` was overridden for the live shot and the page then loaded its own
-frames as usual. The run was at Max speed, where the frame on screen trails the battle label by a
-moment, so a live shot was kept only when the label read the same before and after it was taken.
+Captured at a 1280 pixel viewport in the light theme, at native pixel density.
+The browser saved JPEGs at quality 90. Taller views include complete panels.
+The PC uses the actual All Pokémon control and its default power sorting.
 
 | File | View |
 | --- | --- |
-| `live-adventure.jpg` | The Champion battle, six teammates with HP, experience and DV ratings, and the plan across the foot |
-| `journal.jpg` | The road so far, then the latest highlights, each with its own screenshot |
-| `pokedex.jpg` | Registered, seen, total caught, level 100 and perfect find counts, and the first species rows |
-| `pc-storage.jpg` | Party and all boxes, sorted by DV star rating with the best first |
+| `live-adventure.jpg` | Game screen, six partners with colored types, and the current plan |
+| `journal.jpg` | Entries and Stats tabs, a League reward gift, and recent victories |
+| `adventure-stats.jpg` | Progress history, legendary return countdown, marathon records, and collection strength |
+| `pokedex.jpg` | Species milestones, catch totals, DV records, and colored types |
+| `pc-storage.jpg` | All Pokémon across the party and every box, sorted by power |
 
-Only the JPEGs are kept. The README embeds these files directly, so an unreferenced PNG of the
-same view is weight in the source package for nothing.
+Only the JPEGs are kept. The README embeds these files directly.
+Portraits are decoded from the supplied ROM. Retake against a library whose
+Pokédex shows those sprites, not numbered placeholders.
 
-Portraits are decoded from your own ROM when it is added (see Odds and ends in the main README).
-Retake against a library whose Pokédex shows those sprites, not numbered placeholders.
-
-Keep screenshots free of browser chrome, local file paths, credentials, and private
-settings. Use actual interface controls to choose a view without altering game state.
-Keep images in the source package so the README also works in downloaded source.
+Keep screenshots free of browser chrome, local file paths, credentials, and
+private settings. Use actual interface controls to choose a view without
+altering game data. Keep images in the source package so the README also works
+in downloaded source.

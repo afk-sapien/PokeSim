@@ -6,19 +6,28 @@ PokeSim plays Pokémon Red and Blue by itself, and you watch it happen in your b
 
 Fair warning: you will get attached to a Lapras named WOBBLECOP, and you will argue with its battle decisions.
 
-![PokeSim running Pokémon Red: the Champion battle, with the rival sending out Rhydon against a level 100 Lapras, six teammates with their HP, experience and levels, all eight badges, and the current plan along the bottom](docs/images/live-adventure.jpg)
+![The live Red adventure with all eight badges, the game screen, six teammates with colored type badges, and the current plan](docs/images/live-adventure.jpg)
 
-*The live adventure: the game, the team, and the plan (allegedly), all in one place. League rematch number 135, and WOBBLECOP has this one.*
+*The game, the team, and the plan (allegedly), all in one place. WOBBLECOP is still on the payroll.*
 
 ## What you get
 
 Battles, catches, evolutions and the slow march to the Pokémon League, with the current plan spelled out along the foot of the page: what it is doing, how that is going, and what comes next. Your six travelling companions sit beside the game with their health, experience and DV rating on the card, and one tap opens a partner's moves, remaining PP and battle stats. Keyboard and touch controls are there when you want to steer, and a speed dial from 0.5× up to Max when you want to skip ahead or slow down and actually watch a fight.
 
-The Journal has separate Entries and Stats pages. Entries records milestones with screenshots, including Pokémon exchanged in the Cable Club. Stats charts collection power, DV quality, catches, travel, battles, and marathon finishes alongside Pokédex and League progress. See the [adventure statistics guide](docs/adventure-statistics.md) for counting rules and long-term history. Journal entries are also available through a feed reader or phone notifications with [ntfy](https://ntfy.sh).
+The Journal has separate Entries and Stats pages. Entries records milestones with screenshots, including Pokémon exchanged in the Cable Club. Stats charts collection power, DV quality, catches, travel, battles, and marathon finishes alongside Pokédex and League progress. It also shows your marathon personal best and progress toward the next legendary return. See the [adventure statistics guide](docs/adventure-statistics.md) for counting rules and long-term history. Journal entries are also available through a feed reader or phone notifications with [ntfy](https://ntfy.sh).
 
-![The Journal: charts of the adventure's progress over its whole run, then the latest milestones, each with the game screenshot from the moment it happened](docs/images/journal.jpg)
+![Journal Entries with separate Entries and Stats tabs, a League reward gift, and recent Champion and Elite Four victories](docs/images/journal.jpg)
 
 *It keeps its own notes, so you can catch up on what you missed.*
+
+<details>
+<summary><strong>See the adventure stats</strong></summary>
+
+![Journal Stats showing Pokédex and League history, progress toward returning legendary encounters, an 11:58 marathon personal best, and collection power trends](docs/images/adventure-stats.jpg)
+
+*An entire Pokédex, a faster marathon, and a stronger collection. There is always another number to improve.*
+
+</details>
 
 Open the Library, choose **Notifications**, generate a topic and subscribe to it in the ntfy app. There is no account and nothing to edit. After the Hall of Fame it keeps going, working on collection, training and evolution projects.
 
@@ -28,18 +37,18 @@ It decides everything locally with ordinary game logic. No model API key, no sub
 
 Browse all 151 Kanto entries, search by name or type, and see who's registered, who's only been spotted, and who's still out there somewhere. Fill it and the counts keep going: how many have reached level 100, and how many turned out to be perfect.
 
-![The Pokédex showing 149 of 151 registered and 150 seen, 2,232 catches, level 100 and perfect find counts, search and filter options, and the original Kanto starters](docs/images/pokedex.jpg)
+![The Pokédex showing all 151 species registered, 137 species trained to level 100, catch counts, DV milestones, and colored type badges](docs/images/pokedex.jpg)
 
-*Two short of a full Pokédex, 111 species at level 100, and not one perfect catch yet. One more reason to check back.*
+*All 151 registered, 137 species at level 100, and still looking for that perfect catch.*
 
-The PC searches your party and every box at once, sorts by DV rating, and shows each partner's stats and training. Four stars means perfect DVs.
+The PC searches your party and every box at once. All Pokémon starts with the strongest partners first, with other sort options and DV filters when you want to find a promising trainee. Four stars means perfect DVs.
 
 <details>
 <summary><strong>Look inside the PC</strong></summary>
 
-![PC storage searching the party and every box at once, sorted by DV star rating with the best first](docs/images/pc-storage.jpg)
+![All Pokémon in the PC, sorted by power with colored types, DV ratings, and partners from the party and every box](docs/images/pc-storage.jpg)
 
-*Two hundred and forty partners across the party and every box, sorted by DV rating. Yes, the Mr. Mime is called WOBBLEMODE.*
+*Your strongest partners up front, with the next promising trainee waiting somewhere in the boxes.*
 
 </details>
 
@@ -120,6 +129,6 @@ Portraits come out of your own cartridge. When you add a ROM, PokeSim decodes al
 sprites from it and keeps them in the application's `assets/sprites` folder, so the Pokédex
 and the PC are illustrated without you finding artwork anywhere. Nothing is shipped and nothing
 is fetched for this. Drop your own `1.png` through `151.png` in that folder to override any of
-them; a file that is already there is never replaced.
+them. A file that is already there is never replaced.
 
 AI coding assistance was used while building and testing this. The automatic player itself is plain local rules, not a model. See [third-party notices](THIRD_PARTY_NOTICES.md) and [dependency licensing](docs/licensing.md).
