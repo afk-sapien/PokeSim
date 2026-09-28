@@ -191,6 +191,10 @@ class Emulator:
 
     def status(self) -> dict:
         snap = self.snapshot
+        strategy = self.policy.details()
+        preparation = getattr(self, 'preparation', None)
+        if preparation:
+            strategy = preparation.details(strategy)
         return {
             "version": __version__, "viewer_only": config.VIEWER_ONLY,
             "build": build_info(),
@@ -203,7 +207,7 @@ class Emulator:
             "game": snap.to_dict() if snap else None,
             "areas_discovered": len(self.mem.seen_maps), "reloads": self.reloads,
             "glitched": bool(self.invalid_since),
-            "strategy": self.policy.details(),
+            "strategy": strategy,
             "progress": self.progress_status(),
             "league_rewards": rewards.status(self.store),
             "legendary_recovery": self.legendary_recovery.state_dict(),
@@ -263,6 +267,10 @@ class Emulator:
                 raise ValueError("Checkpoint requires a different policy")
         with open_state(path) as f:
             self.pb.load_state(f)
+        # A checkpoint can be captured while a direction is held. The next
+        # policy action must not inherit that button from the saved joypad.
+        for button in BUTTONS:
+            self.pb.button_release(button)
         if metadata:
             self.policy.load_state_dict(metadata["policy_state"])
             announced = getattr(self, 'mem', RunMemory()).playtime_milestones.copy()

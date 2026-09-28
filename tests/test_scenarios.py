@@ -99,8 +99,11 @@ def test_a_seed_varies_a_checkpoint_run_only_when_the_caller_asks(tmp_path, monk
         run.rom_sha1, run.seed, run.rng = 'rom', 4321, None
         run.policy = type('P', (), {'rng': random.Random(),
                                     'load_state_dict': lambda self, data: self.rng.setstate(saved)})()
-        run.pb = type('B', (), {'load_state': lambda self, stream: None})()
+        released = []
+        run.pb = type('B', (), {'load_state': lambda self, stream: None,
+                               'button_release': lambda self, button: released.append(button)})()
         assert run._load(checkpoint, reseed=reseed)['frame'] == 5
+        assert released == list(headless.BUTTONS)
         return run.policy.rng.random()
 
     assert rolled(reseed=False) == rolled(reseed=False) == random.Random(99).random()

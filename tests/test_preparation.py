@@ -575,3 +575,33 @@ def test_league_inventory_has_no_offers_until_returning_to_a_center(participant)
     assert owner.inventory()['offers'] == []
     inventory = replace(inventory, map=174)
     assert owner.inventory()['offers']
+
+
+@pytest.mark.parametrize('phase,expected', [
+    ('travelling', 'Reach a Pokémon Center'),
+    ('storage', 'selected Pokémon at the PC'),
+    ('rendezvous', 'Cable Club counter'),
+])
+def test_live_preparation_replaces_suspended_objective(participant, phase, expected):
+    emu, _, candidate = participant
+    preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
+    controller = emu.preparation
+    controller.state['phase'] = phase
+    controller.state.pop('waiting_for', None)
+    previous = {'objective': {'title': 'Train a partner'}, 'next': {'title': 'Go hunting'},
+                'route': [[18, 8, 3]], 'expectation': 'Move left', 'collection': {'marathon': {}}}
+    details = controller.details(previous)
+    assert details['objective']['title'] == 'Prepare a Cable Club trade'
+    assert expected in details['reason']
+    assert details['next'] is None and details['expectation'] is None
+    assert details['route'] == []
+    assert details['collection'] == previous['collection']
+    assert previous['objective']['title'] == 'Train a partner'
+
+
+def test_waiting_trade_status_explains_the_current_battle(participant):
+    emu, _, candidate = participant
+    preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
+    controller = emu.preparation
+    controller.state.update(waiting_for='overworld', waiting_reason='Finish the current battle')
+    assert controller.details({})['reason'] == 'Finish the current battle'

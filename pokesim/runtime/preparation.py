@@ -122,6 +122,21 @@ class Preparation:
         self.emu.store.set(KEY, self.state)
         self.persist_frame = self.emu.frame
 
+    def details(self, strategy):
+        from ..policies.progression import Goal
+        phase = self.state['phase']
+        if self.state.get('waiting_for'):
+            reason = self.state['waiting_reason']
+        else:
+            reason = {
+                'travelling': 'Reach a Pokémon Center for the agreed exchange',
+                'storage': 'Prepare the selected Pokémon at the PC',
+                'rendezvous': 'Meet at the Cable Club counter',
+            }.get(phase, 'Prepare the agreed exchange')
+        return {**strategy, 'objective': Goal('cable_prepare', 'Prepare a Cable Club trade', reason).to_dict(),
+                'action': 'trade preparation', 'reason': reason, 'next': None,
+                'expectation': None, 'route': [], 'preparation_phase': phase}
+
     def _phase(self, phase):
         if phase != self.state['phase']:
             self.state['phase'] = phase

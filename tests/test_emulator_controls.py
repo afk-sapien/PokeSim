@@ -76,6 +76,10 @@ def test_restore_discards_policy_intent_and_refreshes_snapshot(tmp_path, monkeyp
     assert emu.snapshot == expected and emu.input_epoch == 8
     assert emu.pending == [] and emu.prev_snapshot is None
     emu.policy.on_restore.assert_called_once()
+    from pokesim.policies.base import BUTTONS
+    from unittest.mock import call
+    assert emu.pb.button_release.call_args_list == [call(button) for button in BUTTONS]
+    assert emu.pb.method_calls[0][0] == 'load_state'
 
 
 def test_restore_keeps_total_victories_separate_from_reward_count(tmp_path, monkeypatch):

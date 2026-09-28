@@ -14,7 +14,7 @@ from pyboy import PyBoy
 
 from .checkpoints import CheckpointStore
 from .events import RunMemory
-from .policies.base import PolicyContext
+from .policies.base import BUTTONS, PolicyContext
 from .policies.strategic import StrategicPolicy
 from .screen import W_OPTIONS
 
@@ -51,6 +51,8 @@ class HeadlessRun:
             self.policy.rng.seed(self.seed)
         with path.open('rb') as stream:
             self.pb.load_state(stream)
+        for button in BUTTONS:
+            self.pb.button_release(button)
         return metadata
 
     def reload(self, path):
