@@ -15,7 +15,7 @@
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=panel-8">
-<link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=panel-4">
+<link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=marathon-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="journal">
@@ -45,6 +45,14 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="column-head"><h2 class="legend legend--ink" id="legendary-heading">Legendary returns</h2></div>
 <div class="progress-panel"><div class="legendary-progress"><p id="legendary-summary"><strong class="readout" id="legendary-remaining"></strong><span class="note"> steps until the next return</span></p><progress id="legendary-meter" aria-label="Steps toward the next legendary return"></progress><p id="legendary-ready" class="note"></p></div></div>
 </section>
+<section class="statistics-section" id="marathon-records" aria-labelledby="marathon-heading">
+<div class="column-head"><h2 class="legend legend--ink" id="marathon-heading">Kanto Marathon</h2><span class="micro">Game time</span></div>
+<div class="progress-panel marathon-records">
+<div><span class="micro">Personal best</span><strong class="readout" id="marathon-best">No finish yet</strong></div>
+<div><span class="micro">Current attempt</span><strong class="readout" id="marathon-current">Not racing</strong><span class="note" id="marathon-checkpoints"></span></div>
+<div><span class="micro">Last attempt</span><strong class="readout" id="marathon-last">No attempts yet</strong><span class="note" id="marathon-result"></span></div>
+</div>
+</section>
 <p class="note" id="statistics-status" role="status">Opening adventure stats…</p>
 <p class="micro" id="statistics-window"></p>
 <div id="statistics-charts"></div>
@@ -61,6 +69,6 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <script src="${game_base}/static/app.js?v=panel-2"></script>
 <script src="${game_base}/static/progress.js?v=2"></script>
-<script src="${game_base}/static/statistics.js?v=legendary-1"></script>
+<script src="${game_base}/static/statistics.js?v=marathon-1"></script>
 </body>
 </html>

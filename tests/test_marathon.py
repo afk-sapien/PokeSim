@@ -202,3 +202,36 @@ def test_legacy_state_and_invalid_observations_are_safe():
     c.observe(checkpoint(1, 60, party=(mon(level=101),)))
     assert c.project['checkpoint'] == 1
     assert c.project['gains']['steps'] == 0
+
+
+def test_only_a_faster_finished_race_replaces_personal_best():
+    c = race()
+    for frames, finished, expected_best, record in (
+            (1200, True, 1200, True),
+            (1800, True, 1200, False),
+            (1200, True, 1200, False),
+            (600, False, 1200, False),
+            (900, True, 900, True)):
+        c.project = dict(marathon.candidate(), race_frames=frames)
+        c.finish_marathon(finished)
+        assert c.marathon_records['best_frames'] == expected_best
+        assert c.marathon_records['last']['personal_best'] is record
+        event = c.take_activity_events()[-1]
+        assert ('personal best' in event.body) is record
+    assert '0:05 faster' in event.body
+    assert c.marathon_records['completed'] == 4
+    restored = Collection()
+    restored.load(json.loads(json.dumps(c.state_dict())))
+    assert restored.details()['marathon']['best_frames'] == 900
+
+
+def test_marathon_details_distinguish_preparation_running_and_inactive():
+    c = race()
+    assert c.details()['marathon']['current'] == {'started': False, 'frames': 0, 'checkpoints': 0}
+    c.observe(checkpoint(0))
+    c.observe(checkpoint(1, 60))
+    details = c.details()['marathon']
+    assert details['current'] == {'started': True, 'frames': 60, 'checkpoints': 1}
+    assert details['total_checkpoints'] == 11
+    c.project = None
+    assert c.details()['marathon']['current'] is None

@@ -73,3 +73,15 @@ A compact panel shows completed-step progress toward the next legendary return
 and the encounters ready to revisit. This uses the cartridge step counter rather
 than the older sampled steps chart. See [Legendary returns](legendary-returns.md)
 for the milestone rules and settings.
+
+## Marathon records
+
+The Kanto Marathon panel shows the personal best, current attempt and checkpoint
+progress, and last result. Times use simulated game time, including battles and
+healing. Pauses and offline time add nothing. Only a completed race can set a
+record. Existing saved records appear automatically.
+
+These records follow the adventure's policy checkpoint, so restoring an older
+checkpoint also restores its race records. The lifetime finishes chart above
+uses durable journal entries. See [Kanto Marathon](marathon.md) for the course
+and timing rules.

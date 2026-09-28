@@ -14,6 +14,10 @@ The current objective shows the next checkpoint, elapsed game time, and recorded
 steps. Starting and finishing create short journal entries with screenshots.
 The finish report includes checkpoints, time, steps, battles, and healing stops.
 The planner also saves the number of finishes, fastest time, and latest result.
+Journal → Stats shows the personal best, current attempt time and checkpoint
+progress, and last attempt. A first finish sets the personal best. A faster
+finish gets a short record announcement in the journal. Ties and unfinished
+attempts never replace the best time.
 Detailed rules stay in this guide.
 
 ## Timing and measurements

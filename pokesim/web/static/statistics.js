@@ -24,7 +24,24 @@
     ]},
   ]
   const number = value => Number(value).toLocaleString(undefined, {maximumFractionDigits: 1})
+  const raceTime = frames => {
+    const seconds = Math.floor(frames / 60)
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+  }
   function render(data) {
+    const marathon = data.marathon || {}
+    document.querySelector('#marathon-best').textContent = marathon.best_frames == null
+      ? 'No finish yet' : raceTime(marathon.best_frames)
+    const race = marathon.current
+    document.querySelector('#marathon-current').textContent = race
+      ? (race.started ? raceTime(race.frames) : 'Heading to start') : 'Not racing'
+    document.querySelector('#marathon-checkpoints').textContent = race?.started
+      ? `${race.checkpoints} of ${marathon.total_checkpoints} checkpoints` : ''
+    document.querySelector('#marathon-last').textContent = marathon.last
+      ? raceTime(marathon.last.frames) : 'No attempts yet'
+    document.querySelector('#marathon-result').textContent = marathon.last
+      ? (marathon.last.finished ? (marathon.last.personal_best ? 'Finished · Personal best' : 'Finished') : 'Did not finish') : ''
+
     const returns = data.legendary_returns
     const panel = document.querySelector('#legendary-returns')
     panel.hidden = !returns?.enabled || !returns.available

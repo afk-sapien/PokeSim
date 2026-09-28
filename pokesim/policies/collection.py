@@ -225,15 +225,21 @@ class Collection:
         project = self.project
         if not project or project['method'] != 'marathon':
             return
+        previous_best = self.marathon_records.get('best_frames')
+        new_best = finished and (previous_best is None or project['race_frames'] < previous_best)
         self.marathon_records['last'] = {
-            'finished': finished, 'frames': project['race_frames'], **project['gains']}
+            'finished': finished, 'frames': project['race_frames'], 'personal_best': new_best, **project['gains']}
         if finished:
             self.marathon_records['completed'] = self.marathon_records.get('completed', 0) + 1
             self.marathon_records['best_frames'] = min(
                 self.marathon_records.get('best_frames', project['race_frames']), project['race_frames'])
+        report = marathon.report(project, finished)
+        if new_best:
+            report += ' First personal best!' if previous_best is None else (
+                f' New personal best, {marathon.duration(previous_best - project["race_frames"])} faster!')
         self.activity_events.append({
             'type': 'marathon', 'title': 'Kanto Marathon finished!' if finished else 'Kanto Marathon called off',
-            'body': marathon.report(project, finished), 'priority': 2, 'tags': 'runner'})
+            'body': report, 'priority': 2, 'tags': 'runner'})
         self.next_marathon = self.elapsed + marathon.INTERVAL
         self.marathon_previous = None
 
@@ -477,7 +483,7 @@ class Collection:
                 'history':self.history, 'director': self.director.state_dict(),
                 'peer_requests': self.demand(),
                 'training': training.details(self.project, self.remaining),
-                'marathon': self.marathon_records,
+                'marathon': marathon.details(self.marathon_records, self.project),
                 'reason':'Collect, evolve, train, and explore in bounded projects. Repeated failures wait longer before retrying.'}
 
     def choose(self,s,nav,rng,main):

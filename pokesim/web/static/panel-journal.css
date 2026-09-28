@@ -501,3 +501,23 @@
 .legendary-progress progress::-webkit-progress-bar { background: var(--cell-off) }
 .legendary-progress progress::-webkit-progress-value { background: repeating-linear-gradient(to right, var(--signal) 0, var(--signal) 8px, transparent 8px, transparent 10px) }
 .legendary-progress progress::-moz-progress-bar { background: repeating-linear-gradient(to right, var(--signal) 0, var(--signal) 8px, transparent 8px, transparent 10px) }
+
+.marathon-records { display: grid }
+.marathon-records { grid-template-columns: repeat(3, minmax(0, 1fr)) }
+.marathon-records > div { padding: var(--s4) }
+.marathon-records > div + div { border-left: var(--hair) solid var(--rule) }
+.marathon-records .readout { display: block }
+.marathon-records .readout { white-space: normal }
+.marathon-records .readout { overflow-wrap: anywhere }
+.marathon-records .readout { font-size: var(--f-read) }
+@media (max-width: 640px) {
+  .marathon-records { grid-template-columns: 1fr }
+  .marathon-records > div + div { border-left: 0 }
+  .marathon-records > div + div { border-top: var(--hair) solid var(--rule) }
+}
+
+@media (max-width: 520px) {
+  #marathon-records .column-head { flex-wrap: wrap }
+  #marathon-records .column-head { gap: var(--s2) }
+  #marathon-heading { flex-basis: 100% }
+}

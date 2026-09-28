@@ -72,3 +72,39 @@ def test_legendary_return_progress_is_readable_and_lists_available_hunts(page, g
     expect(page.locator('#legendary-meter')).to_have_attribute('value', '250000')
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
     page.screenshot(path=f'/tmp/pokesim-legendary-returns-{width}.png', full_page=True)
+
+
+@pytest.mark.parametrize('width', [320, 1280])
+def test_marathon_records_and_current_clock(page, game, monkeypatch, width):
+    from pokesim.policies.collection import Collection
+    from pokesim.policies import marathon
+    url, _, emu, _ = game
+    collection = Collection()
+    collection.marathon_records = {'completed': 2, 'best_frames': 75360,
+                                  'last': {'frames': 75360, 'finished': True, 'personal_best': True}}
+    collection.project = marathon.candidate()
+    collection.project.update(checkpoint=5, race_frames=3660)
+    collection.project['gains']['checkpoints'] = 4
+    original = emu.status
+    monkeypatch.setattr(emu, 'status', lambda: {**original(), 'strategy': {'collection': collection.details()}})
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(url + '/journal/stats')
+    expect(page.locator('#marathon-best')).to_have_text('20:56')
+    expect(page.locator('#marathon-current')).to_have_text('1:01')
+    expect(page.locator('#marathon-checkpoints')).to_have_text('4 of 11 checkpoints')
+    expect(page.locator('#marathon-last')).to_have_text('20:56')
+    expect(page.locator('#marathon-result')).to_have_text('Finished · Personal best')
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    page.screenshot(path=f'/tmp/pokesim-marathon-records-{width}.png', full_page=True)
+    collection.marathon_records['last'] = {'frames': 3600, 'finished': False}
+    collection.project = None
+    page.reload()
+    expect(page.locator('#marathon-best')).to_have_text('20:56')
+    expect(page.locator('#marathon-current')).to_have_text('Not racing')
+    expect(page.locator('#marathon-result')).to_have_text('Did not finish')
+    collection.marathon_records = {}
+    collection.project = marathon.candidate()
+    page.reload()
+    expect(page.locator('#marathon-best')).to_have_text('No finish yet')
+    expect(page.locator('#marathon-current')).to_have_text('Heading to start')
+    expect(page.locator('#marathon-last')).to_have_text('No attempts yet')

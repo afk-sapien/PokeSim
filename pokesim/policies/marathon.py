@@ -31,6 +31,15 @@ def duration(frames):
     return f'{seconds // 60}:{seconds % 60:02d}'
 
 
+def details(records, project):
+    current = None
+    if project and project.get('method') == 'marathon':
+        current = {'started': project['checkpoint'] > 0,
+                   'frames': project['race_frames'],
+                   'checkpoints': project['gains']['checkpoints']}
+    return {**records, 'current': current, 'total_checkpoints': len(COURSE) - 1}
+
+
 def goal(project):
     index = min(project['checkpoint'], len(COURSE) - 1)
     target = COURSE[index]
