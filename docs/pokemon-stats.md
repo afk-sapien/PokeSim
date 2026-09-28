@@ -111,6 +111,6 @@ compact rarity estimate and potential Power alongside their existing stats.
 
 **Elite Four wins** credits a Pokémon for membership in the Hall of Fame party after
 defeating the Elite Four and Champion. Verified historical victories are included,
-and the count follows the individual through managed trades. Missing history is not
+and the count follows the individual through managed trades. A **+** marks a verified minimum when history is incomplete. Missing history is not
 estimated. See [individual Elite Four wins](guide.md#individual-elite-four-wins) for
 identity matching and unavailable counts.

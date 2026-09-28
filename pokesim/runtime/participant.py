@@ -1,6 +1,7 @@
 """Adventure-owned durable cable preparation, staging and publication."""
 from __future__ import annotations
 
+from dataclasses import asdict
 import hashlib
 import io
 import json
@@ -330,7 +331,7 @@ class Participant:
                               'party_slot': slot, 'selected_key': selected},
                       outgoing={key: value.hex() for key, value in row.items()})
         from ..league_partners import export
-        record['outgoing_league_record'] = export(self.store, selected)
+        record['outgoing_league_record'] = export(self.store, selected, asdict(snapshot.party[slot]))
         return _save(self.store, record)
 
     def stage(self, data):
@@ -365,8 +366,12 @@ class Participant:
         from ..league_partners import validate
         from ..trade.preferences import identity
         from ..ram import individual_data
-        incoming_key = identity(individual_data(bytes.fromhex(data['incoming']['struct'])))
-        record['incoming_league_record'] = validate(data.get('incoming_league_record'), incoming_key)
+        incoming_mon = individual_data(bytes.fromhex(data['incoming']['struct']))
+        incoming_mon['species'] = bytes.fromhex(data['incoming']['struct'])[0]
+        from ..ram import decode_text
+        incoming_mon['nick'] = decode_text(bytes.fromhex(data['incoming']['nickname']))
+        incoming_key = identity(incoming_mon)
+        record['incoming_league_record'] = validate(data.get('incoming_league_record'), incoming_key, incoming_mon)
         directory = self.root / record['id']
         target, cartridge = directory / 'staged.state', directory / 'staged.sav'
         CheckpointStore.atomic_write(target, raw)

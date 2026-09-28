@@ -310,3 +310,11 @@ test('DV probability labels stay compact and retain very rare nonzero tails', as
   assert.match(detail, /Higher roll: 0%/)
   assert.doesNotMatch(detail, /65,536|uniform|independent fifth/)
 })
+
+test('Partial League histories show a minimum and unidentified partners stay unknown', async () => {
+  const view = pc([mon(1, 1, 20, {elite_four_wins: 8, elite_four_wins_incomplete: true}),
+    mon(2, 1, 20, {elite_four_wins: null})], '?scope=all')
+  await view.ready()
+  assert.match(view.element('#pc-grid').innerHTML, /Elite Four wins <b>8\+/)
+  assert.match(view.element('#pc-grid').innerHTML, /Elite Four wins <b>Unknown/)
+})

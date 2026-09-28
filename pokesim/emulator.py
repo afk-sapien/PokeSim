@@ -150,6 +150,8 @@ class Emulator:
         return pb
 
     def start(self):
+        from .league_history import recover
+        recover(self.store, self.rom)
         saves = self.store.autosaves()
         if saves:
             self._restore_first_valid(reversed(saves))

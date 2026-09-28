@@ -424,7 +424,9 @@ The PC shows an **Elite Four wins** count on each Pokémon card and in its detai
 
 Each completed Elite Four and Champion run credits every member of the Hall of Fame party, including fainted members. Boxed Pokémon receive no credit for that run. Counts persist through evolution, training, PC moves, restarts, and managed cable trades. Replayed victory records and repeated trade recovery do not add duplicate credit.
 
-Counts include verified historical victory saves when imported. Missing history is not estimated. Generation I has no unique individual identifier. If two partners have indistinguishable trainer and DV data, the count shows **Unavailable** to avoid assigning one Pokémon's wins to another.
+Counts include verified historical victory saves when imported. Missing history is not estimated. Records distinguish evolution families and nicknames as well as original trainer and DVs. Evolution, default species-name changes, and unambiguous renames retain a partner's record. Managed trades carry that record with the Pokémon.
+
+Upgrades recover old counts from saved Hall of Fame parties and uniquely matched journal party lists, while preserving the old ledger. A **+** means a verified minimum because some historical participants could not be identified. **Unknown** is reserved for missing identity data or indistinguishable twins with the same family, trainer, DVs, and nickname. Counts are never guessed from level or box position.
 
 ## Training more partners to level 100
 
