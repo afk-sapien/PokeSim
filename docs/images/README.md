@@ -1,18 +1,26 @@
 # README screenshots
 
-Captured September 27, 2026 from a running Red adventure with all eight badges,
+Captured September 27, 2026 from running adventures. These are browser
+screenshots of actual game state, not mockups or generated art. The owner
+approved using these game views in the public README.
+
+The lead image shows the Fresh Start Red adventure during a complete battle
+frame on Route 6. Both Pokémon, the attack text, all six teammates, and the
+next training objective are visible. It was selected after reviewing nine
+candidates from three adventures. The simulation kept running throughout.
+
+The remaining views show the older Red adventure with all eight badges,
 151 species registered, 137 species recorded at level 100, and more than 2,200
-game hours. These are browser screenshots of actual game state, not mockups or
-generated art. The owner approved using these game views in the public README.
-The simulation was running for the final captures, so the views are a few minutes apart.
+game hours.
 
 Captured at a 1280 pixel viewport in the light theme, at native pixel density.
-The browser saved JPEGs at quality 90. Taller views include complete panels.
+The lead image is 1250 pixels tall and uses JPEG quality 94. The other captures
+use quality 90. Taller views include complete panels.
 The PC uses the actual All Pokémon control and its default power sorting.
 
 | File | View |
 | --- | --- |
-| `live-adventure.jpg` | Game screen, six partners with colored types, and the current plan |
+| `live-adventure.jpg` | Exeggutor battling Oddish, six partners with colored types, and the next training objective |
 | `journal.jpg` | Entries and Stats tabs, a League reward gift, and recent victories |
 | `adventure-stats.jpg` | Progress history, legendary return countdown, marathon records, and collection strength |
 | `pokedex.jpg` | Species milestones, catch totals, DV records, and colored types |

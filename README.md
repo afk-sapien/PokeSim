@@ -6,9 +6,9 @@ PokeSim plays Pokémon Red and Blue by itself, and you watch it happen in your b
 
 Fair warning: you will get attached to a Lapras named WOBBLECOP, and you will argue with its battle decisions.
 
-![The live Red adventure with all eight badges, the game screen, six teammates with colored type badges, and the current plan](docs/images/live-adventure.jpg)
+![A live Red battle with FISHCRIME the Exeggutor using Stomp against Oddish, all six teammates, and the next training objective](docs/images/live-adventure.jpg)
 
-*The game, the team, and the plan (allegedly), all in one place. WOBBLECOP is still on the payroll.*
+*FISHCRIME used STOMP. The rest of the team is waiting for its turn.*
 
 ## What you get
 
