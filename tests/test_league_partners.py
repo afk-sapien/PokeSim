@@ -278,6 +278,7 @@ def test_journal_recovery_does_not_assign_a_reused_name_or_exceed_legacy_total()
     value = {'origin': 'a' * 32, 'victories': [], 'partners': {}}
     a = mon()
     league.resolve(value, [asdict(a)])
+    next(iter(value['partners'].values()))['first_event'] = 1
     legacy = {'partners': {identity(asdict(a)): {'counts': {'a' * 32: 1}, 'ambiguous': False}}}
     for i in range(1, 4):
         recover_named(value, {'id': i, 'title': f'Champion! League victory #{i}',
@@ -298,3 +299,16 @@ def test_new_wins_add_to_preserved_legacy_baseline(tmp_path):
     win(store, 2, mon())
     assert league.apply(payload(mon()), store)['party'][0]['elite_four_wins'] == 13
     store.close()
+
+
+def test_journal_does_not_credit_a_name_first_seen_after_the_victory():
+    from pokesim.league_history import recover_named
+    from dataclasses import asdict
+    value = {'origin': 'a' * 32, 'victories': [], 'partners': {}}
+    league.resolve(value, [asdict(mon())])
+    entry = next(iter(value['partners'].values()))
+    entry['first_event'] = 20
+    legacy = {'partners': {identity(asdict(mon())): {'counts': {}, 'ambiguous': True}}}
+    assert not recover_named(value, {'id': 10, 'title': 'Champion! League victory #1',
+                                     'body': 'Party: SPARK L50.'}, legacy)
+    assert not entry['counts']

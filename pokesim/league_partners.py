@@ -116,6 +116,10 @@ def record(db, snapshot, title, event_id, *, allow_rename=True):
         return False
     party = [asdict(mon) for mon in snapshot.party]
     keys = resolve(value, party + snapshot.storage_entries(), allow_rename=allow_rename)
+    if not allow_rename:
+        for key in set(keys) - {None}:
+            entry = value['partners'][key]
+            entry['first_event'] = min(event_id, entry.get('first_event', event_id))
     for key in set(keys[:len(party)]) - {None}:
         entry = value['partners'][key]
         if allow_rename:

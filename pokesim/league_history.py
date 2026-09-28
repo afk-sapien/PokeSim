@@ -106,7 +106,7 @@ def recover_named(value, row, legacy=None):
                    if name in entry['names'] or ('' in entry['names'] and name in
                        league.default_names(int(entry['signature'].split(':')[1])))]
         if legacy is not None:
-            matches = [entry for entry in matches if (
+            matches = [entry for entry in matches if entry.get('first_event', float('inf')) <= row['id'] and (
                 legacy.get('partners', {}).get(entry['signature'].split(':')[0], {}).get('ambiguous')
                 or legacy.get('partners', {}).get(entry['signature'].split(':')[0], {}).get('counts', {}).get(value['origin'], 0))]
         if counts[name] != 1 or len(matches) != 1 or matches[0]['ambiguous']:
