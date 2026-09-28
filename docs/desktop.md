@@ -6,15 +6,72 @@ Install PokeSim as a Python package to run it on your desktop, or use one Docker
 
 ## Install
 
-### Automatic setup
+### Package-manager setup (recommended)
 
-Use a normal user terminal. The installer downloads [uv](https://docs.astral.sh/uv/),
-managed Python 3.12, the released PokeSim wheel, and its dependencies. It does not need Git,
-a system Python installation, administrator access, or a ROM during installation.
-It checks that the installed launcher loads and prints its full path, which works even
-when your terminal has not picked up a PATH change yet. Installation does not start a server.
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) using your
+platform's package manager. uv installs PokeSim in its own environment and manages
+Python 3.12 for it. Internet access is required.
 
-macOS and Linux, with curl installed:
+Windows, using [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/):
+
+```powershell
+winget install --id astral-sh.uv --exact
+```
+
+macOS, with [Homebrew](https://brew.sh/) installed:
+
+```sh
+brew install uv
+```
+
+Linux, with [pipx](https://pipx.pypa.io/stable/installation/) installed through your
+distribution's package manager:
+
+```sh
+pipx install uv
+pipx ensurepath
+```
+
+Open a new terminal so it can find uv. Install the current public PokeSim release:
+
+```sh
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.12/pokesim-0.4.12-py3-none-any.whl
+uv tool update-shell
+```
+
+Open another terminal and run `pokesim-desktop`. Your browser opens the Adventure
+Library. Install and run PokeSim as your normal user, without sudo or an
+administrator terminal. No system Python, Git, Docker, or ROM is needed during
+this package installation.
+
+PokeSim's package comes from this project's [GitHub releases](https://github.com/afk-sapien/PokeSim/releases).
+Do not use `pip install pokesim` from PyPI, which is not this project's release channel.
+On Windows, the Python package installation creates the `pokesim-desktop.exe`
+launcher. There is no separate PokeSim EXE download in this installation flow.
+
+### Other Python package managers
+
+With pipx and Python 3.12 already installed, you can install PokeSim directly:
+
+```sh
+pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.12/pokesim-0.4.12-py3-none-any.whl
+pipx ensurepath
+```
+
+On Windows, replace `python3.12` with the full path to your Python 3.12 `python.exe`.
+Open a new terminal after PATH setup. A released wheel needs no Git.
+
+Without uv or pipx, create a virtual environment with Python 3.12, activate it,
+and use `python -m pip install` with the wheel URL above. Avoid installing into
+system Python.
+
+### Advanced: installer scripts
+
+The optional scripts bootstrap uv, managed Python 3.12, the released PokeSim
+package, and its dependencies. They execute downloaded code. The package-manager
+instructions above are the recommended desktop path.
+
+macOS and Linux:
 
 ```sh
 curl -fsSL https://github.com/afk-sapien/PokeSim/releases/latest/download/install.sh | sh
@@ -26,48 +83,29 @@ Windows PowerShell:
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/afk-sapien/PokeSim/releases/latest/download/install.ps1 | iex"
 ```
 
-These commands execute the downloaded script. To review it first, download
-[install.sh](../install.sh) or [install.ps1](../install.ps1), read it, then run
-`sh install.sh` or `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1`.
+To review a script first, download
+[the released install.sh](https://github.com/afk-sapien/PokeSim/releases/latest/download/install.sh)
+or [the released install.ps1](https://github.com/afk-sapien/PokeSim/releases/latest/download/install.ps1),
+read it, then run `sh install.sh` or
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1`.
 The PowerShell execution-policy option applies to that process only.
 
-The scripts reuse uv if installed. Otherwise they install it in `~/.local/bin`, with
-no shell-profile changes. Follow the printed `uv tool update-shell` command and open
-a new terminal to use the short `pokesim-desktop` command. You can also always use the
-full launch command printed by the installer.
-
-### Install manually
-
-With [uv](https://docs.astral.sh/uv/getting-started/installation/), which can also download Python:
-
-```sh
-uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.14/pokesim-0.4.14-py3-none-any.whl
-uv tool update-shell
-```
-
-With [pipx](https://pipx.pypa.io/stable/installation/) and Python 3.12 already installed:
-
-```sh
-pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.14/pokesim-0.4.14-py3-none-any.whl
-pipx ensurepath
-```
-
-On Windows, replace `python3.12` with the full path to your Python 3.12 `python.exe`. Open a new terminal after either PATH setup
-command. A released wheel needs no Git. Do not use `pip install pokesim` from PyPI,
-which is not the release channel documented by this project.
-
-Without uv or pipx, create a virtual environment with Python 3.12, activate it, and
-use `python -m pip install` with the wheel URL above. Avoid installing into system Python.
+The scripts reuse uv if installed. Otherwise they install it in `~/.local/bin`,
+with no shell-profile changes. They check the installed launcher and print its
+full path. Follow the printed `uv tool update-shell` command and open a new
+terminal to use `pokesim-desktop`, or use the full launch command printed by the
+installer. Installation does not start a server.
 
 ### Update or remove
 
 Choose **Save and quit** before updating, and keep a backup from **Settings and backups**.
-Rerun the automatic installer to install the version it selects. For manual installations,
+For a uv or pipx installation,
 run `uv tool install --python 3.12 --managed-python --upgrade NEW_WHEEL_URL` or
 `pipx install --force NEW_WHEEL_URL`, using the wheel from the desired
 [release](https://github.com/afk-sapien/PokeSim/releases).
 A wheel URL pins a version. `pipx upgrade pokesim` or `uv tool upgrade pokesim` alone
-does not select a new GitHub release URL.
+does not select a new GitHub release URL. If you used an optional installer
+script, rerun the script from the desired release to install its selected version.
 
 Remove the installed application with `uv tool uninstall pokesim` or `pipx uninstall pokesim`,
 matching the installer you used. Your library and saves remain in the application folder.

@@ -55,28 +55,10 @@ PokeSim ships no ROMs and downloads none. You supply your own clean copy of Pok√
 
 ## Running it
 
-On your own computer, paste the command for your system into a terminal. The installer
-sets up uv, Python 3.12, and the released PokeSim package for your user account.
-You do not need to install Python, pipx, Git, or Docker first. Internet access is required.
+**Server: Docker Compose**
 
-**macOS or Linux:**
-
-```sh
-curl -fsSL https://github.com/afk-sapien/PokeSim/releases/latest/download/install.sh | sh
-```
-
-**Windows PowerShell:**
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/afk-sapien/PokeSim/releases/latest/download/install.ps1 | iex"
-```
-
-Run the launch command printed at the end. Your browser opens the Library, where you add
-your ROM and start an adventure. Run as your normal user, without sudo or an administrator
-terminal. The [desktop guide](docs/desktop.md) explains what the scripts download, how to
-review them first, manual installation, updates, and troubleshooting.
-
-**On a server or with Docker Desktop:** use Linux containers on an x86-64 computer.
+Install Docker with the Compose plugin, or Docker Desktop with Linux containers,
+on an x86-64 computer.
 Create a new folder for this installation, download the quick-start file as `compose.yaml`,
 then start it:
 
@@ -96,6 +78,40 @@ For updates, save a backup from **Settings and backups**, then follow
 [self-hosting](docs/self-hosting.md). That guide also covers remote access, custom ports,
 source builds, and existing bind-mount installations. **Existing Docker users:** keep your
 current Compose file and data mount. The quick-start file is for new libraries.
+
+**Desktop: install with uv**
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) with your
+platform's package manager:
+
+| Platform | Install uv |
+| --- | --- |
+| Windows, with WinGet | `winget install --id astral-sh.uv --exact` |
+| macOS, with Homebrew | `brew install uv` |
+| Linux, with pipx | `pipx install uv`, then `pipx ensurepath` |
+
+Use [Homebrew](https://brew.sh/) on macOS or install
+[pipx](https://pipx.pypa.io/stable/installation/) through your Linux distribution's
+package manager first if needed. Open a new terminal after installing uv.
+
+Install the current public PokeSim release in an isolated environment. uv also
+installs Python 3.12, so you do not need to set up Python or Git yourself:
+
+```sh
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.12/pokesim-0.4.12-py3-none-any.whl
+uv tool update-shell
+```
+
+Open a new terminal, then launch:
+
+```sh
+pokesim-desktop
+```
+
+Your browser opens the Library, where you add your ROM and start an adventure.
+Run PokeSim as your normal user, without sudo or an administrator terminal.
+The [desktop guide](docs/desktop.md) covers updates, removal, other package
+managers, and [optional installer scripts](docs/desktop.md#advanced-installer-scripts).
 
 Either way, the games keep running when you close the tab, and your computer has to stay awake for them to get anywhere. Use **Save and quit** to stop everything cleanly. A busy adventure no longer eats disk while it does: finished trades keep only their newest twenty, and the database gives back empty space each time it starts.
 
