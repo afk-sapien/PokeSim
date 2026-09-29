@@ -1,0 +1,188 @@
+{
+  "date": "2026-09-29",
+  "baseline_revision": "df9ae2984288f48fde0737000aa07ad57ef7e017",
+  "candidate_revision": "b875a8f1d82c805814a11320b942d437e384820a",
+  "candidate_image_id": "sha256:3402afccbba5d40c45a759179af6a6eaab628645e74fe6484a298fe95e9b36c0",
+  "method": "Full simulation worker, fixed emulated frame budgets after 1200 warmup frames, process CPU time, viewer frames about 10 per second and status requests every two seconds.",
+  "environment": "Same 4-vCPU Linux NAS VM and private Blue backup. Production games continued at Max. Each sample used a disposable read-only container and a private tmpfs data copy.",
+  "limitations": [
+    "One short sample per image and scenario, not a statistical estimate across all gameplay.",
+    "Both late-game checkpoints contain 235 or 236 stored Pokemon.",
+    "CPU timings exclude startup, shutdown saves, and shared manager overhead. Normal worker AI, observations, bookkeeping, and viewer requests run during timing.",
+    "RAM is sampled worker RSS, including warmup. CPU 100 percent means one logical core.",
+    "At Max, reduced CPU per frame increases throughput rather than necessarily reducing CPU utilization."
+  ],
+  "comparisons": [
+    {
+      "scenario": "walking",
+      "requested_speed": 0,
+      "cpu_reduction_percent": 46.36359880900548,
+      "throughput_ratio": 1.9045833561117373,
+      "before": {
+        "frames": 12000,
+        "wall_seconds": 21.618584032985382,
+        "cpu_seconds": 19.536024304999998,
+        "achieved_speed": 9.25129970098145,
+        "cpu_one_core_percent": 90.36680790560641,
+        "cpu_ms_per_emulated_frame": 1.6280020254166665,
+        "starting_map": "Digletts Cave",
+        "ending_map": "Route 5",
+        "snapshot_sha256": "74c62227d8df1e022f0bb1b52fc21cbff27d22b5548275c4262931cf9bcd43b3",
+        "ram_sha256": "7ecb20cbc40b8677dd08cf12f6e94c102645b3d4c2166f35981c404b6fae0e4f",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 235,
+        "event": "result",
+        "scenario": "walking",
+        "requested_speed": 0.0,
+        "rss_mib_mean": 186.67544416243655,
+        "rss_mib_range": [
+          172.1640625,
+          200.53125
+        ],
+        "mode": "before",
+        "image": "pokesim:performance-export-df9ae29"
+      },
+      "after": {
+        "frames": 12000,
+        "wall_seconds": 11.350820621009916,
+        "cpu_seconds": 10.478420372999999,
+        "achieved_speed": 17.61987143289076,
+        "cpu_one_core_percent": 92.31420989602162,
+        "cpu_ms_per_emulated_frame": 0.8732016977499999,
+        "starting_map": "Digletts Cave",
+        "ending_map": "Route 5",
+        "snapshot_sha256": "74c62227d8df1e022f0bb1b52fc21cbff27d22b5548275c4262931cf9bcd43b3",
+        "ram_sha256": "7ecb20cbc40b8677dd08cf12f6e94c102645b3d4c2166f35981c404b6fae0e4f",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 235,
+        "event": "result",
+        "scenario": "walking",
+        "requested_speed": 0.0,
+        "rss_mib_mean": 185.24561468160377,
+        "rss_mib_range": [
+          171.546875,
+          195.25
+        ],
+        "mode": "after",
+        "image": "pokesim:cache-library-b875a8f"
+      },
+      "equivalent": true
+    },
+    {
+      "scenario": "ceremony",
+      "requested_speed": 0,
+      "cpu_reduction_percent": 67.36249671618164,
+      "throughput_ratio": 3.224519208406946,
+      "before": {
+        "frames": 12000,
+        "wall_seconds": 11.254549846984446,
+        "cpu_seconds": 10.252344622999999,
+        "achieved_speed": 17.77059080275771,
+        "cpu_one_core_percent": 91.09511053209313,
+        "cpu_ms_per_emulated_frame": 0.8543620519166666,
+        "starting_map": "Hall Of Fame",
+        "ending_map": "Route 1",
+        "snapshot_sha256": "c4d5481bbc0390a16637c165024f3594cc3ff046d7d7ff2c1978ccf5d61032d9",
+        "ram_sha256": "9aee4ed989d3ed9e7b3cffbfe06745b81c88304d17bdd2e262e74a3fbac785d3",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 236,
+        "event": "result",
+        "scenario": "ceremony",
+        "requested_speed": 0.0,
+        "rss_mib_mean": 152.00514573317307,
+        "rss_mib_range": [
+          150.69140625,
+          159.0703125
+        ],
+        "mode": "before",
+        "image": "pokesim:performance-export-df9ae29"
+      },
+      "after": {
+        "frames": 12000,
+        "wall_seconds": 3.490303241997026,
+        "cpu_seconds": 3.346109313,
+        "achieved_speed": 57.30161138823204,
+        "cpu_one_core_percent": 95.86872775803505,
+        "cpu_ms_per_emulated_frame": 0.27884244275,
+        "starting_map": "Hall Of Fame",
+        "ending_map": "Route 1",
+        "snapshot_sha256": "c4d5481bbc0390a16637c165024f3594cc3ff046d7d7ff2c1978ccf5d61032d9",
+        "ram_sha256": "9aee4ed989d3ed9e7b3cffbfe06745b81c88304d17bdd2e262e74a3fbac785d3",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 236,
+        "event": "result",
+        "scenario": "ceremony",
+        "requested_speed": 0.0,
+        "rss_mib_mean": 153.05690104166666,
+        "rss_mib_range": [
+          150.05078125,
+          159.0390625
+        ],
+        "mode": "after",
+        "image": "pokesim:cache-library-b875a8f"
+      },
+      "equivalent": true
+    },
+    {
+      "scenario": "walking",
+      "requested_speed": 4,
+      "cpu_reduction_percent": 37.754406342974654,
+      "throughput_ratio": 1.0258441925086508,
+      "before": {
+        "frames": 7200,
+        "wall_seconds": 35.7670681339805,
+        "cpu_seconds": 14.825079068,
+        "achieved_speed": 3.3550415580748707,
+        "cpu_one_core_percent": 41.448963645738225,
+        "cpu_ms_per_emulated_frame": 2.0590387594444444,
+        "starting_map": "Digletts Cave",
+        "ending_map": "Digletts Cave",
+        "snapshot_sha256": "e44465b5e2f360df17c0b7c43165a137757c9a43705baf01bd0415d861c035ed",
+        "ram_sha256": "159fb3a96f04c1e7a8528ea23481bdb91b7472f68e93975730c4d7fdc5935b35",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 235,
+        "event": "result",
+        "scenario": "walking",
+        "requested_speed": 4.0,
+        "rss_mib_mean": 179.9233330431755,
+        "rss_mib_range": [
+          171.80078125,
+          194.71484375
+        ],
+        "mode": "before",
+        "image": "pokesim:performance-export-df9ae29"
+      },
+      "after": {
+        "frames": 7200,
+        "wall_seconds": 34.86598490801407,
+        "cpu_seconds": 9.227958476000001,
+        "achieved_speed": 3.4417498979762815,
+        "cpu_one_core_percent": 26.46693761941864,
+        "cpu_ms_per_emulated_frame": 1.2816608994444447,
+        "starting_map": "Digletts Cave",
+        "ending_map": "Digletts Cave",
+        "snapshot_sha256": "e44465b5e2f360df17c0b7c43165a137757c9a43705baf01bd0415d861c035ed",
+        "ram_sha256": "159fb3a96f04c1e7a8528ea23481bdb91b7472f68e93975730c4d7fdc5935b35",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 235,
+        "event": "result",
+        "scenario": "walking",
+        "requested_speed": 4.0,
+        "rss_mib_mean": 181.1938959478022,
+        "rss_mib_range": [
+          169.69921875,
+          200.75390625
+        ],
+        "mode": "after",
+        "image": "pokesim:cache-library-b875a8f"
+      },
+      "equivalent": true
+    }
+  ]
+}
