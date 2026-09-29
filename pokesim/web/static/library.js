@@ -108,7 +108,8 @@
     const usage = game.resources
     const off = !running(game) && ['stopped', 'archived', 'failed'].includes(game.state)
     return {
-      cpu: Number.isFinite(usage?.cpu_percent) ? `${usage.cpu_percent.toFixed(1)}%` : off ? 'Not running' : usage ? 'Measuring…' : 'Unavailable',
+      cpu: Number.isFinite(usage?.cpu_percent) ? `${usage.cpu_percent.toFixed(1)}%` : off ? 'Not running' : usage?.cpu_percent === null ? 'Measuring…' : 'Unavailable',
+      speed: off ? 'Not running' : Number.isFinite(usage?.observed_speed) ? `${usage.observed_speed.toFixed(1)}×` : usage?.speed_status === 'measuring' ? 'Measuring…' : 'Unavailable',
       memory: Number.isFinite(usage?.memory_bytes) ? `${Math.round(usage.memory_bytes / 1048576).toLocaleString()} MiB` : off ? 'Not running' : 'Unavailable'
     }
   }
@@ -116,7 +117,10 @@
     if (!container) return
     for (const [key, value] of Object.entries(resourceLabels(game))) {
       const node = container.querySelector(`[data-usage="${key}"]`)
-      if (node && node.textContent !== value) node.textContent = value
+      if (node) {
+        if (node.textContent !== value) node.textContent = value
+        node.classList.toggle('is-pending', ['Measuring…', 'Unavailable', 'Not running'].includes(value))
+      }
     }
   }
   function card(game) {
@@ -128,7 +132,7 @@
     const league = Number.isInteger(wins) ? `<p class="card-stat micro">${wins.toLocaleString()} League ${wins === 1 ? 'win' : 'wins'}</p>` : ''
     const recent = (summary.recent_activity || []).slice(0, 3)
     const log = recent.length ? `<section class="card-log" aria-label="Recent activity"><h3 class="micro">Recent activity</h3><ol>${recent.map(row => `<li><time datetime="${esc(new Date(row.time * 1000).toISOString())}">${esc(new Date(row.time * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}))}</time><span>${esc(row.message)}</span></li>`).join('')}</ol></section>` : ''
-    const resources = '<dl class="card-resources" aria-label="Resource usage" aria-live="off"><div><dt title="100% CPU means one fully used processor core">CPU (1 core)</dt><dd data-usage="cpu">Measuring…</dd></div><div><dt title="Resident memory for this simulation, excluding the shared library process">Memory</dt><dd data-usage="memory">Measuring…</dd></div></dl>'
+    const resources = '<dl class="card-resources" aria-label="Resource usage" aria-live="off"><div><dt title="100% CPU means one fully used processor core">CPU (1 core)</dt><dd data-usage="cpu">Measuring…</dd></div><div><dt title="Resident memory for this simulation, excluding the shared library process">Memory</dt><dd data-usage="memory">Measuring…</dd></div><div><dt title="Simulated seconds per real second, measured over the latest health-check interval">Actual speed</dt><dd data-usage="speed">Measuring…</dd></div></dl>'
     const provenance = game.provenance?.trading_blocked ? `<p class="card-error">${esc(game.provenance.reason || 'Legacy trade history needs reconciliation before trading.')}</p>` : ''
     const stalled = active && summary.stalled ? '<p class="card-error">Stuck? No progress for a while. Open the adventure to see its objective.</p>' : ''
     const failure = game.error ? `<p class="card-error">${esc(typeof game.error === 'string' ? game.error : JSON.stringify(game.error))}</p>` : ''

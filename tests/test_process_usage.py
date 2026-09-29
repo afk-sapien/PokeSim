@@ -53,3 +53,43 @@ def test_real_process_reports_current_resident_memory():
     reading = ProcessUsage(os.getpid()).sample()
     assert reading['memory_bytes'] > 0
     assert reading['cpu_percent'] is None
+
+
+def test_observed_speed_measures_emulation_and_expires_without_fresh_samples(monkeypatch):
+    from pokesim.app.resources import ObservedSpeed
+    now = [10.0]
+    monkeypatch.setattr('pokesim.app.resources.time.monotonic', lambda: now[0])
+    pace = ObservedSpeed()
+    assert pace.sample() == {'observed_speed': None, 'speed_status': 'measuring'}
+    pace.observe({'frames': 1000, 'sampled_at': 10})
+    assert pace.sample()['observed_speed'] is None
+    pace.observe({'frames': 1690, 'sampled_at': 15})
+    now[0] = 15
+    assert pace.sample() == {'observed_speed': 2.3, 'speed_status': 'ready'}
+    pace.observe({'frames': 1690, 'sampled_at': 18})
+    now[0] = 18
+    assert pace.sample()['observed_speed'] == 0
+    pace.observe({'frames': 12490, 'sampled_at': 21})
+    now[0] = 21
+    assert pace.sample()['observed_speed'] == 60
+    now[0] = 37
+    assert pace.sample() == {'observed_speed': None, 'speed_status': 'unavailable'}
+    pace.observe({'frames': 12550, 'sampled_at': 37})
+    assert pace.sample()['observed_speed'] is None
+    pace.observe({'frames': 12730, 'sampled_at': 40})
+    now[0] = 40
+    assert pace.sample()['observed_speed'] == 1
+
+
+def test_observed_speed_resets_on_missing_invalid_or_restarted_counters(monkeypatch):
+    from pokesim.app.resources import ObservedSpeed
+    monkeypatch.setattr('pokesim.app.resources.time.monotonic', lambda: 10)
+    for invalid in [None, {'frames': True, 'sampled_at': 10},
+                    {'frames': -1, 'sampled_at': 10}, {'frames': 500, 'sampled_at': float('nan')},
+                    {'frames': 20, 'sampled_at': 10}, {'frames': 500, 'sampled_at': 5}]:
+        pace = ObservedSpeed()
+        pace.observe({'frames': 100, 'sampled_at': 5})
+        pace.observe({'frames': 400, 'sampled_at': 10})
+        assert pace.sample()['observed_speed'] == 1
+        pace.observe(invalid)
+        assert pace.sample()['observed_speed'] is None

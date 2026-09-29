@@ -483,7 +483,7 @@
 
 /* Session readings update in place without replacing the card or its controls. */
 .card-resources { display: grid }
-.card-resources { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+.card-resources { grid-template-columns: repeat(3, minmax(0, 1fr)) }
 .card-resources { gap: var(--s3) }
 .card-resources { padding-block: var(--s3) }
 .card-resources { border-block: var(--hair) solid var(--rule-faint) }
@@ -492,6 +492,7 @@
 .card-resources dd { margin: var(--s1) 0 0 }
 .card-resources dd { font: 16px / 1.4 var(--font-mono) }
 .card-resources dd { font-variant-numeric: tabular-nums }
+.card-resources dd.is-pending { font: 12px / 1.8 var(--font-text) }
 .card-log { padding-top: var(--s2) }
 .card-log ol { list-style: none }
 .card-log ol { padding: 0 }
@@ -508,3 +509,8 @@
 .card-actions .key { white-space: normal }
 .card-actions .key { text-align: center }
 .adventure-card { grid-template-columns: minmax(0, 1fr) }
+
+@media (max-width: 360px) {
+  .card-resources { gap: var(--s2) }
+  .card-resources dd { font-size: 14px }
+}

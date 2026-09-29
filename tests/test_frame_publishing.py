@@ -12,6 +12,7 @@ def emulator():
     emu.play_clock = PlayClock()
     emu.play_clock.seed(0)
     emu.frame = 0
+    emu.executed_frames = 0
     emu.stopping = False
     emu.speed, emu.manual_mode = 0, False      # Max speed: no pacing between steps
     emu.pb = Mock()
@@ -78,3 +79,15 @@ def test_current_frame_marks_interest_and_returns_the_latest():
     assert emu.current_frame() == b'jpeg'
     emu._tick(60)
     assert emu._publish_frame.call_count > 0
+
+
+def test_executed_frames_count_only_new_emulation_despite_game_frame_rewinds():
+    emu = emulator()
+    emu._tick(120)
+    emu.frame = 0
+    emu._tick(60)
+    assert emu.frame == 60
+    assert emu.executed_frames == 180
+    emu.frame = 1000000
+    emu._tick(30)
+    assert emu.executed_frames == 210

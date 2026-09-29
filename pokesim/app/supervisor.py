@@ -18,7 +18,7 @@ import httpx
 import psutil
 
 from .registry import digest, identifier
-from .resources import ProcessUsage, recent_activity
+from .resources import ObservedSpeed, ProcessUsage, recent_activity
 from ..runtime.settings import validate_speed
 
 log = logging.getLogger(__name__)
@@ -179,7 +179,8 @@ class Supervisor:
         if child is None or child.process is None or child.process.poll() is not None:
             return None
         usage = getattr(child, 'usage', None)
-        return usage.sample() if usage is not None else None
+        reading = usage.sample() if usage is not None else None
+        return {**(reading or {}), **child.pace.sample()}
 
     def start(self, aid, recovery=False):
         with self.admission, self._lock(aid):
@@ -207,6 +208,7 @@ class Supervisor:
                 bootstrap = dict(protocol=1, adventure_id=aid, generation=generation,
                                  token=secrets.token_urlsafe(32), settings=settings, adventure_name=adventure['name'])
                 child = self.child_factory(bootstrap)
+                child.pace = ObservedSpeed()
                 self.children[aid] = child
                 self.registry.update(aid, state='starting', generation=generation, error=None)
             try:
@@ -328,6 +330,7 @@ class Supervisor:
                 try:
                     child.request('GET', '/healthz', timeout=3)
                     status = child.request('GET', '/api/state', timeout=3)
+                    child.pace.observe(status.get('performance'))
                     self.sync_speed(aid, child, status.get('speed'))
                     self.unhealthy_since.pop(aid, None)
                     game = status.get('game') or {}

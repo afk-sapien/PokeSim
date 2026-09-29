@@ -53,6 +53,7 @@ def test_emulator_ticks_count_simulated_frames_including_manual_play():
     emu.play_clock = PlayClock()
     emu.play_clock.seed(0)
     emu.frame = 0
+    emu.executed_frames = 0
     emu.stopping = False
     emu.pb = Mock()
     emu._publish_frame = Mock()
@@ -81,6 +82,7 @@ def test_autosave_persists_clock_in_store_and_checkpoint(tmp_path):
     emu.mem.to_dict.return_value = {}
     emu.rom_sha1 = 'test-rom'
     emu.frame = 0
+    emu.executed_frames = 0
     emu.legendary_recovery = LegendaryRecovery({'pending': {'150': 1234}, 'attempts': {'150': 1}})
     emu._state_bytes = lambda: b'save'
     emu._autosave()
@@ -122,6 +124,7 @@ def test_checkpoint_reload_preserves_announced_playtime(tmp_path, monkeypatch):
     emu.rom_sha1 = 'rom'
     emu.input_epoch = 0
     emu.frame = 0
+    emu.executed_frames = 0
     emu.play_clock = PlayClock()
     path = emu.store.write_checkpoint(b'save', {'rom_sha1': 'rom', 'pyboy_version': version('pyboy'),
         'policy': config.POLICY, 'policy_state': {}, 'run_memory': RunMemory().to_dict()})

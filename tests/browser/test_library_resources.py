@@ -18,7 +18,7 @@ def expect(locator):
 
 @pytest.mark.parametrize('width', [320, 390, 1280])
 def test_library_usage_updates_without_replacing_cards(page, tmp_path, monkeypatch, width):
-    usage = {'cpu_percent': 83.4, 'memory_bytes': 244 * 1048576}
+    usage = {'cpu_percent': 83.4, 'memory_bytes': 244 * 1048576, 'observed_speed': 2.3, 'speed_status': 'ready'}
     def factory(url):
         manager = Manager(tmp_path / 'library', url)
         monkeypatch.setattr(manager, 'start', lambda: None)
@@ -39,11 +39,13 @@ def test_library_usage_updates_without_replacing_cards(page, tmp_path, monkeypat
         page.goto(url)
         expect(page.locator('[data-usage="cpu"]')).to_have_text('83.4%')
         expect(page.locator('[data-usage="memory"]')).to_have_text('244 MiB')
+        expect(page.locator('[data-usage="speed"]')).to_have_text('2.3×')
         expect(page.locator('.card-log li')).to_have_count(3)
         page.evaluate('window.originalCard = document.querySelector(".adventure-card")')
         page.get_by_role('button', name='Save and stop', exact=True).focus()
-        usage.update(cpu_percent=47.1, memory_bytes=251 * 1048576)
+        usage.update(cpu_percent=47.1, memory_bytes=251 * 1048576, observed_speed=18.7)
         expect(page.locator('[data-usage="cpu"]')).to_have_text('47.1%', timeout=10000)
+        expect(page.locator('[data-usage="speed"]')).to_have_text('18.7×')
         assert page.evaluate('window.originalCard === document.querySelector(".adventure-card")')
         expect(page.get_by_role('button', name='Save and stop', exact=True)).to_be_focused()
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

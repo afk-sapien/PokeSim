@@ -154,3 +154,22 @@ def test_global_pace_retries_unavailable_worker_and_rejects_invalid_values(super
         with pytest.raises(ValueError):
             supervisor.set_speed(speed)
         assert supervisor.registry.setting('speed') == 4
+
+
+def test_observed_pace_is_live_per_worker_and_resets_when_restarted(supervisor, monkeypatch):
+    first, second = adventure(supervisor), adventure(supervisor)
+    supervisor.start(first)
+    supervisor.start(second)
+    monkeypatch.setattr('pokesim.app.resources.time.monotonic', lambda: 20)
+    child = supervisor.children[first]
+    child.usage = SimpleNamespace(sample=lambda: {'cpu_percent': 50, 'memory_bytes': 100})
+    child.pace.observe({'frames': 0, 'sampled_at': 10})
+    child.pace.observe({'frames': 1380, 'sampled_at': 20})
+    assert supervisor.resources(first)['observed_speed'] == 2.3
+    assert supervisor.resources(second)['observed_speed'] is None
+    assert 'resources' not in supervisor.registry.adventure(first)
+    supervisor.stop(first)
+    assert supervisor.resources(first) is None
+    supervisor.registry.request_lifecycle(first, 'start', identifier())
+    supervisor.start(first)
+    assert supervisor.resources(first)['observed_speed'] is None

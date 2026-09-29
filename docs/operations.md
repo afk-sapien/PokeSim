@@ -96,11 +96,19 @@ These savings do not change the configured simulation speed or policy cadence.
 
 ## Library resource readings
 
-Each adventure card shows its worker's CPU usage and resident memory. CPU is
+Each adventure card shows its worker's CPU usage, resident memory, and actual speed. CPU is
 measured over the interval between samples. 100% means one fully used logical
 core, and a process using several cores can exceed 100%. Memory excludes the
 shared library process and is shown in MiB. These are current readings, not
 cumulative totals or the whole container's usage.
+
+Actual speed measures simulated seconds per real second over the latest worker
+health-check interval, normally about three seconds. For example, 2.3× means
+2.3 seconds of game time per real second, even if the selected limit is 4×.
+Max has no fixed target. Paused or held workers settle to 0.0×. Cable Club work
+runs separately and is not included in this worker reading. Loading a checkpoint
+does not count restored frames as new work. Readings older than 15 seconds become
+Unavailable, and a restarted worker needs two fresh samples.
 
 The first CPU reading says Measuring until a second sample is available.
 Unavailable means the process could not be measured. Stopped adventures say

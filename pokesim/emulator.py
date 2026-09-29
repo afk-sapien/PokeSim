@@ -81,6 +81,7 @@ class Emulator:
         self.frame_image: bytes = b""
         self.frame_seq = 0
         self.frame = 0
+        self.executed_frames = 0
         self.play_clock = PlayClock(store.get("play_clock", {}))
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
@@ -204,6 +205,7 @@ class Emulator:
             "paused": self.paused, "speed": self.speed, "policy": self.policy.describe(),
             "manual_mode": self.manual_mode, "help_request": None,
             "play_clock": self.play_clock.status(),
+            "performance": {"frames": self.executed_frames, "sampled_at": time.monotonic()},
             "frame": self.frame, "uptime": int(time.time() - self.started_at),
             "stuck_seconds": int(time.time() - self.stuck_since), "rom": self.rom_note,
             "game": snap.to_dict() if snap else None,
@@ -368,6 +370,7 @@ class Emulator:
             # observation frames fresh for journal screenshots and fade retakes.
             self.pb.tick(k, render=observing or publishing)
             self.frame += k
+            self.executed_frames += k
             self.play_clock.advance(k)
             n -= k
             now = time.monotonic()
