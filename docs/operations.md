@@ -66,8 +66,10 @@ backup mounted read-only and a fresh writable destination. See the
 
 ## Continue in another emulator
 
-Choose **Download .sav** on an adventure's Live page. Export outside battles,
-dialogue, and trades. If a screen is changing, wait a moment and retry.
+Choose **Download Save** on the adventure's Library card. Start the adventure
+first if it is stopped. Standalone instances keep **Download .sav** on the Live
+page. Export outside battles, dialogue, and trades. If a screen is changing,
+wait a moment and retry.
 The download contains the current party, PC collection, and cartridge progress.
 Load it with the same English Red or Blue ROM in another emulator, using that
 emulator's import-save option or matching the save's filename to the ROM.
@@ -106,7 +108,8 @@ Not running. Samples are reused for at least two seconds across browser requests
 
 Recent activity shows the last three observed location changes, with local times.
 It is a compact overview, not the full journal or a raw diagnostic log. Every
-managed simulation page has a Back to Library button beside its adventure selector.
+managed simulation page links back to the Library through the PokeSim logo.
+The adventure selector switches between games without returning to the Library.
 
 ## Update and roll back
 

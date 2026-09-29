@@ -53,8 +53,10 @@
     return sessionPending
   }
   async function api(path, options = {}, retried = false) {
-    const response = await fetch(path, {cache: 'no-store', credentials: 'same-origin', ...options,
+    const {download, ...fetchOptions} = options
+    const response = await fetch(path, {cache: 'no-store', credentials: 'same-origin', ...fetchOptions,
       headers: {...options.headers, ...(options.method && options.method !== 'GET' ? {'X-PokeSim-CSRF': csrf} : {})}})
+    if (response.ok && download) return response
     let data
     try { data = await response.json() } catch (_) { data = {} }
     if (!response.ok) {
@@ -75,6 +77,19 @@
       body: JSON.stringify(method === 'PATCH' ? body : {...body, request_id: requests.get(signature)})})
     requests.delete(signature)
     return data
+  }
+  async function downloadSave(game) {
+    notice(`Preparing ${game.name}'s save…`)
+    const response = await api(`${gameUrl(game.id)}api/export-save`, {method: 'POST', download: true})
+    const url = URL.createObjectURL(await response.blob())
+    const link = document.createElement('a')
+    link.href = url
+    link.download = response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || 'pokesim.sav'
+    document.body.append(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+    notice('Save downloaded. Load it with the matching Red or Blue ROM in your emulator.')
   }
   async function act(operation) {
     if (busy) return
@@ -118,10 +133,11 @@
     const stalled = active && summary.stalled ? '<p class="card-error">Stuck? No progress for a while. Open the adventure to see its objective.</p>' : ''
     const failure = game.error ? `<p class="card-error">${esc(typeof game.error === 'string' ? game.error : JSON.stringify(game.error))}</p>` : ''
     const lamp = game.archived ? '' : failure || game.state === 'error' ? 'crit' : transitional || (active && summary.stalled) ? 'warn' : active ? 'ok' : ''
+    const download = `<button class="key" data-action="download-save" data-id="${esc(game.id)}" data-owner ${!active ? 'disabled data-blocked title="Start this adventure to download its save"' : 'title="Download a .sav file for another emulator"'}>Download Save</button>`
     const screen = active
       ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${esc(game.name)} game screen" loading="lazy" width="160" height="144"></div>`
       : `<div class="card-screen card-screen--off"><span class="micro">${game.archived ? 'Archived' : 'Saved · not running'}</span></div>`
-    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${game.archived ? `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner>Restore</button>` : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${transitional ? 'disabled data-blocked' : ''}>${transitional ? esc(game.state) : active ? 'Save and stop' : 'Start'}</button><button class="key" data-action="settings" data-id="${esc(game.id)}" data-owner>Settings</button>${!active && !transitional ? `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner>Archive</button>` : ''}`}</div></article>`
+    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${game.archived ? `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner>Restore</button>` : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${transitional ? 'disabled data-blocked' : ''}>${transitional ? esc(game.state) : active ? 'Save and stop' : 'Start'}</button><button class="key" data-action="settings" data-id="${esc(game.id)}" data-owner>Settings</button>${!active && !transitional ? `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner>Archive</button>` : ''}`}${download}</div></article>`
   }
   function renderAdventures() {
     const visible = adventures.filter(game => $('#show-archived').checked || !game.archived)
@@ -319,6 +335,10 @@
       $('#settings-legendary-steps').value = game.settings?.legendary_return_steps ?? 1000000
       $('#settings-legendary-steps').disabled = running(game)
       $('#adventure-settings').showModal()
+      return
+    }
+    if (button.dataset.action === 'download-save') {
+      act(() => downloadSave(game))
       return
     }
     act(async () => {

@@ -320,9 +320,8 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
 }
 .brandplate .model:empty { display: none; }
 
-/* The managed app's trail, "Library > adventure", set like the brandplate: a
-   small stamped way back above the adventure's name, which is itself the
-   switcher. Absent entirely in standalone mode, and the rail closes up. */
+/* The adventure selector sits beside the brand, which returns to the Library.
+   Absent in standalone mode. */
 .breadcrumb {
   display: flex;
   flex-direction: column;
@@ -1210,22 +1209,4 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 /* A 320px phone: tighten the tab type so "Journal" is not cut off. */
 @media (max-width: 360px) {
   .rail nav:not(.breadcrumb) a { padding: 0 2px; letter-spacing: 0.01em; }
-}
-
-/* A clear, comfortable target for returning from any adventure page. */
-.breadcrumb > a.library-return { min-height: 44px }
-.breadcrumb > a.library-return { padding: 0 var(--s3) }
-.breadcrumb > a.library-return { font: 14px / 1.2 var(--font-text) }
-.breadcrumb > a.library-return { text-transform: none }
-.breadcrumb > a.library-return { letter-spacing: normal }
-.breadcrumb > a.library-return { color: var(--ink) }
-.breadcrumb > a.library-return { background: var(--panel) }
-.breadcrumb > a.library-return::before { content: "←" }
-.breadcrumb > a.library-return::before { margin-right: var(--s2) }
-.breadcrumb > a.library-return:hover { background: var(--panel-2) }
-@media (max-width: 640px) {
-  .breadcrumb:has(.library-return) { flex-wrap: wrap }
-}
-@media (min-width: 641px) {
-  .breadcrumb:has(.library-return) { padding-block: var(--s2) }
 }

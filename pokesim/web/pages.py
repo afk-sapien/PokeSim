@@ -45,8 +45,6 @@ def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', 
     navigation = ''
     if base_path:
         navigation = ('<nav class="breadcrumb" aria-label="Breadcrumb">'
-                      '<a class="key library-return" href="/" aria-label="Back to Library">Back to Library</a>'
-                      '<span class="breadcrumb-mark" aria-hidden="true">&rsaquo;</span>'
                       '<span class="adventure-switch">'
                       '<select id="adventure-switcher" aria-label="Switch adventure">'
                       f'<option value="{html.escape(adventure_id, quote=True)}">'
@@ -59,4 +57,8 @@ def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', 
         # Printed into the page, so the brandplate is its full width at first paint
         # instead of growing when app.js reads the version from the status.
         app_version=f'v{__version__}',
+        brand_label='PokeSim library' if base_path else 'PokeSim home',
+        save_export_control='' if base_path else (
+            '<button id="export-save" class="key" title="Download your current progress for another emulator">'
+            'Download .sav</button>'),
         library_nav=navigation, **context)
