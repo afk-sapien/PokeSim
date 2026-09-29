@@ -4,7 +4,7 @@ import random
 import secrets
 
 KEY = 'league-rewards-v1'
-# Mew belongs exclusively to the one-time event, never the repeatable pool.
+# Mew has its own walking and victory requirement, outside the starter pool.
 BASE_POOL = (153, 176, 177)
 UNLOCK_POOLS = {
     'eevee': (102,),
@@ -13,7 +13,7 @@ UNLOCK_POOLS = {
     'mr_mime': (42,),
     'jynx': (72,),
 }
-POOL = BASE_POOL + tuple(species for group in UNLOCK_POOLS.values() for species in group)
+POOL = BASE_POOL
 
 
 def progress_unlocks(snapshot):
@@ -54,9 +54,7 @@ def observe_progress(store, snapshot):
 
 
 def eligible_pool(value):
-    unlocked = set(value.get('unlocks', ()))
-    return BASE_POOL + tuple(species for group, pool in UNLOCK_POOLS.items()
-                             if group in unlocked for species in pool)
+    return BASE_POOL
 
 
 def ledger(db):

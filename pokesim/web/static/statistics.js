@@ -55,6 +55,22 @@
         ? `Ready to revisit: ${returns.ready.map(dex => names[dex]).join(', ')}.`
         : `${number(returns.steps)} completed steps tracked. Previously acquired legendaries return at their original locations.`
     }
+    const activities = data.event_returns
+    const mew = data.mew_returns
+    const activityPanel = document.querySelector('#event-returns')
+    activityPanel.hidden = !activities?.enabled && !mew?.enabled
+    const activityList = document.querySelector('#event-return-list')
+    activityList.replaceChildren()
+    const labels = {eevee: 'Eevee', dojo: 'Dojo rematch', fossil: 'Fossil expedition', trade_1: 'Mr. Mime exchange', trade_4: 'Farfetch’d exchange', trade_5: 'Lickitung exchange', trade_6: 'Jynx exchange'}
+    const lines = (activities?.enabled ? activities.activities : []).map(row => `${labels[row.key] || 'Exchange'}: ${row.ready ? 'Ready to revisit' : `${number(row.remaining)} steps remaining`}`)
+    if (mew?.enabled) lines.push(`Mew: ${mew.first_gift ? 'First gift after becoming Champion' : mew.league_required ? 'Win the League to claim' : `${number(mew.remaining)} steps remaining`}`)
+    if (!lines.length) lines.push('Complete original events to unlock return visits.')
+    for (const text of lines) {
+      const line = document.createElement('p')
+      line.className = 'note'
+      line.textContent = text
+      activityList.append(line)
+    }
     const status = document.querySelector('#statistics-status')
     const target = document.querySelector('#statistics-charts')
     if (!data.history.length) {

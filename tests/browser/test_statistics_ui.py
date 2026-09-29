@@ -108,3 +108,21 @@ def test_marathon_records_and_current_clock(page, game, monkeypatch, width):
     expect(page.locator('#marathon-best')).to_have_text('No finish yet')
     expect(page.locator('#marathon-current')).to_have_text('Heading to start')
     expect(page.locator('#marathon-last')).to_have_text('No attempts yet')
+
+
+@pytest.mark.parametrize('width', [320, 1280])
+def test_step_activity_and_mew_progress(page, game, width):
+    url, _, _, _ = game
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.route('**/api/statistics', lambda route: route.fulfill(json={
+        'history': [], 'event_returns': {'enabled': True, 'activities': [
+            {'key': 'eevee', 'ready': True, 'remaining': 0},
+            {'key': 'fossil', 'ready': False, 'remaining': 100000}]},
+        'mew_returns': {'enabled': True, 'league_required': True, 'remaining': 0},
+    }))
+    page.goto(url + '/journal/stats')
+    expect(page.locator('#event-return-list')).to_contain_text('Eevee: Ready to revisit')
+    expect(page.locator('#event-return-list')).to_contain_text('100,000 steps remaining')
+    expect(page.locator('#event-return-list')).to_contain_text('Mew: Win the League to claim')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.screenshot(path=f'/tmp/pokesim-step-stats-{width}.png', full_page=True)

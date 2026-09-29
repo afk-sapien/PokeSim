@@ -301,6 +301,8 @@ class Emulator:
             ready, closed = claims(self.store)
             self.policy.collection.returned_legendaries = ready
             self.policy.collection.closed_legendaries = closed
+            from . import step_events
+            self.policy.collection.returned_events = step_events.available(self.store)
         if hasattr(self, 'statistics'):
             self.statistics.reset_baseline()
         self.input_epoch = getattr(self, 'input_epoch', 0) + 1
@@ -433,8 +435,16 @@ class Emulator:
             from .legendary_returns import observe as returns_observe, claims
             if hasattr(self, 'step_tracker'):
                 self.step_tracker.flush()
+            from . import mew_returns
+            mew_returns.observe(self.store, snap)
             return_events, restored_legendary = returns_observe(self.store, snap, self.pb.memory)
             events += return_events
+            from . import step_events
+            activity_events, activity_changed = step_events.observe(self.store, snap, self.pb.memory)
+            events += activity_events
+            restored_legendary |= activity_changed or bool(activity_events)
+            if hasattr(self.policy, 'collection'):
+                self.policy.collection.returned_events = step_events.available(self.store)
             if restored_legendary:
                 snap = read_snapshot(self.pb.memory, self.frame)
             ready, closed = claims(self.store)

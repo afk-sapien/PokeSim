@@ -1009,7 +1009,9 @@ class StrategicPolicy(Policy):
             if path:
                 training.route_progress(self.collection.project, goal.key, path[-1][2], len(path))
             project = self.collection.project
-            if (legendary_project(project) and goal.key == 'collect_static' and remaining is not None
+            expedition = project and (legendary_project(project) or project.get('event_return')
+                                      or project.get('method') == 'fossil')
+            if (expedition and goal.key.startswith('collect_') and remaining is not None
                     and remaining < project.get('closest_distance', float('inf'))):
                 project['closest_distance'] = remaining
                 self.collection.idle_frames = 0

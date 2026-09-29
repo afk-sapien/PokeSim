@@ -30,8 +30,6 @@ def test_pool_requires_each_adventures_own_progress(owned, events, groups):
     assert rewards.progress_unlocks(snapshot) == groups
     value = {'unlocks': sorted(groups)}
     expected = set(rewards.BASE_POOL)
-    for group in groups:
-        expected.update(rewards.UNLOCK_POOLS[group])
     assert set(rewards.eligible_pool(value)) == expected
 
 
@@ -127,8 +125,8 @@ def test_repeated_championships_count_beyond_cartridge_cap_and_restore_safely(tm
     store.close()
 
 
-def test_unlocked_pool_has_eleven_repeatable_species_with_playable_level_five_data():
-    assert {SPECIES[s]['dex'] for s in rewards.POOL} == {1, 4, 7, 106, 107, 122, 124, 133, 138, 140, 142}
+def test_league_pool_has_only_three_starters_with_playable_level_five_data():
+    assert {SPECIES[s]['dex'] for s in rewards.POOL} == {1, 4, 7}
     selected = set()
     for number in range(300):
         value = {'seed': 'test adventure', 'delivered': number, 'unlocks': list(rewards.UNLOCK_POOLS)}

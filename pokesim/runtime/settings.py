@@ -27,6 +27,10 @@ class SimulationSettings:
     league_rewards: bool = False
     mew_event: bool = False
     legendary_return_steps: int = 1000000
+    event_return_steps: int = 100000
+    mew_return_steps: int = 1000000
+    fossil_preference: str = 'auto'
+    dojo_preference: str = 'auto'
     seed: int | None = None
     fast_text: bool = True
     battle_animations: bool = True
@@ -59,11 +63,16 @@ class SimulationSettings:
                 raise ValueError(f'{name} must be a boolean')
         if self.seed is not None and type(self.seed) is not int:
             raise ValueError('seed must be an integer or null')
+        for name, choices in {'fossil_preference': {'auto', 'helix', 'dome', 'amber'},
+                              'dojo_preference': {'auto', 'hitmonlee', 'hitmonchan'}}.items():
+            if not isinstance(getattr(self, name), str) or getattr(self, name) not in choices:
+                raise ValueError(f'Unknown {name}')
         ranges = {
             'speed': (0, 16), 'autosave_seconds': (1, 86400),
             'keep_autosaves': (1, 10000), 'stuck_reload_seconds': (1, 604800),
             'battle_timeout_seconds': (1, 604800), 'stream_fps': (1, 60),
             'legendary_return_steps': (0, 1000000000),
+            'event_return_steps': (0, 1000000000), 'mew_return_steps': (0, 1000000000),
             'event_retention_days': (0, 36500), 'ntfy_min_priority': (1, 5),
         }
         for name, (low, high) in ranges.items():

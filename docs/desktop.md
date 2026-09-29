@@ -161,24 +161,17 @@ If every box and the party are full, preparation uses the existing duplicate cle
 
 The current adapter supports clean English Red and Blue at all twelve Cable Club centers, including the Indigo Plateau lobby. Each cartridge returns to its own original center after trading. An adventure without a supported route waits or reports a preparation failure. Trading pages show recent failed attempts and their reasons alongside completed exchanges. Link battles and trading with another application installation are not implemented.
 
-Championship rewards and the one-time postgame Mew gift are enabled by default for new adventures. You can disable either feature in the adventure's Settings while it is stopped. Existing adventures keep their saved settings. These custom PokeSim gifts use an independent local gift transaction. League rewards apply to future victories while enabled. The Mew gift can catch up once if its original milestone was missed. Mew is excluded from repeatable League rewards. Having previously owned Mew permanently closes the event claim for that adventure, including after a checkpoint restore.
+League rewards grant a random level-5 starter after each new victory while enabled.
+Mew's first custom gift follows becoming Champion. Another Mew requires a million
+new steps and then another League victory. Eevee, fossil expeditions, dojo rematches,
+and supported NPC exchanges return through separate walking requirements.
 
-Each completed Elite Four and Champion run awards one random level-5 Pokémon with a random nickname,
-with equal chances among the species this adventure has unlocked:
+Stop an adventure to change reward intervals and fossil or dojo preferences in
+Library settings. Journal Stats shows progress. See [Walking rewards and return
+visits](step-rewards.md) for defaults, eligibility, and restore behavior.
 
-| Reward Pokémon | Requirement |
-| --- | --- |
-| Bulbasaur, Charmander, Squirtle | Complete a League run with rewards enabled |
-| Eevee | Previously acquire Eevee or one of its evolutions |
-| Omanyte, Kabuto, Aerodactyl | Previously acquire any fossil Pokémon or its evolution |
-| Hitmonlee, Hitmonchan | Beat the Fighting Dojo's Karate Master |
-| Mr. Mime | Previously acquire Mr. Mime |
-| Jynx | Previously acquire Jynx |
-
-Unlocks are per adventure and survive trading away a Pokémon or restoring a
-checkpoint. Existing progress counts toward unlocks. This does not award gifts
-for past League wins. The Library and live screen show total League wins,
-including wins earned with rewards disabled, independently of reward counts.
+The Library and live screen show total League wins, including wins earned with
+rewards disabled, independently of reward counts.
 
 ## Your files and backups
 

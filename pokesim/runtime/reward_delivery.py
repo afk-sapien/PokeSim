@@ -78,6 +78,10 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
         value = rewards.ledger(emu.store.db)
     selected = select_reward(before, value, emu.store.get(EVENT_KEY),
                              league_rewards=league_rewards, mew_event=mew_event)
+    from .. import mew_returns
+    if mew_event and mew_returns.ready(emu.store, rewards.championship_count(value)):
+        from ..trade.event import MEW
+        selected = ('mew_return', None, MEW, str(uuid.uuid4()))
     if selected is None:
         return None
     kind, ordinal, species, seed = selected
@@ -137,8 +141,12 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
             rewards.save(emu.store.db, current)
             title = f"Received {gift.nick} ({SPECIES[species]['name']}) for League reward #{ordinal}"
         else:
+            if kind == 'mew_return' and not mew_returns.ready_db(emu.store.db, rewards.championship_count(rewards.ledger(emu.store.db))):
+                raise ValueError('The Mew walking opportunity is no longer available')
+            mew_returns.consume(emu.store.db)
             _put(emu.store.db, EVENT_KEY, identifier)
-            title = 'Received Mew from the custom PokeSim event'
+            title = ('Received Mew after walking and winning the League' if kind == 'mew_return'
+                     else 'Received Mew from the custom PokeSim event')
         _put(emu.store.db, BARRIER, identifier)
         _put(emu.store.db, PENDING, {**record, 'decision': 'COMMIT', 'phase': 'committed'})
         event = emu.store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime)

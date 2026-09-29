@@ -88,7 +88,8 @@ class Manager:
     def validate_adventure_settings(values):
         allowed = {'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
                    'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards',
-                   'mew_event', 'legendary_return_steps', 'event_retention_days'}
+                   'mew_event', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
+                   'fossil_preference', 'dojo_preference', 'event_retention_days'}
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError('Unsupported adventure settings')
         result = {'starter': 'random', 'policy': 'strategic', 'auto_start': False, **values}
@@ -102,9 +103,14 @@ class Manager:
         # Every notable event keeps a full save state beside its screenshot, which is about
         # 40 MB an hour, so an adventure needs a way to bound its own journal. Zero keeps all.
         for name, low, high in [('autosave_seconds', 1, 86400), ('keep_autosaves', 1, 10000),
+                                ('event_return_steps', 0, 1000000000), ('mew_return_steps', 0, 1000000000),
                                 ('stream_fps', 1, 60), ('legendary_return_steps', 0, 1000000000), ('event_retention_days', 0, 36500)]:
             if name in result and (type(result[name]) is not int or not low <= result[name] <= high):
                 raise ValueError(f'{name} must be between {low} and {high}')
+        for name, choices in {'fossil_preference': {'auto', 'helix', 'dome', 'amber'},
+                              'dojo_preference': {'auto', 'hitmonlee', 'hitmonchan'}}.items():
+            if name in result and (not isinstance(result[name], str) or result[name] not in choices):
+                raise ValueError(f'Unknown {name}')
         if result.get('seed') is not None and type(result['seed']) is not int:
             raise ValueError('Seed must be an integer')
         return result
@@ -350,6 +356,10 @@ def create_app(manager, shutdown=lambda: None):
             'league_rewards': data.get('league_rewards', True),
             'mew_event': data.get('mew_event', True),
             'legendary_return_steps': data.get('legendary_return_steps', 1000000),
+            'event_return_steps': data.get('event_return_steps', 100000),
+            'mew_return_steps': data.get('mew_return_steps', 1000000),
+            'fossil_preference': data.get('fossil_preference', 'auto'),
+            'dojo_preference': data.get('dojo_preference', 'auto'),
         })
         return manager.registry.create(data.get('name', ''), data.get('rom_id', ''), settings,
                                        data.get('request_id', identifier()))

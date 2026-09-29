@@ -53,8 +53,9 @@ class StepTracker:
     def completed(self, pb):
         # This instruction runs once per completed, nonscripted walking tile.
         self.value['total'] += 1
-        every = interval()
-        if every and self.value['total'] % every == 0:
+        intervals = (interval(), getattr(config, 'EVENT_RETURN_STEPS', 100000),
+                     getattr(config, 'MEW_RETURN_STEPS', 1000000))
+        if any(every and self.value['total'] % every == 0 for every in intervals):
             self.flush(force=True)
 
     def flush(self, *, force=False):

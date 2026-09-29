@@ -35,13 +35,13 @@ def test_reference_covers_every_kanto_number(dex):
     assert [entry['dex'] for entry in reference()['entries']] == list(range(1, 152))
 
 
-def test_live_plan_explains_reward_unlocks_without_exposing_locked_species():
+def test_live_plan_does_not_offer_native_events_as_league_rewards():
     collection = {'entries': [{'dex': dex, 'species': sid, 'status': 'unavailable', 'reason': 'No local source'}
                               for dex, sid in ((107, 44), (122, 42), (133, 102))]}
     game = snap(owned=frozenset({133})).to_dict()
     enabled = live_status(game, collection, league_rewards={'unlocks': ['dojo', 'eevee']})
     hitmonchan, mime, eevee = enabled['plan']
-    assert hitmonchan['status'] == 'available' and 'reward pool' in hitmonchan['reason']
+    assert hitmonchan['status'] == 'unavailable'
     assert mime['status'] == 'unavailable'
     assert eevee['status'] == 'unavailable'
     assert live_status(game, collection)['plan'][0]['status'] == 'unavailable'

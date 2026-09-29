@@ -350,6 +350,8 @@ class Collection:
                 caught = max(0, held_count(s, target) - project['initial_count'])
                 project.setdefault('gains', {})['catches'] = max(project.get('gains', {}).get('catches', 0), caught)
                 finished = caught >= project.get('catch_goal', 1)
+            if project.get('event_return'):
+                finished = project['event_return'] not in getattr(self, 'returned_events', {})
             if project.get('legendary_return'):
                 finished = dex(target) not in getattr(self, 'returned_legendaries', ())
             if project.get('upgrade_evolution'):
@@ -397,6 +399,12 @@ class Collection:
 
     def sources(self):
         return {int(k):v for k,v in DATA['versions'].get(self.version, {}).items()}
+
+    def returned_event(self, sid, source):
+        for key, event in getattr(self, 'returned_events', {}).items():
+            if key != 'fossil' and event['dex'] == dex(sid) and event['room'] == source['map']:
+                return key
+        return None
 
     def available(self,s,source):
         legendary = {'ARTICUNO': 144, 'ZAPDOS': 145, 'MOLTRES': 146, 'MEWTWO': 150}
@@ -547,6 +555,8 @@ class Collection:
         for sid,rows in sources.items():
             if dex(sid) in s.owned:
                 rows = [source for source in rows if source['method'] in REPEATABLE
+                        or self.returned_event(sid, source)
+                        or source['method'] == 'fossil' and self.available(s, source)
                         or legendary_project(source) and dex(sid) in getattr(self, 'returned_legendaries', ())
                         or source['method'] == 'gift'
                         and dex(sid) in (106, 107) and dex(sid) == self.dojo_choice]
@@ -564,7 +574,8 @@ class Collection:
                     continue
                 if mode == 'safari' and s.money < 800:
                     continue
-                if mode == 'gift' and dex(sid) in (106, 107) and dex(sid) != self.dojo_choice:
+                selected_dojo = getattr(self, 'returned_events', {}).get('dojo', {}).get('dex', self.dojo_choice)
+                if mode == 'gift' and dex(sid) in (106, 107) and dex(sid) != selected_dojo:
                     continue
                 offered = self.trade_candidate(s, source) if mode == 'trade' else None
                 if mode == 'trade' and offered is None:
@@ -580,6 +591,11 @@ class Collection:
                     continue
                 searched.add(search_key)
                 project = dict(source,species=sid)
+                event_key = self.returned_event(sid, source)
+                if event_key:
+                    project.update(event_return=event_key, repeat=True, initial_count=held_count(s, sid), catch_goal=1)
+                elif mode == 'fossil' and dex(sid) in s.owned:
+                    project.update(repeat=True, initial_count=held_count(s, sid), catch_goal=1)
                 if mode in REPEATABLE:
                     project['needed_capture'] = (dex(sid) not in s.owned
                                                  or held_count(s, sid) < self.demand().get(dex(sid), 0))
@@ -726,6 +742,10 @@ class Collection:
             if not bag.get(ITEMS['OLD_AMBER']) and 142 not in s.owned:
                 if not event_set(s.event_flags,'EVENT_GOT_OLD_AMBER'):
                     add({'method':'amber','item':'OLD_AMBER','map':MAPS['MUSEUM_1F']},1)
+        fossil = getattr(self, 'returned_events', {}).get('fossil')
+        if fossil and not bag.get(ITEMS[fossil['item']]):
+            add({'method': 'return_fossil', 'map': fossil['room'], 'item': fossil['item'],
+                 'event_return': 'fossil'}, 5)
         if any(project.get('needed_capture') for weight, project in candidates):
             candidates = [(weight, project) for weight, project in candidates
                           if not project.get('repeat') or project.get('needed_capture')]
@@ -745,7 +765,7 @@ class Collection:
         self.project_maps = [s.map]
         self.project_flags = list(s.event_flags)
         self.progress_token = None
-        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project['method'] == 'trade' else training.TRAINING_BUDGET if self.project['method']=='train' or self.project['method']=='evolve' and self.project['evolution']['method']=='level' else 108000 if self.project.get('dv_hunt') else 36000 if self.completed_champion else PROJECT_BUDGET
+        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project.get('event_return') or self.project['method'] in ('trade', 'fossil') else training.TRAINING_BUDGET if self.project['method']=='train' or self.project['method']=='evolve' and self.project['evolution']['method']=='level' else 108000 if self.project.get('dv_hunt') else 36000 if self.completed_champion else PROJECT_BUDGET
         if self.project['method'] == 'marathon':
             self.remaining = marathon.BUDGET
         nav.path.clear()
@@ -753,6 +773,10 @@ class Collection:
 
     def project_goal(self,s,p):
         mode=p['method']
+        if mode == 'return_fossil':
+            room = WORLD[p['map']]['symbol']
+            fragment = 'SCIENTIST2' if p['item'] == 'OLD_AMBER' else p['item']
+            return object_goal('collect_pickup', 'Collect another fossil', 'Bring it to the Cinnabar lab', room, fragment)
         if mode == 'marathon':
             return marathon.goal(p)
         sid=p.get('species')

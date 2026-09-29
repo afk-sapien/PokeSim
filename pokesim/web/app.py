@@ -85,7 +85,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         from ..statistics import status
         from ..legendary_returns import status as returns_status
         collection = (emu.status().get('strategy') or {}).get('collection') or {}
+        from .. import step_events, mew_returns
         return {**status(store), 'legendary_returns': returns_status(store),
+                'event_returns': step_events.status(store), 'mew_returns': mew_returns.status(store),
                 'marathon': collection.get('marathon', {})}
 
     @app.get('/trading', response_class=HTMLResponse)

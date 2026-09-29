@@ -252,3 +252,23 @@ def test_library_resources_are_live_and_not_written_to_adventure_records(client,
     assert 'resources' not in manager.registry.adventure(row['id'])
     monkeypatch.setattr(manager.supervisor, 'resources', lambda aid: None)
     assert browser.get('/api/v1/adventures/' + row['id']).json()['resources'] is None
+
+
+@pytest.mark.parametrize('field', ['event_return_steps', 'mew_return_steps'])
+def test_walking_reward_interval_validation(field):
+    from pokesim.app.manager import Manager
+    assert Manager.validate_adventure_settings({field: 0})[field] == 0
+    assert Manager.validate_adventure_settings({field: 100000})[field] == 100000
+    for value in (-1, True, 1.5, '100000', 1000000001):
+        with pytest.raises(ValueError):
+            Manager.validate_adventure_settings({field: value})
+
+
+def test_walking_reward_choice_validation():
+    from pokesim.app.manager import Manager
+    for field, choices in {'fossil_preference': ('auto', 'helix', 'dome', 'amber'),
+                           'dojo_preference': ('auto', 'hitmonlee', 'hitmonchan')}.items():
+        for choice in choices:
+            assert Manager.validate_adventure_settings({field: choice})[field] == choice
+        with pytest.raises(ValueError):
+            Manager.validate_adventure_settings({field: 'random-garbage'})

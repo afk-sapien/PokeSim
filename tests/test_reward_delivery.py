@@ -122,8 +122,9 @@ def test_reward_recovery_refuses_corruption_and_newer_trade(tmp_path):
         store.close()
 
 
+@pytest.mark.parametrize('kind', ['league_reward', 'mew_event', 'mew_return'])
 @pytest.mark.parametrize('fail_receipt', [False, True])
-def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, fail_receipt):
+def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, fail_receipt, kind):
     import sqlite3
     from pokesim import ram
     from pokesim.catches import CatchTracker, SUPPORTED, status
@@ -137,7 +138,13 @@ def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, f
         before = snap(hall_of_fame_count=1, box_counts=(0,) * 12)
         memory = populate(Memory(), contents=())
         clone_memory = populate(Memory(), contents=())
-        species = select_reward(before, rewards.ledger(store.db), True, league_rewards=True)[2]
+        species = select_reward(before, rewards.ledger(store.db), True, league_rewards=True)[2] if kind == 'league_reward' else 21
+        if kind == 'mew_return':
+            from pokesim import mew_returns
+            from pokesim.legendary_returns import STEPS
+            store.set('pokesim-mew-v1', 'previous-Mew')
+            store.set(STEPS, {'available': True, 'total': 1000000})
+            store.set(mew_returns.KEY, {'interval': 1000000, 'next_at': 1000000, 'armed_after_win': 0, 'delivered': 0})
         from pokesim.strategy_data import SPECIES
         after = replace(before, box_counts=(1,) + (0,) * 11, owned=before.owned | {SPECIES[species]['dex']})
         monkeypatch.setattr(ram, 'read_snapshot', lambda mem, _: before if mem is memory else after)
@@ -153,15 +160,20 @@ def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, f
             store.db.execute("CREATE TRIGGER reject_gift BEFORE INSERT ON capture_receipts "
                              "BEGIN SELECT RAISE(ABORT, 'receipt failed')" + chr(59) + " END")
             with pytest.raises(sqlite3.IntegrityError, match='receipt failed'):
-                deliver(emu, league_rewards=True)
+                deliver(emu, league_rewards=kind == 'league_reward', mew_event=kind != 'league_reward')
             assert rewards.status(store)['delivered'] == 0
             assert status(store)['total'] == 0
             assert store.events() == []
             assert store.get(PENDING)['decision'] is None
+            if kind == 'mew_return':
+                assert mew_returns.ready(store, 1)
         else:
-            result = deliver(emu, league_rewards=True)
+            result = deliver(emu, league_rewards=kind == 'league_reward', mew_event=kind != 'league_reward')
             assert result['decision'] == 'COMMIT'
-            assert rewards.status(store)['delivered'] == 1
+            assert rewards.status(store)['delivered'] == (1 if kind == 'league_reward' else 0)
+            if kind == 'mew_return':
+                assert not mew_returns.ready(store, 1)
+                assert store.get(mew_returns.KEY)['next_at'] == 2000000
             assert status(store)['counts'] == {str(SPECIES[species]['dex']): 1}
             assert reward_delivery.recover_storage(store) is None
             CatchTracker(store, sorted(SUPPORTED)[0])

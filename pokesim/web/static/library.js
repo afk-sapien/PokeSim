@@ -338,6 +338,11 @@
       }
       $('#settings-legendary-steps').value = game.settings?.legendary_return_steps ?? 1000000
       $('#settings-legendary-steps').disabled = running(game)
+      for (const [field, setting, fallback] of [['event-steps', 'event_return_steps', 100000], ['mew-steps', 'mew_return_steps', 1000000], ['fossil-preference', 'fossil_preference', 'auto'], ['dojo-preference', 'dojo_preference', 'auto']]) {
+        const input = $(`#settings-${field}`)
+        input.value = game.settings?.[setting] ?? fallback
+        input.disabled = running(game)
+      }
       $('#adventure-settings').showModal()
       return
     }
@@ -371,7 +376,7 @@
   $('#adventure-settings-form').onsubmit = event => { event.preventDefault()
     act(async () => {
       const game = adventures.find(item => item.id === $('#settings-id').value)
-      const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value)} : {}
+      const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
       await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
         settings: {auto_start: $('#settings-autostart').checked, ...rewards}}, 'PATCH')
       $('#adventure-settings').close()
