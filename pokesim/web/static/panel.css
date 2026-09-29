@@ -642,7 +642,19 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   image-rendering: pixelated;
 }
 .screen-well img:not([src]) { visibility: hidden; }
-.screen-well:fullscreen { aspect-ratio: auto; width: 100vw; height: 100vh; background: #000; }
+html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
+.screen-well:fullscreen { aspect-ratio: auto }
+.screen-well:fullscreen { display: flex }
+.screen-well:fullscreen { align-items: center }
+.screen-well:fullscreen { justify-content: center }
+.screen-well:fullscreen { width: 100vw }
+.screen-well:fullscreen { height: 100vh }
+.screen-well:fullscreen { max-width: none }
+.screen-well:fullscreen { max-height: none }
+.screen-well:fullscreen { background: #000 }
+.screen-well:fullscreen::before { display: none }
+.screen-well:fullscreen img { min-width: 0 }
+.screen-well:fullscreen img { min-height: 0 }
 /* screen.js appends this to the well while the stream connects. */
 .screen-status {
   position: absolute;

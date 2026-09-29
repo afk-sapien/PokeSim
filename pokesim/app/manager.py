@@ -44,7 +44,7 @@ GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/s
 def public_game_path(method, path):
     """Allow public routes before HTTP client URL normalization can change them."""
     if method == 'POST':
-        return path in {'api/control', 'api/trading/preferences'}
+        return path in {'api/control', 'api/trading/preferences', 'api/export-save'}
     if method not in {'GET', 'HEAD'}:
         return False
     if path in GAME_READ_PATHS:
@@ -608,7 +608,7 @@ def create_app(manager, shutdown=lambda: None):
             finally:
                 await response.aclose()
         safe_headers = {key: value for key, value in response.headers.items()
-                        if key.lower() in {'content-type', 'cache-control', 'location'}}
+                        if key.lower() in {'content-type', 'cache-control', 'location', 'content-disposition'}}
         return StreamingResponse(stream(), status_code=response.status_code, headers=safe_headers)
 
     return app

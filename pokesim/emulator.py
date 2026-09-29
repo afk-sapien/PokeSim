@@ -359,18 +359,22 @@ class Emulator:
             self.frame_cond.notify_all()
 
     def _tick(self, n: int):
-        """Advance n frames, rendering/pacing every CHUNK frames and snapshotting every SNAPSHOT_EVERY."""
+        """Advance frames, rendering only for an observation or a waiting viewer."""
         while n > 0 and not self.stopping:
             k = min(CHUNK, n)
-            self.pb.tick(k, render=True)
+            observing = (self.frame + k) // SNAPSHOT_EVERY != self.frame // SNAPSHOT_EVERY
+            publishing = self._due_to_publish(time.monotonic())
+            # Policy reads the cartridge tilemap, not the rendered image. Keep
+            # observation frames fresh for journal screenshots and fade retakes.
+            self.pb.tick(k, render=observing or publishing)
             self.frame += k
             self.play_clock.advance(k)
             n -= k
             now = time.monotonic()
-            if self._due_to_publish(now):
+            if publishing:
                 self._last_publish = now
                 self._publish_frame()
-            if self.frame // SNAPSHOT_EVERY != (self.frame - k) // SNAPSHOT_EVERY:
+            if observing:
                 self._observe()
             self._pace(k)
             self.last_activity = time.monotonic()

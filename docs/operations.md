@@ -64,6 +64,34 @@ For Docker, the same `pokesim restore` command runs in a temporary container wit
 backup mounted read-only and a fresh writable destination. See the
 [recovery guidance](self-hosting.md#migration-and-recovery).
 
+## Continue in another emulator
+
+Choose **Download .sav** on an adventure's Live page. Export outside battles,
+dialogue, and trades. If a screen is changing, wait a moment and retry.
+The download contains the current party, PC collection, and cartridge progress.
+Load it with the same English Red or Blue ROM in another emulator, using that
+emulator's import-save option or matching the save's filename to the ROM.
+
+PokeSim opens the native Save menu on a private copy of the current checkpoint,
+then boots the resulting 32 KiB cartridge save and verifies Continue restores
+the collection and progress. The live adventure keeps playing. The ROM is not
+included in the download.
+
+A cartridge save does not contain PokeSim's journal, statistics, marathon records,
+trade receipts, or extended play clock. Use a full Library backup to preserve those.
+Exported saves are for continuing elsewhere, not for replacing one participant
+in a running PokeSim trading library.
+
+## Performance
+
+Each running adventure has its own emulator process. At Max pace, it deliberately
+uses available CPU to advance as quickly as possible. Optimizations increase
+progress per CPU second, so total CPU utilization can remain high at Max.
+
+PokeSim renders only when a viewer needs a frame or an observation needs a fresh
+journal picture. It also encodes live frames only while a viewer is watching.
+These savings do not change the configured simulation speed or policy cadence.
+
 ## Update and roll back
 
 Create and download a backup, then stop the app. For a native installation, follow

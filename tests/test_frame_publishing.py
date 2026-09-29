@@ -25,6 +25,24 @@ def test_no_frames_are_encoded_when_nobody_is_watching():
     emu = emulator()
     emu._tick(600)
     assert emu._publish_frame.call_count == 0
+    assert sum(call.kwargs['render'] for call in emu.pb.tick.call_args_list) == 20
+    assert emu._observe.call_count == 20
+
+
+def test_journal_observations_and_viewer_frames_always_have_a_fresh_picture():
+    emu = emulator()
+    emu.watch()
+    emu._observe.side_effect = lambda: assert_rendered(emu)
+    emu._publish_frame.side_effect = lambda: assert_rendered(emu)
+    emu._tick(29)
+    emu._tick(1)
+    emu._tick(31)
+    assert emu._observe.call_count == 2
+    assert emu.frame == 61
+
+
+def assert_rendered(emu):
+    assert emu.pb.tick.call_args.kwargs['render'] is True
 
 
 def test_watching_starts_frames_again():

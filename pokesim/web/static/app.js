@@ -276,6 +276,32 @@ async function refreshEvents(append = false) {
 if ($('#pause')) $('#pause').onclick = (event) => control(event.currentTarget, paused && !manualMode ? 'take_control' : 'pause')
 if ($('#take-control')) $('#take-control').onclick = (event) => control(event.currentTarget, manualMode ? 'resume' : 'take_control')
 if ($('#save')) $('#save').onclick = (event) => control(event.currentTarget, 'save', undefined, 'Save requested. A little moment to come back to.')
+if ($('#export-save')) $('#export-save').onclick = async (event) => {
+  const button = event.currentTarget
+  button.disabled = true
+  button.textContent = 'Preparing…'
+  try {
+    const response = await PokeSim.fetch('/api/export-save', {method: 'POST'})
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'The save could not be exported. Please try again.')
+    }
+    const url = URL.createObjectURL(await response.blob())
+    const link = document.createElement('a')
+    link.href = url
+    link.download = response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || 'pokesim.sav'
+    document.body.append(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+    toast('Save downloaded. Load it with the matching Red or Blue ROM in your emulator.')
+  } catch (error) {
+    toast(error.message, true)
+  } finally {
+    button.disabled = false
+    button.textContent = 'Download .sav'
+  }
+}
 if ($('#restart')) $('#restart').onclick = (event) => {
   if (confirm('Start a fresh adventure from the beginning? Your event journal will be kept.')) control(event.currentTarget, 'restart', undefined, 'A new adventure is starting.')
 }

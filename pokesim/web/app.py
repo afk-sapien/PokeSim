@@ -6,6 +6,7 @@ import math
 import httpx
 from pathlib import Path
 import re
+import threading
 
 from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
@@ -44,6 +45,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                                 adventure_name=adventure_name, **context)
 
     app = FastAPI(title="pokesim", docs_url=None, redoc_url=None, openapi_url=None)
+    export_lock = threading.Lock()
     if browser_origin is not None:
         from .security import install_browser_boundary
         install_browser_boundary(app, browser_origin)
@@ -237,6 +239,28 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         else:
             raise HTTPException(400, "unknown action")
         return {"ok": True}
+
+    @app.post('/api/export-save')
+    def export_save():
+        if config.VIEWER_ONLY:
+            raise HTTPException(403, 'This instance is view-only')
+        if not export_lock.acquire(blocking=False):
+            raise HTTPException(409, 'A save export is already being prepared.')
+        try:
+            from ..save_export import capture, export
+            state = emu.call(lambda: capture(emu), timeout=5)
+            data = export(emu.rom, state)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+        except (TimeoutError, RuntimeError) as error:
+            raise HTTPException(503, 'The adventure is busy. Try exporting again in a moment.') from error
+        finally:
+            export_lock.release()
+        name = re.sub(r'[^A-Za-z0-9_-]+', '-', adventure_name).strip('-')[:64] or 'pokesim'
+        return Response(data, media_type='application/octet-stream', headers={
+            'Cache-Control': 'no-store',
+            'Content-Disposition': 'attachment' + chr(59) + f' filename="{name}.sav"',
+        })
 
     @app.get("/frame.jpg")
     def frame():

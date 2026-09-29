@@ -1,5 +1,6 @@
 """Keep the live columns aligned and partner inspection separate from game input."""
 from dataclasses import replace
+import re
 
 import pytest
 
@@ -75,3 +76,46 @@ def test_viewer_only_live_page_keeps_the_game_visible(page, live_game, monkeypat
     expect(page.locator('#take-control')).to_be_hidden()
     expect(page.locator('#screen')).to_be_visible()
     expect(page.locator('#party-count')).to_have_text('6 / 6')
+
+
+@pytest.mark.parametrize('width,height', [(1920, 1080), (900, 700), (390, 844)])
+def test_fullscreen_fills_viewport_without_stretching_picture(page, live_game, width, height):
+    url, _ = live_game
+    page.set_viewport_size({'width': width, 'height': height})
+    page.goto(url)
+    expect(page.locator('#screen img')).to_have_attribute('src', re.compile(r'.+'))
+    page.locator('#fullscreen').click()
+    expect(page.locator('#screen:fullscreen')).to_be_visible()
+    page.screenshot(path=f'/tmp/pokesim-fullscreen-{width}.png')
+    well = page.locator('#screen').bounding_box()
+    assert well['width'] == pytest.approx(width, abs=1)
+    assert well['height'] == pytest.approx(height, abs=1)
+    picture = page.locator('#screen img').bounding_box()
+    assert picture['width'] <= width
+    assert picture['height'] <= height
+    assert page.locator('#screen img').evaluate('(image) => getComputedStyle(image).objectFit') == 'contain'
+    page.screenshot(path=f'/tmp/pokesim-fullscreen-{width}.png')
+    page.evaluate('document.exitFullscreen()')
+    expect(page.locator('#screen:fullscreen')).to_have_count(0)
+
+
+def test_download_save_and_busy_message(page, live_game, tmp_path):
+    url, emu = live_game
+    page.route('**/api/export-save', lambda route: route.fulfill(
+        body=bytes(32768), content_type='application/octet-stream',
+        headers={'Content-Disposition': 'attachment' + chr(59) + ' filename="Red.sav"'}))
+    page.goto(url)
+    with page.expect_download() as downloaded:
+        page.get_by_role('button', name='Download .sav').click()
+    download = downloaded.value
+    assert download.suggested_filename == 'Red.sav'
+    target = tmp_path / 'Red.sav'
+    download.save_as(target)
+    assert target.read_bytes() == bytes(32768)
+    assert emu.commands == []
+    page.unroute('**/api/export-save')
+    page.route('**/api/export-save', lambda route: route.fulfill(
+        status=409, json={'detail': 'Wait for the battle to finish.'}))
+    page.get_by_role('button', name='Download .sav').click()
+    expect(page.locator('#toast')).to_have_text('Wait for the battle to finish.')
+    expect(page.get_by_role('button', name='Download .sav')).to_be_enabled()
