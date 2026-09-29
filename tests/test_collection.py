@@ -409,3 +409,34 @@ def test_old_exploration_preferences_do_not_change_restored_adventures(legacy_ex
     assert restored.decisions == 123
     assert 'exploration' not in restored.state_dict()
     assert 'exploration' not in restored.details()
+
+
+def test_training_destinations_share_tiles_without_changing_level_or_version_rules(monkeypatch):
+    from pokesim.policies import collection
+    world = {map_id: {'symbol': symbol, 'tileset': 'CAVERN', 'tiles': [[0, 1, 0]],
+                     'passable': [0], 'warps': [[2, 0, 0, 0]]}
+             for map_id, symbol in ((900, 'EASY'), (901, 'HARD'), (902, 'CERULEAN_CAVE_1F'))}
+    sources = {'red': {'1': [{'method': 'grass', 'map': 900, 'level': 2},
+                            {'method': 'grass', 'map': 901, 'level': 20},
+                            {'method': 'grass', 'map': 902, 'level': 60}]},
+               'blue': {'1': [{'method': 'grass', 'map': 901, 'level': 2}]}}
+    monkeypatch.setattr(collection, 'WORLD', world)
+    monkeypatch.setattr(collection, 'DATA', {'versions': sources})
+    caches = (collection.training_targets, collection._training_map_targets, collection._training_tiles)
+    for cache in caches:
+        cache.cache_clear()
+    try:
+        low = collection.training_targets('red', 5)
+        assert low == ((900, 0, 0),)
+        assert collection.training_targets('red', 6) is low
+        high = collection.training_targets('red', 23)
+        assert high == ((901, 0, 0),)
+        assert collection.training_targets('red', 100) is high
+        assert collection.training_targets('blue', 5) is high
+        combined = collection._training_map_targets((900, 901))
+        assert combined == ((900, 0, 0), (901, 0, 0))
+        assert combined[0] is low[0]
+        assert combined[1] is high[0]
+    finally:
+        for cache in caches:
+            cache.cache_clear()

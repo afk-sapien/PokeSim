@@ -1,0 +1,192 @@
+{
+  "date": "2026-09-29",
+  "baseline_revision": "dfb036bfcf18e4f0ede76c0aa821095e9c44faa8",
+  "candidate": "Shared training destinations and tuple navigation change snapshots",
+  "method": "Separate private real workers, identical Blue checkpoint and fixed emulated-frame budgets after 1200 warmup frames. Viewer frames requested about ten times per second and status every two seconds. Worker CPU time and sampled resident memory.",
+  "safety": "Existing backup copied into a temporary container filesystem. Live assets mounted read-only, no external network, no changes to production saves.",
+  "limitations": [
+    "Short samples on one late-game Blue collection with 235 stored Pokemon, not a universal memory or speed estimate.",
+    "All production games continued at Max, affecting wall-clock speed. CPU time is process time.",
+    "RSS includes warmup samples and shared file-backed pages. Startup, shutdown, and the manager are outside CPU timing.",
+    "The separate allocation profile used tracemalloc. Its inflated memory and timing are excluded from these comparisons."
+  ],
+  "validation": {
+    "pytest_passed": 1528,
+    "pytest_skipped": 94,
+    "ordered_training_combinations_matched": 200,
+    "navigation_differential_checks": "passed"
+  },
+  "comparisons": [
+    {
+      "scenario": "walking",
+      "frames": 24000,
+      "mean_rss_reduction_percent": 8.815084459542256,
+      "peak_rss_reduction_percent": 12.18804749854,
+      "cpu_reduction_percent": 31.993895022866337,
+      "before": {
+        "frames": 24000,
+        "wall_seconds": 26.77394986595027,
+        "cpu_seconds": 24.111370899,
+        "achieved_speed": 14.939895009988772,
+        "cpu_one_core_percent": 90.05533744448964,
+        "cpu_ms_per_emulated_frame": 1.004640454125,
+        "starting_map": "Digletts Cave",
+        "ending_map": "Pallet Town",
+        "snapshot_sha256": "a45f2f0d409553375ff52d9fb0d64050d18157e179bab27404afec554b39aaf1",
+        "ram_sha256": "b01f368511e5b5958478996271cf8e5e5c5b0ca1bd613d789a13a61411bffc9b",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 235,
+        "event": "result",
+        "scenario": "walking",
+        "requested_speed": 0.0,
+        "rss_mib_mean": 192.45028081797236,
+        "rss_mib_range": [
+          171.578125,
+          200.6640625
+        ],
+        "mode": "before",
+        "image": "pokesim:step-rewards-dfb036b"
+      },
+      "after": {
+        "frames": 24000,
+        "wall_seconds": 17.46147643798031,
+        "cpu_seconds": 16.397204204999998,
+        "achieved_speed": 22.9075703547017,
+        "cpu_one_core_percent": 93.90502723661201,
+        "cpu_ms_per_emulated_frame": 0.6832168418749999,
+        "starting_map": "Digletts Cave",
+        "ending_map": "Pallet Town",
+        "snapshot_sha256": "a45f2f0d409553375ff52d9fb0d64050d18157e179bab27404afec554b39aaf1",
+        "ram_sha256": "b01f368511e5b5958478996271cf8e5e5c5b0ca1bd613d789a13a61411bffc9b",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 235,
+        "event": "result",
+        "scenario": "walking",
+        "requested_speed": 0.0,
+        "rss_mib_mean": 175.48562602124184,
+        "rss_mib_range": [
+          167.4296875,
+          176.20703125
+        ],
+        "mode": "after",
+        "image": "pokesim:memory-validation"
+      }
+    },
+    {
+      "scenario": "walking",
+      "frames": 120000,
+      "mean_rss_reduction_percent": 11.643062753126344,
+      "peak_rss_reduction_percent": 9.955799913755925,
+      "cpu_reduction_percent": 11.25734271313581,
+      "before": {
+        "frames": 120000,
+        "wall_seconds": 92.55109855998307,
+        "cpu_seconds": 85.440670859,
+        "achieved_speed": 21.609684067702176,
+        "cpu_one_core_percent": 92.31729518977589,
+        "cpu_ms_per_emulated_frame": 0.7120055904916666,
+        "starting_map": "Digletts Cave",
+        "ending_map": "Cerulean Mart",
+        "snapshot_sha256": "06561f0a91f4a1ee34a4420ff1c4d8534e919990bd2408747e62e333946722f3",
+        "ram_sha256": "2873d9c92683379b4b8b6d93da0c489597ac4b15d856c127f433dd09614e501b",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 236,
+        "event": "result",
+        "scenario": "walking",
+        "requested_speed": 0.0,
+        "rss_mib_mean": 199.53947106186226,
+        "rss_mib_range": [
+          172.0,
+          217.40625
+        ],
+        "mode": "before",
+        "image": "pokesim:step-rewards-dfb036b"
+      },
+      "after": {
+        "frames": 120000,
+        "wall_seconds": 80.75705450493842,
+        "cpu_seconds": 75.822321724,
+        "achieved_speed": 24.765638274705733,
+        "cpu_one_core_percent": 93.88940964824732,
+        "cpu_ms_per_emulated_frame": 0.6318526810333334,
+        "starting_map": "Digletts Cave",
+        "ending_map": "Cerulean Mart",
+        "snapshot_sha256": "06561f0a91f4a1ee34a4420ff1c4d8534e919990bd2408747e62e333946722f3",
+        "ram_sha256": "2873d9c92683379b4b8b6d93da0c489597ac4b15d856c127f433dd09614e501b",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 236,
+        "event": "result",
+        "scenario": "walking",
+        "requested_speed": 0.0,
+        "rss_mib_mean": 176.30696522887325,
+        "rss_mib_range": [
+          167.625,
+          195.76171875
+        ],
+        "mode": "after",
+        "image": "pokesim:memory-validation"
+      }
+    },
+    {
+      "scenario": "ceremony",
+      "frames": 12000,
+      "mean_rss_reduction_percent": 1.6626180750267783,
+      "peak_rss_reduction_percent": 4.919933874509608,
+      "cpu_reduction_percent": 8.023190697360683,
+      "before": {
+        "frames": 12000,
+        "wall_seconds": 3.633976134005934,
+        "cpu_seconds": 3.4264459910000005,
+        "achieved_speed": 55.03613469787125,
+        "cpu_one_core_percent": 94.28917154782847,
+        "cpu_ms_per_emulated_frame": 0.2855371659166667,
+        "starting_map": "Hall Of Fame",
+        "ending_map": "Route 1",
+        "snapshot_sha256": "c4d5481bbc0390a16637c165024f3594cc3ff046d7d7ff2c1978ccf5d61032d9",
+        "ram_sha256": "9aee4ed989d3ed9e7b3cffbfe06745b81c88304d17bdd2e262e74a3fbac785d3",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 236,
+        "event": "result",
+        "scenario": "ceremony",
+        "requested_speed": 0.0,
+        "rss_mib_mean": 152.465087890625,
+        "rss_mib_range": [
+          149.64453125,
+          158.31640625
+        ],
+        "mode": "before",
+        "image": "pokesim:step-rewards-dfb036b"
+      },
+      "after": {
+        "frames": 12000,
+        "wall_seconds": 3.406955419923179,
+        "cpu_seconds": 3.151535695,
+        "achieved_speed": 58.703439097101445,
+        "cpu_one_core_percent": 92.50299186688689,
+        "cpu_ms_per_emulated_frame": 0.2626279745833333,
+        "starting_map": "Hall Of Fame",
+        "ending_map": "Route 1",
+        "snapshot_sha256": "c4d5481bbc0390a16637c165024f3594cc3ff046d7d7ff2c1978ccf5d61032d9",
+        "ram_sha256": "9aee4ed989d3ed9e7b3cffbfe06745b81c88304d17bdd2e262e74a3fbac785d3",
+        "valid": true,
+        "manual_mode": false,
+        "pc_count": 236,
+        "event": "result",
+        "scenario": "ceremony",
+        "requested_speed": 0.0,
+        "rss_mib_mean": 149.93017578125,
+        "rss_mib_range": [
+          149.5859375,
+          150.52734375
+        ],
+        "mode": "after",
+        "image": "pokesim:memory-validation"
+      }
+    }
+  ]
+}

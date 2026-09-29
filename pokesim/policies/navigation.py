@@ -297,16 +297,18 @@ class Navigator:
             self._map_signatures.clear()
             self._neighbor_cache.clear()
             self._world_indices.clear()
+        # Snapshots only detect edits, so they need no per-tile hash tables.
+        # A changed insertion order can conservatively invalidate the map too.
         edges = {}
         for pos, directions in self.edges.items():
-            edges.setdefault(pos[0], []).append((pos, frozenset(directions.items())))
+            edges.setdefault(pos[0], []).append((pos, tuple(directions.items())))
         blocked = {}
         for (pos, dr), until in self.blocked.items():
             if until > frame:
                 blocked.setdefault(pos[0], []).append((pos, dr))
         maps = set(WORLD) | set(edges) | set(blocked) | set(self._map_signatures)
         for m in maps:
-            key = (frozenset(edges.get(m, ())), frozenset(blocked.get(m, ())),
+            key = (tuple(edges.get(m, ())), tuple(blocked.get(m, ())),
                    tuple(self.live_positions) if self.live_map == m else ())
             if key != self._map_signatures.get(m):
                 self._map_signatures[m] = key

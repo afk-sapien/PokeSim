@@ -91,8 +91,19 @@ def training_targets(version, level):
                if source['method'] == 'grass' and source['level'] <= max(3, level - 3)
                and not WORLD[source['map']]['symbol'].startswith('CERULEAN_CAVE')]
     best = max((source['level'] for source in sources), default=0)
-    return tuple(sorted({target[:3] for source in sources if source['level'] >= max(2, best - 8)
-                         for target in tiles(source)}))
+    maps = tuple(sorted({source['map'] for source in sources if source['level'] >= max(2, best - 8)}))
+    return _training_map_targets(maps)
+
+
+@lru_cache(maxsize=256)
+def _training_tiles(map_id):
+    return tuple(target[:3] for target in tiles({'map': map_id, 'method': 'grass'}))
+
+
+@lru_cache(maxsize=200)
+def _training_map_targets(maps):
+    # Levels often choose the same maps. Share both their tuple and tile coordinates.
+    return tuple(sorted({target for map_id in maps for target in _training_tiles(map_id)}))
 
 
 
