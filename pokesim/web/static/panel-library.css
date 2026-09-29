@@ -514,3 +514,9 @@
   .card-resources { gap: var(--s2) }
   .card-resources dd { font-size: 14px }
 }
+
+.sheet-head h2 { min-width: 0 }
+.sheet-head h2 { overflow-wrap: anywhere }
+.sheet-foot .key { white-space: normal }
+.sheet-foot .key { line-height: 1.25 }
+.sheet-foot .key { padding-block: var(--s2) }

@@ -867,27 +867,44 @@ class StrategicPolicy(Policy):
                 self.progress_frame = s.frame
                 return tap(direction, 16, 16)
         if s.map in VICTORY_MAPS:
-            if goal.key in ('heal', 'collect_hunt'):
-                direction = self.nav.open_route(s, goal.targets)
-                if direction is not None:
-                    return self._move(s, mem, direction)
+            # Every expedition must use currently open gates before assuming
+            # another floor's puzzle can be solved along the route.
+            direction = self.nav.open_route(s, goal.targets)
+            if direction is not None:
+                return self._move(s, mem, direction)
             task = boulder_task(s)
-            following_route = ((self.collection.project or self.pickups.active) and goal.key.startswith('collect_')
-                                    and (pos in goal.targets or goal.key != 'collect_hunt'
-                                         and self.nav.route(pos, goal.targets, s.frame) is not None))
+            at_goal = pos in goal.targets
             # Plan the push before reaching for Strength. A boulder in another section of the floor
             # is only reachable by ladder, so there is no push to make from here; activating
             # Strength first meant every step opened the menu, and crossing a map boundary clears
             # the flag again, so the run never fell through to the goal that climbs the ladder.
-            direction = self.boulders.route(s, self.nav, task) if task and not following_route else None
-            if (not direction and not following_route and s.map == MAPS['VICTORY_ROAD_2F']
+            direction = self.boulders.route(s, self.nav, task) if task and not at_goal else None
+            if (not direction and not at_goal and s.map == MAPS['VICTORY_ROAD_1F']
+                    and not event_set(s.event_flags, 'EVENT_VICTORY_ROAD_1_BOULDER_ON_SWITCH')):
+                # Returning from the upper ladder needs the western corridor
+                # cleared before the entrance boulder can reach its switch.
+                task = ('BOULDER3', (2, 13))
+                direction = self.boulders.route(s, self.nav, task)
+            if (not direction and not at_goal and s.map == MAPS['VICTORY_ROAD_2F']
                     and event_set(s.event_flags, 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2')
                     and not event_set(s.event_flags, 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2')):
                 # On the return journey the dropped boulder can be reached before the
                 # entrance switch. Do not insist on doing the two switches in story order.
                 task = ('BOULDER3', (9, 16))
                 direction = self.boulders.route(s, self.nav, task)
-            if not direction and not following_route and s.map == MAPS['VICTORY_ROAD_3F'] and s.x >= 24 and s.y >= 7:
+            if (not direction and not at_goal and s.map == MAPS['VICTORY_ROAD_2F']
+                    and not event_set(s.event_flags, 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1')):
+                # The western ladder enters above another loose boulder. Move it
+                # one tile south to reach the entrance switch from this side.
+                task = ('BOULDER2', (5, 6))
+                direction = self.boulders.route(s, self.nav, task)
+            if (not direction and not at_goal and s.map == MAPS['VICTORY_ROAD_3F']
+                    and not event_set(s.event_flags, 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2')):
+                # The return corridor reaches the hole before the upper switch.
+                # Drop its boulder before trying to follow it downstairs.
+                task = ('BOULDER4', (23, 15))
+                direction = self.boulders.route(s, self.nav, task)
+            if not direction and not at_goal and s.map == MAPS['VICTORY_ROAD_3F'] and s.x >= 24 and s.y >= 7:
                 # Returning from the Plateau enters the east corridor. Its loose boulder
                 # blocks the way west, before any of the switch puzzles can be reached.
                 task = ('BOULDER3', (22, 10))
@@ -908,15 +925,29 @@ class StrategicPolicy(Policy):
                     self.reason = "Find legal pushes and keep room to walk around the boulder"
                     self.progress_frame = s.frame
                     return tap(direction, 16, 16)
-            if goal.key == 'collect_hunt' and not following_route and not direction:
+            if goal.key.startswith('collect_') and not at_goal and not direction:
                 # Reach a puzzle from its accessible ladder instead of repeatedly
                 # following an optimistic route through another floor's closed gate.
-                targets = (((MAPS['VICTORY_ROAD_3F'], 27, 15), (MAPS['VICTORY_ROAD_3F'], 23, 7))
+                targets = (((MAPS['VICTORY_ROAD_3F'], 23, 7), (MAPS['VICTORY_ROAD_3F'], 27, 15))
                            if s.map == MAPS['VICTORY_ROAD_2F'] else
                            ((MAPS['VICTORY_ROAD_2F'], 22, 16),) if s.map == MAPS['VICTORY_ROAD_3F'] else ())
-                direction = self.nav.open_route(s, targets) if targets else None
-                if direction is not None:
-                    return self._move(s, mem, direction)
+                north_maps = LEAGUE | {MAPS['INDIGO_PLATEAU'], MAPS['INDIGO_PLATEAU_LOBBY']}
+                southbound = goal.key == 'collect_passage' or bool(goal.targets) and all(
+                    m not in VICTORY_MAPS | north_maps and (m != MAPS['ROUTE_23'] or y >= 40)
+                    for m, x, y in goal.targets)
+                if southbound:
+                    # Once a switch opens the next pocket, continue toward the
+                    # southern exit instead of returning through a solved section.
+                    onward = ((MAPS['VICTORY_ROAD_1F'], 1, 1) if s.map == MAPS['VICTORY_ROAD_2F']
+                              else (MAPS['VICTORY_ROAD_2F'], 1, 1) if s.map == MAPS['VICTORY_ROAD_3F'] else None)
+                    if onward is not None:
+                        targets = (onward, *targets)
+                # Prefer the ladder into the upper puzzle whenever it is reachable.
+                # The nearer east ladder otherwise undoes the lower switch detour.
+                for target in targets:
+                    direction = self.nav.open_route(s, (target,))
+                    if direction is not None:
+                        return self._move(s, mem, direction)
             upper_ladder = ((MAPS["VICTORY_ROAD_3F"], 23, 7),)
             # Reentry can strand the party beyond the lower switch. Reach the upper
             # puzzle by ladder when the lower boulder and the destination are inaccessible.
@@ -925,9 +956,9 @@ class StrategicPolicy(Policy):
                             and not event_set(s.event_flags, 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2')
                             and self.nav.route(pos, goal.targets, s.frame) is None
                             and self.nav.route(pos, upper_ladder, s.frame) is not None)
-            if not following_route and s.map == MAPS["VICTORY_ROAD_2F"] and (ready_to_climb(s) or upper_detour):
+            if not at_goal and s.map == MAPS["VICTORY_ROAD_2F"] and (ready_to_climb(s) or upper_detour):
                 goal = Goal("victory_ascent", "Reach the upper boulder puzzle", "Climb to the third floor", ((MAPS["VICTORY_ROAD_3F"], 23, 7),))
-            elif not following_route and s.map == MAPS["VICTORY_ROAD_3F"] and ready_to_drop(s):
+            elif not at_goal and s.map == MAPS["VICTORY_ROAD_3F"] and ready_to_drop(s):
                 goal = Goal("victory_drop", "Follow the boulder downstairs", "Drop through the hole to reach the final switch", ((MAPS["VICTORY_ROAD_2F"], 22, 16),))
         if pos in goal.targets:
             if legendary_project(project) and goal.key == 'collect_static' and (

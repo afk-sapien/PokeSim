@@ -57,6 +57,13 @@ def test_library_usage_updates_without_replacing_cards(page, tmp_path, monkeypat
         page.get_by_role('button', name='Dark', exact=True).click()
         page.evaluate('window.scrollTo(0, 0)')
         page.screenshot(path=str(folder / f'library-dark-{width}.png'), full_page=True, animations='disabled')
+        page.get_by_role('button', name='Settings', exact=True).click()
+        dialog = page.get_by_role('dialog', name='Adventure settings')
+        expect(dialog).to_be_visible()
+        expect(dialog.get_by_label('Custom Mew event', exact=True)).to_be_disabled()
+        page.screenshot(path=str(folder / f'settings-{width}.png'), animations='disabled')
+        overflow = dialog.evaluate('node => [...node.querySelectorAll("*")].filter(el => el.getBoundingClientRect().right > node.getBoundingClientRect().right).map(el => ({tag: el.tagName, id: el.id, cls: el.className, text: el.textContent.slice(0, 40)}))')
+        assert dialog.evaluate('(node) => node.scrollWidth <= node.clientWidth'), overflow
 
 
 @pytest.mark.parametrize('width', [320, 390, 1280])
