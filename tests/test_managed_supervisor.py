@@ -59,12 +59,13 @@ def test_multiple_red_games_have_separate_workers_and_one_start_each(supervisor)
     assert second in supervisor.children
 
 
-def test_resource_limit_and_latest_desired_state(supervisor):
+def test_unlimited_workers_and_latest_desired_state(supervisor):
     first, second, third = [adventure(supervisor) for _ in range(3)]
     supervisor.start(first)
     supervisor.start(second)
-    with pytest.raises(ValueError, match='limit'):
-        supervisor.start(third)
+    supervisor.start(third)
+    assert len(supervisor.children) == 3
+    supervisor.stop(third)
     supervisor.registry.request_lifecycle(third, 'stop', identifier())
     assert supervisor.start(third)['desired_state'] == 'stopped'
     assert third not in supervisor.children
@@ -107,12 +108,12 @@ def test_healthy_http_with_stalled_game_state_still_reaches_watchdog(supervisor,
         child.stop = lambda: None
 
 
-def test_global_pace_applies_to_running_new_and_restarted_games(supervisor):
+def test_individual_pace_applies_only_to_its_worker_and_survives_restart(supervisor):
     first, second = adventure(supervisor), adventure(supervisor)
     supervisor.registry.update(first, settings={'speed': 8})
     supervisor.start(first)
     supervisor.start(second)
-    assert supervisor.children[first].bootstrap['settings']['speed'] == 1
+    assert supervisor.children[first].bootstrap['settings']['speed'] == 8
     received = {}
     for aid in (first, second):
         def request(method, path, data, timeout, aid=aid):
@@ -120,8 +121,10 @@ def test_global_pace_applies_to_running_new_and_restarted_games(supervisor):
             received[aid] = data['speed']
             return data
         supervisor.children[aid].request = request
-    assert supervisor.set_speed(0) == []
-    assert received == {first: 0, second: 0}
+    supervisor.registry.update(first, settings={'speed': 0})
+    assert supervisor.push_speed(first) is False
+    assert received == {first: 0}
+    assert supervisor.children[second].bootstrap['settings']['speed'] == 1
     supervisor.stop(first)
     supervisor.registry.request_lifecycle(first, 'start', identifier())
     supervisor.start(first)
@@ -129,18 +132,18 @@ def test_global_pace_applies_to_running_new_and_restarted_games(supervisor):
     supervisor.stop(second)
     third = adventure(supervisor)
     supervisor.start(third)
-    assert supervisor.children[third].bootstrap['settings']['speed'] == 0
+    assert supervisor.children[third].bootstrap['settings']['speed'] == 1
 
 
-def test_global_pace_retries_unavailable_worker_and_rejects_invalid_values(supervisor):
+def test_individual_pace_retries_unavailable_worker(supervisor):
     aid = adventure(supervisor)
     supervisor.start(aid)
     child = supervisor.children[aid]
     def fail(*args, **kwargs):
         raise RuntimeError('Worker reconnecting')
     child.request = fail
-    assert supervisor.set_speed(4) == [aid]
-    assert supervisor.registry.setting('speed') == 4
+    supervisor.registry.update(aid, settings={'speed': 4})
+    assert supervisor.push_speed(aid) is True
     calls = []
     def request(method, path, data, timeout):
         calls.append(data['speed'])
@@ -150,10 +153,6 @@ def test_global_pace_retries_unavailable_worker_and_rejects_invalid_values(super
     assert calls == [4]
     supervisor.sync_speed(aid, child, 4)
     assert calls == [4]
-    for speed in (True, -1, 17, float('nan'), '0'):
-        with pytest.raises(ValueError):
-            supervisor.set_speed(speed)
-        assert supervisor.registry.setting('speed') == 4
 
 
 def test_observed_pace_is_live_per_worker_and_resets_when_restarted(supervisor, monkeypatch):
@@ -173,3 +172,10 @@ def test_observed_pace_is_live_per_worker_and_resets_when_restarted(supervisor, 
     supervisor.registry.request_lifecycle(first, 'start', identifier())
     supervisor.start(first)
     assert supervisor.resources(first)['observed_speed'] is None
+
+
+def test_no_configured_or_fixed_running_limit(supervisor):
+    supervisor.registry.set_setting('max_running', 1)
+    for _ in range(35):
+        supervisor.start(adventure(supervisor))
+    assert len(supervisor.children) == 35

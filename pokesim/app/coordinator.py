@@ -388,8 +388,10 @@ class Coordinator:
     def _session_plan(self, row, prepared):
         from ..interactions.link_worker import CableParticipant, CableSessionPlan
         left, right = row['plan']['participants']
+        speeds = [self.registry.adventure(aid)['settings'].get('speed', 1) for aid in (left, right)]
+        speed = min((value for value in speeds if value > 0), default=0)
         return asdict(CableSessionPlan(interaction_id=row['id'], attempt_id=row['plan']['attempt_id'],
-            speed=self.registry.setting('speed', 1),
+            speed=speed,
             left=CableParticipant(**prepared[left]['source']), right=CableParticipant(**prepared[right]['source'])))
 
     def _run_cable(self, row, session_plan):

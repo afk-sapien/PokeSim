@@ -137,3 +137,45 @@ def test_library_downloads_selected_save_and_reports_busy_game(page, tmp_path, m
         blue.get_by_role('button', name='Download Save').click()
         expect(page.locator('#notice')).to_have_text('Wait for the battle to finish.')
         expect(blue.get_by_role('button', name='Download Save')).to_be_enabled()
+
+
+@pytest.mark.parametrize('width', [320, 1280])
+def test_adventure_speed_changes_independently_and_global_controls_are_removed(page, tmp_path, monkeypatch, width):
+    games = []
+    managers = []
+    def factory(url):
+        manager = Manager(tmp_path / 'library', url)
+        managers.append(manager)
+        monkeypatch.setattr(manager, 'start', lambda: None)
+        manager.registry.add_rom('fixture', 'sha1', 'blue')
+        for name, speed in [('Blue', 0.75 if width == 320 else 4), ('Red', 16)]:
+            game = manager.registry.create(name, 'fixture', {'speed': speed}, identifier())
+            games.append(game)
+            manager.registry.update(game['id'], state='running')
+        return create_app(manager)
+    with serve(factory) as url:
+        page.set_viewport_size({'width': width, 'height': 900})
+        page.goto(url)
+        cards = page.locator('.adventure-card')
+        expect(cards).to_have_count(2)
+        cards.first.get_by_role('button', name='Settings', exact=True).click()
+        dialog = page.get_by_role('dialog', name='Adventure settings')
+        speed = dialog.get_by_role('combobox', name='Simulation speed', exact=True)
+        expect(speed).to_be_enabled()
+        expect(speed).to_have_value('0.75' if width == 320 else '4')
+        speed.select_option('0')
+        assert dialog.evaluate('node => node.scrollWidth <= node.clientWidth')
+        page.screenshot(path=f'/tmp/pokesim-per-speed-{width}.png', full_page=True)
+        dialog.get_by_role('button', name='Save adventure settings').click()
+        expect(dialog).not_to_be_visible()
+        assert managers[0].registry.adventure(games[0]['id'])['settings']['speed'] == 0
+        assert managers[0].registry.adventure(games[1]['id'])['settings']['speed'] == 16
+        page.reload()
+        cards.first.get_by_role('button', name='Settings', exact=True).click()
+        expect(speed).to_have_value('0')
+        page.keyboard.press('Escape')
+        page.goto(url + '/settings')
+        expect(page.locator('#create-backup')).to_be_visible()
+        assert page.locator('#simulation-speed, #max-running, #settings-form').count() == 0
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        page.screenshot(path=f'/tmp/pokesim-global-settings-{width}.png', full_page=True)

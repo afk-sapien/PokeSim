@@ -632,3 +632,15 @@ def test_an_adventure_stopped_meanwhile_cancels_a_slow_proposal(setup):
     with pytest.raises(ValueError, match='must be running'):
         c.propose(setup.data)
     assert setup.registry.transactions(unresolved=True) == []
+
+
+@pytest.mark.parametrize('speeds,expected', [((4, 16), 4), ((0, 4), 4), ((8, 0), 8), ((0, 0), 0), ((0.5, 1), 0.5)])
+def test_cable_uses_slower_participant_without_changing_individual_paces(setup, speeds, expected):
+    ids = (setup.data['left_id'], setup.data['right_id'])
+    prepared = {}
+    for aid, speed in zip(ids, speeds):
+        setup.registry.update(aid, settings={'speed': speed})
+        prepared[aid] = {'source': {'adventure_id': aid, 'rom_path': '/rom', 'checkpoint_path': '/state'}}
+    row = {'id': identifier(), 'plan': {'attempt_id': identifier(), 'participants': ids}}
+    assert setup.coordinator._session_plan(row, prepared)['speed'] == expected
+    assert tuple(setup.registry.adventure(aid)['settings']['speed'] for aid in ids) == speeds

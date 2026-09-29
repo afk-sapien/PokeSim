@@ -71,3 +71,32 @@ def test_restore_checks_content_before_publishing(tmp_path):
     with pytest.raises(ValueError, match='verification'):
         restore_backup(archive, destination)
     assert not destination.exists()
+
+
+@pytest.mark.parametrize('speed', [None, 0, 4])
+def test_legacy_global_speed_migrates_once_and_preserves_other_settings(tmp_path, speed):
+    store = registry(tmp_path)
+    first = store.create('Red', 'digest', {'speed': 8, 'mew_event': True}, identifier())
+    second = store.create('Blue', 'digest', {}, identifier())
+    store.update(second['id'], archived=True)
+    with store.db:
+        store.db.execute("DELETE FROM settings WHERE key='per_adventure_speed_v1'")
+    if speed is not None:
+        store.set_setting('speed', speed)
+    store.set_setting('max_running', 1)
+    store.close()
+    store = Registry(tmp_path)
+    expected = 1 if speed is None else speed
+    assert store.adventure(first['id'])['settings'] == {'speed': expected, 'mew_event': True}
+    assert store.adventure(second['id'])['settings']['speed'] == expected
+    assert store.adventure(second['id'])['archived']
+    assert store.setting('max_running') is None
+    assert store.setting('speed') is None
+    manifest = json.loads((tmp_path / 'adventures' / first['id'] / 'adventure.json').read_text())
+    assert manifest['settings']['speed'] == expected
+    store.update(first['id'], settings={'speed': 0.5})
+    store.close()
+    store = Registry(tmp_path)
+    assert store.adventure(first['id'])['settings']['speed'] == 0.5
+    assert store.create('New', 'digest', {}, identifier())['settings']['speed'] == 1
+    store.close()

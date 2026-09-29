@@ -25,7 +25,6 @@
   let connecting = false
   let closing = false
   let sessionPending = null
-  let appSettingsDirty = false
   let notifyDirty = false
   let notifyAdventuresSignature = ''
   // Checkbox choices on the Notifications page, kept apart from the markup that shows them.
@@ -329,6 +328,13 @@
     if (button.dataset.action === 'settings') {
       $('#settings-id').value = game.id
       $('#settings-name').value = game.name
+      const speed = String(game.settings?.speed ?? 1)
+      const speedInput = $('#settings-speed')
+      speedInput.value = speed
+      if (!speedInput.value) {
+        speedInput.add(new Option(`${speed}×`, speed))
+        speedInput.value = speed
+      }
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
       for (const [field, setting] of [['league-rewards', 'league_rewards'], ['mew-event', 'mew_event']]) {
         const input = $(`#settings-${field}`)
@@ -377,16 +383,11 @@
     act(async () => {
       const game = adventures.find(item => item.id === $('#settings-id').value)
       const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
-      await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
-        settings: {auto_start: $('#settings-autostart').checked, ...rewards}}, 'PATCH')
+      const result = await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
+        settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), ...rewards}}, 'PATCH')
       $('#adventure-settings').close()
-      notice('Adventure settings saved.')
+      notice(result.pace_pending ? 'Settings saved. The speed will apply when this adventure reconnects.' : 'Adventure settings saved.')
     }) }
-  $('#settings-form').oninput = () => { appSettingsDirty = true }
-  $('#settings-form').onchange = () => { appSettingsDirty = true }
-  $('#settings-form').onsubmit = event => { event.preventDefault()
-    act(async () => { const result = await write('/api/v1/settings', {max_running: Number($('#max-running').value), speed: Number($('#simulation-speed').value)}, 'PATCH')
-      notice(result.pace_pending?.length ? 'Settings saved. The pace will apply to reconnecting adventures automatically.' : 'Application settings saved.') }) }
   $('#notify-form').oninput = () => { notifyDirty = true
     renderSubscribe() }
   $('#notify-form').onchange = event => { notifyDirty = true
@@ -436,11 +437,6 @@
     document.querySelectorAll('[data-view]').forEach(section => { section.hidden = section.dataset.view !== page })
     document.querySelector(`[data-nav="${page}"]`)?.setAttribute('aria-current', 'page')
     if (page === 'settings' && owner) {
-      const settings = await api('/api/v1/settings')
-      if (!appSettingsDirty) {
-        $('#max-running').value = settings.max_running
-        $('#simulation-speed').value = String(settings.speed ?? 1)
-      }
       await refreshBackups()
     }
     if (page === 'notifications' && owner && !notifyDirty) renderNotifications(await api('/api/v1/notifications'))

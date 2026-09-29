@@ -118,7 +118,7 @@ def serve(bootstrap, parent_stream, ready_stream):
             from fastapi import HTTPException
             try:
                 if set(data) != {'speed'}:
-                    raise ValueError('Set the global simulation pace')
+                    raise ValueError('Set this simulation pace')
                 value = validate_speed(data['speed'])
             except ValueError as error:
                 raise HTTPException(400, str(error)) from error

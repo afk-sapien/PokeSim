@@ -65,7 +65,23 @@ class Registry:
             self.db.execute(f'PRAGMA user_version={SCHEMA}')
         if self.setting('application_id') is None:
             self.set_setting('application_id', identifier())
-            self.set_setting('max_running', 2)
+        self._migrate_adventure_speeds()
+
+    def _migrate_adventure_speeds(self):
+        with self.lock, self.db:
+            if self.setting('per_adventure_speed_v1'):
+                return
+            # The old supervisor overrode every game, including stale per-game values.
+            speed = self.setting('speed', 1)
+            rows = list(self.db.execute('SELECT id, settings FROM adventures'))
+            for row in rows:
+                settings = {**json.loads(row['settings']), 'speed': speed}
+                self.db.execute('UPDATE adventures SET settings=? WHERE id=?',
+                                (json.dumps(settings), row['id']))
+            self.db.execute("DELETE FROM settings WHERE key IN ('speed', 'max_running')")
+            self.db.execute('INSERT INTO settings VALUES (?, ?)', ('per_adventure_speed_v1', 'true'))
+        for row in rows:
+            self.write_manifest(self.adventure(row['id']))
 
     def setting(self, key, default=None):
         with self.lock:
@@ -129,7 +145,7 @@ class Registry:
             self.db.execute('''INSERT INTO adventures
                 (id,campaign_id,name,rom_id,version,settings,desired_state,state,created_at)
                 VALUES (?,?,?,?,?,?,?,?,?)''',
-                (aid, campaign, name, rom_id, rom['version'], json.dumps(settings), 'stopped', 'stopped', time.time()))
+                (aid, campaign, name, rom_id, rom['version'], json.dumps({'speed': 1, **settings}), 'stopped', 'stopped', time.time()))
             self.db.execute('INSERT INTO operations VALUES (?, ?, ?, ?)',
                             (request_id, 'create', fingerprint, json.dumps({'id': aid})))
         result = self.adventure(aid)

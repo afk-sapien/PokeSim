@@ -145,9 +145,18 @@ Choose **Notifications** in the Library to get milestones on your phone through 
 
 ## Simulation pace
 
-Set the pace for all adventures in Library Settings. The default and recommended pace is 1×, so adventures unfold gradually and produce fewer notifications per hour. The live screen and individual adventure settings do not change pace. Newly created and restarted adventures inherit the global setting, which also applies to new Cable Club sessions. A cable session already in progress finishes at its starting pace.
+Open an adventure's **Settings** in the Library to set its own simulation speed.
+Changes apply while it runs and survive restarts. New adventures default to 1×.
+Upgrading copies the previous global speed into every existing adventure once.
+There is no global speed control or application limit on running adventures.
+Start and stop whichever games you want.
 
-The numbered choices go up to 16×, an application setting limit. Max removes deliberate waiting and runs as fast as the computer can handle. Its actual rate depends on gameplay, available CPU time, and the number of running adventures. Max is intended for testing. Taking manual control still runs that game at 1× until autonomous play resumes.
+Choices range from 0.5× to 16×, plus Max. Max runs as fast as the computer can
+handle. The Library's actual-speed reading shows the achieved rate, which can be
+lower than the requested speed when resources are busy. Manual control temporarily
+runs that game at 1×. Settings are frozen during a reserved trade. Cable Club
+sessions use the slower participant's selected speed, with Max treated as
+unlimited. Both games retain their own settings afterward.
 
 ## Trading
 

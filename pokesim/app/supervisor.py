@@ -19,7 +19,6 @@ import psutil
 
 from .registry import digest, identifier
 from .resources import ObservedSpeed, ProcessUsage, recent_activity
-from ..runtime.settings import validate_speed
 
 log = logging.getLogger(__name__)
 
@@ -195,11 +194,9 @@ class Supervisor:
                 existing = self.children.get(aid)
                 if existing and existing.process and existing.process.poll() is None:
                     return self.registry.update(aid, state='running' if existing.url else 'starting', error=None)
-                if len(self.children) >= self.registry.setting('max_running', 2) and not recovery:
-                    raise ValueError('The running adventure limit has been reached. Stop a game or change Settings.')
                 generation = identifier()
                 settings = {**adventure['settings'],
-                            'speed': self.registry.setting('speed', 1),
+                            'speed': adventure['settings'].get('speed', 1),
                             'rom_path': str(self.assets.rom_path(adventure['rom_id'])),
                             'data_dir': str(self.registry.root / 'adventures' / aid),
                             'game_data_dir': str(self.assets.game_data_dir),
@@ -246,32 +243,31 @@ class Supervisor:
                     self.children.pop(aid, None)
             return self.registry.update(aid, state='stopped', error=None)
 
-    def set_speed(self, speed):
-        speed = validate_speed(speed)
+    def push_speed(self, aid):
         with self.admission:
-            self.registry.set_setting('speed', speed)
             with self.guard:
-                children = list(self.children.items())
-            pending = []
-            for aid, child in children:
-                try:
-                    self._apply_speed(child, speed)
-                except (RuntimeError, OSError, httpx.HTTPError):
-                    pending.append(aid)
-                    log.warning('Adventure %s will receive the global pace when it reconnects', aid)
-            return pending
+                child = self.children.get(aid)
+            if child is None:
+                return False
+            try:
+                speed = self.registry.adventure(aid)['settings'].get('speed', 1)
+                self._apply_speed(child, speed)
+            except (RuntimeError, OSError, httpx.HTTPError):
+                log.warning('Adventure %s will receive its pace when it reconnects', aid)
+                return True
+            return False
 
     @staticmethod
     def _apply_speed(child, speed):
         result = child.request('POST', '/internal/speed', {'speed': speed}, timeout=5)
         if result.get('speed') != speed:
-            raise RuntimeError('Worker did not acknowledge the global pace')
+            raise RuntimeError('Worker did not acknowledge the adventure pace')
 
     def sync_speed(self, aid, child, actual):
         with self.admission:
             if self.closed.is_set() or self.children.get(aid) is not child:
                 return
-            speed = self.registry.setting('speed', 1)
+            speed = self.registry.adventure(aid)['settings'].get('speed', 1)
             if actual != speed:
                 self._apply_speed(child, speed)
 

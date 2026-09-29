@@ -35,7 +35,7 @@ def test_keyless_library_retains_request_boundaries(client):
     headers = login(client, manager)
     assert client.get('/api/v1/adventures').json() == {'adventures': []}
     assert client.patch('/api/v1/settings', json={'max_running': 3}).status_code == 403
-    assert client.patch('/api/v1/settings', json={'max_running': 3}, headers=headers).status_code == 200
+    assert client.patch('/api/v1/settings', json={'max_running': 3}, headers=headers).status_code == 409
     assert client.patch('/api/v1/settings', json={'max_running': 2}, headers={**headers, 'Origin': 'https://evil.example'}).status_code == 403
     assert client.get('/api/v1/settings', headers={'Host': 'evil.example'}).status_code == 403
     assert client.patch('/api/v1/settings', json={'max_running': 2}, headers={**headers, 'Sec-Fetch-Site': 'cross-site'}).status_code == 403
@@ -111,7 +111,7 @@ def test_expired_browser_session_is_recreated_without_login(client):
     assert client.patch('/api/v1/settings', json={'max_running': 3}, headers=headers).status_code == 403
     replacement = login(client, manager)
     assert replacement != headers
-    assert client.patch('/api/v1/settings', json={'max_running': 3}, headers=replacement).status_code == 200
+    assert client.patch('/api/v1/settings', json={'max_running': 3}, headers=replacement).status_code == 409
 
 
 def test_csrf_token_from_another_browser_cannot_authorize_a_write(client):
@@ -121,7 +121,7 @@ def test_csrf_token_from_another_browser_cannot_authorize_a_write(client):
     second = login(client, manager)
     assert first != second
     assert client.patch('/api/v1/settings', json={'max_running': 3}, headers=first).status_code == 403
-    assert client.patch('/api/v1/settings', json={'max_running': 3}, headers=second).status_code == 200
+    assert client.patch('/api/v1/settings', json={'max_running': 3}, headers=second).status_code == 409
 
 
 def test_shared_portraits_work_for_new_adventures_and_allow_local_overrides(client):
@@ -184,27 +184,26 @@ def test_game_trading_stays_scoped_and_available_when_stopped(client):
     assert client.get('/games/' + 'f' * 32 + '/api/interactions').status_code == 404
 
 
-def test_pace_is_a_global_setting_and_rejects_per_adventure_edits(client):
+def test_speed_is_independent_and_editable_while_running(client):
     client, manager = client
     headers = login(client, manager)
-    assert client.get('/api/v1/settings').json()['speed'] == 1
-    for value in (0, 1, 16):
-        response = client.patch('/api/v1/settings', json={'speed': value}, headers=headers)
-        assert response.status_code == 200
-        assert response.json()['speed'] == value
-        assert manager.registry.setting('speed') == value
-    for value in (True, '0', -1, 17):
-        assert client.patch('/api/v1/settings', json={'speed': value}, headers=headers).status_code == 409
-    assert client.patch('/api/v1/settings', json={'speed': 4}).status_code == 403
+    assert set(client.get('/api/v1/settings').json()) == {'data_dir'}
+    for data in ({'speed': 4}, {'max_running': 3}):
+        assert client.patch('/api/v1/settings', json=data, headers=headers).status_code == 409
     manager.registry.add_rom('fixture-rom', 'sha1', 'red')
-    game = manager.registry.create('Red', 'fixture-rom', {'speed': 8}, identifier())
-    route = '/api/v1/adventures/' + game['id']
-    response = client.patch(route, json={'settings': {'speed': 4}}, headers=headers)
-    assert response.status_code == 409
-    assert 'Library Settings' in response.text
-    response = client.patch(route, json={'settings': {'auto_start': True}}, headers=headers)
-    assert response.status_code == 200
-    assert 'speed' not in response.json()['settings']
+    first = manager.registry.create('Red', 'fixture-rom', {'speed': 8}, identifier())
+    second = manager.registry.create('Blue', 'fixture-rom', {'speed': 2}, identifier())
+    manager.registry.update(first['id'], state='running')
+    route = '/api/v1/adventures/' + first['id']
+    for value in (0, 0.5, 1, 4, 16):
+        response = client.patch(route, json={'settings': {'speed': value}}, headers=headers)
+        assert response.status_code == 200
+        assert response.json()['settings']['speed'] == value
+        assert manager.registry.adventure(second['id'])['settings']['speed'] == 2
+    for value in (True, '0', -1, 17, 0.01, None):
+        assert client.patch(route, json={'settings': {'speed': value}}, headers=headers).status_code == 409
+    assert client.patch(route, json={'settings': {'speed': 4}}).status_code == 403
+    assert client.patch(route, json={'settings': {'starter': 'squirtle'}}, headers=headers).status_code == 409
 
 
 def test_event_retention_is_configurable_per_adventure():
