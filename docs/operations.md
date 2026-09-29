@@ -92,6 +92,22 @@ PokeSim renders only when a viewer needs a frame or an observation needs a fresh
 journal picture. It also encodes live frames only while a viewer is watching.
 These savings do not change the configured simulation speed or policy cadence.
 
+## Library resource readings
+
+Each adventure card shows its worker's CPU usage and resident memory. CPU is
+measured over the interval between samples. 100% means one fully used logical
+core, and a process using several cores can exceed 100%. Memory excludes the
+shared library process and is shown in MiB. These are current readings, not
+cumulative totals or the whole container's usage.
+
+The first CPU reading says Measuring until a second sample is available.
+Unavailable means the process could not be measured. Stopped adventures say
+Not running. Samples are reused for at least two seconds across browser requests.
+
+Recent activity shows the last three observed location changes, with local times.
+It is a compact overview, not the full journal or a raw diagnostic log. Every
+managed simulation page has a Back to Library button beside its adventure selector.
+
 ## Update and roll back
 
 Create and download a backup, then stop the app. For a native installation, follow

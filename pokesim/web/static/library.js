@@ -89,6 +89,21 @@
     finally { busy = false
       permissions() }
   }
+  function resourceLabels(game) {
+    const usage = game.resources
+    const off = !running(game) && ['stopped', 'archived', 'failed'].includes(game.state)
+    return {
+      cpu: Number.isFinite(usage?.cpu_percent) ? `${usage.cpu_percent.toFixed(1)}%` : off ? 'Not running' : usage ? 'Measuring…' : 'Unavailable',
+      memory: Number.isFinite(usage?.memory_bytes) ? `${Math.round(usage.memory_bytes / 1048576).toLocaleString()} MiB` : off ? 'Not running' : 'Unavailable'
+    }
+  }
+  function updateResources(container, game) {
+    if (!container) return
+    for (const [key, value] of Object.entries(resourceLabels(game))) {
+      const node = container.querySelector(`[data-usage="${key}"]`)
+      if (node && node.textContent !== value) node.textContent = value
+    }
+  }
   function card(game) {
     const active = running(game)
     const transitional = ['starting', 'stopping', 'preparing', 'setting_up', 'recovering'].includes(game.state)
@@ -96,6 +111,9 @@
     const activity = summary.message || summary.activity || summary.game?.location || summary.map || (active ? 'Adventure in progress' : 'Your saves are waiting here')
     const wins = summary.league_rewards?.wins
     const league = Number.isInteger(wins) ? `<p class="card-stat micro">${wins.toLocaleString()} League ${wins === 1 ? 'win' : 'wins'}</p>` : ''
+    const recent = (summary.recent_activity || []).slice(0, 3)
+    const log = recent.length ? `<section class="card-log" aria-label="Recent activity"><h3 class="micro">Recent activity</h3><ol>${recent.map(row => `<li><time datetime="${esc(new Date(row.time * 1000).toISOString())}">${esc(new Date(row.time * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}))}</time><span>${esc(row.message)}</span></li>`).join('')}</ol></section>` : ''
+    const resources = '<dl class="card-resources" aria-label="Resource usage" aria-live="off"><div><dt title="100% CPU means one fully used processor core">CPU (1 core)</dt><dd data-usage="cpu">Measuring…</dd></div><div><dt title="Resident memory for this simulation, excluding the shared library process">Memory</dt><dd data-usage="memory">Measuring…</dd></div></dl>'
     const provenance = game.provenance?.trading_blocked ? `<p class="card-error">${esc(game.provenance.reason || 'Legacy trade history needs reconciliation before trading.')}</p>` : ''
     const stalled = active && summary.stalled ? '<p class="card-error">Stuck? No progress for a while. Open the adventure to see its objective.</p>' : ''
     const failure = game.error ? `<p class="card-error">${esc(typeof game.error === 'string' ? game.error : JSON.stringify(game.error))}</p>` : ''
@@ -103,7 +121,7 @@
     const screen = active
       ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${esc(game.name)} game screen" loading="lazy" width="160" height="144"></div>`
       : `<div class="card-screen card-screen--off"><span class="micro">${game.archived ? 'Archived' : 'Saved · not running'}</span></div>`
-    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${stalled}${failure}${provenance}${game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'} ↗</a>${game.archived ? `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner>Restore</button>` : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${transitional ? 'disabled data-blocked' : ''}>${transitional ? esc(game.state) : active ? 'Save and stop' : 'Start'}</button><button class="key" data-action="settings" data-id="${esc(game.id)}" data-owner>Settings</button>${!active && !transitional ? `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner>Archive</button>` : ''}`}</div></article>`
+    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${game.archived ? `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner>Restore</button>` : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${transitional ? 'disabled data-blocked' : ''}>${transitional ? esc(game.state) : active ? 'Save and stop' : 'Start'}</button><button class="key" data-action="settings" data-id="${esc(game.id)}" data-owner>Settings</button>${!active && !transitional ? `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner>Archive</button>` : ''}`}</div></article>`
   }
   function renderAdventures() {
     const visible = adventures.filter(game => $('#show-archived').checked || !game.archived)
@@ -115,11 +133,15 @@
     })
     for (const game of visible) {
       const markup = card(game)
-      if (cardSignatures.get(game.id) === markup) continue
+      if (cardSignatures.get(game.id) === markup) {
+        updateResources(container.querySelector(`[data-adventure-id="${game.id}"]`), game)
+        continue
+      }
       const previous = container.querySelector(`[data-adventure-id="${game.id}"]`)
       if (previous) previous.outerHTML = markup
       else container.insertAdjacentHTML('beforeend', markup)
       cardSignatures.set(game.id, markup)
+      updateResources(container.querySelector(`[data-adventure-id="${game.id}"]`), game)
     }
     $('#empty').hidden = Boolean(visible.length)
     const kept = adventures.filter(game => !game.archived).length
@@ -130,6 +152,7 @@
       const stoppedMarkup = game ? card(game) : '<p>This adventure is not in the current library.</p>'
       if (stoppedSignature !== stoppedMarkup) { $('#stopped-card').innerHTML = stoppedMarkup
         stoppedSignature = stoppedMarkup }
+      if (game) updateResources($('#stopped-card'), game)
       if (game && running(game)) location.replace(gameUrl(game.id))
     }
     permissions()

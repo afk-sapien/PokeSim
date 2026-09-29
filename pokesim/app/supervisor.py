@@ -15,8 +15,10 @@ import threading
 import time
 
 import httpx
+import psutil
 
 from .registry import digest, identifier
+from .resources import ProcessUsage, recent_activity
 from ..runtime.settings import validate_speed
 
 log = logging.getLogger(__name__)
@@ -29,6 +31,7 @@ class Child:
         self.generation = bootstrap['generation']
         self.notified = None
         self.process = None
+        self.usage = None
         self.url = None
         self.logs = deque(maxlen=100)
         self.command = command or ([sys.executable, '--worker'] if getattr(sys, 'frozen', False)
@@ -43,6 +46,10 @@ class Child:
             env['PYTHONPATH'] = root + os.pathsep + env.get('PYTHONPATH', '')
         self.process = subprocess.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE, text=True, bufsize=1, env=env)
+        try:
+            self.usage = ProcessUsage(self.process.pid)
+        except (psutil.Error, OSError):
+            self.usage = None
         threading.Thread(target=self._stdout, daemon=True, name='worker-readiness').start()
         threading.Thread(target=self._stderr, daemon=True, name='worker-logs').start()
         try:
@@ -165,6 +172,14 @@ class Supervisor:
         if child is None or not child.url or child.process.poll() is not None:
             raise RuntimeError('This adventure is stopped or still starting')
         return child
+
+    def resources(self, aid):
+        with self.guard:
+            child = self.children.get(aid)
+        if child is None or child.process is None or child.process.poll() is not None:
+            return None
+        usage = getattr(child, 'usage', None)
+        return usage.sample() if usage is not None else None
 
     def start(self, aid, recovery=False):
         with self.admission, self._lock(aid):
@@ -322,6 +337,8 @@ class Supervisor:
                                'last_response': time.time(), 'league_rewards': status.get('league_rewards'),
                                'stalled': (status.get('progress') or {}).get('state') == 'stalled'}
                     current = self.registry.adventure(aid)
+                    summary['recent_activity'] = recent_activity(
+                        current.get('summary') or {}, summary['activity'], summary['last_response'])
                     if current['generation'] == child.generation:
                         self.registry.update(aid, summary=summary)
                     try:

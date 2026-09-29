@@ -480,3 +480,31 @@
   .adventure-card, .exchange, .sheet, .check input, .inline-label input { border: 1px solid CanvasText; box-shadow: none; }
   .check input:checked::after, .inline-label input:checked::after { background: Highlight; }
 }
+
+/* Session readings update in place without replacing the card or its controls. */
+.card-resources { display: grid }
+.card-resources { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+.card-resources { gap: var(--s3) }
+.card-resources { padding-block: var(--s3) }
+.card-resources { border-block: var(--hair) solid var(--rule-faint) }
+.card-resources dt { font-size: 12px }
+.card-resources dt { color: var(--ink-2) }
+.card-resources dd { margin: var(--s1) 0 0 }
+.card-resources dd { font: 16px / 1.4 var(--font-mono) }
+.card-resources dd { font-variant-numeric: tabular-nums }
+.card-log { padding-top: var(--s2) }
+.card-log ol { list-style: none }
+.card-log ol { padding: 0 }
+.card-log ol { margin: var(--s2) 0 0 }
+.card-log li { display: grid }
+.card-log li { grid-template-columns: auto minmax(0, 1fr) }
+.card-log li { gap: var(--s3) }
+.card-log li { margin-top: var(--s1) }
+.card-log li { font-size: 13px }
+.card-log li { overflow-wrap: anywhere }
+.card-log time { color: var(--ink-2) }
+.card-log time { font-variant-numeric: tabular-nums }
+.card-actions .key { min-width: 0 }
+.card-actions .key { white-space: normal }
+.card-actions .key { text-align: center }
+.adventure-card { grid-template-columns: minmax(0, 1fr) }

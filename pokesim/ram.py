@@ -48,7 +48,8 @@ from pokesim_core.gen1 import (
 )
 
 from .game_data import load
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, fields
+from functools import lru_cache
 
 TABLES = load("tables.json")
 MAP_NAMES = {int(k): v for k, v in TABLES["maps"].items()}
@@ -116,6 +117,9 @@ class StoredMon:
     trainer_id: int | None = None
 
 
+_STORED_FIELDS = tuple(field.name for field in fields(StoredMon))
+
+
 @dataclass(frozen=True)
 class Snapshot:
     frame: int
@@ -153,7 +157,8 @@ class Snapshot:
         """Expose individual data while preserving legacy compact storage snapshots."""
         if self.stored_details and self.stored_pokemon == tuple(
                 (mon.box, mon.species, mon.level, mon.nick) for mon in self.stored_details):
-            return [asdict(mon) for mon in self.stored_details]
+            # All StoredMon fields are immutable. Only the outer rows need copies.
+            return [{name: getattr(mon, name) for name in _STORED_FIELDS} for mon in self.stored_details]
         positions, out = {}, []
         for box, species, level, nick in self.stored_pokemon:
             position = positions.get(box, 0)
@@ -266,26 +271,49 @@ def read_stored_pokemon(mem):
     return tuple((mon.box, mon.species, mon.level, mon.nick) for mon in read_stored_details(mem))
 
 
-def read_stored_details(mem):
-    counts = read_box_counts(mem)
+@lru_cache(maxsize=128)
+def _decode_box(box, structs, names):
+    """Cache immutable records by their bytes, never by emulator identity or time."""
+    out = []
+    for i in range(len(structs) // 33):
+        struct = structs[i * 33:(i + 1) * 33]
+        sid, level = struct[0], struct[3]
+        if sid in SPECIES_NAMES and 1 <= level <= 100:
+            nick = decode_text(names[i * 11:(i + 1) * 11])
+            out.append(StoredMon(box, i, sid, level, nick, **individual_data(struct)))
+    return tuple(out)
+
+
+def _box_bytes(mem, bank, start, size):
+    try:
+        key = slice(start, start + size)
+        values = mem[key] if bank is None else mem[bank, key]
+        # Some lightweight memory adapters implement only scalar reads.
+        if not isinstance(values, int):
+            return bytes(values)
+    except TypeError:
+        pass
+    return bytes(mem[address] if bank is None else mem[bank, address]
+                 for address in range(start, start + size))
+
+
+def read_stored_details(mem, *, counts=None):
+    counts = read_box_counts(mem) if counts is None else counts
     active = mem[W_CURRENT_BOX] & 0x7F
     out = []
     for box, count in enumerate(counts):
-        for i in range(min(count, BOX_CAPACITY)):
-            if box == active:
-                base = W_BOX_COUNT
-                get = lambda address: mem[address]
-            else:
-                base = 0xA000 + (box % 6) * BOX_DATA_SIZE
-                get = lambda address: mem[2 + box // 6, address]
-            try:
-                struct = bytes(get(base + 22 + i * 33 + j) for j in range(33))
-                sid, level = struct[0], struct[3]
-                nick = decode_text(bytes(get(base + 902 + i * 11 + j) for j in range(11)))
-            except TypeError:
-                break
-            if sid in SPECIES_NAMES and 1 <= level <= 100:
-                out.append(StoredMon(box, i, sid, level, nick, **individual_data(struct)))
+        count = min(count, BOX_CAPACITY)
+        if not count:
+            continue
+        base = W_BOX_COUNT if box == active else 0xA000 + (box % 6) * BOX_DATA_SIZE
+        bank = None if box == active else 2 + box // 6
+        try:
+            structs = _box_bytes(mem, bank, base + 22, count * 33)
+            names = _box_bytes(mem, bank, base + 902, count * 11)
+        except TypeError:
+            # Flat memory has no inactive cartridge banks.
+            continue
+        out.extend(_decode_box(box, structs, names))
     return tuple(out)
 
 
@@ -295,7 +323,8 @@ def read_snapshot(mem, frame: int) -> Snapshot:
     party = tuple(PartyMon(**mon) for mon in core_gen1.read_party(mem, move_data=MOVE_DATA))
     items = core_gen1.read_bag(mem)
     in_battle = mem[W_IS_IN_BATTLE]
-    stored = read_stored_details(mem)
+    box_counts = read_box_counts(mem)
+    stored = read_stored_details(mem, counts=box_counts)
     # Every cartridge path that registers a species also marks it seen, so an owned flag
     # without its seen flag is not Pokédex data at all. Oak's lab leaves other values in
     # this region for a couple of seconds before the Pokédex exists, which otherwise reads
@@ -326,7 +355,7 @@ def read_snapshot(mem, frame: int) -> Snapshot:
         active_box=mem[W_CURRENT_BOX] & 0x7F,
         hall_of_fame_count=mem[0xD5A2],
         coins=bcd(bytes(mem[0xD5A4:0xD5A6])),
-        box_counts=read_box_counts(mem),
+        box_counts=box_counts,
         stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
         stored_details=stored,
         hidden_objects=bytes(mem[W_TOGGLE_OBJECT_FLAGS:W_TOGGLE_OBJECT_FLAGS + 32]),

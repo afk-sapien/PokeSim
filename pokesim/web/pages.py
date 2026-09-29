@@ -44,10 +44,8 @@ def template(name):
 def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', **context):
     navigation = ''
     if base_path:
-        # One trail answers "where am I": the library, then which adventure, as a single
-        # control rather than a link, a label and a dropdown sitting side by side.
         navigation = ('<nav class="breadcrumb" aria-label="Breadcrumb">'
-                      '<a href="/">Library</a>'
+                      '<a class="key library-return" href="/" aria-label="Back to Library">Back to Library</a>'
                       '<span class="breadcrumb-mark" aria-hidden="true">&rsaquo;</span>'
                       '<span class="adventure-switch">'
                       '<select id="adventure-switcher" aria-label="Switch adventure">'

@@ -306,3 +306,50 @@ def test_three_star_species_credit_requires_stable_valid_observations(tracking):
     store.set('trade_hold', None)
     settle(tracker, s)
     assert status(store)['high_quality_species'] == [134]
+
+
+def test_battle_changes_reuse_goals_but_new_levels_and_dvs_recalculate(tracking, monkeypatch):
+    from pokesim import milestones
+    store, tracker = tracking
+    calculate = Mock(wraps=milestones._goal_token)
+    monkeypatch.setattr(milestones, '_goal_token', calculate)
+    initial = snapshot([stored(0)], party=(partner(3, 99),))
+    settle(tracker, initial)
+    hurt = replace(initial.party[0], hp=1, pp=(1, 0, 0, 0), experience=999999, nick='NEW')
+    settle(tracker, replace(initial, party=(hurt,), x=9, frame=60))
+    assert calculate.call_count == 1
+    maxed = replace(initial, party=(replace(hurt, level=100),))
+    tracker.observe(maxed)
+    assert status(store)['level_100'] == []
+    tracker.observe(maxed)
+    assert status(store)['level_100'] == [1, 2, 3]
+    perfect = replace(maxed, party=(replace(hurt, level=100, dvs=(15,) * 5),))
+    settle(tracker, perfect)
+    assert calculate.call_count == 3
+    assert status(store)['perfect_found'] == 1
+    tracker.reset()
+    settle(tracker, perfect)
+    assert status(store)['perfect_found'] == 1
+    assert calculate.call_count == 4
+
+
+def test_cached_goals_still_require_consecutive_observations_after_trade_hold(tracking):
+    store, tracker = tracking
+    current = snap(party=(partner(3, 100, True),))
+    tracker.observe(current)
+    store.set('trade_hold', True)
+    tracker.observe(current)
+    store.set('trade_hold', None)
+    tracker.observe(current)
+    assert status(store)['perfect_found'] == 0
+    tracker.observe(current)
+    assert status(store)['perfect_found'] == 1
+
+
+def test_cache_distinguishes_invalid_float_dvs_from_perfect_integer_dvs(tracking):
+    store, tracker = tracking
+    current = snap(party=(replace(partner(3, 99), dvs=(15.0,) * 5),))
+    settle(tracker, current)
+    assert status(store)['perfect_found'] == 0
+    settle(tracker, replace(current, party=(partner(3, 99, True),)))
+    assert status(store)['perfect_found'] == 1

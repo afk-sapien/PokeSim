@@ -239,3 +239,16 @@ def test_legendary_return_interval_validation():
     for value in (-1, True, 0.5, '1000000', 1000000001):
         with pytest.raises(ValueError):
             Manager.validate_adventure_settings({'legendary_return_steps': value})
+
+
+def test_library_resources_are_live_and_not_written_to_adventure_records(client, monkeypatch):
+    browser, manager = client
+    manager.registry.add_rom('usage-rom', 'sha1', 'red')
+    row = manager.registry.create('Resource check', 'usage-rom', {}, identifier())
+    usage = {'cpu_percent': 75.2, 'memory_bytes': 123456789}
+    monkeypatch.setattr(manager.supervisor, 'resources', lambda aid: usage)
+    assert browser.get('/api/v1/adventures').json()['adventures'][0]['resources'] == usage
+    assert browser.get('/api/v1/adventures/' + row['id']).json()['resources'] == usage
+    assert 'resources' not in manager.registry.adventure(row['id'])
+    monkeypatch.setattr(manager.supervisor, 'resources', lambda aid: None)
+    assert browser.get('/api/v1/adventures/' + row['id']).json()['resources'] is None

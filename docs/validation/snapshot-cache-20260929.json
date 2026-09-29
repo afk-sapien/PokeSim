@@ -1,0 +1,229 @@
+{
+  "date": "2026-09-29",
+  "baseline_revision": "df9ae2984288f48fde0737000aa07ad57ef7e017",
+  "image": "pokesim:performance-export-df9ae29",
+  "python": "3.14",
+  "pyboy": "2.7.0",
+  "candidate_sha256": {
+    "ram": "10c12cf33f9068d04874002c67b222daadb4040c94cb2b2da9b409f83a0b3cfa",
+    "milestones": "c5924d0d741ebfb9f61e6adba9a6cd5b3cd0a086c0d877e973d2a14c6d2242f2"
+  },
+  "scope": "Warm component CPU timings on real PyBoy memory with large Blue collections. Not whole-app throughput.",
+  "method": "Four alternating baseline and candidate repeats, 250 calls per repeat, median process CPU time. Read-only private backup in a disposable container.",
+  "equivalence": "900 advancing snapshots and their milestone ledgers matched field by field across three checkpoints.",
+  "tests": {
+    "passed": 1485,
+    "skipped": 84,
+    "lint": "passed",
+    "documentation": "passed"
+  },
+  "cases": [
+    {
+      "checkpoint": 0,
+      "map": "Route 23",
+      "pc_count": 235,
+      "snapshots_equal": true,
+      "milestones_equal": true,
+      "metrics": {
+        "snapshot": {
+          "before_cpu_ms_per_call": 5.9533993679999995,
+          "after_cpu_ms_per_call": 0.7673166399999971,
+          "speedup": 7.758725743260333,
+          "cpu_reduction_percent": 87.11128562742849,
+          "sample_seconds_per_250_calls": [
+            [
+              1.4743184190000003,
+              1.4876031659999995,
+              1.623023976999999,
+              1.4890965180000002
+            ],
+            [
+              0.19152514499999995,
+              0.19079806700000113,
+              0.1921331749999986,
+              0.19351613799999967
+            ]
+          ]
+        },
+        "milestones": {
+          "before_cpu_ms_per_call": 6.342968167999995,
+          "after_cpu_ms_per_call": 0.28276679400000404,
+          "speedup": 22.431799994167296,
+          "cpu_reduction_percent": 95.54204299137822,
+          "sample_seconds_per_250_calls": [
+            [
+              1.55525205,
+              1.565464724,
+              1.6060193599999977,
+              1.6098448120000022
+            ],
+            [
+              0.07108756899999946,
+              0.07010825400000087,
+              0.07085251300000195,
+              0.07053088400000007
+            ]
+          ]
+        },
+        "storage_rows": {
+          "before_cpu_ms_per_call": 1.9193250479999975,
+          "after_cpu_ms_per_call": 0.29725756199999864,
+          "speedup": 6.456774505874492,
+          "cpu_reduction_percent": 84.51239083709395,
+          "sample_seconds_per_250_calls": [
+            [
+              0.45137590799999927,
+              0.5068773249999996,
+              0.48277323900000013,
+              0.4768892849999986
+            ],
+            [
+              0.07411960700000009,
+              0.0740133580000002,
+              0.07504072700000108,
+              0.07450917399999923
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "checkpoint": 1,
+      "map": "Victory Road 2F",
+      "pc_count": 235,
+      "snapshots_equal": true,
+      "milestones_equal": true,
+      "metrics": {
+        "snapshot": {
+          "before_cpu_ms_per_call": 5.775183342000005,
+          "after_cpu_ms_per_call": 0.764904584000007,
+          "speedup": 7.550200982976397,
+          "cpu_reduction_percent": 86.7553194642802,
+          "sample_seconds_per_250_calls": [
+            [
+              1.457034741000001,
+              1.4305569300000016,
+              1.4286387050000044,
+              1.4711660430000038
+            ],
+            [
+              0.1746979429999982,
+              0.18577090500000537,
+              0.19668138699999815,
+              0.19675120600000184
+            ]
+          ]
+        },
+        "milestones": {
+          "before_cpu_ms_per_call": 6.199219197999994,
+          "after_cpu_ms_per_call": 0.2822899100000029,
+          "speedup": 21.96047034766468,
+          "cpu_reduction_percent": 95.44636346959507,
+          "sample_seconds_per_250_calls": [
+            [
+              1.5210674149999974,
+              1.5529433379999986,
+              1.5466662609999986,
+              1.5545327670000049
+            ],
+            [
+              0.07140858900000069,
+              0.06781376400000028,
+              0.07001909499999925,
+              0.0711258600000022
+            ]
+          ]
+        },
+        "storage_rows": {
+          "before_cpu_ms_per_call": 1.8337750900000032,
+          "after_cpu_ms_per_call": 0.2946878340000012,
+          "speedup": 6.222771619407931,
+          "cpu_reduction_percent": 83.92999034576259,
+          "sample_seconds_per_250_calls": [
+            [
+              0.44729341799999744,
+              0.4576091790000021,
+              0.47560690400000283,
+              0.4592783659999995
+            ],
+            [
+              0.07330303900000246,
+              0.06780795199999545,
+              0.07432062699999875,
+              0.07404087799999814
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "checkpoint": 2,
+      "map": "Hall Of Fame",
+      "pc_count": 236,
+      "snapshots_equal": true,
+      "milestones_equal": true,
+      "metrics": {
+        "snapshot": {
+          "before_cpu_ms_per_call": 5.838401782000005,
+          "after_cpu_ms_per_call": 0.7729911600000037,
+          "speedup": 7.552999418518548,
+          "cpu_reduction_percent": 86.7602267047951,
+          "sample_seconds_per_250_calls": [
+            [
+              1.4260516340000038,
+              1.4570695279999981,
+              1.4621313630000046,
+              1.5227416920000039
+            ],
+            [
+              0.18443700899999982,
+              0.19726945699999732,
+              0.18922612300000452,
+              0.2149932489999955
+            ]
+          ]
+        },
+        "milestones": {
+          "before_cpu_ms_per_call": 6.224674723999996,
+          "after_cpu_ms_per_call": 0.2751293480000072,
+          "speedup": 22.624539218549064,
+          "cpu_reduction_percent": 95.58002047979772,
+          "sample_seconds_per_250_calls": [
+            [
+              1.5580882020000004,
+              1.5892097109999952,
+              1.5538778780000015,
+              1.5542491599999977
+            ],
+            [
+              0.0679435799999979,
+              0.06962109400000571,
+              0.06725203499999566,
+              0.07096092899999462
+            ]
+          ]
+        },
+        "storage_rows": {
+          "before_cpu_ms_per_call": 1.8770227920000053,
+          "after_cpu_ms_per_call": 0.2908314900000022,
+          "speedup": 6.45398746882599,
+          "cpu_reduction_percent": 84.50570279489705,
+          "sample_seconds_per_250_calls": [
+            [
+              0.4483600610000025,
+              0.4810813399999958,
+              0.49918696900000015,
+              0.45743005600000686
+            ],
+            [
+              0.08710168699999343,
+              0.0709493239999972,
+              0.07136209699999796,
+              0.07405364800000314
+            ]
+          ]
+        }
+      }
+    }
+  ]
+}

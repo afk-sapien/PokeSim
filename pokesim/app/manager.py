@@ -315,11 +315,12 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.get('/api/v1/adventures')
     def adventures():
-        return {'adventures': manager.registry.adventures()}
+        return {'adventures': [{**row, 'resources': manager.supervisor.resources(row['id'])}
+                               for row in manager.registry.adventures()]}
 
     @app.get('/api/v1/adventures/{aid}')
     def adventure(aid: str):
-        return manager.registry.adventure(aid)
+        return {**manager.registry.adventure(aid), 'resources': manager.supervisor.resources(aid)}
 
     @app.get('/api/v1/adventures/{aid}/trade-inventory')
     def trade_inventory(aid: str):

@@ -1,6 +1,5 @@
 """Durable Pokédex goals, independent of emulator checkpoints and box positions."""
 from collections import Counter
-from dataclasses import asdict
 from functools import lru_cache
 import json
 import time
@@ -71,52 +70,82 @@ def record_capture(db, species, trainer_id):
     progress.goals_changed(db, time.time())
 
 
+def _goal_row(species, level, dvs, trainer_id):
+    """Keep only milestone inputs, preserving strict integer validation."""
+    level = level if type(level) is int else None
+    dvs = tuple(dvs) if isinstance(dvs, (list, tuple)) and all(type(v) is int for v in dvs) else ()
+    trainer_id = trainer_id if type(trainer_id) is int else None
+    return species, level, dvs, trainer_id
+
+
+def _goal_inputs(snapshot):
+    rows = [_goal_row(mon.species, mon.level, mon.dvs, mon.trainer_id) for mon in snapshot.party]
+    if snapshot.stored_details and snapshot.stored_pokemon == tuple(
+            (mon.box, mon.species, mon.level, mon.nick) for mon in snapshot.stored_details):
+        rows.extend(_goal_row(mon.species, mon.level, mon.dvs, mon.trainer_id)
+                    for mon in snapshot.stored_details)
+    else:
+        rows.extend(_goal_row(mon['species'], mon['level'], mon.get('dvs'), mon.get('trainer_id'))
+                    for mon in snapshot.storage_entries())
+    return tuple(rows)
+
+
+def _goal_token(rows):
+    maxed, perfect_species, high_quality_species = set(), set(), set()
+    groups = Counter()
+    for species, level, dvs, trainer_id in rows:
+        if species not in SPECIES or level is None or not 1 <= level <= 100:
+            continue
+        mon = {'species': species, 'dvs': dvs, 'trainer_id': trainer_id}
+        if level == 100:
+            maxed.update(level_credit(species))
+        if (dv_rating(mon)['dv_stars'] or 0) >= 3:
+            high_quality_species.add(SPECIES[species]['dex'])
+        if is_perfect(mon):
+            perfect_species.add(SPECIES[species]['dex'])
+            if trainer_id is not None and 0 <= trainer_id <= 65535:
+                groups[perfect_group(mon)] += 1
+    return (tuple(sorted(maxed)), tuple(sorted(perfect_species)), tuple(sorted(groups.items())),
+            tuple(sorted(high_quality_species)))
+
+
 class MilestoneTracker:
     def __init__(self, store):
         self.store = store
         self.previous = None
         self.confirmed = None
+        self._inputs = None
+        self._token = None
 
     def reset(self):
         self.store.set(KEY, empty())
         self.previous = self.confirmed = None
+        self._inputs = self._token = None
 
     def observe(self, snapshot):
         if not snapshot.started or not snapshot.valid or self.store.get('trade_hold'):
             self.previous = None
             return
-        rows = [asdict(mon) for mon in snapshot.party] + snapshot.storage_entries()
-        maxed = set()
-        perfect_species = set()
-        high_quality_species = set()
-        groups = Counter()
-        for mon in rows:
-            if mon['species'] not in SPECIES or type(mon['level']) is not int or not 1 <= mon['level'] <= 100:
-                continue
-            if mon['level'] == 100:
-                maxed.update(level_credit(mon['species']))
-            if (dv_rating(mon)['dv_stars'] or 0) >= 3:
-                high_quality_species.add(SPECIES[mon['species']]['dex'])
-            if is_perfect(mon):
-                perfect_species.add(SPECIES[mon['species']]['dex'])
-                if type(mon.get('trainer_id')) is int and 0 <= mon['trainer_id'] <= 65535:
-                    groups[perfect_group(mon)] += 1
-        token = (tuple(sorted(maxed)), tuple(sorted(perfect_species)), tuple(sorted(groups.items())),
-                 tuple(sorted(high_quality_species)))
+        inputs = _goal_inputs(snapshot)
+        if inputs != self._inputs:
+            self._token = _goal_token(inputs)
+            self._inputs = inputs
+        token = self._token
         # Confirm across consecutive observations to ignore partial party/PC writes.
         if token != self.previous:
             self.previous = token
             return
         if token == self.confirmed:
             return
+        maxed, perfect_species, groups, high_quality_species = token
         with self.store.lock, self.store.db:
             row = self.store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
             value = json.loads(row[0]) if row else empty()
-            value['level_100'] = sorted(set(value['level_100']) | maxed)
-            value['perfect_species'] = sorted(set(value['perfect_species']) | perfect_species)
+            value['level_100'] = sorted(set(value['level_100']) | set(maxed))
+            value['perfect_species'] = sorted(set(value['perfect_species']) | set(perfect_species))
             value['high_quality_species'] = sorted(set(value.get('high_quality_species', ()))
-                                                   | high_quality_species | set(value['perfect_species']))
-            for group, count in groups.items():
+                                                   | set(high_quality_species) | set(value['perfect_species']))
+            for group, count in groups:
                 value['perfect_groups'][group] = max(count, value['perfect_groups'].get(group, 0))
             self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
             progress.goals_changed(self.store.db, time.time())
