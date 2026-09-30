@@ -1,8 +1,12 @@
-# Release status: 0.4.16 candidate
+# Release status: 0.4.16 published and deployed
 
-This release adds global nickname vocabulary, League rematch party rotation,
-and integration with published PokeSim Core 0.1.4. See the
-[release notes](docs/release-notes.md).
+[PokeSim 0.4.16](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.16)
+and [PokeSim Core 0.1.4](https://github.com/afk-sapien/pokesim-core/releases/tag/v0.1.4)
+were published on September 30, 2026. This release adds global nickname vocabulary,
+League rematch party rotation, and shared Core mechanics. See the
+[release notes](docs/release-notes.md). PRs
+[30](https://github.com/afk-sapien/PokeSim/pull/30) and
+[31](https://github.com/afk-sapien/PokeSim/pull/31) are merged.
 
 ## Validation
 
@@ -10,12 +14,27 @@ Core passed 67 synthetic tests and Python 3.11, 3.12 and 3.13 CI. The benchmark
 passed 282 tests with 2 skipped. Fifteen private real-cartridge controller cases
 passed with exact input replays and a forced frame-budget cutoff. PokeSim passed
 1,541 tests with 98 skipped against the new Core wheel, including first-install
-worker startup. Browser, package and Docker checks run again in release CI.
+worker startup. All 48 browser tests passed.
 
-Nickname settings and League party rotation are already running on the owner's
-home server as a local feature build. Core consolidation has not yet been
-deployed there. Publication and deployment status will be recorded after the
-release workflow and production verification complete.
+The [release workflow](https://github.com/afk-sapien/PokeSim/actions/runs/36738803478)
+passed its Python, browser, package, fresh Docker install, proxy and native install
+gates. Native checks covered Linux amd64 and arm64, Windows, Intel Mac and Apple
+Silicon Mac. Anonymous public downloads, checksums, and wheel source identity
+were independently verified.
+
+## Deployment
+
+The home server runs the official `ghcr.io/afk-sapien/pokesim:0.4.16` image,
+revision `5dc2e622cb02e6ad7bc1baeadaf83ecc7d077e5c`, with Core 0.1.4.
+Image digest: `sha256:08086a8179193bf672481867cdaacb99a920fc98e3627cc6420b756989560c0e`.
+
+A complete cold backup was verified before upgrading. Post-deployment checks
+confirmed readiness, the exact release identity, shared Core adapters, valid
+collection statistics, and advancing frames in Red and Blue at their selected
+16× speed. Other adventures remained stopped. Settings, archive state, capture
+totals and gift histories were preserved. A browser review confirmed the new
+version and healthy library cards. Private backup and rollback details are
+recorded in the homelab deployment log.
 
 ## Known limits, deliberately not addressed here
 
@@ -36,8 +55,9 @@ release workflow and production verification complete.
   Journal image. Only new entries are retaken.
 - **Seen counts, level 100 species and perfect finds have no backfill.** Journal entries never
   recorded them, so their history starts with 0.4.0 (seen) and 0.4.2 (the other two).
-- **Hall of Fame teams still do not rotate.** A rematch fights with whichever six remain in the
-  party. Choosing a varied team is a gameplay change that needs its own endurance run.
+- **League rotation has limited endurance coverage.** A private copied-save replay verified
+  the reserve swap through PC menus. Repeated complete rematches with rotating teams still
+  need an extended gameplay run.
 - **Legacy per-entry rewind states are kept** (about 24 MB for the busiest adventure). They stopped
   growing in an earlier release and are what lets an old Journal entry rewind.
 - **No formatter or type checker.** Ruff runs the Pyflakes rules only, and 15% of functions carry
