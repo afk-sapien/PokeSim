@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.16
 
 - Add global custom nickname prefixes and suffixes for future catches and League gifts.
 - Rotate a capable reserve into each new League rematch while retaining the strongest
   teammate, field-move coverage, and trade reservations.
+- Adopt hash-pinned PokeSim Core 0.1.4 for reusable naming, menu, screen, storage and event flag mechanics. Keep reward timing and gameplay policies in PokeSim.
+
 
 ## 0.4.15
 
