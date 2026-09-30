@@ -25,7 +25,8 @@ Validation:
   ordered destination tuples exactly.
 - Regression tests cover level and version changes, duplicate encounter maps,
   exclusion of water and Cerulean Cave sources, and reuse without another tile scan.
-- The 46 collection tests pass. Lint passes.
+- The 46 collection tests pass. The broader suite excluding cartridge integration
+  tests passes 1,533 tests with 96 skipped. Lint and documentation checks pass.
 - A local 50-call Blue level-15 destination benchmark used 2.505 CPU seconds before
   caching and 0.000019 CPU seconds with a warm cache. This measures only destination
   construction, not full-simulation speed or cold-start cost.
@@ -33,3 +34,16 @@ Validation:
 This is a workload-specific optimization. Max throughput still depends on the
 current AI task, emulator work, rendering, and host resources. It does not establish
 a universal 30× or 50× simulation speed.
+
+
+## Home-server verification
+
+Deployed `pokesim:evolution-cache-9362df8` after a verified cold backup. The fresh
+Blue adventure resumed healthy at Max. Live samples while training and traversing
+Mt. Moon included 62.6×, 66.9×, 111.4×, and 114.8×. It had earned the Boulder Badge.
+The three adventures the user stopped remained stopped.
+
+These readings cover different game moments from the earlier 5 to 6× samples.
+They show the post-deployment throughput, not a controlled whole-game speedup ratio.
+The exact-destination comparison above verifies that the cached calculation itself
+retains the original output.
