@@ -112,16 +112,6 @@ def test_menu_coordinates_without_visible_cursor_do_not_create_one():
     assert screen.kind(snap(textbox=True)) == 'dialogue'
 
 
-def test_tile_table_matches_decode_text_for_every_tile():
-    """rows() reads a precomputed table instead of calling decode_text per tile."""
-    from pokesim.ram import decode_text
-    from pokesim.screen import _TILE_CHARS
-
-    assert len(_TILE_CHARS) == 256
-    for tile in range(256):
-        assert _TILE_CHARS[tile] == (decode_text(bytes([tile])) or " "), hex(tile)
-
-
 def test_rows_decodes_every_tile_value_the_old_way():
     """A screen covering all 256 tile ids decodes as the per-tile implementation did."""
     from pokesim.ram import decode_text

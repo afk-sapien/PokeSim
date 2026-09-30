@@ -1,5 +1,6 @@
 """Shared button selection and explicit results from menu controllers."""
 from dataclasses import dataclass
+from pokesim_core.naming import menu_button
 
 from .base import Action
 
@@ -10,7 +11,7 @@ def tap(button, hold=6, gap=12):
 
 def select(screen, target, one_based=False, scroll=False):
     current = screen.menu_index - int(one_based) + (screen.scroll if scroll else 0)
-    return tap('down' if current < target else 'up') if current != target else tap('a')
+    return tap('down' if current < 0 else menu_button(current, target))
 
 
 @dataclass

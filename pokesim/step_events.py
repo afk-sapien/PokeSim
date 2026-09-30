@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 import json
 from functools import lru_cache
+from pokesim_core.resets import Flag, update_flags
 
 from . import config
 from .events import Event
@@ -30,14 +31,7 @@ def read(memory, bit):
 
 
 def write(memory, bit, value):
-    base, index = bit
-    address, mask = base + index // 8, 1 << (index % 8)
-    before = memory[address]
-    after = before | mask if value else before & ~mask
-    if before == after:
-        return False
-    memory[address] = after
-    return True
+    return bool(update_flags(memory, ((Flag(*bit), bool(value)),)))
 
 
 @dataclass(frozen=True)

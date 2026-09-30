@@ -50,6 +50,7 @@ from pokesim_core.gen1 import (
 from .game_data import load
 from dataclasses import dataclass, fields
 from functools import lru_cache
+from pokesim_core.storage import decode_box, memory_bytes
 
 TABLES = load("tables.json")
 MAP_NAMES = {int(k): v for k, v in TABLES["maps"].items()}
@@ -274,27 +275,13 @@ def read_stored_pokemon(mem):
 @lru_cache(maxsize=128)
 def _decode_box(box, structs, names):
     """Cache immutable records by their bytes, never by emulator identity or time."""
-    out = []
-    for i in range(len(structs) // 33):
-        struct = structs[i * 33:(i + 1) * 33]
-        sid, level = struct[0], struct[3]
-        if sid in SPECIES_NAMES and 1 <= level <= 100:
-            nick = decode_text(names[i * 11:(i + 1) * 11])
-            out.append(StoredMon(box, i, sid, level, nick, **individual_data(struct)))
-    return tuple(out)
+    return tuple(StoredMon(box, mon.position, mon.species, mon.level, mon.nick,
+                           mon.moves, mon.experience, mon.dvs, mon.stat_exp, mon.trainer_id)
+                 for mon in decode_box(structs, names)
+                 if mon.species in SPECIES_NAMES and 1 <= mon.level <= 100)
 
 
-def _box_bytes(mem, bank, start, size):
-    try:
-        key = slice(start, start + size)
-        values = mem[key] if bank is None else mem[bank, key]
-        # Some lightweight memory adapters implement only scalar reads.
-        if not isinstance(values, int):
-            return bytes(values)
-    except TypeError:
-        pass
-    return bytes(mem[address] if bank is None else mem[bank, address]
-                 for address in range(start, start + size))
+_box_bytes = memory_bytes
 
 
 def read_stored_details(mem, *, counts=None):

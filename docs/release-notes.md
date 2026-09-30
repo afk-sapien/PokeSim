@@ -1,44 +1,33 @@
-# PokeSim 0.4.15 experimental beta
+# PokeSim 0.4.16 experimental beta
 
-Faster adventures, independent simulation speeds, and more long-term goals.
-This release also includes the Journal Stats and type-color changes from the
-unpublished 0.4.13 and 0.4.14 candidates.
+Custom nicknames, more varied League teams, and a shared Core for game mechanics.
 
-- Choose a speed for each adventure. Run as many as your hardware can support.
-  Library cards show actual speed, CPU use, memory use, and recent activity.
-- Spend less CPU time rebuilding collection and training data. Evolution training
-  now reuses its destinations. Navigation and training caches retain less memory.
-- Download a standard `.sav` from the Library to continue in another emulator.
-  Click the PokeSim logo to return home. Fullscreen preserves the complete image.
-- Follow Journal Entries and Stats for collection power, DVs, catches, steps,
-  battles, marathons, and long-term trends. Type badges have consistent colors.
-- Revisit legendary encounters after walking milestones. Repeat Eevee, dojo,
-  fossil, and supported NPC exchanges unlock after 100,000 new steps by default.
-- League wins award random starters. After the initial Champion Mew gift, another
-  Mew requires 1,000,000 new steps followed by a new League victory.
-- Track marathon times and personal bests. Custom gifts count as catches, and
-  automatic trades protect the last copy of each legendary Pokémon.
-- Improved Victory Road return routing, restored input handling, and individual
-  League victory attribution. Installation docs now lead with Docker and desktop
-  package managers.
+- Add your own nickname prefixes and suffixes in global Settings. They extend
+  the clean default vocabulary and apply to future names, including League gifts.
+  Existing Pokémon keep their names. Restore defaults at any time.
+- League rematches can bring one eligible reserve into the team. Rotation favors
+  Pokémon with fewer recorded appearances, while protecting the strongest member,
+  required field moves, trade locks and a minimum strength threshold. First-time
+  League runs and rematches already underway keep their existing teams.
+- Adopt PokeSim Core 0.1.4 for name entry, cached screen and box decoding, menu
+  selection and event flag updates. The benchmark shares Core's item-use and
+  party-switching mechanics. Adventure strategy, reward timing and trade policy
+  remain in their respective applications.
 
 ## Upgrading
 
-Back up the complete library. Set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.15`
+Back up the complete library. Set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.16`
 in Compose, then run `docker compose pull` and `docker compose up -d --wait`.
 Keep your existing data mount and project name. Follow the
 [desktop installation guide](desktop.md) for a package-based installation.
 
-Existing adventures inherit the old global speed once. Change each game's speed
-in its Library settings. New adventures default to 1×. There is no running-game
-limit. For a rollback across this settings migration, restore the pre-upgrade
-library backup along with the old image.
+Custom nickname lists start empty. Existing names, game speeds, walking rewards
+and adventure progress are preserved. League rotation applies when selecting
+new rematches. This release does not introduce DV training or change battle DVs.
 
-New walking opportunities start fresh without a historical reward backlog.
-Earlier statistics gaps remain unknown. See [walking rewards](step-rewards.md)
-and [adventure statistics](adventure-statistics.md) for details.
+Core's reset helpers are explicit trusted operations. They do not create new
+rewards or change existing step thresholds, and benchmark agents cannot call them.
+See [shared Core](shared-core.md) and [Pokémon stats](pokemon-stats.md) for details.
 
-Core remains at 0.1.2. Docker images target Linux amd64. Native Python installation
-supports the documented desktop and ARM64 platforms. Gameplay remains an
-experimental beta. Automated tests and short live runs do not establish that
-all adventures can run indefinitely without a stall.
+Docker images target Linux amd64. Native Python installation supports the
+documented desktop and ARM64 platforms. Gameplay remains an experimental beta.

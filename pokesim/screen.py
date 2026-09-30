@@ -5,7 +5,8 @@ text charset gives the visible text of menus and dialogue — enough to know whi
 """
 from __future__ import annotations
 
-from .ram import W_TILEMAP, decode_text
+from .ram import W_TILEMAP as W_TILEMAP
+from pokesim_core.gen1_ui import read_screen
 
 W_CURRENT_MENU_ITEM = 0xCC26
 W_TOP_MENU_Y = 0xCC24
@@ -18,33 +19,22 @@ W_ENEMY_MAX_HP = 0xCFF4           # 2 bytes
 W_OPTIONS = 0xD355                # bits 0-2 text speed (1 fast/3 mid/5 slow), bit 6 battle style, bit 7 animations off
 
 
-# A tile decodes to the same string every time, so ask decode_text once per tile id at import
-# rather than 360 times per screen read. Derived from decode_text so the two cannot drift.
-_TILE_CHARS = tuple(decode_text(bytes([tile])) or " " for tile in range(256))
-
-
 def rows(mem) -> list[str]:
-    raw = bytes(mem[W_TILEMAP:W_TILEMAP + 20 * 18])
-    glyph = _TILE_CHARS.__getitem__
-    return ["".join(map(glyph, raw[r * 20:(r + 1) * 20])) for r in range(18)]
+    return read_screen(mem, raw_text=True)["rows"]
 
 
 class Screen:
     __slots__ = ("rows", "text", "cursor", "menu_index", "scroll", "top_x", "top_y")
 
     def __init__(self, mem):
-        self.rows = rows(mem)
+        screen = read_screen(mem, raw_text=True)
+        self.rows = screen["rows"]
         self.text = "\n".join(self.rows)
-        raw = bytes(mem[W_TILEMAP:W_TILEMAP + 360])
-        self.menu_index = mem[W_CURRENT_MENU_ITEM]
-        self.scroll = mem[W_LIST_SCROLL_OFFSET]
+        self.menu_index = screen["menu_index"]
+        self.scroll = screen["scroll"]
         self.top_x = mem[W_TOP_MENU_X]
         self.top_y = mem[W_TOP_MENU_Y]
-        cursors = [(i % 20, i // 20) for i, tile in enumerate(raw) if tile == 0xED]
-        # Confirmation overlays can leave the underlying menu's cursor visible.
-        # Prefer the active menu's selected tile, but still require a visible cursor.
-        active_cursor = (self.top_x, self.top_y + 2 * self.menu_index)
-        self.cursor = active_cursor if active_cursor in cursors else next(iter(cursors), None)
+        self.cursor = screen["cursor"]
 
     def kind(self, snapshot) -> str:
         """Classify visible input states. A filled cursor confirms a menu is accepting input."""

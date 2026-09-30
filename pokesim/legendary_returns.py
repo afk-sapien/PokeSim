@@ -1,6 +1,7 @@
 """Durable walking milestones and repeat legendary encounter claims."""
 import json
 import time
+from pokesim_core.resets import Flag, update_flags
 
 from . import config
 from .catches import SUPPORTED
@@ -85,14 +86,10 @@ def claims(store):
 
 
 def encounter_flags(memory, room, obj, flag, *, hidden):
-    changed = False
-    for base, bit in ((W_EVENT_FLAGS, EVENTS[flag]),
-                     (W_TOGGLE_OBJECT_FLAGS, DATA['toggle_objects'].index([room, obj]))):
-        address = base + bit // 8
-        before = memory[address]
-        memory[address] = before | (1 << (bit % 8)) if hidden else before & ~(1 << (bit % 8))
-        changed |= memory[address] != before
-    return changed
+    return bool(update_flags(memory, (
+        (Flag(W_EVENT_FLAGS, EVENTS[flag]), hidden),
+        (Flag(W_TOGGLE_OBJECT_FLAGS, DATA['toggle_objects'].index([room, obj])), hidden),
+    )))
 
 
 def observe(store, snapshot, memory):

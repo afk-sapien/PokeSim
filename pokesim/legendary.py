@@ -1,5 +1,6 @@
 """Restore missed static encounters without rewinding the adventure or its resources."""
 from copy import deepcopy
+from pokesim_core.resets import Flag, update_flags
 
 from .events import Event, LOW
 from .ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS
@@ -66,10 +67,10 @@ class LegendaryRecovery:
                 continue
             # EndTrainerBattle sets the event and hides the sprite. Clear both, leaving the
             # current map script alone. The cartridge reloads the sprite on the next visit.
-            for base, bit in ((W_EVENT_FLAGS, EVENTS[flag]),
-                              (W_TOGGLE_OBJECT_FLAGS, DATA['toggle_objects'].index([room, obj]))):
-                address = base + bit // 8
-                memory[address] &= ~(1 << (bit % 8))
+            update_flags(memory, (
+                (Flag(W_EVENT_FLAGS, EVENTS[flag]), False),
+                (Flag(W_TOGGLE_OBJECT_FLAGS, DATA['toggle_objects'].index([room, obj])), False),
+            ))
             del self.pending[key]
             changed = True
             events.append(Event('legendary_retry', f'{name} can be encountered again',

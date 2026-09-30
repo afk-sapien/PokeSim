@@ -1,41 +1,21 @@
-# Release status: 0.4.15 published
+# Release status: 0.4.16 candidate
 
-This release combines per-adventure speed, resource readings, performance and
-memory improvements, standard save export, fullscreen fixes, repeat walking
-rewards, Journal Stats, and type colors. See the [release notes](docs/release-notes.md).
+This release adds global nickname vocabulary, League rematch party rotation,
+and integration with published PokeSim Core 0.1.4. See the
+[release notes](docs/release-notes.md).
 
-## Review and validation
+## Validation
 
-An independent subagent reviewed speed migration and runtime propagation,
-training and evolution caches, navigation invalidation, Victory Road routing,
-mixed-speed trades, and resource telemetry. No actionable defects were confirmed.
-Its focused suite passed 177 tests with 5 skipped. The broader Python suite passed
-1,533 tests with 96 skipped. All 200 Red/Blue evolution-training destination
-sequences matched the original implementation exactly.
+Core passed 67 synthetic tests and Python 3.11, 3.12 and 3.13 CI. The benchmark
+passed 282 tests with 2 skipped. Fifteen private real-cartridge controller cases
+passed with exact input replays and a forced frame-budget cutoff. PokeSim passed
+1,541 tests with 98 skipped against the new Core wheel, including first-install
+worker startup. Browser, package and Docker checks run again in release CI.
 
-Release review found two stale security checks targeting the removed global
-running limit. They now exercise backup creation while retaining authentication,
-CSRF, origin, and browser content-policy assertions. All 46 real-browser tests
-and the disposable authenticated HTTPS proxy check passed. Lint, web checks,
-and documentation checks passed.
-
-A fresh live Blue adventure passed the opening story and earned the Boulder Badge.
-After the evolution cache fix, observed Mt. Moon throughput ranged from 63× to
-133× across different game moments. These readings are not a controlled speedup
-benchmark. Full-story and long-duration observation remains in progress.
-
-Published [PokeSim 0.4.15](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.15)
-from `e843c7b4769958fb7633718bf2394d77739f4610` after all release workflow checks passed.
-[PR #28](https://github.com/afk-sapien/PokeSim/pull/28) is merged. All five native
-platforms, optional acceleration, Python and browser tests, package installation,
-and fresh Docker installation checks passed in the publishing workflow.
-
-Anonymous release downloads, checksums, installer files, and clean wheel identity
-were independently verified. The published image is
-`ghcr.io/afk-sapien/pokesim:0.4.15`, with digest
-`sha256:68d44c6b3544d6d93f8e59aecdba77429b6337c7bf120edfc8330936fa634308`.
-The owner explicitly authorized the standard GitHub release bot for this release.
-Direct authenticated operations and authored Git history used `afk-sapien`.
+Nickname settings and League party rotation are already running on the owner's
+home server as a local feature build. Core consolidation has not yet been
+deployed there. Publication and deployment status will be recorded after the
+release workflow and production verification complete.
 
 ## Known limits, deliberately not addressed here
 

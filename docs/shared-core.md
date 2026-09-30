@@ -9,10 +9,16 @@ decoding, individual Pokémon fields, party reads, and bag reads. Its known ROM
 hashes come from `pokesim_core.rom`. `pokesim_core.dvs` supplies the reusable
 DV-total probability reference model, with training and retention policy in PokeSim.
 
+Core also owns cached screen glyphs, immutable box decoding, resumable name
+entry, linear menu selection and explicit flag-update mechanics. PokeSim keeps
+its name pools, step thresholds, reward claims and route decisions. The benchmark
+uses Core's bounded item-use and party-switch macros through its existing
+recorded, budgeted controller. Its observation policy stays in the benchmark.
+
 The existing `pokesim.ram` imports remain compatible. It re-exports shared
 constants and helpers, wraps decoded party dictionaries in `PartyMon`, and
 builds the same `Snapshot` objects. Species names and move PP data still come
-from PokeSim's user-provided game data. Storage bank handling, derived state,
+from PokeSim's user-provided game data. Derived state,
 gameplay policies, recovery, trading, and the application UI remain in PokeSim.
 PokeSim retains its existing emulator runtime for those application behaviors.
 The benchmark can use the core's optional emulator adapter independently.
@@ -24,7 +30,18 @@ coverage there. PokeSim's compatibility tests check the boundary between those
 shared values and its existing application types. Keep gameplay decisions, Power
 ranking, UI copy, trading, and save recovery in PokeSim.
 
-PokeSim pins Core 0.1.2. Each consumer records its reviewed dependency version. Publish a compatible Core release, then
+Mechanical actions belong in Core when another consumer would otherwise have to
+repeat the same button sequence. Current APIs include `use_item`,
+`switch_pokemon`, `name_step` and `enter_name`. Item macros currently support
+restorative items with one party target, not TMs, balls or per-move PP items.
+
+Trusted event resets are a separate API. `reset_encounter` and `reset_events`
+require caller-supplied cartridge definitions and reject visibly unsafe contexts.
+PokeSim uses `update_flags` after its existing scheduling and unloaded-room
+checks. It preserves durable claim history and never resets a game simply
+because Core offers a reset function. Benchmark agents never receive these APIs.
+
+PokeSim pins Core 0.1.4. Each consumer records its reviewed dependency version. Publish a compatible Core release, then
 update and validate each consumer's dependency pin. Core improvements reach both
 applications through those reviewed package updates.
 

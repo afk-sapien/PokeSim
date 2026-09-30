@@ -1,5 +1,6 @@
 """Enter random, readable names using the game's normal naming menus."""
 import random
+from pokesim_core.naming import name_step
 
 from .base import Action
 
@@ -52,26 +53,6 @@ class NamingController:
             self.used.add(self.target)
             self.subject = subject
 
-        # The entered text is at (10, 2). Read it back after every button press,
-        # so missed inputs and restores partway through a name are recoverable.
-        entered = scr.rows[2][10:20].strip()
-        if not self.target.startswith(entered):
-            return Action("b", 6, 24)
-        if entered == self.target:
-            return Action("start", 6, 24)
-        if any(row[2:19:2] == "abcdefghi" for row in scr.rows):
-            return Action("select", 6, 24)
-        if scr.cursor is None:
-            return Action(None, 0, 12)
-
-        letter = self.target[len(entered)]
-        offset = ord(letter) - ord("A")
-        target_x, target_y = 1 + (offset % 9) * 2, 5 + (offset // 9) * 2
-        x, y = scr.cursor
-        if y != target_y:
-            button = "down" if y < target_y else "up"
-        elif x != target_x:
-            button = "right" if x < target_x else "left"
-        else:
-            button = "a"
-        return Action(button, 6, 24)
+        action = name_step(scr.rows, scr.cursor, self.target,
+                           limit=10 if subject == "pokemon" else 7)
+        return Action(*action) if action else None
