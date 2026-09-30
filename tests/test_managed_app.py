@@ -187,7 +187,7 @@ def test_game_trading_stays_scoped_and_available_when_stopped(client):
 def test_speed_is_independent_and_editable_while_running(client):
     client, manager = client
     headers = login(client, manager)
-    assert set(client.get('/api/v1/settings').json()) == {'data_dir'}
+    assert set(client.get('/api/v1/settings').json()) == {'data_dir', 'nickname_prefixes', 'nickname_suffixes'}
     for data in ({'speed': 4}, {'max_running': 3}):
         assert client.patch('/api/v1/settings', json=data, headers=headers).status_code == 409
     manager.registry.add_rom('fixture-rom', 'sha1', 'red')
@@ -271,3 +271,23 @@ def test_walking_reward_choice_validation():
             assert Manager.validate_adventure_settings({field: choice})[field] == choice
         with pytest.raises(ValueError):
             Manager.validate_adventure_settings({field: 'random-garbage'})
+
+
+def test_global_nickname_settings_are_validated_persisted_and_reset(client, monkeypatch):
+    client, manager = client
+    headers = login(client, manager)
+    calls = []
+    monkeypatch.setattr(manager.supervisor, 'update_nicknames', lambda: calls.append(True) or ['reconnecting'])
+    payload = {'nickname_prefixes': [' spicy ', 'SPICY'], 'nickname_suffixes': ['goose']}
+    assert client.patch('/api/v1/settings', json=payload).status_code == 403
+    result = client.patch('/api/v1/settings', json=payload, headers=headers)
+    assert result.status_code == 200
+    assert result.json()['pending'] == ['reconnecting']
+    saved = manager.registry.setting('nickname_parts')
+    assert saved == {'nickname_prefixes': ['SPICY'], 'nickname_suffixes': ['GOOSE']}
+    assert client.get('/api/v1/settings').json()['nickname_prefixes'] == ['SPICY']
+    assert client.patch('/api/v1/settings', json={**payload, 'speed': 4}, headers=headers).status_code == 409
+    assert client.patch('/api/v1/settings', json={**payload, 'nickname_prefixes': ['<script>']}, headers=headers).status_code == 409
+    assert manager.registry.setting('nickname_parts') == saved
+    result = client.patch('/api/v1/settings', json={'nickname_prefixes': [], 'nickname_suffixes': []}, headers=headers)
+    assert result.status_code == 200 and len(calls) == 2

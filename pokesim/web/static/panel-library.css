@@ -299,6 +299,7 @@
 
 /* A labelled input: the silkscreen label above a recessed well. */
 .field { display: grid; gap: var(--s1); width: 100%; }
+.field textarea,
 .field input:not([type="checkbox"]),
 .field select {
   width: 100%;
@@ -520,3 +521,8 @@
 .sheet-foot .key { white-space: normal }
 .sheet-foot .key { line-height: 1.25 }
 .sheet-foot .key { padding-block: var(--s2) }
+
+.field textarea { resize: vertical; min-height: 6rem; }
+
+.nickname-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.nickname-actions .key { white-space: normal; }

@@ -134,3 +134,31 @@ def test_names_are_drawn_without_repeating_until_the_pool_is_spent():
         controller.used.add(chosen)
         drawn.append(chosen)
     assert len(set(drawn)) == len(drawn)
+
+
+def test_custom_parts_validate_and_extend_defaults_without_truncation():
+    from pokesim.nicknames import validate_parts, name_pool
+    parts = validate_parts({'nickname_prefixes': [' chaos ', 'CHAOS'], 'nickname_suffixes': ['goose']})
+    assert parts == {'nickname_prefixes': ['CHAOS'], 'nickname_suffixes': ['GOOSE']}
+    pool = name_pool(tuple(parts['nickname_prefixes']), tuple(parts['nickname_suffixes']))
+    assert 'CHAOSGOOSE' in pool and 'CHAOSLORD' in pool and 'MEATGOOSE' in pool
+    assert set(POKEMON_NAMES) <= set(pool)
+    assert all(len(name) <= 10 for name in pool)
+    assert name_pool() == POKEMON_NAMES
+    for value in [['BAD!'], [''], ['TOOLONGGG'], ['é'], [5], ['A'] * 101, 'SOUP']:
+        with pytest.raises(ValueError):
+            validate_parts({'nickname_prefixes': value, 'nickname_suffixes': []})
+
+
+def test_custom_pool_applies_to_new_names_and_keeps_partial_name(monkeypatch):
+    from pokesim import config
+    controller = NamingController(1)
+    controller.used.update(POKEMON_NAMES)
+    monkeypatch.setattr(config, 'NICKNAME_PREFIXES', ('CHAOS',))
+    monkeypatch.setattr(config, 'NICKNAME_SUFFIXES', ())
+    controller.step(Screen(grid('NICKNAME')), snap())
+    chosen = controller.target
+    assert chosen.startswith('CHAOS')
+    monkeypatch.setattr(config, 'NICKNAME_PREFIXES', ())
+    controller.step(Screen(grid('NICKNAME', entered=chosen[:2])), snap())
+    assert controller.target == chosen

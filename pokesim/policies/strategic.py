@@ -304,6 +304,10 @@ class StrategicPolicy(Policy):
             and self.collection.project
             and any(species == self.collection.project['parent'] for species, level in s.boxed_pokemon)
         ) or (
+            self.goal.key == 'party_league' and len(s.party) < 6
+            and self.collection.project
+            and len(self.collection.partner_matches(s, self.collection.project)) == 1
+        ) or (
             # The field-move partner may sit in a full box. Making room first would switch away from
             # it again, and the two storage goals would trade boxes forever.
             self.goal.key in FIELD_MOVE_GOALS and len(s.party) < 6
@@ -708,7 +712,7 @@ class StrategicPolicy(Policy):
         if not self.heal_latch and not in_league and not self.pickups.active and goal.key not in ('restock','party_box'):
             collection_goal = self.collection.choose(s, self.nav, self.rng, goal)
             if collection_goal:
-                self.next_goal = goal.to_dict() if not goal.key.startswith(('collect_', 'party_collection')) else self.next_goal
+                self.next_goal = goal.to_dict() if not goal.key.startswith(('collect_', 'party_collection', 'party_league')) else self.next_goal
                 goal = collection_goal
         pickup = None if legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon' else self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
         if pickup and not self.heal_latch and not in_league:
@@ -839,7 +843,7 @@ class StrategicPolicy(Policy):
                 action = self._use_item(s, repel)
                 if action:
                     return action
-        if not goal.key.startswith(("collect_", "party_collection")) and (goal.key == "train_league_partner" or self.development_index is not None and s.frame < self.development_until):
+        if not goal.key.startswith(("collect_", "party_collection", "party_league")) and (goal.key == "train_league_partner" or self.development_index is not None and s.frame < self.development_until):
             target = league_partner(s) if goal.key == 'train_league_partner' else self.development_index
             if target is not None and target != 0:
                 self.intent = Decision("reorder", target, reason="Give the partner the lead position while training")
@@ -989,7 +993,7 @@ class StrategicPolicy(Policy):
                 return wait()
         else:
             if goal.key not in ("heal", "restock"):
-                social = None if goal.key.startswith(("collect_", "party_collection")) else self._purposeful_detour(s, mem, goal)
+                social = None if goal.key.startswith(("collect_", "party_collection", "party_league")) else self._purposeful_detour(s, mem, goal)
                 if social:
                     return social
                 social = None if goal.key == 'collect_pickup' or (self.collection.project or {}).get('method') in ('train', 'marathon') or legendary_project(self.collection.project) else self._social_interaction(s, mem)

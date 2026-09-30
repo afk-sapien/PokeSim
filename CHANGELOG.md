@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add global custom nickname prefixes and suffixes for future catches and League gifts.
+- Rotate a capable reserve into each new League rematch while retaining the strongest
+  teammate, field-move coverage, and trade reservations.
+
 ## 0.4.15
 
 - Set speed independently for each adventure and remove the running-game cap.

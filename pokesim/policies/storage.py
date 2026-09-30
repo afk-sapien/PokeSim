@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from .menus import MenuDecision, select, tap
 from .collection import Collection, held_count
 from .team import release_target, reserve_to_deposit
+from . import league_rotation
 from ..strategy_data import SPECIES
 from ..trade.preferences import identity
 
@@ -24,6 +25,8 @@ class StorageController:
         demand = collection.demand() if collection else {}
         protected.update(sid for sid, data in SPECIES.items()
                          if demand.get(data['dex'], 0) and held_count(snapshot, sid) <= demand[data['dex']])
+        if project.get('league_rotation') and not project.get('rotation_ready'):
+            protected.add(project['parent'])
         if project.get('method') == 'trade':
             protected.add(project['give'])
         reserved = {(mon['box'], mon['position']) for mon in snapshot.storage_entries()
@@ -46,13 +49,15 @@ class StorageController:
             if len(snapshot.party) < 6 or snapshot.box_full:
                 return None
             project = project or {}
+            if goal_key == 'party_league':
+                return league_rotation.deposit_target(snapshot, preferences, collection.league_appearances)
             if goal_key == 'party_collection' and project.get('method') == 'trade':
                 return collection.trade_deposit_target(snapshot, project) if collection else None
             return reserve_to_deposit(snapshot, prefer_completed=goal_key == 'party_collection'
                                       and project.get('method') == 'train')
         if goal_key == 'party_collection_space':
             return None
-        if goal_key == 'party_collection' and project:
+        if goal_key in ('party_collection', 'party_league') and project:
             if project.get('trainee_key'):
                 matches = [mon for mon in Collection.partner_matches(snapshot, project) if 'party_index' not in mon]
                 return (matches[0]['position'] if len(matches) == 1 and len(snapshot.party) < 6
@@ -88,7 +93,7 @@ class StorageController:
             target = ((release[0] if release else None) if goal_key == 'party_release' else
                       snapshot.next_free_box if goal_key == 'party_box' else
                       self.field_move_box(snapshot, goal_key) if goal_key in FIELD_MOVE_GOALS else
-                      project.get('box') if goal_key == 'party_collection' and project else None)
+                      project.get('box') if goal_key in ('party_collection', 'party_league') and project else None)
             return MenuDecision(tap('b') if target is None or target == snapshot.active_box else select(screen, target),
                                 'Select a storage box with room for new catches')
         if kind == 'pc':
@@ -103,7 +108,7 @@ class StorageController:
                 if release[0] != snapshot.active_box:
                     return MenuDecision(select(screen, 3), 'Open the box holding the spare duplicate')
                 return MenuDecision(select(screen, 2), 'Let a spare duplicate go, keeping one of every species')
-            if goal_key == 'party_box' or (goal_key == 'party_collection' and len(snapshot.party) < 6
+            if goal_key == 'party_box' or (goal_key in ('party_collection', 'party_league') and len(snapshot.party) < 6
                                            and project and project.get('box') != snapshot.active_box):
                 return MenuDecision(select(screen, 3), 'Change the active storage box without releasing any Pokémon')
             if (goal_key in FIELD_MOVE_GOALS and len(snapshot.party) < 6

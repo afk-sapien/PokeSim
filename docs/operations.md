@@ -23,6 +23,21 @@ Use the same Compose files and project name every time. One manager owns the com
 library and starts one child process for each running adventure. Never run two managers
 against the same library or remove their lock files while they are running.
 
+## Custom nicknames
+
+Open Library **Settings**, then **Pokémon nicknames**. Extra prefixes and suffixes
+extend the default pool across all adventures. Separate words with commas or new
+lines. Each list accepts up to 100 unique parts, each containing 1 to 7 ASCII letters.
+Parts are uppercased, and combinations longer than the cartridge's ten-letter
+nickname limit are skipped. The shipped pool stays unchanged and contains no
+user-supplied vocabulary.
+
+Saving applies to future names in running and stopped adventures. A name already
+being entered finishes unchanged. League reward nicknames also use this pool.
+Existing Pokémon, trainer names, and rival names are not renamed. Restore defaults
+clears both custom lists. These settings are stored in the Library registry and
+included in full Library backups. Reconnecting workers retry the saved settings.
+
 ## Where your data lives
 
 The [desktop guide](desktop.md#your-files-and-backups) lists platform-specific application folders.

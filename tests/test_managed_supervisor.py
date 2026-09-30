@@ -179,3 +179,24 @@ def test_no_configured_or_fixed_running_limit(supervisor):
     for _ in range(35):
         supervisor.start(adventure(supervisor))
     assert len(supervisor.children) == 35
+
+
+def test_nickname_settings_reach_new_workers_and_retry_live_workers(supervisor):
+    values = {'nickname_prefixes': ['CHAOS'], 'nickname_suffixes': []}
+    supervisor.registry.set_setting('nickname_parts', values)
+    aid = adventure(supervisor)
+    supervisor.start(aid)
+    child = supervisor.children[aid]
+    assert child.bootstrap['settings']['nickname_prefixes'] == ['CHAOS']
+    calls = []
+    child.request = lambda *args, **kwargs: calls.append((args, kwargs))
+    assert supervisor.update_nicknames() == []
+    assert calls[0][0] == ('POST', '/internal/nicknames', values)
+    supervisor.update_nicknames()
+    assert len(calls) == 1
+    supervisor.registry.set_setting('nickname_parts', {'nickname_prefixes': [], 'nickname_suffixes': []})
+    child.request = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError('reconnecting'))
+    assert supervisor.update_nicknames() == [aid]
+    child.request = lambda *args, **kwargs: calls.append((args, kwargs))
+    supervisor.sync_nicknames(child)
+    assert calls[-1][0][2]['nickname_prefixes'] == []

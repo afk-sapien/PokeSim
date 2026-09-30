@@ -425,6 +425,27 @@
       await api('/api/v1/imports', {method: 'POST', headers: {'Content-Type': 'application/zip'}, body: $('#import-file').files[0]})
       $('#import-form').reset()
       notice('Import complete. Open the Library to see the adventure.') }) }
+  const nicknameParts = id => $(id).value.split(/[,\n]/).map(word => word.trim()).filter(Boolean)
+  function renderNicknameSettings(settings) {
+    $('#nickname-prefixes').value = (settings.nickname_prefixes || []).join('\n')
+    $('#nickname-suffixes').value = (settings.nickname_suffixes || []).join('\n')
+  }
+  $('#nickname-form').onsubmit = event => {
+    event.preventDefault()
+    act(async () => {
+      const result = await write('/api/v1/settings', {
+        nickname_prefixes: nicknameParts('#nickname-prefixes'),
+        nickname_suffixes: nicknameParts('#nickname-suffixes')
+      }, 'PATCH')
+      renderNicknameSettings(result)
+      notice(result.pending?.length ? 'Nicknames saved. Reconnecting games will receive them shortly.' : 'Nickname settings saved for all adventures.')
+    })
+  }
+  $('#nickname-reset').onclick = () => act(async () => {
+    const result = await write('/api/v1/settings', {nickname_prefixes: [], nickname_suffixes: []}, 'PATCH')
+    renderNicknameSettings(result)
+    notice('Default nickname pool restored.')
+  })
   $('#quit').onclick = () => act(async () => {
     await write('/api/v1/shutdown')
     closing = true
@@ -437,6 +458,7 @@
     document.querySelectorAll('[data-view]').forEach(section => { section.hidden = section.dataset.view !== page })
     document.querySelector(`[data-nav="${page}"]`)?.setAttribute('aria-current', 'page')
     if (page === 'settings' && owner) {
+      renderNicknameSettings(await api('/api/v1/settings'))
       await refreshBackups()
     }
     if (page === 'notifications' && owner && !notifyDirty) renderNotifications(await api('/api/v1/notifications'))

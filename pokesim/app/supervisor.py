@@ -196,6 +196,7 @@ class Supervisor:
                     return self.registry.update(aid, state='running' if existing.url else 'starting', error=None)
                 generation = identifier()
                 settings = {**adventure['settings'],
+                            **self.registry.setting('nickname_parts', {}),
                             'speed': adventure['settings'].get('speed', 1),
                             'rom_path': str(self.assets.rom_path(adventure['rom_id'])),
                             'data_dir': str(self.registry.root / 'adventures' / aid),
@@ -214,6 +215,7 @@ class Supervisor:
                 child.start()
                 try:
                     self.sync_notifications(aid, child)
+                    self.sync_nicknames(child)
                 except Exception:
                     log.warning('Adventure %s will receive notification settings when it reconnects', aid)
                 return self.registry.update(aid, state='recovering' if recovery else 'running', error=None)
@@ -293,6 +295,28 @@ class Supervisor:
             child.request('POST', '/internal/notifications', settings, timeout=5)
             child.notified = fingerprint
 
+    def sync_nicknames(self, child):
+        if not child.url:
+            return
+        parts = self.registry.setting('nickname_parts', {'nickname_prefixes': [], 'nickname_suffixes': []})
+        fingerprint = digest(parts)
+        if getattr(child, 'nickname_settings', None) != fingerprint:
+            child.request('POST', '/internal/nicknames', parts, timeout=5)
+            child.nickname_settings = fingerprint
+
+    def update_nicknames(self):
+        with self.guard:
+            children = list(self.children.items())
+        pending = []
+        for aid, child in children:
+            try:
+                self.sync_nicknames(child)
+                if not child.url:
+                    pending.append(aid)
+            except (RuntimeError, OSError, httpx.HTTPError):
+                pending.append(aid)
+        return pending
+
     def run_monitor(self):
         self.thread = threading.Thread(target=self._monitor, name='adventure-supervisor', daemon=True)
         self.thread.start()
@@ -342,6 +366,7 @@ class Supervisor:
                         self.registry.update(aid, summary=summary)
                     try:
                         self.sync_notifications(aid, child)
+                        self.sync_nicknames(child)
                     except (RuntimeError, OSError, KeyError, httpx.HTTPError):
                         # Undelivered notification settings never make a healthy game look stale.
                         log.warning('Adventure %s has not accepted its notification settings yet', aid)

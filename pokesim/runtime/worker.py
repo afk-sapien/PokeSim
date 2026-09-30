@@ -127,6 +127,21 @@ def serve(bootstrap, parent_stream, ready_stream):
                 return {'speed': runtime.emulator.speed}
             return runtime.call(apply)
 
+        @app.post('/internal/nicknames')
+        def nicknames(data: dict):
+            from fastapi import HTTPException
+            from ..nicknames import validate_parts
+            from .. import config
+            try:
+                parts = validate_parts(data)
+            except ValueError as error:
+                raise HTTPException(400, str(error)) from error
+            def apply():
+                for name, values in parts.items():
+                    setattr(config, name.upper(), tuple(values))
+                return {'ok': True}
+            return runtime.call(apply)
+
         @app.post('/internal/notifications')
         def notifications(data: dict):
             from fastapi import HTTPException

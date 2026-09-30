@@ -434,12 +434,17 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.get('/api/v1/settings')
     def settings():
-        return {'data_dir': str(manager.root)}
+        return {'data_dir': str(manager.root), **manager.registry.setting(
+            'nickname_parts', {'nickname_prefixes': [], 'nickname_suffixes': []})}
 
     @app.patch('/api/v1/settings')
     async def set_settings(request: Request):
         manager.check_available()
-        raise ValueError('Set simulation speed in each adventure settings')
+        from ..nicknames import validate_parts
+        parts = validate_parts(await json_body(request))
+        manager.registry.set_setting('nickname_parts', parts)
+        pending = await asyncio.to_thread(manager.supervisor.update_nicknames)
+        return {**parts, 'pending': pending}
 
     @app.get('/api/v1/notifications')
     def notifications():

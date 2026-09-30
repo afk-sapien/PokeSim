@@ -77,3 +77,24 @@ Records live in the adventure's SQLite database, separately from save checkpoint
 They survive application restarts, evolution, ordinary save rewinds, and journal
 pruning. Starting a fresh adventure resets its goals. Back up the entire adventure
 data directory to preserve both the game and these records.
+
+
+## League party rotation
+
+The first League attempt keeps the story party. Each newly selected post-Champion
+rematch can retrieve one reserve through ordinary PC menus before entering the
+League. The reserve must be identifiable, at least level 50, have a damaging move,
+and have at least 75% of the replaced partner's current Power. This is a conservative
+eligibility rule, not a victory guarantee.
+
+Rotation favors reserves with fewer recorded rotation appearances, then a species
+not already in the party, then current Power. The strongest party member stays,
+and a sole carrier of a field move is not deposited. Locked or offered trade
+partners are excluded. A rotation deposits rather than releases the outgoing
+Pokémon. If no suitable reserve or storage space exists, the rematch keeps the
+current team. Missing or ambiguous targets do not hold up the League indefinitely.
+
+Rotation choices and appearance counts survive saves and restores. Counts begin
+with this feature and record prepared rematch parties, not historical Elite Four
+wins. The selected party stays fixed during the League challenge. An already
+active rematch is left alone until the next project.

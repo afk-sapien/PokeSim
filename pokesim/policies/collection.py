@@ -10,7 +10,7 @@ from ..game_data import load
 from .progression import GRASS_TILES, Goal, object_goal, at
 from .navigation import DIRS
 from .director import AdventureDirector
-from . import training, marathon
+from . import training, marathon, league_rotation
 from ..milestones import is_perfect, level_credit
 from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, EVENTS, event_set, object_hidden
 
@@ -147,6 +147,7 @@ class Collection:
         self.trade_preferences = lambda: {}
         self.history = []
         self.completed_champion = False
+        self.league_appearances = {}
         self.idle_frames = 0
         self.project_maps = []
         self.project_flags = []
@@ -194,7 +195,7 @@ class Collection:
         return project.get('species') if project.get('repeat') else None
 
     def state_dict(self):
-        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','attempts','elapsed','eevee_choice','dojo_choice','history','completed_champion','idle_frames','project_maps','project_flags','last_repeat','last_hunt','quality_searches','next_marathon','marathon_records','activity_events')},
+        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','attempts','elapsed','eevee_choice','dojo_choice','history','completed_champion','league_appearances','idle_frames','project_maps','project_flags','last_repeat','last_hunt','quality_searches','next_marathon','marathon_records','activity_events')},
                 'director': self.director.state_dict()}
 
     def load(self, data):
@@ -781,6 +782,8 @@ class Collection:
         self.project = (self.director.select(candidates, rng, urgent=s.money < 10000)
                         if self.completed_champion else
                         rng.choices([p for w,p in candidates],weights=[w for w,p in candidates])[0])
+        if self.project['method'] == 'rematch':
+            self.prepare_league_rotation(s)
         if self.project['method'] == 'marathon':
             self.next_marathon = self.elapsed + marathon.INTERVAL
             self.marathon_previous = None
@@ -920,11 +923,57 @@ class Collection:
             candidates.append(mon)
         return min(candidates, key=quality) if candidates else None
 
+    def prepare_league_rotation(self, s):
+        from ..trade.preferences import identity
+        held = [asdict(mon) for mon in s.party] + s.storage_entries()
+        keys = {identity(mon) for mon in held} - {None}
+        self.league_appearances = {key: count for key, count in self.league_appearances.items() if key in keys}
+        for mon in s.party:
+            key = identity(asdict(mon))
+            if key:
+                self.league_appearances.setdefault(key, 1)
+        if not storage_exchange_possible(s):
+            return
+        reserve = league_rotation.select_reserve(s, self.trade_preferences(), self.league_appearances)
+        if reserve:
+            self.project.update(parent=reserve['species'], trainee_key=identity(reserve),
+                                trainee_nick=reserve['nick'], family=[reserve['species']],
+                                scoped_partner=True, box=reserve['box'], league_rotation=True)
+
+    def league_rotation_goal(self, s, project):
+        from ..trade.preferences import identity
+        if not project.get('league_rotation') or project.get('rotation_ready'):
+            return None
+        matches = self.partner_matches(s, project)
+        if len(matches) != 1 or self.trade_preferences().get(project['trainee_key'], {}).get('state') in ('locked', 'offered'):
+            project['rotation_ready'] = True
+            return None
+        partner = matches[0]
+        if 'party_index' in partner:
+            project['rotation_ready'] = True
+            for mon in s.party:
+                key = identity(asdict(mon))
+                if key:
+                    self.league_appearances[key] = self.league_appearances.get(key, 0) + 1
+            return None
+        if (not storage_exchange_possible(s) or len(s.party) >= 6
+                and league_rotation.deposit_target(s, self.trade_preferences(), self.league_appearances) is None):
+            project['rotation_ready'] = True
+            return None
+        project['box'] = partner['box']
+        return Goal('party_league', 'Rotate the League team',
+                    'Bring ' + (partner.get('nick') or name(partner['species'])) + ' out for the next rematch',
+                    CENTERS, 'up', True)
+
     def goal(self,s,project=None):
         from ..trade.preferences import identity
         p=self.project if project is None else project
         if not p:
             return None
+        if p['method'] == 'rematch' and s.map not in LEAGUE:
+            rotation = self.league_rotation_goal(s, p)
+            if rotation:
+                return rotation
         if p['method'] == 'trade':
             partner = self.trade_candidate(s, p)
             if partner is None:

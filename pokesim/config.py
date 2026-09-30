@@ -13,6 +13,8 @@ def _env(name, default):
 ROM_PATH = Path(_env("ROM_PATH", "roms/pokered.gb"))
 DATA_DIR = Path(_env("DATA_DIR", "data"))
 SPEED = float(_env("SPEED", "1"))            # emulation speed multiplier, 0 = unlimited
+NICKNAME_PREFIXES = tuple(filter(None, _env("NICKNAME_PREFIXES", "").split(",")))
+NICKNAME_SUFFIXES = tuple(filter(None, _env("NICKNAME_SUFFIXES", "").split(",")))
 POLICY = _env("POLICY", "strategic")
 FAST_TEXT = _env("FAST_TEXT", "1") == "1"                  # force text speed FAST via wOptions
 BATTLE_ANIMATIONS = _env("BATTLE_ANIMATIONS", "1") == "1"  # 0 = turn battle animations off (faster)

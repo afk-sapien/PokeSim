@@ -40,10 +40,11 @@ def gift_slot(seed, species=MEW, *, random_name=False):
     struct[29:29 + len(moves)] = bytes(MOVES[move]['pp'] for move in moves)
     nickname = base['name']
     if random_name:
-        from ..policies.naming import POKEMON_NAMES
+        from ..nicknames import configured_pool
+        pool = configured_pool()
         # Keep naming independent of the draw and stable across delivery retries.
         name_hash = hashlib.sha256(f'nickname:{seed}'.encode()).digest()
-        nickname = POKEMON_NAMES[int.from_bytes(name_hash, 'big') % len(POKEMON_NAMES)]
+        nickname = pool[int.from_bytes(name_hash, 'big') % len(pool)]
     return boxes.Slot(0, 0, bytes(struct), boxes.encode_text(nickname), boxes.encode_text('POKESIM'))
 
 
