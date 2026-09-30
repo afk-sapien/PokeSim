@@ -440,3 +440,35 @@ def test_training_destinations_share_tiles_without_changing_level_or_version_rul
     finally:
         for cache in caches:
             cache.cache_clear()
+
+
+def test_evolution_training_reuses_destinations_and_preserves_level_filters(monkeypatch):
+    from pokesim.policies import collection
+    world = {map_id: {'symbol': symbol, 'tileset': 'CAVERN', 'tiles': [[0, 1, 0]],
+                     'passable': [0], 'warps': [[2, 0, 0, 0]]}
+             for map_id, symbol in ((900, 'EASY'), (901, 'HARD'), (902, 'CERULEAN_CAVE_1F'))}
+    sources = {'red': {'1': [{'method': 'grass', 'map': 900, 'level': 2},
+                            {'method': 'grass', 'map': 901, 'level': 20},
+                            {'method': 'grass', 'map': 902, 'level': 20},
+                            {'method': 'surf', 'map': 900, 'level': 20}],
+                       '2': [{'method': 'grass', 'map': 900, 'level': 2}]},
+               'blue': {'1': [{'method': 'grass', 'map': 901, 'level': 2}]}}
+    monkeypatch.setattr(collection, 'WORLD', world)
+    monkeypatch.setattr(collection, 'DATA', {'versions': sources})
+    caches = (collection.evolution_training_targets,
+              collection._evolution_training_map_targets, collection._training_tiles)
+    for cache in caches:
+        cache.cache_clear()
+    try:
+        low = collection.evolution_training_targets('red', 5)
+        assert low == ((900, 0, 0),)
+        assert collection.evolution_training_targets('red', 6) is low
+        assert collection.evolution_training_targets('blue', 5) == ((901, 0, 0),)
+        assert collection.evolution_training_targets('red', 23) == ((901, 0, 0),)
+        assert collection.evolution_training_targets('red', 100) == ()
+        monkeypatch.setattr(collection, 'tiles', lambda source: pytest.fail('Repeated tile scan'))
+        assert collection.evolution_training_targets('red', 5) is low
+        assert collection.evolution_training_targets('red', 7) is low
+    finally:
+        for cache in caches:
+            cache.cache_clear()

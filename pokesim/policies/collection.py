@@ -95,6 +95,21 @@ def training_targets(version, level):
     return _training_map_targets(maps)
 
 
+@lru_cache(maxsize=200)
+def evolution_training_targets(version, level):
+    maps = tuple(source['map'] for rows in DATA['versions'].get(version, {}).values()
+                 for source in rows if source['method'] == 'grass'
+                 and max(2, level - 12) <= source['level'] <= max(3, level - 3)
+                 and not WORLD[source['map']]['symbol'].startswith('CERULEAN_CAVE'))
+    return _evolution_training_map_targets(maps)
+
+
+@lru_cache(maxsize=200)
+def _evolution_training_map_targets(maps):
+    # Keep the original destination order, including its routing tie breaks.
+    return tuple(set(target for map_id in maps for target in _training_tiles(map_id)))
+
+
 @lru_cache(maxsize=256)
 def _training_tiles(map_id):
     return tuple(target[:3] for target in tiles({'map': map_id, 'method': 'grass'}))
@@ -943,14 +958,9 @@ class Collection:
                 if not dict(s.items).get(ITEMS[evo['requirement']]):
                     return at('collect_stone','Buy an evolution stone','Complete another Pokédex entry','CELADON_MART_4F',5,5,'down')
                 return Goal('collect_evolve','Evolve '+name(p['parent']), 'Use '+evo['requirement'].replace('_',' ').title(),((s.map,s.x,s.y),))
-            options=[]
-            for rows in self.sources().values():
-                for source in rows:
-                    if source['method']=='grass' and source['level'] <= max(3,s.party[index].level-3) and source['level'] >= max(2,s.party[index].level-12):
-                        if not WORLD[source['map']]['symbol'].startswith('CERULEAN_CAVE'):
-                            options.extend(t[:3] for t in tiles(source))
             return Goal('collect_train','Train '+name(p['parent'])+' toward '+name(p['species']),
-                        f'Work toward level {evo["requirement"]}, then resume other activities',tuple(set(options)))
+                        f'Work toward level {evo["requirement"]}, then resume other activities',
+                        evolution_training_targets(self.version, s.party[index].level))
         if p['method'] in ('gift','fossil') and len(s.party)>=6:
             if not storage_exchange_possible(s):
                 return None
