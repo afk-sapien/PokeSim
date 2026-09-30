@@ -1,28 +1,30 @@
-# Release status: 0.4.14 candidate
+# Release status: 0.4.15 candidate
 
-This release adds Journal Entries and Stats, durable activity totals, collection
-trends, and consistent type colors. Existing saves remain compatible. Core remains
-at 0.1.2. See the [release notes](docs/release-notes.md).
+This candidate combines per-adventure speed, resource readings, performance and
+memory improvements, standard save export, fullscreen fixes, repeat walking
+rewards, Journal Stats, and type colors. See the [release notes](docs/release-notes.md).
 
 ## Review and validation
 
-Code review fixed collection measurements being dropped by an early save after
-restart, failed writes consuming capture deltas in memory, and historical values
-being displayed as current when the latest measurement was unavailable.
+An independent subagent reviewed speed migration and runtime propagation,
+training and evolution caches, navigation invalidation, Victory Road routing,
+mixed-speed trades, and resource telemetry. No actionable defects were confirmed.
+Its focused suite passed 177 tests with 5 skipped. The broader Python suite passed
+1,533 tests with 96 skipped. All 200 Red/Blue evolution-training destination
+sequences matched the original implementation exactly.
 
-UI review replaced plain Journal links with panel tabs, added labeled chart
-scales and a date range, made small DV changes visible, and corrected DV deltas
-to percentage points. Desktop and phone layouts keep the text readable.
+Release review found two stale security checks targeting the removed global
+running limit. They now exercise backup creation while retaining authentication,
+CSRF, origin, and browser content-policy assertions. All 46 real-browser tests
+and the disposable authenticated HTTPS proxy check passed. Lint, web checks,
+and documentation checks passed.
 
-Local validation passed 1,404 Python tests with 75 optional tests skipped and
-all 26 browser checks. JavaScript, Ruff, documentation links, and package
-validation passed. The history stress check covered 100,000 hours with bounded
-responses. CI passed on Python 3.11, 3.12, and 3.14. All five native platforms and the
-acceleration check passed. The final Docker image passed lifecycle and fresh
-quickstart checks. See the [validation record](docs/validation/journal-stats-0.4.14.json).
+A fresh live Blue adventure passed the opening story and earned the Boulder Badge.
+After the evolution cache fix, observed Mt. Moon throughput ranged from 63× to
+133× across different game moments. These readings are not a controlled speedup
+benchmark. Full-story and long-duration observation remains in progress.
 
-The version tag and draft release are prepared. Public publication remains
-pending the required workflow authorization.
+Publication is pending the final release checks and publisher identity verification.
 
 ## Known limits, deliberately not addressed here
 

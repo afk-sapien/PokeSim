@@ -18,10 +18,9 @@ def test_library_scripts_work_and_injected_inline_script_is_blocked(page, tmp_pa
         page.goto(url)
         page.locator('#workspace').wait_for(state='visible')
         page.get_by_role('link', name='Settings', exact=True).click()
-        page.locator('#max-running').fill('3')
-        page.get_by_role('button', name='Save settings', exact=True).click()
+        page.locator('#create-backup').click()
         # A string predicate needs eval, which this page's content policy forbids.
-        expect(page.locator('#notice')).to_have_text('Application settings saved.')
+        expect(page.locator('#notice')).to_have_text('Backup ready to download.')
         violation = page.evaluate("""() => new Promise(resolve => {
             document.addEventListener('securitypolicyviolation', event => resolve(event.violatedDirective), {once: true})
             const script = document.createElement('script')

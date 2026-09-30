@@ -92,15 +92,15 @@ def main():
                 for auth in (None, 'Basic ' + base64.b64encode(b'wrong:wrong').decode()):
                     status, _, _ = request(path, auth=auth)
                     assert status == 401, (path, status)
-            assert request('/api/v1/settings', method='PATCH', payload={'max_running': 3})[0] == 401
+            assert request('/api/v1/backups', method='POST', payload={})[0] == 401
             status, headers, _ = request('/', auth=authorization)
             assert status == 200
             assert "script-src 'self'" in headers['Content-Security-Policy']
             token = json.loads(request('/api/v1/session', auth=authorization)[2])['csrf_token']
-            assert request('/api/v1/settings', auth=authorization, method='PATCH', payload={'max_running': 3})[0] == 403
-            assert request('/api/v1/settings', auth=authorization, method='PATCH', payload={'max_running': 3},
+            assert request('/api/v1/backups', auth=authorization, method='POST', payload={})[0] == 403
+            assert request('/api/v1/backups', auth=authorization, method='POST', payload={},
                            headers={'X-PokeSim-CSRF': token, 'Origin': origin})[0] == 200
-            assert request('/api/v1/settings', auth=authorization, method='PATCH', payload={'max_running': 2},
+            assert request('/api/v1/backups', auth=authorization, method='POST', payload={},
                            headers={'X-PokeSim-CSRF': token, 'Origin': 'https://evil.example'})[0] == 403
             assert request('/api/v1/session', auth=authorization, headers={'Sec-Fetch-Site': 'cross-site'})[0] == 403
             assert request('/games/example/%2e/internal/health', auth=authorization)[0] == 404

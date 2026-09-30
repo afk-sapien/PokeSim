@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.15
+
+- Set speed independently for each adventure and remove the running-game cap.
+  Show actual speed, CPU use, memory use, and recent activity on Library cards.
+- Reduce repeated collection decoding, rendering, training destination scans, and
+  navigation cache memory. Preserve the original evolution-training destinations.
+- Export standard cartridge `.sav` files from the Library. Return to the Library
+  through the PokeSim logo and fit the complete game image in fullscreen.
+- Improve Victory Road return routing and release held inputs after restoring saves.
+- Reopen legendary encounters after walking milestones. Add repeat Eevee, dojo,
+  fossil, and supported NPC trade visits after 100,000 new steps by default.
+- Keep League rewards to random starters. Repeat Mew requires 1,000,000 new steps
+  followed by another League win, with one initial Champion gift.
+- Count custom gifts in catch totals and protect the last copy of legendary Pokémon.
+- Record marathon times and personal bests. Recover individual League wins only
+  when historical identity evidence supports attribution.
+- Refresh README screenshots and lead installation with Docker for servers and
+  package-manager commands for desktops.
+- Update security checks to exercise supported controls after removing global limits.
+
 ## 0.4.14
 
 - Split Journal into Entries and Stats with matching segmented navigation.
