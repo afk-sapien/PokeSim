@@ -1,6 +1,7 @@
 from copy import deepcopy
 import hashlib
 import json
+import os
 import threading
 from types import SimpleNamespace
 
@@ -518,6 +519,9 @@ def test_resolved_interaction_directories_are_pruned_but_unresolved_ones_are_kep
         attempt = root / f'old-{index:02d}' / 'attempts' / 'a'
         attempt.mkdir(parents=True)
         (attempt / 'plan.json').write_bytes(b'{}')
+        # Filesystem timestamp resolution must not decide the retention order.
+        timestamp = 1_700_000_000 + index
+        os.utime(root / f'old-{index:02d}', (timestamp, timestamp))
 
     row = setup.coordinator.propose(setup.data)
     live = root / row['id'] / 'attempts' / row['plan']['attempt_id']
