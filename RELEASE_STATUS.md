@@ -1,6 +1,6 @@
-# Release status: 0.4.15 candidate
+# Release status: 0.4.15 published
 
-This candidate combines per-adventure speed, resource readings, performance and
+This release combines per-adventure speed, resource readings, performance and
 memory improvements, standard save export, fullscreen fixes, repeat walking
 rewards, Journal Stats, and type colors. See the [release notes](docs/release-notes.md).
 
@@ -24,7 +24,18 @@ After the evolution cache fix, observed Mt. Moon throughput ranged from 63× to
 133× across different game moments. These readings are not a controlled speedup
 benchmark. Full-story and long-duration observation remains in progress.
 
-Publication is pending the final release checks and publisher identity verification.
+Published [PokeSim 0.4.15](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.15)
+from `e843c7b4769958fb7633718bf2394d77739f4610` after all release workflow checks passed.
+[PR #28](https://github.com/afk-sapien/PokeSim/pull/28) is merged. All five native
+platforms, optional acceleration, Python and browser tests, package installation,
+and fresh Docker installation checks passed in the publishing workflow.
+
+Anonymous release downloads, checksums, installer files, and clean wheel identity
+were independently verified. The published image is
+`ghcr.io/afk-sapien/pokesim:0.4.15`, with digest
+`sha256:68d44c6b3544d6d93f8e59aecdba77429b6337c7bf120edfc8330936fa634308`.
+The owner explicitly authorized the standard GitHub release bot for this release.
+Direct authenticated operations and authored Git history used `afk-sapien`.
 
 ## Known limits, deliberately not addressed here
 
