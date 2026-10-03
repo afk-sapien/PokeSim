@@ -19,23 +19,33 @@
         throw error })
     return sessionRequest
   }
-  async function gameFetch(path, options = {}, retried = false) {
+  async function request(target, options = {}, retried = false) {
     const method = (options.method || 'GET').toUpperCase()
-    if (!base || ['GET', 'HEAD', 'OPTIONS'].includes(method)) return fetch(url(path), options)
+    if (!base || ['GET', 'HEAD', 'OPTIONS'].includes(method)) return fetch(target, options)
     await session()
     const sentCsrf = csrf
-    const response = await fetch(url(path), {...options, credentials: 'same-origin', headers: {...options.headers, 'X-PokeSim-CSRF': sentCsrf}})
+    const response = await fetch(target, {...options, credentials: 'same-origin', headers: {...options.headers, 'X-PokeSim-CSRF': sentCsrf}})
     if (!retried && response.status === 403) {
       let data = {}
       try { data = await response.clone().json() } catch (_) {}
       if (data.code === 'csrf_expired' || data.detail === 'Reload this page before making changes') {
         if (csrf === sentCsrf) sessionRequest = null
-        return gameFetch(path, options, true)
+        return request(target, options, true)
       }
     }
     return response
   }
-  globalThis.PokeSim = {base, adventureId, url, fetch: gameFetch, session}
+  const gameFetch = (path, options = {}) => request(url(path), options)
+  const setSpeed = speed => base && adventureId
+    ? request(`/api/v1/adventures/${encodeURIComponent(adventureId)}`, {
+      method: 'PATCH', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({settings: {speed}}),
+    })
+    : gameFetch('/api/control', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'speed', value: speed}),
+    })
+  globalThis.PokeSim = {base, adventureId, url, fetch: gameFetch, session, setSpeed}
   if (!base || !adventureId) return
   document.addEventListener('DOMContentLoaded', async () => {
     const switcher = document.querySelector('#adventure-switcher')

@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:0.12.18 AS uv
+FROM ghcr.io/astral-sh/uv:0.12.21 AS uv
 FROM python:3.14-slim-trixie AS build
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
@@ -27,7 +27,7 @@ COPY --from=build /notices /usr/share/pokesim
 COPY --from=build /app/pokesim /usr/share/pokesim/source/pokesim
 COPY pyproject.toml setup.py uv.lock LICENSE THIRD_PARTY_NOTICES.md /usr/share/pokesim/source/
 COPY licenses /usr/share/pokesim/licenses
-ARG VERSION=0.4.16
+ARG VERSION=0.4.17
 ARG REVISION=unknown
 ENV POKESIM_REVISION=$REVISION
 LABEL org.opencontainers.image.source="https://github.com/afk-sapien/PokeSim" \

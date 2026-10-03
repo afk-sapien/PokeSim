@@ -62,6 +62,7 @@ def test_portraits_work_without_bundled_game_images(tmp_path):
             (portraits / '25.png').write_bytes(b'user supplied image')
             response = client.get('/sprites/25.png')
             assert response.content == b'user supplied image'
+            assert response.headers['cache-control'] == 'private, no-cache'
             assert response.headers['content-type'] == 'image/png'
     finally:
         store.close()

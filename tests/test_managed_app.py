@@ -136,6 +136,7 @@ def test_shared_portraits_work_for_new_adventures_and_allow_local_overrides(clie
         response = client.get(f'/games/{row["id"]}/sprites/25.png')
         assert response.headers['content-type'] == 'image/png'
         assert response.content == b'shared portrait'
+        assert response.headers['cache-control'] == 'private, no-cache'
     custom = manager.root / 'adventures' / first['id'] / 'sprites'
     custom.mkdir()
     (custom / '25.png').write_bytes(b'custom portrait')
@@ -187,7 +188,8 @@ def test_game_trading_stays_scoped_and_available_when_stopped(client):
 def test_speed_is_independent_and_editable_while_running(client):
     client, manager = client
     headers = login(client, manager)
-    assert set(client.get('/api/v1/settings').json()) == {'data_dir', 'nickname_prefixes', 'nickname_suffixes'}
+    from pokesim.nicknames import NICKNAME_FIELDS
+    assert set(client.get('/api/v1/settings').json()) == {'data_dir', 'nickname_catalog', *NICKNAME_FIELDS}
     for data in ({'speed': 4}, {'max_running': 3}):
         assert client.patch('/api/v1/settings', json=data, headers=headers).status_code == 409
     manager.registry.add_rom('fixture-rom', 'sha1', 'red')
@@ -284,10 +286,65 @@ def test_global_nickname_settings_are_validated_persisted_and_reset(client, monk
     assert result.status_code == 200
     assert result.json()['pending'] == ['reconnecting']
     saved = manager.registry.setting('nickname_parts')
-    assert saved == {'nickname_prefixes': ['SPICY'], 'nickname_suffixes': ['GOOSE']}
+    from pokesim.nicknames import nickname_defaults
+    assert saved == {**nickname_defaults(), 'nickname_prefixes': ['SPICY'], 'nickname_suffixes': ['GOOSE']}
     assert client.get('/api/v1/settings').json()['nickname_prefixes'] == ['SPICY']
     assert client.patch('/api/v1/settings', json={**payload, 'speed': 4}, headers=headers).status_code == 409
     assert client.patch('/api/v1/settings', json={**payload, 'nickname_prefixes': ['<script>']}, headers=headers).status_code == 409
     assert manager.registry.setting('nickname_parts') == saved
     result = client.patch('/api/v1/settings', json={'nickname_prefixes': [], 'nickname_suffixes': []}, headers=headers)
     assert result.status_code == 200 and len(calls) == 2
+
+
+def test_create_saves_normalized_intro_names_and_rejects_later_edits(client):
+    client, manager = client
+    headers = login(client, manager)
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    payload = {'name': 'Custom intro', 'rom_id': 'fixture-rom', 'trainer_name': ' ty ',
+               'rival_name': 'gary', 'request_id': identifier()}
+    row = client.post('/api/v1/adventures', headers=headers, json=payload).json()
+    assert row['settings']['trainer_name'] == 'TY'
+    assert row['settings']['rival_name'] == 'GARY'
+    assert client.post('/api/v1/adventures', headers=headers, json=payload).json()['id'] == row['id']
+    assert manager.registry.adventure(row['id'])['settings']['trainer_name'] == 'TY'
+    response = client.patch(f"/api/v1/adventures/{row['id']}", headers=headers,
+                            json={'settings': {'trainer_name': 'ASH'}})
+    assert response.status_code == 409
+    for bad in ('TOOLONGGG', 'A B', 'ASH!', 'ß', None, 5):
+        response = client.post('/api/v1/adventures', headers=headers,
+                               json={**payload, 'request_id': identifier(), 'rival_name': bad})
+        assert response.status_code == 409
+    assert len(manager.registry.adventures()) == 1
+
+
+def test_audio_proxy_preserves_pcm_metadata_and_adventure_boundary(client, monkeypatch):
+    import httpx
+    client, manager = client
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    adventure = manager.registry.create('Audio Red', 'fixture-rom', {}, identifier())
+    manager.registry.update(adventure['id'], state='running')
+    child = SimpleNamespace(url='http://worker', token='private-worker-token')
+    monkeypatch.setattr(manager.supervisor, 'child', lambda aid: child)
+    def worker(request):
+        assert request.url.path == '/api/audio'
+        assert request.url.query == b'after=7'
+        assert request.headers['authorization'] == 'Bearer private-worker-token'
+        return httpx.Response(200, content=b'\x01\x02' * 800, headers={
+            'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store',
+            'X-Audio-State': 'playing', 'X-Audio-Rate': '48000', 'X-Audio-Sequence': '8',
+            'X-Audio-Speed': '16',
+            'X-Private-Worker': 'must-not-leak',
+        })
+    client.app.state.children = httpx.AsyncClient(transport=httpx.MockTransport(worker))
+    path = f'/games/{adventure["id"]}/api/audio?after=7'
+    response = client.get(path)
+    assert response.status_code == 200
+    assert response.content == b'\x01\x02' * 800
+    assert response.headers['X-Audio-State'] == 'playing'
+    assert response.headers['X-Audio-Rate'] == '48000'
+    assert response.headers['X-Audio-Sequence'] == '8'
+    assert response.headers['X-Audio-Speed'] == '16'
+    assert 'X-Private-Worker' not in response.headers
+    assert client.get(path, headers={'Origin': 'https://elsewhere.invalid'}).status_code == 403
+    manager.registry.update(adventure['id'], state='stopped')
+    assert client.get(path).status_code == 409

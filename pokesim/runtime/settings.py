@@ -22,6 +22,12 @@ class SimulationSettings:
     public_url: str = 'http://127.0.0.1:8000'
     nickname_prefixes: tuple[str, ...] = ()
     nickname_suffixes: tuple[str, ...] = ()
+    nickname_names: tuple[str, ...] = ()
+    nickname_excluded_prefixes: tuple[str, ...] = ()
+    nickname_excluded_suffixes: tuple[str, ...] = ()
+    nickname_excluded_names: tuple[str, ...] = ()
+    trainer_name: str = ''
+    rival_name: str = ''
     starter: str = 'random'
     speed: float = 1
     policy: str = 'strategic'
@@ -49,9 +55,10 @@ class SimulationSettings:
     ntfy_mute: tuple[str, ...] = ()
 
     def __post_init__(self):
-        from ..nicknames import validate_parts
-        parts = validate_parts({name: getattr(self, name) for name in (
-            'nickname_prefixes', 'nickname_suffixes')})
+        from ..nicknames import NICKNAME_FIELDS, validate_parts, validate_trainer_name
+        for name in ('trainer_name', 'rival_name'):
+            object.__setattr__(self, name, validate_trainer_name(getattr(self, name)))
+        parts = validate_parts({name: getattr(self, name) for name in NICKNAME_FIELDS})
         for name, values in parts.items():
             object.__setattr__(self, name, tuple(values))
         for name in ('rom_path', 'data_dir', 'game_data_dir'):
@@ -140,7 +147,7 @@ class SimulationSettings:
         for name, value in self.to_dict().items():
             if isinstance(value, bool):
                 encoded = '1' if value else '0'
-            elif name in ('ntfy_mute', 'nickname_prefixes', 'nickname_suffixes'):
+            elif name == 'ntfy_mute' or name.startswith('nickname_'):
                 encoded = ','.join(value)
             else:
                 encoded = str(value if value is not None else 0)

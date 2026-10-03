@@ -15,7 +15,7 @@
       : failed ? receiving ? 'Planned return' : 'Planned offer' : receiving ? 'Receiving' : 'Sending'
     if (!mon?.name) return `<div class="swap-side cable-mon cable-${direction} cable-unknown"><div class="plate plate--bay plate--empty"><span class="plate-num" aria-hidden="true">?</span></div><div class="swap-read"><p class="micro">${label}</p><h4>Pokémon details unavailable</h4><p class="swap-sub">This older attempt did not record the Pokémon.</p></div></div>`
     const dex = dexNumber(mon)
-    const sprite = dex ? `<img src="${esc(PokeSim.base || '')}/sprites/${dex}.png" alt="" loading="lazy">` : '<span class="plate-num" aria-hidden="true">?</span>'
+    const sprite = dex ? `<img src="${esc(PokeSim.base || '')}/sprites/${dex}.png?v=rom-portraits-1" alt="" loading="lazy">` : '<span class="plate-num" aria-hidden="true">?</span>'
     const nickname = mon.nickname && mon.nickname.toLowerCase() !== mon.name.toLowerCase()
       ? `<p class="swap-sub cable-nickname">“${esc(mon.nickname)}”</p>` : ''
     const level = Number.isInteger(mon.level) && mon.level > 0 && mon.level <= 100 ? ` · Lv. ${mon.level}` : ''

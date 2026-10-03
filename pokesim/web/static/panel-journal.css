@@ -521,3 +521,47 @@
   #marathon-records .column-head { gap: var(--s2) }
   #marathon-heading { flex-basis: 100% }
 }
+
+/* Repeat encounters use the same panel language as the adventure records. */
+#event-returns .column-head { flex-wrap: wrap }
+#event-returns .column-head { gap: var(--s2) }
+.return-grid { display: grid }
+.return-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)) }
+.return-grid { gap: var(--s3) }
+.return-card { min-width: 0 }
+.return-card { padding: var(--s4) }
+.return-card { background: var(--panel) }
+.return-card { border: var(--hair) solid var(--rule) }
+.return-card { display: flex }
+.return-card { flex-direction: column }
+.return-card { gap: var(--s2) }
+.return-card-head { display: flex }
+.return-card-head { align-items: start }
+.return-card-head { justify-content: space-between }
+.return-card-head { flex-wrap: wrap }
+.return-card-head { gap: var(--s2) }
+.return-card-head h3 { font-size: var(--f-legend) }
+.return-card-head h3 { line-height: 1.3 }
+.return-state { padding: var(--s1) var(--s2) }
+.return-state { border: var(--hair) solid var(--rule-faint) }
+.return-state { background: var(--panel-2) }
+.return-card--ready { border-top: 3px solid var(--signal) }
+.return-card--ready .return-state { color: var(--signal) }
+.return-value { display: block }
+.return-value { white-space: normal }
+.return-value { overflow-wrap: anywhere }
+.return-value { font-size: var(--f-read) }
+.return-card--ready .return-value, .return-card--pending .return-value, .return-card--league .return-value { font-size: var(--f-legend) }
+.return-detail { margin-bottom: var(--s2) }
+.return-meter { margin-top: auto }
+.return-meter { width: 100% }
+.return-meter { height: 8px }
+.return-meter { appearance: none }
+.return-meter { border: 0 }
+.return-meter { accent-color: var(--signal) }
+.return-meter::-webkit-progress-bar { background: var(--cell-off) }
+.return-meter::-webkit-progress-value { background: var(--signal) }
+.return-meter::-moz-progress-bar { background: var(--signal) }
+.return-count { color: var(--ink-2) }
+.return-empty { padding: var(--s4) }
+.return-empty { border: var(--hair) solid var(--rule) }

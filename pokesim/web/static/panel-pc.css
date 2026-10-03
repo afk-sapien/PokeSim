@@ -158,7 +158,7 @@
 
 .pc-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
   gap: var(--s2);
 }
 .pc-mon,
@@ -233,7 +233,7 @@
 }
 
 /* All Pokémon: horizontal cards, the plate on the left. */
-.pc-all-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.pc-all-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)) }
 .pc-all-grid .pc-mon {
   grid-template-columns: calc(var(--sprite-2x) + 2px) minmax(0, 1fr);
   grid-template-rows: auto auto auto;
@@ -357,16 +357,14 @@
 
 /* ---- responsive -------------------------------------------------------- */
 @media (max-width: 1100px) {
-  .pc-workspace { grid-template-columns: 232px minmax(0, 1fr); }
-  .pc-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .pc-all-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .pc-workspace:not(.pc-workspace-all) { grid-template-columns: 232px minmax(0, 1fr) }
 }
 @media (max-width: 860px) {
-  .pc-workspace { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+  .pc-workspace:not(.pc-workspace-all) { grid-template-columns: minmax(0, 1fr) }
+  .pc-workspace { gap: var(--s3) }
   .pc-sidebar { position: static; max-height: none; overflow: visible; }
   .pc-sidebar-head, .box-picker { display: none; }
   .mobile-box-control { display: flex; }
-  .pc-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .pc-summary .stats { margin-left: 0; flex-wrap: wrap; row-gap: var(--s3); width: 100%; }
   .pc-summary .stat:last-child { flex-basis: 100%; grid-column: 1 / -1; padding-left: 0; border-left: 0; }
   .segmented { display: flex; }
@@ -376,8 +374,7 @@
   /* Stored and new catches share the first row; the view switch takes the second. */
   .pc-summary .stat:first-child { grid-column: auto; }
   .pc-summary .stat:nth-child(2) { border-top: 0; }
-  .pc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .pc-all-grid { grid-template-columns: minmax(0, 1fr); }
+  .pc-grid:not(.pc-all-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)) }
   .pc-toolbar { padding: var(--s3); }
   .pc-toolbar .field:not(.field--grow) { flex: 1 1 140px; }
   .pc-count { margin-left: 0; padding-bottom: 0; flex-basis: 100%; }

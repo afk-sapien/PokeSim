@@ -262,7 +262,7 @@ class Coordinator:
                 if value is None:
                     return None
                 dex = value['dex']
-                return {**value, 'sprite_url': f'/games/{aid}/sprites/{dex}.png' if dex else None}
+                return {**value, 'sprite_url': f'/games/{aid}/sprites/{dex}.png?v=rom-portraits-1' if dex else None}
             return {'id': row['id'], 'phase': row['phase'], 'decision': row['decision'],
                     'updated_at': row['updated_at'], 'peer_id': peer, 'peer_name': names.get(peer, 'Another adventure'),
                     'sent': mon(detail['sent']), 'received': mon(detail['received']),

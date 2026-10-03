@@ -193,6 +193,24 @@ def test_map_transition_does_not_record_mismatched_coordinates():
     assert not pol.nav.visits and not pol.nav.edges
 
 
+def test_faint_dialogue_at_map_edge_does_not_deadlock_transition():
+    pol = StrategicPolicy(1)
+    mem = fake_mem({14: 'FROGDEBT', 16: 'fainted!'})
+    state = snap(map=MAPS['ROUTE_15'], x=255, y=9, frame=100, textbox=True,
+                 party=(mon(hp=0), mon()), playtime=(10, 0, 0))
+    # Still allow the usual brief settling period after a map change.
+    assert pol.step(PolicyContext(state, 0, 0, mem))[0].button is None
+    state = replace(state, frame=160)
+    action = pol.step(PolicyContext(state, 0, 0, mem))[0]
+    assert action.button == 'b'
+    assert pol.mode == 'dialogue'
+    assert not pol.nav.visits and not pol.nav.edges
+    # Without text, an out-of-bounds transition must still receive no movement input.
+    state = replace(state, frame=190, textbox=False)
+    assert pol.step(PolicyContext(state, 0, 0, fake_mem({})))[0].button is None
+    assert not pol.nav.visits and not pol.nav.edges
+
+
 def test_snapshot_reads_moves_stats_and_flags():
     mem = bytearray(65536)
     mem[W_PARTY_COUNT] = 1

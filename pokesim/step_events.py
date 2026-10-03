@@ -186,7 +186,7 @@ def available(store):
 def status(store):
     total = (store.get(STEPS) or {}).get('total', 0)
     enabled = bool(getattr(config, 'EVENT_RETURN_STEPS', 100000))
-    return {'enabled': enabled, 'activities': [
+    return {'enabled': enabled, 'interval': getattr(config, 'EVENT_RETURN_STEPS', 100000), 'activities': [
         {'key': key, 'ready': enabled and ticket['state'] == 'available',
          'remaining': max(0, ticket['next_at'] - total)}
         for key, ticket in (store.get(KEY) or {}).get('tickets', {}).items()]}

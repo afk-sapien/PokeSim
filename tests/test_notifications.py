@@ -342,3 +342,242 @@ def test_a_stall_is_routed_by_its_own_category():
     rules = dict((key, kinds) for key, _, _, _, kinds in CATEGORIES)
     assert rules['stall'] == (('stall', 1),)
     assert CATEGORIES[0][0] == 'stall' and CATEGORIES[0][3] is True
+
+
+WEBHOOK = 'https://discord.com/api/webhooks/123456789/' + 'x' * 40
+BOT_TOKEN = '123456789:' + 'y' * 35
+
+
+@pytest.mark.parametrize('provider,credentials', [
+    ('discord', {'discord_webhook': WEBHOOK}),
+    ('telegram', {'telegram_token': BOT_TOKEN, 'telegram_chat_id': '-100123456789'}),
+])
+def test_provider_settings_survive_switch_and_restart(client, monkeypatch, provider, credentials):
+    client, manager = client
+    aid = adventure(manager, 'Red')
+    client.patch('/api/v1/notifications', json={'enabled': True, 'topic': 'old-topic', 'token': SECRET})
+    response = client.patch('/api/v1/notifications', json={'provider': provider, **credentials})
+    assert response.status_code == 200
+    assert response.json()['provider'] == provider
+    for secret in (WEBHOOK, BOT_TOKEN, SECRET):
+        assert secret not in response.text
+    fresh = NotificationCenter(manager.registry, manager.supervisor, manager.public_url)
+    live = sender(fresh, manager.registry.adventure(aid))
+    assert live.provider == provider
+    assert live.wants(Event('badge', 'Badge', priority=HIGH))
+    sent = []
+    monkeypatch.setattr(notifications, 'publish', lambda *args, **kwargs: sent.append((args, kwargs)))
+    assert client.post('/api/v1/notifications/test', json={}).json()['ok']
+    assert sent[-1][1]['provider'] == provider
+    client.patch('/api/v1/notifications', json={'provider': 'ntfy'})
+    assert fresh.settings()['token'] == SECRET
+    assert fresh.settings()['topic'] == 'old-topic'
+    client.patch('/api/v1/notifications', json={'provider': provider, 'adventures': {aid: False}})
+    assert not sender(fresh, manager.registry.adventure(aid)).wants(Event('badge', 'Badge', priority=HIGH))
+    response = client.patch('/api/v1/notifications', json={next(iter(credentials)): ''})
+    assert response.status_code == 409
+    assert fresh.settings()[next(iter(credentials))] == next(iter(credentials.values()))
+
+
+@pytest.mark.parametrize('changes', [
+    {'provider': 'unknown'}, {'provider': []},
+    {'discord_webhook': 'https://discord.com.evil.test/api/webhooks/1/' + 'x' * 40},
+    {'discord_webhook': WEBHOOK.replace('discord.com', 'discordapp.com.evil.test')},
+    {'discord_webhook': WEBHOOK.replace('discord.com', 'discordapp.com@evil.test')},
+    {'discord_webhook': WEBHOOK + '?redirect=evil'}, {'telegram_token': 'invalid'},
+    {'telegram_chat_id': 'a/b'}, {'provider': 'telegram', 'enabled': True},
+])
+def test_invalid_provider_changes_are_atomic(client, changes):
+    client, manager = client
+    before = manager.notifications.settings()
+    response = client.patch('/api/v1/notifications', json=changes)
+    assert response.status_code == 409
+    assert manager.notifications.settings() == before
+
+
+@pytest.mark.parametrize('provider', ['discord', 'telegram'])
+@pytest.mark.parametrize('image', [None, b'png'])
+def test_provider_delivery_payload_and_screenshots(monkeypatch, provider, image):
+    calls = []
+    def post(url, **kwargs):
+        calls.append((url, kwargs))
+        return httpx.Response(200, json={'ok': True})
+    monkeypatch.setattr(httpx, 'post', post)
+    notify.publish(WEBHOOK, BOT_TOKEN, 'Red · @everyone', '🌱' * 5000, image=image,
+                   click='https://example.com/games/red/', provider=provider, chat_id='-123')
+    url, request = calls[0]
+    if provider == 'discord':
+        import json
+        payload = json.loads(request['data']['payload_json']) if image else request['json']
+        assert payload['allowed_mentions'] == {'parse': []}
+        assert payload['embeds'][0]['url'] == 'https://example.com/games/red/'
+        assert len(payload['embeds'][0]['description'].encode('utf-16-le')) <= 7000
+        assert url == WEBHOOK
+    else:
+        assert url.endswith('/sendPhoto' if image else '/sendMessage')
+        assert request['data']['chat_id'] == '-123'
+        text = request['data']['caption' if image else 'text']
+        assert len(text.encode('utf-16-le')) <= (1024 if image else 4096) * 2
+        assert 'parse_mode' not in request['data']
+    assert bool(request.get('files')) == bool(image)
+
+
+@pytest.mark.parametrize('provider', ['discord', 'telegram'])
+def test_provider_failure_never_exposes_credentials(monkeypatch, caplog, provider):
+    import logging
+    def post(url, **kwargs):
+        logging.getLogger('httpx').info('HTTP Request: POST %s', url)
+        raise httpx.ConnectError('Failed ' + url + BOT_TOKEN)
+    monkeypatch.setattr(httpx, 'post', post)
+    with caplog.at_level(logging.INFO), pytest.raises(RuntimeError) as error:
+        notify.publish(WEBHOOK, BOT_TOKEN, 'title', 'body', provider=provider, chat_id='123')
+    for secret in (WEBHOOK, BOT_TOKEN):
+        assert secret not in str(error.value) + caplog.text
+    monkeypatch.setattr(httpx, 'post', lambda *args, **kwargs: httpx.Response(429, json={'error': BOT_TOKEN}))
+    with pytest.raises(RuntimeError, match='HTTP 429') as error:
+        notify.publish(WEBHOOK, BOT_TOKEN, 'title', 'body', provider=provider, chat_id='123')
+    assert BOT_TOKEN not in str(error.value)
+
+
+@pytest.mark.parametrize('provider,credentials', [
+    ('discord', {'discord_webhook': WEBHOOK}),
+    ('telegram', {'telegram_token': BOT_TOKEN, 'telegram_chat_id': '123'}),
+])
+def test_worker_and_trade_use_selected_provider(client, monkeypatch, provider, credentials):
+    client, manager = client
+    red, blue = adventure(manager, 'Red'), adventure(manager, 'Blue')
+    client.patch('/api/v1/notifications', json={'provider': provider, **credentials, 'enabled': True,
+                                              'categories': {'trades': True}})
+    sent = []
+    monkeypatch.setattr(notify, 'publish', lambda *args, **kwargs: sent.append((args, kwargs)))
+    monkeypatch.setattr(notifications, 'publish', lambda *args, **kwargs: sent.append((args, kwargs)))
+    live = sender(manager.notifications, manager.registry.adventure(red))
+    # Join the actual worker delivery thread to inspect the captured payload.
+    original = notify.threading.Thread
+    threads = []
+    def thread(*args, **kwargs):
+        result = original(*args, **kwargs)
+        threads.append(result)
+        return result
+    monkeypatch.setattr(notify.threading, 'Thread', thread)
+    live.send('Badge', 'Earned', image=b'png')
+    threads[-1].join(5)
+    assert sent[-1][0][2] == 'Red · Badge'
+    assert sent[-1][1]['provider'] == provider
+    assert sent[-1][1]['chat_id'] == ('123' if provider == 'telegram' else '')
+    manager.notifications.trade_completed({'plan': {'participants': [red, blue]}}, {}).join(5)
+    assert sent[-1][1]['provider'] == provider
+    assert 'Trade completed' in sent[-1][0][2]
+
+
+@pytest.mark.parametrize('host', ['discord.com', 'discordapp.com'])
+@pytest.mark.parametrize('api', ['/api/', '/api/v10/'])
+def test_discord_legacy_urls_normalize_for_unsaved_tests_and_storage(client, monkeypatch, host, api):
+    client, manager = client
+    supplied = WEBHOOK.replace('discord.com', host).replace('/api/', api)
+    expected = WEBHOOK.replace('/api/', api)
+    sent = []
+    monkeypatch.setattr(notifications, 'publish', lambda *args, **kwargs: sent.append(args[0]))
+    response = client.post('/api/v1/notifications/test', json={
+        'provider': 'discord', 'discord_webhook': supplied,
+    })
+    assert response.json()['ok']
+    assert sent == [expected]
+    assert not manager.notifications.public()['discord_webhook_set']
+    response = client.patch('/api/v1/notifications', json={
+        'provider': 'discord', 'discord_webhook': supplied, 'enabled': True,
+    })
+    assert response.status_code == 200
+    assert manager.notifications.settings()['discord_webhook'] == expected
+    assert supplied not in response.text and expected not in response.text
+
+
+def test_multiple_destinations_persist_deliver_and_disable_independently(client, monkeypatch):
+    client, manager = client
+    red, blue = adventure(manager, 'Red'), adventure(manager, 'Blue')
+    enabled = {'ntfy': True, 'discord': True, 'telegram': True}
+    response = client.patch('/api/v1/notifications', json={
+        'enabled': True, 'providers': enabled, 'topic': 'multi', 'token': SECRET,
+        'discord_webhook': WEBHOOK, 'telegram_token': BOT_TOKEN, 'telegram_chat_id': '123',
+        'categories': {'trades': True, 'badges': False}})
+    assert response.status_code == 200
+    assert response.json()['providers'] == enabled
+    for secret in (SECRET, WEBHOOK, BOT_TOKEN):
+        assert secret not in response.text
+    center = NotificationCenter(manager.registry, manager.supervisor, manager.public_url)
+    assert center.public()['providers'] == enabled
+    live = sender(center, manager.registry.adventure(red))
+    assert not live.wants(Event('badge', 'Badge', priority=HIGH))
+    assert live.wants(Event('champion', 'Win', priority=URGENT))
+    sent = []
+    def publish(url, token, title, *args, **kwargs):
+        sent.append((kwargs.get('provider', 'ntfy'), url, token, title, kwargs))
+        if kwargs.get('provider') == 'discord':
+            raise RuntimeError('Simulated provider outage')
+    monkeypatch.setattr(notify, 'publish', publish)
+    monkeypatch.setattr(notifications, 'publish', publish)
+    original = notify.threading.Thread
+    threads = []
+    def thread(*args, **kwargs):
+        result = original(*args, **kwargs)
+        threads.append(result)
+        return result
+    monkeypatch.setattr(notify.threading, 'Thread', thread)
+    live.send('Win', 'Champion defeated', image=b'png')
+    for worker in threads:
+        worker.join(5)
+    assert {row[0] for row in sent} == set(enabled)
+    assert len(sent) == 3
+    by_provider = {row[0]: row for row in sent}
+    assert by_provider['ntfy'][1:3] == ('https://ntfy.sh/multi', SECRET)
+    assert by_provider['discord'][1:3] == (WEBHOOK, '')
+    assert by_provider['telegram'][2] == BOT_TOKEN
+    assert by_provider['telegram'][4]['chat_id'] == '123'
+    assert all(row[3] == 'Red · Win' for row in sent)
+    sent.clear()
+    center.trade_completed({'plan': {'participants': [red, blue]}}, {}).join(5)
+    assert {row[0] for row in sent} == set(enabled)
+    assert len(sent) == 3
+    response = client.patch('/api/v1/notifications', json={'providers': {'discord': False}})
+    assert response.status_code == 200
+    assert response.json()['discord_webhook_set']
+    assert response.json()['providers'] == {**enabled, 'discord': False}
+    config = center.worker_settings(manager.registry.adventure(red))
+    assert {row['provider'] for row in config['destinations']} == {'ntfy', 'telegram'}
+    client.patch('/api/v1/notifications', json={'adventures': {red: False, blue: False}})
+    assert not center.worker_settings(manager.registry.adventure(red))['destinations']
+    assert center.trade_completed({'plan': {'participants': [red, blue]}}, {}) is None
+    client.patch('/api/v1/notifications', json={'enabled': False})
+    config = center.worker_settings(manager.registry.adventure(red))
+    assert config['destinations'] == []
+    live.configure(config)
+    sent.clear()
+    live.send('Win', 'Paused notifications')
+    assert not sent
+
+
+@pytest.mark.parametrize('providers', [[], None, {'unknown': True}, {'discord': 'yes'},
+                                      {'ntfy': False, 'discord': False, 'telegram': False},
+                                      {'ntfy': True, 'telegram': True}])
+def test_invalid_multi_destination_update_does_not_change_saved_settings(client, providers):
+    client, manager = client
+    client.patch('/api/v1/notifications', json={'enabled': True, 'topic': 'existing'})
+    before = manager.notifications.settings()
+    response = client.patch('/api/v1/notifications', json={'providers': providers})
+    assert response.status_code == 409
+    assert manager.notifications.settings() == before
+
+
+@pytest.mark.parametrize('provider', ['ntfy', 'discord', 'telegram'])
+def test_existing_single_provider_settings_migrate_without_enabling_others(client, provider):
+    client, manager = client
+    values = {**notifications.defaults(), 'provider': provider, 'enabled': True, 'topic': 'legacy',
+              'discord_webhook': WEBHOOK, 'telegram_token': BOT_TOKEN, 'telegram_chat_id': '123'}
+    manager.registry.set_setting('notifications', values)
+    data = client.get('/api/v1/notifications').json()
+    assert data['providers'] == {name: name == provider for name in notifications.PROVIDERS}
+    aid = adventure(manager, 'Red')
+    config = manager.notifications.worker_settings(manager.registry.adventure(aid))
+    assert [row['provider'] for row in config['destinations']] == [provider]
+    assert client.patch('/api/v1/notifications', json={'providers': data['providers']}).status_code == 200
+    assert manager.notifications.settings()['providers'] == data['providers']

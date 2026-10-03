@@ -15,6 +15,7 @@ from PIL import Image
 from pyboy import PyBoy
 
 from . import __version__, config
+from .audio import AudioFeed, enable_checkpoint_sound
 from .build_info import build_info
 from .checkpoints import open_state
 from .events import HIGH, Event, RunMemory, diff
@@ -51,6 +52,7 @@ def blank_frame(image) -> bool:
 
 
 class Emulator:
+    _audio_enabled = False
     # Encoding a frame costs far more than emulating one, so only encode while something is
     # actually asking for frames, and no faster than the stream can show them. Class defaults so
     # a partially built emulator still ticks.
@@ -80,6 +82,7 @@ class Emulator:
         self.frame_cond = threading.Condition()
         self.frame_image: bytes = b""
         self.frame_seq = 0
+        self.audio = AudioFeed()
         self.frame = 0
         self.executed_frames = 0
         self.play_clock = PlayClock(store.get("play_clock", {}))
@@ -123,6 +126,7 @@ class Emulator:
             from .policies.navigation_numba import kernel
             kernel()
         self.pb = self._boot()
+        self._audio_enabled = False
         self.thread = threading.Thread(target=self._run, name="emulator", daemon=True)
 
     # ---------------- lifecycle ----------------
@@ -136,12 +140,12 @@ class Emulator:
         log.warning("ROM sha1 %s is not a known clean Red/Blue dump; RAM addresses may be off", sha)
         return f"unverified ROM (sha1 {sha[:12]})"
 
-    def _boot(self) -> PyBoy:
+    def _boot(self, *, sound=False) -> PyBoy:
         options = {}
         if getattr(self, 'isolated_ram', False):
             import io
             options['ram_file'] = io.BytesIO(bytes(32768))
-        pb = PyBoy(str(self.rom), window="null", sound_emulated=False, **options)
+        pb = PyBoy(str(self.rom), window="null", sound_emulated=sound, **options)
         pb.set_emulation_speed(0)
         tracker = getattr(self, 'catch_tracker', None)
         if tracker is not None:
@@ -252,6 +256,7 @@ class Emulator:
                 log.warning("cannot restore %s: %s", path.name, error)
                 self.pb.stop(save=False)
                 self.pb = self._boot()
+                self._audio_enabled = False
         raise RuntimeError(f"No compatible autosave could be restored ({len(errors)} tried). Restore a backup or use a new data directory.")
 
     def _load_state_file(self, path: Path):
@@ -270,7 +275,10 @@ class Emulator:
             if metadata.get("policy") != config.POLICY:
                 raise ValueError("Checkpoint requires a different policy")
         with open_state(path) as f:
-            self.pb.load_state(f)
+            raw = f.read()
+            self.pb.load_state(io.BytesIO(enable_checkpoint_sound(raw) if self._audio_enabled else raw))
+        if getattr(self, "audio", None) is not None:
+            self.audio.clear()
         # A checkpoint can be captured while a direction is held. The next
         # policy action must not inherit that button from the saved joypad.
         for button in BUTTONS:
@@ -336,6 +344,11 @@ class Emulator:
         """Note that something wants frames. Viewers call this as they poll or stream."""
         self._watch_until = time.monotonic() + WATCH_GRACE
 
+    def audio_packet(self, after):
+        state = 'paused' if self.paused and not self.manual_mode else 'playing'
+        sequence, pcm, speed = self.audio.read(after, state)
+        return state, sequence, pcm, speed
+
     def current_frame(self, timeout: float = 1.0) -> bytes:
         """The latest frame, waiting for the first one if the run has only just started."""
         self.watch()
@@ -362,15 +375,41 @@ class Emulator:
             self.frame_seq += 1
             self.frame_cond.notify_all()
 
+    def _sync_audio(self, enabled):
+        if enabled == self._audio_enabled:
+            return
+        # PyBoy cannot toggle its APU through the public API. Replace it on the
+        # owner thread using an in-memory checkpoint and preserve queued input.
+        previous = self.pb
+        state = io.BytesIO()
+        previous.save_state(state)
+        replacement = self._boot(sound=enabled)
+        try:
+            raw = state.getvalue()
+            replacement.load_state(io.BytesIO(enable_checkpoint_sound(raw) if enabled else raw))
+            for event in previous.events:
+                replacement.send_input(event)
+        except BaseException:
+            replacement.stop(save=False)
+            raise
+        self.pb = replacement
+        self._audio_enabled = enabled
+        self.audio.clear()
+        previous.stop(save=False)
+
     def _tick(self, n: int):
         """Advance frames, rendering only for an observation or a waiting viewer."""
         while n > 0 and not self.stopping:
-            k = min(CHUNK, n)
+            audible = self.audio.active()
+            self._sync_audio(audible)
+            k = min(1 if audible else CHUNK, n)
             observing = (self.frame + k) // SNAPSHOT_EVERY != self.frame // SNAPSHOT_EVERY
             publishing = self._due_to_publish(time.monotonic())
             # Policy reads the cartridge tilemap, not the rendered image. Keep
             # observation frames fresh for journal screenshots and fade retakes.
-            self.pb.tick(k, render=observing or publishing)
+            self.pb.tick(k, render=observing or publishing, sound=audible)
+            if audible:
+                self.audio.publish(self.pb.sound.raw_buffer[:self.pb.sound.raw_buffer_head])
             self.frame += k
             self.executed_frames += k
             self.play_clock.advance(k)
@@ -518,7 +557,7 @@ class Emulator:
     def _push(self, eid, ev, png):
         if ev.notable and self.ntfy and self.ntfy.wants(ev):
             self.ntfy.send(ev.title, ev.body, tags=ev.tags, priority=ev.priority, image=png,
-                           click=f"{config.PUBLIC_URL}/events/{eid}")
+                           click=f"{config.PUBLIC_URL}/events/{eid}", event_type=ev.type)
 
     def _retake_shots(self):
         if not self._retakes:
@@ -613,6 +652,7 @@ class Emulator:
             log.warning("%s and no save state to go back to; power-cycling", why)
             self.pb.stop(save=False)
             self.pb = self._boot()
+            self._audio_enabled = False
             self.prev_snapshot = None
             self.policy.on_restore()
             if hasattr(self, 'statistics'):
@@ -627,7 +667,16 @@ class Emulator:
         now = time.time()
         if now - self.last_reload < 60:
             return
-        if self.invalid_since and now - self.invalid_since > 5:
+        invalid_grace = 5
+        if self.invalid_since:
+            from .interactions.centers import CENTERS
+            snapshot = self.snapshot
+            if (snapshot is not None and snapshot.map in CENTERS and not snapshot.in_battle
+                    and snapshot.hp_overflow_only and hasattr(self.policy, 'heal_latch')):
+                # Give the normal healing trip time to finish, including at slow speeds.
+                # The state remains invalid for saving and the grace is still bounded.
+                invalid_grace = 60 / min(1, max(0.1, self.speed or 1))
+        if self.invalid_since and now - self.invalid_since > invalid_grace:
             self._unstick(self.invalid_since, "game state glitched")
         elif config.STUCK_RELOAD_SECONDS and now - self.stuck_since > config.STUCK_RELOAD_SECONDS:
             recover = getattr(self.policy, 'recover_stall', None)
@@ -856,6 +905,7 @@ class Emulator:
             self.policy.reset()
             self.store.set("policy_state", {})
             self.pb = self._boot()
+            self._audio_enabled = False
             self.frame = 0
             self.paused = self.manual_mode = False
             self._reset_transient(clear_observation=True)

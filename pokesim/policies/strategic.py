@@ -268,8 +268,15 @@ class StrategicPolicy(Policy):
             self.observed_map = s.map
             self.settle_until = frame + 60
         world = WORLD.get(s.map)
-        if frame < self.settle_until or (self.nav.use_world and world and not s.in_battle and
-                                        not (0 <= s.x < world["width"] and 0 <= s.y < world["height"])):
+        outside_map = (self.nav.use_world and world and not s.in_battle
+                       and not (0 <= s.x < world["width"] and 0 <= s.y < world["height"]))
+        if frame < self.settle_until or outside_map:
+            # Poison can faint a partner between stepping over an edge and loading
+            # the next map. Dismiss its text without recording temporary coordinates.
+            if frame >= self.settle_until and outside_map and kind == 'dialogue':
+                self.mode = 'dialogue'
+                self.reason = 'Dismiss the message so the map transition can finish'
+                return tap('b', 6, 24)
             self.mode = "waiting for map transition"
             return wait()
         self.completed = milestones(s)

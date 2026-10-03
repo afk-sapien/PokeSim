@@ -95,7 +95,7 @@ function renderGrid() {
         // The hunt flag takes the note's place, so the head stays one line.
         ? '<span class="tag tag--crit hunt-flag" title="The current expedition">Hunting</span>'
         : `<span class="card-note"><i class="lamp"${RECORD_LAMPS[state] ? ` data-on="${RECORD_LAMPS[state]}"` : ''} aria-hidden="true"></i>${esc(note)}</span>`}</span>
-      <span class="plate plate--card"><img loading="lazy" src="${PokeSim.base}/sprites/${entry.dex}.png" alt="" width="56" height="56"></span>
+      <span class="plate plate--card ${PokemonTypes.portraitClass(entry.types)}"><img loading="lazy" src="${PokeSim.base}/sprites/${entry.dex}.png?v=rom-portraits-1" alt="" width="56" height="56"></span>
       <span class="dex-body"><strong class="dex-name">${esc(entry.name)}</strong><span class="card-types">${typeTags(entry.types)}</span>${milestoneBadges(entry.dex)}</span>
       <span class="card-counts">${counts}</span>
     </button>`
@@ -110,7 +110,7 @@ function statRow(label, value) {
 
 function chip(step, direction) {
   return `<button class="evo-chip" data-dex="${step.dex}">
-    <span class="plate plate--chip"><img loading="lazy" src="${PokeSim.base}/sprites/${step.dex}.png" alt="" width="56" height="56"></span>
+    <span class="plate plate--chip ${PokemonTypes.portraitClass(byDex.get(step.dex)?.types)}"><img loading="lazy" src="${PokeSim.base}/sprites/${step.dex}.png?v=rom-portraits-1" alt="" width="56" height="56"></span>
     <span><span class="micro">${direction}</span><strong>${esc(step.name)}</strong><small>${esc(step.label)}</small></span></button>`
 }
 
@@ -139,7 +139,7 @@ function renderDetail(dex, refresh = false) {
     <td>${typeTags([move.type])}</td><td>${move.power || 'N/A'}</td><td>${move.accuracy ?? 'N/A'}%</td><td>${move.pp ?? 'N/A'}</td></tr>`).join('')
   $('#detail-body').innerHTML = `
     <header class="detail-head">
-      <span class="plate plate--hero"><img src="${PokeSim.base}/sprites/${dex}.png" alt="${esc(entry.name)}" width="56" height="56"></span>
+      <span class="plate plate--hero ${PokemonTypes.portraitClass(entry.types)}"><img src="${PokeSim.base}/sprites/${dex}.png?v=rom-portraits-1" alt="${esc(entry.name)}" width="56" height="56"></span>
       <div class="detail-id"><span class="micro eyebrow">No. ${num(dex)}${entry.dex === hunting ? ' · Current expedition' : ''}</span>
         <h2 id="detail-name">${esc(entry.name)}</h2>
         <div class="detail-types">${typeTags(entry.types)}</div>

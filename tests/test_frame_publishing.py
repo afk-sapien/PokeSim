@@ -9,6 +9,9 @@ from pokesim.play_clock import PlayClock
 
 def emulator():
     emu = Emulator.__new__(Emulator)
+    from pokesim.audio import AudioFeed
+    emu.audio = AudioFeed()
+    emu._audio_enabled = False
     emu.play_clock = PlayClock()
     emu.play_clock.seed(0)
     emu.frame = 0

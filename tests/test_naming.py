@@ -162,3 +162,58 @@ def test_custom_pool_applies_to_new_names_and_keeps_partial_name(monkeypatch):
     monkeypatch.setattr(config, 'NICKNAME_PREFIXES', ())
     controller.step(Screen(grid('NICKNAME', entered=chosen[:2])), snap())
     assert controller.target == chosen
+
+
+@pytest.mark.parametrize('header,expected', [('YOUR NAME', 'TY'), ('RIVAL NAME', 'GARY')])
+def test_configured_intro_name_is_typed_and_survives_restore(monkeypatch, header, expected):
+    from pokesim import config
+    monkeypatch.setattr(config, 'TRAINER_NAME', 'TY', raising=False)
+    monkeypatch.setattr(config, 'RIVAL_NAME', 'GARY', raising=False)
+    controller = NamingController(1)
+    controller.step(Screen(grid(header)), snap())
+    assert controller.target == expected
+    restored = NamingController(2)
+    restored.load_state_dict(json.loads(json.dumps(controller.state_dict())))
+    assert restored.step(Screen(grid(header, entered=expected)), snap()).button == 'start'
+    assert restored.target == expected
+
+
+def test_configured_rival_is_reserved_from_random_trainer(monkeypatch):
+    from pokesim import config
+    import pokesim.policies.naming as naming
+    monkeypatch.setattr(config, 'TRAINER_NAME', '', raising=False)
+    monkeypatch.setattr(config, 'RIVAL_NAME', 'ASH', raising=False)
+    monkeypatch.setattr(naming, 'TRAINER_NAMES', ('ASH', 'GARY'))
+    controller = NamingController(1)
+    controller.step(Screen(grid('YOUR NAME')), snap())
+    assert controller.target == 'GARY'
+
+
+def test_full_names_and_exclusions_reach_the_effective_pool(monkeypatch):
+    from pokesim.nicknames import configured_pool, name_pool, nickname_defaults, validate_parts
+    from pokesim import config
+    settings = validate_parts({**nickname_defaults(), 'nickname_names': [' velcro ', 'VELCRO'],
+                               'nickname_excluded_prefixes': ['MEAT'],
+                               'nickname_excluded_suffixes': ['BARON'],
+                               'nickname_excluded_names': ['TAXFRAUD', 'SOUPLORD']})
+    for key, value in settings.items():
+        monkeypatch.setattr(config, key.upper(), tuple(value))
+    pool = configured_pool()
+    assert pool.count('VELCRO') == 1
+    assert 'MEATBARON' not in pool and 'SOUPBARON' not in pool
+    assert 'MEATKING' not in pool and 'MEATBALL' in pool
+    assert 'TAXFRAUD' not in pool and 'SOUPLORD' not in pool
+    assert 'SOUPKING' in pool
+    assert name_pool() != pool
+
+
+def test_nickname_empty_pool_and_long_full_names_are_rejected():
+    import pytest
+    from pokesim.nicknames import CURATED_NAMES, NAME_PREFIXES, nickname_defaults, validate_parts
+    with pytest.raises(ValueError, match='at least one'):
+        validate_parts({**nickname_defaults(), 'nickname_excluded_prefixes': list(NAME_PREFIXES),
+                        'nickname_excluded_names': list(CURATED_NAMES)})
+    with pytest.raises(ValueError, match='1 to 10'):
+        validate_parts({**nickname_defaults(), 'nickname_names': ['ELEVENABCDE']})
+    result = validate_parts({**nickname_defaults(), 'nickname_names': ['TENLETTERS']})
+    assert result['nickname_names'] == ['TENLETTERS']

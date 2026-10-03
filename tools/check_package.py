@@ -21,6 +21,7 @@ required = {
     'pokesim/web/static/trading.js',
     'pokesim/policies/navigation_numba.py',
     'pokesim/app/manager.py',
+    'pokesim/app/portrait_packs.py',
     'pokesim/app/coordinator.py',
     'pokesim/app/supervisor.py',
     'pokesim/app/cli.py',

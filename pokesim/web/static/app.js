@@ -16,7 +16,7 @@ function tradeArt(event) {
   try { detail = event.detail ? JSON.parse(event.detail) : null } catch (error) { return '' }
   if (!detail || detail.kind !== 'trade') return ''
   const face = (side) => side && side.dex
-    ? `<img loading="lazy" src="${PokeSim.base}/sprites/${Number(side.dex)}.png" alt="${esc(side.name || '')}" width="56" height="56">`
+    ? `<img loading="lazy" src="${PokeSim.base}/sprites/${Number(side.dex)}.png?v=rom-portraits-1" alt="${esc(side.name || '')}" width="56" height="56">`
     : '<span class="unknown-sprite" aria-hidden="true">?</span>'
   const label = (side) => esc(side && side.nick ? side.nick : '')
   return `<span class="trade-art">`
@@ -30,6 +30,8 @@ function tradeArt(event) {
 // or the ceremony, so the raw objective flickers several times a minute. Hold the last real one:
 // a gap is not a new plan, and a title has to persist to replace the headline.
 const PLANNING = 'collect_plan'
+let speedBusy = false
+let currentSpeed = 1
 let shownObjective = null
 let pendingObjective = null
 let pendingSightings = 0
@@ -139,9 +141,9 @@ function renderParty(party) {
     const moveRows = (mon.move_details || []).map((move) => `<div class="move" title="${esc(move.name)} · ${esc(move.type || '')} · ${move.pp}/${move.max_pp} PP"><span class="nm">${esc(move.name)}</span><span class="pp${move.pp ? '' : ' empty'}">${move.pp}</span></div>`).join('')
     const rating = dvStars(mon.dvs)
     const dvLamps = rating ? `<span class="dv" title="DV rating ${rating} of 4" role="img" aria-label="DV rating ${rating} of 4">${Array.from({length: 4}, (_, i) => `<i class="lamp"${i < rating ? ' data-on="signal"' : ''}></i>`).join('')}</span>` : ''
-    const sprite = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png" alt="${esc(mon.name)} portrait">` : `<span class="plate-num">?</span>`
+    const sprite = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png?v=rom-portraits-1" alt="${esc(mon.name)} portrait">` : `<span class="plate-num">?</span>`
     const xpText = xp ? xp.max_level ? 'MAX' : `${Math.floor(clamp(xp.percent))}%` : '—'
-    return `<li class="mon${mon.hp ? '' : ' mon--fainted'}"><div class="mon-plate"><div class="plate plate--bay">${sprite}</div></div><div class="mon-body"><div class="mon-head"><span class="slotno">${slotNo(index)}</span><h3 class="name">${esc(name)}</h3><span class="spacer"></span>${dvLamps}<span class="lv"><em>LV</em>${mon.level}</span><button class="mon-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} battle stats"><span aria-hidden="true">↗</span></button></div><div class="mon-id">${dex}<span class="micro">${esc(mon.name)}</span>${types}${statusTag}</div><div class="mon-lower"><div class="mon-meters"><div class="meter-row"><span class="micro">HP</span>${meter(hp, health, `${esc(name)} health: ${mon.hp} of ${mon.max_hp}`)}<span class="value">${fmt(mon.hp)}/${fmt(mon.max_hp)}</span></div><div class="meter-row"><span class="micro">XP</span>${meter(clamp(xp?.percent), 'signal', `${esc(name)} progress to next level`)}<span class="value">${xpText}</span></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div></div></div></li>`
+    return `<li class="mon${mon.hp ? '' : ' mon--fainted'}"><div class="mon-plate"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${sprite}</div></div><div class="mon-body"><div class="mon-head"><span class="slotno">${slotNo(index)}</span><h3 class="name">${esc(name)}</h3><span class="spacer"></span>${dvLamps}<span class="lv"><em>LV</em>${mon.level}</span><button class="mon-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} battle stats"><span aria-hidden="true">↗</span></button></div><div class="mon-id">${dex}<span class="micro">${esc(mon.name)}</span>${types}${statusTag}</div><div class="mon-lower"><div class="mon-meters"><div class="meter-row"><span class="micro">HP</span>${meter(hp, health, `${esc(name)} health: ${mon.hp} of ${mon.max_hp}`)}<span class="value">${fmt(mon.hp)}/${fmt(mon.max_hp)}</span></div><div class="meter-row"><span class="micro">XP</span>${meter(clamp(xp?.percent), 'signal', `${esc(name)} progress to next level`)}<span class="value">${xpText}</span></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div></div></div></li>`
   }).join('') + emptySlots(party.length)
   fitSprites($('#party'))
 }
@@ -158,7 +160,7 @@ async function refreshState() {
     const state = await response.json()
     if ($('#connection').classList.contains('is-offline')) window.pokesimScreen?.reconnect()
     viewerOnly = Boolean(state.viewer_only)
-    document.querySelectorAll('.controls, .manual-controls, .controller, #restart').forEach((element) => {
+    document.querySelectorAll('.controls > :not(#sound):not(#sound-status), .manual-controls, .controller, #restart').forEach((element) => {
       element.hidden = viewerOnly
     })
     set('#app-version', 'textContent', `v${state.version || 'unknown'}`)
@@ -175,13 +177,22 @@ async function refreshState() {
     manualMode = state.manual_mode
     $('.game-card')?.classList.toggle('is-manual', manualMode)
     set('#take-control', 'textContent', manualMode ? 'Let AI play' : 'Take control')
-    set('#control-mode', 'textContent', manualMode ? 'You’re playing · AI paused' : paused ? 'Game frozen' : 'AI is playing')
+    set('#control-mode', 'textContent', manualMode ? 'You’re playing · AI paused' : paused ? 'Game paused' : 'AI is playing')
     set('#control-hint', 'textContent', manualMode ? 'Play at normal speed. Let AI play when you’re ready to hand it back.' : 'Press any game control to pause the AI and take over.')
     $('#connection').classList.toggle('is-paused', paused)
     $('#connection').classList.remove('is-offline')
-    set('#status', 'textContent', manualMode ? 'In control' : paused ? 'Frozen' : 'Running')
-    $('#connection').title = manualMode ? 'You’re in control' : paused ? 'Game frozen' : 'Adventure in progress'
-    set('#pause', 'textContent', paused && !manualMode ? 'Unfreeze' : 'Freeze')
+    set('#status', 'textContent', manualMode ? 'In control' : paused ? 'Paused' : 'Running')
+    $('#connection').title = manualMode ? 'You’re in control' : paused ? 'Game paused' : 'Adventure in progress'
+    set('#pause', 'textContent', paused && !manualMode ? 'Resume' : 'Pause')
+    set('#pause', 'title', paused && !manualMode ? 'Resume AI play' : 'Pause the game and AI')
+    const speedSelect = $('#simulation-speed')
+    if (speedSelect && !speedBusy && Number.isFinite(state.speed)) {
+      currentSpeed = state.speed
+      if (![...speedSelect.options].some(option => Number(option.value) === currentSpeed)) {
+        speedSelect.add(new Option(`${currentSpeed}×`, String(currentSpeed)))
+      }
+      speedSelect.value = String(currentSpeed)
+    }
     const progress = state.progress
     const strategy = state.strategy
     const planning = strategy?.objective?.id === PLANNING
@@ -273,9 +284,30 @@ async function refreshEvents(append = false) {
   }
 }
 
-if ($('#pause')) $('#pause').onclick = (event) => control(event.currentTarget, paused && !manualMode ? 'take_control' : 'pause')
+if ($('#pause')) $('#pause').onclick = (event) => control(event.currentTarget, paused && !manualMode ? 'resume' : 'pause')
 if ($('#take-control')) $('#take-control').onclick = (event) => control(event.currentTarget, manualMode ? 'resume' : 'take_control')
-if ($('#save')) $('#save').onclick = (event) => control(event.currentTarget, 'save', undefined, 'Save requested. A little moment to come back to.')
+if ($('#save')) $('#save').onclick = (event) => control(event.currentTarget, 'save', undefined, 'Checkpoint save requested. Progress also saves automatically.')
+if ($('#simulation-speed')) $('#simulation-speed').onchange = async (event) => {
+  const select = event.currentTarget
+  const speed = Number(select.value)
+  speedBusy = true
+  select.disabled = true
+  try {
+    if (viewerOnly) throw new Error('This instance is view-only.')
+    const response = await PokeSim.setSpeed(speed)
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.detail || 'Could not change the simulation speed.')
+    currentSpeed = speed
+    toast(data.pace_pending ? 'Speed saved. It will apply when this adventure reconnects.'
+      : `Simulation speed set to ${speed === 0 ? 'Max' : `${speed}×`}.`)
+  } catch (error) {
+    select.value = String(currentSpeed)
+    toast(error.message, true)
+  } finally {
+    speedBusy = false
+    select.disabled = false
+  }
+}
 if ($('#export-save')) $('#export-save').onclick = async (event) => {
   const button = event.currentTarget
   button.disabled = true
@@ -379,8 +411,8 @@ function renderPartnerDetail() {
   const xp = mon.experience
   const moves = (mon.move_details || []).map((move) => `<div class="move"><span class="nm">${esc(move.name)}</span><span class="pp${move.pp ? '' : ' empty'}">${move.pp}/${move.max_pp} PP</span></div>`).join('')
   const stats = Object.entries(mon.stats || {}).map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${fmt(value)}</dd></div>`).join('')
-  const portrait = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png" alt="">` : '<span class="plate-num">?</span>'
-  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay">${portrait}</div><p class="micro">Partner ${selectedPartner.index + 1} · Level ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><div class="type-tags">${PokemonTypes.badges(mon.type_names)}</div><p>${esc(mon.name)} · ${mon.hp} / ${mon.max_hp} HP · ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><section><h3 class="micro">Moves</h3><div class="moves">${moves || '<p class="no-moves">No moves yet.</p>'}</div></section><section><h3 class="micro">Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${xp.max_level ? 'MAX LEVEL' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}</section>`)
+  const portrait = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png?v=rom-portraits-1" alt="">` : '<span class="plate-num">?</span>'
+  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${portrait}</div><p class="micro">Partner ${selectedPartner.index + 1} · Level ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><div class="type-tags">${PokemonTypes.badges(mon.type_names)}</div><p>${esc(mon.name)} · ${mon.hp} / ${mon.max_hp} HP · ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><section><h3 class="micro">Moves</h3><div class="moves">${moves || '<p class="no-moves">No moves yet.</p>'}</div></section><section><h3 class="micro">Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${xp.max_level ? 'MAX LEVEL' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}</section>`)
   fitSprites($('#partner-detail-content'))
 }
 $('#party')?.addEventListener('click', (event) => {

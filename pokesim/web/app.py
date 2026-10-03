@@ -154,7 +154,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         path = (store.dir / "sprites" / f"{dex}.png").resolve()
         root = (store.dir / "sprites").resolve()
         if path.parent == root and path.is_file():
-            return FileResponse(path, media_type="image/png")
+            return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, no-cache"})
         svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">'
                f'<rect width="96" height="96" rx="20" fill="#e5ece6"/>'
                f'<circle cx="48" cy="39" r="19" fill="#719389"/>'
@@ -262,6 +262,16 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return Response(data, media_type='application/octet-stream', headers={
             'Cache-Control': 'no-store',
             'Content-Disposition': 'attachment' + chr(59) + f' filename="{name}.sav"',
+        })
+
+    @app.get('/api/audio')
+    def audio(after: int = Query(-1, ge=-1)):
+        from ..audio import SAMPLE_RATE
+        state, sequence, pcm, speed = emu.audio_packet(after)
+        return Response(pcm, media_type='application/octet-stream', headers={
+            'Cache-Control': 'no-store', 'X-Audio-State': state,
+            'X-Audio-Sequence': str(sequence), 'X-Audio-Rate': str(SAMPLE_RATE),
+            'X-Audio-Speed': str(speed),
         })
 
     @app.get("/frame.jpg")

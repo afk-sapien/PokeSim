@@ -48,8 +48,12 @@ class NamingController:
             pool = configured_pool() if subject == "pokemon" else TRAINER_NAMES
             occupied = self.used | {snapshot.player_name, snapshot.rival_name}
             occupied.update(p.nick for p in snapshot.party)
+            from .. import config
+            occupied.update((getattr(config, 'TRAINER_NAME', ''), getattr(config, 'RIVAL_NAME', '')))
             choices = [name for name in pool if name not in occupied]
-            self.target = self.rng.choice(choices or pool)
+            preferred = (getattr(config, 'TRAINER_NAME', '') if subject == 'player' else
+                         getattr(config, 'RIVAL_NAME', '') if subject == 'rival' else '')
+            self.target = preferred or self.rng.choice(choices or pool)
             self.used.add(self.target)
             self.subject = subject
 

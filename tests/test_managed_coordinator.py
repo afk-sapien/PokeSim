@@ -411,7 +411,7 @@ def test_active_trade_display_persists_each_selected_offer(setup):
         assert entry['sent']['name'] == sent_name
         assert entry['received']['name'] == received_name
         assert entry['received']['evolved_from'] is None
-        assert entry['sent']['sprite_url'] == f"/games/{aid}/sprites/{entry['sent']['dex']}.png"
+        assert entry['sent']['sprite_url'] == f"/games/{aid}/sprites/{entry['sent']['dex']}.png?v=rom-portraits-1"
         assert 'trade_key' not in entry['sent']
     assert row['plan']['display_offers'][left]['level'] == 32
 

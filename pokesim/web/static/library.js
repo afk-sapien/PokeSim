@@ -26,6 +26,10 @@
   let closing = false
   let sessionPending = null
   let notifyDirty = false
+  let notifyData = {integrations: [], categories: [], integration_defaults: {}}
+  let notifyIntegration = null
+  let notifySecretChanged = false
+  let notifySecretCleared = false
   let notifyAdventuresSignature = ''
   // Checkbox choices on the Notifications page, kept apart from the markup that shows them.
   const notify = {categories: {}, adventures: {}}
@@ -42,6 +46,7 @@
   }
   function permissions() {
     document.querySelectorAll('[data-owner]').forEach(element => { element.disabled = !owner || busy || element.hasAttribute('data-blocked') })
+    if (notifyIntegration) renderNotifyProvider()
   }
   async function initializeSession() {
     if (!sessionPending) sessionPending = api('/api/v1/session').then(session => {
@@ -196,7 +201,7 @@
     const title = game ? `<a href="${gameUrl(id)}trading">${esc(game.name)} ↗</a>` : 'Adventure unavailable'
     const label = completed ? 'Received' : failed ? 'Planned to receive' : 'Receiving'
     const dex = Number.isInteger(mon?.dex) && mon.dex >= 1 && mon.dex <= 151 ? mon.dex : null
-    const sprite = dex && game ? `<div class="plate plate--trade"><img src="${gameUrl(id)}sprites/${dex}.png" alt="" loading="lazy"></div>`
+    const sprite = dex && game ? `<div class="plate plate--trade"><img src="${gameUrl(id)}sprites/${dex}.png?v=rom-portraits-1" alt="" loading="lazy"></div>`
       : '<div class="plate plate--trade exchange-placeholder" aria-hidden="true"><span class="plate-num">?</span></div>'
     const name = mon?.name ? esc(mon.name) : 'Pokémon details unavailable'
     const nickname = mon?.nickname && mon.nickname.toLowerCase() !== mon.name?.toLowerCase()
@@ -238,10 +243,49 @@
     $('#trade-failures-section').hidden = !failures.length
     $('#trade-failures').innerHTML = failures.map(trade => describeTrade(trade)).join('')
   }
+  let savedBackups = []
+  let backupPage = 0
+  let backupToDelete = null
+  const backupPageSize = 5
+  function renderBackups() {
+    backupPage = Math.max(0, Math.min(backupPage, Math.ceil(savedBackups.length / backupPageSize) - 1))
+    const start = backupPage * backupPageSize
+    const visible = savedBackups.slice(start, start + backupPageSize)
+    $('#backups').innerHTML = visible.length ? visible.map(backup => `<div class="backup-row"><div><strong>${esc(dateLabel(backup.created_at))}</strong><p class="note">${(backup.size_bytes / 1048576).toFixed(1)} MiB</p></div><div class="backup-row-actions"><a class="key" href="/api/v1/backups/${encodeURIComponent(backup.id)}/download" download>Download</a><button type="button" class="key" data-load-backup="${esc(backup.id)}" data-owner>Load</button><button type="button" class="key key--danger" data-delete-backup="${esc(backup.id)}" data-owner>Delete</button></div></div>`).join('') : '<p class="section-note">No backups yet. Create one here or load a backup ZIP.</p>'
+    $('#backup-summary').textContent = savedBackups.length ? `${savedBackups.length} ${savedBackups.length === 1 ? 'backup' : 'backups'} · ${(savedBackups.reduce((total, backup) => total + backup.size_bytes, 0) / 1048576).toFixed(1)} MiB stored` : ''
+    $('#backup-pagination').hidden = savedBackups.length <= backupPageSize
+    $('#backup-page-label').textContent = `${start + 1}–${start + visible.length} of ${savedBackups.length}`
+    $('#backup-previous').disabled = backupPage === 0
+    $('#backup-next').disabled = start + backupPageSize >= savedBackups.length
+    $('#backups').querySelectorAll('[data-load-backup]').forEach(button => { button.onclick = () => act(() => openBackup(button.dataset.loadBackup)) })
+    $('#backups').querySelectorAll('[data-delete-backup]').forEach(button => { button.onclick = () => {
+      backupToDelete = savedBackups.find(backup => backup.id === button.dataset.deleteBackup)
+      $('#backup-delete-description').textContent = `Delete the backup from ${dateLabel(backupToDelete.created_at)} (${(backupToDelete.size_bytes / 1048576).toFixed(1)} MiB)?`
+      $('#backup-delete-dialog .dialog-feedback').textContent = ''
+      $('#backup-delete-dialog').showModal()
+      $('#backup-delete-cancel').focus()
+    } })
+    permissions()
+  }
   async function refreshBackups() {
     const data = await api('/api/v1/backups')
-    const backups = Array.isArray(data) ? data : data.backups || []
-    $('#backups').innerHTML = backups.length ? backups.map(backup => `<p><a class="text-link" href="/api/v1/backups/${encodeURIComponent(backup.id)}/download">Download backup ${esc(dateLabel(backup.created_at) || backup.id)} ↗</a></p>`).join('') : '<p class="section-note">No backups yet.</p>'
+    savedBackups = Array.isArray(data) ? data : data.backups || []
+    renderBackups()
+  }
+  $('#backup-previous').onclick = () => { backupPage -= 1
+    renderBackups() }
+  $('#backup-next').onclick = () => { backupPage += 1
+    renderBackups() }
+  $('#backup-delete-form').onsubmit = event => {
+    event.preventDefault()
+    act(async () => {
+      await write(`/api/v1/backups/${encodeURIComponent(backupToDelete.id)}`, {}, 'DELETE')
+      $('#backup-delete-dialog').close()
+      backupToDelete = null
+      await refreshBackups()
+      notice('Backup deleted. Your adventures are unchanged.')
+      $('#create-backup').focus()
+    })
   }
   function randomTopic() {
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -258,39 +302,88 @@
       : 'Choose a topic to see its address.'
   }
   function renderNotifyAdventures() {
+    if (!notifyIntegration) return
     // New adventures notify until they are turned off, so a missing choice counts as on.
-    const markup = adventures.filter(game => !game.archived).map(game => notifyChoice('adventures', game.id, game.name, '', notify.adventures[game.id] !== false)).join('')
+    const markup = adventures.filter(game => !game.archived).map(game => notifyChoice('adventures', game.id, game.name, '', notify.adventures[game.id] ?? $('#notify-include-new').checked)).join('')
       || '<p class="section-note">Adventures appear here once you create them.</p>'
     if (markup === notifyAdventuresSignature) return
     notifyAdventuresSignature = markup
     $('#notify-adventures').innerHTML = markup
     permissions()
   }
+  const providerLabel = provider => ({ntfy: 'ntfy', discord: 'Discord', telegram: 'Telegram'}[provider] || provider)
+  const integrationUrl = id => '/api/v1/notifications/integrations' + (id ? '/' + encodeURIComponent(id) : '')
   function renderNotifications(data) {
+    notifyData = data
     $('#notify-enabled').checked = Boolean(data.enabled)
-    $('#notify-server').value = data.server || 'https://ntfy.sh'
-    $('#notify-topic').value = data.topic || ''
-    $('#notify-priority').value = String(Math.max(2, data.min_priority ?? 2))
-    $('#notify-token').value = ''
-    $('#notify-token').placeholder = data.token_set ? 'A token is saved. Leave blank to keep it.' : ''
-    $('#notify-clear-token').checked = false
-    $('#notify-clear-row').hidden = !data.token_set
-    $('#notify-token-note').textContent = data.source === 'environment'
-      ? 'These values come from the NTFY_* environment settings. Saving here replaces them.'
-      : 'Only needed for a protected topic or a private server.'
-    const categories = data.categories || []
-    notify.categories = Object.fromEntries(categories.map(row => [row.key, Boolean(row.enabled)]))
-    notify.adventures = Object.fromEntries((data.adventures || []).map(row => [row.id, Boolean(row.enabled)]))
-    $('#notify-categories').innerHTML = categories.map(row => notifyChoice('categories', row.key, row.label, row.detail, row.enabled)).join('')
-    notifyAdventuresSignature = ''
-    renderSubscribe()
-    renderNotifyAdventures()
-    notifyDirty = false
+    $('#notify-delivery-state').textContent = data.enabled ? 'Delivery is on for enabled integrations.' : 'Delivery is paused for all integrations.'
+    $('#notify-integrations').innerHTML = (data.integrations || []).map(row => {
+      const categories = Object.values(row.categories || {}).filter(Boolean).length
+      const games = Object.values(row.adventures || {}).filter(Boolean).length
+      const scope = row.include_new_adventures ? `${games} adventure${games === 1 ? '' : 's'}, plus new adventures` : `${games} selected adventure${games === 1 ? '' : 's'}`
+      return `<article class="panel integration-card"><div><p class="micro">${esc(providerLabel(row.provider))} · ${row.enabled ? 'Enabled' : 'Disabled'}</p><h2 class="legend legend--ink">${esc(row.name)}</h2><p class="note">${categories} event type${categories === 1 ? '' : 's'} · ${esc(scope)}</p></div><div class="integration-card-actions"><button type="button" class="key" data-integration-action="edit" data-id="${esc(row.id)}" data-owner>Edit</button><button type="button" class="key" data-integration-action="test" data-id="${esc(row.id)}" data-owner>Test</button><button type="button" class="key" data-integration-action="toggle" data-id="${esc(row.id)}" data-owner>${row.enabled ? 'Disable' : 'Enable'}</button></div><p class="form-result" data-integration-result="${esc(row.id)}" role="status"></p></article>`
+    }).join('') || '<div class="panel empty-state"><h2 class="legend legend--ink">No integrations yet</h2><p>Add a Discord channel, Telegram chat or ntfy topic. You can add several of each.</p></div>'
     permissions()
   }
+  function renderNotifyProvider() {
+    const provider = $('#notify-provider').value
+    $('#notify-provider').disabled = Boolean(notifyIntegration?.id) || !owner || busy
+    for (const name of ['ntfy', 'discord', 'telegram']) {
+      const panel = $('#notify-' + name)
+      panel.hidden = name !== provider
+      for (const input of panel.querySelectorAll('input, button')) input.disabled = name !== provider || !owner || busy
+    }
+    const field = {ntfy: 'notify-token', discord: 'notify-discord-webhook', telegram: 'notify-telegram-token'}[provider]
+    const saved = notifyIntegration?.[{ntfy: 'token_set', discord: 'discord_webhook_set', telegram: 'telegram_token_set'}[provider]]
+    const kept = saved && !notifySecretChanged && !notifySecretCleared
+    $('#' + field).closest('label').hidden = Boolean(kept)
+    $('#notify-change-secret').hidden = !kept
+    $('#notify-remove-token').hidden = provider !== 'ntfy' || !kept
+    $('#notify-credential-note').textContent = kept ? 'Credential saved. Replacing it is optional.'
+      : notifySecretCleared ? 'The saved access token will be removed when you save.' : ''
+    $('#notify-change-secret').textContent = provider === 'discord' ? 'Replace webhook URL' : 'Replace token'
+  }
+  function openIntegration(row = null) {
+    notifyIntegration = row || {provider: 'discord', name: '', enabled: true, include_new_adventures: true,
+      categories: notifyData.integration_defaults || {}, adventures: {}}
+    notifyDirty = true
+    notifySecretChanged = false
+    notifySecretCleared = false
+    $('#integration-heading').textContent = row ? 'Edit integration' : 'Add integration'
+    $('#notify-name').value = notifyIntegration.name
+    $('#notify-provider').value = notifyIntegration.provider
+    $('#notify-integration-enabled').checked = notifyIntegration.enabled
+    $('#notify-include-new').checked = notifyIntegration.include_new_adventures
+    $('#notify-server').value = notifyIntegration.server || 'https://ntfy.sh'
+    $('#notify-topic').value = notifyIntegration.topic || ''
+    $('#notify-telegram-chat').value = notifyIntegration.telegram_chat_id || ''
+    for (const id of ['notify-token', 'notify-discord-webhook', 'notify-telegram-token']) $('#' + id).value = ''
+    $('#notify-priority').value = String(notifyIntegration.min_priority ?? 2)
+    notify.categories = {...notifyIntegration.categories}
+    notify.adventures = {...notifyIntegration.adventures}
+    $('#notify-categories').innerHTML = (notifyData.categories || []).map(row => notifyChoice('categories', row.key, row.label, row.detail, notify.categories[row.key])).join('')
+    notifyAdventuresSignature = ''
+    renderNotifyAdventures()
+    renderSubscribe()
+    $('#notify-delete').hidden = !row
+    $('#notify-delete-confirm').hidden = true
+    $('#notify-result').textContent = ''
+    permissions()
+    $('#integration-dialog').showModal()
+  }
   function notifyDestination() {
-    const token = $('#notify-clear-token').checked ? {token: ''} : $('#notify-token').value ? {token: $('#notify-token').value} : {}
-    return {server: $('#notify-server').value.trim(), topic: $('#notify-topic').value.trim(), ...token}
+    const provider = $('#notify-provider').value
+    if (provider === 'discord') {
+      const value = $('#notify-discord-webhook').value.trim()
+      return {provider, ...(value || !notifyIntegration?.id ? {discord_webhook: value} : {})}
+    }
+    if (provider === 'telegram') {
+      const value = $('#notify-telegram-token').value.trim()
+      return {provider, telegram_chat_id: $('#notify-telegram-chat').value.trim(),
+        ...(value || !notifyIntegration?.id ? {telegram_token: value} : {})}
+    }
+    const token = notifySecretCleared || (!notifyIntegration?.id && !$('#notify-token').value) ? {token: ''} : $('#notify-token').value ? {token: $('#notify-token').value} : {}
+    return {provider, server: $('#notify-server').value.trim(), topic: $('#notify-topic').value.trim(), ...token}
   }
   async function refresh() {
     if (refreshing || $('#workspace').hidden) return
@@ -306,11 +399,43 @@
       notice(error.message, true) }
     finally { refreshing = false }
   }
+  function randomizeAdventure() {
+    const starts = ['Sleepy', 'Cozy', 'Chaotic', 'Lucky', 'Wobbly', 'Daring', 'Mighty', 'Tiny',
+      'Sneaky', 'Sunny', 'Moonlit', 'Wandering', 'Bouncy', 'Curious', 'Mischievous', 'Snacktime',
+      'Weekend', 'Midnight', 'Daydream', 'Unexpected']
+    const endings = ['Safari', 'Expedition', 'Detour', 'Victory Lap', 'Gym Tour', 'Road Trip',
+      'Adventure', 'Quest', 'Marathon', 'Ramble', 'Rivalry', 'Field Trip', 'Badge Hunt',
+      'Grand Tour', 'Training Camp', 'Cave Club', 'Picnic', 'Escape', 'Homecoming', 'Stroll']
+    const reserved = new Set(adventures.map(game => game.name.trim().toLowerCase()))
+    reserved.add($('#new-name').value.trim().toLowerCase())
+    const choices = starts.flatMap(start => endings.map(ending => `${start} ${ending}`))
+      .filter(name => !reserved.has(name.toLowerCase()))
+    let name = choices[Math.floor(Math.random() * choices.length)]
+    if (!name) {
+      let number = 1
+      while (reserved.has(`kanto adventure ${number}`)) number += 1
+      name = `Kanto Adventure ${number}`
+    }
+    $('#new-name').value = name
+  }
+  $('#random-adventure').onclick = randomizeAdventure
+  function randomizeTrainer(field, other) {
+    const names = (document.body.dataset.trainerNames || '').split(',').filter(Boolean)
+    const current = $(field).value.toUpperCase()
+    const reserved = $(other).value.toUpperCase()
+    const choices = names.filter(name => name !== current && name !== reserved)
+    if (choices.length) $(field).value = choices[Math.floor(Math.random() * choices.length)]
+  }
+  $('#random-trainer').onclick = () => randomizeTrainer('#new-trainer', '#new-rival')
+  $('#random-rival').onclick = () => randomizeTrainer('#new-rival', '#new-trainer')
   async function openCreate() {
     await act(async () => {
       const data = await api('/api/v1/assets')
       $('#rom-select').innerHTML = '<option value="">Add a ROM below</option>' + (data.roms || []).map(rom => `<option value="${esc(rom.id)}">Pokémon ${esc(rom.version)} (${esc(rom.id.slice(0, 8))})</option>`).join('')
       if (data.roms?.length) $('#rom-select').value = data.roms[0].id
+      if (!$('#new-name').value.trim()) randomizeAdventure()
+      if (!$('#new-trainer').value) randomizeTrainer('#new-trainer', '#new-rival')
+      if (!$('#new-rival').value) randomizeTrainer('#new-rival', '#new-trainer')
       $('#create-progress').textContent = ''
       $('#create-dialog').showModal()
       $('#new-name').focus()
@@ -372,7 +497,8 @@
       if (!romId) throw new Error('Select an existing ROM or add a ROM file.')
       $('#create-progress').textContent = 'Creating your adventure…'
       const startNow = $('#start-created').checked
-      const result = await write('/api/v1/adventures', {name: $('#new-name').value.trim(), rom_id: romId, starter: $('#starter').value})
+      const result = await write('/api/v1/adventures', {name: $('#new-name').value.trim(), rom_id: romId, starter: $('#starter').value,
+        trainer_name: $('#new-trainer').value.trim().toUpperCase(), rival_name: $('#new-rival').value.trim().toUpperCase()})
       const game = result.adventure || result
       $('#create-dialog').close()
       $('#create-form').reset()
@@ -388,34 +514,97 @@
       $('#adventure-settings').close()
       notice(result.pace_pending ? 'Settings saved. The speed will apply when this adventure reconnects.' : 'Adventure settings saved.')
     }) }
-  $('#notify-form').oninput = () => { notifyDirty = true
-    renderSubscribe() }
-  $('#notify-form').onchange = event => { notifyDirty = true
+  $('#notify-add').onclick = () => openIntegration()
+  $('#notify-enabled').onchange = () => act(async () => {
+    try {
+      renderNotifications(await write('/api/v1/notifications', {enabled: $('#notify-enabled').checked}, 'PATCH'))
+    } catch (error) {
+      $('#notify-enabled').checked = Boolean(notifyData.enabled)
+      throw error
+    }
+  })
+  $('#notify-integrations').onclick = event => {
+    const button = event.target.closest('[data-integration-action]')
+    if (!button || busy) return
+    const row = notifyData.integrations.find(row => row.id === button.dataset.id)
+    if (!row) return
+    if (button.dataset.integrationAction === 'edit') return openIntegration(row)
+    act(async () => {
+      if (button.dataset.integrationAction === 'toggle') {
+        renderNotifications(await write(integrationUrl(row.id), {enabled: !row.enabled}, 'PATCH'))
+      } else {
+        const result = await write(integrationUrl(row.id) + '/test', {})
+        $(`[data-integration-result="${row.id}"]`).textContent = result.ok ? 'Test accepted. Check your destination.' : `Test failed: ${result.error}`
+      }
+    })
+  }
+  $('#notify-form').oninput = event => {
+    if (event.target?.id === 'notify-token' && event.target.value) {
+      notifySecretCleared = false
+      notifySecretChanged = true
+      renderNotifyProvider()
+    }
+    renderSubscribe()
+  }
+  $('#notify-form').onchange = event => {
     const input = event?.target
-    if (input?.dataset?.notify) notify[input.dataset.notify][input.dataset.key] = Boolean(input.checked) }
+    if (input?.dataset?.notify) notify[input.dataset.notify][input.dataset.key] = Boolean(input.checked)
+  }
+  $('#notify-provider').onchange = () => {
+    notifySecretChanged = false
+    notifySecretCleared = false
+    for (const id of ['notify-token', 'notify-discord-webhook', 'notify-telegram-token']) $('#' + id).value = ''
+    renderNotifyProvider()
+  }
+  $('#notify-include-new').onchange = () => {
+    for (const input of $('#notify-adventures').querySelectorAll('input[data-notify="adventures"]')) notify.adventures[input.dataset.key] = input.checked
+    notifyAdventuresSignature = ''
+    renderNotifyAdventures() }
+  $('#notify-change-secret').onclick = () => { notifySecretChanged = true
+    renderNotifyProvider() }
+  $('#notify-remove-token').onclick = () => { notifySecretCleared = true
+    $('#notify-token').value = ''
+    renderNotifyProvider() }
   $('#notify-generate').onclick = () => { $('#notify-topic').value = randomTopic()
-    notifyDirty = true
     renderSubscribe() }
   $('#notify-form').onsubmit = event => { event.preventDefault()
     act(async () => {
       const known = new Set(adventures.map(game => game.id))
-      const result = await write('/api/v1/notifications', {enabled: $('#notify-enabled').checked, ...notifyDestination(),
-        min_priority: Number($('#notify-priority').value), categories: notify.categories,
-        adventures: Object.fromEntries(Object.entries(notify.adventures).filter(([id]) => known.has(id)))}, 'PATCH')
+      const choices = Object.fromEntries(adventures.filter(game => !game.archived).map(game => [game.id, notify.adventures[game.id] ?? $('#notify-include-new').checked]))
+      for (const [id, on] of Object.entries(notify.adventures)) if (known.has(id)) choices[id] = on
+      const result = await write(integrationUrl(notifyIntegration.id), {
+        name: $('#notify-name').value.trim(), enabled: $('#notify-integration-enabled').checked,
+        ...notifyDestination(), min_priority: Number($('#notify-priority').value), categories: notify.categories,
+        include_new_adventures: $('#notify-include-new').checked, adventures: choices,
+      }, notifyIntegration.id ? 'PATCH' : 'POST')
+      $('#integration-dialog').close()
       renderNotifications(result)
-      $('#notify-result').textContent = ''
-      notice(result.pending?.length ? 'Notifications saved. Reconnecting adventures will pick them up automatically.' : 'Notifications saved. They apply to running adventures right away.')
-    }) }
+      notice(result.pending?.length ? 'Integration saved. Reconnecting adventures will pick it up automatically.' : 'Integration saved.')
+    })
+  }
   $('#notify-test').onclick = () => act(async () => {
     $('#notify-result').textContent = 'Sending…'
-    try {
-      const result = await write('/api/v1/notifications/test', notifyDestination())
-      $('#notify-result').textContent = result.ok ? 'ntfy accepted the test. Check your phone.' : `ntfy did not accept it: ${result.error}`
-    } catch (error) { $('#notify-result').textContent = ''
-      throw error }
+    const url = notifyIntegration.id ? integrationUrl(notifyIntegration.id) + '/test' : '/api/v1/notifications/test'
+    const result = await write(url, notifyDestination())
+    $('#notify-result').textContent = result.ok ? 'Test accepted. Check your destination.' : `Test failed: ${result.error}`
   })
+  $('#notify-delete').onclick = () => { $('#notify-delete-confirm').hidden = false }
+  $('#notify-delete-cancel').onclick = () => { $('#notify-delete-confirm').hidden = true }
+  $('#notify-delete-yes').onclick = () => act(async () => {
+    const result = await write(integrationUrl(notifyIntegration.id), {}, 'DELETE')
+    $('#integration-dialog').close()
+    renderNotifications(result)
+    notice('Integration deleted.')
+  })
+  $('#integration-dialog').onclose = () => {
+    for (const id of ['notify-token', 'notify-discord-webhook', 'notify-telegram-token']) $('#' + id).value = ''
+    notifyIntegration = null
+    notifyDirty = false
+    permissions()
+  }
   $('#create-backup').onclick = () => act(async () => {
     notice('Saving adventures and creating a backup…')
+    backupPage = 0
     await write('/api/v1/backups')
     await refreshBackups()
     notice('Backup ready to download.')
@@ -425,32 +614,144 @@
       await api('/api/v1/imports', {method: 'POST', headers: {'Content-Type': 'application/zip'}, body: $('#import-file').files[0]})
       $('#import-form').reset()
       notice('Import complete. Open the Library to see the adventure.') }) }
-  const nicknameParts = id => $(id).value.split(/[,\n]/).map(word => word.trim()).filter(Boolean)
-  function renderNicknameSettings(settings) {
-    $('#nickname-prefixes').value = (settings.nickname_prefixes || []).join('\n')
-    $('#nickname-suffixes').value = (settings.nickname_suffixes || []).join('\n')
+  const nicknameKinds = ['prefixes', 'suffixes', 'names']
+  const nicknameFields = [...nicknameKinds, ...nicknameKinds.map(kind => 'excluded-' + kind)]
+  const nicknameParts = id => [...new Set($(id).value.split(/[,\n]/).map(word => word.trim().toUpperCase()).filter(Boolean))]
+  let nicknameSettings = {}
+  function nicknamePreview() {
+    const catalog = nicknameSettings.nickname_catalog || {}
+    const read = kind => nicknameParts('#nickname-' + kind)
+    const excluded = kind => new Set(read('excluded-' + kind))
+    const names = new Set([...(catalog.names || []), ...read('names')])
+    for (const prefix of [...(catalog.prefixes || []), ...read('prefixes')].filter(word => !excluded('prefixes').has(word))) {
+      for (const suffix of [...(catalog.suffixes || []), ...read('suffixes')].filter(word => !excluded('suffixes').has(word))) {
+        if ((prefix + suffix).length <= 10) names.add(prefix + suffix)
+      }
+    }
+    for (const name of excluded('names')) names.delete(name)
+    $('#nickname-preview').textContent = `${names.size.toLocaleString()} available names with these choices.`
+    nicknameKinds.forEach(kind => {
+      const blocked = excluded(kind)
+      const choices = $('#nickname-default-' + kind).querySelectorAll('input')
+      choices.forEach(input => { input.checked = !blocked.has(input.value) })
+      $('#nickname-count-' + kind).textContent = `(${[...choices].filter(input => input.checked).length}/${choices.length})`
+    })
   }
+  function renderNicknameSettings(settings) {
+    nicknameSettings = settings
+    nicknameFields.forEach(field => { $('#nickname-' + field).value = (settings['nickname_' + field.replace('-', '_')] || []).join('\n') })
+    const catalog = settings.nickname_catalog || {}
+    $('#nickname-summary').textContent = `${Number(catalog.available || 0).toLocaleString()} available names. Applies to all adventures.`
+    nicknameKinds.forEach(kind => {
+      $('#nickname-default-' + kind).innerHTML = (catalog[kind] || []).map(word => `<label class="check"><input type="checkbox" value="${esc(word)}" data-owner>${esc(word)}</label>`).join('')
+      $('#nickname-default-' + kind).querySelectorAll('input').forEach(input => { input.onchange = () => {
+        const excluded = new Set(nicknameParts('#nickname-excluded-' + kind))
+        if (input.checked) excluded.delete(input.value)
+        else excluded.add(input.value)
+        $('#nickname-excluded-' + kind).value = [...excluded].join('\n')
+        nicknamePreview()
+      } })
+    })
+    nicknamePreview()
+    permissions()
+  }
+  $('#nickname-edit').onclick = () => {
+    renderNicknameSettings(nicknameSettings)
+    $('#nickname-dialog .dialog-feedback').textContent = ''
+    $('#nickname-dialog').showModal()
+  }
+  nicknameFields.forEach(field => { $('#nickname-' + field).oninput = nicknamePreview })
   $('#nickname-form').onsubmit = event => {
     event.preventDefault()
     act(async () => {
-      const result = await write('/api/v1/settings', {
-        nickname_prefixes: nicknameParts('#nickname-prefixes'),
-        nickname_suffixes: nicknameParts('#nickname-suffixes')
-      }, 'PATCH')
+      const values = Object.fromEntries(nicknameFields.map(field => ['nickname_' + field.replace('-', '_'), nicknameParts('#nickname-' + field)]))
+      const result = await write('/api/v1/settings', values, 'PATCH')
       renderNicknameSettings(result)
+      $('#nickname-dialog').close()
       notice(result.pending?.length ? 'Nicknames saved. Reconnecting games will receive them shortly.' : 'Nickname settings saved for all adventures.')
     })
   }
-  $('#nickname-reset').onclick = () => act(async () => {
-    const result = await write('/api/v1/settings', {nickname_prefixes: [], nickname_suffixes: []}, 'PATCH')
-    renderNicknameSettings(result)
-    notice('Default nickname pool restored.')
+  $('#nickname-reset').onclick = () => {
+    nicknameFields.forEach(field => { $('#nickname-' + field).value = '' })
+    nicknamePreview()
+    $('#nickname-dialog .dialog-feedback').textContent = 'Defaults loaded in the editor. Save to apply them.'
+  }
+  let backupSelection = null
+  async function openBackup(id, inspected) {
+    notice('Checking backup…')
+    const data = inspected || await api(`/api/v1/backups/${encodeURIComponent(id)}/inspect`)
+    backupSelection = {id, adventures: data.adventures}
+    $('#backup-date').textContent = `Backup from ${dateLabel(data.created_at)}`
+    const usable = data.adventures.filter(game => game.restorable)
+    $('#backup-adventure').innerHTML = usable.map(game => `<option value="${esc(game.id)}">${esc(game.name)} · ${esc(game.version)}</option>`).join('')
+    $('#backup-load').toggleAttribute('data-blocked', !usable.length)
+    $('#backup-adventure').onchange()
+    $('#backup-dialog .dialog-feedback').textContent = usable.length ? '' : 'This backup has no saved adventures to load.'
+    $('#backup-dialog').showModal()
+    notice('')
+  }
+  $('#backup-adventure').onchange = () => {
+    const game = backupSelection?.adventures.find(game => game.id === $('#backup-adventure').value)
+    $('#backup-name').value = game ? game.name.slice(0, 109) + ' (restored)' : ''
+  }
+  $('#upload-backup').onclick = () => $('#backup-file').click()
+  $('#backup-file').onchange = () => act(async () => {
+    const file = $('#backup-file').files[0]
+    if (!file) return
+    notice('Uploading and checking backup…')
+    try {
+      const result = await api('/api/v1/backups/upload', {method: 'POST', headers: {'Content-Type': 'application/zip'}, body: file})
+      await refreshBackups()
+      await openBackup(result.id, result)
+    } finally { $('#backup-file').value = '' }
   })
+  $('#backup-load-form').onsubmit = event => {
+    event.preventDefault()
+    act(async () => {
+      $('#backup-dialog .dialog-feedback').textContent = 'Checking and loading the adventure…'
+      await write(`/api/v1/backups/${encodeURIComponent(backupSelection.id)}/load`, {adventure_id: $('#backup-adventure').value, name: $('#backup-name').value})
+      $('#backup-dialog').close()
+      notice('Adventure loaded as a stopped copy. Open the Library when you are ready to start it.')
+    })
+  }
   $('#quit').onclick = () => act(async () => {
     await write('/api/v1/shutdown')
     closing = true
     notice('PokeSim is saving and closing. You can close this tab.')
     $('#workspace').hidden = true
+  })
+  function renderPortraits(data) {
+    $('#portrait-state').textContent = data.busy ? `Downloading ${data.completed} / ${data.total}` : data.active === 'community' ? 'Community sprites active' : 'Default sprites active'
+    const install = $('#portrait-install')
+    install.textContent = data.busy ? 'Downloading…' : data.installed ? 'Use community sprites' : 'Install community sprite pack'
+    install.hidden = data.active === 'community' && !data.busy
+    install.toggleAttribute('data-blocked', data.busy)
+    const restore = $('#portrait-default')
+    restore.hidden = data.active !== 'community'
+    restore.toggleAttribute('data-blocked', data.busy)
+    $('#portrait-source').href = data.source
+    $('#portrait-license').href = data.license
+    $('#portrait-progress').hidden = !data.busy
+    $('#portrait-progress').value = data.completed
+    $('#portrait-feedback').textContent = data.error || (data.busy ? 'Your current artwork stays in place until all 151 sprites are ready.' : data.installed ? 'Reopen adventure pages after switching artwork.' : '')
+    $('#portrait-feedback').classList.toggle('is-error', Boolean(data.error))
+    const preview = $('#portrait-preview')
+    preview.hidden = !data.installed
+    if (data.installed && preview.dataset.revision !== data.revision) {
+      preview.dataset.revision = data.revision
+      preview.innerHTML = [[1, 'Bulbasaur'], [6, 'Charizard'], [25, 'Pikachu']].map(([dex, name]) => `<div class="plate"><img src="/api/v1/portraits/preview/${dex}.png?v=${encodeURIComponent(data.revision)}" alt="${name}"></div>`).join('') + '<p class="note portrait-preview-caption">Community pack preview</p>'
+    }
+    permissions()
+  }
+  async function refreshPortraits() {
+    renderPortraits(await api('/api/v1/portraits'))
+  }
+  $('#portrait-install').onclick = () => act(async () => {
+    renderPortraits(await write('/api/v1/portraits/community'))
+  })
+  $('#portrait-default').onclick = () => act(async () => {
+    renderPortraits(await write('/api/v1/portraits/default'))
+    notice('Default sprites restored. Reopen an adventure page to see them.')
   })
   async function enter() {
     await initializeSession()
@@ -460,6 +761,7 @@
     if (page === 'settings' && owner) {
       renderNicknameSettings(await api('/api/v1/settings'))
       await refreshBackups()
+      await refreshPortraits()
     }
     if (page === 'notifications' && owner && !notifyDirty) renderNotifications(await api('/api/v1/notifications'))
     permissions()
@@ -480,7 +782,10 @@
   setInterval(() => {
     if (!document.hidden && !busy && !closing) {
       if ($('#workspace').hidden) boot()
-      else refresh()
+      else {
+        refresh()
+        if (page === 'settings' && owner) refreshPortraits().catch(error => { $('#portrait-feedback').textContent = error.message })
+      }
     }
   }, 3000)
 })()

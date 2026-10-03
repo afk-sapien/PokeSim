@@ -16,7 +16,7 @@ def expect(locator):
     return assertion(locator)
 
 
-@pytest.mark.parametrize('width', [320, 390, 1280])
+@pytest.mark.parametrize('width', [320, 390, 640, 800, 1000, 1100, 1280, 1600])
 def test_library_usage_updates_without_replacing_cards(page, tmp_path, monkeypatch, width):
     usage = {'cpu_percent': 83.4, 'memory_bytes': 244 * 1048576, 'observed_speed': 2.3, 'speed_status': 'ready'}
     def factory(url):
