@@ -6,7 +6,9 @@ Watch an automatic player catch Pokémon, earn badges and challenge the League i
 your browser. Take control whenever you like, then hand the adventure back.
 Everything runs locally, with no model API or subscription.
 
-![Live battle, party and current objective](docs/images/live-adventure.jpg)
+![A live Red adventure training Magikarp, traveling and battling alongside its party](docs/images/live-adventure.gif)
+
+An eight-second clip from a running adventure. [Still image](docs/images/live-adventure.jpg).
 
 ## Keep the adventure going
 
@@ -61,7 +63,7 @@ Change or disable these rewards in each adventure's settings.
 - **The Kanto Marathon:** Sometimes the next big goal is a run around Kanto.
   Follow the race and see whether your trainer beats their personal best.
 
-The expanded name pool and Discord and Telegram support are coming in
+The expanded name pool and Discord and Telegram support arrived in
 [0.4.17](docs/release-notes.md). Follow the [changelog](CHANGELOG.md) for new additions.
 
 ## Your adventure library

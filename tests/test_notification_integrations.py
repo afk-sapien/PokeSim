@@ -1,6 +1,7 @@
 """Independent subscriptions, migration and credentials for named integrations."""
 import copy
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
 
@@ -76,7 +77,10 @@ def test_event_and_adventure_filters_are_applied_at_actual_delivery(client, monk
     assert client.patch('/api/v1/notifications', json={'enabled': True}).status_code == 200
     calls = []
     monkeypatch.setattr(notify, 'publish', lambda *args, **kw: calls.append(kw['chat_id']))
-    monkeypatch.setattr(notify.threading, 'Thread', lambda target, args, daemon: type('T', (), {'start': lambda self: target(*args)})())
+    monkeypatch.setattr(notify, 'threading', SimpleNamespace(
+        Lock=notify.threading.Lock,
+        Thread=lambda target, args, daemon: type('T', (), {'start': lambda self: target(*args)})(),
+    ))
     live = sender(manager.notifications, manager.registry.adventure(red))
     assert live.wants(Event('badge', 'Badge', priority=HIGH))
     live.send('Badge', '', priority=HIGH, event_type='badge')
