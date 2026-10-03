@@ -116,3 +116,33 @@ test('switching adventures from Trading keeps the game trading page', async () =
   switcher.onchange()
   assert.equal(location.href, '/games/red-two/trading')
 })
+
+test('live speed changes persist only the current adventure setting', async () => {
+  const view = routes('/games/red-two', 'red-two')
+  await view.api.setSpeed(4)
+  const call = view.calls.at(-1)
+  assert.equal(call.path, '/api/v1/adventures/red-two')
+  assert.equal(call.options.method, 'PATCH')
+  assert.deepEqual(JSON.parse(call.options.body), {settings: {speed: 4}})
+  assert.equal(call.options.headers['X-PokeSim-CSRF'], 'owner-csrf')
+})
+
+test('standalone live speed uses its existing emulator control', async () => {
+  const view = routes()
+  await view.api.setSpeed(0)
+  assert.equal(view.calls.length, 1)
+  assert.equal(view.calls[0].path, '/api/control')
+  assert.deepEqual(JSON.parse(view.calls[0].options.body), {action: 'speed', value: 0})
+})
+
+test('live speed updates renew expired sessions without losing the selected speed', async () => {
+  let attempts = 0
+  const view = routes('/games/a', 'a', true, path => {
+    if (path === '/api/v1/adventures/a' && ++attempts === 1) {
+      return {ok: false, status: 403, clone: () => ({json: async () => ({code: 'csrf_expired'})})}
+    }
+  })
+  await view.api.setSpeed(16)
+  assert.equal(attempts, 2)
+  assert.deepEqual(JSON.parse(view.calls.at(-1).options.body), {settings: {speed: 16}})
+})

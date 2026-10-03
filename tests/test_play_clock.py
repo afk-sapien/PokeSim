@@ -50,6 +50,9 @@ def test_loading_older_checkpoints_never_rewinds_played_time():
 
 def test_emulator_ticks_count_simulated_frames_including_manual_play():
     emu = Emulator.__new__(Emulator)
+    from pokesim.audio import AudioFeed
+    emu.audio = AudioFeed()
+    emu._audio_enabled = False
     emu.play_clock = PlayClock()
     emu.play_clock.seed(0)
     emu.frame = 0
@@ -74,6 +77,9 @@ def test_autosave_persists_clock_in_store_and_checkpoint(tmp_path):
     emu = Emulator.__new__(Emulator)
     emu.store = store
     emu.snapshot = snap()
+    from pokesim.audio import AudioFeed
+    emu.audio = AudioFeed()
+    emu._audio_enabled = False
     emu.play_clock = PlayClock()
     emu.play_clock.seed(256 * 3600)
     emu.policy = Mock()
@@ -101,6 +107,9 @@ def test_restart_resets_clock_for_a_new_adventure(tmp_path):
     emu.policy = Mock()
     emu._boot = Mock()
     emu.input_epoch = 0
+    from pokesim.audio import AudioFeed
+    emu.audio = AudioFeed()
+    emu._audio_enabled = False
     emu.play_clock = PlayClock()
     emu.play_clock.seed(900000)
     emu._handle_command('restart', None)
@@ -125,6 +134,9 @@ def test_checkpoint_reload_preserves_announced_playtime(tmp_path, monkeypatch):
     emu.input_epoch = 0
     emu.frame = 0
     emu.executed_frames = 0
+    from pokesim.audio import AudioFeed
+    emu.audio = AudioFeed()
+    emu._audio_enabled = False
     emu.play_clock = PlayClock()
     path = emu.store.write_checkpoint(b'save', {'rom_sha1': 'rom', 'pyboy_version': version('pyboy'),
         'policy': config.POLICY, 'policy_state': {}, 'run_memory': RunMemory().to_dict()})

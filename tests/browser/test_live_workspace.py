@@ -23,7 +23,7 @@ def live_game(game):
     return url, emu
 
 
-@pytest.mark.parametrize('width', [1280, 900, 390, 320])
+@pytest.mark.parametrize('width', [1600, 1280, 1100, 1000, 900, 800, 640, 390, 320])
 def test_live_columns_and_partner_details(page, live_game, width):
     url, emu = live_game
     page.set_viewport_size({'width': width, 'height': 900})
@@ -119,3 +119,53 @@ def test_download_save_and_busy_message(page, live_game, tmp_path):
     page.get_by_role('button', name='Download .sav').click()
     expect(page.locator('#toast')).to_have_text('Wait for the battle to finish.')
     expect(page.get_by_role('button', name='Download .sav')).to_be_enabled()
+
+
+def test_live_pause_resume_and_save_have_clear_actions(page, live_game):
+    url, emu = live_game
+    original = emu.status
+    state = {'paused': False, 'manual_mode': False}
+    emu.status = lambda: {**original(), **state}
+    def command(name, value=None):
+        emu.commands.append((name, value))
+        if name == 'pause':
+            state.update(paused=True, manual_mode=False)
+        elif name == 'resume':
+            state.update(paused=False, manual_mode=False)
+    emu.command = command
+    page.goto(url)
+    page.get_by_role('button', name='Pause', exact=True).click()
+    expect(page.locator('#pause')).to_have_text('Resume')
+    page.get_by_role('button', name='Resume', exact=True).click()
+    expect(page.locator('#pause')).to_have_text('Pause')
+    assert emu.commands == [('pause', None), ('resume', None)]
+    page.get_by_role('button', name='Save now', exact=True).click()
+    expect(page.locator('#toast')).to_contain_text('Checkpoint save requested')
+    assert emu.commands[-1] == ('save', None)
+
+
+def test_live_speed_changes_and_failed_updates(page, live_game):
+    url, emu = live_game
+    original = emu.status
+    speed = [1]
+    emu.status = lambda: {**original(), 'speed': speed[0]}
+    def command(name, value=None):
+        emu.commands.append((name, value))
+        if name == 'speed':
+            speed[0] = value
+    emu.command = command
+    page.goto(url)
+    select = page.get_by_role('combobox', name='Simulation speed', exact=True)
+    expect(select).to_have_value('1')
+    select.select_option('4')
+    expect(page.locator('#toast')).to_have_text('Simulation speed set to 4×.')
+    assert emu.commands[-1] == ('speed', 4)
+    select.select_option('0')
+    expect(page.locator('#toast')).to_have_text('Simulation speed set to Max.')
+    assert emu.commands[-1] == ('speed', 0)
+    page.route('**/api/control', lambda route: route.fulfill(
+        status=409, content_type='application/json', body='{"detail":"Adventure is busy"}'))
+    select.select_option('16')
+    expect(page.locator('#toast')).to_have_text('Adventure is busy')
+    expect(select).to_have_value('0')
+    expect(select).to_be_enabled()

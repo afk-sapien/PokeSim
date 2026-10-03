@@ -18,6 +18,22 @@
 .type-psychic { --type-bg: #f0bfd3 }
 .type-ice { --type-bg: #bfe8e5 }
 .type-dragon { --type-bg: #c4c8f5 }
+/* Bright primary type colors surround a soft spotlight behind the portrait. */
+.plate.type-normal { --type-glow: 150, 163, 124 }
+.plate.type-fighting { --type-glow: 229, 113, 80 }
+.plate.type-flying { --type-glow: 155, 150, 238 }
+.plate.type-poison { --type-glow: 188, 106, 225 }
+.plate.type-ground { --type-glow: 220, 170, 79 }
+.plate.type-rock { --type-glow: 185, 157, 78 }
+.plate.type-bug { --type-glow: 160, 192, 58 }
+.plate.type-ghost { --type-glow: 155, 122, 217 }
+.plate.type-fire { --type-glow: 255, 147, 69 }
+.plate.type-water { --type-glow: 74, 164, 234 }
+.plate.type-grass { --type-glow: 115, 193, 72 }
+.plate.type-electric { --type-glow: 245, 205, 48 }
+.plate.type-psychic { --type-glow: 238, 126, 174 }
+.plate.type-ice { --type-glow: 80, 202, 204 }
+.plate.type-dragon { --type-glow: 123, 144, 239 }
 .type-tags { display: flex }
 .type-tags { flex-wrap: wrap }
 .type-tags { gap: 4px }

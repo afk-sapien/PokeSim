@@ -60,6 +60,6 @@ def status(store):
     steps = (store.get(STEPS) or {}).get('total', 0)
     every = getattr(config, 'MEW_RETURN_STEPS', 1000000)
     enabled = bool(every and getattr(config, 'MEW_EVENT', False))
-    return {'enabled': enabled, 'first_gift': not value, 'remaining': max(0, value.get('next_at', steps + every) - steps),
+    return {'enabled': enabled, 'interval': every, 'first_gift': not value, 'remaining': max(0, value.get('next_at', steps + every) - steps),
             'league_required': enabled and value.get('armed_after_win') is not None,
             'delivered': value.get('delivered', 0)}

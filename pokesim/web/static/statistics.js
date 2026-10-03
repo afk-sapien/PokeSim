@@ -62,14 +62,55 @@
     const activityList = document.querySelector('#event-return-list')
     activityList.replaceChildren()
     const labels = {eevee: 'Eevee', dojo: 'Dojo rematch', fossil: 'Fossil expedition', trade_1: 'Mr. Mime exchange', trade_4: 'Farfetch’d exchange', trade_5: 'Lickitung exchange', trade_6: 'Jynx exchange'}
-    const lines = (activities?.enabled ? activities.activities : []).map(row => `${labels[row.key] || 'Exchange'}: ${row.ready ? 'Ready to revisit' : `${number(row.remaining)} steps remaining`}`)
-    if (mew?.enabled) lines.push(`Mew: ${mew.first_gift ? 'First gift after becoming Champion' : mew.league_required ? 'Win the League to claim' : `${number(mew.remaining)} steps remaining`}`)
-    if (!lines.length) lines.push('Complete original events to unlock return visits.')
-    for (const text of lines) {
-      const line = document.createElement('p')
-      line.className = 'note'
-      line.textContent = text
-      activityList.append(line)
+    const cards = (activities?.enabled ? activities.activities : []).map(row => {
+      const remaining = Math.max(0, row.remaining)
+      const ready = row.ready
+      return {title: labels[row.key] || 'Exchange', key: row.key,
+        state: ready ? 'ready' : remaining ? 'walking' : 'pending',
+        badge: ready ? 'Ready' : remaining ? 'Walking' : 'Pending',
+        value: ready ? 'Ready to revisit' : remaining ? number(remaining) : 'Steps complete',
+        detail: ready ? 'Another visit is available.' : remaining ? 'steps remaining' : 'Waiting for the game to reopen this visit.',
+        remaining, interval: activities.interval}
+    })
+    if (mew?.enabled) cards.push({title: 'Mew', key: 'mew',
+      state: mew.first_gift || mew.league_required ? 'league' : 'walking',
+      badge: mew.first_gift ? 'First gift' : mew.league_required ? 'League win' : 'Walking',
+      value: mew.first_gift ? 'Become Champion' : mew.league_required ? 'Win the League' : number(mew.remaining),
+      detail: mew.first_gift ? 'Your first Mew awaits a League victory.' : mew.league_required ? 'Claim another Mew with your next victory.' : 'steps remaining, then a League win',
+      remaining: mew.remaining, interval: mew.first_gift ? null : mew.interval})
+    document.querySelector('#event-return-summary').textContent = `${cards.filter(card => card.state === 'ready').length} ready to revisit`
+    for (const card of cards) {
+      const element = document.createElement('article')
+      element.className = `return-card return-card--${card.state}`
+      element.dataset.return = card.key
+      const add = (tag, className, text, parent = element) => {
+        const node = document.createElement(tag)
+        node.className = className
+        node.textContent = text
+        parent.append(node)
+        return node
+      }
+      const head = add('div', 'return-card-head', '')
+      add('h3', 'legend legend--ink', card.title, head)
+      add('span', 'return-state micro', card.badge, head)
+      add('strong', 'return-value readout', card.value)
+      add('p', 'return-detail note', card.detail)
+      if (Number.isFinite(card.interval) && card.interval > 0) {
+        const completed = Math.min(card.interval, Math.max(0, card.interval - card.remaining))
+        const meter = add('progress', 'return-meter', '')
+        meter.max = card.interval
+        meter.value = completed
+        meter.setAttribute('aria-label', `${card.title}: ${number(completed)} of ${number(card.interval)} steps`)
+        add('p', 'return-count micro', `${number(completed)} / ${number(card.interval)} steps`)
+      }
+      activityList.append(element)
+    }
+    if (!cards.length) {
+      document.querySelector('#event-return-summary').textContent = ''
+      const empty = document.createElement('p')
+      empty.className = 'return-empty note'
+      empty.textContent = 'Complete original events to unlock return visits.'
+      activityList.append(empty)
     }
     const status = document.querySelector('#statistics-status')
     const target = document.querySelector('#statistics-charts')

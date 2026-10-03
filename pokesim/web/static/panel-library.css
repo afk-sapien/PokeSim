@@ -64,8 +64,7 @@
 }
 .notice.error { border-left-color: var(--crit-lamp); color: var(--crit); }
 
-.back-link a,
-.backups a {
+.back-link a {
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
   text-transform: uppercase;
@@ -526,3 +525,183 @@
 
 .nickname-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .nickname-actions .key { white-space: normal; }
+
+/* Keep the expanded creation form within narrow phone screens. */
+#create-dialog .sheet-body { grid-template-columns: minmax(0, 1fr) }
+#create-dialog .sheet-body > * { min-width: 0 }
+#create-dialog .sheet-body .key { white-space: normal }
+#create-dialog .sheet-body .key { overflow-wrap: anywhere }
+
+.notification-fields { display: grid }
+.notification-fields { gap: var(--s4) }
+.notification-fields { width: 100% }
+.notification-fields { align-items: start }
+#notify-form .form-result:empty { display: none }
+@media (min-width: 700px) {
+  .notification-fields { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) }
+  #notify-categories { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  #notify-adventures { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) }
+}
+
+.integration-list { display: grid }
+.integration-list { gap: var(--s4) }
+.integration-card { display: flex }
+.integration-card { flex-wrap: wrap }
+.integration-card { align-items: center }
+.integration-card { justify-content: space-between }
+.integration-card { gap: var(--s4) }
+.integration-card { padding: var(--s4) }
+.integration-card h2 { margin-block: var(--s2) }
+.integration-card h2 { overflow-wrap: anywhere }
+.integration-card > div:first-child { flex: 1 1 260px }
+.integration-card-actions { display: flex }
+.integration-card-actions { flex-wrap: wrap }
+.integration-card-actions { gap: var(--s2) }
+.integration-card .form-result { flex-basis: 100% }
+.integration-card .form-result:empty { display: none }
+#integration-dialog { width: min(820px, calc(100% - 2 * var(--s4))) }
+#notify-form { gap: 0 }
+#notify-form .sheet-body > * { min-width: 0 }
+#notify-form .key { white-space: normal }
+#notify-form .key { overflow-wrap: anywhere }
+.integration-provider, .integration-subscriptions, .integration-credentials { display: grid }
+.integration-provider, .integration-subscriptions, .integration-credentials { gap: var(--s3) }
+.integration-provider { justify-items: start }
+.integration-provider[hidden], .integration-subscriptions[hidden] { display: none }
+.integration-subscriptions { padding-top: var(--s4) }
+.integration-subscriptions { border-top: var(--hair) solid var(--rule) }
+.integration-credentials:has(.note:empty):has(button[hidden] + button[hidden]) { display: none }
+.integration-actions { gap: var(--s2) }
+.integration-actions { flex-wrap: wrap }
+@media (max-width: 640px) {
+  .integration-actions > .key { flex: 1 1 auto }
+  .integration-card-actions { width: 100% }
+  .integration-card-actions > .key { flex: 1 }
+}
+
+@media (max-width: 640px) {
+  .integration-actions > .key:first-child { flex-basis: 100% }
+  .integration-actions > .key:not(:first-child) { flex: 1 1 0 }
+  .integration-actions > .key:not(:first-child) { font: 14px / 1.4 var(--font-text) }
+  .integration-actions > .key:not(:first-child) { min-height: 44px }
+}
+
+/* Nickname choices stay in the editor, leaving Settings compact. */
+#nickname-dialog { width: min(940px, calc(100vw - 24px)) }
+.nickname-fields { display: grid }
+.nickname-fields { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)) }
+.nickname-fields { gap: var(--s3) }
+.nickname-fields > * { min-width: 0 }
+.nickname-fields textarea { width: 100% }
+.nickname-fields textarea { box-sizing: border-box }
+.nickname-builtins details, .nickname-exclusions { border-top: 1px solid var(--rule-faint) }
+.nickname-builtins summary, .nickname-exclusions summary { padding-block: var(--s3) }
+.nickname-builtins summary, .nickname-exclusions summary { cursor: pointer }
+.nickname-choices { display: grid }
+.nickname-choices { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)) }
+.nickname-choices { gap: var(--s2) }
+.nickname-choices { padding-bottom: var(--s3) }
+.nickname-choices .check { font-size: 13px }
+.backup-row { display: flex }
+.backup-row { flex-wrap: wrap }
+.backup-row { align-items: center }
+.backup-row { justify-content: space-between }
+.backup-row { gap: var(--s3) }
+.backup-row { padding-block: var(--s3) }
+.backup-row { border-top: var(--hair) solid var(--rule-faint) }
+.backup-row strong { font-size: 14px }
+.backup-row p { margin: 0 }
+
+.backups { width: 100% }
+#nickname-form .sheet-foot { gap: var(--s2) }
+#nickname-form .sheet-foot { flex-wrap: wrap }
+.nickname-choices { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)) }
+.nickname-choices { max-height: 320px }
+.nickname-choices { overflow-y: auto }
+.nickname-choices { align-content: start }
+@media (max-width: 640px) {
+  #nickname-form .sheet-foot { display: grid }
+  #nickname-form .sheet-foot { grid-template-columns: minmax(0, 1fr) }
+  #nickname-form .sheet-foot .key { font: 14px / 1.4 var(--font-text) }
+  #nickname-form .sheet-foot .key { min-width: 0 }
+}
+.nickname-builtins h3 { line-height: 1.3 }
+.nickname-builtins h3 { margin-bottom: var(--s2) }
+
+
+/* Backup actions share the same keys and stay together as the panel narrows. */
+.settings-actions { display: grid }
+.settings-actions { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)) }
+.settings-actions { gap: var(--s2) }
+.settings-actions { width: 100% }
+.settings-actions .key { min-height: 44px }
+.settings-actions .key { font-size: 14px }
+.settings-actions .key { padding-inline: var(--s2) }
+.settings-actions .key { white-space: normal }
+.settings-actions .key { line-height: 1.25 }
+.backup-row-actions { display: grid }
+.backup-row-actions { grid-template-columns: repeat(3, minmax(0, 1fr)) }
+.backup-row-actions { gap: var(--s2) }
+.backup-row-actions { min-width: min(100%, 330px) }
+.backup-row-actions { max-width: 100% }
+.backup-row-actions .key { min-height: 44px }
+.backup-row-actions .key { padding-inline: var(--s2) }
+.backup-row-actions .key { font-size: 14px }
+.backup-row-actions .key { white-space: normal }
+.backup-row-actions .key { line-height: 1.25 }
+.backup-row-actions .key { text-align: center }
+@media (max-width: 640px) {
+  .backup-row-actions { width: 100% }
+  .backup-row-actions .key { font-size: 14px }
+  .backup-row-actions .key { padding-inline: var(--s2) }
+}
+
+.backup-pagination { display: flex }
+.backup-pagination { align-items: center }
+.backup-pagination { justify-content: space-between }
+.backup-pagination { gap: var(--s2) }
+.backup-pagination { width: 100% }
+.backup-pagination[hidden] { display: none }
+.backup-pagination .key { min-height: 44px }
+.backup-pagination .key { font-size: 12px }
+.backup-pagination .key { padding-inline: var(--s2) }
+#backup-summary:empty { display: none }
+#backup-delete-dialog .sheet-foot { flex-wrap: wrap }
+@media (max-width: 640px) {
+  .backup-row-actions { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .backup-row-actions .key--danger { grid-column: 1 / -1 }
+  .backup-pagination .key { width: auto }
+  #backup-delete-dialog .sheet-foot .key { font-size: 14px }
+}
+
+#backup-delete-dialog .sheet-foot { gap: var(--s2) }
+
+
+.portrait-settings { margin-bottom: var(--s5) }
+.portrait-settings-body { display: grid }
+.portrait-settings-body { grid-template-columns: minmax(0, 1fr) auto }
+.portrait-settings-body { gap: var(--s5) }
+.portrait-settings-body { align-items: center }
+.portrait-preview { display: grid }
+.portrait-preview { grid-template-columns: repeat(3, minmax(0, 1fr)) }
+.portrait-preview { width: 304px }
+.portrait-preview { max-width: 100% }
+.portrait-preview { gap: var(--s2) }
+.portrait-preview .plate { width: 100% }
+.portrait-preview .plate { height: 96px }
+#portrait-progress { width: 100% }
+#portrait-progress { accent-color: var(--signal) }
+#portrait-feedback:empty { display: none }
+#portrait-feedback.is-error { color: var(--crit) }
+@media (max-width: 800px) {
+  .portrait-settings-body { grid-template-columns: minmax(0, 1fr) }
+  .portrait-preview .plate { height: 80px }
+}
+
+.portrait-settings .settings-actions { display: flex }
+.portrait-settings .settings-actions { flex-wrap: wrap }
+.portrait-settings .settings-actions .key { max-width: 100% }
+
+.portrait-preview-caption { grid-column: 1 / -1 }
+.portrait-preview-caption { text-align: center }
+.portrait-preview-caption { margin: 0 }

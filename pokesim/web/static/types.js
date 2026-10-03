@@ -11,5 +11,9 @@
     }))]
     return keys.map(key => `<span class="tag type-badge type-${key}">${labels.get(key) || 'Unknown'}</span>`).join('')
   }
-  globalThis.PokemonTypes = {badges}
+  const portraitClass = types => {
+    const key = Array.isArray(types) ? String(types[0] ?? '').trim().toLowerCase() : ''
+    return labels.has(key) ? `type-${key}` : 'type-unknown'
+  }
+  globalThis.PokemonTypes = {badges, portraitClass}
 })()

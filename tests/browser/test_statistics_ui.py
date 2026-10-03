@@ -110,19 +110,42 @@ def test_marathon_records_and_current_clock(page, game, monkeypatch, width):
     expect(page.locator('#marathon-last')).to_have_text('No attempts yet')
 
 
-@pytest.mark.parametrize('width', [320, 1280])
+@pytest.mark.parametrize('width', [320, 780, 1280])
 def test_step_activity_and_mew_progress(page, game, width):
     url, _, _, _ = game
-    page.set_viewport_size({'width': width, 'height': 900})
-    page.route('**/api/statistics', lambda route: route.fulfill(json={
-        'history': [], 'event_returns': {'enabled': True, 'activities': [
-            {'key': 'eevee', 'ready': True, 'remaining': 0},
-            {'key': 'fossil', 'ready': False, 'remaining': 100000}]},
-        'mew_returns': {'enabled': True, 'league_required': True, 'remaining': 0},
-    }))
+    page.set_viewport_size({'width': width, 'height': 1000})
+    data = {'history': [], 'event_returns': {'enabled': True, 'interval': 100000, 'activities': [
+        {'key': 'eevee', 'ready': False, 'remaining': 25000},
+        {'key': 'dojo', 'ready': True, 'remaining': 0},
+        {'key': 'fossil', 'ready': False, 'remaining': 0},
+        {'key': 'trade_4', 'ready': True, 'remaining': 0},
+        {'key': 'trade_5', 'ready': True, 'remaining': 0},
+        {'key': 'trade_6', 'ready': True, 'remaining': 0}]},
+        'mew_returns': {'enabled': True, 'interval': 1000000, 'league_required': False, 'remaining': 265775}}
+    page.route('**/api/statistics', lambda route: route.fulfill(json=data))
     page.goto(url + '/journal/stats')
-    expect(page.locator('#event-return-list')).to_contain_text('Eevee: Ready to revisit')
-    expect(page.locator('#event-return-list')).to_contain_text('100,000 steps remaining')
-    expect(page.locator('#event-return-list')).to_contain_text('Mew: Win the League to claim')
+    expect(page.locator('[data-return="dojo"]')).to_contain_text('Ready to revisit')
+    expect(page.locator('[data-return="fossil"]')).to_contain_text('Pending')
+    expect(page.locator('[data-return="fossil"]')).not_to_contain_text('Ready to revisit')
+    expect(page.locator('[data-return="eevee"] progress')).to_have_attribute('value', '75000')
+    expect(page.locator('[data-return="mew"] progress')).to_have_attribute('value', '734225')
+    expect(page.locator('#event-return-summary')).to_have_text('4 ready to revisit')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-    page.screenshot(path=f'/tmp/pokesim-step-stats-{width}.png', full_page=True)
+    page.locator('#event-returns').screenshot(path=f'/tmp/pokesim-return-cards-{width}.png')
+    page.get_by_role('button', name='Dark', exact=True).click()
+    page.locator('#event-returns').screenshot(path=f'/tmp/pokesim-return-cards-{width}-dark.png')
+    data['mew_returns'].update(league_required=True, remaining=0)
+    page.reload()
+    expect(page.locator('[data-return="mew"]')).to_contain_text('Win the League')
+    expect(page.locator('[data-return="mew"] progress')).to_have_attribute('value', '1000000')
+    data['mew_returns'].update(first_gift=True, league_required=False)
+    page.reload()
+    expect(page.locator('[data-return="mew"]')).to_contain_text('Become Champion')
+    assert page.locator('[data-return="mew"] progress').count() == 0
+    data['event_returns'].update(activities=[])
+    data['mew_returns'].update(enabled=False)
+    page.reload()
+    expect(page.locator('#event-return-list')).to_contain_text('Complete original events')
+    data['event_returns'].update(enabled=False)
+    page.reload()
+    expect(page.locator('#event-returns')).not_to_be_visible()

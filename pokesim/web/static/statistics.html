@@ -14,8 +14,8 @@
 <link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
-<link rel="stylesheet" href="${game_base}/static/panel.css?v=panel-8">
-<link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=marathon-1">
+<link rel="stylesheet" href="${game_base}/static/panel.css?v=glow-2">
+<link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=return-cards-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="journal">
@@ -45,7 +45,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="column-head"><h2 class="legend legend--ink" id="legendary-heading">Legendary returns</h2></div>
 <div class="progress-panel"><div class="legendary-progress"><p id="legendary-summary"><strong class="readout" id="legendary-remaining"></strong><span class="note"> steps until the next return</span></p><progress id="legendary-meter" aria-label="Steps toward the next legendary return"></progress><p id="legendary-ready" class="note"></p></div></div>
 </section>
-<section class="statistics-section" id="event-returns" hidden aria-labelledby="event-returns-heading"><div class="column-head"><h2 class="legend legend--ink" id="event-returns-heading">Walking rewards</h2></div><div class="progress-panel legendary-progress" id="event-return-list"></div></section>
+<section class="statistics-section" id="event-returns" hidden aria-labelledby="event-returns-heading"><div class="column-head"><h2 class="legend legend--ink" id="event-returns-heading">Return visits &amp; gifts</h2><span class="micro" id="event-return-summary"></span></div><div class="return-grid" id="event-return-list"></div></section>
 <section class="statistics-section" id="marathon-records" aria-labelledby="marathon-heading">
 <div class="column-head"><h2 class="legend legend--ink" id="marathon-heading">Kanto Marathon</h2><span class="micro">Game time</span></div>
 <div class="progress-panel marathon-records">
@@ -68,8 +68,8 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="${game_base}/static/app.js?v=panel-2"></script>
+<script src="${game_base}/static/app.js?v=glow-1"></script>
 <script src="${game_base}/static/progress.js?v=2"></script>
-<script src="${game_base}/static/statistics.js?v=marathon-1"></script>
+<script src="${game_base}/static/statistics.js?v=return-cards-1"></script>
 </body>
 </html>

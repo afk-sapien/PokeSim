@@ -101,3 +101,12 @@ def test_runtime_call_runs_on_emulator_thread_and_reports_exceptions():
     assert not emu.thread.is_alive()
     with pytest.raises(RuntimeError, match='not running'):
         emu.call(lambda: None)
+
+
+def test_runtime_intro_names_validate_and_roundtrip(settings):
+    parsed = SimulationSettings.from_dict({**settings, 'trainer_name': ' ty ', 'rival_name': 'gary'})
+    assert (parsed.trainer_name, parsed.rival_name) == ('TY', 'GARY')
+    assert SimulationSettings.from_dict(parsed.to_dict()) == parsed
+    for bad in ('TOOLONGGG', 'A B', 'ASH!', 'ß', None, 5):
+        with pytest.raises(ValueError):
+            SimulationSettings.from_dict({**settings, 'trainer_name': bad})

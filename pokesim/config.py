@@ -15,6 +15,10 @@ DATA_DIR = Path(_env("DATA_DIR", "data"))
 SPEED = float(_env("SPEED", "1"))            # emulation speed multiplier, 0 = unlimited
 NICKNAME_PREFIXES = tuple(filter(None, _env("NICKNAME_PREFIXES", "").split(",")))
 NICKNAME_SUFFIXES = tuple(filter(None, _env("NICKNAME_SUFFIXES", "").split(",")))
+NICKNAME_NAMES = tuple(filter(None, _env("NICKNAME_NAMES", "").split(",")))
+NICKNAME_EXCLUDED_PREFIXES = tuple(filter(None, _env("NICKNAME_EXCLUDED_PREFIXES", "").split(",")))
+NICKNAME_EXCLUDED_SUFFIXES = tuple(filter(None, _env("NICKNAME_EXCLUDED_SUFFIXES", "").split(",")))
+NICKNAME_EXCLUDED_NAMES = tuple(filter(None, _env("NICKNAME_EXCLUDED_NAMES", "").split(",")))
 POLICY = _env("POLICY", "strategic")
 FAST_TEXT = _env("FAST_TEXT", "1") == "1"                  # force text speed FAST via wOptions
 BATTLE_ANIMATIONS = _env("BATTLE_ANIMATIONS", "1") == "1"  # 0 = turn battle animations off (faster)

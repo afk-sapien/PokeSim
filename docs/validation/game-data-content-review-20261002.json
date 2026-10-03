@@ -1,0 +1,239 @@
+{
+  "source_revision": "a1a22aaf84d1675bcdbaeb194592379d586d838e",
+  "files": {
+    "tables.json": {
+      "bytes": 27959,
+      "sha256": "5f59ac59459df2dee33c3e371f7eeea09cd79b43e45924d704f7844ab1c8d841",
+      "sections": {
+        "maps": {
+          "count": 248,
+          "bytes": 5977
+        },
+        "species": {
+          "count": 155,
+          "bytes": 2458
+        },
+        "items": {
+          "count": 153,
+          "bytes": 2363
+        },
+        "trainers": {
+          "count": 48,
+          "bytes": 737
+        },
+        "dex": {
+          "count": 151,
+          "bytes": 2359
+        },
+        "notable_trainers": {
+          "count": 15,
+          "bytes": 46
+        },
+        "moves": {
+          "count": 165,
+          "bytes": 13653
+        },
+        "badges": {
+          "count": 8,
+          "bytes": 74
+        },
+        "leaders": {
+          "count": 8,
+          "bytes": 74
+        },
+        "key_item_ids": {
+          "count": 26,
+          "bytes": 80
+        },
+        "hall_of_fame_map": {
+          "count": null,
+          "bytes": 3
+        }
+      },
+      "scalar_types": {
+        "str": 1266,
+        "int": 207
+      },
+      "strings_with_newlines": 0,
+      "maximum_string_words": 5,
+      "longest_string_characters": 29
+    },
+    "strategy.json": {
+      "bytes": 510485,
+      "sha256": "66b7e22022efd9e10501b2f4767c1c82e7daa8478af0ac441d473358309d4b22",
+      "sections": {
+        "source": {
+          "count": null,
+          "bytes": 33
+        },
+        "revision": {
+          "count": null,
+          "bytes": 42
+        },
+        "moves": {
+          "count": 165,
+          "bytes": 16222
+        },
+        "matchups": {
+          "count": 82,
+          "bytes": 808
+        },
+        "species": {
+          "count": 151,
+          "bytes": 30564
+        },
+        "events": {
+          "count": 507,
+          "bytes": 18475
+        },
+        "items": {
+          "count": 103,
+          "bytes": 1507
+        },
+        "prices": {
+          "count": 97,
+          "bytes": 781
+        },
+        "marts": {
+          "count": 10,
+          "bytes": 355
+        },
+        "maps": {
+          "count": 248,
+          "bytes": 5390
+        },
+        "world": {
+          "count": 223,
+          "bytes": 434041
+        },
+        "toggle_objects": {
+          "count": 228,
+          "bytes": 1751
+        },
+        "collision_pairs": {
+          "count": 14,
+          "bytes": 234
+        },
+        "ledges": {
+          "count": 8,
+          "bytes": 124
+        }
+      },
+      "scalar_types": {
+        "str": 4405,
+        "int": 111333,
+        "float": 38
+      },
+      "strings_with_newlines": 0,
+      "maximum_string_words": 1,
+      "longest_string_characters": 53
+    },
+    "collection.json": {
+      "bytes": 94687,
+      "sha256": "635218a9bde03ed7d5b40cc8343eab7f28736c2bc573b49fb8168e4c317a3623",
+      "sections": {
+        "versions": {
+          "count": 2,
+          "bytes": 60433
+        },
+        "evolutions": {
+          "count": 151,
+          "bytes": 4918
+        },
+        "trainers": {
+          "count": 322,
+          "bytes": 29296
+        }
+      },
+      "scalar_types": {
+        "int": 3172,
+        "str": 2394,
+        "NoneType": 4
+      },
+      "strings_with_newlines": 0,
+      "maximum_string_words": 1,
+      "longest_string_characters": 37
+    }
+  },
+  "navigation": {
+    "maps": 223,
+    "cells": 94940,
+    "field_bytes": {
+      "name": 3443,
+      "symbol": 3849,
+      "tileset": 1862,
+      "width": 369,
+      "height": 344,
+      "tiles": 275482,
+      "passable": 7525,
+      "warps": 10157,
+      "inactive_warps": 465,
+      "connections": 1553,
+      "objects": 57934,
+      "backgrounds": 8426,
+      "forced_moves": 1364,
+      "locked_doors": 1213,
+      "switch_tiles": 2555,
+      "opened_tiles": 1794,
+      "encounters": 6083
+    },
+    "records": {
+      "warps": 805,
+      "objects": 918,
+      "backgrounds": 201,
+      "connections": 78,
+      "locked_doors": 19,
+      "forced_moves": 71,
+      "opened_tiles": 28
+    }
+  },
+  "collection": {
+    "source_records": {
+      "red": 686,
+      "blue": 686
+    },
+    "evolution_records": 72
+  },
+  "reference": {
+    "files_read": 1099,
+    "read_extensions": {
+      ".asm": 898,
+      ".blk": 182,
+      ".bst": 19
+    },
+    "read_directories": {
+      "data": 665,
+      "scripts": 223,
+      "maps": 182,
+      "constants": 8,
+      "gfx": 20,
+      "maps.asm": 1
+    },
+    "archive_files": 2875,
+    "archive_bytes": 4235450,
+    "archive_extensions": {
+      "": 6,
+      ".asm": 1923,
+      ".md": 3,
+      ".sha1": 1,
+      ".link": 1,
+      ".inc": 1,
+      ".sh": 1,
+      ".template": 2,
+      ".c": 4,
+      ".h": 1,
+      ".blk": 228,
+      ".yml": 2,
+      ".png": 668,
+      ".rle": 1,
+      ".tilemap": 14,
+      ".bst": 19
+    },
+    "text_directory_files_read": [],
+    "audio_directory_files_read": [],
+    "image_files_read": []
+  },
+  "total_bytes": 633131,
+  "combined_gzip_bytes": 78858,
+  "scope": "Fresh output from the current generators and an existing local reference tree. No ROMs or saves were read. No source archive was downloaded during this review."
+}

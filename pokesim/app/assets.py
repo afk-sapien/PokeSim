@@ -22,6 +22,8 @@ class Assets:
         self.reference_archive = reference_archive
         self.guard = threading.Lock()
         self.cancelled = threading.Event()
+        from .portrait_packs import PortraitPacks
+        self.portraits = PortraitPacks(registry, self.cancelled)
 
     def install_rom(self, raw):
         sha1 = hashlib.sha1(raw).hexdigest()
@@ -81,6 +83,9 @@ class Assets:
     def sprite_path(self, adventure_id, dex):
         if not 1 <= dex <= 151:
             return None
+        community = self.portraits.path(dex)
+        if community is not None:
+            return community
         directories = (self.registry.root / 'adventures' / adventure_id / 'sprites',
                        self.root / 'sprites')
         for directory in directories:

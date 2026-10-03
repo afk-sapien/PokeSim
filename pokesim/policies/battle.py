@@ -187,6 +187,10 @@ def replacement_slot(mon, new_move):
 def needs_healing(party):
     if not party:
         return False
+    # PC withdrawal can retain stored HP above the recalculated maximum.
+    # The nurse repairs this through normal play before the party leaves the Center.
+    if any(p.hp > p.max_hp for p in party):
+        return True
     available = sum(pp for p in party if p.hp for mid, pp in zip(p.moves, p.pp) if MOVES.get(mid, {}).get("power", 0))
     maximum = sum(MOVES.get(mid, {}).get("pp", 0) for p in party if p.hp for mid in p.moves if MOVES.get(mid, {}).get("power", 0))
     lead = party[0]

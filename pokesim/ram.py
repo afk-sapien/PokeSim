@@ -48,7 +48,7 @@ from pokesim_core.gen1 import (
 )
 
 from .game_data import load
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from functools import lru_cache
 from pokesim_core.storage import decode_box, memory_bytes
 
@@ -198,6 +198,15 @@ class Snapshot:
         if self.in_battle in (1, 2) and not self.party and self.started:
             return False        # a battle with no Pokémon is a softlock
         return True
+
+    @property
+    def hp_overflow_only(self) -> bool:
+        """A bounded HP mismatch that a nurse can repair, with no other invalid fields."""
+        if (not any(p.hp > p.max_hp for p in self.party)
+                or any(not 0 < p.max_hp <= 999 or not 0 <= p.hp <= 999 for p in self.party)):
+            return False
+        checked = tuple(replace(p, hp=min(p.hp, p.max_hp)) for p in self.party)
+        return replace(self, party=checked).valid
 
     @property
     def map_name(self) -> str:

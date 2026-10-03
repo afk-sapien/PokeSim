@@ -1,36 +1,32 @@
 # README screenshots
 
-Captured September 27, 2026 from running adventures. These are browser
-screenshots of actual game state, not mockups or generated art. The owner
-approved using these game views in the public README.
+Actual browser captures from the owner’s running adventures, approved for use in
+the public README. No game state or statistics were fabricated for these images.
 
-The lead image shows the Fresh Start Red adventure during a complete battle
-frame on Route 6. Both Pokémon, the attack text, all six teammates, and the
-next training objective are visible. It was selected after reviewing nine
-candidates from three adventures. The simulation kept running throughout.
+## Current README images
 
-The remaining views show the older Red adventure with all eight badges,
-151 species registered, 137 species recorded at level 100, and more than 2,200
-game hours.
+| File | Captured | View |
+| --- | --- | --- |
+| `live-adventure.jpg` | September 27, 2026 | Fresh Start Red battle, six partners and the next objective, light theme |
+| `journal-panel.jpg` | October 2, 2026 | Red journal with a trade, training milestones and legendary returns |
+| `stats-panel.jpg` | October 2, 2026 | Red Pokédex, level 100 and League progress charts |
+| `pokedex-panel.jpg` | October 2, 2026 | Registered species, catch totals and colored types |
+| `pc-panel.jpg` | October 2, 2026 | All Pokémon, sorted by power, with recorded Elite Four wins |
+| `library.jpg` | October 2, 2026 | Library header and first row, including both running games and one stopped game |
 
-Captured at a 1280 pixel viewport in the light theme, at native pixel density.
-The lead image is 1250 pixels tall and uses JPEG quality 94. The other captures
-use quality 90. Taller views include complete panels.
-The PC uses the actual All Pokémon control and its default power sorting.
+The October captures show public version 0.4.16 using the browser’s existing dark
+theme and 1265-pixel viewport. Journal and Stats panels are 712 pixels tall. Pokédex and
+PC panels are 1000 pixels tall. The Library
+capture is 1070 pixels tall and ends after the complete first row. A fourth,
+stopped adventure appears farther down the live page and is outside that crop.
+Simulation states were not changed for the captures.
 
-| File | View |
-| --- | --- |
-| `live-adventure.jpg` | Exeggutor battling Oddish, six partners with colored types, and the next training objective |
-| `journal.jpg` | Entries and Stats tabs, a League reward gift, and recent victories |
-| `adventure-stats.jpg` | Progress history, legendary return countdown, marathon records, and collection strength |
-| `pokedex.jpg` | Species milestones, catch totals, DV records, and colored types |
-| `pc-storage.jpg` | All Pokémon across the party and every box, sorted by power |
+The README arranges each pair in a two-column Markdown table. Matching dimensions
+keep the panels aligned. Each image links to the original for a full-size view.
+The original September captures remain available as `journal.jpg`,
+`adventure-stats.jpg`, `pokedex.jpg` and `pc-storage.jpg`.
 
-Only the JPEGs are kept. The README embeds these files directly.
-Portraits are decoded from the supplied ROM. Retake against a library whose
-Pokédex shows those sprites, not numbered placeholders.
-
-Keep screenshots free of browser chrome, local file paths, credentials, and
-private settings. Use actual interface controls to choose a view without
-altering game data. Keep images in the source package so the README also works
-in downloaded source.
+Keep screenshots free of browser chrome, local file paths, credentials and
+private settings. Choose views through the actual interface without altering
+game data. Keep images in the source package so the README also works in
+source downloads. Pokémon portraits come from the supplied cartridge.

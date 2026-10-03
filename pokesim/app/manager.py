@@ -38,7 +38,7 @@ log = logging.getLogger(__name__)
 STATIC = Path(__file__).parents[1] / 'web' / 'static'
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
-                   'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml'}
+                   'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml'}
 
 
 def public_game_path(method, path):
@@ -86,13 +86,17 @@ class Manager:
 
     @staticmethod
     def validate_adventure_settings(values):
-        allowed = {'speed', 'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
+        allowed = {'trainer_name', 'rival_name', 'speed', 'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
                    'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards',
                    'mew_event', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
                    'fossil_preference', 'dojo_preference', 'event_retention_days'}
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError('Unsupported adventure settings')
         result = {'starter': 'random', 'policy': 'strategic', 'auto_start': False, **values}
+        from ..nicknames import validate_trainer_name
+        for name in ('trainer_name', 'rival_name'):
+            if name in result:
+                result[name] = validate_trainer_name(result[name])
         if 'speed' in result:
             from ..runtime.settings import validate_speed
             validate_speed(result['speed'])
@@ -218,7 +222,8 @@ def cache_policy(path, query, content_type):
             return 'public, max-age=604800'
         return 'no-cache'
     if kind == 'sprites' and content_type.startswith('image/png'):
-        return 'private, max-age=86400'
+        # Portraits may be replaced when a ROM is installed or an old pack is migrated.
+        return 'private, no-cache'
     if kind == 'shots':
         # Event numbers can be reused after a rollback, so ask before reusing a shot.
         return 'private, no-cache'
@@ -355,6 +360,8 @@ def create_app(manager, shutdown=lambda: None):
         manager.check_available()
         data = await json_body(request)
         settings = manager.validate_adventure_settings({
+            'trainer_name': data.get('trainer_name', ''),
+            'rival_name': data.get('rival_name', ''),
             'starter': data.get('starter', 'random'),
             'speed': data.get('speed', 1),
             'league_rewards': data.get('league_rewards', True),
@@ -423,6 +430,8 @@ def create_app(manager, shutdown=lambda: None):
             changes = data['settings']
             if not isinstance(changes, dict):
                 raise ValueError('Settings must be an object')
+            if {'trainer_name', 'rival_name'} & set(changes):
+                raise ValueError('Trainer and rival names are chosen when creating an adventure')
             if adventure['state'] == 'running' and set(changes) - {'auto_start', 'speed'}:
                 raise ValueError('Stop the adventure before changing these settings')
             previous = adventure['settings']
@@ -434,17 +443,43 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.get('/api/v1/settings')
     def settings():
-        return {'data_dir': str(manager.root), **manager.registry.setting(
-            'nickname_parts', {'nickname_prefixes': [], 'nickname_suffixes': []})}
+        from ..nicknames import nickname_defaults, nickname_catalog
+        parts = {**nickname_defaults(), **manager.registry.setting('nickname_parts', {})}
+        return {'data_dir': str(manager.root), **parts, 'nickname_catalog': nickname_catalog(parts)}
 
     @app.patch('/api/v1/settings')
     async def set_settings(request: Request):
         manager.check_available()
-        from ..nicknames import validate_parts
-        parts = validate_parts(await json_body(request))
+        from ..nicknames import validate_parts, nickname_defaults
+        changes = validate_parts(await json_body(request))
+        parts = validate_parts({**nickname_defaults(), **manager.registry.setting('nickname_parts', {}), **changes})
         manager.registry.set_setting('nickname_parts', parts)
         pending = await asyncio.to_thread(manager.supervisor.update_nicknames)
-        return {**parts, 'pending': pending}
+        return {**settings(), 'pending': pending}
+
+    @app.get('/api/v1/portraits')
+    def portraits():
+        return manager.assets.portraits.status()
+
+    @app.post('/api/v1/portraits/community')
+    async def install_portraits():
+        manager.check_available()
+        if manager.assets.portraits.begin():
+            manager.background(manager.assets.portraits.install)
+        return portraits()
+
+    @app.post('/api/v1/portraits/default')
+    def restore_portraits():
+        manager.check_available()
+        manager.assets.portraits.restore()
+        return portraits()
+
+    @app.get('/api/v1/portraits/preview/{dex}.png')
+    def portrait_preview(dex: int):
+        path = manager.assets.portraits.path(dex, preview=True)
+        if path is None:
+            raise HTTPException(404)
+        return FileResponse(path, media_type='image/png')
 
     @app.get('/api/v1/notifications')
     def notifications():
@@ -461,6 +496,31 @@ def create_app(manager, shutdown=lambda: None):
     async def test_notification(request: Request):
         data = await json_body(request)
         return await asyncio.to_thread(manager.notifications.test, data)
+
+    @app.post('/api/v1/notifications/integrations')
+    async def add_notification_integration(request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        pending = await asyncio.to_thread(manager.notifications.save_integration, data)
+        return {**manager.notifications.public(), 'pending': pending}
+
+    @app.patch('/api/v1/notifications/integrations/{integration_id}')
+    async def edit_notification_integration(integration_id: str, request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        pending = await asyncio.to_thread(manager.notifications.save_integration, data, integration_id)
+        return {**manager.notifications.public(), 'pending': pending}
+
+    @app.delete('/api/v1/notifications/integrations/{integration_id}')
+    async def remove_notification_integration(integration_id: str):
+        manager.check_available()
+        pending = await asyncio.to_thread(manager.notifications.delete_integration, integration_id)
+        return {**manager.notifications.public(), 'pending': pending}
+
+    @app.post('/api/v1/notifications/integrations/{integration_id}/test')
+    async def test_notification_integration(integration_id: str, request: Request):
+        data = await json_body(request)
+        return await asyncio.to_thread(manager.notifications.test, data, integration_id)
 
     @app.get('/api/v1/interactions')
     def interactions():
@@ -487,8 +547,21 @@ def create_app(manager, shutdown=lambda: None):
     @app.get('/api/v1/backups')
     def backups():
         directory = manager.root / 'backups'
-        return {'backups': [{'id': path.stem, 'path': str(path), 'created_at': path.stat().st_mtime}
-                            for path in sorted(directory.glob('*.zip'), reverse=True)]}
+        rows = []
+        for path in directory.glob('*.zip'):
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                continue
+            rows.append({'id': path.stem, 'path': str(path), 'created_at': stat.st_mtime,
+                         'size_bytes': stat.st_size})
+        return {'backups': sorted(rows, key=lambda row: (row['created_at'], row['id']), reverse=True)}
+
+    @app.delete('/api/v1/backups/{bid}')
+    def delete_backup(bid: str):
+        validate_id(bid)
+        (manager.root / 'backups' / (bid + '.zip')).unlink(missing_ok=True)
+        return {'deleted': bid}
 
     @app.post('/api/v1/backups')
     async def backup():
@@ -502,6 +575,48 @@ def create_app(manager, shutdown=lambda: None):
         if not path.is_file():
             raise HTTPException(404, 'Backup not found')
         return FileResponse(path, filename='pokesim-' + bid + '.zip')
+
+    def backup_path(bid):
+        validate_id(bid)
+        path = manager.root / 'backups' / (bid + '.zip')
+        if not path.is_file():
+            raise HTTPException(404, 'Backup not found')
+        return path
+
+    @app.get('/api/v1/backups/{bid}/inspect')
+    def inspect_saved_backup(bid: str):
+        from .backup import inspect_backup
+        return inspect_backup(manager, backup_path(bid))
+
+    @app.post('/api/v1/backups/upload')
+    async def upload_backup(request: Request):
+        from .backup import inspect_backup
+        manager.check_available()
+        directory = manager.root / 'backups'
+        directory.mkdir(exist_ok=True)
+        bid = identifier()
+        pending = directory / (bid + '.pending')
+        try:
+            total = 0
+            with pending.open('xb') as output:
+                async for chunk in request.stream():
+                    total += len(chunk)
+                    if total > 2 * 1024**3:
+                        raise HTTPException(413, 'Backup upload exceeds 2 GB')
+                    output.write(chunk)
+            result = await asyncio.to_thread(inspect_backup, manager, pending)
+            os.utime(pending, (time.time(), result['created_at']))
+            pending.replace(directory / (bid + '.zip'))
+            return {'id': bid, **result}
+        finally:
+            pending.unlink(missing_ok=True)
+
+    @app.post('/api/v1/backups/{bid}/load')
+    async def load_saved_backup(bid: str, request: Request):
+        from .backup import load_backup_adventure
+        values = await json_body(request)
+        return await asyncio.to_thread(load_backup_adventure, manager, backup_path(bid),
+                                       values.get('adventure_id'), values.get('name'), values.get('request_id'))
 
     @app.post('/api/v1/imports')
     async def import_data(request: Request):
@@ -610,7 +725,8 @@ def create_app(manager, shutdown=lambda: None):
             finally:
                 await response.aclose()
         safe_headers = {key: value for key, value in response.headers.items()
-                        if key.lower() in {'content-type', 'cache-control', 'location', 'content-disposition'}}
+                        if key.lower() in {'content-type', 'cache-control', 'location', 'content-disposition',
+                                           'x-audio-state', 'x-audio-sequence', 'x-audio-rate', 'x-audio-speed'}}
         return StreamingResponse(stream(), status_code=response.status_code, headers=safe_headers)
 
     return app

@@ -12,7 +12,8 @@ def test_stamped_assets_are_immutable_and_live_data_is_not_cached():
     assert cache_policy('/games/a1/static/pc.js', 'v=abc', 'text/javascript').endswith('immutable')
     assert cache_policy('/games/a1/static/fonts/pokesim-panel.woff2', '', 'font/woff2') == 'public, max-age=604800'
     assert cache_policy('/games/a1/static/panel.css', '', 'text/css') == 'no-cache'
-    assert cache_policy('/games/a1/sprites/25.png', '', 'image/png') == 'private, max-age=86400'
+    assert cache_policy('/games/a1/sprites/25.png', '', 'image/png') == 'private, no-cache'
+    assert cache_policy('/games/a1/sprites/25.png', 'v=rom-portraits-1', 'image/png') == 'private, no-cache'
     # A placeholder portrait is replaced once the cartridge is read.
     assert cache_policy('/games/a1/sprites/25.png', '', 'image/svg+xml') == 'no-store'
     assert cache_policy('/games/a1/shots/7.png', '', 'image/png') == 'private, no-cache'
