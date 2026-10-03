@@ -1,35 +1,34 @@
-# Release status: 0.4.17 release validation
+# Release status: 0.4.17 published
 
-The complete unpublished candidate includes named notification integrations,
-nickname editing, backup loading and deletion, custom intro and adventure names,
-live audio and speed controls, responsive layouts, portrait backgrounds, an optional
-community sprite installer, and the
-poison-faint and excess-HP recovery corrections. Core remains pinned at 0.1.4.
-See the [release notes](docs/release-notes.md) and the
-[combined review and validation report](docs/validation/release-candidate-0417-20261003.md).
+[PokeSim 0.4.17](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.17)
+is published with verified Python packages, the Linux amd64 Docker image and
+versioned Compose downloads. Core remains pinned at 0.1.4.
 
-The latest October 3 combined sweep passed 1,648 non-browser regression tests
-with 50 skipped and 104 real-browser tests. After fixing a newly found backup
-issue, 29 focused checks passed, including a new regression and all five cartridge
-tests. The 82 browser-script checks also passed. Ruff and documentation links passed. Both distribution archives passed
-resource checks. Fresh Python installation and repeat installer checks passed on
-Linux. The full image passed legacy save/resume, Library restart, fresh-volume
-first-run setup, and authenticated HTTPS proxy checks. A separate fresh-volume
-Docker test with a real Red cartridge also passed browser setup, automatic data
-preparation, save export, artwork installation, backup restore and container
-recreation with persisted progress.
+The release adds named notification integrations, live audio and speed controls,
+creation names, nickname editing, backup restore and deletion, optional community
+artwork, responsive layouts and recovery fixes. See the
+[release notes](docs/release-notes.md).
 
-Earlier totals below the scope of this sweep are superseded by the linked report.
-The 50 skipped checks retain their environment and optional-fixture limits.
-Windows, macOS and the full Python-version installation matrix still require CI
-before public publication. The original DV-byte mutation cause remains unresolved.
-The healing recovery addresses the reproduced rewind loop without rewriting DVs.
+[Release PR #35](https://github.com/afk-sapien/PokeSim/pull/35) and
+[dependency PR #32](https://github.com/afk-sapien/PokeSim/pull/32) are merged.
+Issues [#33](https://github.com/afk-sapien/PokeSim/issues/33) and
+[#34](https://github.com/afk-sapien/PokeSim/issues/34) are closed as resolved.
+The annotated release tag points to `c3fc0c95f9286f2725adc3fd0a9c02e1b93db69f`.
 
-The complete candidate is deployed on the home server. All four previously running
-adventures resumed, and the stopped adventure stayed stopped. Desktop and mobile
-visual checks passed on the deployed pages. The owner approved publication after the home-server acceptance test and fresh
-Docker installation check. Public publication is gated on the release PR's CI and
-the publishing workflow. The validation report records the candidate deployments.
+CI passed on Python 3.11, 3.12 and 3.14. Native installation checks passed on
+Windows, Intel and Apple Silicon macOS, and x86-64 and ARM Linux. The publishing
+workflow reran validation, verified uploaded checksums and required an anonymous
+pull of the tested image before publishing. A fresh Docker volume also passed
+real cartridge upload, automatic setup, save export, artwork installation,
+backup restoration and container recreation with progress preserved.
+
+The [publication receipt](docs/validation/release-0.4.17.json) records the immutable
+source revision and image digest. The
+[combined review report](docs/validation/release-candidate-0417-20261003.md)
+contains local evidence, candidate deployment history and the test-collection
+correction found by CI. Its earlier pending-publication statements are historical.
+The original DV-byte mutation cause remains unresolved. The healing recovery
+addresses the reproduced rewind loop without rewriting DVs.
 
 ## Known limits, deliberately not addressed here
 
