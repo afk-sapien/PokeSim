@@ -1,40 +1,35 @@
-# Release status: 0.4.16 published and deployed
+# Release status: 0.4.17 release validation
 
-[PokeSim 0.4.16](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.16)
-and [PokeSim Core 0.1.4](https://github.com/afk-sapien/pokesim-core/releases/tag/v0.1.4)
-were published on September 30, 2026. This release adds global nickname vocabulary,
-League rematch party rotation, and shared Core mechanics. See the
-[release notes](docs/release-notes.md). PRs
-[30](https://github.com/afk-sapien/PokeSim/pull/30) and
-[31](https://github.com/afk-sapien/PokeSim/pull/31) are merged.
+The complete unpublished candidate includes named notification integrations,
+nickname editing, backup loading and deletion, custom intro and adventure names,
+live audio and speed controls, responsive layouts, portrait backgrounds, an optional
+community sprite installer, and the
+poison-faint and excess-HP recovery corrections. Core remains pinned at 0.1.4.
+See the [release notes](docs/release-notes.md) and the
+[combined review and validation report](docs/validation/release-candidate-0417-20261003.md).
 
-## Validation
+The latest October 3 combined sweep passed 1,648 non-browser regression tests
+with 50 skipped and 104 real-browser tests. After fixing a newly found backup
+issue, 29 focused checks passed, including a new regression and all five cartridge
+tests. The 82 browser-script checks also passed. Ruff and documentation links passed. Both distribution archives passed
+resource checks. Fresh Python installation and repeat installer checks passed on
+Linux. The full image passed legacy save/resume, Library restart, fresh-volume
+first-run setup, and authenticated HTTPS proxy checks. A separate fresh-volume
+Docker test with a real Red cartridge also passed browser setup, automatic data
+preparation, save export, artwork installation, backup restore and container
+recreation with persisted progress.
 
-Core passed 67 synthetic tests and Python 3.11, 3.12 and 3.13 CI. The benchmark
-passed 282 tests with 2 skipped. Fifteen private real-cartridge controller cases
-passed with exact input replays and a forced frame-budget cutoff. PokeSim passed
-1,541 tests with 98 skipped against the new Core wheel, including first-install
-worker startup. All 48 browser tests passed.
+Earlier totals below the scope of this sweep are superseded by the linked report.
+The 50 skipped checks retain their environment and optional-fixture limits.
+Windows, macOS and the full Python-version installation matrix still require CI
+before public publication. The original DV-byte mutation cause remains unresolved.
+The healing recovery addresses the reproduced rewind loop without rewriting DVs.
 
-The [release workflow](https://github.com/afk-sapien/PokeSim/actions/runs/36738803478)
-passed its Python, browser, package, fresh Docker install, proxy and native install
-gates. Native checks covered Linux amd64 and arm64, Windows, Intel Mac and Apple
-Silicon Mac. Anonymous public downloads, checksums, and wheel source identity
-were independently verified.
-
-## Deployment
-
-The home server runs the official `ghcr.io/afk-sapien/pokesim:0.4.16` image,
-revision `5dc2e622cb02e6ad7bc1baeadaf83ecc7d077e5c`, with Core 0.1.4.
-Image digest: `sha256:08086a8179193bf672481867cdaacb99a920fc98e3627cc6420b756989560c0e`.
-
-A complete cold backup was verified before upgrading. Post-deployment checks
-confirmed readiness, the exact release identity, shared Core adapters, valid
-collection statistics, and advancing frames in Red and Blue at their selected
-16× speed. Other adventures remained stopped. Settings, archive state, capture
-totals and gift histories were preserved. A browser review confirmed the new
-version and healthy library cards. Private backup and rollback details are
-recorded in the homelab deployment log.
+The complete candidate is deployed on the home server. All four previously running
+adventures resumed, and the stopped adventure stayed stopped. Desktop and mobile
+visual checks passed on the deployed pages. The owner approved publication after the home-server acceptance test and fresh
+Docker installation check. Public publication is gated on the release PR's CI and
+the publishing workflow. The validation report records the candidate deployments.
 
 ## Known limits, deliberately not addressed here
 

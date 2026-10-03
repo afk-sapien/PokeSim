@@ -11,6 +11,41 @@ pushed to [ntfy](https://ntfy.sh).
 
 Follow the current [installation instructions](../README.md) and [operations guide](operations.md). This page describes gameplay and advanced settings.
 
+## Optional community sprites
+
+Settings → Pokémon artwork → **Install community sprite pack** downloads the
+151 colored Red/Blue portraits directly from PokéAPI's sprite repository to your
+server. Nothing is downloaded until you choose this option. The pack applies to
+all adventures and stays installed across restarts. A failed download keeps your
+current artwork in place.
+
+**Restore default sprites** switches back to your existing local or ROM-extracted
+portraits. You can enable the installed community pack again without downloading
+it. Reopen adventure pages after switching to refresh their images.
+
+The pack is not bundled with PokeSim or mirrored by this project. Its upstream
+notice identifies Pokémon's copyright. Optional installation does not establish
+permission from the rights holders. See the [source notice](https://github.com/PokeAPI/sprites/blob/bfb75391935310368065096fa08c51e8970bc43e/LICENCE.txt).
+
+## Live controls
+
+Use **Pause** to stop the game temporarily and **Resume** to let the AI continue.
+**Take control** lets you play manually. **Save now** requests an immediate checkpoint.
+Progress also autosaves every 60 seconds by default. Downloading a cartridge `.sav`
+file is a separate action in the Library.
+
+The live **Speed** selector changes this adventure only and saves the same setting
+used in its Library settings. Manual play runs at 1×.
+
+## Live sound
+
+Click **Sound: Off** below the live screen to listen. Audio follows the observed simulation speed, including Max and manual play.
+Music and effects speed up with the game. Your adventure keeps its chosen speed. Audio starts off on every page
+and turns off when you hide or leave the tab.
+
+Only adventures with a listener run sound emulation. Existing saves remain usable.
+A previously silent save may need the next music change before all channels play.
+
 ## Endpoints
 
 | Path | What |
@@ -27,16 +62,71 @@ Follow the current [installation instructions](../README.md) and [operations gui
 
 ## Notifications
 
-Open the Library and choose **Notifications**. No account or settings file is needed.
+Open the Library and choose **Notifications → Add integration**. Give it a name,
+choose ntfy, Discord or Telegram, and enter its destination. Add as many integrations
+of each service as you need, including several channels for the same Discord server
+or several chats using the same Telegram bot.
+
+Each integration has its own event choices, minimum importance and adventure selection.
+**Include adventures created later** controls whether future adventures join that
+subscription. Existing adventure checkboxes stay independent of that choice.
+
+Use **Save integration**, then turn on **Send notifications** in the list to allow delivery.
+That master switch pauses all integrations. **Disable** pauses just one while keeping
+its setup. **Edit** lets you replace a saved credential or delete the integration.
+Existing ntfy, Discord and Telegram settings are carried forward automatically.
+
+### ntfy
+
+No account is needed when using the public ntfy server.
 
 1. Leave the server as `https://ntfy.sh`, or enter your own ntfy server.
 2. Choose **Generate a random topic**. On a public server anyone who knows the topic can read
    it, so a random topic works like a password. An access token is only needed for a protected
    topic or a private server. It is stored in the application folder and never shown again.
 3. Subscribe to the same topic in the ntfy phone app, or open the address shown on the page.
-4. Turn on **Send notifications**, choose **Send a test notification**, then save.
+4. Keep **Enable this integration** checked, choose **Send test**, then **Save integration**.
 
-Choose which adventures notify and which kinds of news are sent. New adventures notify until
+### Discord
+
+1. In your Discord server, open **Server Settings → Integrations → Webhooks**.
+2. Create a webhook, choose the channel, and copy its URL.
+3. Choose **Discord** when adding an integration and paste the webhook URL.
+4. Keep **Enable this integration** checked, choose **Send test**, and save.
+
+You need permission to manage webhooks. No bot application or extra container is
+required. Screenshots are uploaded directly, so Discord does not need access to
+your private PokeSim server. Messages disable mentions, including `@everyone`.
+See [Discord’s webhook guide](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks).
+
+### Telegram
+
+1. Message [@BotFather](https://t.me/BotFather), use `/newbot`, and copy its bot token.
+2. Open a private chat with your new bot and press **Start** or send it a message.
+3. Obtain that chat’s numeric ID from the `message.chat.id` field in the bot’s
+   [getUpdates response](https://core.telegram.org/bots/api#getupdates).
+   The endpoint is `https://api.telegram.org/bot<TOKEN>/getUpdates`. If you open
+   it in a browser, the token will be in your browser history. Keep it private.
+   For a channel, you can instead use its `@username` and add the bot as an
+   administrator with permission to post. Group chat IDs are typically negative.
+4. Choose **Telegram** when adding an integration and enter the bot token and chat ID.
+   The chat ID is the conversation’s `message.chat.id`, not the number at the start of
+   your bot token. Choose **Send test**, then save with **Enable this integration** checked.
+
+Use a dedicated notification bot. A bot already using webhooks cannot also use
+`getUpdates` to discover a chat. See [Telegram’s bot setup guide](https://core.telegram.org/bots/tutorial).
+
+Tokens and webhook URLs are stored in your library database and included in
+backups. They are never returned to the settings page. Use **Replace token** or
+**Replace webhook URL** to change a credential. An ntfy integration can also switch to
+**Use no access token**. Delete the integration to remove its destination and credentials.
+Notification delivery is best effort. Rate limits and provider outages can prevent
+an event from arriving. The journal retains the event. Tests report acceptance
+by the provider, which does not guarantee that your phone displays an alert.
+
+### Event choices
+
+Choose which adventures notify and which kinds of news are sent within each integration. By default, new adventures notify until
 they are turned off. Changes apply to running adventures right away, and each title names its
 adventure, such as "Red · Beat Brock! Got the Boulder Badge". Notifications keep their
 screenshot and open the journal entry when tapped.

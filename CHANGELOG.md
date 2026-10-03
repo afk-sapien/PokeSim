@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.4.17
+
+- Exclude unfinished sprite downloads from backups so installation and backup creation can safely overlap.
+
+- Add an optional community sprite installer in Settings, with download progress, previews and a switch back to default artwork.
+
+- Refresh migrated cartridge portraits without requiring a hard refresh, and recheck replaced image files on later page visits.
+
+- Heal Pokémon whose stored HP exceeds their recalculated maximum after PC withdrawal, preventing repeated save reloads during League rematches.
+- Add a nickname pool editor with full names, built-in choices, exact exclusions, and a pool size preview.
+- Load adventures from verified backups as separate stopped copies, with automatic trading disabled. Show backup dates and sizes in Settings.
+- Present repeat visits and Mew walking requirements as progress cards in Adventure Stats, with separate ready, pending and League-win states.
+- Delete saved backups with confirmation, browse five per page, and see total backup storage.
+- Accept legacy discordapp.com webhook addresses and normalize them to discord.com.
+
+- Add live per-adventure speed controls and clearer Pause, Resume, and Save now actions.
+
+- Fix adventures waiting forever when a poison faint message interrupts a map crossing.
+
+- Add opt-in live game audio at any simulation speed, including Max.
+
+- Add bright type-colored backgrounds with soft spotlights behind Pokémon portraits in the live team, PC, and Pokédex.
+- Update the Docker build tool uv to 0.12.21 from dependency PR #32.
+- Fix PC layouts at intermediate window widths and fit collection cards to the available space.
+- Add editable trainer and rival names with random suggestions when creating adventures.
+- Suggest editable adventure names with a button to generate another.
+
+- Expand built-in nickname vocabulary to 100 prefixes, 70 suffixes and 6,117 names.
+- Add Discord webhook and Telegram bot notifications in the Library. Enable any
+  number of named ntfy, Discord and Telegram integrations, each with its own event
+  filters, adventure subscriptions and test button. Existing settings migrate automatically.
+- Preserve ntfy settings and separate provider credentials when switching.
+- Reuse event filters, screenshots, journal links and test delivery across providers.
+
+
 ## 0.4.16
 
 - Add global custom nickname prefixes and suffixes for future catches and League gifts.

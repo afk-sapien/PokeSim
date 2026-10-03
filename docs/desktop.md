@@ -35,7 +35,7 @@ pipx ensurepath
 Open a new terminal so it can find uv. Install the current public PokeSim release:
 
 ```sh
-uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.12/pokesim-0.4.12-py3-none-any.whl
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.17/pokesim-0.4.17-py3-none-any.whl
 uv tool update-shell
 ```
 
@@ -54,7 +54,7 @@ launcher. There is no separate PokeSim EXE download in this installation flow.
 With pipx and Python 3.12 already installed, you can install PokeSim directly:
 
 ```sh
-pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.12/pokesim-0.4.12-py3-none-any.whl
+pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.17/pokesim-0.4.17-py3-none-any.whl
 pipx ensurepath
 ```
 
@@ -141,7 +141,7 @@ Prepared adventures run offline. Adding another adventure can reuse an installed
 
 ## Notifications
 
-Choose **Notifications** in the Library to get milestones on your phone through [ntfy](https://ntfy.sh). Generate a random topic, subscribe to it in the ntfy app, send a test, and save. No account is needed. The page also chooses which adventures notify and which kinds of news are sent, and changes apply to running adventures right away. See the [guide](guide.md#notifications) for the full list.
+Choose **Notifications** in the Library to receive milestones through ntfy, Discord or Telegram. Select a provider, enter its destination, send a test, and save. Choose which adventures notify and which kinds of news are sent. Changes apply to running adventures right away. See the [setup guide](guide.md#notifications).
 
 ## Simulation pace
 

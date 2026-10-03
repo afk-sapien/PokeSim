@@ -23,19 +23,44 @@ Use the same Compose files and project name every time. One manager owns the com
 library and starts one child process for each running adventure. Never run two managers
 against the same library or remove their lock files while they are running.
 
+## Trainer and rival names
+
+New adventures prefill trainer and rival names from the shared 30-name list.
+Edit either field or use its **Randomize** button before creating the adventure.
+Names accept 1 to 7 letters A to Z and are saved in uppercase. The simulation
+enters the chosen names through the normal intro menus. The adventure’s library
+label is separate. Existing adventures are not renamed, and older adventures
+without these settings continue choosing intro names randomly.
+
 ## Custom nicknames
 
-Open Library **Settings**, then **Pokémon nicknames**. Extra prefixes and suffixes
-extend the default pool across all adventures. Separate words with commas or new
-lines. Each list accepts up to 100 unique parts, each containing 1 to 7 ASCII letters.
-Parts are uppercased, and combinations longer than the cartridge's ten-letter
-nickname limit are skipped. The shipped pool stays unchanged and contains no
-user-supplied vocabulary.
+Open Library **Settings → Edit nickname pool**. Add prefixes, suffixes, or complete
+names. Uncheck built-in entries you do not want, or paste exclusions under
+**Excluded words and exact names**. Prefix and suffix exclusions affect generated
+combinations. Full-name exclusions remove that exact name from every source,
+including handwritten names and generated combinations.
+
+Separate entries with commas or new lines. Prefix and suffix lists accept up to
+100 entries of 1 to 7 letters each. Full-name lists accept up to 500 entries of
+1 to 10 letters each. Entries use A to Z and are uppercased automatically.
+Combinations longer than ten letters are skipped. The editor previews the number
+of available names, and saving an empty pool is rejected.
+
+The built-in vocabulary contains 100 prefixes, 70 suffixes and 100 handwritten
+names, yielding 6,117 distinct valid nicknames. Every species draws from the same
+pool, with no preference based on species, type, power or DVs. Written names have
+the same selection weight as generated names.
+
+Normal naming avoids names remembered by that adventure’s naming controller,
+plus the current party, player and rival names, until its pool is exhausted.
+League gifts use a separate deterministic draw without duplicate avoidance.
+Different adventures and incoming trades can also introduce matching names.
+The larger pool reduces collisions but does not guarantee library-wide uniqueness.
 
 Saving applies to future names in running and stopped adventures. A name already
 being entered finishes unchanged. League reward nicknames also use this pool.
-Existing Pokémon, trainer names, and rival names are not renamed. Restore defaults
-clears both custom lists. These settings are stored in the Library registry and
+Existing Pokémon, trainer names, and rival names are not renamed. **Reset editor to defaults** clears additions and exclusions in the editor.
+Choose **Save nickname settings** to apply the reset. These settings are stored in the Library registry and
 included in full Library backups. Reconnecting workers retry the saved settings.
 
 ## Where your data lives
@@ -54,11 +79,23 @@ project can select a different volume and make an existing library appear empty.
 
 ## Back up and restore
 
-Open **Settings and backups** in the Library, create a backup, then download the ZIP to
+Open **Settings → Backups** in the Library, create a backup, then download the ZIP to
 another location. The application coordinates saving and captures a consistent library.
 A backup left only inside the application's data storage does not protect against losing
 that storage. Backups contain your private ROMs, saves, and notification settings. Keep
 them private and do not attach them to issue reports.
+
+The list shows five backups per page and the total space used. Choose **Delete**
+to permanently remove an individual backup after confirmation. Current adventures
+and copies already downloaded are unaffected. Backups are not automatically pruned.
+
+To recover one adventure, choose **Load** next to a saved backup, or **Load backup
+file** to upload a downloaded ZIP (up to 2 GB). Pick the adventure and name its
+restored copy. PokeSim verifies the archive checksums before loading it. The copy
+starts stopped with automatic startup and automatic trading disabled. Current
+adventures and global settings are preserved. This is useful for inspecting old
+progress without replacing your current library. Adventures with no saved data
+are not offered for loading.
 
 For a cold copy of a host folder, stop the whole application first, then copy the entire
 folder. Pausing an adventure is not equivalent to stopping the manager. For a named volume,
