@@ -345,3 +345,18 @@ passed without horizontal overflow or browser errors. The nickname editor still
 contained the saved custom name. The disposable test container, network and
 volume were removed after verification. Test receipts, screenshots and the private
 exported save remain local in the temporary test directory.
+
+## Public CI preparation
+
+The first release PR run exposed a test-collection defect that separate local
+unit and browser invocations did not exercise. New browser test modules shared
+three basenames with unit tests, and the audio browser module imported the optional
+Playwright dependency at collection time. Renamed those browser modules with a
+`_ui` suffix and used the existing lazy assertion helper. Browser behavior tests
+remain enabled in the dedicated browser run. The ordinary installation matrix
+can now collect them and skip through the browser fixture without Playwright.
+
+After that correction, the exact combined CI pytest invocation passed locally:
+1,649 passed and 154 skipped. The skip count includes the 104 browser cases that
+run separately when enabled. All 16 cases in the renamed browser modules passed
+with Playwright enabled. Ruff passed.

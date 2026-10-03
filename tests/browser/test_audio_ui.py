@@ -3,7 +3,7 @@ import math
 
 import pytest
 
-from playwright.sync_api import expect
+from test_flows import expect
 
 
 @pytest.mark.parametrize('speed', [0.5, 1, 4, 16, 50])
