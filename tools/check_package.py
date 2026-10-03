@@ -101,6 +101,7 @@ for artifact in artifacts:
                 'compose.build.yaml', 'compose.proxy.yaml', 'compose.quickstart.yaml',
                 'install.sh', 'install.ps1', 'deploy/Caddyfile',
                 'docs/README.md', 'docs/images/live-adventure.jpg',
+                'docs/images/live-adventure.gif',
                 'docs/images/pc-storage.jpg', 'docs/images/pokedex.jpg',
                 'docs/images/journal.jpg',
                 'tools/check_web.py', 'tools/check_docs.py',
