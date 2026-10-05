@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove Elite Four wins from PC cards, details, and sorting to reduce visual clutter.
+
 - Add moves-aware Battle Power to PC sorting and details, keeping Stat Power and natural potential separate.
 - Evaluate learned moves with the Pokémon's attacking stats, coverage, accuracy, and useful effects.
 - Delay stone evolution for useful level-up moves that would be lost. Improve empty move slots with owned Surf or Strength HMs, even when another partner already knows the field move.

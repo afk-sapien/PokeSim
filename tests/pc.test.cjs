@@ -268,17 +268,6 @@ test('PC filters preserve the selected adventure address', async () => {
   assert.match(view.url(), /^\/games\/second-red\/pc\?/)
 })
 
-test('Elite Four wins sort across the party and boxes with unknown totals last', async () => {
-  const view = pc([mon(1, 1, 20, {elite_four_wins: 2}), mon(2, 1, 20, {elite_four_wins: null})],
-    '?scope=all&sort=elite_four_wins', [{...mon(0, 1, 20, {elite_four_wins: 7}), slot: 1}])
-  await view.ready()
-  assert.deepEqual(view.rows().map(p => p.elite_four_wins), [7, 2, null])
-  assert.match(view.element('#pc-grid').innerHTML, /Elite Four wins <b>7/)
-  view.sort('elite_four_wins', 'asc')
-  assert.deepEqual(view.rows().map(p => p.elite_four_wins), [2, 7, null])
-  view.element('#pc-grid').onclick({target: {closest: selector => selector === '[data-mon]' ? {dataset: {mon: '0'}} : null}})
-  assert.match(view.element('#pc-detail-body').innerHTML, /Elite Four wins: 2/)
-})
 
 
 test('All Pokemon defaults to battle_power descending on entry and direct links', async () => {
@@ -309,12 +298,4 @@ test('DV probability labels stay compact and retain very rare nonzero tails', as
   assert.match(detail, /DV quality \(est\.\): top 0\.00153%/)
   assert.match(detail, /Higher roll: 0%/)
   assert.doesNotMatch(detail, /65,536|uniform|independent fifth/)
-})
-
-test('Partial League histories show a minimum and unidentified partners stay unknown', async () => {
-  const view = pc([mon(1, 1, 20, {elite_four_wins: 8, elite_four_wins_incomplete: true}),
-    mon(2, 1, 20, {elite_four_wins: null})], '?scope=all')
-  await view.ready()
-  assert.match(view.element('#pc-grid').innerHTML, /Elite Four wins <b>8\+/)
-  assert.match(view.element('#pc-grid').innerHTML, /Elite Four wins <b>Unknown/)
 })
