@@ -65,6 +65,7 @@ def experience_at_level(level, growth):
 
 
 def party_details(mon):
+    from .shiny import is_shiny
     species = SPECIES.get(mon.species, {})
     growth = species.get("growth")
     xp = None
@@ -82,7 +83,7 @@ def party_details(mon):
          if mon.status & bit), "Healthy")
     return {"dex": species.get("dex"), "experience": xp, "status_label": status,
             **({'trainer_id': mon.trainer_id} if mon.trainer_id is not None else {}),
-            "dvs": mon.dvs, "stat_exp": mon.stat_exp,
+            "dvs": mon.dvs, "stat_exp": mon.stat_exp, "shiny": is_shiny({"dvs": mon.dvs}),
             "type_names": list(dict.fromkeys(TYPES.get(t, "Unknown") for t in mon.types)),
             "stats": {"Attack": mon.attack, "Defense": mon.defense, "Speed": mon.speed, "Special": mon.special},
             "move_details": [{"name": MOVES.get(mid, {}).get("name", f"Move {mid}").replace("_", " ").title(),

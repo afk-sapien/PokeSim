@@ -12,6 +12,7 @@ def _env(name, default):
 
 ROM_PATH = Path(_env("ROM_PATH", "roms/pokered.gb"))
 DATA_DIR = Path(_env("DATA_DIR", "data"))
+PALETTE = _env("PALETTE", "original")
 SPEED = float(_env("SPEED", "1"))            # emulation speed multiplier, 0 = unlimited
 NICKNAME_PREFIXES = tuple(filter(None, _env("NICKNAME_PREFIXES", "").split(",")))
 NICKNAME_SUFFIXES = tuple(filter(None, _env("NICKNAME_SUFFIXES", "").split(",")))

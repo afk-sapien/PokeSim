@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Hold the mobile direction and action buttons to repeat input, with larger touch targets and cancellation on release, page hiding, or focus loss.
+- Identify Gen 2 shiny-compatible DVs with a distinct star badge in the party, PC, and Pokédex. Add shiny filters, wild sighting counts, capture and custom gift counts, and a current collection count.
+- Preserve shiny partners from automatic release, NPC trades, and trade offers. Prioritize shiny captures and pause for manual control if a shiny cannot be caught with the available balls or storage space.
+- Permanently delete stopped adventures using typed name confirmation. Interrupted deletions stay archived and can resume, while independent backups and shared ROMs remain available.
+- Keep emulated sound hardware running while muted so reconnecting listeners and cable trades preserve audio state. Upgrade supported older muted checkpoints in memory.
+- Add 12 GBC-inspired whole-screen palettes in Adventure Settings. Stop and start the adventure to apply a palette without changing its save format.
+
 ## 0.4.17
 
 - Exclude unfinished sprite downloads from backups so installation and backup creation can safely overlap.

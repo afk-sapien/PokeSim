@@ -21,6 +21,7 @@ let owned = new Set()
 let seen = new Set()
 let plan = new Map()
 let held = new Map()
+let shinySpecies = new Set()
 let catches = null
 let maxed = new Set()
 let perfectSpecies = new Set()
@@ -59,6 +60,7 @@ function matches(entry) {
   if (filter === 'quality') return highQualitySpecies.has(entry.dex)
   if (filter === 'three-held') return (held.get(entry.dex) || []).some(copy => copy.stars === 3)
   if (filter === 'perfect') return perfectSpecies.has(entry.dex)
+  if (filter === 'shiny') return shinySpecies.has(entry.dex)
   if (filter === 'held') return held.has(entry.dex)
   if (filter !== 'all') return record(entry.dex) === filter
   return true
@@ -74,14 +76,14 @@ function sorted(rows) {
 }
 
 function milestoneBadges(dex) {
-  return `<span class="milestone-badges">${maxed.has(dex) ? '<span class="tag tag--warn mastery-badge"><span aria-hidden="true">⚑</span> Lv. 100</span>' : ''}${perfectSpecies.has(dex) ? '<span class="tag tag--signal perfect-badge"><span aria-hidden="true">★★★★</span> Perfect DV</span>' : highQualitySpecies.has(dex) ? '<span class="tag tag--ok dv-badge dv-stars-3" aria-label="3-star or better DVs found"><span aria-hidden="true">★★★</span> DV found</span>' : ''}</span>`
+  return `<span class="milestone-badges">${PokemonTypes.shinyBadge({shiny: shinySpecies.has(dex)})}${maxed.has(dex) ? '<span class="tag tag--warn mastery-badge"><span aria-hidden="true">⚑</span> Lv. 100</span>' : ''}${perfectSpecies.has(dex) ? '<span class="tag tag--signal perfect-badge"><span aria-hidden="true">★★★★</span> Perfect DV</span>' : highQualitySpecies.has(dex) ? '<span class="tag tag--ok dv-badge dv-stars-3" aria-label="3-star or better DVs found"><span aria-hidden="true">★★★</span> DV found</span>' : ''}</span>`
 }
 
 function renderGrid() {
   if (!entries.length) return
   const rows = sorted(entries.filter(matches))
   $('#result-count').textContent = `${rows.length} Pokémon`
-  const signature = JSON.stringify([rows, [...owned], [...seen], [...held], [...plan], hunting, catches, [...maxed], [...perfectSpecies], [...highQualitySpecies]])
+  const signature = JSON.stringify([rows, [...owned], [...seen], [...held], [...plan], hunting, catches, [...maxed], [...perfectSpecies], [...highQualitySpecies], [...shinySpecies]])
   if (signature === gridSignature) return
   gridSignature = signature
   $('#grid').innerHTML = rows.map((entry) => {
@@ -90,7 +92,7 @@ function renderGrid() {
     const note = RECORD_LABELS[state]
     const caught = caughtCount(entry.dex)
     const counts = `${caught === null ? 'Catch count unavailable' : `Caught ${caught}`} · Have ${copies?.length || 0}`
-    return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${maxed.has(entry.dex) ? ', level 100 reached' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}, ${counts}" aria-describedby="catch-tracking-note">
+    return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${shinySpecies.has(entry.dex) ? ', shiny species found' : ''}${maxed.has(entry.dex) ? ', level 100 reached' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}, ${counts}" aria-describedby="catch-tracking-note">
       <span class="dex-top"><span class="dex-num">${num(entry.dex)}</span>${entry.dex === hunting
         // The hunt flag takes the note's place, so the head stays one line.
         ? '<span class="tag tag--crit hunt-flag" title="The current expedition">Hunting</span>'
@@ -130,7 +132,7 @@ function renderDetail(dex, refresh = false) {
   const state = record(dex)
   const project = plan.get(dex)
   const copies = held.get(dex) || []
-  const signature = JSON.stringify([entry, state, project, copies, hunting, catches, maxed.has(dex), perfectSpecies.has(dex), highQualitySpecies.has(dex)])
+  const signature = JSON.stringify([entry, state, project, copies, hunting, catches, maxed.has(dex), perfectSpecies.has(dex), highQualitySpecies.has(dex), shinySpecies.has(dex)])
   if (refresh && signature === detailSignature) return
   detailSignature = signature
   const partyCount = copies.filter(copy => copy.where.startsWith('Party slot ')).length
@@ -153,7 +155,7 @@ function renderDetail(dex, refresh = false) {
     </section>
     ${project && state !== 'caught' ? `<p class="plan-note"><b>${esc(PLAN_LABELS[project.status] || 'Status')}</b> ${esc(project.reason || '')}</p>` : ''}
     ${copies.length ? `<section class="detail-section"><h3>With you right now</h3><ul class="copy-list">${copies.map((copy) =>
-      `<li><strong>${esc(copy.nick || entry.name)}</strong><span>Lv. ${copy.level} · ${esc(copy.where)} · ${copy.stars ? `${copy.stars}★ DVs` : 'DVs unknown'}</span></li>`).join('')}</ul></section>` : ''}
+      `<li><strong>${esc(copy.nick || entry.name)}</strong>${PokemonTypes.shinyBadge(copy)}<span>Lv. ${copy.level} · ${esc(copy.where)} · ${copy.stars ? `${copy.stars}★ DVs` : 'DVs unknown'}</span></li>`).join('')}</ul></section>` : ''}
     <section class="detail-section"><h3>Base stats</h3>
       ${Object.entries(entry.stats).map(([label, value]) => statRow(label, value)).join('')}
       <p class="detail-meta">Total ${entry.total} · Generation I shares one Special stat</p>
@@ -208,8 +210,8 @@ function renderHolders(status) {
     if (!dex) return
     held.set(dex, [...(held.get(dex) || []), copy])
   }
-  party.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, stars: mon.dv_stars, where: `Party slot ${mon.slot}`}))
-  stored.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, stars: mon.dv_stars, where: `Box ${mon.box}`}))
+  party.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, stars: mon.dv_stars, shiny: mon.shiny, where: `Party slot ${mon.slot}`}))
+  stored.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, stars: mon.dv_stars, shiny: mon.shiny, where: `Box ${mon.box}`}))
 
 
 }
@@ -233,6 +235,12 @@ async function fetchStatus() {
 async function refreshStatus(pending = fetchStatus()) {
   try {
     const status = await pending
+    const shiny = status.shiny || {}
+    shinySpecies = new Set([...(shiny.seen_species || []), ...(shiny.acquired_species || []), ...(shiny.held_species || [])])
+    $('#shiny-seen').textContent = shiny.available ? count(shiny.seen || 0) : 'Not tracked'
+    $('#shiny-acquired').textContent = count(shiny.acquired || 0)
+    $('#shiny-held').textContent = count(shiny.held || 0)
+    $('#shiny-tracking-note').textContent = '★ marks Gen 2 shiny DVs. Sightings, catches and custom gifts count from when tracking began. Held includes existing partners.'
     catches = status.catches || null
     const goals = status.milestones || {}
     maxed = new Set(goals.level_100 || [])

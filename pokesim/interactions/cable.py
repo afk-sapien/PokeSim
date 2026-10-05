@@ -8,6 +8,7 @@ import io
 from pathlib import Path
 
 from .cable_metadata import BUILDS
+from ..audio import enable_checkpoint_sound
 
 
 class CableError(RuntimeError):
@@ -51,10 +52,10 @@ class CableSide:
                     f'Source digest mismatch: {field}')
         self.ram_stream = io.BytesIO(save or bytes(32768))
         self.pb = PyBoy(io.BytesIO(self.rom_bytes), ram_file=self.ram_stream,
-                        window='null', sound_emulated=False, log_level='ERROR')
+                        window='null', sound_emulated=True, log_level='ERROR')
         try:
             self.pb.set_emulation_speed(0)
-            self.pb.load_state(io.BytesIO(state))
+            self.pb.load_state(io.BytesIO(enable_checkpoint_sound(state)))
         except BaseException:
             self.pb.stop(save=False)
             raise

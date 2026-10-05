@@ -13,6 +13,7 @@ import httpx
 
 from ..duplicates import spare_entries
 from ..investment import automatic_trade_protected
+from ..shiny import is_shiny
 from ..milestones import is_perfect
 
 DEFAULT_INSTANCES = 'red=http://127.0.0.1:8930,blue=http://127.0.0.1:8940'
@@ -151,7 +152,7 @@ def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory
     boxes = placed(stored)
     investment_slots = {(mon['box'], mon['position']) for mon in boxes
                         if mon['species'] not in off_limits and automatic_trade_protected(mon, party + boxes)}
-    available = [mon for mon in boxes if not is_perfect(mon) and mon.get('trade_preference') not in ('withdrawn', 'locked')
+    available = [mon for mon in boxes if not is_perfect(mon) and not is_shiny(mon) and mon.get('trade_preference') not in ('withdrawn', 'locked')
                  and not mon.get('trade_ambiguous')
                  and (mon.get('trade_preference') == 'offered'
                       or (mon['box'], mon['position']) not in investment_slots)]

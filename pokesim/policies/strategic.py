@@ -437,7 +437,7 @@ class StrategicPolicy(Policy):
         if kind == "safari":
             missing = SPECIES.get(s.enemy_species, {}).get('dex') not in s.owned
             targeted = self.collection.repeat_target(s.enemy_species, s.map) == s.enemy_species
-            if not s.can_catch or not (missing or targeted or useful_capture(s, s.enemy_species, s.enemy_level)):
+            if not s.can_catch or not (s.enemy_shiny or missing or targeted or useful_capture(s, s.enemy_species, s.enemy_level)):
                 self.reason = ('Leave the encounter because the party and active box are full' if not s.can_catch
                                else 'Leave an unnecessary duplicate already covered by the collection')
                 if scr.top_x != 13:
@@ -449,7 +449,7 @@ class StrategicPolicy(Policy):
             return self._select(scr, 0)
         if kind == "battle":
             me, enemy = read_battler(mem, W_BATTLE_MON), read_battler(mem, W_ENEMY_MON)
-            if s.in_battle == 1 and SPECIES.get(enemy.species, {}).get('dex') in getattr(self.collection, 'closed_legendaries', ()):
+            if s.in_battle == 1 and not s.enemy_shiny and SPECIES.get(enemy.species, {}).get('dex') in getattr(self.collection, 'closed_legendaries', ()):
                 self.reason = 'This legendary return was already caught. Wait for the next walking milestone'
                 return self._root(scr, 'run')
             key = (s.enemy_species, s.enemy_level, enemy.max_hp)
@@ -477,8 +477,8 @@ class StrategicPolicy(Policy):
             return self._root(scr, self.intent.kind)
         if kind == "moves":
             me, enemy = read_battler(mem, W_BATTLE_MON), read_battler(mem, W_ENEMY_MON)
-            if (s.in_battle == 1 and SPECIES.get(enemy.species, {}).get('dex') in (144, 145, 146, 150)
-                    and SPECIES[enemy.species]['dex'] not in s.owned
+            if (s.in_battle == 1 and (s.enemy_shiny or SPECIES.get(enemy.species, {}).get('dex') in (144, 145, 146, 150)
+                    and SPECIES[enemy.species]['dex'] not in s.owned)
                     and (not self.intent or self.intent.kind != 'fight' or MOVES.get(
                         me.moves[self.intent.index], {}).get('effect') not in ('SLEEP_EFFECT', 'PARALYZE_EFFECT'))):
                 self.intent = None

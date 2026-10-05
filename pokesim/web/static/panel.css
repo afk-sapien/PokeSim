@@ -1227,3 +1227,30 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .live-speed select { border: var(--hair) solid var(--rule) }
 .live-speed select { border-radius: 0 }
 .live-speed select { font: var(--f-legend) / 1 var(--font-panel) }
+
+/* Game controls own touch gestures and remain usable while held. */
+.controller [data-b] { touch-action: none }
+.controller [data-b] { user-select: none }
+.controller [data-b] { -webkit-user-select: none }
+.controller [data-b] { -webkit-touch-callout: none }
+.controller [data-b] { min-width: 48px }
+.controller [data-b] { min-height: 48px }
+.controller [data-b].is-held { background: var(--signal) }
+.controller [data-b].is-held { color: var(--panel) }
+.dpad { grid-template-columns: repeat(3, 48px) }
+.dpad { grid-auto-rows: 48px }
+
+.shiny-badge { color: var(--signal) }
+.shiny-badge { border: 1px solid currentColor }
+
+.shiny-collection .collection-counts { grid-template-columns: repeat(3, minmax(0, 1fr)) }
+.shiny-collection .collection-counts dd { font-size: clamp(16px, 4vw, 28px) }
+.shiny-collection .collection-counts dd { overflow-wrap: anywhere }
+.shiny-collection .collection-counts > div { padding: 12px 8px }
+.shiny-collection .note { margin: 12px 0 }
+.shiny-collection { margin-bottom: 24px }
+
+.shiny-collection h2 { font: var(--f-legend) / 1.2 var(--font-panel) }
+.shiny-collection h2 { margin-bottom: 12px }
+.shiny-collection .note { font-size: var(--f-label) }
+.shiny-collection .note { color: var(--ink-2) }

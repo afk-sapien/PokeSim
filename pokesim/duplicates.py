@@ -3,6 +3,7 @@ from collections import defaultdict
 from math import isqrt
 
 from .strategy_data import MOVES, SPECIES
+from .shiny import is_shiny
 from .milestones import is_perfect
 from .investment import potential_power, veteran, rare_find
 
@@ -61,5 +62,5 @@ def spare_entries(party, stored, protected=()):
         else:
             keepers[species] = next((mon for mon in party if mon['species'] == species),
                                     max(copies, key=lambda mon: mon['level']))
-    return [mon for mon in stored if mon['species'] not in protected and not is_perfect(mon) and not rare_find(mon)
+    return [mon for mon in stored if mon['species'] not in protected and not is_perfect(mon) and not is_shiny(mon) and not rare_find(mon)
             and mon is not keepers[mon['species']] and mon is not veterans.get(mon['species'])]

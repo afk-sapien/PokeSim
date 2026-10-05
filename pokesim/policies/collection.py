@@ -11,6 +11,7 @@ from .progression import GRASS_TILES, Goal, object_goal, at
 from .navigation import DIRS
 from .director import AdventureDirector
 from . import training, marathon, league_rotation
+from ..shiny import is_shiny
 from ..milestones import is_perfect, level_credit
 from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, EVENTS, event_set, object_hidden
 
@@ -901,7 +902,7 @@ class Collection:
         candidates = []
         for mon in rows:
             key = identity(mon)
-            if (mon['species'] != project['give'] or is_perfect(mon)
+            if (mon['species'] != project['give'] or is_perfect(mon) or is_shiny(mon)
                     or automatic_trade_protected(mon, rows)):
                 continue
             if project.get('give_key') and key != project['give_key']:

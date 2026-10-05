@@ -20,6 +20,8 @@ the web API already publishes):
 """
 from __future__ import annotations
 
+from ..audio import enable_checkpoint_sound
+
 import hashlib
 import io
 import json
@@ -82,11 +84,11 @@ def register_arrival(mem, *species):
 def _boot(rom: Path, state: Path, expect_sha1: str | None) -> PyBoy:
     if expect_sha1 and hashlib.sha1(rom.read_bytes()).hexdigest() != expect_sha1:
         raise TradeError(f"{state.name} was recorded with a different ROM than {rom.name}")
-    pb = PyBoy(str(rom), window="null", sound_emulated=False)
+    pb = PyBoy(str(rom), window="null", sound_emulated=True)
     pb.set_emulation_speed(0)
     try:
         with open(state, "rb") as f:
-            pb.load_state(f)
+            pb.load_state(io.BytesIO(enable_checkpoint_sound(f.read())))
     except Exception as error:
         pb.stop(save=False)
         raise TradeError(f"Cannot load {state.name}: {error}") from error

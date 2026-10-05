@@ -153,6 +153,7 @@ class Snapshot:
     stored_pokemon: tuple[tuple[int, int, int, str], ...] = ()
     box_counts: tuple[int, ...] = ()
     stored_details: tuple[StoredMon, ...] = ()
+    enemy_shiny: bool = False
 
     def storage_entries(self):
         """Expose individual data while preserving legacy compact storage snapshots."""
@@ -245,6 +246,7 @@ class Snapshot:
             "dex_owned": sorted(self.owned), "dex_seen": sorted(self.seen),
             "items": [{"id": i, "name": ITEM_NAMES.get(i, f"#{i}"), "qty": q} for i, q in self.items],
             "in_battle": self.in_battle, "enemy": SPECIES_NAMES.get(self.enemy_species) if self.in_battle else None,
+            "enemy_shiny": self.enemy_shiny if self.in_battle == 1 else False,
             "enemy_level": self.enemy_level if self.in_battle else None,
             "opponent": TRAINER_NAMES.get(self.trainer_class) if self.trainer_class is not None else None,
             "player_name": self.player_name, "rival_name": self.rival_name,
@@ -327,7 +329,9 @@ def read_snapshot(mem, frame: int) -> Snapshot:
     # as owning four starters at once.
     seen_dex = flag_bits(bytes(mem[W_DEX_SEEN:W_DEX_SEEN + 19]))
     owned_dex = flag_bits(bytes(mem[W_DEX_OWNED:W_DEX_OWNED + 19])) & seen_dex
+    from .shiny import shiny_bytes
     return Snapshot(
+        enemy_shiny=bool(in_battle == 1 and not mem[0xd069] & 8 and shiny_bytes(bytes(mem[0xcff1:0xcff3]))),
         frame=frame,
         map=mem[W_CUR_MAP], x=mem[W_X], y=mem[W_Y],
         badges=mem[W_BADGES],

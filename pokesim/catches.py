@@ -59,16 +59,17 @@ class CatchTracker:
         # Re-entering the exact saved capture completion must not count twice.
         # WRAM includes the individual, destination, game clock and random state.
         fingerprint = hashlib.sha256(bytes(memory[0xc000:0xe000])).hexdigest()
-        self.record(fingerprint, dex, perfect=bytes(memory[0xcff1:0xcff3]) == b'\xff\xff',
+        from .shiny import shiny_bytes
+        self.record(fingerprint, dex, shiny=shiny_bytes(bytes(memory[0xcff1:0xcff3])), perfect=bytes(memory[0xcff1:0xcff3]) == b'\xff\xff',
                     species=species, trainer_id=int.from_bytes(bytes(memory[0xd359:0xd35b]), 'big'))
 
-    def record(self, fingerprint, dex, *, perfect=False, species=None, trainer_id=None):
+    def record(self, fingerprint, dex, *, perfect=False, shiny=False, species=None, trainer_id=None):
         with self.store.lock, self.store.db:
-            record_receipt(self.store.db, fingerprint, dex, perfect=perfect,
+            record_receipt(self.store.db, fingerprint, dex, perfect=perfect, shiny=shiny,
                            species=species, trainer_id=trainer_id)
 
 
-def record_receipt(db, fingerprint, dex, *, perfect=False, species=None, trainer_id=None):
+def record_receipt(db, fingerprint, dex, *, perfect=False, shiny=False, species=None, trainer_id=None):
     """Record once inside the caller transaction."""
     if not 1 <= dex <= 151:
         raise ValueError('Capture has an invalid Pokédex number')
@@ -83,6 +84,9 @@ def record_receipt(db, fingerprint, dex, *, perfect=False, species=None, trainer
     if dex in (144, 145, 146, 150):
         from .legendary_returns import consume
         consume(db, dex)
+    if shiny:
+        from .shiny import record
+        record(db, 'acquired', fingerprint, dex)
     if perfect:
         from .milestones import record_capture
         record_capture(db, species, trainer_id)
@@ -101,7 +105,9 @@ def record_gift(db, event_id, species, slot=None):
     """Count a committed custom gift using its durable journal identity."""
     from .strategy_data import SPECIES
     initialize(db)
+    from .shiny import shiny_bytes
     record_receipt(db, f'gift-event:{event_id}', SPECIES[species]['dex'],
+                   shiny=bool(slot and shiny_bytes(slot.struct[27:29])),
                    perfect=bool(slot and slot.struct[27:29] == bytes((255, 255))),
                    species=species,
                    trainer_id=int.from_bytes(slot.struct[12:14], 'big') if slot else None)

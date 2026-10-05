@@ -124,13 +124,15 @@ def test_real_rom_sound_switch_preserves_save_and_queued_buttons(tmp_path):
         emu.pb.save_state(state)
         raw = state.getvalue()
         fixed = enable_checkpoint_sound(raw)
-        assert fixed != raw and len(fixed) == len(raw)
+        assert fixed == raw
         # Only the serialized APU changes. CPU, game RAM, and cartridge save stay intact.
         assert fixed[:9144] == raw[:9144]
         assert fixed[10900:] == raw[10900:]
         assert enable_checkpoint_sound(fixed) == fixed
         emu.pb.button_press('a')
+        original = emu.pb
         emu._sync_audio(True)
+        assert emu.pb is original
         assert bytes(emu.pb.memory[0xA000:0xE000]) == before
         assert int(emu.pb.events[-1]) == WindowEvent.PRESS_BUTTON_A
         buffers = []
@@ -165,3 +167,34 @@ def test_real_rom_sound_switch_preserves_save_and_queued_buttons(tmp_path):
 def test_checkpoint_adapter_leaves_unknown_formats_untouched():
     for raw in [b'', b'garbage', bytes(20000)]:
         assert enable_checkpoint_sound(raw) == raw
+
+
+def test_muted_hardware_accepts_register_writes_and_old_checkpoints_upgrade():
+    rom = Path('roms/pokered.gb')
+    if not rom.is_file():
+        pytest.skip('Private ROM unavailable')
+    emu = Emulator.__new__(Emulator)
+    emu.rom, emu.isolated_ram = rom, True
+    legacy, current = emu._boot(sound=False), emu._boot()
+    try:
+        legacy.tick(300, render=False, sound=False)
+        state = io.BytesIO()
+        legacy.save_state(state)
+        raw = state.getvalue()
+        fixed = enable_checkpoint_sound(raw)
+        assert fixed != raw and len(fixed) == len(raw)
+        assert fixed[:9144] == raw[:9144] and fixed[10900:] == raw[10900:]
+        current.load_state(io.BytesIO(fixed))
+        for pb in (legacy, current):
+            pb.memory[0xff26] = 0x80
+            pb.memory[0xff25] = 0x11
+        assert legacy.memory[0xff25] != 0x11
+        assert current.memory[0xff25] == 0x11
+        before = bytes(current.memory[0xa000:0xe000])
+        emu.pb, emu.audio, emu._audio_enabled = current, AudioFeed(), False
+        emu._sync_audio(True)
+        assert emu.pb is current and current.memory[0xff25] == 0x11
+        assert bytes(current.memory[0xa000:0xe000]) == before
+    finally:
+        legacy.stop(save=False)
+        current.stop(save=False)

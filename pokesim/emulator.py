@@ -114,6 +114,8 @@ class Emulator:
         fresh = (not store.autosaves() and not store.events(limit=1)
                  and (isolated_ram or not Path(str(self.rom) + '.ram').exists()))
         self.catch_tracker = CatchTracker(store, self.rom_sha1, fresh=fresh)
+        from .shiny import ShinyTracker
+        self.shiny_tracker = ShinyTracker(store, self.rom_sha1)
         from .legendary_returns import StepTracker
         self.step_tracker = StepTracker(store, self.rom_sha1)
         if hasattr(self.policy, "collection"):
@@ -140,13 +142,17 @@ class Emulator:
         log.warning("ROM sha1 %s is not a known clean Red/Blue dump; RAM addresses may be off", sha)
         return f"unverified ROM (sha1 {sha[:12]})"
 
-    def _boot(self, *, sound=False) -> PyBoy:
-        options = {}
+    def _boot(self, *, sound=True) -> PyBoy:
+        from .palettes import PALETTES, validate_palette
+        options = {'color_palette': PALETTES[validate_palette(getattr(config, 'PALETTE', 'original'))]}
         if getattr(self, 'isolated_ram', False):
             import io
             options['ram_file'] = io.BytesIO(bytes(32768))
         pb = PyBoy(str(self.rom), window="null", sound_emulated=sound, **options)
         pb.set_emulation_speed(0)
+        shiny_tracker = getattr(self, 'shiny_tracker', None)
+        if shiny_tracker is not None:
+            shiny_tracker.attach(pb)
         tracker = getattr(self, 'catch_tracker', None)
         if tracker is not None:
             tracker.attach(pb)
@@ -276,7 +282,7 @@ class Emulator:
                 raise ValueError("Checkpoint requires a different policy")
         with open_state(path) as f:
             raw = f.read()
-            self.pb.load_state(io.BytesIO(enable_checkpoint_sound(raw) if self._audio_enabled else raw))
+            self.pb.load_state(io.BytesIO(enable_checkpoint_sound(raw)))
         if getattr(self, "audio", None) is not None:
             self.audio.clear()
         # A checkpoint can be captured while a direction is held. The next
@@ -375,27 +381,25 @@ class Emulator:
             self.frame_seq += 1
             self.frame_cond.notify_all()
 
+    def _protect_shiny(self, snapshot):
+        from .strategy_data import ITEMS
+        balls = {ITEMS[name] for name in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL', 'MASTER_BALL')}
+        if (not self.manual_mode and snapshot.enemy_shiny
+                and (not snapshot.can_catch or snapshot.battle_type == 0
+                     and not any(item in balls and qty for item, qty in snapshot.items))):
+            self.snapshot = snapshot
+            self.paused = True
+            self._autosave()
+            return True
+        return False
+
     def _sync_audio(self, enabled):
         if enabled == self._audio_enabled:
             return
-        # PyBoy cannot toggle its APU through the public API. Replace it on the
-        # owner thread using an in-memory checkpoint and preserve queued input.
-        previous = self.pb
-        state = io.BytesIO()
-        previous.save_state(state)
-        replacement = self._boot(sound=enabled)
-        try:
-            raw = state.getvalue()
-            replacement.load_state(io.BytesIO(enable_checkpoint_sound(raw) if enabled else raw))
-            for event in previous.events:
-                replacement.send_input(event)
-        except BaseException:
-            replacement.stop(save=False)
-            raise
-        self.pb = replacement
+        # Keep hardware registers and clocks running while muted. Only PCM sampling
+        # follows listeners, so a browser reconnect cannot restore stale channels.
         self._audio_enabled = enabled
         self.audio.clear()
-        previous.stop(save=False)
 
     def _tick(self, n: int):
         """Advance frames, rendering only for an observation or a waiting viewer."""
@@ -888,6 +892,8 @@ class Emulator:
             for p in self.store.states.glob("auto-*.state"):
                 p.unlink()
                 p.with_suffix(".json").unlink(missing_ok=True)
+            if hasattr(self, 'shiny_tracker'):
+                self.shiny_tracker.reset()
             self.mem = RunMemory()
             self.legendary_recovery = LegendaryRecovery()
             self.last_achievement = None
@@ -941,6 +947,8 @@ class Emulator:
                     continue
                 if not pending:
                     snap = read_snapshot(self.pb.memory, self.frame)
+                    if self._protect_shiny(snap):
+                        continue
                     ctx = PolicyContext(snap, time.time() - self.stuck_since, time.time(), self.pb.memory)
                     preparation = getattr(self, 'preparation', None)
                     pending = list(preparation.step(ctx) if preparation else self.policy.step(ctx))
@@ -973,7 +981,7 @@ class Emulator:
                 if now >= next_autosave:
                     self._autosave()
                     next_autosave = now + config.AUTOSAVE_SECONDS
-                if not self.manual_mode and not getattr(self, 'preparation', None):
+                if not self.manual_mode and not self.paused and not getattr(self, 'preparation', None):
                     self._check_guards()
                 if getattr(self, 'isolated_ram', False) and now >= getattr(self, '_next_reward', 0):
                     from .runtime.reward_delivery import deliver

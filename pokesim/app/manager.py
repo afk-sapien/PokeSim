@@ -89,7 +89,7 @@ class Manager:
         allowed = {'trainer_name', 'rival_name', 'speed', 'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
                    'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards',
                    'mew_event', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
-                   'fossil_preference', 'dojo_preference', 'event_retention_days'}
+                   'fossil_preference', 'dojo_preference', 'event_retention_days', 'palette'}
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError('Unsupported adventure settings')
         result = {'starter': 'random', 'policy': 'strategic', 'auto_start': False, **values}
@@ -97,6 +97,9 @@ class Manager:
         for name in ('trainer_name', 'rival_name'):
             if name in result:
                 result[name] = validate_trainer_name(result[name])
+        if 'palette' in result:
+            from ..palettes import validate_palette
+            validate_palette(result['palette'])
         if 'speed' in result:
             from ..runtime.settings import validate_speed
             validate_speed(result['speed'])
@@ -143,6 +146,8 @@ class Manager:
             raise ValueError('PokeSim is saving, backing up, or shutting down')
 
     def start(self):
+        from .deletion import recover_deletions
+        recover_deletions(self)
         self.coordinator.recover()
         for adventure in self.registry.adventures():
             if self.closing:
@@ -399,6 +404,12 @@ def create_app(manager, shutdown=lambda: None):
         manager.background(manager.start_adventure, aid)
         return manager.registry.adventure(aid)
 
+    @app.delete('/api/v1/adventures/{aid}')
+    async def delete(aid: str, request: Request):
+        from .deletion import delete_adventure
+        data = await json_body(request)
+        return await asyncio.to_thread(delete_adventure, manager, aid, data.get('confirmation'))
+
     @app.post('/api/v1/adventures/{aid}/archive')
     async def archive(aid: str):
         manager.check_available()
@@ -434,6 +445,8 @@ def create_app(manager, shutdown=lambda: None):
                 raise ValueError('Trainer and rival names are chosen when creating an adventure')
             if adventure['state'] == 'running' and set(changes) - {'auto_start', 'speed'}:
                 raise ValueError('Stop the adventure before changing these settings')
+            if 'palette' in changes and adventure['state'] not in {'stopped', 'failed'}:
+                raise ValueError('Stop the adventure before changing its palette')
             previous = adventure['settings']
             values['settings'] = manager.validate_adventure_settings({**previous, **changes})
         result = manager.registry.update(aid, **values) if values else adventure

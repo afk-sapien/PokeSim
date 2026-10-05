@@ -129,7 +129,7 @@
   }
   function card(game) {
     const active = running(game)
-    const transitional = ['starting', 'stopping', 'preparing', 'setting_up', 'recovering'].includes(game.state)
+    const transitional = ['starting', 'stopping', 'preparing', 'setting_up', 'recovering', 'deleting'].includes(game.state)
     const summary = game.summary || {}
     const activity = summary.message || summary.activity || summary.game?.location || summary.map || (active ? 'Adventure in progress' : 'Your saves are waiting here')
     const wins = summary.league_rewards?.wins
@@ -145,7 +145,7 @@
     const screen = active
       ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${esc(game.name)} game screen" loading="lazy" width="160" height="144"></div>`
       : `<div class="card-screen card-screen--off"><span class="micro">${game.archived ? 'Archived' : 'Saved · not running'}</span></div>`
-    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${game.archived ? `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner>Restore</button>` : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${transitional ? 'disabled data-blocked' : ''}>${transitional ? esc(game.state) : active ? 'Save and stop' : 'Start'}</button><button class="key" data-action="settings" data-id="${esc(game.id)}" data-owner>Settings</button>${!active && !transitional ? `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner>Archive</button>` : ''}`}${download}</div></article>`
+    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.state === 'deleting' ? '<p class="card-note">Deletion is incomplete. Retry to finish removing this adventure.</p>' : game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${game.archived ? game.state === 'deleting' ? '' : `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner>Restore</button>` : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${transitional ? 'disabled data-blocked' : ''}>${transitional ? esc(game.state) : active ? 'Save and stop' : 'Start'}</button><button class="key" data-action="settings" data-id="${esc(game.id)}" data-owner>Settings</button>${!active && !transitional ? `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner>Archive</button>` : ''}`}${download}${!active && (!transitional || game.state === 'deleting') ? `<button class="key key--danger" data-action="delete" data-id="${esc(game.id)}" data-owner>${game.state === 'deleting' ? 'Retry deletion' : 'Delete'}</button>` : ''}</div></article>`
   }
   function renderAdventures() {
     const visible = adventures.filter(game => $('#show-archived').checked || !game.archived)
@@ -251,7 +251,7 @@
     backupPage = Math.max(0, Math.min(backupPage, Math.ceil(savedBackups.length / backupPageSize) - 1))
     const start = backupPage * backupPageSize
     const visible = savedBackups.slice(start, start + backupPageSize)
-    $('#backups').innerHTML = visible.length ? visible.map(backup => `<div class="backup-row"><div><strong>${esc(dateLabel(backup.created_at))}</strong><p class="note">${(backup.size_bytes / 1048576).toFixed(1)} MiB</p></div><div class="backup-row-actions"><a class="key" href="/api/v1/backups/${encodeURIComponent(backup.id)}/download" download>Download</a><button type="button" class="key" data-load-backup="${esc(backup.id)}" data-owner>Load</button><button type="button" class="key key--danger" data-delete-backup="${esc(backup.id)}" data-owner>Delete</button></div></div>`).join('') : '<p class="section-note">No backups yet. Create one here or load a backup ZIP.</p>'
+    $('#backups').innerHTML = visible.length ? visible.map(backup => `<div class="backup-row"><div><strong>${esc(dateLabel(backup.created_at))}</strong><p class="note">${(backup.size_bytes / 1048576).toFixed(1)} MiB</p></div><div class="backup-row-actions"><a class="key" href="/api/v1/backups/${encodeURIComponent(backup.id)}/download" download>Download</a><button type="button" class="key" data-load-backup="${esc(backup.id)}" data-owner>Load</button><button type="button" class="key key--danger" data-delete-backup="${esc(backup.id)}" data-owner>${game.state === 'deleting' ? 'Retry deletion' : 'Delete'}</button></div></div>`).join('') : '<p class="section-note">No backups yet. Create one here or load a backup ZIP.</p>'
     $('#backup-summary').textContent = savedBackups.length ? `${savedBackups.length} ${savedBackups.length === 1 ? 'backup' : 'backups'} · ${(savedBackups.reduce((total, backup) => total + backup.size_bytes, 0) / 1048576).toFixed(1)} MiB stored` : ''
     $('#backup-pagination').hidden = savedBackups.length <= backupPageSize
     $('#backup-page-label').textContent = `${start + 1}–${start + visible.length} of ${savedBackups.length}`
@@ -444,12 +444,30 @@
   $('#new-adventure').onclick = openCreate
   $('#empty-create').onclick = openCreate
   $('#show-archived').onchange = renderAdventures
+  $('#adventure-delete-form').onsubmit = event => {
+    event.preventDefault()
+    act(async () => {
+      await write(`/api/v1/adventures/${encodeURIComponent($('#delete-id').value)}`,
+        {confirmation: $('#delete-confirmation').value}, 'DELETE')
+      $('#adventure-delete-dialog').close()
+      notice('Adventure deleted. Existing backups are kept.')
+    })
+  }
+
   document.querySelectorAll('[data-close]').forEach(button => { button.onclick = () => $(`#${button.dataset.close}`).close() })
   document.addEventListener('click', event => {
     const button = event.target.closest('[data-action]')
     if (!button || button.disabled) return
     const game = adventures.find(item => item.id === button.dataset.id)
     if (!game) return
+    if (button.dataset.action === 'delete') {
+      $('#delete-id').value = game.id
+      $('#delete-name').textContent = game.name
+      $('#delete-confirmation').value = ''
+      $('#adventure-delete-dialog .dialog-feedback').textContent = ''
+      $('#adventure-delete-dialog').showModal()
+      return
+    }
     if (button.dataset.action === 'settings') {
       $('#settings-id').value = game.id
       $('#settings-name').value = game.name
@@ -460,6 +478,8 @@
         speedInput.add(new Option(`${speed}×`, speed))
         speedInput.value = speed
       }
+      $('#settings-palette').value = game.settings?.palette || 'original'
+      $('#settings-palette').disabled = running(game)
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
       for (const [field, setting] of [['league-rewards', 'league_rewards'], ['mew-event', 'mew_event']]) {
         const input = $(`#settings-${field}`)
@@ -508,7 +528,7 @@
   $('#adventure-settings-form').onsubmit = event => { event.preventDefault()
     act(async () => {
       const game = adventures.find(item => item.id === $('#settings-id').value)
-      const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
+      const rewards = game && !running(game) ? {palette: $('#settings-palette').value, league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
       const result = await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
         settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), ...rewards}}, 'PATCH')
       $('#adventure-settings').close()

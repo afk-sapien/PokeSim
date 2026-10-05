@@ -286,7 +286,8 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
             and MAPS['POKEMON_TOWER_1F'] <= snapshot.map <= MAPS['POKEMON_TOWER_7F']
             and not dict(snapshot.items).get(ITEMS['SILPH_SCOPE'])):
         return Decision('run', reason='Leave the unidentified ghost until the Silph Scope is obtained')
-    if (capture_species is not None and snapshot.in_battle == 1 and snapshot.battle_type == 0
+    shiny = snapshot.in_battle == 1 and snapshot.enemy_shiny
+    if (not shiny and capture_species is not None and snapshot.in_battle == 1 and snapshot.battle_type == 0
             and enemy.species != capture_species
             and SPECIES.get(enemy.species, {}).get('dex') not in (144, 145, 146, 150)):
         return Decision('run', reason='Save time and supplies for the legendary expedition')
@@ -300,19 +301,19 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     safe = me.hp > incoming * 1.5 and not me.status
     balls = [(i, item) for item in BALLS for i, (bag_item, qty) in enumerate(snapshot.items) if bag_item == item and qty > 0]
     legendary = known.get('dex') in (144,145,146,150)
-    allowed_capture = capture_species is None or enemy.species == capture_species or legendary
+    allowed_capture = capture_species is None or enemy.species == capture_species or legendary or shiny
     useful = useful and allowed_capture
     collection_target = (collect_missing or legendary) and missing_species and allowed_capture
     repeat_target = enemy.species == repeat_species and not missing_species
-    collection_target |= repeat_target
-    capture_limit = 50 if legendary else 5 if repeat_target else 20
+    collection_target |= repeat_target or shiny
+    capture_limit = float('inf') if shiny else 50 if legendary else 5 if repeat_target else 20
     master = next((i for i,(item,qty) in enumerate(snapshot.items) if item==ITEMS['MASTER_BALL'] and qty),None)
-    if (snapshot.in_battle == 1 and snapshot.battle_type == 0 and legendary and (missing_species or repeat_target)
+    if (snapshot.in_battle == 1 and snapshot.battle_type == 0 and (shiny or legendary and (missing_species or repeat_target))
             and (not snapshot.can_catch or not balls and master is None or catch_attempts >= capture_limit)):
         return Decision('run', reason='Retreat and prepare another legendary attempt with balls and storage space')
-    if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and collection_target and catch_attempts < capture_limit and (balls or legendary and master is not None):
-        if legendary and master is not None:
-            return Decision('item',master,reason='Secure the legendary with the Master Ball')
+    if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and collection_target and catch_attempts < capture_limit and (balls or (legendary or shiny) and master is not None):
+        if (legendary or shiny) and master is not None:
+            return Decision('item',master,reason='Secure the shiny with the Master Ball' if shiny else 'Secure the legendary with the Master Ball')
         healing = healing_item(snapshot.items,me,incoming)
         if me.hp <= incoming * 1.5 and healing is not None:
             return Decision('item',healing,active,'Keep the catcher healthy while preserving the wild Pokémon')
@@ -331,9 +332,9 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
         weakening = [(score,i) for score,i in moves if MOVES[me.moves[i]]['effect'] not in
                      ('EXPLODE_EFFECT','RECOIL_EFFECT','OHKO_EFFECT','TWO_TO_FIVE_ATTACKS_EFFECT')
                      and 0 < damage(me.moves[i],me,enemy) * 2.5 < enemy.hp]
-        if not legendary and enemy.hp > enemy.max_hp*0.4 and weakening and not enemy.status:
+        if not legendary and not shiny and enemy.hp > enemy.max_hp*0.4 and weakening and not enemy.status:
             return Decision('fight',max(weakening)[1],reason='Use a gentle attack with a margin for critical damage')
-        return Decision('item',balls[-1][0],reason='Catch the returned legendary' if repeat_target and legendary
+        return Decision('item',balls[-1][0],reason='Catch the shiny without risking a knockout' if shiny else 'Catch the returned legendary' if repeat_target and legendary
                         else 'Catch another partner for the collection or a useful trade' if repeat_target
                         else 'Catch the missing Pokédex entry without risking a knockout')
     if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and useful and balls and safe and catch_attempts < (12 if required else 5):

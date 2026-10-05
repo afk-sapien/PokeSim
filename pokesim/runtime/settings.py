@@ -31,6 +31,7 @@ class SimulationSettings:
     starter: str = 'random'
     speed: float = 1
     policy: str = 'strategic'
+    palette: str = 'original'
     viewer_only: bool = False
     league_rewards: bool = False
     mew_event: bool = False
@@ -55,6 +56,8 @@ class SimulationSettings:
     ntfy_mute: tuple[str, ...] = ()
 
     def __post_init__(self):
+        from ..palettes import validate_palette
+        validate_palette(self.palette)
         from ..nicknames import NICKNAME_FIELDS, validate_parts, validate_trainer_name
         for name in ('trainer_name', 'rival_name'):
             object.__setattr__(self, name, validate_trainer_name(getattr(self, name)))

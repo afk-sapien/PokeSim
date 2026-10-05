@@ -5,6 +5,7 @@ import json
 import time
 
 from . import progress
+from .shiny import is_shiny, status as shiny_status
 from .game_data import load
 from .pokemon import dv_rating
 from .strategy_data import SPECIES
@@ -156,10 +157,13 @@ def apply(payload, store):
     value = status(store)
     # Keep internal identity groups out of the public API.
     value.pop('perfect_groups')
-    party = [dict(mon, perfect_dvs=is_perfect(mon), **dv_rating(mon)) for mon in payload.get('party', ())]
+    party = [dict(mon, shiny=is_shiny(mon), perfect_dvs=is_perfect(mon), **dv_rating(mon)) for mon in payload.get('party', ())]
     storage = payload.get('storage')
-    boxed = [dict(mon, perfect_dvs=is_perfect(mon), **dv_rating(mon)) for mon in (storage or {}).get('pokemon', ())]
+    boxed = [dict(mon, shiny=is_shiny(mon), perfect_dvs=is_perfect(mon), **dv_rating(mon)) for mon in (storage or {}).get('pokemon', ())]
     value['perfect_held'] = sum(mon['perfect_dvs'] for mon in party + boxed)
     value['three_star_held'] = sum(mon['dv_stars'] == 3 for mon in party + boxed)
-    return {**payload, 'milestones': value, 'party': party,
+    shinies = shiny_status(store)
+    shinies['held'] = sum(mon['shiny'] for mon in party + boxed)
+    shinies['held_species'] = sorted({mon['dex'] for mon in party + boxed if mon['shiny'] and mon.get('dex')})
+    return {**payload, 'milestones': value, 'shiny': shinies, 'party': party,
             'storage': {**storage, 'pokemon': boxed} if storage else None}

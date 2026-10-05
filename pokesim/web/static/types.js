@@ -15,5 +15,6 @@
     const key = Array.isArray(types) ? String(types[0] ?? '').trim().toLowerCase() : ''
     return labels.has(key) ? `type-${key}` : 'type-unknown'
   }
-  globalThis.PokemonTypes = {badges, portraitClass}
+  const shinyBadge = mon => mon?.shiny ? '<span class="tag shiny-badge" title="Gen 2 shiny DVs. Collected shiny partners are protected from automatic release and trading.">★ Shiny</span>' : ''
+  globalThis.PokemonTypes = {badges, portraitClass, shinyBadge}
 })()

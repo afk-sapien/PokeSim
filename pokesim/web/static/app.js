@@ -83,6 +83,7 @@ async function post(action, value) {
 }
 
 async function control(button, action, value, message) {
+  releaseControls()
   button.disabled = true
   try {
     await post(action, value)
@@ -143,7 +144,7 @@ function renderParty(party) {
     const dvLamps = rating ? `<span class="dv" title="DV rating ${rating} of 4" role="img" aria-label="DV rating ${rating} of 4">${Array.from({length: 4}, (_, i) => `<i class="lamp"${i < rating ? ' data-on="signal"' : ''}></i>`).join('')}</span>` : ''
     const sprite = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png?v=rom-portraits-1" alt="${esc(mon.name)} portrait">` : `<span class="plate-num">?</span>`
     const xpText = xp ? xp.max_level ? 'MAX' : `${Math.floor(clamp(xp.percent))}%` : '—'
-    return `<li class="mon${mon.hp ? '' : ' mon--fainted'}"><div class="mon-plate"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${sprite}</div></div><div class="mon-body"><div class="mon-head"><span class="slotno">${slotNo(index)}</span><h3 class="name">${esc(name)}</h3><span class="spacer"></span>${dvLamps}<span class="lv"><em>LV</em>${mon.level}</span><button class="mon-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} battle stats"><span aria-hidden="true">↗</span></button></div><div class="mon-id">${dex}<span class="micro">${esc(mon.name)}</span>${types}${statusTag}</div><div class="mon-lower"><div class="mon-meters"><div class="meter-row"><span class="micro">HP</span>${meter(hp, health, `${esc(name)} health: ${mon.hp} of ${mon.max_hp}`)}<span class="value">${fmt(mon.hp)}/${fmt(mon.max_hp)}</span></div><div class="meter-row"><span class="micro">XP</span>${meter(clamp(xp?.percent), 'signal', `${esc(name)} progress to next level`)}<span class="value">${xpText}</span></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div></div></div></li>`
+    return `<li class="mon${mon.hp ? '' : ' mon--fainted'}"><div class="mon-plate"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${sprite}</div></div><div class="mon-body"><div class="mon-head"><span class="slotno">${slotNo(index)}</span><h3 class="name">${esc(name)}</h3><span class="spacer"></span>${dvLamps}<span class="lv"><em>LV</em>${mon.level}</span><button class="mon-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} battle stats"><span aria-hidden="true">↗</span></button></div><div class="mon-id">${dex}<span class="micro">${esc(mon.name)}</span>${types}${PokemonTypes.shinyBadge(mon)}${statusTag}</div><div class="mon-lower"><div class="mon-meters"><div class="meter-row"><span class="micro">HP</span>${meter(hp, health, `${esc(name)} health: ${mon.hp} of ${mon.max_hp}`)}<span class="value">${fmt(mon.hp)}/${fmt(mon.max_hp)}</span></div><div class="meter-row"><span class="micro">XP</span>${meter(clamp(xp?.percent), 'signal', `${esc(name)} progress to next level`)}<span class="value">${xpText}</span></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div></div></div></li>`
   }).join('') + emptySlots(party.length)
   fitSprites($('#party'))
 }
@@ -213,7 +214,7 @@ async function refreshState() {
     if (!game) return
     set('#live-heading', 'textContent', game.map_name)
     set('#coordinates', 'textContent', `${game.x}, ${game.y}`)
-    set('#game-activity', 'textContent', manualMode ? 'Your adventure. Your next move.' : paused ? 'A moment to take it all in.' : game.in_battle ? game.opponent ? `Trainer battle · ${game.opponent}` : `Wild encounter · ${game.enemy || 'Pokémon'} · Lv. ${game.enemy_level}` : game.textbox ? 'A conversation along the way.' : game.start_menu ? 'Checking the essentials.' : 'Onward to the next little discovery.')
+    set('#game-activity', 'textContent', manualMode ? 'Your adventure. Your next move.' : paused ? game.enemy_shiny ? '★ Shiny encounter paused. Take control to choose what happens next.' : 'A moment to take it all in.' : game.in_battle ? game.opponent ? `Trainer battle · ${game.opponent}` : `Wild encounter${game.enemy_shiny ? ' · ★ Shiny' : ''} · ${game.enemy || 'Pokémon'} · Lv. ${game.enemy_level}` : game.textbox ? 'A conversation along the way.' : game.start_menu ? 'Checking the essentials.' : 'Onward to the next little discovery.')
     const clock = state.play_clock
     const time = clock?.display || game.playtime
     set('#playtime', 'textContent', time.split(':').slice(0, 2).map((v) => v.padStart(2, '0')).join(':') + (clock?.lower_bound ? '+' : ''))
@@ -337,9 +338,51 @@ if ($('#export-save')) $('#export-save').onclick = async (event) => {
 if ($('#restart')) $('#restart').onclick = (event) => {
   if (confirm('Start a fresh adventure from the beginning? Your event journal will be kept.')) control(event.currentTarget, 'restart', undefined, 'A new adventure is starting.')
 }
-if ($('.controller')) $('.controller').onclick = (event) => {
-  const button = event.target.closest('[data-b]')
-  if (button) manualPress(button.dataset.b)
+const heldControls = new Map()
+function releaseControls(pointerId) {
+  for (const [id, held] of heldControls) {
+    if (pointerId !== undefined && id !== pointerId) continue
+    clearTimeout(held.timer)
+    held.button.classList.remove('is-held')
+    heldControls.delete(id)
+  }
+}
+const controller = $('.controller')
+if (controller) {
+  controller.addEventListener('pointerdown', event => {
+    const button = event.target.closest('[data-b]')
+    if (!button || button.disabled || viewerOnly || event.button !== 0) return
+    event.preventDefault()
+    releaseControls(event.pointerId)
+    button.setPointerCapture(event.pointerId)
+    const held = {button, timer: null}
+    heldControls.set(event.pointerId, held)
+    button.classList.add('is-held')
+    const repeat = async () => {
+      if (heldControls.get(event.pointerId) !== held || viewerOnly || document.hidden) return
+      const ok = await manualPress(button.dataset.b)
+      if (!ok) return releaseControls(event.pointerId)
+      if (heldControls.get(event.pointerId) === held && !['start', 'select'].includes(button.dataset.b)) {
+        held.timer = setTimeout(repeat, 150)
+      }
+    }
+    repeat()
+  })
+  for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    controller.addEventListener(name, event => releaseControls(event.pointerId))
+  }
+  controller.addEventListener('contextmenu', event => event.preventDefault())
+  // Keyboard and assistive activation produce a click without a pointing device.
+  controller.addEventListener('click', event => {
+    const button = event.target.closest('[data-b]')
+    if (button && event.detail === 0 && !viewerOnly) manualPress(button.dataset.b)
+  })
+}
+window.addEventListener('blur', () => releaseControls())
+window.addEventListener('pagehide', () => releaseControls())
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseControls() })
+for (const button of document.querySelectorAll('#take-control, #pause, #restart')) {
+  button.addEventListener('pointerdown', () => releaseControls())
 }
 if ($('#fullscreen')) $('#fullscreen').onclick = async () => {
   try {
@@ -373,7 +416,9 @@ async function manualPress(button) {
     set('#take-control', 'textContent', 'Let AI play')
     set('#control-mode', 'textContent', 'You’re playing · AI paused')
     $('.game-card')?.classList.add('is-manual')
-  } catch (error) { toast(error.message, true) }
+    return true
+  } catch (error) { toast(error.message, true)
+    return false }
 }
 let lastKeyPress = 0
 window.addEventListener('keydown', (event) => {
@@ -412,7 +457,7 @@ function renderPartnerDetail() {
   const moves = (mon.move_details || []).map((move) => `<div class="move"><span class="nm">${esc(move.name)}</span><span class="pp${move.pp ? '' : ' empty'}">${move.pp}/${move.max_pp} PP</span></div>`).join('')
   const stats = Object.entries(mon.stats || {}).map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${fmt(value)}</dd></div>`).join('')
   const portrait = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png?v=rom-portraits-1" alt="">` : '<span class="plate-num">?</span>'
-  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${portrait}</div><p class="micro">Partner ${selectedPartner.index + 1} · Level ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><div class="type-tags">${PokemonTypes.badges(mon.type_names)}</div><p>${esc(mon.name)} · ${mon.hp} / ${mon.max_hp} HP · ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><section><h3 class="micro">Moves</h3><div class="moves">${moves || '<p class="no-moves">No moves yet.</p>'}</div></section><section><h3 class="micro">Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${xp.max_level ? 'MAX LEVEL' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}</section>`)
+  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${portrait}</div><p class="micro">Partner ${selectedPartner.index + 1} · Level ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><div class="type-tags">${PokemonTypes.badges(mon.type_names)}${PokemonTypes.shinyBadge(mon)}</div><p>${esc(mon.name)} · ${mon.hp} / ${mon.max_hp} HP · ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><section><h3 class="micro">Moves</h3><div class="moves">${moves || '<p class="no-moves">No moves yet.</p>'}</div></section><section><h3 class="micro">Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${xp.max_level ? 'MAX LEVEL' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}</section>`)
   fitSprites($('#partner-detail-content'))
 }
 $('#party')?.addEventListener('click', (event) => {
