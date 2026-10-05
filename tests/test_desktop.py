@@ -124,7 +124,6 @@ def test_first_run_and_browser_assets_work_without_game_data(launcher):
     assert 'Your first partner' in page.text
     assert page.headers['cache-control'] == 'no-store'
     assert client.get('/desktop/assets/desktop.js').status_code == 200
-    assert client.get('/desktop/assets/desktop.css').status_code == 200
     for asset in ('tokens.css', 'panel.css', 'panel.js', 'panel-desktop.css', 'favicon.svg'):
         assert f'/desktop/assets/{asset}' in page.text
         assert client.get(f'/desktop/assets/{asset}').status_code == 200

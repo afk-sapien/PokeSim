@@ -40,7 +40,8 @@ def main():
                         time.sleep(0.1)
                 with opener.open(url) as response:
                     assert b'Your adventure library' in response.read()
-                for path in ('/static/library.js', '/static/library.css'):
+                for path in ('/static/library.js', '/static/tokens.css',
+                             '/static/panel.css', '/static/panel-library.css'):
                     with opener.open(url + path) as response:
                         assert response.status == 200
                 with opener.open(url + '/api/v1/session') as response:

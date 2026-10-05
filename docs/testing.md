@@ -2,8 +2,8 @@
 
 Start with [Contributing](../CONTRIBUTING.md) for dependency and reference-data setup.
 Use focused scenarios while editing and the full suite before a release.
-See the [rc31 cleanup results](validation/cleanup-0.2.0rc31.json) for the recorded
-local checks, copied-save comparisons, and their limits.
+See the [retained validation evidence](validation/README.md) for the current
+release checks and selected investigations, including their limits.
 
 ## Python and browser logic
 
@@ -184,18 +184,10 @@ It does not touch an existing adventure or establish autonomous campaign progres
 
 ## Publishing a complete release
 
-Choose a new version, update package metadata and release notes, and tag the reviewed
-commit. Run **Publish public release** with that existing tag from a branch containing
-the updated workflow. All five desktop targets must pass before publication continues.
-Every package must carry the same version and clean source revision. The final
-manifest and `SHA256SUMS` cover desktop, container, Python, and configuration assets.
+Follow the [publishing guide](publishing.md) for the current draft-release workflow,
+required installation matrix, artifact verification, and recovery after a failed
+run. Python packages, the Linux amd64 image, and versioned configuration downloads
+are the supported release artifacts. Standalone desktop bundles are excluded.
 
-Publishing a GitHub release starts the workflow, which uploads the downloads and
-checks every uploaded digest. An interrupted upload or verification failure leaves
-the release with incomplete assets. Rerun the workflow manually for the same tag.
-The preflight rejects a release whose downloads are already attached. Never replace
-a completed release. Release candidates are marked prerelease based on the `rc` version suffix.
-
-Publication does not merge the public default branch or upgrade any deployment.
-Keep the public installation page aligned with the newly published version, and
-verify downloads anonymously before announcing it.
+Publication does not upgrade any deployment. Verify downloads anonymously and
+review the exact source revision before announcing a completed release.

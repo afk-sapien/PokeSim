@@ -154,12 +154,12 @@ rematch. Local recoveries fell from 38 to 33. Neither version caught a new speci
 the initially selected Butterfree still failed to gain experience. Preparation was one
 contributor, not a complete explanation of slow collection. Blue's regression remained
 unchanged. All 387 tests passed. See
-[the comparison](../validation/training-preparation-0.2.0rc13.json).
+[the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/training-preparation-0.2.0rc13.json).
 
 Red received rc13 from `17cd997` with a cold backup and a successful current-save load.
 Blue stayed on rc12 and caught a level-25 Kangaskhan live in Safari Zone East, reaching
 116 registered entries. Both games remained healthy with zero save reloads. All 12
-public checks passed. See [the receipt](../validation/release-0.2.0rc13.json).
+public checks passed. See [the receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc13.json).
 
 Next, preserve the live intervals while measuring actual training gains and new catches.
 Investigate repeated supply detours and arrival at chosen encounter areas if Red remains
@@ -185,7 +185,7 @@ The fix records partial progress and avoids escalating the failure penalty, whil
 retaining the idle guard and ordinary retry delay. It is queued for a later release,
 with 388 tests passing and one optional test skipped. The same copied-save gameplay
 was unchanged. Existing historical outcomes remain preserved. See
-[the evidence](../validation/partial-training-20260915.json).
+[the evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/partial-training-20260915.json).
 
 No live deployment was performed during this heartbeat. Red stays on rc13 from
 `17cd997`, and Blue stays on rc12 from `66b226f`. Do not assume the checkout's queued
@@ -221,7 +221,7 @@ recoveries from 6 to 26 and still attempted no pickups. All 389 candidate tests 
 but this does not establish a pickup improvement. The candidate was removed from the
 runtime checkout and preserved as a patch with the private reproduction. No deployment
 was performed. The existing queued partial-training fix remains the only pending
-runtime change. See [the comparison](../validation/item-capacity-20260915.json).
+runtime change. See [the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/item-capacity-20260915.json).
 
 Next, investigate bounded PC item storage for verified retired story items. Preserve
 items instead of discarding them, and keep necessary keys, HMs, balls, medicine, and
@@ -237,7 +237,7 @@ accounting fix. Cold backups and save compatibility checks passed. All 12 public
 and six static asset comparisons passed. Red has 112 registered entries and Blue has
 116. Both are healthy at unlimited speed with zero post-startup save reloads. The
 maintenance restarts begin fresh endurance intervals. Bag capacity remains the next
-simulation investigation. See [the release receipt](../validation/release-0.2.0rc14.json).
+simulation investigation. See [the release receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc14.json).
 
 
 ## Scoped trading release, rc16
@@ -277,7 +277,7 @@ next scan time, and local policy recoveries. Those fields should help capture a 
 while the failed detour is active. The case count is seven. Retain at most eight cases,
 preserving validation records and held patches before retiring older private artifacts.
 No games were restarted and no runtime deployment was made. Trading remains disabled
-under the existing approval block. See [the comparison](../validation/pickup-retry-20260915.json).
+under the existing approval block. See [the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/pickup-retry-20260915.json).
 
 
 ## September 15, 06:11 UTC progress check
@@ -294,7 +294,7 @@ pickup history still records repeated failures, while both sampled active target
 retry maps were empty. A bounded 90-poll capture attempt found no active pickup checkpoint.
 No runtime change or deployment was justified, and neither game was paused or restarted.
 Disk use remained stable at 83.16 percent, with 16.53 GB free. See
-[the monitoring record](../validation/monitor-20260915-0611.json).
+[the monitoring record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-0611.json).
 
 
 ## Automatic trading activated, September 15 UTC
@@ -309,7 +309,7 @@ completed. One HTTP retry cleared and neither game retained a hold. Both adventu
 remain healthy, unpaused, at unlimited speed with zero reloads and unchanged container
 start times. Follow up on the first completion and investigate prolonged safe-point
 waiting if the next monitor still finds no exchange. See
-[the activation receipt](../validation/automatic-trading-enabled-20260915.json).
+[the activation receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/automatic-trading-enabled-20260915.json).
 
 
 ## September 15, 06:59 UTC first automatic trade verified
@@ -329,7 +329,7 @@ Disk use is 83.2 percent with 16.47 GB free.
 The next exchange is waiting for both overworld states, with 12 useful proposals visible.
 The sampler now records compact trading status and was verified against the live board.
 Monitor the delay beyond the 15-minute minimum interval. No runtime deployment or game
-restart was needed. See [the verification](../validation/monitor-20260915-0659.json).
+restart was needed. See [the verification](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-0659.json).
 
 
 ## September 15, 07:30 UTC rc17 deployment
@@ -348,7 +348,7 @@ Two previous live exchanges remain recorded, including Machamp and Golem registr
 The optional Mew gift passed copied-save interruption recovery, duplicate prevention,
 and actual PC withdrawal and training from level 5 to level 12. It remains disabled on
 the live pair while the user considers rewards requiring varied Championship teams.
-No live Mew was delivered. See [the release receipt](../validation/release-0.2.0rc17.json).
+No live Mew was delivered. See [the release receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc17.json).
 
 
 ## September 15, 09:24 UTC legendary route investigation
@@ -358,7 +358,7 @@ and Blue gained three. Two automatic exchanges completed: Bellsprout for Mankey,
 Pinsir for Vileplume. Blue also evolved Mankey into Primeape. Both games stayed healthy
 at maximum speed with zero save reloads and container restarts. Local policy replanning
 increased by 95 for Red and 126 for Blue. No 24-hour endurance pass is claimed.
-See [the interval record](../validation/monitor-20260915-0924.json).
+See [the interval record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-0924.json).
 
 The new private reproduction is `data/operations/repros/legendary-routes-20260915`,
 the eighth retained case. Blue repeatedly requested Surf at Seafoam B4F's strong-current
@@ -380,7 +380,7 @@ Both live games caught Articuno after rc21 deployment, in Red event 8709 and Blu
 3806. Red reached 125 registrations and Blue reached 128. Both games are healthy at
 maximum speed with zero recovery reloads. Automatic trading has seven completed exchanges.
 All five Red rewards and six Blue rewards are delivered. The new cold backups passed
-compressed-stream integrity checks. See [the rc21 receipt](../validation/release-0.2.0rc21.json).
+compressed-stream integrity checks. See [the rc21 receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc21.json).
 The rollout starts new endurance intervals. Continue with Red's Moltres route and avoid
 repeating notifications for the already confirmed Mewtwo and Articuno catches.
 
@@ -401,7 +401,7 @@ Bellsprout and Squirtle, collected Nugget and TM Mega Kick, and recorded 13 leve
 Blue collected Escape Rope and recorded 13 level events, including CRABRAVE reaching
 levels 57 through 59. Red's six and Blue's eight Championship rewards are all delivered.
 No runtime change or deployment was performed. See
-[the monitoring record](../validation/monitor-20260915-1020.json).
+[the monitoring record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-1020.json).
 
 The journal appears to report some PC transfers as spare releases. For example, Red event
 8737 and Blue event 3818 report Mewtwo releases, while the same unique nicknamed
@@ -422,7 +422,7 @@ zero save reloads, and unchanged starts. Both gained two registrations since the
 sample. Red completed five training projects and one evolution, while Blue completed
 two training projects and one supply project. Local replanning increased by 133 and
 120. The ninth automatic exchange registered Kangaskhan for Red and Wartortle for Blue.
-See [the interval record](../validation/monitor-20260915-1054.json).
+See [the interval record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-1054.json).
 
 A 72,022-frame copied replay reproduced both a genuine Geodude release and a false
 Tentacruel release. CRICKET already appeared in the party before the box entry disappeared.
@@ -436,14 +436,14 @@ All 458 Python tests passed, with one optional test skipped, and all seven JavaS
 checks passed. The default sandbox stalled an API client test, so its test process was
 terminated and the complete suite reran successfully outside the sandbox. Both final
 packages passed resource checks. See
-[the copied comparison](../validation/pc-release-events-0.2.0rc22.json).
+[the copied comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/pc-release-events-0.2.0rc22.json).
 
 Both games, the board, and coordinator now run rc22 from `49403d7`. Fresh compressed
 cold backups and current-save load checks passed. All 12 public checks passed. Both
 games resumed with 132 registrations, maximum speed, and zero recovery reloads. Ten
 automatic trades have completed, and all seven Red and ten Blue rewards are delivered.
 This starts new endurance intervals. See
-[the deployment receipt](../validation/release-0.2.0rc22.json).
+[the deployment receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc22.json).
 
 Post-rollout filesystem space is 5.71 GB free,
 with 91.17 percent used. No original saves, backups, or old images were
@@ -463,7 +463,7 @@ project, while Blue's partial training outcomes included 13,180 XP for Mewtwo an
 XP with two levels for Primeape. Both retained all four encounter legendaries, and no
 new legendary release messages appeared in the sampled rc22 journal. No new coordinated
 trade had completed at the first sample, with ten total and ordinary overworld waiting.
-See [the progress record](../validation/monitor-20260915-1137.json).
+See [the progress record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-1137.json).
 
 Converted all 26 legacy uncompressed cold backups to gzip, retaining every archived
 byte. Each replacement verified the decompressed SHA-256 against the source, checked
@@ -490,7 +490,7 @@ Final free filesystem space is 19.48 GB, with
 80.97 percent used. Both games remain on rc22 with unchanged starts.
 Continue this endurance interval, monitor useful training and trade opportunities,
 and apply the documented image retention policy after future validated releases.
-See [the storage evidence](../validation/release-storage-20260915.json).
+See [the storage evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-storage-20260915.json).
 
 
 ## September 15, 12:20 UTC automatic exchanges and reserve training
@@ -514,7 +514,7 @@ The coordinator is ready with no error. Its two new trades completed about 19.4 
 apart. No trading intervention, runtime edit, or deployment was necessary. Free disk
 space remains stable at 19.46 GB. Preserve the current endurance interval and continue
 monitoring useful gains and exchange latency. No multi-day endurance milestone is
-claimed. See [the monitoring record](../validation/monitor-20260915-1220.json).
+claimed. See [the monitoring record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-1220.json).
 
 
 ## September 15, 12:52 UTC reward evolution progress
@@ -539,7 +539,7 @@ in the next interval, and investigate only if the wait persists without safe-poi
 
 No runtime change, manual trade cycle, or restart was needed. Disk space remains stable
 at 19.48 GB free. Continue the rc22 endurance interval. See
-[the monitoring record](../validation/monitor-20260915-1252.json).
+[the monitoring record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-1252.json).
 
 
 ## September 15, 13:24 UTC reward and trade scheduling
@@ -549,7 +549,7 @@ Red reached 138 registrations and Blue reached 140. Earlier pending rewards were
 delivered, but more League wins built another backlog. The trade count remained twelve,
 with more than an hour since the last exchange despite visible useful proposals.
 Training continued, including Red's Alakazam gaining 24,262 XP and three levels.
-See [the interval record](../validation/monitor-20260915-1324.json).
+See [the interval record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-1324.json).
 
 The coordinator always selected rewards first at safe points. A regression with pending
 rewards across four fresh coordinator instances reproduced four reward-only attempts.
@@ -559,7 +559,7 @@ and delivers rewards when proposals are absent or the board cannot be reached. U
 peers are never held to force scheduling. No transaction, release, or Pokémon handling
 code changed. All 468 Python tests passed, with one optional test skipped, and seven
 JavaScript checks passed. See
-[the scheduling evidence](../validation/trade-fairness-0.2.0rc23.json).
+[the scheduling evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/trade-fairness-0.2.0rc23.json).
 
 Only the scoped coordinator was upgraded, to rc23 from `7ccf16e`. A cold private archive
 of its state and configuration passed gzip integrity checks. The first preflight missed
@@ -575,7 +575,7 @@ exchanges and continued reward delivery. The sampler now retains coordinator ima
 start time, process status, and last operation alongside trade counts. Keep the union of
 rollback images needed by each service, currently rc20 through rc23 plus the held rc11
 image and earlier legacy images. See
-[the coordinator deployment receipt](../validation/release-0.2.0rc23.json).
+[the coordinator deployment receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc23.json).
 
 
 ## September 15, 14:46 UTC independent exchange safe points
@@ -607,7 +607,7 @@ were unchanged. Tests cover staggered readiness, a shared deadline, abort cleanu
 paused or unhealthy peers, authentication rejection, conflicting holds, and unknown
 409 responses. All 478 Python tests passed, with one optional test skipped. Both
 JavaScript test files passed. See
-[the safe-point evidence](../validation/trade-safe-points-0.2.0rc24.json).
+[the safe-point evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/trade-safe-points-0.2.0rc24.json).
 
 Only the coordinator was deployed as rc24 from `d99cdc2`, with a verified compressed
 cold backup of its private state and configuration. Game and board starts were
@@ -617,7 +617,7 @@ At 14:54 UTC, a live reward transaction delivered Red's twentieth reward
 (Kabuto) and Blue's twenty-fourth (Mew). Both games resumed healthy with no holds,
 no active transaction, and zero recovery reloads. The coordinator reported ready
 with no error. Red had three pending rewards after another win, and Blue had one.
-See [the deployment receipt](../validation/release-0.2.0rc24.json).
+See [the deployment receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc24.json).
 
 The next scheduled cycle completed trade fifteen, registering Blastoise for Red and
 Gloom for Blue. It began 938.94 seconds after trade fourteen, about 15 minutes
@@ -649,7 +649,7 @@ and delivered. Five Red box slots and six Blue slots were free at the detailed c
 One additional bounded preparation timeout appeared in the coordinator log. The
 coordinator and both games had no active holds when inspected, with no current error.
 Free disk space stayed near 18.25 GB. See
-[the interval record](../validation/monitor-20260915-1527.json).
+[the interval record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-1527.json).
 
 Repeated Diglett release journal messages prompted a separate copied Red replay. It
 reproduced a false Wigglytuff release at frame 53,118, while the cartridge text said
@@ -666,7 +666,7 @@ the change and pass afterward, including preservation of real release events. Al
 481 Python tests passed, with one optional skip. Original copied checkpoint hashes
 were unchanged. The temporary source is `/tmp/pokesim-director/pc-check-1530`, leaving
 the eight retained private reproduction cases unchanged. See
-[the comparison](../validation/pc-invalid-write-20260915.json).
+[the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/pc-invalid-write-20260915.json).
 
 This journal-only correction is committed for the next necessary game release. No
 runtime deployment or restart was performed. Preserve the current endurance interval,
@@ -699,7 +699,7 @@ manual trade cycle, or restart was necessary. The validated journal correction a
 `dac1f95` remains queued for the next necessary game release. Release journal messages
 remain subject to that known reporting issue. Continue ordinary monitoring without
 repeating prior deployment or catch notifications. See
-[the interval record](../validation/monitor-20260915-1610.json).
+[the interval record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-1610.json).
 
 
 ## September 15, 16:43 UTC Red healing stall
@@ -725,7 +725,7 @@ Cave, used one rope, and performed no rewinds or RAM edits. The witness is retai
 `red-escape` within the existing Victory Road reproduction case, leaving eight cases.
 This fallback does not claim to solve every route or provide escape without supplies.
 All 490 Python tests passed, with one optional skip. Both JavaScript files and package
-checks passed. See [the comparison](../validation/victory-escape-0.2.0rc25.json).
+checks passed. See [the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/victory-escape-0.2.0rc25.json).
 
 Only Red was upgraded to rc25 from `a0c3398`. The coordinator stopped briefly, and a
 preflight confirmed no active transaction or peer hold. Red's compressed cold backup
@@ -739,7 +739,7 @@ At the first live follow-up, Red had left Victory Road, spent the one Escape Rop
 and healed. It was on Route 9 with full party HP and restored PP, pursuing Kangaskhan
 training. Both games retained 144 registrations, healthy workers, and maximum speed.
 Red had thirty rewards earned and delivered, and Blue had thirty-two, with no pending
-claims. Trading remained enabled. See [the Red receipt](../validation/release-0.2.0rc25.json).
+claims. Trading remained enabled. See [the Red receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc25.json).
 
 The monitor now records `last_local_progress` from catches, evolutions, levels, trainer
 wins, Championships, badges, and ground items separately from trades and reward gifts.
@@ -789,8 +789,8 @@ unchanged. Red's prior interval ended at 1,444 seconds and Blue's at 22,622 seco
 New starts are 17:21:16 UTC for Red and 17:22:28 UTC for Blue. Coordinator rc24 resumed
 at 17:22:30 UTC. Both games now include the earlier journal correction. No training
 policy change was included with the PC ranking. See the
-[Red receipt](../validation/release-0.2.0rc26-red.json) and
-[Blue receipt](../validation/release-0.2.0rc26-blue.json).
+[Red receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc26-red.json) and
+[Blue receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc26-blue.json).
 
 The post-deployment sample confirmed new local progress independently of trading:
 Red leveled Mew to 39 and Blue evolved Squirtle into Wartortle. Both stayed healthy,
@@ -801,7 +801,7 @@ Red served valid scores for all 234 boxed Pokémon. The public Blue page display
 its Power ranking and all-box controls in the browser. Free disk space was
 16,892,948,480 bytes. The existing monitoring automation now includes rc26 deployment
 identities and the training-churn investigation. See
-[the follow-up evidence](../validation/pc-power-0.2.0rc26.json).
+[the follow-up evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/pc-power-0.2.0rc26.json).
 
 
 ## September 15, party included in PC comparisons
@@ -827,8 +827,8 @@ holds before each game was stopped. Red's prior interval ended at
 2026-09-15T17:36:20.348488252Z for Red and 2026-09-15T17:38:11.180666584Z for Blue.
 The board retained its process and the rc24 coordinator resumed at
 2026-09-15T17:38:13.488657589Z. Each game resumed healthy with existing registrations
-preserved and maximum speed. See the [Red receipt](../validation/release-0.2.0rc27-red.json)
-and [Blue receipt](../validation/release-0.2.0rc27-blue.json).
+preserved and maximum speed. See the [Red receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc27-red.json)
+and [Blue receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc27-blue.json).
 
 Public checks confirmed both sites expose six party members and 234 boxed partners,
 all with valid calculated scores. The public Red combined view displayed 240 partners,
@@ -838,7 +838,7 @@ Red leveled Jolteon to 33 after deployment and Blue leveled PEACH to 41. Trading
 running, enabled, and ready with 25 completed exchanges and no reported error. Free
 disk space was 16,583,733,248 bytes. The existing monitor now tracks rc27 starts and
 retains the training-continuity investigation as the next policy priority. See
-[the follow-up evidence](../validation/pc-party-0.2.0rc27.json).
+[the follow-up evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/pc-party-0.2.0rc27.json).
 
 
 ## September 15, preparation separated from productive training
@@ -869,7 +869,7 @@ evidence for continuity and completed goals, not an XP-per-battle benchmark. Bot
 runs preserved registrations and used zero rewinds. Inherited cave recoveries still
 occurred. Inputs and full traces are continuity subcases inside the existing Red
 partial training and Blue training reproductions, keeping eight top-level cases.
-See [the comparison](../validation/training-continuity-0.2.0rc28.json).
+See [the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/training-continuity-0.2.0rc28.json).
 
 The tagged release was deployed to both games after verified compressed cold backups
 and saved-game load checks. Coordinator guards found no active transaction or holds
@@ -879,8 +879,8 @@ before each game was stopped. Red's previous interval ended at
 2026-09-15T17:58:12.57887649Z and 2026-09-15T17:59:28.091462413Z, respectively.
 The board retained its process and coordinator rc24 resumed at
 2026-09-15T17:59:31.05231564Z. Both games resumed healthy at maximum speed with existing
-registrations. See the [Red receipt](../validation/release-0.2.0rc28-red.json) and
-[Blue receipt](../validation/release-0.2.0rc28-blue.json).
+registrations. See the [Red receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc28-red.json) and
+[Blue receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc28-blue.json).
 
 
 ## September 15, productive healing cycles retain their training partner
@@ -888,7 +888,7 @@ registrations. See the [Red receipt](../validation/release-0.2.0rc28-red.json) a
 The rc28 follow-up caught a cumulative preparation limit ending Red's session after
 19,383 trainee XP and three levels. Blue completed a Porygon training milestone with
 7,117 XP and two levels. Both games remained healthy at maximum speed with zero reloads.
-See [the live evidence](../validation/training-live-0.2.0rc28.json).
+See [the live evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/training-live-0.2.0rc28.json).
 
 rc29 renews the preparation allowance only on new trainee XP. Repeated readings and
 other partners' gains do not renew it. Active training keeps its 50-minute budget and
@@ -900,7 +900,7 @@ skip, both JavaScript test files, Live syntax, lockfile, and package checks. Unr
 trading-page work in the shared checkout was excluded from the release. Final copied
 replays retained the rc28 results: Red stayed with one partner and gained two levels,
 while Blue completed a five-level milestone. No rewinds were used. See
-[the corrected comparison](../validation/training-continuity-0.2.0rc29.json).
+[the corrected comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/training-continuity-0.2.0rc29.json).
 
 Both games were deployed from tag v0.2.0rc29 after verified compressed cold backups
 and saved-game load checks. Their previous intervals ended at
@@ -911,8 +911,8 @@ The board retained its process and coordinator rc24 resumed at
 2026-09-15T18:19:35.033012842Z. Existing registrations and maximum speed were preserved.
 Monitor completed training goals, preparation cost, and actual trainee XP rather than
 movement. Cave navigation remains a separate source of recoveries. See the
-[Red receipt](../validation/release-0.2.0rc29-red.json) and
-[Blue receipt](../validation/release-0.2.0rc29-blue.json).
+[Red receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc29-red.json) and
+[Blue receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc29-blue.json).
 
 
 The public rc29 follow-up confirmed both healthy, unpaused games at maximum speed
@@ -924,7 +924,7 @@ total trainee levels, then ended as advanced instead of running indefinitely. It
 latest post-deployment event reached level 38. These projects began before rc29, so
 the total gains are not all attributed to this release. Trading was ready with 28
 completed exchanges and no reported error. Free disk space was 15,967,289,344 bytes.
-See [the live check](../validation/training-live-0.2.0rc29.json).
+See [the live check](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/training-live-0.2.0rc29.json).
 
 The existing 30-minute monitor was updated with rc29 timings, exact deployment
 starts and backups, and the corrected preparation rules. It now prioritizes
@@ -956,14 +956,14 @@ and three levels with eight recoveries. Both runs retained registrations with no
 rewinds. The witness is a supply-trip subcase within red-partial-training-20260915,
 keeping eight top-level reproduction cases. All 521 Python tests passed with one
 optional skip, and lockfile and package checks passed. The isolated release excluded
-unrelated work in the shared checkout. See [the comparison](../validation/supply-trip-0.2.0rc30.json).
+unrelated work in the shared checkout. See [the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/supply-trip-0.2.0rc30.json).
 
 Only Red was upgraded, after a verified compressed cold backup and current-save load.
 Its previous endurance interval ended at 2692 seconds.
 The new start is 2026-09-15T19:03:56.67078667Z. Blue retained its productive rc29 process
 from 2026-09-15T18:19:32.712199958Z, and the board also retained its process.
 Coordinator rc24 resumed at 2026-09-15T19:03:59.660732997Z.
-See [the receipt](../validation/release-0.2.0rc30-red.json).
+See [the receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc30-red.json).
 
 
 The first live follow-up confirmed Red had resumed League battles, defeating Bruno
@@ -973,4 +973,4 @@ Both remained healthy, unpaused, at maximum speed, with zero recovery reloads an
 reported error. Red had 34 delivered Championship rewards and Blue 39, with none
 pending. Free disk space was 15,657,025,536 bytes. The monitor now records the split
 Red rc30 and Blue rc29 deployment, supply-trip regression, private witness, and exact
-endurance starts. See [the live evidence](../validation/supply-live-0.2.0rc30.json).
+endurance starts. See [the live evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/supply-live-0.2.0rc30.json).

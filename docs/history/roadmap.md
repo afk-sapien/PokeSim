@@ -35,7 +35,7 @@ no completed training target under the baseline. Different trainees were selecte
 so raw XP totals are not directly comparable. Monitor longer live runs for milestone
 completion, preparation cost, repeated deferrals, and route failures. Cave navigation
 recoveries remain visible in both replays and are not universally fixed by this change.
-See [the comparison](../validation/training-continuity-0.2.0rc28.json).
+See [the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/training-continuity-0.2.0rc28.json).
 
 Party inclusion deployed to both games, September 15: rc27 adds a Party section to
 the PC sidebar and mobile selector. The combined scope includes party and boxed
@@ -67,7 +67,7 @@ repeat until the party is fully healed. Without a rope, ordinary navigation reco
 continues. The copied run escaped, healed at Saffron, and resumed training. This is a
 bounded retreat fallback, not a repair of every cave route. The Red release includes the previously
 validated journal correction. Blue remains on rc22 with unchanged uptime.
-See [the copied comparison](../validation/victory-escape-0.2.0rc25.json).
+See [the copied comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/victory-escape-0.2.0rc25.json).
 
 Journal correction deployed to Red and pending for Blue, September 15: preserve a recent valid event
 baseline across up to 120 frames of invalid party RAM during PC transfers. The copied
@@ -75,7 +75,7 @@ Red replay previously called a Wigglytuff withdrawal a release after seeing HP e
 the stale maximum HP for one observation. The corrected replay keeps the withdrawal
 credit and records no release. Health and policy continue receiving the actual snapshot.
 All 481 Python tests pass, with one optional skip. Red received this correction with its rc25 recovery deployment. Blue will receive it
-in its next necessary game update, preserving the current Blue endurance interval. See [the reproduction](../validation/pc-invalid-write-20260915.json).
+in its next necessary game update, preserving the current Blue endurance interval. See [the reproduction](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/pc-invalid-write-20260915.json).
 
 Current safe-point work, September 15: coordinator rc24 requests a safe checkpoint
 from each available game independently within one shared 15-second retry window. Only
@@ -90,7 +90,7 @@ Championship reward backlog from monopolizing safe points. An overdue useful tra
 the turn after a reward attempt. Reward delivery continues during trade cooldown and
 when no useful proposal exists or the board is unavailable. Persisted turn state survives
 coordinator restarts. Blue remains on rc22 with its original start, while Red now runs rc25 after its healing recovery update. See
-[the regression](../validation/trade-fairness-0.2.0rc23.json).
+[the regression](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/trade-fairness-0.2.0rc23.json).
 
 Current release storage work, September 15: legacy cold backups are compressed with
 verified byte-for-byte restoration. Keep the current release and two successful rollback
@@ -103,7 +103,7 @@ Current journal correction, September 15: rc22 recognizes PC withdrawals in eith
 RAM write order. The copied-save replay suppresses a false Tentacruel release and keeps
 a genuine Geodude release. Saved arrival records are bounded and expire. Existing
 journal history and release policy are unchanged. See
-[the comparison](../validation/pc-release-events-0.2.0rc22.json).
+[the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/pc-release-events-0.2.0rc22.json).
 
 Current Articuno work, September 15: the planner now completes the Seafoam B3F
 boulder puzzle before attempting Surf on B4F. It first clears room to push each
@@ -112,7 +112,7 @@ and avoids dropping the player into the holes. A copied Blue checkpoint that pre
 repeated the strong-current refusal caught Articuno after 17,646 frames with normal
 controls and zero rewinds. Red subsequently caught Moltres live on rc21, confirmed by event 8753. Both games now
 hold all three legendary birds and Mewtwo. The copied Victory Road routing edge case
-remains preserved, but no further route patch was needed for this live catch. See [the comparison](../validation/articuno-current-0.2.0rc21.json).
+remains preserved, but no further route patch was needed for this live catch. See [the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/articuno-current-0.2.0rc21.json).
 
 Current legendary recovery, September 15: failed Articuno, Zapdos, Moltres, and
 Mewtwo encounters can return. Clear only the finished-encounter and hidden-object bits
@@ -357,15 +357,15 @@ New adventures choose a seeded random starter, with a fixed `STARTER` override. 
 choice survives reloads. Existing checkpoints retain their partner. All three choices
 pass the opening test through receiving the Pokédex without save reloads.
 Separate default-pace runs also earned Brock's badge with all three choices. Their
-blackouts and frame budgets are recorded in the [starter checks](../validation/starters-0.2.0rc8.json).
+blackouts and frame budgets are recorded in the [starter checks](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/starters-0.2.0rc8.json).
 
 Two simulated hours on the copied Red checkpoint produced a Moltres catch, increasing
 the dex from 111 to 112, and level gains on several partners. Blue retained 113 entries
 while gaining levels, completing a League rematch, and reaching Cerulean Cave. Both
 replays disabled rewinds. Red used 34 local policy recoveries and Blue used 36, so the
 evidence does not establish that all stalls are solved. See the
-[Red](../validation/red-progress-0.2.0rc8.json) and
-[Blue](../validation/blue-progress-0.2.0rc8.json) records.
+[Red](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/red-progress-0.2.0rc8.json) and
+[Blue](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/blue-progress-0.2.0rc8.json) records.
 
 The rc8 changes are now deployed to both adventures from commit `addfb73`.
 Coordinated automatic trades, external trade requests
@@ -375,7 +375,7 @@ The deployed rc8 release includes short detours for visible ground items during 
 and collection expeditions, including Victory Road. The detour preserves the original
 project, respects bag capacity, and records confirmed pickups in the journal. A copied
 Red checkpoint collected Max Revive and TM47 Explosion, with inventory changes and
-journal events verified in the [pickup record](../validation/ground-pickups-0.2.0rc8.json).
+journal events verified in the [pickup record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/ground-pickups-0.2.0rc8.json).
 The earlier two-hour and first-gym evidence above predates this followup. Hidden items
 are not part of the new pickup behavior.
 
@@ -396,8 +396,8 @@ The revised 432028-frame Red replay gained four levels, won two trainer battles,
 collected TM Explosion. Its dex remained at 111 and it used 25 local policy recoveries.
 The Blue regression replay gained experience and won a trainer battle, with 13 local
 policy recoveries in 144020 frames. Neither replay enables save rewinds. See the
-[Red](../validation/red-progress-0.2.0rc9.json) and
-[Blue](../validation/blue-progress-0.2.0rc9.json) evidence.
+[Red](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/red-progress-0.2.0rc9.json) and
+[Blue](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/blue-progress-0.2.0rc9.json) evidence.
 
 The following heartbeat confirmed live Red had resumed gaining levels. Both games
 remained healthy with zero observed save reloads. Continue improving collection efficiency.
@@ -413,7 +413,7 @@ complete a project. Missing party entries also no longer reset the training idle
 The reproduced withdrawal previously completed the level-50 project after 1662 frames.
 With the fix, the 72002-frame replay kept the project active, gained 8088 experience, and
 recorded the real level 44. A 144012-frame replay of Blue's current save also gained levels.
-All 383 tests passed. See [the transfer evidence](../validation/training-transfer-0.2.0rc10.json).
+All 383 tests passed. See [the transfer evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/training-transfer-0.2.0rc10.json).
 Historical director totals may contain incorrect completions and remain preserved.
 
 Next, monitor sustained live training and meaningful collection progress. New catches
@@ -434,7 +434,7 @@ the current map and preserves distant learned routes until fresh readings are av
 The longer comparison did not establish overall benefit. Red made no new catches in
 either run, and rc10 produced more journal achievements. The candidate is committed
 and tested but is not deployed. The live release remains rc10. See
-[the candidate record](../validation/navigation-candidate-0.2.0rc11.json).
+[the candidate record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/navigation-candidate-0.2.0rc11.json).
 
 Collection trips still spend substantial time on supply and storage interruptions.
 A controlled Moltres objective was repeatedly replaced by restocking before reaching
@@ -458,8 +458,8 @@ The corrected replay fully restored HP and PP at Fuchsia Pokémon Center after 7
 frames, then picked up Full Restore and resumed gaining experience. Red's regression
 was unchanged. All 386 tests passed. Blue received rc12 with a cold backup and has
 already left Seafoam live. Red remains on rc10 so its active endurance interval continues.
-See [the evidence](../validation/seafoam-exit-0.2.0rc12.json) and
-[deployment receipt](../validation/release-0.2.0rc12.json).
+See [the evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/seafoam-exit-0.2.0rc12.json) and
+[deployment receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc12.json).
 
 The held rc11 experiment is preserved on `codex/held-navigation-candidate` and is excluded
 from rc12. Next, watch Blue for renewed training and successful expeditions. Seafoam's
@@ -479,12 +479,12 @@ rematch. Local recoveries fell from 38 to 33. Neither version caught a new speci
 the initially selected Butterfree still failed to gain experience. Preparation was one
 contributor, not a complete explanation of slow collection. Blue's regression remained
 unchanged. All 387 tests passed. See
-[the comparison](../validation/training-preparation-0.2.0rc13.json).
+[the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/training-preparation-0.2.0rc13.json).
 
 Red received rc13 from `17cd997` with a cold backup and a successful current-save load.
 Blue stayed on rc12 and caught a level-25 Kangaskhan live in Safari Zone East, reaching
 116 registered entries. Both games remained healthy with zero save reloads. All 12
-public checks passed. See [the receipt](../validation/release-0.2.0rc13.json).
+public checks passed. See [the receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc13.json).
 
 Next, preserve the live intervals while measuring actual training gains and new catches.
 Investigate repeated supply detours and arrival at chosen encounter areas if Red remains
@@ -502,7 +502,7 @@ Release rc14 keeps productive training marked as partial
 progress when the idle guard ends a project. Previously this path escalated the failure
 penalty despite recorded XP gains. The ordinary retry delay and idle deadline remain.
 All 388 tests pass, and the copied Red healing replay is unchanged. Both live processes received this fix with the PC sorting release. See
-[the evidence](../validation/partial-training-20260915.json).
+[the evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/partial-training-20260915.json).
 
 
 ## Bag capacity before broader pickup coverage
@@ -511,7 +511,7 @@ Blue's full 20-slot bag now blocks new item types. Selling a battle booster mere
 replaced it with medicine in the copied-save trial, so that candidate is held. Add
 bounded PC storage for verified retired story items, preserving the items and required
 travel supplies, then test pickup success. Expired detour failures need a separate
-reproduction. See [the inventory evidence](../validation/item-capacity-20260915.json).
+reproduction. See [the inventory evidence](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/item-capacity-20260915.json).
 
 
 ## PC comparison tools delivered in rc14
@@ -519,7 +519,7 @@ reproduction. See [the inventory evidence](../validation/item-capacity-20260915.
 Both live sites now sort selected or all boxes before pagination by level, total DVs,
 total stat experience, total experience, Pokédex number, species, nickname, and box
 order. Cards show both stat totals, and details explain the five-stat sums. Sorting
-persists through refreshes and URLs. See [the release receipt](../validation/release-0.2.0rc14.json).
+persists through refreshes and URLs. See [the release receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc14.json).
 
 
 ## Pickup retry investigation
@@ -528,7 +528,7 @@ Live Red repeatedly failed Max Revive and Max Potion detours. The next copied re
 made no pickup attempts, so a persistent retry-backoff candidate did not demonstrate
 an improvement and remains held outside runtime. Monitoring now includes active pickup
 state and retry timing. Capture an active failure before changing approach or retry
-behavior. See [the comparison](../validation/pickup-retry-20260915.json).
+behavior. See [the comparison](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/pickup-retry-20260915.json).
 
 
 ## Live collection progress, September 15
@@ -536,4 +536,4 @@ behavior. See [the comparison](../validation/pickup-retry-20260915.json).
 Blue completed the Route 18 Gate NPC trade for Lickitung and reached 117 registered
 entries. Both runs completed two additional training projects in the next monitoring
 interval without save reloads or container restarts. Coordinated server-to-server
-trading remains disabled. See [the monitoring record](../validation/monitor-20260915-0611.json).
+trading remains disabled. See [the monitoring record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-0611.json).

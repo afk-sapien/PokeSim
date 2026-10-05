@@ -1,20 +1,30 @@
 # Monitoring runbook
 
-This is the repository's monitoring procedure. Deployment-specific settings and access
-are described in [homeserver.md](homeserver.md). The
-[release status](../RELEASE_STATUS.md) summarizes the last recorded deployments.
+Use this procedure for the managed Adventure Library. See
+[release status](../RELEASE_STATUS.md) for the latest recorded release and
+[self-hosting](self-hosting.md) for installation and access settings.
 
 ## Collect evidence
 
-For the documented homelab installation, run:
+From a source checkout on the machine running the Library, take an observation:
 
 ```sh
-.venv/bin/python tools/sample_live.py
+uv run --locked python tools/observe_adventures.py \
+  --data-dir /path/to/pokesim-app \
+  --output data/operations/library-observation.json
 ```
 
-The sampler uses the configured SSH access to `servarr` and writes private observations
-to `data/operations/live-samples.json`, retaining at most 3360 samples. It is specific
-to that installation. Other installations need their own endpoints and access settings.
+Replace the data directory with the running application's directory, accessible
+from the same environment as its `manager.json` address. The observer reads
+Library and adventure status, compares it with the previous output, replaces the
+JSON report, and appends a sibling `.jsonl` history. Keep both files private and
+rotate the history as needed. It does not impose a retention limit or schedule
+itself. For a container deployment, run it where the Library address and data
+mount are accessible.
+
+`tools/sample_live.py` is retained for the [historical two-container
+installation](homeserver.md). Its fixed SSH host, ports, and filesystem paths
+are not the managed Library monitoring procedure.
 
 Compare container start times and image revisions before comparing counters. A restart
 begins a new endurance interval. Read previous samples, not only the latest position.
@@ -74,14 +84,17 @@ Follow [operations](operations.md) and the installation's configured access poli
 
 ## Configuration and reporting
 
-Inspect the deployed coordinator policy when interpreting rewards and trades. Older
-releases include Mew in the random Championship pool. The working source grants it
-separately once after Champion and uses seven species for repeatable rewards.
-Check the deployed revision before changing expectations.
+Check the deployed revision and each adventure's settings when interpreting
+rewards and trades. Current League rewards select a random starter. The initial
+Mew gift follows becoming Champion, and later Mew gifts require the configured
+walking interval followed by another League win. Native gifts, fossils, Dojo
+battles, NPC exchanges, and legendary returns have separate eligibility and
+walking requirements. See [walking rewards and return visits](step-rewards.md).
 
 Report meaningful changes, verified fixes, failures requiring attention, and completed
 endurance milestones. Unchanged healthy observations do not need repeated reports.
-Update the short release summary and link sanitized evidence in `docs/validation`.
+Summarize relevant results in the owning issue or pull request. Retain release
+evidence and unresolved investigations according to the [evidence policy](validation/README.md).
 Keep ROMs, saves, tokens, and private traces outside Git.
 
 The [archived operations record](history/operations-monitor.md) preserves prior

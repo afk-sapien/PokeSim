@@ -15,7 +15,7 @@ approval requirements below are historical and superseded by this authorization.
 The first automatic exchange completed at 06:32 UTC: Red received MOCHI the Vulpix
 and Blue received DIRTNAP as Machamp. Red subsequently evolved MOCHI into Ninetales.
 Both games journaled the exchange once and resumed without retained holds. See
-[the live verification](validation/monitor-20260915-0659.json).
+[the live verification](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/monitor-20260915-0659.json).
 
 # Previously proposed first exchange
 
@@ -50,7 +50,7 @@ was tested against copied checkpoints:
 
 These are each game's last boxed copy of the offered species. Their existing Pokédex
 registrations remain. Both parties, their contents, and all eight badges remained
-unchanged in the dry run. See [the verification record](validation/proposed-trade-20260914.json).
+unchanged in the dry run. See [the verification record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/proposed-trade-20260914.json).
 
 The rehearsal found and fixed a missing registration step in the save-based executor.
 That correction is committed after the adventure release and is not active in either

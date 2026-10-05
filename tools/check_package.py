@@ -38,14 +38,15 @@ required = {
     'pokesim/web/static/adventure-trading.js',
     'pokesim/web/static/library.html',
     'pokesim/web/static/library.js',
-    'pokesim/web/static/library.css',
+    'pokesim/web/static/panel-library.css',
     'pokesim/desktop.py',
     'pokesim/desktop_setup.py',
     'pokesim/desktop_check.py',
     'pokesim/platform_io.py',
     'pokesim/web/static/desktop.html',
     'pokesim/web/static/desktop.js',
-    'pokesim/web/static/desktop.css',
+    'pokesim/web/static/panel-desktop.css',
+    'pokesim/web/static/tokens.css',
     'pokesim/policies/director.py',
     'pokesim/policies/pickups.py',
     'pokesim/ground_items.py',
@@ -102,10 +103,11 @@ for artifact in artifacts:
                 'install.sh', 'install.ps1', 'deploy/Caddyfile',
                 'docs/README.md', 'docs/images/live-adventure.jpg',
                 'docs/images/live-adventure.gif',
-                'docs/images/pc-storage.jpg', 'docs/images/pokedex.jpg',
-                'docs/images/journal.jpg',
+                'docs/images/pc-panel.jpg', 'docs/images/pokedex-panel.jpg',
+                'docs/images/journal-panel.jpg', 'docs/images/stats-panel.jpg',
+                'docs/images/library.jpg',
                 'tools/check_web.py', 'tools/check_docs.py',
-                'deploy/proxy.env.example', 'docs/validation/public-install-0.2.0rc2.json'} <= names
+                'deploy/proxy.env.example', 'docs/validation/README.md'} <= names
     missing = required - names
     assert identity['version'] == release_version, f'{artifact}: build version mismatch'
     assert not missing, f'{artifact}: missing runtime files {missing}'

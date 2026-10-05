@@ -24,7 +24,7 @@ The [rc31 prerelease](https://github.com/afk-sapien/PokeSim/releases/tag/v0.2.0r
 is public and has five desktop archives, Python wheel and source packages, an
 amd64 container archive, Compose configuration, and checksums. Desktop downloads
 are about 40 to 75 MB. The container archive is about 202 MB. The recorded
-[release receipt](validation/release-0.2.0rc31.json) identifies its source as
+[release receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc31.json) identifies its source as
 `0983b0d`. All five jobs in the subsequent
 [desktop workflow for this checkout](https://github.com/afk-sapien/PokeSim/actions/runs/35045829185)
 also succeeded.

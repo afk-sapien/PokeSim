@@ -2,7 +2,7 @@
 
 Keep game decisions separate from emulator I/O, persistence, and HTTP presentation.
 
-The application manager owns the Adventure Library and supervises one worker per running adventure. See the [implementation report](multi-adventure-implementation.md) and [architecture plan](multi-adventure-app-plan.md) for the process and trading boundaries.
+The application manager owns the Adventure Library and supervises one worker per running adventure. The [historical implementation report](multi-adventure-implementation.md) and [design plan](multi-adventure-app-plan.md) explain the original process and trading decisions. The boundaries below describe the maintained application.
 
 | Area | Owner | Boundary |
 | --- | --- | --- |

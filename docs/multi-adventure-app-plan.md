@@ -1,4 +1,12 @@
-# One PokeSim app, multiple adventures
+# Historical multi-adventure application plan
+
+Design snapshot from September 2026, retained to explain the implemented
+Library. Branch names, proposed work, and release gates below describe that
+time. Use [architecture](architecture.md), [release status](../RELEASE_STATUS.md),
+and the [roadmap](roadmap.md) for current guidance.
+
+---
+
 
 Architecture and implementation plan. Prepared September 15, 2026 against the working tree reporting v0.2.0rc30.
 

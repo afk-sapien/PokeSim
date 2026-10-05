@@ -1,4 +1,12 @@
-# Homeserver deployment
+# Historical homeserver deployment
+
+Snapshot of the September 15, 2026 two-container installation. The service
+versions, addresses, paths, and operational instructions below are historical.
+Use [self-hosting](self-hosting.md) and [monitoring](operations-monitor.md) for
+the managed Library. Verify the actual deployment before applying any command.
+
+---
+
 
 Updated September 15, 2026 UTC.
 
@@ -32,8 +40,8 @@ registrations. Verified private cold backups are `/docker/pokesim/backups/202609
 Red's new endurance interval began at 2026-09-15T19:03:56.67078667Z and Blue's at
 2026-09-15T18:19:32.712199958Z. The board remains on rc22 with its original start.
 Coordinator rc24 resumed at 2026-09-15T19:03:59.660732997Z.
-See the [Red receipt](validation/release-0.2.0rc30-red.json) and
-[Blue receipt](validation/release-0.2.0rc29-blue.json).
+See the [Red receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc30-red.json) and
+[Blue receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc29-blue.json).
 
 The scoped coordinator runs `pokesim:0.2.0rc24-d99cdc2` from tagged commit
 `d99cdc2dfd9afc13fae042eb49aa6cdc001ce804`. Its image ID is
@@ -43,7 +51,7 @@ update lets each game prepare at its own safe point within a shared retry window
 At the coordinator rollout, games and the board retained their rc22 processes. Red subsequently reached rc30 and Blue rc29 as described above. The private
 coordinator backup is `/docker/pokesim-trading/backups/20260915T145218Z-rc24/before.tar.gz`.
 It contains state and configuration and must not be published. See
-[the coordinator receipt](validation/release-0.2.0rc24.json).
+[the coordinator receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc24.json).
 
 The release includes persistent playtime, the four-page interface, stall recovery,
 bounded collection objectives, and return paths through Victory Road. Live displays
@@ -112,7 +120,7 @@ The current rc22 deployment retained compressed cold backups and passed current-
 - Blue: `/docker/pokesim-blue/backups/20260915T110504Z-rc22/before.tar.gz`.
 - Previous image: `pokesim:0.2.0rc21-339d9a0`.
 
-See [the rc22 release receipt](validation/release-0.2.0rc22.json). Older deployments below
+See [the rc22 release receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc22.json). Older deployments below
 are historical records, not descriptions of the currently running services.
 
 The rc16 deployment verified both current saves and retained these cold backups:
@@ -120,14 +128,14 @@ The rc16 deployment verified both current saves and retained these cold backups:
 - Red: `/docker/pokesim/backups/20260915T045935Z-rc16/before.tar`.
 - Blue: `/docker/pokesim-blue/backups/20260915T045901Z-rc16/before.tar`.
 
-See [the rc16 release receipt](validation/release-0.2.0rc16.json).
+See [the rc16 release receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc16.json).
 
 The rc14 deployment updated both games after loading each latest save successfully:
 
 - Red: `/docker/pokesim/backups/20260915T040744Z-rc14/before.tar`. Previous image: `pokesim:0.2.0rc13-17cd997`.
 - Blue: `/docker/pokesim-blue/backups/20260915T040653Z-rc14/before.tar`. Previous image: `pokesim:0.2.0rc12-66b226f`.
 
-See [the rc14 deployment receipt](validation/release-0.2.0rc14.json).
+See [the rc14 deployment receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc14.json).
 
 The rc13 deployment updated Red only:
 
@@ -136,7 +144,7 @@ The rc13 deployment updated Red only:
 - Blue remains on rc12 and retains its existing cold backup below.
 
 Red's latest save loaded successfully before startup. See the
-[rc13 deployment receipt](validation/release-0.2.0rc13.json).
+[rc13 deployment receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc13.json).
 
 The rc12 deployment updated Blue only:
 
@@ -145,7 +153,7 @@ The rc12 deployment updated Blue only:
 - Red remains on rc10 and retains its existing cold backup below.
 
 Blue's latest save loaded successfully before startup. See the
-[rc12 deployment receipt](validation/release-0.2.0rc12.json).
+[rc12 deployment receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc12.json).
 
 The rc10 deployment retains fresh cold backups:
 
@@ -154,7 +162,7 @@ The rc10 deployment retains fresh cold backups:
 - Previous image: `pokesim:0.2.0rc9-8ca0271`.
 
 Both latest saves loaded successfully before startup. See the
-[rc10 deployment receipt](validation/release-0.2.0rc10.json).
+[rc10 deployment receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc10.json).
 
 The rc9 deployment retains fresh cold backups:
 
@@ -163,7 +171,7 @@ The rc9 deployment retains fresh cold backups:
 - Previous image: `pokesim:0.2.0rc8-addfb73`.
 
 Both latest saves loaded successfully before startup. See the
-[rc9 deployment receipt](validation/release-0.2.0rc9.json).
+[rc9 deployment receipt](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc9.json).
 
 The rc8 deployment has fresh cold backups of both data directories and compose files:
 
@@ -172,7 +180,7 @@ The rc8 deployment has fresh cold backups of both data directories and compose f
 - Previous image: `pokesim:0.2.0rc7-ca32f70`.
 
 Both latest saves loaded successfully in the rc8 image before their live processes
-started. The deployment receipt is [release-0.2.0rc8.json](validation/release-0.2.0rc8.json).
+started. The deployment receipt is [release-0.2.0rc8.json](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/release-0.2.0rc8.json).
 
 The final progress release has cold backups of both complete data directories and
 compose files:

@@ -1,4 +1,12 @@
-# Multi-adventure application
+# Historical multi-adventure implementation report
+
+September 2026 implementation and qualification record. References to a
+development branch, an observation run in progress, and remaining release gates
+are historical. See [architecture](architecture.md) for current boundaries and
+[release status](../RELEASE_STATUS.md) for published validation.
+
+---
+
 
 The implementation lives on `codex/multi-adventure-app`. It was developed in an isolated worktree from baseline `bd9f570`, which captures the existing workspace work without changing the original checkout. The [design plan](multi-adventure-app-plan.md) explains the architecture and release gates.
 
@@ -72,9 +80,9 @@ Validated on Linux x86-64:
 - One non-root container with a read-only root filesystem, two private workers, scoped game routes, health checks, and clean shutdown.
 - Browser creation, ROM reuse, stopped pages, independent dashboards, and worker-limit errors.
 
-The final broad suite passed **696 Python tests**, with 10 legacy fixture tests explicitly skipped. A subsequent watchdog and backup check passed eight tests, including one additional watchdog regression. All **27 JavaScript tests** passed. The wheel, source distribution, and Docker checks passed. The earlier standalone prototype also completed a real cable exchange, but standalone artifacts are no longer part of the release scope. See the [validation report](validation/multi-adventure-20260915.json) for evidence, artifact checksum, and qualification limits.
+The final broad suite passed **696 Python tests**, with 10 legacy fixture tests explicitly skipped. A subsequent watchdog and backup check passed eight tests, including one additional watchdog regression. All **27 JavaScript tests** passed. The wheel, source distribution, and Docker checks passed. The earlier standalone prototype also completed a real cable exchange, but standalone artifacts are no longer part of the release scope. See the [validation report](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/multi-adventure-20260915.json) for evidence, artifact checksum, and qualification limits.
 
-The package-only follow-up passed 38 affected regressions and a fresh wheel install outside the checkout. Three new adventures then started from the beginning with separate starters and seeds, minute autosaves, and automatic trading across the library. Their initial health, frames, saves, and early-game progress passed. A 24-hour observation run is in progress. See the [Python installation and fresh-game smoke record](validation/python-install-smoke-20260915.json). This newer distribution scope supersedes standalone release gates in the earlier historical report.
+The package-only follow-up passed 38 affected regressions and a fresh wheel install outside the checkout. Three new adventures then started from the beginning with separate starters and seeds, minute autosaves, and automatic trading across the library. Their initial health, frames, saves, and early-game progress passed. A 24-hour observation run is in progress. See the [Python installation and fresh-game smoke record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/python-install-smoke-20260915.json). This newer distribution scope supersedes standalone release gates in the earlier historical report.
 
 ## Remaining release gates
 
@@ -84,7 +92,7 @@ The first cable preparation target is Vermilion's Center. Games without a suppor
 
 The long-lived workers retain a process-local compatibility adapter for legacy configuration globals. The manager imports without generated game data, and each worker installs immutable settings before loading game modules. Multiple independent long-lived games in one Python interpreter are not supported.
 
-The automatic trading simplification removes group setup and manual exchange selection. Every eligible running adventure participates, including new games. Battles and menus now finish naturally before preparation, and interrupted exchanges retry durable recovery automatically. The update passed 690 regression tests, 44 private cable and managed runtime checks, 35 browser logic tests, and isolated package installation checks. All three live smoke adventures resumed with their campaigns and progress preserved. See the [automatic trading validation record](validation/automatic-trading-20260915.json).
+The automatic trading simplification removes group setup and manual exchange selection. Every eligible running adventure participates, including new games. Battles and menus now finish naturally before preparation, and interrupted exchanges retry durable recovery automatically. The update passed 690 regression tests, 44 private cable and managed runtime checks, 35 browser logic tests, and isolated package installation checks. All three live smoke adventures resumed with their campaigns and progress preserved. See the [automatic trading validation record](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/automatic-trading-20260915.json).
 
 Adventure Trading navigation stays within the selected game. The page shows only that adventure’s active exchange and recent completed trades, including saved history while stopped. The Library retains the global overview. Same-version games are scoped by their distinct IDs, and the adventure switcher preserves the current Trading page. Validation passed 40 focused Python tests, 39 browser logic tests, package resource checks, and an isolated installed-wheel smoke test. The live Red Sprout Trading page was inspected in the browser, and all three running game pages and saved progress were checked after deployment.
 
@@ -93,7 +101,7 @@ Running workers acknowledge changes through their private interface, and health
 checks retry missed updates. Existing games migrate once from the formerly global
 speed. There is no application limit on the number of running adventures. Cable
 sessions use the slower participant speed, treating Max as unlimited. The earlier
-[global pace validation](validation/global-pace-20260915.json) remains historical
+[global pace validation](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/global-pace-20260915.json) remains historical
 evidence for the previous design.
 
 Notifications follow the same pattern. The Library's Notifications page saves one durable setting in the application database, with the ntfy server, topic, optional access token, chosen adventures, and chosen kinds of news. The manager resolves it into per-worker delivery settings and sends them through the private worker interface when a worker starts and whenever they change. The supervisor's health loop retries any worker that missed an update. Workers keep delivering their own events with the screenshot they already hold, the manager announces completed trades, and the token is never returned to a browser. `NTFY_*` environment variables remain the defaults until the page is saved.

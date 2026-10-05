@@ -1,4 +1,4 @@
-"""Record bounded health and adventure evidence from the homeserver."""
+"""Legacy two-container homeserver sampler. Use observe_adventures.py for the Library."""
 import argparse
 import json
 import os

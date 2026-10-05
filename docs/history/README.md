@@ -10,6 +10,6 @@ when written. Use the [documentation index](../README.md) for maintained guidanc
 - [Earlier roadmap and delivery notes](roadmap.md)
 - [Operations observations and deployment record](operations-monitor.md)
 
-Existing validation JSON files remain in [validation](../validation/README.md), so
-receipts and reproduction evidence retain their original paths. New observations
-should be recorded there and summarized in the maintained documents.
+Older validation files are preserved in the [archive before cleanup](https://github.com/afk-sapien/PokeSim/tree/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation).
+Historical citations point to individual records at that revision. Only current
+release evidence and selected investigations remain in [validation](../validation/README.md).

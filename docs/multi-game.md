@@ -2,7 +2,7 @@
 
 Historical design notes. Automatic trading is now implemented for configured trusted
 peers. See [automatic trading](automatic-trading.md) for current behavior and the
-[multi-adventure application plan](multi-adventure-app-plan.md) for future architecture.
+[architecture guide](architecture.md) for the implemented Adventure Library.
 The original proposal below is retained for context.
 
 

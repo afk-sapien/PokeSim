@@ -82,7 +82,7 @@ representative private fixtures before drawing broader performance conclusions.
 
 ## Navigation optimization results
 
-The [September 15 validation report](validation/decision-performance-20260915.json)
+The [September 15 validation report](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/decision-performance-20260915.json)
 records a 5.18× reduction in decision time on the navigation-heavy Red Sprout
 workload. Mean decision latency fell from 156.3 ms to 30.2 ms, with p95 falling from
 405.0 ms to 76.6 ms across three trials of identical inputs.
@@ -165,7 +165,7 @@ and compiler machine code from the cache estimate. Process peak RSS captures the
 broader memory impact. Compare that memory cost, first-use delay, and steady-state
 benefit before enabling acceleration for a deployment.
 
-The [Numba validation report](validation/numba-performance-20260915.json) records
+The [Numba validation report](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/numba-performance-20260915.json) records
 three trials per workload with identical decisions and exact gameplay replays.
 The demanding routing sample improved from 31.7 ms to 16.5 ms mean decision time,
 with p95 improving from 79.9 ms to 58.8 ms. The short-routing sample added 0.87 ms

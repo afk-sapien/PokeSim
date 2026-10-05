@@ -32,8 +32,8 @@ Simulation states were not changed for the captures.
 
 The README arranges each pair in a two-column Markdown table. Matching dimensions
 keep the panels aligned. Each image links to the original for a full-size view.
-The original September captures remain available as `journal.jpg`,
-`adventure-stats.jpg`, `pokedex.jpg` and `pc-storage.jpg`.
+The superseded September panel captures are available in the
+[image archive before cleanup](https://github.com/afk-sapien/PokeSim/tree/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/images).
 
 Keep screenshots free of browser chrome, local file paths, credentials and
 private settings. Choose views through the actual interface without altering

@@ -37,36 +37,10 @@ Distinct species or custom nicknames can disambiguate partners with identical
 trainer and DV data. Truly ambiguous individuals remain excluded from targeted
 training.
 
-These policy changes apply to the local multi-adventure runtime source at
-`/tmp/pokesim-multi-adventure`. The separate desktop distribution checkout at
-`/home/ty/Repos/pokesim` has a different lineage. The deployment evidence includes a
-patch against the prior local runtime, the candidate wheel and tests.
+## Historical validation
 
-## Validation
-
-The complete suite passed 1,025 tests with 40 skips. A copied Blue campaign reached
-Route 2 and acquired two additional Caterpie at levels 3 and 5 during its bounded
-hunt. It also caught low-level Pidgey and Rattata repeatedly. The old policy's
-comparison hunt timed out without a capture. These runs used different routes and
-frame totals, so they establish behavior rather than a capture-rate benchmark.
-
-A copied Red campaign's long Victory Road journey deferred for lack of recent
-progress before reaching its destination. The route graph and ladder fixes improve
-access, but do not guarantee that every dungeon expedition will finish within one
-project. Ordinary retry backoff remains active, and the hourly monitor continues
-checking progress, supplies, storage and trades.
-
-## Deployment
-
-All three original campaigns resumed healthy with advancing frames, 151 Pokédex
-entries each, unchanged settings and preserved capture totals. The deployment
-contains six changed Python modules and preserves the existing Live and Pokédex
-interface assets.
-
-Wheel SHA-256: `04e8ea5c4c6bbd4b183d26ed0523eb2702f18468ffb68a31d385dfb28e32131b`.
-
-Full cold backup and rollback wheel:
-`/home/ty/.local/share/pokesim/backups/dv-hunting-20260918`.
-
-Evidence and installed wheel:
-`/home/ty/.local/share/pokesim/smoke-20260915/observations/dv-hunting-20260918`.
+The [original September 18 validation report](https://github.com/afk-sapien/PokeSim/blob/5ea6630aab466cbf1f02abde4e3912ee3e90f0b6/docs/validation/local-dv-hunting-20260918.md)
+records the copied-save experiments and deployment at that time. Its temporary
+checkout paths and release lineage are historical. For current inspection and
+counting rules, see [Pokémon stats](pokemon-stats.md) and
+[collection goals](collection-goals.md).
