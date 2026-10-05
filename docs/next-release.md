@@ -6,8 +6,8 @@ Target: 0.4.18. This work is not published yet.
 
 A compact overview uses the same playtime and League totals as Live, with durable
 milestone times, 24-hour and 7-day progress, and current Battle Power and DV
-highlights. Existing charts and return activities are grouped behind expandable
-sections. Old milestone times remain unknown where evidence is incomplete.
+highlights. Existing charts and return activities are shown in open
+sections with clear headings. Old milestone times remain unknown where evidence is incomplete.
 Stat Power history keeps its original meaning. The detailed item and species
 ledgers remain deferred. See [Adventure statistics](adventure-statistics.md).
 

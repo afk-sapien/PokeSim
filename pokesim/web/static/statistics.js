@@ -212,7 +212,6 @@
     const until = data.history.at(-1).ts
     const date = ts => new Date(ts * 1000).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'})
     document.querySelector('#statistics-window').textContent = `${date(data.history[0].ts)} → ${date(until)}`
-    const expanded = new Set([...target.querySelectorAll('details[open]')].map(node => node.dataset.group))
     target.innerHTML = groups.map((group, index) => {
       const rows = Progress.describe(data.history, until, group.series).map(series => {
         const available = data.current[series.key] != null
@@ -221,7 +220,7 @@
         const summary = available ? `${series.label}: from ${number(series.first)} to ${number(series.last)}` : `${series.label}: not recorded`
         return `<div class="progress-row"><div class="progress-label"><span class="micro">${series.label}</span><strong class="readout${available ? '' : ' readout--missing'}">${value}</strong>${available ? `<span class="note">${series.last > series.first ? '+' : ''}${change}${series.deltaUnit || series.unit || ''} since first record</span>` : ''}</div><div class="trend">${series.available ? `<span class="trend-scale micro">${number(series.min)} to ${number(series.max)}${series.unit || ''}</span>` : ''}<svg class="progress-chart" viewBox="0 0 ${Progress.WIDTH} ${Progress.HEIGHT}" preserveAspectRatio="none" role="img" aria-label="${summary}"><path d="${series.path}" vector-effect="non-scaling-stroke"></path></svg></div></div>`
       }).join('')
-      return `<details class="stats-details" data-group="${index}"${expanded.has(String(index)) ? ' open' : ''}><summary>${group.title}</summary><div class="progress-panel">${rows}</div></details>`
+      return `<section class="statistics-section" aria-labelledby="trend-heading-${index}"><div class="column-head"><h2 class="legend legend--ink" id="trend-heading-${index}">${group.title}</h2></div><div class="progress-panel">${rows}</div></section>`
     }).join('')
   }
   let busy = false

@@ -28,11 +28,10 @@ def test_journal_entries_and_stats(page, game, width, theme):
     expect(page.locator('#statistics-charts')).to_contain_text('Total collection Stat Power')
     expect(page.locator('#statistics-charts')).to_contain_text('Average DV score')
     expect(page.locator('#statistics-charts')).to_contain_text('Not recorded')
-    page.locator('#coverage-details > summary').click()
     expect(page.locator('#road')).to_be_visible()
     assert page.locator('#events').count() == 0
     assert page.locator('.progress-chart').count() == 18
-    page.locator('#statistics-charts details').evaluate_all('nodes => nodes.forEach(node => { node.open = true })')
+    assert page.locator('.progress-chart:visible').count() == 18
     assert page.locator('#statistics-charts .progress-label').evaluate_all(
         'labels => labels.every(label => label.scrollWidth <= label.clientWidth)')
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
@@ -68,7 +67,6 @@ def test_legendary_return_progress_is_readable_and_lists_available_hunts(page, g
                    'tickets': {'150': {'state': 'available', 'cycle': 1}}})
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(url + '/journal/stats')
-    page.locator('#activities-details > summary').click()
     expect(page.locator('#legendary-returns')).to_be_visible()
     expect(page.locator('#legendary-summary')).to_have_text('750,000 steps until the next return')
     expect(page.locator('#legendary-ready')).to_have_text('Ready to revisit: Mewtwo.')
@@ -134,7 +132,6 @@ def test_step_activity_and_mew_progress(page, game, width):
     expect(page.locator('[data-return="mew"] progress')).to_have_attribute('value', '734225')
     expect(page.locator('#event-return-summary')).to_have_text('4 ready to revisit')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-    page.locator('#activities-details > summary').click()
     page.locator('#event-returns').screenshot(path=f'/tmp/pokesim-return-cards-{width}.png')
     page.get_by_role('button', name='Dark', exact=True).click()
     page.locator('#event-returns').screenshot(path=f'/tmp/pokesim-return-cards-{width}-dark.png')
@@ -221,10 +218,10 @@ def test_stats_overview_milestones_and_recent_selector(page, game, monkeypatch, 
     assert page.locator('#stats-highlights a').first.get_attribute('href').startswith('/pc?scope=all')
     page.locator('#recent-period').select_option('week')
     expect(page.locator('#recent-note')).to_contain_text('Partial history')
-    assert page.locator('details[open]').count() == 0
-    page.locator('#activity-details > summary').click()
+    assert page.locator('details').count() == 0
+    expect(page.locator('#collection-details .readout').first).to_be_visible()
+    expect(page.locator('#activity-list')).to_be_visible()
     expect(page.locator('#activity-list')).to_contain_text('123,456')
-    page.locator('#activity-details > summary').click()
     page.evaluate('scrollTo(0, 0)')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     page.screenshot(path=f'/tmp/pokesim-stats-overview-{width}.png', full_page=True)

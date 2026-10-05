@@ -3,7 +3,7 @@
 Journal Entries contains the event log. Stats opens with an overview, milestone
 times, recent progress, and two collection highlights. Collection details,
 activity totals, existing trend charts, return visits, and Marathon records sit
-in expandable groups. Entries does not load these charts.
+in visible sections with clear headings. Entries does not load these charts.
 
 ## Overview and shared totals
 

@@ -586,14 +586,6 @@
 /* The overview stays short, while detail groups preserve the complete history. */
 .stats-overview { grid-template-columns: repeat(3, minmax(0, 1fr)) }
 .stats-overview > div:last-child { grid-column: auto }
-.stats-details { margin-block: var(--s4) }
-.stats-details > summary { cursor: pointer }
-.stats-details > summary { padding: var(--s4) }
-.stats-details > summary { background: var(--panel-2) }
-.stats-details > summary { border: var(--hair) solid var(--rule) }
-.stats-details > summary { font: 16px / 1.5 var(--font-text) }
-.stats-details > .progress-panel { margin-top: var(--s2) }
-.stats-details > section { margin-top: var(--s4) }
 .stats-recent, .stats-activity, .stats-highlights { display: grid }
 .stats-recent, .stats-activity { grid-template-columns: repeat(4, minmax(0, 1fr)) }
 .stats-recent, .stats-activity, .stats-highlights { gap: var(--s4) }
