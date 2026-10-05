@@ -42,12 +42,20 @@ def test_library_usage_updates_without_replacing_cards(page, tmp_path, monkeypat
         expect(page.locator('[data-usage="speed"]')).to_have_text('2.3×')
         expect(page.locator('.card-log li')).to_have_count(3)
         page.evaluate('window.originalCard = document.querySelector(".adventure-card")')
-        page.get_by_role('button', name='Save and stop', exact=True).focus()
+        page.get_by_role('button', name='Stop', exact=True).focus()
+        for label in ('Stop', 'Download', 'Archive', 'Delete', 'Settings'):
+            expect(page.get_by_role('button', name=label, exact=True)).to_be_enabled()
+        opening = page.get_by_role('link', name='Open adventure').bounding_box()
+        settings = page.get_by_role('button', name='Settings', exact=True).bounding_box()
+        assert settings['x'] >= opening['x'] + opening['width']
+        assert abs(settings['y'] - opening['y']) < 1
+        for button in page.locator('.card-operations button').all():
+            assert button.bounding_box()['height'] >= 44
         usage.update(cpu_percent=47.1, memory_bytes=251 * 1048576, observed_speed=18.7)
         expect(page.locator('[data-usage="cpu"]')).to_have_text('47.1%', timeout=10000)
         expect(page.locator('[data-usage="speed"]')).to_have_text('18.7×')
         assert page.evaluate('window.originalCard === document.querySelector(".adventure-card")')
-        expect(page.get_by_role('button', name='Save and stop', exact=True)).to_be_focused()
+        expect(page.get_by_role('button', name='Stop', exact=True)).to_be_focused()
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         assert page.locator('.card-screen').bounding_box()['width'] <= page.locator('.adventure-card').bounding_box()['width']
         folder = Path('/tmp/pokesim-library-ui')
@@ -117,9 +125,9 @@ def test_library_downloads_selected_save_and_reports_busy_game(page, tmp_path, m
         page.goto(url)
         blue = page.locator(f'[data-adventure-id="{games["Blue"]}"]')
         red = page.locator(f'[data-adventure-id="{games["Red"]}"]')
-        expect(red.get_by_role('button', name='Download Save')).to_be_disabled()
+        expect(red.get_by_role('button', name='Download')).to_be_disabled()
         with page.expect_download() as downloaded:
-            blue.get_by_role('button', name='Download Save').click()
+            blue.get_by_role('button', name='Download').click()
         result = downloaded.value
         assert result.suggested_filename == 'Blue.sav'
         result.save_as(tmp_path / 'Blue.sav')
@@ -134,9 +142,9 @@ def test_library_downloads_selected_save_and_reports_busy_game(page, tmp_path, m
         page.unroute('**/api/export-save')
         page.route('**/api/export-save', lambda route: route.fulfill(
             status=409, json={'detail': 'Wait for the battle to finish.'}))
-        blue.get_by_role('button', name='Download Save').click()
+        blue.get_by_role('button', name='Download').click()
         expect(page.locator('#notice')).to_have_text('Wait for the battle to finish.')
-        expect(blue.get_by_role('button', name='Download Save')).to_be_enabled()
+        expect(blue.get_by_role('button', name='Download')).to_be_enabled()
 
 
 @pytest.mark.parametrize('width', [320, 1280])
@@ -179,3 +187,40 @@ def test_adventure_speed_changes_independently_and_global_controls_are_removed(p
         assert page.locator('#simulation-speed, #max-running, #settings-form').count() == 0
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.screenshot(path=f'/tmp/pokesim-global-settings-{width}.png', full_page=True)
+
+
+@pytest.mark.parametrize('action', ['archive', 'delete'])
+def test_running_adventure_removal_saves_and_stops_first(page, tmp_path, monkeypatch, action):
+    captured = {}
+    def factory(url):
+        manager = Manager(tmp_path / 'library', url)
+        monkeypatch.setattr(manager, 'start', lambda: None)
+        manager.registry.add_rom('fixture', 'sha1', 'red')
+        row = manager.registry.create('Disposable', 'fixture', {}, identifier())
+        manager.registry.update(row['id'], state='running', desired_state='running')
+        path = manager.root / 'adventures' / row['id']
+        saved = []
+        original = manager.supervisor.stop
+        def stop(aid, **kwargs):
+            assert path.exists()
+            assert not manager.registry.adventure(aid)['archived']
+            (path / 'save.state').write_bytes(b'latest progress')
+            saved.append(aid)
+            return original(aid, **kwargs)
+        monkeypatch.setattr(manager.supervisor, 'stop', stop)
+        captured.update(manager=manager, row=row, path=path, saved=saved)
+        return create_app(manager)
+    with serve(factory) as url:
+        page.goto(url)
+        page.get_by_role('button', name=action.title(), exact=True).click()
+        if action == 'delete':
+            page.locator('#delete-confirmation').fill('Disposable')
+            page.get_by_role('button', name='Delete adventure', exact=True).click()
+        expect(page.locator('.adventure-card')).to_have_count(0)
+        assert captured['saved'] == [captured['row']['id']]
+        if action == 'archive':
+            assert (captured['path'] / 'save.state').read_bytes() == b'latest progress'
+            row = captured['manager'].registry.adventure(captured['row']['id'])
+            assert row['archived'] and row['state'] == 'stopped'
+        else:
+            assert not captured['path'].exists()

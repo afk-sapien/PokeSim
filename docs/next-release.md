@@ -32,7 +32,7 @@ Wild encounter tracking runs only for the verified English Red and Blue cartridg
 
 ## Adventure deletion
 
-Save and stop an adventure, choose Delete, and type its exact name. This removes the adventure directory and its registry entry. Shared ROMs, other adventures, and independent backup archives remain. A pending trade or live worker blocks deletion. A durable deletion record and temporary rename allow interrupted removal to resume without restarting a partially removed adventure. The retry action is available in the archived library if cleanup fails.
+Adventure cards keep Start or Stop, Download, Archive, and Delete in a compact grid, with a Settings icon beside Open or View adventure. Stop saves progress before shutting down. Archive and Delete save and stop a running adventure automatically. Delete still requires its exact name. Keep the page open while an action waits for shutdown or an active trade. A failed shutdown prevents removal. This removes the adventure directory and its registry entry. Shared ROMs, other adventures, and independent backup archives remain. A pending trade or live worker blocks deletion. A durable deletion record and temporary rename allow interrupted removal to resume without restarting a partially removed adventure. The retry action is available in the archived library if cleanup fails.
 
 ## Audio investigation
 

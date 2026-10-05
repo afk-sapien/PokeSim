@@ -156,24 +156,25 @@
   overflow-wrap: anywhere;
 }
 
-/* One key to go in, then the housekeeping keys sharing a row in the mono
-   voice so three of them fit a narrow card without wrapping mid-label. */
-.card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  padding: var(--s4);
-  border-top: var(--hair) solid var(--rule-faint);
-  background: var(--panel-2);
-}
-.card-actions .key { flex: 1 1 0; }
-.card-actions .key--primary { flex-basis: 100%; }
-.card-actions button.key {
-  min-height: 40px;
-  padding: 0 var(--s3);
-  font: var(--f-label) / 1 var(--font-mono);
-  letter-spacing: var(--track-micro);
-}
+/* Navigation and settings share one row above a stable grid of actions. */
+.card-actions { display: grid }
+.card-actions { gap: var(--s2) }
+.card-actions { padding: var(--s4) }
+.card-actions { border-top: var(--hair) solid var(--rule-faint) }
+.card-actions { background: var(--panel-2) }
+.card-open { display: grid }
+.card-open { grid-template-columns: minmax(0, 1fr) 44px }
+.card-open { gap: var(--s2) }
+.card-operations { display: grid }
+.card-operations { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+.card-operations { gap: var(--s2) }
+.card-actions button.key { min-height: 44px }
+.card-actions button.key { padding: 0 var(--s2) }
+.card-actions button.key { font: var(--f-label) / 1.3 var(--font-mono) }
+.card-actions button.key { letter-spacing: var(--track-micro) }
+.card-actions .card-settings { padding: 0 }
+.card-settings svg { flex-shrink: 0 }
+
 
 
 /* ==========================================================================

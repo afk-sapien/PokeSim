@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Simplify adventure controls with Stop and Download labels, a Settings icon beside Open adventure, and always-visible Archive and Delete actions that save and stop first.
+
 - Make all Pokédex header counters species coverage out of 151. Credit perfect and shiny final evolutions to their earlier forms, remove the separate shiny panel, and move individual catch, perfect-find, and shiny totals to Journal Stats.
 
 - Remove Elite Four wins from PC cards, details, and sorting to reduce visual clutter.

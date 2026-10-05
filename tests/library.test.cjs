@@ -12,6 +12,7 @@ function library(options = {}) {
   const elements = new Map()
   const calls = []
   let poll
+  const listeners = {}
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
       hidden: selector === '#workspace', value: '', checked: false, files: [], dataset: {}, textContent: '',
@@ -24,7 +25,8 @@ function library(options = {}) {
   const location = {hash: options.hash || '', pathname: '/', search: '', replace() {}}
   const context = vm.createContext({
     document: {body: {dataset: {page: options.page || 'library', adventure: ''}}, querySelector: element,
-      querySelectorAll: () => [], addEventListener() {}, hidden: false},
+      querySelectorAll: () => [], addEventListener(name, callback) { listeners[name] = callback }, hidden: false},
+    setTimeout: callback => setImmediate(callback),
     location, history: {replaceState(_, __, path) { calls.push({path: 'history', next: path})
       location.hash = '' }}, crypto, Uint8Array, URLSearchParams, setInterval(callback) { poll = callback },
     fetch: async (path, opts = {}) => {
@@ -41,7 +43,7 @@ function library(options = {}) {
     },
   })
   vm.runInContext(source, context)
-  return {element, calls, context, poll}
+  return {element, calls, context, poll, click(action, id) { listeners.click({target: {closest: () => ({dataset: {action, id}})}}) }}
 }
 
 test('library opens automatically with a GET session and never submits fragment credentials', async () => {
@@ -403,4 +405,78 @@ test('failed master switch update restores the saved state', async () => {
   await view.element('#notify-enabled').onchange()
   assert.equal(view.element('#notify-enabled').checked, true)
   assert.equal(view.element('#notice').textContent, 'Try again')
+})
+
+function removalView(action, states) {
+  const id = 'a'.repeat(32)
+  let state = states[0]
+  let stopping = false
+  let reads = 0
+  const view = library({respond(path, options) {
+    if (path.endsWith('/stop')) {
+      stopping = true
+      return {ok: true, json: async () => ({})}
+    }
+    if (path === `/api/v1/adventures/${id}` && !options.method) {
+      if (stopping) state = states[Math.min(++reads, states.length - 1)]
+      return {ok: true, json: async () => ({id, name: 'Red', ...state})}
+    }
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [{id, name: 'Red', version: 'red', ...state}]})}
+  }})
+  return {view, id, async submit(confirmation = 'Red') {
+    await settle()
+    if (action === 'archive') view.click('archive', id)
+    else {
+      view.element('#delete-id').value = id
+      view.element('#delete-confirmation').value = confirmation
+      view.element('#adventure-delete-form').onsubmit({preventDefault() {}})
+    }
+    await settle()
+    await settle()
+    return view.calls.filter(call => call.options.method).map(call => [call.path, call.options.method])
+  }}
+}
+
+for (const action of ['archive', 'delete']) {
+  test(`${action} waits for the running adventure to stop before removal`, async () => {
+    const {view, id, submit} = removalView(action, [
+      {state: 'running', desired_state: 'running'},
+      {state: 'waiting_for_trade', desired_state: 'stopped'},
+      {state: 'stopping', desired_state: 'stopped'},
+      {state: 'stopped', desired_state: 'stopped'}
+    ])
+    assert.deepEqual(await submit(), [
+      [`/api/v1/adventures/${id}/stop`, 'POST'],
+      [action === 'archive' ? `/api/v1/adventures/${id}/archive` : `/api/v1/adventures/${id}`, action === 'archive' ? 'POST' : 'DELETE']
+    ])
+    assert.equal(view.calls.filter(call => call.path === `/api/v1/adventures/${id}` && !call.options.method).length, 4)
+  })
+
+  test(`${action} preserves the adventure when saving or stopping fails`, async () => {
+    const {view, submit} = removalView(action, [
+      {state: 'running', desired_state: 'running'},
+      {state: 'failed', desired_state: 'stopped', error: 'Save failed'}
+    ])
+    assert.equal((await submit()).length, 1)
+    assert.match(view.element('#notice').textContent, /could not stop safely/)
+  })
+
+  test(`${action} does not stop an adventure that is already stopped`, async () => {
+    const {submit} = removalView(action, [{state: 'stopped', desired_state: 'stopped'}])
+    const requests = await submit()
+    assert.equal(requests.length, 1)
+    assert.equal(requests.some(([path]) => path.endsWith('/stop')), false)
+  })
+}
+
+test('incorrect deletion confirmation cannot stop a running adventure', async () => {
+  const {view, submit} = removalView('delete', [{state: 'running', desired_state: 'running'}])
+  assert.deepEqual(await submit('Wrong name'), [])
+  assert.match(view.element('#notice').textContent, /Type the adventure name/)
+})
+
+test('a concurrent restart cancels removal', async () => {
+  const {view, submit} = removalView('archive', [{state: 'running', desired_state: 'running'}])
+  assert.equal((await submit()).length, 1)
+  assert.match(view.element('#notice').textContent, /was restarted/)
 })

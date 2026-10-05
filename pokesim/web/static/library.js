@@ -82,6 +82,27 @@
     requests.delete(signature)
     return data
   }
+  async function stopBeforeRemoval(id, action, confirmation) {
+    const path = `/api/v1/adventures/${encodeURIComponent(id)}`
+    let game = await api(path)
+    if (action === 'delete' && confirmation !== game.name) throw new Error('Type the adventure name to confirm permanent deletion')
+    if (game.state === 'deleting' && action === 'delete') return
+    if (['stopped', 'failed'].includes(game.state) && game.desired_state === 'stopped') return
+    const message = `Saving and stopping before ${action === 'archive' ? 'archiving' : 'deleting'}… Waiting for any current trade to finish. Keep this page open.`
+    notice(message)
+    const feedback = document.querySelector('dialog[open] .dialog-feedback')
+    if (feedback) feedback.textContent = message
+    await write(`${path}/stop`)
+    const deadline = Date.now() + 180000
+    while (Date.now() < deadline) {
+      game = await api(path)
+      if (game.state === 'failed') throw new Error(`The adventure could not stop safely. Nothing was ${action === 'archive' ? 'archived' : 'deleted'}. ${game.error || 'Check the adventure and try again.'}`)
+      if (game.desired_state !== 'stopped') throw new Error('The adventure was restarted. Nothing was archived or deleted.')
+      if (game.state === 'stopped') return
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    }
+    throw new Error('The adventure is still stopping or finishing a trade. Nothing was archived or deleted. Try again once it has stopped.')
+  }
   async function downloadSave(game) {
     notice(`Preparing ${game.name}'s save…`)
     const response = await api(`${gameUrl(game.id)}api/export-save`, {method: 'POST', download: true})
@@ -141,11 +162,19 @@
     const stalled = active && summary.stalled ? '<p class="card-error">Stuck? No progress for a while. Open the adventure to see its objective.</p>' : ''
     const failure = game.error ? `<p class="card-error">${esc(typeof game.error === 'string' ? game.error : JSON.stringify(game.error))}</p>` : ''
     const lamp = game.archived ? '' : failure || game.state === 'error' ? 'crit' : transitional || (active && summary.stalled) ? 'warn' : active ? 'ok' : ''
-    const download = `<button class="key" data-action="download-save" data-id="${esc(game.id)}" data-owner ${!active ? 'disabled data-blocked title="Start this adventure to download its save"' : 'title="Download a .sav file for another emulator"'}>Download Save</button>`
+    const download = `<button class="key" data-action="download-save" data-id="${esc(game.id)}" data-owner ${!active ? 'disabled data-blocked title="Start this adventure to download its save"' : 'title="Download a .sav file for another emulator"'}>Download</button>`
     const screen = active
       ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${esc(game.name)} game screen" loading="lazy" width="160" height="144"></div>`
       : `<div class="card-screen card-screen--off"><span class="micro">${game.archived ? 'Archived' : 'Saved · not running'}</span></div>`
-    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.state === 'deleting' ? '<p class="card-note">Deletion is incomplete. Retry to finish removing this adventure.</p>' : game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${game.archived ? game.state === 'deleting' ? '' : `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner>Restore</button>` : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${transitional ? 'disabled data-blocked' : ''}>${transitional ? esc(game.state) : active ? 'Save and stop' : 'Start'}</button><button class="key" data-action="settings" data-id="${esc(game.id)}" data-owner>Settings</button>${!active && !transitional ? `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner>Archive</button>` : ''}`}${download}${!active && (!transitional || game.state === 'deleting') ? `<button class="key key--danger" data-action="delete" data-id="${esc(game.id)}" data-owner>${game.state === 'deleting' ? 'Retry deletion' : 'Delete'}</button>` : ''}</div></article>`
+    const blocked = transitional ? 'disabled data-blocked' : ''
+    const settings = `<button class="key card-settings" data-action="settings" data-id="${esc(game.id)}" data-owner ${blocked} aria-label="Settings" title="Adventure settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3h6l1 3 3-1 3 5-2 2 2 2-3 5-3-1-1 3H9l-1-3-3 1-3-5 2-2-2-2 3-5 3 1Z"/><circle cx="12" cy="12" r="3"/></svg></button>`
+    const primary = `<div class="card-open"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${settings}</div>`
+    const lifecycle = game.archived
+      ? `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner ${blocked}>Restore</button>`
+      : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${blocked} ${active ? 'title="Save progress and stop this adventure"' : ''}>${transitional ? esc(game.state) : active ? 'Stop' : 'Start'}</button>`
+    const archive = game.archived ? '' : `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner ${blocked} title="Save, stop, and archive this adventure">Archive</button>`
+    const deletion = `<button class="key key--danger" data-action="delete" data-id="${esc(game.id)}" data-owner ${transitional && game.state !== 'deleting' ? blocked : ''}>${game.state === 'deleting' ? 'Retry deletion' : 'Delete'}</button>`
+    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.state === 'deleting' ? '<p class="card-note">Deletion is incomplete. Retry to finish removing this adventure.</p>' : game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions">${primary}<div class="card-operations">${lifecycle}${download}${archive}${deletion}</div></div></article>`
   }
   function renderAdventures() {
     const visible = adventures.filter(game => $('#show-archived').checked || !game.archived)
@@ -447,8 +476,10 @@
   $('#adventure-delete-form').onsubmit = event => {
     event.preventDefault()
     act(async () => {
-      await write(`/api/v1/adventures/${encodeURIComponent($('#delete-id').value)}`,
-        {confirmation: $('#delete-confirmation').value}, 'DELETE')
+      const id = $('#delete-id').value
+      const confirmation = $('#delete-confirmation').value
+      await stopBeforeRemoval(id, 'delete', confirmation)
+      await write(`/api/v1/adventures/${encodeURIComponent(id)}`, {confirmation}, 'DELETE')
       $('#adventure-delete-dialog').close()
       notice('Adventure deleted. Existing backups are kept.')
     })
@@ -502,6 +533,7 @@
       return
     }
     act(async () => {
+      if (button.dataset.action === 'archive') await stopBeforeRemoval(game.id, 'archive')
       if (button.dataset.action === 'restore') await write(`/api/v1/adventures/${encodeURIComponent(game.id)}`, {archived: false}, 'PATCH')
       else await write(`/api/v1/adventures/${encodeURIComponent(game.id)}/${button.dataset.action}`)
       notice(button.dataset.action === 'stop' ? 'Saving and stopping this adventure.' : 'Adventure updated.')
