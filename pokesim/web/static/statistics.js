@@ -1,9 +1,9 @@
 (() => {
   const groups = [
-    {title: 'Collection strength', series: [
-      {key: 'collection_power', label: 'Total collection power', zoom: true},
-      {key: 'strongest_six_power', label: 'Strongest six power', zoom: true},
-      {key: 'average_power', label: 'Average Pokémon power', zoom: true},
+    {title: 'Stat Power and levels', series: [
+      {key: 'collection_power', label: 'Total collection Stat Power', zoom: true},
+      {key: 'strongest_six_power', label: 'Strongest six Stat Power', zoom: true},
+      {key: 'average_power', label: 'Average Stat Power', zoom: true},
       {key: 'held', label: 'Pokémon held'},
       {key: 'average_level', label: 'Average level', max: 100, zoom: true},
     ]},
@@ -13,10 +13,10 @@
     ]},
     {title: 'Life on the road', series: [
       {key: 'captures', label: 'Pokémon caught'},
-      {key: 'steps', label: 'Recorded steps'},
+      {key: 'steps', label: 'Sampled steps (legacy)'},
       {key: 'battles', label: 'Battles entered'},
       {key: 'marathons', label: 'Marathons completed'},
-      {key: 'recorded_hours', label: 'Recorded game hours'},
+      {key: 'recorded_hours', label: 'Sampled game hours (legacy)'},
     ]},
     {title: 'Battle endurance', series: [
       {key: 'damage_dealt', label: 'Observed damage dealt'},
@@ -28,7 +28,75 @@
     const seconds = Math.floor(frames / 60)
     return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
   }
+  let latest = null
+  const display = value => Number.isFinite(value) ? number(value) : 'Not tracked'
+  const date = value => value == null ? 'Date unknown' : new Date(value * 1000).toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'})
+  const duration = value => value == null ? 'Time unknown' : `${Math.floor(value / 3600).toLocaleString()}h ${Math.floor(value % 3600 / 60)}m`
+  function add(parent, tag, className, text) {
+    const node = document.createElement(tag)
+    node.className = className
+    node.textContent = text
+    parent.append(node)
+    return node
+  }
+  function renderRecent() {
+    const period = latest?.recent?.[document.querySelector('#recent-period').value]
+    const target = document.querySelector('#recent-list')
+    target.replaceChildren()
+    for (const [key, label] of [['catches', 'Catches tracked'], ['league', 'League wins'], ['registered', 'Registered change'], ['level100', 'Level 100 change']]) {
+      const row = add(target, 'div', '', '')
+      add(row, 'span', 'micro', label)
+      const value = period?.[key]
+      add(row, 'strong', Number.isFinite(value) ? 'readout' : 'readout readout--missing', display(value))
+    }
+    document.querySelector('#recent-note').textContent = !period ? 'Recent history is not available yet.'
+      : `Real-world time window. ${period.partial ? `Partial history. Catch records from ${date(period.catches_since)}, collection records from ${date(period.progress_since)}.` : 'Collection changes are net changes over this period.'}${period.undated_gifts ? ' Older gifts without dates are excluded.' : ''}`
+  }
+  document.querySelector('#recent-period').onchange = renderRecent
+  function renderOverview(data) {
+    latest = data
+    const overview = data.overview || {}
+    const clock = overview.play_clock
+    document.querySelector('#stats-playtime').textContent = clock ? duration(clock.seconds) + (clock.lower_bound ? '+' : '') : 'Not tracked'
+    document.querySelector('#stats-playtime').title = clock?.lower_bound ? 'At least this much playtime. The cartridge clock had reached its limit before app tracking began.' : 'Uses the same app clock as Live.'
+    document.querySelector('#stats-league').textContent = display(overview.league_wins)
+    document.querySelector('#stats-held').textContent = display(overview.held)
+    document.querySelector('#stats-perfect-held').textContent = display(overview.perfect_held)
+    const list = document.querySelector('#milestone-list')
+    list.replaceChildren()
+    const milestones = data.milestone_records?.milestones || []
+    for (const milestone of milestones) {
+      const row = add(list, 'div', 'milestone-row', '')
+      row.dataset.milestone = milestone.key
+      add(row, 'span', '', milestone.label)
+      add(row, 'strong', '', milestone.achieved ? duration(milestone.seconds) + (milestone.seconds != null && milestone.lower_bound ? '+' : '') : 'Not reached')
+      add(row, 'span', 'note', milestone.achieved ? `${milestone.source === 'first_recorded' ? 'First recorded ' : ''}${date(milestone.at)}${milestone.clock_source === 'cartridge' ? ' · Recorded cartridge time' : ''}` : '')
+    }
+    if (!milestones.length) add(list, 'p', 'note', 'Milestone tracking begins when this adventure runs.')
+    const activity = document.querySelector('#activity-list')
+    activity.replaceChildren()
+    for (const [label, value] of [['Areas explored', overview.areas], ['Steps tracked', overview.steps], ['Current money', overview.money], ['Battles entered', data.current?.battles]]) {
+      const row = add(activity, 'div', '', '')
+      add(row, 'span', 'micro', label)
+      add(row, 'strong', Number.isFinite(value) ? 'readout' : 'readout readout--missing', display(value))
+    }
+    document.querySelector('#activity-note').textContent = `Steps use the return-visit counter${overview.steps_since ? ', tracked since ' + date(overview.steps_since) : ''}. Battles are sampled observations. Money is the current balance.`
+    const highlights = document.querySelector('#stats-highlights')
+    highlights.replaceChildren()
+    for (const [key, title] of [['battle', 'Strongest Battle Power'], ['dvs', 'Highest DV score']]) {
+      const mon = data.highlights?.[key]
+      const card = add(highlights, 'div', 'progress-panel', '')
+      add(card, 'span', 'micro', title)
+      if (!mon) { add(card, 'p', 'note', 'No rated Pokémon available')
+        continue }
+      const link = add(card, 'a', 'highlight-name', mon.name)
+      link.href = `${document.querySelector('meta[name="pokesim-base"]').content}/${mon.url}`
+      add(card, 'p', 'note', `Lv. ${mon.level} · ${number(mon.value)}${key === 'dvs' ? '/75 DVs' : ' Battle Power'}${mon.partial ? ' · Among known ratings' : ''}`)
+    }
+    renderRecent()
+  }
   function render(data) {
+    renderOverview(data)
     const records = data.collection_records || {}
     const catches = records.catches
     const shiny = records.shiny
@@ -45,6 +113,10 @@
     document.querySelector('#stats-shiny-seen').textContent = shiny?.available ? number(shiny.seen) : 'Not tracked'
     document.querySelector('#stats-shiny-acquired').textContent = shiny ? number(shiny.acquired) : 'Not tracked'
     document.querySelector('#stats-shiny-held').textContent = shiny ? number(shiny.held) : 'Not tracked'
+
+    document.querySelectorAll('.stats-overview .readout, #collection-details .readout').forEach(node => {
+      node.classList.toggle('readout--missing', node.textContent === 'Not tracked')
+    })
 
     const marathon = data.marathon || {}
     document.querySelector('#marathon-best').textContent = marathon.best_frames == null
@@ -131,16 +203,17 @@
     }
     const status = document.querySelector('#statistics-status')
     const target = document.querySelector('#statistics-charts')
-    if (!data.history.length) {
-      status.textContent = 'Stats will appear after the adventure starts moving.'
+    if (!data.history?.length) {
+      status.textContent = 'Trend charts will appear after the adventure starts moving.'
       target.replaceChildren()
       return
     }
-    status.textContent = `Activity tracked since ${new Date(data.started_at * 1000).toLocaleDateString()}. Power includes the team and PC. Steps and damage are sampled totals.`
+    status.textContent = `Activity tracked since ${new Date(data.started_at * 1000).toLocaleDateString()}. Stat Power includes the party and PC. Historical sampled counters remain separate from the overview totals.`
     const until = data.history.at(-1).ts
     const date = ts => new Date(ts * 1000).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'})
     document.querySelector('#statistics-window').textContent = `${date(data.history[0].ts)} → ${date(until)}`
-    target.innerHTML = groups.map(group => {
+    const expanded = new Set([...target.querySelectorAll('details[open]')].map(node => node.dataset.group))
+    target.innerHTML = groups.map((group, index) => {
       const rows = Progress.describe(data.history, until, group.series).map(series => {
         const available = data.current[series.key] != null
         const value = available ? number(data.current[series.key]) + (series.unit || '') : 'Not recorded'
@@ -148,7 +221,7 @@
         const summary = available ? `${series.label}: from ${number(series.first)} to ${number(series.last)}` : `${series.label}: not recorded`
         return `<div class="progress-row"><div class="progress-label"><span class="micro">${series.label}</span><strong class="readout${available ? '' : ' readout--missing'}">${value}</strong>${available ? `<span class="note">${series.last > series.first ? '+' : ''}${change}${series.deltaUnit || series.unit || ''} since first record</span>` : ''}</div><div class="trend">${series.available ? `<span class="trend-scale micro">${number(series.min)} to ${number(series.max)}${series.unit || ''}</span>` : ''}<svg class="progress-chart" viewBox="0 0 ${Progress.WIDTH} ${Progress.HEIGHT}" preserveAspectRatio="none" role="img" aria-label="${summary}"><path d="${series.path}" vector-effect="non-scaling-stroke"></path></svg></div></div>`
       }).join('')
-      return `<section class="statistics-section"><div class="column-head"><h2 class="legend legend--ink">${group.title}</h2></div><div class="progress-panel">${rows}</div></section>`
+      return `<details class="stats-details" data-group="${index}"${expanded.has(String(index)) ? ' open' : ''}><summary>${group.title}</summary><div class="progress-panel">${rows}</div></details>`
     }).join('')
   }
   let busy = false

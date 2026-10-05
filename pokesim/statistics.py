@@ -65,6 +65,8 @@ def status(store):
 class StatisticsTracker:
     def __init__(self, store):
         self.store = store
+        from .adventure_records import RecordTracker
+        self.records = RecordTracker(store)
         self.value = store.get(KEY) or {'started_at': None, 'current': {}, 'counters': dict.fromkeys(COUNTERS, 0)}
         self.previous = None
         self.enemy = None
@@ -74,15 +76,17 @@ class StatisticsTracker:
 
     def reset_baseline(self):
         self.previous = self.enemy = self.candidate = None
+        self.records.previous = None
         self.last_collection = 0
 
-    def observe(self, snapshot, memory=None, *, now=None):
+    def observe(self, snapshot, memory=None, *, now=None, clock=None):
         now = time.time() if now is None else now
         if not snapshot.valid or not snapshot.started or self.store.get('trade_hold'):
             self.reset_baseline()
             return
         if self.value['started_at'] is None:
             self.value['started_at'] = now
+        self.records.observe(snapshot, clock, now=now)
         previous = self.previous
         counters = self.value['counters']
         continuous = previous is not None and 0 < snapshot.frame - previous.frame <= 120
@@ -154,3 +158,73 @@ class StatisticsTracker:
             self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
         self.value = value
         self.last_flush = now
+
+
+def recent(store, *, now=None):
+    """Use bounded database queries, never the downsampled chart response."""
+    from .catches import status as catches_status
+    now = time.time() if now is None else now
+    catches = catches_status(store)
+    periods = {}
+    with store.lock:
+        receipts = store.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='capture_receipts'").fetchone()
+        unknown_gifts = bool(receipts and store.db.execute(
+            "SELECT 1 FROM capture_receipts c WHERE c.fingerprint LIKE 'gift-event:%' "
+            "AND NOT EXISTS (SELECT 1 FROM events e WHERE e.id = CAST(SUBSTR(c.fingerprint, 12) AS INTEGER)) LIMIT 1").fetchone())
+        latest = store.db.execute('SELECT ts, league, owned, level100 FROM progress ORDER BY rowid DESC LIMIT 1').fetchone()
+        for key, seconds in [('day', DAY), ('week', 7 * DAY)]:
+            cutoff = now - seconds
+            first = store.db.execute('SELECT ts, league, owned, level100 FROM progress WHERE ts >= ? ORDER BY rowid LIMIT 1',
+                                     (cutoff,)).fetchone()
+            # If nothing changed during the window, its last earlier record is a valid baseline.
+            prior = store.db.execute('SELECT ts, league, owned, level100 FROM progress WHERE ts <= ? ORDER BY rowid DESC LIMIT 1',
+                                     (cutoff,)).fetchone()
+            baseline = prior or first
+            capture_since = max(cutoff, catches.get('started_at') or now)
+            captured = None
+            if receipts and catches['available']:
+                # Gift backfills carry an import timestamp. Use the original event date instead.
+                captured = store.db.execute(
+                    "SELECT COUNT(*) FROM capture_receipts c LEFT JOIN events e "
+                    "ON c.fingerprint LIKE 'gift-event:%' AND e.id = CAST(SUBSTR(c.fingerprint, 12) AS INTEGER) WHERE "
+                    "CASE WHEN c.fingerprint LIKE 'gift-event:%' THEN e.ts ELSE c.recorded_at END BETWEEN ? AND ?",
+                    (capture_since, now)).fetchone()[0]
+            result = {'since': cutoff, 'until': now, 'catches': captured, 'catches_since': capture_since,
+                      'progress_since': max(cutoff, baseline[0]) if baseline else None, 'undated_gifts': unknown_gifts}
+            for index, metric in enumerate(('league', 'registered', 'level100'), 1):
+                result[metric] = latest[index] - baseline[index] if (
+                    latest and baseline and latest[index] is not None and baseline[index] is not None) else None
+            result['partial'] = (unknown_gifts or not prior or catches.get('started_at') is None or capture_since > cutoff)
+            periods[key] = result
+    return periods
+
+
+def overview(state, records, steps):
+    game = state.get('game') or {}
+    rows = game.get('party', []) + (game.get('storage') or {}).get('pokemon', [])
+    return {'play_clock': state.get('play_clock'),
+            'league_wins': (state.get('league_rewards') or {}).get('wins', game.get('hall_of_fame_count')),
+            'held': len(rows) if game else None, 'areas': state.get('areas_discovered'),
+            'money': game.get('money'), 'steps': steps.get('steps') if steps.get('available') else None,
+            'steps_since': steps.get('started_at'), 'perfect_held': records['milestones']['perfect_held']}
+
+
+def highlights(game):
+    from urllib.parse import urlencode
+    from .battle_power import battle_power
+    from .strategy_data import SPECIES
+    rows = (game or {}).get('party', []) + ((game or {}).get('storage') or {}).get('pokemon', [])
+    result = {}
+    for key, score, sort in [('battle', battle_power, 'battle_power'),
+                              ('dvs', lambda mon: dv_rating(mon)['dv_total'], 'dvs')]:
+        known = [(score(mon), mon) for mon in rows if mon.get('species') in SPECIES]
+        eligible = [(value, mon) for value, mon in known if value is not None]
+        if not eligible:
+            result[key] = None
+            continue
+        value, mon = max(eligible, key=lambda row: row[0])
+        dex = SPECIES[mon['species']]['dex']
+        result[key] = {'name': mon.get('nick') or mon.get('name') or f'#{dex}', 'dex': dex,
+                       'level': mon.get('level'), 'value': value, 'partial': len(eligible) < len(rows),
+                       'url': 'pc?' + urlencode({'scope': 'all', 'q': f'#{dex}', 'sort': sort, 'order': 'desc'})}
+    return result

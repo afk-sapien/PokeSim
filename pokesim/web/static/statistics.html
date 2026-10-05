@@ -37,21 +37,48 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <nav class="journal-pages" aria-label="Journal pages"><a href="${game_base}/journal">Entries</a><a href="${game_base}/journal/stats" aria-current="page">Stats</a></nav>
 
 <section class="statistics-section" aria-labelledby="collection-records-heading">
-<div class="column-head"><h2 class="legend legend--ink" id="collection-records-heading">Collection activity</h2></div>
-<div class="collection-records progress-panel">
+<div class="column-head"><h2 class="legend legend--ink" id="collection-records-heading">Overview</h2></div>
+<div class="collection-records stats-overview progress-panel">
+<div><span class="micro">Playtime</span><strong class="readout" id="stats-playtime">Loading</strong><span class="note">Simulated hours, excluding pauses</span></div>
+<div><span class="micro">League wins</span><strong class="readout" id="stats-league">Loading</strong><span class="note">Elite Four and Champion runs</span></div>
+<div><span class="micro">Pokémon held</span><strong class="readout" id="stats-held">Loading</strong><span class="note">Party and every PC box</span></div>
 <div><span class="micro" id="stats-caught-label">Catches tracked</span><strong class="readout" id="stats-caught">Loading</strong><span class="note" id="stats-caught-note"></span></div>
 <div><span class="micro">Perfect finds</span><strong class="readout" id="stats-perfect">Loading</strong><span class="note" id="stats-perfect-note"></span></div>
-<div><span class="micro">Shinies seen</span><strong class="readout" id="stats-shiny-seen">Loading</strong><span class="note">Wild encounters tracked</span></div>
 <div><span class="micro">Shinies acquired</span><strong class="readout" id="stats-shiny-acquired">Loading</strong><span class="note">Tracked catches and custom gifts</span></div>
-<div><span class="micro">Shinies held</span><strong class="readout" id="stats-shiny-held">Loading</strong><span class="note">Currently in the party and PC</span></div>
 </div>
 </section>
 
+<section class="statistics-section" aria-labelledby="milestone-heading">
+<div class="column-head"><h2 class="legend legend--ink" id="milestone-heading">Milestones</h2><span class="micro">Simulated playtime</span></div>
+<div class="progress-panel" id="milestone-list"></div>
+<p class="note">First recorded dates are the earliest evidence available. Unknown times are never estimated.</p>
+</section>
+<section class="statistics-section" aria-labelledby="recent-heading">
+<div class="column-head"><h2 class="legend legend--ink" id="recent-heading">Recent progress</h2><label class="stats-period"><span class="vh">Recent progress period</span><select id="recent-period"><option value="day">Last 24 hours</option><option value="week">Last 7 days</option></select></label></div>
+<div class="progress-panel stats-recent" id="recent-list"></div><p class="note" id="recent-note"></p>
+</section>
+<section class="statistics-section" aria-labelledby="highlights-heading">
+<div class="column-head"><h2 class="legend legend--ink" id="highlights-heading">Collection highlights</h2><span class="micro">Currently held</span></div>
+<div class="stats-highlights" id="stats-highlights"></div>
+</section>
+<details class="stats-details" id="collection-details"><summary>Collection details</summary>
+<div class="collection-records progress-panel">
+<div><span class="micro">Shinies seen</span><strong class="readout" id="stats-shiny-seen">Loading</strong><span class="note">Wild encounters tracked</span></div>
+<div><span class="micro">Shinies held</span><strong class="readout" id="stats-shiny-held">Loading</strong><span class="note">Currently in the party and PC</span></div>
+<div><span class="micro">Perfect Pokémon held</span><strong class="readout" id="stats-perfect-held">Loading</strong><span class="note">Currently in the party and PC</span></div>
+</div></details>
+<details class="stats-details" id="activity-details"><summary>Activity details</summary><div class="progress-panel stats-activity" id="activity-list"></div><p class="note" id="activity-note"></p></details>
+<details class="stats-details" id="coverage-details"><summary>Collection and League history</summary>
 <section class="progress" id="road" aria-labelledby="road-heading" hidden>
 <div class="column-head"><h2 class="legend legend--ink" id="road-heading">The road so far</h2><span class="micro" id="road-span"></span></div>
 <div class="progress-panel" id="road-charts"></div>
 </section>
 
+</details>
+<p class="note" id="statistics-status" role="status">Opening adventure stats…</p>
+<p class="micro" id="statistics-window"></p>
+<div id="statistics-charts"></div>
+<details class="stats-details" id="activities-details"><summary>Return visits and Marathon</summary>
 <section class="statistics-section" id="legendary-returns" hidden aria-labelledby="legendary-heading">
 <div class="column-head"><h2 class="legend legend--ink" id="legendary-heading">Legendary returns</h2></div>
 <div class="progress-panel"><div class="legendary-progress"><p id="legendary-summary"><strong class="readout" id="legendary-remaining"></strong><span class="note"> steps until the next return</span></p><progress id="legendary-meter" aria-label="Steps toward the next legendary return"></progress><p id="legendary-ready" class="note"></p></div></div>
@@ -65,9 +92,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div><span class="micro">Last attempt</span><strong class="readout" id="marathon-last">No attempts yet</strong><span class="note" id="marathon-result"></span></div>
 </div>
 </section>
-<p class="note" id="statistics-status" role="status">Opening adventure stats…</p>
-<p class="micro" id="statistics-window"></p>
-<div id="statistics-charts"></div>
+</details>
 </main>
 
 <footer class="plate-foot">

@@ -501,13 +501,13 @@ class Emulator:
             if restored_legendary:
                 snap = read_snapshot(self.pb.memory, self.frame)
                 self.prev_snapshot = snap
-        if hasattr(self, 'statistics'):
-            self.statistics.observe(snap, self.pb.memory)
         if hasattr(self, 'milestones'):
             self.milestones.observe(snap)
             if hasattr(self.policy, 'collection'):
                 from .milestones import status as milestone_status
                 self.policy.collection.milestones = milestone_status(self.store)
+        if hasattr(self, 'statistics'):
+            self.statistics.observe(snap, self.pb.memory, clock=self.play_clock.status())
         with self.lock:
             self.snapshot = snap
         now = time.time()
@@ -904,6 +904,8 @@ class Emulator:
             if hasattr(self, 'milestones'):
                 self.milestones.reset()
             self.store.set(rewards.KEY, None)
+            if hasattr(self, 'statistics'):
+                self.statistics.records.reset()
             self.play_clock = PlayClock()
             self.store.set("play_clock", self.play_clock.state_dict())
             self.snapshot = None

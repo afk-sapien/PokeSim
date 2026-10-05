@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reorganize Journal Stats around shared overview totals, durable milestone times, recent progress, and collection highlights. Keep detailed charts expandable, preserve unknown historical times, and label existing power charts as Stat Power.
+
 - Simplify adventure controls with Stop and Download labels, a Settings icon beside Open adventure, and always-visible Archive and Delete actions that save and stop first.
 
 - Make all Pokédex header counters species coverage out of 151. Credit perfect and shiny final evolutions to their earlier forms, remove the separate shiny panel, and move individual catch, perfect-find, and shiny totals to Journal Stats.

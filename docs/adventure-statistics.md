@@ -1,13 +1,60 @@
 # Adventure statistics
 
-Journal has two subpages. Entries contains the event log. Stats contains the
-existing Pokédex, level 100, perfect-find and League history alongside collection
-strength, potential, and activity trends.
+Journal Entries contains the event log. Stats opens with an overview, milestone
+times, recent progress, and two collection highlights. Collection details,
+activity totals, existing trend charts, return visits, and Marathon records sit
+in expandable groups. Entries does not load these charts.
+
+## Overview and shared totals
+
+The overview shows simulated playtime, League wins, Pokémon held, catches tracked,
+perfect finds, and shiny acquisitions. Playtime and League wins use the same
+sources as Live. The playtime plus sign means the app inherited a cartridge clock
+that had already reached its limit. Pokémon held includes the party and every PC
+box. Activity details show areas explored, current money, battles entered, and
+steps from the same completed-step tracker used for return visits.
+
+## Milestone times
+
+Seven records cover the first badge, all eight badges, first Champion victory,
+151 registered, first level 100, first shiny acquired, and first perfect acquired.
+New achievements are confirmed across consecutive valid observations. Their
+records preserve the app's simulated playtime and date. A lower-bound play clock
+retains its plus sign. A shiny sighting alone does not award an acquisition.
+
+The records are stored separately from journal entries and emulator checkpoints.
+Journal pruning, restart, and save rewind do not erase an achievement or award
+it twice. Explicitly restarting from power-on starts a new milestone timeline.
+
+On upgrade, existing progress supplies the earliest recorded date. If its
+matching retained journal entry has an uncapped cartridge clock, that time is
+preserved and labeled Recorded cartridge time. Other achievements say First
+recorded and Time unknown. An achievement already present in the initial collection also has
+unknown timing. Existing records are never assigned the current playtime as an
+invented acquisition time.
+
+## Recent progress and highlights
+
+The 24-hour and 7-day choices use real-world time windows. They show tracked
+catches, League wins, and net changes in registered and level-100 species. Queries
+use the original database records rather than the bounded chart response. A
+period starting before tracking began is labeled partial, with the available
+starting dates. Negative collection changes remain visible after a new run.
+
+Catches include verified custom gifts, as in the overview. Gift imports use their
+original journal dates, not import dates. Gifts with missing dates are excluded
+from period totals and explicitly mark the history as incomplete.
+
+Two highlights identify the strongest currently held Pokémon by Battle Power
+and the highest DV score. Links open the corresponding species in the PC, sorted
+by the relevant rating. Ties follow current party and PC order. Unknown ratings
+are excluded and an incomplete comparison is labeled.
 
 ## Collection activity
 
-The collection activity panel shows catches tracked, individual perfect finds,
-wild shinies seen, shiny catches plus custom gifts, and shinies currently held.
+The overview and collection details show catches tracked, individual perfect
+finds, wild shinies seen, shiny catches plus custom gifts, and shiny and perfect
+Pokémon currently held.
 These are individual totals, separate from the Pokédex's species coverage out of
 151. Partial catch history is labeled as tracked since collection began, and
 perfect finds retain the plus sign for a verified minimum. Unavailable tracking
@@ -20,7 +67,9 @@ power. Strongest-six power sums the six highest individual power scores,
 regardless of their current box or party slot. Average power distinguishes
 individual improvement from simply collecting more Pokémon.
 
-Power uses the same formula as PC, described in [Pokémon stats](pokemon-stats.md).
+Historical power charts explicitly show Stat Power, the stat-based score also
+available in PC and described in [Pokémon stats](pokemon-stats.md). Their history
+is not reinterpreted as moves-aware Battle Power.
 It uses permanent species, level, DVs, and stat experience rather than temporary
 battle boosts or current HP. Missing individual data stays unknown.
 
@@ -38,7 +87,7 @@ number held provide context for those changes.
   seed the total once. Other missing history is not estimated.
 - Marathons completed counts finished races in the durable journal, including
   existing races. Abandoned races are excluded.
-- Recorded steps count adjacent movement observed on the same map. Map changes,
+- The legacy sampled-steps chart counts adjacent movement observed on the same map. Map changes,
   large jumps, observation gaps, menus, and battles do not add distance. Walking,
   cycling, and surfing all count. Movement between observations can be missed.
 - Battles entered counts observed transitions into wild or trainer battles.
@@ -47,7 +96,7 @@ number held provide context for those changes.
   battle. Healing and identity changes do not count. These are sampled HP-loss
   totals, including recoil and status effects, not exact attribution to attacks.
   Fast changes or damage on an unobserved battle exit can be missed.
-- Recorded game hours counts valid observed emulator frames at 60 frames per
+- The legacy sampled-game-hours chart counts valid observed emulator frames at 60 frames per
   second. Pauses, offline time, and gaps are excluded. It does not inherit the
   cartridge clock's hour limit.
 

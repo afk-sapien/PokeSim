@@ -82,7 +82,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get('/api/statistics')
     def statistics():
-        from ..statistics import status
+        from ..statistics import status, recent, overview, highlights
+        from ..adventure_records import status as record_status
         from ..legendary_returns import status as returns_status
         current = emu.status()
         collection = (current.get('strategy') or {}).get('collection') or {}
@@ -91,7 +92,10 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         records = milestones(current.get('game') or {}, store)
         goals = records['milestones']
         from .. import step_events, mew_returns
-        return {**status(store), 'legendary_returns': returns_status(store),
+        returns = returns_status(store)
+        return {**status(store), 'overview': overview(current, records, returns),
+                'milestone_records': record_status(store), 'recent': recent(store),
+                'highlights': highlights(current.get('game')), 'legendary_returns': returns,
                 'event_returns': step_events.status(store), 'mew_returns': mew_returns.status(store),
                 'collection_records': {'catches': catch_status(store),
                                        'perfect_found': goals['perfect_found'],

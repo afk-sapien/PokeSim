@@ -136,6 +136,10 @@ def test_stats_routes_are_scoped_and_entries_do_not_load_charts(tmp_path):
     result = client.get('/api/statistics').json()
     assert result.pop('event_returns')['activities'] == []
     assert not result.pop('mew_returns')['league_required']
+    assert result.pop('overview')['play_clock'] is None
+    assert len(result.pop('milestone_records')['milestones']) == 7
+    assert result.pop('recent')['day']['catches'] is None
+    assert result.pop('highlights') == {'battle': None, 'dvs': None}
     records = result.pop('collection_records')
     assert records['perfect_found'] == 0
     assert records['shiny']['held'] == 0
