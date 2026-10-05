@@ -12,6 +12,7 @@ from urllib.parse import quote
 from ..game_data import load
 from ..pokemon import STAT_NAMES, TYPES, stored_strength
 from ..investment import assessment
+from ..battle_power import battle_power
 from ..ram import DEX_NAMES, MAP_NAMES, MOVES as MOVE_TABLE
 from ..strategy_data import MOVES as MOVE_DETAILS, SPECIES
 
@@ -184,11 +185,11 @@ def live_status(game: dict | None, collection: dict | None = None, *, league_rew
                    "stat_exp": mon.get("stat_exp", ()),
                    **({'trainer_id': mon['trainer_id']} if mon.get('trainer_id') is not None else {}),
                    "experience": (mon.get("experience") or {}).get("total", 0),
-                   "status_label": mon.get("status_label"), "slot": slot + 1, **stored_strength(mon), **assessment(mon)}
+                   "status_label": mon.get("status_label"), "slot": slot + 1, **stored_strength(mon), **assessment(mon), 'battle_power': battle_power(mon)}
                   for slot, mon in enumerate(game.get("party", []))],
         "storage": {**storage,
                     "pokemon": [{**mon, "dex": dex_of.get(mon["species"]),
-                                 "type_names": species_types(mon["species"]), **stored_strength(mon), **assessment(mon)}
+                                 "type_names": species_types(mon["species"]), **stored_strength(mon), **assessment(mon), 'battle_power': battle_power(mon)}
                                 for mon in storage.get("pokemon", [])]}
         if storage else None,
         **plan,

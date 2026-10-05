@@ -134,7 +134,7 @@ test('party joins every combined sort without changing source data', async () =>
   const before = JSON.stringify({boxed, party})
   const view = pc(boxed, '?scope=all', party)
   await view.ready()
-  for (const field of ['box', 'power', 'level', 'dvs', 'stat_exp', 'experience', 'dex', 'name', 'nick', 'HP', 'Attack', 'Defense', 'Speed', 'Special']) {
+  for (const field of ['box', 'power', 'battle_power', 'level', 'dvs', 'stat_exp', 'experience', 'dex', 'name', 'nick', 'HP', 'Attack', 'Defense', 'Speed', 'Special']) {
     view.sort(field)
     assert.equal(view.rows()[0].nick, 'Ace', field)
   }
@@ -281,19 +281,19 @@ test('Elite Four wins sort across the party and boxes with unknown totals last',
 })
 
 
-test('All Pokemon defaults to power descending on entry and direct links', async () => {
-  const pokemon = [mon(1, 1, 100, {power: 2614, stat_total: 1533}),
-    mon(2, 1, 100, {power: 4575, stat_total: 1725}),
-    mon(3, 1, 100, {power: 3291, stat_total: 1499}), mon(4, 1, 100, {power: null})]
+test('All Pokemon defaults to battle_power descending on entry and direct links', async () => {
+  const pokemon = [mon(1, 1, 100, {battle_power: 2614, stat_total: 1533}),
+    mon(2, 1, 100, {battle_power: 4575, stat_total: 1725}),
+    mon(3, 1, 100, {battle_power: 3291, stat_total: 1499}), mon(4, 1, 100, {battle_power: null})]
   for (const search of ['', '?scope=all', '?scope=all&sort=invalid']) {
     const view = pc(pokemon, search)
     await view.ready()
     if (!search.includes('scope=all')) view.element('#pc-all-view').onclick()
-    assert.equal(view.element('#pc-sort').value, 'power')
+    assert.equal(view.element('#pc-sort').value, 'battle_power')
     assert.equal(view.element('#pc-order').value, 'desc')
-    assert.deepEqual(view.rows().map(row => row.power), [4575, 3291, 2614, null])
+    assert.deepEqual(view.rows().map(row => row.battle_power), [4575, 3291, 2614, null])
     await view.refresh()
-    assert.deepEqual(view.rows().map(row => row.power), [4575, 3291, 2614, null])
+    assert.deepEqual(view.rows().map(row => row.battle_power), [4575, 3291, 2614, null])
     view.sort('stat_total')
     assert.deepEqual(view.rows().map(row => row.stat_total), [1725, 1533, 1499, undefined])
   }
@@ -305,7 +305,7 @@ test('DV probability labels stay compact and retain very rare nonzero tails', as
   await view.ready()
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
   const detail = view.element('#pc-detail-body').innerHTML
-  assert.match(detail, /Potential Power: 3,200/)
+  assert.match(detail, /Potential Stat Power: 3,200/)
   assert.match(detail, /DV quality \(est\.\): top 0\.00153%/)
   assert.match(detail, /Higher roll: 0%/)
   assert.doesNotMatch(detail, /65,536|uniform|independent fifth/)

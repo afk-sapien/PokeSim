@@ -3,9 +3,9 @@
 How individual stats, Power, DV ratings, training, and Elite Four wins are calculated.
 For collection browsing and protecting partners, see [PC storage](pc-storage.md).
 
-## Power
+## Stat Power
 
-**Power** is PokeSim's estimate of overall strength at the current level. It serves
+**Stat Power** is PokeSim's estimate of overall strength at the current level. It serves
 a similar purpose to [Pokémon GO's CP](https://niantic.helpshift.com/hc/en/6-pokemon-go/faq/125-what-are-combat-power-cp-and-hit-points-hp/),
 but uses a custom formula for the original games. Values come from the Generation I
 stat calculation using species, individual DVs, and stat experience, as when
@@ -35,6 +35,56 @@ no bonuses for being legendary or a starter. Individual training and DVs can cha
 the order. Moves, type matchups, status strategies, and battle bonuses are excluded,
 so a higher score does not guarantee a win. Missing individual data gives an
 unavailable score and sorts last in either direction.
+
+## Battle Power
+
+**Battle Power** rates the four known moves at the current level and is the default
+sort in the PC's All Pokémon view. Stat Power and Potential Stat Power remain
+available separately. Existing `power` API fields and historical collection
+statistics retain their original stat-only meaning. The new API field is
+`battle_power`.
+
+For each of the 15 Generation I types, the estimate chooses the best damaging move
+against a single-type reference opponent at the same level L, with 3L + 10 HP and
+2L + 5 Defense and Special. It averages expected damage as a percentage of reference
+HP, accounting for the attacking stat, STAB, type effectiveness, accuracy, critical
+hits, multi-hit moves, charging, recharge, recoil, and a steep self-destruction penalty.
+Recovery and distinct useful status effects add at most 20 percent to that offense
+estimate. Redundant moves do not add damage merely by filling another slot.
+
+```text
+Battle Power = floor(moveset score × sqrt(HP × Durability) × Speed factor / 10)
+```
+
+The estimates reuse the battle policy's damage model. They are a general benchmark,
+not a battle simulator or a win probability. References have no dual typing, and
+opponent frequency, PP endurance, setup sequences, Transform, Counter, Bide, and
+one-hit knockout strategies are not modeled. Utility-only movesets score zero.
+Missing or unknown move data is unavailable. Damage, current PP, and temporary
+status do not change the score. The scale is separate from Stat Power.
+
+A Starmie with only Tackle therefore rates much lower than the same individual
+with Surf, even though their Stat Power is identical. Duplicate release and trading
+continue to protect natural potential and trained veterans using the existing rules.
+
+## Move development
+
+The strategic policy uses the moveset estimate when deciding which move to replace
+on learning. Field HMs remain protected. Before using an evolution stone it checks
+for valuable future level-up moves that the evolved species would miss, then trains
+toward the next such move. For example, Staryu can wait for Water Gun or Recover.
+Already missed moves are not retroactively restored.
+
+Outside the League and urgent healing, the policy can teach owned HM03 (Surf) or
+HM04 (Strength) into an empty party move slot when the estimated improvement is
+substantial. Another party member already knowing the HM does not block this.
+The policy uses normal cartridge menus, preserves existing moves, and spaces retries.
+Navigation teaching of Cut, Surf, and Strength continues as before.
+
+General TM spending, shopping for battle TMs, replacement of occupied slots with
+optional HMs, and prediction of future TM access remain deferred. Reusable HMs
+are never consumed. Movesets with four occupied slots are left to normal level-up
+learning or manual teaching.
 
 ## Stat total
 

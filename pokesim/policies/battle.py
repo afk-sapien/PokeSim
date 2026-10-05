@@ -152,36 +152,13 @@ def ranked_moves(me, enemy, used_status=()):
 
 
 def replacement_slot(mon, new_move):
-    """Keep HMs and score coverage as well as power when replacing a move."""
-    def value(mid):
-        move = MOVES.get(mid, {})
-        power = move.get("power", 0)
-        value = power * move.get("accuracy", 100) / 100 * (1.5 if move.get("type") in mon.types else 1)
-        if move.get('name') in ('RAZOR_LEAF', 'SLASH', 'CRABHAMMER', 'KARATE_CHOP'):
-            value *= 1.7
-        if move.get('effect') in ('CHARGE_EFFECT', 'FLY_EFFECT', 'CHARGE_ATTACK_EFFECT', 'RECHARGE_EFFECT'):
-            value *= 0.6
-        if move.get('effect') == 'EXPLODE_EFFECT':
-            value *= 0.35
-        if not power:
-            value = 40 if move.get('effect') in ('SLEEP_EFFECT', 'HEAL_EFFECT', 'LEECH_SEED_EFFECT', 'PARALYZE_EFFECT') else 8
-        return value
-    choices = [(value(mid), slot) for slot, mid in enumerate(mon.moves) if mid not in HM_MOVES]
-    if not choices or new_move not in MOVES or new_move in mon.moves:
-        return None
-    def moveset_value(moves):
-        scores = {}
-        utility = 0
-        for mid in moves:
-            m = MOVES.get(mid, {})
-            if m.get('power'):
-                scores.setdefault(m['type'], []).append(value(mid))
-            else:
-                utility += value(mid)
-        return sum(max(v) + 0.2 * (sum(v) - max(v)) for v in scores.values()) + utility
-    slot = max((k for _, k in choices), key=lambda k: moveset_value(tuple(new_move if j == k else mid for j, mid in enumerate(mon.moves))))
-    improved = moveset_value(tuple(new_move if j == slot else mid for j, mid in enumerate(mon.moves)))
-    return slot if new_move in HM_MOVES or improved > moveset_value(mon.moves) + 5 else None
+    """Use the actual attacking stats and coverage while preserving field moves."""
+    from ..battle_power import best_replacement, moveset_score
+    slot = best_replacement(mon, new_move, HM_MOVES)
+    if slot is not None or new_move not in HM_MOVES or new_move in mon.moves:
+        return slot
+    choices = [i for i, mid in enumerate(mon.moves) if mid not in HM_MOVES]
+    return min(choices, key=lambda i: moveset_score(mon, (mon.moves[i],)), default=None)
 
 
 def needs_healing(party):

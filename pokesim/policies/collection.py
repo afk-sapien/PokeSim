@@ -3,6 +3,7 @@ import time
 from collections import Counter
 from dataclasses import asdict
 from ..duplicates import quality
+from .move_development import evolution_wait, move_name
 from ..investment import automatic_trade_protected, training_investment, potential_power, assessment, GOOD_TAIL, SEARCH_BUDGET
 from functools import lru_cache
 from ..game_data import load
@@ -336,7 +337,7 @@ class Collection:
                     token = (mon.species, mon.level, mon.experience)
                 else:
                     token = None
-            elif project['method'] == 'evolve' and project.get('evolution', {}).get('method') == 'level':
+            elif project['method'] == 'evolve':
                 # Experience toward a level evolution is progress. Without it a Dragonair that gained
                 # levels all turn was deferred as a failure, and each failure doubled its wait.
                 trainee = self.trainee(s, project)
@@ -795,7 +796,7 @@ class Collection:
         self.project_maps = [s.map]
         self.project_flags = list(s.event_flags)
         self.progress_token = None
-        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project.get('event_return') or self.project['method'] in ('trade', 'fossil') else training.TRAINING_BUDGET if self.project['method']=='train' or self.project['method']=='evolve' and self.project['evolution']['method']=='level' else 108000 if self.project.get('dv_hunt') else 36000 if self.completed_champion else PROJECT_BUDGET
+        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project.get('event_return') or self.project['method'] in ('trade', 'fossil') else training.TRAINING_BUDGET if self.project['method']=='train' or self.project['method']=='evolve' else 108000 if self.project.get('dv_hunt') else 36000 if self.completed_champion else PROJECT_BUDGET
         if self.project['method'] == 'marathon':
             self.remaining = marathon.BUDGET
         nav.path.clear()
@@ -1005,6 +1006,12 @@ class Collection:
                             training_targets(self.version, s.party[index].level))
             evo=p['evolution']
             if evo['method']=='item':
+                wait_for = evolution_wait(asdict(s.party[index]), evo)
+                if wait_for:
+                    level, move = wait_for
+                    return Goal('collect_train', f'Learn {move_name(move)} before evolving',
+                                f'Train {s.party[index].nick or name(p["parent"])} to level {level} before using a stone',
+                                evolution_training_targets(self.version, s.party[index].level))
                 if not dict(s.items).get(ITEMS[evo['requirement']]):
                     return at('collect_stone','Buy an evolution stone','Complete another Pokédex entry','CELADON_MART_4F',5,5,'down')
                 return Goal('collect_evolve','Evolve '+name(p['parent']), 'Use '+evo['requirement'].replace('_',' ').title(),((s.map,s.x,s.y),))

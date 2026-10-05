@@ -172,7 +172,7 @@ def test_stone_project_buys_then_uses_the_correct_stone():
     c=Collection()
     parent=sid(44)
     c.project={'method':'evolve','parent':parent,'species':sid(45),'box':None,'evolution':EVOS[parent][0],'key':'evo'}
-    s=state(party=(mon(species=parent),))
+    s=state(party=(mon(species=parent, level=60),))
     assert c.goal(s).key=='collect_stone'
     s=replace(s,items=s.items+((ITEMS['LEAF_STONE'],1),))
     assert c.goal(s).key=='collect_evolve'
@@ -263,7 +263,7 @@ def test_stone_vendor_goal_is_reachable_from_the_shop_floor():
     c=Collection()
     parent=sid(44)
     c.project={'method':'evolve','parent':parent,'species':sid(45),'evolution':EVOS[parent][0]}
-    s=state(map=MAPS['CELADON_MART_4F'],x=12,y=2,party=(mon(species=parent),))
+    s=state(map=MAPS['CELADON_MART_4F'],x=12,y=2,party=(mon(species=parent, level=60),))
     goal=c.goal(s)
     nav=Navigator()
     nav.update_story(s)

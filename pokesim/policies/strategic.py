@@ -9,6 +9,7 @@ from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, boulder_task, seafoam_current_task
+from .move_development import hm_upgrade, move_name
 from .progression import STARTERS, Goal, healing_goal, journey, league_partner, milestones, story_goal
 from . import training
 from .menus import select, tap
@@ -161,6 +162,7 @@ class StrategicPolicy(Policy):
         self.menu_context = None
         self.pending_social = None
         self.supply_attempts = set()
+        self.move_teaching_after = 0
 
     def describe(self):
         return f"strategic ({self.mode})"
@@ -714,6 +716,17 @@ class StrategicPolicy(Policy):
                     self.intent = Decision("item", index, target, "Treat the party before walking farther")
                     self.intent_since = s.frame
                     return tap("start")
+        if (not self.heal_latch and not in_league and s.frame >= self.move_teaching_after
+                and not goal.key.startswith(('party_', 'teach_', 'restock'))):
+            upgrade = hm_upgrade(s)
+            # Bound failures and avoid rescoring every overworld frame.
+            self.move_teaching_after = s.frame + 3600
+            if upgrade:
+                _, target, item, move = upgrade
+                self.goal = Goal('teach_battle', f'Teach {move_name(move)}',
+                                 f'Improve {s.party[target].nick or s.party[target].name} using an owned HM')
+                self.reason = self.goal.reason
+                return self._use_item(s, item, target)
         if goal.key == "thunder" and not event_set(s.event_flags, "EVENT_2ND_LOCK_OPENED"):
             goal = self._trash_goal(s)
         if not self.heal_latch and not in_league and not self.pickups.active and goal.key not in ('restock','party_box'):
@@ -809,7 +822,7 @@ class StrategicPolicy(Policy):
                 if mem[W_FACING] != FACING[direction]:
                     return tap(direction,4,12)
                 return self._use_item(s,ITEMS[project['rod']]) or tap('b')
-        if goal.key.startswith("teach_"):
+        if goal.key in ("teach_cut", "teach_surf", "teach_strength"):
             hm, move = {"teach_cut": ("HM01", 15), "teach_surf": ("HM03", 57),
                         "teach_strength": ("HM04", 70)}[goal.key]
             candidates = [i for i, p in enumerate(s.party) if move in SPECIES.get(p.species, {}).get("hms", [])

@@ -2,6 +2,20 @@
 
 Target: 0.4.18. This work is not published yet.
 
+## Battle Power and move development
+
+The PC now defaults to Battle Power, which rates known moves using the actual
+attacking stats and a consistent set of type matchups. Stat Power and Potential
+Stat Power remain separate, with existing collection history and retention rules
+preserved. The same moveset evaluator improves level-up move choices.
+
+Stone evolution waits for useful upcoming moves the evolved species cannot learn
+by leveling. Owned Surf and Strength HMs can fill empty party move slots for a
+clear battle improvement. General TM spending remains deferred. An isolated replay
+of a Red backup verified that a Tackle-only Starmie learned Surf through the cartridge
+menus, retained its identity and stats, and returned to the overworld. See
+[Pokémon stats](pokemon-stats.md) for the scoring assumptions and limits.
+
 ## Mobile controls
 
 Direction, A, and B buttons repeat while held. Start and Select fire once per press. Pointer capture keeps release handling active if a finger moves off the button. Losing focus, hiding the page, a cancelled pointer, or a failed request stops repetition. Each server request remains a bounded action, so losing the browser cannot leave a game button held indefinitely.

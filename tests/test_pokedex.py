@@ -136,7 +136,7 @@ def test_live_status_reports_records_party_and_boxes():
                                   'level': 5, 'hp': 20, 'max_hp': 22, 'status_label': 'Healthy', 'slot': 1,
                                   'type_names': ['Grass', 'Poison'],
                                   'moves': (), 'dvs': (), 'stat_exp': (), 'experience': 0,
-                                  'calculated_stats': None, 'stat_total': None, 'power': None,
+                                  'calculated_stats': None, 'stat_total': None, 'power': None, 'battle_power': None,
                                   'dv_top_percent': None, 'dv_better_percent': None, 'potential_power': None}
     assert status['storage']['pokemon'][0]['dex'] == 25
     assert status['storage']['pokemon'][0]['type_names'] == ['Electric']

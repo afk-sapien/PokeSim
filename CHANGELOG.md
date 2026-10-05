@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add moves-aware Battle Power to PC sorting and details, keeping Stat Power and natural potential separate.
+- Evaluate learned moves with the Pokémon's attacking stats, coverage, accuracy, and useful effects.
+- Delay stone evolution for useful level-up moves that would be lost. Improve empty move slots with owned Surf or Strength HMs, even when another partner already knows the field move.
+
 - Hold the mobile direction and action buttons to repeat input, with larger touch targets and cancellation on release, page hiding, or focus loss.
 - Identify Gen 2 shiny-compatible DVs with a distinct star badge in the party, PC, and Pokédex. Add shiny filters, wild sighting counts, capture and custom gift counts, and a current collection count.
 - Preserve shiny partners from automatic release, NPC trades, and trade offers. Prioritize shiny captures and pause for manual control if a shiny cannot be caught with the available balls or storage space.
