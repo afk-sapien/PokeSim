@@ -29,6 +29,23 @@
     return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
   }
   function render(data) {
+    const records = data.collection_records || {}
+    const catches = records.catches
+    const shiny = records.shiny
+    const caught = document.querySelector('#stats-caught')
+    caught.textContent = catches?.available ? number(catches.total) : 'Not tracked'
+    document.querySelector('#stats-caught-label').textContent = catches?.complete_history ? 'Total caught' : 'Catches tracked'
+    document.querySelector('#stats-caught-note').textContent = !catches?.available ? 'Unavailable for this game'
+      : catches.complete_history ? 'Every catch this run' : 'Since tracking began'
+    const perfect = records.perfect_found
+    document.querySelector('#stats-perfect').textContent = Number.isFinite(perfect)
+      ? number(perfect) + (perfect && records.perfect_count_is_minimum ? '+' : '') : 'Not tracked'
+    document.querySelector('#stats-perfect-note').textContent = records.perfect_count_is_minimum
+      ? 'Verified minimum of individual finds' : 'Individual finds'
+    document.querySelector('#stats-shiny-seen').textContent = shiny?.available ? number(shiny.seen) : 'Not tracked'
+    document.querySelector('#stats-shiny-acquired').textContent = shiny ? number(shiny.acquired) : 'Not tracked'
+    document.querySelector('#stats-shiny-held').textContent = shiny ? number(shiny.held) : 'Not tracked'
+
     const marathon = data.marathon || {}
     document.querySelector('#marathon-best').textContent = marathon.best_frames == null
       ? 'No finish yet' : raceTime(marathon.best_frames)

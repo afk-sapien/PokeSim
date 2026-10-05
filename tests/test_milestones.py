@@ -353,3 +353,63 @@ def test_cache_distinguishes_invalid_float_dvs_from_perfect_integer_dvs(tracking
     assert status(store)['perfect_found'] == 0
     settle(tracker, replace(current, party=(partner(3, 99, True),)))
     assert status(store)['perfect_found'] == 1
+
+
+def test_perfect_collection_backfills_terminal_ancestors_without_extra_finds(tracking):
+    store, tracker = tracking
+    store.set(KEY, {'level_100': [], 'perfect_species': [3, 134],
+                    'perfect_groups': {'first': 1, 'second': 1}, 'perfect_catches': 0})
+    value = status(store)
+    assert value['perfect_collection'] == [1, 2, 3, 133, 134]
+    assert value['perfect_found'] == 2
+    settle(tracker, snap(party=(partner(135, 40, True),)))
+    assert status(store)['perfect_collection'] == [1, 2, 3, 133, 134, 135]
+    assert status(store)['perfect_found'] == 3
+
+
+def test_shiny_collection_persists_evolution_credit_without_counting_wild_sightings(tracking):
+    from pokesim.shiny import record
+    store, tracker = tracking
+    shiny = replace(partner(134, 40), dvs=(0, 10, 10, 10, 10))
+    s = snap(party=(shiny, shiny))
+    tracker.observe(s)
+    assert status(store)['shiny_species'] == []
+    settle(tracker, s)
+    with store.db:
+        record(store.db, 'seen', 'wild-only', 150)
+        record(store.db, 'acquired', 'gift-a', 3)
+        record(store.db, 'acquired', 'gift-b', 3)
+    value = apply(live_status(s.to_dict()), store)['shiny']
+    assert value['held'] == 2
+    assert value['acquired'] == 2
+    assert value['collection_species'] == [1, 2, 3, 133, 134]
+    # A reload and a later inventory with no shinies retain collection credit.
+    tracker = MilestoneTracker(store)
+    settle(tracker, snap(party=(partner(25, 5),)))
+    value = apply(live_status(snap(party=(partner(25, 5),)).to_dict()), store)['shiny']
+    assert value['held'] == 0
+    assert value['collection_species'] == [1, 2, 3, 133, 134]
+    assert 135 not in value['collection_species'] and 150 not in value['collection_species']
+
+
+def test_stats_api_keeps_individual_totals_separate_from_species_coverage(tracking):
+    from pokesim.catches import KEY as catch_key
+    from pokesim.shiny import record
+    store, tracker = tracking
+    s = snap(party=(partner(3, 50, True), replace(partner(134, 20), dvs=(0, 10, 10, 10, 10))))
+    settle(tracker, s)
+    store.set(catch_key, {'total': 42, 'counts': {'3': 42}, 'available': True, 'complete_history': False})
+    with store.db:
+        record(store.db, 'seen', 'wild', 150)
+        record(store.db, 'acquired', 'caught', 134)
+    emu = Mock()
+    emu.status.return_value = {'game': s.to_dict(), 'strategy': {}}
+    with TestClient(create_app(emu, store)) as client:
+        stats = client.get('/api/statistics').json()['collection_records']
+        dex = client.get('/api/pokedex/status').json()
+    assert stats['catches']['total'] == 42
+    assert stats['perfect_found'] == 1
+    assert stats['perfect_count_is_minimum']
+    assert stats['shiny']['seen'] == stats['shiny']['acquired'] == stats['shiny']['held'] == 1
+    assert dex['milestones']['perfect_collection'] == [1, 2, 3]
+    assert dex['shiny']['collection_species'] == [133, 134]

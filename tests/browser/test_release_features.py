@@ -43,7 +43,7 @@ def test_shiny_badges_filters_and_counts(page, game):
     page.locator('.pc-mon').click()
     expect(page.locator('#pc-detail-body .shiny-badge')).to_be_visible()
     page.goto(url + '/pokedex')
-    expect(page.locator('#shiny-held')).to_have_text('1')
+    expect(page.locator('#sum-shiny')).to_have_text('1/151')
     page.locator('#status-filter').select_option('shiny')
     expect(page.locator('.dex-card')).to_have_count(1)
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -53,7 +53,8 @@ def test_shiny_badges_filters_and_counts(page, game):
 def test_shiny_summary_fits_small_phone(page, game):
     page.set_viewport_size({'width': 320, 'height': 844})
     page.goto(game[0] + '/pokedex')
-    expect(page.locator('#shiny-seen')).to_have_text('Not tracked')
+    expect(page.locator('#sum-shiny')).to_have_text('0/151')
+    assert page.locator('.shiny-collection').count() == 0
     page.screenshot(path='/tmp/pokesim-shiny-320.png', full_page=False)
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), page.locator('main *').evaluate_all('''elements => elements.filter(e => e.getBoundingClientRect().right > innerWidth).map(e => [e.tagName, e.className, e.id, e.getBoundingClientRect().right])''')
 

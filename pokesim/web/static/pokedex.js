@@ -236,20 +236,21 @@ async function refreshStatus(pending = fetchStatus()) {
   try {
     const status = await pending
     const shiny = status.shiny || {}
-    shinySpecies = new Set([...(shiny.seen_species || []), ...(shiny.acquired_species || []), ...(shiny.held_species || [])])
-    $('#shiny-seen').textContent = shiny.available ? count(shiny.seen || 0) : 'Not tracked'
-    $('#shiny-acquired').textContent = count(shiny.acquired || 0)
-    $('#shiny-held').textContent = count(shiny.held || 0)
-    $('#shiny-tracking-note').textContent = '★ marks Gen 2 shiny DVs. Sightings, catches and custom gifts count from when tracking began. Held includes existing partners.'
+    shinySpecies = new Set(shiny.collection_species || [])
     catches = status.catches || null
     const goals = status.milestones || {}
     maxed = new Set(goals.level_100 || [])
-    perfectSpecies = new Set(goals.perfect_species || [])
-    highQualitySpecies = new Set([...(goals.high_quality_species || []), ...perfectSpecies])
+    perfectSpecies = new Set(goals.perfect_collection || goals.perfect_species || [])
+    highQualitySpecies = new Set([...(goals.high_quality_species || []), ...(goals.perfect_species || [])])
     $('#sum-maxed').innerHTML = outOf(maxed.size)
     $('#maxed-meter').value = maxed.size
     paintBank('#maxed-cells', maxed.size)
-    $('#sum-perfect').textContent = `${goals.perfect_found || 0}${goals.perfect_found ? '+' : ''}`
+    $('#sum-perfect').innerHTML = outOf(perfectSpecies.size)
+    $('#perfect-meter').value = perfectSpecies.size
+    paintBank('#perfect-cells', perfectSpecies.size)
+    $('#sum-shiny').innerHTML = outOf(shinySpecies.size)
+    $('#shiny-meter').value = shinySpecies.size
+    paintBank('#shiny-cells', shinySpecies.size)
     owned = new Set(status.owned || [])
     seen = new Set(status.seen || [])
     plan = new Map((status.plan || []).map((row) => [row.dex, row]))
@@ -259,10 +260,6 @@ async function refreshStatus(pending = fetchStatus()) {
     $('#connection').title = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
     $('#sum-owned').innerHTML = outOf(owned.size)
     $('#sum-seen').innerHTML = outOf(seen.size)
-    $('#sum-caught').textContent = catchesAvailable() ? count(catches.total) : 'Unavailable'
-    $('#sum-caught').classList[catchesAvailable() ? 'remove' : 'add']('is-word')
-    $('#sum-caught-label').textContent = catches?.complete_history ? 'Total caught' : 'Catches tracked'
-    $('#sum-caught-note').textContent = !catchesAvailable() ? 'Not tracked for this game' : catches?.complete_history ? 'Every catch this run' : 'Since tracking began'
     $('#catch-tracking-note').textContent = trackingNote()
     $('#owned-meter').value = owned.size
     $('#seen-meter').value = seen.size

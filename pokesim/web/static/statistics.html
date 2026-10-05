@@ -36,6 +36,17 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <nav class="journal-pages" aria-label="Journal pages"><a href="${game_base}/journal">Entries</a><a href="${game_base}/journal/stats" aria-current="page">Stats</a></nav>
 
+<section class="statistics-section" aria-labelledby="collection-records-heading">
+<div class="column-head"><h2 class="legend legend--ink" id="collection-records-heading">Collection activity</h2></div>
+<div class="collection-records progress-panel">
+<div><span class="micro" id="stats-caught-label">Catches tracked</span><strong class="readout" id="stats-caught">Loading</strong><span class="note" id="stats-caught-note"></span></div>
+<div><span class="micro">Perfect finds</span><strong class="readout" id="stats-perfect">Loading</strong><span class="note" id="stats-perfect-note"></span></div>
+<div><span class="micro">Shinies seen</span><strong class="readout" id="stats-shiny-seen">Loading</strong><span class="note">Wild encounters tracked</span></div>
+<div><span class="micro">Shinies acquired</span><strong class="readout" id="stats-shiny-acquired">Loading</strong><span class="note">Tracked catches and custom gifts</span></div>
+<div><span class="micro">Shinies held</span><strong class="readout" id="stats-shiny-held">Loading</strong><span class="note">Currently in the party and PC</span></div>
+</div>
+</section>
+
 <section class="progress" id="road" aria-labelledby="road-heading" hidden>
 <div class="column-head"><h2 class="legend legend--ink" id="road-heading">The road so far</h2><span class="micro" id="road-span"></span></div>
 <div class="progress-panel" id="road-charts"></div>

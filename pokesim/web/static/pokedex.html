@@ -40,14 +40,13 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <section class="bank" aria-label="Pokédex progress">
 <div class="bank-cell"><span class="micro">Registered</span><strong class="readout" id="sum-owned">0<span class="unit">/151</span></strong><span class="meter" id="owned-cells" data-level="ok" aria-hidden="true"></span><progress class="vh" id="owned-meter" max="151" value="0" aria-label="Pokémon registered"></progress></div>
 <div class="bank-cell"><span class="micro">Seen</span><strong class="readout" id="sum-seen">0<span class="unit">/151</span></strong><span class="meter" id="seen-cells" data-level="signal" aria-hidden="true"></span><progress class="vh" id="seen-meter" max="151" value="0" aria-label="Pokémon seen"></progress></div>
-<div class="bank-cell"><span class="micro" id="sum-caught-label">Catches tracked</span><strong class="readout" id="sum-caught">0</strong><span class="bank-note" id="sum-caught-note">Since tracking began</span></div>
 <div class="bank-cell"><span class="micro">Level 100</span><strong class="readout" id="sum-maxed">0<span class="unit">/151</span></strong><span class="meter" id="maxed-cells" data-level="warn" aria-hidden="true"></span><progress class="vh" id="maxed-meter" max="151" value="0" aria-label="Pokédex level 100 milestones"></progress></div>
-<div class="bank-cell"><span class="micro">Perfect finds</span><strong class="readout" id="sum-perfect">0</strong><span class="bank-note">Every DV at 15</span></div>
+<div class="bank-cell" title="Final evolutions credit earlier forms, never sibling branches"><span class="micro">Perfect</span><strong class="readout" id="sum-perfect">0<span class="unit">/151</span></strong><span class="meter" id="perfect-cells" data-level="warn" aria-hidden="true"></span><progress class="vh" id="perfect-meter" max="151" value="0" aria-label="Perfect species collected"></progress></div>
+<div class="bank-cell" title="Final evolutions credit earlier forms, never sibling branches"><span class="micro">Shiny</span><strong class="readout" id="sum-shiny">0<span class="unit">/151</span></strong><span class="meter" id="shiny-cells" data-level="signal" aria-hidden="true"></span><progress class="vh" id="shiny-meter" max="151" value="0" aria-label="Shiny species collected"></progress></div>
 </section>
 
 <p class="vh" id="catch-tracking-note">Loading catch records…</p>
 
-<section class="detail-section shiny-collection" aria-label="Shiny collection"><h2>★ Shiny collection</h2><dl class="collection-counts"><div><dt>Wild seen</dt><dd id="shiny-seen">0</dd></div><div><dt>Catches + custom gifts</dt><dd id="shiny-acquired">0</dd></div><div><dt>Held</dt><dd id="shiny-held">0</dd></div></dl><p class="note" id="shiny-tracking-note"></p><a class="key" href="${game_base}/pc?scope=all&rating=shiny">View shinies ↗</a></section>
 <section id="panel-dex" aria-label="Pokédex entries">
 <div class="filters" role="search">
 <label class="field field--search" for="search"><span class="micro">Find</span><input id="search" type="search" placeholder="Name or number" autocomplete="off"></label>
@@ -58,7 +57,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <option value="seen">Seen, not caught</option>
 <option value="unseen">Not met yet</option>
 <option value="available">Possible in this run</option>
-<option value="maxed">Gold stars earned</option><option value="unmastered">Still needs a gold star</option><option value="quality">3★+ DV species found</option><option value="three-held">3★ partners with you</option><option value="perfect">Perfect DV species found</option><option value="shiny">★ Shiny species found</option><option value="held">On the team or in a box</option>
+<option value="maxed">Gold stars earned</option><option value="unmastered">Still needs a gold star</option><option value="quality">3★+ DV species found</option><option value="three-held">3★ partners with you</option><option value="perfect">Perfect collection</option><option value="shiny">★ Shiny collection</option><option value="held">On the team or in a box</option>
 </select></span></label>
 <label class="field" for="sort"><span class="micro">Order</span><span class="select"><select id="sort">
 <option value="dex">Pokédex number</option>

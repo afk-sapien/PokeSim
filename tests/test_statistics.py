@@ -136,6 +136,10 @@ def test_stats_routes_are_scoped_and_entries_do_not_load_charts(tmp_path):
     result = client.get('/api/statistics').json()
     assert result.pop('event_returns')['activities'] == []
     assert not result.pop('mew_returns')['league_required']
+    records = result.pop('collection_records')
+    assert records['perfect_found'] == 0
+    assert records['shiny']['held'] == 0
+    assert not records['catches']['available']
     returns = result.pop('legendary_returns')
     assert returns['interval'] == 1000000 and not returns['available']
     assert result == {

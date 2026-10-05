@@ -84,10 +84,19 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def statistics():
         from ..statistics import status
         from ..legendary_returns import status as returns_status
-        collection = (emu.status().get('strategy') or {}).get('collection') or {}
+        current = emu.status()
+        collection = (current.get('strategy') or {}).get('collection') or {}
+        from ..milestones import apply as milestones
+        from ..catches import status as catch_status
+        records = milestones(current.get('game') or {}, store)
+        goals = records['milestones']
         from .. import step_events, mew_returns
         return {**status(store), 'legendary_returns': returns_status(store),
                 'event_returns': step_events.status(store), 'mew_returns': mew_returns.status(store),
+                'collection_records': {'catches': catch_status(store),
+                                       'perfect_found': goals['perfect_found'],
+                                       'perfect_count_is_minimum': goals['perfect_count_is_minimum'],
+                                       'shiny': records['shiny']},
                 'marathon': collection.get('marathon', {})}
 
     @app.get('/trading', response_class=HTMLResponse)

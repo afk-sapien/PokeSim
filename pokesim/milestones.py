@@ -40,6 +40,12 @@ def level_credit(species):
     return {SPECIES[sid]['dex'] for sid in family if sid in SPECIES}
 
 
+def collection_credit(dexes):
+    """Apply the level-100 evolution rule to verified collection records."""
+    return sorted({dex for sid, mon in SPECIES.items() if mon['dex'] in dexes
+                   for dex in level_credit(sid)})
+
+
 def perfect_group(mon):
     # Evolution and nicknames cannot manufacture extra individual discoveries.
     roots = [sid for sid in ancestors(mon['species'])
@@ -49,13 +55,14 @@ def perfect_group(mon):
 
 def empty():
     return {'level_100': [], 'perfect_species': [], 'high_quality_species': [],
-            'perfect_groups': {}, 'perfect_catches': 0}
+            'perfect_groups': {}, 'perfect_catches': 0, 'shiny_species': []}
 
 
 def status(store):
     value = {**empty(), **(store.get(KEY) or {})}
     value['high_quality_species'] = sorted(set(value['high_quality_species']) | set(value['perfect_species']))
-    return {**value, 'perfect_found': sum(value['perfect_groups'].values()),
+    return {**value, 'perfect_collection': collection_credit(set(value['perfect_species'])),
+            'perfect_found': sum(value['perfect_groups'].values()),
             'perfect_count_is_minimum': True}
 
 
@@ -92,7 +99,7 @@ def _goal_inputs(snapshot):
 
 
 def _goal_token(rows):
-    maxed, perfect_species, high_quality_species = set(), set(), set()
+    maxed, perfect_species, high_quality_species, shiny_species = set(), set(), set(), set()
     groups = Counter()
     for species, level, dvs, trainer_id in rows:
         if species not in SPECIES or level is None or not 1 <= level <= 100:
@@ -106,8 +113,10 @@ def _goal_token(rows):
             perfect_species.add(SPECIES[species]['dex'])
             if trainer_id is not None and 0 <= trainer_id <= 65535:
                 groups[perfect_group(mon)] += 1
+        if is_shiny(mon):
+            shiny_species.add(SPECIES[species]['dex'])
     return (tuple(sorted(maxed)), tuple(sorted(perfect_species)), tuple(sorted(groups.items())),
-            tuple(sorted(high_quality_species)))
+            tuple(sorted(high_quality_species)), tuple(sorted(shiny_species)))
 
 
 class MilestoneTracker:
@@ -138,12 +147,13 @@ class MilestoneTracker:
             return
         if token == self.confirmed:
             return
-        maxed, perfect_species, groups, high_quality_species = token
+        maxed, perfect_species, groups, high_quality_species, shiny_species = token
         with self.store.lock, self.store.db:
             row = self.store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
             value = json.loads(row[0]) if row else empty()
             value['level_100'] = sorted(set(value['level_100']) | set(maxed))
             value['perfect_species'] = sorted(set(value['perfect_species']) | set(perfect_species))
+            value['shiny_species'] = sorted(set(value.get('shiny_species', ())) | set(shiny_species))
             value['high_quality_species'] = sorted(set(value.get('high_quality_species', ()))
                                                    | set(high_quality_species) | set(value['perfect_species']))
             for group, count in groups:
@@ -165,5 +175,9 @@ def apply(payload, store):
     shinies = shiny_status(store)
     shinies['held'] = sum(mon['shiny'] for mon in party + boxed)
     shinies['held_species'] = sorted({mon['dex'] for mon in party + boxed if mon['shiny'] and mon.get('dex')})
+    held_dexes = {SPECIES[mon['species']]['dex'] for mon in party + boxed
+                 if mon['shiny'] and mon.get('species') in SPECIES}
+    shinies['collection_species'] = collection_credit(set(value['shiny_species'])
+                                                      | set(shinies['acquired_species']) | held_dexes)
     return {**payload, 'milestones': value, 'shiny': shinies, 'party': party,
             'storage': {**storage, 'pokemon': boxed} if storage else None}

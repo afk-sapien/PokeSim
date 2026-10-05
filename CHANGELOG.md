@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make all Pokédex header counters species coverage out of 151. Credit perfect and shiny final evolutions to their earlier forms, remove the separate shiny panel, and move individual catch, perfect-find, and shiny totals to Journal Stats.
+
 - Remove Elite Four wins from PC cards, details, and sorting to reduce visual clutter.
 
 - Add moves-aware Battle Power to PC sorting and details, keeping Stat Power and natural potential separate.

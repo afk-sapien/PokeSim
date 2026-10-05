@@ -49,8 +49,6 @@ test('cards show caught and current counts even when a species has zero or no re
   assert.equal((grid.match(/class="card-counts">Caught 0 · Have 0/g) || []).length, 2)
   assert.match(grid, /aria-label="Pikachu, number 025, In Pokédex, Caught 12 · Have 3"/)
   assert.match(grid, /aria-describedby="catch-tracking-note"/)
-  assert.equal(view.element('#sum-caught').textContent, 42)
-  assert.equal(view.element('#sum-caught-label').textContent, 'Catches tracked')
   assert.match(view.element('#catch-tracking-note').textContent, /^Catches tracked since .*2026/)
 })
 
@@ -82,7 +80,6 @@ test('catch-only updates refresh open details and cards without losing scroll po
   await view.context.refreshStatus()
   assert.match(view.element('#grid').innerHTML, /Caught 13 · Have 3/)
   assert.match(view.element('#detail-body').innerHTML, /<dt>Caught<\/dt><dd>13<\/dd>/)
-  assert.equal(view.element('#sum-caught').textContent, 43)
   assert.equal(view.element('#detail').scrollTop, 480)
   current.storage.pokemon.pop()
   await view.context.refreshStatus()
@@ -95,7 +92,6 @@ test('new adventures with complete history identify the total as tracked from th
   current.catches.complete_history = true
   const view = page(() => current)
   await settle()
-  assert.equal(view.element('#sum-caught-label').textContent, 'Total caught')
   assert.equal(view.element('#catch-tracking-note').textContent, 'Catches tracked from the start of this adventure.')
   view.context.renderDetail(25)
   assert.match(view.element('#detail-body').innerHTML, /Catches tracked from the start of this adventure/)
@@ -108,7 +104,6 @@ test('missing catch history is not inferred from the registered species or held 
   const view = page(() => current)
   await settle()
   assert.match(view.element('#grid').innerHTML, /Catch count unavailable · Have 3/)
-  assert.equal(view.element('#sum-caught').textContent, 'Unavailable')
   assert.equal(view.element('#catch-tracking-note').textContent, 'Catch tracking has not started yet.')
 })
 
@@ -119,7 +114,6 @@ test('unsupported games display unavailable catch counts while retaining current
   await settle()
   assert.match(view.element('#grid').innerHTML, /Catch count unavailable · Have 3/)
   assert.doesNotMatch(view.element('#grid').innerHTML, /Caught 0/)
-  assert.equal(view.element('#sum-caught').textContent, 'Unavailable')
   assert.equal(view.element('#catch-tracking-note').textContent, 'Catch tracking is unavailable for this game.')
   view.context.renderDetail(25)
   assert.match(view.element('#detail-body').innerHTML, /<dt>Caught<\/dt><dd class="count-unavailable">Unavailable<\/dd>/)

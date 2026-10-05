@@ -1,7 +1,7 @@
 # Long-term collection goals
 
-These goals are included in the development source. They are not part of the
-published rc31 download yet. Each adventure keeps its own records.
+Each adventure keeps its own collection records. The Pokédex header shows
+Registered, Seen, Level 100, Perfect, and Shiny coverage, each out of 151 species.
 
 ## A level 100 Pokédex
 
@@ -48,9 +48,12 @@ HP is derived from the other four DVs. This measures natural potential, not
 stat experience or current battle stats.
 
 Perfect individuals receive a soft animated halo and a labeled badge in the PC.
-The effect respects reduced-motion preferences. Their actual species also receives
-a Pokédex badge. Evolving a perfect Bulbasaur records Ivysaur when it is observed,
-then Venusaur when it is observed. It does not invent sightings of other forms.
+The effect respects reduced-motion preferences. Perfect collection coverage uses
+the same rule as level 100: a final evolution credits its ancestors, never sibling
+branches. A perfect Venusaur credits Bulbasaur, Ivysaur, and Venusaur. A perfect
+Vaporeon credits Eevee and Vaporeon. Existing perfect species records automatically
+receive this coverage credit without increasing the number of individual finds
+or changing the cartridge Pokédex flags.
 
 The automatic player keeps perfect individuals alongside the best future and
 current partners of each species. Rare-find protection and bounded hunting before
@@ -58,8 +61,8 @@ training are described in the [investment guide](pokemon-stats.md#training). Aut
 exclude them. Repeat expeditions continue looking for rare partners after the
 ordinary Pokédex is complete, while training and supply trips still have priority.
 
-The total displayed with a plus sign is a **confirmed minimum**, accompanied by
-the number of perfect species discovered and perfect partners currently held.
+Journal Stats shows individual perfect finds. Its total with a plus sign is a
+**confirmed minimum**, separate from the Pokédex species coverage counter.
 Existing partners establish a baseline. New perfect catches on verified Red and
 Blue cartridges add durable capture receipts, so replaying the same saved capture
 does not add another find.
@@ -70,6 +73,18 @@ and evolution family. Nicknames, evolution, or moving boxes cannot create extra
 finds. Identical gifts or trades after a partner leaves may be indistinguishable,
 and previously released partners cannot be reconstructed. Unknown DV data never
 receives perfect credit.
+
+## Shiny collection
+
+The shiny counter is species coverage out of 151, with the same final-evolution
+credit as perfect and level-100 milestones. Duplicate individuals count once per
+species. Verified catches, custom gifts, and observed party or PC partners count.
+A wild sighting alone does not earn collection credit. Confirmed records remain
+after trading or evolving a partner and survive restarts and save rewinds.
+
+Journal Stats holds the individual totals: wild shinies seen, shiny catches plus
+custom gifts, and shinies currently held. Sightings and acquisitions start when
+tracking was enabled. Older unrecorded shinies cannot be reconstructed.
 
 ## Persistence
 

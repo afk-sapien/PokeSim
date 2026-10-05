@@ -4,6 +4,15 @@ Journal has two subpages. Entries contains the event log. Stats contains the
 existing Pokédex, level 100, perfect-find and League history alongside collection
 strength, potential, and activity trends.
 
+## Collection activity
+
+The collection activity panel shows catches tracked, individual perfect finds,
+wild shinies seen, shiny catches plus custom gifts, and shinies currently held.
+These are individual totals, separate from the Pokédex's species coverage out of
+151. Partial catch history is labeled as tracked since collection began, and
+perfect finds retain the plus sign for a verified minimum. Unavailable tracking
+is shown explicitly. The API exposes these records under `collection_records`.
+
 ## Collection strength
 
 All current party members and all PC boxes contribute once to total collection

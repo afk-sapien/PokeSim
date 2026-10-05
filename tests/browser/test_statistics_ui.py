@@ -149,3 +149,44 @@ def test_step_activity_and_mew_progress(page, game, width):
     data['event_returns'].update(enabled=False)
     page.reload()
     expect(page.locator('#event-returns')).not_to_be_visible()
+
+
+@pytest.mark.parametrize('width', [320, 1280])
+def test_pokedex_coverage_and_journal_individual_counts(page, game, width):
+    from pokesim import catches, shiny
+    from pokesim.milestones import MilestoneTracker
+    from pokesim.strategy_data import SPECIES
+    url, store, emu, _ = game
+    sid = lambda dex: next(key for key, mon in SPECIES.items() if mon['dex'] == dex)
+    base = emu.snapshot.party[0]
+    emu.snapshot = replace(emu.snapshot, party=(
+        replace(base, species=sid(3), dvs=(15,) * 5),
+        replace(base, species=sid(134), dvs=(0, 10, 10, 10, 10))))
+    tracker = MilestoneTracker(store)
+    tracker.observe(emu.snapshot)
+    tracker.observe(emu.snapshot)
+    store.set(catches.KEY, {'total': 42, 'counts': {'3': 42}, 'available': True,
+                            'complete_history': False, 'started_at': time.time()})
+    store.set(shiny.KEY, {**shiny.empty(), 'seen': 7, 'acquired': 4, 'available': True,
+                          'acquired_species': [134], 'seen_species': [150]})
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(url + '/pokedex')
+    expect(page.locator('#sum-perfect')).to_have_text('3/151')
+    expect(page.locator('#sum-shiny')).to_have_text('2/151')
+    assert page.locator('.bank .readout').count() == 5
+    assert all(text.endswith('/151') for text in page.locator('.bank .readout').all_text_contents())
+    assert page.locator('#sum-caught, .shiny-collection').count() == 0
+    page.locator('#status-filter').select_option('perfect')
+    expect(page.locator('.dex-card')).to_have_count(3)
+    page.locator('#status-filter').select_option('shiny')
+    expect(page.locator('.dex-card')).to_have_count(2)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.screenshot(path=f'/tmp/pokesim-collection-dex-{width}.png', full_page=True)
+    page.goto(url + '/journal/stats')
+    expect(page.locator('#stats-caught')).to_have_text('42')
+    expect(page.locator('#stats-perfect')).to_have_text('1+')
+    expect(page.locator('#stats-shiny-seen')).to_have_text('7')
+    expect(page.locator('#stats-shiny-acquired')).to_have_text('4')
+    expect(page.locator('#stats-shiny-held')).to_have_text('1')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.screenshot(path=f'/tmp/pokesim-collection-stats-{width}.png', full_page=True)

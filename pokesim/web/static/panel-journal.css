@@ -565,3 +565,20 @@
 .return-count { color: var(--ink-2) }
 .return-empty { padding: var(--s4) }
 .return-empty { border: var(--hair) solid var(--rule) }
+
+/* Individual discovery totals belong beside the adventure history. */
+.collection-records { display: grid }
+.collection-records { grid-template-columns: repeat(5, minmax(0, 1fr)) }
+.collection-records > div { display: grid }
+.collection-records > div { align-content: start }
+.collection-records > div { gap: var(--s2) }
+.collection-records > div { padding: var(--s4) }
+.collection-records > div { min-width: 0 }
+.collection-records .readout { font-size: clamp(20px, 3vw, 32px) }
+.collection-records .readout { overflow-wrap: anywhere }
+@media (max-width: 800px) {
+  .collection-records { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .collection-records > div:last-child { grid-column: 1 / -1 }
+}
+
+.collection-records .readout { white-space: normal }
