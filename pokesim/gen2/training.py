@@ -84,7 +84,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     state['phase'] = 'evolving'
     if mon.box is not None:
         goal = policy.storage_goal(snapshot)
-        return Goal('collection_train_pc', f'Prepare {mon.name} for evolution', goal.map_name, goal.x, goal.y, goal.face)
+        return Goal('collection_train_pc', f'Prepare {mon.name} for training', goal.map_name, goal.x, goal.y, goal.face)
     if project['item']:
         return Goal('collection_evolve_item', f'Evolve {mon.name}', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     if mon.held_item != share:
@@ -129,7 +129,8 @@ def arrive(policy, snapshot):
     project = state.get('training')
     if not project:
         return None
-    wanted = state.get('share_holder') or project['identity']
+    wanted = state.get('share_holder') if policy.goal.key == 'collection_train_pc' else None
+    wanted = wanted or project['identity']
     mon = next((row for row in snapshot.party + snapshot.stored if identity(row) == wanted), None)
     key = policy.goal.key
     if key == 'collection_train_pc' and mon:

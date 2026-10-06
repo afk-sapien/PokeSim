@@ -87,7 +87,7 @@ activation or a rewind across the committed unlock.
 ## Validation
 
 Testing uses Python 3.12.3 and PyBoy 2.7.0 with the owner-supplied cartridges.
-The full regression suite passed 1,896 tests with 151 skipped.
+The full regression suite passed 1,927 tests with 151 skipped.
 Skipped tests retain their existing external fixture or environment requirements.
 
 Recorded cartridge scenarios include:
@@ -109,12 +109,13 @@ Recorded cartridge scenarios include:
 | Time Capsule | Red and Blue exchanged with Gold, Silver and Crystal, with independent participant and save restart checks |
 | Managed Time Capsule | Crystal prepared a boxed offer, committed and recovered the result, then restored its original six partners |
 | Ruins of Alph | All four puzzles solved in each of Gold, Silver and Crystal |
-| Crystal Battle Tower | Level 30, 50 and 100 challenge attempts, three partners trained to level 50, Strength taught through the menu, ordinary loss recovery and original team restoration. Corrected the native counter, which counts opponents loaded rather than only wins |
+| Crystal Battle Tower | Level 30, 50 and 100 challenge attempts, three partners trained to level 50, Strength, Psychic, Earthquake and Toxic taught through the menus, native Leftovers collection and use, level 70 training, ordinary loss recovery and original team restoration. Corrected the native counter, which counts opponents loaded rather than only wins |
 | Crystal Celebi | Optional GS Ball activation committed once, delivery and Kurt quest completed, Celebi caught at the shrine |
 | Bug-Catching Contest | Entry, judging and party restoration in all three games, Crystal won first place and received a Sun Stone |
-| Extended collection | Crystal completed another 5,000,028 frames without a stall, reaching 94 owned species including Espeon and Crobat, then another 750,032 frames reached 95. Gold recovered from insufficient Day Care funds and reached 68 |
+| Extended collection | Crystal completed another 5,000,028 frames without a stall, reaching 94 owned species including Espeon and Crobat, then another 750,032 frames reached 95. Gold recovered from insufficient Day Care funds, completed another 2,000,008 frames without a stall and reached 78, then Espeon and Nidoqueen raised it to 80. Crystal reached 98 after Suicune, a native Lugia trade and Tyranitar |
+| Moon Stone | Collected the native Tohjo Falls item in all three games. Gold then selected Nidorina in the stone menu and evolved it into Nidoqueen |
 | Trade evolution items | Collected Up-Grade, King’s Rock and Dragon Scale in Gold, Silver and Crystal through native dialogue, Strength and item pickups |
-| Held trade evolution | Prepared Metal Coat through the menu, traded Onix and received Steelix |
+| Held trade evolution | Prepared Metal Coat for Steelix and King’s Rock for a Gold/Crystal exchange that produced Politoed and Slowking. Both King’s Rock results passed checkpoint restart, cartridge restart and durable commit/recovery checks |
 | Runtime API | Pages, 251-entry Pokédex, PC, journal, statistics, manual input, audio, paused frame and restart |
 | Portable saves | Fresh Continue verified for all three games |
 | Optional rewards | Valid party and box preservation, fresh Continue, durable claim and replay protection |
@@ -132,6 +133,15 @@ postgame collection when Red reappears after the weekly reset. Split-evolution
 breeding includes Slowking and requires viable Tyrogue stat combinations instead
 of counting arbitrary spare Tyrogue. Training waits through transient collision
 maps instead of indexing an empty encounter list.
+
+Further Tower preparation considers reachable evolutions and shared type
+weaknesses, equips native Leftovers, and teaches compatible attacks while
+preserving Recover. Combat uses Toxic against healthy bulky opponents and
+Recover when its healing can outpace incoming damage. The expanded cartridge
+runs also found and fixed PC opening, Psychic TM selection, held-item transfer,
+evolution-stone selection and cave item routes that cross internal warps.
+Focused scenarios now wait for menus and scripts to finish before saving a
+completion checkpoint.
 
 ## Reproduce
 
