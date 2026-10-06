@@ -16,6 +16,11 @@ using the received species after trade evolution. NPC exchanges count from the
 update. Failed and canceled trades are excluded. Verified historical catches carry forward. Other counters begin with
 the update, without estimating older activity. Reusable item use is not counted. See [Adventure statistics](adventure-statistics.md).
 
+Item labels include TM/HM move names. An optional PokéAPI item artwork pack adds
+icons beside all 125 entries, including discs colored by the move's type. The
+pack downloads to local data storage and works offline. It can be enabled or
+hidden in Library Settings independently of Pokémon portraits.
+
 ## Battle Power and move development
 
 The PC now defaults to Battle Power, which rates known moves using the actual

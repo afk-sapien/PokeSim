@@ -805,6 +805,32 @@
     renderPortraits(await write('/api/v1/portraits/default'))
     notice('Default sprites restored. Reopen an adventure page to see them.')
   })
+  function renderItemArtwork(data) {
+    $('#item-artwork-state').textContent = data.busy ? `Downloading ${data.completed} / ${data.total}` : data.active === 'community' ? 'Item icons active' : 'Item icons hidden'
+    const install = $('#item-artwork-install')
+    install.textContent = data.busy ? 'Downloading…' : data.installed ? 'Show item icons' : 'Install item icons'
+    install.hidden = data.active === 'community' && !data.busy
+    install.toggleAttribute('data-blocked', data.busy)
+    $('#item-artwork-default').hidden = data.active !== 'community'
+    $('#item-artwork-default').toggleAttribute('data-blocked', data.busy)
+    $('#item-artwork-source').href = data.source
+    $('#item-artwork-license').href = data.license
+    $('#item-artwork-progress').hidden = !data.busy
+    $('#item-artwork-progress').max = data.total
+    $('#item-artwork-progress').value = data.completed
+    $('#item-artwork-feedback').textContent = data.error || (data.busy ? 'Icons appear once the complete pack is ready.' : 'Stats → Items updates automatically. No simulation restart is needed.')
+    $('#item-artwork-feedback').classList.toggle('is-error', Boolean(data.error))
+    permissions()
+  }
+  async function refreshItemArtwork() {
+    renderItemArtwork(await api('/api/v1/item-artwork'))
+  }
+  $('#item-artwork-install').onclick = () => act(async () => {
+    renderItemArtwork(await write('/api/v1/item-artwork/install'))
+  })
+  $('#item-artwork-default').onclick = () => act(async () => {
+    renderItemArtwork(await write('/api/v1/item-artwork/default'))
+  })
   async function enter() {
     await initializeSession()
     $('#workspace').hidden = false
@@ -814,6 +840,7 @@
       renderNicknameSettings(await api('/api/v1/settings'))
       await refreshBackups()
       await refreshPortraits()
+      await refreshItemArtwork()
     }
     if (page === 'notifications' && owner && !notifyDirty) renderNotifications(await api('/api/v1/notifications'))
     permissions()
@@ -836,7 +863,10 @@
       if ($('#workspace').hidden) boot()
       else {
         refresh()
-        if (page === 'settings' && owner) refreshPortraits().catch(error => { $('#portrait-feedback').textContent = error.message })
+        if (page === 'settings' && owner) {
+          refreshPortraits().catch(error => { $('#portrait-feedback').textContent = error.message })
+          refreshItemArtwork().catch(error => { $('#item-artwork-feedback').textContent = error.message })
+        }
       }
     }
   }, 3000)

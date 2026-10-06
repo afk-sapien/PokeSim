@@ -6,6 +6,7 @@
     : [['bought', 'Purchased'], ['used', 'Used'], ['bag', 'In bag now']]
   const params = new URLSearchParams(location.search)
   let rows = []
+  let itemArtwork = null
   let descending = params.get('order') === 'desc'
   let busy = false
   const add = (parent, tag, text = '') => {
@@ -54,9 +55,11 @@
       name.scope = 'row'
       const identity = add(name, 'div')
       identity.className = 'ledger-identity'
-      if (pokemon) {
+      if (pokemon || itemArtwork) {
         const sprite = add(identity, 'img')
-        sprite.src = PokeSim.url(`/sprites/${row.id}.png`)
+        sprite.src = pokemon ? PokeSim.url(`/sprites/${row.id}.png`)
+          : `/api/v1/item-artwork/images/${row.id}.png?v=${encodeURIComponent(itemArtwork)}`
+        sprite.addEventListener('error', () => { sprite.hidden = true }, {once: true})
         sprite.alt = ''
         sprite.width = sprite.height = 40
         sprite.loading = 'lazy'
@@ -100,6 +103,13 @@
       if (!response.ok) throw new Error('Statistics unavailable')
       const data = await response.json()
       rows = data[pokemon ? 'pokemon' : 'items']
+      if (!pokemon) {
+        try {
+          const response = await fetch('/api/v1/item-artwork', {cache: 'no-store'})
+          const artwork = response.ok ? await response.json() : null
+          itemArtwork = artwork?.active === 'community' ? artwork.revision : null
+        } catch (_) { /* Keep the last known artwork setting while reconnecting. */ }
+      }
       const shop = data.champion_shop
       const offers = $('#champion-shop')
       offers.hidden = pokemon || !shop

@@ -19,3 +19,10 @@ Sources:
 - [PyBoy source and LGPL license](https://github.com/Baekalfen/PyBoy/tree/4627b90b878e91faff443b3acd6d4e4be09a4387)
 - [GNU GPL version 3](https://www.gnu.org/licenses/gpl-3.0.html)
 - [Pinned disassembly source](https://github.com/pret/pokered/tree/a1a22aaf84d1675bcdbaeb194592379d586d838e)
+
+The optional item icon pack uses the same pinned PokéAPI revision and download
+process. It maps 125 Red/Blue item entries to 86 later-generation images, with
+TM/HM discs colored by their Generation I move types. Later-game equivalents
+include Exp. Share for Exp. All and Dowsing Machine for Itemfinder. Icons and the
+source notice are stored only in the owner’s data directory, never in release
+packages. The pack can be installed or hidden independently of Pokémon portraits.

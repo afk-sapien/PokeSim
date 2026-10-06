@@ -24,6 +24,9 @@ class Assets:
         self.cancelled = threading.Event()
         from .portrait_packs import PortraitPacks
         self.portraits = PortraitPacks(registry, self.cancelled)
+        from .item_artwork import IMAGES
+        self.item_artwork = PortraitPacks(registry, self.cancelled, images=IMAGES,
+                                         folder='/sprites/items/', pack='item-artwork', setting='item_artwork')
 
     def install_rom(self, raw):
         sha1 = hashlib.sha1(raw).hexdigest()

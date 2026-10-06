@@ -1,4 +1,4 @@
-"""Optional owner-requested portrait downloads, separate from cartridge artwork."""
+"""Optional owner-requested artwork downloads, separate from cartridge artwork."""
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 import json
@@ -43,10 +43,14 @@ def validate_png(data):
 
 
 class PortraitPacks:
-    def __init__(self, registry, cancelled):
+    def __init__(self, registry, cancelled, *, images=None, folder=FOLDER,
+                 pack='portrait-packs', setting='community_portraits'):
         self.registry = registry
         self.cancelled = cancelled
-        self.directory = registry.root / 'assets' / 'portrait-packs' / REVISION
+        self.images = images if images is not None else {dex: f'{dex}.png' for dex in range(1, 152)}
+        self.folder = folder
+        self.setting = setting
+        self.directory = registry.root / 'assets' / pack / REVISION
         self.lock = threading.RLock()
         self.busy = False
         self.completed = 0
@@ -58,10 +62,10 @@ class PortraitPacks:
     def status(self):
         with self.lock:
             installed = self.installed()
-            active = installed and self.registry.setting('community_portraits', False) is True
+            active = installed and self.registry.setting(self.setting, False) is True
             return {'active': 'community' if active else 'default', 'installed': installed,
-                    'busy': self.busy, 'completed': self.completed, 'total': 151,
-                    'error': self.error, 'revision': REVISION, 'source': SOURCE + FOLDER.rstrip('/'),
+                    'busy': self.busy, 'completed': self.completed, 'total': len(self.images),
+                    'error': self.error, 'revision': REVISION, 'source': SOURCE + self.folder.rstrip('/'),
                     'license': 'https://github.com/PokeAPI/sprites/blob/' + REVISION + '/LICENCE.txt'}
 
     def begin(self):
@@ -70,7 +74,7 @@ class PortraitPacks:
                 raise ValueError('The community sprite pack is already downloading')
             self.error = None
             if self.installed():
-                self.registry.set_setting('community_portraits', True)
+                self.registry.set_setting(self.setting, True)
                 return False
             self.busy = True
             self.completed = 0
@@ -80,13 +84,13 @@ class PortraitPacks:
         with self.lock:
             if self.busy:
                 raise ValueError('Wait for the sprite download to finish before switching')
-            self.registry.set_setting('community_portraits', False)
+            self.registry.set_setting(self.setting, False)
             self.error = None
 
     def path(self, dex, *, preview=False):
-        if not 1 <= dex <= 151 or not self.installed():
+        if dex not in self.images or not self.installed():
             return None
-        if not preview and self.registry.setting('community_portraits', False) is not True:
+        if not preview and self.registry.setting(self.setting, False) is not True:
             return None
         path = self.directory / f'{dex}.png'
         return path if path.is_file() else None
@@ -101,20 +105,26 @@ class PortraitPacks:
                     notice = download(client, RAW + '/LICENCE.txt', 64 * 1024)
                     (stage / 'LICENCE.txt').write_bytes(notice)
 
-                    def fetch(dex):
+                    groups = {}
+                    for dex, filename in self.images.items():
+                        groups.setdefault(filename, []).append(dex)
+
+                    def fetch(filename):
                         if self.cancelled.is_set():
                             raise ValueError('Sprite download was interrupted')
-                        data = download(client, RAW + FOLDER + f'{dex}.png', MAX_IMAGE_BYTES)
+                        data = download(client, RAW + self.folder + filename, MAX_IMAGE_BYTES)
                         validate_png(data)
-                        (stage / f'{dex}.png').write_bytes(data)
+                        for dex in groups[filename]:
+                            (stage / f'{dex}.png').write_bytes(data)
+                        return len(groups[filename])
 
                     with ThreadPoolExecutor(max_workers=4) as pool:
-                        futures = [pool.submit(fetch, dex) for dex in range(1, 152)]
+                        futures = [pool.submit(fetch, filename) for filename in groups]
                         try:
                             for future in as_completed(futures):
-                                future.result()
+                                completed = future.result()
                                 with self.lock:
-                                    self.completed += 1
+                                    self.completed += completed
                         except Exception:
                             for future in futures:
                                 future.cancel()
@@ -122,9 +132,9 @@ class PortraitPacks:
                 if self.cancelled.is_set():
                     raise ValueError('Sprite download was interrupted')
                 CheckpointStore.atomic_write(stage / 'manifest.json', json.dumps({
-                    'revision': REVISION, 'source': SOURCE, 'count': 151}).encode())
+                    'revision': REVISION, 'source': SOURCE, 'count': len(self.images)}).encode())
                 stage.rename(self.directory)
-                self.registry.set_setting('community_portraits', True)
+                self.registry.set_setting(self.setting, True)
         except Exception:
             log.exception('Community sprite installation failed')
             with self.lock:

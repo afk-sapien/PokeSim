@@ -218,6 +218,9 @@ def cache_policy(path, query, content_type):
     Pages reference their stylesheets and scripts with a ?v= stamp that changes with
     the file, so those never need a round trip. Everything live stays uncached.
     """
+    if (re.fullmatch(r'/api/v1/item-artwork/images/[0-9]+\.png', path)
+            and 'v=' in query and content_type.startswith('image/png')):
+        return 'private, max-age=86400'
     game = GAME_ASSET.match(path)
     kind = game[1] if game else ('static' if path.startswith('/static/') else None)
     if kind == 'static':
@@ -490,6 +493,30 @@ def create_app(manager, shutdown=lambda: None):
     @app.get('/api/v1/portraits/preview/{dex}.png')
     def portrait_preview(dex: int):
         path = manager.assets.portraits.path(dex, preview=True)
+        if path is None:
+            raise HTTPException(404)
+        return FileResponse(path, media_type='image/png')
+
+    @app.get('/api/v1/item-artwork')
+    def item_artwork():
+        return manager.assets.item_artwork.status()
+
+    @app.post('/api/v1/item-artwork/install')
+    async def install_item_artwork():
+        manager.check_available()
+        if manager.assets.item_artwork.begin():
+            manager.background(manager.assets.item_artwork.install)
+        return item_artwork()
+
+    @app.post('/api/v1/item-artwork/default')
+    def hide_item_artwork():
+        manager.check_available()
+        manager.assets.item_artwork.restore()
+        return item_artwork()
+
+    @app.get('/api/v1/item-artwork/images/{item}.png')
+    def item_image(item: int):
+        path = manager.assets.item_artwork.path(item)
         if path is None:
             raise HTTPException(404)
         return FileResponse(path, media_type='image/png')
