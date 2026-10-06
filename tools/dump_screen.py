@@ -1,7 +1,7 @@
 """Play until a condition, then print the decoded screen text after a scripted input sequence."""
 import os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from pyboy import PyBoy
+from pokesim_core.emulator import Emulator as PyBoy
 from pokesim.ram import read_snapshot, decode_text, W_TILEMAP
 from pokesim.policies import make_policy
 from pokesim.policies.base import PolicyContext

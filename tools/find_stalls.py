@@ -8,7 +8,7 @@ private game data and must remain outside the checkout.
 """
 import argparse
 from collections import Counter, deque
-from importlib.metadata import version
+from pokesim_core.emulator_state import runtime_provenance
 import json
 from pathlib import Path
 import sys
@@ -163,7 +163,7 @@ def main():
                    'wall_minutes': round((time.monotonic() - wall) / 60, 1),
                    'stall_minutes': args.stall_minutes, 'stalls': stalls, 'timeline': timeline,
                    'mode_frames': dict(modes.most_common(12)), 'final': report(final),
-                   'pyboy': version('pyboy')}
+                   'emulator': runtime_provenance()}
         (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
         print(json.dumps({'outcome': outcome, 'game_hours': summary['game_hours'], 'wall_minutes': summary['wall_minutes'],
                           'stalls': [(row['folder'], row['map'], (row['objective'] or {}).get('title'),

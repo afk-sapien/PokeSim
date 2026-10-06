@@ -3,7 +3,7 @@ import argparse
 import io
 from pathlib import Path
 
-from pyboy import PyBoy
+from pokesim_core.emulator import Emulator as PyBoy
 from pokesim.ram import read_snapshot
 from pokesim.screen import Screen
 from pokesim.strategy_data import MOVES, SPECIES

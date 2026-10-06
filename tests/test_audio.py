@@ -109,8 +109,7 @@ def test_real_rom_sound_switch_preserves_save_and_queued_buttons(tmp_path):
     rom = Path('roms/pokered.gb')
     if not rom.is_file():
         pytest.skip('Private ROM is not available')
-    from pyboy import PyBoy
-    from pyboy.utils import WindowEvent
+    from pokesim_core.emulator import Emulator as PyBoy
     emu = Emulator.__new__(Emulator)
     emu.rom = rom
     emu.isolated_ram = True
@@ -134,7 +133,7 @@ def test_real_rom_sound_switch_preserves_save_and_queued_buttons(tmp_path):
         emu._sync_audio(True)
         assert emu.pb is original
         assert bytes(emu.pb.memory[0xA000:0xE000]) == before
-        assert int(emu.pb.events[-1]) == WindowEvent.PRESS_BUTTON_A
+        assert emu.pb.pending_inputs[-1] == ('a', True)
         buffers = []
         for _ in range(180):
             emu.pb.tick(1, render=False, sound=True)
@@ -145,7 +144,7 @@ def test_real_rom_sound_switch_preserves_save_and_queued_buttons(tmp_path):
         before = bytes(emu.pb.memory[0xA000:0xE000])
         emu._sync_audio(False)
         assert bytes(emu.pb.memory[0xA000:0xE000]) == before
-        assert int(emu.pb.events[-1]) == WindowEvent.RELEASE_BUTTON_A
+        assert emu.pb.pending_inputs[-1] == ('a', False)
         emu.pb.tick(120, render=False, sound=False)
         emu._sync_audio(True)
         emu.pb.tick(1, render=False, sound=True)

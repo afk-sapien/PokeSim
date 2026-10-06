@@ -183,7 +183,7 @@ def test_driver_rejects_unprepared_sources_before_input(monkeypatch, map_id, lin
     (174, 140, 'Cartridge restart'),
 ])
 def test_restarts_require_exact_original_center(monkeypatch, checkpoint_map, cartridge_map, error):
-    import pyboy
+    from pokesim_core import emulator as pyboy
     import pokesim.ram
     import pokesim.screen
     instances = []
@@ -213,7 +213,7 @@ def test_restarts_require_exact_original_center(monkeypatch, checkpoint_map, car
         def stop(self, **kwargs):
             self.stopped = True
 
-    monkeypatch.setattr(pyboy, 'PyBoy', PyBoy)
+    monkeypatch.setattr(pyboy, 'Emulator', PyBoy)
     monkeypatch.setattr(verification, 'party', lambda pb, symbols: ['exact-party'])
     monkeypatch.setattr(pokesim.ram, 'read_snapshot',
                         lambda memory, frame: snapshot(next(pb.map_id for pb in instances if pb.memory is memory)))
@@ -237,7 +237,7 @@ def test_restarts_require_exact_original_center(monkeypatch, checkpoint_map, car
 def test_participant_derives_original_center_from_source_checkpoint(
         monkeypatch, tmp_path, source_map, reserved_map, error):
     import hashlib
-    import pyboy
+    from pokesim_core import emulator as pyboy
     import pokesim.ram
     import pokesim.screen
     from pokesim.interactions import cable_metadata
@@ -256,7 +256,7 @@ def test_participant_derives_original_center_from_source_checkpoint(
         def stop(self, **kwargs):
             pass
 
-    monkeypatch.setattr(pyboy, 'PyBoy', PyBoy)
+    monkeypatch.setattr(pyboy, 'Emulator', PyBoy)
     monkeypatch.setattr(pokesim.screen, 'Screen', lambda memory: SimpleNamespace(
         text='', cursor=None, kind=lambda snapshot: 'overworld'))
     monkeypatch.setattr(cable_metadata, 'BUILDS', {'test-rom': {'symbols': {}}})

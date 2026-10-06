@@ -15,12 +15,12 @@ def main():
     args = parser.parse_args()
 
     from fastapi.testclient import TestClient
-    import pyboy
+    from pokesim_core import emulator as pyboy
     from pokesim import desktop_setup, sprites
     from pokesim.app.manager import Manager, create_app
     from pokesim.app.registry import identifier
 
-    raw = (args.rom or Path(pyboy.__file__).with_name('default_rom.gb')).read_bytes()
+    raw = (args.rom or pyboy.demo_rom()).read_bytes()
     if not args.rom:
         # Only this isolated probe accepts the redistributable demo cartridge.
         desktop_setup.ROM_NAMES[hashlib.sha1(raw).hexdigest()] = 'Pokémon Red'

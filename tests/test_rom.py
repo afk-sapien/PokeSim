@@ -12,7 +12,7 @@ pytestmark = pytest.mark.skipif(not ROM.exists(), reason="no ROM")
 
 
 def test_boot_and_snapshot():
-    from pyboy import PyBoy
+    from pokesim_core.emulator import Emulator as PyBoy
     pb = PyBoy(str(ROM), window="null", sound_emulated=False)
     try:
         pb.set_emulation_speed(0)
@@ -22,8 +22,10 @@ def test_boot_and_snapshot():
         assert s.map == 0 and not s.started and s.valid
         # mash through the title into the intro: the player name gets a preset value
         for _ in range(120):
-            pb.button("a", delay=2)
-            pb.tick(8, render=False)
+            pb.press("a")
+            pb.tick(2, render=False)
+            pb.release("a")
+            pb.tick(6, render=False)
         s = read_snapshot(pb.memory, 1260)
         assert s.player_name != ""
     finally:

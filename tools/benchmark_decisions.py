@@ -51,7 +51,7 @@ def peak_rss_mib():
 
 def dependency_versions():
     result = {}
-    for name in ('pyboy', 'numpy', 'numba', 'llvmlite'):
+    for name in ('pokesim-core', 'numpy', 'numba', 'llvmlite'):
         try:
             result[name] = version(name)
         except PackageNotFoundError:
@@ -243,15 +243,14 @@ def simulate(fixture_path, frames, capture):
     timings = Timings()
     with tempfile.TemporaryDirectory(prefix='pokesim-decisions-') as temporary:
         settings = configure(fixture, Path(temporary))
-        from importlib.metadata import version
-        from pyboy import PyBoy
+        from pokesim_core.emulator_state import validate_runtime
+        from pokesim_core.emulator import Emulator as PyBoy
         from pokesim.policies.base import Action, PolicyContext
         from pokesim.ram import read_snapshot
         from pokesim.screen import W_OPTIONS
         if hashlib.sha1(Path(settings.rom_path).read_bytes()).hexdigest() != metadata['rom_sha1']:
             raise ValueError('Fixture ROM does not match its checkpoint')
-        if metadata['pyboy_version'] != version('pyboy'):
-            raise ValueError('Fixture checkpoint needs a different PyBoy version')
+        validate_runtime(metadata)
         policy = policy_start(fixture, metadata)
         pb = PyBoy(settings.rom_path, window='null', sound_emulated=False, ram_file=io.BytesIO(bytes(32768)))
         pb.set_emulation_speed(0)

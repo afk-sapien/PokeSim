@@ -28,3 +28,6 @@ SHA256SUMS
 release/
 manifest-output.txt
 manifest-error.txt
+
+# Separate emulator checkout, kept as a local convenience link.
+/pyboy-rs

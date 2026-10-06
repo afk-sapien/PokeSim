@@ -138,7 +138,7 @@ def test_checkpoint_reload_preserves_announced_playtime(tmp_path, monkeypatch):
     emu.audio = AudioFeed()
     emu._audio_enabled = False
     emu.play_clock = PlayClock()
-    path = emu.store.write_checkpoint(b'save', {'rom_sha1': 'rom', 'pyboy_version': version('pyboy'),
+    path = emu.store.write_checkpoint(b'save', {'rom_sha1': 'rom', 'pyboy_version': '2.7.0',
         'policy': config.POLICY, 'policy_state': {}, 'run_memory': RunMemory().to_dict()})
     monkeypatch.setattr('pokesim.emulator.read_snapshot', lambda memory, frame: snap())
     emu._load_state_file(path)
