@@ -1,34 +1,23 @@
-# Release status: 0.4.17 published
+# Release status: 0.4.18 candidate
 
-[PokeSim 0.4.17](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.17)
-is published with verified Python packages, the Linux amd64 Docker image and
-versioned Compose downloads. Core remains pinned at 0.1.4.
+The 0.4.18 candidate combines [repository cleanup #46](https://github.com/afk-sapien/PokeSim/pull/46)
+and [feature and release work #47](https://github.com/afk-sapien/PokeSim/pull/47).
+The latest published release remains [0.4.17](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.17).
+No 0.4.18 tag or public downloads have been published yet.
 
-The release adds named notification integrations, live audio and speed controls,
-creation names, nickname editing, backup restore and deletion, optional community
-artwork, responsive layouts and recovery fixes. See the
-[release notes](docs/release-notes.md).
+See the [release notes](docs/release-notes.md) for the combined changes and
+[implementation details](docs/next-release.md) for their limits. Core remains at 0.1.4.
 
-[Release PR #35](https://github.com/afk-sapien/PokeSim/pull/35) and
-[dependency PR #32](https://github.com/afk-sapien/PokeSim/pull/32) are merged.
-Issues [#33](https://github.com/afk-sapien/PokeSim/issues/33) and
-[#34](https://github.com/afk-sapien/PokeSim/issues/34) are closed as resolved.
-The annotated release tag points to `c3fc0c95f9286f2725adc3fd0a9c02e1b93db69f`.
+The Tynet preview includes live palettes and the complete feature set. Its latest
+local regression run passed 1,781 tests with 50 skips, and all five saved adventures
+passed checkpoint validation before deployment. Live palette checks preserved
+emulator state, paused frame counts, and worker continuity.
 
-CI passed on Python 3.11, 3.12 and 3.14. Native installation checks passed on
-Windows, Intel and Apple Silicon macOS, and x86-64 and ARM Linux. The publishing
-workflow reran validation, verified uploaded checksums and required an anonymous
-pull of the tested image before publishing. A fresh Docker volume also passed
-real cartridge upload, automatic setup, save export, artwork installation,
-backup restoration and container recreation with progress preserved.
-
-The [publication receipt](docs/validation/release-0.4.17.json) records the immutable
-source revision and image digest. The
-[combined review report](docs/validation/release-candidate-0417-20261003.md)
-contains local evidence, candidate deployment history and the test-collection
-correction found by CI. Its earlier pending-publication statements are historical.
-The original DV-byte mutation cause remains unresolved. The healing recovery
-addresses the reproduced rewind loop without rewriting DVs.
+Release validation is in progress. The feature PR's initial GitHub checks exposed
+an eager import of optional Playwright in normal test collection. That import now
+follows the existing lazy browser assertion pattern. The cleanup PR's prior jobs
+mostly failed to acquire hosted runners and have been restarted. A green local
+run does not substitute for the full cross-platform and browser checks.
 
 ## Known limits, deliberately not addressed here
 

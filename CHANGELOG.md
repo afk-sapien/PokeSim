@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.4.18
+
+- Fix Settings failing to load when saved backups exist.
+
+- Add optional locally stored PokéAPI artwork for all 125 item statistics entries, independently of Pokémon portraits. Include move names in TM/HM labels.
+- Allocate TMs by projected level-100 Battle Power gain using actual DVs, with a level-50 minimum and material improvement requirements.
+- Replenish Moon Stones, PP Ups, Elixirs, and Max Elixirs at the Champion counter. Add separate capped million-step offers for a Master Ball and five Rare Candies, with progress in Items.
+- Remove stale validation records and unused assets, update maintenance guidance, and keep optional browser imports out of normal test collection.
+
 - Add a Champion TM counter at Celadon Department Store for the 38 limited TMs.
   The AI purchases useful upgrades for compatible party members with a supply
   reserve, then teaches them through cartridge menus. Purchases recover safely
@@ -11,11 +20,11 @@
 
 - Give Stats its own main tab with Overview, Pokémon, and Items pages. Add searchable action totals for each species and item, preserve recorded catch history, and start new counters without estimating earlier activity.
 
-- Reorganize Journal Stats around shared overview totals, durable milestone times, recent progress, and collection highlights. Show detailed charts in open sections and combine legendary returns with the return-visit and gift cards, preserve unknown historical times, and label existing power charts as Stat Power.
+- Reorganize Stats around shared overview totals, durable milestone times, recent progress, and collection highlights. Show detailed charts in open sections and combine legendary returns with the return-visit and gift cards, preserve unknown historical times, and label existing power charts as Stat Power.
 
 - Simplify adventure controls with Stop and Download labels, a Settings icon beside Open adventure, and always-visible Archive and Delete actions that save and stop first.
 
-- Make all Pokédex header counters species coverage out of 151. Credit perfect and shiny final evolutions to their earlier forms, remove the separate shiny panel, and move individual catch, perfect-find, and shiny totals to Journal Stats.
+- Make all Pokédex header counters species coverage out of 151. Credit perfect and shiny final evolutions to their earlier forms, remove the separate shiny panel, and move individual catch, perfect-find, and shiny totals to Stats.
 
 - Remove Elite Four wins from PC cards, details, and sorting to reduce visual clutter.
 
@@ -28,7 +37,7 @@
 - Preserve shiny partners from automatic release, NPC trades, and trade offers. Prioritize shiny captures and pause for manual control if a shiny cannot be caught with the available balls or storage space.
 - Permanently delete stopped adventures using typed name confirmation. Interrupted deletions stay archived and can resume, while independent backups and shared ROMs remain available.
 - Keep emulated sound hardware running while muted so reconnecting listeners and cable trades preserve audio state. Upgrade supported older muted checkpoints in memory.
-- Add 12 GBC-inspired whole-screen palettes in Adventure Settings. Stop and start the adventure to apply a palette without changing its save format.
+- Add 12 GBC-inspired whole-screen palettes in Adventure Settings. Apply palette changes live, including while paused, without changing game state. Remember the choice per adventure.
 
 ## 0.4.17
 
@@ -104,7 +113,7 @@
   missing measurements. Express DV changes in percentage points.
 - Preserve collection measurements when saving immediately after restart and retry
   failed statistics transactions without losing capture counts.
-- Route Journal Stats correctly through the multi-adventure manager.
+- Route Stats correctly through the multi-adventure manager.
 
 ## 0.4.13
 

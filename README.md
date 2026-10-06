@@ -64,7 +64,7 @@ Change or disable these rewards in each adventure's settings.
   Follow the race and see whether your trainer beats their personal best.
 
 The expanded name pool and Discord and Telegram support arrived in
-[0.4.17](docs/release-notes.md). Follow the [changelog](CHANGELOG.md) for new additions.
+[0.4.18](docs/release-notes.md). Follow the [changelog](CHANGELOG.md) for new additions.
 
 ## Your adventure library
 
@@ -112,7 +112,7 @@ package manager:
 Open a new terminal, then install the current public release:
 
 ```sh
-uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.17/pokesim-0.4.17-py3-none-any.whl
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.18/pokesim-0.4.18-py3-none-any.whl
 uv tool update-shell
 ```
 

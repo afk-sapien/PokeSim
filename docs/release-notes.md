@@ -1,57 +1,70 @@
-# PokeSim 0.4.17 experimental beta
+# PokeSim 0.4.18 experimental beta
 
-Customize notifications, Pokémon names and artwork, manage backups, and enjoy
-clearer live controls and collection pages. This release also fixes two gameplay
-stalls during travel and League rematches.
+Track your adventures in more detail, build stronger movesets, and complete shiny
+and perfect collections. This release also improves mobile controls, adventure
+management, item artwork, audio handling, and live screen colors.
 
-- Optionally install the colored Red/Blue community sprite pack from Settings.
-  Includes download progress, previews and a switch back to default portraits.
-  Artwork downloads only after the user chooses it and is not bundled with PokeSim.
-- Keep unfinished sprite downloads out of backups, preventing failures when a download finishes during backup creation.
-- Refresh replaced sprites without requiring users to clear their browser cache.
-- Add live per-adventure speed controls and clearer Pause, Resume, and Save now actions.
+## Collection and statistics
 
-- Heal HP mismatches after PC withdrawal before leaving the Pokémon Center, preventing repeated rematch rewinds.
-- Fix adventures waiting forever when a poison faint message interrupts a map crossing.
+- Give Stats its own tab with Overview, Pokémon, and Items pages. Keep Journal
+  focused on the event timeline.
+- Add milestone times, 24-hour and 7-day progress, and Battle Power and DV highlights.
+- Track encounters, opponents, defeats, catches, gifts, trades in and out, and
+  current holdings for each species. Track purchases, consumption, and holdings
+  for each item. Recover verified historical catches and completed cable trades.
+- Show Pokédex collection coverage out of 151 for Seen, Registered, Level 100,
+  Shiny, and Perfect, with earlier-form credit through the recorded evolution line.
+- Identify Pokémon whose DVs satisfy the Generation II shiny rule. Add badges and
+  filters, prioritize their capture, and protect collected shinies from release
+  and automatic trades. Red and Blue do not gain native shiny battle sprites.
+- Add move names to TM/HM labels and an optional PokéAPI item artwork pack.
+  Icons download to local storage and work offline. Artwork is not bundled.
 
-- Listen to live game audio at any simulation speed, including Max with the Sound button.
-  Sound starts off and stops when you leave the tab.
-- Choose trainer and rival names when creating an adventure. Both fields start
-  with random suggestions and have individual reroll buttons.
-- Start with a suggested adventure name, edit it, or generate another.
-- Keep the PC collection full width in smaller desktop windows. Both collection
-  and box grids adjust their column counts to the available space.
-- Give Pokémon portraits brighter type-colored backgrounds with soft spotlights across the live
-  team, PC, and Pokédex.
-- Edit nickname prefixes, suffixes, complete names, and built-in exclusions in a compact Settings dialog.
-- Load an adventure from a verified backup as a separate stopped copy without overwriting current progress.
-- Present repeat visits and Mew walking requirements as progress cards in Adventure Stats, with separate ready, pending and League-win states.
-- Delete saved backups with confirmation, browse five per page, and see total backup storage.
-- Expand the built-in nickname pool from 1,616 to 6,117 unique names using
-  100 prefixes and 70 suffixes. Existing Pokémon keep their names.
-- Add named ntfy, Discord and Telegram integrations in Library → Notifications, including several of each. Discord uses a channel webhook.
-  Telegram uses a bot token and chat ID.
-- Keep the existing adventure and event filters, screenshots, journal links and
-  separate test buttons for each integration. Settings apply to running adventures.
-- Existing ntfy settings keep working. Disabling a destination preserves its
-  saved credentials. Saved bot tokens and webhook URLs stay hidden.
-- Discord messages suppress mentions. Provider errors and ordinary HTTP request
-  logs do not expose the new provider credentials.
-- Update the Docker build tool uv to 0.12.21.
+## Battle development and supplies
 
-Resolves sound support (#34) and additional notification providers (#33). Includes
-the uv build-tool update from PR #32.
+- Rate Battle Power using known moves and actual attacking stats. Keep Stat Power
+  and potential separate, and remove Elite Four wins from PC cards and details.
+- Improve move choices and delay stone evolution for useful upcoming moves.
+  Teach owned Surf or Strength into empty move slots when beneficial.
+- Allocate TMs greedily by projected level-100 Battle Power gain using each
+  Pokémon's actual DVs and full training. Require level 50 and a material
+  improvement both now and at maturity, then reassess after each use.
+- Make all 38 limited TMs renewable at a custom Champion counter in Celadon.
+  Purchases keep a cash reserve and recover safely after interruption.
+- Replenish Moon Stones, PP Ups, Elixirs, and Max Elixirs at that counter.
+- Offer one Master Ball and a bundle of five Rare Candies at separate million-step
+  intervals after becoming Champion. Offers are capped at one unclaimed purchase
+  each, with progress shown in Items.
 
-See the [notification setup guide](guide.md#notifications). Each integration chooses its own events and adventures. Multiple destinations can
-receive the same event. Notifications are best effort, and the journal remains the
-record of events when a provider is unavailable or rate limited.
+## Controls and presentation
 
-## Upgrading
+- Repeat held mobile direction, A, and B buttons, with reliable cancellation when
+  the finger releases, the page loses focus, or an input request fails.
+- Simplify adventure cards with Stop, Download, Archive, and Delete, plus a Settings
+  icon beside Open adventure. Archive and Delete save and stop first. Deletion
+  requires the exact name and preserves independent backups and other adventures.
+- Apply screen palette changes live, including while paused, and remember each
+  adventure's choice. New screenshots use the selected colors. Existing journal
+  screenshots retain their captured colors.
+- Keep sound hardware active while muted and during cable sessions, addressing
+  a demonstrated source of stale audio when listening resumes.
+- Fix Settings failing to load when saved backups exist.
+- Remove stale validation records and unused assets, and refresh maintenance guidance.
 
-Back up the complete library. Set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.17`
+## Upgrading and limits
+
+Back up the complete library. Set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.18`
 and run `docker compose pull` followed by `docker compose up -d --wait`.
-Keep the existing data mount and project name. Desktop users can follow the
-[installation guide](desktop.md). Adventure progress and speeds are unchanged.
+Keep the existing data mount and project name. Python users can follow the
+[installation guide](desktop.md). Core remains pinned at 0.1.4.
 
-Core remains at 0.1.4. These integrations belong to the application, not the
-shared game mechanics package. Gameplay remains an experimental beta.
+Existing saves remain supported. Unrecorded past actions and unknown milestone
+times are not estimated. New statistics show their tracking start date. Reusable
+items and HMs are not counted as consumption. Million-step offers start when the
+updated simulation first observes Champion status, without retroactive stockpiling.
+
+Battle Power is an approximate benchmark, and TM allocation considers the current
+party and species. Separate GBC sprite/background coloring remains deferred.
+The reporter-specific Blue/Docker audio issue still needs confirmation. Gameplay
+remains an experimental beta. See [release status](../RELEASE_STATUS.md) and the
+[detailed feature scope](next-release.md) for validation and remaining limitations.
