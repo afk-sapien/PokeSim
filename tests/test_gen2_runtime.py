@@ -1017,7 +1017,7 @@ def test_tower_strength_preparation_preserves_the_active_menu(real_data):
     from pokesim.gen2.policy import Goal, Policy
     policy = Policy(real_data)
     policy.memory = None
-    mon = SimpleNamespace(species=99, moves=(23, 57, 182, 250), stats=(138, 160, 120, 90, 60, 65),
+    mon = SimpleNamespace(species=99, level=50, moves=(23, 57, 182, 250), stats=(138, 160, 120, 90, 60, 65),
                            held_item=0, to_dict=lambda: {'trainer_id': 1, 'dvs': [0] * 5})
     policy.collection['tower'] = {'team': [tower.key(mon)], 'original': [], 'cap': 50,
                                   'entered': False, 'returning': False, 'trained': True, 'preparation_center': True}
@@ -1037,3 +1037,186 @@ def test_teaching_a_move_closes_leftover_pc_dialogue():
         text='The PC turned on.', tiles=(' ',) * 12 + ('┌──────────────────┐',) + (' ',) * 5)
     assert menu.step(snapshot, None) == 'b'
     assert menu.phase == 'open'
+
+
+def test_item_approach_can_cross_an_internal_cave_warp(real_data):
+    from dataclasses import dataclass
+    from pokesim.gen2.policy import Policy
+    @dataclass
+    class Position:
+        map: int
+        x: int = 5
+        y: int = 4
+        badges: int = 65535
+        party: tuple = ()
+        objects: tuple = ()
+        def event(self, name):
+            return False
+    policy = Policy(real_data)
+    policy.memory = None
+    snapshot = Position(real_data.map_ids['MR_PSYCHICS_HOUSE'])
+    goal = policy.person(snapshot, 'earthquake', 'Collect Earthquake', 'VICTORY_ROAD', 'VictoryRoadTMEarthquake')
+    mid = real_data.map_ids[goal.map_name]
+    assert (goal.x, goal.y) != (3, 29)
+    assert policy.nav.regions.route(snapshot, mid, [(goal.x, goal.y)], cut=True, surf=True) is not None
+    snapshot = Position(mid, 13, 6)
+    goal = policy.person(snapshot, 'earthquake', 'Collect Earthquake', 'VICTORY_ROAD', 'VictoryRoadTMEarthquake')
+    assert (goal.x, goal.y) != (3, 29)
+    assert policy.nav.regions.route(snapshot, mid, [(goal.x, goal.y)], cut=True, surf=True) is not None
+
+
+def test_tower_recovers_only_when_healing_can_outpace_damage(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    mon = SimpleNamespace(species=249, level=70, moves=(105, 57, 19, 94), pp=(20, 15, 15, 10))
+    snapshot = SimpleNamespace(enemy_species=19, enemy_level=50, enemy_hp=150)
+    values = {'wBattleMonHP': 100, 'wBattleMonMaxHP': 300}
+    moves = bytearray([33, 0, 0, 0])
+    mem = SimpleNamespace(word=lambda name: values.get(name, 30), read=lambda *args: bytes(moves))
+    assert policy.recovery_move(snapshot, mem, mon, [(40, 1)]) == 0
+    assert policy.recovery_move(snapshot, mem, mon, [(200, 1)]) is None
+    values['wEnemyMonAttack'] = 999
+    snapshot.enemy_level = 100
+    moves[0] = 38
+    assert policy.recovery_move(snapshot, mem, mon, [(40, 1)]) is None
+    values['wBattleMonHP'] = 290
+    assert policy.recovery_move(snapshot, mem, mon, [(40, 1)]) is None
+
+
+def test_exp_share_goes_to_training_partner_after_storage_retrieval(real_data):
+    from pokesim.gen2.training import arrive
+    from pokesim.gen2.menus import Give
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    partner = SimpleNamespace(trainer_id=1, dvs=(1,) * 5, box=None)
+    holder = SimpleNamespace(trainer_id=1, dvs=(2,) * 5, box=None)
+    policy.collection.update(training={'identity': [1, [1] * 5]}, share_holder=[1, [2] * 5])
+    policy.goal = Goal('collection_equip', 'Equip the training partner', 'OLIVINE_POKECENTER_1F', 5, 6)
+    assert arrive(policy, SimpleNamespace(party=(partner, holder), stored=())) == 'wait'
+    assert isinstance(policy.menu, Give)
+    assert policy.menu.slot == 0
+
+
+def test_tower_attack_replacement_keeps_recover(real_data):
+    from pokesim.gen2.menus import Teach
+    menu = Teach(89, 0, phase='learn', replace_move=240)
+    snapshot = SimpleNamespace(data=real_data, party=(SimpleNamespace(moves=(105, 56, 240, 129)),),
+        text='TYPE/GROUND', tiles=(' ',) * 18)
+    assert menu.step(snapshot, SimpleNamespace(byte=lambda name: 3)) == 'a'
+
+
+def test_tower_teaches_psychic_to_the_stronger_special_attacker(real_data):
+    if real_data.game != 'crystal':
+        return
+    from pokesim.gen2 import tower
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    policy.memory = None
+    lugia = SimpleNamespace(species=249, level=70, moves=(105, 56, 240, 129), stats=(245, 151, 195, 170, 133, 235),
+        held_item=0, to_dict=lambda: {'trainer_id': 1, 'dvs': [1] * 5})
+    espeon = SimpleNamespace(species=196, level=70, moves=(33, 98, 44, 36), stats=(220, 125, 123, 208, 220, 179),
+        held_item=0, to_dict=lambda: {'trainer_id': 1, 'dvs': [2] * 5})
+    policy.collection['tower'] = {'team': [tower.key(lugia), tower.key(espeon)], 'original': [], 'cap': 70,
+        'entered': False, 'returning': False, 'trained': True, 'preparation_center': True}
+    snapshot = SimpleNamespace(map=real_data.map_ids['OLIVINE_POKECENTER_1F'], party=(lugia, espeon),
+        items=((real_data.items['TM29'], 1),), x=9, y=2)
+    assert tower.journey(policy, snapshot, Goal).key == 'tower_move'
+    assert policy.menu.move == 94 and policy.menu.slot == 1
+
+
+def test_box_change_opens_the_pc_from_the_overworld():
+    from pokesim.gen2.menus import ChangeBox
+    menu = ChangeBox(3)
+    snapshot = SimpleNamespace(active_box=0, text='', tiles=(' ',) * 18)
+    assert menu.step(snapshot, None) == 'a'
+    snapshot.text = 'The PC turned on.'
+    assert menu.step(snapshot, None) == 'a'
+    snapshot.text = 'Choose a POKéMON. CANCEL'
+    assert menu.step(snapshot, None) == 'b'
+
+
+def test_psychic_tm_selection_uses_machine_number(real_data):
+    from pokesim.gen2.menus import Teach
+    menu = Teach(94, 0, phase='pack')
+    rows = [' '] * 18
+    rows[2], rows[4] = '     29 PSYCHIC', '     30▶SHADOW BALL'
+    snapshot = SimpleNamespace(data=real_data, party=(SimpleNamespace(moves=(33,)),),
+        text='\n'.join(rows), tiles=rows)
+    mem = SimpleNamespace(byte=lambda name: 3)
+    assert menu.step(snapshot, mem) == 'up'
+    rows[2], rows[4] = '     29▶PSYCHIC', '     30 SHADOW BALL'
+    snapshot.text = '\n'.join(rows)
+    assert menu.step(snapshot, mem) == 'a'
+    assert menu.phase == 'use'
+
+
+def test_held_item_menus_close_leftover_pc_dialogue():
+    from pokesim.gen2.menus import Give, Take
+    snapshot = SimpleNamespace(party=(SimpleNamespace(held_item=57),),
+        text='The PC turned on.', tiles=(' ',) * 12 + ('┌──────────────────┐',) + (' ',) * 5)
+    assert Give(146, 0).step(snapshot, None) == 'b'
+    assert Take(0).step(snapshot, None) == 'b'
+
+
+def test_tower_toxic_targets_healthy_bulky_opponents(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    mon = SimpleNamespace(moves=(105, 92, 89, 70), pp=(20, 10, 10, 15))
+    snapshot = SimpleNamespace(enemy_species=143, enemy_hp=365)
+    mem = SimpleNamespace(byte=lambda name: 0)
+    options = [(0, 1), (60, 2)]
+    assert policy.poison_move(snapshot, mem, mon, options) == 1
+    snapshot.enemy_species = 208
+    assert policy.poison_move(snapshot, mem, mon, options) is None
+    snapshot.enemy_species = 89
+    assert policy.poison_move(snapshot, mem, mon, options) is None
+    snapshot.enemy_species, snapshot.enemy_hp = 143, 60
+    assert policy.poison_move(snapshot, mem, mon, options) is None
+    snapshot.enemy_hp = 365
+    assert policy.poison_move(snapshot, SimpleNamespace(byte=lambda name: 8), mon, options) is None
+    assert policy.poison_move(snapshot, mem, mon, [(60, 2)]) is None
+
+
+def test_tower_trains_an_evolution_to_cover_shared_weaknesses(real_data):
+    from pokesim.gen2.ram import calculated_stats
+    from pokesim.gen2.tower import forecast, select_team
+    mons = []
+    for species, level, moves in [(249, 70, (105, 92, 89, 70)), (196, 70, (94, 247, 44, 36)),
+                                  (169, 70, (141, 17, 44, 19)), (247, 53, (44, 157, 37, 242))]:
+        dvs, training = (8,) * 5, (5000,) * 5
+        mons.append(SimpleNamespace(data=real_data, species=species, level=level, moves=moves, egg=False,
+            dvs=dvs, stat_exp=training, stats=calculated_stats(real_data.species[species]['stats'], level, dvs, training)))
+    cap, team = select_team(SimpleNamespace(party=tuple(mons), stored=(), items=()))
+    assert cap == 70
+    assert {mon.species for mon in team} == {249, 196, 247}
+    assert forecast(mons[-1], cap).species == 248
+    assert mons[-1].species == 247 and mons[-1].level == 53
+
+
+def test_recover_can_outpace_damage_between_two_fifths_and_half_hp(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    mon = SimpleNamespace(species=249, level=70, moves=(105, 92, 89, 70), pp=(20, 10, 10, 15))
+    snapshot = SimpleNamespace(enemy_species=143, enemy_level=70, enemy_hp=365)
+    values = {'wBattleMonHP': 100, 'wBattleMonMaxHP': 245, 'wEnemyMonAttack': 217}
+    mem = SimpleNamespace(word=lambda name: values.get(name, 30), read=lambda *args: bytes([157, 0, 0, 0]))
+    assert policy.recovery_move(snapshot, mem, mon, [(50, 2)]) == 0
+
+
+def test_evolution_item_closes_leftover_pc_dialogue():
+    from pokesim.gen2.menus import Remedy
+    snapshot = SimpleNamespace(items=((8, 1),), in_battle=0,
+        text='The PC turned on.', tiles=(' ',) * 12 + ('┌──────────────────┐',) + (' ',) * 5)
+    assert Remedy(8, 0, 1).step(snapshot, None) == 'b'
+
+
+def test_evolution_stone_selects_the_compatible_party_member():
+    from pokesim.gen2.menus import Remedy
+    menu = Remedy(8, 5, 1, phase='party')
+    rows = [' '] * 18
+    rows[1], rows[2], rows[11], rows[12], rows[13] = '▶FERALIGATR', 'NOT ABLE', 'NIDORINA', 'ABLE', 'CANCEL'
+    snapshot = SimpleNamespace(items=((8, 1),), text='\n'.join(rows), tiles=rows)
+    assert menu.step(snapshot, None) == 'down'
+    rows[1], rows[11] = 'FERALIGATR', '▶NIDORINA'
+    snapshot.text = '\n'.join(rows)
+    assert menu.step(snapshot, None) == 'a'

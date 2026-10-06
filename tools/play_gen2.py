@@ -9,7 +9,7 @@ from pyboy import PyBoy
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy
-from pokesim.gen2.ram import read_snapshot
+from pokesim.gen2.ram import Memory, read_snapshot
 
 
 def main():
@@ -46,6 +46,10 @@ def main():
             task = lambda policy, snapshot, Goal: journey(policy, snapshot, Goal, force=True)
 
         def focused(snapshot, mem):
+            if args.focus in policy.completed:
+                return Goal('collection_wait', 'Focused scenario complete', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
+            if snapshot.map == data.map_ids['POKECENTER_2F']:
+                return Goal('return_from_cable', 'Return downstairs after the Cable Club', 'POKECENTER_2F', 0, 7)
             if task:
                 goal = task(policy, snapshot, Goal)
             else:
@@ -122,7 +126,9 @@ def main():
                     print(frame, snapshot.map_name, snapshot.x, snapshot.y, policy.mode, action.button,
                           row['party'], flush=True)
                     previous = summary
-                if args.until and args.until in policy.completed:
+                if (args.until and args.until in policy.completed and policy.menu is None
+                        and not snapshot.in_battle and not Memory(pb.memory, data).byte('wScriptRunning')
+                        and '┌' not in snapshot.tiles[12]):
                     break
                 if action.button:
                     pb.button_press(action.button)
