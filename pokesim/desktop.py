@@ -75,8 +75,14 @@ class Adventure:
             settings = read_settings(self.root)
             raw = (self.root / 'rom.gb').read_bytes()
             if len(raw) > MAX_ROM or hashlib.sha1(raw).hexdigest() not in ROM_NAMES:
-                raise ValueError('The stored ROM is not a clean Red or Blue ROM. Restore rom.gb from your backup.')
-            ensure_game_data(self.root / 'game-data', self.report, self.cancelled, self.reference_archive)
+                raise ValueError('The stored ROM is not a supported clean cartridge. Restore rom.gb from your backup.')
+            from .cartridges import identify
+            cartridge = identify(raw)
+            if cartridge and cartridge.generation == 2:
+                from .gen2.data import ensure
+                ensure(self.root / 'game-data', cartridge.version, self.report)
+            else:
+                ensure_game_data(self.root / 'game-data', self.report, self.cancelled, self.reference_archive)
             if self.cancelled.is_set():
                 return
             self.report('Opening your adventure…')

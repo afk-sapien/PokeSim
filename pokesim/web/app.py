@@ -15,15 +15,18 @@ from pydantic import BaseModel
 from typing import Literal
 
 from .. import config
-from ..policies.base import BUTTONS
 from .event_page import render_event
 from .feed import render_feed
-from .pokedex import DEFAULT_VERSION, VERSIONS, live_status, reference_json
-from . import trading
 from .pages import render_game_page
 from ..trade import preferences
 
 STATIC = Path(__file__).parent / "static"
+BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
+
+
+def live_status(*args, **kwargs):
+    from .pokedex import live_status as implementation
+    return implementation(*args, **kwargs)
 
 
 class Control(BaseModel):
@@ -38,6 +41,14 @@ class TradePreference(BaseModel):
 
 def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adventure_name: str = '',
                browser_origin: str | None = None) -> FastAPI:
+    gen2 = getattr(emu, 'generation', 1) == 2
+    if gen2:
+        from ..gen2.web import Reference, live_status as gen2_live_status
+        reference_json = Reference(emu.data).json
+        DEFAULT_VERSION = emu.data.game
+        VERSIONS = (DEFAULT_VERSION,)
+    else:
+        from .pokedex import DEFAULT_VERSION, VERSIONS, reference_json
     if base_path and not re.fullmatch(r'/games/[A-Za-z0-9_-]+', base_path):
         raise ValueError('Invalid adventure base path')
     def page(name: str, **context):
@@ -104,6 +115,10 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def statistics():
         from ..statistics import status, recent, overview, highlights
         from ..adventure_records import status as record_status
+        if gen2:
+            from ..gen2.steps import status as mew_status
+            return {**status(store), 'legendary_returns': {}, 'event_returns': {},
+                    'mew_returns': mew_status(store), 'marathon': {}}
         from ..legendary_returns import status as returns_status
         current = emu.status()
         collection = (current.get('strategy') or {}).get('collection') or {}
@@ -139,9 +154,13 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     @app.get("/api/pokedex/status")
     def pokedex_status():
         status = emu.status()
-        payload = live_status(status.get("game"), (status.get("strategy") or {}).get("collection"),
+        payload = (gen2_live_status if gen2 else live_status)(status.get("game"), (status.get("strategy") or {}).get("collection"),
                               league_rewards=status.get('league_rewards', {})
                               if getattr(config, 'LEAGUE_REWARDS', False) else None)
+        if gen2:
+            from ..gen2.tracking import apply as achievements
+            from ..gen2.league import apply as league_partners
+            return preferences.apply(achievements(league_partners(payload, store, emu.data), store), store.trade_preferences())
         from ..catches import status as catch_status
         payload['catches'] = catch_status(store)
         from ..league_partners import apply as league_partners
@@ -152,6 +171,10 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     @app.get('/api/trading')
     def trading_status():
         payload = pokedex_status()
+        if gen2:
+            from ..gen2.trading import status
+            return status(emu, payload, adventure_id)
+        from . import trading
         if base_path:
             participant = getattr(app.state, 'participant', None)
             if participant is not None:
@@ -182,7 +205,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get("/sprites/{dex}.png")
     def sprite(dex: int):
-        if not 1 <= dex <= 151:
+        if not 1 <= dex <= (251 if gen2 else 151):
             raise HTTPException(404)
         path = (store.dir / "sprites" / f"{dex}.png").resolve()
         root = (store.dir / "sprites").resolve()
@@ -282,9 +305,14 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         if not export_lock.acquire(blocking=False):
             raise HTTPException(409, 'A save export is already being prepared.')
         try:
-            from ..save_export import capture, export
-            state = emu.call(lambda: capture(emu), timeout=5)
-            data = export(emu.rom, state)
+            if gen2:
+                from ..gen2.save import capture, export
+                state = emu.call(lambda: capture(emu), timeout=5)
+                data = export(emu.rom, state, emu.data)
+            else:
+                from ..save_export import capture, export
+                state = emu.call(lambda: capture(emu), timeout=5)
+                data = export(emu.rom, state)
         except ValueError as error:
             raise HTTPException(409, str(error)) from error
         except (TimeoutError, RuntimeError) as error:

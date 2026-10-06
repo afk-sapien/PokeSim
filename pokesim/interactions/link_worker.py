@@ -30,6 +30,7 @@ class CableParticipant:
     checkpoint_sha256: str | None = None
     cartridge_sha256: str | None = None
     selected_key: str | None = None
+    game_data_dir: str | None = None
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,14 @@ def run_session(plan: CableSessionPlan, output_dir, progress=None, cancelled=Non
     No participant database or authoritative checkpoint is written. The caller must
     fence this attempt and stage both verified outputs before deciding to commit.
     """
+    plan.validate()
+    if Path(output_dir).exists():
+        raise FileExistsError(output_dir)
+    from ..cartridges import identify
+    cartridge = identify(Path(plan.left.rom_path).read_bytes())
+    if cartridge is not None and cartridge.generation == 2:
+        from ..gen2.link_worker import run_session as gen2_session
+        return gen2_session(plan, output_dir, progress, cancelled)
     plan.validate()
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=False)

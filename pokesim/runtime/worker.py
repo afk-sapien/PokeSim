@@ -168,7 +168,10 @@ def serve(bootstrap, parent_stream, ready_stream):
             server.should_exit = True
             return {'ok': True}
 
-        from .participant import install
+        if getattr(runtime.emulator, 'generation', 1) == 2:
+            from ..gen2.trading import install
+        else:
+            from .participant import install
         install(app, runtime)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             # Accepted sockets inherit this; see the manager's listener.

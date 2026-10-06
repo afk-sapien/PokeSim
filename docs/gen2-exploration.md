@@ -1,131 +1,154 @@
-# Gold, Silver and Crystal exploration
+# Gold, Silver and Crystal support
 
-Generation II is feasible on the emulator shipped with PokeSim v0.4.17. The
-three owner-supplied cartridges boot in color, complete the opening, move in
-the bedroom, and resume reproducibly from checkpoints. Full autonomous
-adventures are not implemented by this experiment.
+This branch implements Generation II adventures in the normal Library and
+adventure runtime. Gold, Silver and Crystal have each completed Johto, the
+Pokémon League, all eight Kanto gyms, and Red through ordinary cartridge input.
+The original boot experiment remains available in `tools/probe_gen2.py`.
 
-The branch is `codex/gen2-exploration`, based on release tag `v0.4.17`, commit
-`c3fc0c9`. The local worktree is
-`/home/ty/Repos/pokesim/.worktrees/gen2-exploration`. The existing
-`codex/release-0.4.18` checkout contains uncommitted emulator migration work.
-This experiment does not incorporate or modify that work.
+The branch is `codex/gen2-exploration`, based on release `v0.4.17` at `c3fc0c9`.
+Its local worktree is `/home/ty/Repos/pokesim/.worktrees/gen2-exploration`.
+The separate `codex/release-0.4.18` checkout and its emulator migration have not
+been modified. This work is not part of the published v0.4.17 package.
 
-## Verified scope
+## Supported cartridges
 
-Validation ran on October 5, 2026, with PyBoy 2.7.0 and Python 3.12.3.
-Each cartridge was read from its ZIP in the owner's Downloads folder.
+| Game | Retail revision | SHA-1 |
+| --- | --- | --- |
+| Gold | USA, Europe | `d8b8a3600a465308c9953dfa04f0081c05bdcb94` |
+| Silver | USA, Europe | `49b163f7e57702bc939d642a18f591de55d92dae` |
+| Crystal | USA, Europe, Rev 1 | `f2f52230b536214ef7c9924f483392993e226cfb` |
 
-| Game | Retail revision | SHA-1 | Result |
-| --- | --- | --- | --- |
-| Gold | USA, Europe | `d8b8a3600a465308c9953dfa04f0081c05bdcb94` | Passed |
-| Silver | USA, Europe | `49b163f7e57702bc939d642a18f591de55d92dae` | Passed |
-| Crystal | USA, Europe, Rev 1 | `f2f52230b536214ef7c9924f483392993e226cfb` | Passed |
+ROM installation accepts these cartridges as raw files or a ZIP containing one
+supported cartridge. ROM assets remain read-only. Each adventure owns its own
+SRAM, real-time clock, checkpoints, policy memory and journal. Other revisions,
+languages and ROM hacks are rejected instead of using incompatible addresses.
+No ROM, save, screenshot, reference checkout or full symbol file is committed.
 
-The hashes match the retail builds documented by
-[pret/pokegold](https://github.com/pret/pokegold) and
-[pret/pokecrystal](https://github.com/pret/pokecrystal).
-Crystal 1.0, other languages, hacks, and other revisions are not accepted by
-this probe.
+## Runtime and gameplay
 
-All three passed these checks with an isolated blank cartridge RAM buffer:
+- Library creation, per-game starters, worker isolation, pause, manual controls,
+  speed, audio, health reporting, restart and standard `.sav` export.
+- Complete Johto and Kanto campaign goals, including the Radio Tower, Ice Path,
+  Strength puzzles, Dragon’s Den, S.S. Aqua, Power Plant, Snorlax and Mt. Silver.
+- Battle decisions, healing, safe capture weakening, status moves, party
+  switching, move learning, HM protection and recovery from depleted supplies.
+- Fishing, Surf, Fly, Cut, Strength, Whirlpool, Waterfall, Headbutt and Rock Smash.
+- All 251 species, all moves, version and time dependent encounter tables,
+  six battle stats, Dark and Steel types, gender, friendship, held items,
+  eggs, shiny DVs, all 14 PC boxes and cartridge portraits.
+- Postgame collection, gift quests, Day Care breeding and hatching, Exp. Share
+  projects, item and friendship evolution, and continued level 100 training.
+- Legendary quests, roaming beast tracking and delayed retries after failed
+  static legendary encounters. Retries preserve consumed supplies and progress.
+- Durable capture counts, Pokédex milestones, observed activity statistics,
+  cartridge walking counts, individual League records and notifications through
+  the existing integrations. Collection expeditions also catch spare copies
+  requested by compatible adventures in the Library.
+- Optional Johto starter gifts after League victories and the optional custom
+  Mew gift, with repeat Mew earned by walking and a later League victory.
+  Gift claims, checkpoint publication and recovery prevent duplicate
+  delivery or a rewind across the latest committed gift.
 
-1. Boot in CGB mode with sound hardware emulation enabled.
-2. Reach map group 24, map 7, position `(3, 3)` through ordinary button input.
-3. Read the player name, empty party, badges, and Pokédex state from the
-   cartridge's own memory layout.
-4. Move one tile right to `(4, 3)`.
-5. Restore the bedroom checkpoint and match fixed WRAM plus WRAM bank 1.
-6. Replay the same input and match the resulting snapshot, WRAM and pixels.
-7. Repeat restore and replay in a newly constructed emulator.
+Gold, Silver and Crystal can trade with each other through the managed Cable
+Club. Preparation uses the cartridge PC and held-item menus. The exchange runs
+both cartridges through their link routines, verifies the resulting party,
+checks unaffected Pokémon and story state, verifies a fresh cartridge Continue,
+and uses the existing durable two-adventure commit protocol. Held-item trade
+evolutions and individual League records travel with the exchanged Pokémon.
 
-The opening replay takes 7,920 frames and names the player `AAAAAAA`. It is
-a deliberately small fixed input sequence, not an opening policy. The tests
-lock the cartridge clock before the first tick. They do not establish real
-time clock persistence or deterministic replay with a running clock.
+## Validation
 
-The focused suite passed **23 tests**, including all three real cartridges.
-The recorded [validation report](validation/gen2-probe.json) contains the
-snapshots and check results. Local screenshots and checkpoints are under
-`.release-local/gen2-validation-v2/`, with one subdirectory per game.
-ROM bytes, full symbol files, screenshots and save states are not committed.
+Testing uses Python 3.12.3 and PyBoy 2.7.0 with the owner-supplied cartridges.
+The full regression suite passed 1,822 tests with 151 skipped.
+Skipped tests retain their existing external fixture or environment requirements.
 
-## What this branch adds
+Recorded cartridge scenarios include:
 
-- `pokesim/experimental/gen2.py`: exact hash identification, bounded local
-  ZIP loading, separate Gold/Silver and Crystal memory profiles, and a
-  read-only diagnostic snapshot.
-- `tools/probe_gen2.py`: a repeatable headless boot, input and checkpoint
-  probe that runs separately from the adventure runtime.
-- `tests/test_gen2_experiment.py`: decoder boundary tests and optional real
-  cartridge integration tests.
-- `docs/validation/gen2-symbols.json`: pinned source URLs, file hashes and
-  the selected addresses used by the profiles.
+| Scenario | Evidence |
+| --- | --- |
+| Gold, Silver and Crystal campaign | All 16 badges and Red defeated in each version |
+| Fresh Gold campaign | One uninterrupted process, 3,108,188 frames through Red |
+| Fresh Silver campaign | Chikorita, one uninterrupted process, 4,783,228 frames through Red |
+| Fresh Crystal campaign | Cyndaquil, one uninterrupted process, 3,415,124 frames through Red |
+| Low-cash Chikorita recovery | Sold a spare TM, bought balls, weakened and caught Krabby, continued through Red |
+| Full party before Togepi | Deposited a partner through the PC and received the egg |
+| Day Care | Deposited compatible parents, received and hatched Wooper, retrieved both parents |
+| Special encounters | Caught Heracross using Headbutt and Shuckle using Rock Smash |
+| Legendary quests | Caught Crystal Suicune and Lugia, Gold Lugia and Ho-Oh |
+| Missed legendary recovery | Retried the failed Gold Ho-Oh encounter and caught it |
+| Gift quests | Eevee, Crystal Odd Egg, Dratini, Kiyo’s Tyrogue and Bill’s grandfather’s first gift |
+| Cable Club | Gold/Silver, Gold/Crystal and Silver/Crystal exchanges |
+| Held trade evolution | Prepared Metal Coat through the menu, traded Onix and received Steelix |
+| Runtime API | Pages, 251-entry Pokédex, PC, journal, statistics, manual input, audio, paused frame and restart |
+| Portable saves | Fresh Continue verified for all three games |
+| Optional rewards | Valid party and box preservation, fresh Continue, durable claim and replay protection |
+| Repeat Mew | First and repeat gifts on all three cartridges, later win requirement and duplicate prevention |
+| Library integration | Three installed games, three actual workers, automatic selection and committed Cable Club exchange |
+| Reference installation | Clean download and generation from pinned public sources for all three games |
 
-The decoder handles map group and number separately, 251 Pokédex flags,
-two badge bytes, 48-byte party records, held items, moves, eggs and separate
-Special Attack and Special Defense. Party records beyond the empty starting
-party have synthetic coverage only. Live starter, capture, battle and egg
-fixtures remain necessary. The name decoder covers English letters, numbers
-and spaces, preserving unsupported glyph bytes visibly.
-
-All reads use explicit WRAM bank 1. A CPU-visible address alone is unsafe
-for banked CGB memory, especially while Crystal switches banks. The probe
-does not write game RAM or attach hooks.
+Private evidence, traces and reproducible failure checkpoints are under
+`.release-local/`. The scenario runner reports its actual stopping reason and
+retains both the cartridge checkpoint and policy state.
 
 ## Reproduce
 
-From the exploration worktree, use an isolated environment:
+Install this checkout in an isolated Python environment, then launch the normal
+Library with `pokesim-desktop`. Add an owner-supplied cartridge and choose the
+matching starter. The first installation prepares the generation-specific data.
+
+With local cartridge and generated data directories, run the regression suite:
 
 ```sh
-uv venv .venv --python 3.12
-uv pip install --python .venv/bin/python 'pyboy==2.7.0' pytest pillow
-.venv/bin/python -m tools.probe_gen2 \
-  '/home/ty/Downloads/Pokemon_ Gold Version.zip' \
-  '/home/ty/Downloads/Pokemon_ Silver Version.zip' \
-  '/home/ty/Downloads/Pokemon_ Crystal Version.zip' \
-  --output .release-local/gen2-next-run
-GEN2_ROM_DIR=/home/ty/Downloads .venv/bin/python -m pytest tests/test_gen2_experiment.py -q
+GAME_DATA_DIR=.release-local/gen1-data \
+GEN2_DATA_DIR=.release-local/gen2-data \
+GEN2_CARTRIDGE_DIR=.release-local/gen2 \
+GEN2_ROM_DIR=/home/ty/Downloads \
+.venv/bin/pytest -q tests
 ```
 
-The output directory must be new. Plain `.gbc` files also work. The tool
-accepts exactly one cartridge per ZIP and never extracts archive paths.
-ROMs are copied into a temporary directory for emulation, then removed.
-No adjacent Downloads save or clock file is read or written. The original
-archives remain untouched.
+Run a complete isolated campaign:
 
-Without `GEN2_ROM_DIR`, the decoder tests run and the three real cartridge
-tests skip. The minimal environment above does not install the full
-application or its data bundles. The existing Red/Blue application suite
-was not run for this isolated experiment.
+```sh
+.venv/bin/python tools/play_gen2.py .release-local/gen2/crystal.gbc \
+  --game crystal --starter cyndaquil --frames 10000000 --until red \
+  --data .release-local/gen2-data --output .release-local/crystal-campaign
+```
 
-## Work needed for supported adventures
+`--load PATH` resumes a cartridge checkpoint and its sibling `.policy.json`.
+Focused scenarios include gifts, legends, breeding, stones, Headbutt, Rock
+Smash and a specified encounter. Separate verification tools exercise runtime
+APIs, capture accounting, portable saves, trade preparation, durable exchange
+and custom reward delivery. `tools/verify_gen2_library.py` also exercises worker
+restart during trade preparation and reservation release before an automatic
+exchange.
 
-| Area | Current obstacle | Next implementation |
-| --- | --- | --- |
-| ROM installation | `desktop_setup.py` caps uploads at 1 MiB and accepts only Red/Blue hashes. `app/assets.py` maps the version to Red or Blue. These cartridges are 2 MiB. | Introduce explicit game profiles and capability gates before changing the production allowlist. |
-| Runtime observation | `ram.py` imports Gen I core addresses and tables. `emulator.py` attaches Gen I hooks and writes Gen I options. | Dispatch observation, options and hooks through a game adapter. Keep unsupported Gen II operations disabled. |
-| World data | Reference bundles and generators are pinned to pokered. Navigation assumes its maps and events. | Generate versioned Gen II maps, collisions, warps, scripts, encounters and event data from pinned pret references. Preserve map group plus number. |
-| Policy | Opening, menus, battles, shopping, gyms and collection are Gen I specific. Starter settings only accept the Kanto starters. | Start with bedroom to Elm, starter acquisition, first wild battle and first capture. Add route and badge goals after those fixtures pass. |
-| Pokémon and interface | Much of the data, portraits, collection and completion logic assumes 151 species and Gen I stats. | Support 251 species, split Special stats, held items, friendship, eggs, new types and evolution rules in shared schemas and UI. |
-| Persistence and time | This probe freezes RTC and only checks emulator checkpoints. | Test cartridge save checksums, save export, clock files, day rollover, reload after elapsed wall time and time-dependent encounters. |
-| Trading | Existing cable scripts, hook addresses and save layouts target Gen I. | Design and test Gen II trades separately. Treat Time Capsule compatibility as another capability. |
-| Emulator migration | The release 0.4.18 checkout is moving to a different emulator interface. | Repeat CGB, banked memory, RTC, input and checkpoint checks against that backend before integrating. |
+## Boundaries
 
-A useful first product milestone is an explicitly experimental manual
-Gen II adventure with correct observation, isolated persistence and safe
-capability gating. The first autonomous milestone should be a repeatable
-Elm starter and first capture scenario for each game. Completing the
-Johto campaign and trading need substantially more work than adding ROM
-hashes to the existing installer.
+Time Capsule trading between Generation I and Generation II is not implemented.
+The coordinator pairs adventures within their cartridge generation. This does
+not prevent any Gold/Silver/Crystal pairing.
+
+The autonomous controller is not a proof that every seed will finish without a
+stall, or that every optional cartridge activity is automated. The Battle Tower,
+Game Corner, Bug-Catching Contest, Ruins of Alph puzzles and limited distribution
+events remain available through manual controls. All 251 species have data and
+UI support. An autonomous 251-species collection has not been demonstrated.
+The Red/Blue Kanto Marathon and repeatable fossil, dojo and NPC-trade rewards
+have not been transplanted into the Generation II campaign. Generation II
+retries missed static legendary encounters, but does not schedule repeat
+encounters with already caught legends. Settings that apply only to Red and
+Blue are hidden for these adventures.
 
 ## Reference provenance
 
-The exact symbol files are linked in
-[gen2-symbols.json](validation/gen2-symbols.json). Their addresses were
-cross-checked against live bedroom movement for every cartridge.
-Party field definitions and the English text alphabet were checked against
-[pokecrystal constants](https://github.com/pret/pokecrystal/tree/5beda23ffa505f62e1dad7e3d7c214d1737b3358/constants)
-and [pokegold constants](https://github.com/pret/pokegold/tree/62388c7204e5d13aa05b4231e220b6760584d1b5/constants).
-The experiment uses the installed PyBoy 2.7.0 implementation for its memory,
-clock and checkpoint API behavior.
+Game data comes from pinned primary disassemblies:
+
+- [pret/pokegold at 62388c7](https://github.com/pret/pokegold/tree/62388c7204e5d13aa05b4231e220b6760584d1b5)
+- [pret/pokecrystal at 5beda23](https://github.com/pret/pokecrystal/tree/5beda23ffa505f62e1dad7e3d7c214d1737b3358)
+
+`pokesim/gen2/data.py` pins the source and symbol revisions, verifies symbol
+hashes, generates version-specific data and validates cached bundle checksums.
+The original selected-address audit is in
+[gen2-symbols.json](validation/gen2-symbols.json).
+All banked memory access uses explicit banks. The capture hooks and link
+transport check cartridge instruction signatures before they attach.

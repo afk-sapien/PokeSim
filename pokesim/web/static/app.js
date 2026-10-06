@@ -222,14 +222,16 @@ async function refreshState() {
     set('#clock-note', 'textContent', clock?.lower_bound ? 'Earlier time hit the game limit' : '')
     set('#trainer-name', 'textContent', game.player_name || 'A new trainer')
     set('#trainer-rival', 'textContent', game.rival_name ? `Rival: ${game.rival_name}` : 'A new story begins')
-    set('#dex-count', 'innerHTML', `${fmt(game.owned)}<span class="unit">/151</span>`)
+    set('#dex-count', 'innerHTML', `${fmt(game.owned)}<span class="unit">/${game.dex_total || 151}</span>`)
     set('#dex-count', 'title', `${game.seen} Pokémon seen`)
     set('#league-wins', 'textContent', fmt(state.league_rewards?.wins ?? game.hall_of_fame_count ?? 0))
     set('#money', 'textContent', `₽${fmt(game.money)}`)
     set('#areas', 'textContent', fmt(state.areas_discovered))
     const earned = game.badges || []
-    set('#badge-count', 'textContent', `${earned.length} / 8`)
-    set('#badges', 'innerHTML', BADGES.map((badge, i) => `<i class="lamp"${earned.includes(badge) ? ' data-on="signal"' : ''} role="img" aria-label="${badge} Badge, ${earned.includes(badge) ? 'earned' : 'still ahead'}" title="${badge} Badge · ${LEADERS[i]} · ${earned.includes(badge) ? 'Earned' : 'Still ahead'}"></i>`).join(''))
+    set('#badge-count', 'textContent', `${earned.length} / ${game.badge_total || 8}`)
+    const badgeNames = game.generation === 2 ? ['Zephyr', 'Hive', 'Plain', 'Fog', 'Mineral', 'Storm', 'Glacier', 'Rising', ...BADGES] : BADGES
+    const leaderNames = game.generation === 2 ? ['Falkner', 'Bugsy', 'Whitney', 'Morty', 'Jasmine', 'Chuck', 'Pryce', 'Clair', 'Brock', 'Misty', 'Lt. Surge', 'Erika', 'Janine', 'Sabrina', 'Blaine', 'Blue'] : LEADERS
+    set('#badges', 'innerHTML', badgeNames.map((badge, i) => `<i class="lamp"${earned.includes(badge) ? ' data-on="signal"' : ''} role="img" aria-label="${badge} Badge, ${earned.includes(badge) ? 'earned' : 'still ahead'}" title="${badge} Badge · ${leaderNames[i]} · ${earned.includes(badge) ? 'Earned' : 'Still ahead'}"></i>`).join(''))
     renderParty(game.party)
   } catch (_) {
     set('#status', 'textContent', 'Reconnecting…')
@@ -327,7 +329,7 @@ if ($('#export-save')) $('#export-save').onclick = async (event) => {
     link.click()
     link.remove()
     setTimeout(() => URL.revokeObjectURL(url), 60000)
-    toast('Save downloaded. Load it with the matching Red or Blue ROM in your emulator.')
+    toast('Save downloaded. Load it with the matching game ROM in your emulator.')
   } catch (error) {
     toast(error.message, true)
   } finally {

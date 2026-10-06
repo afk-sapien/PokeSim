@@ -3,8 +3,6 @@ from dataclasses import asdict
 import json
 import time
 
-from .pokemon import dv_rating, stored_strength
-from .screen import W_ENEMY_HP, W_ENEMY_MAX_HP, W_PLAYER_MON_NUMBER
 
 KEY = 'adventure-statistics-v1'
 INTERVAL = 30
@@ -22,6 +20,7 @@ def initialize(db):
 
 
 def collection(snapshot):
+    from .pokemon import dv_rating, stored_strength
     rows = [asdict(mon) for mon in snapshot.party] + snapshot.storage_entries()
     powers = [stored_strength(mon)['power'] for mon in rows]
     dvs = [dv_rating(mon)['dv_percent'] for mon in rows]
@@ -80,6 +79,7 @@ class StatisticsTracker:
         self.last_collection = 0
 
     def observe(self, snapshot, memory=None, *, now=None, clock=None):
+        from .screen import W_ENEMY_HP, W_ENEMY_MAX_HP, W_PLAYER_MON_NUMBER
         now = time.time() if now is None else now
         if not snapshot.valid or not snapshot.started or self.store.get('trade_hold'):
             self.reset_baseline()

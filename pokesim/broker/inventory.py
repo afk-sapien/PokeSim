@@ -166,7 +166,7 @@ def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory
                      if (mon['box'], mon['position']) in available_slots),
         tradeable=tuple(to_copy(mon) for mon in available if mon['species'] not in off_limits),
         hunting=hunting,
-        missing=tuple(dex for dex in range(1, 152) if dex not in owned))
+        missing=tuple(dex for dex in range(1, int(payload.get('dex_total', 151)) + 1) if dex not in owned))
 
 
 def read(instance: str, url: str, timeout: float = 5.0, protected=()) -> Inventory:
