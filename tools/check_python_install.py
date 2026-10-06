@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--acceleration', action='store_true', help='Install and verify optional Numba support')
+    parser.add_argument('--dependency-wheel', type=Path, action='append', default=[],
+                        help='Explicit local dependency wheel for unreleased stack validation')
     args = parser.parse_args()
     version = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['version']
     wheels = list((ROOT / 'dist').glob(f'pokesim-{version}-*.whl'))
@@ -39,7 +41,7 @@ def main():
         executable = target / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
         launcher = target / ('Scripts/pokesim-desktop.exe' if os.name == 'nt' else 'bin/pokesim-desktop')
         package = str(wheels[0]) + ('[acceleration]' if args.acceleration else '')
-        subprocess.run([uv, 'pip', 'install', '--python', str(executable), package],
+        subprocess.run([uv, 'pip', 'install', '--python', str(executable), package, *[str(p.resolve()) for p in args.dependency_wheel]],
                        check=True, env=environment, cwd=root)
         if args.acceleration:
             subprocess.run([str(executable), '-c',

@@ -48,7 +48,7 @@ def test_verified_cartridge_hook_attaches_without_changing_game_ram(tmp_path):
     rom = Path('roms/pokered.gb')
     if not rom.is_file():
         pytest.skip('Private ROM unavailable')
-    from pyboy import PyBoy
+    from pokesim_core.emulator import Emulator as PyBoy
     store = Store(tmp_path)
     pb = PyBoy(str(rom), window='null', ram_file=io.BytesIO(bytes(32768)))
     try:

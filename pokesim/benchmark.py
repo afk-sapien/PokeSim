@@ -4,7 +4,7 @@ import hashlib
 import io
 import json
 import platform
-from importlib.metadata import version
+from pokesim_core.emulator_state import checkpoint_metadata
 from collections import Counter
 from pathlib import Path
 from statistics import mean
@@ -58,8 +58,8 @@ class Metrics:
 
 
 def run(rom, policy_name, seed, frames, checkpoint=None, target=None, trace=None):
-    from pyboy import PyBoy
-    pb = PyBoy(str(rom), window="null", sound_emulated=False)
+    from pokesim_core.emulator import Emulator as CoreEmulator
+    pb = CoreEmulator(str(rom), window="null", sound_emulated=False)
     pb.set_emulation_speed(0)
     policy = make_policy(policy_name, seed)
     rom_sha = hashlib.sha1(Path(rom).read_bytes()).hexdigest()
@@ -150,7 +150,7 @@ def run(rom, policy_name, seed, frames, checkpoint=None, target=None, trace=None
                 "policy_recoveries": policy.details().get("recoveries", 0), "areas": len(metrics.areas),
                 "mode_frames": dict(metrics.modes), "final": final.to_dict(), "final_screen": Screen(pb.memory).text,
                 "strategy": policy.details(), "rom_sha1": rom_sha, "python": platform.python_version(),
-                "pyboy": version("pyboy"), "battle_animations": config.BATTLE_ANIMATIONS,
+                **checkpoint_metadata(), "battle_animations": config.BATTLE_ANIMATIONS,
                 "policy_fingerprint": policy_fingerprint(),
                 "checkpoint_sha256": hashlib.sha256(Path(checkpoint).read_bytes()).hexdigest() if checkpoint else None}
     finally:

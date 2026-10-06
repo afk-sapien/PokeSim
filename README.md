@@ -1,5 +1,12 @@
 # PokeSim
 
+> Development integration: this checkout now uses PyBoy RS exclusively through
+> `pokesim-core`. Keep sibling `pyboy-rs` and `pokesim-core` checkouts, then run
+> `uv sync --extra dev` to use the local dependencies. Rust is required for the
+> current source build. Versioned wheel releases and published installers are
+> a separate release step. Application code must not import emulator backends.
+
+
 **Pokémon Red and Blue adventures that keep going while you're away.**
 
 Watch an automatic player catch Pokémon, earn badges and challenge the League in

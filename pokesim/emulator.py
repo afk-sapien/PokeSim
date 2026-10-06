@@ -1,4 +1,4 @@
-"""Headless PyBoy loop: policy-driven input, save states, RAM diff -> events, frame publishing."""
+"""Headless CoreEmulator loop: policy-driven input, save states, RAM diff -> events, frame publishing."""
 from __future__ import annotations
 
 import hashlib
@@ -7,12 +7,12 @@ import logging
 import queue
 import secrets
 import threading
-from importlib.metadata import version
+from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
 import time
 from pathlib import Path
 
 from PIL import Image
-from pyboy import PyBoy
+from pokesim_core.emulator import Emulator as CoreEmulator
 
 from . import __version__, config
 from .audio import AudioFeed, enable_checkpoint_sound
@@ -149,12 +149,12 @@ class Emulator:
         log.warning("ROM sha1 %s is not a known clean Red/Blue dump; RAM addresses may be off", sha)
         return f"unverified ROM (sha1 {sha[:12]})"
 
-    def _boot(self, *, sound=True) -> PyBoy:
+    def _boot(self, *, sound=True) -> CoreEmulator:
         options = {'color_palette': PALETTES['original']}
         if getattr(self, 'isolated_ram', False):
             import io
             options['ram_file'] = io.BytesIO(bytes(32768))
-        pb = PyBoy(str(self.rom), window="null", sound_emulated=sound, **options)
+        pb = CoreEmulator(str(self.rom), window="null", sound_emulated=sound, **options)
         pb.set_emulation_speed(0)
         if getattr(self, 'activity_ledger', None) is not None:
             self.activity_ledger.attach(pb)
@@ -285,8 +285,7 @@ class Emulator:
         if metadata:
             if metadata.get("rom_sha1") != self.rom_sha1:
                 raise ValueError("Checkpoint was created with a different ROM")
-            if metadata.get("pyboy_version") != version("pyboy"):
-                raise ValueError("Checkpoint requires a different PyBoy version")
+            validate_runtime(metadata)
             if metadata.get("policy") != config.POLICY:
                 raise ValueError("Checkpoint requires a different policy")
         with open_state(path) as f:
@@ -611,7 +610,7 @@ class Emulator:
 
     def _manifest(self):
         return {
-            "app_version": __version__, "pyboy_version": version("pyboy"),
+            "app_version": __version__, **checkpoint_metadata(),
             "rom_sha1": self.rom_sha1, "policy": config.POLICY,
             "policy_state": self.policy.state_dict(), "run_memory": self.mem.to_dict(),
             "frame": self.frame, "play_clock": self.play_clock.state_dict(),

@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pyboy import PyBoy
+from pokesim_core.emulator import Emulator as PyBoy
 from pokesim.policies.base import PolicyContext
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.policies.progression import milestones
