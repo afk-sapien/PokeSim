@@ -13,7 +13,23 @@ KEY = 'activity-ledger-v1'
 CONSUMABLES = (set(range(1, 5)) | {8, 10, 29, 30, 32, 33, 34, 46, 47, 51}
                | set(range(11, 21)) | set(range(35, 41)) | set(range(52, 59))
                | set(range(60, 63)) | set(range(65, 69)) | set(range(79, 84)) | set(range(201, 251)))
-ITEMS = {key: name for key, name in ITEM_NAMES.items()
+# Red and Blue share this order, from pret/pokered constants/item_constants.asm.
+# Keep labels available for saved statistics without opening a cartridge.
+MACHINE_MOVES = dict(enumerate((
+    'CUT FLY SURF STRENGTH FLASH MEGA_PUNCH RAZOR_WIND SWORDS_DANCE WHIRLWIND MEGA_KICK '
+    'TOXIC HORN_DRILL BODY_SLAM TAKE_DOWN DOUBLE_EDGE BUBBLEBEAM WATER_GUN ICE_BEAM '
+    'BLIZZARD HYPER_BEAM PAY_DAY SUBMISSION COUNTER SEISMIC_TOSS RAGE MEGA_DRAIN '
+    'SOLARBEAM DRAGON_RAGE THUNDERBOLT THUNDER EARTHQUAKE FISSURE DIG PSYCHIC_M TELEPORT '
+    'MIMIC DOUBLE_TEAM REFLECT BIDE METRONOME SELFDESTRUCT EGG_BOMB FIRE_BLAST SWIFT '
+    'SKULL_BASH SOFTBOILED DREAM_EATER SKY_ATTACK REST THUNDER_WAVE PSYWAVE EXPLOSION '
+    'ROCK_SLIDE TRI_ATTACK SUBSTITUTE'
+).split(), 196))
+MACHINE_LABELS = {item: {'SOLARBEAM': 'Solar Beam', 'BUBBLEBEAM': 'Bubble Beam',
+                       'SOFTBOILED': 'Soft-Boiled', 'SELFDESTRUCT': 'Self-Destruct'}.get(
+                           move, move.removesuffix('_M').replace('_', ' ').title())
+                  for item, move in MACHINE_MOVES.items()}
+ITEMS = {key: f'{name} ({MACHINE_LABELS[key]})' if key in MACHINE_LABELS else name
+         for key, name in ITEM_NAMES.items()
          if 1 <= key <= 83 and key not in {7, 9, *range(21, 29), 44, 50, 59}
          or 196 <= key <= 250}
 # Verified English Red/Blue instructions from pret/pokered. Wildcard bytes are
