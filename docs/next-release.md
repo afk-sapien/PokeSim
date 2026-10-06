@@ -10,8 +10,10 @@ highlights. Existing charts and return activities are shown in open
 sections with clear headings. Old milestone times remain unknown where evidence is incomplete.
 Stat Power history keeps its original meaning. Stats now has its own main tab
 with Overview, Pokémon, and Items subpages. Searchable species and item tables
-track encounters, defeats, catches, gifts, purchases, consumable uses, and current
-holdings. Verified historical catches carry forward. Other counters begin with
+track encounters, defeats, catches, gifts, trades in and out, purchases, consumable
+uses, and current holdings. Verified completed cable trade records are backfilled,
+using the received species after trade evolution. NPC exchanges count from the
+update. Failed and canceled trades are excluded. Verified historical catches carry forward. Other counters begin with
 the update, without estimating older activity. Reusable item use is not counted. See [Adventure statistics](adventure-statistics.md).
 
 ## Battle Power and move development

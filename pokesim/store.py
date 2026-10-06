@@ -59,6 +59,8 @@ class Store:
             initialize(self.db)
             from .activity_ledger import initialize as initialize_activity
             initialize_activity(self.db)
+            from .trade_statistics import initialize as initialize_trade_statistics
+            initialize_trade_statistics(self.db)
         self.lock = threading.Lock()
 
     def _migrate(self):

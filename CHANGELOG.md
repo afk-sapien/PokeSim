@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add Traded in and Traded out to Pokémon Stats, with verified cable-history recovery, final received evolution forms, NPC exchange tracking, and duplicate protection.
+
 - Give Stats its own main tab with Overview, Pokémon, and Items pages. Add searchable action totals for each species and item, preserve recorded catch history, and start new counters without estimating earlier activity.
 
 - Reorganize Journal Stats around shared overview totals, durable milestone times, recent progress, and collection highlights. Show detailed charts in open sections and combine legendary returns with the return-visit and gift cards, preserve unknown historical times, and label existing power charts as Stat Power.

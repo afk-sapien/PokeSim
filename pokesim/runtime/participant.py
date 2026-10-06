@@ -435,13 +435,17 @@ class Participant:
             return record
         if record['phase'] != 'applied' or record['decision'] != 'COMMIT':
             raise ValueError('Both committed results must be applied before release')
-        self.store.set('interaction_preparation', None)
-        self.store.set('trade_hold', None)
         record['phase'] = 'released'
         # Only an unreleased commit is ever promoted from this snapshot, and it dwarfs
         # the rest of the record, so a released exchange has no reason to carry it.
         record.pop('source_metadata', None)
-        _save(self.store, record)
+        with self.store.lock, self.store.db:
+            from ..trade_statistics import managed
+            managed(self.store.db, record)
+            self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?,?)',
+                                  (PREFIX + record['id'], json.dumps(record)))
+            for key in ('interaction_preparation', 'trade_hold'):
+                self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?,?)', (key, 'null'))
         self.emu.paused = False
         self.emu.policy.on_restore()
         self.emu.stuck_since = time.time()

@@ -19,6 +19,7 @@ ITEMS = {key: name for key, name in ITEM_NAMES.items()
 # Verified English Red/Blue instructions from pret/pokered. Wildcard bytes are
 # call or branch destinations. Each sequence must occur exactly the expected number of times.
 HOOKS = (
+    ('npc_trade', 28, bytes.fromhex('a73e03180137ea12cdc9'), 9, 1),
     ('wild', 15, rb'\x3e\x01\xea\x57\xd0\xcd..\xcd..\xfa\x59\xd0', 8, 1),
     ('trainer', 15, bytes.fromhex('21f1cf227011f3cffa27d112'), 12, 1),
     ('defeated', 15, rb'\xaf\xea\xf0\xcc\xcd..\xcd..\x7a\xa7\xca..\x21\x15\xd0', 0, 1),
@@ -76,6 +77,8 @@ class ActivityLedger:
             value = json.loads(self.store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
             value['available'] = self.supported
             if self.supported:
+                from .trade_statistics import tracking
+                tracking(self.store.db)
                 value['started_at'] = value['started_at'] or time.time()
             self.store.db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
 
@@ -84,6 +87,10 @@ class ActivityLedger:
         mem = pb.memory
         # Cable battles and the old man's tutorial are not this adventure's actions.
         if mem[0xd12b] or mem[0xd057] and mem[0xd05a] == 1:
+            return
+        if kind == 'npc_trade':
+            from .trade_statistics import npc
+            npc(self.store, mem)
             return
         amount = 1
         if kind in {'wild', 'trainer', 'defeated'}:
@@ -139,6 +146,8 @@ def status(store, game=None):
     with store.lock:
         metadata = json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
         counts = {(row[0], row[1]): row[2] for row in store.db.execute('SELECT * FROM activity_counts')}
+        from .trade_statistics import KEY as trade_key
+        trades = json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (trade_key,)).fetchone()[0])
     captures = catches(store)
     held = Counter()
     for mon in [*game.get('party', []), *(game.get('storage') or {}).get('pokemon', [])]:
@@ -150,12 +159,14 @@ def status(store, game=None):
         bag[item['id']] += item['qty']
     def count(kind, subject):
         return counts.get((kind, subject), 0) if metadata['started_at'] is not None else None
-    return {**metadata, 'captures_since': captures['started_at'],
+    return {**metadata, 'trade_records': trades, 'captures_since': captures['started_at'],
             'captures_available': captures['available'],
             'pokemon': [{'id': dex, 'name': name, 'wild': count('wild', dex),
                          'trainer': count('trainer', dex), 'defeated': count('defeated', dex),
                          'caught': counts.get(('caught', dex), 0) if captures['available'] else None,
-                         'gift': counts.get(('gift', dex), 0), 'held': held[dex] if game else None}
+                         'gift': counts.get(('gift', dex), 0),
+                         'traded_in': counts.get(('traded_in', dex), 0),
+                         'traded_out': counts.get(('traded_out', dex), 0), 'held': held[dex] if game else None}
                         for dex, name in sorted(DEX_NAMES.items()) if 1 <= dex <= 151],
             'items': [{'id': item, 'name': name, 'bought': count('bought', item),
                        'used': count('used', item) if item in CONSUMABLES else None,

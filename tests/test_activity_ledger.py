@@ -52,7 +52,7 @@ def test_encounters_defeats_transform_and_replays(ledger):
     action(ledger, 'defeated', transformed=True, sequence=6)
     assert row(ledger.store, 'pokemon', 25) == {
         'id': 25, 'name': 'Pikachu', 'wild': 2, 'trainer': 1, 'defeated': 2,
-        'caught': None, 'gift': 0, 'held': None}
+        'caught': None, 'gift': 0, 'traded_in': 0, 'traded_out': 0, 'held': None}
     for kind in ('wild', 'defeated', 'used', 'bought'):
         action(ledger, kind, tutorial=True)
         action(ledger, kind, link=True)

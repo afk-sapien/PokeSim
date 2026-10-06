@@ -130,8 +130,13 @@ def journal(root, transaction):
             body += ' The incoming partner evolved during the exchange.'
         # The journal row and idempotency marker commit together.
         with sqlite3.connect(data / 'pokesim.sqlite') as db:
+            from ..activity_ledger import initialize as initialize_activity
+            from ..trade_statistics import initialize as initialize_trades, record
+            initialize_activity(db)
+            initialize_trades(db)
             db.execute('CREATE TABLE IF NOT EXISTS completed_trades (id TEXT PRIMARY KEY)')
             cursor = db.execute('INSERT OR IGNORE INTO completed_trades(id) VALUES (?)', (key,))
+            record(db, 'legacy:' + transaction, moved['sent'].get('species'), moved['received'].get('species'))
             if cursor.rowcount:
                 for side in result.get('proposal', {}).values():
                     if isinstance(side, dict) and side.get('instance') == name and side.get('trade_key'):

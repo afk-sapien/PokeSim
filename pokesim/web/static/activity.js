@@ -2,7 +2,7 @@
   const $ = selector => document.querySelector(selector)
   const pokemon = document.body.dataset.ledger === 'pokemon'
   const columns = pokemon
-    ? [['wild', 'Wild encounters'], ['trainer', 'Trainer opponents'], ['defeated', 'Defeated'], ['caught', 'Caught'], ['gift', 'Custom gifts'], ['held', 'Held now']]
+    ? [['wild', 'Wild encounters'], ['trainer', 'Trainer opponents'], ['defeated', 'Defeated'], ['caught', 'Caught'], ['gift', 'Custom gifts'], ['traded_in', 'Traded in'], ['traded_out', 'Traded out'], ['held', 'Held now']]
     : [['bought', 'Purchased'], ['used', 'Used'], ['bag', 'In bag now']]
   const params = new URLSearchParams(location.search)
   let rows = []
@@ -26,7 +26,7 @@
     add(head, 'th', label).scope = 'col'
   }
   $('#ledger-help').textContent = pokemon
-    ? 'Encounters count each wild Pokémon or trainer opponent entering battle. Defeated includes both. Caught excludes gifts and trades. Custom gifts include PokeSim League rewards. Held now includes the party and every PC box.'
+    ? 'Encounters count each wild Pokémon or trainer opponent entering battle. Defeated includes both. Caught excludes gifts and trades. Custom gifts include PokeSim League rewards. Trades count completed cable and NPC exchanges, using the received form after evolution and the sent form before evolution. Held now includes the party and every PC box.'
     : 'Purchased counts quantities bought at shops and vending machines. Used counts consumed items, including balls thrown, healing items, stones, and TMs. Reusable items show “Not counted”. Moving, selling, discarding, or giving items away does not count as use.'
   function render() {
     const query = $('#ledger-search').value.trim().toLocaleLowerCase().replace(/^#/, '')
@@ -105,6 +105,10 @@
         : 'Action tracking begins when this adventure runs on a supported Red or Blue cartridge.'
       if (data.started_at && !data.available) coverage += ' Action tracking is currently unavailable for this cartridge.'
       if (pokemon && data.captures_available && data.captures_since) coverage += ` Catch records since ${date(data.captures_since)} are included.`
+      if (pokemon) {
+        coverage += data.trade_records?.npc_since ? ` Trades include verified cable history and NPC exchanges since ${date(data.trade_records.npc_since)}.` : ' Verified cable trades are included. NPC tracking begins when this adventure runs.'
+        if (data.trade_records?.missing_history) coverage += ' Older trades with missing species records are excluded.'
+      }
       $('#ledger-coverage').textContent = coverage
       render()
     } catch (_) {

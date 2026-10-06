@@ -149,11 +149,21 @@ and timing rules.
 ## Pokémon and item records
 
 The Pokémon page lists all 151 species with wild encounters, trainer opponents
-faced, defeated opponents, catches, custom gifts, and currently held partners.
+faced, defeated opponents, catches, custom gifts, traded in, traded out, and
+currently held partners.
 Held includes the party and every PC box. Wild encounters include unsuccessful
 captures and fleeing. Trainer counts are per opposing Pokémon sent into battle,
 not per trainer. Defeats include wild and trainer opponents, with a transformed
 Ditto credited to its original species. The tutorial and link battles are excluded.
+
+Trade totals count completed cable and NPC exchanges. Traded out uses the sent
+species, and traded in uses the received species after any trade evolution.
+Verified released cable records are backfilled once from the adventure database.
+The verified result supplies the received species, never the pre-evolution offer.
+Pending, failed, and canceled exchanges do not count. NPC trades count from this
+update, including repeat visits. Older trades without sufficient species evidence
+remain excluded and are noted on the page. Receipts and both totals commit together,
+so retries, restarts, and journal pruning cannot duplicate or erase a counted trade.
 
 The Items page lists usable cartridge items, key items, TMs, and HMs. Purchased
 counts quantities bought at marts and vending machines. Used counts consumption,
