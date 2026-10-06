@@ -868,6 +868,7 @@ class Policy:
 
     def battle(self, snapshot, mem):
         text = snapshot.text
+        opponent = self.battle_target(snapshot, mem) if self.collection.get('tower') else snapshot
         needed = self.needed_move(snapshot)
         partner = (not any(needed in self.data.species[mon.species]['machines'] for mon in snapshot.party if not mon.egg)
                    and needed in self.data.species.get(snapshot.enemy_species, {}).get('machines', []))
@@ -928,7 +929,7 @@ class Policy:
             if snapshot.party and snapshot.party[active].hp and self.switching is None:
                 return Action('b')
             target = max((i for i, mon in enumerate(snapshot.party) if mon.hp and not mon.egg),
-                         key=lambda i: max((self.move_score(move, snapshot.party[i], snapshot)
+                         key=lambda i: max((self.move_score(move, snapshot.party[i], opponent)
                                             for move, pp in zip(snapshot.party[i].moves, snapshot.party[i].pp) if pp), default=0),
                          default=0) + 1
             if self.switching is not None and snapshot.party[self.switching].hp:
@@ -953,7 +954,16 @@ class Policy:
                     if mem.byte('wMenuCursorY') > 1:
                         return Action('up')
                     return Action('a')
-            scores = [max((self.move_score(move, mon, snapshot) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
+            if not catch and self.collection.get('tower'):
+                target = self.tower_switch(snapshot, mem, active)
+                if target is not None:
+                    self.switching = target
+                    if mem.byte('wMenuCursorX') < 2:
+                        return Action('right')
+                    if mem.byte('wMenuCursorY') > 1:
+                        return Action('up')
+                    return Action('a')
+            scores = [max((self.move_score(move, mon, opponent) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
                       if mon.hp and not mon.egg else 0 for mon in snapshot.party]
             if not catch and scores and scores[min(active, len(scores) - 1)] == 0 and max(scores) > 0:
                 self.switching = max(range(len(scores)), key=scores.__getitem__)
@@ -990,12 +1000,18 @@ class Policy:
             slot = min(mem.byte('wCurPartyMon' if self.learning else 'wCurBattleMon'), max(0, len(snapshot.party) - 1))
             if snapshot.party:
                 mon = snapshot.party[slot]
-                options = [(self.move_score(move, mon, snapshot), index)
+                options = [(self.move_score(move, mon, opponent), index)
                            for index, move in enumerate(mon.moves) if move and mon.pp[index]
                            and not (mem.byte('wPlayerDisableCount') and move == mem.byte('wDisabledMove'))]
+                if not self.learning and self.collection.get('tower'):
+                    reflected = {self.data.moves.get(move, {}).get('effect') for move in mem.read('wEnemyMonMoves', 4)}
+                    options = [(score * (0.1 if score < snapshot.enemy_hp
+                                and ('EFFECT_COUNTER' if self.data.moves[mon.moves[index]]['type'] < 20
+                                     else 'EFFECT_MIRROR_COAT') in reflected else 1), index)
+                               for score, index in options]
                 if not self.learning and snapshot.in_battle == 2 and not self.collection.get('tower'):
                     normal_available = any(self.data.moves.get(move, {}).get('type') == 0 and mon.pp[index]
-                                           and self.move_score(move, mon, snapshot) > 0
+                                           and self.move_score(move, mon, opponent) > 0
                                            for index, move in enumerate(mon.moves) if move)
                     if normal_available:
                         options = [(score * (0.25 if mon.pp[index] <= 5
@@ -1057,6 +1073,56 @@ class Policy:
                 options.append((damage, index))
         return max(options)[1] if options else None
 
+    def battle_target(self, snapshot, mem):
+        return SimpleNamespace(enemy_species=snapshot.enemy_species, enemy_level=snapshot.enemy_level,
+            enemy_hp=snapshot.enemy_hp, enemy_defense=mem.word('wEnemyMonDefense'),
+            enemy_special_defense=mem.word('wEnemyMonSpclDef'))
+
+    def tower_switch(self, snapshot, mem, active):
+        if active >= len(snapshot.party):
+            return None
+        enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level,
+            stats=tuple(mem.word('wEnemyMon' + stat) for stat in ('MaxHP', 'Attack', 'Defense', 'Speed', 'SpclAtk', 'SpclDef')))
+        moves = mem.read('wEnemyMonMoves', 4)
+        opponent = self.battle_target(snapshot, mem)
+        rows = []
+        for slot, mon in enumerate(snapshot.party):
+            if not mon.hp or mon.egg:
+                continue
+            target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.hp,
+                enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
+            received = max((self.move_score(move, enemy, target) for move in moves), default=0)
+            dealt = max((self.move_score(move, mon, opponent) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
+            rows.append((slot, received / mon.hp, dealt, received))
+        current = next((row for row in rows if row[0] == active), None)
+        if current is None:
+            return None
+        healing = any(self.data.moves.get(move, {}).get('effect') in {'EFFECT_HEAL', 'EFFECT_MORNING_SUN',
+                      'EFFECT_MOONLIGHT', 'EFFECT_SYNTHESIS', 'EFFECT_REST'} for move in moves)
+        if (healing and not mem.byte('wEnemyMonStatus') and 92 not in snapshot.party[active].moves
+                and not {3, 9}.intersection(self.data.species[snapshot.enemy_species]['types'])
+                and current[2] * 2 < snapshot.enemy_hp):
+            poison = next((slot for slot, _, _, received in rows
+                           if slot != active and {92, 105} <= set(snapshot.party[slot].moves)
+                           and snapshot.party[slot].pp[snapshot.party[slot].moves.index(92)]
+                           and snapshot.party[slot].hp > received * 2.25), None)
+            if poison is not None:
+                return poison
+        if current[1] < 0.65:
+            return None
+        def speed(mon):
+            return mon.stats[3] / (4 if getattr(mon, 'status', 0) & 64 else 1)
+        if current[2] >= snapshot.enemy_hp and speed(snapshot.party[active]) >= enemy.stats[3]:
+            return None
+        candidates = []
+        for slot, danger, dealt, received in rows:
+            mon = snapshot.party[slot]
+            margin = 1.25 if speed(mon) >= enemy.stats[3] else 2.25
+            if (slot != active and danger < current[1] * 0.65 and mon.hp > received * margin
+                    and dealt >= snapshot.enemy_hp * 0.15):
+                candidates.append((dealt / max(1, snapshot.enemy_hp) - danger, slot))
+        return max(candidates)[1] if candidates else None
+
     def poison_move(self, snapshot, mem, mon, options):
         if mem.byte('wEnemyMonStatus') or {3, 9}.intersection(self.data.species[snapshot.enemy_species]['types']):
             return None
@@ -1069,14 +1135,20 @@ class Policy:
     def recovery_move(self, snapshot, mem, mon, options):
         slot = next((i for i, move in enumerate(mon.moves) if mon.pp[i]
                      and self.data.moves.get(move, {}).get('effect') == 'EFFECT_HEAL'), None)
-        if slot is None:
+        if slot is None or mem.byte('wPlayerDisableCount') and mem.byte('wDisabledMove') == mon.moves[slot]:
             return None
+        reflected = {self.data.moves.get(move, {}).get('effect') for move in mem.read('wEnemyMonMoves', 4)}
+        attacks = [self.data.moves.get(move, {}) for move in mon.moves if self.data.moves.get(move, {}).get('power')]
+        if (mem.byte('wEnemyMonStatus') & 8 and attacks
+                and all(('EFFECT_COUNTER' if move['type'] < 20 else 'EFFECT_MIRROR_COAT') in reflected for move in attacks)):
+            return slot
         hp, maximum = mem.word('wBattleMonHP'), mem.word('wBattleMonMaxHP')
         if not 0 < hp < maximum * 0.55 or max((score for score, _ in options), default=0) >= snapshot.enemy_hp:
             return None
         enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level,
             stats=tuple(mem.word('wEnemyMon' + stat) for stat in ('MaxHP', 'Attack', 'Defense', 'Speed', 'SpclAtk', 'SpclDef')))
-        target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=hp)
+        target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=hp,
+            enemy_defense=mem.word('wBattleMonDefense'), enemy_special_defense=mem.word('wBattleMonSpclDef'))
         damage = max((self.move_score(move, enemy, target) for move in mem.read('wEnemyMonMoves', 4)), default=0)
         return slot if damage < maximum / 2 else None
 
@@ -1100,8 +1172,12 @@ class Policy:
         if effect == 'EFFECT_SUPER_FANG':
             return getattr(snapshot, 'enemy_hp', 0) / 2 * accuracy
         attack = mon.stats[1 if kind < 20 else 4]
+        if kind < 20 and getattr(mon, 'status', 0) & 16:
+            attack /= 2
         enemy = self.data.species.get(snapshot.enemy_species, {}).get('stats', [50] * 6)
-        defense = (enemy[2 if kind < 20 else 5] + 8) * 2 * getattr(snapshot, 'enemy_level', mon.level) / 100 + 5
+        defense = getattr(snapshot, 'enemy_defense' if kind < 20 else 'enemy_special_defense', None)
+        if defense is None:
+            defense = (enemy[2 if kind < 20 else 5] + 8) * 2 * getattr(snapshot, 'enemy_level', mon.level) / 100 + 5
         stab = 1.5 if kind in self.data.species[mon.species]['types'] else 1
         score = ((2 * mon.level / 5 + 2) * power * attack / max(1, defense) / 50 + 2) * factor * stab * accuracy
         if effect == 'EFFECT_MULTI_HIT':
