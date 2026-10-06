@@ -7,6 +7,9 @@ from .collection import legendary_project
 from .menus import MenuDecision, select, tap
 from ..strategy_data import DATA, ITEMS, MAPS, PRICES, WORLD
 
+# Protect all finite TMs, including purchased replacements waiting to be taught.
+RENEWABLE_TMS = {200 + number for number in (1, 2, 5, 7, 9, 15, 17, 23, 32, 33, 37, 50)}
+
 # Red and Blue refuse Safari Zone entry below this amount, and the story needs two visits' worth of
 # prizes (Surf and the Gold Teeth), so an unaffordable fee is a permanent roadblock, not a delay.
 SAFARI_FEE = 500
@@ -67,7 +70,8 @@ class ShoppingController:
             item = row[1]
             tier = 0 if item in SPARE or 201 <= item <= 250 else 1 if item in LUXURIES else 3 if item in BALLS else 2
             return tier, -PRICES.get(item, 0)
-        rows = [(i, item) for i, (item, qty) in enumerate(snapshot.items) if qty and PRICES.get(item, 0) > 0]
+        rows = [(i, item) for i, (item, qty) in enumerate(snapshot.items)
+                if qty and PRICES.get(item, 0) > 0 and (not 201 <= item <= 250 or item in RENEWABLE_TMS)]
         return min(rows, key=rank)[0] if rows else None
 
     def raising_funds(self, snapshot):
@@ -81,7 +85,7 @@ class ShoppingController:
     @staticmethod
     def sale_index(snapshot):
         return next((i for i, (item, qty) in enumerate(snapshot.items)
-                     if qty and (item == ITEMS['NUGGET'] or 201 <= item <= 250
+                     if qty and (item == ITEMS['NUGGET'] or item in RENEWABLE_TMS
                                  or len(snapshot.items) >= 18 and item in {
                                      ITEMS[name] for name in ('X_ACCURACY', 'GUARD_SPEC', 'DIRE_HIT',
                                                              'X_ATTACK', 'X_DEFEND', 'X_SPEED', 'X_SPECIAL')})), None)
@@ -148,7 +152,7 @@ class ShoppingController:
                                  else self.sale_index(snapshot)) is not None:
                 return MenuDecision(select(screen, 1), 'Sell spare valuables to cover the Safari Zone entry fee'
                                     if self.raising_funds(snapshot) else
-                                    'Sell spare TMs and Nuggets to make room for story items')
+                                    'Sell replaceable TMs and Nuggets to make room for story items')
             self.selling = False
             self.item = self.item_for(snapshot, stock, goal_key, project)
             self.buying = self.item is not None

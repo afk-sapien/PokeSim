@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a Champion TM counter at Celadon Department Store for the 38 limited TMs.
+  The AI purchases useful upgrades for compatible party members with a supply
+  reserve, then teaches them through cartridge menus. Purchases recover safely
+  after interruption and count in item statistics. Protect limited TMs from selling.
+
 - Add Traded in and Traded out to Pokémon Stats, with verified cable-history recovery, final received evolution forms, NPC exchange tracking, and duplicate protection.
 
 - Give Stats its own main tab with Overview, Pokémon, and Items pages. Add searchable action totals for each species and item, preserve recorded catch history, and start new counters without estimating earlier activity.

@@ -102,12 +102,16 @@ class StrategicPolicy(Policy):
         self.failures = {}
         self.readiness = {}
         self.next_goal = None
+        self.tm_moves = {}
+        self.tm_compatible = {}
         self.map_view = None
         self.escape_attempted = False
         self.on_restore()
 
     def reset(self):
+        moves, compatible = self.tm_moves, self.tm_compatible
         self.__init__(self.seed, self.starter_setting)
+        self.tm_moves, self.tm_compatible = moves, compatible
 
     @property
     def hopeless_battle(self):
@@ -163,6 +167,10 @@ class StrategicPolicy(Policy):
         self.pending_social = None
         self.supply_attempts = set()
         self.move_teaching_after = 0
+        self.tm_plan = None
+        self.tm_check_after = 0
+        self.tm_teach_after = 0
+        self.tm_deadline = 0
 
     def describe(self):
         return f"strategic ({self.mode})"
@@ -239,7 +247,7 @@ class StrategicPolicy(Policy):
         self.decisions += 1
         # PC transfers briefly combine a new partner with the old slot's level.
         # Accept training gains in battle or after returning to the overworld.
-        self.collection.observe(s, overworld=kind == 'overworld', suspended=self.pickups.active is not None,
+        self.collection.observe(s, overworld=kind == 'overworld', suspended=self.pickups.active is not None or self.tm_plan is not None,
                                 training_ready=bool(s.in_battle) or kind == 'overworld',
                                 training_active=(self.goal.key == 'collect_train' and not self.heal_latch
                                                  and not needs_healing(s.party)
@@ -727,14 +735,17 @@ class StrategicPolicy(Policy):
                                  f'Improve {s.party[target].nick or s.party[target].name} using an owned HM')
                 self.reason = self.goal.reason
                 return self._use_item(s, item, target)
+        goal, tm_action = self._tm_development(s, goal, in_league)
+        if tm_action:
+            return tm_action
         if goal.key == "thunder" and not event_set(s.event_flags, "EVENT_2ND_LOCK_OPENED"):
             goal = self._trash_goal(s)
-        if not self.heal_latch and not in_league and not self.pickups.active and goal.key not in ('restock','party_box'):
+        if not self.heal_latch and not in_league and not self.pickups.active and goal.key not in ('restock','party_box','buy_tm'):
             collection_goal = self.collection.choose(s, self.nav, self.rng, goal)
             if collection_goal:
                 self.next_goal = goal.to_dict() if not goal.key.startswith(('collect_', 'party_collection', 'party_league')) else self.next_goal
                 goal = collection_goal
-        pickup = None if legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon' else self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
+        pickup = None if goal.key == 'buy_tm' or legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon' else self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
         if pickup and not self.heal_latch and not in_league:
             self.next_goal = goal.to_dict()
             goal = pickup
@@ -1012,14 +1023,14 @@ class StrategicPolicy(Policy):
             else:
                 return wait()
         else:
-            if goal.key not in ("heal", "restock"):
+            if goal.key not in ("heal", "restock", "buy_tm"):
                 social = None if goal.key.startswith(("collect_", "party_collection", "party_league")) else self._purposeful_detour(s, mem, goal)
                 if social:
                     return social
                 social = None if goal.key == 'collect_pickup' or (self.collection.project or {}).get('method') in ('train', 'marathon') or legendary_project(self.collection.project) else self._social_interaction(s, mem)
                 if social:
                     return social
-            curiosity = 0 if goal.key in ("heal", "restock", "collect_pickup", "collect_hunt") or (self.collection.project or {}).get('method') in ('train', 'marathon') or legendary_project(self.collection.project) else EXPLORATION_CHANCE
+            curiosity = 0 if goal.key in ("heal", "restock", "buy_tm", "collect_pickup", "collect_hunt") or (self.collection.project or {}).get('method') in ('train', 'marathon') or legendary_project(self.collection.project) else EXPLORATION_CHANCE
             if s.map in MANSION_MAPS:
                 direction = self.mansion.route(s, goal.targets, self.nav)
                 if direction == "switch":
@@ -1153,6 +1164,42 @@ class StrategicPolicy(Policy):
         return self.pc.target(snapshot, self.goal.key, self.collection.project, self._preferences(), self.collection)
 
     _sale_index = staticmethod(ShoppingController.sale_index)
+
+    def _tm_development(self, s, goal, in_league):
+        from .. import tm_shop
+        if (not self.tm_moves or self.heal_latch or in_league
+                or goal.key.startswith(('party_', 'teach_', 'restock'))):
+            return goal, None
+        if self.tm_plan and (s.frame > self.tm_deadline
+                             or not tm_shop.valid_plan(s, self.tm_plan, self.tm_moves, self.tm_compatible)):
+            self.tm_plan = None
+            self.tm_check_after = s.frame + 18000
+        if s.frame >= self.tm_teach_after:
+            self.tm_teach_after = s.frame + 3600
+            owned = tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=True)
+            if owned:
+                self.tm_plan = None
+                item, target = owned['item'], owned['target']
+                name = tm_shop.label(item, self.tm_moves)
+                self.goal = Goal('teach_tm', f'Teach {name}',
+                                 f'Improve {s.party[target].nick or s.party[target].name} using an owned TM')
+                self.reason = self.goal.reason
+                return self.goal, self._use_item(s, item, target)
+        if (not self.tm_plan and s.frame >= self.tm_check_after and goal.key == 'collect_plan'
+                and not self.collection.project and not self.pickups.active):
+            self.tm_check_after = s.frame + 3600
+            self.tm_plan = tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=False)
+            self.tm_deadline = s.frame + 60000
+        if self.tm_plan:
+            item, target = self.tm_plan['item'], self.tm_plan['target']
+            if dict(s.items).get(item):
+                return goal, None
+            name = tm_shop.label(item, self.tm_moves)
+            goal = Goal('buy_tm', f'Buy {name}',
+                        f'Visit the Champion TM counter for {s.party[target].nick or s.party[target].name}. '
+                        f'Price ₽{tm_shop.PRICES[item]:,}, keeping ₽{tm_shop.RESERVE:,} for supplies',
+                        (tm_shop.COUNTER,))
+        return goal, None
 
     def _use_item(self, snapshot, item, target=0):
         index = next((i for i, (mid, qty) in enumerate(snapshot.items) if mid == item and qty), None)

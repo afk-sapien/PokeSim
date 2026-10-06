@@ -110,6 +110,9 @@ class Emulator:
         self.reloads = 0
         self.pending: list = []      # events waiting for confirmation on the next snapshot
         self.rom_note = self._check_rom()
+        if isolated_ram and config.POLICY == 'strategic':
+            from .tm_shop import cartridge_data
+            self.policy.tm_moves, self.policy.tm_compatible = cartridge_data(self.rom.read_bytes())
         from .catches import CatchTracker
         fresh = (not store.autosaves() and not store.events(limit=1)
                  and (isolated_ram or not Path(str(self.rom) + '.ram').exists()))
@@ -276,7 +279,7 @@ class Emulator:
             raise ValueError("Checkpoint predates the latest completed trade")
         reward_barrier = self.store.get('custom-reward-barrier-v1')
         if reward_barrier and (metadata or {}).get('reward_id') != reward_barrier:
-            raise ValueError('Checkpoint predates the latest custom reward')
+            raise ValueError('Checkpoint predates the latest custom reward or purchase')
         if metadata:
             if metadata.get("rom_sha1") != self.rom_sha1:
                 raise ValueError("Checkpoint was created with a different ROM")
@@ -989,6 +992,9 @@ class Emulator:
                     next_autosave = now + config.AUTOSAVE_SECONDS
                 if not self.manual_mode and not self.paused and not getattr(self, 'preparation', None):
                     self._check_guards()
+                if getattr(self, 'isolated_ram', False) and getattr(self.policy, 'tm_plan', None):
+                    from .runtime.tm_purchase import purchase
+                    purchase(self)
                 if getattr(self, 'isolated_ram', False) and now >= getattr(self, '_next_reward', 0):
                     from .runtime.reward_delivery import deliver
                     self._next_reward = now + 60

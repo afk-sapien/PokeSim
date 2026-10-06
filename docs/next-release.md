@@ -25,7 +25,11 @@ preserved. The same moveset evaluator improves level-up move choices.
 
 Stone evolution waits for useful upcoming moves the evolved species cannot learn
 by leveling. Owned Surf and Strength HMs can fill empty party move slots for a
-clear battle improvement. General TM spending remains deferred. An isolated replay
+clear battle improvement. A Champion-only custom TM counter in Celadon makes all
+38 limited TMs renewable for managed adventures. The AI buys one useful upgrade
+for a compatible party member, keeps a supply reserve, and teaches it through
+normal menus. Limited TMs are protected from selling. Purchases and their item
+statistics share recoverable checkpoint ownership. An isolated replay
 of a Red backup verified that a Tackle-only Starmie learned Surf through the cartridge
 menus, retained its identity and stats, and returned to the overworld. See
 [Pokémon stats](pokemon-stats.md) for the scoring assumptions and limits.

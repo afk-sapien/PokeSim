@@ -18,7 +18,7 @@ def test_reward_retries_soon_but_success_keeps_gifts_spaced(monkeypatch, deliver
     emu.paused = False
     emu.manual_mode = False
     emu.isolated_ram = True
-    emu.policy = Mock()
+    emu.policy = Mock(tm_plan=None)
     emu.pb = Mock()
     emu._autosave = Mock()
     emu._check_guards = Mock()
@@ -39,7 +39,7 @@ def test_manual_input_runs_while_paused_without_policy_input():
     emu.manual.put(Action('right', 8, 2))
     emu.paused = True
     emu.manual_mode = False
-    emu.policy = Mock()
+    emu.policy = Mock(tm_plan=None)
     emu.pb = Mock()
     emu._autosave = Mock()
     emu._check_guards = Mock()
@@ -63,7 +63,7 @@ def test_restore_discards_policy_intent_and_refreshes_snapshot(tmp_path, monkeyp
     path.write_bytes(b'checkpoint')
     emu = Emulator.__new__(Emulator)
     emu.pb = Mock()
-    emu.policy = Mock()
+    emu.policy = Mock(tm_plan=None)
     from pokesim.store import Store
     emu.store = Store(tmp_path)
     emu.input_epoch = 7
@@ -91,7 +91,7 @@ def test_restore_keeps_total_victories_separate_from_reward_count(tmp_path, monk
     path.write_bytes(b'checkpoint')
     emu = Emulator.__new__(Emulator)
     emu.pb = Mock()
-    emu.policy = Mock()
+    emu.policy = Mock(tm_plan=None)
     emu.store = Store(tmp_path)
     emu.rom_sha1 = 'test-rom'
     emu.play_clock = PlayClock()
@@ -148,7 +148,7 @@ def test_resume_clears_queued_manual_input_and_resets_ai():
     emu.paused = True
     emu.manual = queue.Queue()
     emu.manual.put(Action('a', 6, 2))
-    emu.policy = Mock()
+    emu.policy = Mock(tm_plan=None)
     assert emu._handle_command('resume', None)
     assert not emu.manual_mode and not emu.paused and emu.manual.empty()
     emu.policy.on_restore.assert_called_once()
@@ -162,7 +162,7 @@ def test_failed_tick_releases_button_before_worker_retries(monkeypatch):
     emu.manual.put(Action('right', 8, 2))
     emu.paused = True
     emu.manual_mode = False
-    emu.policy = Mock()
+    emu.policy = Mock(tm_plan=None)
     emu.pb = Mock()
     emu._autosave = Mock()
     emu._check_guards = Mock()

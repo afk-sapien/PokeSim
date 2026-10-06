@@ -81,10 +81,34 @@ substantial. Another party member already knowing the HM does not block this.
 The policy uses normal cartridge menus, preserves existing moves, and spaces retries.
 Navigation teaching of Cut, Surf, and Strength continues as before.
 
-General TM spending, shopping for battle TMs, replacement of occupied slots with
-optional HMs, and prediction of future TM access remain deferred. Reusable HMs
-are never consumed. Movesets with four occupied slots are left to normal level-up
-learning or manual teaching.
+After becoming Champion, managed adventures on supported Red and Blue cartridges
+can buy replacements for the 38 limited TMs at the Celadon Department Store 2F
+counter. The AI chooses a compatible party member at level 30 or above and a move
+that materially improves the same moveset score. It teaches useful limited TMs
+already in the bag first, keeps field HMs, and avoids buying a move that the
+recipient can still learn by leveling. Existing occupied move slots can be
+replaced when that improves the moveset.
+
+The custom counter charges ₽50,000 for Toxic, Body Slam, Ice Beam, Blizzard,
+Thunderbolt, Earthquake, Dig, Psychic, and Fire Blast. Swords Dance, Seismic Toss,
+Mega Drain, SolarBeam, Thunder, Softboiled, Rest, Thunder Wave, and Rock Slide cost
+₽25,000. The other limited TMs cost ₽10,000. Purchases leave at least ₽20,000 for
+supplies and require a free bag slot. Only one copy is bought for a chosen
+recipient. The twelve renewable cartridge TMs retain their existing availability
+and are outside this shopping planner.
+
+Shopping trips begin between collection projects and yield to healing, supply
+restocking, storage needs, and League battles. A trip has a bounded travel budget.
+At the counter, PokeSim stages the money deduction and TM in a cloned checkpoint,
+then commits the checkpoint, journal entry, and Purchased counter together. A
+restart recovers an unfinished committed purchase. Earlier checkpoints cannot
+rewind across that purchase. Teaching uses the cartridge menus and consumes the
+TM normally, incrementing Used only on success. There is no replacement cartridge
+shop screen or ROM patch. The journal identifies the custom Champion counter.
+
+Limited TMs are protected from automatic selling, including original copies and
+purchased replacements. Optional HM teaching still uses empty slots only.
+Reusable HMs are never consumed. Other item replenishment remains unchanged.
 
 ## Stat total
 
