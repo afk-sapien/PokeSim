@@ -62,7 +62,8 @@ def _promote(store, record):
         raise ValueError('The interaction has no durable commit receipt')
     stage = record['staged']
     state = _artifact(stage['state_path'], stage['checkpoint_sha256'])
-    metadata = {**record['source_metadata'], 'sha256': stage['checkpoint_sha256'], 'trade_id': record['id']}
+    from pokesim_core.emulator_state import retag_checkpoint
+    metadata = {**retag_checkpoint(record['source_metadata']), 'sha256': stage['checkpoint_sha256'], 'trade_id': record['id']}
     path = store.states / f"auto-v1-link-{record['id']}.state"
     if not path.exists():
         CheckpointStore.atomic_write(path, state)
@@ -383,12 +384,12 @@ class Participant:
 
     def verify_result(self, record, result, state, save, incoming):
         from types import SimpleNamespace
-        from pyboy import PyBoy
+        from pokesim_core.emulator import Emulator as CoreEmulator
         from ..interactions.cable_metadata import BUILDS
         from ..interactions.verification import party, boxed_inventory, verify_exchange, verify_restarts
         symbols = BUILDS[self.emu.rom_sha1]['symbols']
         rom = Path(self.runtime.settings.rom_path).read_bytes()
-        pb = PyBoy(io.BytesIO(rom), ram_file=io.BytesIO(bytes(32768)), window='null', sound_emulated=False, log_level='ERROR')
+        pb = CoreEmulator(io.BytesIO(rom), ram_file=io.BytesIO(bytes(32768)), window='null', sound_emulated=False, log_level='ERROR')
         pb.set_emulation_speed(0)
         try:
             pb.load_state(io.BytesIO(_artifact(record['source']['checkpoint_path'], record['source']['checkpoint_sha256'])))

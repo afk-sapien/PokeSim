@@ -1,6 +1,6 @@
 """Execute an agreed trade at save level: swap one boxed Pokémon between two checkpoints.
 
-pokesim persists PyBoy save states, not cartridge .sav files, so there is no save file to
+pokesim persists CoreEmulator save states, not cartridge .sav files, so there is no save file to
 edit. Instead each side is booted headless on its own ROM, its checkpoint is loaded, the box
 bytes are moved through `pyboy.memory` (see boxes.py for the layout), and a fresh state is
 written back out. No link cable, no emulation of the trade protocol.
@@ -30,7 +30,8 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
-from pyboy import PyBoy
+from pokesim_core.emulator import Emulator as CoreEmulator
+from pokesim_core.emulator_state import retag_checkpoint
 
 from ..checkpoints import CheckpointStore
 from ..policies.collection import EVOS
@@ -81,10 +82,10 @@ def register_arrival(mem, *species):
             mem[address + byte] |= 1 << bit
 
 
-def _boot(rom: Path, state: Path, expect_sha1: str | None) -> PyBoy:
+def _boot(rom: Path, state: Path, expect_sha1: str | None) -> CoreEmulator:
     if expect_sha1 and hashlib.sha1(rom.read_bytes()).hexdigest() != expect_sha1:
         raise TradeError(f"{state.name} was recorded with a different ROM than {rom.name}")
-    pb = PyBoy(str(rom), window="null", sound_emulated=True)
+    pb = CoreEmulator(str(rom), window="null", sound_emulated=True)
     pb.set_emulation_speed(0)
     try:
         with open(state, "rb") as f:
@@ -150,7 +151,7 @@ def perform(proposal: dict, sources: dict, outputs: dict | None = None) -> dict:
     if give["instance"] == take["instance"]:
         raise TradeError("A trade needs two different instances")
 
-    machines: dict[str, PyBoy] = {}
+    machines: dict[str, CoreEmulator] = {}
     try:
         held, manifests, states = {}, {}, {}
         for role, want in (("give", give), ("take", take)):
@@ -205,7 +206,7 @@ def perform(proposal: dict, sources: dict, outputs: dict | None = None) -> dict:
             "states": {entry["instance"]: entry["state"] for entry in moved}}
 
 
-def _state_bytes(pb: PyBoy) -> bytes:
+def _state_bytes(pb: CoreEmulator) -> bytes:
     buf = io.BytesIO()
     pb.save_state(buf)
     return buf.getvalue()
@@ -215,5 +216,5 @@ def _publish(path: Path, state: bytes, manifest: dict | None):
     """Write a state, and its manifest if the source had one, the way the store does."""
     CheckpointStore.atomic_write(path, state)
     if manifest is not None:
-        updated = dict(manifest, sha256=hashlib.sha256(state).hexdigest())
+        updated = dict(retag_checkpoint(manifest), sha256=hashlib.sha256(state).hexdigest())
         CheckpointStore.atomic_write(path.with_suffix(".json"), json.dumps(updated).encode())

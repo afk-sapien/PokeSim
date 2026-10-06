@@ -22,8 +22,8 @@ def main():
         rom = root / 'demo.gb'
         rom.write_bytes(subprocess.check_output([
             'docker', 'run', '--rm', '--network', 'none', '--entrypoint', 'python', args.image,
-            '-c', 'from pathlib import Path\nimport pyboy\nimport sys\n'
-            'sys.stdout.buffer.write(Path(pyboy.__file__).with_name("default_rom.gb").read_bytes())',
+            '-c', 'from pokesim_core.emulator import demo_rom\nimport sys\n'
+            'sys.stdout.buffer.write(demo_rom().read_bytes())',
         ], timeout=30))
         rom.chmod(0o644)
         override = root / 'compose.json'

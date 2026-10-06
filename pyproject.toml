@@ -11,8 +11,7 @@ license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11"
 dependencies = [
-  "pokesim-core @ https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.4/pokesim_core-0.1.4-py3-none-any.whl#sha256=8984ad4f2ac5012ca6a2d1f0501866f3194cf182b42686122e3edbc7a09c10cb",
-  "pyboy==2.7.0",
+  "pokesim-core[emulator]==0.2.0.dev0",
   "fastapi>=0.110",
   "uvicorn[standard]>=0.53.0",
   "pillow>=10",
@@ -58,3 +57,7 @@ select = ["E9", "F"]
 [tool.ruff.lint.per-file-ignores]
 # pytest fixtures are imported and then named as test parameters.
 "tests/*" = ["F811", "F401"]
+
+[tool.uv.sources]
+pokesim-core = { path = "../pokesim-core", editable = true }
+pyboy-rs = { path = "../pyboy-rs" }

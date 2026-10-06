@@ -76,7 +76,7 @@ def test_invalid_button_save_path_and_limit(api):
 
 def metadata():
     return {'policy_state': {'goal': 'heal'}, 'run_memory': {}, 'rom_sha1': 'known-rom',
-            'pyboy_version': version('pyboy'), 'policy': config.POLICY, 'frame': 900}
+            'pyboy_version': '2.7.0', 'policy': config.POLICY, 'frame': 900}
 
 
 def test_checkpoint_pairs_state_and_memory_and_detects_corruption(store):

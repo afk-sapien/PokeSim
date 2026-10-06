@@ -31,7 +31,7 @@ def test_unsupported_rom_is_rejected_before_starting_an_emulator(tmp_path, monke
     rom = tmp_path / 'unsupported.gb'
     rom.write_bytes(b'unsupported')
     boot = Mock()
-    monkeypatch.setattr(save_export, 'PyBoy', boot)
+    monkeypatch.setattr(save_export, 'CoreEmulator', boot)
     with pytest.raises(ValueError, match='supported English'):
         save_export.export(rom, b'checkpoint')
     boot.assert_not_called()

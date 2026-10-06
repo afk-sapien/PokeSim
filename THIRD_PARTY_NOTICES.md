@@ -8,6 +8,11 @@ The previously bundled images came from [PokéAPI/sprites](https://github.com/Po
 
 This public repository starts from a reviewed current-source snapshot. It contains no imported development history, bundled game datasets, sprite packs, ROMs, or saves.
 
+The development runtime uses PyBoy RS through PokeSim Core. PyBoy RS retains
+LGPL-3.0-only licensing and upstream attribution. Its corresponding source and
+notices must accompany bundled release artifacts. The following container
+source description applies to the previous published PyBoy-based release.
+
 PyBoy 2.7.0 is distributed under GNU LGPL version 3. The original LGPL text and the incorporated GPL text are retained under `licenses/`. The image includes its exact hash-verified PyPI source archive at `/usr/share/pokesim/sources/pyboy-2.7.0.tar.gz`, a source manifest, all discovered installed Python dependency notices, and the original application source under `/usr/share/pokesim/source`. The Python library is dynamically imported and can be replaced with a compatible modified build. See the dependency modification instructions in `docs/licensing.md`.
 
 Other Python dependencies retain their own licenses. The image records their installed names, versions, license metadata, and notice paths in `/usr/share/pokesim/python-dependencies.json`. Native components and Debian packages retain their installed notices under `/usr/share/doc`. The OCI license label summarizes the application and emulator licenses. It is not an exhaustive license expression for every OS and transitive dependency.

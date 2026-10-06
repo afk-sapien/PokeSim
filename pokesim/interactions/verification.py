@@ -145,13 +145,13 @@ def verify_control(pb, source_center, expected, symbols):
 
 
 def verify_restarts(side, state, save, expected):
-    from pyboy import PyBoy
+    from pokesim_core.emulator import Emulator as CoreEmulator
     from pokesim.ram import read_snapshot
     from pokesim.screen import Screen
     source_center = getattr(side, 'source_center_map', None)
     checked(type(source_center) is int and source_center in CENTERS, 'Missing validated source Center')
     def emulator():
-        pb = PyBoy(io.BytesIO(side.rom_bytes), ram_file=io.BytesIO(save), window='null',
+        pb = CoreEmulator(io.BytesIO(side.rom_bytes), ram_file=io.BytesIO(save), window='null',
                    sound_emulated=False, log_level='ERROR')
         pb.set_emulation_speed(0)
         return pb

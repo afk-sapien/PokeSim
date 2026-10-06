@@ -3,7 +3,7 @@ import argparse
 import hashlib
 import json
 import sqlite3
-from importlib.metadata import version
+from pokesim_core.emulator_state import validate_runtime
 from pathlib import Path
 
 from ..broker import inventory, routine
@@ -33,7 +33,8 @@ def inspect(rom, state):
     metadata = CheckpointStore(state.parent).checkpoint_metadata(state)
     if metadata is None:
         raise ValueError('A verified checkpoint manifest is required')
-    if metadata.get('pyboy_version') != version('pyboy') or metadata.get('policy') != 'strategic':
+    validate_runtime(metadata)
+    if metadata.get('policy') != 'strategic':
         raise ValueError('Checkpoint runtime is incompatible with the trade worker')
     pb = _boot(rom, state, metadata['rom_sha1'])
     try:

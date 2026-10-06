@@ -97,7 +97,7 @@ def test_restore_keeps_total_victories_separate_from_reward_count(tmp_path, monk
     emu.play_clock = PlayClock()
     emu.input_epoch = 0
     emu.frame = 0
-    metadata = {'rom_sha1': emu.rom_sha1, 'pyboy_version': version('pyboy'),
+    metadata = {'rom_sha1': emu.rom_sha1, 'pyboy_version': '2.7.0',
                 'policy': config.POLICY, 'policy_state': {}, 'run_memory': {'championships': 100}}
     monkeypatch.setattr(emu.store, 'checkpoint_metadata', lambda _: metadata)
     monkeypatch.setattr('pokesim.emulator.read_snapshot', lambda *_: snap())

@@ -12,6 +12,8 @@ import re
 import sys
 import threading
 
+from pokesim_core.emulator_state import checkpoint_metadata
+
 from .cable import CableError, CableSide, checked, sha256
 from .cable_driver import CableDriver
 from .cable_metadata import ADAPTER_ID
@@ -151,7 +153,7 @@ def run_session(plan: CableSessionPlan, output_dir, progress=None, cancelled=Non
                 'evidence': evidence,
             }
         canonical = json.dumps(asdict(plan), sort_keys=True, separators=(',', ':')).encode()
-        manifest = {'schema_version': 1, 'status': 'verified', 'adapter_id': ADAPTER_ID,
+        manifest = {**checkpoint_metadata(), 'schema_version': 1, 'status': 'verified', 'adapter_id': ADAPTER_ID,
                     'interaction_id': plan.interaction_id, 'attempt_id': plan.attempt_id,
                     'plan_sha256': sha256(canonical), 'participants': results,
                     'return_method': 'cartridge_soft_reset_continue'}
