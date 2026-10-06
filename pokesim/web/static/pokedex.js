@@ -2,19 +2,19 @@ const $ = (selector) => document.querySelector(selector)
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]))
 const num = (dex) => String(dex).padStart(3, '0')
 const typeTags = (types) => PokemonTypes.badges(types)
-// Base stats count in cells of ten, so the tallest Gen 1 stat (190) fills the meter.
-const MAX_STAT = 190
+let maxStat = 190
 const STAT_CELLS = 19
 const BANK_CELLS = 20
 const RECORD_LABELS = {caught: 'In Pokédex', seen: 'Seen', unseen: 'Unseen'}
 const RECORD_LAMPS = {caught: 'ok', seen: 'signal', unseen: ''}
 const cells = (on, total) => Array.from({length: total}, (_, i) => i < on ? '<i class="on"></i>' : '<i></i>').join('')
-const outOf = (n) => `${n}<span class="unit">/151</span>`
+const outOf = (n) => `${n}<span class="unit">/${dexTotal}</span>`
 function paintBank(selector, value) {
-  $(selector).innerHTML = cells(value > 0 ? Math.max(1, Math.round(value / 151 * BANK_CELLS)) : 0, BANK_CELLS)
+  $(selector).innerHTML = cells(value > 0 ? Math.max(1, Math.round(value / dexTotal * BANK_CELLS)) : 0, BANK_CELLS)
 }
 const PLAN_LABELS = {available: 'Possible in this run', caught: 'Already registered', external: 'Needs another game', unavailable: 'Out of reach for now'}
 
+let dexTotal = 151
 let entries = []
 let byDex = new Map()
 let owned = new Set()
@@ -104,7 +104,7 @@ function renderGrid() {
 }
 
 function statRow(label, value) {
-  const on = Math.max(1, Math.min(STAT_CELLS, Math.round(value / MAX_STAT * STAT_CELLS)))
+  const on = Math.max(1, Math.min(STAT_CELLS, Math.round(value / maxStat * STAT_CELLS)))
   return `<div class="stat-row"><span class="micro">${esc(label)}</span><span class="meter" data-level="signal" aria-hidden="true">${cells(on, STAT_CELLS)}</span><b>${value}</b></div>`
 }
 
@@ -156,24 +156,24 @@ function renderDetail(dex, refresh = false) {
       `<li><strong>${esc(copy.nick || entry.name)}</strong><span>Lv. ${copy.level} · ${esc(copy.where)} · ${copy.stars ? `${copy.stars}★ DVs` : 'DVs unknown'}</span></li>`).join('')}</ul></section>` : ''}
     <section class="detail-section"><h3>Base stats</h3>
       ${Object.entries(entry.stats).map(([label, value]) => statRow(label, value)).join('')}
-      <p class="detail-meta">Total ${entry.total} · Generation I shares one Special stat</p>
+      <p class="detail-meta">Total ${entry.total} · ${dexTotal === 251 ? 'Separate Special Attack and Special Defense' : 'Generation I shares one Special stat'}</p>
       <p class="detail-meta">Catch rate ${entry.catch_rate} of 255 · ${esc(entry.growth)} level curve${entry.hms.length ? ` · Field moves: ${entry.hms.map(esc).join(', ')}` : ''}</p>
     </section>
     ${entry.evolves_from.length || entry.evolves_to.length ? `<section class="detail-section"><h3>Family</h3><div class="evo-row">
       ${entry.evolves_from.map((step) => chip(step, 'Evolves from')).join('')}
       ${entry.evolves_to.map((step) => chip(step, 'Evolves into')).join('')}</div></section>` : ''}
-    <section class="detail-section"><h3>Where to look in Kanto</h3>
+    <section class="detail-section"><h3>Where to look</h3>
       ${entry.locations.length ? `<ul class="place-list">${entry.locations.map(placeLine).join('')}</ul>`
         : '<p class="detail-meta">No encounters in this version. Evolution, a trade, or another cartridge is the way in.</p>'}
     </section>
     <section class="detail-section"><h3>Moves it learns on its own</h3>
       <div class="move-scroll"><table class="move-table"><thead><tr><th>When</th><th>Move</th><th>Type</th><th>Power</th><th>Acc.</th><th>PP</th></tr></thead><tbody>${moves}</tbody></table></div>
     </section>
-    <section class="detail-section"><h3>Read more</h3><div class="link-row">
+    ${Object.keys(entry.links).length ? `<section class="detail-section"><h3>Read more</h3><div class="link-row">
       <a class="key" href="${esc(entry.links.bulbapedia)}" target="_blank" rel="noreferrer">Bulbapedia ↗</a>
       <a class="key" href="${esc(entry.links.serebii)}" target="_blank" rel="noreferrer">Serebii ↗</a>
       <a class="key" href="${esc(entry.links.wikipedia)}" target="_blank" rel="noreferrer">Wikipedia ↗</a>
-    </div></section>`
+    </div></section>` : ''}`
   fitSprites($('#detail-body'))
   $('#detail').hidden = false
   $('#backdrop').hidden = false
@@ -195,7 +195,7 @@ function closeDetail() {
 
 function step(offset) {
   if (openDex === null) return
-  const next = Math.min(151, Math.max(1, openDex + offset))
+  const next = Math.min(dexTotal, Math.max(1, openDex + offset))
   renderDetail(next)
 }
 
@@ -219,6 +219,14 @@ async function loadReference() {
   if (!response.ok) throw new Error('The Pokédex could not be opened.')
   const data = await response.json()
   entries = data.entries
+  dexTotal = data.count || entries.length
+  const regions = data.generation === 2 ? 'Johto and Kanto' : 'Kanto'
+  document.title = `The ${regions} Pokédex. · pokesim`
+  $('.skip-link').textContent = 'Skip to the Pokédex.'
+  $('.who .micro').textContent = `Species register · ${regions} · ${dexTotal} entries`
+  $('.dex-lede').textContent = `Pick any species for its stats, family, where to find it in ${regions}, and the moves it learns.`
+  for (const id of ['#owned-meter', '#seen-meter', '#maxed-meter']) $(id).max = dexTotal
+  maxStat = data.generation === 2 ? 255 : 190
   byDex = new Map(entries.map((entry) => [entry.dex, entry]))
   const types = [...new Set(entries.flatMap((entry) => entry.types))].sort()
   $('#type-filter').innerHTML = '<option value="all">Every type</option>' + types.map((type) => `<option value="${esc(type)}">${esc(type)}</option>`).join('')
@@ -304,7 +312,7 @@ loadReference().then(() => {
   renderGrid()
   refreshStatus(firstStatus)
   const requested = Number(location.hash.replace('#', ''))
-  if (requested >= 1 && requested <= 151) renderDetail(requested)
+  if (requested >= 1 && requested <= dexTotal) renderDetail(requested)
 }).catch(() => {
   $('#grid').innerHTML = '<p class="dex-empty">The Pokédex data could not be loaded. Refresh to try again.</p>'
 })

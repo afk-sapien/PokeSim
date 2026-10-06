@@ -3,7 +3,6 @@ import hashlib
 import json
 from collections import Counter
 
-from ..milestones import is_perfect
 
 PREFIX = 'trade_offer:'
 
@@ -47,7 +46,7 @@ def update(store, payload, key, state):
     if len(matches) != 1:
         raise ValueError('This Pokémon left the collection or cannot be identified uniquely. Refresh and try again.')
     mon = matches[0]
-    if state == 'offered' and is_perfect(mon):
+    if state == 'offered' and len(mon.get('dvs', ())) == 5 and all(value == 15 for value in mon['dvs']):
         raise ValueError('Perfect DV Pokémon are preserved for the collection and cannot be offered.')
     store.set_trade_preference(key, {'state': state, 'name': mon['name'],
                                     'nick': mon['nick'], 'dex': mon['dex']})

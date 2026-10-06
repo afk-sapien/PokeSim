@@ -38,3 +38,9 @@
 .type-tags { flex-wrap: wrap }
 .type-tags { gap: 4px }
 .pc-mon-body > .type-tags { margin-top: 4px }
+
+.type-dark { --type-bg: #cdc4d5 }
+.type-steel { --type-bg: #c3d3db }
+
+.plate.type-dark { --type-glow: 105, 89, 122 }
+.plate.type-steel { --type-glow: 118, 149, 164 }

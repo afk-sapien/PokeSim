@@ -26,9 +26,15 @@ class Assets:
         self.portraits = PortraitPacks(registry, self.cancelled)
 
     def install_rom(self, raw):
+        from ..cartridges import identify, unpack
+        if len(raw) > MAX_ROM:
+            raise ValueError('The cartridge file is too large')
+        if raw[:4] == b'PK\x03\x04':
+            raw = unpack(raw)
+        cartridge = identify(raw)
         sha1 = hashlib.sha1(raw).hexdigest()
         if len(raw) > MAX_ROM or sha1 not in ROM_NAMES:
-            raise ValueError('Choose a clean Pokémon Red or Blue (USA, Europe) ROM')
+            raise ValueError('Choose a clean supported Red, Blue, Gold, Silver or Crystal ROM')
         sha256 = hashlib.sha256(raw).hexdigest()
         path = self.root / 'roms' / sha256 / 'rom.gb'
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -37,7 +43,7 @@ class Assets:
                 raise ValueError('Stored ROM verification failed')
         else:
             CheckpointStore.atomic_write(path, raw)
-        version = 'blue' if 'Blue' in ROM_NAMES[sha1] else 'red'
+        version = cartridge.version if cartridge else ROM_NAMES[sha1].split()[1].lower()
         return self.registry.add_rom(sha256, sha1, version)
 
     def install_portraits(self, raw) -> int:
@@ -46,6 +52,11 @@ class Assets:
         The artwork is in their own ROM, so nothing is shipped and nothing is downloaded.
         An existing file is never replaced, so a hand-installed pack still wins.
         """
+        from ..cartridges import identify
+        cartridge = identify(raw)
+        if cartridge and cartridge.generation == 2:
+            from ..gen2.sprites import install
+            return install(raw, self.game_data_dir, self.root / 'sprites' / cartridge.version, cartridge.version)
         from ..sprites import extract
         data = game_data.load('strategy.json', directory=self.game_data_dir)
         species = {int(key): value for key, value in data['species'].items()}
@@ -81,8 +92,12 @@ class Assets:
         return path
 
     def sprite_path(self, adventure_id, dex):
-        if not 1 <= dex <= 151:
+        if not 1 <= dex <= 251:
             return None
+        adventure = self.registry.adventure(adventure_id)
+        if adventure['version'] in {'gold', 'silver', 'crystal'}:
+            path = self.root / 'sprites' / adventure['version'] / f'{dex}.png'
+            return path if path.is_file() else None
         community = self.portraits.path(dex)
         if community is not None:
             return community
@@ -94,6 +109,20 @@ class Assets:
             if path.parent == root and path.is_file():
                 return path
         return None
+
+    def prepare_gen2(self, version, report=lambda message: None):
+        from ..gen2.data import GameData, ensure, write_bundle
+        with self.guard:
+            if self.reference_source:
+                try:
+                    data = GameData.load(self.reference_source, version)
+                except (OSError, ValueError):
+                    pass
+                else:
+                    write_bundle(self.game_data_dir, version, data.raw)
+            ensure(self.game_data_dir, version, report)
+            if self.cancelled.is_set():
+                raise RuntimeError('Application setup was cancelled')
 
     def prepare(self, report=lambda message: None):
         with self.guard:

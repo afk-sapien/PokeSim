@@ -26,14 +26,15 @@ def sha256(data):
 class CableSide:
     """Own an emulator, independent cartridge RAM, and one bounded cable endpoint."""
 
-    def __init__(self, spec, max_queue=4):
+    def __init__(self, spec, max_queue=4, *, builds=None):
         from pyboy import PyBoy
         checked(version('pyboy') == '2.7.0', 'Cable adapter requires PyBoy 2.7.0')
         self.spec = spec
         self.rom_bytes = Path(spec.rom_path).read_bytes()
         self.rom_sha1 = hashlib.sha1(self.rom_bytes).hexdigest()
-        checked(self.rom_sha1 in BUILDS, 'Unsupported ROM for cable adapter')
-        self.build = BUILDS[self.rom_sha1]
+        builds = BUILDS if builds is None else builds
+        checked(self.rom_sha1 in builds, 'Unsupported ROM for cable adapter')
+        self.build = builds[self.rom_sha1]
         self.sym = self.build['symbols']
         for name, expected in self.build['signatures'].items():
             bank, address = self.sym[name]

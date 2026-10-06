@@ -52,11 +52,19 @@ class SimulationRuntime:
             self.lock.acquire()
             try:
                 self.settings.install(managed=self.managed)
-                from ..game_data import FILES, load
-                for name in FILES:
-                    load(name)
+                from ..cartridges import identify
+                cartridge = identify(Path(self.settings.rom_path).read_bytes())
+                gen2 = cartridge is not None and cartridge.generation == 2
+                if gen2:
+                    from ..gen2.data import GameData
+                    GameData.load(self.settings.game_data_dir, cartridge.version)
+                    from ..gen2.emulator import Emulator
+                else:
+                    from ..game_data import FILES, load
+                    for name in FILES:
+                        load(name)
+                    from ..emulator import Emulator
                 from ..store import Store
-                from ..emulator import Emulator
                 from ..notify import LiveNtfy, Ntfy
                 self.store = Store(Path(self.settings.data_dir))
                 if self.managed:

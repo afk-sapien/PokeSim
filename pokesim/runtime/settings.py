@@ -70,8 +70,9 @@ class SimulationSettings:
             raise ValueError('rom_path must point to a nonempty ROM file')
         if self.policy not in {'strategic', 'smart_random', 'guided_random'}:
             raise ValueError('Unknown simulation policy')
-        if self.starter not in {'random', 'bulbasaur', 'charmander', 'squirtle'}:
-            raise ValueError('Unknown starter')
+        from ..cartridges import identify, validate_starter
+        cartridge = identify(Path(self.rom_path).read_bytes())
+        validate_starter(self.starter, cartridge.version if cartridge else None)
         for name in ('viewer_only', 'fast_text', 'battle_animations', 'league_rewards', 'mew_event'):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f'{name} must be a boolean')

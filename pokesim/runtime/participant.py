@@ -70,15 +70,20 @@ def _promote(store, record):
         raise ValueError('The committed checkpoint is damaged')
     CheckpointStore.atomic_write(path.with_suffix('.json'), json.dumps(metadata).encode())
     with store.lock, store.db:
-        from ..league_partners import merge
+        if record.get('cartridge_generation') != 2:
+            from ..league_partners import merge
+        else:
+            from ..gen2.league import merge
         merge(store.db, record.get('incoming_league_record'))
         store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', ('trade_barrier', json.dumps(record['id'])))
         hold = {'id': record['id'], 'source': record['source_name'], 'phase': 'prepared'}
         store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', ('trade_hold', json.dumps(hold)))
         marker = 'managed_journal:' + record['id']
         if not store.db.execute('SELECT 1 FROM kv WHERE k=?', (marker,)).fetchone():
-            from ..interactions.centers import CENTERS
-            location = CENTERS.get(record.get('source_center_map'), {}).get('name', 'Pokémon Center')
+            location = 'Pokémon Center'
+            if record.get('cartridge_generation') != 2:
+                from ..interactions.centers import CENTERS
+                location = CENTERS.get(record.get('source_center_map'), {}).get('name', location)
             title, body, detail = _trade_story(record)
             store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime,detail)
                 VALUES (?,?,?,?,?,?,?,?,?)''', (time.time(), 'trade', title, body, 1, 4, location, '',
@@ -117,10 +122,14 @@ def _trade_story(record):
     """A journal entry that says what crossed the cable, falling back to the old wording."""
     generic = ('Cable Club trade completed',
                'Both cartridges completed their exchange and saved the result.', None)
-    sent, got = _traded_mon(record.get('outgoing')), _traded_mon(record.get('incoming'))
+    sent = record.get('outgoing_display') or _traded_mon(record.get('outgoing'))
+    got = record.get('incoming_display') or _traded_mon(record.get('incoming'))
     if not sent or not got:
         return generic
-    from ..strategy_data import SPECIES
+    if record.get('cartridge_generation') == 2:
+        SPECIES = {mon['species']: {'dex': mon['species']} for mon in (sent, got)}
+    else:
+        from ..strategy_data import SPECIES
     # The checkpoint manifest carries no trainer name, so the names come from the Pokemon: the
     # original trainer of the one that arrived is the adventure on the other end of the cable.
     peer = got.get('trainer') or ''
@@ -363,6 +372,17 @@ class Participant:
         raw = _artifact(result['state_path'], result['checkpoint_sha256'])
         save = _artifact(result['cartridge_save_path'], result['cartridge_sha256'])
         self.verify_result(record, result, raw, save, data['incoming'])
+        self.incoming_record(record, data)
+        directory = self.root / record['id']
+        target, cartridge = directory / 'staged.state', directory / 'staged.sav'
+        CheckpointStore.atomic_write(target, raw)
+        CheckpointStore.atomic_write(cartridge, save)
+        record.update(phase='staged', attempt_id=data['attempt_id'], staged={**result,
+                      'state_path': str(target), 'cartridge_save_path': str(cartridge)},
+                      incoming=dict(data['incoming']))
+        return _save(self.store, record)
+
+    def incoming_record(self, record, data):
         from ..league_partners import validate
         from ..trade.preferences import identity
         from ..ram import individual_data
@@ -372,14 +392,6 @@ class Participant:
         incoming_mon['nick'] = decode_text(bytes.fromhex(data['incoming']['nickname']))
         incoming_key = identity(incoming_mon)
         record['incoming_league_record'] = validate(data.get('incoming_league_record'), incoming_key, incoming_mon)
-        directory = self.root / record['id']
-        target, cartridge = directory / 'staged.state', directory / 'staged.sav'
-        CheckpointStore.atomic_write(target, raw)
-        CheckpointStore.atomic_write(cartridge, save)
-        record.update(phase='staged', attempt_id=data['attempt_id'], staged={**result,
-                      'state_path': str(target), 'cartridge_save_path': str(cartridge)},
-                      incoming=dict(data['incoming']))
-        return _save(self.store, record)
 
     def verify_result(self, record, result, state, save, incoming):
         from types import SimpleNamespace
@@ -459,7 +471,10 @@ class Participant:
             return record
         record.update(decision='ABORT', phase='aborting')
         _save(self.store, record)
-        from .preparation import cancel
+        if getattr(self.emu, 'generation', 1) == 2:
+            cancel = lambda emu, tid: None
+        else:
+            from .preparation import cancel
         hold = self.store.get('trade_hold')
         if hold and hold['id'] == tid:
             if record.get('source_name'):
@@ -479,8 +494,8 @@ class Participant:
         return _save(self.store, record)
 
 
-def install(app, runtime):
-    participant = Participant(runtime, app.state.bootstrap)
+def install(app, runtime, participant_type=Participant):
+    participant = participant_type(runtime, app.state.bootstrap)
     app.state.participant = participant
 
     @app.get('/internal/participant/inventory')

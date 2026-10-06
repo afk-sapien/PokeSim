@@ -90,7 +90,9 @@ class Store:
                          "%d:%02d:%02d" % snapshot.playtime))
                     eid = cur.lastrowid
                     won = False
-                    if ev.type == 'champion':
+                    if ev.type == 'champion' and getattr(snapshot, 'generation', 1) == 2:
+                        won = True
+                    elif ev.type == 'champion':
                         from .league_partners import record
                         won = record(self.db, snapshot, ev.title, eid)
                     progress.record(self.db, ts, snapshot, won)
