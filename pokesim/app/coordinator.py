@@ -177,6 +177,9 @@ class Coordinator:
                 if actual:
                     saved_received = (stored.get(aid) or {}).get('received') or {}
                     base = saved_received or incoming or {}
+                    if evidence.get('time_capsule'):
+                        base = {**base, 'cartridge_generation': evidence['cartridge_generation'], 'species': None,
+                                'dex': None, 'name': None}
                     same_species = base.get('species') == actual
                     received = self._mon_display({**base, 'species': actual,
                         'name': base.get('name') if same_species else None,
@@ -299,6 +302,20 @@ class Coordinator:
     def inventory(self, aid):
         return self._request(aid, 'inventory')
 
+    @staticmethod
+    def _offer_for(offer, recipient):
+        if offer.get('cartridge_generation') == 2 and recipient.get('cartridge_generation', 1) == 1:
+            dex = offer.get('dex')
+            return {**offer, 'arrived_dex': {64: 65, 67: 68, 75: 76, 93: 94}.get(dex, dex)}
+        return offer
+
+    @staticmethod
+    def _compatible_pair(left, right, give, take):
+        if left.get('cartridge_generation', 1) == right.get('cartridge_generation', 1):
+            return True
+        modern, offer = (left, give) if left.get('cartridge_generation') == 2 else (right, take)
+        return bool(modern.get('time_capsule_ready') and offer.get('time_capsule_compatible'))
+
     def propose(self, data):
         required = {'left_id', 'right_id', 'left_key', 'right_key'}
         if not isinstance(data, dict) or not required <= set(data) or set(data) - required - {'request_id'}:
@@ -335,7 +352,9 @@ class Coordinator:
             selected_offers.append(selected_offer)
             display_offers[aid] = self._mon_display(selected_offer)
         left, right = selected_inventories
-        give, take = selected_offers
+        give, take = (self._offer_for(selected_offers[0], right), self._offer_for(selected_offers[1], left))
+        if not self._compatible_pair(left, right, give, take):
+            raise ValueError('The Time Capsule needs an unlocked Gen II adventure and compatible Kanto Pokémon')
         if not self._last_copies_useful(give, take, self._benefit(left, take), self._benefit(right, give)):
             raise ValueError('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
         with self.manager.maintenance, self.guard:
@@ -370,9 +389,6 @@ class Coordinator:
                 raise ValueError(game['provenance'].get('reason') or 'This imported adventure needs its legacy peers reconciled before trading')
             if game['version'] not in {'red', 'blue', 'gold', 'silver', 'crystal'}:
                 raise ValueError('This cartridge has no compatible Cable Club adapter')
-        versions = [self.registry.adventure(selection[side + '_id'])['version'] for side in ('left', 'right')]
-        if (versions[0] in {'red', 'blue'}) != (versions[1] in {'red', 'blue'}):
-            raise ValueError('Choose two adventures from the same cartridge generation')
         return None
 
     def _prepare(self, row):
@@ -386,7 +402,9 @@ class Coordinator:
                 if aid in prepared:
                     continue
                 receipt = self._request(aid, 'prepare', {'id': row['id'], 'plan_digest': plan['plan_digest'],
-                                                        'selected_key': plan[side + '_key']})
+                                                        'selected_key': plan[side + '_key'],
+                                                        'time_capsule': len({self.registry.adventure(p)['version'] in {'red', 'blue'}
+                                                                             for p in plan['participants']}) == 2})
                 if receipt.get('phase') == 'prepared':
                     if receipt.get('plan_digest') != plan['plan_digest'] or receipt.get('selected_key') != plan[side + '_key']:
                         raise ValueError('Preparation receipt does not match the selected exchange')
@@ -487,7 +505,11 @@ class Coordinator:
                     self.process = None
 
     def _verify_manifest(self, row, session_plan, manifest):
-        if self.registry.adventure(row['plan']['participants'][0])['version'] in {'gold', 'silver', 'crystal'}:
+        generations = {self.registry.adventure(aid)['version'] in {'gold', 'silver', 'crystal'}
+                       for aid in row['plan']['participants']}
+        if len(generations) == 2:
+            from ..gen2.timecapsule import ADAPTER_ID
+        elif True in generations:
             from ..gen2.cable_metadata import ADAPTER_ID
         else:
             from ..interactions.cable_metadata import ADAPTER_ID
@@ -685,8 +707,7 @@ class Coordinator:
         missing = {aid: set(range(1, inv.get('dex_total', 151) + 1)) - set(inv.get('owned', [])) for aid, inv in inventories}
         for aid, inventory in inventories:
             totals = Counter(dex for peer, inv in inventories
-                             if inv.get('cartridge_generation', 1) == inventory.get('cartridge_generation', 1)
-                             for dex in missing[peer])
+                             for dex in missing[peer] if dex <= inventory.get('dex_total', 151))
             requests = {str(dex): count - int(dex in missing[aid]) for dex, count in totals.items()
                         if count > int(dex in missing[aid])}
             try:
@@ -754,15 +775,16 @@ class Coordinator:
         candidates = []
         for index, (left_id, left) in enumerate(inventories):
             for right_id, right in inventories[index + 1:]:
-                if left.get('cartridge_generation', 1) != right.get('cartridge_generation', 1):
-                    continue
                 # Each benefit scans a whole library, so score every offer once per pair
                 # rather than once per combination.
-                gives, takes = left.get('offers', []), right.get('offers', [])
+                gives = [self._offer_for(offer, right) for offer in left.get('offers', [])]
+                takes = [self._offer_for(offer, left) for offer in right.get('offers', [])]
                 theirs_by_give = [self._benefit(right, give) for give in gives]
                 mine_by_take = [self._benefit(left, take) for take in takes]
                 for give, theirs in zip(gives, theirs_by_give):
                     for take, mine in zip(takes, mine_by_take):
+                        if not self._compatible_pair(left, right, give, take):
+                            continue
                         if not mine + theirs or not self._last_copies_useful(give, take, mine, theirs):
                             continue
                         # Do not circulate the same individual for repeat quality gains.

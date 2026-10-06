@@ -112,6 +112,15 @@ class Policy:
                 'reason': self.goal.label if self.goal else 'Start the adventure'}
 
     def journey(self, snapshot, mem):
+        if snapshot.map == self.data.map_ids['POKECENTER_2F']:
+            return Goal('return_from_cable', 'Return downstairs after the Cable Club', 'POKECENTER_2F', 0, 7)
+        if self.collection.get('time_capsule_restore'):
+            from .teams import assemble
+            goal = assemble(self, snapshot, self.collection['time_capsule_restore'], Goal,
+                            'Restore the adventure team after the Time Capsule')
+            if goal:
+                return goal
+            self.collection.pop('time_capsule_restore', None)
         if not snapshot.event('EVENT_GOT_A_POKEMON_FROM_ELM'):
             x = {'cyndaquil': 6, 'totodile': 7, 'chikorita': 8}[self.starter]
             return Goal('starter', f'Choose {self.starter.title()}', 'ELMS_LAB', x, 4, 'up')
@@ -614,6 +623,11 @@ class Policy:
         self.memory = memory
         self.decisions += 1
         mem = Memory(memory, self.data)
+        from .ruins import control
+        puzzle = control(snapshot, mem) if snapshot.started and snapshot.valid else None
+        if puzzle:
+            self.mode = 'Solve the Ruins of Alph picture puzzle'
+            return Action(None, 0, 24) if puzzle == 'wait' else Action(puzzle, 6, 24)
         update_world(self.nav.regions, snapshot)
         naming = self.naming.step(snapshot, mem)
         if naming:
@@ -625,6 +639,16 @@ class Policy:
         if not snapshot.started:
             self.mode = 'opening'
             return Action('start' if self.decisions % 20 == 1 else 'a', 8, 52)
+        from .contest import control as contest_control
+        contest_button = contest_control(self, snapshot, mem)
+        if contest_button:
+            self.mode = 'Catch a Bug-Catching Contest partner'
+            return Action(contest_button, 8, 28)
+        from .tower import control as tower_control
+        tower_button = tower_control(self, snapshot, mem)
+        if tower_button:
+            self.mode = 'Choose the Battle Tower challenge'
+            return Action(tower_button, 6, 26)
         if self.menu is None and not snapshot.in_battle and self.data.maps[snapshot.map]['constant'].endswith('POKECENTER_1F'):
             if 'TURN OFF' in snapshot.text:
                 return Action(choose(snapshot.tiles, 'TURN OFF') or 'b', 8, 36)
@@ -678,8 +702,8 @@ class Policy:
             mon = snapshot.party[strongest]
             self.menu = Lead(strongest, (mon.trainer_id, mon.dvs))
             return Action(None, 0, 24)
-        for event, move in [('EVENT_GOT_HM01_CUT', 15), ('EVENT_GOT_HM02_FLY', 19), ('EVENT_GOT_HM03_SURF', 57),
-                            ('EVENT_GOT_HM04_STRENGTH', 70), ('EVENT_GOT_HM06_WHIRLPOOL', 250), ('EVENT_GOT_HM07_WATERFALL', 127)]:
+        for event, move in ([] if self.collection.get('tower') or self.collection.get('contest') or self.collection.get('time_capsule_restore') else [('EVENT_GOT_HM01_CUT', 15), ('EVENT_GOT_HM02_FLY', 19), ('EVENT_GOT_HM03_SURF', 57),
+                            ('EVENT_GOT_HM04_STRENGTH', 70), ('EVENT_GOT_HM06_WHIRLPOOL', 250), ('EVENT_GOT_HM07_WATERFALL', 127)]):
             if snapshot.event(event) and not any(move in mon.moves for mon in snapshot.party):
                 protected = {15, 19, 57, 70, 148, 250, 127}
                 slot = min((i for i, mon in enumerate(snapshot.party)
@@ -710,7 +734,8 @@ class Policy:
             return Action(None, 0, 24)
         if self.in_league(snapshot) and self.remedy(snapshot):
             return Action(None, 0, 24)
-        self.goal = self.healing(snapshot) or self.shop(snapshot) or self.goal
+        if not self.collection.get('contest') or not mem.byte('wStatusFlags2') & 4:
+            self.goal = self.healing(snapshot) or self.shop(snapshot) or self.goal
         target = self.data.map_ids[self.goal.map_name]
         from .flight import shortcut
         flight = shortcut(self, snapshot, mem, target)
@@ -833,7 +858,7 @@ class Policy:
         catch = (snapshot.in_battle == 1 and (snapshot.enemy_species not in snapshot.owned or partner or requested)
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in
                     {label.casefold() for label in self.ball_labels(snapshot)} for item, count in snapshot.pockets['balls'] if count))
-        if (catch and not partner and snapshot.enemy_species not in {130, 243, 244, 245, 249, 250}
+        if (catch and not partner and snapshot.enemy_species not in {130, 243, 244, 245, 249, 250, 251}
                 and snapshot.badges < 128 and snapshot.money < 1200
                 and sum(count for _, count in snapshot.pockets['balls']) <= 3):
             catch = False
@@ -896,7 +921,7 @@ class Policy:
         if 'FIGHT' in text and 'TYPE' not in text:
             self.switching = None
             active = mem.byte('wCurBattleMon')
-            if catch and (partner or snapshot.enemy_species in {243, 244, 245, 249, 250}) and weaken is None and snapshot.enemy_hp > snapshot.enemy_max_hp // 2:
+            if catch and (partner or snapshot.enemy_species in {243, 244, 245, 249, 250, 251}) and weaken is None and snapshot.enemy_hp > snapshot.enemy_max_hp // 2:
                 candidates = [(self.capture_move(snapshot, mem, slot=i), i)
                               for i, mon in enumerate(snapshot.party)
                               if i != active and not mon.egg and mon.hp > mon.max_hp // 2
@@ -918,7 +943,7 @@ class Policy:
                 if mem.byte('wMenuCursorY') > 1:
                     return Action('up')
                 return Action('a')
-            if self.remedy(snapshot, active=mem.byte('wCurBattleMon')):
+            if self.data.maps[snapshot.map]['constant'] != 'BATTLE_TOWER_BATTLE_ROOM' and self.remedy(snapshot, active=mem.byte('wCurBattleMon')):
                 return Action(None, 0, 24)
             self.learning = False
             if catch:
@@ -971,7 +996,7 @@ class Policy:
         return Action('a', 8, 24)
 
     def ball_labels(self, snapshot):
-        master = ('MASTER BALL',) if snapshot.enemy_species in {243, 244, 245, 249, 250} else ()
+        master = ('MASTER BALL',) if snapshot.enemy_species in {243, 244, 245, 249, 250, 251} else ()
         regular = ('ULTRA BALL', 'GREAT BALL', 'POKé BALL', 'LURE BALL', 'FAST BALL',
                    'HEAVY BALL', 'LEVEL BALL', 'LOVE BALL', 'FRIEND BALL', 'MOON BALL')
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'

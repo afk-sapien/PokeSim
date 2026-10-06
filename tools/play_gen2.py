@@ -22,8 +22,9 @@ def main():
     parser.add_argument('--frames', type=int, default=60000)
     parser.add_argument('--starter', default='cyndaquil')
     parser.add_argument('--until', default='')
-    parser.add_argument('--focus', choices=('gifts', 'legends', 'stones', 'breeding', 'encounter', 'headbutt', 'rock smash'))
+    parser.add_argument('--focus', choices=('ruins', 'tower', 'celebi', 'contest', 'gifts', 'legends', 'stones', 'breeding', 'encounter', 'headbutt', 'rock smash'))
     parser.add_argument('--species', type=int)
+    parser.add_argument('--real-clock', action='store_true', help='Use the checkpoint real-time clock instead of freezing it')
     parser.add_argument('--stall-frames', type=int, default=12000)
     args = parser.parse_args()
     data = GameData.load(args.data, args.game)
@@ -31,6 +32,18 @@ def main():
     if args.focus:
         from pokesim.gen2 import breeding, collection, quests
         task = breeding.journey if args.focus == 'breeding' else getattr(quests, args.focus, None)
+        if args.focus == 'ruins':
+            from pokesim.gen2.ruins import journey
+            task = lambda policy, snapshot, Goal: journey(policy, snapshot, Goal)
+        if args.focus == 'contest':
+            from pokesim.gen2.contest import journey
+            task = lambda policy, snapshot, Goal: journey(policy, snapshot, Goal, force=True)
+        if args.focus == 'celebi':
+            from pokesim.gen2.celebi import journey
+            task = lambda policy, snapshot, Goal: journey(policy, snapshot, Goal)
+        if args.focus == 'tower':
+            from pokesim.gen2.tower import journey
+            task = lambda policy, snapshot, Goal: journey(policy, snapshot, Goal, force=True)
 
         def focused(snapshot, mem):
             if task:
@@ -66,7 +79,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     pb = PyBoy(str(args.rom), window='null', cgb=True, sound_emulated=True, ram_file=io.BytesIO(bytes(32768)))
     pb.set_emulation_speed(0)
-    pb.rtc_lock_experimental(True)
+    pb.rtc_lock_experimental(not args.real_clock)
     from pokesim.gen2.legendary import Recovery
     recovery = Recovery()
     frame, previous = 0, None
