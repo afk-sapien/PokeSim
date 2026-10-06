@@ -1072,8 +1072,10 @@ def test_tower_recovers_only_when_healing_can_outpace_damage(real_data):
     snapshot = SimpleNamespace(enemy_species=19, enemy_level=50, enemy_hp=150)
     values = {'wBattleMonHP': 100, 'wBattleMonMaxHP': 300}
     moves = bytearray([33, 0, 0, 0])
-    mem = SimpleNamespace(word=lambda name: values.get(name, 30), read=lambda *args: bytes(moves))
+    mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: values.get(name, 30), read=lambda *args: bytes(moves))
     assert policy.recovery_move(snapshot, mem, mon, [(40, 1)]) == 0
+    disabled = SimpleNamespace(byte=lambda name: {'wPlayerDisableCount': 1, 'wDisabledMove': 105}.get(name, 0))
+    assert policy.recovery_move(snapshot, disabled, mon, [(40, 1)]) is None
     assert policy.recovery_move(snapshot, mem, mon, [(200, 1)]) is None
     values['wEnemyMonAttack'] = 999
     snapshot.enemy_level = 100
@@ -1198,8 +1200,8 @@ def test_recover_can_outpace_damage_between_two_fifths_and_half_hp(real_data):
     policy = Policy(real_data)
     mon = SimpleNamespace(species=249, level=70, moves=(105, 92, 89, 70), pp=(20, 10, 10, 15))
     snapshot = SimpleNamespace(enemy_species=143, enemy_level=70, enemy_hp=365)
-    values = {'wBattleMonHP': 100, 'wBattleMonMaxHP': 245, 'wEnemyMonAttack': 217}
-    mem = SimpleNamespace(word=lambda name: values.get(name, 30), read=lambda *args: bytes([157, 0, 0, 0]))
+    values = {'wBattleMonHP': 100, 'wBattleMonMaxHP': 245, 'wBattleMonDefense': 205, 'wEnemyMonAttack': 217}
+    mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: values.get(name, 30), read=lambda *args: bytes([157, 0, 0, 0]))
     assert policy.recovery_move(snapshot, mem, mon, [(50, 2)]) == 0
 
 
@@ -1220,3 +1222,121 @@ def test_evolution_stone_selects_the_compatible_party_member():
     rows[1], rows[11] = 'FERALIGATR', '▶NIDORINA'
     snapshot.text = '\n'.join(rows)
     assert menu.step(snapshot, None) == 'a'
+
+
+def test_tower_switches_away_from_a_lethal_fighting_matchup(real_data):
+    from pokesim.gen2.policy import Policy
+    from pokesim.gen2.ram import calculated_stats
+    policy = Policy(real_data)
+    party = []
+    for species, moves in [(248, (89, 157, 37, 242)), (249, (105, 92, 89, 70)), (196, (94, 247, 44, 36))]:
+        stats = calculated_stats(real_data.species[species]['stats'], 70, (8,) * 5, (5000,) * 5)
+        party.append(SimpleNamespace(species=species, level=70, moves=moves, pp=(10,) * 4, hp=stats[0], stats=stats, egg=False))
+    snapshot = SimpleNamespace(enemy_species=68, enemy_level=70, enemy_hp=230, party=party)
+    stats = {'wEnemyMonMaxHP': 230, 'wEnemyMonAttack': 250, 'wEnemyMonDefense': 170,
+             'wEnemyMonSpeed': 140, 'wEnemyMonSpclAtk': 110, 'wEnemyMonSpclDef': 160}
+    mem = SimpleNamespace(byte=lambda name: 0, word=stats.__getitem__, read=lambda *args: bytes([238, 0, 0, 0]))
+    assert policy.tower_switch(snapshot, mem, 0) == 2
+    assert policy.tower_switch(snapshot, mem, 2) is None
+    snapshot.enemy_hp = 40
+    party[0].stats = (*party[0].stats[:3], 150, *party[0].stats[4:])
+    assert policy.tower_switch(snapshot, mem, 0) is None
+    party[0].status = 64
+    assert policy.tower_switch(snapshot, mem, 0) == 2
+    party[1].hp = party[2].hp = 1
+    assert policy.tower_switch(snapshot, mem, 0) is None
+
+
+def test_boxed_tower_partner_with_an_hm_can_breed_its_missing_baby(real_data):
+    from pokesim.gen2.breeding import journey
+    from pokesim.gen2.policy import Goal
+    magmar = SimpleNamespace(species=126, moves=(70, 94, 53, 7), egg=False, box=0, gender='Male',
+        trainer_id=1, dvs=(0, 2, 4, 6, 8))
+    ditto = SimpleNamespace(species=132, moves=(144,), egg=False, box=1, gender='Genderless',
+        trainer_id=1, dvs=(0, 1, 3, 5, 7))
+    lead = SimpleNamespace(species=157, egg=False, trainer_id=2, dvs=(1,) * 5)
+    snapshot = SimpleNamespace(party=(lead,), stored=(magmar, ditto), daycare=(None, None),
+        owned={126, 132, 157}, money=10000, egg_ready=False)
+    policy = SimpleNamespace(data=real_data, collection={}, demand={},
+        storage_goal=lambda snapshot: Goal('pc', 'Use the PC', 'OLIVINE_POKECENTER_1F', 9, 2, 'up'))
+    assert journey(policy, snapshot, Goal).key == 'collection_breed_pc'
+    assert policy.collection['breeding']['target'] == 240
+
+
+def test_tower_uses_poison_against_counter_and_recovery(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    attacker = SimpleNamespace(species=248, level=70, moves=(89, 157, 37, 242), pp=(10,) * 4,
+        hp=268, stats=(268, 250, 205, 150, 190, 190), egg=False)
+    lugia = SimpleNamespace(species=249, level=70, moves=(105, 92, 89, 70), pp=(20, 10, 10, 15),
+        hp=245, stats=(245, 143, 205, 170, 145, 234), egg=False)
+    snapshot = SimpleNamespace(enemy_species=242, enemy_level=70, enemy_hp=495, party=(attacker, lugia))
+    stats = {'wEnemyMonMaxHP': 495, 'wEnemyMonAttack': 77, 'wEnemyMonDefense': 80,
+             'wEnemyMonSpeed': 143, 'wEnemyMonSpclAtk': 166, 'wEnemyMonSpclDef': 250}
+    status = [0]
+    mem = SimpleNamespace(byte=lambda name: status[0], word=stats.__getitem__, read=lambda *args: bytes([68, 135, 247, 85]))
+    assert policy.tower_switch(snapshot, mem, 0) == 1
+    status[0] = 8
+    assert policy.recovery_move(snapshot, mem, lugia, [(15, 2)]) == 0
+
+
+def test_tower_damage_estimate_uses_the_opponents_actual_defense(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    mon = SimpleNamespace(species=248, level=70, stats=(268, 250, 205, 150, 190, 190))
+    snapshot = SimpleNamespace(enemy_species=242, enemy_level=70, enemy_hp=495)
+    values = {'wEnemyMonDefense': 80, 'wEnemyMonSpclDef': 250}
+    observed = policy.battle_target(snapshot, SimpleNamespace(word=values.__getitem__))
+    assert policy.move_score(157, mon, observed) < policy.move_score(157, mon, snapshot) / 2
+
+
+def test_burn_reduces_physical_but_not_special_attack_estimates(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    mon = SimpleNamespace(species=248, level=70, stats=(268, 250, 205, 150, 190, 190), status=0)
+    target = SimpleNamespace(enemy_species=242, enemy_level=70, enemy_hp=495)
+    physical = policy.move_score(157, mon, target)
+    special = policy.move_score(242, mon, target)
+    mon.status = 16
+    assert policy.move_score(157, mon, target) < physical * 0.6
+    assert policy.move_score(242, mon, target) == special
+
+
+def test_tower_leads_with_its_poison_and_recovery_partner(real_data):
+    if real_data.game != 'crystal':
+        return
+    from pokesim.gen2 import tower
+    from pokesim.gen2.policy import Goal, Policy
+    from pokesim.gen2.menus import Lead
+    policy = Policy(real_data)
+    policy.memory = None
+    party = []
+    for index, (species, moves, stats) in enumerate([
+        (248, (89, 157, 37, 242), (268, 250, 205, 150, 190, 190)),
+        (249, (105, 92, 89, 70), (245, 143, 205, 170, 145, 234)),
+        (196, (94, 247, 44, 36), (212, 150, 140, 194, 215, 166))]):
+        party.append(SimpleNamespace(species=species, level=70, moves=moves, stats=stats, held_item=0,
+            trainer_id=1, dvs=(index,) * 5, to_dict=lambda index=index: {'trainer_id': 1, 'dvs': [index] * 5}))
+    policy.collection['tower'] = {'team': [tower.key(mon) for mon in party], 'original': [], 'cap': 70,
+        'entered': False, 'returning': False, 'trained': True, 'preparation_center': True}
+    snapshot = SimpleNamespace(map=real_data.map_ids['OLIVINE_POKECENTER_1F'], party=tuple(party), items=(), x=9, y=2)
+    assert tower.journey(policy, snapshot, Goal).key == 'tower_lead'
+    assert isinstance(policy.menu, Lead) and policy.menu.slot == 1
+
+
+def test_tower_berry_respects_native_daily_flags_and_bag_capacity(real_data, monkeypatch):
+    if real_data.game != 'crystal':
+        return
+    from pokesim.gen2 import tower
+    from pokesim.gen2.policy import Goal
+    values = {'wDailyFlags1': 16, 'wFruitTreeFlags': 0}
+    monkeypatch.setattr(tower, 'Memory', lambda *args: SimpleNamespace(byte=lambda name, *args: values[name]))
+    policy = SimpleNamespace(data=real_data, collection={}, decisions=0, memory=None, person=lambda *args: 'berry')
+    snapshot = SimpleNamespace(event=lambda name: True, items=(), pockets={'items': ()}, party=(), stored=())
+    assert tower.journey(policy, snapshot, Goal, force=True) == 'berry'
+    values['wFruitTreeFlags'] = 1
+    assert tower.journey(policy, snapshot, Goal, force=True) is None
+    values['wDailyFlags1'] = 0
+    assert tower.journey(policy, snapshot, Goal, force=True) == 'berry'
+    snapshot.pockets['items'] = tuple(range(20))
+    assert tower.journey(policy, snapshot, Goal, force=True) is None
