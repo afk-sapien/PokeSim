@@ -210,7 +210,11 @@ class Supervisor:
                 self.children[aid] = child
                 self.registry.update(aid, state='starting', generation=generation, error=None)
             try:
-                self.assets.prepare(lambda message: self.registry.update(aid, summary={'setup': message}))
+                report = lambda message: self.registry.update(aid, summary={'setup': message})
+                if adventure['version'] in {'gold', 'silver', 'crystal'}:
+                    self.assets.prepare_gen2(adventure['version'], report)
+                else:
+                    self.assets.prepare(report)
                 self.assets.install_portraits(Path(settings['rom_path']).read_bytes())
                 child.start()
                 try:

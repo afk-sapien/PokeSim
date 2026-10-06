@@ -1,7 +1,7 @@
 const $ = (selector) => document.querySelector(selector)
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
 const params = new URLSearchParams(location.search)
-let selectedBox = params.get('box') === 'party' ? 0 : Math.min(12, Math.max(1, Number(params.get('box')) || 1))
+let selectedBox = params.get('box') === 'party' ? 0 : Math.min(14, Math.max(1, Number(params.get('box')) || 1))
 let followActive = !params.has('box')
 let storage = null
 let party = []
@@ -14,7 +14,7 @@ let viewQueries = {box: '', all: ''}
 $('#pc-search').value = params.get('q') || ''
 $('#pc-scope').value = params.get('scope') === 'all' ? 'all' : 'box'
 viewQueries[$('#pc-scope').value] = $('#pc-search').value
-const sortDefaults = {box: 'asc', battle_power: 'desc', power: 'desc', stat_total: 'desc', level: 'desc', HP: 'desc', Attack: 'desc', Defense: 'desc', Speed: 'desc', Special: 'desc', dv_stars: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
+const sortDefaults = {box: 'asc', battle_power: 'desc', power: 'desc', stat_total: 'desc', level: 'desc', HP: 'desc', Attack: 'desc', Defense: 'desc', Speed: 'desc', Special: 'desc', 'Special Attack': 'desc', 'Special Defense': 'desc', dv_stars: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
 $('#pc-sort').value = Object.hasOwn(sortDefaults, params.get('sort')) ? params.get('sort') : 'battle_power'
 $('#pc-order').value = ['asc', 'desc'].includes(params.get('order')) ? params.get('order') : sortDefaults[$('#pc-sort').value]
 
@@ -26,7 +26,8 @@ function statTotal(mon, field) {
 
 function sortValue(mon, field) {
   if (field === 'dvs' || field === 'stat_exp') return statTotal(mon, field)
-  if (['HP', 'Attack', 'Defense', 'Speed', 'Special'].includes(field)) return mon.calculated_stats?.[field] ?? null
+  if (['HP', 'Attack', 'Defense', 'Speed', 'Special', 'Special Attack', 'Special Defense'].includes(field)) return mon.calculated_stats?.[field] ?? null
+  if (field === 'experience') return mon.experience?.total ?? mon.experience ?? null
   if (field === 'box') return mon.box * 20 + (mon.position || 0)
   if (field === 'nick') return mon.nick || mon.name || ''
   if (field === 'name') return mon.name || ''
@@ -142,16 +143,16 @@ function render() {
 
 function detail(mon) {
   detailKey = mon.trade_key
-  const labels = ['HP', 'Attack', 'Defense', 'Speed', 'Special']
+  const labels = Object.keys(mon.calculated_stats || {})
   const known = mon.dvs?.length === 5 && mon.stat_exp?.length === 5
-  $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}"><img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png?v=rom-portraits-1" alt=""></div><p class="micro">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>${PokemonTypes.shinyBadge(mon)}${ratingBadge(mon)}${mon.perfect_dvs || mon.shiny ? '<p class="detail-meta">Protected from automatic release and trading.</p>' : ''}<p>${esc(mon.name)} · Level ${mon.level}</p><div class="type-tags">${PokemonTypes.badges(mon.type_names)}</div></div>
-    ${known ? `<table class="individual-stats"><caption>Stats</caption><thead><tr><th>Stat</th><th>Value</th><th>DV</th><th>Stat exp.</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[i]}</td><td>${mon.stat_exp[i].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.stat_total) ? mon.stat_total.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')}</td><td>${formatTotal(mon, 'stat_exp')}</td></tr></tfoot></table>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'}
-    <p class="detail-meta"><strong>Battle Power: ${Number.isFinite(mon.battle_power) ? mon.battle_power.toLocaleString() : 'Unavailable'}</strong></p>
-    <p class="detail-meta">Battle Power rates known moves at full health and PP. Matchups can change the result.</p>
+  $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}"><img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png?v=rom-portraits-1" alt=""></div><p class="micro">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>${PokemonTypes.shinyBadge(mon)}${ratingBadge(mon)}${mon.perfect_dvs || mon.shiny ? '<p class="detail-meta">Protected from automatic release and trading.</p>' : ''}<p>${esc(mon.name)} · Level ${mon.level}${mon.gender ? ` · ${esc(mon.gender)}` : ''}${mon.egg ? ' · Egg' : ''}</p>${mon.held_item_name ? `<p>Holding ${esc(mon.held_item_name)}</p>` : ''}<div class="type-tags">${PokemonTypes.badges(mon.type_names)}</div></div>
+    ${known ? `<table class="individual-stats"><caption>Stats</caption><thead><tr><th>Stat</th><th>Value</th><th>DV</th><th>Stat exp.</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[Math.min(i, 4)]}</td><td>${mon.stat_exp[Math.min(i, 4)].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.stat_total) ? mon.stat_total.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')}</td><td>${formatTotal(mon, 'stat_exp')}</td></tr></tfoot></table>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'}
+    ${mon.battle_power === undefined ? '' : `<p class="detail-meta"><strong>Battle Power: ${Number.isFinite(mon.battle_power) ? mon.battle_power.toLocaleString() : 'Unavailable'}</strong></p>
+    <p class="detail-meta">Battle Power rates known moves at full health and PP. Matchups can change the result.</p>`}
     <p class="detail-meta"><strong>Stat Power: ${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</strong></p>
     <p class="detail-meta">Potential Stat Power: ${Number.isFinite(mon.potential_power) ? mon.potential_power.toLocaleString() : 'Unavailable'}</p>
     ${Number.isFinite(mon.dv_top_percent) ? `<p class="detail-meta">DV quality (est.): top ${mon.dv_top_percent.toLocaleString(undefined, {maximumSignificantDigits: 3})}% · Higher roll: ${mon.dv_better_percent.toLocaleString(undefined, {maximumSignificantDigits: 3})}%</p>` : ''}
-    <p class="detail-meta">${Number(mon.experience || 0).toLocaleString()} total experience</p>
+    <p class="detail-meta">${Number(mon.experience?.total ?? mon.experience ?? 0).toLocaleString()} total experience</p>
     <a class="dex-open key" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer">Stats guide ↗</a>
     ${mon.dex ? `<a class="dex-open key" href="${PokeSim.base}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex ↗</a>` : ''}`
   $('#pc-trade-action').innerHTML = globalThis.TradeUI?.control(detailKey) || ''
@@ -167,6 +168,15 @@ async function refresh() {
     if (!response.ok) throw new Error('Unavailable')
     const status = await response.json()
     storage = status.storage
+    const special = $('#pc-sort option[value="Special"]')
+    if (status.generation === 2 && special) {
+      special.value = 'Special Attack'
+      special.textContent = 'Special Attack'
+      const defense = document.createElement('option')
+      defense.value = 'Special Defense'
+      defense.textContent = 'Special Defense'
+      special.after(defense)
+    }
     party = (status.party || []).map((mon) => ({...mon, box: 0, position: mon.slot}))
     if (followActive && storage) { selectedBox = storage.active_box
       followActive = false }

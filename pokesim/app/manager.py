@@ -103,8 +103,8 @@ class Manager:
         if 'speed' in result:
             from ..runtime.settings import validate_speed
             validate_speed(result['speed'])
-        if result['starter'] not in {'random', 'bulbasaur', 'charmander', 'squirtle'}:
-            raise ValueError('Choose a listed starter')
+        from ..cartridges import validate_starter
+        validate_starter(result['starter'])
         if result['policy'] not in {'strategic', 'guided_random', 'smart_random'}:
             raise ValueError('Unknown adventure policy')
         for name in ('auto_start', 'fast_text', 'battle_animations', 'viewer_only', 'league_rewards', 'mew_event'):

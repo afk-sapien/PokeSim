@@ -98,14 +98,26 @@ class Coordinator:
         if not isinstance(offer, dict):
             return None
         species = _display_number(offer.get('species'), 255)
-        data = self._species(species) if species else {}
-        result = {'species': species, 'dex': _display_number(data.get('dex', offer.get('dex')), 151),
+        gen2 = offer.get('cartridge_generation') == 2
+        if gen2 and species:
+            from ..gen2.data import GameData
+            data = next((bundle.species.get(species, {}) for game in ('gold', 'silver', 'crystal')
+                         if (self.manager.assets.game_data_dir / 'gen2' / game).exists()
+                         for bundle in [GameData.load(self.manager.assets.game_data_dir, game)]), {})
+            data = {**data, 'dex': species}
+        else:
+            data = self._species(species) if species else {}
+        result = {'species': species, 'dex': _display_number(data.get('dex', offer.get('dex')), 251 if gen2 else 151),
                   'name': _display_text(data.get('name') or offer.get('name')),
                   'nickname': _display_text(offer.get('nickname', offer.get('nick'))),
                   'level': _display_number(offer.get('level'), 100), 'evolved_from': None}
+        if gen2:
+            result['cartridge_generation'] = 2
         return result if any(value is not None for value in result.values()) else None
 
     def _receipt_display(self, receipt):
+        if receipt.get('cartridge_generation') == 2 and receipt.get('outgoing_display'):
+            return self._mon_display({**receipt['outgoing_display'], 'cartridge_generation': 2})
         try:
             raw = bytes.fromhex(receipt['outgoing']['struct'])
             nick = bytes.fromhex(receipt['outgoing']['nickname'])
@@ -356,8 +368,11 @@ class Coordinator:
                 raise ValueError('Both adventures must be running before an exchange')
             if (game.get('provenance') or {}).get('trading_blocked'):
                 raise ValueError(game['provenance'].get('reason') or 'This imported adventure needs its legacy peers reconciled before trading')
-            if game['version'] not in {'red', 'blue'}:
-                raise ValueError('This Cable Club adapter supports Red and Blue')
+            if game['version'] not in {'red', 'blue', 'gold', 'silver', 'crystal'}:
+                raise ValueError('This cartridge has no compatible Cable Club adapter')
+        versions = [self.registry.adventure(selection[side + '_id'])['version'] for side in ('left', 'right')]
+        if (versions[0] in {'red', 'blue'}) != (versions[1] in {'red', 'blue'}):
+            raise ValueError('Choose two adventures from the same cartridge generation')
         return None
 
     def _prepare(self, row):
@@ -472,7 +487,10 @@ class Coordinator:
                     self.process = None
 
     def _verify_manifest(self, row, session_plan, manifest):
-        from ..interactions.cable_metadata import ADAPTER_ID
+        if self.registry.adventure(row['plan']['participants'][0])['version'] in {'gold', 'silver', 'crystal'}:
+            from ..gen2.cable_metadata import ADAPTER_ID
+        else:
+            from ..interactions.cable_metadata import ADAPTER_ID
         expected = hashlib.sha256(json.dumps(session_plan, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         if (manifest.get('adapter_id') != ADAPTER_ID or manifest.get('status') != 'verified' or manifest.get('schema_version') != 1
                 or manifest.get('interaction_id') != row['id'] or manifest.get('attempt_id') != row['plan']['attempt_id']
@@ -664,9 +682,11 @@ class Coordinator:
         return allowed(give, take, mine, theirs) and allowed(take, give, theirs, mine)
 
     def _refresh_collection_demand(self, inventories):
-        missing = {aid: set(range(1, 152)) - set(inv.get('owned', [])) for aid, inv in inventories}
-        totals = Counter(dex for entries in missing.values() for dex in entries)
+        missing = {aid: set(range(1, inv.get('dex_total', 151) + 1)) - set(inv.get('owned', [])) for aid, inv in inventories}
         for aid, inventory in inventories:
+            totals = Counter(dex for peer, inv in inventories
+                             if inv.get('cartridge_generation', 1) == inventory.get('cartridge_generation', 1)
+                             for dex in missing[peer])
             requests = {str(dex): count - int(dex in missing[aid]) for dex, count in totals.items()
                         if count > int(dex in missing[aid])}
             try:
@@ -720,7 +740,7 @@ class Coordinator:
         for game in games:
             aid = game['id']
             if (game['state'] != 'running' or game['desired_state'] != 'running' or game['archived']
-                    or game['version'] not in {'red', 'blue'} or (game.get('provenance') or {}).get('trading_blocked')):
+                    or game['version'] not in {'red', 'blue', 'gold', 'silver', 'crystal'} or (game.get('provenance') or {}).get('trading_blocked')):
                 continue
             try:
                 inventory = self.inventory(aid)
@@ -734,6 +754,8 @@ class Coordinator:
         candidates = []
         for index, (left_id, left) in enumerate(inventories):
             for right_id, right in inventories[index + 1:]:
+                if left.get('cartridge_generation', 1) != right.get('cartridge_generation', 1):
+                    continue
                 # Each benefit scans a whole library, so score every offer once per pair
                 # rather than once per combination.
                 gives, takes = left.get('offers', []), right.get('offers', [])

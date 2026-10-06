@@ -18,11 +18,13 @@ from .checkpoints import CheckpointStore
 REFERENCE_URL = f'https://codeload.github.com/pret/pokered/zip/{game_data.SOURCE_REVISION}'
 REFERENCE_SHA256 = 'd651b4495b353b1521b42494e635aae2ffe9c89c3609f8cf166975c0bc723fcc'
 MAX_ARCHIVE = 16 * 1024 * 1024
-MAX_ROM = 1024 * 1024
+MAX_ROM = 4 * 1024 * 1024
 ROM_NAMES = {
     'ea9bcae617fdf159b045185467ae58b2e4a48b9a': 'Pokémon Red',
     'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2': 'Pokémon Blue (experimental)',
 }
+from .cartridges import CARTRIDGES
+ROM_NAMES.update({cartridge.sha1: cartridge.title for cartridge in CARTRIDGES if cartridge.generation == 2})
 
 
 def user_directory():
@@ -44,7 +46,7 @@ def read_settings(root):
     try:
         settings = json.loads(path.read_text(encoding='utf-8'))
         if not isinstance(settings, dict) or settings.get('starter') not in {
-            'random', 'bulbasaur', 'charmander', 'squirtle'
+            'random', 'bulbasaur', 'charmander', 'squirtle', 'chikorita', 'cyndaquil', 'totodile'
         }:
             raise ValueError('Invalid starter')
         return settings
@@ -53,10 +55,13 @@ def read_settings(root):
 
 
 def install_rom(root, raw, starter):
-    if starter not in {'random', 'bulbasaur', 'charmander', 'squirtle'}:
-        raise ValueError('Choose one of the listed starters')
+    from .cartridges import identify, unpack, validate_starter
+    if raw[:4] == b'PK\x03\x04':
+        raw = unpack(raw)
     if len(raw) > MAX_ROM or hashlib.sha1(raw).hexdigest() not in ROM_NAMES:
-        raise ValueError('Choose a clean Pokémon Red or Blue (USA, Europe) .gb file. ZIP files and modified ROMs are not supported.')
+        raise ValueError('Choose a clean supported Red, Blue, Gold, Silver or Crystal ROM')
+    cartridge = identify(raw)
+    validate_starter(starter, cartridge.version if cartridge else None)
     if (root / 'rom.gb').exists():
         raise ValueError('This adventure already has a ROM. Use a separate data folder for another adventure.')
     CheckpointStore.atomic_write(root / 'settings.json', json.dumps({'starter': starter}).encode())

@@ -1,0 +1,252 @@
+"""Persistent postgame expeditions using version and time specific encounters."""
+from .menus import ChangeBox, FieldMove, Teach, Use
+from .navigation import DIRS
+from .ram import Memory
+
+
+def matching_time(value, current):
+    return value in {'any', 'rare trees'} or current in value.split('/')
+
+
+def tree_score(x, y, trainer_id):
+    # Facing tile coordinates include the four tile map border in cartridge RAM.
+    x, y = x + 4, y + 4
+    return ((x * y + x + y) // 5 - trainer_id) % 10
+
+
+def encounter_points(policy, snapshot, mid, method, *, rare=False):
+    data = policy.data
+    entry = data.maps[mid]
+    grid = policy.nav.collision(snapshot, policy.memory) if mid == snapshot.map else policy.nav.regions.live.get(mid, entry['collision'])
+    width, height = entry['width'], entry['height']
+    points = []
+    warps = {(warp['x'], warp['y']) for warp in entry['warps']}
+    rocks = {(obj['x'], obj['y']) for index, obj in enumerate(entry['objects'], 1)
+             if obj['sprite'] == 'SPRITE_ROCK' and index not in policy.nav.regions.cleared_rocks.get(mid, set())}
+    trainer = Memory(policy.memory, data).word('wPlayerID') if method == 'headbutt' else 0
+    for y in range(height):
+        for x in range(width):
+            tile = grid[y * width + x]
+            if (x, y) in warps:
+                continue
+            if method in {'grass', 'surf'}:
+                good = tile in (0x10, 0x14, 0x18, 0x1C) if method == 'grass' else tile in (0x21, 0x29)
+                good |= method == 'grass' and entry['environment'] == 'CAVE' and tile == 0
+                if good:
+                    points.append((x, y, None))
+            elif method.endswith('rod') and policy.nav.passable(tile):
+                for face, (dx, dy) in DIRS.items():
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < width and 0 <= ny < height and grid[ny * width + nx] in (0x21, 0x29):
+                        points.append((x, y, face))
+            elif method in {'headbutt', 'rock smash'} and policy.nav.passable(tile):
+                for face, (dx, dy) in DIRS.items():
+                    nx, ny = x + dx, y + dy
+                    if not (0 <= nx < width and 0 <= ny < height):
+                        continue
+                    if method == 'rock smash':
+                        good = (nx, ny) in rocks
+                    else:
+                        good = grid[ny * width + nx] in (0x15, 0x1D) and (tree_score(nx, ny, trainer) == 0) == rare
+                    if good:
+                        points.append((x, y, face))
+    return points
+
+
+def wanted(policy, snapshot, species):
+    held = sum(mon.species == species and not mon.egg for mon in snapshot.party + snapshot.stored)
+    return species not in snapshot.owned or held < policy.demand.get(species, 0) + 1 and bool(policy.demand.get(species))
+
+
+def journey(policy, snapshot, mem, Goal):
+    data, state = policy.data, policy.collection
+    if not snapshot.can_catch:
+        if any(count < 20 for count in snapshot.box_counts):
+            goal = policy.storage_goal(snapshot)
+            return Goal('collection_box', 'Make room for new catches', goal.map_name, goal.x, goal.y, goal.face)
+    if not snapshot.event('EVENT_GOT_SUPER_ROD'):
+        return policy.person(snapshot, 'super_rod', 'Get the Super Rod for the Pokédex expedition',
+                             'ROUTE_12_SUPER_ROD_HOUSE', 'Route12SuperRodHouseFishingGuruScript')
+    for flag, map_name, script, label in [
+            ('EVENT_GOT_TM02_HEADBUTT', 'ILEX_FOREST', 'IlexForestHeadbuttGuyScript', 'Learn about Headbutt encounters'),
+            ('EVENT_GOT_TM08_ROCK_SMASH', 'ROUTE_36', 'Route36RockSmashGuyScript', 'Learn about Rock Smash encounters')]:
+        if not snapshot.event(flag):
+            return policy.person(snapshot, flag.lower(), label, map_name, script)
+    funding = state.get('funding')
+    if funding is not None and snapshot.hall_of_fame_count >= funding:
+        state.pop('funding', None)
+        funding = None
+    if funding is None and snapshot.money < 5000 and sum(count for _, count in snapshot.pockets['balls']) < 4:
+        state['funding'] = funding = snapshot.hall_of_fame_count + 1
+    if funding is not None:
+        state['phase'] = 'league'
+        if not policy.in_league(snapshot):
+            if snapshot.event('EVENT_WILLS_ROOM_ENTRANCE_CLOSED'):
+                return Goal('funds_arrive', 'Return to the League reception', 'INDIGO_PLATEAU_POKECENTER_1F', 17, 10)
+            return policy.person(snapshot, 'funds_will', 'Challenge the League to fund the next expedition',
+                                 'WILLS_ROOM', 'WillScript_Battle')
+        for trainer, room in [('WILL', 'WILLS'), ('KOGA', 'KOGAS'), ('BRUNO', 'BRUNOS'), ('KAREN', 'KARENS')]:
+            if not snapshot.event(f'EVENT_BEAT_ELITE_4_{trainer}'):
+                return policy.person(snapshot, 'funds_' + trainer.lower(), 'Continue the League expedition',
+                                     room + '_ROOM', trainer.title() + 'Script_Battle')
+        if not snapshot.event('EVENT_BEAT_CHAMPION_LANCE'):
+            return policy.person(snapshot, 'funds_lance', 'Challenge Champion Lance again', 'LANCES_ROOM', 'LancesRoomLanceScript')
+        return Goal('funds_champion', 'Record another League victory', 'HALL_OF_FAME', 4, 7)
+    from .quests import gifts
+    gift = gifts(policy, snapshot, Goal)
+    if gift:
+        return gift
+    from .breeding import journey as breed
+    goal = breed(policy, snapshot, Goal)
+    if goal:
+        return goal
+    from .quests import stones
+    goal = stones(policy, snapshot, Goal)
+    if goal:
+        return goal
+    from .training import journey as training
+    goal = training(policy, snapshot, mem, Goal)
+    if goal:
+        return goal
+    current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
+    target = state.get('target')
+    if (target and (not wanted(policy, snapshot, target['species']) or not matching_time(target['time'], current_time)
+                   or policy.decisions - target['started'] > 12000)):
+        state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
+        state['target'] = target = None
+    if target is None:
+        from .quests import legends
+        legend = legends(policy, snapshot, Goal)
+        if legend:
+            return legend
+        groups = {}
+        items = dict(snapshot.items)
+        for row in data.encounters:
+            if not wanted(policy, snapshot, row['species']) or not matching_time(row['time'], current_time):
+                continue
+            method = row['method']
+            if method not in {'grass', 'surf', 'old rod', 'good rod', 'super rod', 'headbutt', 'rock smash'}:
+                continue
+            if method in {'headbutt', 'rock smash'}:
+                move = 29 if method == 'headbutt' else 249
+                machine = data.items['TM_HEADBUTT' if move == 29 else 'TM_ROCK_SMASH']
+                if not any(move in mon.moves or machine in items and move in data.species[mon.species]['machines']
+                           and not all(known in {15, 19, 57, 70, 148, 250, 127} for known in mon.moves)
+                           for mon in snapshot.party if not mon.egg):
+                    continue
+            if method.endswith('rod') and data.items[method.upper().replace(' ', '_')] not in items:
+                continue
+            key = (row['map'], method, row['species'], row['time'] == 'rare trees')
+            groups.setdefault(key, {**row, 'chance': 0})['chance'] += row['chance']
+        routes, points = {}, {}
+        choices = []
+        distances = {}
+        for mid, _, _, _ in groups:
+            if mid not in distances:
+                route = policy.nav.route(snapshot.map, mid)
+                distances[mid] = len(route) if route is not None else 9999
+        ranked = sorted(groups.items(), key=lambda pair: distances[pair[0][0]] + 50 / max(1, pair[1]['chance']))
+        for (mid, method, species, rare), row in ranked:
+            if choices and len(choices) >= 12:
+                break
+            key = (mid, method, rare)
+            if key not in points:
+                points[key] = encounter_points(policy, snapshot, mid, method, rare=rare)
+                routes[key] = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points[key]], cut=True, surf=True)
+            route = routes[key]
+            if route is None or not points[key]:
+                continue
+            attempted = state.get('attempts', {}).get(str(species), -100000)
+            recent = policy.decisions - attempted < 18000
+            choices.append((species in snapshot.owned, recent, len(route) + 50 / max(1, row['chance']), species, mid, method, row))
+        if choices:
+            target = dict(min(choices, key=lambda row: row[:6])[-1], started=policy.decisions)
+            state['target'] = target
+        else:
+            goal = training(policy, snapshot, mem, Goal, terminal=True)
+            if goal:
+                return goal
+            state['phase'] = 'waiting'
+            return Goal('collection_wait', 'Explore while waiting for new collection opportunities', 'ROUTE_29', 12, 8)
+    return hunt(policy, snapshot, Goal)
+
+
+def hunt(policy, snapshot, Goal):
+    data, state = policy.data, policy.collection
+    target = state['target']
+    state['phase'] = 'hunting'
+    mid, method = target['map'], target['method']
+    points = encounter_points(policy, snapshot, mid, method, rare=target['time'] == 'rare trees')
+    if not points:
+        state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
+        state['target'] = None
+        return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
+    if mid == snapshot.map:
+        candidates = []
+        ordered = sorted(points, key=lambda point: (abs(point[0] - snapshot.x) + abs(point[1] - snapshot.y),
+                         policy.nav.visits.get((mid, point[0], point[1]), 0)))
+        for x, y, face in ordered:
+            if (x, y) == (snapshot.x, snapshot.y) and method in {'grass', 'surf'}:
+                continue
+            path = policy.nav.local(snapshot, [(x, y)], policy.memory, surf=True)
+            if path is not None:
+                visits = policy.nav.visits.get((mid, x, y), 0)
+                candidates.append((len(path), visits, x, y, face))
+                if len(candidates) >= 4:
+                    break
+        if candidates:
+            _, _, x, y, face = min(candidates, key=lambda row: row[:4])
+        else:
+            state['attempts'][str(target['species'])] = policy.decisions
+            state['target'] = None
+            return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[mid]['constant'], snapshot.x, snapshot.y)
+    else:
+        route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
+        region = route[-1][1][1] if route else None
+        x, y, face = next((point for point in points
+                           if region in policy.nav.regions.memberships(mid, point[:2], True, True)), points[0])
+    name = data.species[target['species']]['name']
+    key = 'collection_fish' if method.endswith('rod') else 'collection_field' if method in {'headbutt', 'rock smash'} else 'collection_hunt'
+    return Goal(key,
+                f'Search for {name} in {data.maps[mid]["name"]}', data.maps[mid]['constant'], x, y, face)
+
+
+def arrive(policy, snapshot):
+    key = policy.goal.key
+    from .breeding import arrive as breed
+    result = breed(policy, snapshot)
+    if result is not None:
+        return result
+    from .quests import arrive as gift
+    result = gift(policy, snapshot)
+    if result is not None:
+        return result
+    from .training import arrive as train
+    result = train(policy, snapshot)
+    if result is not None:
+        return result
+    if key == 'collection_box':
+        box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)
+        if box is not None:
+            policy.menu = ChangeBox(box)
+            return 'a'
+    if key == 'collection_fish':
+        method = policy.collection['target']['method']
+        policy.menu = Use(policy.data.items[method.upper().replace(' ', '_')])
+        return 'wait'
+    if key == 'collection_field':
+        method = policy.collection['target']['method']
+        move = 29 if method == 'headbutt' else 249
+        slot = next((i for i, mon in enumerate(snapshot.party) if not mon.egg and move in mon.moves), None)
+        if slot is None:
+            slot = next((i for i, mon in enumerate(snapshot.party) if not mon.egg
+                         and move in policy.data.species[mon.species]['machines']
+                         and not all(known in {15, 19, 57, 70, 148, 250, 127} for known in mon.moves)), None)
+            if slot is not None:
+                policy.menu = Teach(move, slot)
+        else:
+            policy.menu = FieldMove(slot, 'HEADBUTT' if move == 29 else 'ROCK SMASH')
+        return 'wait'
+    if key in {'collection_wait', 'collection_hunt'}:
+        return 'wait'
+    return None

@@ -114,7 +114,7 @@
     link.click()
     link.remove()
     setTimeout(() => URL.revokeObjectURL(url), 60000)
-    notice('Save downloaded. Load it with the matching Red or Blue ROM in your emulator.')
+    notice('Save downloaded. Load it with the matching game ROM in your emulator.')
   }
   async function act(operation) {
     if (busy) return
@@ -229,7 +229,7 @@
     const game = adventures.find(item => item.id === id)
     const title = game ? `<a href="${gameUrl(id)}trading">${esc(game.name)} ↗</a>` : 'Adventure unavailable'
     const label = completed ? 'Received' : failed ? 'Planned to receive' : 'Receiving'
-    const dex = Number.isInteger(mon?.dex) && mon.dex >= 1 && mon.dex <= 151 ? mon.dex : null
+    const dex = Number.isInteger(mon?.dex) && mon.dex >= 1 && mon.dex <= 251 ? mon.dex : null
     const sprite = dex && game ? `<div class="plate plate--trade"><img src="${gameUrl(id)}sprites/${dex}.png?v=rom-portraits-1" alt="" loading="lazy"></div>`
       : '<div class="plate plate--trade exchange-placeholder" aria-hidden="true"><span class="plate-num">?</span></div>'
     const name = mon?.name ? esc(mon.name) : 'Pokémon details unavailable'
@@ -457,11 +457,22 @@
   }
   $('#random-trainer').onclick = () => randomizeTrainer('#new-trainer', '#new-rival')
   $('#random-rival').onclick = () => randomizeTrainer('#new-rival', '#new-trainer')
+  function updateStarters() {
+    const version = $('#rom-select').selectedOptions[0]?.dataset.version
+    const johto = ['gold', 'silver', 'crystal'].includes(version)
+    const choices = !version || $('#rom-file').files.length ? ['bulbasaur', 'charmander', 'squirtle', 'chikorita', 'cyndaquil', 'totodile'] : johto ? ['chikorita', 'cyndaquil', 'totodile'] : ['bulbasaur', 'charmander', 'squirtle']
+    const previous = $('#starter').value
+    $('#starter').innerHTML = '<option value="random">Surprise me</option>' + choices.map(name => `<option value="${name}">${name[0].toUpperCase() + name.slice(1)}</option>`).join('')
+    $('#starter').value = choices.includes(previous) ? previous : 'random'
+  }
+  $('#rom-select').onchange = updateStarters
+  $('#rom-file').onchange = updateStarters
   async function openCreate() {
     await act(async () => {
       const data = await api('/api/v1/assets')
-      $('#rom-select').innerHTML = '<option value="">Add a ROM below</option>' + (data.roms || []).map(rom => `<option value="${esc(rom.id)}">Pokémon ${esc(rom.version)} (${esc(rom.id.slice(0, 8))})</option>`).join('')
+      $('#rom-select').innerHTML = '<option value="">Add a ROM below</option>' + (data.roms || []).map(rom => `<option value="${esc(rom.id)}" data-version="${esc(rom.version)}">Pokémon ${esc(rom.version)} (${esc(rom.id.slice(0, 8))})</option>`).join('')
       if (data.roms?.length) $('#rom-select').value = data.roms[0].id
+      updateStarters()
       if (!$('#new-name').value.trim()) randomizeAdventure()
       if (!$('#new-trainer').value) randomizeTrainer('#new-trainer', '#new-rival')
       if (!$('#new-rival').value) randomizeTrainer('#new-rival', '#new-trainer')
@@ -511,6 +522,7 @@
       }
       $('#settings-palette').value = game.settings?.palette || 'original'
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
+      const johto = ['gold', 'silver', 'crystal'].includes(game.version)
       for (const [field, setting] of [['league-rewards', 'league_rewards'], ['mew-event', 'mew_event']]) {
         const input = $(`#settings-${field}`)
         input.checked = Boolean(game.settings?.[setting])
@@ -523,6 +535,11 @@
         const input = $(`#settings-${field}`)
         input.value = game.settings?.[setting] ?? fallback
         input.disabled = running(game)
+      }
+      for (const field of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) {
+        const input = $(`#settings-${field}`)
+        input.closest('label').hidden = johto
+        input.disabled = johto || running(game)
       }
       $('#adventure-settings').showModal()
       return
@@ -560,6 +577,9 @@
     act(async () => {
       const game = adventures.find(item => item.id === $('#settings-id').value)
       const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
+      if (['gold', 'silver', 'crystal'].includes(game?.version)) {
+        for (const field of ['legendary_return_steps', 'event_return_steps', 'fossil_preference', 'dojo_preference']) delete rewards[field]
+      }
       const result = await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
         settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), palette: $('#settings-palette').value || 'original', ...rewards}}, 'PATCH')
       $('#adventure-settings').close()

@@ -7,7 +7,7 @@
 > a separate release step. Application code must not import emulator backends.
 
 
-**Pokémon Red and Blue adventures that keep going while you're away.**
+**Pokémon Red, Blue, Gold, Silver and Crystal adventures that keep going while you're away.**
 
 Watch an automatic player catch Pokémon, earn badges and challenge the League in
 your browser. Take control whenever you like, then hand the adventure back.
@@ -19,7 +19,7 @@ An eight-second clip from a running adventure. [Still image](docs/images/live-ad
 
 ## Keep the adventure going
 
-- **Independent games:** Run Red and Blue side by side, each with its own saves
+- **Independent games:** Run adventures from both generations side by side, each with its own saves
   and speed. Check CPU, memory and observed speed in the Library.
 - **A growing collection:** Explore the Pokédex and search every PC box. Compare
   power, types and DV quality to find promising Pokémon.
@@ -36,9 +36,15 @@ An eight-second clip from a running adventure. [Still image](docs/images/live-ad
 | --- | --- |
 | [![Journal entries](docs/images/journal-panel.jpg)](docs/images/journal-panel.jpg) | [![Adventure stats](docs/images/stats-panel.jpg)](docs/images/stats-panel.jpg) |
 
+Gold, Silver and Crystal include autonomous journeys through all 16 badges and
+Red, the 251-species Pokédex, breeding, held items and Gen II Cable Club trades.
+See [Generation II support and validation](docs/gen2-exploration.md) for cartridge
+revisions, test evidence and compatibility boundaries. This support is on the
+development branch and is not included in the public v0.4.17 downloads below.
+
 ## The collection is half the fun
 
-Want all 151? Run both Red and Blue and let them trade version exclusives and
+In Red and Blue, want all 151? Run both games and let them trade version exclusives and
 trade evolutions automatically. New adventures created in the Library have
 these rewards and return visits **enabled by default**, so the collection keeps
 growing beyond the original games' one-time encounters:
@@ -82,8 +88,9 @@ usage, and the speed each simulation is actually reaching.
 
 ## Install
 
-Bring your own supported Pokémon Red or Blue ROM (USA, Europe) that you are
-entitled to use. Professor Oak supplies starters, not ROMs. PokeSim does not
+Bring your own supported Pokémon Red, Blue, Gold, Silver or Crystal ROM that you are
+entitled to use. Supported builds are English USA/Europe, with Crystal Rev 1.
+Professor Oak supplies starters, not ROMs. PokeSim does not
 include or download ROMs. Your ROM stays on the machine running PokeSim.
 
 ### Server: Docker Compose

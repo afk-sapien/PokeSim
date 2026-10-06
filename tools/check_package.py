@@ -6,6 +6,16 @@ import tomllib
 import json
 
 required = {
+    'pokesim/cartridges.py',
+    'pokesim/gen2/data.py',
+    'pokesim/gen2/emulator.py',
+    'pokesim/gen2/policy.py',
+    'pokesim/gen2/ram.py',
+    'pokesim/gen2/save.py',
+    'pokesim/gen2/steps.py',
+    'pokesim/gen2/rewards.py',
+    'pokesim/gen2/link_worker.py',
+    'pokesim/gen2/trading.py',
     'pokesim/_build.json',
     'pokesim/build_info.py',
     'pokesim/runtime/legacy.py',

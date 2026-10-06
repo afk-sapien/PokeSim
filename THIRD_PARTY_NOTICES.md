@@ -6,6 +6,8 @@ Release wheels, source archives, and container images do not include the previou
 
 The previously bundled images came from [PokéAPI/sprites](https://github.com/PokeAPI/sprites/blob/master/LICENCE.txt). Its notice identifies The Pokémon Company as the image copyright holder alongside a CC0 repository statement. Those files have been removed from the current release tree. By default, portraits are extracted locally from the supplied ROM, with a geometric placeholder if unavailable. Settings also offers an explicit optional download of the 151 colored Red/Blue portraits from PokéAPI at revision `bfb75391935310368065096fa08c51e8970bc43e`. Those PNGs and the upstream license notice are stored only in the user data directory. They are not bundled in PokeSim releases or mirrored by this project. This option does not grant rights to the underlying artwork. Users can also supply a local portrait pack in their data directory.
 
+Generation II setup uses pinned [pret/pokegold](https://github.com/pret/pokegold/tree/62388c7204e5d13aa05b4231e220b6760584d1b5) and [pret/pokecrystal](https://github.com/pret/pokecrystal/tree/5beda23ffa505f62e1dad7e3d7c214d1737b3358) references. The generator verifies the reference archives and symbol files and records the source revisions and bundle checksums. Generated datasets, reference sources and symbol files remain local user content. The 251 portraits for each supported cartridge are decoded locally from the owner-supplied ROM and are not bundled in releases.
+
 This public repository starts from a reviewed current-source snapshot. It contains no imported development history, bundled game datasets, sprite packs, ROMs, or saves.
 
 The development runtime uses PyBoy RS through PokeSim Core. PyBoy RS retains

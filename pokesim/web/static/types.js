@@ -1,7 +1,7 @@
 // Shared type labels use a fixed vocabulary, including a neutral unknown state.
 (() => {
   const names = ['Normal', 'Fighting', 'Flying', 'Poison', 'Ground', 'Rock', 'Bug',
-    'Ghost', 'Fire', 'Water', 'Grass', 'Electric', 'Psychic', 'Ice', 'Dragon']
+    'Ghost', 'Fire', 'Water', 'Grass', 'Electric', 'Psychic', 'Ice', 'Dragon', 'Dark', 'Steel']
   const labels = new Map(names.map(name => [name.toLowerCase(), name]))
   const badges = types => {
     if (!Array.isArray(types)) return ''
