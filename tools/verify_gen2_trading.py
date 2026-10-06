@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--load', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--species', type=int)
+    parser.add_argument('--time-capsule', action='store_true')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     settings = SimulationSettings(rom_path=str(Path(f'.release-local/gen2/{args.game}.gbc').resolve()),
@@ -41,7 +42,8 @@ def main():
         offer = next((mon for mon in inventory['offers'] if args.species is None or mon['species'] == args.species), None)
         assert offer, 'The requested species is not an eligible boxed offer'
         key = offer['trade_key']
-        request = {'id': '0123456789abcdef0123456789abcdef', 'plan_digest': 'test', 'selected_key': key}
+        request = {'id': '0123456789abcdef0123456789abcdef', 'plan_digest': 'test', 'selected_key': key,
+                   'time_capsule': args.time_capsule}
         receipt = participant.prepare(request)
         for step in range(4000):
             snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)

@@ -648,3 +648,26 @@ def test_cable_uses_slower_participant_without_changing_individual_paces(setup, 
     row = {'id': identifier(), 'plan': {'attempt_id': identifier(), 'participants': ids}}
     assert setup.coordinator._session_plan(row, prepared)['speed'] == expected
     assert tuple(setup.registry.adventure(aid)['settings']['speed'] for aid in ids) == speeds
+
+
+def test_time_capsule_pair_requires_readiness_and_compatible_offer():
+    old = {'cartridge_generation': 1}
+    modern = {'cartridge_generation': 2, 'time_capsule_ready': True}
+    offer = {'time_capsule_compatible': True, 'cartridge_generation': 2, 'dex': 95, 'arrived_dex': 208}
+    assert Coordinator._compatible_pair(old, modern, {}, offer)
+    assert Coordinator._compatible_pair(modern, old, offer, {})
+    assert not Coordinator._compatible_pair(old, {**modern, 'time_capsule_ready': False}, {}, offer)
+    assert not Coordinator._compatible_pair(old, modern, {}, {**offer, 'time_capsule_compatible': False})
+    assert Coordinator._offer_for(offer, old)['arrived_dex'] == 95
+    assert Coordinator._offer_for(offer, modern)['arrived_dex'] == 208
+    assert Coordinator._offer_for({**offer, 'dex': 64}, old)['arrived_dex'] == 65
+
+
+def test_collection_requests_cross_generations_only_for_kanto_species(setup):
+    left, right = setup.data['left_id'], setup.data['right_id']
+    setup.coordinator._refresh_collection_demand([
+        (left, {'cartridge_generation': 1, 'owned': list(range(1, 152))}),
+        (right, {'cartridge_generation': 2, 'dex_total': 251,
+                 'owned': [dex for dex in range(1, 252) if dex not in {1, 251}]})])
+    assert setup.peers[left].collection_requests == {'1': 1}
+    assert setup.peers[right].collection_requests == {}

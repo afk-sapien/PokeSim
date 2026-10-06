@@ -35,6 +35,7 @@ class SimulationSettings:
     viewer_only: bool = False
     league_rewards: bool = False
     mew_event: bool = False
+    celebi_event: bool = False
     legendary_return_steps: int = 1000000
     event_return_steps: int = 100000
     mew_return_steps: int = 1000000
@@ -76,7 +77,7 @@ class SimulationSettings:
         from ..cartridges import identify, validate_starter
         cartridge = identify(Path(self.rom_path).read_bytes())
         validate_starter(self.starter, cartridge.version if cartridge else None)
-        for name in ('viewer_only', 'fast_text', 'battle_animations', 'league_rewards', 'mew_event'):
+        for name in ('viewer_only', 'fast_text', 'battle_animations', 'league_rewards', 'mew_event', 'celebi_event'):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f'{name} must be a boolean')
         if self.seed is not None and type(self.seed) is not int:

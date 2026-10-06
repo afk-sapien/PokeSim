@@ -562,7 +562,7 @@ def test_full_party_makes_room_before_togepi_gift(real_data):
     from pokesim.gen2.policy import Goal, Policy
     policy = Policy(real_data, starter='cyndaquil')
     policy.storage_goal = lambda snapshot: Goal('storage', 'PC', 'VIOLET_POKECENTER_1F', 9, 2, 'up')
-    snapshot = SimpleNamespace(frame=100, badges=1, party=[None] * 6,
+    snapshot = SimpleNamespace(frame=100, badges=1, party=[None] * 6, map=real_data.map_ids['VIOLET_POKECENTER_1F'],
                                event=lambda flag: flag != 'EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE')
     assert policy.journey(snapshot, None).key == 'collection_gift_room'
 
@@ -646,3 +646,183 @@ def test_repeat_mew_requires_walking_then_a_later_win(tmp_path, monkeypatch):
         assert store.get(RETURNS)['next_at'] == 210
     finally:
         store.close()
+
+
+def test_ruins_solver_completes_shuffled_boards_without_losing_pieces():
+    import random
+    from pokesim.gen2.ruins import CELLS, DESTINATIONS, puzzle_button
+    for seed in range(50):
+        rng = random.Random(seed)
+        board = [0] * 36
+        for piece, cell in enumerate(rng.sample(sorted(CELLS), 16), 1):
+            board[cell] = piece
+        cursor, held = 0, 0
+        for _ in range(2000):
+            if all(board[cell] == piece for piece, cell in DESTINATIONS.items()):
+                break
+            button = puzzle_button(board, cursor, held)
+            assert button is not None
+            if button == 'a':
+                board[cursor], held = held, board[cursor]
+            elif cursor == 30 and button == 'right':
+                cursor = 35
+            elif cursor == 35 and button == 'left':
+                cursor = 30
+            else:
+                cursor += {'up': -6, 'down': 6, 'left': -1, 'right': 1}[button]
+            assert cursor in CELLS
+            assert sorted([n for n in board if n] + ([held] if held else [])) == list(range(1, 17))
+        assert all(board[cell] == piece for piece, cell in DESTINATIONS.items())
+        assert not held
+
+
+def test_time_capsule_rejects_eggs_johto_moves_and_mail(real_data):
+    from pokesim.gen2.timecapsule import compatible
+    mon = SimpleNamespace(egg=False, species=95, moves=(20, 88, 106, 99), held_item=0)
+    assert compatible(mon, real_data)
+    for change in ({'egg': True}, {'species': 152}, {'moves': (166, 0, 0, 0)},
+                   {'held_item': real_data.items['FLOWER_MAIL']}):
+        assert not compatible(SimpleNamespace(**(vars(mon) | change)), real_data)
+    assert compatible(SimpleNamespace(**(vars(mon) | {'held_item': real_data.items['METAL_COAT']})), real_data)
+
+
+def test_time_capsule_conversion_matches_retail_exchange(real_data):
+    from pokesim.gen2.timecapsule_conversion import to_gen1, to_gen2
+    old = bytes.fromhex('85002306001515ff9621000051a1001c0a0410061e052f065603d2a6f728230000110024000d001b0027000f')
+    modern = bytes.fromhex('5f0014586a630d3b008c6100000000000000000000804f140f1e144600a158210000004200420027006e00350022002c')
+    row = {'struct': modern, 'nickname': b'\x50' * 11, 'trainer': b'\x50' * 11}
+    result = to_gen1(row, real_data)
+    assert result['struct'].hex() == '220042000005040014586a630d3b008c6100000000000000000000804f140f1e142100420027006e00350022'
+    result = to_gen2({**row, 'struct': old}, real_data)['struct']
+    assert result[0:8] == bytes.fromhex('81ad9621000051a1')
+    assert result[27:33] == bytes.fromhex('460000001100')
+    assert result[34:] == bytes.fromhex('00230024000d001b0027000d000f')
+
+
+def test_tower_team_has_three_distinct_legal_species():
+    from pokesim.gen2.tower import select_team
+    def mon(species, level, strength, egg=False):
+        return SimpleNamespace(species=species, level=level, stats=(strength,) * 6, egg=egg)
+    snapshot = SimpleNamespace(party=(mon(150, 30, 200), mon(25, 30, 90), mon(25, 30, 100)),
+        stored=(mon(26, 30, 80), mon(81, 29, 70), mon(250, 20, 150), mon(82, 30, 100, True)))
+    cap, team = select_team(snapshot)
+    assert cap == 30
+    assert [m.species for m in team] == [25, 26, 81]
+
+
+def test_time_capsule_team_restoration_takes_priority_over_story(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data, seed=1, starter='cyndaquil')
+    policy.collection['time_capsule_restore'] = ['original']
+    from pokesim.gen2.policy import Goal
+    policy.storage_goal = lambda _: Goal('pc', 'PC', 'NEW_BARK_TOWN', 1, 1, 'up')
+    snapshot = SimpleNamespace(party=(), stored=(), map=real_data.map_ids['NEW_BARK_TOWN'])
+    goal = policy.journey(snapshot, None)
+    assert goal.key == 'collection_activity_team'
+
+
+def test_daycare_selects_the_requested_parent_on_gender_list():
+    from pokesim.gen2.menus import DayCare
+    menu = DayCare(0, 3)
+    snapshot = SimpleNamespace(daycare=(None, None), text='CANCEL\nChoose a POKéMON.', tiles=())
+    assert menu.step(snapshot, SimpleNamespace(byte=lambda name: 1)) == 'down'
+    assert menu.step(snapshot, SimpleNamespace(byte=lambda name: 4)) == 'a'
+
+
+def test_time_capsule_waits_for_bill_and_next_day():
+    from pokesim.gen2.timecapsule import unlocked
+    snapshot = SimpleNamespace(started=True, event=lambda name: True)
+    assert not unlocked(snapshot, SimpleNamespace(byte=lambda name: 0))
+    snapshot.event = lambda name: False
+    assert not unlocked(snapshot, SimpleNamespace(byte=lambda name: 8))
+    assert unlocked(snapshot, SimpleNamespace(byte=lambda name: 0))
+    assert not unlocked(None, None)
+
+
+def test_celebi_quest_respects_the_overnight_wait(real_data):
+    if real_data.game != 'crystal':
+        return
+    from pokesim.gen2.celebi import journey
+    from pokesim.gen2.policy import Policy, Goal
+    policy = Policy(real_data, seed=1, starter='cyndaquil')
+    memory = {}
+    class Ram:
+        def __getitem__(self, key):
+            bank, address = key
+            return bytes(memory.get((bank, i), 0) for i in range(address.start, address.stop))
+    policy.memory = Ram()
+    policy.person = lambda snapshot, key, label, room, script: Goal(key, label, room, 3, 3, 'up')
+    bank, address = real_data.symbols['wDailyFlags1']
+    memory[bank, address] = 1
+    flags = {'EVENT_GOT_GS_BALL_FROM_GOLDENROD_POKEMON_CENTER', 'EVENT_CAN_GIVE_GS_BALL_TO_KURT', 'EVENT_GAVE_GS_BALL_TO_KURT'}
+    snapshot = SimpleNamespace(owned=set(), event=flags.__contains__, map=real_data.map_ids['KURTS_HOUSE'],
+                               x=3, y=3, objects=())
+    assert journey(policy, snapshot, Goal) is None
+    memory[bank, address] = 0
+    assert journey(policy, snapshot, Goal).key == 'celebi_kurt'
+    flags.add('EVENT_FOREST_IS_RESTLESS')
+    snapshot.items = ()
+    assert journey(policy, snapshot, Goal).key == 'celebi_kurt_returns'
+    snapshot.items = ((real_data.items['GS_BALL'], 1),)
+    snapshot.can_catch = True
+    goal = journey(policy, snapshot, Goal)
+    assert (goal.map_name, goal.x, goal.y, goal.face) == ('ILEX_FOREST', 8, 23, 'up')
+
+
+def test_time_capsule_preserves_league_counts_across_return_trade(real_data):
+    from pokesim.gen2 import league
+    from pokesim.gen2.ram import decode_mon
+    from pokesim.gen2.timecapsule_conversion import to_gen1
+    from pokesim.gen2.timecapsule_records import to_gen1 as old_record, to_gen2 as new_record
+    from pokesim.trade.preferences import identity
+    raw = bytes.fromhex('5f0014586a630d3b008c6100000000000000000000804f140f1e144600a158210000004200420027006e00350022002c')
+    row = {'struct': raw, 'nickname': b'\x8e\x8d\x88\x97' + b'\x50' * 7, 'trainer': b'\x50' * 11}
+    mon = decode_mon(raw, row['nickname'], real_data).to_dict()
+    signature, name = league.signature(real_data, mon)
+    record = {'key': identity(mon), 'version': 'gen2-1', 'individual': 'a' * 24, 'signature': signature,
+              'names': [name], 'counts': {'b' * 32: 3}, 'ambiguous': False, 'incomplete': False}
+    encoded = {key: value.hex() for key, value in row.items()}
+    converted = old_record(record, encoded, real_data)
+    assert converted['counts'] == record['counts']
+    encoded_old = {key: value.hex() for key, value in to_gen1(row, real_data).items()}
+    returned = new_record(converted, encoded_old, real_data)
+    league.validate(returned, real_data, mon)
+    assert returned['counts'] == record['counts']
+    assert returned['signature'] == signature
+
+
+def test_contest_uses_park_balls_and_runs_from_low_scores():
+    from pokesim.gen2.contest import control
+    policy = SimpleNamespace(collection={'contest': {'entered': True}})
+    snapshot = SimpleNamespace(in_battle=1, text='FIGHT POKéMON PACK RUN', tiles=())
+    values = {'wEnemyMonSpecies': 123, 'wEnemyMonMaxHP': 55, 'wEnemyMonHP': 55,
+              'wContestMonSpecies': 0, 'wParkBallsRemaining': 20, 'wMenuCursorX': 1, 'wMenuCursorY': 1}
+    mem = SimpleNamespace(byte=lambda name: values.get(name, 0),
+                          word=lambda name: values.get(name, 40), read=lambda name, size: bytes([0xff, 0xff]))
+    assert control(policy, snapshot, mem) == 'down'
+    values['wMenuCursorY'] = 2
+    assert control(policy, snapshot, mem) == 'a'
+    values['wParkBallsRemaining'] = 0
+    assert control(policy, snapshot, mem) == 'right'
+    values['wMenuCursorX'] = 2
+    assert control(policy, snapshot, mem) == 'a'
+
+
+def test_contest_respects_days_and_completed_daily_entry(real_data):
+    from pokesim.gen2.contest import journey
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data, starter='cyndaquil')
+    memory = {}
+    class Ram:
+        def __getitem__(self, key):
+            bank, address = key
+            return bytes(memory.get((bank, i), 0) for i in range(address.start, address.stop))
+    policy.memory = Ram()
+    snapshot = SimpleNamespace(owned=set(), items=(), can_catch=True,
+        map=real_data.map_ids['GOLDENROD_CITY'], x=20, y=20)
+    assert journey(policy, snapshot, Goal) is None
+    memory[tuple(real_data.symbols['wCurDay'])] = 2
+    assert journey(policy, snapshot, Goal).key == 'contest_enter'
+    policy.collection.pop('contest')
+    memory[tuple(real_data.symbols['wDailyFlags1'])] = 2
+    assert journey(policy, snapshot, Goal) is None

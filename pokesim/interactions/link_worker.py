@@ -82,6 +82,10 @@ def run_session(plan: CableSessionPlan, output_dir, progress=None, cancelled=Non
         raise FileExistsError(output_dir)
     from ..cartridges import identify
     cartridge = identify(Path(plan.left.rom_path).read_bytes())
+    peer = identify(Path(plan.right.rom_path).read_bytes())
+    if cartridge and peer and cartridge.generation != peer.generation:
+        from ..gen2.timecapsule_worker import run_session as timecapsule_session
+        return timecapsule_session(plan, output_dir, progress, cancelled)
     if cartridge is not None and cartridge.generation == 2:
         from ..gen2.link_worker import run_session as gen2_session
         return gen2_session(plan, output_dir, progress, cancelled)

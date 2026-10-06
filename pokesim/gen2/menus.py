@@ -449,7 +449,7 @@ class DayCare:
         if done or self.exit_steps or self.steps > 240:
             self.exit_steps += 1
             return 'b' if self.exit_steps < 8 else None
-        if self.slot is not None and 'CANCEL' in snapshot.text and '/' in snapshot.text:
+        if self.slot is not None and 'CANCEL' in snapshot.text and 'Choose a POKéMON' in snapshot.text:
             cursor = mem.byte('wMenuCursorY') - 1
             return 'a' if cursor == self.slot else 'down' if cursor < self.slot else 'up'
         return choose(snapshot.tiles, 'YES', exact=True) or 'a'

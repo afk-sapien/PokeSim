@@ -50,16 +50,42 @@ No ROM, save, screenshot, reference checkout or full symbol file is committed.
   delivery or a rewind across the latest committed gift.
 
 Gold, Silver and Crystal can trade with each other through the managed Cable
-Club. Preparation uses the cartridge PC and held-item menus. The exchange runs
+Club. Red and Blue can trade with each of them through the Time Capsule. Preparation uses the cartridge PC and held-item menus. The exchange runs
 both cartridges through their link routines, verifies the resulting party,
 checks unaffected Pokémon and story state, verifies a fresh cartridge Continue,
 and uses the existing durable two-adventure commit protocol. Held-item trade
 evolutions and individual League records travel with the exchanged Pokémon.
 
+Time Capsule preparation requires the native unlock after meeting Bill and
+waiting until the following day. It temporarily deposits incompatible party
+members, trades only Kanto species with Generation I moves and no Mail, then
+restores the adventure team. Verification accounts for the cartridge’s species
+number conversion, Special stat split, catch-rate items and trade evolution.
+Cross-generation collection requests let Red and Blue collect missing Kanto
+species for the Johto adventures.
+
+The postgame controller solves all four Ruins of Alph picture puzzles, including
+the Union Cave Strength passage. Crystal also prepares a legal three-Pokémon
+Battle Tower team, selects its level bracket, plays the challenge, records its
+wins and restores the original team. A failed challenge is a normal result and
+does not prevent the adventure from continuing.
+
+When Sun Stones are needed, the controller enters the Bug-Catching Contest on
+its native eligible days, compares catches using the cartridge scoring rules,
+uses Park Balls, collects the result and resumes with its original party.
+A loss allows another attempt on a later eligible day.
+
+Crystal’s stopped-adventure settings include an optional **Custom Crystal GS
+Ball event**, disabled by default. It enables the original Goldenrod delivery,
+Kurt’s overnight examination and Ilex Forest Celebi encounter after becoming
+Champion. Only the distribution unlock is custom. Travel, dialogue, item use
+and capture run through the cartridge. Its durable claim prevents repeated
+activation or a rewind across the committed unlock.
+
 ## Validation
 
 Testing uses Python 3.12.3 and PyBoy 2.7.0 with the owner-supplied cartridges.
-The full regression suite passed 1,822 tests with 151 skipped.
+The full regression suite passed 1,847 tests with 151 skipped.
 Skipped tests retain their existing external fixture or environment requirements.
 
 Recorded cartridge scenarios include:
@@ -78,6 +104,13 @@ Recorded cartridge scenarios include:
 | Missed legendary recovery | Retried the failed Gold Ho-Oh encounter and caught it |
 | Gift quests | Eevee, Crystal Odd Egg, Dratini, Kiyo’s Tyrogue and Bill’s grandfather’s first gift |
 | Cable Club | Gold/Silver, Gold/Crystal and Silver/Crystal exchanges |
+| Time Capsule | Red and Blue exchanged with Gold, Silver and Crystal, with independent participant and save restart checks |
+| Managed Time Capsule | Crystal prepared a boxed offer, committed and recovered the result, then restored its original six partners |
+| Ruins of Alph | All four puzzles solved in each of Gold, Silver and Crystal |
+| Crystal Battle Tower | Level 30 challenge, one opponent defeated, normal loss and original team restored |
+| Crystal Celebi | Optional GS Ball activation committed once, delivery and Kurt quest completed, Celebi caught at the shrine |
+| Bug-Catching Contest | Entry, judging and party restoration in all three games, Crystal won first place and received a Sun Stone |
+| Extended collection | Fixed Day Care gender-menu selection, then completed 1,000,012 frames without a stall and reached 86 owned species |
 | Held trade evolution | Prepared Metal Coat through the menu, traded Onix and received Steelix |
 | Runtime API | Pages, 251-entry Pokédex, PC, journal, statistics, manual input, audio, paused frame and restart |
 | Portable saves | Fresh Continue verified for all three games |
@@ -99,7 +132,7 @@ matching starter. The first installation prepares the generation-specific data.
 With local cartridge and generated data directories, run the regression suite:
 
 ```sh
-GAME_DATA_DIR=.release-local/gen1-data \
+GAME_DATA_DIR=.release-local/all-data \
 GEN2_DATA_DIR=.release-local/gen2-data \
 GEN2_CARTRIDGE_DIR=.release-local/gen2 \
 GEN2_ROM_DIR=/home/ty/Downloads \
@@ -115,24 +148,31 @@ Run a complete isolated campaign:
 ```
 
 `--load PATH` resumes a cartridge checkpoint and its sibling `.policy.json`.
-Focused scenarios include gifts, legends, breeding, stones, Headbutt, Rock
-Smash and a specified encounter. Separate verification tools exercise runtime
+Focused scenarios include ruins, tower, celebi, contest, gifts, legends, breeding, stones,
+Headbutt, Rock Smash and a specified encounter. Separate verification tools exercise runtime
 APIs, capture accounting, portable saves, trade preparation, durable exchange
 and custom reward delivery. `tools/verify_gen2_library.py` also exercises worker
 restart during trade preparation and reservation release before an automatic
-exchange.
+exchange. `tools/verify_gen2_trading.py --time-capsule` prepares a compatible
+boxed offer. `tools/verify_timecapsule.py` exchanges that receipt with a prepared
+Red or Blue checkpoint and runs both participant verifiers. Its `--data`
+directory must contain both the Generation I tables and generated `gen2` data.
+
+The Time Capsule, Celebi overnight and repeat contest tests advanced the real-time clock in
+private fixture copies before allowing the cartridge’s daily reset to run.
+Production adventures use their ordinary clocks. No story flags or Pokémon
+were injected to produce those exchange or capture results.
 
 ## Boundaries
 
-Time Capsule trading between Generation I and Generation II is not implemented.
-The coordinator pairs adventures within their cartridge generation. This does
-not prevent any Gold/Silver/Crystal pairing.
-
 The autonomous controller is not a proof that every seed will finish without a
-stall, or that every optional cartridge activity is automated. The Battle Tower,
-Game Corner, Bug-Catching Contest, Ruins of Alph puzzles and limited distribution
-events remain available through manual controls. All 251 species have data and
-UI support. An autonomous 251-species collection has not been demonstrated.
+stall, or that every optional cartridge activity is automated. Game Corner
+play still uses manual controls. The Battle Tower test proves
+entry, combat and return, not a seven-win streak. All 251 species have data and
+UI support, and Time Capsule and the optional Celebi quest add acquisition paths.
+An autonomous 251-species collection has not been demonstrated. Sun Stones now
+have an automated acquisition path through contest wins, but those wins are not
+guaranteed, and this branch does not claim unattended Pokédex completion.
 The Red/Blue Kanto Marathon and repeatable fossil, dojo and NPC-trade rewards
 have not been transplanted into the Generation II campaign. Generation II
 retries missed static legendary encounters, but does not schedule repeat

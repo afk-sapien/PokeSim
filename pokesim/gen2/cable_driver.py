@@ -18,13 +18,14 @@ class CableDriver:
     def button(self, side):
         s = read_snapshot(side.pb.memory, side.data, side.frame)
         m = side.memory
+        link = 'Gen2ToGen1LinkComms' if getattr(side, 'time_capsule', False) else 'Gen2ToGen2LinkComms'
         side.nav.observe(s)
         name = side.data.maps[s.map]['constant']
         if side.counts['ExitLinkCommunications']:
             return None
-        if side.counts['SaveAfterLinkTrade'] and side.counts['Gen2ToGen2LinkComms'] >= 2:
+        if side.counts['SaveAfterLinkTrade'] and side.counts[link] >= 2:
             return 'a' if any('▶' in row and 'CANCEL' in row for row in s.tiles) else 'down'
-        if side.counts['Gen2ToGen2LinkComms']:
+        if side.counts[link]:
             if 'STATS' in s.text and 'TRADE' in s.text:
                 row = next(r for r in s.tiles if 'STATS' in r and 'TRADE' in r)
                 cursor = max(row.find('▶'), row.find('▷'))
@@ -33,7 +34,7 @@ class CableDriver:
                 return 'b'
             if 'CANCEL' in s.text and 'TRADE' in s.text:
                 return choose(s.tiles, 'TRADE') or 'a'
-            if any(mon.nick in s.text for mon in s.party) and 'CANCEL' in s.text:
+            if any(mon.name.upper() in s.text.upper() for mon in s.party) and 'CANCEL' in s.text:
                 cursor = m.byte('wMenuCursorY') - 1
                 target = side.spec.party_slot
                 return 'a' if cursor == target else 'down' if cursor < target else 'up'
@@ -42,14 +43,15 @@ class CableDriver:
             return choose(s.tiles, 'TURN OFF') or 'b'
         if 'CHANGE BOX' in s.text or 'Choose a' in s.text or 'STATS' in s.text:
             return 'b'
-        if '┌' in s.tiles[12] or m.byte('wScriptRunning') and name != 'TRADE_CENTER':
+        if '┌' in s.tiles[12] or m.byte('wScriptRunning') and name not in {'TRADE_CENTER', 'TIME_CAPSULE'}:
             return 'a'
-        if name == 'TRADE_CENTER':
+        if name in {'TRADE_CENTER', 'TIME_CAPSULE'}:
             occupied = {(x, y) for _, x, y in s.objects}
             point, face = ((6, 4), 'left') if (3, 4) in occupied else ((3, 4), 'right')
             path = side.nav.local(s, [point], side.pb.memory)
         else:
-            path = side.nav.toward(s, side.data.map_ids['POKECENTER_2F'], [(5, 3)], side.pb.memory)
+            point = (13, 4) if getattr(side, 'time_capsule', False) else (5, 3)
+            path = side.nav.toward(s, side.data.map_ids['POKECENTER_2F'], [point], side.pb.memory)
             face = 'up'
         if path:
             return path[0]
