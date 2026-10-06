@@ -118,6 +118,8 @@ class Emulator:
         self.shiny_tracker = ShinyTracker(store, self.rom_sha1)
         from .legendary_returns import StepTracker
         self.step_tracker = StepTracker(store, self.rom_sha1)
+        from .activity_ledger import ActivityLedger
+        self.activity_ledger = ActivityLedger(store, self.rom_sha1)
         if hasattr(self.policy, "collection"):
             self.policy.collection.version = "blue" if "Blue" in self.rom_note else "red"
         if hasattr(self.policy, "nav"):
@@ -150,6 +152,8 @@ class Emulator:
             options['ram_file'] = io.BytesIO(bytes(32768))
         pb = PyBoy(str(self.rom), window="null", sound_emulated=sound, **options)
         pb.set_emulation_speed(0)
+        if getattr(self, 'activity_ledger', None) is not None:
+            self.activity_ledger.attach(pb)
         shiny_tracker = getattr(self, 'shiny_tracker', None)
         if shiny_tracker is not None:
             shiny_tracker.attach(pb)

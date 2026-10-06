@@ -101,10 +101,10 @@ test('game routing refuses external addresses and parent traversal', () => {
   }
 })
 
-test('switching adventures from Trading keeps the game trading page', async () => {
+for (const page of ['/trading', '/stats', '/stats/pokemon', '/stats/items']) test(`switching adventures preserves ${page}`, async () => {
   let ready
   const switcher = {value: 'red-two', replaceChildren() {}}
-  const location = {pathname: '/games/red-one/trading', href: ''}
+  const location = {pathname: '/games/red-one' + page, href: ''}
   vm.runInNewContext(source, {
     document: {
       querySelector: name => name === '#adventure-switcher' ? switcher
@@ -114,7 +114,7 @@ test('switching adventures from Trading keeps the game trading page', async () =
   })
   await ready()
   switcher.onchange()
-  assert.equal(location.href, '/games/red-two/trading')
+  assert.equal(location.href, '/games/red-two' + page)
 })
 
 test('live speed changes persist only the current adventure setting', async () => {

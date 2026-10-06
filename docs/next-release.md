@@ -8,8 +8,11 @@ A compact overview uses the same playtime and League totals as Live, with durabl
 milestone times, 24-hour and 7-day progress, and current Battle Power and DV
 highlights. Existing charts and return activities are shown in open
 sections with clear headings. Old milestone times remain unknown where evidence is incomplete.
-Stat Power history keeps its original meaning. The detailed item and species
-ledgers remain deferred. See [Adventure statistics](adventure-statistics.md).
+Stat Power history keeps its original meaning. Stats now has its own main tab
+with Overview, Pokémon, and Items subpages. Searchable species and item tables
+track encounters, defeats, catches, gifts, purchases, consumable uses, and current
+holdings. Verified historical catches carry forward. Other counters begin with
+the update, without estimating older activity. Reusable item use is not counted. See [Adventure statistics](adventure-statistics.md).
 
 ## Battle Power and move development
 
@@ -33,7 +36,7 @@ Direction, A, and B buttons repeat while held. Start and Select fire once per pr
 
 Red and Blue have no native shiny appearance. PokeSim marks individuals whose DVs match the Generation II shiny rule: Defense, Speed, and Special are 10, and Attack is 2, 3, 6, 7, 10, 11, 14, or 15. The UI uses a distinct ★ Shiny badge alongside the separate DV rating. It keeps the original game sprites and supports the existing optional portrait packs.
 
-Party cards, partner details, PC cards, and Pokédex records display the badge. PC and Pokédex filters find shiny partners or species. The Pokédex uses compact perfect and shiny species coverage counters out of 151, with final-evolution credit for earlier forms. Individual catch, perfect-find, and shiny totals appear in Journal Stats. Existing saves reveal their current shiny partners immediately. Historic sightings cannot be reconstructed. Trades and existing partners do not manufacture new capture receipts. Replaying the same verified encounter or capture does not increment its receipt twice.
+Party cards, partner details, PC cards, and Pokédex records display the badge. PC and Pokédex filters find shiny partners or species. The Pokédex uses compact perfect and shiny species coverage counters out of 151, with final-evolution credit for earlier forms. Individual catch, perfect-find, and shiny totals appear in Stats. Existing saves reveal their current shiny partners immediately. Historic sightings cannot be reconstructed. Trades and existing partners do not manufacture new capture receipts. Replaying the same verified encounter or capture does not increment its receipt twice.
 
 The strategic policy prioritizes shiny captures, including already registered species and encounters outside its current target. It avoids damaging attacks against them, may use a Master Ball, and pauses if storage is full or ordinary battles have no usable balls. Manual control is still available. A capture is not guaranteed, since the original game still controls battle effects and escape behavior. Collected shinies are excluded from duplicate releases, NPC trade candidates, automatic trades, and explicit offers.
 

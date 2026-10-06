@@ -77,6 +77,8 @@ def record_receipt(db, fingerprint, dex, *, perfect=False, shiny=False, species=
                           (fingerprint, dex, time.time())).rowcount
     if not inserted:
         return
+    from .activity_ledger import increment
+    increment(db, 'gift' if fingerprint.startswith('gift-event:') else 'caught', dex)
     value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
     key = str(dex)
     value['counts'][key] = value['counts'].get(key, 0) + 1

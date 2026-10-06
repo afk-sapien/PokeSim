@@ -441,8 +441,8 @@
 
 /* Journal subpages use the same panel keys as the main navigation. */
 .journal-pages { display: grid }
-.journal-pages { grid-template-columns: repeat(2, minmax(0, 1fr)) }
-.journal-pages { width: min(100%, 320px) }
+.journal-pages { grid-template-columns: repeat(3, minmax(0, 1fr)) }
+.journal-pages { width: min(100%, 440px) }
 .journal-pages { margin-bottom: var(--s5) }
 .journal-pages { background: var(--panel-2) }
 .journal-pages { border: var(--hair) solid var(--rule) }
@@ -618,3 +618,8 @@
 
 .stats-overview .readout--missing, .stats-recent .readout--missing, .stats-activity .readout--missing, #collection-details .readout--missing { font: 16px / 1.4 var(--font-text) }
 .stats-overview .readout--missing, .stats-recent .readout--missing, .stats-activity .readout--missing, #collection-details .readout--missing { overflow-wrap: normal }
+
+@media (max-width: 640px) {
+  [aria-label="Stats pages"] a { padding: var(--s3) var(--s2) }
+  [aria-label="Stats pages"] a { font-size: 12px }
+}

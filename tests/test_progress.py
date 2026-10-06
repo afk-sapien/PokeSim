@@ -85,7 +85,7 @@ def test_the_journal_chart_uses_no_id_the_shared_page_script_writes(tmp_path):
     from pathlib import Path
     static = Path(__file__).parents[1] / 'pokesim/web/static'
     written = set(re.findall(r"set\('#([\w-]+)'", (static / 'app.js').read_text()))
-    chart = re.search(r'<section class="progress".*?</section>', (static / 'statistics.html').read_text(), re.S)[0]
+    chart = re.search(r'<section [^>]*id="road"[^>]*>.*?</section>', (static / 'statistics.html').read_text(), re.S)[0]
     assert written.isdisjoint(re.findall(r'id="([\w-]+)"', chart))
 
 

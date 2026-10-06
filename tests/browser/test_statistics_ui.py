@@ -22,7 +22,7 @@ def test_journal_entries_and_stats(page, game, width, theme):
     page.get_by_role('button', name=theme.title(), exact=True).click()
     expect(page.locator('#events')).to_be_visible()
     assert page.locator('#road').count() == 0
-    page.get_by_role('navigation', name='Journal pages').get_by_role('link', name='Stats').click()
+    page.get_by_role('navigation', name='Main navigation').get_by_role('link', name='Stats').click()
     expect(page.get_by_role('heading', name='Adventure stats')).to_be_visible()
     expect(page.locator('#statistics-charts')).to_contain_text('10,000,000,000')
     expect(page.locator('#statistics-charts')).to_contain_text('Total collection Stat Power')
@@ -36,7 +36,7 @@ def test_journal_entries_and_stats(page, game, width, theme):
         'labels => labels.every(label => label.scrollWidth <= label.clientWidth)')
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
     page.screenshot(path=f'/tmp/pokesim-journal-stats-{width}.png', full_page=True)
-    page.get_by_role('navigation', name='Journal pages').get_by_role('link', name='Entries').click()
+    page.get_by_role('navigation', name='Main navigation').get_by_role('link', name='Journal').click()
     expect(page.locator('#events')).to_contain_text('Caught a partner')
 
 

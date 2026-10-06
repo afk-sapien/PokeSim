@@ -76,9 +76,28 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def journal_page():
         return page('journal.html')
 
-    @app.get('/journal/stats', response_class=HTMLResponse)
+    @app.get('/journal/stats')
+    def legacy_statistics_page():
+        return RedirectResponse(f'{base_path}/stats', status_code=308)
+
+    @app.get('/stats', response_class=HTMLResponse)
     def statistics_page():
         return page('statistics.html')
+
+    @app.get('/stats/pokemon', response_class=HTMLResponse)
+    def pokemon_statistics_page():
+        return page('activity.html', ledger_kind='pokemon', ledger_title='Pokémon statistics',
+                    pokemon_current=' aria-current="page"', items_current='')
+
+    @app.get('/stats/items', response_class=HTMLResponse)
+    def item_statistics_page():
+        return page('activity.html', ledger_kind='items', ledger_title='Item statistics',
+                    pokemon_current='', items_current=' aria-current="page"')
+
+    @app.get('/api/statistics/activity')
+    def activity_statistics():
+        from ..activity_ledger import status
+        return status(store, emu.status().get('game'))
 
     @app.get('/api/statistics')
     def statistics():

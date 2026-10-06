@@ -57,6 +57,8 @@ class Store:
             progress.backfill(self.db)
             from .statistics import initialize
             initialize(self.db)
+            from .activity_ledger import initialize as initialize_activity
+            initialize_activity(self.db)
         self.lock = threading.Lock()
 
     def _migrate(self):

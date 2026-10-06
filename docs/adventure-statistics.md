@@ -1,9 +1,10 @@
 # Adventure statistics
 
-Journal Entries contains the event log. Stats opens with an overview, milestone
-times, recent progress, and two collection highlights. Collection details,
+Journal contains the event log. Stats has its own main navigation tab with
+Overview, Pokémon, and Items pages. The overview opens with milestone times,
+recent progress, and two collection highlights. Collection details,
 activity totals, existing trend charts, return visits, and Marathon records sit
-in visible sections with clear headings. Entries does not load these charts.
+in visible sections with clear headings. Journal does not load these charts. Older `/journal/stats` links redirect to `/stats`.
 
 ## Overview and shared totals
 
@@ -144,3 +145,37 @@ These records follow the adventure's policy checkpoint, so restoring an older
 checkpoint also restores its race records. The lifetime finishes chart above
 uses durable journal entries. See [Kanto Marathon](marathon.md) for the course
 and timing rules.
+
+## Pokémon and item records
+
+The Pokémon page lists all 151 species with wild encounters, trainer opponents
+faced, defeated opponents, catches, custom gifts, and currently held partners.
+Held includes the party and every PC box. Wild encounters include unsuccessful
+captures and fleeing. Trainer counts are per opposing Pokémon sent into battle,
+not per trainer. Defeats include wild and trainer opponents, with a transformed
+Ditto credited to its original species. The tutorial and link battles are excluded.
+
+The Items page lists usable cartridge items, key items, TMs, and HMs. Purchased
+counts quantities bought at marts and vending machines. Used counts consumption,
+including unsuccessful ball throws, Safari Balls, healing items, evolution stones,
+and TMs. Canceled and ineffective uses, sales, gifts to NPCs, discards, and PC
+transfers do not count as use. Reusable key items and HMs show Not counted for use.
+In bag now is a current quantity, excluding the item PC.
+
+Both tables support name or number search, numeric sorting in either direction,
+and an activity filter. The selected view survives a refresh. Tables scroll
+horizontally on phones while keeping the Pokémon or item name visible.
+
+Verified English Red and Blue action hooks record these counters independently
+of sampled snapshots. Counts and duplicate-detection receipts commit together.
+They survive journal pruning, process restarts, and save rewinds. Replaying an
+identical action state does not count again. These are cumulative records for the
+adventure, including actions recorded before starting a fresh run in that adventure.
+
+Existing capture receipts populate catches and custom gifts once. Custom gifts
+mean PokeSim League and Mew rewards, not every vanilla gift or trade. Current
+ownership does not manufacture capture or encounter history. Other counters
+start when this tracking version first runs, with the date shown on each page.
+Unavailable tracking is distinguished from a recorded zero. Unsupported cartridges
+do not install these hooks. The read-only `/api/statistics/activity` endpoint serves
+bounded species and item summaries without scanning action receipts on each refresh.

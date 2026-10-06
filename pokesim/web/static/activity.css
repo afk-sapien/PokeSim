@@ -1,0 +1,57 @@
+.ledger-tools { display: flex }
+.ledger-tools { flex-wrap: wrap }
+.ledger-tools { align-items: end }
+.ledger-tools { gap: var(--s3) }
+.ledger-tools label { display: grid }
+.ledger-tools label { gap: var(--s2) }
+.ledger-tools label { min-width: 0 }
+.ledger-tools label { font: var(--f-label) / 1.4 var(--font-mono) }
+.ledger-tools input, .ledger-tools select { min-height: 44px }
+.ledger-tools input, .ledger-tools select { max-width: 100% }
+.ledger-tools input, .ledger-tools select { background: var(--panel) }
+.ledger-tools input, .ledger-tools select { color: var(--ink) }
+.ledger-tools input, .ledger-tools select { border: var(--hair) solid var(--rule) }
+.ledger-tools input, .ledger-tools select { padding: var(--s2) }
+#ledger-coverage, #ledger-help, #ledger-status { margin-block: var(--s3) }
+.ledger-scroll { overflow-x: auto }
+.ledger-scroll { border: var(--hair) solid var(--rule) }
+.ledger-table { width: 100% }
+.ledger-table { border-collapse: separate }
+.ledger-table { border-spacing: 0 }
+.ledger-table { background: var(--panel) }
+.ledger-table th, .ledger-table td { padding: var(--s3) }
+.ledger-table th, .ledger-table td { border-bottom: var(--hair) solid var(--rule-faint) }
+.ledger-table thead { background: var(--panel-2) }
+.ledger-table thead th { font: var(--f-label) / 1.5 var(--font-mono) }
+.ledger-table thead th { min-width: 100px }
+.ledger-table th { text-align: left }
+.ledger-table thead th:not(:first-child) { text-align: right }
+.ledger-table td { text-align: right }
+.ledger-table td { font-variant-numeric: tabular-nums }
+.ledger-table tbody th { position: sticky }
+.ledger-table tbody th { left: 0 }
+.ledger-table tbody th { background: var(--panel) }
+.ledger-table tbody tr:nth-child(even), .ledger-table tbody tr:nth-child(even) th { background: var(--panel-2) }
+.ledger-table tbody tr:hover, .ledger-table tbody tr:hover th { background: var(--cell-off) }
+.ledger-identity { display: flex }
+.ledger-identity { align-items: center }
+.ledger-identity { gap: var(--s2) }
+.ledger-identity { min-width: 155px }
+.ledger-identity img { image-rendering: pixelated }
+.ledger-identity small { display: block }
+.ledger-identity small { color: var(--ink-2) }
+.ledger-identity small { font: var(--f-label) / 1.5 var(--font-mono) }
+.ledger-unknown { color: var(--ink-2) }
+.ledger-unknown { font-size: 12px }
+@media (max-width: 640px) {
+  .ledger-tools { display: grid }
+  .ledger-tools { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) }
+  .ledger-tools label:first-child { grid-column: 1 / -1 }
+  .ledger-tools button { grid-column: 1 / -1 }
+  .ledger-tools select { width: 100% }
+  .ledger-tools label:first-child input { width: 100% }
+  .ledger-table th, .ledger-table td { padding: var(--s2) }
+  .ledger-identity { min-width: 125px }
+  .ledger-identity img { width: 28px }
+  .ledger-identity img { height: 28px }
+}

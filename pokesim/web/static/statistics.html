@@ -18,23 +18,23 @@
 <link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=return-cards-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
-<body data-page="journal">
+<body data-page="stats">
 <a class="skip-link" href="#main">Skip to adventure stats.</a>
 
 <header class="rail">
 <div class="shell rail-inner">
 <a class="brandplate" href="/" aria-label="${brand_label}" title="${brand_label}"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model" id="app-version">${app_version}</span></span></a>
-${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a><a href="${game_base}/pokedex">Pokédex</a><a href="${game_base}/pc">PC</a><a href="${game_base}/trading">Trading</a><a href="${game_base}/journal" aria-current="page">Journal</a></nav>
+${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a><a href="${game_base}/pokedex">Pokédex</a><a href="${game_base}/pc">PC</a><a href="${game_base}/trading">Trading</a><a href="${game_base}/journal">Journal</a><a href="${game_base}/stats" aria-current="page">Stats</a></nav>
 <span class="connection" id="connection"><i class="lamp" aria-hidden="true"></i><span id="status">Connecting</span></span>
 </div>
 </header>
 
 <main id="main" class="shell">
 <header class="identity page-head">
-<div class="who"><p class="micro">The Kanto journal</p><h1>Adventure stats</h1><p class="lede">Your collection, your travels, and the strength built along the way.</p></div>
+<div class="who"><p class="micro">Adventure records</p><h1>Adventure stats</h1><p class="lede">Your collection, your travels, and the strength built along the way.</p></div>
 </header>
 
-<nav class="journal-pages" aria-label="Journal pages"><a href="${game_base}/journal">Entries</a><a href="${game_base}/journal/stats" aria-current="page">Stats</a></nav>
+<nav class="journal-pages" aria-label="Stats pages"><a href="${game_base}/stats" aria-current="page">Overview</a><a href="${game_base}/stats/pokemon">Pokémon</a><a href="${game_base}/stats/items">Items</a></nav>
 
 <section class="statistics-section" aria-labelledby="collection-records-heading">
 <div class="column-head"><h2 class="legend legend--ink" id="collection-records-heading">Overview</h2></div>

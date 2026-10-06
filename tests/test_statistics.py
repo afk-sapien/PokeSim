@@ -128,8 +128,11 @@ def test_stats_routes_are_scoped_and_entries_do_not_load_charts(tmp_path):
     store = Store(tmp_path)
     client = TestClient(create_app(SimpleNamespace(status=lambda: {}), store, base_path='/games/red', adventure_id='red'))
     entries = client.get('/journal').text
-    stats = client.get('/journal/stats').text
-    assert '/games/red/journal/stats' in entries
+    legacy = client.get('/journal/stats', follow_redirects=False)
+    assert legacy.headers['location'] == '/games/red/stats'
+    stats = client.get('/stats').text
+    assert '/games/red/stats' in entries
+    assert 'Journal pages' not in entries
     assert 'progress.js' not in entries
     assert '/games/red/static/statistics.js' in stats
     assert 'aria-current="page">Stats' in stats
