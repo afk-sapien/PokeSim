@@ -3,6 +3,28 @@ from itertools import combinations
 
 from .menus import ChangeBox, DayCare, Storage
 from .training import FIELD_MOVES, identity
+from .ram import calculated_stats, experience_at
+
+
+def retrieval_cost(data, snapshot):
+    total = 0
+    for mon in getattr(snapshot, 'daycare', ()):
+        if mon:
+            growth = data.species[mon.species]['growth']
+            level = max(level for level in range(mon.level, 101) if experience_at(level, growth) <= mon.experience)
+            total += (level - mon.level + 1) * 100
+    return total
+
+
+def branch_parents(data, snapshot, baby, branches):
+    available = [mon for mon in snapshot.party + snapshot.stored if mon.species == baby]
+    if baby != 236:
+        return len(available) >= len(branches)
+    possible = set()
+    for mon in available:
+        stats = calculated_stats(data.species[baby]['stats'], max(20, mon.level + 1), mon.dvs, mon.stat_exp)
+        possible.add(107 if stats[1] < stats[2] else 106 if stats[1] > stats[2] else 237)
+    return branches <= possible
 
 
 def offspring(data, first, second):
@@ -49,15 +71,16 @@ def journey(policy, snapshot, Goal):
                 if (policy.demand.get(baby, 0) and sum(mon.species == baby for mon in snapshot.party + snapshot.stored)
                         <= policy.demand[baby]):
                     missing.add(baby)
-            for baby in babies & {133, 236, 43, 60}:
+            for baby in babies & {133, 236, 43, 60, 79}:
                 branches = {evo['species'] for evo in data.species[baby]['evolutions']}
                 if baby in (43, 60):
                     middle = 44 if baby == 43 else 61
                     branches = {evo['species'] for evo in data.species[middle]['evolutions']}
                     available = sum(mon.species in {baby, middle} for mon in snapshot.party + snapshot.stored)
+                    ready = available >= len(branches - snapshot.owned)
                 else:
-                    available = sum(mon.species == baby for mon in snapshot.party + snapshot.stored)
-                if available < len(branches - snapshot.owned):
+                    ready = branch_parents(data, snapshot, baby, branches - snapshot.owned)
+                if not ready:
                     missing.add(baby)
             for target in missing:
                 choices.append((target, first.box is not None, second.box is not None, identity(first), identity(second)))

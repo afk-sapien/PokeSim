@@ -57,7 +57,7 @@ def journey(policy, snapshot, mem, Goal):
     policy.completed.setdefault('sixteen_badges', snapshot.frame)
     if not snapshot.event('EVENT_OPENED_MT_SILVER'):
         return person('oak', 'Show Professor Oak all sixteen badges', 'OAKS_LAB', 'Oak')
-    if not snapshot.event('EVENT_RED_IN_MT_SILVER'):
+    if 'red' not in policy.completed and not snapshot.event('EVENT_RED_IN_MT_SILVER'):
         return person('red', 'Challenge Red on Mt. Silver', 'SILVER_CAVE_ROOM_3', 'Red')
     policy.completed.setdefault('red', snapshot.frame)
     from .collection import journey as collect

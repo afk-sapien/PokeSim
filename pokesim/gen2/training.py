@@ -71,7 +71,8 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         _, _, species, key, target, item = min(choices)
         project = state['training'] = {'identity': key, 'target': target, 'item': item, 'species': species, 'terminal': terminal_project}
     mon = next((mon for mon in snapshot.party + snapshot.stored if identity(mon) == project['identity']), None)
-    if mon is None or mon.species != project['species'] and not project.get('terminal') or mon.level == 100:
+    if (mon is None or mon.species != project['species'] and not project.get('terminal')
+            or mon.level >= project.get('level_goal', 100)):
         state['training'] = None
         return None
     if project.get('terminal'):
@@ -104,6 +105,9 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     mid = data.map_ids['SILVER_CAVE_ROOM_1']
     from .collection import encounter_points
     points = encounter_points(policy, snapshot, mid, 'grass')
+    if not points:
+        return Goal('collection_train', 'Wait for the training map to finish loading',
+                    data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     if snapshot.map == mid:
         candidates = [(policy.nav.local(snapshot, [point[:2]], policy.memory), point) for point in points
                       if 0 < abs(point[0] - snapshot.x) + abs(point[1] - snapshot.y) <= 3]
@@ -115,7 +119,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
             x, y, _ = points[0]
     else:
         x, y = 9, 31
-    target_name = 'level 100' if project.get('terminal') else data.species[project['target']]['name']
+    target_name = 'level ' + str(project.get('level_goal', 100)) if project.get('terminal') else data.species[project['target']]['name']
     return Goal('collection_train', f'Train {mon.name} toward {target_name}',
                 'SILVER_CAVE_ROOM_1', x, y)
 
