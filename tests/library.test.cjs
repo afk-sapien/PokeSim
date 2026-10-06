@@ -500,3 +500,14 @@ test('running adventure settings allow palettes and explain deferred application
   assert.equal(settings.league_rewards, undefined)
   assert.equal(view.element('#notice').textContent, 'Settings saved. The palette will apply when this adventure reconnects.')
 })
+
+test('settings render existing backups without an adventure variable', async () => {
+  const view = library({page: 'settings', respond(path) {
+    if (path === '/api/v1/backups') return {ok: true, json: async () => ({backups: [
+      {id: 'b'.repeat(32), created_at: 1700000000, size_bytes: 1024},
+    ]})}
+  }})
+  await settle()
+  assert.match(view.element('#backups').innerHTML, /data-delete-backup="b{32}" data-owner>Delete/)
+  assert.match(view.element('#backup-summary').textContent, /1 backup/)
+})

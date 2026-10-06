@@ -1,6 +1,9 @@
 from dataclasses import replace
 
-from playwright.sync_api import expect
+
+def expect(locator):
+    from playwright.sync_api import expect as assertion
+    return assertion(locator)
 
 
 def test_mobile_hold_stops_on_release_and_blur(page, game):
