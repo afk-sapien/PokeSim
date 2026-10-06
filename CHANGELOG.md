@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Reorganize Journal Stats around shared overview totals, durable milestone times, recent progress, and collection highlights. Show detailed charts in open sections, preserve unknown historical times, and label existing power charts as Stat Power.
+- Reorganize Journal Stats around shared overview totals, durable milestone times, recent progress, and collection highlights. Show detailed charts in open sections and combine legendary returns with the return-visit and gift cards, preserve unknown historical times, and label existing power charts as Stat Power.
 
 - Simplify adventure controls with Stop and Download labels, a Settings icon beside Open adventure, and always-visible Archive and Delete actions that save and stop first.
 

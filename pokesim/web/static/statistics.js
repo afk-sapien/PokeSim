@@ -132,22 +132,11 @@
       ? (marathon.last.finished ? (marathon.last.personal_best ? 'Finished · Personal best' : 'Finished') : 'Did not finish') : ''
 
     const returns = data.legendary_returns
-    const panel = document.querySelector('#legendary-returns')
-    panel.hidden = !returns?.enabled || !returns.available
-    if (!panel.hidden) {
-      const names = {144: 'Articuno', 145: 'Zapdos', 146: 'Moltres', 150: 'Mewtwo'}
-      document.querySelector('#legendary-remaining').textContent = number(returns.remaining)
-      const meter = document.querySelector('#legendary-meter')
-      meter.max = returns.interval
-      meter.value = returns.progress
-      document.querySelector('#legendary-ready').textContent = returns.ready.length
-        ? `Ready to revisit: ${returns.ready.map(dex => names[dex]).join(', ')}.`
-        : `${number(returns.steps)} completed steps tracked. Previously acquired legendaries return at their original locations.`
-    }
+    const legendaryAvailable = returns?.enabled && returns.available
     const activities = data.event_returns
     const mew = data.mew_returns
     const activityPanel = document.querySelector('#event-returns')
-    activityPanel.hidden = !activities?.enabled && !mew?.enabled
+    activityPanel.hidden = !activities?.enabled && !mew?.enabled && !legendaryAvailable
     const activityList = document.querySelector('#event-return-list')
     activityList.replaceChildren()
     const labels = {eevee: 'Eevee', dojo: 'Dojo rematch', fossil: 'Fossil expedition', trade_1: 'Mr. Mime exchange', trade_4: 'Farfetch’d exchange', trade_5: 'Lickitung exchange', trade_6: 'Jynx exchange'}
@@ -167,6 +156,17 @@
       value: mew.first_gift ? 'Become Champion' : mew.league_required ? 'Win the League' : number(mew.remaining),
       detail: mew.first_gift ? 'Your first Mew awaits a League victory.' : mew.league_required ? 'Claim another Mew with your next victory.' : 'steps remaining, then a League win',
       remaining: mew.remaining, interval: mew.first_gift ? null : mew.interval})
+    if (legendaryAvailable) {
+      const names = {144: 'Articuno', 145: 'Zapdos', 146: 'Moltres', 150: 'Mewtwo'}
+      const ready = returns.ready.length > 0
+      cards.push({title: 'Legendary returns', key: 'legendary',
+        state: ready ? 'ready' : 'walking', badge: ready ? 'Ready' : 'Walking',
+        value: ready ? 'Ready to revisit' : number(returns.remaining),
+        detail: ready
+          ? `${returns.ready.map(dex => names[dex]).join(', ')} available. ${number(returns.remaining)} steps until the next return.`
+          : 'steps until the next return. Previously acquired legendaries return at their original locations.',
+        remaining: returns.remaining, interval: returns.interval})
+    }
     document.querySelector('#event-return-summary').textContent = `${cards.filter(card => card.state === 'ready').length} ready to revisit`
     for (const card of cards) {
       const element = document.createElement('article')

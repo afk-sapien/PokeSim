@@ -67,10 +67,13 @@ def test_legendary_return_progress_is_readable_and_lists_available_hunts(page, g
                    'tickets': {'150': {'state': 'available', 'cycle': 1}}})
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(url + '/journal/stats')
-    expect(page.locator('#legendary-returns')).to_be_visible()
-    expect(page.locator('#legendary-summary')).to_have_text('750,000 steps until the next return')
-    expect(page.locator('#legendary-ready')).to_have_text('Ready to revisit: Mewtwo.')
-    expect(page.locator('#legendary-meter')).to_have_attribute('value', '250000')
+    card = page.locator('#event-return-list [data-return=legendary]')
+    expect(card).to_be_visible()
+    expect(card).to_contain_text('750,000 steps until the next return')
+    expect(card).to_contain_text('Mewtwo available')
+    expect(card.locator('.return-state')).to_have_text('Ready')
+    expect(card.locator('progress')).to_have_attribute('value', '250000')
+    assert page.locator('#legendary-returns').count() == 0
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
     page.screenshot(path=f'/tmp/pokesim-legendary-returns-{width}.png', full_page=True)
 
@@ -148,6 +151,17 @@ def test_step_activity_and_mew_progress(page, game, width):
     page.reload()
     expect(page.locator('#event-return-list')).to_contain_text('Complete original events')
     data['event_returns'].update(enabled=False)
+    page.reload()
+    expect(page.locator('#event-returns')).not_to_be_visible()
+    data['legendary_returns'] = {'enabled': True, 'available': True, 'ready': [],
+                                 'remaining': 750000, 'interval': 1000000}
+    page.reload()
+    expect(page.locator('#event-returns')).to_be_visible()
+    expect(page.locator('#event-return-list .return-card')).to_have_count(1)
+    expect(page.locator('[data-return="legendary"] .return-value')).to_have_text('750,000')
+    expect(page.locator('[data-return="legendary"] .return-state')).to_have_text('Walking')
+    expect(page.locator('#event-return-summary')).to_have_text('0 ready to revisit')
+    data['legendary_returns']['available'] = False
     page.reload()
     expect(page.locator('#event-returns')).not_to_be_visible()
 
