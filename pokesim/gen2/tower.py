@@ -54,7 +54,7 @@ def select_team(snapshot):
             attacks = [attack_value(data, mon, mid) for mid in list(mon.moves) + upgrades(data, mon, dict(snapshot.items))]
             value *= (max(attacks, default=0) / 200) ** 0.5
             if 105 in mon.moves:
-                value *= 1.35 if 92 in mon.moves else 1.25
+                value *= 1.6 if 92 in mon.moves else 1.3
         return value
     choices = []
     for cap in range(10, 101, 10):
@@ -105,6 +105,14 @@ def journey(policy, snapshot, Goal, *, force=False):
                 return policy.person(snapshot, 'tower_machine', 'Collect a move for the Battle Tower team', area, script)
         if not snapshot.event('EVENT_FOUND_LEFTOVERS_IN_CELADON_CAFE'):
             return Goal('tower_leftovers', 'Collect Leftovers for the Tower team', 'CELADON_CAFE', 7, 2, 'up')
+        berry = policy.data.items['PRZCUREBERRY']
+        mem = Memory(policy.memory, policy.data)
+        # Violet City's tree is number nine. The daily flag gates its native reset.
+        fruit_ready = not mem.byte('wDailyFlags1') & 16 or not mem.byte('wFruitTreeFlags', 1) & 1
+        if (fruit_ready and len(snapshot.pockets['items']) < 20 and not dict(snapshot.items).get(berry)
+                and not any(mon.held_item == berry for mon in snapshot.party + snapshot.stored)):
+            return policy.person(snapshot, 'tower_berry', 'Collect a paralysis-curing berry for the Tower',
+                                 'VIOLET_CITY', 'VioletCityFruitTree')
         selected = select_team(snapshot)
         if not selected:
             return None
@@ -186,7 +194,8 @@ def journey(policy, snapshot, Goal, *, force=False):
         if policy.menu is None:
             policy.menu = Teach(move, slot, replace_move=weakest)
         return Goal('tower_move', 'Prepare attacks for the Tower opponents', name, snapshot.x, snapshot.y)
-    lead = max(range(len(snapshot.party)), key=lambda slot: sum(snapshot.party[slot].stats))
+    lead = max(range(len(snapshot.party)), key=lambda slot: sum(snapshot.party[slot].stats)
+               * (1.3 if {92, 105} <= set(snapshot.party[slot].moves) else 1))
     if lead:
         mon = snapshot.party[lead]
         if policy.menu is None:
@@ -197,6 +206,15 @@ def journey(policy, snapshot, Goal, *, force=False):
         if policy.menu is None:
             policy.menu = Take(0) if snapshot.party[0].held_item else Give(leftovers, 0)
         return Goal('tower_leftovers', 'Equip Leftovers for the Tower challenge', name, snapshot.x, snapshot.y)
+    berry = policy.data.items['PRZCUREBERRY']
+    if dict(snapshot.items).get(berry) and not any(mon.held_item == berry for mon in snapshot.party):
+        candidates = [slot for slot, mon in enumerate(snapshot.party)
+                      if mon.held_item in {0, policy.data.items['EXP_SHARE']} and 105 not in mon.moves]
+        if candidates:
+            slot = max(candidates, key=lambda slot: snapshot.party[slot].stats[1])
+            if policy.menu is None:
+                policy.menu = Take(slot) if snapshot.party[slot].held_item else Give(berry, slot)
+            return Goal('tower_berry', 'Equip a paralysis-curing berry for the Tower', name, snapshot.x, snapshot.y)
     items = set()
     for slot, mon in enumerate(snapshot.party):
         if mon.held_item and mon.held_item in items:

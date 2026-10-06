@@ -62,7 +62,7 @@ def journey(policy, snapshot, Goal):
     project = state.get('breeding')
     if project is None:
         mons = [mon for mon in snapshot.party[1:] + snapshot.stored + tuple(mon for mon in parents if mon)
-                if not mon.egg and not FIELD_MOVES.intersection(mon.moves)]
+                if not mon.egg and (mon.box is not None or not FIELD_MOVES.intersection(mon.moves))]
         choices = []
         for first, second in combinations(mons, 2):
             babies = offspring(data, first, second)

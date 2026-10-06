@@ -48,6 +48,9 @@ def main():
         def focused(snapshot, mem):
             if args.focus in policy.completed:
                 return Goal('collection_wait', 'Focused scenario complete', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
+            if args.focus in {'encounter', 'headbutt', 'rock smash'} and not snapshot.can_catch:
+                goal = policy.storage_goal(snapshot)
+                return Goal('collection_box', 'Make room for the encounter target', goal.map_name, goal.x, goal.y, goal.face)
             if snapshot.map == data.map_ids['POKECENTER_2F']:
                 return Goal('return_from_cable', 'Return downstairs after the Cable Club', 'POKECENTER_2F', 0, 7)
             if task:
