@@ -21,7 +21,7 @@ def selected(snapshot, preferences, key):
     return matches[0]
 
 
-def begin(emu, key, tid):
+def begin(emu, key, tid, *, time_capsule=False):
     saved = emu.store.get(KEY)
     if saved and saved['id'] == tid:
         if saved.get('trade_key') != key:
@@ -36,8 +36,16 @@ def begin(emu, key, tid):
     snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
     if selected(snapshot, emu.store.trade_preferences(), key)[0] != 'box':
         raise ValueError('Choose a boxed offer. Active party members are protected')
+    if time_capsule:
+        from .timecapsule import compatible, unlocked
+        if not unlocked(snapshot, Memory(emu.pb.memory, emu.data)):
+            raise ValueError('The Time Capsule opens the day after meeting Bill')
+        if not compatible(selected(snapshot, emu.store.trade_preferences(), key)[2], emu.data):
+            raise ValueError('The selected Pokémon cannot enter the Time Capsule')
     state = {'id': tid, 'trade_key': key, 'phase': 'travelling', 'started_frame': emu.frame,
-             'deadline': time.time() + 1800, 'party_slot': None}
+             'deadline': time.time() + 1800, 'party_slot': None, 'time_capsule': time_capsule}
+    if time_capsule:
+        state['original_party'] = [identity(mon.to_dict()) for mon in snapshot.party]
     emu.store.set(KEY, state)
     emu.preparation = Preparation(emu, state)
     return state
@@ -81,14 +89,17 @@ class Preparation:
         if '┌' in snapshot.tiles[12] or mem.byte('wScriptRunning'):
             return Action('a', 8, 32)
         location, slot, mon = selected(snapshot, emu.store.trade_preferences(), state['trade_key'])
-        if location == 'party':
+        from .timecapsule import compatible
+        incompatible = next((i for i, member in enumerate(snapshot.party) if not compatible(member, data)), None)
+        needs_storage = location != 'party' or state.get('time_capsule') and incompatible is not None
+        if location == 'party' and not state.get('time_capsule'):
             from .cable_verification import available_trade_item
             item = available_trade_item(data, mon.species, mon.held_item, dict(snapshot.items))
             if item:
                 self.menu = Give(item, slot)
                 return Action(None, 0, 24)
         surf = any(57 in mon.moves for mon in snapshot.party) and bool(snapshot.badges & 8)
-        if location == 'party':
+        if not needs_storage:
             target, point = data.map_ids['POKECENTER_2F'], (3, 4)
         else:
             if self.center is None:
@@ -112,9 +123,11 @@ class Preparation:
             return policy.walk(snapshot, emu.pb.memory, path)
         if path is None:
             return Action(None, 0, 24)
-        if location == 'party':
+        if not needs_storage:
             state.update(phase='ready', party_slot=slot)
             emu.snapshot = snapshot
+            if state.get('original_party'):
+                policy.collection['time_capsule_restore'] = state['original_party']
             source = emu._autosave(trade_prepare=True)
             if source is None:
                 raise ValueError('Cannot checkpoint the prepared adventure')
@@ -124,7 +137,13 @@ class Preparation:
             return Action(None, 0, 0)
         if mem.byte('wPlayerDirection') & 12 != 4:
             return Action('up', 8, 16)
-        if len(snapshot.party) == 6:
+        if state.get('time_capsule') and incompatible is not None and len(snapshot.party) > 1:
+            if snapshot.box_counts[snapshot.active_box] >= 20:
+                box = next(i for i, count in enumerate(snapshot.box_counts) if count < 20)
+                self.menu = ChangeBox(box)
+            else:
+                self.menu = Storage('DEPOSIT', incompatible, len(snapshot.party))
+        elif len(snapshot.party) == 6:
             if snapshot.box_counts[snapshot.active_box] >= 20:
                 box = next(i for i, count in enumerate(snapshot.box_counts) if count < 20)
                 self.menu = ChangeBox(box)

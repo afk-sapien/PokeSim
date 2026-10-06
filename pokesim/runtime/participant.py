@@ -298,7 +298,8 @@ class Participant:
                 raise ValueError('Another interaction already reserves this adventure')
             record = _save(self.store, {'id': tid, 'phase': 'preparing', 'decision': None,
                 'plan_digest': plan_digest, 'selected_key': selected,
-                'was_paused': self.emu.paused, 'was_manual': self.emu.manual_mode})
+                'was_paused': self.emu.paused, 'was_manual': self.emu.manual_mode,
+                'time_capsule': bool(data.get('time_capsule'))})
         from .preparation import begin
         prepared = begin(self.emu, selected, tid)
         if prepared.get('phase') == 'failed':
@@ -386,6 +387,15 @@ class Participant:
         from ..league_partners import validate
         from ..trade.preferences import identity
         from ..ram import individual_data
+        if record.get('time_capsule'):
+            from ..gen2.timecapsule_conversion import convert
+            from ..gen2.timecapsule_records import bundle, to_gen1
+            game_data = bundle(self.runtime.settings.game_data_dir)
+            league = to_gen1(data.get('incoming_league_record'), data['incoming'], game_data)
+            converted = convert({key: bytes.fromhex(value) for key, value in data['incoming'].items()}, 1, game_data)
+            data = {**data, 'incoming': {key: value.hex() for key, value in converted.items()},
+                    'incoming_league_record': league}
+            record['incoming_display'] = _traded_mon(data['incoming'])
         incoming_mon = individual_data(bytes.fromhex(data['incoming']['struct']))
         incoming_mon['species'] = bytes.fromhex(data['incoming']['struct'])[0]
         from ..ram import decode_text
@@ -416,8 +426,12 @@ class Participant:
             side = SimpleNamespace(pb=pb, sym=symbols, frame=0, attached=False, rom_bytes=rom,
                 source_center_map=source.map,
                 counts=result['evidence']['transport'], get=lambda name: pb.memory[symbols[name][1]])
-            expected, _ = verify_exchange(side, before,
-                {key: bytes.fromhex(value) for key, value in incoming.items()}, record['source']['party_slot'], boxes)
+            received = {key: bytes.fromhex(value) for key, value in incoming.items()}
+            if record.get('time_capsule'):
+                from ..gen2.timecapsule_conversion import convert
+                from ..gen2.timecapsule_records import bundle
+                received = convert(received, 1, bundle(self.runtime.settings.game_data_dir))
+            expected, _ = verify_exchange(side, before, received, record['source']['party_slot'], boxes)
             verify_restarts(side, state, save, expected)
         finally:
             pb.stop(save=False)

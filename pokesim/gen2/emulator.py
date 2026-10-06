@@ -369,7 +369,7 @@ class Emulator:
                 path.unlink()
                 path.with_suffix('.json').unlink(missing_ok=True)
             for key in ('trade_barrier', 'custom-reward-barrier-v1', 'custom-reward-pending-v1',
-                        'league-rewards-v1', 'gen2-mythical-gift-v1', 'gen2-league-partners-v1',
+                        'league-rewards-v1', 'gen2-mythical-gift-v1', 'gen2-gs-ball-distribution-v1', 'gen2-league-partners-v1',
                         'gen2-mew-returns-v1'):
                 self.store.set(key, None)
             self.store.clear_trade_preferences()
@@ -408,8 +408,9 @@ class Emulator:
                     continue
                 if self.frame - getattr(self, '_reward_check_frame', -300) >= 300:
                     from .rewards import deliver
+                    from .celebi import activate
                     self._reward_check_frame = self.frame
-                    if deliver(self):
+                    if activate(self) or deliver(self):
                         continue
                 if self.preparation and not self.paused:
                     snapshot = read_snapshot(self.pb.memory, self.data, self.frame)

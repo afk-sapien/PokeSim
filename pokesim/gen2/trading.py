@@ -16,6 +16,8 @@ from .cable_verification import available_trade_item, continue_save, evolved_spe
 from .preparation import begin
 from .ram import Memory, read_snapshot
 from .web import live_status
+from .timecapsule import compatible, unlocked
+from .timecapsule_conversion import convert
 
 
 def status(emu, payload, adventure_id):
@@ -29,7 +31,8 @@ def status(emu, payload, adventure_id):
 
 def offers(emu, payload):
     snapshot = emu.snapshot
-    if snapshot is None or emu.policy.in_league(snapshot):
+    if (snapshot is None or emu.policy.in_league(snapshot) or emu.policy.collection.get('tower')
+            or emu.policy.collection.get('contest') or emu.policy.collection.get('time_capsule_restore')):
         return []
     party = payload.get('party') or []
     stored = (payload.get('storage') or {}).get('pokemon') or []
@@ -45,7 +48,8 @@ def offers(emu, payload):
             continue
         equip = available_trade_item(emu.data, mon['species'], mon.get('held_item', 0), dict(snapshot.items))
         raw = bytes([mon['species'], equip or mon.get('held_item', 0)])
-        result.append({**mon, 'last_copy': held[mon['species']] == 1,
+        actual = next(member for member in snapshot.stored if member.box + 1 == mon['box'] and member.position + 1 == mon['position'])
+        result.append({**mon, 'time_capsule_compatible': compatible(actual, emu.data), 'last_copy': held[mon['species']] == 1,
                        'arrived_dex': evolved_species(raw, emu.data), 'equip_item': equip, 'cartridge_generation': 2})
     return result
 
@@ -64,6 +68,7 @@ class Participant(BaseParticipant):
         return {**payload, 'adventure_id': self.bootstrap.adventure_id,
                 'generation': self.bootstrap.generation, 'cartridge_generation': 2,
                 'offers': offers(self.emu, payload), 'revision': digest(payload),
+                'time_capsule_ready': unlocked(self.emu.snapshot, Memory(self.emu.pb.memory, self.emu.data)),
                 'holding': bool(self.store.get('trade_hold'))}
 
     def collection_demand(self, data):
@@ -92,8 +97,9 @@ class Participant(BaseParticipant):
                 raise ValueError('Another interaction already reserves this adventure')
             record = _save(self.store, {'id': tid, 'phase': 'preparing', 'decision': None,
                 'plan_digest': plan_digest, 'selected_key': selected, 'cartridge_generation': 2,
-                'was_paused': self.emu.paused, 'was_manual': self.emu.manual_mode})
-        prepared = begin(self.emu, selected, tid)
+                'was_paused': self.emu.paused, 'was_manual': self.emu.manual_mode,
+                'time_capsule': bool(data.get('time_capsule'))})
+        prepared = begin(self.emu, selected, tid, time_capsule=record.get('time_capsule', False))
         if prepared['phase'] == 'failed':
             raise ValueError(prepared.get('error', 'Trade preparation failed'))
         if prepared['phase'] != 'ready':
@@ -113,6 +119,8 @@ class Participant(BaseParticipant):
         snapshot = read_snapshot(self.emu.pb.memory, self.emu.data, self.emu.frame)
         if snapshot.map != self.emu.data.map_ids['POKECENTER_2F'] or snapshot.in_battle:
             raise ValueError('Prepared adventure is not in a Pokémon Center')
+        if prepared.get('original_party'):
+            record['time_capsule_original'] = prepared['original_party']
         record.update(phase='prepared', source_name=source.name, source_metadata=self.store.checkpoint_metadata(source),
                       source_center_map=snapshot.map, outgoing_display=display(row, self.emu.data),
                       source={'adventure_id': self.bootstrap.adventure_id, 'rom_path': self.runtime.settings.rom_path,
@@ -127,11 +135,16 @@ class Participant(BaseParticipant):
 
     def incoming_record(self, record, data):
         incoming = {key: bytes.fromhex(value) for key, value in data['incoming'].items()}
+        incoming = convert(incoming, 2, self.emu.data)
         record['incoming_display'] = display(incoming, self.emu.data)
         from .league import validate
         from .ram import decode_mon
         mon = decode_mon(incoming['struct'], incoming['nickname'], self.emu.data)
-        record['incoming_league_record'] = validate(data.get('incoming_league_record'), self.emu.data, mon.to_dict())
+        league = data.get('incoming_league_record')
+        if record.get('time_capsule'):
+            from .timecapsule_records import to_gen2
+            league = to_gen2(league, data['incoming'], self.emu.data)
+        record['incoming_league_record'] = validate(league, self.emu.data, mon.to_dict())
 
     def verify_result(self, record, result, state, save, incoming):
         data = self.emu.data
@@ -144,9 +157,10 @@ class Participant(BaseParticipant):
             if snapshot.map != data.map_ids['POKECENTER_2F'] or snapshot.in_battle:
                 raise ValueError('Prepared source is outside the Pokémon Center')
             received = {key: bytes.fromhex(value) for key, value in incoming.items()}
+            received = convert(received, 2, data)
             pb.load_state(io.BytesIO(state))
             side = SimpleNamespace(pb=pb, data=data, frame=0)
-            expected, _ = verify_exchange(side, before, received, record['source']['party_slot'], snapshot)
+            expected, _ = verify_exchange(side, before, received, record['source']['party_slot'], snapshot, time_capsule=record.get('time_capsule', False))
             if Memory(pb.memory, data).byte('wLinkMode') != 0:
                 raise ValueError('The returned checkpoint is still in link mode')
             restarted = continue_save(rom, save, data)
@@ -154,16 +168,31 @@ class Participant(BaseParticipant):
                 if party(restarted, data) != expected:
                     raise ValueError('Cartridge save differs from the staged checkpoint')
                 verify_exchange(SimpleNamespace(pb=restarted, data=data, frame=0), before, received,
-                                record['source']['party_slot'], snapshot)
+                                record['source']['party_slot'], snapshot, time_capsule=record.get('time_capsule', False))
             finally:
                 restarted.stop(save=False)
         finally:
             pb.stop(save=False)
 
-    def release(self, data):
-        record = super().release(data)
+    def restore_team(self, record):
+        original = record.get('time_capsule_original')
+        if original and not record.get('team_restore_scheduled'):
+            self.emu.policy.collection['time_capsule_restore'] = original
+            record['team_restore_scheduled'] = True
+            self.emu._autosave()
+            _save(self.store, record)
         self.emu.preparation = None
         return record
+
+    def release(self, data):
+        return self.restore_team(super().release(data))
+
+    def abort(self, data):
+        preparation = self.store.get('interaction_preparation') or {}
+        record = super().abort(data)
+        if preparation.get('original_party'):
+            record['time_capsule_original'] = preparation['original_party']
+        return self.restore_team(record)
 
 
 def install(app, runtime):

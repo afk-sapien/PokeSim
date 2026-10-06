@@ -60,6 +60,16 @@ def wanted(policy, snapshot, species):
 
 def journey(policy, snapshot, mem, Goal):
     data, state = policy.data, policy.collection
+    from .contest import journey as contest
+    if state.get('contest'):
+        goal = contest(policy, snapshot, Goal)
+        if goal:
+            return goal
+    from .tower import journey as tower
+    if state.get('tower'):
+        goal = tower(policy, snapshot, Goal)
+        if goal:
+            return goal
     if not snapshot.can_catch:
         if any(count < 20 for count in snapshot.box_counts):
             goal = policy.storage_goal(snapshot)
@@ -92,10 +102,25 @@ def journey(policy, snapshot, mem, Goal):
         if not snapshot.event('EVENT_BEAT_CHAMPION_LANCE'):
             return policy.person(snapshot, 'funds_lance', 'Challenge Champion Lance again', 'LANCES_ROOM', 'LancesRoomLanceScript')
         return Goal('funds_champion', 'Record another League victory', 'HALL_OF_FAME', 4, 7)
+    from .ruins import journey as ruins
+    goal = ruins(policy, snapshot, Goal)
+    if goal:
+        return goal
     from .quests import gifts
     gift = gifts(policy, snapshot, Goal)
     if gift:
         return gift
+    if 'tower' not in policy.completed:
+        goal = tower(policy, snapshot, Goal)
+        if goal:
+            return goal
+    from .celebi import journey as celebi
+    goal = celebi(policy, snapshot, Goal)
+    if goal:
+        return goal
+    goal = contest(policy, snapshot, Goal)
+    if goal:
+        return goal
     from .breeding import journey as breed
     goal = breed(policy, snapshot, Goal)
     if goal:
@@ -163,6 +188,9 @@ def journey(policy, snapshot, mem, Goal):
             target = dict(min(choices, key=lambda row: row[:6])[-1], started=policy.decisions)
             state['target'] = target
         else:
+            goal = tower(policy, snapshot, Goal)
+            if goal:
+                return goal
             goal = training(policy, snapshot, mem, Goal, terminal=True)
             if goal:
                 return goal
@@ -213,6 +241,10 @@ def hunt(policy, snapshot, Goal):
 
 def arrive(policy, snapshot):
     key = policy.goal.key
+    from .teams import arrive as team
+    result = team(policy, snapshot)
+    if result is not None:
+        return result
     from .breeding import arrive as breed
     result = breed(policy, snapshot)
     if result is not None:

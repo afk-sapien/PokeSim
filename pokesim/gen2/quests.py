@@ -32,6 +32,10 @@ def gifts(policy, snapshot, Goal):
 
 
 def legends(policy, snapshot, Goal):
+    from .celebi import journey
+    celebi = journey(policy, snapshot, Goal)
+    if celebi:
+        return celebi
     data = policy.data
     policy.collection['phase'] = 'legendary'
     if not snapshot.can_catch:

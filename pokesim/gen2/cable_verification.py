@@ -46,7 +46,7 @@ def available_trade_item(data, species, held_item, inventory):
     return None
 
 
-def verify_exchange(side, before, incoming, slot, source_snapshot):
+def verify_exchange(side, before, incoming, slot, source_snapshot, *, time_capsule=False):
     after = party(side.pb, side.data)
     checked(len(after) == len(before), 'Trade changed party size')
     checked(after[:-1] == before[:slot] + before[slot + 1:], 'Untraded party members changed')
@@ -60,7 +60,8 @@ def verify_exchange(side, before, incoming, slot, source_snapshot):
             'Trade changed moves, identity, training or caught data')
     checked(target[27] == 70, 'Trade did not reset friendship normally')
     if species == source[0]:
-        checked(target[32:] == source[32:], 'Trade changed battle stats or health')
+        checked(target[32] == source[32] and target[34:] == source[34:]
+                and (time_capsule or target[33] == source[33]), 'Trade changed battle stats or health')
     nickname_changed = (species != source[0]
                         and side.data.text(incoming['nickname']) == side.data.species[source[0]]['name'].upper()
                         and side.data.text(received['nickname']) == side.data.species[species]['name'].upper())
