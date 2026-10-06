@@ -22,7 +22,7 @@ def main():
     parser.add_argument('--frames', type=int, default=60000)
     parser.add_argument('--starter', default='cyndaquil')
     parser.add_argument('--until', default='')
-    parser.add_argument('--focus', choices=('ruins', 'tower', 'celebi', 'contest', 'gifts', 'legends', 'stones', 'breeding', 'encounter', 'headbutt', 'rock smash'))
+    parser.add_argument('--focus', choices=('ruins', 'tower', 'celebi', 'contest', 'gifts', 'legends', 'stones', 'trade_items', 'breeding', 'encounter', 'headbutt', 'rock smash'))
     parser.add_argument('--species', type=int)
     parser.add_argument('--real-clock', action='store_true', help='Use the checkpoint real-time clock instead of freezing it')
     parser.add_argument('--stall-frames', type=int, default=12000)

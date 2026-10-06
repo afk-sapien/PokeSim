@@ -86,7 +86,10 @@ def journey(policy, snapshot, mem, Goal):
     if funding is not None and snapshot.hall_of_fame_count >= funding:
         state.pop('funding', None)
         funding = None
-    if funding is None and snapshot.money < 5000 and sum(count for _, count in snapshot.pockets['balls']) < 4:
+    from .breeding import retrieval_cost
+    fees = retrieval_cost(data, snapshot)
+    if funding is None and (snapshot.money < 5000 and sum(count for _, count in snapshot.pockets['balls']) < 4
+                            or fees and snapshot.money < fees + 1000):
         state['funding'] = funding = snapshot.hall_of_fame_count + 1
     if funding is not None:
         state['phase'] = 'league'
@@ -110,6 +113,10 @@ def journey(policy, snapshot, mem, Goal):
     gift = gifts(policy, snapshot, Goal)
     if gift:
         return gift
+    from .quests import trade_items
+    goal = trade_items(policy, snapshot, Goal)
+    if goal:
+        return goal
     if 'tower' not in policy.completed:
         goal = tower(policy, snapshot, Goal)
         if goal:

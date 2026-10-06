@@ -53,6 +53,8 @@ class Teach:
                 if action == 'a':
                     self.phase = 'pack'
                 return action or 'b'
+            if '┌' in rows[12] or any(label in text for label in ('TURN OFF', 'CHANGE BOX', 'CANCEL')):
+                return 'b'
             return 'start'
         if self.phase == 'pack':
             if not any('▶' in row for row in rows[:12]):
