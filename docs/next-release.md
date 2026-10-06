@@ -1,6 +1,6 @@
-# Next release candidate
+# PokeSim 0.4.18 feature details
 
-Target: 0.4.18. This work is not published yet.
+Published as [PokeSim 0.4.18](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.18).
 
 ## Adventure Stats
 

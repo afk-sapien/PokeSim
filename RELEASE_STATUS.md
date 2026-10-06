@@ -1,23 +1,31 @@
-# Release status: 0.4.18 candidate
+# Release status: 0.4.18 published
 
-The 0.4.18 candidate combines [repository cleanup #46](https://github.com/afk-sapien/PokeSim/pull/46)
-and [feature and release work #47](https://github.com/afk-sapien/PokeSim/pull/47).
-The latest published release remains [0.4.17](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.17).
-No 0.4.18 tag or public downloads have been published yet.
+[PokeSim 0.4.18](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.18)
+combines [repository cleanup #46](https://github.com/afk-sapien/PokeSim/pull/46)
+and [feature release #47](https://github.com/afk-sapien/PokeSim/pull/47).
+Both PRs passed all 24 checks before merging. Core remains pinned at 0.1.4.
 
-See the [release notes](docs/release-notes.md) for the combined changes and
-[implementation details](docs/next-release.md) for their limits. Core remains at 0.1.4.
+The release adds dedicated statistics pages, milestone times, shiny collection
+tracking and protection, move-aware Battle Power, smarter TM investment,
+renewable Champion supplies, item artwork, simpler adventure controls, mobile
+input improvements, audio-state fixes, and live palettes. See the
+[release notes](docs/release-notes.md) and
+[detailed feature scope](docs/next-release.md).
 
-The Tynet preview includes live palettes and the complete feature set. Its latest
-local regression run passed 1,781 tests with 50 skips, and all five saved adventures
-passed checkpoint validation before deployment. Live palette checks preserved
-emulator state, paused frame counts, and worker continuity.
+The [publication receipt](docs/validation/release-0.4.18.json) records the tagged
+source revision, image digest, download checksums, and publication workflow.
+The tagged source passed installation checks on Windows, Intel and Apple Silicon
+macOS, and x86-64 and ARM Linux. Python checks passed on 3.11, 3.12, and 3.14.
+The complete local Chromium suite passed 118 cases. The exact normal CI command
+passed 1,776 tests with 168 skips, while the earlier full non-browser run including
+private-ROM checks passed 1,781 tests with 50 skips.
 
-Release validation is in progress. The feature PR's initial GitHub checks exposed
-an eager import of optional Playwright in normal test collection. That import now
-follows the existing lazy browser assertion pattern. The cleanup PR's prior jobs
-mostly failed to acquire hosted runners and have been restarted. A green local
-run does not substitute for the full cross-platform and browser checks.
+Release preparation fixed optional Playwright loading during normal test
+collection and a Settings rendering error when saved backups exist. GitHub's
+canceled cleanup jobs were rerun after hosted runners became available. The
+publishing workflow verified the container, anonymous registry access, and every
+uploaded asset before making the release public. Public installer and Compose
+downloads were checked again against the published manifest.
 
 ## Known limits, deliberately not addressed here
 

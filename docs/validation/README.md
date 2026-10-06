@@ -6,6 +6,9 @@ not live status or substitutes for executable regression tests.
 
 ## Retained records
 
+- [0.4.18 publication receipt](release-0.4.18.json): combined release, source revision,
+  image digest, public download checks, and cross-platform validation.
+
 - [0.4.17 publication receipt](release-0.4.17.json): source revision, image digest,
   publication checks, and supported installation results.
 - [0.4.17 candidate review](release-candidate-0417-20261003.md): detailed checks
