@@ -153,6 +153,9 @@ def arrive(policy, snapshot):
 
 
 def stones(policy, snapshot, Goal):
+    if not snapshot.event('EVENT_TOHJO_FALLS_MOON_STONE'):
+        return policy.person(snapshot, 'collection_stone', 'Collect the Moon Stone in Tohjo Falls',
+                             'TOHJO_FALLS', 'TohjoFallsMoonStone')
     requirements = [(108, 'EVERSTONE'), (43, 'LEAF_STONE'), (120, 'WATER_STONE'),
                     (37 if policy.data.game == 'silver' else 58, 'FIRE_STONE'), (172, 'THUNDERSTONE')]
     for species, item in requirements:

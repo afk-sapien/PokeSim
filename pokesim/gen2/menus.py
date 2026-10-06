@@ -33,6 +33,7 @@ class Teach:
     slot: int
     phase: str = 'open'
     steps: int = 0
+    replace_move: int | None = None
 
     def step(self, snapshot, mem):
         self.steps += 1
@@ -68,13 +69,20 @@ class Teach:
             if action:
                 return action
             aliases = snapshot.data.items
-            key = label.replace(' ', '_').replace('-', '_')
+            key = snapshot.data.moves[self.move].get('constant', label.replace(' ', '_').replace('-', '_'))
             item = aliases.get('TM_' + key, aliases.get('HM_' + key))
             target = next((i for i in range(1, 58)
                            if aliases.get(f'TM{i:02d}' if i <= 50 else f'HM{i - 50:02d}') == item), 57)
-            visible = [int(m[2]) + (50 if m[1] else 0) for row in rows[:12]
+            visible = [(int(m[2]) + (50 if m[1] else 0), index) for index, row in enumerate(rows[:12])
                        if (m := re.match(r'(H?)(\d+)[ ▶▷]', row[5:]))]
-            return 'up' if visible and target < min(visible) or selected(rows) == 'CANCEL' else 'down'
+            index = next((index for number, index in visible if number == target), None)
+            cursor = next((i for i, row in enumerate(rows[:12]) if '▶' in row), None)
+            if index is not None and cursor is not None:
+                if index == cursor:
+                    self.phase = 'use'
+                    return 'a'
+                return 'down' if index > cursor else 'up'
+            return 'up' if visible and target < min(number for number, _ in visible) or selected(rows) == 'CANCEL' else 'down'
         if self.phase == 'use':
             if 'USE' in text:
                 self.phase = 'confirm'
@@ -99,6 +107,8 @@ class Teach:
                 mon = snapshot.party[self.slot]
                 protected = {15, 19, 57, 70, 148, 250, 127}
                 target = min(range(4), key=lambda i: 999 if mon.moves[i] in protected else snapshot.data.moves.get(mon.moves[i], {}).get('power', 0)) + 1
+                if self.replace_move in mon.moves and self.replace_move not in protected:
+                    target = mon.moves.index(self.replace_move) + 1
                 cursor = mem.byte('wMenuCursorY')
                 return 'a' if cursor == target else 'down' if cursor < target else 'up'
             return 'a'
@@ -318,6 +328,8 @@ class Remedy:
                 if action == 'a':
                     self.phase = 'pack'
                 return action or 'wait'
+            if not snapshot.in_battle and ('┌' in rows[12] or any(label in text for label in ('TURN OFF', 'CHANGE BOX', 'CANCEL'))):
+                return 'b'
             return 'a' if snapshot.in_battle else 'start'
         if self.phase == 'pack':
             if 'USE' in text:
@@ -330,7 +342,7 @@ class Remedy:
             label = snapshot.data.item_names[self.item].upper()
             return choose(rows, label, exact=True) or 'down'
         if self.phase == 'party':
-            if 'CANCEL' in text and '▶' in text and '/' in text:
+            if 'CANCEL' in text and '▶' in text and ('/' in text or 'ABLE' in text):
                 cursor = next((i // 2 for i, row in enumerate(rows) if '▶' in row), 0)
                 return 'a' if cursor == self.slot else 'down' if cursor < self.slot else 'up'
             return 'a'
@@ -358,7 +370,9 @@ class ChangeBox:
             self.phase = 'boxes'
             return choose(rows, 'CHANGE BOX') or 'a'
         if self.phase == 'open':
-            return (choose(rows, 'CANCEL') or 'b') if 'STATS' in text else 'a' if 'BOX is full' in text else 'b'
+            if 'STATS' in text:
+                return choose(rows, 'CANCEL') or 'b'
+            return 'b' if 'CANCEL' in text or 'PACK' in text else 'a'
         if 'SWITCH' in text and 'NAME' in text:
             self.phase = 'save'
             return choose(rows, 'SWITCH') or 'a'
@@ -564,6 +578,8 @@ class Give:
                 if action == 'a':
                     self.phase = 'pack'
                 return action or 'wait'
+            if '┌' in rows[12] or any(label in text for label in ('TURN OFF', 'CHANGE BOX', 'CANCEL')):
+                return 'b'
             return 'start'
         if self.phase == 'pack':
             if 'GIVE' in text:
@@ -603,6 +619,8 @@ class Take:
                 if action == 'a':
                     self.phase = 'party'
                 return action or 'wait'
+            if '┌' in rows[12] or any(label in text for label in ('TURN OFF', 'CHANGE BOX', 'CANCEL')):
+                return 'b'
             return 'start'
         if 'TAKE' in text:
             return choose(rows, 'TAKE', exact=True) or 'a'

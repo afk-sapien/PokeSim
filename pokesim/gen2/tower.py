@@ -1,7 +1,49 @@
 """Prepare a legal Crystal Battle Tower team and play a seven-opponent challenge."""
-from .menus import Take, Teach, choose
-from .ram import Memory
+from itertools import combinations
+from types import SimpleNamespace
+
+from .menus import Give, Lead, Take, Teach, choose
+from .ram import Memory, calculated_stats
 from .teams import assemble, key
+
+MACHINES = ((70, 'HM04'), (57, 'HM03'), (19, 'HM02'), (94, 'TM29'), (89, 'TM26'), (188, 'TM36'), (247, 'TM30'))
+
+
+def attack_value(data, mon, mid):
+    move = data.moves.get(mid, {})
+    power = move.get('power', 0)
+    if not power:
+        return 0
+    kind = move['type']
+    attack = mon.stats[1 if kind < 20 else 4]
+    stab = 1.5 if kind in data.species[mon.species]['types'] else 1
+    score = power * attack / mon.level * stab * move.get('accuracy', 100) / 100
+    if move.get('effect') == 'EFFECT_STATIC_DAMAGE':
+        score = power * 250 / mon.level
+    if move.get('effect') == 'EFFECT_LEVEL_DAMAGE':
+        score = 250
+    if move.get('effect') in {'EFFECT_EXPLOSION', 'EFFECT_SELFDESTRUCT'}:
+        score *= 0.1
+    if move.get('effect') in {'EFFECT_RECHARGE', 'EFFECT_RAZOR_WIND', 'EFFECT_SOLARBEAM', 'EFFECT_FLY', 'EFFECT_DIG'}:
+        score *= 0.6
+    return score
+
+
+def upgrades(data, mon, inventory):
+    return [move for move, item in MACHINES if inventory.get(data.items[item])
+            and move in data.species[mon.species]['machines'] and move not in mon.moves]
+
+
+def forecast(mon, cap):
+    data = getattr(mon, 'data', None)
+    if not data:
+        return mon
+    species = mon.species
+    for _ in range(2):
+        species = next((evo['species'] for evo in data.species[species]['evolutions']
+                        if evo['method'] == 'level' and int(evo['requirements'][0]) <= cap), species)
+    return SimpleNamespace(data=data, species=species, level=cap, moves=mon.moves,
+        stats=calculated_stats(data.species[species]['stats'], cap, mon.dvs, mon.stat_exp))
 
 
 def select_team(snapshot):
@@ -9,40 +51,44 @@ def select_team(snapshot):
         value = (sum(mon.stats) - mon.level - 35) / mon.level
         data = getattr(mon, 'data', None)
         if data:
-            attacks = []
-            for mid in mon.moves:
-                move = data.moves.get(mid, {})
-                power = move.get('power', 0)
-                if not power:
-                    continue
-                kind = move['type']
-                attack = mon.stats[1 if kind < 20 else 4]
-                stab = 1.5 if kind in data.species[mon.species]['types'] else 1
-                score = power * attack / mon.level * stab * move.get('accuracy', 100) / 100
-                if move.get('effect') == 'EFFECT_STATIC_DAMAGE':
-                    score = power * 250 / mon.level
-                if move.get('effect') == 'EFFECT_LEVEL_DAMAGE':
-                    score = 250
-                if move.get('effect') in {'EFFECT_EXPLOSION', 'EFFECT_SELFDESTRUCT'}:
-                    score *= 0.1
-                attacks.append(score)
+            attacks = [attack_value(data, mon, mid) for mid in list(mon.moves) + upgrades(data, mon, dict(snapshot.items))]
             value *= (max(attacks, default=0) / 200) ** 0.5
+            if 105 in mon.moves:
+                value *= 1.35 if 92 in mon.moves else 1.25
         return value
     choices = []
     for cap in range(10, 101, 10):
-        candidates = sorted((mon for mon in snapshot.party + snapshot.stored
-                             if not mon.egg and cap - 10 < mon.level <= cap
-                             and (cap >= 70 or mon.species not in {150, 151, 249, 250, 251})),
-                            key=strength, reverse=True)
-        team = []
-        for mon in candidates:
-            if mon.species not in {member.species for member in team}:
-                team.append(mon)
-                if len(team) == 3:
-                    break
-        if len(team) == 3:
-            choices.append((sum(strength(mon) for mon in team), cap, team))
-    return max(choices, key=lambda row: row[:2])[1:] if choices else None
+        candidates = []
+        for mon in snapshot.party + snapshot.stored:
+            if mon.egg or not cap - 20 < mon.level <= cap or cap < 70 and mon.species in {150, 151, 249, 250, 251}:
+                continue
+            expected = forecast(mon, cap)
+            score = strength(expected) * (1 - (cap - mon.level) * 0.01)
+            candidates.append((score, mon, expected))
+        unique = {}
+        for row in sorted(candidates, key=lambda row: row[0], reverse=True):
+            unique.setdefault(row[2].species, row)
+        candidates = list(unique.values())[:12]
+        for rows in combinations(candidates, 3):
+            if len({row[2].species for row in rows}) != 3:
+                continue
+            data = getattr(rows[0][2], 'data', None)
+            exposed = 0
+            if data:
+                for attack in {kind for pair in data.matchups for kind in pair}:
+                    factors = []
+                    for _, _, mon in rows:
+                        factor = 1
+                        for kind in set(data.species[mon.species]['types']):
+                            factor *= data.matchups.get((attack, kind), 1)
+                        factors.append(factor)
+                    exposed += sum(value > 1 for value in factors) >= 2 and min(factors) >= 1
+            score = sum(row[0] for row in rows) * max(0.4, 1 - exposed * 0.12)
+            choices.append((score, -cap, [row[1] for row in rows]))
+    if not choices:
+        return None
+    _, cap, team = max(choices, key=lambda row: row[:2])
+    return -cap, team
 
 
 def journey(policy, snapshot, Goal, *, force=False):
@@ -52,6 +98,13 @@ def journey(policy, snapshot, Goal, *, force=False):
     if state is None:
         if not force and policy.decisions < policy.collection.get('tower_after', 0):
             return None
+        for flag, area, script in [('EVENT_GOT_TM29_PSYCHIC', 'MR_PSYCHICS_HOUSE', 'MrPsychic'),
+                                    ('EVENT_VICTORY_ROAD_TM_EARTHQUAKE', 'VICTORY_ROAD', 'VictoryRoadTMEarthquake'),
+                                    ('EVENT_GOT_TM36_SLUDGE_BOMB', 'ROUTE_43_GATE', 'OfficerScript_GuardWithSludgeBomb')]:
+            if not snapshot.event(flag):
+                return policy.person(snapshot, 'tower_machine', 'Collect a move for the Battle Tower team', area, script)
+        if not snapshot.event('EVENT_FOUND_LEFTOVERS_IN_CELADON_CAFE'):
+            return Goal('tower_leftovers', 'Collect Leftovers for the Tower team', 'CELADON_CAFE', 7, 2, 'up')
         selected = select_team(snapshot)
         if not selected:
             return None
@@ -106,18 +159,46 @@ def journey(policy, snapshot, Goal, *, force=False):
     goal = assemble(policy, snapshot, state['team'], Goal, 'Prepare three partners for the Battle Tower')
     if goal:
         return goal
+    options = []
+    protected = {15, 19, 57, 70, 148, 250, 127, 105, 92}
+    for slot, mon in enumerate(snapshot.party):
+        if (105 in mon.moves and 92 not in mon.moves and 92 in policy.data.species[mon.species]['machines']
+                and dict(snapshot.items).get(policy.data.items['TM06'])):
+            weakest = min((move for move in mon.moves if move not in protected),
+                          key=lambda move: attack_value(policy.data, mon, move), default=None)
+            if weakest is not None:
+                if policy.menu is None:
+                    policy.menu = Teach(92, slot, replace_move=weakest)
+                return Goal('tower_toxic', 'Prepare Toxic for opponents that withstand direct attacks', name, snapshot.x, snapshot.y)
+    for slot, mon in enumerate(snapshot.party):
+        for move in upgrades(policy.data, mon, dict(snapshot.items)):
+            kind = policy.data.moves[move]['type']
+            same_type = max((attack_value(policy.data, mon, known) for known in mon.moves
+                             if policy.data.moves.get(known, {}).get('type') == kind), default=0)
+            weakest = min((known for known in mon.moves if known not in protected),
+                          key=lambda known: attack_value(policy.data, mon, known), default=None)
+            if weakest is not None:
+                gain = attack_value(policy.data, mon, move) - max(same_type, attack_value(policy.data, mon, weakest))
+                if gain > 20:
+                    options.append((gain, slot, move, weakest))
+    if options:
+        _, slot, move, weakest = max(options)
+        if policy.menu is None:
+            policy.menu = Teach(move, slot, replace_move=weakest)
+        return Goal('tower_move', 'Prepare attacks for the Tower opponents', name, snapshot.x, snapshot.y)
+    lead = max(range(len(snapshot.party)), key=lambda slot: sum(snapshot.party[slot].stats))
+    if lead:
+        mon = snapshot.party[lead]
+        if policy.menu is None:
+            policy.menu = Lead(lead, (mon.trainer_id, mon.dvs))
+        return Goal('tower_lead', 'Lead with the strongest Tower partner', name, snapshot.x, snapshot.y)
+    leftovers = policy.data.items['LEFTOVERS']
+    if dict(snapshot.items).get(leftovers) and not any(mon.held_item == leftovers for mon in snapshot.party):
+        if policy.menu is None:
+            policy.menu = Take(0) if snapshot.party[0].held_item else Give(leftovers, 0)
+        return Goal('tower_leftovers', 'Equip Leftovers for the Tower challenge', name, snapshot.x, snapshot.y)
     items = set()
     for slot, mon in enumerate(snapshot.party):
-        physical = [policy.data.moves.get(move, {}) for move in mon.moves]
-        best = max((move.get('power', 0) * (1.5 if move.get('type') in policy.data.species[mon.species]['types'] else 1)
-                    for move in physical if move.get('type', 20) < 20
-                    and move.get('effect') not in {'EFFECT_EXPLOSION', 'EFFECT_SELFDESTRUCT'}), default=0)
-        if (70 not in mon.moves and 70 in policy.data.species[mon.species]['machines']
-                and policy.data.items['HM04'] in dict(snapshot.items)
-                and mon.stats[1] > mon.stats[4] * 1.4 and best < 80):
-            if policy.menu is None:
-                policy.menu = Teach(70, slot)
-            return Goal('tower_move', 'Prepare a physical attack for the Tower', name, snapshot.x, snapshot.y)
         if mon.held_item and mon.held_item in items:
             if policy.menu is None:
                 policy.menu = Take(slot)

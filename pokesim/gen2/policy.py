@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 import random
 import re
+from types import SimpleNamespace
 
 from .navigation import DIRS, Navigator
 from .ram import Memory
@@ -482,9 +483,10 @@ class Policy:
                 if snapshot.map == mid:
                     path = self.nav.local(snapshot, [point], self.memory)
                 else:
-                    paths = [self.nav.local(replace(snapshot, map=mid, x=warp['x'], y=warp['y'], objects=()), [point])
-                             for warp in entry['warps'] if warp['map'] != mid]
-                    path = min((path for path in paths if path is not None), key=len, default=None)
+                    path = None
+                if path is None:
+                    path = self.nav.regions.route(snapshot, mid, [point], cut=bool(snapshot.badges & 2),
+                                                   surf=bool(snapshot.badges & 8))
                 if path is not None:
                     choices.append((len(path), point[0], point[1], face))
         if not choices:
@@ -698,6 +700,7 @@ class Policy:
                 self.mode = labels.get(type(self.menu), 'Manage the team')
                 return Action(None, 0, 24) if button == 'wait' else Action(button, 8, 28)
             self.menu = None
+            return Action(None, 0, 24)
         if self.data.game == 'crystal' and snapshot.map == self.data.map_ids['DRAGON_SHRINE']:
             for label in ('Pal', 'Strategy', 'Anybody', 'Love', 'Both'):
                 action = choose(snapshot.tiles, label, exact=True)
@@ -1004,7 +1007,10 @@ class Policy:
                         return Action('b')
                     target = min(range(4), key=lambda i: 999 if mon.moves[i] in protected else self.data.moves.get(mon.moves[i], {}).get('power', 0)) + 1
                 else:
-                    target = weaken + 1 if weaken is not None else max(options)[1] + 1 if options else 1
+                    recovery = self.recovery_move(snapshot, mem, mon, options) if self.collection.get('tower') else None
+                    poison = self.poison_move(snapshot, mem, mon, options) if self.collection.get('tower') else None
+                    target = (recovery + 1 if recovery is not None else poison + 1 if poison is not None else weaken + 1 if weaken is not None
+                              else max(options)[1] + 1 if options else 1)
                 cursor = mem.byte('wMenuCursorY')
                 if cursor != target:
                     return Action('down' if cursor < target else 'up', 8, 40)
@@ -1050,6 +1056,29 @@ class Policy:
             if entry.get('effect') == 'EFFECT_FALSE_SWIPE' or 0 < damage * 2.5 < snapshot.enemy_hp:
                 options.append((damage, index))
         return max(options)[1] if options else None
+
+    def poison_move(self, snapshot, mem, mon, options):
+        if mem.byte('wEnemyMonStatus') or {3, 9}.intersection(self.data.species[snapshot.enemy_species]['types']):
+            return None
+        if max((score for score, _ in options), default=0) * 2 >= snapshot.enemy_hp:
+            return None
+        return next((i for i, move in enumerate(mon.moves) if mon.pp[i]
+                     and self.data.moves.get(move, {}).get('effect') == 'EFFECT_TOXIC'
+                     and any(index == i for _, index in options)), None)
+
+    def recovery_move(self, snapshot, mem, mon, options):
+        slot = next((i for i, move in enumerate(mon.moves) if mon.pp[i]
+                     and self.data.moves.get(move, {}).get('effect') == 'EFFECT_HEAL'), None)
+        if slot is None:
+            return None
+        hp, maximum = mem.word('wBattleMonHP'), mem.word('wBattleMonMaxHP')
+        if not 0 < hp < maximum * 0.55 or max((score for score, _ in options), default=0) >= snapshot.enemy_hp:
+            return None
+        enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level,
+            stats=tuple(mem.word('wEnemyMon' + stat) for stat in ('MaxHP', 'Attack', 'Defense', 'Speed', 'SpclAtk', 'SpclDef')))
+        target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=hp)
+        damage = max((self.move_score(move, enemy, target) for move in mem.read('wEnemyMonMoves', 4)), default=0)
+        return slot if damage < maximum / 2 else None
 
     def move_score(self, mid, mon, snapshot):
         move = self.data.moves.get(mid, {})
