@@ -65,6 +65,8 @@ class Screen:
                 return "item_action"
             if ("FORG" in text or "HM TECHNIQUES" in text) and x == 5 and 8 <= y <= 11:
                 return "learn_move"
+            if x == 5 and 8 <= y <= 11 and not snapshot.in_battle and 'PP' in text:
+                return "item_moves"
             if x == 5 and 13 <= y <= 16 and snapshot.in_battle:
                 return "moves"
             if x == 0 and y <= 11 and snapshot.party and not self.pause_menu:

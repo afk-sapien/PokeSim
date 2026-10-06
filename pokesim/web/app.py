@@ -97,7 +97,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     @app.get('/api/statistics/activity')
     def activity_statistics():
         from ..activity_ledger import status
-        return status(store, emu.status().get('game'))
+        from ..champion_shop import status as shop_status
+        return {**status(store, emu.status().get('game')), 'champion_shop': shop_status(store)}
 
     @app.get('/api/statistics')
     def statistics():

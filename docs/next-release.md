@@ -34,6 +34,11 @@ of a Red backup verified that a Tackle-only Starmie learned Surf through the car
 menus, retained its identity and stats, and returned to the overworld. See
 [Pokémon stats](pokemon-stats.md) for the scoring assumptions and limits.
 
+The Champion counter also replenishes Moon Stones, PP Ups, Elixirs, and Max
+Elixirs. Separate capped million-step offers sell one Master Ball and five Rare
+Candies, with progress on Stats → Items. Purchases and offer redemption share
+the existing recoverable checkpoint transaction. PP Ups use native move menus.
+
 ## Mobile controls
 
 Direction, A, and B buttons repeat while held. Start and Select fire once per press. Pointer capture keeps release handling active if a finger moves off the button. Losing focus, hiding the page, a cancelled pointer, or a failed request stops repetition. Each server request remains a bounded action, so losing the browser cannot leave a game button held indefinitely.

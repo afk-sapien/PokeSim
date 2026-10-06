@@ -487,6 +487,10 @@ class Emulator:
                 self.step_tracker.flush()
             from . import mew_returns
             mew_returns.observe(self.store, snap)
+            from . import champion_shop
+            champion_shop.observe(self.store, snap)
+            if hasattr(self.policy, 'shop_offers'):
+                self.policy.shop_offers = champion_shop.ready(self.store)
             return_events, restored_legendary = returns_observe(self.store, snap, self.pb.memory)
             events += return_events
             from . import step_events

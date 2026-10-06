@@ -108,7 +108,32 @@ shop screen or ROM patch. The journal identifies the custom Champion counter.
 
 Limited TMs are protected from automatic selling, including original copies and
 purchased replacements. Optional HM teaching still uses empty slots only.
-Reusable HMs are never consumed. Other item replenishment remains unchanged.
+Reusable HMs are never consumed.
+
+The same custom Champion counter also replenishes Moon Stones (₽5,000), PP Ups
+(₽25,000), Elixirs (₽5,000), and Max Elixirs (₽10,000). The planner keeps at most
+one of each in the bag. Moon Stones require a held evolution candidate. PP Ups
+require a healthy level 60+ partner with a strong damaging move that can still
+gain PP. Explosion and one-hit knockout moves are excluded. Item use happens
+through the normal cartridge menus. Elixirs remain emergency League supplies,
+and the collection planner handles Moon Stone evolutions.
+
+After becoming Champion, another 1,000,000 tracked walking steps unlock one
+Master Ball purchase for ₽100,000 and one bundle of five Rare Candies for
+₽25,000. Each offer has its own countdown, holds only one unclaimed purchase,
+and starts its next million steps when purchased. Waiting longer does not bank
+extra purchases. Existing Champion adventures start these countdowns when first
+running this update. Stats → Items shows the remaining steps and ready offers.
+The automatic player waits for enough money, bag space, and an eligible party,
+and does not buy another copy while that item remains in the bag. Rare Candies
+are used on unfinished level 30+ partners. Master Balls retain the existing
+legendary and shiny capture rules.
+
+These purchases keep the same ₽20,000 reserve and checkpoint recovery protection
+as TMs. Offer redemption and Purchased counts commit with the item and payment.
+A five-candy bundle counts as five purchased items. Native successful consumption
+increments Used separately. Returning to an older checkpoint cannot reclaim an
+offer or undo its payment.
 
 ## Stat total
 

@@ -104,6 +104,7 @@ class StrategicPolicy(Policy):
         self.next_goal = None
         self.tm_moves = {}
         self.tm_compatible = {}
+        self.shop_offers = set()
         self.map_view = None
         self.escape_attempted = False
         self.on_restore()
@@ -485,6 +486,14 @@ class StrategicPolicy(Policy):
             self.mode = f"battle: {self.intent.kind}"
             self.reason = self.intent.reason
             return self._root(scr, self.intent.kind)
+        if kind == "item_moves":
+            from ..champion_shop import pp_slot
+            if self.intent and self.intent.kind == 'item' and self.intent.target < len(s.party):
+                item = s.items[self.intent.index][0] if self.intent.index < len(s.items) else None
+                slot = pp_slot(s.party[self.intent.target]) if item == ITEMS['PP_UP'] else None
+                if slot is not None:
+                    return self._select(scr, slot, one_based=True)
+            return tap('b')
         if kind == "moves":
             me, enemy = read_battler(mem, W_BATTLE_MON), read_battler(mem, W_ENEMY_MON)
             if (s.in_battle == 1 and (s.enemy_shiny or SPECIES.get(enemy.species, {}).get('dex') in (144, 145, 146, 150)
@@ -1166,16 +1175,27 @@ class StrategicPolicy(Policy):
     _sale_index = staticmethod(ShoppingController.sale_index)
 
     def _tm_development(self, s, goal, in_league):
-        from .. import tm_shop
+        from .. import tm_shop, champion_shop
         if (not self.tm_moves or self.heal_latch or in_league
                 or goal.key.startswith(('party_', 'teach_', 'restock'))):
             return goal, None
         if self.tm_plan and (s.frame > self.tm_deadline
-                             or not tm_shop.valid_plan(s, self.tm_plan, self.tm_moves, self.tm_compatible)):
+                             or not tm_shop.valid_plan(s, self.tm_plan, self.tm_moves, self.tm_compatible, self.shop_offers)):
             self.tm_plan = None
             self.tm_check_after = s.frame + 18000
         if s.frame >= self.tm_teach_after:
             self.tm_teach_after = s.frame + 3600
+            bag = dict(s.items)
+            for item in (ITEMS['PP_UP'], ITEMS['RARE_CANDY']):
+                target = champion_shop.recipient(s, item) if bag.get(item) else None
+                if target is not None:
+                    mon = s.party[target]
+                    attempt = (item, bag[item], champion_shop.signature(mon), mon.level, tuple(mon.max_pp))
+                    if attempt not in self.supply_attempts:
+                        self.supply_attempts.add(attempt)
+                        self.goal = Goal('teach_supply', f'Use {champion_shop.NAMES[item]}',
+                                         f'Improve {mon.nick or mon.name} using an owned item')
+                        return self.goal, self._use_item(s, item, target)
             owned = tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=True)
             if owned:
                 self.tm_plan = None
@@ -1188,16 +1208,23 @@ class StrategicPolicy(Policy):
         if (not self.tm_plan and s.frame >= self.tm_check_after and goal.key == 'collect_plan'
                 and not self.collection.project and not self.pickups.active):
             self.tm_check_after = s.frame + 3600
-            self.tm_plan = tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=False)
+            self.tm_plan = (tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=False)
+                            or champion_shop.choose(s, self.shop_offers))
             self.tm_deadline = s.frame + 60000
         if self.tm_plan:
             item, target = self.tm_plan['item'], self.tm_plan['target']
             if dict(s.items).get(item):
                 return goal, None
-            name = tm_shop.label(item, self.tm_moves)
+            name = champion_shop.NAMES[item] if self.tm_plan.get('supply') else tm_shop.label(item, self.tm_moves)
+            quantity = self.tm_plan.get('quantity', 1)
+            price = champion_shop.PRICES[item] if self.tm_plan.get('supply') else tm_shop.PRICES[item]
+            if quantity > 1:
+                name = f'{quantity} × {name}'
+            purpose = ('Replenish useful supplies' if self.tm_plan.get('supply')
+                       else f'Improve {s.party[target].nick or s.party[target].name}')
             goal = Goal('buy_tm', f'Buy {name}',
-                        f'Visit the Champion TM counter for {s.party[target].nick or s.party[target].name}. '
-                        f'Price ₽{tm_shop.PRICES[item]:,}, keeping ₽{tm_shop.RESERVE:,} for supplies',
+                        f'{purpose} at the Champion counter. '
+                        f'Price ₽{price:,}, keeping ₽{tm_shop.RESERVE:,} for supplies',
                         (tm_shop.COUNTER,))
         return goal, None
 

@@ -86,7 +86,10 @@ def choose(snapshot, moves, compatible, *, owned):
     return {'item': item, 'target': index, 'signature': signature(snapshot.party[index])}
 
 
-def valid_plan(snapshot, plan, moves, compatible):
+def valid_plan(snapshot, plan, moves, compatible, offers=()):
+    if plan and plan.get("supply"):
+        from .champion_shop import valid_plan as valid_supply
+        return valid_supply(snapshot, plan, offers)
     if not plan or not champion(snapshot):
         return False
     index, item = plan['target'], plan['item']

@@ -166,7 +166,7 @@ remain excluded and are noted on the page. Receipts and both totals commit toget
 so retries, restarts, and journal pruning cannot duplicate or erase a counted trade.
 
 The Items page lists usable cartridge items, key items, TMs, and HMs. Purchased
-counts quantities bought at marts, vending machines, and the custom Champion TM counter. Used counts consumption,
+counts quantities bought at marts, vending machines, and the custom Champion counter. Used counts consumption,
 including unsuccessful ball throws, Safari Balls, healing items, evolution stones,
 and TMs. Canceled and ineffective uses, sales, gifts to NPCs, discards, and PC
 transfers do not count as use. Reusable key items and HMs show Not counted for use.
@@ -189,3 +189,7 @@ start when this tracking version first runs, with the date shown on each page.
 Unavailable tracking is distinguished from a recorded zero. Unsupported cartridges
 do not install these hooks. The read-only `/api/statistics/activity` endpoint serves
 bounded species and item summaries without scanning action receipts on each refresh.
+
+Stats → Items also shows the Champion shop walking offers. Each million steps
+earns one Master Ball purchase and one five-candy bundle purchase. These are
+paid offers, with separate countdowns that restart on purchase and no backlog.
