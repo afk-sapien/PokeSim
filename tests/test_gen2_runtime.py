@@ -132,7 +132,7 @@ def test_battle_selects_an_available_move_after_disable(real_data):
     from types import SimpleNamespace
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, starter='cyndaquil')
-    mon = SimpleNamespace(species=156, egg=False, moves=(15, 43, 108, 52), pp=(30, 30, 20, 20), stats=(90, 60, 50, 70, 70, 60))
+    mon = SimpleNamespace(species=156, level=25, egg=False, moves=(15, 43, 108, 52), pp=(30, 30, 20, 20), stats=(90, 60, 50, 70, 70, 60))
     snapshot = SimpleNamespace(text='Disabled!', tiles=('Disabled!',), party=[mon], in_battle=2,
                                enemy_species=39, badges=0, owned=set(), can_catch=True, pockets={'balls': []})
     values = {'wCurBattleMon': 0, 'wMenuCursorY': 4, 'wPlayerDisableCount': 72, 'wDisabledMove': 52}
@@ -143,7 +143,7 @@ def test_level_up_replacement_preserves_hm_moves(real_data):
     from types import SimpleNamespace
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, starter='cyndaquil')
-    mon = SimpleNamespace(species=156, egg=False, moves=(15, 43, 108, 52), pp=(30, 30, 20, 20), stats=(90, 60, 50, 70, 70, 60))
+    mon = SimpleNamespace(species=156, level=25, egg=False, moves=(15, 43, 108, 52), pp=(30, 30, 20, 20), stats=(90, 60, 50, 70, 70, 60))
     snapshot = SimpleNamespace(text='Which move should be forgotten?\n▶CUT\nLEER\nSMOKESCREEN\nEMBER',
                                tiles=(), party=[mon], in_battle=2, enemy_species=39, badges=0, owned=set(),
                                can_catch=True, pockets={'balls': []})
@@ -826,3 +826,214 @@ def test_contest_respects_days_and_completed_daily_entry(real_data):
     policy.collection.pop('contest')
     memory[tuple(real_data.symbols['wDailyFlags1'])] = 2
     assert journey(policy, snapshot, Goal) is None
+
+
+def test_active_tower_preempts_campaign_field_partner_recruitment(real_data, monkeypatch):
+    from pokesim.gen2.policy import Goal, Policy
+    from pokesim.gen2 import tower
+    policy = Policy(real_data, seed=1, starter='cyndaquil')
+    policy.collection['tower'] = {'entered': False}
+    expected = Goal('tower_enter', 'Tower', 'BATTLE_TOWER_1F', 7, 7, 'up')
+    monkeypatch.setattr(tower, 'journey', lambda *args: expected)
+    snapshot = SimpleNamespace(map=real_data.map_ids['SILVER_CAVE_POKECENTER_1F'])
+    assert policy.journey(snapshot, None) == expected
+
+
+def test_tower_prepares_near_entrance_before_removing_field_partners(real_data):
+    if real_data.game != 'crystal':
+        return
+    from pokesim.gen2.policy import Goal, Policy
+    from pokesim.gen2.tower import journey
+    policy = Policy(real_data, seed=1, starter='cyndaquil')
+    policy.memory = None
+    policy.collection['tower'] = {'team': ['target'], 'original': [], 'cap': 30,
+                                  'entered': False, 'returning': False}
+    snapshot = SimpleNamespace(map=real_data.map_ids['SILVER_CAVE_POKECENTER_1F'], party=(), stored=())
+    goal = journey(policy, snapshot, Goal)
+    assert goal.map_name == 'OLIVINE_POKECENTER_1F'
+    assert goal.key == 'tower_travel'
+    assert 'activity_team' not in policy.collection
+
+
+def test_fixed_damage_moves_beat_weak_attacks_and_respect_immunity(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    dragonair = SimpleNamespace(species=148, level=30, stats=(88, 60, 50, 50, 50, 50))
+    enemy = SimpleNamespace(enemy_species=73, enemy_level=30)
+    assert policy.move_score(82, dragonair, enemy) == 40
+    assert policy.move_score(82, dragonair, enemy) > policy.move_score(21, dragonair, enemy)
+    assert policy.move_score(69, dragonair, enemy) == 30
+    assert policy.move_score(69, dragonair, SimpleNamespace(enemy_species=94, enemy_level=30)) == 0
+
+
+@pytest.mark.parametrize('result,entered,expected', [(1, 1, 0), (1, 4, 3), (0, 7, 7)])
+def test_tower_win_count_excludes_the_opponent_that_defeated_the_player(real_data, monkeypatch, result, entered, expected):
+    if real_data.game != 'crystal':
+        return
+    from pokesim.gen2 import tower
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    policy.memory = None
+    policy.collection['tower'] = {'entered': True, 'returning': False, 'cap': 30, 'original': []}
+    values = {'sNrOfBeatenBattleTowerTrainers': entered, 'wBattleResult': result}
+    monkeypatch.setattr(tower, 'Memory', lambda *args: SimpleNamespace(byte=lambda name: values[name]))
+    snapshot = SimpleNamespace(map=real_data.map_ids['BATTLE_TOWER_1F'], party=(), frame=100)
+    assert tower.journey(policy, snapshot, Goal) is None
+    assert policy.collection['tower_result']['wins'] == expected
+
+
+def test_weekly_red_reset_does_not_interrupt_completed_collection(real_data, monkeypatch):
+    from pokesim.gen2 import kanto, collection
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    policy.completed['red'] = 10
+    false_events = {'EVENT_TRAINERS_IN_CERULEAN_GYM', 'EVENT_VIRIDIAN_GYM_BLUE', 'EVENT_RED_IN_MT_SILVER'}
+    snapshot = SimpleNamespace(map=real_data.map_ids['NEW_BARK_TOWN'], badges=65535, frame=100,
+                               event=lambda name: name not in false_events)
+    expected = Goal('collection', 'Collect', 'NEW_BARK_TOWN', 1, 1)
+    monkeypatch.setattr(collection, 'journey', lambda *args: expected)
+    assert kanto.journey(policy, snapshot, SimpleNamespace(byte=lambda name: 10), Goal) == expected
+
+
+def test_daycare_cost_accounts_for_unapplied_levels(real_data):
+    from pokesim.gen2.breeding import retrieval_cost
+    parent = SimpleNamespace(species=220, level=21, experience=29816)
+    assert retrieval_cost(real_data, SimpleNamespace(daycare=(parent, None))) == 800
+    assert retrieval_cost(real_data, SimpleNamespace(daycare=(None, None))) == 0
+
+
+def test_tyrogue_branches_need_viable_stats_not_just_spare_copies(real_data):
+    from pokesim.gen2.breeding import branch_parents
+    hitmonlee = SimpleNamespace(species=236, level=5, dvs=(8, 15, 0, 0, 0), stat_exp=(0,) * 5)
+    hitmontop = SimpleNamespace(species=236, level=5, dvs=(0,) * 5, stat_exp=(0,) * 5)
+    snapshot = SimpleNamespace(party=(hitmonlee, hitmonlee), stored=())
+    assert not branch_parents(real_data, snapshot, 236, {106, 237})
+    snapshot.party = (hitmonlee, hitmontop)
+    assert branch_parents(real_data, snapshot, 236, {106, 237})
+
+
+def test_trade_item_quests_use_versioned_cartridge_objects(real_data):
+    from pokesim.gen2.quests import trade_items
+    from pokesim.gen2.policy import Goal
+    finished = set()
+    def person(snapshot, key, label, area, script):
+        assert any(obj['script'] == script for obj in real_data.maps[real_data.map_ids[area]]['objects'])
+        return area
+    policy = SimpleNamespace(person=person, data=real_data)
+    snapshot = SimpleNamespace(map=real_data.map_ids['NEW_BARK_TOWN'], event=lambda name: name in finished)
+    for flag, area in [('EVENT_GOT_UP_GRADE', 'SILPH_CO_1F'),
+                       ('EVENT_GOT_KINGS_ROCK_IN_SLOWPOKE_WELL', 'SLOWPOKE_WELL_B2F'),
+                       ('EVENT_MOUNT_MORTAR_2F_INSIDE_DRAGON_SCALE', 'MOUNT_MORTAR_2F_INSIDE')]:
+        assert trade_items(policy, snapshot, Goal) == area
+        finished.add(flag)
+    assert trade_items(policy, snapshot, Goal) is None
+
+
+def test_slowking_branch_breeds_another_slowpoke(real_data):
+    from pokesim.gen2.breeding import journey
+    from pokesim.gen2.policy import Goal
+    slowbro = SimpleNamespace(species=80, moves=(33,), egg=False, box=None, gender='Female', trainer_id=1, dvs=(0, 2, 4, 6, 8))
+    ditto = SimpleNamespace(species=132, moves=(144,), egg=False, box=None, gender='Genderless', trainer_id=1, dvs=(0, 1, 3, 5, 7))
+    snapshot = SimpleNamespace(party=(slowbro, slowbro, ditto), stored=(), daycare=(None, None),
+                               owned={79, 80, 132}, money=10000, egg_ready=False)
+    policy = SimpleNamespace(data=real_data, collection={}, demand={}, person=lambda *args: 'deposit')
+    assert journey(policy, snapshot, Goal) == 'deposit'
+    assert policy.collection['breeding']['target'] == 79
+    assert policy.collection['breeding']['duplicate']
+
+
+def test_tower_training_does_not_finish_during_held_item_transfer(real_data, monkeypatch):
+    if real_data.game != 'crystal':
+        return
+    from pokesim.gen2 import tower, training
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    policy.memory = None
+    policy.menu = object()
+    mon = SimpleNamespace(species=101, level=23, trainer_id=1, dvs=(0,) * 5,
+                           to_dict=lambda: {'trainer_id': 1, 'dvs': [0] * 5})
+    state = policy.collection['tower'] = {'team': [tower.key(mon)], 'original': [], 'cap': 30,
+        'entered': False, 'returning': False, 'previous_training': None}
+    snapshot = SimpleNamespace(map=real_data.map_ids['SILVER_CAVE_POKECENTER_1F'], party=(mon,), stored=(), x=9, y=2)
+    monkeypatch.setattr(training, 'journey', lambda *args: None)
+    assert tower.journey(policy, snapshot, Goal).key == 'tower_training_menu'
+    assert not state.get('trained')
+
+
+def test_training_stops_at_requested_tower_cap(real_data):
+    from pokesim.gen2.training import journey
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    mon = SimpleNamespace(species=101, level=30, trainer_id=1, dvs=(0,) * 5,
+                           held_item=real_data.items['EXP_SHARE'])
+    policy.collection['training'] = {'identity': [1, [0] * 5], 'target': 101, 'species': 101,
+                                     'terminal': True, 'level_goal': 30}
+    snapshot = SimpleNamespace(party=(mon,), stored=(), items=())
+    assert journey(policy, snapshot, SimpleNamespace(byte=lambda name: 1), Goal) is None
+    assert policy.collection['training'] is None
+
+
+def test_training_waits_for_transient_collision_map(real_data, monkeypatch):
+    from pokesim.gen2 import collection, training
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    mon = SimpleNamespace(species=101, level=20, trainer_id=1, dvs=(0,) * 5,
+                           held_item=real_data.items['EXP_SHARE'], box=None)
+    policy.collection['training'] = {'identity': [1, [0] * 5], 'target': 101, 'species': 101,
+                                     'terminal': True, 'level_goal': 30, 'item': None}
+    snapshot = SimpleNamespace(party=(mon,), stored=(), items=(), map=real_data.map_ids['SILVER_CAVE_ROOM_1'], x=11, y=32)
+    monkeypatch.setattr(collection, 'encounter_points', lambda *args: [])
+    goal = training.journey(policy, snapshot, SimpleNamespace(byte=lambda name: 1), Goal)
+    assert goal.key == 'collection_train'
+    assert (goal.x, goal.y) == (11, 32)
+
+
+def test_slowpoke_well_boulder_uses_the_reachable_side(real_data):
+    from pokesim.gen2.quests import trade_items
+    from pokesim.gen2.policy import Goal
+    well = real_data.map_ids['SLOWPOKE_WELL_B1F']
+    index = next(i for i, obj in enumerate(real_data.maps[well]['objects'], 1) if obj['sprite'] == 'SPRITE_BOULDER')
+    events = {'EVENT_GOT_UP_GRADE'}
+    reachable = set()
+    nav = SimpleNamespace(objects={}, local=lambda snapshot, points, *args, **kwargs: [] if points[0] in reachable else None)
+    policy = SimpleNamespace(data=real_data, nav=nav, memory=None, person=lambda *args: 'visit')
+    snapshot = SimpleNamespace(map=well, objects=((index, 3, 2),), event=lambda name: name in events)
+    goal = trade_items(policy, snapshot, Goal)
+    assert goal.face == 'left' and goal.x == 4
+    reachable.add((7, 11))
+    assert trade_items(policy, snapshot, Goal) == 'visit'
+    events.add('EVENT_GOT_KINGS_ROCK_IN_SLOWPOKE_WELL')
+    goal = trade_items(policy, snapshot, Goal)
+    assert goal.face == 'right' and goal.x == 2
+    reachable.add((17, 15))
+    assert trade_items(policy, snapshot, Goal) == 'visit'
+
+
+def test_tower_strength_preparation_preserves_the_active_menu(real_data):
+    if real_data.game != 'crystal':
+        return
+    from pokesim.gen2 import tower
+    from pokesim.gen2.menus import Teach
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    policy.memory = None
+    mon = SimpleNamespace(species=99, moves=(23, 57, 182, 250), stats=(138, 160, 120, 90, 60, 65),
+                           held_item=0, to_dict=lambda: {'trainer_id': 1, 'dvs': [0] * 5})
+    policy.collection['tower'] = {'team': [tower.key(mon)], 'original': [], 'cap': 50,
+                                  'entered': False, 'returning': False, 'trained': True, 'preparation_center': True}
+    snapshot = SimpleNamespace(map=real_data.map_ids['OLIVINE_POKECENTER_1F'], party=(mon,),
+                               items=((real_data.items['HM04'], 1),), x=9, y=2)
+    assert tower.journey(policy, snapshot, Goal).key == 'tower_move'
+    menu = policy.menu
+    assert isinstance(menu, Teach) and menu.move == 70
+    assert tower.journey(policy, snapshot, Goal).key == 'tower_move'
+    assert policy.menu is menu
+
+
+def test_teaching_a_move_closes_leftover_pc_dialogue():
+    from pokesim.gen2.menus import Teach
+    menu = Teach(70, 0)
+    snapshot = SimpleNamespace(party=(SimpleNamespace(moves=(23, 57, 182, 250)),),
+        text='The PC turned on.', tiles=(' ',) * 12 + ('┌──────────────────┐',) + (' ',) * 5)
+    assert menu.step(snapshot, None) == 'b'
+    assert menu.phase == 'open'

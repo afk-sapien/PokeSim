@@ -173,3 +173,28 @@ def stones(policy, snapshot, Goal):
         return policy.person(snapshot, 'collection_stone_show', 'Show a Pokémon to Bill’s grandfather',
                              'BILLS_HOUSE', 'BillsGrandpa')
     return None
+
+
+def trade_items(policy, snapshot, Goal):
+    well = policy.data.map_ids['SLOWPOKE_WELL_B1F']
+    if snapshot.map == well:
+        stones = policy.nav.objects.setdefault(well, {})
+        stones.update({index: (x, y) for index, x, y in snapshot.objects})
+        index = next(i for i, obj in enumerate(policy.data.maps[well]['objects'], 1) if obj['sprite'] == 'SPRITE_BOULDER')
+        x, y = stones.get(index, (3, 2))
+        if (not snapshot.event('EVENT_GOT_KINGS_ROCK_IN_SLOWPOKE_WELL') and x > 2
+                and policy.nav.local(snapshot, [(7, 11)], policy.memory, surf=True) is None):
+            return Goal('push_well_passage', 'Open the lower passage in Slowpoke Well', 'SLOWPOKE_WELL_B1F', x + 1, y, 'left')
+        if (snapshot.event('EVENT_GOT_KINGS_ROCK_IN_SLOWPOKE_WELL') and x < 6
+                and policy.nav.local(snapshot, [(17, 15)], policy.memory, surf=True) is None):
+            return Goal('push_well_exit', 'Reopen the exit from Slowpoke Well', 'SLOWPOKE_WELL_B1F', x - 1, y, 'right')
+    for event, area, script, label in [
+        ('EVENT_GOT_UP_GRADE', 'SILPH_CO_1F', 'SilphCoOfficerScript', 'Receive the Up-Grade at Silph Co.'),
+        ('EVENT_GOT_KINGS_ROCK_IN_SLOWPOKE_WELL', 'SLOWPOKE_WELL_B2F', 'SlowpokeWellB2FGymGuideScript',
+         'Receive the King’s Rock in Slowpoke Well'),
+        ('EVENT_MOUNT_MORTAR_2F_INSIDE_DRAGON_SCALE', 'MOUNT_MORTAR_2F_INSIDE', 'MountMortar2FInsideDragonScale',
+         'Collect the Dragon Scale in Mt. Mortar'),
+    ]:
+        if not snapshot.event(event):
+            return policy.person(snapshot, 'collection_trade_item', label, area, script)
+    return None

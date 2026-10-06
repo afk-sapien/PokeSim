@@ -121,6 +121,16 @@ class Policy:
             if goal:
                 return goal
             self.collection.pop('time_capsule_restore', None)
+        if self.collection.get('tower'):
+            from .tower import journey
+            goal = journey(self, snapshot, Goal)
+            if goal:
+                return goal
+        if self.collection.get('contest'):
+            from .contest import journey
+            goal = journey(self, snapshot, Goal)
+            if goal:
+                return goal
         if not snapshot.event('EVENT_GOT_A_POKEMON_FROM_ELM'):
             x = {'cyndaquil': 6, 'totodile': 7, 'chikorita': 8}[self.starter]
             return Goal('starter', f'Choose {self.starter.title()}', 'ELMS_LAB', x, 4, 'up')
@@ -568,6 +578,10 @@ class Policy:
                 return min(choices, key=lambda row: row[:2])[-1]
             return None
         reserve = 400 if snapshot.money >= 1200 else 0
+        from .breeding import retrieval_cost
+        fees = retrieval_cost(self.data, snapshot)
+        if fees:
+            reserve = max(reserve, fees + 1000)
         requests = []
         ball_target = 20 if self.collection.get('phase') == 'legendary' else 4
         if sum(count for _, count in snapshot.pockets['balls']) < ball_target and snapshot.can_catch:
@@ -734,7 +748,9 @@ class Policy:
             return Action(None, 0, 24)
         if self.in_league(snapshot) and self.remedy(snapshot):
             return Action(None, 0, 24)
-        if not self.collection.get('contest') or not mem.byte('wStatusFlags2') & 4:
+        well_item = (self.goal.key == 'collection_trade_item'
+                     and self.data.maps[snapshot.map]['constant'] in {'SLOWPOKE_WELL_B1F', 'SLOWPOKE_WELL_B2F'})
+        if not self.goal.key.startswith('push_') and not well_item and (not self.collection.get('contest') or not mem.byte('wStatusFlags2') & 4):
             self.goal = self.healing(snapshot) or self.shop(snapshot) or self.goal
         target = self.data.map_ids[self.goal.map_name]
         from .flight import shortcut
@@ -974,7 +990,7 @@ class Policy:
                 options = [(self.move_score(move, mon, snapshot), index)
                            for index, move in enumerate(mon.moves) if move and mon.pp[index]
                            and not (mem.byte('wPlayerDisableCount') and move == mem.byte('wDisabledMove'))]
-                if not self.learning and snapshot.in_battle == 2:
+                if not self.learning and snapshot.in_battle == 2 and not self.collection.get('tower'):
                     normal_available = any(self.data.moves.get(move, {}).get('type') == 0 and mon.pp[index]
                                            and self.move_score(move, mon, snapshot) > 0
                                            for index, move in enumerate(mon.moves) if move)
@@ -1044,11 +1060,25 @@ class Policy:
         factor = 1
         for target_type in set(self.data.species.get(snapshot.enemy_species, {}).get('types', [])):
             factor *= self.data.matchups.get((kind, target_type), 1)
+        if not factor:
+            return 0
+        accuracy = move.get('accuracy', 100) / 100
+        effect = move.get('effect')
+        if effect == 'EFFECT_STATIC_DAMAGE':
+            return power * accuracy
+        if effect == 'EFFECT_LEVEL_DAMAGE':
+            return mon.level * accuracy
+        if effect == 'EFFECT_SUPER_FANG':
+            return getattr(snapshot, 'enemy_hp', 0) / 2 * accuracy
         attack = mon.stats[1 if kind < 20 else 4]
         enemy = self.data.species.get(snapshot.enemy_species, {}).get('stats', [50] * 6)
-        defense = enemy[2 if kind < 20 else 5]
+        defense = (enemy[2 if kind < 20 else 5] + 8) * 2 * getattr(snapshot, 'enemy_level', mon.level) / 100 + 5
         stab = 1.5 if kind in self.data.species[mon.species]['types'] else 1
-        score = power * attack / max(1, defense) * factor * stab * move.get('accuracy', 100) / 100
+        score = ((2 * mon.level / 5 + 2) * power * attack / max(1, defense) / 50 + 2) * factor * stab * accuracy
+        if effect == 'EFFECT_MULTI_HIT':
+            score *= 3
+        if effect in {'EFFECT_DOUBLE_HIT', 'EFFECT_POISON_MULTI_HIT'}:
+            score *= 2
         if move.get('effect') in {'EFFECT_EXPLOSION', 'EFFECT_SELFDESTRUCT'}:
             score *= 0.1
         if move.get('effect') in {'EFFECT_RECHARGE', 'EFFECT_RAZOR_WIND', 'EFFECT_SOLARBEAM'}:
