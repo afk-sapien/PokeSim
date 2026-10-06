@@ -1,7 +1,7 @@
 """Champion TM catalogue and conservative, recipient-specific shopping plans."""
 import hashlib
 
-from .battle_power import best_replacement, moveset_score
+from .battle_power import battle_power, best_replacement, moveset_score
 from .policies.battle import HM_MOVES
 from .policies.collection import champion
 from .strategy_data import MAPS, MOVES, SPECIES
@@ -14,6 +14,7 @@ STANDARD = {3, 19, 21, 22, 25, 41, 44, 45, 48}
 PRICES = {item: 50000 if item - 200 in PREMIUM else 25000 if item - 200 in STANDARD else 10000
           for item in LIMITED}
 RESERVE = 20000
+MIN_LEVEL = 50
 COUNTER = (MAPS['CELADON_MART_2F'], 6, 5)
 
 
@@ -49,7 +50,7 @@ def signature(mon):
 def improvement(mon, item, moves, compatible):
     mid = moves.get(item)
     if (item not in LIMITED or item not in compatible.get(mon.species, ()) or not mid
-            or mon.level < 30 or mon.hp <= 0 or mon.status):
+            or mon.level < MIN_LEVEL or mon.hp <= 0 or mon.status):
         return None
     # Save finite original copies when this partner will learn the same move naturally.
     if any(level > mon.level and move == mid for level, move in SPECIES[mon.species].get('learnset', ())):
@@ -64,8 +65,28 @@ def improvement(mon, item, moves, compatible):
     return gain if gain > max(1, baseline * 0.08) else None
 
 
+def projected_upgrade(mon, item, moves, compatible):
+    """Value the actual planned replacement at level 100, preserving this partner's DVs."""
+    current_gain = improvement(mon, item, moves, compatible)
+    if current_gain is None:
+        return None
+    slot = best_replacement(mon, moves[item], HM_MOVES)
+    projected = {'species': mon.species, 'level': 100, 'dvs': mon.dvs,
+                 'stat_exp': (65535,) * 5, 'moves': mon.moves}
+    before = battle_power(projected)
+    if before is None:
+        return None
+    changed = list(mon.moves)
+    changed[slot] = moves[item]
+    after = battle_power({**projected, 'moves': changed})
+    gain = after - before
+    if gain <= max(1, before * 0.08):
+        return None
+    return {'before': before, 'after': after, 'gain': gain, 'current_gain': current_gain}
+
+
 def choose(snapshot, moves, compatible, *, owned):
-    """Prefer meaningful coverage for an established party member, one copy at a time."""
+    """Greedily choose the largest mature Battle Power gain, one upgrade at a time."""
     if not champion(snapshot):
         return None
     bag = dict(snapshot.items)
@@ -76,12 +97,12 @@ def choose(snapshot, moves, compatible, *, owned):
         if not owned and (len(bag) >= 20 or snapshot.money < PRICES[item] + RESERVE):
             continue
         for index, mon in enumerate(snapshot.party):
-            gain = improvement(mon, item, moves, compatible)
-            if gain is not None:
-                options.append((gain * mon.level / 100, -PRICES[item], -index, -item))
+            upgrade = projected_upgrade(mon, item, moves, compatible)
+            if upgrade is not None:
+                options.append((upgrade['gain'], upgrade['current_gain'], -PRICES[item], -index, -item))
     if not options:
         return None
-    _, _, index, item = max(options)
+    _, _, _, index, item = max(options)
     index, item = -index, -item
     return {'item': item, 'target': index, 'signature': signature(snapshot.party[index])}
 
@@ -94,7 +115,7 @@ def valid_plan(snapshot, plan, moves, compatible, offers=()):
         return False
     index, item = plan['target'], plan['item']
     return (0 <= index < len(snapshot.party) and signature(snapshot.party[index]) == plan['signature']
-            and improvement(snapshot.party[index], item, moves, compatible) is not None
+            and projected_upgrade(snapshot.party[index], item, moves, compatible) is not None
             and (dict(snapshot.items).get(item) or len(snapshot.items) < 20 and snapshot.money >= PRICES[item] + RESERVE))
 
 

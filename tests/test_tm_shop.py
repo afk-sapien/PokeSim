@@ -270,3 +270,52 @@ def test_reset_keeps_verified_cartridge_capability_but_discards_shopping_plan(sh
     policy.reset()
     assert (policy.tm_moves, policy.tm_compatible) == shop_data
     assert policy.tm_plan is None
+
+
+def test_greedy_projection_can_prefer_level_50_over_level_100():
+    low = live(partner('STARMIE', level=50))
+    high = live(partner('BUTTERFREE', level=100))
+    moves, compatible = {229: 94}, {low.species: {229}, high.species: {229}}
+    # The previous current-level weighting picked Butterfree here.
+    assert (tm_shop.improvement(high, 229, moves, compatible)
+            > tm_shop.improvement(low, 229, moves, compatible) * 0.5)
+    s = shopper(party=(high, low), items=((229, 1),))
+    assert tm_shop.choose(s, moves, compatible, owned=True)['target'] == 1
+    assert tm_shop.choose(replace(s, items=()), moves, compatible, owned=False)['target'] == 1
+
+
+def test_projection_normalizes_level_and_training_but_keeps_actual_dvs():
+    moves, compatible = {229: 94}, {152: {229}}
+    unfinished = live(partner(level=50, stat_exp=[0] * 5))
+    mature = live(partner(level=100))
+    early = tm_shop.projected_upgrade(unfinished, 229, moves, compatible)
+    late = tm_shop.projected_upgrade(mature, 229, moves, compatible)
+    assert early and late
+    assert (early['before'], early['after']) == (late['before'], late['after'])
+    weak_special = live(partner(level=100, dvs=[11, 13, 14, 9, 0]))
+    weaker = tm_shop.projected_upgrade(weak_special, 229, moves, compatible)
+    assert weaker['gain'] < late['gain']
+    assert tm_shop.choose(shopper(party=(weak_special, unfinished), items=((229, 1),)),
+                          moves, compatible, owned=True)['target'] == 1
+
+
+def test_mature_ranking_still_refuses_low_levels_unknown_dvs_and_natural_moves():
+    moves, compatible = {229: 94}, {152: {229}}
+    s = shopper(party=(live(partner(level=49)),), items=((229, 1),))
+    assert tm_shop.choose(s, moves, compatible, owned=True) is None
+    assert tm_shop.choose(replace(s, party=(live(partner(level=50)),)), moves, compatible, owned=True)
+    assert tm_shop.choose(replace(s, party=(replace(s.party[0], level=100, dvs=()),)),
+                          moves, compatible, owned=True) is None
+    slowbro = live(partner('SLOWBRO', level=50))
+    assert tm_shop.projected_upgrade(slowbro, 229, moves, {slowbro.species: {229}}) is None
+
+
+def test_greedy_choice_reassesses_after_one_tm_is_taught():
+    first = live(partner('STARMIE', level=50))
+    second = live(partner('BUTTERFREE', level=100))
+    moves, compatible = {229: 94}, {first.species: {229}, second.species: {229}}
+    s = shopper(party=(first, second), items=((229, 2),))
+    assert tm_shop.choose(s, moves, compatible, owned=True)['target'] == 0
+    taught = replace(first, moves=(33, 94, 0, 0))
+    after = replace(s, party=(taught, second), items=((229, 1),))
+    assert tm_shop.choose(after, moves, compatible, owned=True)['target'] == 1

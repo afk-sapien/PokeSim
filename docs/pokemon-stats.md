@@ -83,8 +83,19 @@ Navigation teaching of Cut, Surf, and Strength continues as before.
 
 After becoming Champion, managed adventures on supported Red and Blue cartridges
 can buy replacements for the 38 limited TMs at the Celadon Department Store 2F
-counter. The AI chooses a compatible party member at level 30 or above and a move
-that materially improves the same moveset score. It teaches useful limited TMs
+counter. The AI considers healthy compatible party members at level 50 or above. A move
+must improve the current moveset score by more than 8 percent and one score
+point. It then projects that exact replacement to level 100 with maximum stat
+experience, keeping the individual's real DVs and current species. The projected
+Battle Power gain must also exceed 8 percent and one point.
+
+The planner greedily chooses the largest absolute projected Battle Power gain
+across eligible TM and party pairs, then reassesses after every successful use.
+Current moveset gain and lower price break ties. It does not multiply by current
+level or prefer the highest final score over the biggest improvement. This lets
+a level-50 partner receive a more valuable upgrade ahead of a level-100 partner.
+The projection does not assume future evolutions, moves, or changes to DVs, and
+boxed partners are not automatically withdrawn for TM teaching. It teaches useful limited TMs
 already in the bag first, keeps field HMs, and avoids buying a move that the
 recipient can still learn by leveling. Existing occupied move slots can be
 replaced when that improves the moveset.

@@ -28,7 +28,10 @@ by leveling. Owned Surf and Strength HMs can fill empty party move slots for a
 clear battle improvement. A Champion-only custom TM counter in Celadon makes all
 38 limited TMs renewable for managed adventures. The AI buys one useful upgrade
 for a compatible party member, keeps a supply reserve, and teaches it through
-normal menus. Limited TMs are protected from selling. Purchases and their item
+normal menus. TM allocation compares absolute level-100 Battle Power gains
+using each partner's real DVs and full training, with a level-50 minimum and
+material gains required now and at maturity. Each use triggers fresh evaluation.
+Limited TMs are protected from selling. Purchases and their item
 statistics share recoverable checkpoint ownership. An isolated replay
 of a Red backup verified that a Tackle-only Starmie learned Surf through the cartridge
 menus, retained its identity and stats, and returned to the overworld. See
