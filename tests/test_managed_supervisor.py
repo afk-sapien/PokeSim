@@ -200,3 +200,35 @@ def test_nickname_settings_reach_new_workers_and_retry_live_workers(supervisor):
     child.request = lambda *args, **kwargs: calls.append((args, kwargs))
     supervisor.sync_nicknames(child)
     assert calls[-1][0][2]['nickname_prefixes'] == []
+
+
+def test_palette_is_independent_retries_and_survives_worker_restart(supervisor):
+    first, second = adventure(supervisor), adventure(supervisor)
+    supervisor.start(first)
+    supervisor.start(second)
+    child = supervisor.children[first]
+    supervisor.registry.update(first, settings={'palette': 'blue'})
+    def fail(*args, **kwargs):
+        raise RuntimeError('Worker reconnecting')
+    child.request = fail
+    assert supervisor.push_palette(first) is True
+    calls = []
+    def request(method, path, data, timeout):
+        assert path == '/internal/palette'
+        calls.append(data['palette'])
+        return data
+    child.request = request
+    supervisor.sync_palette(first, child, 'original')
+    supervisor.sync_palette(first, child, 'blue')
+    assert calls == ['blue']
+    supervisor.registry.update(first, settings={'palette': 'red'})
+    assert supervisor.push_palette(first) is False
+    assert calls == ['blue', 'red']
+    assert supervisor.children[second].bootstrap['settings'].get('palette', 'original') == 'original'
+    supervisor.stop(first)
+    assert supervisor.push_palette(first) is False
+    supervisor.registry.request_lifecycle(first, 'start', identifier())
+    supervisor.start(first)
+    assert supervisor.children[first].bootstrap['settings']['palette'] == 'red'
+    supervisor.sync_palette(first, child, 'blue')
+    assert calls == ['blue', 'red']

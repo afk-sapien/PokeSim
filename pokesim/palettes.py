@@ -31,3 +31,21 @@ def validate_palette(value):
     if not isinstance(value, str) or value not in PALETTES:
         raise ValueError('Choose a listed screen palette')
     return value
+
+
+def _lookup(colors):
+    table = []
+    for shift in (16, 8, 0):
+        channel = list(range(256))
+        for source, target in zip(PALETTES['original'], colors):
+            channel[source & 255] = (target >> shift) & 255
+        table.extend(channel)
+    return table
+
+
+LOOKUPS = {name: _lookup(colors) for name, colors in PALETTES.items()}
+
+
+def recolor(image, palette):
+    """Map the emulator's fixed grayscale output without touching game state."""
+    return image if palette == 'original' else image.point(LOOKUPS[palette])

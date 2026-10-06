@@ -446,15 +446,15 @@ def create_app(manager, shutdown=lambda: None):
                 raise ValueError('Settings must be an object')
             if {'trainer_name', 'rival_name'} & set(changes):
                 raise ValueError('Trainer and rival names are chosen when creating an adventure')
-            if adventure['state'] == 'running' and set(changes) - {'auto_start', 'speed'}:
+            if adventure['state'] == 'running' and set(changes) - {'auto_start', 'speed', 'palette'}:
                 raise ValueError('Stop the adventure before changing these settings')
-            if 'palette' in changes and adventure['state'] not in {'stopped', 'failed'}:
-                raise ValueError('Stop the adventure before changing its palette')
             previous = adventure['settings']
             values['settings'] = manager.validate_adventure_settings({**previous, **changes})
         result = manager.registry.update(aid, **values) if values else adventure
         if 'speed' in data.get('settings', {}):
             result['pace_pending'] = await asyncio.to_thread(manager.supervisor.push_speed, aid)
+        if 'palette' in data.get('settings', {}):
+            result['palette_pending'] = await asyncio.to_thread(manager.supervisor.push_palette, aid)
         return result
 
     @app.get('/api/v1/settings')

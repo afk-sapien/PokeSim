@@ -348,3 +348,27 @@ def test_audio_proxy_preserves_pcm_metadata_and_adventure_boundary(client, monke
     assert client.get(path, headers={'Origin': 'https://elsewhere.invalid'}).status_code == 403
     manager.registry.update(adventure['id'], state='stopped')
     assert client.get(path).status_code == 409
+
+
+def test_palette_changes_live_and_requires_valid_authorized_settings(client, monkeypatch):
+    client, manager = client
+    headers = login(client, manager)
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    row = manager.registry.create('Red', 'fixture-rom', {}, identifier())
+    manager.registry.update(row['id'], state='running')
+    route = '/api/v1/adventures/' + row['id']
+    calls = []
+    def push(aid):
+        calls.append((aid, manager.registry.adventure(aid)['settings']['palette']))
+        return True
+    monkeypatch.setattr(manager.supervisor, 'push_palette', push)
+    response = client.patch(route, json={'settings': {'palette': 'blue'}}, headers=headers)
+    assert response.status_code == 200
+    assert response.json()['palette_pending'] is True
+    assert response.json()['state'] == 'running'
+    assert calls == [(row['id'], 'blue')]
+    for value in ('invalid', None, [], True):
+        assert client.patch(route, json={'settings': {'palette': value}}, headers=headers).status_code == 409
+    assert client.patch(route, json={'settings': {'palette': 'red'}}).status_code == 403
+    assert manager.registry.adventure(row['id'])['settings']['palette'] == 'blue'
+    assert len(calls) == 1

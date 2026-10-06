@@ -112,7 +112,7 @@ test('settings mutations send only fields accepted by the manager', async () => 
   view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
   await settle()
   const request = view.calls.find(call => call.options?.method === 'PATCH')
-  assert.deepEqual(JSON.parse(request.options.body), {name: 'Renamed adventure', settings: {auto_start: true, speed: 4}})
+  assert.deepEqual(JSON.parse(request.options.body), {name: 'Renamed adventure', settings: {auto_start: true, speed: 4, palette: 'original'}})
 })
 
 test('speed lives in adventure settings and global limits are absent', async () => {
@@ -479,4 +479,24 @@ test('a concurrent restart cancels removal', async () => {
   const {view, submit} = removalView('archive', [{state: 'running', desired_state: 'running'}])
   assert.equal((await submit()).length, 1)
   assert.match(view.element('#notice').textContent, /was restarted/)
+})
+
+test('running adventure settings allow palettes and explain deferred application', async () => {
+  const game = {id: 'a'.repeat(32), name: 'Red', state: 'running', settings: {palette: 'blue'}}
+  const view = library({respond(path, options) {
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+    if (options.method === 'PATCH') return {ok: true, json: async () => ({palette_pending: true})}
+  }})
+  await settle()
+  for (const name of ['league-rewards', 'mew-event']) view.element(`#settings-${name}`).toggleAttribute = () => {}
+  view.click('settings', game.id)
+  assert.equal(view.element('#settings-palette').value, 'blue')
+  assert.notEqual(view.element('#settings-palette').disabled, true)
+  view.element('#settings-palette').value = 'green'
+  view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+  await settle()
+  const settings = JSON.parse(view.calls.find(call => call.options.method === 'PATCH').options.body).settings
+  assert.equal(settings.palette, 'green')
+  assert.equal(settings.league_rewards, undefined)
+  assert.equal(view.element('#notice').textContent, 'Settings saved. The palette will apply when this adventure reconnects.')
 })

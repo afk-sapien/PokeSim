@@ -127,6 +127,18 @@ def serve(bootstrap, parent_stream, ready_stream):
                 return {'speed': runtime.emulator.speed}
             return runtime.call(apply)
 
+        @app.post('/internal/palette')
+        def palette(data: dict):
+            from fastapi import HTTPException
+            from ..palettes import validate_palette
+            try:
+                if set(data) != {'palette'}:
+                    raise ValueError('Set this simulation palette')
+                value = validate_palette(data['palette'])
+            except ValueError as error:
+                raise HTTPException(400, str(error)) from error
+            return runtime.call(lambda: runtime.emulator.set_palette(value))
+
         @app.post('/internal/nicknames')
         def nicknames(data: dict):
             from fastapi import HTTPException

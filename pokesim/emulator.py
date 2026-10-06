@@ -22,6 +22,7 @@ from .events import HIGH, Event, RunMemory, diff
 from . import rewards
 from .legendary import LegendaryRecovery
 from .play_clock import PlayClock
+from .palettes import PALETTES, recolor, validate_palette
 from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext
 from .ram import Snapshot, read_snapshot
@@ -74,6 +75,7 @@ class Emulator:
         self.statistics = StatisticsTracker(store)
         self.rom = Path(config.ROM_PATH)
         self.speed = config.SPEED
+        self.palette = validate_palette(getattr(config, 'PALETTE', 'original'))
         self.paused = False
         self.manual_mode = False
         self.policy = make_policy(config.POLICY, config.SEED)
@@ -148,8 +150,7 @@ class Emulator:
         return f"unverified ROM (sha1 {sha[:12]})"
 
     def _boot(self, *, sound=True) -> PyBoy:
-        from .palettes import PALETTES, validate_palette
-        options = {'color_palette': PALETTES[validate_palette(getattr(config, 'PALETTE', 'original'))]}
+        options = {'color_palette': PALETTES['original']}
         if getattr(self, 'isolated_ram', False):
             import io
             options['ram_file'] = io.BytesIO(bytes(32768))
@@ -220,6 +221,7 @@ class Emulator:
             "build": build_info(),
             "health": self.health(),
             "paused": self.paused, "speed": self.speed, "policy": self.policy.describe(),
+            "palette": getattr(self, 'palette', 'original'),
             "manual_mode": self.manual_mode, "help_request": None,
             "play_clock": self.play_clock.status(),
             "performance": {"frames": self.executed_frames, "sampled_at": time.monotonic()},
@@ -344,7 +346,13 @@ class Emulator:
         return buf.getvalue()
 
     def _image(self) -> Image.Image:
-        return self.pb.screen.image.convert("RGB")
+        return recolor(self.pb.screen.image.convert("RGB"), getattr(self, 'palette', 'original'))
+
+    def set_palette(self, value):
+        """Called on the emulator thread, including while the game is paused."""
+        self.palette = validate_palette(value)
+        self._publish_frame()
+        return {'palette': self.palette}
 
     def _shot_png(self, img=None) -> bytes:
         img = self._image() if img is None else img

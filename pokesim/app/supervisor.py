@@ -273,6 +273,34 @@ class Supervisor:
             if actual != speed:
                 self._apply_speed(child, speed)
 
+    def push_palette(self, aid):
+        with self.admission:
+            with self.guard:
+                child = self.children.get(aid)
+            if child is None:
+                return False
+            try:
+                value = self.registry.adventure(aid)['settings'].get('palette', 'original')
+                self._apply_palette(child, value)
+            except (RuntimeError, OSError, httpx.HTTPError):
+                log.warning('Adventure %s will receive its palette when it reconnects', aid)
+                return True
+            return False
+
+    @staticmethod
+    def _apply_palette(child, value):
+        result = child.request('POST', '/internal/palette', {'palette': value}, timeout=5)
+        if result.get('palette') != value:
+            raise RuntimeError('Worker did not acknowledge the adventure palette')
+
+    def sync_palette(self, aid, child, actual):
+        with self.admission:
+            if self.closed.is_set() or self.children.get(aid) is not child:
+                return
+            value = self.registry.adventure(aid)['settings'].get('palette', 'original')
+            if actual != value:
+                self._apply_palette(child, value)
+
     def push_notifications(self):
         """Apply the Library notification settings to running adventures without restarting them."""
         with self.guard:
@@ -352,6 +380,7 @@ class Supervisor:
                     status = child.request('GET', '/api/state', timeout=3)
                     child.pace.observe(status.get('performance'))
                     self.sync_speed(aid, child, status.get('speed'))
+                    self.sync_palette(aid, child, status.get('palette'))
                     self.unhealthy_since.pop(aid, None)
                     game = status.get('game') or {}
                     summary = {'activity': game.get('map_name') or 'Adventure in progress',

@@ -510,7 +510,6 @@
         speedInput.value = speed
       }
       $('#settings-palette').value = game.settings?.palette || 'original'
-      $('#settings-palette').disabled = running(game)
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
       for (const [field, setting] of [['league-rewards', 'league_rewards'], ['mew-event', 'mew_event']]) {
         const input = $(`#settings-${field}`)
@@ -560,11 +559,12 @@
   $('#adventure-settings-form').onsubmit = event => { event.preventDefault()
     act(async () => {
       const game = adventures.find(item => item.id === $('#settings-id').value)
-      const rewards = game && !running(game) ? {palette: $('#settings-palette').value, league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
+      const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
       const result = await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
-        settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), ...rewards}}, 'PATCH')
+        settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), palette: $('#settings-palette').value || 'original', ...rewards}}, 'PATCH')
       $('#adventure-settings').close()
-      notice(result.pace_pending ? 'Settings saved. The speed will apply when this adventure reconnects.' : 'Adventure settings saved.')
+      const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette'].filter(Boolean).join(' and ')
+      notice(pending ? `Settings saved. The ${pending} will apply when this adventure reconnects.` : 'Adventure settings saved.')
     }) }
   $('#notify-add').onclick = () => openIntegration()
   $('#notify-enabled').onchange = () => act(async () => {

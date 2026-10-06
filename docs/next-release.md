@@ -75,7 +75,7 @@ Keeping sound hardware active adds some CPU work while muted. A local cartridge 
 
 ## Palettes
 
-Adventure Settings offers the background colors of the 12 GBC startup choices as whole-screen palettes. Palette changes require a stopped adventure and take effect when it starts again. The default remains the existing grayscale. Checkpoint hardware mode and game RAM stay unchanged.
+Adventure Settings offers the background colors of the 12 GBC startup choices as whole-screen palettes. Palette changes apply live, including while paused, and persist per adventure. Display recoloring updates the live view and new screenshots without restarting the emulator. Existing journal screenshots keep their captured colors. The default remains the existing grayscale. Checkpoint hardware mode and game RAM stay unchanged.
 
 Authentic GBC coloring uses separate background and sprite palettes. That is deferred because the current renderer's public DMG API exposes one whole-screen palette, and existing DMG checkpoints cannot simply be loaded as CGB checkpoints. The labels describe this implementation as GBC-inspired. Color data is cross-checked against [SameBoy's startup palette table](https://github.com/LIJI32/SameBoy/blob/master/BootROMs/cgb_boot.asm).
 
