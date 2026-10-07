@@ -24,7 +24,7 @@
 - Fix a KeyError before the game starts that made the trade inventory return HTTP 500. Unknown Gen II YES or NO prompts now answer NO, then YES after three repeats so the story cannot deadlock. Preparing a Gen II trade with every PC box full now fails with a clear message and resumes play instead of pausing, and a leftover trade hold with no live exchange no longer blocks resume.
 - Generate Gen II game data in CI so the Gen II runtime tests run there, and read all local Gen II test inputs from `GEN2_DATA_DIR` and `GEN2_CARTRIDGE_DIR` (`GEN2_ROM_DIR` is gone).
 - Extend the private-string scan to case-insensitive matches, personal paths, private network addresses and contact details, and make it fail when git is missing.
-- Make the shiny-not-caught notification low priority, under "Everything else". Narrow the new-adventure starter list from the chosen cartridge file and refuse a starter from the wrong game before creating the adventure. Skip zero-length ticks in `tools/play_gen2.py`.
+- Make the shiny-not-caught notification low priority, under "Everything else". Narrow the new-adventure starter list from the chosen cartridge file and refuse a starter from the wrong game before creating the adventure.
 - Correct the release documents: rollback wording (Red and Blue need no restore, Gold, Silver and Crystal need 0.5.0, locked-clock checkpoints are refused by 0.4.x), Gen II in the package description, third-party notices, and a test that loads a Rust-written Gen 1 state into PyBoy 2.7.0.
 
 ## 0.4.20
