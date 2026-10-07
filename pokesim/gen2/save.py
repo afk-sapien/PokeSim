@@ -75,18 +75,20 @@ def export(rom, state, data):
         if progress(read_snapshot(pb.memory, data)) != expected:
             raise ValueError('Progress changed during export. No save was downloaded.')
         output = io.BytesIO()
-        pb.stop(ram_file=output, rtc_file=io.BytesIO())
+        clock = io.BytesIO()
+        pb.stop(ram_file=output, rtc_file=clock)
         save = output.getvalue()
     finally:
         pb.stop(save=False)
     if len(save) != 32768:
         raise ValueError('The cartridge produced an unexpected save size.')
-    verify(rom_bytes, save, data, expected)
+    verify(rom_bytes, save, data, expected, rtc=clock.getvalue())
     return save
 
 
-def verify(rom, save, data, expected):
-    pb = PyBoy(io.BytesIO(rom), ram_file=io.BytesIO(save), window='null', cgb=True,
+def verify(rom, save, data, expected, *, rtc=None):
+    pb = PyBoy(io.BytesIO(rom), ram_file=io.BytesIO(save), rtc_file=io.BytesIO(rtc) if rtc else None,
+               window='null', cgb=True,
                sound_emulated=True)
     pb.set_emulation_speed(0)
     try:

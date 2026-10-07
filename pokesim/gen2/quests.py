@@ -90,7 +90,7 @@ def roamers(policy, snapshot, Goal):
     choices = []
     for roamer in snapshot.roamers:
         mid, species = roamer['map'], roamer['species']
-        if species in snapshot.owned or mid not in data.maps:
+        if species in snapshot.owned or mid not in data.maps or mid != snapshot.map:
             continue
         points = encounter_points(policy, snapshot, mid, 'grass')
         route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
@@ -110,6 +110,15 @@ def roamers(policy, snapshot, Goal):
     if choices:
         _, species, mid, (x, y, _) = min(choices)
         return Goal('collection_hunt', f'Track {data.species[species]["name"]} through Johto', data.maps[mid]['constant'], x, y)
+    if any(row['species'] not in snapshot.owned and row['map'] in data.maps for row in snapshot.roamers):
+        # A two-map reversal excludes the route through the native last-map rule.
+        # Visiting the ruins through its gate gives the roamers a fresh route entry.
+        destination = state.get('roam_destination', 'ROUTE_36')
+        if snapshot.map == data.map_ids[destination]:
+            destination = 'RUINS_OF_ALPH_OUTSIDE' if destination == 'ROUTE_36' else 'ROUTE_36'
+        state['roam_destination'] = destination
+        x, y = (47, 12) if destination == 'ROUTE_36' else (7, 6)
+        return Goal('collection_roam_shift', 'Search the ruins border for roaming legends', destination, x, y)
     return None
 
 

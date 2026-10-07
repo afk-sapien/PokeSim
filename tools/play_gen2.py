@@ -22,9 +22,13 @@ def main():
     parser.add_argument('--frames', type=int, default=60000)
     parser.add_argument('--starter', default='cyndaquil')
     parser.add_argument('--until', default='')
-    parser.add_argument('--focus', choices=('ruins', 'tower', 'celebi', 'contest', 'gifts', 'legends', 'stones', 'trade_items', 'breeding', 'encounter', 'headbutt', 'rock smash'))
+    parser.add_argument('--focus', choices=('ruins', 'tower', 'celebi', 'contest', 'gifts', 'legends', 'stones', 'trade_items', 'breeding', 'gamecorner', 'restore', 'encounter', 'headbutt', 'rock smash'))
     parser.add_argument('--species', type=int)
     parser.add_argument('--real-clock', action='store_true', help='Use the checkpoint real-time clock instead of freezing it')
+    parser.add_argument('--league-rewards', action='store_true', help='Enable the existing optional Johto starter gifts')
+    parser.add_argument('--celebi-event', action='store_true', help='Enable the existing optional GS Ball distribution')
+    parser.add_argument('--mew-event', action='store_true', help='Enable the existing optional custom Mew gift')
+    parser.add_argument('--runtime-store', type=Path, help='Keep optional reward claims across scenario continuations')
     parser.add_argument('--stall-frames', type=int, default=12000)
     args = parser.parse_args()
     data = GameData.load(args.data, args.game)
@@ -44,6 +48,31 @@ def main():
         if args.focus == 'tower':
             from pokesim.gen2.tower import journey
             task = lambda policy, snapshot, Goal: journey(policy, snapshot, Goal, force=True)
+        if args.focus == 'gamecorner':
+            from pokesim.gen2.gamecorner import journey
+            task = lambda policy, snapshot, Goal: (collection.journey(policy, snapshot, Memory(policy.memory, data), Goal)
+                    if policy.collection.get('funding') is not None else journey(policy, snapshot, Goal))
+        if args.focus == 'legends':
+            def legends(policy, snapshot, Goal):
+                if (policy.collection.get('funding') is not None
+                        or snapshot.money < 5000 and sum(count for _, count in snapshot.pockets['balls']) < 4):
+                    return collection.journey(policy, snapshot, Memory(policy.memory, data), Goal)
+                return quests.legends(policy, snapshot, Goal)
+
+            task = legends
+        if args.focus == 'restore':
+            from pokesim.gen2.teams import assemble
+
+            def restore(policy, snapshot, Goal):
+                original = policy.collection.get('time_capsule_restore')
+                if not original:
+                    return None
+                goal = assemble(policy, snapshot, original, Goal, 'Restore the adventure team after trading')
+                if goal is None:
+                    policy.collection.pop('time_capsule_restore', None)
+                return goal
+
+            task = restore
 
         def focused(snapshot, mem):
             if args.focus in policy.completed:
@@ -76,6 +105,12 @@ def main():
                         return Goal('collection_wait', 'Wait for the field map to settle', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
                     policy.collection['target'] = dict(min(options, key=lambda row: row[:2])[-1], started=policy.decisions)
                     goal = collection.hunt(policy, snapshot, Goal)
+            if goal is None and args.focus == 'gamecorner' and policy.collection.get('funding') is not None:
+                return Goal('collection_wait', 'Prepare to earn prize money', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
+            if goal is None and args.focus == 'legends' and not {243, 244, 245, 249, 250} <= snapshot.owned:
+                policy.collection.pop('roam_after', None)
+                return Goal('collection_wait', 'Continue searching for the missing legends',
+                            data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
             if goal is None:
                 if not snapshot.in_battle and not mem.byte('wScriptRunning') and '┌' not in snapshot.tiles[12]:
                     policy.completed[args.focus] = snapshot.frame
@@ -84,7 +119,21 @@ def main():
 
         policy.journey = focused
     args.output.mkdir(parents=True, exist_ok=True)
-    pb = PyBoy(str(args.rom), window='null', cgb=True, sound_emulated=True, ram_file=io.BytesIO(bytes(32768)))
+    event_emu = None
+    if args.league_rewards or args.celebi_event or args.mew_event:
+        from pokesim.gen2.emulator import Emulator
+        from pokesim.runtime.settings import SimulationSettings
+        from pokesim.store import Store
+        settings = SimulationSettings(rom_path=str(args.rom.resolve()),
+            data_dir=str((args.runtime_store or args.output / 'runtime').resolve()),
+            game_data_dir=str(args.data.resolve()), speed=0, starter=args.starter,
+            league_rewards=args.league_rewards, celebi_event=args.celebi_event, mew_event=args.mew_event)
+        settings.install(managed=True)
+        event_emu = Emulator(Store(Path(settings.data_dir)))
+        event_emu.policy = policy
+        pb = event_emu.pb
+    else:
+        pb = PyBoy(str(args.rom), window='null', cgb=True, sound_emulated=True, ram_file=io.BytesIO(bytes(32768)))
     pb.set_emulation_speed(0)
     pb.rtc_lock_experimental(not args.real_clock)
     from pokesim.gen2.legendary import Recovery
@@ -102,9 +151,26 @@ def main():
                 policy.load_state_dict(json.loads(metadata.read_text()))
         if args.focus:
             policy.completed.pop(args.focus, None)
+        if event_emu:
+            from pokesim import rewards
+            event_emu.snapshot = read_snapshot(pb.memory, data, frame)
+            rewards.initialize(event_emu.store, event_emu.snapshot.hall_of_fame_count)
+        reward_frame = -5000
         with (args.output / 'trace.jsonl').open('w') as trace:
             while frame < args.frames:
                 snapshot = read_snapshot(pb.memory, data, frame)
+                if event_emu and frame - reward_frame >= 5000:
+                    from pokesim.gen2.celebi import activate
+                    from pokesim.gen2.rewards import deliver
+                    reward_frame = frame
+                    event_emu.snapshot, event_emu.frame = snapshot, frame
+                    rewards.earn(event_emu.store, snapshot.hall_of_fame_count, enabled=args.league_rewards)
+                    records = [record for record in (activate(event_emu), deliver(event_emu)) if record]
+                    if records:
+                        with (args.output / 'optional-events.jsonl').open('a') as events:
+                            for record in records:
+                                events.write(json.dumps(record) + '\n')
+                        continue
                 recovery.observe(snapshot, pb.memory)
                 visited.add((snapshot.map, snapshot.x, snapshot.y))
                 progress = (len(visited), snapshot.badges, snapshot.money,
@@ -129,6 +195,8 @@ def main():
                     print(frame, snapshot.map_name, snapshot.x, snapshot.y, policy.mode, action.button,
                           row['party'], flush=True)
                     previous = summary
+                if args.until == 'all251' and len(snapshot.owned) == 251:
+                    policy.completed.setdefault('all251', snapshot.frame)
                 if (args.until and args.until in policy.completed and policy.menu is None
                         and not snapshot.in_battle and not Memory(pb.memory, data).byte('wScriptRunning')
                         and '┌' not in snapshot.tiles[12]):
@@ -145,6 +213,9 @@ def main():
                     with (args.output / 'latest.state').open('wb') as output:
                         pb.save_state(output)
                     (args.output / 'latest.policy.json').write_text(json.dumps(policy.state_dict()))
+                    (args.output / 'progress.json').write_text(json.dumps({
+                        'game': snapshot.to_dict(), 'mode': policy.mode,
+                        'seconds': time.monotonic() - start}, indent=2))
         snapshot = read_snapshot(pb.memory, data, frame)
         pb.screen.image.save(args.output / 'final.png')
         with (args.output / 'final.state').open('wb') as output:
@@ -154,6 +225,8 @@ def main():
                                                          'seconds': time.monotonic() - start, 'stopped': stopped}, indent=2))
     finally:
         pb.stop(save=False)
+        if event_emu:
+            event_emu.store.close()
 
 
 if __name__ == '__main__':

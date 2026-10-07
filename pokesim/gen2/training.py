@@ -47,6 +47,9 @@ def projects(data, snapshot, current_time):
 
 def journey(policy, snapshot, mem, Goal, *, terminal=False):
     data, state = policy.data, policy.collection
+    project = state.get('training')
+    if project and project.get('terminal') and not project.get('level_goal') and not terminal:
+        state['training'] = None
     share = data.items['EXP_SHARE']
     inventory = dict(snapshot.items)
     if not inventory.get(share) and not any(mon.held_item == share for mon in snapshot.party + snapshot.stored):

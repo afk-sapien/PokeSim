@@ -17,7 +17,9 @@ def main():
     parser.add_argument('--load', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--species', type=int)
+    parser.add_argument('--trade-key', help='Select one exact boxed individual')
     parser.add_argument('--time-capsule', action='store_true')
+    parser.add_argument('--offer-trained', action='store_true')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     settings = SimulationSettings(rom_path=str(Path(f'.release-local/gen2/{args.game}.gbc').resolve()),
@@ -29,17 +31,44 @@ def main():
     try:
         with args.load.open('rb') as source:
             emu.pb.load_state(source)
+        metadata = args.load.with_suffix('.policy.json')
+        if metadata.exists():
+            emu.policy.load_state_dict(json.loads(metadata.read_text()))
         for _ in range(12):
             emu.pb.button_press('b')
             emu.pb.tick(8, True)
             emu.pb.button_release('b')
             emu.pb.tick(32, True)
         emu.snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
+        for _ in range(6000):
+            from pokesim.gen2.ram import Memory
+            snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
+            if (snapshot.started and not snapshot.in_battle and not emu.policy.in_league(snapshot)
+                    and not Memory(emu.pb.memory, emu.data).byte('wScriptRunning')):
+                break
+            action = emu.policy.step(snapshot, emu.pb.memory)
+            if action.button:
+                emu.pb.button_press(action.button)
+            emu.pb.tick(action.hold, True)
+            if action.button:
+                emu.pb.button_release(action.button)
+            emu.pb.tick(action.gap, True)
+            emu.frame += action.hold + action.gap
+        emu.snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
         runtime = SimpleNamespace(store=store, emulator=emu, settings=settings)
         participant = Participant(runtime, SimpleNamespace(adventure_id=args.game, generation=1))
+        if args.offer_trained:
+            from pokesim.gen2.web import live_status
+            from pokesim.trade.preferences import apply, update
+            payload = apply(live_status(emu.snapshot.to_dict()), store.trade_preferences())
+            for mon in payload['storage']['pokemon']:
+                if mon['species'] == args.species and not mon['trade_ambiguous'] and tuple(mon['dvs']) != (15,) * 5:
+                    update(store, payload, mon['trade_key'], 'offered')
         inventory = participant.inventory()
         assert inventory['offers'], 'No eligible boxed Pokémon in this scenario'
-        offer = next((mon for mon in inventory['offers'] if args.species is None or mon['species'] == args.species), None)
+        offer = next((mon for mon in inventory['offers']
+                      if (args.species is None or mon['species'] == args.species)
+                      and (args.trade_key is None or mon['trade_key'] == args.trade_key)), None)
         assert offer, 'The requested species is not an eligible boxed offer'
         key = offer['trade_key']
         request = {'id': '0123456789abcdef0123456789abcdef', 'plan_digest': 'test', 'selected_key': key,
