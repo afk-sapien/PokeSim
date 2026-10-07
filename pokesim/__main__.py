@@ -7,8 +7,9 @@ import threading
 
 import uvicorn
 
-
-from . import config
+from . import platform_support
+platform_support.require_emulator()
+from . import config  # noqa: E402
 from .notify import Ntfy
 from .runtime import Runtime
 
