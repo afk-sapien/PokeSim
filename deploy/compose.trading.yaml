@@ -18,7 +18,7 @@ services:
     volumes:
       - "/opt/pokesim-trading/state:/trading"
       - "/opt/pokesim/data:/pair/red"
-      - "/opt/pokesim-blue/data:/pair/blue"
+      - "/opt/pokesim-second/data:/pair/blue"
       - "/opt/pokesim/roms/pokered.gb:/roms/red.gb:ro"
-      - "/opt/pokesim-blue/roms/pokeblue.gb:/roms/blue.gb:ro"
+      - "/opt/pokesim-second/roms/pokeblue.gb:/roms/blue.gb:ro"
       - "/opt/pokesim/data/game-data:/data/game-data:ro"

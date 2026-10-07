@@ -21,6 +21,19 @@ The default suite skips the opt-in real-browser tests. The Node tests check isol
 browser logic. Lifecycle tests cover final-save failure, startup cleanup, process locks,
 shutdown timeout, and the distinct behavior of restore, resume, restart, and trade holds.
 
+## Gen 2 test data
+
+Gen 2 regression tests read two optional folders and skip when they are unset.
+
+| Variable | Contents | Needs a cartridge |
+| --- | --- | --- |
+| `GEN2_DATA_DIR` | Generated game data for Gold, Silver and Crystal | No |
+| `GEN2_CARTRIDGE_DIR` | Your own `gold.gbc`, `silver.gbc` and `crystal.gbc` | Yes |
+
+CI sets `GEN2_DATA_DIR` only. Create the same data locally with
+`uv run --locked python tools/prepare_gen2_test_data.py .release-local/gen2-data`.
+Cartridge tests need your own files and never run in CI.
+
 ## Real Chromium flows
 
 Install the optional browser dependency and its browser binary:

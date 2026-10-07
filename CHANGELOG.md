@@ -18,6 +18,8 @@
 - Stop `pokesim-core` from being requested on platforms without a pyboy-rs wheel (Windows ARM64, 32-bit ARM, FreeBSD, musl), so pip never looks those names up on PyPI. The installers and the application now say plainly that the platform is unsupported.
 - Derive the bundled pyboy-rs source archive check from `uv.lock` instead of a hard-coded file name, and fail when the archive's own metadata names another version.
 
+- Generate Gen II game data in CI so the Gen II runtime tests run there, and read all local Gen II test inputs from `GEN2_DATA_DIR` and `GEN2_CARTRIDGE_DIR` (`GEN2_ROM_DIR` is gone).
+- Extend the private-string scan to case-insensitive matches, personal paths, private network addresses and contact details, and make it fail when git is missing.
 ## 0.4.20
 
 - Fix PC box lists with a nickname containing PP being read as the PP Up menu, which stopped the Release goal from freeing storage.

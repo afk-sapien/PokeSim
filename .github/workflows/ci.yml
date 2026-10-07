@@ -61,9 +61,11 @@ jobs:
           path: .reference/pokered
           persist-credentials: false
       - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
+      - name: Generate Gen II game data from pinned public sources
+        run: uv run --locked python tools/prepare_gen2_test_data.py "$RUNNER_TEMP/gen2-data"
       - run: uv run --locked pytest --ignore=tests/test_rom.py --ignore=tests/browser -q
-      - name: Rust emulator backend, checkpoint compatibility and Core capability errors
-        run: uv run --locked pytest -q tests/test_rust_backend.py tests/test_downgrade_compat.py tests/test_gen2_clock.py tests/test_emulator_boundary.py tests/test_save_export.py
+        env:
+          GEN2_DATA_DIR: ${{ runner.temp }}/gen2-data
       - run: python tools/check_web.py
       - run: python tools/check_docs.py
       - run: uv build
