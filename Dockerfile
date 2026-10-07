@@ -6,8 +6,14 @@ WORKDIR /app
 COPY pyproject.toml setup.py uv.lock README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY pokesim ./pokesim
 COPY tools/bundle_dependency_sources.py ./tools/bundle_dependency_sources.py
+# The corresponding pyboy-rs source archive is a release asset next to its wheels. The checksum is
+# required: an empty value fails the build instead of skipping verification.
+ARG EMULATOR_SOURCE_URL=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1.tar.gz
+ARG EMULATOR_SOURCE_SHA256=
+ADD --checksum=sha256:${EMULATOR_SOURCE_SHA256} ${EMULATOR_SOURCE_URL} /emulator-source/pyboy_rs-0.1.1.tar.gz
+# The locked dependencies are release wheels, so this stage needs no compiler or Rust toolchain.
 RUN uv sync --frozen --no-dev --no-editable \
-    && .venv/bin/python tools/bundle_dependency_sources.py /notices
+    && .venv/bin/python tools/bundle_dependency_sources.py /notices --emulator-source /emulator-source/pyboy_rs-0.1.1.tar.gz
 
 FROM python:3.14-slim-trixie
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
