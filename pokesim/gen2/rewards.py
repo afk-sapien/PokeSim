@@ -138,7 +138,7 @@ def deliver(emu):
 
 
 def clone_emulator(emu):
-    from pyboy import PyBoy
-    clone = PyBoy(str(emu.rom), window='null', cgb=True, sound_emulated=True, ram_file=io.BytesIO(bytes(32768)))
+    from .core import boot
+    clone = boot(str(emu.rom), sound=True)
     clone.load_state(io.BytesIO(emu._state_bytes()))
     return clone

@@ -3,7 +3,7 @@ import argparse
 import io
 from pathlib import Path
 
-from pyboy import PyBoy
+from pokesim.gen2.core import boot
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.ram import read_snapshot
@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     data = GameData.load(args.data, args.game)
-    pb = PyBoy(str(args.rom), window='null', cgb=True, ram_file=io.BytesIO(bytes(32768)))
+    pb = boot(str(args.rom), sound=True)
     pb.set_emulation_speed(0)
     try:
         pb.load_state(io.BytesIO(args.state.read_bytes()))

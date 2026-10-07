@@ -1355,14 +1355,14 @@ def test_idle_training_yields_to_new_collection_opportunities(real_data):
 
 def test_checkpoint_clock_export_preserves_elapsed_days(real_data):
     import struct
-    from pyboy import PyBoy
+    from pokesim.gen2.core import boot
     from pokesim.gen2.cable_verification import checkpoint_clock
     from tools.advance_gen2_clock import advance
     directory = os.environ.get('GEN2_CARTRIDGE_DIR')
     if not directory:
         pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
     rom = (Path(directory) / (real_data.game + '.gbc')).read_bytes()
-    pb = PyBoy(io.BytesIO(rom), ram_file=io.BytesIO(bytes(32768)), window='null', cgb=True, sound_emulated=False)
+    pb = boot(io.BytesIO(rom), sound=False)
     try:
         state = io.BytesIO()
         pb.save_state(state)

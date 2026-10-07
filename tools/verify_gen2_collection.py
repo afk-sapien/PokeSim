@@ -5,7 +5,7 @@ import io
 import json
 from pathlib import Path
 
-from pyboy import PyBoy
+from pokesim.gen2.core import boot
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.ram import read_snapshot
@@ -22,7 +22,7 @@ def main():
     args = parser.parse_args()
     data = GameData.load(args.data, args.game)
     raw = args.state.read_bytes()
-    pb = PyBoy(str(args.rom), window='null', cgb=True, ram_file=io.BytesIO(bytes(32768)))
+    pb = boot(str(args.rom), sound=True)
     try:
         pb.load_state(io.BytesIO(raw))
         snapshot = read_snapshot(pb.memory, data)

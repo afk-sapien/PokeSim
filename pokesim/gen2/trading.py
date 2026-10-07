@@ -5,7 +5,7 @@ import io
 from pathlib import Path
 from types import SimpleNamespace
 
-from pyboy import PyBoy
+from .core import boot
 
 from .. import config
 from ..app.registry import digest, validate_id
@@ -149,8 +149,7 @@ class Participant(BaseParticipant):
     def verify_result(self, record, result, state, save, incoming):
         data = self.emu.data
         rom = Path(self.runtime.settings.rom_path).read_bytes()
-        pb = PyBoy(io.BytesIO(rom), ram_file=io.BytesIO(bytes(32768)), window='null', cgb=True, sound_emulated=False)
-        pb.set_emulation_speed(0)
+        pb = boot(io.BytesIO(rom), sound=False)
         try:
             pb.load_state(io.BytesIO(_artifact(record['source']['checkpoint_path'], record['source']['checkpoint_sha256'])))
             before, snapshot = party(pb, data), read_snapshot(pb.memory, data)
