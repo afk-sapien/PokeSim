@@ -1,13 +1,12 @@
 """Continue verified Time Capsule imports from two disposable adventure copies."""
 import argparse
-import io
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 
-from pyboy import PyBoy
+from pokesim.gen2.core import boot
 
 
 def inspect_classic(rom, state, *, offer_trained=False):
@@ -16,7 +15,7 @@ def inspect_classic(rom, state, *, offer_trained=False):
     from pokesim.broker.inventory import normalise
     from pokesim.broker.routine import offers
     from pokesim.trade.preferences import apply, identity
-    pb = PyBoy(str(rom), ram_file=io.BytesIO(bytes(32768)), window='null', sound_emulated=False)
+    pb = boot(str(rom), sound=False)
     try:
         with state.open('rb') as stream:
             pb.load_state(stream)
@@ -37,7 +36,7 @@ def inspect_modern(rom, state, data, *, offer_trained=False):
     from pokesim.gen2.ram import read_snapshot
     from pokesim.gen2.trading import offers
     from pokesim.gen2.web import live_status
-    pb = PyBoy(str(rom), ram_file=io.BytesIO(bytes(32768)), window='null', cgb=True, sound_emulated=True)
+    pb = boot(str(rom), sound=True)
     try:
         with state.open('rb') as stream:
             pb.load_state(stream)

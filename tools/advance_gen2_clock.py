@@ -1,7 +1,6 @@
-"""Simulate elapsed cartridge clock time in an isolated PyBoy 2.7 checkpoint."""
+"""Simulate elapsed cartridge clock time in an isolated format 15 checkpoint."""
 import argparse
 import hashlib
-from importlib.metadata import version
 import json
 import math
 from pathlib import Path
@@ -10,11 +9,11 @@ import struct
 
 
 def advance(raw, hours):
-    if version('pyboy') != '2.7.0' or raw[0] != 15 or len(raw) < 100000:
-        raise ValueError('Clock simulation requires a PyBoy 2.7.0 version 15 checkpoint')
+    if raw[0] != 15 or len(raw) < 100000:
+        raise ValueError('Clock simulation requires a format 15 checkpoint')
     if not math.isfinite(hours) or not 0 < hours <= 24 * 7:
         raise ValueError('Advance the clock by at most seven days per simulation step')
-    # PyBoy serializes RTC, two joypad bytes, then 36 serial-port bytes.
+    # The state ends with the RTC epoch, halt and carry bytes, two joypad bytes, then 36 serial-port bytes.
     offset = len(raw) - 48
     epoch = struct.unpack_from('d', raw, offset)[0]
     if not math.isfinite(epoch) or not 946684800 <= epoch <= 4102444800:

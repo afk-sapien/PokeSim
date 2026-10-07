@@ -11,6 +11,7 @@ from ..interactions.link_worker import _write
 from .cable import CableSide
 from .cable_driver import CableDriver
 from .cable_metadata import ADAPTER_ID, BUILDS
+from .core import stop_with_clock
 from .cable_verification import continue_save, individual_key, party, verify_exchange
 from .data import GameData
 from .ram import read_snapshot
@@ -68,7 +69,7 @@ def run_session(plan, output_dir, progress=None, cancelled=None):
                                                  side.spec.party_slot, snapshots[index])
             save_stream = io.BytesIO()
             clock_stream = io.BytesIO()
-            side.pb.stop(ram_file=save_stream, rtc_file=clock_stream)
+            stop_with_clock(side.pb, save_stream, clock_stream)
             side.stopped = True
             save = save_stream.getvalue()
             checked(len(save) == 32768, 'Unexpected cartridge save size')

@@ -6,7 +6,7 @@ from ..interactions.cable import checked
 from .cable import CableSide
 from .cable_driver import CableDriver
 
-ADAPTER_ID = 'english-rbgsc-pyboy270-timecapsule-v1'
+ADAPTER_ID = 'english-rbgsc-core-timecapsule-v1'
 COMMUNICATION = {'gold': (16469, 'cdb443cd2744cdc2'), 'silver': (16469, 'cdb443cd2744cdc2'),
                  'crystal': (16477, 'cd2644cd9944cd34')}
 

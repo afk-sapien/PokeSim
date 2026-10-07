@@ -1,6 +1,6 @@
 """Exercise Gen II installation, real Library workers and automatic trading."""
 import argparse
-from importlib.metadata import version
+from pokesim_core.emulator_state import checkpoint_metadata
 import json
 from pathlib import Path
 import time
@@ -31,7 +31,7 @@ def main():
             path = args.states / source / 'final.state'
             store = Store(manager.root / 'adventures' / aid)
             try:
-                metadata = {'app_version': __version__, 'pyboy_version': version('pyboy'),
+                metadata = {'app_version': __version__, **checkpoint_metadata(),
                             'generation': 2, 'rom_sha1': rom['sha1'], 'frame': 0, 'policy': 'strategic',
                             'policy_state': json.loads(path.with_suffix('.policy.json').read_text()),
                             'run_memory': {}, 'play_clock': {}, 'trade_id': None, 'reward_id': None}

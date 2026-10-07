@@ -5,7 +5,7 @@ import io
 from pathlib import Path
 import tempfile
 
-from pyboy import PyBoy
+from pokesim.gen2.core import boot
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Action, Policy
@@ -25,7 +25,7 @@ def main():
     with tempfile.TemporaryDirectory() as directory:
         store = Store(Path(directory))
         tracker = Tracker(store, data, fresh=False)
-        pb = PyBoy(str(args.rom), window='null', cgb=True, ram_file=io.BytesIO(bytes(32768)))
+        pb = boot(str(args.rom), sound=True)
         pb.set_emulation_speed(0)
         tracker.attach(pb)
         try:

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib.metadata import version
 import io
 import logging
 from pathlib import Path
@@ -10,14 +9,14 @@ import queue
 import threading
 import time
 
-from pyboy import PyBoy
-
 from .. import __version__, config
 from ..audio import AudioFeed
 from ..build_info import build_info
 from ..checkpoints import open_state
 from ..experimental.gen2 import identify
 from ..play_clock import PlayClock
+from .core import boot
+from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
 from .policy import Action, Policy
 from .ram import BADGES, read_snapshot
@@ -87,9 +86,7 @@ class Emulator:
 
     def _boot(self):
         # Save states own both SRAM and RTC. Shared ROM assets never own save files.
-        pb = PyBoy(str(self.rom), window='null', cgb=True, sound_emulated=True,
-                   ram_file=io.BytesIO(bytes(32768)))
-        pb.set_emulation_speed(0)
+        pb = boot(str(self.rom), sound=True)
         self.tracker.attach(pb)
         self.steps.attach(pb)
         return pb
@@ -173,7 +170,7 @@ class Emulator:
         return output.getvalue()
 
     def _manifest(self):
-        return {'app_version': __version__, 'pyboy_version': version('pyboy'), 'generation': 2,
+        return {'app_version': __version__, **checkpoint_metadata(), 'generation': 2,
                 'rom_sha1': self.rom_sha1, 'frame': self.frame, 'policy': config.POLICY,
                 'policy_state': self.policy.state_dict(), 'run_memory': {}, 'play_clock': self.play_clock.state_dict(),
                 'gen2_history': self.history, 'legendary_recovery': self.legendary_recovery.state_dict(),
@@ -205,6 +202,7 @@ class Emulator:
             raise ValueError('This checkpoint belongs to a different cartridge')
         if metadata is None:
             raise ValueError('Gen II checkpoints require cartridge identity metadata')
+        validate_runtime(metadata)
         with open_state(path) as source:
             self.pb.load_state(source)
         for button in BUTTONS:

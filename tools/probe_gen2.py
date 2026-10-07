@@ -8,7 +8,6 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict
 import hashlib
-from importlib.metadata import version
 import io
 import json
 from pathlib import Path
@@ -21,7 +20,7 @@ def ram_digest(pb):
     """Hash fixed WRAM and bank 1, independent of the bank selected by the CPU."""
     raw = bytearray()
     for bank in (0, 1):
-        # PyBoy 2.7.0 rejects a banked slice ending exactly at the bank boundary.
+        # Upstream PyBoy 2.7.0 rejected a banked slice ending exactly at the bank boundary.
         start = 0xC000 + bank * 0x1000
         raw.extend(pb.memory[bank, start:start + 0xFFF])
         raw.append(pb.memory[bank, start + 0xFFF])
@@ -29,10 +28,8 @@ def ram_digest(pb):
 
 
 def probe(source: Path, output: Path) -> dict:
-    from pyboy import PyBoy
-
-    if version('pyboy') != '2.7.0':
-        raise ValueError('This release experiment requires pyboy==2.7.0')
+    from pokesim.gen2.core import boot, lock_clock
+    from pokesim_core.emulator_state import runtime_provenance
     profile, raw = load_rom(source)
     output.mkdir(parents=True, exist_ok=False)
     with tempfile.TemporaryDirectory(prefix='pokesim-gen2-') as temporary:
@@ -40,11 +37,9 @@ def probe(source: Path, output: Path) -> dict:
         rom.write_bytes(raw)
 
         def boot():
-            pb = PyBoy(str(rom), window='null', cgb=True, sound_emulated=True,
-                       ram_file=io.BytesIO(bytes(32768)))
-            pb.set_emulation_speed(0)
+            pb = boot(str(rom), sound=True)
             # Set before the first tick so a test's clock cannot move backwards.
-            pb.rtc_lock_experimental(True)
+            lock_clock(pb, True)
             return pb
 
         def walk(pb):
@@ -97,7 +92,7 @@ def probe(source: Path, output: Path) -> dict:
 
     result = {
         'game': profile.game, 'revision': profile.revision, 'sha1': profile.sha1,
-        'cartridge_title': title, 'emulator': f'PyBoy {version("pyboy")}',
+        'cartridge_title': title, 'emulator': dict(runtime_provenance()),
         'mode': 'CGB', 'rtc': 'locked before first tick', 'opening_frames': 7920,
         'checks': {'bedroom_reached': True, 'walked_one_tile': True,
                    'checkpoint_restores_wram': True, 'checkpoint_replays_pixels_and_wram': True,

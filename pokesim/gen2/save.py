@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import io
 
-from pyboy import PyBoy
+from .core import boot, stop_with_clock
 
 from .ram import Memory, read_snapshot
 
@@ -37,9 +37,7 @@ def capture(emu):
 
 def export(rom, state, data):
     rom_bytes = rom.read_bytes()
-    pb = PyBoy(io.BytesIO(rom_bytes), ram_file=io.BytesIO(bytes(32768)),
-               window='null', cgb=True, sound_emulated=True)
-    pb.set_emulation_speed(0)
+    pb = boot(io.BytesIO(rom_bytes), sound=True)
     try:
         pb.load_state(io.BytesIO(state))
         for button in BUTTONS:
@@ -76,7 +74,7 @@ def export(rom, state, data):
             raise ValueError('Progress changed during export. No save was downloaded.')
         output = io.BytesIO()
         clock = io.BytesIO()
-        pb.stop(ram_file=output, rtc_file=clock)
+        stop_with_clock(pb, output, clock)
         save = output.getvalue()
     finally:
         pb.stop(save=False)
@@ -87,10 +85,7 @@ def export(rom, state, data):
 
 
 def verify(rom, save, data, expected, *, rtc=None):
-    pb = PyBoy(io.BytesIO(rom), ram_file=io.BytesIO(save), rtc_file=io.BytesIO(rtc) if rtc else None,
-               window='null', cgb=True,
-               sound_emulated=True)
-    pb.set_emulation_speed(0)
+    pb = boot(io.BytesIO(rom), ram=io.BytesIO(save), rtc=rtc, sound=True)
     try:
         continued = False
         for index in range(180):

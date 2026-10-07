@@ -1,11 +1,10 @@
 """Run an isolated Gen II policy scenario and retain failure evidence."""
 import argparse
-import io
 import json
 from pathlib import Path
 import time
 
-from pyboy import PyBoy
+from pokesim.gen2.core import boot, lock_clock
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy
@@ -143,9 +142,9 @@ def main():
         event_emu.policy = policy
         pb = event_emu.pb
     else:
-        pb = PyBoy(str(args.rom), window='null', cgb=True, sound_emulated=True, ram_file=io.BytesIO(bytes(32768)))
+        pb = boot(str(args.rom), sound=True)
     pb.set_emulation_speed(0)
-    pb.rtc_lock_experimental(not args.real_clock)
+    lock_clock(pb, not args.real_clock)
     from pokesim.gen2.legendary import Recovery
     recovery = Recovery()
     frame, previous = 0, None
@@ -165,7 +164,7 @@ def main():
                 policy.collection['target'] = None
         if args.restore_team_from:
             from pokesim.gen2.teams import key
-            source = PyBoy(str(args.rom), window='null', cgb=True, ram_file=io.BytesIO(bytes(32768)))
+            source = boot(str(args.rom), sound=True)
             try:
                 with args.restore_team_from.open('rb') as stream:
                     source.load_state(stream)

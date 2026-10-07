@@ -2,7 +2,7 @@
 import io
 import json
 
-from pyboy import PyBoy
+from .core import boot, stop_with_clock
 
 from ..interactions.cable import checked, sha256
 from .ram import Memory, read_snapshot
@@ -98,21 +98,19 @@ def verify_exchange(side, before, incoming, slot, source_snapshot, *, time_capsu
 
 
 def checkpoint_clock(rom, state):
-    """Export the checkpoint RTC through PyBoy without changing the source."""
-    clone = PyBoy(io.BytesIO(rom), ram_file=io.BytesIO(bytes(32768)), window='null', cgb=True, sound_emulated=False)
+    """Export the checkpoint RTC through Core without changing the source."""
+    clone = boot(io.BytesIO(rom), sound=False)
     try:
         clone.load_state(io.BytesIO(state))
         clock = io.BytesIO()
-        clone.stop(ram_file=io.BytesIO(), rtc_file=clock)
+        stop_with_clock(clone, io.BytesIO(), clock)
         return clock.getvalue()
     finally:
         clone.stop(save=False)
 
 
 def continue_save(rom, save, data, *, rtc=None):
-    pb = PyBoy(io.BytesIO(rom), ram_file=io.BytesIO(save), rtc_file=io.BytesIO(rtc) if rtc else None,
-               window='null', cgb=True, sound_emulated=False)
-    pb.set_emulation_speed(0)
+    pb = boot(io.BytesIO(rom), ram=io.BytesIO(save), rtc=rtc, sound=False)
     try:
         pb.tick(180, True)
         continuing = False

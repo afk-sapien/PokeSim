@@ -1,6 +1,6 @@
-"""Verified retail Gen II transport boundaries for PyBoy 2.7.0."""
+"""Verified retail Gen II transport boundaries for the Core emulator."""
 
-ADAPTER_ID = "english-gsc-pyboy270-cable-v1"
+ADAPTER_ID = "english-gsc-core-cable-v1"
 BUILDS = {'d8b8a3600a465308c9953dfa04f0081c05bdcb94': {'version': 'gold',
                                               'symbols': {'WaitForLinkedFriend.loop': (10, 23411),
                                                           'Serial_ExchangeByte': (0, 1851),

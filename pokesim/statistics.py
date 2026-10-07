@@ -213,6 +213,7 @@ def highlights(game):
     from urllib.parse import urlencode
     from .battle_power import battle_power
     from .strategy_data import SPECIES
+    from .pokemon import dv_rating
     rows = (game or {}).get('party', []) + ((game or {}).get('storage') or {}).get('pokemon', [])
     result = {}
     for key, score, sort in [('battle', battle_power, 'battle_power'),
