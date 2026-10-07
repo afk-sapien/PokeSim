@@ -14,6 +14,8 @@ RENEWABLE_TMS = {200 + number for number in (1, 2, 5, 7, 9, 15, 17, 23, 32, 33, 
 # prizes (Surf and the Gold Teeth), so an unaffordable fee is a permanent roadblock, not a delay.
 SAFARI_FEE = 500
 CASH_RESERVE = 300
+# Balls kept in stock so a shiny or rare find is catchable on any route; none can be bought in battle.
+BALL_RESERVE = 10
 SAFARI_GOALS = ('surf', 'teeth')
 SAFARI_INTERIOR = {m for m, w in WORLD.items() if w['name'].startswith('SafariZone') and w['name'] != 'SafariZoneGate'}
 SPARE = {ITEMS[name] for name in ('NUGGET', 'X_ACCURACY', 'GUARD_SPEC', 'DIRE_HIT', 'X_ATTACK', 'X_DEFEND',
@@ -108,7 +110,7 @@ class ShoppingController:
                 return SupplyPlan(Goal('restock', 'Raise the Safari Zone entry fee',
                                        'Sell spare valuables at a shop because the Safari Zone turns away anyone short of the fee',
                                        tuple(clerks), 'left', True))
-        ball_reserve = 5 if completed_champion else 2
+        ball_reserve = BALL_RESERVE
         balls = sum(qty for item, qty in snapshot.items if item in BALLS)
         medicine = sum(qty for item, qty in snapshot.items if item in HEALING)
         bag_full = len(snapshot.items) >= 18 and self.sale_index(snapshot) is not None

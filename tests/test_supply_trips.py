@@ -6,13 +6,13 @@ from test_screen import fake_mem
 from test_strategy import mon
 
 
-def supply_goal(money, location='INDIGO_PLATEAU', sale=False):
+def supply_goal(money, location='INDIGO_PLATEAU', sale=False, balls=1):
     policy = StrategicPolicy(7)
     policy.completed['pokedex'] = True
     policy.goal = Goal('collect_train', 'Train a partner', 'Gain experience', ((MAPS['INDIGO_PLATEAU'], 10, 15),))
     policy.collection.choose = lambda *args: None
     policy.pickups.choose = lambda *args: None
-    items = ((ITEMS['GREAT_BALL'], 1), (ITEMS['ANTIDOTE'], 1))
+    items = ((ITEMS['GREAT_BALL'], balls), (ITEMS['ANTIDOTE'], 1))
     if sale:
         items += ((ITEMS['NUGGET'], 1),)
         items += tuple((item, 1) for item in range(201, 216))
@@ -38,3 +38,9 @@ def test_optional_supplies_can_still_be_bought_in_the_current_mart():
 
 def test_a_full_bag_of_saleable_items_still_triggers_a_shop_visit():
     assert supply_goal(455, sale=True).key == 'restock'
+
+
+def test_a_ball_reserve_of_ten_triggers_a_restock_when_affordable():
+    assert supply_goal(10000, balls=9).key == 'restock'
+    assert supply_goal(10000, balls=10).key == 'collect_train'
+    assert supply_goal(455, balls=9).key == 'collect_train'

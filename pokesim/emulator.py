@@ -25,7 +25,7 @@ from .play_clock import PlayClock
 from .palettes import PALETTES, recolor, validate_palette
 from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext
-from .ram import Snapshot, read_snapshot
+from .ram import SPECIES_NAMES, Snapshot, read_snapshot
 from .screen import W_OPTIONS
 from .stalls import PROGRESS_EVENTS, StallWatch, advanced
 from .strategy_data import MAPS
@@ -395,17 +395,32 @@ class Emulator:
             self.frame_seq += 1
             self.frame_cond.notify_all()
 
-    def _protect_shiny(self, snapshot):
+    def _report_uncatchable_shiny(self, snapshot):
+        """Say once per battle why a shiny cannot be caught. The policy runs from it as usual.
+
+        Balls cannot be bought and storage cannot be freed in battle, so pausing would only
+        look like a stall. The supply and storage reserves are what keep a shiny catchable.
+        """
+        if not snapshot.enemy_shiny or snapshot.in_battle != 1:
+            self._shiny_reported = False
+            return False
         from .strategy_data import ITEMS
         balls = {ITEMS[name] for name in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL', 'MASTER_BALL')}
-        if (not self.manual_mode and snapshot.enemy_shiny
-                and (not snapshot.can_catch or snapshot.battle_type == 0
-                     and not any(item in balls and qty for item, qty in snapshot.items))):
-            self.snapshot = snapshot
-            self.paused = True
-            self._autosave()
+        if not snapshot.can_catch:
+            why = 'no storage space'
+        elif snapshot.battle_type == 0 and not any(item in balls and qty for item, qty in snapshot.items):
+            why = 'no balls'
+        else:
+            return False
+        if getattr(self, '_shiny_reported', False):
             return True
-        return False
+        self._shiny_reported = True
+        species = SPECIES_NAMES.get(snapshot.enemy_species) or 'Pokémon'
+        self._handle_events([Event('shiny_missed', f'Shiny {species} could not be caught: {why}',
+                                   f'A shiny {species} appeared with {why}, so the adventure ran from it. '
+                                   'The supply and storage reserves should prevent this.',
+                                   priority=HIGH, tags='star')], snapshot)
+        return True
 
     def _sync_audio(self, enabled):
         if enabled == self._audio_enabled:
@@ -971,8 +986,7 @@ class Emulator:
                     continue
                 if not pending:
                     snap = read_snapshot(self.pb.memory, self.frame)
-                    if self._protect_shiny(snap):
-                        continue
+                    self._report_uncatchable_shiny(snap)
                     ctx = PolicyContext(snap, time.time() - self.stuck_since, time.time(), self.pb.memory)
                     preparation = getattr(self, 'preparation', None)
                     pending = list(preparation.step(ctx) if preparation else self.policy.step(ctx))

@@ -21,8 +21,9 @@ PROVIDERS = ('ntfy', 'discord', 'telegram')
 # The first matching row wins, so a legendary catch is "legendary" and any other catch is "pokedex".
 # Event types that appear nowhere here, including ones added later, belong to "other".
 CATEGORIES = (
-    ('stall', 'Stuck or needs attention', 'An adventure stopped making progress and may need a look.',
-     True, (('stall', 1),)),
+    ('stall', 'Stuck or needs attention',
+     'An adventure stopped making progress, or a shiny could not be caught.',
+     True, (('stall', 1), ('shiny_missed', 1))),
     ('badges', 'Gym badges', 'A Gym Leader was beaten and a badge earned.', True, (('badge', 1),)),
     ('league', 'Elite Four and Champion', 'Elite Four wins, League victories and the Hall of Fame.',
      True, (('champion', 1), ('trainer', 5))),
