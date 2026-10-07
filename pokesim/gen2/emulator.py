@@ -6,6 +6,7 @@ import io
 import logging
 from pathlib import Path
 import queue
+import secrets
 import threading
 import time
 
@@ -13,8 +14,10 @@ from .. import __version__, config
 from ..audio import AudioFeed
 from ..build_info import build_info
 from ..checkpoints import open_state
+from ..events import HIGH
 from ..experimental.gen2 import identify
 from ..play_clock import PlayClock
+from ..stalls import StallWatch
 from .core import boot
 from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
@@ -22,6 +25,8 @@ from .policy import Action, Policy
 from .ram import BADGES, read_snapshot
 
 log = logging.getLogger('pokesim.gen2')
+# A screen that has not changed for half a game minute is a loop, not a pause.
+SCREEN_FRAMES = 1800
 BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
 
 
@@ -70,6 +75,18 @@ class Emulator:
         self.stuck_since = time.time()
         self.progress_frame = 0
         self.progress_key = None
+        self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
+                                config.STALL_ALERT_REPEAT_HOURS)
+        self.reloads = 0
+        self.last_reload = 0.0
+        self.unstick_streak = 0
+        self.failure_streak = 0
+        self.invalid_frame = self.battle_frame = None
+        self.screen_key = None
+        self.screen_frame = self.stuck_frame = 0
+        self.stuck_ts = time.time()
+        self.last_reload_frame = -10 ** 9
+        self._guard_frame = 0
         self._watch_until = self._last_publish = 0.0
         self.history = store.get('gen2-history', {'maps': [], 'owned': [], 'badges': 0, 'league': 0})
         self.last_achievement = next(iter(store.events(limit=1)), None)
@@ -106,9 +123,22 @@ class Emulator:
                 raise ValueError('No compatible Gen II autosave could be restored') from errors[-1]
         from .. import rewards
         rewards.initialize(self.store, self.snapshot.hall_of_fame_count if self.snapshot else 0)
-        if self.store.get('interaction_preparation') or self.store.get('trade_hold'):
+        self._clear_stale_hold()
+        preparation = self.store.get('interaction_preparation') or {}
+        if preparation.get('phase') in {'travelling', 'storage', 'rendezvous'} or self.store.get('trade_hold'):
             self.paused = True
         self.thread.start()
+
+    def _clear_stale_hold(self):
+        """Drop a trade hold whose exchange no longer exists, since a hold freezes every command."""
+        hold = self.store.get('trade_hold')
+        if not hold:
+            return
+        from ..runtime.participant import _records
+        live = {row.get('id') for row in _records(self.store) if row.get('phase') != 'aborted'}
+        if hold.get('id') not in live:
+            log.warning('Clearing a trade hold with no live exchange')
+            self.store.set('trade_hold', None)
 
     def stop(self):
         self.commands.put(('stop', None))
@@ -182,6 +212,11 @@ class Emulator:
             return
         if self.snapshot is not None and not self.snapshot.valid:
             return
+        # Keep older saves intact while the run is wedged so a reload has somewhere good to go.
+        if not trade_prepare and (self.frame - self.screen_frame >= SCREEN_FRAMES
+                                  or self.battle_frame is not None
+                                  and self.frame - self.battle_frame > config.BATTLE_TIMEOUT_SECONDS * 20):
+            return
         self.steps.flush(force=True)
         self.statistics.flush(self.snapshot)
         path = self.store.write_checkpoint(self._state_bytes(), self._manifest())
@@ -219,6 +254,7 @@ class Emulator:
         self.snapshot = read_snapshot(self.pb.memory, self.data, self.frame)
         self.audio.clear()
         self.options_applied = False
+        self._reset_watch()
         self._publish_frame()
 
     def _event(self, event, snapshot):
@@ -234,7 +270,9 @@ class Emulator:
     def _observe(self):
         snapshot = read_snapshot(self.pb.memory, self.data, self.frame)
         self.snapshot = snapshot
+        self.invalid_frame = (self.invalid_frame if self.invalid_frame is not None else self.frame) if not snapshot.valid else None
         if not snapshot.valid or not snapshot.started:
+            self.stuck_frame, self.stuck_ts = self.frame, time.time()
             return
         if not self.options_applied and not self.manual_mode:
             from .ram import Memory
@@ -288,14 +326,117 @@ class Emulator:
                 elif mon.level > old.level and not mon.egg:
                     self._event(Event('level', f'{mon.nick} grew to level {mon.level}',
                                       priority=4 if mon.level in (50, 100) else 2, notable=mon.level % 10 == 0), snapshot)
-        key = (len(self.policy.nav.visits), snapshot.event_flags, snapshot.badges,
-               snapshot.owned, snapshot.items, snapshot.enemy_hp,
-               tuple((mon.species, mon.level, mon.hp, mon.experience, mon.pp) for mon in snapshot.party))
+        # Hit points and PP move during a battle that never ends, so they are not progress.
+        key = (len(self.policy.nav.visits), len(self.history['maps']), snapshot.event_flags, snapshot.badges,
+               snapshot.owned, snapshot.items,
+               tuple((mon.species, mon.level, mon.experience) for mon in snapshot.party))
+        now = time.time()
         if key != self.progress_key:
             self.progress_key, self.progress_frame = key, self.frame
-        if before and (before.map, before.x, before.y) != (snapshot.map, snapshot.x, snapshot.y):
-            self.stuck_since = time.time()
+            self.stall.progress(self.frame, now)
+            self.stuck_frame, self.stuck_ts = self.frame, now
+            self.unstick_streak = self.failure_streak = 0
+        screen = hash((snapshot.tiles, snapshot.map, snapshot.x, snapshot.y, snapshot.in_battle))
+        if screen != self.screen_key:
+            self.screen_key, self.screen_frame = screen, self.frame
+        if before and (before.map, before.x, before.y) != (snapshot.map, snapshot.x, snapshot.y) or snapshot.in_battle:
+            self.stuck_since = now
+            self.stuck_frame, self.stuck_ts = self.frame, now
+        self.battle_frame = (self.battle_frame if self.battle_frame is not None else self.frame) if snapshot.in_battle else None
         self.previous = snapshot
+
+    def _reset_watch(self):
+        """Restart the stuck clocks after a reload, which also rewinds the frame counter."""
+        now = time.time()
+        self.progress_frame = self.screen_frame = self.stuck_frame = self.last_reload_frame = self.frame
+        self.stuck_ts = self.stuck_since = now
+        self.screen_key = self.progress_key = None
+        self.invalid_frame = self.battle_frame = None
+        self._reward_check_frame = self.frame
+        self.stall.frame = None
+
+    def _unstick(self, since_ts, why):
+        """Go back to an autosave from before the trouble started, or power-cycle when there is none."""
+        saves = self.store.autosaves()
+        older = [path for path in saves if path.stat().st_mtime < since_ts - 30]
+        target = older[-1] if older else (saves[0] if saves else None)
+        self.unstick_streak += 1
+        if self.unstick_streak == 2 and self.snapshot is not None and self.snapshot.valid and self.snapshot.started:
+            self._event(Event('stall', 'Stuck? The adventure had to reload twice',
+                              f'{why.capitalize()} at {self.snapshot.map_name} and a reload did not help. '
+                              f'{self.policy.recoveries} recoveries so far.', priority=HIGH), self.snapshot)
+        restored = None
+        if target:
+            log.warning('%s for %ds, reloading %s', why, time.time() - since_ts, target.name)
+            for path in [target] + [path for path in reversed(saves) if path != target]:
+                try:
+                    self._load_state_file(path)
+                    restored = path
+                    break
+                except (ValueError, OSError):
+                    log.exception('Cannot reload Gen II checkpoint %s', path.name)
+        if restored:
+            # The emulator is deterministic, so the same save and choices would replay the same
+            # trouble. Idling a random moment moves the game's random numbers along.
+            self._tick(1 + secrets.randbelow(180))
+        else:
+            log.warning('%s and no save state to go back to, power-cycling', why)
+            self.pb.stop(save=False)
+            self.pb = self._boot()
+            self.options_applied = False
+            self.previous = self.snapshot = None
+            self.audio.clear()
+            self.policy.on_restore()
+            self.statistics.previous = None
+        self.policy.menu = None
+        self.reloads += 1
+        self.last_reload = time.time()
+        self._reset_watch()
+
+    def _check_guards(self):
+        """Escalate from a gentle policy reset, to exploratory buttons, to reloading an older save."""
+        if self.paused or self.manual_mode or self.preparation or self.store.get('trade_hold'):
+            self.stuck_frame = self.screen_frame = self.progress_frame = self.frame
+            self.stuck_ts = time.time()
+            return
+        snapshot = self.snapshot
+        if snapshot is None or self.frame - self.last_reload_frame < 3600:
+            return
+        limit, frame = config.STUCK_RELOAD_SECONDS * 60, self.frame
+        failure = self.policy.take_failure()
+        if failure:
+            self.failure_streak += 1
+            log.warning('policy gave up: %s', failure)
+        if self.invalid_frame is not None and frame - self.invalid_frame > 600:
+            self._unstick(self.stuck_ts, 'game state glitched')
+        elif self.failure_streak >= 3:
+            self._unstick(self.stuck_ts, 'a menu task kept failing')
+        elif self.battle_frame is not None and frame - self.battle_frame > config.BATTLE_TIMEOUT_SECONDS * 60:
+            self._unstick(self.stuck_ts, 'battle never ended')
+        elif frame - self.stuck_frame > limit or frame - self.progress_frame > 3 * limit:
+            self._unstick(self.stuck_ts, 'stuck')
+        elif frame - self.screen_frame >= SCREEN_FRAMES:
+            level = 1 if self.policy.recoveries % 3 == 0 else 2
+            self.policy.recover(level)
+            self.screen_frame = frame
+            log.warning('the screen has not changed for %d frames, recovery level %d', SCREEN_FRAMES, level)
+        self._check_stall()
+
+    def _check_stall(self):
+        """Report a run that keeps playing without achieving anything for hours of game time."""
+        snapshot = self.snapshot
+        if snapshot is None or not snapshot.valid or not snapshot.started:
+            return
+        quiet = self.stall.check(self.frame, time.time())
+        if quiet is None:
+            return
+        details = self.policy.details()
+        objective = (details.get('objective') or {}).get('label') or 'no objective'
+        hours = quiet[0] / 60
+        log.warning('no progress for %.1f game hours at %s: %s', hours, snapshot.map_name, objective)
+        self._event(Event('stall', f'Stuck? {hours:.0f} game hours without progress',
+                          f'Objective: {objective}. On {snapshot.map_name} after {quiet[1]} real minutes '
+                          f'and {self.policy.recoveries} recoveries.', priority=HIGH), snapshot)
 
     def _tick(self, frames):
         while frames > 0:
@@ -436,6 +577,9 @@ class Emulator:
                     if action.button:
                         self.pb.button_release(action.button)
                 self._tick(action.gap)
+                if self.frame >= self._guard_frame:
+                    self._guard_frame = self.frame + 60
+                    self._check_guards()
                 if time.monotonic() >= next_save:
                     self._autosave()
                     next_save = time.monotonic() + config.AUTOSAVE_SECONDS
@@ -462,17 +606,20 @@ class Emulator:
         from .. import rewards
         achievement = self.last_achievement
         quiet_minutes = max(0, self.frame - self.progress_frame) / 3600
-        stalled = quiet_minutes >= 10 and not self.paused and not self.manual_mode
+        live = not self.paused and not self.manual_mode
+        stalled = live and self.stall.stalled(self.frame, time.time())
+        recovering = time.time() - self.last_reload < 30 or self.policy.mode == 'finding another approach'
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
                 'health': self.health(), 'paused': self.paused, 'manual_mode': self.manual_mode, 'speed': self.speed,
                 'policy': self.policy.describe(), 'strategy': self.policy.details(), 'frame': self.frame,
                 'game': self.snapshot.to_dict() if self.snapshot else None, 'rom': self.rom_note,
                 'play_clock': self.play_clock.status(), 'performance': {'frames': self.executed_frames, 'sampled_at': time.monotonic()},
                 'uptime': int(time.time() - self.started_at), 'stuck_seconds': int(time.time() - self.stuck_since),
-                'areas_discovered': len(self.history['maps']), 'reloads': 0, 'glitched': False,
+                'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,
+                'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,
                 'help_request': {'reason': 'The policy has stopped making game progress',
                                  'action': self.policy.mode} if stalled else None,
-                'progress': {'state': 'stalled' if stalled else 'making_progress',
+                'progress': {'state': 'stalled' if stalled else 'recovering' if recovering else 'making_progress',
                              'last_achievement': achievement, 'quiet_game_minutes': round(quiet_minutes, 1)},
                 'league_rewards': rewards.status(self.store), 'legendary_recovery': self.legendary_recovery.state_dict()}
 

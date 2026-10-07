@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from math import isqrt
 
 from ..experimental.gen2 import dex_flags
+from .screens import ScreenText, mask_hud
 
 BADGES = ('Zephyr', 'Hive', 'Plain', 'Fog', 'Mineral', 'Storm', 'Glacier', 'Rising',
           'Boulder', 'Cascade', 'Thunder', 'Rainbow', 'Soul', 'Marsh', 'Volcano', 'Earth')
@@ -244,7 +245,7 @@ class Snapshot:
 
     @property
     def text(self):
-        return '\n'.join(self.tiles)
+        return ScreenText('\n'.join(self.tiles))
 
     def event(self, name):
         index = self.data.events[name]
@@ -326,6 +327,8 @@ def read_snapshot(memory, data, frame=0):
         raw = mem.read(f'wRoamMon{index}', 7)
         if raw[0] in (243, 244, 245):
             roamers.append({'species': raw[0], 'level': raw[1], 'map': raw[2] * 256 + raw[3], 'hp': raw[4]})
+    battle = mem.byte('wBattleMode')
+    screen_tiles = mask_hud(mem.tiles()) if battle else mem.tiles()
     return Snapshot(frame, mem.byte('wMapGroup') * 256 + mem.byte('wMapNumber'), mem.byte('wXCoord'), mem.byte('wYCoord'),
                     mem.text('wPlayerName'), mem.text('wRivalName'), tuple(party), tuple(stored), tuple(box_counts), active_box,
                     owned, seen, mem.byte('wJohtoBadges') | (mem.byte('wKantoBadges') << 8),
@@ -334,7 +337,7 @@ def read_snapshot(memory, data, frame=0):
                     mem.byte('wBattleMode'), mem.byte('wEnemyMonSpecies'), mem.byte('wEnemyMonLevel'),
                     mem.word('wEnemyMonHP'), mem.word('wEnemyMonMaxHP'), mem.byte('wTrainerClass'), mem.byte('wBattleType'),
                     (mem.word('wGameTimeHours'), mem.byte('wGameTimeMinutes'), mem.byte('wGameTimeSeconds')),
-                    mem.byte('wHallOfFameCount'), mem.read('wEventFlags', 256), mem.tiles(), tuple(objects), valid, data,
+                    mem.byte('wHallOfFameCount'), mem.read('wEventFlags', 256), screen_tiles, tuple(objects), valid, data,
                     daycare=daycare, egg_ready=bool(mem.byte('wDayCareMan') & 64),
                     breeding_compatible=bool(mem.byte('wDayCareMan') & 32), roamers=tuple(roamers),
                     step_count=mem.byte('wStepCount'), happiness_cycle=mem.byte('wHappinessStepCount'))

@@ -3,6 +3,7 @@ import random
 from dataclasses import asdict
 
 from .base import Action, Policy
+from ..textmatch import ScreenText
 from .battle import (BALLS, CURES, HEALING, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
                      healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
@@ -409,7 +410,7 @@ class StrategicPolicy(Policy):
         return actions
 
     def _dispatch(self, s, scr, kind, mem):
-        text = scr.text.upper()
+        text = ScreenText(scr.text.upper())
         active = min(mem[W_PLAYER_MON_NUMBER], max(0, len(s.party) - 1))
         if kind == "yes_no":
             decision = self.pc.confirmation(s, scr, text, self.goal.key, self.collection.project,
@@ -631,7 +632,7 @@ class StrategicPolicy(Policy):
             return self._menu_decision(self.pc.step(s, scr, kind, self.goal.key,
                                                   self.collection.project, self._preferences(), self.collection))
         if kind == "dialogue":
-            if not s.in_battle and ("NO SURF" in text or "NO PLACE TO GET OFF" in text or 'CURRENT IS' in text):
+            if not s.in_battle and ("NO SURFING" in text or "NO PLACE TO GET OFF" in text or 'CURRENT IS' in text):
                 self._remember_failure(s, 'Surf was rejected at this shoreline')
                 self.watch.expected = None
                 self.intent = None

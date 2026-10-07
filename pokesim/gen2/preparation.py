@@ -29,7 +29,7 @@ def begin(emu, key, tid, *, time_capsule=False):
         if saved.get('phase') == 'travelling' and emu.preparation is None:
             raise ValueError('Trade preparation was interrupted. Release the reservation and retry')
         return saved
-    if emu.store.get('trade_hold') or saved:
+    if emu.store.get('trade_hold') or saved and saved.get('phase') not in ('failed', 'cancelled'):
         raise ValueError('Another exchange reserves this adventure')
     if emu.paused or emu.manual_mode:
         raise ValueError('Resume autonomous play before preparing a trade')
@@ -61,10 +61,21 @@ class Preparation:
         try:
             return self.advance(snapshot)
         except (ValueError, StopIteration) as error:
+            # Give the adventure back to the policy, as Gen 1 does, so a failed
+            # preparation never leaves the run paused with nothing to resume it.
             self.state.update(phase='failed', error=str(error) or 'No safe PC storage operation is available')
             self.emu.store.set(KEY, self.state)
-            self.emu.paused = True
+            self.emu.preparation = None
+            self.menu = None
+            self.emu.policy.on_restore()
             return Action(None, 0, 1)
+
+    @staticmethod
+    def open_box(snapshot):
+        box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)
+        if box is None:
+            raise ValueError('Every PC box is full. Release or move some Pokémon, then prepare the trade again')
+        return box
 
     def advance(self, snapshot):
         emu, state = self.emu, self.state
@@ -156,13 +167,13 @@ class Preparation:
             return Action('up', 8, 16)
         if state.get('time_capsule') and incompatible is not None and len(snapshot.party) > 1:
             if snapshot.box_counts[snapshot.active_box] >= 20:
-                box = next(i for i, count in enumerate(snapshot.box_counts) if count < 20)
+                box = self.open_box(snapshot)
                 self.menu = ChangeBox(box)
             else:
                 self.menu = Storage('DEPOSIT', incompatible, len(snapshot.party))
         elif len(snapshot.party) == 6:
             if snapshot.box_counts[snapshot.active_box] >= 20:
-                box = next(i for i, count in enumerate(snapshot.box_counts) if count < 20)
+                box = self.open_box(snapshot)
                 self.menu = ChangeBox(box)
             else:
                 protected = {15, 19, 57, 70, 148, 250, 127}
