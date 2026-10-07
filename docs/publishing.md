@@ -31,13 +31,37 @@ To retry a failed run, start the workflow manually with the unchanged draft's ta
 It refuses a version whose final image download is already attached, so inspect a
 failure during the final upload before retrying. Never move a published tag.
 
-The workflow validates Python installation on all configured targets, runs Python
-and browser tests, builds the wheel and source package, and builds and tests the
-Linux amd64 image. Only then does it log in to GHCR with the repository's temporary
-`GITHUB_TOKEN` and push the exact version tag. No personal access token or added
+The workflow does not repeat the verification matrix. The CI and Python install
+workflows already run on every push to `main` and on every tag. The `gate` job runs
+`tools/check_release_gates.py` and requires push runs of both workflows for the exact
+release commit in which every job succeeded, the required jobs are present, and none was
+skipped or cancelled. Together they cover Python 3.11, 3.12, and 3.14 tests, lint, the
+dependency audit, the browser flows, container build and verification, vulnerability
+scanning, and fresh installs on Windows, macOS Intel and ARM, and Linux x86 and ARM. The
+gate waits for runs that are still in progress and fails for a missing or failed run, so wait
+for green checks on the release commit before starting the workflow. The script comes
+from the commit that dispatched the workflow, not from the release revision.
+
+The `build` job runs in parallel with the gate. It builds the wheel and source package,
+checks them, builds and tests the Linux amd64 image, assembles the downloads, and keeps
+them as a workflow artifact. It has read-only permissions and publishes nothing. The
+`publish` job runs only after both the gate and the build succeed. It is the only job that
+can push an image or change a release. It loads the tested image from the build artifact,
+logs in to GHCR with the repository's temporary
+`GITHUB_TOKEN`, and pushes the exact version tag. No personal access token or added
 repository secret is needed. The publishing job has `packages: write` and
 `contents: write`. Draft validation also needs `contents: write` because GitHub only
-exposes draft releases to identities with push access. Test jobs retain read-only access.
+exposes draft releases to identities with push access. All other jobs retain read-only access.
+
+To rehearse the whole workflow without publishing, start it with the dry run input:
+
+```sh
+gh workflow run release.yml --ref main -f tag=v0.4.17 -f dry_run=true
+```
+
+A dry run validates the tag, runs the gate, and runs the full build and image checks. The
+`publish` job is skipped, so no image is pushed and no release is uploaded or edited. A dry run
+does not require a draft release, so it can also run against a tag that is already published.
 
 It next pulls the image using an empty Docker credentials directory and verifies
 that it has the same image ID as the tested build. Release assembly records the
@@ -66,7 +90,7 @@ policies that prohibit package creation must be resolved before the first releas
 
 ## Failed runs and retries
 
-A failed check before image publication leaves GHCR unchanged and the GitHub
+A failed gate or build leaves GHCR unchanged and the GitHub
 release remains a private draft. The previous completed stable release stays latest. Once the image has been pushed, a later
 failure can leave that image in GHCR with an incomplete draft asset list. Inspect the
 failure and rerun the workflow manually against the same unchanged tag. It replaces

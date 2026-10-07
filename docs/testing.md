@@ -44,6 +44,11 @@ state replaces the emulator boundary, so CI needs no Pokémon ROM. Coverage incl
 - Disconnected trading, offer withdrawal, and view-only controls.
 - A trade hold beginning after an event page loads, rejected rewind feedback, and retry.
 
+CI splits the browser tests into four parallel jobs. Set `POKESIM_TEST_SHARD=2/4` to run one
+shard locally. Whole test modules are assigned to shards, and the shards together cover every
+test exactly once. The same variable splits the native test suite across parallel jobs on the
+slower operating systems in the Python install workflow.
+
 Browser traces are written into each test's temporary directory. CI retains them on
 failure. These scenarios do not establish native packaging or actual cartridge playback.
 
