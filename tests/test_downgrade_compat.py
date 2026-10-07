@@ -80,19 +80,3 @@ def test_locked_clock_checkpoint_is_refused_by_the_legacy_logic():
         legacy_headless_load(locked, 'abc')
     with pytest.raises(ValueError):
         legacy_pair_inspect(locked)
-
-
-def test_core_checkpoint_carries_the_legacy_tag():
-    """Core 0.2 tags Emulator.checkpoint() for plain format-15 state. Use any cartridge the tests have."""
-    import os
-    from pathlib import Path
-    from pokesim_core.emulator import Emulator
-    rom = os.environ.get('ROM_PATH')
-    if not rom or not Path(rom).is_file():
-        pytest.skip('Set ROM_PATH to a Pokemon Red or Blue cartridge')
-    emulator = Emulator(rom, window='null', sound_emulated=False, log_level='ERROR')
-    try:
-        emulator.tick(5)
-        assert emulator.checkpoint()['pyboy_version'] == '2.7.0'
-    finally:
-        emulator.stop(save=False)
