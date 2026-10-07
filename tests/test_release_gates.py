@@ -61,7 +61,10 @@ def test_publish_job_is_the_only_writer_and_never_runs_in_a_dry_run():
 
 
 def test_shards_cover_the_suite_exactly_once(monkeypatch):
-    import conftest
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('pokesim_root_conftest', ROOT / 'conftest.py')
+    conftest = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(conftest)
 
     class Item:
         def __init__(self, nodeid):
