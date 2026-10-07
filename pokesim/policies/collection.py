@@ -861,8 +861,11 @@ class Collection:
     @staticmethod
     def partner_matches(s, project):
         from ..trade.preferences import identity
-        rows = [dict(asdict(mon), party_index=i) for i, mon in enumerate(s.party)] + s.storage_entries()
-        rows = [mon for mon in rows if identity(mon) == project.get('trainee_key')]
+        from pokesim_core.identity import pokemon_identity
+        key = project.get('trainee_key')
+        rows = [dict(asdict(mon), party_index=i) for i, mon in enumerate(s.party)
+                if pokemon_identity(mon.trainer_id, mon.dvs) == key]
+        rows += [mon for mon in s.storage_entries() if identity(mon) == key]
         if project.get('scoped_partner'):
             rows = [mon for mon in rows if mon['species'] in project['family']]
             nick = project.get('trainee_nick')

@@ -1,5 +1,6 @@
 """Directed navigation with observed actions, static geometry, and temporary obstacles."""
 from collections import deque
+import os
 
 from ..strategy_data import DATA, ITEMS, MAPS, WORLD, event_set
 
@@ -49,6 +50,9 @@ class Navigator:
         self._neighbor_cache = {}
         self._compiled_graph = None
         self._open_navigation = None
+        self._story_key = None
+        self._story_result = None
+        self._cache_story = os.environ.get('POKESIM_EXPERIMENT_STORY_CACHE', '1') != '0'
 
     def update_live(self, snapshot, memory):
         self.live_map = snapshot.map
@@ -56,6 +60,28 @@ class Navigator:
                                for i in range(min(15, len(WORLD.get(snapshot.map, {}).get("objects", []))))]
 
     def update_story(self, snapshot, *, allow_remote_puzzles=True):
+        # World tables are immutable for the lifetime of a navigator.
+        key = (snapshot.map, snapshot.badges, snapshot.saffron_open, tuple(snapshot.items),
+               tuple(tuple(mon.moves) for mon in snapshot.party), snapshot.event_flags if isinstance(snapshot.event_flags, bytes) else tuple(snapshot.event_flags),
+               bytes(snapshot.hidden_objects), allow_remote_puzzles)
+        if self._cache_story and key == self._story_key:
+            tiles, closed, blocks, cleared, surf, cut = self._story_result
+            # Restore fresh containers because travel and puzzle policies can override them.
+            self.tile_overrides = dict(tiles)
+            self.closed_passages = set(closed)
+            self.story_blocks = set(blocks)
+            self.can_surf, self.can_cut = surf, cut
+            if self.cleared_objects != cleared:
+                self.cleared_objects = set(cleared)
+                self.path.clear()
+            return
+        self._rebuild_story(snapshot, allow_remote_puzzles=allow_remote_puzzles)
+        self._story_key = key
+        self._story_result = (tuple(self.tile_overrides.items()), frozenset(self.closed_passages),
+                              frozenset(self.story_blocks), frozenset(self.cleared_objects),
+                              self.can_surf, self.can_cut)
+
+    def _rebuild_story(self, snapshot, *, allow_remote_puzzles=True):
         can_strength = any(70 in p.moves for p in snapshot.party)
         self.tile_overrides = {(m, x, y): tile for m, w in WORLD.items() for flag, x, y, tile in w.get("opened_tiles", [])
                                if event_set(snapshot.event_flags, flag)
@@ -157,6 +183,7 @@ class Navigator:
         self.attempt = (pos, direction, frame)
 
     def restore(self):
+        self._story_key = None
         self.attempt = None
         self.last_pos = None
         self.path.clear()
