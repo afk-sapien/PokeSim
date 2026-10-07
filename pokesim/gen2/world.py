@@ -78,3 +78,18 @@ def travel_collision(data, snapshot, mid, grid):
             for x in (34, 35):
                 grid[y * width + x] = 7
     return grid
+
+
+def ice_solids(data, snapshot, mid):
+    """Tiles of an ice map held by objects the game is currently showing.
+
+    Objects an event flag has hidden are skipped. Boulders use the position the game reports
+    while their map is loaded, since the player can push them. Everything else stays where the map puts it.
+    """
+    live = {index: (x, y) for index, x, y in snapshot.objects} if snapshot.map == mid else {}
+    points = set()
+    for index, obj in enumerate(data.maps[mid]['objects'], 1):
+        if obj['event'] in data.events and snapshot.event(obj['event']):
+            continue
+        points.add(live.get(index, (obj['x'], obj['y'])) if obj['sprite'] == 'SPRITE_BOULDER' else (obj['x'], obj['y']))
+    return points

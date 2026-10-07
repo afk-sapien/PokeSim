@@ -1,9 +1,10 @@
 """Gen II map routing with live collision blocks and object avoidance."""
 from collections import deque
 
+from . import ice
 from .ram import Memory
 from .routes import Regions
-from .world import travel_collision
+from .world import ice_solids, travel_collision
 
 DIRS = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}
 OPPOSITE = {'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'}
@@ -38,6 +39,8 @@ class Navigator:
             if index not in visible and abs(x - snapshot.x) <= 4 and abs(y - snapshot.y) <= 4:
                 del known[index]
         known.update(visible)
+        for mid in self.regions.ice_maps:
+            self.regions.observe_solids(mid, ice_solids(self.data, snapshot, mid))
         objects = self.data.maps[snapshot.map]['objects']
         cleared = set(self.regions.cleared_rocks.get(snapshot.map, set()))
         for index, obj in enumerate(objects, 1):
@@ -108,6 +111,11 @@ class Navigator:
         occupied.update((x, y) for index, x, y in snapshot.objects if index in boulders)
         warps = {(warp['x'], warp['y']) for warp in entry['warps']
                  if 0x60 <= grid[warp['y'] * width + warp['x']] <= 0x7F} - targets if avoid_warps else set()
+        # Objects out of sight still stop a slide, so ice maps also count the ones the map data places.
+        occupied |= self.regions.solids.get(snapshot.map, frozenset()) if snapshot.map in self.regions.ice_maps else set()
+        bumped = {(nx, ny) for (mid, nx, ny) in self.blocked if mid == snapshot.map}
+        # Only a warp ends a slide on the spot. Passing over any other target does not stop the player there.
+        doors = {(warp['x'], warp['y']) for warp in entry['warps']}
         origin = (snapshot.x, snapshot.y)
         queue = deque([origin])
         paths = {origin: []}
@@ -133,16 +141,10 @@ class Navigator:
                         or not (self.passable(grid[ny * width + nx], surf=surf)
                                 or can_cut and grid[ny * width + nx] in (0x12, 0x1A))):
                     continue
-                # Ice commits the player to a direction until a wall or dry tile.
-                while grid[ny * width + nx] in (0x23, 0x2B):
-                    sx, sy = nx + dx, ny + dy
-                    if (not 0 <= sx < width or not 0 <= sy < height
-                            or (sx, sy) in occupied or (sx, sy) in warps
-                            or blocked_side(grid[ny * width + nx], button)
-                            or blocked_side(grid[sy * width + sx], OPPOSITE[button])
-                            or not self.passable(grid[sy * width + sx], surf=surf)):
-                        break
-                    nx, ny = sx, sy
+                # Ice commits the player to a direction until a wall, an object or dry ground.
+                if grid[ny * width + nx] in ice.ICE:
+                    nx, ny = ice.slide(grid, width, height, (nx, ny), button, lambda tile: self.passable(tile, surf=surf),
+                                       occupied | warps | bumped, targets & doors)
                 point = (nx, ny)
                 if point in paths:
                     continue
