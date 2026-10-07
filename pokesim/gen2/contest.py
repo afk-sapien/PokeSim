@@ -56,7 +56,7 @@ def journey(policy, snapshot, Goal, *, force=False):
 
 
 def control(policy, snapshot, mem):
-    if not policy.collection.get('contest') or not snapshot.in_battle:
+    if not policy.collection.get('contest') or not snapshot.in_battle or not mem.byte('wStatusFlags2') & 4:
         return None
     text = snapshot.text
     if 'YES' in text and 'NO' in text:

@@ -60,6 +60,8 @@ def journey(policy, snapshot, Goal):
     state, data = policy.collection, policy.data
     parents = snapshot.daycare
     project = state.get('breeding')
+    if project is None and any(mon.egg for mon in snapshot.party):
+        return nursery(policy, snapshot, Goal)
     if project is None:
         mons = [mon for mon in snapshot.party[1:] + snapshot.stored + tuple(mon for mon in parents if mon)
                 if not mon.egg and (mon.box is not None or not FIELD_MOVES.intersection(mon.moves))]

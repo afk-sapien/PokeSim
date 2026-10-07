@@ -36,6 +36,8 @@ def legends(policy, snapshot, Goal):
     celebi = journey(policy, snapshot, Goal)
     if celebi:
         return celebi
+    if {243, 244, 245, 249, 250} <= snapshot.owned:
+        return None
     data = policy.data
     policy.collection['phase'] = 'legendary'
     if not snapshot.can_catch:
@@ -69,7 +71,8 @@ def legends(policy, snapshot, Goal):
         return Goal('legend_suicune', 'Meet Suicune at the Tin Tower', 'TIN_TOWER_1F', 9, 12)
     if 249 not in snapshot.owned and not snapshot.event('EVENT_FOUGHT_LUGIA'):
         return policy.person(snapshot, 'legend_lugia', 'Seek Lugia in the Whirl Islands', 'WHIRL_ISLAND_LUGIA_CHAMBER', 'Lugia')
-    if data.game == 'crystal' and {243, 244, 245} <= snapshot.owned and data.items['RAINBOW_WING'] not in items:
+    if (data.game == 'crystal' and 250 not in snapshot.owned
+            and {243, 244, 245} <= snapshot.owned and data.items['RAINBOW_WING'] not in items):
         return policy.person(snapshot, 'rainbow_wing', 'Return to the Tin Tower with the three beasts',
                              'TIN_TOWER_1F', 'TinTower1FSage5Script')
     if 250 not in snapshot.owned and data.items['RAINBOW_WING'] in items and not snapshot.event('EVENT_FOUGHT_HO_OH'):
@@ -96,16 +99,12 @@ def roamers(policy, snapshot, Goal):
         route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
         if route is None or not points:
             continue
-        if snapshot.map == mid:
-            points = sorted(points, key=lambda p: (abs(p[0] - snapshot.x) + abs(p[1] - snapshot.y),
-                                                    policy.nav.visits.get((mid, *p[:2]), 0)))
-            point = next((p for p in points if p[:2] != (snapshot.x, snapshot.y)
-                          and policy.nav.local(snapshot, [p[:2]], policy.memory, surf=True)), None)
-            if point is None:
-                continue
-        else:
-            region = route[-1][1][1] if route else None
-            point = next((p for p in points if region in policy.nav.regions.memberships(mid, p[:2], True, True)), points[0])
+        points = sorted(points, key=lambda p: (abs(p[0] - snapshot.x) + abs(p[1] - snapshot.y),
+                                                policy.nav.visits.get((mid, *p[:2]), 0)))
+        point = next((p for p in points if p[:2] != (snapshot.x, snapshot.y)
+                      and policy.nav.local(snapshot, [p[:2]], policy.memory, surf=True)), None)
+        if point is None:
+            continue
         choices.append((len(route), species, mid, point))
     if choices:
         _, species, mid, (x, y, _) = min(choices)

@@ -55,11 +55,35 @@ def encounter_points(policy, snapshot, mid, method, *, rare=False):
 
 def wanted(policy, snapshot, species):
     held = sum(mon.species == species and not mon.egg for mon in snapshot.party + snapshot.stored)
-    return species not in snapshot.owned or held < policy.demand.get(species, 0) + 1 and bool(policy.demand.get(species))
+    return (species not in snapshot.owned
+            or species in policy.collection.get('prerequisites', ()) and not held
+            or held < policy.demand.get(species, 0) + 1 and bool(policy.demand.get(species)))
+
+
+def prerequisites(data, snapshot):
+    """Find breeding and evolution partners that were collected but later traded away."""
+    mons = snapshot.party + snapshot.stored + tuple(mon for mon in getattr(snapshot, 'daycare', ()) if mon)
+    held = {mon.species for mon in mons}
+    needed = set()
+    for source, row in data.species.items():
+        for evolution in row['evolutions']:
+            if (evolution['species'] not in snapshot.owned
+                    and not any(mon.species == source and (evolution['method'] in {'item', 'trade'} or mon.level < 100)
+                                for mon in mons)):
+                needed.add(source)
+    babies = {172: {25, 26}, 173: {35, 36}, 174: {39, 40}, 236: {106, 107, 237},
+              238: {124}, 239: {125}, 240: {126}}
+    for baby, parents in babies.items():
+        if baby not in snapshot.owned and not parents & held:
+            needed.update(parents)
+    if len(snapshot.owned) < 251 and 132 not in held:
+        needed.add(132)
+    return needed
 
 
 def journey(policy, snapshot, mem, Goal):
     data, state = policy.data, policy.collection
+    state['prerequisites'] = sorted(prerequisites(data, snapshot))
     from .contest import journey as contest
     if state.get('contest'):
         goal = contest(policy, snapshot, Goal)
@@ -183,7 +207,8 @@ def journey(policy, snapshot, mem, Goal):
             if mid not in distances:
                 route = policy.nav.route(snapshot.map, mid)
                 distances[mid] = len(route) if route is not None else 9999
-        ranked = sorted(groups.items(), key=lambda pair: (not bool(policy.demand.get(pair[0][2])),
+        ranked = sorted(groups.items(), key=lambda pair: (not bool(policy.demand.get(pair[0][2])
+                         or pair[0][2] in state['prerequisites']),
                          distances[pair[0][0]] + 50 / max(1, pair[1]['chance'])))
         for (mid, method, species, rare), row in ranked:
             if choices and len(choices) >= 12:
@@ -197,7 +222,8 @@ def journey(policy, snapshot, mem, Goal):
                 continue
             attempted = state.get('attempts', {}).get(str(species), -100000)
             recent = policy.decisions - attempted < 18000
-            choices.append((not bool(policy.demand.get(species)), species in snapshot.owned, recent,
+            choices.append((not bool(policy.demand.get(species) or species in state['prerequisites']),
+                            species in snapshot.owned, recent,
                             len(route) + 50 / max(1, row['chance']), species, mid, method, row))
         if choices:
             target = dict(min(choices, key=lambda row: row[:-1])[-1], started=policy.decisions)
@@ -240,9 +266,15 @@ def hunt(policy, snapshot, Goal):
         if candidates:
             _, _, x, y, face = min(candidates, key=lambda row: row[:4])
         else:
-            state['attempts'][str(target['species'])] = policy.decisions
-            state['target'] = None
-            return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[mid]['constant'], snapshot.x, snapshot.y)
+            route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
+            if route:
+                region = route[-1][1][1]
+                x, y, face = next(point for point in points
+                                  if region in policy.nav.regions.memberships(mid, point[:2], True, True))
+            else:
+                state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
+                state['target'] = None
+                return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[mid]['constant'], snapshot.x, snapshot.y)
     else:
         route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
         region = route[-1][1][1] if route else None
