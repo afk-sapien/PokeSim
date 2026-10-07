@@ -6,6 +6,9 @@ not live status or substitutes for executable regression tests.
 
 ## Retained records
 
+- [0.4.20 publication receipt](release-0.4.20.json): PP menu hotfix, source
+  revision, image digest, public download checks, and cross-platform validation.
+
 - [0.4.19 publication receipt](release-0.4.19.json): bag and Transform fixes, source
   revision, public download checks, and cross-platform validation.
 

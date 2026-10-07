@@ -1,12 +1,23 @@
-# Release status: 0.4.20 prepared
+# Release status: 0.4.20 published
 
-PokeSim 0.4.20 fixes box lists with a nickname containing PP being read as the PP Up
-menu, which stopped the Release goal from freeing storage. Core remains pinned at
-0.1.4. See the [release notes](docs/release-notes.md).
+[PokeSim 0.4.20](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.20)
+fixes box lists with a nickname containing PP being read as the PP Up menu, which
+stopped the Release goal from freeing storage.
+[PR #50](https://github.com/afk-sapien/PokeSim/pull/50) passed all 24 checks before
+merging. Core remains pinned at 0.1.4. See the [release notes](docs/release-notes.md).
 
 The local suite passed 1,790 tests with 168 skips, including private-ROM checks.
-Ruff and documentation checks passed. Publication and deployment verification are
-pending.
+Ruff and documentation checks passed.
+
+The [publication receipt](docs/validation/release-0.4.20.json) records the exact
+source revision, image digest, and publication workflow. Normal CI passed on Python
+3.11, 3.12, and 3.14. The tagged publication build passed 1,772 tests with 165
+skips and all 118 browser cases. Installation checks passed on Windows, Intel and
+Apple Silicon macOS, and x86-64 and ARM Linux.
+
+The publishing workflow verified the container, anonymous registry access, and
+every uploaded asset before making the release public. Public Compose, installer,
+and wheel downloads were checked again against the published manifest.
 
 The [0.4.19 publication receipt](docs/validation/release-0.4.19.json) retains the
 previous release's checks and source revision.
