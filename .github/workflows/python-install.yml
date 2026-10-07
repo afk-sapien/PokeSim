@@ -2,6 +2,10 @@ name: Python install
 on:
   push:
   pull_request:
+    # Documentation-only pull requests do not change what installs. Pushes to main and tags always run everything.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -13,8 +17,44 @@ permissions:
   contents: read
 concurrency:
   group: python-install-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Runs on main and on tags are the evidence the publish workflow requires, so they are never cancelled.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 jobs:
+  native-tests:
+    name: native tests (${{ matrix.os }}, ${{ matrix.shard }})
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-22.04, shard: '1/1'}
+          - {os: ubuntu-24.04-arm, shard: '1/1'}
+          - {os: macos-15, shard: '1/1'}
+          - {os: macos-15-intel, shard: '1/2'}
+          - {os: macos-15-intel, shard: '2/2'}
+          - {os: windows-latest, shard: '1/4'}
+          - {os: windows-latest, shard: '2/4'}
+          - {os: windows-latest, shard: '3/4'}
+          - {os: windows-latest, shard: '4/4'}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+        with:
+          version: '0.12.18'
+      - run: uv sync --locked --extra dev
+      - name: Prepare verified reference data without a private ROM
+        run: uv run --locked python tools/prepare_test_data.py
+      - name: Test native service and Python launcher
+        env:
+          POKESIM_TEST_SHARD: ${{ matrix.shard }}
+        run: uv run --locked pytest --ignore=tests/test_rom.py -q -o faulthandler_timeout=120 --durations=10
   install:
     timeout-minutes: 20
     strategy:
@@ -36,8 +76,6 @@ jobs:
       - run: uv sync --locked --extra dev
       - name: Prepare verified reference data without a private ROM
         run: uv run --locked python tools/prepare_test_data.py
-      - name: Test native service and Python launcher
-        run: uv run --locked pytest --ignore=tests/test_rom.py -q -o faulthandler_timeout=120 --durations=40
       - run: uv build
       - name: Check package resources and exclude private data
         run: uv run --locked python tools/check_package.py

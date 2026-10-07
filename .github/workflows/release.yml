@@ -6,10 +6,15 @@ on:
         description: Tag of an existing draft GitHub release, for example v0.4.17
         required: true
         type: string
+      dry_run:
+        description: Build and verify everything but publish nothing (no image push, no release upload, no release edit)
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
-  group: publish-${{ inputs.tag || github.ref_name }}
+  group: publish-${{ inputs.tag || github.ref_name }}${{ inputs.dry_run && '-dry-run' || '' }}
   cancel-in-progress: false
 jobs:
   validate:
@@ -35,6 +40,7 @@ jobs:
         id: release
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python - <<'PY'
@@ -55,6 +61,7 @@ jobs:
           headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'}
           with urlopen(Request('https://api.github.com/repos/' + repo, headers=headers)) as response:
               assert json.load(response)['visibility'] == 'public', 'This workflow publishes only reviewed public source'
+          dry_run = os.environ['DRY_RUN'] == 'true'
           releases = []
           page = 1
           while True:
@@ -65,28 +72,47 @@ jobs:
               if len(batch) < 100:
                   break
               page += 1
-          assert len(releases) == 1, 'Create exactly one draft GitHub release for this tag first'
-          release = releases[0]
-          assert release['draft'], 'Only draft releases can be built and published'
-          assert not any(asset['name'] == 'image-linux-amd64.tar.gz' for asset in release['assets']), \
-              'This version already has published downloads. Publish a new version.'
+          release = releases[0] if releases else {'id': ''}
+          if not dry_run:
+              assert len(releases) == 1, 'Create exactly one draft GitHub release for this tag first'
+              assert release['draft'], 'Only draft releases can be built and published'
+              assert not any(asset['name'] == 'image-linux-amd64.tar.gz' for asset in release['assets']), \
+                  'This version already has published downloads. Publish a new version.'
           revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write(f'image=ghcr.io/{repo.lower()}:{version}\nversion={version}\nrevision={revision}\n')
               output.write(f'release_id={release["id"]}\n')
           PY
-  python-install:
+  gate:
+    # The verification matrix is not repeated here. The CI and Python install workflows already ran on the
+    # exact commit (their push runs on main or on the tag), so this job requires those runs to have
+    # succeeded and waits for any that are still running.
     needs: validate
-    uses: ./.github/workflows/python-install.yml
-    with:
-      ref: ${{ needs.validate.outputs.revision }}
-  release:
-    needs: [validate, python-install]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      # The gate script comes from the commit that dispatched this workflow, not from the release revision.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - name: Require passing CI and Python install runs for this exact commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REVISION: ${{ needs.validate.outputs.revision }}
+        run: python tools/check_release_gates.py --sha "$REVISION" --timeout 2100
+  build:
+    # Runs in parallel with the gate. It holds no credentials that can publish and uploads nothing public.
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write
-      packages: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -98,27 +124,7 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
         with:
           version: '0.12.18'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: '22'
-      - run: python tools/check_web.py
-      - run: python tools/check_docs.py
       - run: uv sync --locked --extra dev
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: pret/pokered
-          ref: a1a22aaf84d1675bcdbaeb194592379d586d838e
-          path: .reference/pokered
-          persist-credentials: false
-      - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
-      - run: uv run --locked pytest --ignore=tests/test_rom.py -q
-      - name: Validate real browser flows before publishing
-        env:
-          POKESIM_BROWSER_TESTS: '1'
-        run: |
-          uv sync --locked --extra dev --extra browser-test
-          uv run --locked --extra browser-test python -m playwright install --with-deps chromium
-          uv run --locked --extra dev --extra browser-test pytest tests/browser -q
       - run: uv build
       - run: python tools/check_package.py
       - run: python tools/check_python_install.py
@@ -131,21 +137,6 @@ jobs:
           docker build --platform linux/amd64 --build-arg VERSION="$VERSION" --build-arg REVISION="$REVISION" -t "$IMAGE" .
           python tools/check_container.py "$IMAGE"
           python tools/check_quickstart.py "$IMAGE"
-      - name: Publish image and verify anonymous access
-        env:
-          IMAGE: ${{ needs.validate.outputs.image }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
-        run: |
-          mkdir -p "$DOCKER_CONFIG"
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker push "$IMAGE"
-          python tools/check_registry_image.py "$IMAGE"
-      - name: Remove registry credentials
-        if: always()
-        env:
-          DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
-        run: docker logout ghcr.io
       - name: Assemble versioned release downloads
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
@@ -160,6 +151,50 @@ jobs:
           docker run --rm --network none "$IMAGE" cat /usr/share/pokesim/python-dependencies.json > release/python-dependencies.json
           docker image inspect "$IMAGE" --format '{{json .}}' > release/image-metadata.json
           python tools/assemble_release.py release --version "$VERSION" --revision "$REVISION" --image "$IMAGE" --without-desktop
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-downloads
+          path: release/
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    # The only job that can push an image or change a release. A dry run never reaches it.
+    if: ${{ inputs.dry_run != true }}
+    needs: [validate, gate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.validate.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-downloads
+          path: release
+      - name: Publish image and verify anonymous access
+        env:
+          IMAGE: ${{ needs.validate.outputs.image }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
+        run: |
+          docker load --input release/image-linux-amd64.tar.gz
+          mkdir -p "$DOCKER_CONFIG"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE"
+          python tools/check_registry_image.py "$IMAGE"
+      - name: Remove registry credentials
+        if: always()
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
+        run: docker logout ghcr.io
       - name: Upload and verify the release downloads
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}

@@ -7,7 +7,9 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Only superseded branch and pull request runs are cancelled. Runs on main and on tags are the evidence
+  # that the publish workflow later requires for an exact commit, so they always finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 jobs:
   dependency-audit:
     runs-on: ubuntu-latest
@@ -59,7 +61,7 @@ jobs:
           path: .reference/pokered
           persist-credentials: false
       - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
-      - run: uv run --locked pytest --ignore=tests/test_rom.py -q
+      - run: uv run --locked pytest --ignore=tests/test_rom.py --ignore=tests/browser -q
       - run: python tools/check_web.py
       - run: python tools/check_docs.py
       - run: uv build
@@ -67,23 +69,46 @@ jobs:
       - name: Verify installation outside the source checkout
         if: matrix.python == '3.12'
         run: python tools/check_python_install.py
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/4', '2/4', '3/4', '4/4']
+    name: browser (${{ matrix.shard }})
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+        with:
+          version: '0.12.18'
+      - name: Read user-content reference for tests only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: pret/pokered
+          ref: a1a22aaf84d1675bcdbaeb194592379d586d838e
+          path: .reference/pokered
+          persist-credentials: false
       - name: Install browser test runtime
-        if: matrix.python == '3.12'
         run: |
           uv sync --locked --extra dev --extra browser-test
           uv run --locked --extra browser-test python -m playwright install --with-deps chromium
+      - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
       - name: Exercise real browser flows
-        if: matrix.python == '3.12'
         env:
           POKESIM_BROWSER_TESTS: '1'
+          POKESIM_TEST_SHARD: ${{ matrix.shard }}
         run: |
           mkdir -p build
-          uv run --locked --extra dev --extra browser-test pytest tests/browser -q --durations=25 --basetemp=build/browser-tests
+          uv run --locked --extra dev --extra browser-test pytest tests/browser -q --durations=10 --basetemp=build/browser-tests
       - name: Retain browser diagnostics on failure
-        if: failure() && matrix.python == '3.12'
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: browser-diagnostics
+          name: browser-diagnostics-${{ strategy.job-index }}
           path: build/browser-tests/**/browser-trace.zip
           if-no-files-found: ignore
   container:
@@ -97,20 +122,6 @@ jobs:
         run: python tools/check_container.py pokesim:ci
       - name: Verify the new-user Docker setup and persistent volume
         run: python tools/check_quickstart.py pokesim:ci
-      - name: Verify the authenticated HTTPS proxy
-        run: python tools/check_proxy_boundary.py pokesim:ci
-      - name: Reject fixable high and critical image vulnerabilities
-        run: |
-          docker save pokesim:ci -o /tmp/pokesim-app.tar
-          docker save pokesim-proxy:2.11.4-hardened-20260919 -o /tmp/pokesim-proxy.tar
-          chmod 644 /tmp/pokesim-app.tar /tmp/pokesim-proxy.tar
-          for image in app proxy
-          do
-            docker run --rm --cap-drop ALL --security-opt no-new-privileges:true \
-              -v "/tmp/pokesim-$image.tar:/image.tar:ro" -v /tmp/trivy-cache:/root/.cache/trivy \
-              aquasec/trivy:0.74.0 image --input /image.tar --scanners vuln \
-              --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1
-          done
       - name: Prepare local data outside the image
         run: docker run --rm -v pokesim-ci-data:/data pokesim:ci python -m pokesim.prepare_data --download
       - name: Verify repeated setup works offline
@@ -128,3 +139,23 @@ jobs:
           assert not (Path(pokesim.__file__).parent / 'data/strategy.json').exists()
           assert Path('/usr/share/pokesim/sources/pyboy-2.7.0.tar.gz').is_file()
           PYCODE
+  container-proxy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - run: docker build --pull -t pokesim:ci .
+      - name: Verify the authenticated HTTPS proxy
+        run: python tools/check_proxy_boundary.py pokesim:ci
+      - name: Reject fixable high and critical image vulnerabilities
+        run: |
+          docker save pokesim:ci -o /tmp/pokesim-app.tar
+          docker save pokesim-proxy:2.11.4-hardened-20260919 -o /tmp/pokesim-proxy.tar
+          chmod 644 /tmp/pokesim-app.tar /tmp/pokesim-proxy.tar
+          for image in app proxy
+          do
+            docker run --rm --cap-drop ALL --security-opt no-new-privileges:true \
+              -v "/tmp/pokesim-$image.tar:/image.tar:ro" -v /tmp/trivy-cache:/root/.cache/trivy \
+              aquasec/trivy:0.74.0 image --input /image.tar --scanners vuln \
+              --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1
+          done
