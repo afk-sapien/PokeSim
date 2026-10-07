@@ -45,7 +45,8 @@ administrator terminal. No system Python, Git, Docker, or ROM is needed during
 this package installation.
 
 PokeSim's package comes from this project's [GitHub releases](https://github.com/afk-sapien/PokeSim/releases).
-Do not use `pip install pokesim` from PyPI, which is not this project's release channel.
+Do not use `pip install pokesim`: PyPI has an unrelated project with that name, and neither
+`pokesim-core` nor `pyboy-rs` is published there. Install only from the release files above.
 On Windows, the Python package installation creates the `pokesim-desktop.exe`
 launcher. There is no separate PokeSim EXE download in this installation flow.
 
@@ -250,7 +251,11 @@ failing compiled backend falls back to Python. Set the environment variable
 `POKESIM_NAVIGATION_BACKEND=python` before launch to force the Python backend even
 when Numba is installed. Restart the application after changing this setting.
 
-The [Python install workflow](https://github.com/afk-sapien/PokeSim/actions/workflows/python-install.yml) builds and installs the wheel in a fresh environment on Windows x86-64, Intel macOS, Apple Silicon, and Linux x86-64 and ARM64. It checks the installed launcher and actual native worker processes using PyBoy's demonstration ROM. A successful run establishes validation for that platform. Other CPUs require compatible native dependencies and are not covered by this matrix.
+The [Python install workflow](https://github.com/afk-sapien/PokeSim/actions/workflows/python-install.yml) builds and installs the wheel in a fresh environment on Windows x86-64, Intel macOS, Apple Silicon, and Linux x86-64 and ARM64. It checks the installed launcher and actual native worker processes using the demonstration ROM bundled with PyBoy RS. A successful run establishes validation for that platform. Other CPUs require compatible native dependencies and are not covered by this matrix.
+
+### Unsupported platforms
+
+The emulator ships as one prebuilt wheel per platform: Linux x86-64 and ARM64 (glibc), macOS Intel and Apple Silicon, and Windows x64. Windows on ARM64, 32-bit ARM, FreeBSD and musl Linux (Alpine) have no wheel. PokeSim installs nothing for the emulator on them: `install.sh` and `install.ps1` stop with a clear message before downloading anything, and a manual install leaves the application unable to start with the same message. Do not work around this with `pip install pokesim`, which installs an unrelated PyPI project, or by installing `pyboy-rs` or `pokesim-core` from PyPI. Use the Docker image (linux/amd64) on such a machine if Docker is available.
 
 ## Troubleshooting
 

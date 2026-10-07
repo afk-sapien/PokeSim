@@ -334,6 +334,8 @@ def legacy_main(argv=None):
 
 
 def main(argv=None):
+    from . import platform_support
+    platform_support.require_emulator()
     args = list(sys.argv[1:] if argv is None else argv)
     if '--check-runtime' in args:
         return legacy_main(args)

@@ -13,6 +13,10 @@
 - Read the wild Pokémon's original DVs for shiny protection after Transform through Core's decoder.
 - Require the NO THANKS entry before reading a list as the Game Corner prize menu, so other lists are not mistaken for it.
 - Fix live sound stutter over a jittery connection. The page now keeps an adaptive lead of 0.4 seconds that grows to 1.5 seconds after dropouts and shrinks slowly, trims drift by at most 2%, and skips forward with a short fade instead of clearing. The server keeps about 2 seconds of audio and serves it without truncation. Take Control uses a lead of about 0.1 seconds. Playback speeds snap to fixed rates, and sound is off above 4.5x. Short network failures are retried for 6 seconds. The new `tools/audio_jitter_harness.py` measures gaps in Chromium.
+- Require every job of the CI and Python install workflows by exact name in the release gate, including the browser and native test shards and all four Windows shards. The old prefix matching let `container-proxy` stand in for `container` and `macos-15-intel` for `macos-15`.
+- Make the release validate job and gate fail while any temporary pin remains, check the `#sha256=` fragments, the Dockerfile source checksum and the published emulator assets against `uv.lock`, and add `tools/finalize_release_pins.py` to rewrite the pins from the final release assets.
+- Stop `pokesim-core` from being requested on platforms without a pyboy-rs wheel (Windows ARM64, 32-bit ARM, FreeBSD, musl), so pip never looks those names up on PyPI. The installers and the application now say plainly that the platform is unsupported.
+- Derive the bundled pyboy-rs source archive check from `uv.lock` instead of a hard-coded file name, and fail when the archive's own metadata names another version.
 
 ## 0.4.20
 
