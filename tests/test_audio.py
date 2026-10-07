@@ -6,7 +6,7 @@ from unittest.mock import Mock
 from fastapi.testclient import TestClient
 import pytest
 
-from pokesim.audio import AudioFeed, MAX_FRAMES, enable_checkpoint_sound
+from pokesim.audio import AudioFeed, BUFFER_SECONDS, MAX_FRAMES, MAX_SPEED, enable_checkpoint_sound
 from pokesim.emulator import Emulator
 from pokesim.web.app import create_app
 
@@ -26,7 +26,12 @@ def test_audio_feed_expires_and_bounds_slow_listeners(monkeypatch):
     assert feed.read(count, 'playing')[:2] == (count, b'')
     clock[0] += 0.5
     feed.publish(b'cd')
-    assert feed.read(0, 'playing')[:2] == (count + 1, b'cd')
+    assert feed.read(0, 'playing')[:2] == (count + 1, b'\x01\x02' * (MAX_FRAMES - 1) + b'cd')
+    clock[0] += BUFFER_SECONDS + 0.1
+    feed.read(0, 'playing')
+    feed.publish(b'ef')
+    assert feed.read(0, 'playing')[:2] == (count + 2, b'ef')
+    count += 1
     clock[0] += 1
     assert not feed.active()
     assert feed.read(0, 'playing')[:2] == (count + 1, b'')
@@ -52,9 +57,68 @@ def test_audio_measures_actual_pace_for_playback(monkeypatch, speed):
     for index in range(12):
         clock[0] = 10 + index / (60 * speed)
         feed.publish(b'ab')
-    sequence, data, measured = feed.read(0, 'playing')
-    assert sequence == 12 and data == b'ab' * 12
+    sequence, data, measured, dropped = feed.read(0, 'playing')
+    assert sequence == 12 and dropped == 0
+    assert data == b'ab' * 12
     assert measured == pytest.approx(speed)
+
+
+def test_audio_ring_covers_a_listener_stall_and_serves_from_the_cursor(monkeypatch):
+    clock = [10.0]
+    monkeypatch.setattr('pokesim.audio.time.monotonic', lambda: clock[0])
+    assert BUFFER_SECONDS >= 2
+    feed = AudioFeed()
+    feed.read(-1, 'playing')
+    # A listener stalls for 1.5 seconds of 60 frame per second audio, then returns with its cursor.
+    for index in range(90):
+        clock[0] = 10 + index / 60
+        feed.publish(index.to_bytes(2, 'big'))
+        if index % 20 == 0:
+            feed.read(-1, 'playing')
+    packet = feed.read(0, 'playing')
+    assert packet.sequence == 90 and packet.dropped == 0
+    assert packet.data == b''.join(index.to_bytes(2, 'big') for index in range(90))
+    assert feed.read(60, 'playing').data == b''.join(index.to_bytes(2, 'big') for index in range(60, 90))
+
+
+def test_audio_reports_frames_that_aged_out_before_the_listener_returned(monkeypatch):
+    clock = [10.0]
+    monkeypatch.setattr('pokesim.audio.time.monotonic', lambda: clock[0])
+    feed = AudioFeed()
+    feed.read(-1, 'playing')
+    for index in range(300):
+        clock[0] = 10 + index / 60
+        feed.publish(b'xy')
+        if index % 10 == 0:
+            feed.read(index, 'playing')
+    packet = feed.read(5, 'playing')
+    kept = len(packet.data) // 2
+    assert kept <= BUFFER_SECONDS * 60 + 2
+    assert packet.dropped == 300 - kept - 5
+    assert packet.sequence == 300
+
+
+def test_audio_pace_follows_the_recent_second_and_fast_pace_sends_no_pcm(monkeypatch):
+    clock = [10.0]
+    monkeypatch.setattr('pokesim.audio.time.monotonic', lambda: clock[0])
+    feed = AudioFeed()
+    feed.read(-1, 'playing')
+    for index in range(120):
+        clock[0] += 1 / 60
+        feed.publish(b'ab')
+        feed.read(0, 'playing')
+    assert feed.read(0, 'playing').speed == pytest.approx(1)
+    for index in range(600):
+        clock[0] += 1 / 240
+        feed.publish(b'ab')
+        feed.read(0, 'playing')
+    packet = feed.read(0, 'playing')
+    assert packet.speed == pytest.approx(4, rel=0.02)
+    for index in range(1200):
+        clock[0] += 1 / 960
+        feed.publish(b'ab')
+        feed.read(0, 'playing')
+    assert feed.read(0, 'playing').speed > MAX_SPEED
 
 
 @pytest.mark.parametrize('speed,paused,manual,state', [
@@ -72,12 +136,20 @@ def test_audio_endpoint_reports_playback_without_changing_speed(tmp_path, speed,
         assert response.status_code == 200
         assert response.headers['X-Audio-State'] == state
         assert response.headers['X-Audio-Rate'] == '48000'
+        assert response.headers['X-Audio-Mode'] == ('manual' if manual else 'watch')
+        assert response.headers['X-Audio-Dropped'] == '0'
         assert float(response.headers['X-Audio-Speed']) > 0
         assert response.headers['Cache-Control'] == 'no-store'
         emu.audio.publish(b'\x01\x02')
         response = client.get('/api/audio?after=0')
         assert response.content == (b'\x01\x02' if state == 'playing' else b'')
         assert client.get('/api/audio?after=-2').status_code == 422
+        if state == 'playing':
+            emu.audio.until = 1e18
+            for index in range(600):
+                emu.audio.publish(b'\x01\x02')
+            assert float(client.get('/api/audio?after=1').headers['X-Audio-Speed']) > MAX_SPEED
+            assert client.get('/api/audio?after=1').content == b''
     assert emu.speed == speed
 
 

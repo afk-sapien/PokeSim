@@ -43,6 +43,11 @@ Click **Sound: Off** below the live screen to listen. Audio follows the observed
 Music and effects speed up with the game. Your adventure keeps its chosen speed. Audio starts off on every page
 and turns off when you hide or leave the tab.
 
+Sound keeps a short buffer so a slow connection does not cause crackling. Watching holds about 0.4 seconds of audio ahead.
+After a dropout the buffer grows up to 1.5 seconds and then shrinks slowly while the connection stays calm.
+If even that is not enough, the status line says "Audio connection is unstable".
+Take Control uses about 0.1 seconds so button presses sound immediate. Sound is off above 4.5x because the pitch is not useful, and it returns when the speed drops.
+
 Only adventures with a listener run sound emulation. Existing saves remain usable.
 A previously silent save may need the next music change before all channels play.
 

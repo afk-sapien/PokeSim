@@ -150,8 +150,8 @@ class Emulator:
 
     def audio_packet(self, after):
         state = 'playing' if not self.paused or self.manual_mode else 'paused'
-        sequence, pcm, speed = self.audio.read(after, state)
-        return state, sequence, pcm, speed
+        sequence, pcm, speed, dropped = self.audio.read(after, state)
+        return state, sequence, pcm, speed, dropped
 
     def _shot_png(self):
         output = io.BytesIO()

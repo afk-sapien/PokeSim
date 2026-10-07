@@ -10,6 +10,7 @@
 - Report both Core and PokeSim capability errors as HTTP 501 with the real message instead of the busy response.
 - Read the wild Pokémon's original DVs for shiny protection after Transform through Core's decoder.
 - Require the NO THANKS entry before reading a list as the Game Corner prize menu, so other lists are not mistaken for it.
+- Fix live sound stutter over a jittery connection. The page now keeps an adaptive lead of 0.4 seconds that grows to 1.5 seconds after dropouts and shrinks slowly, trims drift by at most 2%, and skips forward with a short fade instead of clearing. The server keeps about 2 seconds of audio and serves it without truncation. Take Control uses a lead of about 0.1 seconds. Playback speeds snap to fixed rates, and sound is off above 4.5x. Short network failures are retried for 6 seconds. The new `tools/audio_jitter_harness.py` measures gaps in Chromium.
 
 ## 0.4.20
 

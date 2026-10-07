@@ -366,8 +366,8 @@ class Emulator:
 
     def audio_packet(self, after):
         state = 'paused' if self.paused and not self.manual_mode else 'playing'
-        sequence, pcm, speed = self.audio.read(after, state)
-        return state, sequence, pcm, speed
+        sequence, pcm, speed, dropped = self.audio.read(after, state)
+        return state, sequence, pcm, speed, dropped
 
     def current_frame(self, timeout: float = 1.0) -> bytes:
         """The latest frame, waiting for the first one if the run has only just started."""
