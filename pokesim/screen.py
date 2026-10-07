@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 
 from .ram import W_TILEMAP as W_TILEMAP
+from .textmatch import ScreenText
 from pokesim_core.gen1_ui import read_screen
 
 W_CURRENT_MENU_ITEM = 0xCC26
@@ -35,7 +36,7 @@ class Screen:
     def __init__(self, mem):
         screen = read_screen(mem, raw_text=True)
         self.rows = screen["rows"]
-        self.text = "\n".join(self.rows)
+        self.text = ScreenText("\n".join(self.rows))
         self.menu_index = screen["menu_index"]
         self.scroll = screen["scroll"]
         self.top_x = mem[W_TOP_MENU_X]
@@ -44,14 +45,14 @@ class Screen:
 
     def kind(self, snapshot) -> str:
         """Classify visible input states. A filled cursor confirms a menu is accepting input."""
-        text = self.text.upper()
+        text = ScreenText(self.text.upper())
         if self.naming:
             return "naming"
         if self.cursor:
             x, y = self.cursor
             if "1F" in text and "2F" in text and ("3F" in text or "B4F" in text):
                 return "elevator"
-            if "FRESH" in text and "SODA" in text and "LEMONADE" in text:
+            if "FRESH WATER" in text and "SODA POP" in text and "LEMONADE" in text:
                 return "vending"
             if any(row.strip("? ") == "HEAL" for row in self.rows) and "CANCEL" in text:
                 return "heal"
@@ -69,9 +70,9 @@ class Screen:
                 return "party_action"
             if "USE" in text and "TOSS" in text:
                 return "item_action"
-            if ("FORG" in text or "HM TECHNIQUES" in text) and x == 5 and 8 <= y <= 11:
+            if ("FORGET" in text or "FORGOTTEN" in text or "HM TECHNIQUES" in text) and x == 5 and 8 <= y <= 11:
                 return "learn_move"
-            if x == 5 and 8 <= y <= 11 and not snapshot.in_battle and PP_PROMPT.search(text):
+            if x == 5 and 8 <= y <= 11 and not snapshot.in_battle and PP_PROMPT.search(text) and "TECHNIQUE" in text:
                 return "item_moves"
             if x == 5 and 13 <= y <= 16 and snapshot.in_battle:
                 return "moves"
