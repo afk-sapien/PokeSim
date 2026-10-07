@@ -4,10 +4,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+from pokesim import game_data
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(*args, cwd, env=None):
+    # The scripts import modules that read the Gen I bundle, whose default location is relative to the cwd.
+    env = {**(os.environ if env is None else env), 'GAME_DATA_DIR': str(game_data.directory().resolve())}
     return subprocess.run([sys.executable, str(ROOT / 'tools' / args[0]), *args[1:]], cwd=cwd, env=env,
                           capture_output=True, text=True, timeout=120)
 
