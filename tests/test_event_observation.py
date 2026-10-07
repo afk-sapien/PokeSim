@@ -1,4 +1,5 @@
 """Short invalid cartridge writes must not erase a valid withdrawal baseline."""
+from contextlib import nullcontext
 from dataclasses import replace
 import threading
 from unittest.mock import Mock
@@ -16,6 +17,7 @@ def observer(monkeypatch):
     emu._enforce_options = Mock()
     emu._handle_events = Mock()
     emu.store = Mock()
+    emu.store.observation_reads.return_value = nullcontext()
     emu.mem = RunMemory()
     emu.prev_snapshot = None
     emu.pending = []

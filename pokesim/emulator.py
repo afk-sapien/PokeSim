@@ -443,6 +443,10 @@ class Emulator:
 
     def _observe(self):
         self._retake_shots()
+        with self.store.observation_reads():
+            self._observe_snapshot()
+
+    def _observe_snapshot(self):
         snap = read_snapshot(self.pb.memory, self.frame)
         if snap.started:
             self.play_clock.seed(snap.playtime_seconds)

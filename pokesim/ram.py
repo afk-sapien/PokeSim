@@ -5,7 +5,6 @@ against the community RAM map and verified in-emulator (see tests/).
 """
 from __future__ import annotations
 
-from pokesim_core import gen1 as core_gen1
 from pokesim_core.gen1 import (
     W_TILEMAP as W_TILEMAP,
     W_ENEMY_SPECIES2 as W_ENEMY_SPECIES2,
@@ -316,48 +315,13 @@ def read_stored_details(mem, *, counts=None):
 
 
 def read_snapshot(mem, frame: int) -> Snapshot:
-    """mem: anything supporting mem[addr] and mem[a:b] over the GB address space (pyboy.memory)."""
+    """Decode through Core while retaining application-specific storage filtering."""
     from .strategy_data import MOVES as MOVE_DATA
-    party = tuple(PartyMon(**mon) for mon in core_gen1.read_party(mem, move_data=MOVE_DATA))
-    items = core_gen1.read_bag(mem)
-    in_battle = mem[W_IS_IN_BATTLE]
+    from pokesim_core.snapshot import read_fields
+    decoded = read_fields(mem, move_data=MOVE_DATA)
+    decoded['party'] = tuple(PartyMon(**mon) for mon in decoded['party'])
     box_counts = read_box_counts(mem)
     stored = read_stored_details(mem, counts=box_counts)
-    # Every cartridge path that registers a species also marks it seen, so an owned flag
-    # without its seen flag is not Pokédex data at all. Oak's lab leaves other values in
-    # this region for a couple of seconds before the Pokédex exists, which otherwise reads
-    # as owning four starters at once.
-    seen_dex = flag_bits(bytes(mem[W_DEX_SEEN:W_DEX_SEEN + 19]))
-    owned_dex = flag_bits(bytes(mem[W_DEX_OWNED:W_DEX_OWNED + 19])) & seen_dex
-    from .shiny import shiny_bytes
-    return Snapshot(
-        enemy_shiny=bool(in_battle == 1 and not mem[0xd069] & 8 and shiny_bytes(bytes(mem[0xcff1:0xcff3]))),
-        frame=frame,
-        map=mem[W_CUR_MAP], x=mem[W_X], y=mem[W_Y],
-        badges=mem[W_BADGES],
-        saffron_open=bool(mem[W_STATUS_FLAGS1] & 64),
-        party=party,
-        owned=frozenset(owned_dex),
-        seen=frozenset(seen_dex),
-        money=bcd(bytes(mem[W_MONEY:W_MONEY + 3])),
-        items=items,
-        in_battle=in_battle,
-        battle_type=mem[W_BATTLE_TYPE],
-        enemy_species=mem[W_ENEMY_MON] if in_battle else 0,
-        enemy_level=mem[W_ENEMY_LEVEL] if in_battle else 0,
-        opponent=mem[W_CUR_OPPONENT],
-        player_name=decode_text(bytes(mem[W_PLAYER_NAME:W_PLAYER_NAME + 11])),
-        rival_name=decode_text(bytes(mem[W_RIVAL_NAME:W_RIVAL_NAME + 11])),
-        playtime=(mem[W_PLAYTIME_H], mem[W_PLAYTIME_H + 2], mem[W_PLAYTIME_H + 3]),
-        textbox=mem[W_TILEMAP + 12 * 20] == TILE_BOX_TL,
-        start_menu=mem[W_TILEMAP + 10] == TILE_BOX_TL and not in_battle,
-        boxed_pokemon=tuple((mem[0xDA96 + i * 33], mem[0xDA99 + i * 33]) for i in range(min(mem[0xDA80], 20))),
-        active_box=mem[W_CURRENT_BOX] & 0x7F,
-        hall_of_fame_count=mem[0xD5A2],
-        coins=bcd(bytes(mem[0xD5A4:0xD5A6])),
-        box_counts=box_counts,
-        stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
-        stored_details=stored,
-        hidden_objects=bytes(mem[W_TOGGLE_OBJECT_FLAGS:W_TOGGLE_OBJECT_FLAGS + 32]),
-        event_flags=bytes(mem[W_EVENT_FLAGS:W_EVENT_FLAGS + 0x140]),
-    )
+    return Snapshot(frame=frame, **decoded, box_counts=box_counts,
+                    stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
+                    stored_details=stored)
