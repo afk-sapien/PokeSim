@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix Gold, Silver and Crystal adventures standing still beside a person who blocks the tile they chose, such as Amphy at the top of the Olivine Lighthouse. A blocked tile is no longer scored as already reached, the next open side is used, and an objective that stays unreachable is reported as stuck. `tools/play_gen2.py` no longer asks the emulator to run zero frames.
+
 ## 0.5.0
 
 - Fix Gold, Silver and Crystal adventures being restarted about every 65 seconds and ending as failed. The supervisor asked Generation II workers, which have no screen palette, to apply one, and counted the refusal as a failed health check. Optional settings now never decide whether a worker lives, a refusal is reported on the setting, workers that report no palette are left alone, and the Library hides the palette choice for Generation II games. Opening a Generation II adventure on 0.4.x still fails with "Unknown settings: celebi_event" (documented in the operations guide), since that release cannot be changed.

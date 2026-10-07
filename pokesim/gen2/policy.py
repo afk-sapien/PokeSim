@@ -16,6 +16,8 @@ from .naming import Naming
 from .kanto import journey as kanto_journey
 from .menus import MAX_STEPS, RADIO_MAX_STEPS, menu_label, Buy, ChangeBox, DayCare, FieldMove, Fly, Give, Take, Lead, Radio, Forget, Remedy, Sell, ShowPartner, Storage, Teach, Use, choose
 
+STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) before reporting a blocked objective
+
 
 @dataclass(frozen=True)
 class Action:
@@ -69,6 +71,7 @@ class Policy:
         self.puzzle_cache = {}
         self.memory = None
         self.resetting_puzzle = None
+        self.unreachable_waits = 0
 
     def state_dict(self):
         return {'starter': self.starter, 'completed': self.completed, 'collection': self.collection, 'demand': self.demand, 'decisions': self.decisions,
@@ -163,6 +166,7 @@ class Policy:
                 'collection': {'version': self.data.game, 'dex_total': 251,
                                'phase': self.collection.get('phase', 'journey'),
                                'hunting': (self.collection.get('target') or {}).get('species')},
+                'blocked': self.unreachable_waits >= STUCK_WAITS,
                 'reason': self.goal.label if self.goal else 'Start the adventure'}
 
     def journey(self, snapshot, mem):
@@ -566,19 +570,30 @@ class Policy:
                     continue
                 if not self.nav.passable(grid[point[1] * entry['width'] + point[0]]):
                     continue
-                if snapshot.map == mid:
-                    path = self.nav.local(snapshot, [point], self.memory)
-                else:
-                    path = None
-                if path is None:
-                    path = self.nav.regions.route(snapshot, mid, [point], cut=bool(snapshot.badges & 2),
-                                                   surf=bool(snapshot.badges & 8))
+                path = self.reachable_path(snapshot, mid, point)
                 if path is not None:
                     choices.append((len(path), point[0], point[1], face))
         if not choices:
             return Goal(key, label, map_name, x, y + 1, 'up')
         _, x, y, face = min(choices)
         return Goal(key, label, map_name, x, y, face)
+
+    def reachable_path(self, snapshot, mid, point):
+        """Path to a tile, or None when it cannot be reached right now.
+
+        On the current map, a failed local search means the tile is blocked (for example by a
+        person standing on it). regions.route then answers [] for 'same region, use local nav',
+        which must not be read as 'already there'.
+        """
+        same_map = snapshot.map == mid
+        path = self.nav.local(snapshot, [point], self.memory) if same_map else None
+        if path is not None:
+            return path
+        route = self.nav.regions.route(snapshot, mid, [point], cut=bool(snapshot.badges & 2),
+                                       surf=bool(snapshot.badges & 8))
+        if same_map and route == []:
+            return None
+        return route
 
     def in_league(self, snapshot):
         return self.constant(snapshot) in {
@@ -860,6 +875,8 @@ class Policy:
         surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
         path = self.nav.toward(snapshot, target, [(self.goal.x, self.goal.y)], memory, surf=surf)
         self.mode = self.goal.label
+        if path is not None:
+            self.unreachable_waits = 0
         if path:
             return self.walk(snapshot, memory, path)
         if path == []:
@@ -915,7 +932,11 @@ class Policy:
                 self.interaction = self.goal.key
                 return Action(self.goal.face, 8, 8)
             return Action('a', 8, 36)
-        # Briefly wait for moving people or map transitions before replanning.
+        # Briefly wait for moving people or map transitions before replanning, but do not wait
+        # silently forever: after a long run of waits the objective is reported as stuck.
+        self.unreachable_waits += 1
+        if self.unreachable_waits >= STUCK_WAITS:
+            self.mode = f'Stuck: cannot reach {self.goal.label}'
         return Action(None, 0, 24)
 
     def walk(self, snapshot, memory, path):
