@@ -113,6 +113,8 @@ Recorded cartridge scenarios include:
 | Crystal Celebi | Optional GS Ball activation committed once, delivery and Kurt quest completed, Celebi caught at the shrine |
 | Bug-Catching Contest | Entry, judging and party restoration in all three games, Crystal won first place and received a Sun Stone |
 | Extended collection | Crystal completed another 5,000,028 frames without a stall, reaching 94 owned species including Espeon and Crobat, then another 750,032 frames reached 95. Gold recovered from insufficient Day Care funds, completed another 2,000,008 frames without a stall and reached 78, then Espeon and Nidoqueen raised it to 80, with subsequent collection reaching 83. Crystal reached 98 after Suicune, a native Lugia trade and Tyranitar |
+| Continuous collection with donors | One Crystal save reached 194 owned through native catches and verified Red, Blue, Gold and Silver exchanges. Imports include Articuno, Zapdos, Moltres, Mewtwo, Ho-Oh, Porygon2, Politoed, Slowking, Steelix, Kingdra and Hitmontop. Each exchange passed cartridge Continue, checkpoint restart and durable participant verification |
+| Game Corner | Native coin purchases, prize menus and League funding obtained Cubone, Wobbuffet, Pikachu and Porygon in Crystal. Gold obtained its 9,999-coin Porygon using native slot play for the balance above the coin purchase limit |
 | Moon Stone | Collected the native Tohjo Falls item in all three games. Gold then selected Nidorina in the stone menu and evolved it into Nidoqueen |
 | Trade evolution items | Collected Up-Grade, King’s Rock and Dragon Scale in Gold, Silver and Crystal through native dialogue, Strength and item pickups |
 | Held trade evolution | Prepared Metal Coat for Steelix and King’s Rock for a Gold/Crystal exchange that produced Politoed and Slowking. A further Gold/Crystal exchange used Dragon Scale and Metal Coat to produce Kingdra and Steelix. All four results passed checkpoint restart, cartridge restart and durable commit/recovery checks |
@@ -168,7 +170,7 @@ Run a complete isolated campaign:
 ```
 
 `--load PATH` resumes a cartridge checkpoint and its sibling `.policy.json`.
-Focused scenarios include ruins, tower, celebi, contest, gifts, legends, breeding, stones, trade_items,
+Focused scenarios include ruins, tower, celebi, contest, gifts, legends, breeding, stones, trade_items, gamecorner, restore,
 Headbutt, Rock Smash and a specified encounter. Separate verification tools exercise runtime
 APIs, capture accounting, portable saves, trade preparation, durable exchange
 and custom reward delivery. `tools/verify_gen2_library.py` also exercises worker
@@ -177,6 +179,23 @@ exchange. `tools/verify_gen2_trading.py --time-capsule` prepares a compatible
 boxed offer. `tools/verify_timecapsule.py` exchanges that receipt with a prepared
 Red or Blue checkpoint and runs both participant verifiers. Its `--data`
 directory must contain both the Generation I tables and generated `gen2` data.
+
+`tools/collect_gen2_imports.py` resumes verified Time Capsule imports from disposable
+Red or Blue donor copies. `tools/collect_gen2_donors.py` does the same for Gen II
+donors, including held-item evolutions. Their progress manifests record each
+adopted checkpoint and the continuous recipient lineage. `--offer-trained`
+explicitly offers trained boxed partners in those disposable copies.
+`tools/play_gen2.py --until all251` stops only after the observed owned count is 251.
+Optional Mew, GS Ball and earned League starter gifts use the existing runtime
+settings, a persistent `--runtime-store` and a separate event ledger.
+
+Extended imports exposed clock loss during cartridge restart verification,
+native walking friendship gains, a Gen I withdrawal with HP above its recalculated
+maximum, and incorrect Gen II boxed nickname offsets. Verification now preserves
+the RTC, accounts for the cartridge's friendship step counter, and requires the
+nurse to repair the HP mismatch before preparing an exchange. Box names and
+optional gifts now use the native nickname layout, with a full-box preservation
+regression check. Level-100 evolution parents can breed a trainable replacement.
 
 The Time Capsule, Celebi overnight and repeat contest tests advanced the real-time clock in
 private fixture copies before allowing the cartridge’s daily reset to run.
@@ -187,7 +206,7 @@ were injected to produce those exchange or capture results.
 
 The autonomous controller is not a proof that every seed will finish without a
 stall, or that every optional cartridge activity is automated. Game Corner
-play still uses manual controls. The Battle Tower test proves
+prize acquisition is automated. The Battle Tower test proves
 entry, combat, a six-win streak and return. A seven-win streak has not yet been demonstrated. All 251 species have data and
 UI support, and Time Capsule and the optional Celebi quest add acquisition paths.
 An autonomous 251-species collection has not been demonstrated. Sun Stones now

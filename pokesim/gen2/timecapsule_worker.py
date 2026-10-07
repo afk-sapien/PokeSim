@@ -74,22 +74,33 @@ def run_session(plan, output_dir, progress=None, cancelled=None):
             peer = sides[1 - i]
             incoming = convert(before[1 - i][peer.spec.party_slot], versions[i].generation, data)
             if i == second:
+                encode = lambda rows: [{key: value.hex() for key, value in row.items()} for row in rows]
+                _write(out / 'modern-party-evidence.json', json.dumps({
+                    'before': encode(before[i]), 'after': encode(gen2.party(side.pb, data)),
+                    'slot': side.spec.party_slot}, indent=2).encode())
                 expected, evidence = gen2.verify_exchange(side, before[i], incoming, side.spec.party_slot,
                                                           snapshot, time_capsule=True)
             else:
                 expected, evidence = gen1.verify_exchange(side, before[i], incoming, side.spec.party_slot, boxes)
             save_stream = io.BytesIO()
+            clock_stream = io.BytesIO()
             state_stream = io.BytesIO()
             if i != second:
                 side.pb.save_state(state_stream)
-            side.pb.stop(ram_file=save_stream, rtc_file=io.BytesIO())
+            side.pb.stop(ram_file=save_stream, rtc_file=clock_stream)
             side.stopped = True
             save = save_stream.getvalue()
             checked(len(save) == 32768, 'Unexpected cartridge save size')
             if i == second:
-                restarted = gen2.continue_save(side.rom_bytes, save, data)
+                restarted = gen2.continue_save(side.rom_bytes, save, data, rtc=clock_stream.getvalue())
                 try:
-                    checked(gen2.party(restarted, data) == expected, 'Time Capsule Continue changed the party')
+                    resumed = gen2.party(restarted, data)
+                    if resumed != expected:
+                        encode = lambda rows: [{key: value.hex() for key, value in row.items()} for row in rows]
+                        _write(out / 'restart-party-mismatch.json', json.dumps({
+                            'expected': encode(expected), 'continued': encode(resumed)}, indent=2).encode())
+                        _write(out / 'rejected.sav', save)
+                    checked(resumed == expected, 'Time Capsule Continue changed the party')
                     side.pb = restarted
                     gen2.verify_exchange(side, before[i], incoming, side.spec.party_slot, snapshot, time_capsule=True)
                     restarted.save_state(state_stream)
@@ -105,6 +116,8 @@ def run_session(plan, output_dir, progress=None, cancelled=None):
             state_path, save_path = out / f'{prefix}.state', out / f'{prefix}.sav'
             _write(state_path, state)
             _write(save_path, save)
+            if i == second:
+                _write(out / f'{prefix}.rtc', clock_stream.getvalue())
             evidence.update(time_capsule=True, cartridge_generation=versions[i].generation, transport=dict(side.counts))
             key = gen2.individual_key if i == second else gen1.individual_key
             results[side.spec.adventure_id] = {'adventure_id': side.spec.adventure_id, 'side': prefix,

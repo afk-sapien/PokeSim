@@ -71,6 +71,13 @@ def journey(policy, snapshot, Goal):
                 if (policy.demand.get(baby, 0) and sum(mon.species == baby for mon in snapshot.party + snapshot.stored)
                         <= policy.demand[baby]):
                     missing.add(baby)
+                level_evolution = any(evo['method'] in {'level', 'happiness', 'stat'}
+                                      and evo['species'] not in snapshot.owned
+                                      for evo in data.species[baby]['evolutions'])
+                if (baby in snapshot.owned and level_evolution
+                        and not any(mon.species == baby and mon.level < 100
+                                    for mon in snapshot.party + snapshot.stored)):
+                    missing.add(baby)
             for baby in babies & {133, 236, 43, 60, 79}:
                 branches = {evo['species'] for evo in data.species[baby]['evolutions']}
                 if baby in (43, 60):

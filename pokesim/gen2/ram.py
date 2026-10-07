@@ -215,6 +215,8 @@ class Snapshot:
     egg_ready: bool = False
     breeding_compatible: bool = False
     roamers: tuple[dict, ...] = ()
+    step_count: int = 0
+    happiness_cycle: int = 0
 
     @property
     def started(self):
@@ -287,7 +289,7 @@ def read_snapshot(memory, data, frame=0):
         count_box = min(mem.byte(name), 20)
         box_counts.append(count_box)
         for slot in range(count_box):
-            mon = decode_mon(mem.read(name, 32, 22 + slot * 32), mem.read(name, 11, 862 + slot * 11), data,
+            mon = decode_mon(mem.read(name, 32, 22 + slot * 32), mem.read(name, 11, 882 + slot * 11), data,
                              box=box, position=slot, egg=mem.byte(name, 1 + slot) == 0xFD)
             if mon:
                 stored.append(mon)
@@ -334,4 +336,5 @@ def read_snapshot(memory, data, frame=0):
                     (mem.word('wGameTimeHours'), mem.byte('wGameTimeMinutes'), mem.byte('wGameTimeSeconds')),
                     mem.byte('wHallOfFameCount'), mem.read('wEventFlags', 256), mem.tiles(), tuple(objects), valid, data,
                     daycare=daycare, egg_ready=bool(mem.byte('wDayCareMan') & 64),
-                    breeding_compatible=bool(mem.byte('wDayCareMan') & 32), roamers=tuple(roamers))
+                    breeding_compatible=bool(mem.byte('wDayCareMan') & 32), roamers=tuple(roamers),
+                    step_count=mem.byte('wStepCount'), happiness_cycle=mem.byte('wHappinessStepCount'))

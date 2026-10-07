@@ -73,6 +73,7 @@ class Policy:
                             for mid, objects in self.nav.objects.items()}}
 
     def load_state_dict(self, state):
+        from .gamecorner import Coins, Prize, Slots
         self.starter = state.get('starter', self.starter)
         self.completed = state.get('completed', {})
         self.collection = state.get('collection', {'target': None, 'attempts': {}})
@@ -85,6 +86,8 @@ class Policy:
         menu = state.get('menu')
         kinds = {'ShowPartner': ShowPartner, 'Sell': Sell, 'Lead': Lead, 'DayCare': DayCare, 'FieldMove': FieldMove, 'Give': Give, 'Take': Take, 'Fly': Fly, 'Radio': Radio, 'ChangeBox': ChangeBox, 'Buy': Buy, 'Teach': Teach, 'Use': Use, 'Storage': Storage, 'Forget': Forget, 'Remedy': Remedy}
         self.menu = kinds[menu['kind']](**menu['state']) if menu and menu.get('kind') in kinds else None
+        if menu and menu.get('kind') in {'Coins', 'Prize', 'Slots'}:
+            self.menu = {'Coins': Coins, 'Prize': Prize, 'Slots': Slots}[menu['kind']](**menu['state'])
         self.shopping = tuple(state['shopping']) if state.get('shopping') else None
         self.shop_location = tuple(state['shop_location']) if state.get('shop_location') else None
         self.healing_map = state.get('healing_map')
@@ -585,7 +588,8 @@ class Policy:
         if fees:
             reserve = max(reserve, fees + 1000)
         requests = []
-        ball_target = 20 if self.collection.get('phase') == 'legendary' else 4
+        unique_encounter = self.goal is not None and self.goal.key in {'sudowoodo', 'snorlax'}
+        ball_target = 20 if self.collection.get('phase') == 'legendary' or unique_encounter else 4
         if sum(count for _, count in snapshot.pockets['balls']) < ball_target and snapshot.can_catch:
             names = ('ULTRA_BALL', 'GREAT_BALL', 'POKE_BALL') if snapshot.badges & 64 else ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL')
             requests.append((names, 40 if ball_target == 20 else 20))
@@ -754,7 +758,8 @@ class Policy:
         well_item = (self.goal.key == 'collection_trade_item'
                      and self.data.maps[snapshot.map]['constant'] in {'SLOWPOKE_WELL_B1F', 'SLOWPOKE_WELL_B2F'})
         if not self.goal.key.startswith('push_') and not well_item and (not self.collection.get('contest') or not mem.byte('wStatusFlags2') & 4):
-            self.goal = self.healing(snapshot) or self.shop(snapshot) or self.goal
+            prize_errand = self.goal.key in {'collection_coin_case', 'collection_coins', 'collection_prize', 'collection_slots'}
+            self.goal = self.healing(snapshot) or (None if prize_errand else self.shop(snapshot)) or self.goal
         target = self.data.map_ids[self.goal.map_name]
         from .flight import shortcut
         flight = shortcut(self, snapshot, mem, target)
@@ -878,7 +883,7 @@ class Policy:
         catch = (snapshot.in_battle == 1 and (snapshot.enemy_species not in snapshot.owned or partner or requested)
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in
                     {label.casefold() for label in self.ball_labels(snapshot)} for item, count in snapshot.pockets['balls'] if count))
-        if (catch and not partner and snapshot.enemy_species not in {130, 243, 244, 245, 249, 250, 251}
+        if (catch and not partner and snapshot.enemy_species not in {130, 143, 185, 243, 244, 245, 249, 250, 251}
                 and snapshot.badges < 128 and snapshot.money < 1200
                 and sum(count for _, count in snapshot.pockets['balls']) <= 3):
             catch = False

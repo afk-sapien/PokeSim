@@ -67,11 +67,12 @@ def run_session(plan, output_dir, progress=None, cancelled=None):
             expected, evidence = verify_exchange(side, before[index], before[1 - index][peer.spec.party_slot],
                                                  side.spec.party_slot, snapshots[index])
             save_stream = io.BytesIO()
-            side.pb.stop(ram_file=save_stream, rtc_file=io.BytesIO())
+            clock_stream = io.BytesIO()
+            side.pb.stop(ram_file=save_stream, rtc_file=clock_stream)
             side.stopped = True
             save = save_stream.getvalue()
             checked(len(save) == 32768, 'Unexpected cartridge save size')
-            restarted = continue_save(side.rom_bytes, save, side.data)
+            restarted = continue_save(side.rom_bytes, save, side.data, rtc=clock_stream.getvalue())
             try:
                 checked(party(restarted, side.data) == expected, 'Cartridge Continue changed the traded party')
                 side.pb = restarted
@@ -88,6 +89,7 @@ def run_session(plan, output_dir, progress=None, cancelled=None):
             state_path, save_path = out / f'{prefix}.state', out / f'{prefix}.sav'
             _write(state_path, state)
             _write(save_path, save)
+            _write(out / f'{prefix}.rtc', clock_stream.getvalue())
             evidence.update(cartridge_restart=True, checkpoint_restart=True, transport=dict(side.counts))
             results[side.spec.adventure_id] = {
                 'adventure_id': side.spec.adventure_id, 'side': prefix, 'version': side.build['version'],

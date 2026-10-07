@@ -25,6 +25,7 @@ required = {
     'pokesim/gen2/teams.py',
     'pokesim/gen2/celebi.py',
     'pokesim/gen2/contest.py',
+    'pokesim/gen2/gamecorner.py',
     'pokesim/_build.json',
     'pokesim/build_info.py',
     'pokesim/runtime/legacy.py',
