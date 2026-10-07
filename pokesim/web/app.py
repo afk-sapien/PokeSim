@@ -25,6 +25,24 @@ STATIC = Path(__file__).parent / "static"
 BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
 
 
+# Ownership barriers: a save from before one of these would undo a completed trade or custom reward.
+REWIND_BARRIERS = (('trade_barrier', 'trade_id', 'This save predates the latest completed trade'),
+                   ('custom-reward-barrier-v1', 'reward_id', 'This save predates the latest custom reward or purchase'))
+
+
+def rewind_refusal(store, state_name):
+    """Why this save cannot be loaded, or None. The emulator enforces the same barriers."""
+    metadata = None
+    for key, field, message in REWIND_BARRIERS:
+        barrier = store.get(key)
+        if barrier:
+            if metadata is None:
+                metadata = store.checkpoint_metadata(store.state_path(state_name)) or {}
+            if metadata.get(field) != barrier:
+                return message
+    return None
+
+
 def live_status(*args, **kwargs):
     from .pokedex import live_status as implementation
     return implementation(*args, **kwargs)
@@ -289,11 +307,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         elif c.action == "load_state":
             if not isinstance(c.value, str) or not store.state_path(c.value):
                 raise HTTPException(400, "Save state does not exist")
-            barrier = store.get('trade_barrier')
-            if barrier:
-                metadata = store.checkpoint_metadata(store.state_path(c.value))
-                if (metadata or {}).get('trade_id') != barrier:
-                    raise HTTPException(409, 'This save predates the latest completed trade')
+            refusal = rewind_refusal(store, c.value)
+            if refusal:
+                raise HTTPException(409, refusal)
             emu.command("load_state", str(c.value))
         else:
             raise HTTPException(400, "unknown action")
@@ -369,7 +385,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         ev = store.event(eid)
         if not ev:
             raise HTTPException(404)
-        can_rewind = bool(ev["state"]) and not config.VIEWER_ONLY and not store.get("trade_barrier")
+        can_rewind = bool(ev["state"]) and not config.VIEWER_ONLY and not any(
+            store.get(key) for key, _, _ in REWIND_BARRIERS)
         return render_event(ev, can_rewind=can_rewind, base_path=base_path,
                             adventure_id=adventure_id, adventure_name=adventure_name)
 
