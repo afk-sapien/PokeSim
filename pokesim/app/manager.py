@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.background import BackgroundTask
 
+from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, user_directory
 from ..platform_io import lock_file
@@ -268,6 +269,10 @@ def create_app(manager, shutdown=lambda: None):
     @app.exception_handler(KeyError)
     async def missing(request, error):
         return JSONResponse({'detail': str(error).strip("'")}, status_code=404)
+
+    @app.exception_handler(CoreBackendCapabilityError)
+    async def unsupported(request, error):
+        return JSONResponse({'detail': str(error)}, status_code=501)
 
     @app.exception_handler(RuntimeError)
     async def unavailable(request, error):

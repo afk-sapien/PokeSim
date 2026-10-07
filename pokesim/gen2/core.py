@@ -15,15 +15,13 @@ import io
 
 from pokesim_core.emulator import Emulator as CoreEmulator
 
+from ..capability import CAPABILITY_ERRORS, CoreCapabilityError
+
 CLOCK_UNAVAILABLE = ('The installed Core or PyBoy RS does not support the cartridge clock '
                      '(rtc_file, export_rtc and lock_clock), so this operation cannot be verified.')
 
 # A fixed instant for reproducible runs: 2023-11-14 22:13:20 UTC.
 FIXED_CLOCK_EPOCH = 1_700_000_000.0
-
-
-class CoreCapabilityError(NotImplementedError):
-    """The installed Core and PyBoy RS lack a feature that Gen II requires."""
 
 
 def _core_has_clock():
@@ -34,7 +32,7 @@ def _clock_call(function, *args, **kwargs):
     """Run a Core clock call, reporting a backend without clock control as a missing capability."""
     try:
         return function(*args, **kwargs)
-    except CoreCapabilityError:
+    except CAPABILITY_ERRORS:
         raise
     except NotImplementedError as error:
         raise CoreCapabilityError(CLOCK_UNAVAILABLE) from error
