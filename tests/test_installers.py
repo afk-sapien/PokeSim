@@ -242,16 +242,14 @@ def test_pyproject_markers_cover_exactly_the_platforms_with_a_wheel():
 
 
 def test_unsupported_platform_message_is_shown_instead_of_a_traceback(monkeypatch):
-    import builtins
+    import importlib.util
     from pokesim import platform_support
-    real = builtins.__import__
+    real = importlib.util.find_spec
 
     def missing(name, *args, **kwargs):
-        if name == 'pyboy_rs':
-            raise ModuleNotFoundError("No module named 'pyboy_rs'")
-        return real(name, *args, **kwargs)
+        return None if name == 'pyboy_rs' else real(name, *args, **kwargs)
 
-    monkeypatch.setattr(builtins, '__import__', missing)
+    monkeypatch.setattr(importlib.util, 'find_spec', missing)
     with pytest.raises(SystemExit) as stopped:
         platform_support.require_emulator()
     assert 'no emulator build' in str(stopped.value) and 'pip install pokesim' in str(stopped.value)
