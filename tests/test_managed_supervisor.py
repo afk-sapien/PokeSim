@@ -249,3 +249,75 @@ def test_readiness_timeout_names_the_last_cause_and_the_log_not_forty_lines(tmp_
     assert 'ROM header checksum is wrong' in message
     assert str(tmp_path / 'logs' / 'worker.log') in message
     assert 'noise 10' not in message and ' | ' not in message and len(message) < 400
+
+
+def run_monitor_once(supervisor, aid, child, requests):
+    child.request = requests
+    child.pace = SimpleNamespace(observe=lambda value: None)
+    waits = iter([False, True])
+    original = supervisor.closed
+    supervisor.closed = SimpleNamespace(wait=lambda seconds: next(waits), is_set=lambda: False)
+    try:
+        supervisor._monitor()
+    finally:
+        supervisor.closed = original
+
+
+def test_worker_without_a_palette_is_never_sent_one_and_stays_healthy(supervisor):
+    aid = adventure(supervisor)
+    supervisor.start(aid)
+    child = supervisor.child(aid)
+    paths = []
+
+    def request(method, path, data=None, timeout=None):
+        paths.append(path)
+        if path == '/api/state':
+            return {'speed': 1, 'game': {}, 'frame': 1}   # Generation II reports no palette
+        if path == '/internal/palette':
+            raise RuntimeError('Gen II has no palette')
+        return {'ok': True}
+
+    run_monitor_once(supervisor, aid, child, request)
+    assert '/internal/palette' not in paths
+    assert supervisor.registry.adventure(aid)['state'] == 'running'
+    assert supervisor.registry.adventure(aid)['summary']['settings_errors'] == {}
+    assert aid not in supervisor.unhealthy_since
+
+
+def test_refused_optional_setting_is_reported_and_never_fails_health(supervisor):
+    aid = adventure(supervisor)
+    supervisor.start(aid)
+    child = supervisor.child(aid)
+    supervisor.registry.update(aid, settings={'palette': 'blue', 'speed': 4})
+
+    def request(method, path, data=None, timeout=None):
+        if path == '/api/state':
+            return {'speed': 1, 'palette': 'original', 'game': {}, 'frame': 1}
+        if path in {'/internal/palette', '/internal/speed'}:
+            raise RuntimeError('refused')
+        return {'ok': True}
+
+    run_monitor_once(supervisor, aid, child, request)
+    row = supervisor.registry.adventure(aid)
+    assert row['state'] == 'running'
+    assert row['summary']['settings_errors'] == {'speed': 'refused', 'palette': 'refused'}
+    assert aid not in supervisor.unhealthy_since
+
+
+def test_palette_choice_is_ignored_for_generation_ii_adventures(tmp_path):
+    registry = Registry(tmp_path)
+    registry.add_rom('gold', 'sha1', 'gold')
+    rom = tmp_path / 'gold.gbc'
+    rom.write_bytes(b'fake')
+    assets = SimpleNamespace(rom_path=lambda rid: rom, game_data_dir=tmp_path, prepare_gen2=lambda game, report: tmp_path,
+                             install_portraits=lambda raw: 0, cancelled=threading.Event())
+    supervisor = Supervisor(registry, assets, 'http://127.0.0.1:8000', FakeChild)
+    try:
+        row = registry.create('Johto', 'gold', {'starter': 'random', 'palette': 'blue'}, identifier())
+        registry.request_lifecycle(row['id'], 'start', identifier())
+        supervisor.start(row['id'])
+        supervisor.children[row['id']].request = lambda *args, **kwargs: pytest.fail('no palette request expected')
+        assert supervisor.push_palette(row['id']) is False
+    finally:
+        supervisor.close()
+        registry.close()

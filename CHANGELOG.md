@@ -4,6 +4,7 @@
 
 ## 0.5.0
 
+- Fix Gold, Silver and Crystal adventures being restarted about every 65 seconds and ending as failed. The supervisor asked Generation II workers, which have no screen palette, to apply one, and counted the refusal as a failed health check. Optional settings now never decide whether a worker lives, a refusal is reported on the setting, workers that report no palette are left alone, and the Library hides the palette choice for Generation II games. Opening a Generation II adventure on 0.4.x still fails with "Unknown settings: celebi_event" (documented in the operations guide), since that release cannot be changed.
 - Remove the automatic pause for a shiny that cannot be caught (added in 0.4.18). Balls cannot be bought and storage cannot be freed during a battle, so the pause only looked like a stall. Keep at least 10 balls in stock before heading out, on top of the existing free-storage reserve, so a shiny stays catchable. If one still cannot be caught, the player runs as it would from any other uncatchable encounter, and the journal and notifications record "Shiny <species> could not be caught: no balls" or "no storage space". The notification follows the "Stuck or needs attention" setting. Shiny release and trade protection, Take Control, and the Transform check are unchanged.
 - Run every adventure on PyBoy RS, a Rust port of PyBoy 2.7.0, through PokeSim Core 0.2. PyBoy is no longer a dependency, and installation needs no Rust toolchain.
 - Add Gold, Silver and Crystal adventures with Gen II Cable Club trading, the Time Capsule with Red and Blue, portable save export and cartridge real-time clocks. They run on the Rust backend only.
@@ -20,6 +21,12 @@
 - Show a short cause and the log path when a worker is not ready in time, in place of forty log lines.
 - Show what idle Gen II collection is waiting for, such as Tuesday for the Bug-Catching Contest or night for a time-gated encounter. The cartridge clock follows wall time.
 - Remove unreachable Core clock probes. An older Core still gets a clear capability error, and the package's capability error now shares the backend's 501 handling.
+- Require every job of the CI and Python install workflows by exact name in the release gate, including the browser and native test shards and all four Windows shards. The old prefix matching let `container-proxy` stand in for `container` and `macos-15-intel` for `macos-15`.
+- Make the release validate job and gate fail while any temporary pin remains, check the `#sha256=` fragments, the Dockerfile source checksum and the published emulator assets against `uv.lock`, and add `tools/finalize_release_pins.py` to rewrite the pins from the final release assets.
+- Stop `pokesim-core` from being requested on platforms without a pyboy-rs wheel (Windows ARM64, 32-bit ARM, FreeBSD, musl), so pip never looks those names up on PyPI. The installers and the application now say plainly that the platform is unsupported.
+- Derive the bundled pyboy-rs source archive check from `uv.lock` instead of a hard-coded file name, and fail when the archive's own metadata names another version.
+- Generate Gen II game data in CI so the Gen II runtime tests run there, and read all local Gen II test inputs from `GEN2_DATA_DIR` and `GEN2_CARTRIDGE_DIR` (`GEN2_ROM_DIR` is gone).
+- Extend the private-string scan to case-insensitive matches, personal paths, private network addresses and contact details, and make it fail when git is missing.
 
 ## 0.4.20
 

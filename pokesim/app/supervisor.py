@@ -22,6 +22,8 @@ from .resources import ObservedSpeed, ProcessUsage, recent_activity
 
 log = logging.getLogger(__name__)
 
+GEN2_VERSIONS = {'gold', 'silver', 'crystal'}
+
 
 class Child:
     def __init__(self, bootstrap, command=None):
@@ -218,7 +220,7 @@ class Supervisor:
                 self.registry.update(aid, state='starting', generation=generation, error=None)
             try:
                 report = lambda message: self.registry.update(aid, summary={'setup': message})
-                if adventure['version'] in {'gold', 'silver', 'crystal'}:
+                if adventure['version'] in GEN2_VERSIONS:
                     self.assets.prepare_gen2(adventure['version'], report)
                 else:
                     self.assets.prepare(report)
@@ -288,7 +290,7 @@ class Supervisor:
         with self.admission:
             with self.guard:
                 child = self.children.get(aid)
-            if child is None:
+            if child is None or self.registry.adventure(aid)['version'] in GEN2_VERSIONS:
                 return False
             try:
                 value = self.registry.adventure(aid)['settings'].get('palette', 'original')
@@ -308,9 +310,26 @@ class Supervisor:
         with self.admission:
             if self.closed.is_set() or self.children.get(aid) is not child:
                 return
+            if actual is None:
+                return   # This worker reports no palette (Generation II), so there is nothing to apply.
             value = self.registry.adventure(aid)['settings'].get('palette', 'original')
             if actual != value:
                 self._apply_palette(child, value)
+
+    def sync_optional(self, aid, child, status):
+        """Apply settings that may lag behind. A refusal is reported on the setting and never judges health."""
+        errors = {}
+        for name, sync, actual in (('speed', self.sync_speed, status.get('speed')),
+                                   ('palette', self.sync_palette, status.get('palette'))):
+            try:
+                sync(aid, child, actual)
+            except (RuntimeError, OSError, KeyError, httpx.HTTPError) as error:
+                errors[name] = str(error) or error.__class__.__name__
+        if errors != getattr(child, 'sync_errors', {}):
+            for name, message in errors.items():
+                log.warning('Adventure %s has not accepted its %s setting: %s', aid, name, message)
+            child.sync_errors = errors
+        return errors
 
     def push_notifications(self):
         """Apply the Library notification settings to running adventures without restarting them."""
@@ -390,15 +409,15 @@ class Supervisor:
                     child.request('GET', '/healthz', timeout=3)
                     status = child.request('GET', '/api/state', timeout=3)
                     child.pace.observe(status.get('performance'))
-                    self.sync_speed(aid, child, status.get('speed'))
-                    self.sync_palette(aid, child, status.get('palette'))
+                    settings_errors = self.sync_optional(aid, child, status)
                     self.unhealthy_since.pop(aid, None)
                     game = status.get('game') or {}
                     summary = {'activity': game.get('map_name') or 'Adventure in progress',
                                'paused': status.get('paused', False),
                                'frame': status.get('frame'), 'playtime': game.get('playtime'),
                                'last_response': time.time(), 'league_rewards': status.get('league_rewards'),
-                               'stalled': (status.get('progress') or {}).get('state') == 'stalled'}
+                               'stalled': (status.get('progress') or {}).get('state') == 'stalled',
+                               'settings_errors': settings_errors}
                     current = self.registry.adventure(aid)
                     summary['recent_activity'] = recent_activity(
                         current.get('summary') or {}, summary['activity'], summary['last_response'])
