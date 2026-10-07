@@ -13,6 +13,8 @@
 - Require the NO THANKS entry before reading a list as the Game Corner prize menu, so other lists are not mistaken for it.
 - Fix live sound stutter over a jittery connection. The page now keeps an adaptive lead of 0.4 seconds that grows to 1.5 seconds after dropouts and shrinks slowly, trims drift by at most 2%, and skips forward with a short fade instead of clearing. The server keeps about 2 seconds of audio and serves it without truncation. Take Control uses a lead of about 0.1 seconds. Playback speeds snap to fixed rates, and sound is off above 4.5x. Short network failures are retried for 6 seconds. The new `tools/audio_jitter_harness.py` measures gaps in Chromium.
 
+- Generate Gen II game data in CI so the Gen II runtime tests run there, and read all local Gen II test inputs from `GEN2_DATA_DIR` and `GEN2_CARTRIDGE_DIR` (`GEN2_ROM_DIR` is gone).
+- Extend the private-string scan to case-insensitive matches, personal paths, private network addresses and contact details, and make it fail when git is missing.
 ## 0.4.20
 
 - Fix PC box lists with a nickname containing PP being read as the PP Up menu, which stopped the Release goal from freeing storage.

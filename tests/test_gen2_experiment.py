@@ -137,11 +137,11 @@ def test_profiles_match_recorded_upstream_symbols(profile):
 
 @pytest.mark.parametrize('profile', PROFILES, ids=lambda profile: profile.game)
 def test_real_cartridge_probe(tmp_path, profile):
-    directory = os.environ.get('GEN2_ROM_DIR')
+    directory = os.environ.get('GEN2_CARTRIDGE_DIR')
     if not directory:
-        pytest.skip('Set GEN2_ROM_DIR to the directory containing the three owner-supplied ZIPs')
+        pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
     from tools.probe_gen2 import probe
-    source = Path(directory) / f'Pokemon_ {profile.game.title()} Version.zip'
+    source = Path(directory) / f'{profile.game}.gbc'
     result = probe(source, tmp_path / profile.game)
     assert all(result['checks'].values())
     assert result['sha1'] == profile.sha1
