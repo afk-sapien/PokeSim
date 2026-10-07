@@ -68,6 +68,15 @@ def test_pp_ups_target_established_useful_moves_below_native_cap():
     assert shop.pp_slot(replace(mon, moves=(89, 153, 0, 0), max_pp=(10, 5, 0, 0))) == 0
 
 
+def test_supply_purchase_keeps_last_bag_slot_free():
+    s = shopper(items=tuple((item, 1) for item in range(201, 219)))
+    plan = shop.choose(s, set())
+    assert plan and shop.valid_plan(s, plan, set())
+    crowded = replace(s, items=s.items + ((219, 1),))
+    assert shop.choose(crowded, set(shop.OFFERS)) is None
+    assert not shop.valid_plan(crowded, plan, set())
+
+
 def test_moon_stones_replenish_for_held_evolution_candidates():
     mon = live(partner('CLEFAIRY', level=40))
     s = shopper(party=(mon,), owned=frozenset())

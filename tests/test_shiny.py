@@ -108,6 +108,50 @@ def test_shiny_capture_priority_and_pause_without_supplies():
     assert not emu._protect_shiny(replace(snapshot, items=()))
 
 
+@pytest.mark.parametrize('original,copied,expected', [
+    (b'\x2a\xaa', b'\xff\xff', True),
+    (b'\xff\xff', b'\x2a\xaa', False),
+])
+def test_transform_uses_original_dvs_for_capture_and_pause(original, copied, expected):
+    from dataclasses import replace
+    from unittest.mock import Mock
+    from pokesim.emulator import Emulator
+    from pokesim.policies.battle import choose_battle
+    from pokesim.ram import read_snapshot
+    from pokesim.strategy_data import ITEMS
+    from test_events import snap
+    from test_strategy import mon
+    memory = bytearray(65536)
+    memory[0xd057] = 1
+    memory[0xcff1:0xcff3] = original
+    assert read_snapshot(memory, 0).enemy_shiny is expected
+    memory[0xcceb:0xcced] = original
+    memory[0xd069] = 8
+    memory[0xcff1:0xcff3] = copied
+    shiny = read_snapshot(memory, 1).enemy_shiny
+    assert shiny is expected
+    me = mon(level=100, hp=300, max_hp=300, attack=300, special=300, moves=(33,), pp=(35,))
+    enemy = mon(species=76, level=20, hp=50, max_hp=50, moves=(144,), pp=(10,))
+    s = snap(party=(me,), owned=frozenset(range(1, 152)), in_battle=1,
+             enemy_shiny=shiny, items=((ITEMS['ULTRA_BALL'], 10),))
+    assert choose_battle(s, me, enemy, 0).kind == ('item' if expected else 'fight')
+    emu = Emulator.__new__(Emulator)
+    emu.manual_mode, emu.paused, emu._autosave = False, False, Mock()
+    assert emu._protect_shiny(replace(s, items=())) is expected
+    assert emu.paused is expected
+    # A successful catch also sets TRANSFORMED while restoring the original DVs.
+    # It must finish its dialogue even when it fills the last available slot.
+    memory[0xd11c] = 76
+    assert not read_snapshot(memory, 2).enemy_shiny
+    memory[0xd11c] = 0
+    memory[0xcf0b] = 2
+    assert not read_snapshot(memory, 3).enemy_shiny
+    memory[0xcf0b] = 0
+    for battle in (0, 2):
+        memory[0xd057] = battle
+        assert not read_snapshot(memory, 3).enemy_shiny
+
+
 def test_shiny_catch_receipt_counts_once_and_preserves_held_badge(tmp_path):
     from pokesim.catches import record_receipt, initialize
     from pokesim.milestones import apply

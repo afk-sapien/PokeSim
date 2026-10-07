@@ -14,6 +14,8 @@ STANDARD = {3, 19, 21, 22, 25, 41, 44, 45, 48}
 PRICES = {item: 50000 if item - 200 in PREMIUM else 25000 if item - 200 in STANDARD else 10000
           for item in LIMITED}
 RESERVE = 20000
+# Leave one cartridge bag slot for story items and other pickups.
+PURCHASE_BAG_LIMIT = 19
 MIN_LEVEL = 50
 COUNTER = (MAPS['CELADON_MART_2F'], 6, 5)
 
@@ -94,7 +96,7 @@ def choose(snapshot, moves, compatible, *, owned):
     for item in sorted(LIMITED):
         if bool(bag.get(item)) != owned:
             continue
-        if not owned and (len(bag) >= 20 or snapshot.money < PRICES[item] + RESERVE):
+        if not owned and (len(bag) >= PURCHASE_BAG_LIMIT or snapshot.money < PRICES[item] + RESERVE):
             continue
         for index, mon in enumerate(snapshot.party):
             upgrade = projected_upgrade(mon, item, moves, compatible)
@@ -116,7 +118,8 @@ def valid_plan(snapshot, plan, moves, compatible, offers=()):
     index, item = plan['target'], plan['item']
     return (0 <= index < len(snapshot.party) and signature(snapshot.party[index]) == plan['signature']
             and projected_upgrade(snapshot.party[index], item, moves, compatible) is not None
-            and (dict(snapshot.items).get(item) or len(snapshot.items) < 20 and snapshot.money >= PRICES[item] + RESERVE))
+            and (dict(snapshot.items).get(item) or len(snapshot.items) < PURCHASE_BAG_LIMIT
+                 and snapshot.money >= PRICES[item] + RESERVE))
 
 
 def label(item, moves):

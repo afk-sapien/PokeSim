@@ -35,7 +35,7 @@ pipx ensurepath
 Open a new terminal so it can find uv. Install the current public PokeSim release:
 
 ```sh
-uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.18/pokesim-0.4.18-py3-none-any.whl
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.19/pokesim-0.4.19-py3-none-any.whl
 uv tool update-shell
 ```
 
@@ -54,7 +54,7 @@ launcher. There is no separate PokeSim EXE download in this installation flow.
 With pipx and Python 3.12 already installed, you can install PokeSim directly:
 
 ```sh
-pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.18/pokesim-0.4.18-py3-none-any.whl
+pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.19/pokesim-0.4.19-py3-none-any.whl
 pipx ensurepath
 ```
 

@@ -117,9 +117,12 @@ rewind across that purchase. Teaching uses the cartridge menus and consumes the
 TM normally, incrementing Used only on success. There is no replacement cartridge
 shop screen or ROM patch. The journal identifies the custom Champion counter.
 
-Limited TMs are protected from automatic selling, including original copies and
-purchased replacements. Optional HM teaching still uses empty slots only.
-Reusable HMs are never consumed.
+Limited TMs are normally protected from automatic selling. If all 20 bag slots
+are occupied and no ordinary surplus can be sold, the player sells the limited
+TM stack with the lowest Champion replacement cost to free one slot for story
+items. Key items, HMs, balls, and medicine are excluded from this fallback.
+Champion purchases leave at least one bag slot free. Optional HM teaching still
+uses empty slots only. Reusable HMs are never consumed.
 
 The same custom Champion counter also replenishes Moon Stones (₽5,000), PP Ups
 (₽25,000), Elixirs (₽5,000), and Max Elixirs (₽10,000). The planner keeps at most

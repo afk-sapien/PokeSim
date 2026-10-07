@@ -7,7 +7,7 @@ from .collection import legendary_project
 from .menus import MenuDecision, select, tap
 from ..strategy_data import DATA, ITEMS, MAPS, PRICES, WORLD
 
-# Protect all finite TMs, including purchased replacements waiting to be taught.
+# Keep finite TMs unless a completely full bag has no ordinary surplus to sell.
 RENEWABLE_TMS = {200 + number for number in (1, 2, 5, 7, 9, 15, 17, 23, 32, 33, 37, 50)}
 
 # Red and Blue refuse Safari Zone entry below this amount, and the story needs two visits' worth of
@@ -84,11 +84,19 @@ class ShoppingController:
 
     @staticmethod
     def sale_index(snapshot):
-        return next((i for i, (item, qty) in enumerate(snapshot.items)
+        surplus = next((i for i, (item, qty) in enumerate(snapshot.items)
                      if qty and (item == ITEMS['NUGGET'] or item in RENEWABLE_TMS
                                  or len(snapshot.items) >= 18 and item in {
                                      ITEMS[name] for name in ('X_ACCURACY', 'GUARD_SPEC', 'DIRE_HIT',
                                                              'X_ATTACK', 'X_DEFEND', 'X_SPEED', 'X_SPECIAL')})), None)
+        if surplus is not None or len(snapshot.items) < 20:
+            return surplus
+        # Free one slot for required story items. Minimize the cost of replacing
+        # the complete TM stack later, without selling key items or supplies.
+        from ..tm_shop import PRICES as replacement_prices
+        candidates = [(replacement_prices[item] * qty, i) for i, (item, qty) in enumerate(snapshot.items)
+                      if qty and item in replacement_prices]
+        return min(candidates)[1] if candidates else None
 
     def plan(self, snapshot, goal, project, *, requested_goal, healing, in_league, has_pokedex, completed_champion=False):
         fee = entry_fee(snapshot, goal.key)
@@ -152,7 +160,7 @@ class ShoppingController:
                                  else self.sale_index(snapshot)) is not None:
                 return MenuDecision(select(screen, 1), 'Sell spare valuables to cover the Safari Zone entry fee'
                                     if self.raising_funds(snapshot) else
-                                    'Sell replaceable TMs and Nuggets to make room for story items')
+                                    'Sell surplus items, or a limited TM only when the bag is full, to make room for story items')
             self.selling = False
             self.item = self.item_for(snapshot, stock, goal_key, project)
             self.buying = self.item is not None

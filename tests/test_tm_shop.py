@@ -102,6 +102,55 @@ def test_shopping_protects_limited_tms_even_when_raising_funds():
     assert ShoppingController.sale_index(replace(s, items=((201, 1),))) == 0
 
 
+def crowded_bag():
+    keys = ('BICYCLE', 'TOWN_MAP', 'HELIX_FOSSIL', 'S_S_TICKET', 'POKE_FLUTE',
+            'SILPH_SCOPE', 'COIN_CASE', 'OLD_ROD', 'GOOD_ROD', 'HM01', 'HM02', 'HM03')
+    return (tuple((ITEMS[name], 1) for name in keys)
+            + tuple((item, 1) for item in (206, 211, 221, 224, 234, 245))
+            + ((ITEMS['POKE_BALL'], 15), (ITEMS['SUPER_POTION'], 3)))
+
+
+def test_full_story_bag_routes_to_sell_one_tm_then_resumes():
+    from pokesim.policies.pickups import Pickups
+    s = shopper(items=crowded_bag(), hall_of_fame_count=0, map=MAPS['SAFFRON_CITY'])
+    goal = Goal('silph', 'Get the Card Key', 'Continue the story')
+    shop = ShoppingController()
+    def plan(state):
+        return shop.plan(state, goal, None, requested_goal=goal.key, healing=False,
+                         in_league=False, has_pokedex=True)
+    assert not Pickups.has_space(s, ITEMS['CARD_KEY'])
+    assert plan(s).goal.key == 'restock'
+    index = shop._sale_choice(s)
+    item, quantity = s.items[index]
+    assert item in tm_shop.LIMITED
+    assert tm_shop.PRICES[item] * quantity == min(tm_shop.PRICES[mid] * qty for mid, qty in s.items if mid in tm_shop.LIMITED)
+    after = replace(s, items=s.items[:index] + s.items[index + 1:])
+    assert shop._sale_choice(after) is None
+    assert plan(after).goal.key == 'silph'
+    assert Pickups.has_space(after, ITEMS['CARD_KEY'])
+    assert all(entry in after.items for entry in s.items if entry[0] not in tm_shop.LIMITED)
+
+
+@pytest.mark.parametrize('surplus', [ITEMS['NUGGET'], ITEMS['X_ATTACK'], 201])
+def test_full_bag_sells_ordinary_surplus_before_limited_tms(surplus):
+    bag = crowded_bag()
+    s = shopper(items=bag[:12] + ((surplus, 1),) + bag[13:])
+    assert ShoppingController.sale_index(s) == 12
+
+
+def test_champion_tm_purchase_keeps_last_bag_slot_free(shop_data):
+    moves, compatible = shop_data
+    s = shopper(items=tuple((item, 1) for item in range(1, 19)))
+    plan = tm_shop.choose(s, moves, compatible, owned=False)
+    assert plan and tm_shop.valid_plan(s, plan, moves, compatible)
+    crowded = replace(s, items=s.items + ((ITEMS['SUPER_POTION'], 1),))
+    assert tm_shop.choose(crowded, moves, compatible, owned=False) is None
+    assert not tm_shop.valid_plan(crowded, plan, moves, compatible)
+    owned = replace(crowded, items=crowded.items + ((plan['item'], 1),))
+    assert tm_shop.choose(owned, moves, compatible, owned=True)
+    assert tm_shop.valid_plan(owned, plan, moves, compatible)
+
+
 def test_policy_routes_to_counter_then_uses_owned_tm(shop_data):
     policy = StrategicPolicy(1)
     policy.tm_moves, policy.tm_compatible = shop_data

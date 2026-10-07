@@ -329,9 +329,9 @@ def read_snapshot(mem, frame: int) -> Snapshot:
     # as owning four starters at once.
     seen_dex = flag_bits(bytes(mem[W_DEX_SEEN:W_DEX_SEEN + 19]))
     owned_dex = flag_bits(bytes(mem[W_DEX_OWNED:W_DEX_OWNED + 19])) & seen_dex
-    from .shiny import shiny_bytes
+    from .shiny import wild_shiny
     return Snapshot(
-        enemy_shiny=bool(in_battle == 1 and not mem[0xd069] & 8 and shiny_bytes(bytes(mem[0xcff1:0xcff3]))),
+        enemy_shiny=wild_shiny(mem),
         frame=frame,
         map=mem[W_CUR_MAP], x=mem[W_X], y=mem[W_Y],
         badges=mem[W_BADGES],

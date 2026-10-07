@@ -14,6 +14,18 @@ def shiny_bytes(raw):
     return len(raw) == 2 and raw[0] & 0x2f == 0x2a and raw[1] == 0xaa
 
 
+def wild_shiny(memory):
+    """Keep the wild individual's original DVs when Transform copies a battler."""
+    # wCapturedMonSpecies is set before the capture dialogue and storage update.
+    # That capture no longer needs protection, even if it filled the last slot.
+    # wBattleResult becomes 2 when the capture flag is cleared for battle exit.
+    if memory[0xd057] != 1 or memory[0xd11c] or memory[0xcf0b] == 2:
+        return False
+    # wEnemyBattleStatus3.TRANSFORMED and wTransformedEnemyMonOriginalDVs.
+    address = 0xcceb if memory[0xd069] & 8 else 0xcff1
+    return shiny_bytes(bytes(memory[address:address + 2]))
+
+
 def is_shiny(mon):
     dvs = mon.get('dvs', ())
     return (isinstance(dvs, (tuple, list)) and len(dvs) == 5

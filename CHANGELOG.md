@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.19
+
+- Keep shiny encounter protection after Transform by reading the wild Pokémon's original DVs.
+- Free a full bag for story items by selling a limited TM only when no ordinary surplus remains. Champion purchases leave one bag slot free.
+
 ## 0.4.18
 
 - Fix Settings failing to load when saved backups exist.

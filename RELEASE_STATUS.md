@@ -1,31 +1,17 @@
-# Release status: 0.4.18 published
+# Release status: 0.4.19 prepared
 
-[PokeSim 0.4.18](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.18)
-combines [repository cleanup #46](https://github.com/afk-sapien/PokeSim/pull/46)
-and [feature release #47](https://github.com/afk-sapien/PokeSim/pull/47).
-Both PRs passed all 24 checks before merging. Core remains pinned at 0.1.4.
+PokeSim 0.4.19 fixes full bags blocking story progress and shiny encounters losing
+protection after Transform. Champion purchases also reserve one free bag slot.
+Core remains pinned at 0.1.4. See the [release notes](docs/release-notes.md).
 
-The release adds dedicated statistics pages, milestone times, shiny collection
-tracking and protection, move-aware Battle Power, smarter TM investment,
-renewable Champion supplies, item artwork, simpler adventure controls, mobile
-input improvements, audio-state fixes, and live palettes. See the
-[release notes](docs/release-notes.md) and
-[detailed feature scope](docs/next-release.md).
+The local non-browser suite passed 1,789 tests with 34 skips, including private-ROM
+checks. A copied-save cartridge replay verified emergency TM selling through shop
+menus and confirmed that one bag slot becomes available. Ruff and documentation
+checks passed. Publication and deployment verification are pending.
 
-The [publication receipt](docs/validation/release-0.4.18.json) records the tagged
-source revision, image digest, download checksums, and publication workflow.
-The tagged source passed installation checks on Windows, Intel and Apple Silicon
-macOS, and x86-64 and ARM Linux. Python checks passed on 3.11, 3.12, and 3.14.
-The complete local Chromium suite passed 118 cases. The exact normal CI command
-passed 1,776 tests with 168 skips, while the earlier full non-browser run including
-private-ROM checks passed 1,781 tests with 50 skips.
-
-Release preparation fixed optional Playwright loading during normal test
-collection and a Settings rendering error when saved backups exist. GitHub's
-canceled cleanup jobs were rerun after hosted runners became available. The
-publishing workflow verified the container, anonymous registry access, and every
-uploaded asset before making the release public. Public installer and Compose
-downloads were checked again against the published manifest.
+The [0.4.18 publication receipt](docs/validation/release-0.4.18.json) retains the
+previous release's checks and source revision. Its larger feature update remains
+documented in the [feature details](docs/next-release.md).
 
 ## Known limits, deliberately not addressed here
 

@@ -47,7 +47,7 @@ this volume if you want to keep your saves.**
 
 The latest-download URLs select the newest completed stable release. Its installers and
 Compose files pin that release's wheel and image. To pin a configuration yourself, replace
-`latest/download` with `download/v0.4.18` in the download URL. Draft releases stay hidden
+`latest/download` with `download/v0.4.19` in the download URL. Draft releases stay hidden
 until all their downloads are verified, so preparing the next version does not interrupt
 these install commands.
 
@@ -164,7 +164,7 @@ in a [support request](../SUPPORT.md). Remove private paths or tokens before sha
 | `PUBLIC_URL=http://localhost:8930` | Exact browser address, including scheme and port |
 | `HTTP_PORT=8930` | Host port mapped to the manager |
 | `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
-| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.18` | Exact published image version, overridden by `compose.build.yaml` for source builds |
+| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.19` | Exact published image version, overridden by `compose.build.yaml` for source builds |
 
 Phone notifications need no setting here. Open the Library, choose **Notifications**, generate a topic, and subscribe to it in the [ntfy](https://ntfy.sh) app. See the [guide](guide.md#notifications). `NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY`, and `NTFY_MUTE` are still read from the environment as defaults until notifications are saved in the Library.
 

@@ -4,7 +4,7 @@ import json
 from .legendary_returns import STEPS
 from .policies.collection import EVOS, champion
 from .strategy_data import ITEMS, MOVES
-from .tm_shop import RESERVE, signature
+from .tm_shop import PURCHASE_BAG_LIMIT, RESERVE, signature
 
 KEY = 'champion-shop-v1'
 INTERVAL = 1000000
@@ -96,7 +96,7 @@ def valid_plan(snapshot, plan, offers):
         return False
     quantity = OFFERS.get(item, 1)
     count = dict(snapshot.items).get(item, 0)
-    return (not count and len(snapshot.items) < 20 and snapshot.money >= PRICES[item] + RESERVE
+    return (not count and len(snapshot.items) < PURCHASE_BAG_LIMIT and snapshot.money >= PRICES[item] + RESERVE
             and plan.get('quantity') == quantity and (item not in OFFERS or item in offers))
 
 
