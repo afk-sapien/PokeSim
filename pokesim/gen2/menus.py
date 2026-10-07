@@ -2,6 +2,12 @@
 from dataclasses import dataclass
 import re
 
+from .screens import has_word
+
+# A menu task that needs more steps than this is lost. It ends and the stuck path takes over.
+MAX_STEPS = 600
+RADIO_MAX_STEPS = 300
+
 
 def selected(rows):
     return next((row.split('▶', 1)[1].strip() for row in rows if '▶' in row), '')
@@ -20,7 +26,7 @@ def menu_label(row):
 
 def choose(rows, label, *, exact=False):
     target = next((i for i, row in enumerate(rows)
-                   if (menu_label(row).casefold() == label.casefold() if exact else label.casefold() in row.casefold())), None)
+                   if (menu_label(row).casefold() == label.casefold() if exact else has_word(row.casefold(), label.casefold()))), None)
     cursor = next((i for i, row in enumerate(rows) if '▶' in row), None)
     if target is None or cursor is None:
         return None
@@ -37,6 +43,8 @@ class Teach:
 
     def step(self, snapshot, mem):
         self.steps += 1
+        if self.steps > MAX_STEPS:
+            return None
         rows, text = snapshot.tiles, snapshot.text
         party_menu = 'CANCEL' in text and 'ABLE' in text and any(row.lstrip().startswith('▶') for row in rows)
         if party_menu:
@@ -207,6 +215,8 @@ class Use:
 
     def step(self, snapshot, mem):
         self.steps += 1
+        if self.steps > MAX_STEPS:
+            return None
         rows, text = snapshot.tiles, snapshot.text
         if self.item not in dict(snapshot.items):
             return 'b' if '┌' in rows[12] or 'PACK' in text or 'CANCEL' in text else None
@@ -245,6 +255,8 @@ class Storage:
 
     def step(self, snapshot, mem):
         self.steps += 1
+        if self.steps > MAX_STEPS:
+            return None
         rows, text = snapshot.tiles, snapshot.text
         if len(snapshot.party) != self.initial_count:
             self.phase = 'exit'
@@ -277,6 +289,8 @@ class Forget:
 
     def step(self, snapshot, mem):
         self.steps += 1
+        if self.steps > MAX_STEPS:
+            return None
         rows, text = snapshot.tiles, snapshot.text
         if self.move not in snapshot.party[self.slot].moves:
             self.phase = 'exit'
@@ -309,6 +323,8 @@ class Remedy:
 
     def step(self, snapshot, mem):
         self.steps += 1
+        if self.steps > MAX_STEPS:
+            return None
         rows, text = snapshot.tiles, snapshot.text
         if dict(snapshot.items).get(self.item, 0) < self.initial:
             self.phase = 'exit'
@@ -360,6 +376,8 @@ class ChangeBox:
 
     def step(self, snapshot, mem):
         self.steps += 1
+        if self.steps > MAX_STEPS:
+            return None
         rows, text = snapshot.tiles, snapshot.text
         if snapshot.active_box == self.box:
             self.phase = 'exit'
@@ -392,6 +410,8 @@ class Radio:
 
     def step(self, snapshot, mem):
         self.steps += 1
+        if self.steps > RADIO_MAX_STEPS:
+            return None
         rows, text = snapshot.tiles, snapshot.text
         if self.phase == 'open':
             if 'GEAR' in text:

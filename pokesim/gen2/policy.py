@@ -2,17 +2,19 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
+from collections import deque
 import random
 import re
 from types import SimpleNamespace
 
 from .navigation import DIRS, Navigator
 from .ram import Memory
+from .screens import ScreenText, mask_roster
 from .puzzles import push_plan
 from .world import update as update_world
 from .naming import Naming
 from .kanto import journey as kanto_journey
-from .menus import Buy, ChangeBox, DayCare, FieldMove, Fly, Give, Take, Lead, Radio, Forget, Remedy, Sell, ShowPartner, Storage, Teach, Use, choose
+from .menus import MAX_STEPS, RADIO_MAX_STEPS, menu_label, Buy, ChangeBox, DayCare, FieldMove, Fly, Give, Take, Lead, Radio, Forget, Remedy, Sell, ShowPartner, Storage, Teach, Use, choose
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,11 @@ class Policy:
         self.naming = Naming(seed)
         self.learning = False
         self.switching = None
+        self.refusals = {}
+        self.recoveries = 0
+        self.rescue = deque()
+        self.failure = None
+        self.menu_ref, self.menu_steps = None, 0
         self.partner_move = None
         self.last_position = None
         self.same_position = 0
@@ -98,6 +105,49 @@ class Policy:
         self.nav.objects = {int(mid): {int(index): tuple(point) for index, point in objects.items()}
                             for mid, objects in state.get('objects', {}).items()}
 
+    MENU_STEP_LIMIT = MAX_STEPS
+    MENU_STEP_LIMITS = {'Radio': RADIO_MAX_STEPS}
+
+    def recover(self, level=1):
+        """Drop every half-finished plan and press buttons that back out of unknown screens.
+
+        Level 1 backs out with B. Level 2 mixes in directions and A from a seeded sequence, so a
+        screen that B cannot leave still gets explored, and the same trouble gives the same buttons.
+        """
+        self.recoveries += 1
+        self.menu = self.interaction = self.switching = None
+        self.learning = False
+        self.refusals.clear()
+        self.on_restore()
+        if level <= 1:
+            self.rescue = deque(['b', 'b', 'b'])
+        else:
+            rng = random.Random(self.recoveries)
+            self.rescue = deque(button for _ in range(8)
+                                for button in (rng.choice(('up', 'down', 'left', 'right')), 'b', rng.choice(('a', 'b'))))
+
+    def fail(self, reason):
+        """A menu task exceeded its step limit. Reset and let the emulator count the failure."""
+        self.failure = reason
+        self.recover(1)
+
+    def take_failure(self):
+        failure, self.failure = self.failure, None
+        return failure
+
+    def menu_step(self, snapshot, mem):
+        """Run the current menu task, giving up when it takes implausibly many steps."""
+        menu = self.menu
+        if menu is not self.menu_ref:
+            self.menu_ref, self.menu_steps = menu, 0
+        self.menu_steps += 1
+        name = type(menu).__name__
+        limit = self.MENU_STEP_LIMITS.get(name, self.MENU_STEP_LIMIT)
+        if self.menu_steps > limit:
+            self.fail(f'The {name} menu task made no progress after {limit} steps')
+            return None
+        return menu.step(snapshot, mem)
+
     def on_restore(self):
         objects = self.nav.objects
         self.nav = Navigator(self.data)
@@ -108,7 +158,7 @@ class Policy:
 
     def details(self):
         return {'action': self.mode, 'decisions': self.decisions, 'starter': self.starter,
-                'milestones': dict(self.completed), 'visited_tiles': len(self.nav.visits),
+                'milestones': dict(self.completed), 'recoveries': self.recoveries, 'visited_tiles': len(self.nav.visits),
                 'objective': {'key': self.goal.key, 'label': self.goal.label, 'reason': self.goal.label} if self.goal else {},
                 'collection': {'version': self.data.game, 'dex_total': 251,
                                'phase': self.collection.get('phase', 'journey'),
@@ -316,8 +366,8 @@ class Policy:
         if snapshot.map == self.data.map_ids['BLACKTHORN_CITY']:
             self.completed.setdefault('ice_path', snapshot.frame)
         if ('ice_path' not in self.completed or not snapshot.event('EVENT_BEAT_CLAIR')
-                and self.data.maps[snapshot.map]['constant'].startswith('ICE_PATH_')):
-            name = self.data.maps[snapshot.map]['constant']
+                and self.constant(snapshot).startswith('ICE_PATH_')):
+            name = self.constant(snapshot)
             if name == 'ICE_PATH_B2F_MAHOGANY_SIDE':
                 return Goal('ice_crossing', 'Cross the frozen cavern', 'ICE_PATH_B3F', 3, 5)
             if name == 'ICE_PATH_B3F':
@@ -422,8 +472,41 @@ class Policy:
             return self.person(snapshot, 'good_rod', 'Get a fishing rod', 'OLIVINE_GOOD_ROD_HOUSE', 'GoodRodGuru')
         return self.fishing(snapshot)
 
+    # Prompts where the adventure should answer YES at once, and prompts it must always decline.
+    YES_PROMPTS = re.compile(r'HEAL')
+    NO_PROMPTS = re.compile(r'MONEY|SAVE|CALL|PHONE|REGISTER|NUMBER')
+    NO_LIMIT = 3
+
+    def unknown_yes_no(self, snapshot):
+        """Decline YES or NO prompts the policy has no plan for, instead of mashing A into YES.
+
+        Mom's savings and phone calls both ask YES or NO in the overworld. A prompt that
+        keeps coming back after repeated refusals is one the story needs, so it gets a YES.
+        """
+        rows = snapshot.tiles
+        yes = next((i for i, row in enumerate(rows[:12]) if menu_label(row) == 'YES'), None)
+        if yes is None or yes + 1 >= 12 or menu_label(rows[yes + 1]) != 'NO' or '▶' not in rows[yes] + rows[yes + 1]:
+            return None
+        question = ' '.join(' '.join(rows[13:]).upper().split())
+        if self.NO_PROMPTS.search(question):
+            return 'b'
+        if self.YES_PROMPTS.search(question):
+            return None
+        count = self.refusals.get(question, 0)
+        if count >= self.NO_LIMIT:
+            self.refusals.clear()
+            return None
+        if len(self.refusals) > 32:
+            self.refusals.clear()
+        self.refusals[question] = count + 1
+        return 'b'
+
+    def constant(self, snapshot):
+        """Map constant, or an empty name before the game has loaded a real map."""
+        return self.data.maps.get(snapshot.map, {}).get('constant', '')
+
     def travel_region(self, snapshot):
-        name = self.data.maps[snapshot.map]['constant']
+        name = self.constant(snapshot)
         if ((name == 'TOHJO_FALLS' and snapshot.x < 20 or name == 'ROUTE_27' and snapshot.x < 32)
                 and not any(127 in mon.moves for mon in snapshot.party)):
             return self.data.maps[self.data.map_ids['NEW_BARK_TOWN']]['region']
@@ -498,7 +581,7 @@ class Policy:
         return Goal(key, label, map_name, x, y, face)
 
     def in_league(self, snapshot):
-        return self.data.maps[snapshot.map]['constant'] in {
+        return self.constant(snapshot) in {
             'WILLS_ROOM', 'KOGAS_ROOM', 'BRUNOS_ROOM', 'KARENS_ROOM', 'LANCES_ROOM', 'HALL_OF_FAME'}
 
     def in_transmitter_room(self, snapshot):
@@ -508,8 +591,8 @@ class Policy:
 
     def healing(self, snapshot):
         if (self.in_transmitter_room(snapshot) or self.in_league(snapshot)
-                or self.data.maps[snapshot.map]['constant'].startswith('ICE_PATH_')
-                or self.data.maps[snapshot.map]['constant'] in {
+                or self.constant(snapshot).startswith('ICE_PATH_')
+                or self.constant(snapshot) in {
                     'GOLDENROD_UNDERGROUND_WAREHOUSE', 'GOLDENROD_UNDERGROUND_SWITCH_ROOM_ENTRANCES'}):
             return None
         if (snapshot.map == self.data.map_ids['BURNED_TOWER_B1F']
@@ -547,8 +630,8 @@ class Policy:
 
     def shop(self, snapshot):
         if (self.in_transmitter_room(snapshot) or self.in_league(snapshot)
-                or self.data.maps[snapshot.map]['constant'].startswith('ICE_PATH_')
-                or self.data.maps[snapshot.map]['constant'] in {'BLACKTHORN_GYM_1F', 'BLACKTHORN_GYM_2F',
+                or self.constant(snapshot).startswith('ICE_PATH_')
+                or self.constant(snapshot) in {'BLACKTHORN_GYM_1F', 'BLACKTHORN_GYM_2F',
                     'GOLDENROD_UNDERGROUND_WAREHOUSE', 'GOLDENROD_UNDERGROUND_SWITCH_ROOM_ENTRANCES'}):
             return None
         if (snapshot.map == self.data.map_ids['BURNED_TOWER_B1F']
@@ -643,6 +726,9 @@ class Policy:
     def step(self, snapshot, memory):
         self.memory = memory
         self.decisions += 1
+        if self.rescue:
+            self.mode = 'finding another approach'
+            return Action(self.rescue.popleft(), 8, 24)
         mem = Memory(memory, self.data)
         from .ruins import control
         puzzle = control(snapshot, mem) if snapshot.started and snapshot.valid else None
@@ -670,7 +756,7 @@ class Policy:
         if tower_button:
             self.mode = 'Choose the Battle Tower challenge'
             return Action(tower_button, 6, 26)
-        if self.menu is None and not snapshot.in_battle and self.data.maps[snapshot.map]['constant'].endswith('POKECENTER_1F'):
+        if self.menu is None and not snapshot.in_battle and self.constant(snapshot).endswith('POKECENTER_1F'):
             if 'TURN OFF' in snapshot.text:
                 return Action(choose(snapshot.tiles, 'TURN OFF') or 'b', 8, 36)
             if 'CHANGE BOX' in snapshot.text or 'Choose a' in snapshot.text:
@@ -678,7 +764,7 @@ class Policy:
         if self.menu is None and snapshot.started and not snapshot.in_battle and ('CANCEL' in snapshot.text or 'PACK' in snapshot.text and 'SAVE' in snapshot.text or 'Teach ' in snapshot.text and 'POKéMON?' in snapshot.text):
             return Action('b', 8, 28)
         if isinstance(self.menu, Remedy):
-            button = self.menu.step(snapshot, mem)
+            button = self.menu_step(snapshot, mem)
             if button:
                 self.mode = 'Heal the team'
                 return Action(None, 0, 24) if button == 'wait' else Action(button, 8, 28)
@@ -695,7 +781,7 @@ class Policy:
             if box is not None:
                 self.menu = ChangeBox(box)
         if self.menu:
-            button = self.menu.step(snapshot, mem)
+            button = self.menu_step(snapshot, mem)
             if button:
                 labels = {Buy: 'Buy supplies', Sell: 'Sell a spare item', Storage: 'Manage Pokémon storage',
                           ChangeBox: 'Choose a receiving box', Use: 'Use an item', ShowPartner: 'Show a Pokémon',
@@ -717,6 +803,9 @@ class Policy:
         # Textboxes cover the bottom six rows. Scripted walking is allowed to finish.
         if '┌' in snapshot.tiles[12] or mem.byte('wScriptRunning'):
             self.mode = 'conversation'
+            answer = self.unknown_yes_no(snapshot)
+            if answer:
+                return Action(answer, 8, 36)
             return Action('a', 8, 36)
         strongest = max((i for i, mon in enumerate(snapshot.party) if not mon.egg),
                         key=lambda i: snapshot.party[i].level, default=0)
@@ -757,7 +846,7 @@ class Policy:
         if self.in_league(snapshot) and self.remedy(snapshot):
             return Action(None, 0, 24)
         well_item = (self.goal.key == 'collection_trade_item'
-                     and self.data.maps[snapshot.map]['constant'] in {'SLOWPOKE_WELL_B1F', 'SLOWPOKE_WELL_B2F'})
+                     and self.constant(snapshot) in {'SLOWPOKE_WELL_B1F', 'SLOWPOKE_WELL_B2F'})
         if not self.goal.key.startswith('push_') and not well_item and (not self.collection.get('contest') or not mem.byte('wStatusFlags2') & 4):
             prize_errand = self.goal.key in {'collection_coin_case', 'collection_coins', 'collection_prize', 'collection_slots'}
             self.goal = self.healing(snapshot) or (None if prize_errand else self.shop(snapshot)) or self.goal
@@ -873,7 +962,10 @@ class Policy:
         return False
 
     def battle(self, snapshot, mem):
-        text = snapshot.text
+        # Roster nicknames are blanked so a mon named QUIT or FIGHT is not a menu.
+        text = ScreenText(snapshot.text)
+        if snapshot.tiles and '\n'.join(snapshot.tiles) == text:
+            text = ScreenText('\n'.join(mask_roster(snapshot.tiles)))
         opponent = self.battle_target(snapshot, mem) if self.collection.get('tower') else snapshot
         # The native capture routine restores transformed wild opponents as Ditto.
         catch_species = 132 if mem.byte('wEnemySubStatus5') & 8 else snapshot.enemy_species
@@ -900,6 +992,13 @@ class Policy:
             self.switching = None
         if 'SWITCH' in text and 'STATS' in text:
             return Action('b' if trapped else choose(snapshot.tiles, 'SWITCH', exact=True) or 'a', 8, 32)
+        pocket = mem.byte('wCurPocket')
+        if (('CANCEL' in text or '▶' in text or '▷' in text)
+                and (pocket == 3 and any(re.match(r'(?:H[1-7]|\d{2})[ ▶▷]', row[5:]) for row in snapshot.tiles)
+                     or pocket == 2 and any(self.data.item_names.get(item, '').upper() in text
+                                            for item, _ in snapshot.pockets.get('key', ())))):
+            # The pack opened on the TM or key pocket. Close any item menu, then walk to the Balls pocket.
+            return Action('b' if 'QUIT' in text or not catch else 'left')
         if 'QUIT' in text:
             return Action((choose(snapshot.tiles, 'USE') or 'a') if 'USE' in text else 'a')
         if any(row.startswith('ぐげござ') for row in snapshot.tiles[:2]):
@@ -987,7 +1086,7 @@ class Policy:
                 if mem.byte('wMenuCursorY') > 1:
                     return Action('up')
                 return Action('a')
-            if self.data.maps[snapshot.map]['constant'] != 'BATTLE_TOWER_BATTLE_ROOM' and self.remedy(snapshot, active=mem.byte('wCurBattleMon')):
+            if self.constant(snapshot) != 'BATTLE_TOWER_BATTLE_ROOM' and self.remedy(snapshot, active=mem.byte('wCurBattleMon')):
                 return Action(None, 0, 24)
             self.learning = False
             if catch:
