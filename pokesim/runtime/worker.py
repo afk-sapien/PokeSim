@@ -77,6 +77,10 @@ def serve(bootstrap, parent_stream, ready_stream):
     from .simulation import SimulationRuntime
     from ..web.app import create_app
 
+    # Load numpy before the liveness thread blocks reading stdin. With the Rust emulator nothing
+    # else imports it this early, and on Windows its first import stalled behind that blocked read.
+    import numpy  # noqa: F401
+
     parent_gone = threading.Event()
     finished = threading.Event()
 
