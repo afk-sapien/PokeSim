@@ -25,6 +25,7 @@
 
 - Generate Gen II game data in CI so the Gen II runtime tests run there, and read all local Gen II test inputs from `GEN2_DATA_DIR` and `GEN2_CARTRIDGE_DIR` (`GEN2_ROM_DIR` is gone).
 - Extend the private-string scan to case-insensitive matches, personal paths, private network addresses and contact details, and make it fail when git is missing.
+- Fix Gen II adventures stalling on ice, found in the Ice Path pocket on the Mahogany side of B2F. The route planner now reads object positions from the map data, treats hidden objects and warp events on plain ice correctly, replans after every slide, and no longer counts a tile it only slides over as somewhere it can stop. When no route to the goal exists the player returns to the main objective, then explores the least visited way out, and finally asks for a reload instead of waiting forever. `tools/check_gen2_ice.py` lists which warps of every ice map can reach which from the generated map data.
 ## 0.4.20
 
 - Fix PC box lists with a nickname containing PP being read as the PP Up menu, which stopped the Release goal from freeing storage.

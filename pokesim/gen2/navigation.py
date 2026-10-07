@@ -22,6 +22,8 @@ class Navigator:
         self.blocked = {}
         self.previous = None
         self.visits = {}
+        self.explored = {}
+        self.exploring = None
         self.failed_edges = {}
         self.objects = {}
         self.regions = Regions(data)
@@ -184,6 +186,36 @@ class Navigator:
                 if destination not in paths and destination not in excluded and (mid, destination) not in self.failed_edges:
                     paths[destination] = paths[mid] + [(mid, destination, points, kind)]
                     queue.append(destination)
+        return None
+
+    def explore(self, snapshot, memory=None, *, surf=False):
+        """Head for the least visited way out of the current region, keeping to one choice until it is reached."""
+        cut = bool(snapshot.badges & 2) and any(15 in mon.moves for mon in snapshot.party)
+        grid = self.collision(snapshot, memory)
+        self.regions.observe(snapshot.map, grid)
+        here = {(snapshot.map, region) for region in
+                self.regions.memberships(snapshot.map, (snapshot.x, snapshot.y), cut, surf, arrive=True)}
+        for node in here:
+            self.explored[node] = self.explored.get(node, 0) + (node != self.exploring)
+        if self.exploring in here:
+            self.exploring = None
+        options = []
+        for node in here:
+            for destination, points, kind in self.regions.edges(node, cut, surf):
+                options.append((destination != self.exploring,
+                                self.explored.get(destination, 0), len(options), destination, points, kind))
+        for _, _, _, destination, points, kind in sorted(options):
+            path = self.local(snapshot, points, memory, surf=surf)
+            if path is None:
+                continue
+            if not path:
+                path = next(([direction] for direction, (dx, dy) in DIRS.items()
+                             if self.local(snapshot, [(snapshot.x + dx, snapshot.y + dy)], memory,
+                                           surf=surf) == [direction]), None)
+                if path is None:
+                    continue
+            self.exploring = destination
+            return path
         return None
 
     def toward(self, snapshot, target_map, targets, memory=None, *, surf=False, excluded=()):

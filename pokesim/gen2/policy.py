@@ -61,6 +61,7 @@ class Policy:
         self.switching = None
         self.refusals = {}
         self.recoveries = 0
+        self.stranded = 0
         self.rescue = deque()
         self.failure = None
         self.menu_ref, self.menu_steps = None, 0
@@ -108,6 +109,7 @@ class Policy:
         self.nav.objects = {int(mid): {int(index): tuple(point) for index, point in objects.items()}
                             for mid, objects in state.get('objects', {}).items()}
 
+    STRANDED_LIMIT = 60
     MENU_STEP_LIMIT = MAX_STEPS
     MENU_STEP_LIMITS = {'Radio': RADIO_MAX_STEPS}
 
@@ -790,7 +792,7 @@ class Policy:
         self.nav.observe(snapshot)
         if self.resetting_puzzle is not None and self.resetting_puzzle != snapshot.map:
             self.resetting_puzzle = None
-        self.goal = self.journey(snapshot, mem)
+        self.goal = journey_goal = self.journey(snapshot, mem)
         if isinstance(self.menu, Storage) and 'BOX is full' in snapshot.text:
             box = next((box for box, count in enumerate(snapshot.box_counts) if count < 20), None)
             if box is not None:
@@ -874,11 +876,21 @@ class Policy:
             return Action(None, 0, 24)
         surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
         path = self.nav.toward(snapshot, target, [(self.goal.x, self.goal.y)], memory, surf=surf)
+        if path is None and self.goal is not journey_goal:
+            # A side errand that cannot be reached from here must not hide the main objective.
+            fallback = self.nav.toward(snapshot, self.data.map_ids[journey_goal.map_name],
+                                       [(journey_goal.x, journey_goal.y)], memory, surf=surf)
+            if fallback is not None:
+                self.goal, path = journey_goal, fallback
         self.mode = self.goal.label
         if path is not None:
             self.unreachable_waits = 0
         if path:
+            self.stranded = 0
             return self.walk(snapshot, memory, path)
+        if path is None:
+            return self.stranded_action(snapshot, memory, surf)
+        self.stranded = 0
         if path == []:
             if self.goal.key.startswith('collection_'):
                 from .collection import arrive
@@ -932,6 +944,19 @@ class Policy:
                 self.interaction = self.goal.key
                 return Action(self.goal.face, 8, 8)
             return Action('a', 8, 36)
+        return Action(None, 0, 24)
+
+    def stranded_action(self, snapshot, memory, surf):
+        """No route to the goal exists from here, so look around and, in the end, ask for a reload."""
+        self.stranded += 1
+        if self.stranded >= self.STRANDED_LIMIT:
+            self.stranded = 0
+            self.fail(f'no route to {self.goal.label} from {snapshot.map_name}')
+            return Action(None, 0, 24)
+        path = self.nav.explore(snapshot, memory, surf=surf)
+        if path:
+            self.mode = 'finding another approach'
+            return self.walk(snapshot, memory, path)
         # Briefly wait for moving people or map transitions before replanning, but do not wait
         # silently forever: after a long run of waits the objective is reported as stuck.
         self.unreachable_waits += 1
