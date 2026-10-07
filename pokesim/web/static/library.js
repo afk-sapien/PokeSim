@@ -520,9 +520,15 @@
         speedInput.add(new Option(`${speed}×`, speed))
         speedInput.value = speed
       }
-      $('#settings-palette').value = game.settings?.palette || 'original'
-      $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
       const johto = ['gold', 'silver', 'crystal'].includes(game.version)
+      $('#settings-palette').value = game.settings?.palette || 'original'
+      // Gold, Silver and Crystal already render in colour, so only the Game Boy games offer a palette.
+      $('#settings-palette-label').hidden = johto
+      $('#settings-palette-note').hidden = johto
+      const refused = game.summary?.settings_errors?.palette
+      $('#settings-palette-note').textContent = refused ? `This adventure has not accepted the palette yet: ${refused}` : 'GBC-inspired colors applied to the whole screen. Changes apply immediately, including while paused.'
+      $('#settings-palette').disabled = johto
+      $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
       for (const [field, setting] of [['league-rewards', 'league_rewards'], ['mew-event', 'mew_event']]) {
         const input = $(`#settings-${field}`)
         input.checked = Boolean(game.settings?.[setting])
@@ -586,7 +592,7 @@
         for (const field of ['legendary_return_steps', 'event_return_steps', 'fossil_preference', 'dojo_preference']) delete rewards[field]
       }
       const result = await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
-        settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), palette: $('#settings-palette').value || 'original', ...rewards}}, 'PATCH')
+        settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), ...($('#settings-palette').disabled ? {} : {palette: $('#settings-palette').value || 'original'}), ...rewards}}, 'PATCH')
       $('#adventure-settings').close()
       const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette'].filter(Boolean).join(' and ')
       notice(pending ? `Settings saved. The ${pending} will apply when this adventure reconnects.` : 'Adventure settings saved.')

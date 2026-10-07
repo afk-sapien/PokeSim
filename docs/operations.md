@@ -183,6 +183,11 @@ A rollback may require both the previous application version and its matching ba
 Do not run an older version against a library modified by a newer version unless that
 release explicitly supports it. Restore into a separate location to preserve current progress.
 
+Gold, Silver and Crystal adventures need 0.5.0 or later. Starting one on 0.4.x fails with
+"Worker exited before becoming ready" and "Unknown settings: celebi_event", because 0.4.x does not know
+Generation II. Older releases cannot be taught a clearer message from this side, so stop those adventures
+before rolling back and use 0.5.0 or later to open them. Generation I adventures roll back normally.
+
 ## Health, storage, and recovery
 
 The manager's `/health/ready` endpoint reports readiness. Docker checks it automatically.
