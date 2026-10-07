@@ -125,6 +125,13 @@ jobs:
         with:
           version: '0.12.18'
       - run: uv sync --locked --extra dev
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: pret/pokered
+          ref: a1a22aaf84d1675bcdbaeb194592379d586d838e
+          path: .reference/pokered
+          persist-credentials: false
+      - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
       - run: uv build
       - run: python tools/check_package.py
       - run: python tools/check_python_install.py
