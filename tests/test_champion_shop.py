@@ -152,3 +152,13 @@ def test_policy_routes_supply_and_uses_owned_pp_up(shop_data):
     result, action = policy._tm_development(replace(s, items=((ITEMS['PP_UP'], 1),)), goal, False)
     assert result.key == 'teach_supply' and action[0].button == 'start'
     assert policy.intent.target == 0
+
+
+def test_box_list_with_pp_in_a_nickname_is_not_the_pp_up_menu():
+    """A storage list showing DAMPPILOT must stay a list, or the PC release loops forever."""
+    from pokesim.screen import Screen
+    from test_strategy import menu
+    s = shopper(textbox=True)
+    memory = menu({4: '    TUBAJURY', 6: '    OATKNIGHT', 8: '    NACHODEPT', 10: '    DAMPPILOT', 12: '    CANCEL'},
+                  (5, 8), top=(5, 4))
+    assert Screen(memory).kind(s) == 'list'

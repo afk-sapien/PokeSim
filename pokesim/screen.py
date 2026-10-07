@@ -5,6 +5,8 @@ text charset gives the visible text of menus and dialogue — enough to know whi
 """
 from __future__ import annotations
 
+import re
+
 from .ram import W_TILEMAP as W_TILEMAP
 from pokesim_core.gen1_ui import read_screen
 
@@ -21,6 +23,10 @@ W_OPTIONS = 0xD355                # bits 0-2 text speed (1 fast/3 mid/5 slow), b
 
 def rows(mem) -> list[str]:
     return read_screen(mem, raw_text=True)["rows"]
+
+
+# The PP Up prompt says "PP" as a word. A nickname such as DAMPPILOT must not match it.
+PP_PROMPT = re.compile(r'(?<![A-Z])PP(?![A-Z])')
 
 
 class Screen:
@@ -65,7 +71,7 @@ class Screen:
                 return "item_action"
             if ("FORG" in text or "HM TECHNIQUES" in text) and x == 5 and 8 <= y <= 11:
                 return "learn_move"
-            if x == 5 and 8 <= y <= 11 and not snapshot.in_battle and 'PP' in text:
+            if x == 5 and 8 <= y <= 11 and not snapshot.in_battle and PP_PROMPT.search(text):
                 return "item_moves"
             if x == 5 and 13 <= y <= 16 and snapshot.in_battle:
                 return "moves"
