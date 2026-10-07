@@ -144,23 +144,16 @@ jobs:
           docker build --platform linux/amd64 --build-arg VERSION="$VERSION" --build-arg REVISION="$REVISION" -t "$IMAGE" .
           python tools/check_container.py "$IMAGE"
           python tools/check_quickstart.py "$IMAGE"
-      - name: Assemble versioned release downloads
-        env:
-          IMAGE: ${{ needs.validate.outputs.image }}
-          VERSION: ${{ needs.validate.outputs.version }}
-          REVISION: ${{ needs.validate.outputs.revision }}
+      - name: Keep the tested image and packages for the publish job
         run: |
           mkdir -p release
           docker save "$IMAGE" | gzip > release/image-linux-amd64.tar.gz
           cp dist/* release/
-          cp compose.yaml compose.quickstart.yaml install.sh install.ps1 release/
-          cp .env.example release/env.example
-          docker run --rm --network none "$IMAGE" cat /usr/share/pokesim/python-dependencies.json > release/python-dependencies.json
-          docker image inspect "$IMAGE" --format '{{json .}}' > release/image-metadata.json
-          python tools/assemble_release.py release --version "$VERSION" --revision "$REVISION" --image "$IMAGE" --without-desktop
+        env:
+          IMAGE: ${{ needs.validate.outputs.image }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: release-downloads
+          name: release-inputs
           path: release/
           compression-level: 0
           retention-days: 3
@@ -184,7 +177,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: release-downloads
+          name: release-inputs
           path: release
       - name: Publish image and verify anonymous access
         env:
@@ -202,6 +195,17 @@ jobs:
         env:
           DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
         run: docker logout ghcr.io
+      - name: Assemble versioned release downloads
+        env:
+          IMAGE: ${{ needs.validate.outputs.image }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          REVISION: ${{ needs.validate.outputs.revision }}
+        run: |
+          cp compose.yaml compose.quickstart.yaml install.sh install.ps1 release/
+          cp .env.example release/env.example
+          docker run --rm --network none "$IMAGE" cat /usr/share/pokesim/python-dependencies.json > release/python-dependencies.json
+          docker image inspect "$IMAGE" --format '{{json .}}' > release/image-metadata.json
+          python tools/assemble_release.py release --version "$VERSION" --revision "$REVISION" --image "$IMAGE" --without-desktop
       - name: Upload and verify the release downloads
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
