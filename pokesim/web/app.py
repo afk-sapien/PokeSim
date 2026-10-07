@@ -315,6 +315,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                 data = export(emu.rom, state)
         except ValueError as error:
             raise HTTPException(409, str(error)) from error
+        except NotImplementedError as error:
+            raise HTTPException(501, str(error)) from error
         except (TimeoutError, RuntimeError) as error:
             raise HTTPException(503, 'The adventure is busy. Try exporting again in a moment.') from error
         finally:

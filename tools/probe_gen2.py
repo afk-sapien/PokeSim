@@ -36,26 +36,32 @@ def probe(source: Path, output: Path) -> dict:
         rom = Path(temporary) / 'probe.gbc'
         rom.write_bytes(raw)
 
-        def boot():
+        def start():
             pb = boot(str(rom), sound=True)
             # Set before the first tick so a test's clock cannot move backwards.
             lock_clock(pb, True)
             return pb
 
+        def tap(pb, button, frames):
+            # Core exposes press/release only; hold for the requested frames.
+            pb.press(button)
+            pb.tick(frames, True)
+            pb.release(button)
+
         def walk(pb):
-            pb.button('right', 16)
+            tap(pb, 'right', 16)
             pb.tick(60, True)
             return read_snapshot(pb.memory, profile), ram_digest(pb), pb.screen.image.tobytes()
 
-        pb = boot()
+        pb = start()
         try:
             pb.tick(1200, True)
             pb.screen.image.save(output / 'opening.png')
-            pb.button('start', 8)
+            tap(pb, 'start', 8)
             pb.tick(120, True)
             # Bounded input replay for the English opening, not a general policy.
             for _ in range(110):
-                pb.button('a', 8)
+                tap(pb, 'a', 8)
                 pb.tick(60, True)
             before = read_snapshot(pb.memory, profile)
             if (before.map_group, before.map_number, before.x, before.y) != (24, 7, 3, 3):

@@ -90,3 +90,23 @@ def test_real_cartridge_export_restarts_with_current_collection():
         result = save_export.export(rom, stream.read())
     assert len(result) == 32768
     assert checkpoint.read_bytes() == before
+
+
+def test_missing_core_capability_is_not_reported_as_busy(tmp_path, monkeypatch):
+    from pokesim.gen2 import save as gen2_save
+    from pokesim.gen2.core import CoreCapabilityError
+    message = 'Core does not provide cartridge clock import or export.'
+
+    def unavailable(*_):
+        raise CoreCapabilityError(message)
+    monkeypatch.setattr(gen2_save, 'capture', lambda _: b'checkpoint')
+    monkeypatch.setattr(gen2_save, 'export', unavailable)
+    monkeypatch.setattr(config, 'VIEWER_ONLY', False)
+    shots = tmp_path / 'shots'
+    shots.mkdir()
+    emu = SimpleNamespace(rom=tmp_path / 'g.gbc', data=SimpleNamespace(game="gold"), generation=2, call=lambda function, **_: function())
+    client = TestClient(create_app(emu, SimpleNamespace(shots=shots), adventure_name='Gold'))
+    response = client.post('/api/export-save')
+    assert response.status_code == 501
+    assert message in response.json()['detail']
+    assert 'busy' not in response.json()['detail']
