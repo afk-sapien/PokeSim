@@ -28,6 +28,53 @@ def test_cartridge_starters_are_generation_specific(version):
         validate_starter('totodile', 'red')
 
 
+@pytest.mark.parametrize('game,species,price', [('gold', 27, 700), ('silver', 23, 700), ('crystal', 202, 1500)])
+def test_game_corner_prizes_follow_cartridge_versions(game, species, price):
+    from pokesim.gen2.gamecorner import prizes
+    assert (species, price, 'GOLDENROD') in prizes(game)
+    assert (137, 5555 if game == 'crystal' else 9999, 'CELADON') in prizes(game)
+
+
+@pytest.mark.parametrize('coins,money,target,button', [
+    (0, 20000, 100, 'a'), (0, 20000, 5555, 'down'),
+    (9500, 20000, 9999, 'a'), (9950, 20000, 9999, 'b'),
+    (100, 20000, 100, 'b'), (0, 999, 100, 'b')])
+def test_game_corner_coin_menu_respects_price_balance_and_case_capacity(coins, money, target, button):
+    from pokesim.gen2.gamecorner import Coins
+    rows = [''] * 18
+    rows[6], rows[8], rows[10], rows[12] = '▶ 50 :  ¥1000', ' 500 : ¥10000', 'CANCEL', '┌'
+    snapshot = SimpleNamespace(coins=coins, money=money, text='\n'.join(rows), tiles=rows)
+    assert Coins(target).step(snapshot, None) == button
+
+
+def test_game_corner_prize_stops_after_native_receipt():
+    from pokesim.gen2.gamecorner import Prize
+    snapshot = SimpleNamespace(owned={137}, text='CANCEL', tiles=[''] * 18)
+    menu = Prize(137)
+    assert menu.step(snapshot, None) == 'b'
+    snapshot.text = ''
+    assert menu.step(snapshot, None) is None
+
+
+def test_game_corner_waits_for_earned_money(real_data):
+    from pokesim.gen2.gamecorner import journey
+    snapshot = SimpleNamespace(owned=set(), coins=0, money=0, hall_of_fame_count=2,
+                               items=((real_data.items['COIN_CASE'], 1),))
+    policy = SimpleNamespace(data=real_data, collection={})
+    assert journey(policy, snapshot, None) is None
+    assert policy.collection['funding'] == 3
+
+
+def test_game_corner_menu_survives_policy_reload(real_data):
+    from pokesim.gen2.gamecorner import Coins
+    from pokesim.gen2.policy import Policy
+    first = Policy(real_data)
+    first.menu = Coins(5555)
+    second = Policy(real_data)
+    second.load_state_dict(first.state_dict())
+    assert second.menu == first.menu
+
+
 def test_constant_parser_accounts_for_item_holes_and_hm_aliases(tmp_path):
     source = tmp_path / 'constants.asm'
     source.write_text('const_def $bf\nadd_tm DYNAMICPUNCH\nconst ITEM_C0\nadd_tm HEADBUTT\nadd_hm CUT\n')
@@ -89,6 +136,38 @@ def test_real_reference_has_all_species_correct_types_and_versioned_encounters(r
     assert reference['entries'][154]['hms'] == ['Cut']
     assert reference['entries'][18]['locations']
     assert data.matchups[(data.types['DARK'], data.types['PSYCHIC_TYPE'])] == 2
+
+
+def test_full_box_gift_preserves_existing_native_names(real_data):
+    from collections import defaultdict
+    from pokesim.gen2.ram import Memory, read_snapshot
+    from pokesim.gen2.rewards import gift
+    class BankedMemory:
+        def __init__(self):
+            self.banks = defaultdict(lambda: bytearray(65536))
+
+        def __getitem__(self, key):
+            bank, address = key if isinstance(key, tuple) else (0, key)
+            return self.banks[bank][address]
+
+        def __setitem__(self, key, value):
+            bank, address = key if isinstance(key, tuple) else (0, key)
+            self.banks[bank][address] = value
+
+    memory = BankedMemory()
+    mem = Memory(memory, real_data)
+    for slot in range(19):
+        gift(memory, real_data, 161, str(slot), 1, slot)
+    before = read_snapshot(memory, real_data)
+    for slot, mon in enumerate(before.stored):
+        assert mon.nick == real_data.text(mem.read('sBox2MonNicknames', 11, slot * 11))
+    originals = mem.read('sBox2MonOTs', 19 * 11)
+    gift(memory, real_data, 151, 'final slot', 1, 19)
+    after = read_snapshot(memory, real_data)
+    assert after.stored[:-1] == before.stored
+    assert after.stored[-1].species == 151
+    assert mem.read('sBox2MonOTs', 19 * 11) == originals
+    assert real_data.text(mem.read('sBox2MonOTs', 11, 19 * 11)) == 'POKESIM'
 
 
 def test_all_cartridge_portraits_decode(real_data):
@@ -558,6 +637,28 @@ def test_capture_weakening_rejects_a_lethal_lead_move(real_data):
     assert policy.capture_move(snapshot, mem, slot=1) is None
 
 
+@pytest.mark.parametrize('species,button', [(185, 'a'), (143, 'a'), (19, 'b')])
+def test_last_balls_are_available_for_one_time_encounters(real_data, species, button):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    policy.needed_move = lambda snapshot: 0
+    policy.capture_move = lambda *args: None
+    rows = [''] * 18
+    rows[4], rows[5], rows[6] = '▶POKé BALL', '× 1', 'CANCEL'
+    snapshot = SimpleNamespace(party=(), stored=(), text='\n'.join(rows), tiles=rows,
+        in_battle=1, enemy_species=species, owned=set(), can_catch=True, badges=4, money=0,
+        pockets={'balls': [(real_data.items['POKE_BALL'], 1)]})
+    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: 1)).button == button
+
+
+def test_slot_machine_leaves_when_the_prize_budget_is_reached():
+    from pokesim.gen2.gamecorner import Slots
+    rows = [''] * 18
+    rows[12], rows[13], rows[14], rows[15] = '┌', '▶YES', 'Play again?', 'NO'
+    snapshot = SimpleNamespace(coins=9999, text='\n'.join(rows), tiles=rows)
+    assert Slots(9999).step(snapshot, SimpleNamespace(byte=lambda name: 1)) == 'down'
+
+
 def test_full_party_makes_room_before_togepi_gift(real_data):
     from pokesim.gen2.policy import Goal, Policy
     policy = Policy(real_data, starter='cyndaquil')
@@ -942,6 +1043,56 @@ def test_slowking_branch_breeds_another_slowpoke(real_data):
     assert policy.collection['breeding']['duplicate']
 
 
+def test_level_100_chansey_breeds_a_partner_that_can_evolve(real_data):
+    from pokesim.gen2.breeding import journey
+    from pokesim.gen2.policy import Goal
+    chansey = SimpleNamespace(species=113, moves=(1,), egg=False, box=None, gender='Female',
+        trainer_id=1, dvs=(0, 2, 4, 6, 8), level=100)
+    ditto = SimpleNamespace(species=132, moves=(144,), egg=False, box=None, gender='Genderless',
+        trainer_id=1, dvs=(0, 1, 3, 5, 7), level=20)
+    snapshot = SimpleNamespace(party=(chansey, chansey, ditto), stored=(), daycare=(None, None),
+        owned={113, 132}, money=10000, egg_ready=False)
+    policy = SimpleNamespace(data=real_data, collection={}, demand={}, person=lambda *args: 'deposit')
+    assert journey(policy, snapshot, Goal) == 'deposit'
+    assert policy.collection['breeding']['target'] == 113
+    assert policy.collection['breeding']['duplicate']
+
+
+def test_full_pc_box_does_not_interrupt_an_active_league_attempt(real_data):
+    from pokesim.gen2.collection import journey
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    policy.collection['funding'] = 2
+    policy.person = lambda snapshot, key, *args: key
+    snapshot = SimpleNamespace(map=real_data.map_ids['KOGAS_ROOM'], can_catch=False,
+        box_counts=(20, 0), hall_of_fame_count=1, money=10000, daycare=(),
+        owned={152, 155, 158}, event=lambda name: name != 'EVENT_BEAT_ELITE_4_KOGA')
+    assert journey(policy, snapshot, None, Goal) == 'funds_koga'
+
+
+def test_roamer_search_cycles_a_border_until_a_beast_is_on_the_current_route(real_data, monkeypatch):
+    from pokesim.gen2 import collection
+    from pokesim.gen2.quests import roamers
+    from pokesim.gen2.policy import Goal
+    policy = SimpleNamespace(data=real_data, collection={}, decisions=0, memory=None,
+        nav=SimpleNamespace(regions=SimpleNamespace(route=lambda *args, **kwargs: []),
+                            local=lambda *args, **kwargs: ['left'], visits={}))
+    snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_CITY'], x=1, y=8, owned=set(),
+        roamers=[{'species': 243, 'map': real_data.map_ids['ROUTE_42']}])
+    assert roamers(policy, snapshot, Goal).map_name == 'ROUTE_36'
+    snapshot.map, snapshot.x = real_data.map_ids['ROUTE_36'], 58
+    assert roamers(policy, snapshot, Goal).map_name == 'RUINS_OF_ALPH_OUTSIDE'
+    snapshot.map = real_data.map_ids['ROUTE_36_RUINS_OF_ALPH_GATE']
+    assert roamers(policy, snapshot, Goal).map_name == 'RUINS_OF_ALPH_OUTSIDE'
+    snapshot.map = real_data.map_ids['RUINS_OF_ALPH_OUTSIDE']
+    assert roamers(policy, snapshot, Goal).map_name == 'ROUTE_36'
+    snapshot.map = real_data.map_ids['ROUTE_36']
+    snapshot.roamers[0]['map'] = snapshot.map
+    monkeypatch.setattr(collection, 'encounter_points', lambda *args: [(58, 8, None), (57, 8, None)])
+    goal = roamers(policy, snapshot, Goal)
+    assert (goal.key, goal.map_name, goal.x, goal.y) == ('collection_hunt', 'ROUTE_36', 57, 8)
+
+
 def test_tower_training_does_not_finish_during_held_item_transfer(real_data, monkeypatch):
     if real_data.game != 'crystal':
         return
@@ -971,6 +1122,58 @@ def test_training_stops_at_requested_tower_cap(real_data):
     snapshot = SimpleNamespace(party=(mon,), stored=(), items=())
     assert journey(policy, snapshot, SimpleNamespace(byte=lambda name: 1), Goal) is None
     assert policy.collection['training'] is None
+
+
+def test_idle_training_yields_to_new_collection_opportunities(real_data):
+    from pokesim.gen2.training import journey
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    mon = SimpleNamespace(species=184, level=40, trainer_id=1, dvs=(0,) * 5,
+                           held_item=real_data.items['EXP_SHARE'], egg=False)
+    policy.collection['training'] = {'identity': [1, [0] * 5], 'target': 184, 'species': 184,
+                                     'terminal': True, 'item': None}
+    snapshot = SimpleNamespace(party=(mon,), stored=(), items=(), owned={184})
+    assert journey(policy, snapshot, SimpleNamespace(byte=lambda name: 1), Goal) is None
+    assert policy.collection['training'] is None
+
+
+def test_checkpoint_clock_export_preserves_elapsed_days(real_data):
+    import struct
+    from pyboy import PyBoy
+    from pokesim.gen2.cable_verification import checkpoint_clock
+    from tools.advance_gen2_clock import advance
+    directory = os.environ.get('GEN2_CARTRIDGE_DIR')
+    if not directory:
+        pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
+    rom = (Path(directory) / (real_data.game + '.gbc')).read_bytes()
+    pb = PyBoy(io.BytesIO(rom), ram_file=io.BytesIO(bytes(32768)), window='null', cgb=True, sound_emulated=False)
+    try:
+        state = io.BytesIO()
+        pb.save_state(state)
+        raw = state.getvalue()
+        changed = advance(raw, 48)
+        assert raw[:-48] == changed[:-48]
+        assert raw[-40:] == changed[-40:]
+        clock = checkpoint_clock(rom, changed)
+        assert len(clock) == 10
+        assert struct.unpack('d', clock[:8])[0] == struct.unpack('d', raw[-48:-40])[0] - 48 * 3600
+    finally:
+        pb.stop(save=False)
+
+
+@pytest.mark.parametrize('steps,cycle,gain', [(2, 0, 1), (2, 1, 0), (253, 0, 0)])
+def test_cable_verification_allows_only_native_walking_friendship(steps, cycle, gain):
+    from pokesim.gen2.cable_verification import untraded_party
+    raw = bytearray(48)
+    raw[27] = 172
+    row = {'struct': bytes(raw), 'nickname': b'PARTNER', 'trainer': b'OWNER'}
+    source = SimpleNamespace(step_count=250, happiness_cycle=1, party=[SimpleNamespace(egg=False)] * 2)
+    current = SimpleNamespace(step_count=steps, happiness_cycle=cycle)
+    expected = untraded_party([row, row], 1, source, current)
+    assert expected[0]['struct'][27] == 172 + gain
+    assert expected[0]['struct'][:27] == row['struct'][:27]
+    assert expected[0]['struct'][28:] == row['struct'][28:]
+    assert expected[0]['nickname'] == row['nickname']
 
 
 def test_training_waits_for_transient_collision_map(real_data, monkeypatch):

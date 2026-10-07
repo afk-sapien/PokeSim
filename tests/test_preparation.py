@@ -49,6 +49,34 @@ def test_restart_pauses_preparation_until_coordinator_recovery(participant):
     emu.policy.on_restore.assert_called_once()
 
 
+def test_withdrawn_hp_overflow_visits_nurse_before_trade(participant, monkeypatch):
+    emu, snap, candidate = participant
+    preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
+    controller = emu.preparation
+    invalid = replace(snap, frame=snap.frame + 240,
+                      party=(replace(snap.party[0], hp=snap.party[0].max_hp + 1),))
+    assert invalid.hp_overflow_only
+    monkeypatch.setattr(preparation.Screen, 'kind', lambda *args: 'overworld')
+    controller._walk = Mock(return_value=[Action('left', 8, 12)])
+    memory = bytes(emu.pb.memory)
+    assert controller.step(PolicyContext(invalid, 0, 0, emu.pb.memory)) == [Action('left', 8, 12)]
+    assert controller._walk.call_args.args[1] == ((89, 3, 3),)
+    assert bytes(emu.pb.memory) == memory
+    assert emu.store.get('trade_hold') is None
+
+
+def test_unrelated_invalid_party_does_not_get_healing_grace(participant):
+    emu, snap, candidate = participant
+    preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
+    controller = emu.preparation
+    invalid = replace(snap, frame=snap.frame + 1,
+                      party=(replace(snap.party[0], level=101),))
+    controller.step(PolicyContext(invalid, 0, 0, emu.pb.memory))
+    controller.step(PolicyContext(replace(invalid, frame=invalid.frame + 181), 0, 0, emu.pb.memory))
+    assert emu.store.get(preparation.KEY)['phase'] == 'failed'
+    assert emu.store.get('trade_hold') is None
+
+
 def test_protection_change_cancels_before_pc_input(participant):
     emu, snap, candidate = participant
     key = identity(asdict(candidate))

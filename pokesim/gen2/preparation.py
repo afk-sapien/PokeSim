@@ -99,6 +99,10 @@ class Preparation:
                 self.menu = Give(item, slot)
                 return Action(None, 0, 24)
         surf = any(57 in mon.moves for mon in snapshot.party) and bool(snapshot.badges & 8)
+        if needs_storage and snapshot.map == data.map_ids['POKECENTER_2F']:
+            path = policy.nav.toward(snapshot, snapshot.map, [(0, 7)], emu.pb.memory, surf=surf)
+            policy.mode = 'Return downstairs for the next boxed exchange'
+            return policy.walk(snapshot, emu.pb.memory, path) if path else Action(None, 0, 24)
         if not needs_storage:
             target, point = data.map_ids['POKECENTER_2F'], (3, 4)
         else:

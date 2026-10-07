@@ -49,7 +49,7 @@ def gift(memory, data, species, seed, box, position):
         raise ValueError('The gift destination changed')
     write(memory, data, name, raw, 22 + position * 32)
     write(memory, data, name, encode('POKESIM'), 662 + position * 11)
-    write(memory, data, name, nickname, 862 + position * 11)
+    write(memory, data, name, nickname, 882 + position * 11)
     write(memory, data, name, bytes((species, 0xFF)), 1 + position)
     write(memory, data, name, bytes((position + 1,)))
     offset, bit = divmod(species - 1, 8)

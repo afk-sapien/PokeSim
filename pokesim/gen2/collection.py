@@ -70,7 +70,7 @@ def journey(policy, snapshot, mem, Goal):
         goal = tower(policy, snapshot, Goal)
         if goal:
             return goal
-    if not snapshot.can_catch:
+    if not snapshot.can_catch and not policy.in_league(snapshot):
         if any(count < 20 for count in snapshot.box_counts):
             goal = policy.storage_goal(snapshot)
             return Goal('collection_box', 'Make room for new catches', goal.map_name, goal.x, goal.y, goal.face)
@@ -88,8 +88,10 @@ def journey(policy, snapshot, mem, Goal):
         funding = None
     from .breeding import retrieval_cost
     fees = retrieval_cost(data, snapshot)
+    from .. import config
+    starter_gifts = getattr(config, 'LEAGUE_REWARDS', False) and not {152, 155, 158} <= snapshot.owned
     if funding is None and (snapshot.money < 5000 and sum(count for _, count in snapshot.pockets['balls']) < 4
-                            or fees and snapshot.money < fees + 1000):
+                            or fees and snapshot.money < fees + 1000 or starter_gifts):
         state['funding'] = funding = snapshot.hall_of_fame_count + 1
     if funding is not None:
         state['phase'] = 'league'
@@ -130,6 +132,10 @@ def journey(policy, snapshot, mem, Goal):
         return goal
     from .breeding import journey as breed
     goal = breed(policy, snapshot, Goal)
+    if goal:
+        return goal
+    from .gamecorner import journey as prizes
+    goal = prizes(policy, snapshot, Goal)
     if goal:
         return goal
     from .quests import stones
@@ -177,7 +183,8 @@ def journey(policy, snapshot, mem, Goal):
             if mid not in distances:
                 route = policy.nav.route(snapshot.map, mid)
                 distances[mid] = len(route) if route is not None else 9999
-        ranked = sorted(groups.items(), key=lambda pair: distances[pair[0][0]] + 50 / max(1, pair[1]['chance']))
+        ranked = sorted(groups.items(), key=lambda pair: (not bool(policy.demand.get(pair[0][2])),
+                         distances[pair[0][0]] + 50 / max(1, pair[1]['chance'])))
         for (mid, method, species, rare), row in ranked:
             if choices and len(choices) >= 12:
                 break
@@ -190,9 +197,10 @@ def journey(policy, snapshot, mem, Goal):
                 continue
             attempted = state.get('attempts', {}).get(str(species), -100000)
             recent = policy.decisions - attempted < 18000
-            choices.append((species in snapshot.owned, recent, len(route) + 50 / max(1, row['chance']), species, mid, method, row))
+            choices.append((not bool(policy.demand.get(species)), species in snapshot.owned, recent,
+                            len(route) + 50 / max(1, row['chance']), species, mid, method, row))
         if choices:
-            target = dict(min(choices, key=lambda row: row[:6])[-1], started=policy.decisions)
+            target = dict(min(choices, key=lambda row: row[:-1])[-1], started=policy.decisions)
             state['target'] = target
         else:
             goal = tower(policy, snapshot, Goal)
@@ -248,6 +256,10 @@ def hunt(policy, snapshot, Goal):
 
 def arrive(policy, snapshot):
     key = policy.goal.key
+    from .gamecorner import arrive as prize
+    result = prize(policy, snapshot)
+    if result is not None:
+        return result
     from .teams import arrive as team
     result = team(policy, snapshot)
     if result is not None:

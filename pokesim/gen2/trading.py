@@ -12,7 +12,7 @@ from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
 from ..runtime.participant import Participant as BaseParticipant, PREFIX, _records, _save, _artifact
 from ..trade.preferences import apply
-from .cable_verification import available_trade_item, continue_save, evolved_species, individual_key, party, verify_exchange
+from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin
 from .ram import Memory, read_snapshot
 from .web import live_status
@@ -163,7 +163,7 @@ class Participant(BaseParticipant):
             expected, _ = verify_exchange(side, before, received, record['source']['party_slot'], snapshot, time_capsule=record.get('time_capsule', False))
             if Memory(pb.memory, data).byte('wLinkMode') != 0:
                 raise ValueError('The returned checkpoint is still in link mode')
-            restarted = continue_save(rom, save, data)
+            restarted = continue_save(rom, save, data, rtc=checkpoint_clock(rom, state))
             try:
                 if party(restarted, data) != expected:
                     raise ValueError('Cartridge save differs from the staged checkpoint')

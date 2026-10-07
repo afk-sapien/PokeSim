@@ -204,6 +204,20 @@ class Preparation:
             self._save()
         if not snap.valid:
             self.invalid_since = self.invalid_since or snap.frame
+            if snap.hp_overflow_only and snap.map in CENTERS and not snap.in_battle:
+                if snap.frame - self.invalid_since > 3600:
+                    raise ValueError('The nurse could not restore the withdrawn partner')
+                from ..policies.progression import healing_goal
+                target = healing_goal(snap).targets[0]
+                if (snap.map, snap.x, snap.y) == target:
+                    if kind in {'heal', 'yes_no'}:
+                        return self._select(screen, 0)
+                    if kind != 'overworld':
+                        return [Action('a', 6, 24)]
+                    return [Action('a' if ctx.mem[0xC109] == 4 else 'up', 6, 18)]
+                if kind != 'overworld' or snap.textbox or snap.start_menu:
+                    return [Action('b', 6, 18)]
+                return self._walk(ctx, (target,))
             if snap.frame - self.invalid_since > 180:
                 raise ValueError('The game state remained invalid during preparation')
             return [Action(None, 0, 12)]
