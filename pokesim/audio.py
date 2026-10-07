@@ -5,9 +5,11 @@ import threading
 import time
 
 SAMPLE_RATE = 48000
-WATCH_GRACE = 0.75
 # Keep enough history for a client jitter buffer to ride out a multi-second stall and catch up.
 BUFFER_SECONDS = 2.0
+# A listener that goes quiet for less than the buffer keeps its history. The ring is only thrown
+# away once nobody could still use it, so the two must not disagree.
+WATCH_GRACE = BUFFER_SECONDS
 MAX_FRAMES = 1024
 # Above this pace the pitch is meaningless, so no audio is sent. Matches the page's limit.
 MAX_SPEED = 4.5
@@ -50,7 +52,11 @@ class AudioFeed:
             self.until = now + WATCH_GRACE
             # A new listener starts at the live edge, so only a known cursor receives data.
             wanted = [frame for frame in self.frames if frame[0] > after] if after >= 0 else []
-            dropped = max(0, wanted[0][0] - after - 1) if wanted else 0
+            if wanted:
+                dropped = max(0, wanted[0][0] - after - 1)
+            else:
+                # Nothing kept for a known cursor means every newer frame was discarded.
+                dropped = max(0, self.sequence - after) if after >= 0 else 0
             speed = 1.0
             if len(self.frames) > 1:
                 last = self.frames[-1]

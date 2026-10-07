@@ -134,6 +134,9 @@
         if (!Number.isSafeInteger(sequence) || sequence < 0) throw new Error('Invalid audio sequence')
         // A restarted worker has a new sequence. Rejoin at its current live edge.
         if (sequence < after) clearQueue(session)
+        // The server no longer holds frames this page never received, so what is queued is stale.
+        // Drop it and let the jitter buffer prime again at the live edge instead of playing a gap.
+        if (Number(response.headers.get('X-Audio-Dropped')) > 0) clearQueue(session)
         after = sequence
         const manual = response.headers.get('X-Audio-Mode') === 'manual'
         session.buffer.setMode(manual ? 'manual' : 'watch')

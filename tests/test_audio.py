@@ -7,7 +7,7 @@ from unittest.mock import Mock
 from fastapi.testclient import TestClient
 import pytest
 
-from pokesim.audio import AudioFeed, BUFFER_SECONDS, MAX_FRAMES, MAX_SPEED, enable_checkpoint_sound
+from pokesim.audio import AudioFeed, BUFFER_SECONDS, WATCH_GRACE, MAX_FRAMES, MAX_SPEED, enable_checkpoint_sound
 from pokesim.emulator import Emulator
 from pokesim.web.app import create_app
 
@@ -33,7 +33,7 @@ def test_audio_feed_expires_and_bounds_slow_listeners(monkeypatch):
     feed.publish(b'ef')
     assert feed.read(0, 'playing')[:2] == (count + 2, b'ef')
     count += 1
-    clock[0] += 1
+    clock[0] += WATCH_GRACE + 0.1
     assert not feed.active()
     assert feed.read(0, 'playing')[:2] == (count + 1, b'')
     feed.publish(b'ab')
@@ -97,6 +97,43 @@ def test_audio_reports_frames_that_aged_out_before_the_listener_returned(monkeyp
     assert kept <= BUFFER_SECONDS * 60 + 2
     assert packet.dropped == 300 - kept - 5
     assert packet.sequence == 300
+
+
+def test_a_listener_stall_shorter_than_the_buffer_keeps_its_history(monkeypatch):
+    from pokesim.audio import WATCH_GRACE
+    assert WATCH_GRACE >= BUFFER_SECONDS
+    clock = [10.0]
+    monkeypatch.setattr('pokesim.audio.time.monotonic', lambda: clock[0])
+    feed = AudioFeed()
+    feed.read(-1, 'playing')
+    for index in range(3):
+        feed.publish(bytes([index]))
+    assert feed.read(0, 'playing').sequence == 3
+    # The page goes quiet for 1.5 seconds while the game keeps producing sound.
+    for index in range(90):
+        clock[0] = 10 + (index + 1) / 60
+        feed.publish(bytes([index % 256]))
+    packet = feed.read(3, 'playing')
+    assert packet.dropped == 0 and len(packet.data) == 90
+
+
+def test_a_stall_past_the_grace_reports_the_missed_frames(monkeypatch):
+    from pokesim.audio import WATCH_GRACE
+    clock = [10.0]
+    monkeypatch.setattr('pokesim.audio.time.monotonic', lambda: clock[0])
+    feed = AudioFeed()
+    feed.read(-1, 'playing')
+    feed.publish(b'ab')
+    assert feed.read(0, 'playing').sequence == 1
+    clock[0] += WATCH_GRACE + 0.5
+    for _ in range(5):
+        feed.publish(b'cd')
+    packet = feed.read(1, 'playing')
+    assert packet.sequence == 6 and packet.dropped == 5 and packet.data == b''
+    # With the ring cleared and nothing new yet, the missed count is still visible.
+    clock[0] += 1
+    assert feed.read(1, 'playing').dropped == 5
+    assert feed.read(6, 'playing').dropped == 0
 
 
 def test_audio_pace_follows_the_recent_second_and_fast_pace_sends_no_pcm(monkeypatch):
