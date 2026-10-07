@@ -1,4 +1,5 @@
 import io
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -126,7 +127,7 @@ def test_audio_pace_follows_the_recent_second_and_fast_pace_sends_no_pcm(monkeyp
     (0, False, False, 'playing'), (0.5, False, False, 'playing'),
     (1, True, False, 'paused'), (16, True, True, 'playing'),
 ])
-def test_audio_endpoint_reports_playback_without_changing_speed(tmp_path, speed, paused, manual, state):
+def test_audio_endpoint_reports_playback_without_changing_speed(tmp_path, monkeypatch, speed, paused, manual, state):
     emu = Emulator.__new__(Emulator)
     emu.speed, emu.paused, emu.manual_mode = speed, paused, manual
     emu.audio = AudioFeed()
@@ -145,8 +146,12 @@ def test_audio_endpoint_reports_playback_without_changing_speed(tmp_path, speed,
         assert response.content == (b'\x01\x02' if state == 'playing' else b'')
         assert client.get('/api/audio?after=-2').status_code == 422
         if state == 'playing':
+            # A fake clock keeps the burst's pace exact, whatever the platform's timer resolution.
+            clock = [time.monotonic()]
+            monkeypatch.setattr('pokesim.audio.time.monotonic', lambda: clock[0])
             emu.audio.until = 1e18
             for index in range(600):
+                clock[0] += 1 / 960
                 emu.audio.publish(b'\x01\x02')
             assert float(client.get('/api/audio?after=1').headers['X-Audio-Speed']) > MAX_SPEED
             assert client.get('/api/audio?after=1').content == b''
