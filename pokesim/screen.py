@@ -59,7 +59,7 @@ class Screen:
                 return "yes_no"
             if "BOX 1" in text and "BOX12" in text:
                 return "change_box"
-            if 'PORYGON' in text and ('DRATINI' in text or 'PINSIR' in text):
+            if 'PORYGON' in text and ('DRATINI' in text or 'PINSIR' in text) and 'NO THANKS' in text:
                 return 'prize'
             if self.battle_menu:
                 return "battle"
