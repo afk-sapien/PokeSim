@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.5.0 (draft)
+## 0.5.0
 
 - Run every adventure on PyBoy RS, a Rust port of PyBoy 2.7.0, through PokeSim Core 0.2. PyBoy is no longer a dependency, and installation needs no Rust toolchain.
 - Add Gold, Silver and Crystal adventures with Gen II Cable Club trading, the Time Capsule with Red and Blue, portable save export and cartridge real-time clocks. They run on the Rust backend only.

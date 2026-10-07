@@ -1,4 +1,4 @@
-# PokeSim 0.5.0 experimental beta (draft)
+# PokeSim 0.5.0 experimental beta
 
 This release changes the emulator under every adventure and adds Gold, Silver and Crystal.
 
