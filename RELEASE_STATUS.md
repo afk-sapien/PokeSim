@@ -6,10 +6,10 @@ The last published release is [0.4.20](https://github.com/afk-sapien/PokeSim/rel
 its [receipt](docs/validation/release-0.4.20.json) is unchanged.
 
 0.5.0 moves every adventure to the Rust emulator (PyBoy RS through Core 0.2) and adds
-Gold, Silver and Crystal. See the [release notes](docs/release-notes.md). Both packages
-are not yet on PyPI, so this branch pins them to git commits in a single commit marked
-TEMP. The pull request description lists what to remove after publication. A release is not ready until the TEMP commit is reverted, `uv.lock` is regenerated
-from PyPI and the publication workflow has produced a receipt.
+Gold, Silver and Crystal. See the [release notes](docs/release-notes.md). Core and PyBoy RS
+are not on PyPI: PokeSim depends on their GitHub release wheels, named in `pyproject.toml` and
+hashed in `uv.lock`. A release is not ready until those two releases exist, the lock matches them
+and the publication workflow has produced a receipt.
 
 ## Known limits, deliberately not addressed here
 
