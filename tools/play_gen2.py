@@ -227,11 +227,11 @@ def main():
                     break
                 if action.button:
                     pb.button_press(action.button)
-                if action.hold:
+                if action.hold > 0:
                     pb.tick(action.hold, True)
                 if action.button:
                     pb.button_release(action.button)
-                if action.gap:
+                if action.gap > 0:
                     pb.tick(action.gap, True)
                 frame += action.hold + action.gap
                 if frame % 10000 < action.hold + action.gap:
