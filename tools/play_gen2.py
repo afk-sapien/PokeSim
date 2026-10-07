@@ -227,7 +227,8 @@ def main():
                     break
                 if action.button:
                     pb.button_press(action.button)
-                pb.tick(action.hold, True)
+                if action.hold:
+                    pb.tick(action.hold, True)
                 if action.button:
                     pb.button_release(action.button)
                 pb.tick(action.gap, True)
