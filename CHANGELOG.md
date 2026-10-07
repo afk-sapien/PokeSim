@@ -4,6 +4,7 @@
 
 ## 0.5.0
 
+- Remove the automatic pause for a shiny that cannot be caught (added in 0.4.18). Balls cannot be bought and storage cannot be freed during a battle, so the pause only looked like a stall. Keep at least 10 balls in stock before heading out, on top of the existing free-storage reserve, so a shiny stays catchable. If one still cannot be caught, the player runs as it would from any other uncatchable encounter, and the journal and notifications record "Shiny <species> could not be caught: no balls" or "no storage space". The notification follows the "Stuck or needs attention" setting. Shiny release and trade protection, Take Control, and the Transform check are unchanged.
 - Run every adventure on PyBoy RS, a Rust port of PyBoy 2.7.0, through PokeSim Core 0.2. PyBoy is no longer a dependency, and installation needs no Rust toolchain.
 - Add Gold, Silver and Crystal adventures with Gen II Cable Club trading, the Time Capsule with Red and Blue, portable save export and cartridge real-time clocks. They run on the Rust backend only.
 - Keep the 0.4.x checkpoint tag on Gen I checkpoints so a 0.5.0 library rolls back to 0.4.x. Gen II adventures and locked-clock checkpoints cannot be opened by 0.4.x.

@@ -86,6 +86,18 @@ Journal Stats holds the individual totals: wild shinies seen, shiny catches plus
 custom gifts, and shinies currently held. Sightings and acquisitions start when
 tracking was enabled. Older unrecorded shinies cannot be reconstructed.
 
+## Catching a shiny
+
+The adventure does not pause for a shiny. Balls cannot be bought and storage cannot be
+freed during a battle, so a pause would only look like a stall. Instead the player keeps
+at least 10 balls in stock (restocking at a shop when affordable) and keeps free storage
+slots, switching to an open box or releasing a spare duplicate when needed. A shiny is
+caught with a Master Ball when there is one, and otherwise with the normal ball routine.
+If a shiny still cannot be caught, the player runs, and the journal and notifications
+record "Shiny <species> could not be caught: no balls" or "no storage space". That
+notification follows the "Stuck or needs attention" setting. Taking control yourself is
+never interrupted.
+
 ## Persistence
 
 Records live in the adventure's SQLite database, separately from save checkpoints.
