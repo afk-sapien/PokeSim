@@ -31,4 +31,4 @@ def test_save_verifier_reads_its_data_folder_from_the_environment(tmp_path):
     (tmp_path / 's.state').write_bytes(b'')
     result = run('verify_gen2_save.py', 'rom.gbc', 's.state', '--game', 'gold', '--output', 'o.sav', cwd=tmp_path, env=env)
     assert result.returncode != 0
-    assert str(tmp_path / 'data') in result.stderr
+    assert str(tmp_path / 'data').replace('\\', '/') in result.stderr.replace('\\\\', '/').replace('\\', '/')

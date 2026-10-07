@@ -7,7 +7,7 @@ def test_no_backend_imports_or_private_adapter_access():
     root = Path(__file__).resolve().parents[1] / "pokesim"
     failures = []
     for path in root.rglob("*.py"):
-        for node in ast.walk(ast.parse(path.read_text())):
+        for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
             if isinstance(node, ast.Import):
                 names = [alias.name for alias in node.names]
             elif isinstance(node, ast.ImportFrom):

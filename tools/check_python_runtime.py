@@ -6,22 +6,7 @@ import sys
 import tempfile
 
 
-def probe():
-    import subprocess, time
-    for label, code in [('numpy', 'import numpy'), ('pyboy_rs then numpy', 'import pyboy_rs, numpy'),
-                        ('numpy then pyboy_rs', 'import numpy, pyboy_rs'),
-                        ('core emulator then numpy', 'import pokesim_core.emulator, numpy')]:
-        start = time.time()
-        try:
-            result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, timeout=60)
-            outcome = f'exit {result.returncode} {result.stderr[-200:]}'
-        except subprocess.TimeoutExpired:
-            outcome = 'TIMEOUT'
-        print(f'PROBE {label}: {outcome} in {time.time() - start:.1f}s', flush=True)
-
-
 def main():
-    probe()
     os.environ.setdefault('POKESIM_WORKER_STACK_DUMP', '30')
     import httpx
     from pokesim_core import emulator as pyboy
