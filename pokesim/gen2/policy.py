@@ -613,7 +613,8 @@ class Policy:
                 if entry['constant'] == 'BLACKTHORN_MART' and 'ice_path' not in self.completed:
                     continue
                 route = self.nav.route(snapshot.map, mid)
-                if route is None or len(route) > 5 and (not self.shop_location or mid != self.shop_location[0]):
+                if (route is None or len(route) > 5 and 'red' not in self.completed
+                        and (not self.shop_location or mid != self.shop_location[0])):
                     continue
                 if 'ice_path' not in self.completed and any(self.data.maps[dest]['constant'].startswith('ICE_PATH_')
                                                              for _, dest, _, _ in route):
@@ -874,13 +875,18 @@ class Policy:
     def battle(self, snapshot, mem):
         text = snapshot.text
         opponent = self.battle_target(snapshot, mem) if self.collection.get('tower') else snapshot
+        # The native capture routine restores transformed wild opponents as Ditto.
+        catch_species = 132 if mem.byte('wEnemySubStatus5') & 8 else snapshot.enemy_species
         needed = self.needed_move(snapshot)
         partner = (not any(needed in self.data.species[mon.species]['machines'] for mon in snapshot.party if not mon.egg)
-                   and needed in self.data.species.get(snapshot.enemy_species, {}).get('machines', []))
-        requested = (self.demand.get(snapshot.enemy_species, 0)
-                     and sum(mon.species == snapshot.enemy_species and not mon.egg
-                             for mon in snapshot.party + snapshot.stored) <= self.demand[snapshot.enemy_species])
-        catch = (snapshot.in_battle == 1 and (snapshot.enemy_species not in snapshot.owned or partner or requested)
+                   and needed in self.data.species.get(catch_species, {}).get('machines', []))
+        requested = (self.demand.get(catch_species, 0)
+                     and sum(mon.species == catch_species and not mon.egg
+                             for mon in snapshot.party + snapshot.stored) <= self.demand[catch_species])
+        requested |= (catch_species in self.collection.get('prerequisites', ())
+                      and not any(mon.species == catch_species and not mon.egg
+                                  for mon in snapshot.party + snapshot.stored))
+        catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or requested)
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in
                     {label.casefold() for label in self.ball_labels(snapshot)} for item, count in snapshot.pockets['balls'] if count))
         if (catch and not partner and snapshot.enemy_species not in {130, 143, 185, 243, 244, 245, 249, 250, 251}
@@ -888,8 +894,12 @@ class Policy:
                 and sum(count for _, count in snapshot.pockets['balls']) <= 3):
             catch = False
         weaken = self.capture_move(snapshot, mem) if catch else None
+        roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
+        trapped = bool(mem.byte('wEnemySubStatus5') & 128 or mem.byte('wPlayerWrapCount'))
+        if trapped:
+            self.switching = None
         if 'SWITCH' in text and 'STATS' in text:
-            return Action(choose(snapshot.tiles, 'SWITCH', exact=True) or 'a', 8, 32)
+            return Action('b' if trapped else choose(snapshot.tiles, 'SWITCH', exact=True) or 'a', 8, 32)
         if 'QUIT' in text:
             return Action((choose(snapshot.tiles, 'USE') or 'a') if 'USE' in text else 'a')
         if any(row.startswith('ぐげござ') for row in snapshot.tiles[:2]):
@@ -946,7 +956,7 @@ class Policy:
         if 'FIGHT' in text and 'TYPE' not in text:
             self.switching = None
             active = mem.byte('wCurBattleMon')
-            if catch and (partner or snapshot.enemy_species in {243, 244, 245, 249, 250, 251}) and weaken is None and snapshot.enemy_hp > snapshot.enemy_max_hp // 2:
+            if catch and not roaming and not trapped and (partner or snapshot.enemy_species in {245, 249, 250, 251}) and weaken is None and snapshot.enemy_hp > snapshot.enemy_max_hp // 2:
                 candidates = [(self.capture_move(snapshot, mem, slot=i), i)
                               for i, mon in enumerate(snapshot.party)
                               if i != active and not mon.egg and mon.hp > mon.max_hp // 2
@@ -959,7 +969,7 @@ class Policy:
                     if mem.byte('wMenuCursorY') > 1:
                         return Action('up')
                     return Action('a')
-            if not catch and self.collection.get('tower'):
+            if not catch and not trapped and self.collection.get('tower'):
                 target = self.tower_switch(snapshot, mem, active)
                 if target is not None:
                     self.switching = target
@@ -970,7 +980,7 @@ class Policy:
                     return Action('a')
             scores = [max((self.move_score(move, mon, opponent) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
                       if mon.hp and not mon.egg else 0 for mon in snapshot.party]
-            if not catch and scores and scores[min(active, len(scores) - 1)] == 0 and max(scores) > 0:
+            if not catch and not trapped and scores and scores[min(active, len(scores) - 1)] == 0 and max(scores) > 0:
                 self.switching = max(range(len(scores)), key=scores.__getitem__)
                 if mem.byte('wMenuCursorX') < 2:
                     return Action('right')
@@ -1053,6 +1063,9 @@ class Policy:
         if not snapshot.party:
             return None
         mon = snapshot.party[min(mem.byte('wCurBattleMon') if slot is None else slot, len(snapshot.party) - 1)]
+        roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
+        if roaming and mon.stats[3] // (4 if mon.status & 64 else 1) <= mem.word('wEnemyMonSpeed'):
+            return None
         if not mem.byte('wEnemyMonStatus'):
             for index, move in enumerate(mon.moves):
                 entry = self.data.moves.get(move, {})

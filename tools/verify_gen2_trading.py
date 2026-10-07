@@ -20,7 +20,10 @@ def main():
     parser.add_argument('--trade-key', help='Select one exact boxed individual')
     parser.add_argument('--time-capsule', action='store_true')
     parser.add_argument('--offer-trained', action='store_true')
+    parser.add_argument('--evolve', action='store_true', help='Swap the held item for an available evolution item through native menus')
     args = parser.parse_args()
+    if args.evolve and args.time_capsule:
+        parser.error('--evolve requires a Gen II Cable Club trade')
     args.output.mkdir(parents=True, exist_ok=True)
     settings = SimulationSettings(rom_path=str(Path(f'.release-local/gen2/{args.game}.gbc').resolve()),
         data_dir=str((args.output / 'store').resolve()), game_data_dir=str(Path('.release-local/gen2-data').resolve()),
@@ -70,10 +73,18 @@ def main():
                       if (args.species is None or mon['species'] == args.species)
                       and (args.trade_key is None or mon['trade_key'] == args.trade_key)), None)
         assert offer, 'The requested species is not an eligible boxed offer'
+        if args.evolve:
+            from pokesim.gen2.cable_verification import available_trade_item, evolved_species
+            item = available_trade_item(emu.data, offer['species'], offer['held_item'],
+                                        dict(emu.snapshot.items), replace_held=True)
+            if item is None and evolved_species(bytes((offer['species'], offer['held_item'])), emu.data) == offer['species']:
+                raise ValueError('No evolution item is available for this partner')
         key = offer['trade_key']
         request = {'id': '0123456789abcdef0123456789abcdef', 'plan_digest': 'test', 'selected_key': key,
                    'time_capsule': args.time_capsule}
         receipt = participant.prepare(request)
+        if args.evolve:
+            emu.preparation.state['replace_held'] = True
         for step in range(4000):
             snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
             action = emu.preparation.step(snapshot)

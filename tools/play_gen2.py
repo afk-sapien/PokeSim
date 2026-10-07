@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--data', type=Path, default=Path('.release-local/gen2-data'))
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--load', type=Path)
+    parser.add_argument('--restore-team-from', type=Path, help='Restore the party from an earlier checkpoint through the PC')
     parser.add_argument('--frames', type=int, default=60000)
     parser.add_argument('--starter', default='cyndaquil')
     parser.add_argument('--until', default='')
@@ -31,6 +32,8 @@ def main():
     parser.add_argument('--runtime-store', type=Path, help='Keep optional reward claims across scenario continuations')
     parser.add_argument('--stall-frames', type=int, default=12000)
     args = parser.parse_args()
+    if args.restore_team_from and args.focus != 'restore':
+        parser.error('--restore-team-from requires --focus restore')
     data = GameData.load(args.data, args.game)
     policy = Policy(data, seed=1, starter=args.starter)
     if args.focus:
@@ -77,6 +80,10 @@ def main():
         def focused(snapshot, mem):
             if args.focus in policy.completed:
                 return Goal('collection_wait', 'Focused scenario complete', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
+            if (args.focus in {'encounter', 'headbutt', 'rock smash'}
+                    and (policy.collection.get('funding') is not None
+                         or snapshot.money < 5000 and sum(count for _, count in snapshot.pockets['balls']) < 4)):
+                return collection.journey(policy, snapshot, mem, Goal)
             if args.focus in {'encounter', 'headbutt', 'rock smash'} and not snapshot.can_catch:
                 goal = policy.storage_goal(snapshot)
                 return Goal('collection_box', 'Make room for the encounter target', goal.map_name, goal.x, goal.y, goal.face)
@@ -96,6 +103,9 @@ def main():
                         current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
                         if (row['species'] != species or args.focus != 'encounter' and row['method'] != args.focus
                                 or not collection.matching_time(row['time'], current_time)):
+                            continue
+                        if (row['method'].endswith('rod')
+                                and data.items[row['method'].upper().replace(' ', '_')] not in dict(snapshot.items)):
                             continue
                         points = collection.encounter_points(policy, snapshot, row['map'], row['method'], rare=row['time'] == 'rare trees')
                         route = policy.nav.regions.route(snapshot, row['map'], [point[:2] for point in points], cut=True, surf=True)
@@ -151,6 +161,20 @@ def main():
                 policy.load_state_dict(json.loads(metadata.read_text()))
         if args.focus:
             policy.completed.pop(args.focus, None)
+            if args.focus in {'encounter', 'headbutt', 'rock smash'}:
+                policy.collection['target'] = None
+        if args.restore_team_from:
+            from pokesim.gen2.teams import key
+            source = PyBoy(str(args.rom), window='null', cgb=True, ram_file=io.BytesIO(bytes(32768)))
+            try:
+                with args.restore_team_from.open('rb') as stream:
+                    source.load_state(stream)
+                original = read_snapshot(source.memory, data)
+                if not original.valid or not original.party:
+                    raise ValueError('The original party checkpoint is invalid')
+                policy.collection['time_capsule_restore'] = [key(mon) for mon in original.party]
+            finally:
+                source.stop(save=False)
         if event_emu:
             from pokesim import rewards
             event_emu.snapshot = read_snapshot(pb.memory, data, frame)
@@ -175,6 +199,7 @@ def main():
                 visited.add((snapshot.map, snapshot.x, snapshot.y))
                 progress = (len(visited), snapshot.badges, snapshot.money,
                             snapshot.owned, snapshot.event_flags,
+                            tuple((row['species'], row['map'], row['hp']) for row in snapshot.roamers),
                             tuple((mon.species, mon.level, mon.hp, mon.experience, mon.moves, mon.nick, mon.friendship)
                                   for mon in snapshot.party + tuple(mon for mon in snapshot.daycare if mon)))
                 if progress != last_progress:
