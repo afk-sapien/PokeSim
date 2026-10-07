@@ -12,6 +12,14 @@
 - Read the wild Pokémon's original DVs for shiny protection after Transform through Core's decoder.
 - Require the NO THANKS entry before reading a list as the Game Corner prize menu, so other lists are not mistaken for it.
 - Fix live sound stutter over a jittery connection. The page now keeps an adaptive lead of 0.4 seconds that grows to 1.5 seconds after dropouts and shrinks slowly, trims drift by at most 2%, and skips forward with a short fade instead of clearing. The server keeps about 2 seconds of audio and serves it without truncation. Take Control uses a lead of about 0.1 seconds. Playback speeds snap to fixed rates, and sound is off above 4.5x. Short network failures are retried for 6 seconds. The new `tools/audio_jitter_harness.py` measures gaps in Chromium.
+- Let a library that only holds Gen II adventures start a worker. Preparing Gen II data also prepares the shared Gen I tables, and a missing set is reported in words.
+- Refuse to rewind past a trade or a custom reward from the load-state command as well as the rewind list, and return command errors to the caller instead of ending the adventure.
+- Stop the Gen II policy crashing on empty choices when it plans a Pokémon Center, a fishing spot or a field move partner.
+- Download a Gen II save as a `.zip` holding the `.sav` and its `.rtc` clock file, because a save without its clock is read as having lost the time. Gen I stays a single `.sav`.
+- Keep the live audio ring for the full buffer so a stall under two seconds resumes without a gap, and have the page resync when the server reports missed frames.
+- Show a short cause and the log path when a worker is not ready in time, in place of forty log lines.
+- Show what idle Gen II collection is waiting for, such as Tuesday for the Bug-Catching Contest or night for a time-gated encounter. The cartridge clock follows wall time.
+- Remove unreachable Core clock probes. An older Core still gets a clear capability error, and the package's capability error now shares the backend's 501 handling.
 
 ## 0.4.20
 
