@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+env:
+  # TEMP-0.5.0-UNPUBLISHED-DEPENDENCIES: pokesim-core 0.2.0 and pyboy-rs 0.1.1 are not on PyPI yet.
+  UV_OVERRIDE: ${{ github.workspace }}/tools/temp-unpublished-overrides.txt
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -21,7 +24,7 @@ jobs:
         with:
           version: '0.12.18'
       - name: Export the pinned runtime dependencies
-        run: uv export --locked --no-dev --no-emit-project --format requirements-txt --output-file runtime-requirements.txt
+        run: uv export --locked --no-dev --no-emit-project --no-emit-package pokesim-core --no-emit-package pyboy-rs --format requirements-txt --output-file runtime-requirements.txt
       - name: Check runtime dependency advisories
         run: uvx pip-audit==2.10.1 --require-hashes --disable-pip -r runtime-requirements.txt
   lint:

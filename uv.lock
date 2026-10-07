@@ -6,9 +6,6 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 
-[manifest]
-overrides = [{ name = "pyboy-rs", directory = "../pyboy-rs-rtc" }]
-
 [[package]]
 name = "annotated-doc"
 version = "0.0.5"
@@ -603,7 +600,7 @@ wheels = [
 
 [[package]]
 name = "pokesim"
-version = "0.4.20"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -611,8 +608,9 @@ dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pillow" },
-    { name = "pokesim-core", extra = ["acceleration", "emulator"] },
+    { name = "pokesim-core", extra = ["emulator"] },
     { name = "psutil" },
+    { name = "pyboy-rs" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -635,8 +633,9 @@ requires-dist = [
     { name = "numpy" },
     { name = "pillow", specifier = ">=10" },
     { name = "playwright", marker = "extra == 'browser-test'", specifier = ">=1.50" },
-    { name = "pokesim-core", extras = ["emulator", "acceleration"], editable = "../pokesim-core-rtc" },
+    { name = "pokesim-core", extras = ["emulator"], git = "https://github.com/afk-sapien/pokesim-core?rev=a4ecd8a75ab9390d6bfeff36e492d137314ceb6f" },
     { name = "psutil", specifier = ">=7,<8" },
+    { name = "pyboy-rs", git = "https://github.com/afk-sapien/pyboy-rs?rev=1f378907c17458a6108ceac94ea4be5889e638cc" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.53.0" },
 ]
@@ -644,32 +643,14 @@ provides-extras = ["dev", "browser-test", "acceleration"]
 
 [[package]]
 name = "pokesim-core"
-version = "0.2.0.dev0"
-source = { editable = "../pokesim-core-rtc" }
+version = "0.2.0"
+source = { git = "https://github.com/afk-sapien/pokesim-core?rev=a4ecd8a75ab9390d6bfeff36e492d137314ceb6f#a4ecd8a75ab9390d6bfeff36e492d137314ceb6f" }
 
 [package.optional-dependencies]
-acceleration = [
-    { name = "pokesim-core-native" },
-]
 emulator = [
     { name = "pillow" },
     { name = "pyboy-rs" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "pillow", marker = "extra == 'emulator'", specifier = ">=10,<13" },
-    { name = "pokesim-core-native", marker = "extra == 'acceleration'", directory = "../pokesim-core-rtc/native" },
-    { name = "pyboy-rs", marker = "extra == 'emulator'", directory = "../pyboy-rs" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<10" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11,<1" },
-]
-provides-extras = ["emulator", "acceleration", "dev"]
-
-[[package]]
-name = "pokesim-core-native"
-version = "0.1.0.dev0"
-source = { directory = "../pokesim-core-rtc/native" }
 
 [[package]]
 name = "psutil"
@@ -701,17 +682,8 @@ wheels = [
 
 [[package]]
 name = "pyboy-rs"
-version = "0.1.0"
-source = { directory = "../pyboy-rs-rtc" }
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", marker = "extra == 'images'" },
-    { name = "pillow", marker = "extra == 'images'", specifier = ">=10" },
-    { name = "pyboy", marker = "extra == 'test'", specifier = "==2.7.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
-]
-provides-extras = ["test", "images"]
+version = "0.1.1"
+source = { git = "https://github.com/afk-sapien/pyboy-rs?rev=1f378907c17458a6108ceac94ea4be5889e638cc#1f378907c17458a6108ceac94ea4be5889e638cc" }
 
 [[package]]
 name = "pydantic"
