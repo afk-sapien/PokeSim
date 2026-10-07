@@ -23,7 +23,7 @@ An eight-second clip from a running adventure. [Still image](docs/images/live-ad
 - **Life after the League:** Keep training, rotate League teammates, revisit
   eligible encounters and earn new Pokémon.
 - **Your own touch:** Add nickname prefixes and suffixes, take over the controls,
-  or export a standard `.sav` to continue in another emulator (Gen II export needs Core 0.2.0 RTC support).
+  or export a standard `.sav` to continue in another emulator.
 
 | Journal entries | Adventure stats |
 | --- | --- |
@@ -46,18 +46,19 @@ runtime and checkpoint restart for each of Gold, Silver and Crystal; `.sav` expo
 cartridge Continue and clock for each; Time Capsule exchange of a prepared Gen II offer with both
 Red and Blue (six pairings); and the Red and Blue Cable Club exchange in both directions.
 Not re-run on this backend: the full campaigns from a new game. The recorded campaigns in the
-[Generation II notes](docs/gen2-exploration.md) were played on 0.4.x and replay identically from
-their saved states, but 0.5.0 has not played a fresh Gold, Silver or Crystal game to the League.
+[Generation II notes](docs/gen2-exploration.md) were played on development builds that used
+PyBoy 2.7.0, before the move to the Rust backend, and replay identically from their saved states, but 0.5.0 has not played a fresh Gold, Silver or Crystal game to the League.
 
 ## Upgrading is one way for Generation II
 
 Copy the whole data directory (the library) somewhere safe before you upgrade. To go back,
-stop the app, restore the copy and start the previous version.
+stop the app and start the previous version.
 
-- Red and Blue adventures roll back to 0.4.x. Their saves and manifests keep the
-  `pyboy_version: "2.7.0"` tag that 0.4.x checks.
-- Gold, Silver and Crystal adventures cannot be opened by 0.4.x.
-- Locked-clock checkpoints are refused by 0.4.x. Normal adventures do not make them.
+- Red and Blue adventures need no restore. Their saves and manifests keep the
+  `pyboy_version: "2.7.0"` tag that 0.4.x checks, so 0.4.x opens them as they are.
+- Gold, Silver and Crystal adventures need 0.5.0 or later. 0.4.x cannot open them, so restore
+  your copy of the library or remove those adventures before you go back.
+- Locked-clock checkpoints are refused by 0.4.x. Only verification tools make them.
 
 See [Generation II support and validation](docs/gen2-exploration.md) for cartridge revisions,
 test evidence and compatibility boundaries.

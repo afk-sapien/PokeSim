@@ -6,8 +6,8 @@ Pokémon League, all eight Kanto gyms, and Red through ordinary cartridge input.
 The original boot experiment remains available in `tools/probe_gen2.py`.
 
 Gen II support ships in PokeSim 0.5.0 and runs on the Rust emulator (PyBoy RS through
-PokeSim Core 0.2) only. It was developed on PyBoy 2.7.0 in 0.4.x, then moved to the Rust
-backend. Where a section below says which backend gathered its evidence, that is stated.
+PokeSim Core 0.2) only. It was developed on PyBoy 2.7.0 in builds that were never released, then moved to the Rust
+backend. 0.4.x has no Gen II support. Where a section below says which backend gathered its evidence, that is stated.
 
 ## Supported cartridges
 
@@ -20,9 +20,9 @@ backend. Where a section below says which backend gathered its evidence, that is
 ROM installation accepts these cartridges as raw files or a ZIP containing one
 supported cartridge. ROM assets remain read-only. Each adventure owns its own
 SRAM, checkpoints, policy memory and journal. On the Core backend the cartridge
-clock is not yet per-adventure: it follows the host clock and is stored only inside
-checkpoint states, because Core 0.1.x cannot import, export or lock it (see
-`pokesim/gen2/core.py`). Per-adventure clocks arrive with Core 0.2.0 RTC support. Other revisions,
+clock follows the host clock and is stored with each adventure's checkpoint states. Core 0.2
+imports, exports and locks it, which standard `.sav` export and the verification tools use.
+Other revisions,
 languages and ROM hacks are rejected instead of using incompatible addresses.
 No ROM, save, screenshot, reference checkout or full symbol file is committed.
 

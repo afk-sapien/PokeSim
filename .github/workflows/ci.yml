@@ -66,6 +66,9 @@ jobs:
       - run: uv run --locked pytest --ignore=tests/test_rom.py --ignore=tests/browser -q
         env:
           GEN2_DATA_DIR: ${{ runner.temp }}/gen2-data
+      - name: Rollback check, a Rust-written Gen 1 state loads into PyBoy 2.7.0
+        if: matrix.python == '3.12'
+        run: uv run --locked --with pyboy==2.7.0 pytest -q tests/test_pyboy_state_compat.py -rs
       - run: python tools/check_web.py
       - run: python tools/check_docs.py
       - run: uv build

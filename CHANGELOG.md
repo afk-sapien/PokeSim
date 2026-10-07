@@ -22,9 +22,11 @@
 - Fix Gen II hangs caused by nicknames that look like menu words. A Pokémon named CANCEL, PROTOTYPE (contains TYPE) or MOSQUITO (contains QUIT) made the bot read the battle screen as the wrong menu and press the same button forever. Battle HUD names and party nicknames are now blanked before the screen is classified, keywords match whole words only, and generated or custom full nicknames can no longer equal a menu word. The same whole-word rule fixes Gen I lookalikes such as FRESH, SODA, PP and RELEASED nicknames, with the 0.4.20 PP fix kept.
 - Add Gen II stuck recovery. A screen that does not change for 1800 frames makes the player back out with B and then try seeded exploratory buttons. Longer trouble reloads an autosave from before it began, with a random idle so the same save does not replay the same hang. Every Gen II menu task now gives up after a step limit, and repeated failures escalate to a reload. The Stuck? badge and notification now come with a real recovery, and reloads, glitched state and help requests are reported truthfully.
 - Fix a KeyError before the game starts that made the trade inventory return HTTP 500. Unknown Gen II YES or NO prompts now answer NO, then YES after three repeats so the story cannot deadlock. Preparing a Gen II trade with every PC box full now fails with a clear message and resumes play instead of pausing, and a leftover trade hold with no live exchange no longer blocks resume.
-
 - Generate Gen II game data in CI so the Gen II runtime tests run there, and read all local Gen II test inputs from `GEN2_DATA_DIR` and `GEN2_CARTRIDGE_DIR` (`GEN2_ROM_DIR` is gone).
 - Extend the private-string scan to case-insensitive matches, personal paths, private network addresses and contact details, and make it fail when git is missing.
+- Make the shiny-not-caught notification low priority, under "Everything else". Narrow the new-adventure starter list from the chosen cartridge file and refuse a starter from the wrong game before creating the adventure.
+- Correct the release documents: rollback wording (Red and Blue need no restore, Gold, Silver and Crystal need 0.5.0, locked-clock checkpoints are refused by 0.4.x), Gen II in the package description, third-party notices, and a test that loads a Rust-written Gen 1 state into PyBoy 2.7.0.
+
 ## 0.4.20
 
 - Fix PC box lists with a nickname containing PP being read as the PP Up menu, which stopped the Release goal from freeing storage.
