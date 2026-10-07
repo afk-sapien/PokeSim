@@ -22,8 +22,8 @@ PROVIDERS = ('ntfy', 'discord', 'telegram')
 # Event types that appear nowhere here, including ones added later, belong to "other".
 CATEGORIES = (
     ('stall', 'Stuck or needs attention',
-     'An adventure stopped making progress, or a shiny could not be caught.',
-     True, (('stall', 1), ('shiny_missed', 1))),
+     'An adventure stopped making progress.',
+     True, (('stall', 1),)),
     ('badges', 'Gym badges', 'A Gym Leader was beaten and a badge earned.', True, (('badge', 1),)),
     ('league', 'Elite Four and Champion', 'Elite Four wins, League victories and the Hall of Fame.',
      True, (('champion', 1), ('trainer', 5))),
@@ -37,7 +37,7 @@ CATEGORIES = (
     ('levels', 'Level milestones', 'Every tenth level, including 50 and 100.', False, (('level', 1),)),
     ('exploration', 'New areas and key items', 'First visits and important items.', False, (('map', 1), ('item', 1))),
     ('blackouts', 'Blackouts', 'The whole party fainted.', False, (('blackout', 1),)),
-    ('other', 'Everything else', 'Money and play time milestones, and any kind added in a later version.',
+    ('other', 'Everything else', 'Money and play time milestones, a shiny that could not be caught, and any kind added in a later version.',
      True, ()),
 )
 CATEGORY_KEYS = tuple(row[0] for row in CATEGORIES)

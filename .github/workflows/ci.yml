@@ -64,6 +64,9 @@ jobs:
       - run: uv run --locked pytest --ignore=tests/test_rom.py --ignore=tests/browser -q
       - name: Rust emulator backend, checkpoint compatibility and Core capability errors
         run: uv run --locked pytest -q tests/test_rust_backend.py tests/test_downgrade_compat.py tests/test_gen2_clock.py tests/test_emulator_boundary.py tests/test_save_export.py
+      - name: Rollback check, a Rust-written Gen 1 state loads into PyBoy 2.7.0
+        if: matrix.python == '3.12'
+        run: uv run --locked --with pyboy==2.7.0 pytest -q tests/test_pyboy_state_compat.py -rs
       - run: python tools/check_web.py
       - run: python tools/check_docs.py
       - run: uv build

@@ -512,3 +512,41 @@ test('settings render existing backups without an adventure variable', async () 
   assert.match(view.element('#backups').innerHTML, /data-delete-backup="b{32}" data-owner>Delete/)
   assert.match(view.element('#backup-summary').textContent, /1 backup/)
 })
+
+function cartridgeFile(title) {
+  const header = new Uint8Array(16)
+  for (let i = 0; i < title.length; i++) header[i] = title.charCodeAt(i)
+  header[15] = 0x80
+  return {slice: () => ({arrayBuffer: async () => header.buffer})}
+}
+
+test('choosing a cartridge file narrows the starters from its header before upload', async () => {
+  const view = library()
+  await settle()
+  for (const [title, expected] of [['POKEMON_GLDAAUE', 'chikorita'], ['PM_CRYSTAL', 'totodile'], ['POKEMON RED', 'squirtle'], ['POKEMON BLUE', 'bulbasaur']]) {
+    view.element('#rom-file').files = [cartridgeFile(title)]
+    await view.element('#rom-file').onchange()
+    const html = view.element('#starter').innerHTML
+    assert.ok(html.includes(`value="${expected}"`), title)
+    assert.equal(html.includes('value="chikorita"'), expected === 'chikorita' || expected === 'totodile', title)
+    assert.equal(html.includes('value="squirtle"'), expected === 'squirtle' || expected === 'bulbasaur', title)
+  }
+  view.element('#rom-file').files = [cartridgeFile('SOMETHING ELSE')]
+  await view.element('#rom-file').onchange()
+  assert.ok(view.element('#starter').innerHTML.includes('value="squirtle"') && view.element('#starter').innerHTML.includes('value="totodile"'))
+})
+
+test('a starter from the wrong game is refused before the adventure is created', async () => {
+  const view = library({respond: (path, opts) => {
+    if (path === '/api/v1/assets/rom') return {ok: true, json: async () => ({id: 'new', version: 'red'})}
+  }})
+  await settle()
+  view.element('#new-name').value = 'Mismatch'
+  view.element('#rom-file').files = [cartridgeFile('unknown')]
+  await view.element('#rom-file').onchange()
+  view.element('#starter').value = 'cyndaquil'
+  view.element('#create-form').onsubmit({preventDefault() {}})
+  await settle()
+  assert.equal(view.calls.some(call => call.path === '/api/v1/adventures' && call.options.method === 'POST'), false)
+  assert.match(view.element('dialog[open] .dialog-feedback').textContent, /different game/)
+})

@@ -457,16 +457,37 @@
   }
   $('#random-trainer').onclick = () => randomizeTrainer('#new-trainer', '#new-rival')
   $('#random-rival').onclick = () => randomizeTrainer('#new-rival', '#new-trainer')
+  const KANTO = ['bulbasaur', 'charmander', 'squirtle']
+  const JOHTO = ['chikorita', 'cyndaquil', 'totodile']
+  const HEADER_TITLES = {'POKEMON RED': 'red', 'POKEMON BLUE': 'blue', 'POKEMON_GLD': 'gold', 'POKEMON_SLV': 'silver', 'PM_CRYSTAL': 'crystal'}
+  let fileVersion = ''
+  async function sniffVersion(file) {
+    // Read only the 16-byte cartridge title so a chosen file narrows the starters before upload.
+    try {
+      const bytes = new Uint8Array(await file.slice(0x134, 0x144).arrayBuffer())
+      const title = String.fromCharCode(...bytes).replace(/\0.*$/, '').replace(/[^\x20-\x7e]/g, '')
+      const key = Object.keys(HEADER_TITLES).find(name => title.startsWith(name))
+      return key ? HEADER_TITLES[key] : ''
+    } catch { return '' }
+  }
+  function startersFor(version) {
+    if (!version) return [...KANTO, ...JOHTO]
+    return ['gold', 'silver', 'crystal'].includes(version) ? JOHTO : KANTO
+  }
   function updateStarters() {
-    const version = $('#rom-select').selectedOptions[0]?.dataset.version
-    const johto = ['gold', 'silver', 'crystal'].includes(version)
-    const choices = !version || $('#rom-file').files.length ? ['bulbasaur', 'charmander', 'squirtle', 'chikorita', 'cyndaquil', 'totodile'] : johto ? ['chikorita', 'cyndaquil', 'totodile'] : ['bulbasaur', 'charmander', 'squirtle']
+    const file = $('#rom-file').files[0]
+    const version = file ? fileVersion : $('#rom-select').selectedOptions[0]?.dataset.version
+    const choices = startersFor(version)
     const previous = $('#starter').value
     $('#starter').innerHTML = '<option value="random">Surprise me</option>' + choices.map(name => `<option value="${name}">${name[0].toUpperCase() + name.slice(1)}</option>`).join('')
     $('#starter').value = choices.includes(previous) ? previous : 'random'
   }
   $('#rom-select').onchange = updateStarters
-  $('#rom-file').onchange = updateStarters
+  $('#rom-file').onchange = async () => {
+    const file = $('#rom-file').files[0]
+    fileVersion = file ? await sniffVersion(file) : ''
+    updateStarters()
+  }
   async function openCreate() {
     await act(async () => {
       const data = await api('/api/v1/assets')
@@ -566,7 +587,9 @@
       const file = $('#rom-file').files[0]
       if (file) { $('#create-progress').textContent = 'Checking and adding your ROM…'
         const rom = await api('/api/v1/assets/rom', {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: file})
-        romId = rom.id }
+        romId = rom.id
+        if (rom.version && !startersFor(rom.version).includes($('#starter').value) && $('#starter').value !== 'random') {
+          throw new Error(`That starter belongs to a different game. The ROM was added as Pokémon ${rom.version}, so choose one of its starters.`) } }
       if (!romId) throw new Error('Select an existing ROM or add a ROM file.')
       $('#create-progress').textContent = 'Creating your adventure…'
       const startNow = $('#start-created').checked

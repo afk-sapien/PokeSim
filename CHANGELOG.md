@@ -4,7 +4,7 @@
 
 ## 0.5.0
 
-- Remove the automatic pause for a shiny that cannot be caught (added in 0.4.18). Balls cannot be bought and storage cannot be freed during a battle, so the pause only looked like a stall. Keep at least 10 balls in stock before heading out, on top of the existing free-storage reserve, so a shiny stays catchable. If one still cannot be caught, the player runs as it would from any other uncatchable encounter, and the journal and notifications record "Shiny <species> could not be caught: no balls" or "no storage space". The notification follows the "Stuck or needs attention" setting. Shiny release and trade protection, Take Control, and the Transform check are unchanged.
+- Remove the automatic pause for a shiny that cannot be caught (added in 0.4.18). Balls cannot be bought and storage cannot be freed during a battle, so the pause only looked like a stall. Keep at least 10 balls in stock before heading out, on top of the existing free-storage reserve, so a shiny stays catchable. If one still cannot be caught, the player runs as it would from any other uncatchable encounter, and the journal and notifications record "Shiny <species> could not be caught: no balls" or "no storage space". The notification is low priority and sits under "Everything else", not "Stuck or needs attention". Shiny release and trade protection, Take Control, and the Transform check are unchanged.
 - Run every adventure on PyBoy RS, a Rust port of PyBoy 2.7.0, through PokeSim Core 0.2. PyBoy is no longer a dependency, and installation needs no Rust toolchain.
 - Add Gold, Silver and Crystal adventures with Gen II Cable Club trading, the Time Capsule with Red and Blue, portable save export and cartridge real-time clocks. They run on the Rust backend only.
 - Keep the 0.4.x checkpoint tag on Gen I checkpoints so a 0.5.0 library rolls back to 0.4.x. Gen II adventures and locked-clock checkpoints cannot be opened by 0.4.x.
@@ -13,6 +13,8 @@
 - Require the NO THANKS entry before reading a list as the Game Corner prize menu, so other lists are not mistaken for it.
 - Fix live sound stutter over a jittery connection. The page now keeps an adaptive lead of 0.4 seconds that grows to 1.5 seconds after dropouts and shrinks slowly, trims drift by at most 2%, and skips forward with a short fade instead of clearing. The server keeps about 2 seconds of audio and serves it without truncation. Take Control uses a lead of about 0.1 seconds. Playback speeds snap to fixed rates, and sound is off above 4.5x. Short network failures are retried for 6 seconds. The new `tools/audio_jitter_harness.py` measures gaps in Chromium.
 
+- Make the shiny-not-caught notification low priority, under "Everything else". Narrow the new-adventure starter list from the chosen cartridge file and refuse a starter from the wrong game before creating the adventure. Skip zero-length ticks in `tools/play_gen2.py`.
+- Correct the release documents: rollback wording (Red and Blue need no restore, Gold, Silver and Crystal need 0.5.0, locked-clock checkpoints are refused by 0.4.x), Gen II in the package description, third-party notices, and a test that loads a Rust-written Gen 1 state into PyBoy 2.7.0.
 ## 0.4.20
 
 - Fix PC box lists with a nickname containing PP being read as the PP Up menu, which stopped the Release goal from freeing storage.

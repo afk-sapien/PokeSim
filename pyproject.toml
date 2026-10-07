@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pokesim"
 version = "0.5.0"
-description = "One application for autonomous Pokémon Red and Blue adventures with live views and cable trading"
+description = "One application for autonomous Pokémon Red, Blue, Gold, Silver and Crystal adventures with live views and cable trading"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]

@@ -149,7 +149,7 @@ screenshot and open the journal entry when tapped.
 | Level milestones | off | `level` (every tenth level) |
 | New areas and key items | off | `map`, `item` |
 | Blackouts | off | `blackout` |
-| Everything else | on | `money`, `name`, `playtime`, and any type added later |
+| Everything else | on | `money`, `name`, `playtime`, `shiny_missed` (low priority), and any type added later |
 
 Only notable events (priority 2 and up) are ever pushed. **Least important notification**
 raises that threshold.

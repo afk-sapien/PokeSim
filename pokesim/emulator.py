@@ -18,7 +18,7 @@ from . import __version__, config
 from .audio import AudioFeed, enable_checkpoint_sound
 from .build_info import build_info
 from .checkpoints import open_state
-from .events import HIGH, Event, RunMemory, diff
+from .events import HIGH, LOW, Event, RunMemory, diff
 from . import rewards
 from .legendary import LegendaryRecovery
 from .play_clock import PlayClock
@@ -419,7 +419,7 @@ class Emulator:
         self._handle_events([Event('shiny_missed', f'Shiny {species} could not be caught: {why}',
                                    f'A shiny {species} appeared with {why}, so the adventure ran from it. '
                                    'The supply and storage reserves should prevent this.',
-                                   priority=HIGH, tags='star')], snapshot)
+                                   priority=LOW, tags='star')], snapshot)
         return True
 
     def _sync_audio(self, enabled):
