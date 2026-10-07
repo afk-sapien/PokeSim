@@ -58,10 +58,3 @@ select = ["E9", "F"]
 [tool.ruff.lint.per-file-ignores]
 # pytest fixtures are imported and then named as test parameters.
 "tests/*" = ["F811", "F401"]
-
-# TEMP-0.5.0-UNPUBLISHED-DEPENDENCIES: remove this whole block, and the other pieces listed in
-# TEMP_REMOVE_BEFORE_RELEASE.md, once pokesim-core 0.2.0 and pyboy-rs 0.1.1 are on PyPI.
-# Until then uv resolves them from the exact reviewed commits below. pyboy-rs builds with Rust here.
-[tool.uv.sources]
-pokesim-core = { git = "https://github.com/afk-sapien/pokesim-core", rev = "a4ecd8a75ab9390d6bfeff36e492d137314ceb6f" }
-pyboy-rs = { git = "https://github.com/afk-sapien/pyboy-rs", rev = "1f378907c17458a6108ceac94ea4be5889e638cc" }

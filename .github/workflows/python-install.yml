@@ -15,9 +15,6 @@ on:
         type: string
 permissions:
   contents: read
-env:
-  # TEMP-0.5.0-UNPUBLISHED-DEPENDENCIES: pokesim-core 0.2.0 and pyboy-rs 0.1.1 are not on PyPI yet.
-  UV_OVERRIDE: ${{ github.workspace }}/tools/temp-unpublished-overrides.txt
 concurrency:
   group: python-install-${{ github.workflow }}-${{ github.ref }}
   # Runs on main and on tags are the evidence the publish workflow requires, so they are never cancelled.

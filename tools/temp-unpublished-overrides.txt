@@ -1,7 +1,0 @@
-# TEMP-0.5.0-UNPUBLISHED-DEPENDENCIES
-# Used through UV_OVERRIDE by the CI jobs that install the built wheel, because the wheel's own
-# requirements (pokesim-core>=0.2.0,<0.3 and pyboy-rs>=0.1.1,<0.2) are not on PyPI yet.
-# pyboy-rs compiles from source, so the job needs a Rust toolchain (GitHub runners have one).
-# Delete this file when both packages are published.
-pokesim-core @ git+https://github.com/afk-sapien/pokesim-core@a4ecd8a75ab9390d6bfeff36e492d137314ceb6f
-pyboy-rs @ git+https://github.com/afk-sapien/pyboy-rs@1f378907c17458a6108ceac94ea4be5889e638cc
