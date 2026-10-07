@@ -69,3 +69,35 @@ def test_game_pages_fit_intermediate_windows(page, game, width):
         folder = Path('/tmp/pokesim-responsive-ui')
         folder.mkdir(exist_ok=True)
         page.screenshot(path=str(folder / f'{path.strip("/").replace("/", "-")}-{width}.png'))
+
+
+@pytest.mark.parametrize('width', [1280, 1024, 800, 768])
+def test_live_controls_sit_on_one_row(page, game, width):
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(game[0])
+    expect(page.locator('#take-control')).to_be_visible()
+    boxes = page.evaluate('''() => {
+      const deck = document.querySelector('.deck.controls')
+      const rows = [...deck.children].filter(el => el.offsetParent)
+        .map(el => el.getBoundingClientRect())
+      const edge = deck.getBoundingClientRect()
+      return {rows, left: edge.left, right: edge.right, wide: deck.scrollWidth > deck.clientWidth}
+    }''')
+    assert len(boxes['rows']) >= 5
+    assert max(box['top'] for box in boxes['rows']) - min(box['top'] for box in boxes['rows']) <= 2
+    assert all(box['left'] >= boxes['left'] - 1 and box['right'] <= boxes['right'] + 1 for box in boxes['rows'])
+    assert not boxes['wide']
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [320, 390, 480, 640, 700])
+def test_live_controls_are_an_even_touch_grid_on_phones(page, game, width):
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(game[0])
+    expect(page.locator('#take-control')).to_be_visible()
+    boxes = page.evaluate('''() => [...document.querySelectorAll('.deck.controls > *')]
+      .filter(el => el.offsetParent).map(el => el.getBoundingClientRect().toJSON())''')
+    assert all(box['height'] >= 44 for box in boxes)
+    assert len({round(box['left']) for box in boxes if box['width'] < boxes[0]['width'] - 20}) <= 2
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert not page.evaluate("(() => { const d = document.querySelector('.deck.controls'); return d.scrollWidth > d.clientWidth })()")

@@ -698,19 +698,26 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   border-top: 0;
   box-shadow: var(--key-inset);
 }
-.deck .mode {
+.bezel-foot .mode {
   display: flex;
+  flex: none;
   align-items: center;
   gap: var(--s2);
   margin-left: auto;
-  padding-right: var(--s1);
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
   text-transform: uppercase;
-  color: var(--ink-2);
+  color: #B9C29F;
 }
-.game-card.is-manual .deck .mode { color: var(--signal); }
-.game-card.is-manual .deck .mode .lamp { background: var(--signal-lamp); }
+.game-card.is-manual .bezel-foot .mode { color: var(--signal-lamp); }
+.game-card.is-manual .bezel-foot .mode .lamp { background: var(--signal-lamp); }
+
+/* One compact row of controls; the mode readout lives in the bezel foot. */
+.deck { flex-wrap: nowrap; justify-content: space-between; }
+.deck > * { flex: 0 0 auto; }
+.deck .key { min-height: 44px; padding: 0 10px; font-size: 12px; letter-spacing: 0.04em; }
+.deck .live-speed select { min-height: 44px; min-width: 56px; padding: 0 4px; }
+
 
 .gamepad {
   background: var(--panel-2);
@@ -1148,9 +1155,6 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .bezel-head { padding-bottom: var(--s2); }
   .bezel-head h2 { font-size: var(--f-legend); }
   .bezel-foot { padding-top: var(--s2); }
-  .deck .key { flex: 1 1 auto; min-height: 44px; }
-  .deck .key--primary { flex-basis: 100%; }
-  .deck .mode { width: 100%; justify-content: center; margin-left: 0; }
 
   .plan { grid-template-columns: minmax(0, 1fr); }
   .plan .plan-next { border-left: 0; border-top: var(--hair) solid var(--rule-faint); }
@@ -1242,3 +1246,15 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 
 .shiny-badge { color: var(--signal) }
 .shiny-badge { border: 1px solid currentColor }
+
+/* Below the width where six controls fit on one row: an even two-column touch grid. */
+@media (max-width: 760px) {
+  .deck { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .deck > * { min-width: 0; }
+  .deck .key { width: 100%; padding: 0 var(--s2); }
+  .deck .key--primary, .deck #export-save { grid-column: 1 / -1; }
+  .deck .live-speed, .deck .live-speed select { width: 100%; }
+  .deck .live-speed { margin: 0; }
+  .bezel-foot { flex-wrap: wrap; gap: var(--s1) var(--s3); }
+  .bezel-foot .mode { margin-left: 0; width: 100%; }
+}
