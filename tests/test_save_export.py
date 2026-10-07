@@ -121,7 +121,7 @@ def test_core_capability_error_is_a_runtime_error_but_not_busy():
     from pokesim.capability import CAPABILITY_ERRORS
     from pokesim_core.errors import CoreCapabilityError as CoreError
     assert issubclass(CoreError, RuntimeError) and not issubclass(CoreError, NotImplementedError)
-    assert CoreError in CAPABILITY_ERRORS and len(CAPABILITY_ERRORS) == 2
+    assert CAPABILITY_ERRORS == (CoreError,)
 
 
 def test_gen2_export_downloads_save_and_clock_together(tmp_path, monkeypatch):
@@ -132,7 +132,7 @@ def test_gen2_export_downloads_save_and_clock_together(tmp_path, monkeypatch):
     monkeypatch.setattr(gen2_save, 'capture', lambda _: b'state')
     monkeypatch.setattr(gen2_save, 'export_with_clock', lambda rom, state, data: (save, clock))
     monkeypatch.setattr(config, 'VIEWER_ONLY', False)
-    emu = SimpleNamespace(generation=2, rom=tmp_path / 'gold.gbc', data=object(), call=lambda function, **_: function())
+    emu = SimpleNamespace(generation=2, rom=tmp_path / 'gold.gbc', data=SimpleNamespace(game='gold'), call=lambda function, **_: function())
     client = TestClient(create_app(emu, SimpleNamespace(shots=tmp_path), adventure_name='Gold / test'))
     response = client.post('/api/export-save')
     assert response.status_code == 200

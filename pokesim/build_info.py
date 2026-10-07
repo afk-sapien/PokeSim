@@ -15,9 +15,10 @@ def source_info(root=None):
     if (root / '.git').exists():
         try:
             revision = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'],
-                                               text=True, stderr=subprocess.DEVNULL).strip()
+                                               text=True, stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL).strip()
             dirty = bool(subprocess.check_output(
-                ['git', '-C', str(root), 'status', '--porcelain'], text=True, stderr=subprocess.DEVNULL))
+                ['git', '-C', str(root), 'status', '--porcelain'], text=True, stdin=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL))
             return dict(result, revision=revision, dirty=dirty)
         except (OSError, subprocess.CalledProcessError):
             pass
