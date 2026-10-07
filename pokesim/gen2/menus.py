@@ -208,6 +208,8 @@ class Use:
     def step(self, snapshot, mem):
         self.steps += 1
         rows, text = snapshot.tiles, snapshot.text
+        if self.item not in dict(snapshot.items):
+            return 'b' if '┌' in rows[12] or 'PACK' in text or 'CANCEL' in text else None
         if self.phase == 'open':
             if 'PACK' in text:
                 action = choose(rows, 'PACK')
@@ -592,6 +594,8 @@ class Give:
             if mem.byte('wCurPocket') != 0:
                 return 'left'
             return choose(rows, snapshot.data.item_names[self.item].upper(), exact=True) or 'down'
+        if 'YES' in text and 'NO' in text:
+            return choose(rows, 'YES', exact=True) or 'a'
         if 'CANCEL' in text and '▶' in text and '/' in text:
             cursor = next((i // 2 for i, row in enumerate(rows) if '▶' in row), 0)
             return 'a' if cursor == self.slot else 'down' if cursor < self.slot else 'up'

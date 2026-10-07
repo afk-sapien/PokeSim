@@ -457,7 +457,7 @@ def test_battle_switch_submenu_is_not_the_party_slot_selector(real_data):
     policy = Policy(real_data)
     policy.needed_move = lambda snapshot: 57
     policy.switching = 5
-    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: 1)).button == 'up'
+    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: 0)).button == 'up'
 
 
 def test_fainted_voluntary_switch_target_is_replanned(real_data):
@@ -623,6 +623,21 @@ def test_burned_tower_fall_finishes_the_beast_scene_before_supply_trips(real_dat
     assert policy.shop(snapshot) is None
 
 
+def test_postgame_restocking_reaches_a_mart_beyond_the_local_map_limit(real_data):
+    from pokesim.gen2.policy import Policy, Goal
+    policy = Policy(real_data)
+    policy.completed.update(red=1, ice_path=1)
+    mart = real_data.map_ids['VIOLET_MART']
+    policy.travel_region = lambda snapshot: real_data.maps[mart]['region']
+    policy.nav.route = lambda source, target: [None] * 6 if target == mart else None
+    policy.nav.regions.route = lambda *args, **kwargs: [None] * 6
+    policy.person = lambda snapshot, key, label, name, script: Goal(key, label, name, 1, 1)
+    snapshot = SimpleNamespace(map=real_data.map_ids['SILVER_CAVE_ROOM_2'], items=(), party=(),
+        pockets={'balls': ()}, money=20000, can_catch=True, badges=65535, hall_of_fame_count=1,
+        event=lambda name: True)
+    assert policy.shop(snapshot).map_name == 'VIOLET_MART'
+
+
 def test_capture_weakening_rejects_a_lethal_lead_move(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, starter='chikorita')
@@ -635,6 +650,69 @@ def test_capture_weakening_rejects_a_lethal_lead_move(real_data):
     assert policy.capture_move(snapshot, mem, slot=1) == 0
     snapshot.enemy_hp = 15
     assert policy.capture_move(snapshot, mem, slot=1) is None
+
+
+def test_ditto_capture_intent_survives_transform_into_an_owned_species(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    policy.needed_move = lambda snapshot: 0
+    policy.capture_move = lambda *args: None
+    policy.collection['prerequisites'] = [132]
+    rows = [''] * 18
+    rows[4], rows[5], rows[6] = '▶POKé BALL', '× 20', 'CANCEL'
+    snapshot = SimpleNamespace(party=(), stored=(), text='\n'.join(rows), tiles=rows,
+        in_battle=1, enemy_species=157, owned={132, 157}, can_catch=True, badges=65535, money=10000,
+        pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
+    mem = SimpleNamespace(byte=lambda name: 8 if name == 'wEnemySubStatus5' else 1)
+    assert policy.battle(snapshot, mem).button == 'a'
+
+
+@pytest.mark.parametrize('field,value', [('wEnemySubStatus5', 128), ('wPlayerWrapCount', 2)])
+def test_trapped_partner_does_not_retry_an_impossible_switch(real_data, field, value):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    policy.needed_move = lambda snapshot: 0
+    policy.move_score = lambda move, mon, target: int(mon.species != 160)
+    policy.remedy = lambda *args, **kwargs: False
+    mons = tuple(SimpleNamespace(species=sid, hp=50, egg=False, moves=(15,), pp=(30,)) for sid in (160, 118))
+    snapshot = SimpleNamespace(party=mons, stored=(), text='FIGHT', tiles=(),
+        map=real_data.map_ids['SILVER_CAVE_ROOM_2'], in_battle=1, enemy_species=200,
+        owned={200}, pockets={'balls': ()})
+    mem = SimpleNamespace(byte=lambda name: value if name == field else int(name in {'wMenuCursorX', 'wMenuCursorY'}))
+    assert policy.battle(snapshot, mem).button == 'a'
+    assert policy.switching is None
+    snapshot.text = 'STATS SWITCH'
+    policy.switching = 1
+    assert policy.battle(snapshot, mem).button == 'b'
+    assert policy.switching is None
+
+
+def test_roamer_capture_does_not_spend_its_turn_switching_to_a_helper(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    policy.needed_move = lambda snapshot: 0
+    policy.capture_move = lambda snapshot, mem, slot=None: None if slot is None else 0
+    policy.move_score = lambda *args: 1
+    policy.remedy = lambda *args, **kwargs: False
+    mon = SimpleNamespace(species=160, egg=False, hp=300, max_hp=300, level=100, moves=(33,), pp=(30,))
+    snapshot = SimpleNamespace(party=(mon, mon), stored=(), text='FIGHT', tiles=(),
+        map=real_data.map_ids['ROUTE_36'], in_battle=1, enemy_species=243, enemy_hp=140,
+        enemy_max_hp=140, enemy_level=40, owned=set(), can_catch=True, badges=65535, money=10000,
+        pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
+    mem = SimpleNamespace(byte=lambda name: 1 if name in {'wMenuCursorX', 'wMenuCursorY'} else 0)
+    assert policy.battle(snapshot, mem).button == 'down'
+    assert policy.switching is None
+
+
+def test_slow_capture_partner_throws_a_ball_before_the_roamer_flees(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    helper = SimpleNamespace(species=118, level=20, status=0, moves=(64, 0, 0, 0),
+        pp=(35, 0, 0, 0), stats=(48, 30, 25, 30, 25, 25))
+    snapshot = SimpleNamespace(party=(helper,), enemy_species=244, enemy_hp=145, enemy_max_hp=145,
+        pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
+    mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: 100)
+    assert policy.capture_move(snapshot, mem) is None
 
 
 @pytest.mark.parametrize('species,button', [(185, 'a'), (143, 'a'), (19, 'b')])
@@ -693,7 +771,7 @@ def test_grandfather_selects_the_requested_partner():
 
 def test_trade_demand_collects_enough_spare_copies():
     from pokesim.gen2.collection import wanted
-    policy = SimpleNamespace(demand={179: 1})
+    policy = SimpleNamespace(demand={179: 1}, collection={})
     mon = SimpleNamespace(species=179, egg=False)
     snapshot = SimpleNamespace(owned={179}, party=(mon,), stored=())
     assert wanted(policy, snapshot, 179)
@@ -785,6 +863,58 @@ def test_time_capsule_rejects_eggs_johto_moves_and_mail(real_data):
                    {'held_item': real_data.items['FLOWER_MAIL']}):
         assert not compatible(SimpleNamespace(**(vars(mon) | change)), real_data)
     assert compatible(SimpleNamespace(**(vars(mon) | {'held_item': real_data.items['METAL_COAT']})), real_data)
+
+
+def test_trade_evolution_item_replacement_requires_an_explicit_request(real_data):
+    from pokesim.gen2.cable_verification import available_trade_item
+    coat, berry = real_data.items['METAL_COAT'], real_data.items['BITTER_BERRY']
+    inventory = {coat: 1}
+    assert available_trade_item(real_data, 123, berry, inventory) is None
+    assert available_trade_item(real_data, 123, berry, inventory, replace_held=True) == coat
+    assert available_trade_item(real_data, 123, coat, inventory, replace_held=True) is None
+    assert available_trade_item(real_data, 123, berry, {}, replace_held=True) is None
+    assert inventory == {coat: 1}
+
+
+def test_native_held_item_swap_selects_yes_even_when_the_cursor_is_on_no():
+    from pokesim.gen2.menus import Give
+    rows = [''] * 18
+    rows[4], rows[6] = ' YES', '▶NO'
+    snapshot = SimpleNamespace(party=(SimpleNamespace(held_item=83),), tiles=rows, text='\n'.join(rows))
+    assert Give(143, 0, phase='party').step(snapshot, None) == 'up'
+
+
+def test_trade_preparation_closes_the_pc_after_link_closed_text(real_data, monkeypatch):
+    import time
+    from pokesim.gen2 import preparation
+    monkeypatch.setattr(preparation, 'update_world', lambda *args: None)
+    policy = SimpleNamespace(in_league=lambda snapshot: False,
+        nav=SimpleNamespace(observe=lambda snapshot: None, regions=SimpleNamespace(observe=lambda *args: None)),
+        collision=lambda *args: [])
+    policy.nav.collision = lambda *args: []
+    emu = SimpleNamespace(policy=policy, data=real_data, frame=0, pb=SimpleNamespace(memory={}))
+    controller = preparation.Preparation(emu, {'deadline': time.time() + 60, 'started_frame': 0})
+    snapshot = SimpleNamespace(in_battle=False, map=real_data.map_ids['VIOLET_POKECENTER_1F'],
+        text='TURN OFF\nLink closed…')
+    assert controller.advance(snapshot).button == 'b'
+
+
+def test_trade_preparation_heals_poison_before_freezing_the_source(real_data, monkeypatch):
+    import time
+    from pokesim.gen2 import preparation
+    monkeypatch.setattr(preparation, 'update_world', lambda *args: None)
+    monkeypatch.setattr(preparation, 'Memory', lambda *args: SimpleNamespace(
+        byte=lambda name: 4 if name == 'wPlayerDirection' else 0))
+    policy = SimpleNamespace(in_league=lambda snapshot: False,
+        healing=lambda snapshot: SimpleNamespace(map_name='VIOLET_POKECENTER_1F', x=3, y=3),
+        nav=SimpleNamespace(observe=lambda snapshot: None, collision=lambda *args: [],
+            toward=lambda *args, **kwargs: [], regions=SimpleNamespace(observe=lambda *args: None)))
+    emu = SimpleNamespace(policy=policy, data=real_data, frame=0, pb=SimpleNamespace(memory={}))
+    controller = preparation.Preparation(emu, {'deadline': time.time() + 60, 'started_frame': 0})
+    snapshot = SimpleNamespace(in_battle=False, map=real_data.map_ids['VIOLET_POKECENTER_1F'],
+        text='', tiles=[''] * 18, badges=65535, party=(SimpleNamespace(status=8, egg=False, moves=()),))
+    assert controller.advance(snapshot).button == 'a'
+    assert controller.state.get('phase') != 'ready'
 
 
 def test_time_capsule_conversion_matches_retail_exchange(real_data):
@@ -897,7 +1027,8 @@ def test_contest_uses_park_balls_and_runs_from_low_scores():
     policy = SimpleNamespace(collection={'contest': {'entered': True}})
     snapshot = SimpleNamespace(in_battle=1, text='FIGHT POKéMON PACK RUN', tiles=())
     values = {'wEnemyMonSpecies': 123, 'wEnemyMonMaxHP': 55, 'wEnemyMonHP': 55,
-              'wContestMonSpecies': 0, 'wParkBallsRemaining': 20, 'wMenuCursorX': 1, 'wMenuCursorY': 1}
+              'wContestMonSpecies': 0, 'wParkBallsRemaining': 20, 'wMenuCursorX': 1, 'wMenuCursorY': 1,
+              'wStatusFlags2': 4}
     mem = SimpleNamespace(byte=lambda name: values.get(name, 0),
                           word=lambda name: values.get(name, 40), read=lambda name, size: bytes([0xff, 0xff]))
     assert control(policy, snapshot, mem) == 'down'
@@ -907,6 +1038,13 @@ def test_contest_uses_park_balls_and_runs_from_low_scores():
     assert control(policy, snapshot, mem) == 'right'
     values['wMenuCursorX'] = 2
     assert control(policy, snapshot, mem) == 'a'
+
+
+def test_planned_contest_does_not_override_an_unrelated_wild_battle():
+    from pokesim.gen2.contest import control
+    policy = SimpleNamespace(collection={'contest': {'entered': False}})
+    snapshot = SimpleNamespace(in_battle=1, text='CELEBI FIGHT POKéMON PACK RUN', tiles=())
+    assert control(policy, snapshot, SimpleNamespace(byte=lambda name: 0)) is None
 
 
 def test_contest_respects_days_and_completed_daily_entry(real_data):
@@ -1065,9 +1203,87 @@ def test_full_pc_box_does_not_interrupt_an_active_league_attempt(real_data):
     policy.collection['funding'] = 2
     policy.person = lambda snapshot, key, *args: key
     snapshot = SimpleNamespace(map=real_data.map_ids['KOGAS_ROOM'], can_catch=False,
-        box_counts=(20, 0), hall_of_fame_count=1, money=10000, daycare=(),
+        box_counts=(20, 0), hall_of_fame_count=1, money=10000, daycare=(), party=(), stored=(),
         owned={152, 155, 158}, event=lambda name: name != 'EVENT_BEAT_ELITE_4_KOGA')
     assert journey(policy, snapshot, None, Goal) == 'funds_koga'
+
+
+def test_collection_recovers_parents_that_were_traded_away(real_data):
+    from pokesim.gen2.collection import prerequisites, wanted
+    snapshot = SimpleNamespace(party=(), stored=(), daycare=(),
+        owned=set(range(1, 252)) - {174, 182, 197, 242})
+    needs = prerequisites(real_data, snapshot)
+    assert {39, 40, 44, 113, 132, 133} <= needs
+    policy = SimpleNamespace(demand={}, collection={'prerequisites': needs})
+    assert wanted(policy, snapshot, 39)
+    snapshot.party = (SimpleNamespace(species=39, level=20, egg=False),)
+    assert not wanted(policy, snapshot, 39)
+    assert not {39, 40} & prerequisites(real_data, snapshot)
+
+
+def test_training_can_replace_an_owned_intermediate_needed_for_a_missing_evolution(real_data):
+    from pokesim.gen2.training import projects
+    mareep = SimpleNamespace(species=179, level=14, experience=2000, egg=False,
+        box=None, trainer_id=1, dvs=(5,) * 5)
+    snapshot = SimpleNamespace(party=(mareep,), stored=(), items=(), owned=set(range(1, 252)) - {181})
+    assert {row[4] for row in projects(real_data, snapshot, 'day')} == {180}
+
+
+def test_level_100_partners_can_still_use_evolution_stones(real_data):
+    from pokesim.gen2.training import projects, journey
+    from pokesim.gen2.policy import Goal
+    mon = SimpleNamespace(species=44, name='Gloom', level=100, experience=1000000, egg=False,
+        box=None, trainer_id=1, dvs=(5,) * 5, held_item=0)
+    snapshot = SimpleNamespace(party=(mon,), stored=(), owned=set(range(1, 252)) - {182},
+        items=((real_data.items['SUN_STONE'], 1), (real_data.items['EXP_SHARE'], 1)),
+        map=real_data.map_ids['GOLDENROD_CITY'], x=1, y=1)
+    assert {row[4] for row in projects(real_data, snapshot, 'day')} == {182}
+    policy = SimpleNamespace(data=real_data, collection={})
+    assert journey(policy, snapshot, SimpleNamespace(byte=lambda name: 1), Goal).key == 'collection_evolve_item'
+
+
+def test_pending_eggs_hatch_before_recalculating_breeding_pairs(real_data, monkeypatch):
+    from pokesim.gen2 import breeding
+    from pokesim.gen2.policy import Goal
+    monkeypatch.setattr(breeding, 'offspring', lambda *args: pytest.fail('Pending eggs do not need new pair searches'))
+    policy = SimpleNamespace(data=real_data, collection={})
+    snapshot = SimpleNamespace(daycare=(None, None), party=(SimpleNamespace(egg=True),),
+        map=real_data.map_ids['GOLDENROD_CITY'], x=20, y=10)
+    assert breeding.journey(policy, snapshot, Goal).key == 'collection_hatch'
+    assert policy.collection.get('breeding') is None
+
+
+def test_imported_legends_do_not_require_the_local_wing_quest(monkeypatch):
+    from pokesim.gen2 import celebi
+    from pokesim.gen2.quests import legends
+    monkeypatch.setattr(celebi, 'journey', lambda *args: None)
+    snapshot = SimpleNamespace(owned={243, 244, 245, 249, 250})
+    assert legends(SimpleNamespace(), snapshot, None) is None
+
+
+def test_item_menu_exits_when_the_requested_item_is_unavailable():
+    from pokesim.gen2.menus import Use
+    snapshot = SimpleNamespace(items=(), text='CANCEL', tiles=[''] * 18)
+    menu = Use(59, phase='pack')
+    assert menu.step(snapshot, None) == 'b'
+    snapshot.text = ''
+    assert menu.step(snapshot, None) is None
+
+
+def test_encounter_search_can_leave_and_reenter_a_disconnected_map(real_data, monkeypatch):
+    from pokesim.gen2 import collection
+    from pokesim.gen2.policy import Goal
+    mid = real_data.map_ids['ROUTE_10_NORTH']
+    state = {'target': {'map': mid, 'species': 125, 'method': 'grass', 'time': 'day'}}
+    regions = SimpleNamespace(route=lambda *args, **kwargs: [((mid, 0), (mid, 1), [], 'warp')],
+        memberships=lambda *args: {1})
+    policy = SimpleNamespace(data=real_data, collection=state, memory=None,
+        nav=SimpleNamespace(local=lambda *args, **kwargs: None, regions=regions, visits={}))
+    snapshot = SimpleNamespace(map=mid, x=11, y=2)
+    monkeypatch.setattr(collection, 'encounter_points', lambda *args, **kwargs: [(1, 1, None)])
+    goal = collection.hunt(policy, snapshot, Goal)
+    assert (goal.key, goal.x, goal.y) == ('collection_hunt', 1, 1)
+    assert state['target']['species'] == 125
 
 
 def test_roamer_search_cycles_a_border_until_a_beast_is_on_the_current_route(real_data, monkeypatch):

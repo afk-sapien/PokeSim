@@ -10,13 +10,17 @@ def identity(mon):
 
 
 def projects(data, snapshot, current_time):
+    from .collection import prerequisites
+    needed = prerequisites(data, snapshot)
     inventory = dict(snapshot.items)
     rows = []
     for mon in snapshot.party + snapshot.stored:
-        if mon.egg or mon.level == 100:
+        if mon.egg:
             continue
         for evo in data.species[mon.species]['evolutions']:
-            if evo['species'] in snapshot.owned or evo['method'] == 'trade':
+            if evo['species'] in snapshot.owned and evo['species'] not in needed or evo['method'] == 'trade':
+                continue
+            if mon.level == 100 and evo['method'] != 'item':
                 continue
             requirements = evo['requirements']
             if evo['method'] == 'item':
@@ -59,7 +63,9 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         return None
     current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
     project = state.get('training')
-    if project and not project.get('terminal') and project['target'] in snapshot.owned:
+    from .collection import prerequisites
+    if (project and not project.get('terminal') and project['target'] in snapshot.owned
+            and project['target'] not in prerequisites(data, snapshot)):
         state['training'] = project = None
     if project is None:
         choices = projects(data, snapshot, current_time)
@@ -75,7 +81,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         project = state['training'] = {'identity': key, 'target': target, 'item': item, 'species': species, 'terminal': terminal_project}
     mon = next((mon for mon in snapshot.party + snapshot.stored if identity(mon) == project['identity']), None)
     if (mon is None or mon.species != project['species'] and not project.get('terminal')
-            or mon.level >= project.get('level_goal', 100)):
+            or not project.get('item') and mon.level >= project.get('level_goal', 100)):
         state['training'] = None
         return None
     if project.get('terminal'):

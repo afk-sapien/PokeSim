@@ -2,7 +2,7 @@
 import time
 
 from ..trade.preferences import identity
-from .menus import ChangeBox, Give, Storage, choose
+from .menus import ChangeBox, Give, Storage
 from .policy import Action
 from .ram import Memory, read_snapshot
 from .world import update as update_world
@@ -83,18 +83,31 @@ class Preparation:
                 return Action(None, 0, 24) if button == 'wait' else Action(button, 8, 28)
             self.menu = None
         if 'TURN OFF' in snapshot.text:
-            return Action(choose(snapshot.tiles, 'TURN OFF') or 'b', 8, 32)
+            return Action('b', 8, 32)
         if 'CHANGE BOX' in snapshot.text or 'Choose a' in snapshot.text or 'CANCEL' in snapshot.text:
             return Action('b', 8, 32)
         if '┌' in snapshot.tiles[12] or mem.byte('wScriptRunning'):
             return Action('a', 8, 32)
+        if any(member.status for member in snapshot.party if not member.egg):
+            goal = policy.healing(snapshot)
+            if goal is None:
+                raise ValueError('The party needs a Pokémon Center before link preparation')
+            surf = any(57 in member.moves for member in snapshot.party) and bool(snapshot.badges & 8)
+            path = policy.nav.toward(snapshot, data.map_ids[goal.map_name], [(goal.x, goal.y)], emu.pb.memory, surf=surf)
+            policy.mode = 'Heal the party before the Cable Club exchange'
+            if path:
+                return policy.walk(snapshot, emu.pb.memory, path)
+            if path is None:
+                return Action(None, 0, 24)
+            return Action('up' if mem.byte('wPlayerDirection') & 12 != 4 else 'a', 8, 32)
         location, slot, mon = selected(snapshot, emu.store.trade_preferences(), state['trade_key'])
         from .timecapsule import compatible
         incompatible = next((i for i, member in enumerate(snapshot.party) if not compatible(member, data)), None)
         needs_storage = location != 'party' or state.get('time_capsule') and incompatible is not None
         if location == 'party' and not state.get('time_capsule'):
             from .cable_verification import available_trade_item
-            item = available_trade_item(data, mon.species, mon.held_item, dict(snapshot.items))
+            item = available_trade_item(data, mon.species, mon.held_item, dict(snapshot.items),
+                                        replace_held=state.get('replace_held', False))
             if item:
                 self.menu = Give(item, slot)
                 return Action(None, 0, 24)

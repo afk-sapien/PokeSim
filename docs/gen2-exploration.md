@@ -113,7 +113,7 @@ Recorded cartridge scenarios include:
 | Crystal Celebi | Optional GS Ball activation committed once, delivery and Kurt quest completed, Celebi caught at the shrine |
 | Bug-Catching Contest | Entry, judging and party restoration in all three games, Crystal won first place and received a Sun Stone |
 | Extended collection | Crystal completed another 5,000,028 frames without a stall, reaching 94 owned species including Espeon and Crobat, then another 750,032 frames reached 95. Gold recovered from insufficient Day Care funds, completed another 2,000,008 frames without a stall and reached 78, then Espeon and Nidoqueen raised it to 80, with subsequent collection reaching 83. Crystal reached 98 after Suicune, a native Lugia trade and Tyranitar |
-| Continuous collection with donors | One Crystal save reached 194 owned through native catches and verified Red, Blue, Gold and Silver exchanges. Imports include Articuno, Zapdos, Moltres, Mewtwo, Ho-Oh, Porygon2, Politoed, Slowking, Steelix, Kingdra and Hitmontop. Each exchange passed cartridge Continue, checkpoint restart and durable participant verification |
+| Continuous collection with donors | One Crystal save reached all 251 registered entries through native catches, breeding, evolution, optional event features and verified Red, Blue, Gold and Silver exchanges. Imports include Articuno, Zapdos, Moltres, Mewtwo, Ho-Oh, Porygon2, Politoed, Slowking, Steelix, Kingdra, Scizor and Hitmontop. Gold caught both roaming beasts and transferred them to this Crystal save. Each exchange passed cartridge Continue, checkpoint restart and durable participant verification |
 | Game Corner | Native coin purchases, prize menus and League funding obtained Cubone, Wobbuffet, Pikachu and Porygon in Crystal. Gold obtained its 9,999-coin Porygon using native slot play for the balance above the coin purchase limit |
 | Moon Stone | Collected the native Tohjo Falls item in all three games. Gold then selected Nidorina in the stone menu and evolved it into Nidoqueen |
 | Trade evolution items | Collected Up-Grade, King’s Rock and Dragon Scale in Gold, Silver and Crystal through native dialogue, Strength and item pickups |
@@ -124,6 +124,15 @@ Recorded cartridge scenarios include:
 | Repeat Mew | First and repeat gifts on all three cartridges, later win requirement and duplicate prevention |
 | Library integration | Three installed games, three actual workers, automatic selection and committed Cable Club exchange |
 | Reference installation | Clean download and generation from pinned public sources for all three games |
+
+The [251-entry verification record](validation/gen2-251.json) includes the final
+checkpoint and portable-save hashes. A fresh cartridge Continue preserved all
+251 entries, party, storage and adventure progress. The run used optional Mew,
+GS Ball and earned League starter gifts, donor exchanges and recorded clock
+advances. Collection means registered Pokédex entries. The final party and PC
+held 116 distinct species after evolutions and outgoing trades. The final full
+suite passed 2,043 tests with 151 skipped, and both package formats passed their
+runtime-resource and private-artifact checks.
 
 Private evidence, traces and reproducible failure checkpoints are under
 `.release-local/`. The scenario runner reports its actual stopping reason and
@@ -186,6 +195,8 @@ donors, including held-item evolutions. Their progress manifests record each
 adopted checkpoint and the continuous recipient lineage. `--offer-trained`
 explicitly offers trained boxed partners in those disposable copies.
 `tools/play_gen2.py --until all251` stops only after the observed owned count is 251.
+`tools/verify_gen2_collection.py` requires every owned entry, exports a portable
+cartridge save, verifies fresh Continue and records checkpoint and save hashes.
 Optional Mew, GS Ball and earned League starter gifts use the existing runtime
 settings, a persistent `--runtime-store` and a separate event ledger.
 
@@ -196,11 +207,34 @@ the RTC, accounts for the cartridge's friendship step counter, and requires the
 nurse to repair the HP mismatch before preparing an exchange. Box names and
 optional gifts now use the native nickname layout, with a full-box preservation
 regression check. Level-100 evolution parents can breed a trainable replacement.
+Collection also replaces breeding and evolution parents that were traded away,
+including already registered intermediate evolutions. A planned contest cannot
+intercept an unrelated wild battle. Native roaming searches use the ruins gate
+to avoid the cartridge's last-map exclusion, then stay on the route when a beast
+is present. Capture does not spend the escape turn switching to a weaker partner.
+An explicit `tools/verify_gen2_trading.py --evolve` request can swap a held item
+for an available evolution item through the native Pack. The Scizor proof
+preserved the original Bitter Berry and consumed Metal Coat during evolution.
+Completed legendary collections skip wing errands, including imported Ho-Oh.
+Encounter searches can leave and reenter disconnected areas of the same map.
+Capture intent survives Ditto's Transform, using the species the cartridge
+actually stores after capture. An unavailable item closes its menu instead of
+scrolling indefinitely. Focused encounter tests also earn replacement supplies
+through the League and select a fishing rod that the adventure actually owns.
+Postgame supply trips can reach distant marts from Mt. Silver. Battle control
+recognizes Mean Look and binding effects before attempting a switch. Native
+Misdreavus acquisition verified recovery from the trapped battle, restocking and
+capture. Trade preparation heals status conditions before freezing its source,
+preserving strict party comparisons even when poison would tick on the walk to
+the link desk. Pending eggs hatch before recalculating breeding pairs, and
+level-100 partners remain eligible for stone evolutions.
 
 The Time Capsule, Celebi overnight and repeat contest tests advanced the real-time clock in
 private fixture copies before allowing the cartridge’s daily reset to run.
-Production adventures use their ordinary clocks. No story flags or Pokémon
-were injected to produce those exchange or capture results.
+Production adventures use their ordinary clocks. Clock fixtures change only
+the emulator RTC epoch. The cartridge performs its daily reset, captures,
+breeding, evolutions and exchanges through native gameplay. Optional gifts and
+the GS Ball distribution are recorded separately in the runtime event ledger.
 
 ## Boundaries
 
@@ -209,9 +243,11 @@ stall, or that every optional cartridge activity is automated. Game Corner
 prize acquisition is automated. The Battle Tower test proves
 entry, combat, a six-win streak and return. A seven-win streak has not yet been demonstrated. All 251 species have data and
 UI support, and Time Capsule and the optional Celebi quest add acquisition paths.
-An autonomous 251-species collection has not been demonstrated. Sun Stones now
-have an automated acquisition path through contest wins, but those wins are not
-guaranteed, and this branch does not claim unattended Pokédex completion.
+The verified 251-entry run used managed checkpoint continuations, coordinated
+donor exchanges and simulated clock advances. Unattended fresh-start completion
+remains unproven. Sun Stones have an automated acquisition path through contest
+wins, with two further first-place wins supplying Bellossom and Sunflora in the
+completed collection. Contest wins are not guaranteed for every attempt.
 The Red/Blue Kanto Marathon and repeatable fossil, dojo and NPC-trade rewards
 have not been transplanted into the Generation II campaign. Generation II
 retries missed static legendary encounters, but does not schedule repeat
