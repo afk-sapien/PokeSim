@@ -11,7 +11,8 @@ license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11"
 dependencies = [
-  "pokesim-core[emulator,acceleration]==0.2.0.dev0",
+  "pokesim-core[emulator]>=0.2.0,<0.3",
+  "pyboy-rs>=0.1.1,<0.2",
   "fastapi>=0.110",
   "uvicorn[standard]>=0.53.0",
   "pillow>=10",
@@ -57,12 +58,3 @@ select = ["E9", "F"]
 [tool.ruff.lint.per-file-ignores]
 # pytest fixtures are imported and then named as test parameters.
 "tests/*" = ["F811", "F401"]
-
-[tool.uv.sources]
-pokesim-core = { path = "../pokesim-core-rtc", editable = true }
-pyboy-rs = { path = "../pyboy-rs-rtc" }
-pokesim-core-native = { path = "../pokesim-core-rtc/native" }
-
-[tool.uv]
-# Core's own source for pyboy-rs points at the non-RTC sibling checkout; use the RTC build.
-override-dependencies = ["pyboy-rs==0.1.0"]
