@@ -232,3 +232,20 @@ def test_palette_is_independent_retries_and_survives_worker_restart(supervisor):
     assert supervisor.children[first].bootstrap['settings']['palette'] == 'red'
     supervisor.sync_palette(first, child, 'blue')
     assert calls == ['blue', 'red']
+
+
+def test_readiness_timeout_names_the_last_cause_and_the_log_not_forty_lines(tmp_path):
+    import sys
+    from pokesim.app.supervisor import Child
+    script = ("import sys,time\n"
+              "[print('noise %d' % i, file=sys.stderr, flush=True) for i in range(60)]\n"
+              "print('ROM header checksum is wrong', file=sys.stderr, flush=True)\n"
+              "time.sleep(30)\n")
+    bootstrap = {'token': 't', 'generation': 1, 'adventure_id': 'a', 'settings': {'data_dir': str(tmp_path)}}
+    child = Child(bootstrap, command=[sys.executable, '-c', script])
+    with pytest.raises(RuntimeError) as caught:
+        child.start(timeout=1.5)
+    message = str(caught.value)
+    assert 'ROM header checksum is wrong' in message
+    assert str(tmp_path / 'logs' / 'worker.log') in message
+    assert 'noise 10' not in message and ' | ' not in message and len(message) < 400

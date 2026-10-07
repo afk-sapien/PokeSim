@@ -57,9 +57,11 @@ class Child:
             try:
                 message = self.ready.get(timeout=timeout)
             except queue.Empty:
-                detail = ' | '.join(list(self.logs)[-40:]) or 'no output'
+                last = next((line for line in reversed(self.logs) if line.strip()), '')
+                cause = last if len(last) <= 200 else last[:197] + '...'
                 alive = 'still running' if self.process.poll() is None else f'exited with {self.process.returncode}'
-                raise RuntimeError(f'Worker was not ready after {timeout} seconds ({alive}): {detail}') from None
+                raise RuntimeError(f'Worker was not ready after {timeout} seconds ({alive}). '
+                                   f'Last output: {cause or "none"}. Full log: {self.log_path}') from None
             if (message.get('event') != 'ready' or message.get('protocol') != 1
                     or message.get('adventure_id') != self.bootstrap['adventure_id']
                     or message.get('generation') != self.generation
