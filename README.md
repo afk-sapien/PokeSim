@@ -23,7 +23,7 @@ An eight-second clip from a running adventure. [Still image](docs/images/live-ad
 - **Life after the League:** Keep training, rotate League teammates, revisit
   eligible encounters and earn new Pokémon.
 - **Your own touch:** Add nickname prefixes and suffixes, take over the controls,
-  or export a standard `.sav` to continue in another emulator (Gen II export needs Core 0.2.0 RTC support).
+  or export a `.sav` (a `.zip` with the `.rtc` clock for Gen II) to continue in another emulator (Gen II export needs Core 0.2.0 RTC support).
 
 | Journal entries | Adventure stats |
 | --- | --- |
@@ -38,7 +38,9 @@ The cartridges contain a real-time clock. In the app, a Generation II adventure 
 clock and keeps the cartridge's clock with its saves, so day and night, daily events and
 Day Care behave as they would on a console left switched on. The clock is locked to a fixed
 instant only by the verification tools and by checkpoints made for them, so that runs are
-reproducible. Standard `.sav` export includes the clock bytes. A checkpoint saved with a
+reproducible. Exporting a Generation II adventure downloads a `.zip` holding the 32 KiB `.sav` and its ten-byte
+`.rtc` clock file with the same base name. Put both next to the ROM, since a save without its clock
+is read as having lost the time. Generation I exports remain a single `.sav`. A checkpoint saved with a
 locked clock is refused by 0.4.x.
 
 Verified for this release on the Rust backend, with owner-supplied cartridges: the Library

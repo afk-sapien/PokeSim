@@ -104,7 +104,7 @@ def test_missing_core_capability_is_not_reported_as_busy(tmp_path, monkeypatch, 
     def unavailable(*_):
         raise CoreCapabilityError(message)
     monkeypatch.setattr(gen2_save, 'capture', lambda _: b'checkpoint')
-    monkeypatch.setattr(gen2_save, 'export', unavailable)
+    monkeypatch.setattr(gen2_save, 'export_with_clock', unavailable)
     monkeypatch.setattr(config, 'VIEWER_ONLY', False)
     shots = tmp_path / 'shots'
     shots.mkdir()
@@ -122,3 +122,22 @@ def test_core_capability_error_is_a_runtime_error_but_not_busy():
     from pokesim_core.errors import CoreCapabilityError as CoreError
     assert issubclass(CoreError, RuntimeError) and not issubclass(CoreError, NotImplementedError)
     assert CoreError in CAPABILITY_ERRORS and len(CAPABILITY_ERRORS) == 2
+
+
+def test_gen2_export_downloads_save_and_clock_together(tmp_path, monkeypatch):
+    import io
+    import zipfile
+    from pokesim.gen2 import save as gen2_save
+    save, clock = bytes(32768), bytes(range(10))
+    monkeypatch.setattr(gen2_save, 'capture', lambda _: b'state')
+    monkeypatch.setattr(gen2_save, 'export_with_clock', lambda rom, state, data: (save, clock))
+    monkeypatch.setattr(config, 'VIEWER_ONLY', False)
+    emu = SimpleNamespace(generation=2, rom=tmp_path / 'gold.gbc', data=object(), call=lambda function, **_: function())
+    client = TestClient(create_app(emu, SimpleNamespace(shots=tmp_path), adventure_name='Gold / test'))
+    response = client.post('/api/export-save')
+    assert response.status_code == 200
+    assert response.headers['content-disposition'].endswith('filename="Gold-test.zip"')
+    with zipfile.ZipFile(io.BytesIO(response.content)) as bundle:
+        assert sorted(bundle.namelist()) == ['Gold-test.rtc', 'Gold-test.sav']
+        assert bundle.read('Gold-test.sav') == save
+        assert bundle.read('Gold-test.rtc') == clock

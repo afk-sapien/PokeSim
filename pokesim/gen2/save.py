@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import zipfile
 
 from .core import boot, stop_with_clock
 
@@ -36,8 +37,22 @@ def capture(emu):
 
 
 def export(rom, state, data):
-    """The verified 32 KiB cartridge save for a checkpoint."""
+    """The verified 32 KiB cartridge save for a checkpoint.
+
+    This is the save alone. The web download uses export_with_clock so the clock travels with it.
+    """
     return export_with_clock(rom, state, data)[0]
+
+
+def clock_archive(save, clock, name='game'):
+    """A zip holding the save and its clock file side by side, named so an emulator finds both."""
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as bundle:
+        for suffix, content in (('sav', save), ('rtc', clock)):
+            entry = zipfile.ZipInfo(f'{name}.{suffix}', (1980, 1, 1, 0, 0, 0))
+            entry.compress_type = zipfile.ZIP_DEFLATED
+            bundle.writestr(entry, content)
+    return archive.getvalue()
 
 
 def export_with_clock(rom, state, data):

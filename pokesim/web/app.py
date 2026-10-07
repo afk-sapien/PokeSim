@@ -321,11 +321,13 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             raise HTTPException(403, 'This instance is view-only')
         if not export_lock.acquire(blocking=False):
             raise HTTPException(409, 'A save export is already being prepared.')
+        name = re.sub(r'[^A-Za-z0-9_-]+', '-', adventure_name).strip('-')[:64] or 'pokesim'
         try:
             if gen2:
-                from ..gen2.save import capture, export
+                from ..gen2.save import capture, clock_archive, export_with_clock
                 state = emu.call(lambda: capture(emu), timeout=5)
-                data = export(emu.rom, state, emu.data)
+                save, clock = export_with_clock(emu.rom, state, emu.data)
+                data = clock_archive(save, clock, name)
             else:
                 from ..save_export import capture, export
                 state = emu.call(lambda: capture(emu), timeout=5)
@@ -338,10 +340,10 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             raise HTTPException(503, 'The adventure is busy. Try exporting again in a moment.') from error
         finally:
             export_lock.release()
-        name = re.sub(r'[^A-Za-z0-9_-]+', '-', adventure_name).strip('-')[:64] or 'pokesim'
-        return Response(data, media_type='application/octet-stream', headers={
+        extension, media_type = ('zip', 'application/zip') if gen2 else ('sav', 'application/octet-stream')
+        return Response(data, media_type=media_type, headers={
             'Cache-Control': 'no-store',
-            'Content-Disposition': 'attachment' + chr(59) + f' filename="{name}.sav"',
+            'Content-Disposition': 'attachment' + chr(59) + f' filename="{name}.{extension}"',
         })
 
     @app.get('/api/audio')
