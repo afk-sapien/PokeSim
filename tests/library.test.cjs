@@ -502,6 +502,24 @@ test('running adventure settings allow palettes and explain deferred application
   assert.equal(view.element('#notice').textContent, 'Settings saved. The palette will apply when this adventure reconnects.')
 })
 
+test('Gold, Silver and Crystal adventures hide the palette and never send one', async () => {
+  const game = {id: 'c'.repeat(32), name: 'Johto', version: 'gold', state: 'stopped', settings: {}}
+  const view = library({respond(path, options) {
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+    if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
+  }})
+  await settle()
+  for (const name of ['league-rewards', 'mew-event', 'celebi-event']) view.element(`#settings-${name}`).toggleAttribute = () => {}
+  for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+  view.click('settings', game.id)
+  assert.equal(view.element('#settings-palette-label').hidden, true)
+  assert.equal(view.element('#settings-palette-note').hidden, true)
+  view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+  await settle()
+  const settings = JSON.parse(view.calls.find(call => call.options.method === 'PATCH').options.body).settings
+  assert.equal('palette' in settings, false)
+})
+
 test('settings render existing backups without an adventure variable', async () => {
   const view = library({page: 'settings', respond(path) {
     if (path === '/api/v1/backups') return {ok: true, json: async () => ({backups: [

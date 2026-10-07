@@ -141,6 +141,8 @@ def serve(bootstrap, parent_stream, ready_stream):
                 value = validate_palette(data['palette'])
             except ValueError as error:
                 raise HTTPException(400, str(error)) from error
+            if not hasattr(runtime.emulator, 'set_palette'):
+                raise HTTPException(409, 'This game does not support screen palettes')
             return runtime.call(lambda: runtime.emulator.set_palette(value))
 
         @app.post('/internal/nicknames')

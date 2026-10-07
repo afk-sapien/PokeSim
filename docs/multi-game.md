@@ -25,8 +25,8 @@ Pokédex page. Nothing about a single run changes.
 
 | Instance | ROM | URL | Port | Data |
 | --- | --- | --- | --- | --- |
-| `pokesim` | Red | https://pokesim-red.example.com | 8930 | `/opt/pokesim/data` |
-| `pokesim-blue` | Blue | https://pokesim-blue.example.com | 8940 | `/opt/pokesim-blue/data` |
+| `pokesim` | Red | http://localhost:8930 | 8930 | `/opt/pokesim/data` |
+| `pokesim-second` | Blue | http://localhost:8940 | 8940 | `/opt/pokesim-second/data` |
 
 Both instances use the GUI update from September 13, 2026, including separate PC
 and Pokédex pages and locally installed sprites.
@@ -138,7 +138,7 @@ proposal needs it, which is what makes a premium price payable at all.
 
 ## Milestones
 
-1. **Blue instance — done.** `pokesim-blue` on port 8940 with its own data directory.
+1. **Blue instance — done.** `pokesim-second` on port 8940 with its own data directory.
 2. **Broker, read-only — built.** Poll both `/api/pokedex/status` endpoints and publish proposed trades —
    a trade board page showing what the two runs could exchange and at what price. No writes, so no
    risk, and it makes the negotiation rules visible before anything acts on them.

@@ -6,6 +6,15 @@ if (-not $package) {
     $package = "https://github.com/afk-sapien/PokeSim/releases/download/v$version/pokesim-$version-py3-none-any.whl"
 }
 
+$architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+if ($architecture -ne 'X64') {
+    Write-Host "PokeSim 0.5 has no emulator build for Windows $architecture. Only Windows x64 is supported."
+    Write-Host 'The Docker image (linux/amd64) is the alternative: see the Docker guide in the PokeSim documentation.'
+    Write-Host 'Nothing was installed. Do not run "pip install pokesim": that installs an unrelated project from PyPI.'
+    Write-Host 'Do not install pyboy-rs or pokesim-core from PyPI either: they are published only as GitHub release files.'
+    throw 'Unsupported platform.'
+}
+
 $uvCommand = Get-Command uv -ErrorAction SilentlyContinue
 $uvBin = Join-Path $HOME '.local\bin\uv.exe'
 if ($uvCommand) {
@@ -38,7 +47,7 @@ $launcher = Join-Path $binDir 'pokesim-desktop.exe'
 if ($LASTEXITCODE -ne 0) { throw 'The installed launcher failed. Please include the error in a bug report.' }
 Write-Host "`nPokeSim is installed. Start it with:"
 Write-Host "  & `"$launcher`""
-Write-Host "`nYour browser will open the Library. Add your own Red or Blue ROM there."
+Write-Host "`nYour browser will open the Library. Add your own Red, Blue, Gold, Silver or Crystal ROM there."
 Write-Host 'For the short pokesim-desktop command, add the tool directory to PATH with:'
 Write-Host "  & `"$uvBin`" tool update-shell"
 Write-Host 'Then open a new terminal. Save and quit PokeSim before rerunning this installer to update.'

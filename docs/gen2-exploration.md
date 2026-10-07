@@ -176,7 +176,6 @@ With local cartridge and generated data directories, run the regression suite:
 GAME_DATA_DIR=.release-local/all-data \
 GEN2_DATA_DIR=.release-local/gen2-data \
 GEN2_CARTRIDGE_DIR=.release-local/gen2 \
-GEN2_ROM_DIR=/path/to/your/roms \
 .venv/bin/pytest -q tests
 ```
 
