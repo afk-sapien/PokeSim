@@ -6,7 +6,7 @@ Pokémon League, all eight Kanto gyms, and Red through ordinary cartridge input.
 The original boot experiment remains available in `tools/probe_gen2.py`.
 
 The branch is `codex/gen2-exploration`, based on release `v0.4.17` at `c3fc0c9`.
-Its local worktree is `/home/ty/Repos/pokesim/.worktrees/gen2-exploration`.
+Its local worktree was a `.worktrees/gen2-exploration` checkout of the repository.
 The separate `codex/release-0.4.18` checkout and its emulator migration have not
 been modified. This work is not part of the published v0.4.17 package.
 
@@ -20,7 +20,10 @@ been modified. This work is not part of the published v0.4.17 package.
 
 ROM installation accepts these cartridges as raw files or a ZIP containing one
 supported cartridge. ROM assets remain read-only. Each adventure owns its own
-SRAM, real-time clock, checkpoints, policy memory and journal. Other revisions,
+SRAM, checkpoints, policy memory and journal. On the Core backend the cartridge
+clock is not yet per-adventure: it follows the host clock and is stored only inside
+checkpoint states, because Core 0.1.x cannot import, export or lock it (see
+`pokesim/gen2/core.py`). Per-adventure clocks arrive with Core 0.2.0 RTC support. Other revisions,
 languages and ROM hacks are rejected instead of using incompatible addresses.
 No ROM, save, screenshot, reference checkout or full symbol file is committed.
 
@@ -166,7 +169,7 @@ With local cartridge and generated data directories, run the regression suite:
 GAME_DATA_DIR=.release-local/all-data \
 GEN2_DATA_DIR=.release-local/gen2-data \
 GEN2_CARTRIDGE_DIR=.release-local/gen2 \
-GEN2_ROM_DIR=/home/ty/Downloads \
+GEN2_ROM_DIR=/path/to/your/roms \
 .venv/bin/pytest -q tests
 ```
 
@@ -228,6 +231,10 @@ capture. Trade preparation heals status conditions before freezing its source,
 preserving strict party comparisons even when poison would tick on the walk to
 the link desk. Pending eggs hatch before recalculating breeding pairs, and
 level-100 partners remain eligible for stone evolutions.
+
+Note: on the Core backend, the clock operations below (export, restart with a saved
+clock, fixture advance) raise `CoreCapabilityError` until Core 0.2.0 RTC support lands.
+The evidence in this section was gathered with the earlier PyBoy-based harness.
 
 The Time Capsule, Celebi overnight and repeat contest tests advanced the real-time clock in
 private fixture copies before allowing the cartridge’s daily reset to run.

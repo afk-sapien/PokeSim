@@ -30,17 +30,21 @@ An eight-second clip from a running adventure. [Still image](docs/images/live-ad
 - **Life after the League:** Keep training, rotate League teammates, revisit
   eligible encounters and earn new Pokémon.
 - **Your own touch:** Add nickname prefixes and suffixes, take over the controls,
-  or export a standard `.sav` to continue in another emulator.
+  or export a standard `.sav` to continue in another emulator (Gen II export needs Core 0.2.0 RTC support).
 
 | Journal entries | Adventure stats |
 | --- | --- |
 | [![Journal entries](docs/images/journal-panel.jpg)](docs/images/journal-panel.jpg) | [![Adventure stats](docs/images/stats-panel.jpg)](docs/images/stats-panel.jpg) |
 
-Gold, Silver and Crystal include autonomous journeys through all 16 badges and
-Red, the 251-species Pokédex, breeding, held items and Gen II Cable Club trades.
-See [Generation II support and validation](docs/gen2-exploration.md) for cartridge
-revisions, test evidence and compatibility boundaries. This support is on the
-development branch and is not included in the public v0.4.17 downloads below.
+Gold, Silver and Crystal adventures play through all 16 badges and Red and work toward
+the 251-species Pokédex, with breeding and held items. On the Rust (Core) backend,
+anything that needs the cartridge real-time clock is not available yet: Gen II save
+export, Gen II Cable Club trading and the Time Capsule need the Core 0.2.0 RTC support,
+which is still being finished, and raise a clear error until then. Gen I Cable Club
+trading is separate: the Red and Blue cable exchange itself has been verified on this backend. See [Generation II support and
+validation](docs/gen2-exploration.md) for cartridge revisions, test evidence and
+compatibility boundaries. This support is on the development branch and is not
+included in the public v0.4.17 downloads below.
 
 ## The collection is half the fun
 
