@@ -3,6 +3,7 @@ import random
 from pokesim_core.naming import name_step
 
 from .base import Action
+from ..textmatch import ScreenText
 
 
 from ..nicknames import (
@@ -35,7 +36,7 @@ class NamingController:
 
     def step(self, scr, snapshot):
         """Return one observed menu action, or None when naming is not needed."""
-        text = scr.text.upper()
+        text = ScreenText(scr.text.upper())
         if not scr.naming:
             self.target = self.subject = None
             if scr.cursor and ((scr.yes_no and "NICKNAME" in text) or

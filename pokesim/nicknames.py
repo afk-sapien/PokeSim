@@ -63,6 +63,19 @@ NAME_SUFFIXES = (
 )
 
 
+# Words the screen classifiers look for as whole words. A nickname that equals
+# one of these can be shown beside a menu (HUD, party list, naming field) and
+# read as that menu, so such names are never generated or accepted.
+MENU_WORDS = frozenset((
+    # Gen 2 battle, party, pack and storage menus
+    'FIGHT', 'PACK', 'RUN', 'ITEM', 'SWITCH', 'STATS', 'CANCEL', 'QUIT', 'USE', 'TYPE',
+    'ABLE', 'TRADE', 'GIVE', 'TAKE', 'BUY', 'SELL', 'SAVE', 'SAVED', 'GEAR', 'LEVEL', 'BADGES',
+    'NAME', 'DEL', 'END', 'GAME', 'CONTINUE', 'CHALLENGE', 'EXPLANATION', 'YES', 'NO',
+    # Gen 1 menus and prompts
+    'FORG', 'HEAL', 'FRESH', 'SODA', 'LEMONADE', 'RELEASED', 'PP', 'UP', 'TECHNIQUE',
+))
+
+
 def _paired_names():
     """Every prefix and suffix join that the cartridge can actually hold."""
     seen = set(CURATED_NAMES)
@@ -106,6 +119,8 @@ def validate_parts(values):
             part = part.strip().upper()
             if not 1 <= len(part) <= limit or any(c not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' for c in part):
                 raise ValueError(f'Each nickname entry must contain 1 to {limit} letters A to Z')
+            if full_names and part in MENU_WORDS:
+                raise ValueError(f'{part} is a game menu word and would confuse the bot, pick another nickname')
             if part not in cleaned:
                 cleaned.append(part)
         result[field] = cleaned
@@ -118,13 +133,13 @@ def validate_parts(values):
 @lru_cache(maxsize=16)
 def name_pool(prefixes=(), suffixes=(), full_names=(), excluded_prefixes=(), excluded_suffixes=(), excluded_names=()):
     if not any((prefixes, suffixes, full_names, excluded_prefixes, excluded_suffixes, excluded_names)):
-        return POKEMON_NAMES
-    names = dict.fromkeys((*CURATED_NAMES, *full_names))
+        return tuple(name for name in POKEMON_NAMES if name not in MENU_WORDS)
+    names = dict.fromkeys(name for name in (*CURATED_NAMES, *full_names) if name not in MENU_WORDS)
     for prefix in (*NAME_PREFIXES, *prefixes):
         if prefix in excluded_prefixes:
             continue
         for suffix in (*NAME_SUFFIXES, *suffixes):
-            if suffix not in excluded_suffixes and len(prefix + suffix) <= NAME_LIMIT:
+            if suffix not in excluded_suffixes and len(prefix + suffix) <= NAME_LIMIT and prefix + suffix not in MENU_WORDS:
                 names[prefix + suffix] = None
     return tuple(name for name in names if name not in excluded_names)
 
