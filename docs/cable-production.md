@@ -6,7 +6,7 @@ The transport descends from experiment commit `705ec4ddc2f0e5a1265170b33f101141c
 
 ## Supported runtime
 
-The adapter pins PyBoy 2.7.0 and these English retail ROM identities:
+The adapter runs on the PyBoy RS backend through PokeSim Core and accepts these English retail ROM identities:
 
 | Version | SHA-1 |
 | --- | --- |

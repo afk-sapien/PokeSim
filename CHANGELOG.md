@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.5.0 (draft)
+
+- Run every adventure on PyBoy RS, a Rust port of PyBoy 2.7.0, through PokeSim Core 0.2. PyBoy is no longer a dependency, and installation needs no Rust toolchain.
+- Add Gold, Silver and Crystal adventures with Gen II Cable Club trading, the Time Capsule with Red and Blue, portable save export and cartridge real-time clocks. They run on the Rust backend only.
+- Keep the 0.4.x checkpoint tag on Gen I checkpoints so a 0.5.0 library rolls back to 0.4.x. Gen II adventures and locked-clock checkpoints cannot be opened by 0.4.x.
+- Report both Core and PokeSim capability errors as HTTP 501 with the real message instead of the busy response.
+- Read the wild Pokémon's original DVs for shiny protection after Transform through Core's decoder.
+- Require the NO THANKS entry before reading a list as the Game Corner prize menu, so other lists are not mistaken for it.
+
 ## 0.4.20
 
 - Fix PC box lists with a nickname containing PP being read as the PP Up menu, which stopped the Release goal from freeing storage.

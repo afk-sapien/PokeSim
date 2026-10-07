@@ -1,26 +1,15 @@
-# Release status: 0.4.20 published
+# Release status: 0.5.0 DRAFT, not published
 
-[PokeSim 0.4.20](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.20)
-fixes box lists with a nickname containing PP being read as the PP Up menu, which
-stopped the Release goal from freeing storage.
-[PR #50](https://github.com/afk-sapien/PokeSim/pull/50) passed all 24 checks before
-merging. Core remains pinned at 0.1.4. See the [release notes](docs/release-notes.md).
+This is a draft note for the 0.5.0 release candidate. Nothing here claims that 0.5.0 has
+been tagged, published or deployed, and there is no 0.5.0 publication receipt yet.
+The last published release is [0.4.20](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.20);
+its [receipt](docs/validation/release-0.4.20.json) is unchanged.
 
-The local suite passed 1,790 tests with 168 skips, including private-ROM checks.
-Ruff and documentation checks passed.
-
-The [publication receipt](docs/validation/release-0.4.20.json) records the exact
-source revision, image digest, and publication workflow. Normal CI passed on Python
-3.11, 3.12, and 3.14. The tagged publication build passed 1,772 tests with 165
-skips and all 118 browser cases. Installation checks passed on Windows, Intel and
-Apple Silicon macOS, and x86-64 and ARM Linux.
-
-The publishing workflow verified the container, anonymous registry access, and
-every uploaded asset before making the release public. Public Compose, installer,
-and wheel downloads were checked again against the published manifest.
-
-The [0.4.19 publication receipt](docs/validation/release-0.4.19.json) retains the
-previous release's checks and source revision.
+0.5.0 moves every adventure to the Rust emulator (PyBoy RS through Core 0.2) and adds
+Gold, Silver and Crystal. See the [release notes](docs/release-notes.md). Both packages
+are not yet on PyPI, so this branch pins them to git commits in a single commit marked
+TEMP. The pull request description lists what to remove after publication. A release is not ready until the TEMP commit is reverted, `uv.lock` is regenerated
+from PyPI and the publication workflow has produced a receipt.
 
 ## Known limits, deliberately not addressed here
 

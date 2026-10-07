@@ -210,6 +210,6 @@ Restore a complete backup into an empty application directory. Recovery needs th
 
 ### Validation boundary
 
-Native source launch depends on the availability of Python, PyBoy, and its native dependencies for the host. Docker packages those dependencies for a Linux target. Neither the manager nor the simulation protocol requires x86-64. The Python install workflow covers multiple OS and CPU targets, with actual passing results required before claiming support for a release.
+Native source launch depends on the availability of Python and the PyBoy RS wheel for the host (published wheels cover Windows, macOS and Linux on x86-64 and ARM; other targets need a Rust toolchain). Docker packages those dependencies for a Linux target. Neither the manager nor the simulation protocol requires x86-64. The Python install workflow covers multiple OS and CPU targets, with actual passing results required before claiming support for a release.
 
 Historical instructions for retired v0.2.0rc6 installations are kept in the [archive](history/self-hosting-rc6.md).

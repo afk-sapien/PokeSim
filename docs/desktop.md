@@ -256,7 +256,7 @@ The [Python install workflow](https://github.com/afk-sapien/PokeSim/actions/work
 
 - **`pokesim-desktop` or `uv` is not recognized:** Use the full path printed by the installer. Run its `uv tool update-shell` command and open a new terminal. For pipx, use `pipx ensurepath`.
 - **An executable already exists from another installer:** Keep using that installer, or uninstall its PokeSim package before switching between pipx and uv. Uninstalling the package keeps your library and saves.
-- **Python version, compiler, or PyBoy build error:** Use the automatic installer or the manual uv command above to select Python 3.12. A newer system Python may lack compatible dependency wheels on your platform. Include your OS, CPU, and the complete error in a [support request](../SUPPORT.md).
+- **Python version or dependency install error:** Use the automatic installer or the manual uv command above to select Python 3.12. A newer system Python may lack compatible dependency wheels on your platform. Include your OS, CPU, and the complete error in a [support request](../SUPPORT.md).
 - **`externally-managed-environment`:** Use the installer, uv, pipx, or a virtual environment. Do not use sudo pip or override your system's package protections.
 - **Download or certificate error:** Check your connection and any proxy configuration, then retry. Do not disable TLS verification.
 

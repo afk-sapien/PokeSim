@@ -5,10 +5,9 @@ adventure runtime. Gold, Silver and Crystal have each completed Johto, the
 Pokémon League, all eight Kanto gyms, and Red through ordinary cartridge input.
 The original boot experiment remains available in `tools/probe_gen2.py`.
 
-The branch is `codex/gen2-exploration`, based on release `v0.4.17` at `c3fc0c9`.
-Its local worktree was a `.worktrees/gen2-exploration` checkout of the repository.
-The separate `codex/release-0.4.18` checkout and its emulator migration have not
-been modified. This work is not part of the published v0.4.17 package.
+Gen II support ships in PokeSim 0.5.0 and runs on the Rust emulator (PyBoy RS through
+PokeSim Core 0.2) only. It was developed on PyBoy 2.7.0 in 0.4.x, then moved to the Rust
+backend. Where a section below says which backend gathered its evidence, that is stated.
 
 ## Supported cartridges
 
@@ -89,9 +88,17 @@ activation or a rewind across the committed unlock.
 
 ## Validation
 
-Testing uses Python 3.12.3 and PyBoy 2.7.0 with the owner-supplied cartridges.
-The full regression suite passed 1,948 tests with 151 skipped.
-Skipped tests retain their existing external fixture or environment requirements.
+The campaign, collection and trade evidence below was gathered on PyBoy 2.7.0 with
+owner-supplied cartridges, before the move to the Rust backend. The Rust backend loads those
+saved states byte for byte (state format 15 is identical), and the checks listed next were
+re-run on it for 0.5.0. They are not a replay of the campaigns.
+
+Re-run on the Rust backend with Python 3.12 and PyBoy RS 0.1.1: the runtime API and checkpoint
+restart for Gold, Silver and Crystal; `verify_gen2_save` (a fresh cartridge Continue with the
+saved clock) for each; `verify_gen2_trading --time-capsule` for each; `verify_timecapsule` for
+each Gen II game with both Red and Blue; and the Red and Blue Cable Club exchange in both
+directions with different party slots. The full test suite passed with the private cartridges
+available; the remaining skips need browser, cable-fixture or reference-checkout setups.
 
 Recorded cartridge scenarios include:
 
@@ -232,14 +239,17 @@ preserving strict party comparisons even when poison would tick on the walk to
 the link desk. Pending eggs hatch before recalculating breeding pairs, and
 level-100 partners remain eligible for stone evolutions.
 
-Note: on the Core backend, the clock operations below (export, restart with a saved
-clock, fixture advance) raise `CoreCapabilityError` until Core 0.2.0 RTC support lands.
-The evidence in this section was gathered with the earlier PyBoy-based harness.
+Note: the clock operations below (export, restart with a saved clock, fixture advance) need
+PyBoy RS with clock support (0.1.1 or later) through Core 0.2. On a build without it they raise
+`CoreCapabilityError`, which the web API reports as HTTP 501. The long campaign evidence in this
+section was gathered with the earlier PyBoy-based harness. The Rust backend runs the same clock
+file format, and keeps the saved clock across a restart.
 
 The Time Capsule, Celebi overnight and repeat contest tests advanced the real-time clock in
 private fixture copies before allowing the cartridge’s daily reset to run.
-Production adventures use their ordinary clocks. Clock fixtures change only
-the emulator RTC epoch. The cartridge performs its daily reset, captures,
+Production adventures use the host clock, which the cartridge saves with its checkpoints. Clock
+fixtures change only the emulator RTC epoch, and a checkpoint made with a locked clock is refused
+by 0.4.x. The cartridge performs its daily reset, captures,
 breeding, evolutions and exchanges through native gameplay. Optional gifts and
 the GS Ball distribution are recorded separately in the runtime event ledger.
 

@@ -1,6 +1,6 @@
 # Gameplay and feature guide
 
-A Pokémon Red that plays itself. A headless Game Boy emulator (PyBoy) runs the game 24/7,
+A Pokémon Red that plays itself. A headless Game Boy emulator (PyBoy RS, through PokeSim Core) runs the game 24/7,
 driven by a policy that plans objectives and checks each action against the game state. A small web app shows the
 live screen, party and stats, and a timeline of things that happened. Notable events
 (caught a Pokémon, beat a gym, evolved, new area, blacked out, champion, ...) are detected by
@@ -206,7 +206,7 @@ Defaults live in `pokesim/events.py`; change a priority there to reclassify an e
 
 ## How it works
 
-- `pokesim/emulator.py` runs PyBoy in a thread: ask the policy for an action, press the
+- `pokesim/emulator.py` runs the emulator in a thread: ask the policy for an action, press the
   button, tick frames, publish a JPEG frame for the stream, and every 30 frames read a RAM
   snapshot. Autosaves every minute; on start it resumes from the newest one.
 - `pokesim/ram.py` knows the Pokémon Red WRAM layout (from the pret/pokered disassembly) and
@@ -380,7 +380,7 @@ whole frame budget for a battle, shopping, or navigation scenario. `tools/replay
 the same command-line interface.
 
 Replays use emulated time for policy contexts and recovery guards, fixed input cadence, and
-seeded randomness. Keep the ROM, PyBoy version, starting state, frame budget, and battle
+seeded randomness. Keep the ROM, emulator version, starting state, frame budget, and battle
 animation setting the same when comparing runs. Recovery reloads retain learned navigation
 but clear in-flight actions, as in the application.
 
@@ -473,7 +473,7 @@ python -m pokesim.prepare_data /path/to/pokered
 ## Reproduce a stalled expedition
 
 Copy a live autosave and its matching JSON manifest into a scratch directory. Keep the
-original pair unchanged. Use the matching user-supplied ROM and PyBoy 2.7.0:
+original pair unchanged. Use the matching user-supplied ROM and the installed PyBoy RS:
 
 ```sh
 python tools/validate_progress.py --rom /path/to/pokered.gb --checkpoint /scratch/auto-v1-example.state --frames 432000 --output /scratch/progress.json

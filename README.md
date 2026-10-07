@@ -1,12 +1,5 @@
 # PokeSim
 
-> Development integration: this checkout now uses PyBoy RS exclusively through
-> `pokesim-core`. Keep sibling `pyboy-rs` and `pokesim-core` checkouts, then run
-> `uv sync --extra dev` to use the local dependencies. Rust is required for the
-> current source build. Versioned wheel releases and published installers are
-> a separate release step. Application code must not import emulator backends.
-
-
 **Pokémon Red, Blue, Gold, Silver and Crystal adventures that keep going while you're away.**
 
 Watch an automatic player catch Pokémon, earn badges and challenge the League in
@@ -37,14 +30,37 @@ An eight-second clip from a running adventure. [Still image](docs/images/live-ad
 | [![Journal entries](docs/images/journal-panel.jpg)](docs/images/journal-panel.jpg) | [![Adventure stats](docs/images/stats-panel.jpg)](docs/images/stats-panel.jpg) |
 
 Gold, Silver and Crystal adventures play through all 16 badges and Red and work toward
-the 251-species Pokédex, with breeding and held items. On the Rust (Core) backend,
-anything that needs the cartridge real-time clock is not available yet: Gen II save
-export, Gen II Cable Club trading and the Time Capsule need the Core 0.2.0 RTC support,
-which is still being finished, and raise a clear error until then. Gen I Cable Club
-trading is separate: the Red and Blue cable exchange itself has been verified on this backend. See [Generation II support and
-validation](docs/gen2-exploration.md) for cartridge revisions, test evidence and
-compatibility boundaries. This support is on the development branch and is not
-included in the public v0.4.17 downloads below.
+the 251-species Pokédex, with breeding and held items. Generation II runs on the Rust
+emulator (PyBoy RS through PokeSim Core) only. There is no PyBoy fallback: 0.5.0 does not
+depend on PyBoy, and 0.4.x, which does, has no Generation II support.
+
+The cartridges contain a real-time clock. In the app, a Generation II adventure uses the host
+clock and keeps the cartridge's clock with its saves, so day and night, daily events and
+Day Care behave as they would on a console left switched on. The clock is locked to a fixed
+instant only by the verification tools and by checkpoints made for them, so that runs are
+reproducible. Standard `.sav` export includes the clock bytes. A checkpoint saved with a
+locked clock is refused by 0.4.x.
+
+Verified for this release on the Rust backend, with owner-supplied cartridges: the Library
+runtime and checkpoint restart for each of Gold, Silver and Crystal; `.sav` export with a fresh
+cartridge Continue and clock for each; Time Capsule exchange of a prepared Gen II offer with both
+Red and Blue (six pairings); and the Red and Blue Cable Club exchange in both directions.
+Not re-run on this backend: the full campaigns from a new game. The recorded campaigns in the
+[Generation II notes](docs/gen2-exploration.md) were played on 0.4.x and replay identically from
+their saved states, but 0.5.0 has not played a fresh Gold, Silver or Crystal game to the League.
+
+## Upgrading is one way for Generation II
+
+Copy the whole data directory (the library) somewhere safe before you upgrade. To go back,
+stop the app, restore the copy and start the previous version.
+
+- Red and Blue adventures roll back to 0.4.x. Their saves and manifests keep the
+  `pyboy_version: "2.7.0"` tag that 0.4.x checks.
+- Gold, Silver and Crystal adventures cannot be opened by 0.4.x.
+- Locked-clock checkpoints are refused by 0.4.x. Normal adventures do not make them.
+
+See [Generation II support and validation](docs/gen2-exploration.md) for cartridge revisions,
+test evidence and compatibility boundaries.
 
 ## The collection is half the fun
 

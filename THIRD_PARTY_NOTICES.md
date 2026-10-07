@@ -10,12 +10,7 @@ Generation II setup uses pinned [pret/pokegold](https://github.com/pret/pokegold
 
 This public repository starts from a reviewed current-source snapshot. It contains no imported development history, bundled game datasets, sprite packs, ROMs, or saves.
 
-The development runtime uses PyBoy RS through PokeSim Core. PyBoy RS retains
-LGPL-3.0-only licensing and upstream attribution. Its corresponding source and
-notices must accompany bundled release artifacts. The following container
-source description applies to the previous published PyBoy-based release.
-
-PyBoy 2.7.0 is distributed under GNU LGPL version 3. The original LGPL text and the incorporated GPL text are retained under `licenses/`. The image includes its exact hash-verified PyPI source archive at `/usr/share/pokesim/sources/pyboy-2.7.0.tar.gz`, a source manifest, all discovered installed Python dependency notices, and the original application source under `/usr/share/pokesim/source`. The Python library is dynamically imported and can be replaced with a compatible modified build. See the dependency modification instructions in `docs/licensing.md`.
+PokeSim 0.5.0 runs games on PyBoy RS, a Rust port of PyBoy 2.7.0, installed through PokeSim Core. PyBoy RS is distributed under GNU LGPL version 3 and retains upstream attribution to PyBoy. The original LGPL text and the incorporated GPL text are retained under `licenses/`. The image includes the exact PyBoy RS source archive at `/usr/share/pokesim/sources/pyboy-rs-<version>.tar.gz`, a source manifest, all discovered installed Python dependency notices, and the original application source under `/usr/share/pokesim/source`. The Python extension module is dynamically imported and can be replaced with a compatible modified build. See the dependency modification instructions in `docs/licensing.md`. PokeSim 0.4.x releases used PyBoy 2.7.0 itself and shipped its source archive instead.
 
 Other Python dependencies retain their own licenses. The image records their installed names, versions, license metadata, and notice paths in `/usr/share/pokesim/python-dependencies.json`. Native components and Debian packages retain their installed notices under `/usr/share/doc`. The OCI license label summarizes the application and emulator licenses. It is not an exhaustive license expression for every OS and transitive dependency.
 
@@ -23,7 +18,8 @@ The optional authenticated proxy builds [Caddy 2.11.4](https://github.com/caddys
 
 Sources:
 
-- [PyBoy source and LGPL license](https://github.com/Baekalfen/PyBoy/tree/4627b90b878e91faff443b3acd6d4e4be09a4387)
+- [PyBoy source and LGPL license](https://github.com/Baekalfen/PyBoy/tree/4627b90b878e91faff443b3acd6d4e4be09a4387), the upstream project that PyBoy RS ports
+- [PyBoy RS source](https://github.com/afk-sapien/pyboy-rs)
 - [GNU GPL version 3](https://www.gnu.org/licenses/gpl-3.0.html)
 - [Pinned disassembly source](https://github.com/pret/pokered/tree/a1a22aaf84d1675bcdbaeb194592379d586d838e)
 

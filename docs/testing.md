@@ -166,7 +166,7 @@ The wheel check runs outside the repository and resolves the wheel's declared
 dependencies. It tests the installed launcher, setup assets, duplicate launch, and
 protected shutdown. It needs uv and access to the package index.
 
-Native runtime checks use PyBoy's demonstration ROM and verified reference data. They do not
+Native runtime checks use the demonstration ROM bundled with PyBoy RS and verified reference data. They do not
 validate Pokémon cartridge playback on that platform.
 
 For an isolated server installation test:
@@ -177,7 +177,7 @@ uv run --locked python tools/check_container.py pokesim:check
 ```
 
 The test creates a uniquely named Compose project, disposable named volume, and
-random localhost port. It uses only PyBoy's demo ROM, downloads verified reference
+random localhost port. It uses only the bundled demo ROM, downloads verified reference
 data, checks HTTP health, stops cleanly, verifies saved checkpoint hashes, and
 restarts from a checkpoint. It removes only its test project and volume afterward.
 It does not touch an existing adventure or establish autonomous campaign progress.
