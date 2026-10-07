@@ -14,12 +14,12 @@ def test_no_backend_imports_or_private_adapter_access():
                 names = [node.module or ""]
             else:
                 names = []
-            if any(name.split(".")[0] in {"pyboy", "pyboy_rs"} for name in names):
+            if any(name.split(".")[0] in {"pyboy", "pyboy_rs", "pokesim_core_native"} for name in names):
                 failures.append((path.name, node.lineno, "backend import"))
             if isinstance(node, ast.Attribute) and node.attr in {"_backend", "_machine", "_pb"}:
                 failures.append((path.name, node.lineno, "private adapter access"))
             if isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant):
-                if node.args[0].value in ("pyboy", "pyboy-rs", "pyboy_rs"):
+                if node.args[0].value in ("pyboy", "pyboy-rs", "pyboy_rs", "pokesim_core_native", "pokesim-core-native"):
                     name = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", "")
                     if name in {"version", "distribution", "import_module", "__import__"}:
                         failures.append((path.name, node.lineno, "backend lookup"))

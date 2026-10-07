@@ -608,7 +608,7 @@ dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pillow" },
-    { name = "pokesim-core", extra = ["emulator"] },
+    { name = "pokesim-core", extra = ["acceleration", "emulator"] },
     { name = "psutil" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -632,7 +632,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "pillow", specifier = ">=10" },
     { name = "playwright", marker = "extra == 'browser-test'", specifier = ">=1.50" },
-    { name = "pokesim-core", extras = ["emulator"], editable = "../pokesim-core" },
+    { name = "pokesim-core", extras = ["emulator", "acceleration"], editable = "../pokesim-core" },
     { name = "psutil", specifier = ">=7,<8" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.53.0" },
@@ -645,6 +645,9 @@ version = "0.2.0.dev0"
 source = { editable = "../pokesim-core" }
 
 [package.optional-dependencies]
+acceleration = [
+    { name = "pokesim-core-native" },
+]
 emulator = [
     { name = "pillow" },
     { name = "pyboy-rs" },
@@ -653,11 +656,17 @@ emulator = [
 [package.metadata]
 requires-dist = [
     { name = "pillow", marker = "extra == 'emulator'", specifier = ">=10,<13" },
+    { name = "pokesim-core-native", marker = "extra == 'acceleration'", directory = "../pokesim-core/native" },
     { name = "pyboy-rs", marker = "extra == 'emulator'", directory = "../pyboy-rs" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<10" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11,<1" },
 ]
-provides-extras = ["emulator", "dev"]
+provides-extras = ["emulator", "acceleration", "dev"]
+
+[[package]]
+name = "pokesim-core-native"
+version = "0.1.0.dev0"
+source = { directory = "../pokesim-core/native" }
 
 [[package]]
 name = "psutil"
