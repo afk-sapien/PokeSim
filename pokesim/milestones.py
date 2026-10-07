@@ -6,17 +6,12 @@ import time
 
 from . import progress
 from .shiny import is_shiny, status as shiny_status
+from .dvs import is_perfect  # noqa: F401  (re-exported)
 from .game_data import load
 from .pokemon import dv_rating
 from .strategy_data import SPECIES
 
 KEY = 'pokedex-milestones-v1'
-
-
-def is_perfect(mon):
-    dvs = mon.get('dvs')
-    return isinstance(dvs, (list, tuple)) and len(dvs) == 5 and all(
-        type(value) is int and value == 15 for value in dvs)
 
 
 @lru_cache(maxsize=1)
