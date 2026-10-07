@@ -162,3 +162,14 @@ def test_box_list_with_pp_in_a_nickname_is_not_the_pp_up_menu():
     memory = menu({4: '    TUBAJURY', 6: '    OATKNIGHT', 8: '    NACHODEPT', 10: '    DAMPPILOT', 12: '    CANCEL'},
                   (5, 8), top=(5, 4))
     assert Screen(memory).kind(s) == 'list'
+
+
+def test_box_list_of_unnamed_prize_species_is_not_the_prize_menu():
+    """Default-named PORYGON and DRATINI in a storage list must stay a list, not the Game Corner prize window."""
+    from pokesim.screen import Screen
+    from test_strategy import menu
+    s = shopper(textbox=True)
+    box = menu({4: '      PORYGON', 6: '      DRATINI', 8: '      NACHODEPT', 10: '      CANCEL'}, (5, 4), top=(5, 4))
+    assert Screen(box).kind(s) == 'list'
+    prizes = menu({4: '      PORYGON', 6: '      DRATINI', 8: '      NO THANKS'}, (5, 4), top=(5, 4))
+    assert Screen(prizes).kind(s) == 'prize'
