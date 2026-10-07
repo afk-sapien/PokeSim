@@ -36,6 +36,15 @@ def capture(emu):
 
 
 def export(rom, state, data):
+    """The verified 32 KiB cartridge save for a checkpoint."""
+    return export_with_clock(rom, state, data)[0]
+
+
+def export_with_clock(rom, state, data):
+    """The verified cartridge save and the ten-byte clock file that belongs with it.
+
+    A Gen II save without its clock is read as having lost the time: the cartridge asks for it again.
+    """
     rom_bytes = rom.read_bytes()
     pb = boot(io.BytesIO(rom_bytes), sound=True)
     try:
@@ -81,7 +90,7 @@ def export(rom, state, data):
     if len(save) != 32768:
         raise ValueError('The cartridge produced an unexpected save size.')
     verify(rom_bytes, save, data, expected, rtc=clock.getvalue())
-    return save
+    return save, clock.getvalue()
 
 
 def verify(rom, save, data, expected, *, rtc=None):

@@ -322,10 +322,6 @@ def read_snapshot(mem, frame: int) -> Snapshot:
     decoded['party'] = tuple(PartyMon(**mon) for mon in decoded['party'])
     box_counts = read_box_counts(mem)
     stored = read_stored_details(mem, counts=box_counts)
-    from .shiny import wild_shiny
-    # Core's decoder predates the capture and Transform protections, so keep the
-    # application's wild-shiny rule authoritative.
-    decoded['enemy_shiny'] = wild_shiny(mem)
     return Snapshot(frame=frame, **decoded, box_counts=box_counts,
                     stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
                     stored_details=stored)

@@ -28,7 +28,7 @@ def ram_digest(pb):
 
 
 def probe(source: Path, output: Path) -> dict:
-    from pokesim.gen2.core import boot, lock_clock
+    from pokesim.gen2.core import FIXED_CLOCK_EPOCH, boot, lock_clock
     from pokesim_core.emulator_state import runtime_provenance
     profile, raw = load_rom(source)
     output.mkdir(parents=True, exist_ok=False)
@@ -38,8 +38,9 @@ def probe(source: Path, output: Path) -> dict:
 
         def start():
             pb = boot(str(rom), sound=True)
-            # Set before the first tick so a test's clock cannot move backwards.
-            lock_clock(pb, True)
+            # Set before the first tick so a test's clock cannot move backwards. The clock reads zero
+            # elapsed time at the fixed instant and stays there, as the PyBoy exploration's lock did.
+            lock_clock(pb, True, at=FIXED_CLOCK_EPOCH, rebase=True)
             return pb
 
         def tap(pb, button, frames):
@@ -86,7 +87,7 @@ def probe(source: Path, output: Path) -> dict:
         finally:
             pb.stop(save=False)
 
-        restored = boot()
+        restored = start()
         try:
             restored.load_state(io.BytesIO(state))
             if read_snapshot(restored.memory, profile) != before or ram_digest(restored) != before_ram:

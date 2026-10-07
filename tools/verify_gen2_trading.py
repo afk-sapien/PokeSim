@@ -52,10 +52,12 @@ def main():
             action = emu.policy.step(snapshot, emu.pb.memory)
             if action.button:
                 emu.pb.button_press(action.button)
-            emu.pb.tick(action.hold, True)
+            if action.hold:
+                emu.pb.tick(action.hold, True)
             if action.button:
                 emu.pb.button_release(action.button)
-            emu.pb.tick(action.gap, True)
+            if action.gap:
+                emu.pb.tick(action.gap, True)
             emu.frame += action.hold + action.gap
         emu.snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
         runtime = SimpleNamespace(store=store, emulator=emu, settings=settings)
@@ -90,10 +92,12 @@ def main():
             action = emu.preparation.step(snapshot)
             if action.button:
                 emu.pb.button_press(action.button)
-            emu.pb.tick(action.hold, True)
+            if action.hold:
+                emu.pb.tick(action.hold, True)
             if action.button:
                 emu.pb.button_release(action.button)
-            emu.pb.tick(action.gap, True)
+            if action.gap:
+                emu.pb.tick(action.gap, True)
             emu.frame += action.hold + action.gap
             emu.snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
             if step % 50 == 0:

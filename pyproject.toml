@@ -59,6 +59,10 @@ select = ["E9", "F"]
 "tests/*" = ["F811", "F401"]
 
 [tool.uv.sources]
-pokesim-core = { path = "../pokesim-core", editable = true }
-pyboy-rs = { path = "../pyboy-rs" }
-pokesim-core-native = { path = "../pokesim-core/native" }
+pokesim-core = { path = "../pokesim-core-rtc", editable = true }
+pyboy-rs = { path = "../pyboy-rs-rtc" }
+pokesim-core-native = { path = "../pokesim-core-rtc/native" }
+
+[tool.uv]
+# Core's own source for pyboy-rs points at the non-RTC sibling checkout; use the RTC build.
+override-dependencies = ["pyboy-rs==0.1.0"]

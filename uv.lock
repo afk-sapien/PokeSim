@@ -6,6 +6,9 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 
+[manifest]
+overrides = [{ name = "pyboy-rs", directory = "../pyboy-rs-rtc" }]
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.5"
@@ -632,7 +635,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "pillow", specifier = ">=10" },
     { name = "playwright", marker = "extra == 'browser-test'", specifier = ">=1.50" },
-    { name = "pokesim-core", extras = ["emulator", "acceleration"], editable = "../pokesim-core" },
+    { name = "pokesim-core", extras = ["emulator", "acceleration"], editable = "../pokesim-core-rtc" },
     { name = "psutil", specifier = ">=7,<8" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.53.0" },
@@ -642,7 +645,7 @@ provides-extras = ["dev", "browser-test", "acceleration"]
 [[package]]
 name = "pokesim-core"
 version = "0.2.0.dev0"
-source = { editable = "../pokesim-core" }
+source = { editable = "../pokesim-core-rtc" }
 
 [package.optional-dependencies]
 acceleration = [
@@ -656,7 +659,7 @@ emulator = [
 [package.metadata]
 requires-dist = [
     { name = "pillow", marker = "extra == 'emulator'", specifier = ">=10,<13" },
-    { name = "pokesim-core-native", marker = "extra == 'acceleration'", directory = "../pokesim-core/native" },
+    { name = "pokesim-core-native", marker = "extra == 'acceleration'", directory = "../pokesim-core-rtc/native" },
     { name = "pyboy-rs", marker = "extra == 'emulator'", directory = "../pyboy-rs" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<10" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11,<1" },
@@ -666,7 +669,7 @@ provides-extras = ["emulator", "acceleration", "dev"]
 [[package]]
 name = "pokesim-core-native"
 version = "0.1.0.dev0"
-source = { directory = "../pokesim-core/native" }
+source = { directory = "../pokesim-core-rtc/native" }
 
 [[package]]
 name = "psutil"
@@ -699,7 +702,7 @@ wheels = [
 [[package]]
 name = "pyboy-rs"
 version = "0.1.0"
-source = { directory = "../pyboy-rs" }
+source = { directory = "../pyboy-rs-rtc" }
 
 [package.metadata]
 requires-dist = [

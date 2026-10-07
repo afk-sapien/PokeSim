@@ -1,0 +1,145 @@
+"""Cartridge clock wiring on Core: ROM-free fakes and ROM-backed round trips."""
+import io
+import os
+import struct
+from pathlib import Path
+
+import pytest
+
+from pokesim.gen2 import core
+from pokesim.gen2.core import CoreCapabilityError, export_clock, lock_clock, stop_with_clock
+
+
+class FakeClock:
+    def __init__(self):
+        self.calls = []
+        self.clock_locked = False
+
+    def clock_now(self):
+        return 123.0
+
+    def lock_clock(self, at, follow_frames=False):
+        self.calls.append(('lock', at, follow_frames))
+        self.clock_locked = True
+
+    def unlock_clock(self):
+        self.calls.append(('unlock',))
+        self.clock_locked = False
+
+    def set_rtc_timezero(self, value):
+        self.calls.append(('zero', value))
+
+    def export_rtc(self):
+        return bytes(10)
+
+    def stop(self, ram_file=None, rtc_file=None):
+        self.calls.append(('stop', ram_file, rtc_file))
+        rtc_file.write(bytes(10))
+
+
+def test_lock_defaults_to_current_reading_without_rebase():
+    emulator = FakeClock()
+    lock_clock(emulator)
+    assert emulator.calls == [('lock', 123.0, False)]
+
+
+def test_lock_with_rebase_moves_zero_point_to_the_instant():
+    emulator = FakeClock()
+    lock_clock(emulator, at=core.FIXED_CLOCK_EPOCH, follow_frames=True, rebase=True)
+    assert emulator.calls == [('lock', core.FIXED_CLOCK_EPOCH, True), ('zero', core.FIXED_CLOCK_EPOCH)]
+
+
+def test_unlock_only_when_locked():
+    emulator = FakeClock()
+    lock_clock(emulator, False)
+    assert emulator.calls == []
+    lock_clock(emulator)
+    lock_clock(emulator, False)
+    assert emulator.calls[-1] == ('unlock',)
+
+
+def test_stop_with_clock_writes_both_streams():
+    emulator, save, clock = FakeClock(), io.BytesIO(), io.BytesIO()
+    stop_with_clock(emulator, save, clock)
+    assert clock.getvalue() == bytes(10)
+    assert export_clock(emulator) == bytes(10)
+
+
+@pytest.mark.parametrize('operation', [
+    lambda e: lock_clock(e),
+    lambda e: stop_with_clock(e, io.BytesIO(), io.BytesIO()),
+    lambda e: export_clock(e),
+])
+def test_core_without_clock_methods_is_a_capability_error(operation):
+    with pytest.raises(CoreCapabilityError):
+        operation(object())
+
+
+@pytest.mark.parametrize('error', [
+    NotImplementedError('rtc_file is not supported'),
+    RuntimeError('this build requires real-time clock control'),
+])
+def test_backend_refusals_become_capability_errors(error):
+    class Refusing(FakeClock):
+        def export_rtc(self):
+            raise error
+    with pytest.raises(CoreCapabilityError):
+        export_clock(Refusing())
+
+
+def test_unrelated_runtime_errors_pass_through():
+    class Broken(FakeClock):
+        def export_rtc(self):
+            raise RuntimeError('disk on fire')
+    with pytest.raises(RuntimeError, match='disk on fire'):
+        export_clock(Broken())
+
+
+def test_capability_error_stays_a_not_implemented_error():
+    assert issubclass(CoreCapabilityError, NotImplementedError)
+
+
+def test_boot_rtc_requires_core_support(monkeypatch):
+    monkeypatch.setattr(core, '_core_has_clock', lambda: False)
+    with pytest.raises(CoreCapabilityError):
+        core.boot(io.BytesIO(b''), rtc=bytes(10))
+
+
+GAMES = ['gold', 'silver', 'crystal']
+
+
+@pytest.fixture(params=GAMES)
+def cartridge(request):
+    directory = os.environ.get('GEN2_CARTRIDGE_DIR')
+    if not directory:
+        pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
+    return (Path(directory) / (request.param + '.gbc')).read_bytes()
+
+
+def test_real_clock_file_round_trips_through_a_fresh_emulator(cartridge):
+    clock = struct.pack('<d', 1_700_000_000.0) + bytes([0, 0])
+    emulator = core.boot(io.BytesIO(cartridge), rtc=clock, sound=False)
+    try:
+        assert export_clock(emulator) == clock
+    finally:
+        emulator.stop(save=False)
+
+
+def test_real_locked_rebased_clock_reads_zero_elapsed(cartridge):
+    emulator = core.boot(io.BytesIO(cartridge), sound=False)
+    try:
+        lock_clock(emulator, at=core.FIXED_CLOCK_EPOCH, rebase=True)
+        assert emulator.clock_locked
+        assert struct.unpack('<d', export_clock(emulator)[:8])[0] == core.FIXED_CLOCK_EPOCH
+        lock_clock(emulator, False)
+        assert not emulator.clock_locked
+    finally:
+        emulator.stop(save=False)
+
+
+def test_real_stop_with_clock_emits_ten_byte_file(cartridge):
+    emulator = core.boot(io.BytesIO(cartridge), sound=False)
+    save, clock = io.BytesIO(), io.BytesIO()
+    stop_with_clock(emulator, save, clock)
+    assert len(clock.getvalue()) == 10
+    assert len(save.getvalue()) == 32768
