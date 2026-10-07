@@ -332,7 +332,7 @@ def test_audio_proxy_preserves_pcm_metadata_and_adventure_boundary(client, monke
         return httpx.Response(200, content=b'\x01\x02' * 800, headers={
             'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store',
             'X-Audio-State': 'playing', 'X-Audio-Rate': '48000', 'X-Audio-Sequence': '8',
-            'X-Audio-Speed': '16',
+            'X-Audio-Speed': '16', 'X-Audio-Mode': 'manual', 'X-Audio-Dropped': '3',
             'X-Private-Worker': 'must-not-leak',
         })
     client.app.state.children = httpx.AsyncClient(transport=httpx.MockTransport(worker))
@@ -344,6 +344,7 @@ def test_audio_proxy_preserves_pcm_metadata_and_adventure_boundary(client, monke
     assert response.headers['X-Audio-Rate'] == '48000'
     assert response.headers['X-Audio-Sequence'] == '8'
     assert response.headers['X-Audio-Speed'] == '16'
+    assert response.headers['X-Audio-Mode'] == 'manual' and response.headers['X-Audio-Dropped'] == '3'
     assert 'X-Private-Worker' not in response.headers
     assert client.get(path, headers={'Origin': 'https://elsewhere.invalid'}).status_code == 403
     manager.registry.update(adventure['id'], state='stopped')

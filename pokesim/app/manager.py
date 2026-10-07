@@ -772,7 +772,8 @@ def create_app(manager, shutdown=lambda: None):
                 await response.aclose()
         safe_headers = {key: value for key, value in response.headers.items()
                         if key.lower() in {'content-type', 'cache-control', 'location', 'content-disposition',
-                                           'x-audio-state', 'x-audio-sequence', 'x-audio-rate', 'x-audio-speed'}}
+                                           'x-audio-state', 'x-audio-sequence', 'x-audio-rate', 'x-audio-speed',
+                                           'x-audio-mode', 'x-audio-dropped'}}
         return StreamingResponse(stream(), status_code=response.status_code, headers=safe_headers)
 
     return app
