@@ -13,10 +13,12 @@ def advance(raw, hours):
         raise ValueError('Clock simulation requires a format 15 checkpoint')
     if not math.isfinite(hours) or not 0 < hours <= 24 * 7:
         raise ValueError('Advance the clock by at most seven days per simulation step')
-    # The state ends with the RTC epoch, halt and carry bytes, two joypad bytes, then 36 serial-port bytes.
+    # On an MBC3 clock cartridge the format 15 state ends with the base timestamp (the .rtc file's
+    # first eight bytes), the halt and carry bytes, two joypad bytes, then 36 serial-port bytes.
+    # Verified against PyBoy RS state writer and Core's export_rtc on Gold, Silver and Crystal.
     offset = len(raw) - 48
     epoch = struct.unpack_from('d', raw, offset)[0]
-    if not math.isfinite(epoch) or not 946684800 <= epoch <= 4102444800:
+    if not math.isfinite(epoch) or not 946684800 <= epoch <= 4102444800 or raw[offset + 8] > 1 or raw[offset + 9] > 1:
         raise ValueError('The checkpoint does not have the expected RTC timestamp')
     result = bytearray(raw)
     struct.pack_into('d', result, offset, epoch - hours * 3600)

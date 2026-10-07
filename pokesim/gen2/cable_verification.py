@@ -2,7 +2,7 @@
 import io
 import json
 
-from .core import boot, stop_with_clock
+from .core import boot, export_clock
 
 from ..interactions.cable import checked, sha256
 from .ram import Memory, read_snapshot
@@ -102,9 +102,7 @@ def checkpoint_clock(rom, state):
     clone = boot(io.BytesIO(rom), sound=False)
     try:
         clone.load_state(io.BytesIO(state))
-        clock = io.BytesIO()
-        stop_with_clock(clone, io.BytesIO(), clock)
-        return clock.getvalue()
+        return export_clock(clone)
     finally:
         clone.stop(save=False)
 
