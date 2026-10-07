@@ -1769,3 +1769,41 @@ def test_storage_goal_survives_a_cable_room_with_no_known_route(real_data):
     goal = policy.storage_goal(snapshot)
     assert goal.key == 'return_from_cable'
     assert goal.map_name == 'POKECENTER_2F'
+
+
+def _clock_policy(real_data, day, daily=0):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data, starter='cyndaquil')
+    policy.collection = {}
+    mem = SimpleNamespace(byte=lambda name: {'wCurDay': day, 'wDailyFlags1': daily}.get(name, 0))
+    snapshot = SimpleNamespace(owned=set(), items=[])
+    return policy, snapshot, mem
+
+
+def test_idle_collection_says_it_is_waiting_for_a_contest_day(real_data):
+    from pokesim.gen2.contest import waiting_for_day
+    policy, snapshot, mem = _clock_policy(real_data, day=1)
+    assert 'Tuesday, Thursday or Saturday' in waiting_for_day(policy, snapshot, mem)
+    policy, snapshot, mem = _clock_policy(real_data, day=2)
+    assert waiting_for_day(policy, snapshot, mem) is None
+    policy, snapshot, mem = _clock_policy(real_data, day=2, daily=2)
+    assert 'tomorrow' in waiting_for_day(policy, snapshot, mem)
+    # Sun Stones already in the bag mean there is nothing to wait for.
+    policy, snapshot, mem = _clock_policy(real_data, day=1)
+    snapshot.owned = {182, 192}
+    assert waiting_for_day(policy, snapshot, mem) is None
+
+
+def test_idle_collection_says_which_time_of_day_it_needs(real_data):
+    from pokesim.gen2 import collection
+    policy, snapshot, mem = _clock_policy(real_data, day=2)
+    policy.data = SimpleNamespace(**{**vars(policy.data), 'encounters': [{'species': 41, 'time': 'night'}]})
+    snapshot.owned = {182, 192}
+    policy.demand = {}
+    original = collection.wanted
+    collection.wanted = lambda *_: True
+    try:
+        assert collection.waiting_label(policy, snapshot, mem, 'day') == 'Waiting for night to find new Pokémon'
+        assert collection.waiting_label(policy, snapshot, mem, 'night') == 'Explore while waiting for new collection opportunities'
+    finally:
+        collection.wanted = original

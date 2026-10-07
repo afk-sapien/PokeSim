@@ -13,13 +13,31 @@ def score(mem, prefix):
             + bonus + mem.word(prefix + 'HP') // 8 + bool(mem.byte(prefix + 'Item')))
 
 
+# The contest runs on Tuesday, Thursday and Saturday by the cartridge clock (wCurDay counts from Sunday).
+# That clock follows wall time, not simulation speed, so a skipped day can be days of real time away.
+CONTEST_DAYS = (2, 4, 6)
+
+
+def needs_sun_stone(policy, snapshot):
+    return len({182, 192} - snapshot.owned) > dict(snapshot.items).get(policy.data.items['SUN_STONE'], 0)
+
+
+def waiting_for_day(policy, snapshot, mem):
+    """Why the Sun Stone work is idle, in words for the status line, or None when it is not waiting."""
+    if not needs_sun_stone(policy, snapshot) or policy.collection.get('contest') or policy.collection.get('tower'):
+        return None
+    if mem.byte('wCurDay') % 7 in CONTEST_DAYS:
+        return 'Waiting for tomorrow: the Bug-Catching Contest was already entered today' if mem.byte('wDailyFlags1') & 2 else None
+    return 'Waiting for Tuesday, Thursday or Saturday: the Bug-Catching Contest'
+
+
 def journey(policy, snapshot, Goal, *, force=False):
     mem, data = Memory(policy.memory, policy.data), policy.data
     state = policy.collection.get('contest')
     running = bool(mem.byte('wStatusFlags2') & 4)
     if state is None:
-        needed = len({182, 192} - snapshot.owned) > dict(snapshot.items).get(data.items['SUN_STONE'], 0)
-        if (not force and not needed or mem.byte('wCurDay') % 7 not in (2, 4, 6)
+        needed = needs_sun_stone(policy, snapshot)
+        if (not force and not needed or mem.byte('wCurDay') % 7 not in CONTEST_DAYS
                 or mem.byte('wDailyFlags1') & 2 or policy.collection.get('tower')):
             return None
         if not snapshot.can_catch:
