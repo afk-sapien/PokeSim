@@ -97,7 +97,7 @@ verified byte-for-byte restoration. Keep the current release and two successful 
 images, plus every container reference, the held experiment, and earlier legacy images.
 Remove only verified obsolete monitoring image tags with retained sources. The Dockerfile
 now preserves the stable filesystem layers across revision-label changes. These maintenance
-changes do not restart the games. See [the retention policy](../homeserver.md#release-storage-retention).
+changes do not restart the games.
 
 Current journal correction, September 15: rc22 recognizes PC withdrawals in either
 RAM write order. The copied-save replay suppresses a false Tentacruel release and keeps
@@ -225,7 +225,7 @@ is obsolete. The remaining release requirement is a versioned commit, matching p
 and image revision, test evidence, and a rollback record for each deployment.
 
 Preserve PyBoy 2.7.0 while using existing checkpoints. Keep game data, sprites, ROMs,
-and saves outside source releases. See [homeserver.md](../homeserver.md) for the live layout.
+and saves outside source releases.
 
 ## Long-term progression
 

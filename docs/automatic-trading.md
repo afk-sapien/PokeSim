@@ -44,14 +44,14 @@ filesystem. It has read/write access to the two configured game data directories
 its recovery directory, plus read-only ROM and game-data mounts. It has no host Docker
 socket, Docker client, or root identity.
 
-Put private configuration in `/docker/pokesim-trading/state/policy.json` using
+Put private configuration in `/opt/pokesim-trading/state/policy.json` using
 `deploy/trading-policy.json.example`. Set a different random token for each peer and
 supply that token as `TRADE_TOKEN` in the corresponding game container. Keep the private
 configuration readable only by UID 10001. An empty token disables the game's trade API.
 Tokens authorize only prepare, load, release, and abort for a numeric transaction ID.
 The ordinary resume and rewind controls cannot bypass a held exchange.
 
-The board mounts only `/docker/pokesim-trading/state/public` as `/trading:ro`, with
+The board mounts only `/opt/pokesim-trading/state/public` as `/trading:ro`, with
 `BROKER_TRADING_DIR=/trading`. That directory contains a redacted `policy.json` with
 only `enabled`, `interval_seconds`, `allow_last_copies`, `mew_event`, and `league_rewards`, and the completed exchange status. It never
 receives peer tokens, ROMs, saves, or transaction backups.

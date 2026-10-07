@@ -88,8 +88,8 @@ the original source hashes before patching. Other pending changes remain local.
 
 - Image: `pokesim-local:0.4.16-hp-recovery-20261003`
 - Image ID: `sha256:9d17a1a8494b8ee4d83fd9c821c26444e085c67b348e503d804c2e30f04c3821`
-- Server build context: `/docker/pokesim-app/hotfixes/withdrawal-hp-20261003`
-- Server deployment receipt: `/docker/pokesim-app/backups/hotfix-0.4.16-hp-recovery-20261003T170844Z.json`
+- Server build context: `/opt/pokesim/hotfixes/withdrawal-hp-20261003`
+- Server deployment receipt: `/opt/pokesim/backups/hotfix-0.4.16-hp-recovery-20261003T170844Z.json`
 - Verified cold backup: `pre-0.4.16-hp-recovery-20261003T170844Z.tar.gz`, 291,111,980 bytes and 70,277 entries.
 
 Compose now selects this local image through `POKESIM_IMAGE`. The deployment

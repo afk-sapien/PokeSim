@@ -38,7 +38,6 @@ This index separates current instructions, future plans, and historical evidence
 
 ## Plans and historical records
 
-- [Earlier homelab deployment](homeserver.md): September 2026 two-container layout.
 - [Distribution readiness](distribution-readiness.md): historical release-process review.
 
 - [Multi-adventure application plan](multi-adventure-app-plan.md) and
