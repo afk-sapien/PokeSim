@@ -430,21 +430,30 @@ class Policy:
         return self.data.maps[snapshot.map]['region']
 
     def storage_goal(self, snapshot):
-        choices = []
+        choices, unreachable = [], []
+        region = self.travel_region(snapshot)
         for mid, entry in self.data.maps.items():
             if not entry['constant'].endswith('POKECENTER_1F'):
                 continue
-            if entry['region'] != self.travel_region(snapshot):
+            pcs = [(index % entry['width'], index // entry['width'] + 1)
+                   for index, tile in enumerate(entry['collision']) if tile == 0x93]
+            # Kept for a cartridge restored somewhere no route is known, such as a cable room.
+            unreachable.extend((entry['region'] != region, mid, x, y) for x, y in pcs)
+            if entry['region'] != region:
                 continue
             if entry['constant'] == 'BLACKTHORN_POKECENTER_1F' and 'ice_path' not in self.completed:
                 continue
             route = self.nav.route(snapshot.map, mid)
             if route is None:
                 continue
-            for index, tile in enumerate(entry['collision']):
-                if tile == 0x93:
-                    choices.append((len(route), mid, index % entry['width'], index // entry['width'] + 1))
-        _, mid, x, y = min(choices)
+            choices.extend((len(route), mid, x, y) for x, y in pcs)
+        if not choices:
+            if snapshot.map == self.data.map_ids['POKECENTER_2F']:
+                return Goal('return_from_cable', 'Return downstairs after the Cable Club', 'POKECENTER_2F', 0, 7)
+            # Aim at the nearest known Pokémon Center by id and let navigation and stall recovery sort it out.
+            _, mid, x, y = min(unreachable)
+        else:
+            _, mid, x, y = min(choices)
         return Goal('storage', 'Prepare a place for a field move partner', self.data.maps[mid]['constant'], x, y, 'up')
 
     def fishing(self, snapshot):
@@ -460,8 +469,8 @@ class Policy:
                     if entry['collision'][(y + dy) * entry['width'] + x + dx] not in (0x21, 0x29):
                         continue
                     path = self.nav.local(snapshot, [(x, y)]) if snapshot.map == mid else []
-                    if path is not None:
-                        choices.append((len(path), x, y, face))
+                    # An unreachable shore ranks last instead of leaving nothing to choose from.
+                    choices.append((len(path) if path is not None else 1_000_000, x, y, face))
         _, x, y, face = min(choices)
         return Goal('fish_surf', 'Catch a partner for field moves', map_name, x, y, face)
 
@@ -804,8 +813,10 @@ class Policy:
                                (bool(protected.intersection(snapshot.party[i].moves)), snapshot.party[i].level))
                     self.menu = Storage('DEPOSIT', slot, len(snapshot.party))
                 else:
-                    mon = next(mon for mon in snapshot.stored if not mon.egg and mon.box == snapshot.active_box
-                               and self.needed_move(snapshot) in self.data.species[mon.species]['machines'])
+                    mon = next((mon for mon in snapshot.stored if not mon.egg and mon.box == snapshot.active_box
+                                and self.needed_move(snapshot) in self.data.species[mon.species]['machines']), None)
+                    if mon is None:
+                        return Action('b', 8, 36)
                     self.menu = Storage('WITHDRAW', mon.position, len(snapshot.party))
                 return Action('a', 8, 36)
             if self.goal.key.startswith('push_') and mem.byte('wBikeFlags') & 1:

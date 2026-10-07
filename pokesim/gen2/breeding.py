@@ -146,7 +146,9 @@ def arrive(policy, snapshot):
         return None
     if key.startswith('collection_breed_leave_'):
         index = int(key[-1])
-        slot = next(i for i, mon in enumerate(snapshot.party) if identity(mon) == project['parents'][index])
+        slot = next((i for i, mon in enumerate(snapshot.party) if identity(mon) == project['parents'][index]), None)
+        if slot is None:
+            return 'b'
         policy.menu = DayCare(index, slot)
         return 'a'
     if key.startswith('collection_breed_take_'):

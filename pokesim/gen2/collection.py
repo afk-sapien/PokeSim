@@ -269,8 +269,8 @@ def hunt(policy, snapshot, Goal):
             route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
             if route:
                 region = route[-1][1][1]
-                x, y, face = next(point for point in points
-                                  if region in policy.nav.regions.memberships(mid, point[:2], True, True))
+                x, y, face = next((point for point in points
+                                   if region in policy.nav.regions.memberships(mid, point[:2], True, True)), points[0])
             else:
                 state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
                 state['target'] = None

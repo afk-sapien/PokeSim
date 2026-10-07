@@ -1759,3 +1759,13 @@ def test_tower_berry_respects_native_daily_flags_and_bag_capacity(real_data, mon
     assert tower.journey(policy, snapshot, Goal, force=True) == 'berry'
     snapshot.pockets['items'] = tuple(range(20))
     assert tower.journey(policy, snapshot, Goal, force=True) is None
+
+
+def test_storage_goal_survives_a_cable_room_with_no_known_route(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data, starter='cyndaquil')
+    cable = real_data.map_ids['POKECENTER_2F']
+    snapshot = SimpleNamespace(map=cable, frame=100, badges=1, party=[None], x=0, y=0)
+    goal = policy.storage_goal(snapshot)
+    assert goal.key == 'return_from_cable'
+    assert goal.map_name == 'POKECENTER_2F'
