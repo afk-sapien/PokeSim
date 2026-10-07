@@ -1,13 +1,14 @@
 """Verify a late-campaign portable save after dismissing the ending credits."""
 import argparse
 import io
+import os
 from pathlib import Path
 
 from pokesim.gen2.core import boot
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.ram import read_snapshot
-from pokesim.gen2.save import export, press
+from pokesim.gen2.save import export_with_clock, press
 
 
 def main():
@@ -15,7 +16,7 @@ def main():
     parser.add_argument('rom', type=Path)
     parser.add_argument('state', type=Path)
     parser.add_argument('--game', required=True, choices=('gold', 'silver', 'crystal'))
-    parser.add_argument('--data', type=Path, default=Path('.release-local/gen2-data'))
+    parser.add_argument('--data', type=Path, default=Path(os.environ.get('GEN2_DATA_DIR', '.release-local/gen2-data')))
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     data = GameData.load(args.data, args.game)
@@ -33,10 +34,11 @@ def main():
         press(pb, wait=120)
         state = io.BytesIO()
         pb.save_state(state)
-        save = export(args.rom, state.getvalue(), data)
+        save, clock = export_with_clock(args.rom, state.getvalue(), data)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_bytes(save)
-        print(f'{args.game}: {len(save)} bytes verified by a fresh cartridge Continue')
+        args.output.with_suffix('.rtc').write_bytes(clock)
+        print(f'{args.game}: {len(save)} bytes and {len(clock)} clock bytes verified by a fresh cartridge Continue with its clock')
     finally:
         pb.stop(save=False)
 

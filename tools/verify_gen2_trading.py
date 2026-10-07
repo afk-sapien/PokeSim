@@ -1,6 +1,7 @@
 """Exercise managed Gen II PC preparation on a disposable adventure copy."""
 import argparse
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,6 +15,8 @@ from pokesim.store import Store
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--game', required=True)
+    parser.add_argument('--rom', type=Path, help='Cartridge file (default: $GEN2_CARTRIDGE_DIR/<game>.gbc, else .release-local/gen2/<game>.gbc)')
+    parser.add_argument('--data', type=Path, help='Generated Gen II data folder (default: $GEN2_DATA_DIR, else .release-local/gen2-data)')
     parser.add_argument('--load', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--species', type=int)
@@ -24,9 +27,13 @@ def main():
     args = parser.parse_args()
     if args.evolve and args.time_capsule:
         parser.error('--evolve requires a Gen II Cable Club trade')
+    if (args.output / 'store').exists():
+        parser.error(f'{args.output / "store"} already exists. Use a fresh --output so no earlier preparation is resumed')
     args.output.mkdir(parents=True, exist_ok=True)
-    settings = SimulationSettings(rom_path=str(Path(f'.release-local/gen2/{args.game}.gbc').resolve()),
-        data_dir=str((args.output / 'store').resolve()), game_data_dir=str(Path('.release-local/gen2-data').resolve()),
+    rom = args.rom or Path(os.environ.get('GEN2_CARTRIDGE_DIR', '.release-local/gen2')) / f'{args.game}.gbc'
+    data = args.data or Path(os.environ.get('GEN2_DATA_DIR', '.release-local/gen2-data'))
+    settings = SimulationSettings(rom_path=str(rom.resolve()),
+        data_dir=str((args.output / 'store').resolve()), game_data_dir=str(data.resolve()),
         starter='random', speed=0)
     settings.install(managed=True)
     store = Store(Path(settings.data_dir))
