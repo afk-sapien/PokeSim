@@ -1,6 +1,6 @@
 # Roadmap
 
-Outstanding work reviewed against the published 0.4.18 baseline. Delivered
+Outstanding work reviewed against the published 0.4.19 baseline. Delivered
 features belong in the [changelog](../CHANGELOG.md), and current limitations
 are summarized in [release status](../RELEASE_STATUS.md).
 

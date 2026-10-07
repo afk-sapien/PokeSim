@@ -1,0 +1,36 @@
+{
+  "version": "0.4.19",
+  "tag": "v0.4.19",
+  "revision": "f58fdcc090373e5974a74027b1dbff93155d012f",
+  "release_url": "https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.19",
+  "published_at": "2026-10-07T01:38:00Z",
+  "image": "ghcr.io/afk-sapien/pokesim:0.4.19",
+  "image_digest": "ghcr.io/afk-sapien/pokesim@sha256:27611b9a4da968efb35a91804023eebd954fc7944a681cc3eff46c9d6cfe3279",
+  "image_id": "sha256:5458b5cbe0facbd7421f1d19c1f0bd3216b3e08ba6a792bca8f7a52b880bbfa8",
+  "assets": 12,
+  "prs": [
+    48
+  ],
+  "publication_run": 37556967742,
+  "publication_url": "https://github.com/afk-sapien/PokeSim/actions/runs/37556967742",
+  "status": "published",
+  "anonymous_downloads": "passed",
+  "uploaded_checksums": "passed",
+  "validation": {
+    "pr_checks_each": 24,
+    "release_pr_checks": "passed",
+    "python_versions": [
+      "3.11",
+      "3.12",
+      "3.14"
+    ],
+    "local_private_rom_pytest_passed": 1789,
+    "local_private_rom_pytest_skipped": 34,
+    "full_bag_cartridge_replay": "passed",
+    "browser_cases": 118,
+    "native_installation_matrix": "passed",
+    "publication_pytest_passed": 1771,
+    "publication_pytest_skipped": 165,
+    "publication_browser_passed": 118
+  }
+}
