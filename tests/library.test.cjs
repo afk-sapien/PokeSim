@@ -488,7 +488,8 @@ test('running adventure settings allow palettes and explain deferred application
     if (options.method === 'PATCH') return {ok: true, json: async () => ({palette_pending: true})}
   }})
   await settle()
-  for (const name of ['league-rewards', 'mew-event']) view.element(`#settings-${name}`).toggleAttribute = () => {}
+  for (const name of ['league-rewards', 'mew-event', 'celebi-event']) view.element(`#settings-${name}`).toggleAttribute = () => {}
+  for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
   view.click('settings', game.id)
   assert.equal(view.element('#settings-palette').value, 'blue')
   assert.notEqual(view.element('#settings-palette').disabled, true)
