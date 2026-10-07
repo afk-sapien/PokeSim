@@ -57,7 +57,7 @@ class Child:
             try:
                 message = self.ready.get(timeout=timeout)
             except queue.Empty:
-                detail = ' | '.join(list(self.logs)[-8:]) or 'no output'
+                detail = ' | '.join(list(self.logs)[-40:]) or 'no output'
                 alive = 'still running' if self.process.poll() is None else f'exited with {self.process.returncode}'
                 raise RuntimeError(f'Worker was not ready after {timeout} seconds ({alive}): {detail}') from None
             if (message.get('event') != 'ready' or message.get('protocol') != 1

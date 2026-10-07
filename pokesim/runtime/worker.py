@@ -247,6 +247,10 @@ def main():
             pass
     sys.stdout = sys.stderr
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    # Diagnostic for a worker that stalls before reporting ready: dump every thread's stack once.
+    if os.environ.get('POKESIM_WORKER_STACK_DUMP', '').isdigit():
+        import faulthandler
+        faulthandler.dump_traceback_later(int(os.environ['POKESIM_WORKER_STACK_DUMP']), file=sys.stderr)
     try:
         bootstrap = Bootstrap.read(sys.stdin)
         # Install data paths before imports that eagerly load generated tables.
