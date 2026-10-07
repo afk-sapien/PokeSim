@@ -74,6 +74,16 @@ fresh named volume and verify that it survives container removal and recreation.
 downloads to the release and verifies every uploaded checksum. Versions containing
 `rc` are marked as prereleases. No floating `latest` tag is published.
 
+## Emulator dependencies are GitHub release wheels
+
+PokeSim 0.5 depends on `pokesim-core` and `pyboy-rs`, which are not on PyPI. `pyproject.toml` names
+their release wheels directly, so the PokeSim wheel's metadata resolves for uv, pip and pipx without a
+Rust toolchain, and `uv.lock` records their hashes. pyboy-rs has one abi3 wheel per supported
+platform (Linux x86-64 and aarch64, macOS x86-64 and arm64, Windows x86-64), selected by markers.
+Before tagging PokeSim, both releases must exist with their wheels attached, and the pyboy-rs
+release must also carry its source archive: the Dockerfile fetches it with a required
+`EMULATOR_SOURCE_SHA256`. After changing either release, run `uv lock` and commit the result.
+
 ## First publication: package visibility
 
 GitHub creates a new GHCR package as private, even for a public repository.
