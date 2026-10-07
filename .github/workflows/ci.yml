@@ -78,7 +78,7 @@ jobs:
           POKESIM_BROWSER_TESTS: '1'
         run: |
           mkdir -p build
-          uv run --locked --extra dev --extra browser-test pytest tests/browser -q --basetemp=build/browser-tests
+          uv run --locked --extra dev --extra browser-test pytest tests/browser -q --durations=25 --basetemp=build/browser-tests
       - name: Retain browser diagnostics on failure
         if: failure() && matrix.python == '3.12'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

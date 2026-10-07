@@ -37,7 +37,7 @@ jobs:
       - name: Prepare verified reference data without a private ROM
         run: uv run --locked python tools/prepare_test_data.py
       - name: Test native service and Python launcher
-        run: uv run --locked pytest --ignore=tests/test_rom.py -q -o faulthandler_timeout=120
+        run: uv run --locked pytest --ignore=tests/test_rom.py -q -o faulthandler_timeout=120 --durations=40
       - run: uv build
       - name: Check package resources and exclude private data
         run: uv run --locked python tools/check_package.py
