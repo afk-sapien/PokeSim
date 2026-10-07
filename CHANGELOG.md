@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.4.20
+
+- Fix PC box lists with a nickname containing PP being read as the PP Up menu, which stopped the Release goal from freeing storage.
+
 ## 0.4.19
 
 - Keep shiny encounter protection after Transform by reading the wild Pokémon's original DVs.

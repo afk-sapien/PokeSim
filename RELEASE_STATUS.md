@@ -1,29 +1,15 @@
-# Release status: 0.4.19 published
+# Release status: 0.4.20 prepared
 
-[PokeSim 0.4.19](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.19)
-fixes full bags blocking story progress and shiny encounters losing protection
-after Transform. Champion purchases also reserve one free bag slot.
-[PR #48](https://github.com/afk-sapien/PokeSim/pull/48) passed all 24 checks before
-merging. Core remains pinned at 0.1.4. See the [release notes](docs/release-notes.md).
+PokeSim 0.4.20 fixes box lists with a nickname containing PP being read as the PP Up
+menu, which stopped the Release goal from freeing storage. Core remains pinned at
+0.1.4. See the [release notes](docs/release-notes.md).
 
-The local non-browser suite passed 1,789 tests with 34 skips, including private-ROM
-checks. A copied-save cartridge replay verified emergency TM selling through shop
-menus and confirmed that one bag slot becomes available. Ruff, browser script,
-and documentation checks passed.
+The local suite passed 1,790 tests with 168 skips, including private-ROM checks.
+Ruff and documentation checks passed. Publication and deployment verification are
+pending.
 
-The [publication receipt](docs/validation/release-0.4.19.json) records the exact
-source revision, image digest, and publication workflow. Normal CI passed 1,771
-tests with 165 skips on Python 3.11, 3.12, and 3.14. The tagged publication build
-also passed 1,771 tests and all 118 browser cases. Installation checks passed on
-Windows, Intel and Apple Silicon macOS, and x86-64 and ARM Linux.
-
-The publishing workflow verified the container, anonymous registry access, and
-every uploaded asset before making the release public. Public installer, Compose,
-and wheel downloads were checked again against the published manifest.
-
-The [0.4.18 publication receipt](docs/validation/release-0.4.18.json) retains the
-previous release's checks and source revision. Its larger feature update remains
-documented in the [feature details](docs/next-release.md).
+The [0.4.19 publication receipt](docs/validation/release-0.4.19.json) retains the
+previous release's checks and source revision.
 
 ## Known limits, deliberately not addressed here
 
