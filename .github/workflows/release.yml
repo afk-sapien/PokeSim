@@ -151,6 +151,22 @@ jobs:
           cp dist/* release/
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
+      - name: Rehearse release assembly before anything is published
+        # The publish job repeats these steps against the registry image. Running them here without a registry
+        # finds identity, checksum, and Compose problems before an image is pushed, and in a dry run.
+        env:
+          IMAGE: ${{ needs.validate.outputs.image }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          REVISION: ${{ needs.validate.outputs.revision }}
+        run: |
+          mkdir rehearsal
+          cp dist/* rehearsal/
+          ln -s "$PWD/release/image-linux-amd64.tar.gz" rehearsal/image-linux-amd64.tar.gz
+          cp compose.yaml compose.quickstart.yaml install.sh install.ps1 rehearsal/
+          cp .env.example rehearsal/env.example
+          docker run --rm --network none "$IMAGE" cat /usr/share/pokesim/python-dependencies.json > rehearsal/python-dependencies.json
+          docker image inspect "$IMAGE" --format '{{json .}}' > rehearsal/image-metadata.json
+          python tools/assemble_release.py rehearsal --version "$VERSION" --revision "$REVISION" --without-desktop
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-inputs
