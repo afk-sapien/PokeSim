@@ -60,6 +60,8 @@ jobs:
           persist-credentials: false
       - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
       - run: uv run --locked pytest --ignore=tests/test_rom.py -q
+      - name: Rust emulator backend, checkpoint compatibility and Core capability errors
+        run: uv run --locked pytest -q tests/test_rust_backend.py tests/test_downgrade_compat.py tests/test_gen2_clock.py tests/test_emulator_boundary.py tests/test_save_export.py
       - run: python tools/check_web.py
       - run: python tools/check_docs.py
       - run: uv build
@@ -119,12 +121,14 @@ jobs:
         run: |
           docker run --rm -i -v pokesim-ci-data:/data --entrypoint python pokesim:ci <<'PYCODE'
           import os
-          import pyboy
+          import pyboy_rs
+          import pokesim_core.emulator
           import pokesim.strategy_data
           import pokesim.web.app
           import pokesim.healthcheck
           assert os.getuid() != 0
           from pathlib import Path
           assert not (Path(pokesim.__file__).parent / 'data/strategy.json').exists()
-          assert Path('/usr/share/pokesim/sources/pyboy-2.7.0.tar.gz').is_file()
+          assert list(Path('/usr/share/pokesim/sources').glob('pyboy-rs-*.tar.gz'))
+          pokesim_core.emulator.check_runtime()
           PYCODE
