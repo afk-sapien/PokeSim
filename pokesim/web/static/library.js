@@ -538,10 +538,12 @@
     const hint = state === 'coming' ? `<p class="note">PokeSim cannot play ${esc(slot.title)} yet.</p>`
       : state === 'empty' ? '<p class="note">Drop a ROM file here or choose Upload.</p>'
       : `<p class="note">${users.length ? `Used by ${users.length} ${users.length === 1 ? 'adventure' : 'adventures'}` : 'Not used by any adventure yet'}</p>`
-    const actions = state === 'coming' ? ''
-      : `<div class="cartridge-actions"><button type="button" class="key${state === 'empty' || rom?.file_missing ? ' key--primary' : ''}" data-cartridge-upload="${id}" data-owner aria-label="${state === 'installed' ? 'Replace' : 'Upload'} ${esc(slot.title)}">${state === 'installed' ? 'Replace' : 'Upload'}</button>${state === 'installed' ? `<button type="button" class="key" data-cartridge-remove="${id}" data-owner aria-label="Remove ${esc(slot.title)}">Remove</button>` : ''}</div>`
+    // Every slot reserves the same two button places so the keys line up across a row.
+    const spacer = '<span class="cartridge-action-spacer" aria-hidden="true"></span>'
+    const actions = state === 'coming' ? `<div class="cartridge-actions">${spacer}${spacer}</div>`
+      : `<div class="cartridge-actions"><button type="button" class="key${state === 'empty' || rom?.file_missing ? ' key--primary' : ''}" data-cartridge-upload="${id}" data-owner aria-label="${state === 'installed' ? 'Replace' : 'Upload'} ${esc(slot.title)}">${state === 'installed' ? 'Replace' : 'Upload'}</button>${state === 'installed' ? `<button type="button" class="key" data-cartridge-remove="${id}" data-owner aria-label="Remove ${esc(slot.title)}">Remove</button>` : spacer}</div>`
     const feedback = cartridgeFeedback[slot.version]
-    return `<article class="cartridge-slot" id="cartridge-${id}" data-slot="${id}" data-state="${state}" aria-labelledby="cartridge-${id}-name"><div class="cartridge-face" aria-hidden="true"><span></span></div><div class="cartridge-info"><h3 class="cartridge-name" id="cartridge-${id}-name">${esc(slot.title)}</h3><p class="cartridge-state micro">${esc(status)}</p>${facts}${hint}</div>${actions}<p class="cartridge-feedback${feedback?.error ? ' is-error' : ''}" role="status">${esc(feedback?.text || '')}</p></article>`
+    return `<article class="cartridge-slot" id="cartridge-${id}" data-slot="${id}" data-state="${state}" aria-labelledby="cartridge-${id}-name"><div class="cartridge-face" aria-hidden="true"><span></span></div><div class="cartridge-info"><h3 class="cartridge-name" id="cartridge-${id}-name">${esc(slot.title)}</h3><p class="cartridge-state micro">${esc(status)}</p>${facts}${hint}</div><p class="cartridge-feedback${feedback?.error ? ' is-error' : ''}" role="status">${esc(feedback?.text || '')}</p>${actions}</article>`
   }
   function renderCartridges(slots) {
     if (slots) {
@@ -582,15 +584,16 @@
         result = await api(`/api/v1/cartridges${target ? `?slot=${encodeURIComponent(target)}` : ''}`,
           {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: file})
       } catch (error) {
-        if (target) cartridgeFeedback[target] = {text: error.message, error: true}
+        // The slot shows the error, so the page banner stays quiet.
+        if (!target) throw error
+        cartridgeFeedback[target] = {text: error.message, error: true}
         renderCartridges()
-        throw error
+        return
       }
       if (target) delete cartridgeFeedback[target]
       if (result.moved) cartridgeFeedback[target] = {text: `That file was ${result.title}. It went into the ${versionName(result.version)} slot.`}
       cartridgeFeedback[result.version] = {text: result.message}
       renderCartridges(result.slots)
-      notice(result.message)
       document.getElementById?.(`cartridge-${result.version}`)?.scrollIntoView({block: 'nearest'})
     })
   }
@@ -654,7 +657,6 @@
       delete cartridgeFeedback[version]
       cartridgeFeedback[version] = {text: result.message}
       renderCartridges(result.slots)
-      notice(result.message)
     })
   }
   function gameCard(slot, selected) {
