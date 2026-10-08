@@ -14,7 +14,7 @@ from .puzzles import push_plan
 from .world import update as update_world
 from .naming import Naming
 from .kanto import journey as kanto_journey
-from .menus import MAX_STEPS, RADIO_MAX_STEPS, menu_label, Buy, ChangeBox, DayCare, FieldMove, Fly, Give, Take, Lead, Radio, Forget, Remedy, Sell, ShowPartner, Storage, Teach, Use, choose
+from .menus import MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, menu_label, Buy, ChangeBox, DayCare, FieldMove, Fly, Give, Take, Lead, Radio, Forget, Remedy, Sell, ShowPartner, Storage, Teach, Use, choose
 
 STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) before reporting a blocked objective
 
@@ -111,7 +111,7 @@ class Policy:
 
     STRANDED_LIMIT = 60
     MENU_STEP_LIMIT = MAX_STEPS
-    MENU_STEP_LIMITS = {'Radio': RADIO_MAX_STEPS}
+    MENU_STEP_LIMITS = {'Radio': RADIO_MAX_STEPS, 'Slots': SLOT_MAX_STEPS}
 
     def recover(self, level=1):
         """Drop every half-finished plan and press buttons that back out of unknown screens.
@@ -151,7 +151,13 @@ class Policy:
         if self.menu_steps > limit:
             self.fail(f'The {name} menu task made no progress after {limit} steps')
             return None
-        return menu.step(snapshot, mem)
+        button = menu.step(snapshot, mem)
+        failure = getattr(menu, 'failure', '')
+        if failure:
+            # A Game Corner task saw its screen stop changing and failed itself.
+            self.fail(failure)
+            return None
+        return button
 
     def on_restore(self):
         objects = self.nav.objects

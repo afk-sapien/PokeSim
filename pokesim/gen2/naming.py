@@ -7,12 +7,17 @@ from .. import config
 from ..nicknames import TRAINER_NAMES, configured_pool
 
 
+# Typing one name takes well under this many presses. Past it, accept what is on screen.
+MAX_STEPS = 600
+
+
 class Naming:
     def __init__(self, seed=None):
         self.rng = random.Random(seed)
         self.target = None
         self.subject = None
         self.used = set()
+        self.steps = 0
 
     def state_dict(self):
         return {'target': self.target, 'subject': self.subject, 'used': sorted(self.used)}
@@ -25,7 +30,12 @@ class Naming:
     def step(self, snapshot, mem):
         if 'DEL' not in snapshot.text or 'END' not in snapshot.text:
             self.target = self.subject = None
+            self.steps = 0
             return None
+        self.steps += 1
+        if self.steps > MAX_STEPS:
+            # START jumps to END and A accepts the name typed so far, so the screen always closes.
+            return 'a' if self.steps % 2 else 'start'
         subject = mem.byte('wNamingScreenType') & 7
         if self.target is None or self.subject != subject:
             pool = configured_pool() if subject == 0 else TRAINER_NAMES

@@ -7,6 +7,8 @@ from .screens import has_word
 # A menu task that needs more steps than this is lost. It ends and the stuck path takes over.
 MAX_STEPS = 600
 RADIO_MAX_STEPS = 300
+# A slot session is hundreds of rounds, so it is capped on a long run and on no visible change.
+SLOT_MAX_STEPS = 12000
 
 
 def selected(rows):
