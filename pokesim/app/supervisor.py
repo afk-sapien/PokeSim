@@ -17,12 +17,15 @@ import time
 import httpx
 import psutil
 
+from ..downloads import DataDownloadError
 from .registry import digest, identifier
 from .resources import ObservedSpeed, ProcessUsage, recent_activity
 
 log = logging.getLogger(__name__)
 
 GEN2_VERSIONS = {'gold', 'silver', 'crystal'}
+SETUP_RETRIES = 3
+SETUP_DELAYS = (30, 120, 300)
 
 
 class Child:
@@ -165,6 +168,7 @@ class Supervisor:
         self.admission = threading.RLock()
         self.locks = {}
         self.retries = {}
+        self.setup_retries = {}   # aid -> (due time, automatic attempts made) after a failed data download
         self.unhealthy_since = {}
         self.notifications = None   # installed by the manager: adventure row -> worker notification settings
         self.closed = threading.Event()
@@ -231,12 +235,56 @@ class Supervisor:
                     self.sync_nicknames(child)
                 except Exception:
                     log.warning('Adventure %s will receive notification settings when it reconnects', aid)
+                self.setup_retries.pop(aid, None)
                 return self.registry.update(aid, state='recovering' if recovery else 'running', error=None)
             except Exception as error:
                 with self.guard:
                     self.children.pop(aid, None)
                 self.registry.update(aid, state='failed', error=str(error))
+                self.schedule_setup_retry(aid, error)
                 raise
+
+    def schedule_setup_retry(self, aid, error, manual=False):
+        """After a failed download, try again later a few times so a brief outage heals itself."""
+        if manual:
+            self.setup_retries.pop(aid, None)
+        if not isinstance(error, DataDownloadError):
+            self.setup_retries.pop(aid, None)
+            return
+        attempts = self.setup_retries.get(aid, (0, 0))[1]
+        if attempts < SETUP_RETRIES:
+            delay = SETUP_DELAYS[attempts]
+            self.setup_retries[aid] = (time.monotonic() + delay, attempts + 1)
+            try:
+                summary = {**(self.registry.adventure(aid).get('summary') or {}), 'next_retry': time.time() + delay}
+                self.registry.update(aid, summary=summary)
+            except KeyError:
+                pass
+        else:
+            self.setup_retries.pop(aid, None)
+
+    def run_setup_retries(self):
+        if not self.setup_retries:
+            return
+        now = time.monotonic()
+        for aid, (due, _) in list(self.setup_retries.items()):
+            if due > now or self.closed.is_set():
+                continue
+            try:
+                row = self.registry.adventure(aid)
+            except KeyError:
+                self.setup_retries.pop(aid, None)
+                continue
+            if row['state'] != 'failed' or row['desired_state'] != 'running' or row['archived']:
+                self.setup_retries.pop(aid, None)
+                continue
+            self.setup_retries[aid] = (float('inf'), self.setup_retries[aid][1])
+            try:
+                self.start(aid)
+            except Exception:
+                log.warning('Automatic retry of adventure %s data preparation did not succeed', aid)
+                if aid in self.setup_retries and self.setup_retries[aid][0] == float('inf'):
+                    self.setup_retries.pop(aid)
 
     def stop(self, aid, preserve_desired=False):
         with (nullcontext() if self.closed.is_set() else self.admission), self._lock(aid):
@@ -381,6 +429,7 @@ class Supervisor:
 
     def _monitor(self):
         while not self.closed.wait(3):
+            self.run_setup_retries()
             with self.guard:
                 children = list(self.children.items())
             for aid, child in children:

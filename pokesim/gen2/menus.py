@@ -132,15 +132,25 @@ class Buy:
     initial: int
     phase: str = 'greet'
     steps: int = 0
+    exit_steps: int = 0
+    clear_frames: int = 0
 
     def step(self, snapshot, mem):
         self.steps += 1
         count = dict(snapshot.items).get(self.item, 0)
         rows, text = snapshot.tiles, snapshot.text
-        if count > self.initial or self.steps > 240:
+        price = snapshot.data.item_attributes[self.item]['price']
+        # Never ask for something the wallet cannot cover: the clerk only answers "You don't have
+        # enough money." and the shop would offer the same item again.
+        if count > self.initial or self.steps > 240 or snapshot.money < price:
             self.phase = 'exit'
         if self.phase == 'exit':
-            return 'b' if '┌' in rows[12] or 'CANCEL' in text or 'BUY' in text else None
+            # The clerk's box can be blank for a frame between "Here you go!" and "Anything else?".
+            # Leave only after the shop screen has stayed away for several frames, never on one gap.
+            self.exit_steps += 1
+            showing = '┌' in rows[12] or 'CANCEL' in text or 'BUY' in text or bool(mem.byte('wScriptRunning'))
+            self.clear_frames = 0 if showing else self.clear_frames + 1
+            return 'b' if self.clear_frames < 3 and self.exit_steps <= 40 else None
         if self.phase == 'greet':
             if 'BUY' in text:
                 self.phase = 'list'
@@ -156,10 +166,11 @@ class Buy:
             if '×' not in text:
                 return 'a'
             quantity = mem.byte('wItemQuantityChange')
-            if quantity == self.amount:
+            target = min(self.amount, snapshot.money // price)
+            if quantity == target:
                 self.phase = 'confirm'
                 return 'a'
-            return 'up' if quantity < self.amount else 'down'
+            return 'up' if quantity < target else 'down'
         return 'a'
 
 

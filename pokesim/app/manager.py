@@ -135,6 +135,7 @@ class Manager:
                     if self.coordinator.reserved(aid):
                         return row
                     return self.supervisor.stop(aid, preserve_desired=True)
+                self.supervisor.setup_retries.pop(aid, None)
                 return self.supervisor.start(aid)
         except Exception as error:
             row = self.registry.adventure(aid)
@@ -706,7 +707,7 @@ def create_app(manager, shutdown=lambda: None):
         sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)
         if sprite and request.method in {'GET', 'HEAD'}:
             dex = int(sprite[1])
-            if not 1 <= dex <= 151:
+            if not 1 <= dex <= 251:
                 raise HTTPException(404)
             image = manager.assets.sprite_path(aid, dex)
             if image is not None:

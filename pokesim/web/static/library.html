@@ -11,8 +11,8 @@
 <link rel="preload" href="/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="/static/panel.css?v=glow-2">
-<link rel="stylesheet" href="/static/panel-library.css?v=backup-management-3">
-<script src="/static/library.js?v=gen2-palette-1" defer></script>
+<link rel="stylesheet" href="/static/panel-library.css?v=adventure-status-1">
+<script src="/static/library.js?v=adventure-status-1" defer></script>
 </head>
 <body class="library" data-trainer-names="${trainer_names}" data-page="${page}" data-adventure="${adventure_id}">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -37,9 +37,8 @@
 </section>
 
 <section data-view="stopped" hidden>
-<header class="page-head"><div class="page-title"><p class="micro">Your adventure</p><h1 id="stopped-title">Adventure</h1><p class="lede">Stopping an adventure keeps its saves. Start it to return to the live view, PC, and journal.</p></div></header>
-<div id="stopped-card" class="adventure-grid adventure-grid--single"></div>
-<p class="back-link"><a href="/">Back to the library ↗</a></p>
+<header class="page-head"><div class="page-title"><p class="micro">Your adventure</p><h1 id="stopped-title">Adventure</h1><p class="lede" id="stopped-lede"></p></div></header>
+<div id="stopped-card" class="status-wrap" aria-live="polite"></div>
 </section>
 
 <section data-view="trading" hidden>
