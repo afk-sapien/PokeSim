@@ -24,7 +24,7 @@ class Assets:
         self.guard = threading.Lock()
         self.cancelled = threading.Event()
         from .portrait_packs import PortraitPacks
-        self.portraits = PortraitPacks(registry, self.cancelled)
+        self.portraits = PortraitPacks.portraits(registry, self.cancelled)
         from .item_artwork import IMAGES
         self.item_artwork = PortraitPacks(registry, self.cancelled, images=IMAGES,
                                          folder='/sprites/items/', pack='item-artwork', setting='item_artwork')
@@ -96,23 +96,35 @@ class Assets:
         return path
 
     def sprite_path(self, adventure_id, dex):
+        """The portrait an adventure shows for `dex`.
+
+        A hand-installed image in the adventure's own `sprites` folder wins. Next comes the
+        community pack set for the adventure's version when the owner installed and enabled
+        it, then the portraits extracted from the owner's own cartridge (per version, with the
+        shared Generation I folder last).
+        """
         if not 1 <= dex <= 251:
             return None
         adventure = self.registry.adventure(adventure_id)
-        if adventure['version'] in {'gold', 'silver', 'crystal'}:
-            path = self.root / 'sprites' / adventure['version'] / f'{dex}.png'
-            return path if path.is_file() else None
-        community = self.portraits.path(dex)
+        version = adventure['version']
+        override = self._contained(self.registry.root / 'adventures' / adventure_id / 'sprites', dex)
+        if override is not None:
+            return override
+        community = self.portraits.path(dex, version=version)
         if community is not None:
             return community
-        directories = (self.registry.root / 'adventures' / adventure_id / 'sprites',
-                       self.root / 'sprites')
-        for directory in directories:
-            root = directory.resolve()
-            path = (root / f'{dex}.png').resolve()
-            if path.parent == root and path.is_file():
-                return path
-        return None
+        path = self.root / 'sprites' / version / f'{dex}.png'
+        if path.is_file():
+            return path
+        if version in {'gold', 'silver', 'crystal'}:
+            return None
+        return self._contained(self.root / 'sprites', dex)
+
+    @staticmethod
+    def _contained(directory, dex):
+        root = directory.resolve()
+        path = (root / f'{dex}.png').resolve()
+        return path if path.parent == root and path.is_file() else None
 
     def prepare_gen2(self, version, report=lambda message: None):
         from ..gen2.data import GameData, ensure, write_bundle
