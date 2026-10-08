@@ -48,6 +48,32 @@ def no_sideways_scroll(page):
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'page scrolls sideways'
 
 
+WIDTHS = [320, 390, 768, 1024, 1280, 1920]
+
+# Groups visible elements by their top edge, so each group is one row of the grid.
+ROWS = """(selector) => {
+  const rows = {}
+  for (const node of document.querySelectorAll(selector)) {
+    const box = node.getBoundingClientRect()
+    if (!box.width) continue
+    const top = Math.round(node.closest('.cartridge-slot, .game-card').getBoundingClientRect().top)
+    ;(rows[top] = rows[top] || []).push({top: Math.round(box.top * 10) / 10, height: Math.round(box.height * 10) / 10,
+      clipped: node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1})
+  }
+  return Object.values(rows)
+}"""
+
+
+def assert_even_keys(page):
+    rows = page.evaluate(ROWS, '.cartridge-actions > :first-child')
+    assert rows and sum(map(len, rows)) == 6
+    for row in rows:
+        assert len({item['top'] for item in row}) == 1, row
+    keys = [item for row in page.evaluate(ROWS, '.cartridge-actions .key') for item in row]
+    assert len({item['height'] for item in keys}) == 1, keys
+    assert not any(item['clipped'] for item in keys), keys
+
+
 def rom_file(version, name=None):
     return {'name': name or f'{version}.gb', 'mimeType': 'application/octet-stream', 'buffer': synthetic(version)}
 
@@ -58,7 +84,7 @@ def upload(page, version, payload):
     chooser.value.set_files(payload)
 
 
-@pytest.mark.parametrize('width', [320, 390, 1280])
+@pytest.mark.parametrize('width', WIDTHS)
 def test_shelf_places_uploads_by_hash_and_rejects_unknown_files(page, library, width):
     from playwright.sync_api import expect
     url, manager = library
@@ -92,10 +118,11 @@ def test_shelf_places_uploads_by_hash_and_rejects_unknown_files(page, library, w
     expect(crystal.locator('.cartridge-feedback.is-error')).to_contain_text('This file is not a game PokeSim can play')
     expect(crystal).to_contain_text('Red, Blue, Gold, Silver or Crystal')
     expect(crystal).to_have_attribute('data-state', 'empty')
+    expect(page.locator('#notice')).to_be_hidden()
+    assert_even_keys(page)
     assert sorted(row['version'] for row in manager.registry.roms()) == ['red', 'silver']
     no_sideways_scroll(page)
-    if width != 320:
-        shot(page, f'settings-shelf-{width}')
+    shot(page, f'settings-shelf-{width}')
 
 
 def test_drop_onto_any_slot_lands_in_the_right_one(page, library):
@@ -117,7 +144,7 @@ def test_drop_onto_any_slot_lands_in_the_right_one(page, library):
     assert [row['version'] for row in manager.registry.roms()] == ['crystal']
 
 
-@pytest.mark.parametrize('width', [320, 390, 1280])
+@pytest.mark.parametrize('width', WIDTHS)
 def test_new_adventure_with_no_one_and_many_cartridges(page, library, width):
     from playwright.sync_api import expect
     url, manager = library
@@ -126,16 +153,14 @@ def test_new_adventure_with_no_one_and_many_cartridges(page, library, width):
     expect(page.locator('#empty-needs-cartridge')).to_be_visible()
     expect(page.locator('#empty-needs-cartridge')).to_contain_text('Add a game cartridge first')
     no_sideways_scroll(page)
-    if width != 320:
-        shot(page, f'library-none-{width}')
+    shot(page, f'library-none-{width}')
     page.get_by_role('button', name='+ New adventure', exact=True).click()
     dialog = page.get_by_role('dialog', name='New adventure')
     expect(dialog.locator('#create-needs-cartridge')).to_be_visible()
     expect(dialog.locator('#create-needs-cartridge')).to_contain_text('Add a game cartridge first')
     expect(dialog.get_by_role('button', name='Create adventure', exact=True)).to_be_hidden()
     assert dialog.evaluate('node => node.scrollWidth <= node.clientWidth')
-    if width != 320:
-        shot(page, f'create-none-{width}')
+    shot(page, f'create-none-{width}')
     dialog.locator('#create-add-cartridge').click()
     page.wait_for_url('**/settings#cartridges')
     expect(page.locator('#cartridge-red')).to_be_visible()
@@ -151,8 +176,7 @@ def test_new_adventure_with_no_one_and_many_cartridges(page, library, width):
     expect(dialog.locator('.game-card[data-version="red"] a')).to_have_attribute('href', '/settings#cartridge-red')
     assert dialog.locator('#starter option').all_inner_texts() == ['Surprise me', 'Chikorita', 'Cyndaquil', 'Totodile']
     assert dialog.evaluate('node => node.scrollWidth <= node.clientWidth')
-    if width != 320:
-        shot(page, f'create-one-{width}')
+    shot(page, f'create-one-{width}')
     dialog.get_by_label('Start this adventure now', exact=True).uncheck()
     dialog.get_by_role('button', name='Create adventure', exact=True).click()
     expect(dialog).not_to_be_visible()
@@ -174,9 +198,10 @@ def test_new_adventure_with_no_one_and_many_cartridges(page, library, width):
     expect(dialog.get_by_role('radio', name='Pokémon Blue')).to_be_checked()
     assert dialog.locator('#starter option').all_inner_texts() == ['Surprise me', 'Bulbasaur', 'Charmander', 'Squirtle']
     dialog.locator('#starter').select_option('squirtle')
+    heights = {card.bounding_box()['height'] for card in dialog.locator('.game-card').all()}
+    assert len(heights) == 1, heights
     assert dialog.evaluate('node => node.scrollWidth <= node.clientWidth')
-    if width != 320:
-        shot(page, f'create-many-{width}')
+    shot(page, f'create-many-{width}')
     dialog.get_by_role('button', name='Create adventure', exact=True).click()
     expect(dialog).not_to_be_visible()
     second = next(row for row in manager.registry.adventures() if row['name'] == 'Kanto again')

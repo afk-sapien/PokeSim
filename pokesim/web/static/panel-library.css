@@ -758,9 +758,11 @@
 }
 .cartridge-slot {
   display: grid;
+  /* Art, title and details, then the message, then the keys pinned to the bottom. */
   grid-template-rows: auto 1fr auto auto;
   gap: var(--s2);
   min-width: 0;
+  container-type: inline-size;
   padding: var(--s3);
   background: var(--panel-2);
   border: var(--hair) solid var(--rule-faint);
@@ -795,10 +797,14 @@
 .cartridge-facts dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
 .cartridge-facts code { font: 12px / 1.4 var(--font-mono); }
 .cartridge-info .note { margin: 0; font-size: 13px; }
-.cartridge-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 104px), 1fr)); gap: var(--s2); }
-.cartridge-actions .key { min-height: 44px; min-width: 0; padding-inline: var(--s2); font-size: 13px; letter-spacing: 0.04em; white-space: nowrap; }
-.cartridge-feedback { margin: 0; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
-.cartridge-feedback:empty { display: none; }
+.cartridge-actions { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: 44px; gap: var(--s2); }
+.cartridge-actions .key, .cartridge-action-spacer { height: 44px; min-height: 44px; min-width: 0; margin: 0; }
+.cartridge-actions .key { padding-inline: var(--s1); font-size: 13px; letter-spacing: 0.04em; white-space: nowrap; }
+@container (min-width: 280px) {
+  .cartridge-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.cartridge-feedback { align-self: end; margin: 0; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+.cartridge-feedback:empty { visibility: hidden; }
 .cartridge-feedback.is-error { color: var(--crit); }
 
 .empty-block { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: start; gap: var(--s3); min-width: 0; }
@@ -806,7 +812,7 @@
 
 .game-picker { display: grid; gap: var(--s2); min-width: 0; margin: 0; padding: 0; border: 0; }
 .game-picker legend { padding: 0; margin-bottom: var(--s2); }
-.game-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 130px), 1fr)); gap: var(--s2); }
+.game-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 130px), 1fr)); grid-auto-rows: 1fr; gap: var(--s2); }
 .game-card {
   position: relative;
   display: grid;
