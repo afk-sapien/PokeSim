@@ -12,6 +12,7 @@ import tarfile
 import tempfile
 from urllib.request import urlopen
 
+from ..downloads import retrying
 from ..experimental.gen2 import PROFILES
 
 SCHEMA = 6
@@ -25,6 +26,14 @@ SYMBOLS = {
     'silver': ('521550d5d988faf9371bc51caed4cf696bfa07b4', 'fdaa1a22e513db5103b1ebd459792f360720b866ded59866106c5fe21107d5a6'),
     'crystal': ('87b0d7436e43c3717cfc416d38a99162191bb714', '915e46c9df40a016d530b70979a002b44b301b8c4fc548a30ed249042d7a11a5'),
 }
+
+
+def download(url, limit, game, report=lambda message: None, sleep=None):
+    """Read a pinned URL, retrying brief network failures a bounded number of times."""
+    def read():
+        with urlopen(url, timeout=30) as response:
+            return response.read(limit + 1)
+    return retrying(read, f'Pokémon {game.title()}', report, sleep)
 
 
 def lines(path):
@@ -469,8 +478,8 @@ def ensure(root, game, report=lambda message: None):
     report(f'Preparing Pokémon {game.title()} maps and game data')
     with tempfile.TemporaryDirectory(prefix='pokesim-gen2-data-') as temporary:
         temporary = Path(temporary)
-        with urlopen(f'https://codeload.github.com/pret/{repo}/tar.gz/{revision}', timeout=30) as response:
-            archive = response.read(16 * 1024 * 1024 + 1)
+        archive = download(f'https://codeload.github.com/pret/{repo}/tar.gz/{revision}',
+                           16 * 1024 * 1024, game, report)
         if len(archive) > 16 * 1024 * 1024:
             raise ValueError('Gen II reference archive is too large')
         with tarfile.open(fileobj=io.BytesIO(archive), mode='r:gz') as tar:
@@ -479,8 +488,7 @@ def ensure(root, game, report=lambda message: None):
                 raise ValueError('Gen II reference contents are too large')
             tar.extractall(temporary, filter='data')
         url = f'https://raw.githubusercontent.com/pret/{repo}/{symbol_revision}/{profile.symbols}'
-        with urlopen(url, timeout=30) as response:
-            symbols = response.read(8 * 1024 * 1024)
+        symbols = download(url, 8 * 1024 * 1024, game, report)
         if hashlib.sha256(symbols).hexdigest() != symbol_hash:
             raise ValueError('Gen II symbols failed verification')
         symbol_path = temporary / profile.symbols
