@@ -179,7 +179,6 @@ async function refreshState() {
     $('.game-card')?.classList.toggle('is-manual', manualMode)
     set('#take-control', 'textContent', manualMode ? 'Let AI play' : 'Take control')
     set('#control-mode', 'textContent', manualMode ? 'You’re playing · AI paused' : paused ? 'Game paused' : 'AI is playing')
-    set('#control-hint', 'textContent', manualMode ? 'Play at normal speed. Let AI play when you’re ready to hand it back.' : 'Press any game control to pause the AI and take over.')
     $('#connection').classList.toggle('is-paused', paused)
     $('#connection').classList.remove('is-offline')
     set('#status', 'textContent', manualMode ? 'In control' : paused ? 'Paused' : 'Running')
@@ -425,7 +424,7 @@ async function manualPress(button) {
 let lastKeyPress = 0
 window.addEventListener('keydown', (event) => {
   if (viewerOnly || !$('#screen') || $('#partner-detail')?.open) return
-  const map = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', z: 'a', x: 'b', Enter: 'start', Shift: 'select'}
+  const map = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', z: 'a', x: 'b', Z: 'a', X: 'b', Enter: 'start', Shift: 'select'}
   if (map[event.key] && !event.target.closest('input, select, textarea, [contenteditable]') && !(event.key === 'Enter' && event.target.closest('button, summary, a'))) {
     event.preventDefault()
     if (!event.repeat || Date.now() - lastKeyPress > 140) {
