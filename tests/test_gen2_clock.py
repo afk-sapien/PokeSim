@@ -2,6 +2,7 @@
 import io
 import os
 import struct
+import time
 from pathlib import Path
 
 import pytest
@@ -128,12 +129,31 @@ def test_real_clock_file_round_trips_through_a_fresh_emulator(cartridge):
         emulator.stop(save=False)
 
 
+def _elapsed(emulator):
+    registers = emulator.rtc_registers()
+    return ((registers['days'] * 24 + registers['hours']) * 60 + registers['minutes']) * 60 + registers['seconds']
+
+
 def test_real_locked_rebased_clock_reads_zero_elapsed(cartridge):
+    # Core 0.3.0 with pyboy-rs carrying rtc_export_follows_host exports a locked clock as its
+    # host-following equivalent: the file that, read on the host clock now, shows what the locked
+    # clock shows now. The fake locked base (FIXED_CLOCK_EPOCH here) is never written out, because
+    # a real cartridge or an unlocked emulator would read it as a jump of hundreds of days. So a
+    # rebased clock at zero elapsed exports a base of about now, and a fresh emulator still reads zero.
     emulator = core.boot(io.BytesIO(cartridge), sound=False)
     try:
         lock_clock(emulator, at=core.FIXED_CLOCK_EPOCH, rebase=True)
         assert emulator.clock_locked
-        assert struct.unpack('<d', export_clock(emulator)[:8])[0] == core.FIXED_CLOCK_EPOCH
+        assert _elapsed(emulator) == 0
+        exported = export_clock(emulator)
+        assert abs(struct.unpack('<d', exported[:8])[0] - time.time()) <= 5
+        assert emulator.clock_locked and _elapsed(emulator) == 0  # exporting changes nothing
+        fresh = core.boot(io.BytesIO(cartridge), rtc=exported, sound=False)
+        try:
+            assert not fresh.clock_locked
+            assert _elapsed(fresh) <= 5
+        finally:
+            fresh.stop(save=False)
         lock_clock(emulator, False)
         assert not emulator.clock_locked
     finally:
