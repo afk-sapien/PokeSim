@@ -24,6 +24,16 @@ SEAFOAM_HOLES = {(MAPS[name], x, y) for name, points in (
 # Row on Route 23 and the badge checked there, from Cascade in the south to Earth in the north.
 ROUTE_23_CHECKS = ((136, 2), (119, 4), (105, 8), (96, 16), (85, 32), (56, 64), (35, 128))
 
+# Cinnabar Gym doors from CinnabarGymGateCoords, as (block x, block y, vertical). The map file
+# draws them open and the game closes each one on entry until EVENT_CINNABAR_GYM_GATE<n>_UNLOCKED,
+# n counting from 1. A closed horizontal door walls its top row and a vertical door its right column.
+CINNABAR_GYM_GATES = ((9, 3, False), (6, 3, False), (6, 6, False), (3, 8, True), (2, 6, False), (2, 3, False))
+CLOSED_GATE_TILES = {False: (((0, 0), 24), ((1, 0), 24)), True: (((1, 0), 36), ((1, 1), 36))}
+
+
+def cinnabar_gate_open(flags, index):
+    return event_set(flags, f'EVENT_CINNABAR_GYM_GATE{index + 1}_UNLOCKED')
+
 
 class Navigator:
     def __init__(self):
@@ -86,6 +96,12 @@ class Navigator:
         self.tile_overrides = {(m, x, y): tile for m, w in WORLD.items() for flag, x, y, tile in w.get("opened_tiles", [])
                                if event_set(snapshot.event_flags, flag)
                                or (allow_remote_puzzles and m != snapshot.map and can_strength)}
+        gym = MAPS.get('CINNABAR_GYM')
+        if gym in WORLD:
+            for index, (bx, by, vertical) in enumerate(CINNABAR_GYM_GATES):
+                if not cinnabar_gate_open(snapshot.event_flags, index):
+                    self.tile_overrides.update(((gym, bx * 2 + dx, by * 2 + dy), tile)
+                                               for (dx, dy), tile in CLOSED_GATE_TILES[vertical])
         # Puzzle switches reset on reentry. Old successful steps cannot reopen a gate.
         self.closed_passages = {(m, x, y) for m, w in WORLD.items()
                                 for _, x, y, _ in w.get("opened_tiles", [])

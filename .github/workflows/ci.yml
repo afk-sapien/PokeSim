@@ -61,6 +61,14 @@ jobs:
           path: .reference/pokered
           persist-credentials: false
       - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
+      - name: Read Yellow user-content reference for tests only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: pret/pokeyellow
+          ref: e89ead154b9968aa50eed9328ff2b38b6c194382
+          path: .reference/pokeyellow
+          persist-credentials: false
+      - run: uv run --locked python -m pokesim.prepare_data .reference/pokeyellow --yellow
       - name: Generate Gen II game data from pinned public sources
         run: uv run --locked python tools/prepare_gen2_test_data.py "$RUNNER_TEMP/gen2-data"
       - run: uv run --locked pytest --ignore=tests/test_rom.py --ignore=tests/browser -q

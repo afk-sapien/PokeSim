@@ -1,6 +1,6 @@
 # PokeSim
 
-**Pokémon Red, Blue, Gold, Silver and Crystal adventures that keep going while you're away.**
+**Pokémon Red, Blue, Yellow, Gold, Silver and Crystal adventures that keep going while you're away.**
 
 Watch an automatic player catch Pokémon, earn badges and challenge the League in
 your browser. Take control whenever you like, then hand the adventure back.
@@ -111,7 +111,7 @@ usage, and the speed each simulation is actually reaching.
 
 ## Install
 
-Bring your own supported Pokémon Red, Blue, Gold, Silver or Crystal ROM that you are
+Bring your own supported Pokémon Red, Blue, Yellow, Gold, Silver or Crystal ROM that you are
 entitled to use. Supported builds are English USA/Europe, with Crystal Rev 1.
 Professor Oak supplies starters, not ROMs. PokeSim does not
 include or download ROMs. Your ROM stays on the machine running PokeSim.

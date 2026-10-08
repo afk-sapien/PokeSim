@@ -38,7 +38,7 @@ class Assets:
         cartridge = identify(raw)
         sha1 = hashlib.sha1(raw).hexdigest()
         if len(raw) > MAX_ROM or sha1 not in ROM_NAMES:
-            raise ValueError('Choose a clean supported Red, Blue, Gold, Silver or Crystal ROM')
+            raise ValueError('Choose a clean supported Red, Blue, Yellow, Gold, Silver or Crystal ROM')
         sha256 = hashlib.sha256(raw).hexdigest()
         path = self.root / 'roms' / sha256 / 'rom.gb'
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -62,10 +62,12 @@ class Assets:
             from ..gen2.sprites import install
             return install(raw, self.game_data_dir, self.root / 'sprites' / cartridge.version, cartridge.version)
         from ..sprites import extract
-        data = game_data.load('strategy.json', directory=self.game_data_dir)
+        yellow = cartridge is not None and cartridge.version == 'yellow'
+        data = game_data.load('strategy.json', directory=self.game_data_dir, variant='yellow' if yellow else 'red')
         species = {int(key): value for key, value in data['species'].items()}
 
-        directory = self.root / 'sprites'
+        # Yellow redraws most portraits, so they never mix with Red and Blue artwork.
+        directory = self.root / 'sprites' / 'yellow' if yellow else self.root / 'sprites'
         directory.mkdir(parents=True, exist_ok=True)
         written = 0
         try:
@@ -105,6 +107,11 @@ class Assets:
         community = self.portraits.path(dex)
         if community is not None:
             return community
+        if adventure['version'] == 'yellow':
+            if dex > 151:
+                return None
+            path = self.root / 'sprites' / 'yellow' / f'{dex}.png'
+            return path if path.is_file() else None
         directories = (self.registry.root / 'adventures' / adventure_id / 'sprites',
                        self.root / 'sprites')
         for directory in directories:
@@ -134,7 +141,7 @@ class Assets:
     def _has_gen1_data(self):
         try:
             for name in game_data.FILES:
-                game_data.load(name, directory=self.game_data_dir)
+                game_data.load(name, directory=self.game_data_dir, variant='red')
         except RuntimeError:
             return False
         return True
@@ -143,7 +150,7 @@ class Assets:
         """Copy the verified Gen I reference bundle, even into a folder that already holds Gen II data."""
         try:
             for name in game_data.FILES:
-                game_data.load(name, directory=self.reference_source)
+                game_data.load(name, directory=self.reference_source, variant='red')
         except RuntimeError:
             return  # a reference without Gen I tables: they are downloaded below instead
         self.game_data_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -153,7 +160,7 @@ class Assets:
                 shutil.copytree(self.reference_source, copied)
                 copied.rename(self.game_data_dir)
             return
-        bundle = game_data.bundle_path(self.reference_source)
+        bundle = game_data.bundle_path(self.reference_source, 'red')
         destination = self.game_data_dir / 'bundles' / bundle.name
         destination.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='.reference-', dir=destination.parent) as temporary:
@@ -170,9 +177,34 @@ class Assets:
         retrying(lambda: ensure_game_data(self.game_data_dir, report, self.cancelled, self.reference_archive),
                  'Pokémon', report)
 
-    def prepare(self, report=lambda message: None):
+    def prepare(self, report=lambda message: None, version=None):
         with self.guard:
             self._prepare_gen1(report)
+            if version == 'yellow':
+                self._prepare_yellow(report)
             if self.cancelled.is_set():
                 raise RuntimeError('Application setup was cancelled')
         return self.game_data_dir
+
+    def _prepare_yellow(self, report):
+        """Prepare Yellow maps, trainers and Pokédex data beside the shared Red and Blue data."""
+        if self.reference_source:
+            try:
+                for name in game_data.FILES:
+                    game_data.load(name, directory=self.reference_source, variant='yellow')
+            except RuntimeError:
+                pass
+            else:
+                source = game_data.variant_root(self.reference_source, 'yellow')
+                target = game_data.variant_root(self.game_data_dir, 'yellow')
+                bundle = game_data.bundle_path(self.reference_source, 'yellow')
+                destination = target / 'bundles' / bundle.name
+                if not destination.exists():
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    with tempfile.TemporaryDirectory(prefix='.reference-', dir=destination.parent) as temporary:
+                        copied = Path(temporary) / 'bundle'
+                        shutil.copytree(bundle, copied)
+                        copied.rename(destination)
+                CheckpointStore.atomic_write(target / 'current.json', (source / 'current.json').read_bytes())
+        retrying(lambda: ensure_game_data(self.game_data_dir, report, self.cancelled, variant='yellow'),
+                 'Pokémon Yellow', report)

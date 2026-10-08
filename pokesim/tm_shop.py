@@ -22,8 +22,8 @@ COUNTER = (MAPS['CELADON_MART_2F'], 6, 5)
 
 def cartridge_data(rom):
     """Read compatibility from verified cartridges, including older data bundles."""
-    from .catches import SUPPORTED
-    if hashlib.sha1(rom).hexdigest() not in SUPPORTED:
+    from .catches import TRACKED
+    if hashlib.sha1(rom).hexdigest() not in TRACKED:
         return {}, {}
     # The move table ends with the five HMs. Verify all preceding move IDs too.
     suffix = bytes((15, 19, 57, 70, 148))

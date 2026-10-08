@@ -149,6 +149,11 @@ class SimulationSettings:
         """Bridge legacy module constants once inside the owning process."""
         os.environ['DATA_DIR'] = self.data_dir
         os.environ['GAME_DATA_DIR'] = self.game_data_dir
+        from ..cartridges import identify
+        from ..game_data import VARIANT_ENV
+        cartridge = identify(Path(self.rom_path).read_bytes())
+        # Gen I modules load their tables at import time, so choose Yellow data before importing them.
+        os.environ[VARIANT_ENV] = 'yellow' if cartridge is not None and cartridge.version == 'yellow' else 'red'
         for name, value in self.to_dict().items():
             if isinstance(value, bool):
                 encoded = '1' if value else '0'

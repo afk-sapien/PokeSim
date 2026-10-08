@@ -505,7 +505,7 @@
   $('#random-rival').onclick = () => randomizeTrainer('#new-rival', '#new-trainer')
   const KANTO = ['bulbasaur', 'charmander', 'squirtle']
   const JOHTO = ['chikorita', 'cyndaquil', 'totodile']
-  const HEADER_TITLES = {'POKEMON RED': 'red', 'POKEMON BLUE': 'blue', 'POKEMON_GLD': 'gold', 'POKEMON_SLV': 'silver', 'PM_CRYSTAL': 'crystal'}
+  const HEADER_TITLES = {'POKEMON RED': 'red', 'POKEMON BLUE': 'blue', 'POKEMON YELLOW': 'yellow', 'POKEMON_GLD': 'gold', 'POKEMON_SLV': 'silver', 'PM_CRYSTAL': 'crystal'}
   let fileVersion = ''
   async function sniffVersion(file) {
     // Read only the 16-byte cartridge title so a chosen file narrows the starters before upload.
@@ -517,7 +517,8 @@
     } catch { return '' }
   }
   function startersFor(version) {
-    if (!version) return [...KANTO, ...JOHTO]
+    if (!version) return [...KANTO, 'pikachu', ...JOHTO]
+    if (version === 'yellow') return ['pikachu']
     return ['gold', 'silver', 'crystal'].includes(version) ? JOHTO : KANTO
   }
   function updateStarters() {
@@ -588,13 +589,14 @@
         speedInput.value = speed
       }
       const johto = ['gold', 'silver', 'crystal'].includes(game.version)
+      const colour = johto || game.version === 'yellow'
       $('#settings-palette').value = game.settings?.palette || 'original'
-      // Gold, Silver and Crystal already render in colour, so only the Game Boy games offer a palette.
-      $('#settings-palette-label').hidden = johto
-      $('#settings-palette-note').hidden = johto
+      // Yellow, Gold, Silver and Crystal already render in colour, so only Red and Blue offer a palette.
+      $('#settings-palette-label').hidden = colour
+      $('#settings-palette-note').hidden = colour
       const refused = game.summary?.settings_errors?.palette
       $('#settings-palette-note').textContent = refused ? `This adventure has not accepted the palette yet: ${refused}` : 'GBC-inspired colors applied to the whole screen. Changes apply immediately, including while paused.'
-      $('#settings-palette').disabled = johto
+      $('#settings-palette').disabled = colour
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
       for (const [field, setting] of [['league-rewards', 'league_rewards'], ['mew-event', 'mew_event']]) {
         const input = $(`#settings-${field}`)

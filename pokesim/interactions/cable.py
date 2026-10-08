@@ -20,7 +20,7 @@ class CableSide(CableEndpoint):
     """Own an emulator, independent cartridge RAM, and one bounded cable endpoint."""
 
     def __init__(self, spec, max_queue=4, *, builds=None):
-        from pokesim_core.emulator import Emulator as CoreEmulator
+        from ..yellow import open_emulator
         self.spec = spec
         self.rom_bytes = Path(spec.rom_path).read_bytes()
         self.rom_sha1 = hashlib.sha1(self.rom_bytes).hexdigest()
@@ -43,7 +43,7 @@ class CableSide(CableEndpoint):
             checked(expected is None or expected == self.input_hashes[field],
                     f'Source digest mismatch: {field}')
         self.ram_stream = io.BytesIO(save or bytes(32768))
-        self.pb = CoreEmulator(io.BytesIO(self.rom_bytes), ram_file=self.ram_stream,
+        self.pb = open_emulator(io.BytesIO(self.rom_bytes), ram_file=self.ram_stream,
                         window='null', sound_emulated=True, log_level='ERROR')
         try:
             self.pb.set_emulation_speed(0)

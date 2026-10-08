@@ -153,6 +153,8 @@ class Snapshot:
     box_counts: tuple[int, ...] = ()
     stored_details: tuple[StoredMon, ...] = ()
     enemy_shiny: bool = False
+    # Yellow only. Melanie gives Bulbasaur once Pikachu is happy enough.
+    pikachu_happiness: int = 0
 
     def storage_entries(self):
         """Expose individual data while preserving legacy compact storage snapshots."""
@@ -322,6 +324,9 @@ def read_snapshot(mem, frame: int) -> Snapshot:
     decoded['party'] = tuple(PartyMon(**mon) for mon in decoded['party'])
     box_counts = read_box_counts(mem)
     stored = read_stored_details(mem, counts=box_counts)
+    from .yellow import PIKACHU_HAPPINESS, YellowMemory
+    if isinstance(mem, YellowMemory):
+        decoded['pikachu_happiness'] = mem.raw[PIKACHU_HAPPINESS]
     return Snapshot(frame=frame, **decoded, box_counts=box_counts,
                     stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
                     stored_details=stored)

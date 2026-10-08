@@ -134,7 +134,7 @@ def policy_start(fixture, metadata):
     policy = make_policy(config.POLICY, config.SEED)
     preferences = fixture.get('trade_preferences', {})
     policy.trade_preferences = lambda: preferences
-    known = config.KNOWN_ROM_SHA1.get(metadata['rom_sha1'], '')
+    known = config.GEN1_ROM_SHA1.get(metadata['rom_sha1'], '')
     if hasattr(policy, 'nav'):
         policy.nav.use_world = bool(known)
     if hasattr(policy, 'collection'):

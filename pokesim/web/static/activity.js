@@ -121,7 +121,7 @@
       }
       const date = value => new Date(value * 1000).toLocaleString(undefined, {dateStyle: 'medium'})
       let coverage = data.started_at ? `Actions since ${date(data.started_at)}. Earlier activity is not estimated.`
-        : 'Action tracking begins when this adventure runs on a supported Red or Blue cartridge.'
+        : 'Action tracking begins when this adventure runs on a supported Red, Blue, or Yellow cartridge.'
       if (data.started_at && !data.available) coverage += ' Action tracking is currently unavailable for this cartridge.'
       if (pokemon && data.captures_available && data.captures_since) coverage += ` Catch records since ${date(data.captures_since)} are included.`
       if (pokemon) {

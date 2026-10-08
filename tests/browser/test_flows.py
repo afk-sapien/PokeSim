@@ -95,7 +95,7 @@ def test_desktop_upload_validation_retry_and_shutdown(page, game, tmp_path, monk
         expect(page.locator('#setup')).to_be_visible()
         page.locator('#rom').set_input_files({'name': 'bad.gb', 'mimeType': 'application/octet-stream', 'buffer': b'bad'})
         page.get_by_role('button', name='Start my adventure').click()
-        expect(page.get_by_role('alert')).to_contain_text('clean supported Red, Blue, Gold, Silver or Crystal ROM')
+        expect(page.get_by_role('alert')).to_contain_text('clean supported Red, Blue, Yellow, Gold, Silver or Crystal ROM')
         page.locator('#starter').select_option('charmander')
         page.locator('#rom').set_input_files({'name': 'test.gb', 'mimeType': 'application/octet-stream', 'buffer': raw})
         page.get_by_role('button', name='Start my adventure').click()

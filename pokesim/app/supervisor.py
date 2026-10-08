@@ -226,6 +226,8 @@ class Supervisor:
                 report = lambda message: self.registry.update(aid, summary={'setup': message})
                 if adventure['version'] in GEN2_VERSIONS:
                     self.assets.prepare_gen2(adventure['version'], report)
+                elif adventure['version'] == 'yellow':
+                    self.assets.prepare(report, 'yellow')
                 else:
                     self.assets.prepare(report)
                 self.assets.install_portraits(Path(settings['rom_path']).read_bytes())

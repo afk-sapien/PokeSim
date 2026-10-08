@@ -406,12 +406,12 @@ class Participant:
 
     def verify_result(self, record, result, state, save, incoming):
         from types import SimpleNamespace
-        from pokesim_core.emulator import Emulator as CoreEmulator
+        from ..yellow import open_emulator
         from ..interactions.cable_metadata import BUILDS
         from ..interactions.verification import party, boxed_inventory, verify_exchange, verify_restarts
         symbols = BUILDS[self.emu.rom_sha1]['symbols']
         rom = Path(self.runtime.settings.rom_path).read_bytes()
-        pb = CoreEmulator(io.BytesIO(rom), ram_file=io.BytesIO(bytes(32768)), window='null', sound_emulated=False, log_level='ERROR')
+        pb = open_emulator(io.BytesIO(rom), ram_file=io.BytesIO(bytes(32768)), window='null', sound_emulated=False, log_level='ERROR')
         pb.set_emulation_speed(0)
         try:
             pb.load_state(io.BytesIO(_artifact(record['source']['checkpoint_path'], record['source']['checkpoint_sha256'])))
