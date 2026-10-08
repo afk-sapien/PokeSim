@@ -29,6 +29,7 @@ class Navigator:
         self.regions = Regions(data)
         self.region_failures = {}
         self.last_map = None
+        self.moved_frame = -10 ** 9
 
     def observe(self, snapshot):
         if self.last_map is not None and self.last_map != snapshot.map:
@@ -37,13 +38,29 @@ class Navigator:
         self.last_map = snapshot.map
         visible = {index: (x, y) for index, x, y in snapshot.objects}
         known = self.objects.setdefault(snapshot.map, {})
+        objects = self.data.maps[snapshot.map]['objects']
+        # A pushed boulder also shows up under a spare index (255) at its new tile, so it is counted once.
+        real = {point for index, point in visible.items() if 1 <= index <= len(objects)}
+        visible = {index: point for index, point in visible.items() if 1 <= index <= len(objects) or point not in real}
+        moved = set()
         for index, (x, y) in list(known.items()):
+            boulder = not 1 <= index <= len(objects) or objects[index - 1]['sprite'] == 'SPRITE_BOULDER'
+            if index in visible and visible[index] != (x, y) and boulder:
+                moved.add((x, y))
             if index not in visible and abs(x - snapshot.x) <= 4 and abs(y - snapshot.y) <= 4:
                 del known[index]
+                if boulder:
+                    moved.add((x, y))
         known.update(visible)
+        if moved:
+            self.moved_frame = snapshot.frame
+        real = {point for index, point in known.items() if 1 <= index <= len(objects)}
+        for index in [index for index, point in known.items() if not 1 <= index <= len(objects) and point in real]:
+            del known[index]
+        for key in [key for key in self.blocked if key[0] == snapshot.map and key[1:] in moved]:
+            del self.blocked[key]
         for mid in self.regions.ice_maps:
             self.regions.observe_solids(mid, ice_solids(self.data, snapshot, mid))
-        objects = self.data.maps[snapshot.map]['objects']
         cleared = set(self.regions.cleared_rocks.get(snapshot.map, set()))
         for index, obj in enumerate(objects, 1):
             if (obj['sprite'] == 'SPRITE_ROCK' and index not in visible
@@ -62,7 +79,14 @@ class Navigator:
             before, button, frame = self.previous
             if point == before and snapshot.frame - frame >= 24 and not snapshot.in_battle:
                 dx, dy = DIRS[button]
-                self.blocked[(snapshot.map, snapshot.x + dx, snapshot.y + dy)] = snapshot.frame + 180
+                ahead = (snapshot.x + dx, snapshot.y + dy)
+                # A boulder push, or the Strength question, leaves the player in place without the
+                # tile being a wall, and the boulder's old tile is free once it has moved on.
+                pushing = snapshot.frame - self.moved_frame <= 120 or any(
+                    point == ahead for index, point in known.items()
+                    if 1 <= index <= len(objects) and objects[index - 1]['sprite'] == 'SPRITE_BOULDER')
+                if not pushing:
+                    self.blocked[(snapshot.map, *ahead)] = snapshot.frame + 180
             self.previous = None
         self.blocked = {key: until for key, until in self.blocked.items() if until > snapshot.frame}
 
