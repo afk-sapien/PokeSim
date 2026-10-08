@@ -13,11 +13,19 @@ Follow the current [installation instructions](../README.md) and [operations gui
 
 ## Optional community sprites
 
-Settings → Pokémon artwork → **Install community sprite pack** downloads the
-151 colored Red/Blue portraits directly from PokéAPI's sprite repository to your
-server. Nothing is downloaded until you choose this option. The pack applies to
-all adventures and stays installed across restarts. A failed download keeps your
-current artwork in place.
+Portraits normally come from your own ROM. Settings → Pokémon artwork →
+**Install community sprite pack** downloads, in one step, the pinned PokéAPI
+artwork for every supported game: Red/Blue and Yellow (Pokémon 1 to 151) and
+Gold, Silver and Crystal (1 to 251), 1,055 images in all. Each adventure then
+shows the artwork of its own version. Nothing is downloaded until you choose this
+option. The download runs four images at a time with a size limit per image and
+for the whole pack, and finished images are kept in the data folder, so a retry
+after a failure only fetches what is missing. The pack appears only once every
+game is complete and stays installed across restarts. A failed download keeps
+your current artwork in place. A pack installed by an earlier release (Red/Blue
+only) keeps working and offers **Download artwork for all games**, which reuses
+its images. An image you place in an adventure's own `sprites` folder still wins
+over the pack.
 
 **Restore default sprites** switches back to your existing local or ROM-extracted
 portraits. You can enable the installed community pack again without downloading
