@@ -95,6 +95,22 @@ def prerequisites(data, snapshot):
     return needed
 
 
+def league_funding(policy, snapshot, Goal):
+    """Run the Elite Four again for prize money, ending with a Hall of Fame entry."""
+    if not policy.in_league(snapshot):
+        if snapshot.event('EVENT_WILLS_ROOM_ENTRANCE_CLOSED'):
+            return Goal('funds_arrive', 'Return to the League reception', 'INDIGO_PLATEAU_POKECENTER_1F', 17, 10)
+        return policy.person(snapshot, 'funds_will', 'Challenge the League to fund the next expedition',
+                             'WILLS_ROOM', 'WillScript_Battle')
+    for trainer, room in [('WILL', 'WILLS'), ('KOGA', 'KOGAS'), ('BRUNO', 'BRUNOS'), ('KAREN', 'KARENS')]:
+        if not snapshot.event(f'EVENT_BEAT_ELITE_4_{trainer}'):
+            return policy.person(snapshot, 'funds_' + trainer.lower(), 'Continue the League expedition',
+                                 room + '_ROOM', trainer.title() + 'Script_Battle')
+    if not snapshot.event('EVENT_BEAT_CHAMPION_LANCE'):
+        return policy.person(snapshot, 'funds_lance', 'Challenge Champion Lance again', 'LANCES_ROOM', 'LancesRoomLanceScript')
+    return Goal('funds_champion', 'Record another League victory', 'HALL_OF_FAME', 4, 7)
+
+
 def journey(policy, snapshot, mem, Goal):
     data, state = policy.data, policy.collection
     state['prerequisites'] = sorted(prerequisites(data, snapshot))
@@ -133,18 +149,7 @@ def journey(policy, snapshot, mem, Goal):
         state['funding'] = funding = snapshot.hall_of_fame_count + 1
     if funding is not None:
         state['phase'] = 'league'
-        if not policy.in_league(snapshot):
-            if snapshot.event('EVENT_WILLS_ROOM_ENTRANCE_CLOSED'):
-                return Goal('funds_arrive', 'Return to the League reception', 'INDIGO_PLATEAU_POKECENTER_1F', 17, 10)
-            return policy.person(snapshot, 'funds_will', 'Challenge the League to fund the next expedition',
-                                 'WILLS_ROOM', 'WillScript_Battle')
-        for trainer, room in [('WILL', 'WILLS'), ('KOGA', 'KOGAS'), ('BRUNO', 'BRUNOS'), ('KAREN', 'KARENS')]:
-            if not snapshot.event(f'EVENT_BEAT_ELITE_4_{trainer}'):
-                return policy.person(snapshot, 'funds_' + trainer.lower(), 'Continue the League expedition',
-                                     room + '_ROOM', trainer.title() + 'Script_Battle')
-        if not snapshot.event('EVENT_BEAT_CHAMPION_LANCE'):
-            return policy.person(snapshot, 'funds_lance', 'Challenge Champion Lance again', 'LANCES_ROOM', 'LancesRoomLanceScript')
-        return Goal('funds_champion', 'Record another League victory', 'HALL_OF_FAME', 4, 7)
+        return league_funding(policy, snapshot, Goal)
     from .ruins import journey as ruins
     goal = ruins(policy, snapshot, Goal)
     if goal:
