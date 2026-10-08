@@ -15,6 +15,7 @@ import io
 from pokesim_core.emulator import Emulator as CoreEmulator
 
 from ..capability import CAPABILITY_ERRORS, CoreCapabilityError
+from .snapshot import snapshot_emulator
 
 CLOCK_UNAVAILABLE = ('The installed Core or PyBoy RS does not support the cartridge clock '
                      '(rtc_file, export_rtc and lock_clock), so this operation cannot be verified.')
@@ -54,13 +55,15 @@ def boot(rom, *, ram=None, rtc=None, sound=True, log_level='ERROR'):
 
     ``rtc`` is the ten-byte clock file saved with the cartridge, as bytes or a stream.
     Core copies it, so the caller's stream is never written later.
+    The emulator serves memory reads between steps from a snapshot (see ``snapshot``).
     """
     if ram is None:
         ram = io.BytesIO(bytes(32768))
     options = {}
     if rtc:
         options['rtc_file'] = rtc
-    emulator = _clock_call(CoreEmulator, rom, window='null', sound_emulated=sound, ram_file=ram,
+    factory = snapshot_emulator(CoreEmulator) if isinstance(CoreEmulator, type) else CoreEmulator
+    emulator = _clock_call(factory, rom, window='null', sound_emulated=sound, ram_file=ram,
                            log_level=log_level, **options)
     emulator.set_emulation_speed(0)
     return emulator
