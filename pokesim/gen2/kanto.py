@@ -58,7 +58,32 @@ def journey(policy, snapshot, mem, Goal):
     if not snapshot.event('EVENT_OPENED_MT_SILVER'):
         return person('oak', 'Show Professor Oak all sixteen badges', 'OAKS_LAB', 'Oak')
     if 'red' not in policy.completed and not snapshot.event('EVENT_RED_IN_MT_SILVER'):
-        return person('red', 'Challenge Red on Mt. Silver', 'SILVER_CAVE_ROOM_3', 'Red')
+        goal = red_funding(policy, snapshot, Goal)
+        return goal or person('red', 'Challenge Red on Mt. Silver', 'SILVER_CAVE_ROOM_3', 'Red')
     policy.completed.setdefault('red', snapshot.frame)
     from .collection import journey as collect
     return collect(policy, snapshot, mem, Goal)
+
+
+RED_POTIONS = ['FULL_RESTORE', 'MAX_POTION', 'HYPER_POTION']
+
+
+def red_funding(policy, snapshot, Goal):
+    """Win League prize money before Red when healing items run low and the purse cannot restock them.
+
+    Each loss to Red halves the money, so without this the policy keeps walking back to Mt. Silver
+    with an empty bag and no way to buy the potions the shop asks for.
+    """
+    state = policy.collection
+    funding = state.get('funding')
+    if funding is not None and snapshot.hall_of_fame_count >= funding:
+        state.pop('funding', None)
+        funding = None
+    inventory = dict(snapshot.items)
+    potions = sum(inventory.get(policy.data.items[name], 0) for name in RED_POTIONS)
+    if funding is None and potions < 8 and snapshot.money < 10000:
+        state['funding'] = funding = snapshot.hall_of_fame_count + 1
+    if funding is None:
+        return None
+    from .collection import league_funding
+    return league_funding(policy, snapshot, Goal)
