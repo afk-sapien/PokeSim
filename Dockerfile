@@ -8,9 +8,9 @@ COPY pokesim ./pokesim
 COPY tools/bundle_dependency_sources.py ./tools/bundle_dependency_sources.py
 # The corresponding pyboy-rs source archive is a release asset next to its wheels. The checksum is
 # required: an empty value fails the build instead of skipping verification.
-ARG EMULATOR_SOURCE_URL=https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1.tar.gz
+ARG EMULATOR_SOURCE_URL=https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1.tar.gz
 # TEMP-0.5.0-RELEASE-WHEELS: the two values above and below point at the temporary copy.
-ARG EMULATOR_SOURCE_SHA256=608ce596a26d0409630bf34ab8fc15d2b674a59a89495641d698309064cc60d7
+ARG EMULATOR_SOURCE_SHA256=c70e97ae7bac912808c84401d6b35cd6fbe7321d073070a3aebd3a3cd23a7a7a
 ADD --checksum=sha256:${EMULATOR_SOURCE_SHA256} ${EMULATOR_SOURCE_URL} /emulator-source/pyboy-rs-source.tar.gz
 # The locked dependencies are release wheels, so this stage needs no compiler or Rust toolchain.
 RUN uv sync --frozen --no-dev --no-editable \
