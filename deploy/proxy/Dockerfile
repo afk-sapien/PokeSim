@@ -17,7 +17,7 @@ do
 done
 SHELL
 
-FROM caddy:2.11.4-alpine
+FROM caddy:2.11.6-alpine
 RUN apk upgrade --no-cache
 COPY --from=build /caddy /usr/bin/caddy
 COPY --from=build /notices /usr/share/pokesim-proxy/licenses
