@@ -3,7 +3,7 @@ from collections import deque
 
 from . import ice
 from .ram import Memory
-from .routes import Regions
+from .routes import Regions, Search
 from .world import ice_solids, travel_collision
 
 DIRS = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}
@@ -25,6 +25,7 @@ class Navigator:
         self.explored = {}
         self.exploring = None
         self.failed_edges = {}
+        self.searches = {}
         self.objects = {}
         self.regions = Regions(data)
         self.region_failures = {}
@@ -200,17 +201,18 @@ class Navigator:
             yield connection['map'], points, direction
 
     def route(self, start, target, excluded=()):
-        queue = deque([start])
-        paths = {start: []}
-        while queue:
-            mid = queue.popleft()
-            if mid == target:
-                return paths[mid]
-            for destination, points, kind in self.edges(mid):
-                if destination not in paths and destination not in excluded and (mid, destination) not in self.failed_edges:
-                    paths[destination] = paths[mid] + [(mid, destination, points, kind)]
-                    queue.append(destination)
-        return None
+        excluded, failed = frozenset(excluded), frozenset(self.failed_edges)
+        key = (start, excluded, failed)
+        search = self.searches.get(key)
+        if search is None:
+            def expand(mid):
+                for destination, points, kind in self.edges(mid):
+                    if destination not in excluded and (mid, destination) not in failed:
+                        yield destination, (mid, destination, points, kind)
+            if len(self.searches) > 512:
+                self.searches = {}
+            search = self.searches[key] = Search([start], expand)
+        return search.find({target})
 
     def explore(self, snapshot, memory=None, *, surf=False):
         """Head for the least visited way out of the current region, keeping to one choice until it is reached."""
