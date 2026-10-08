@@ -117,7 +117,7 @@ def _emulator():
 
 def test_uncatchable_shiny_is_reported_once_per_battle_with_the_reason():
     from dataclasses import replace
-    from pokesim.events import HIGH
+    from pokesim.events import LOW
     from pokesim.ram import BOX_CAPACITY
     from pokesim.strategy_data import ITEMS
     from test_events import snap
@@ -131,7 +131,7 @@ def test_uncatchable_shiny_is_reported_once_per_battle_with_the_reason():
         assert emu._report_uncatchable_shiny(shiny)
     event, = emu._handle_events.call_args[0][0]
     emu._handle_events.assert_called_once()
-    assert (event.type, event.priority) == ('shiny_missed', HIGH)
+    assert (event.type, event.priority) == ('shiny_missed', LOW)
     assert event.title == 'Shiny Pikachu could not be caught: no storage space'
     assert not emu.paused
     # Battle over, then a new shiny without balls is a new report.
@@ -141,16 +141,17 @@ def test_uncatchable_shiny_is_reported_once_per_battle_with_the_reason():
     assert emu._handle_events.call_count == 2
 
 
-def test_shiny_notification_follows_the_existing_attention_setting():
+def test_shiny_notification_is_low_priority_and_informational():
     from pokesim.app.notifications import CATEGORIES
-    from pokesim.events import Event
+    from pokesim.events import Event, LOW
     from pokesim.notify import Ntfy
-    attention = next(row for row in CATEGORIES if row[0] == 'stall')
-    assert attention[3] and ('shiny_missed', 1) in attention[4]
-    event = Event('shiny_missed', 'Shiny Pikachu could not be caught: no balls', priority=4)
+    stall = next(row for row in CATEGORIES if row[0] == 'stall')
+    assert all(kind != 'shiny_missed' for kind, _ in stall[4])
+    assert not any(kind == 'shiny_missed' for row in CATEGORIES for kind, _ in row[4])  # falls into "other"
+    event = Event('shiny_missed', 'Shiny Pikachu could not be caught: no balls', priority=LOW)
     assert Ntfy('https://ntfy.invalid/t', min_priority=2).wants(event)
+    assert not Ntfy('https://ntfy.invalid/t', min_priority=3).wants(event)
     assert not Ntfy('https://ntfy.invalid/t', min_priority=2, mute={'shiny_missed'}).wants(event)
-    assert not Ntfy('https://ntfy.invalid/t', min_priority=5).wants(event)
 
 
 @pytest.mark.parametrize('original,copied,expected', [
