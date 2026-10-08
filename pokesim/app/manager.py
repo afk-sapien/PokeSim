@@ -135,6 +135,7 @@ class Manager:
                     if self.coordinator.reserved(aid):
                         return row
                     return self.supervisor.stop(aid, preserve_desired=True)
+                self.supervisor.setup_retries.pop(aid, None)
                 return self.supervisor.start(aid)
         except Exception as error:
             row = self.registry.adventure(aid)

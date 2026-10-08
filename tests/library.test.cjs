@@ -24,7 +24,7 @@ function library(options = {}) {
   }
   const location = {hash: options.hash || '', pathname: '/', search: '', replace() {}}
   const context = vm.createContext({
-    document: {body: {dataset: {page: options.page || 'library', adventure: ''}}, querySelector: element,
+    document: {body: {dataset: {page: options.page || 'library', adventure: options.adventure || ''}}, querySelector: element,
       querySelectorAll: () => [], addEventListener(name, callback) { listeners[name] = callback }, hidden: false},
     setTimeout: callback => setImmediate(callback),
     location, history: {replaceState(_, __, path) { calls.push({path: 'history', next: path})
@@ -100,6 +100,42 @@ test('a running adventure that reports a stall says so on its card', async () =>
   view.element('#adventure-list').insertAdjacentHTML = (_, html) => { cards.push(html) }
   await settle()
   assert.deepEqual(cards.map(html => /Stuck\?/.test(html)), [true, false, false])
+})
+
+test('stopped and failed cards say so and start in one click, translating raw network errors', async () => {
+  const games = [{id: 'a'.repeat(32), name: 'Cozy Escape', version: 'silver', state: 'failed', desired_state: 'running',
+    error: '<urlopen error [Errno -5] No address associated with hostname>'},
+    {id: 'b'.repeat(32), name: 'Quiet Cove', version: 'red', state: 'stopped', desired_state: 'stopped'}]
+  const view = library({respond(path) {
+    return path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: games})} : null
+  }})
+  const cards = []
+  view.element('#adventure-list').insertAdjacentHTML = (_, html) => { cards.push(html) }
+  await settle()
+  assert.match(cards[0], /state-pill"><i[^>]*><\/i>Failed</)
+  assert.match(cards[0], /data-action="start"[^>]*>Retry</)
+  assert.match(cards[0], /Couldn&#39;t download the Pokémon Silver game data \(no network\)\. Retry\./)
+  assert.doesNotMatch(cards[0], /urlopen/)
+  assert.match(cards[1], />Stopped</)
+  assert.match(cards[1], /key key--primary" data-action="start"[^>]*>Start</)
+  assert.doesNotMatch(cards[1], />View adventure</)
+})
+
+test('the page for a failed adventure explains the failure and is not a library', async () => {
+  const id = 'a'.repeat(32)
+  const view = library({page: 'stopped', adventure: id, respond(path) {
+    return path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: [{id, name: 'Cozy Escape', version: 'silver',
+      state: 'failed', error: '<urlopen error timed out>', summary: {next_retry: Date.now() / 1000 + 120}}]})} : null
+  }})
+  await settle()
+  const page = view.element('#stopped-card').innerHTML
+  assert.match(page, /Failed to start/)
+  assert.match(page, /\(no network\)\. Retry\./)
+  assert.match(page, /Technical details/)
+  assert.match(page, /try again by itself in about 2 minutes/)
+  assert.match(page, /data-action="start"[^>]*>Retry</)
+  assert.doesNotMatch(page, /No adventures yet|Create an adventure/)
+  assert.match(view.element('#stopped-lede').textContent, /could not start/)
 })
 
 test('settings mutations send only fields accepted by the manager', async () => {

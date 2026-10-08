@@ -39,6 +39,24 @@
   const dateLabel = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : String(value || '')
   const gameUrl = id => `/games/${encodeURIComponent(id)}/`
   const running = game => ['running', 'paused', 'held', 'waiting_for_trade'].includes(game.state)
+  const capital = text => text ? text[0].toUpperCase() + text.slice(1) : ''
+  const stateLabel = game => game.archived ? 'Archived' : capital((game.state || 'stopped').replaceAll('_', ' '))
+  const gameName = game => `Pokémon ${capital(game.version)}`
+  const transitionalStates = ['starting', 'stopping', 'preparing', 'setting_up', 'recovering', 'deleting']
+  const offline = /urlopen error|No address associated|Name or service not known|Temporary failure in name resolution|Network is unreachable|timed out|Connection (refused|reset|aborted)|getaddrinfo/i
+  // The server words most failures already. Raw network errors from older starts are translated here.
+  function explainError(game) {
+    const raw = typeof game.error === 'string' ? game.error : game.error ? JSON.stringify(game.error) : ''
+    if (!raw) return ''
+    if (offline.test(raw)) return `Couldn't download the ${gameName(game)} game data (no network). Retry.`
+    return raw
+  }
+  function retryNote(game) {
+    const due = game.summary?.next_retry
+    if (!due || game.state !== 'failed') return ''
+    const minutes = Math.max(1, Math.round((due * 1000 - Date.now()) / 60000))
+    return `PokeSim will also try again by itself in about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`
+  }
   function notice(message, error = false) {
     $('#notice').textContent = message
     $('#notice').hidden = !message
@@ -150,7 +168,7 @@
   }
   function card(game) {
     const active = running(game)
-    const transitional = ['starting', 'stopping', 'preparing', 'setting_up', 'recovering', 'deleting'].includes(game.state)
+    const transitional = transitionalStates.includes(game.state)
     const summary = game.summary || {}
     const activity = summary.message || summary.activity || summary.game?.location || summary.map || (active ? 'Adventure in progress' : 'Your saves are waiting here')
     const wins = summary.league_rewards?.wins
@@ -160,21 +178,49 @@
     const resources = '<dl class="card-resources" aria-label="Resource usage" aria-live="off"><div><dt title="100% CPU means one fully used processor core">CPU (1 core)</dt><dd data-usage="cpu">Measuring…</dd></div><div><dt title="Resident memory for this simulation, excluding the shared library process">Memory</dt><dd data-usage="memory">Measuring…</dd></div><div><dt title="Simulated seconds per real second, measured over the latest health-check interval">Actual speed</dt><dd data-usage="speed">Measuring…</dd></div></dl>'
     const provenance = game.provenance?.trading_blocked ? `<p class="card-error">${esc(game.provenance.reason || 'Legacy trade history needs reconciliation before trading.')}</p>` : ''
     const stalled = active && summary.stalled ? '<p class="card-error">Stuck? No progress for a while. Open the adventure to see its objective.</p>' : ''
-    const failure = game.error ? `<p class="card-error">${esc(typeof game.error === 'string' ? game.error : JSON.stringify(game.error))}</p>` : ''
+    const failure = game.error ? `<p class="card-error">${esc(explainError(game))}</p>` : ''
     const lamp = game.archived ? '' : failure || game.state === 'error' ? 'crit' : transitional || (active && summary.stalled) ? 'warn' : active ? 'ok' : ''
     const download = `<button class="key" data-action="download-save" data-id="${esc(game.id)}" data-owner ${!active ? 'disabled data-blocked title="Start this adventure to download its save"' : 'title="Download a .sav file for another emulator"'}>Download</button>`
     const screen = active
       ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${esc(game.name)} game screen" loading="lazy" width="160" height="144"></div>`
-      : `<div class="card-screen card-screen--off"><span class="micro">${game.archived ? 'Archived' : 'Saved · not running'}</span></div>`
+      : `<div class="card-screen card-screen--off"><span class="micro">${game.archived ? 'Archived' : game.state === 'failed' ? 'Failed to start · saves kept' : transitional ? esc(stateLabel(game)) + '…' : 'Stopped · saves kept'}</span></div>`
     const blocked = transitional ? 'disabled data-blocked' : ''
     const settings = `<button class="key card-settings" data-action="settings" data-id="${esc(game.id)}" data-owner ${blocked} aria-label="Settings" title="Adventure settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3h6l1 3 3-1 3 5-2 2 2 2-3 5-3-1-1 3H9l-1-3-3 1-3-5 2-2-2-2 3-5 3 1Z"/><circle cx="12" cy="12" r="3"/></svg></button>`
-    const primary = `<div class="card-open"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${settings}</div>`
-    const lifecycle = game.archived
+    // A stopped or failed adventure has no live view, so its main key starts it right here.
+    const startable = !active && !transitional && !game.archived
+    const primary = startable
+      ? `<div class="card-open"><button class="key key--primary" data-action="start" data-id="${esc(game.id)}" data-owner>${game.state === 'failed' ? 'Retry' : 'Start'}</button>${settings}</div>`
+      : `<div class="card-open"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${settings}</div>`
+    const details = `<a class="key" href="${gameUrl(game.id)}">Details</a>`
+    const lifecycle = startable ? details : game.archived
       ? `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner ${blocked}>Restore</button>`
       : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${blocked} ${active ? 'title="Save progress and stop this adventure"' : ''}>${transitional ? esc(game.state) : active ? 'Stop' : 'Start'}</button>`
     const archive = game.archived ? '' : `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner ${blocked} title="Save, stop, and archive this adventure">Archive</button>`
     const deletion = `<button class="key key--danger" data-action="delete" data-id="${esc(game.id)}" data-owner ${transitional && game.state !== 'deleting' ? blocked : ''}>${game.state === 'deleting' ? 'Retry deletion' : 'Delete'}</button>`
-    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.state === 'deleting' ? '<p class="card-note">Deletion is incomplete. Retry to finish removing this adventure.</p>' : game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions">${primary}<div class="card-operations">${lifecycle}${download}${archive}${deletion}</div></div></article>`
+    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(stateLabel(game))}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.state === 'deleting' ? '<p class="card-note">Deletion is incomplete. Retry to finish removing this adventure.</p>' : game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions">${primary}<div class="card-operations">${lifecycle}${download}${archive}${deletion}</div></div></article>`
+  }
+  function stoppedLede(game) {
+    if (game.archived) return 'Archived adventures keep all their saves. Restore it from the library to play again.'
+    if (game.state === 'failed') return 'It could not start. Your saves are untouched.'
+    if (transitionalStates.includes(game.state)) return 'Getting ready. This page opens the live view when it is running.'
+    return 'Stopped. Your saves are kept. Start it to return to the live view, PC, and journal.'
+  }
+  // The page for an adventure that is not running: what happened, why, and one big key to fix it.
+  function stoppedPage(game) {
+    const failed = game.state === 'failed'
+    const busyState = transitionalStates.includes(game.state)
+    const lamp = failed ? 'crit' : busyState ? 'warn' : ''
+    const headline = game.archived ? 'Archived' : failed ? 'Failed to start' : busyState ? `${stateLabel(game)}…` : 'Stopped'
+    const setup = busyState && game.summary?.setup ? `<p class="status-detail">${esc(game.summary.setup)}…</p>` : ''
+    const reason = failed && game.error ? explainError(game) : ''
+    const raw = typeof game.error === 'string' ? game.error : ''
+    const technical = reason && raw && raw !== reason ? `<details class="status-technical"><summary>Technical details</summary><p>${esc(raw)}</p></details>` : ''
+    const again = failed ? retryNote(game) : ''
+    const action = game.archived ? `<button class="key key--primary key--large" data-action="restore" data-id="${esc(game.id)}" data-owner>Restore adventure</button>`
+      : busyState ? `<button class="key key--primary key--large" disabled>${esc(stateLabel(game))}…</button>`
+      : `<button class="key key--primary key--large" data-action="start" data-id="${esc(game.id)}" data-owner>${failed ? 'Retry' : 'Start adventure'}</button>`
+    const links = `<a class="key" href="${gameUrl(game.id)}trading">Cable Club trading</a><a class="key" href="/">Back to the library</a>`
+    return `<article class="adventure-status ${esc(game.version)}" data-state="${esc(game.state || 'stopped')}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">${esc(gameName(game).toUpperCase())}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(stateLabel(game))}</span></header><div class="status-body"><h2 class="status-headline">${esc(headline)}</h2>${reason ? `<p class="card-error" role="alert">${esc(reason)}</p>` : ''}${setup}${technical}${again ? `<p class="note">${esc(again)}</p>` : ''}<div class="status-actions">${action}</div><p class="note">Your saves are safe while it is not running. The live view, PC, Pokédex, and journal open once it is running.</p><nav class="status-links" aria-label="Adventure">${links}</nav></div></article>`
   }
   function renderAdventures() {
     const visible = adventures.filter(game => $('#show-archived').checked || !game.archived)
@@ -202,10 +248,10 @@
     if (page === 'stopped') {
       const game = adventures.find(item => item.id === currentId)
       $('#stopped-title').textContent = game?.name || 'Adventure unavailable'
-      const stoppedMarkup = game ? card(game) : '<p>This adventure is not in the current library.</p>'
+      const stoppedMarkup = game ? stoppedPage(game) : '<p class="stopped-missing">This adventure is not in the current library. <a href="/">Back to the library</a></p>'
       if (stoppedSignature !== stoppedMarkup) { $('#stopped-card').innerHTML = stoppedMarkup
         stoppedSignature = stoppedMarkup }
-      if (game) updateResources($('#stopped-card'), game)
+      if (game) $('#stopped-lede').textContent = stoppedLede(game)
       if (game && running(game)) location.replace(gameUrl(game.id))
     }
     permissions()
@@ -889,7 +935,7 @@
     await initializeSession()
     $('#workspace').hidden = false
     document.querySelectorAll('[data-view]').forEach(section => { section.hidden = section.dataset.view !== page })
-    document.querySelector(`[data-nav="${page}"]`)?.setAttribute('aria-current', 'page')
+    document.querySelector(`[data-nav="${page === 'stopped' ? 'library' : page}"]`)?.setAttribute('aria-current', 'page')
     if (page === 'settings' && owner) {
       renderNicknameSettings(await api('/api/v1/settings'))
       await refreshBackups()
