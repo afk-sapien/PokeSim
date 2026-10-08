@@ -877,8 +877,9 @@
   function renderPortraits(data) {
     $('#portrait-state').textContent = data.busy ? `Downloading ${data.completed} / ${data.total}` : data.active === 'community' ? 'Community sprites active' : 'Default sprites active'
     const install = $('#portrait-install')
-    install.textContent = data.busy ? 'Downloading…' : data.installed ? 'Use community sprites' : 'Install community sprite pack'
-    install.hidden = data.active === 'community' && !data.busy
+    const partial = !data.installed && Object.values(data.sets || {}).some(Boolean)
+    install.textContent = data.busy ? 'Downloading…' : data.installed ? 'Use community sprites' : partial ? 'Download artwork for all games' : 'Install community sprite pack'
+    install.hidden = data.active === 'community' && data.installed && !data.busy
     install.toggleAttribute('data-blocked', data.busy)
     const restore = $('#portrait-default')
     restore.hidden = data.active !== 'community'
@@ -886,12 +887,13 @@
     $('#portrait-source').href = data.source
     $('#portrait-license').href = data.license
     $('#portrait-progress').hidden = !data.busy
+    $('#portrait-progress').max = data.total
     $('#portrait-progress').value = data.completed
-    $('#portrait-feedback').textContent = data.error || (data.busy ? 'Your current artwork stays in place until all 151 sprites are ready.' : data.installed ? 'Reopen adventure pages after switching artwork.' : '')
+    $('#portrait-feedback').textContent = data.error || (data.busy ? `Your current artwork stays in place until all ${data.total} sprites for every game are ready.` : data.installed ? 'Reopen adventure pages after switching artwork.' : partial ? 'This older pack only covers Red and Blue. Download the rest to cover every game.' : '')
     $('#portrait-feedback').classList.toggle('is-error', Boolean(data.error))
     const preview = $('#portrait-preview')
-    preview.hidden = !data.installed
-    if (data.installed && preview.dataset.revision !== data.revision) {
+    preview.hidden = !data.installed && !partial
+    if (!preview.hidden && preview.dataset.revision !== data.revision) {
       preview.dataset.revision = data.revision
       preview.innerHTML = [[1, 'Bulbasaur'], [6, 'Charizard'], [25, 'Pikachu']].map(([dex, name]) => `<div class="plate"><img src="/api/v1/portraits/preview/${dex}.png?v=${encodeURIComponent(data.revision)}" alt="${name}"></div>`).join('') + '<p class="note portrait-preview-caption">Community pack preview</p>'
     }
