@@ -16,12 +16,12 @@ dependencies = [
   # exactly the platforms that have a pyboy-rs wheel. Core must carry the marker too: its own requirement on
   # pyboy-rs would otherwise send pip to look that name up on PyPI where the platform has no wheel (Windows ARM64,
   # 32-bit ARM, FreeBSD). Neither name is a PyPI project of ours, so no install may ever depend on PyPI for them.
-  "pokesim-core[emulator] @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pokesim_core-0.2.0-py3-none-any.whl ; (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and (platform_machine == 'x86_64' or platform_machine == 'arm64')) or (sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64'))",
-  "pyboy-rs @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
-  "pyboy-rs @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl ; sys_platform == 'linux' and platform_machine == 'aarch64'",
-  "pyboy-rs @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-  "pyboy-rs @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl ; sys_platform == 'darwin' and platform_machine == 'arm64'",
-  "pyboy-rs @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl ; sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",
+  "pokesim-core[emulator] @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pokesim_core-0.2.0-py3-none-any.whl ; (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and (platform_machine == 'x86_64' or platform_machine == 'arm64')) or (sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64'))",
+  "pyboy-rs @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "pyboy-rs @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl ; sys_platform == 'linux' and platform_machine == 'aarch64'",
+  "pyboy-rs @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "pyboy-rs @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl ; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "pyboy-rs @ https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl ; sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",
   "fastapi>=0.110",
   "uvicorn[standard]>=0.53.0",
   "pillow>=10",

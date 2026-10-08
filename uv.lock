@@ -585,11 +585,11 @@ dependencies = [
     { name = "pillow", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
     { name = "pokesim-core", extra = ["emulator"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
     { name = "psutil", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" }, marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
+    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" }, marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
     { name = "uvicorn", extra = ["standard"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
 ]
 
@@ -612,13 +612,13 @@ requires-dist = [
     { name = "numpy" },
     { name = "pillow", specifier = ">=10" },
     { name = "playwright", marker = "extra == 'browser-test'", specifier = ">=1.50" },
-    { name = "pokesim-core", extras = ["emulator"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pokesim_core-0.2.0-py3-none-any.whl" },
+    { name = "pokesim-core", extras = ["emulator"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pokesim_core-0.2.0-py3-none-any.whl" },
     { name = "psutil", specifier = ">=7,<8" },
-    { name = "pyboy-rs", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" },
-    { name = "pyboy-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" },
-    { name = "pyboy-rs", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" },
-    { name = "pyboy-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" },
-    { name = "pyboy-rs", marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" },
+    { name = "pyboy-rs", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" },
+    { name = "pyboy-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" },
+    { name = "pyboy-rs", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" },
+    { name = "pyboy-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" },
+    { name = "pyboy-rs", marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')", url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.53.0" },
 ]
@@ -627,19 +627,19 @@ provides-extras = ["dev", "browser-test", "acceleration"]
 [[package]]
 name = "pokesim-core"
 version = "0.2.0"
-source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pokesim_core-0.2.0-py3-none-any.whl" }
+source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pokesim_core-0.2.0-py3-none-any.whl" }
 wheels = [
-    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pokesim_core-0.2.0-py3-none-any.whl", hash = "sha256:92f19116d19cb3b8a0f3e25547e51bd85b10cef3ba38263b735b4c5f7f8bb112" },
+    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pokesim_core-0.2.0-py3-none-any.whl", hash = "sha256:92f19116d19cb3b8a0f3e25547e51bd85b10cef3ba38263b735b4c5f7f8bb112" },
 ]
 
 [package.optional-dependencies]
 emulator = [
     { name = "pillow", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" }, marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
+    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" }, marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
 ]
 
 [package.metadata]
@@ -679,13 +679,13 @@ wheels = [
 [[package]]
 name = "pyboy-rs"
 version = "0.1.1"
-source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" }
+source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" }
 resolution-markers = [
     "python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
     "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
 ]
 wheels = [
-    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:99509c771e6d2f6a9db52d3858d7a03715c8d98c6697517818f83f10f6208276" },
+    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:99509c771e6d2f6a9db52d3858d7a03715c8d98c6697517818f83f10f6208276" },
 ]
 
 [package.metadata]
@@ -700,13 +700,13 @@ provides-extras = ["images", "test"]
 [[package]]
 name = "pyboy-rs"
 version = "0.1.1"
-source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" }
+source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" }
 resolution-markers = [
     "python_full_version >= '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
     "python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
 ]
 wheels = [
-    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:d05536e74240515123b5f50be91120b6af21fcba4d0b1ad0bcc273212a5b940d" },
+    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:d05536e74240515123b5f50be91120b6af21fcba4d0b1ad0bcc273212a5b940d" },
 ]
 
 [package.metadata]
@@ -721,13 +721,13 @@ provides-extras = ["images", "test"]
 [[package]]
 name = "pyboy-rs"
 version = "0.1.1"
-source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }
+source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }
 resolution-markers = [
     "python_full_version >= '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
-    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:dc5fb9de9066acb8810f6cb54a17cdcd71449410df84af9a66dbc05ee9836152" },
+    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:dc5fb9de9066acb8810f6cb54a17cdcd71449410df84af9a66dbc05ee9836152" },
 ]
 
 [package.metadata]
@@ -742,13 +742,13 @@ provides-extras = ["images", "test"]
 [[package]]
 name = "pyboy-rs"
 version = "0.1.1"
-source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
+source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
 resolution-markers = [
     "python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
 ]
 wheels = [
-    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:37e8b8b7f184356529118b266fa83337999068e41681109034ae1cd1320b1352" },
+    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:37e8b8b7f184356529118b266fa83337999068e41681109034ae1cd1320b1352" },
 ]
 
 [package.metadata]
@@ -763,13 +763,13 @@ provides-extras = ["images", "test"]
 [[package]]
 name = "pyboy-rs"
 version = "0.1.1"
-source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" }
+source = { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" }
 resolution-markers = [
     "(python_full_version >= '3.12' and platform_machine == 'AMD64' and sys_platform == 'win32') or (python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'win32')",
     "(python_full_version < '3.12' and platform_machine == 'AMD64' and sys_platform == 'win32') or (python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'win32')",
 ]
 wheels = [
-    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/codex/pin-pyboy-rs-45c2fe7/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl", hash = "sha256:61133a75a328ac8e46b7d22c8104d95b0136aecc2aeadb72b158c38f1df442fb" },
+    { url = "https://raw.githubusercontent.com/afk-sapien/PokeSim/refs/heads/release/0.5.0/tools/temp-wheels/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl", hash = "sha256:61133a75a328ac8e46b7d22c8104d95b0136aecc2aeadb72b158c38f1df442fb" },
 ]
 
 [package.metadata]
