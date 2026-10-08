@@ -1,6 +1,7 @@
 """Generation II data presented through the shared adventure interface."""
 import json
 
+from .battle_power import battle_power
 from .ram import STAT_NAMES
 
 VERSIONS = ('gold', 'silver', 'crystal')
@@ -56,12 +57,20 @@ class Reference:
         return json.dumps({'version': version, 'generation': 2, 'count': 251, 'entries': entries}).encode()
 
 
-def live_status(game, collection=None, **kwargs):
+def live_status(game, collection=None, *, data=None, **kwargs):
     collection = collection or {}
+    game = game or {}
+
+    def rated(mon):
+        return {**mon, 'battle_power': battle_power(mon, data) if data is not None else None}
+
+    storage = game.get('storage')
+    if storage:
+        storage = {**storage, 'pokemon': [rated(mon) for mon in storage.get('pokemon', [])]}
     return {'started': bool(game), 'version': collection.get('version', DEFAULT_VERSION),
-            'generation': 2, 'dex_total': 251, 'owned': (game or {}).get('dex_owned', []),
-            'seen': (game or {}).get('dex_seen', []), 'party': [{**mon, 'slot': index + 1} for index, mon in enumerate((game or {}).get('party', []))],
-            'storage': (game or {}).get('storage'), 'player_name': (game or {}).get('player_name', ''),
-            'playtime': (game or {}).get('playtime', ''), 'plan': collection.get('plan', []),
+            'generation': 2, 'dex_total': 251, 'owned': game.get('dex_owned', []),
+            'seen': game.get('dex_seen', []), 'party': [{**rated(mon), 'slot': index + 1} for index, mon in enumerate(game.get('party', []))],
+            'storage': storage, 'player_name': game.get('player_name', ''),
+            'playtime': game.get('playtime', ''), 'plan': collection.get('plan', []),
             'phase': collection.get('phase', 'journey'), 'hunting': collection.get('hunting'),
             'protected_species': collection.get('protected_species', []), 'catches': {}}

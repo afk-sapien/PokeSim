@@ -62,7 +62,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                browser_origin: str | None = None) -> FastAPI:
     gen2 = getattr(emu, 'generation', 1) == 2
     if gen2:
-        from ..gen2.web import Reference, live_status as gen2_live_status
+        from functools import partial
+        from ..gen2.web import Reference, live_status as gen2_status
+        gen2_live_status = partial(gen2_status, data=emu.data)
         reference_json = Reference(emu.data).json
         DEFAULT_VERSION = emu.data.game
         VERSIONS = (DEFAULT_VERSION,)
@@ -136,7 +138,11 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         from ..adventure_records import status as record_status
         if gen2:
             from ..gen2.steps import status as mew_status
+            from ..gen2.battle_power import battle_power as gen2_power
             return {**status(store), 'legendary_returns': {}, 'event_returns': {},
+                    'highlights': highlights((emu.status() or {}).get('game'),
+                                             (lambda mon: gen2_power(mon, emu.data), lambda mon: None if mon.get('egg') else mon.get('dv_total')),
+                                             emu.data.species),
                     'mew_returns': mew_status(store), 'marathon': {}}
         from ..legendary_returns import status as returns_status
         current = emu.status()
