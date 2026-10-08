@@ -712,11 +712,6 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .game-card.is-manual .bezel-foot .mode { color: var(--signal-lamp); }
 .game-card.is-manual .bezel-foot .mode .lamp { background: var(--signal-lamp); }
 
-/* One compact row of controls; the mode readout lives in the bezel foot. */
-.deck { flex-wrap: nowrap; justify-content: space-between; }
-.deck > * { flex: 0 0 auto; }
-.deck .key { min-height: 44px; padding: 0 10px; font-size: 12px; letter-spacing: 0.04em; }
-.deck .live-speed select { min-height: 44px; min-width: 56px; padding: 0 4px; }
 
 
 .gamepad {
@@ -769,7 +764,12 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .dpad button:active,
 .abxy button:active { background: var(--well); box-shadow: var(--well-inset); }
 .pad-help { flex: 1 1 200px; display: grid; gap: var(--s2); }
-.pad-help p { font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.keymap-title { font: var(--f-label) / 1.3 var(--font-mono); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); }
+.keymap { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s2) var(--s4); margin: 0; }
+.keymap > div { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.keymap dt { font: var(--f-legend) / 1 var(--font-panel); text-transform: uppercase; color: var(--ink); }
+.keymap dd { display: flex; gap: 4px; margin: 0; }
+.keymap kbd { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; background: var(--panel); border: var(--hair) solid var(--rule); box-shadow: var(--key-inset); font: 12px / 1 var(--font-mono); color: var(--ink); }
 
 /* ---- the plan ----------------------------------------------------------
    The machine's statement of intent, directly under the picture it
@@ -1247,14 +1247,70 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .shiny-badge { color: var(--signal) }
 .shiny-badge { border: 1px solid currentColor }
 
-/* Below the width where six controls fit on one row: an even two-column touch grid. */
+/* ---- live controls: one even grid of identical keys --------------------
+   Every control is the same height and type. Wide enough for each key to
+   hold its label: one row of equal keys. Otherwise an even grid (3 columns,
+   then 2 on phones) with Take control spanning so no row is ragged. A label
+   that still does not fit wraps inside its key instead of clipping or
+   pushing the key wider. Status text gets its own full-width line. */
+.deck.controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--s2);
+}
+.deck.controls > * { min-width: 0; margin: 0; }
+.deck.controls .key--primary { grid-column: span 2; }
+.deck.controls:has(#export-save) .key--primary { grid-column: auto; }
+.deck.controls .key,
+.deck.controls .live-speed select {
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 6px;
+  font: var(--f-legend) / 1.15 var(--font-panel);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.deck.controls .live-speed { display: block; width: 100%; }
+.deck.controls .live-speed select {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  padding: 0 24px 0 6px;
+  text-align-last: center;
+  background: var(--panel-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23555'/%3E%3C/svg%3E") no-repeat right 9px center;
+  border: var(--hair) solid var(--rule);
+  border-radius: 0;
+  box-shadow: var(--key-inset);
+  color: var(--ink);
+  cursor: pointer;
+}
+.deck.controls #sound-status {
+  grid-column: 1 / -1;
+  text-align: center;
+  font: var(--f-micro) / 1.4 var(--font-mono);
+  color: var(--ink-2);
+}
+.deck.controls #sound-status[hidden] { display: none; }
+
+/* One row of five equal keys once each key is about 130px wide. */
+@media (min-width: 821px) {
+  .deck.controls:not(:has(#export-save)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .deck.controls:not(:has(#export-save)) .key--primary { grid-column: auto; }
+}
+@media (max-width: 560px) {
+  .deck.controls,
+  .deck.controls:has(#export-save) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .deck.controls .key--primary,
+  .deck.controls:has(#export-save) .key--primary,
+  .deck.controls #export-save { grid-column: 1 / -1; }
+}
 @media (max-width: 760px) {
-  .deck { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .deck > * { min-width: 0; }
-  .deck .key { width: 100%; padding: 0 var(--s2); }
-  .deck .key--primary, .deck #export-save { grid-column: 1 / -1; }
-  .deck .live-speed, .deck .live-speed select { width: 100%; }
-  .deck .live-speed { margin: 0; }
   .bezel-foot { flex-wrap: wrap; gap: var(--s1) var(--s3); }
   .bezel-foot .mode { margin-left: 0; width: 100%; }
 }
