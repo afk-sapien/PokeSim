@@ -4,7 +4,7 @@ import json
 from collections import Counter
 
 from ..shiny import is_shiny
-from ..milestones import is_perfect
+from ..dvs import is_perfect
 
 PREFIX = 'trade_offer:'
 

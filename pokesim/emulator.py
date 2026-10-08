@@ -914,8 +914,12 @@ class Emulator:
         elif name == "load_state":
             p = self.store.state_path(arg)
             if p:
-                self._load_state_file(p)
-                log.info("loaded %s", p.name)
+                try:
+                    self._load_state_file(p)
+                except ValueError as error:
+                    log.warning("Rewind to %s refused: %s", p.name, error)
+                else:
+                    log.info("loaded %s", p.name)
         elif name == "restart":
             log.warning("restarting run from power-on")
             if hasattr(self, 'statistics'):

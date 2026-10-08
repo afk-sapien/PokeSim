@@ -56,6 +56,14 @@ class SimulationRuntime:
                 cartridge = identify(Path(self.settings.rom_path).read_bytes())
                 gen2 = cartridge is not None and cartridge.generation == 2
                 if gen2:
+                    from ..game_data import FILES, load
+                    try:
+                        for name in FILES:
+                            load(name)
+                    except RuntimeError as error:
+                        raise RuntimeError(
+                            'The shared Gen I reference tables are missing from the game data folder, and Gen II '
+                            'adventures still read them. Re-run the application setup or the prepare-data command.') from error
                     from ..gen2.data import GameData
                     GameData.load(self.settings.game_data_dir, cartridge.version)
                     from ..gen2.emulator import Emulator

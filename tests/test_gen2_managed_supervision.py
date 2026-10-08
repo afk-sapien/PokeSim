@@ -4,6 +4,7 @@ Skips unless GEN2_CARTRIDGE_DIR (extracted gold.gbc, silver.gbc, crystal.gbc) an
 (generated local game data) are set. Set POKESIM_GEN2_SOAK_SECONDS to change the 80 second soak.
 """
 import os
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -27,6 +28,12 @@ def test_real_gen2_worker_stays_healthy_past_the_monitor_sync_interval(tmp_path,
         pytest.skip(f'{rom.name} is not available')
     if version != 'gold' and os.environ.get('POKESIM_GEN2_SOAK_ALL') != '1':
         pytest.skip('Set POKESIM_GEN2_SOAK_ALL=1 to soak Silver and Crystal as well')
+    # A prepared library holds the shared Gen I tables beside the Gen II bundles.
+    from test_gen2_only_library import _reference
+    combined = tmp_path / 'game-data'
+    shutil.copytree(_reference(tmp_path), combined)
+    shutil.copytree(Path(data) / 'gen2', combined / 'gen2', dirs_exist_ok=True)
+    data = str(combined)
     registry = Registry(tmp_path / 'library')
     registry.add_rom('digest', 'sha1', version)
     assets = SimpleNamespace(rom_path=lambda rid: rom, game_data_dir=Path(data),

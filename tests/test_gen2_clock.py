@@ -95,13 +95,16 @@ def test_unrelated_runtime_errors_pass_through():
         export_clock(Broken())
 
 
-def test_capability_error_stays_a_not_implemented_error():
-    assert issubclass(CoreCapabilityError, NotImplementedError)
+def test_capability_error_is_the_backends_so_one_handler_reports_it():
+    from pokesim_core.errors import CoreCapabilityError as BackendError
+    assert issubclass(CoreCapabilityError, BackendError)
 
 
-def test_boot_rtc_requires_core_support(monkeypatch):
-    monkeypatch.setattr(core, '_core_has_clock', lambda: False)
-    with pytest.raises(CoreCapabilityError):
+def test_boot_with_a_clock_on_an_old_core_is_a_clear_capability_error(monkeypatch):
+    def old_core(rom, **options):
+        raise TypeError("__init__() got an unexpected keyword argument 'rtc_file'")
+    monkeypatch.setattr(core, 'CoreEmulator', old_core)
+    with pytest.raises(CoreCapabilityError, match='cartridge clock'):
         core.boot(io.BytesIO(b''), rtc=bytes(10))
 
 
@@ -143,3 +146,17 @@ def test_real_stop_with_clock_emits_ten_byte_file(cartridge):
     stop_with_clock(emulator, save, clock)
     assert len(clock.getvalue()) == 10
     assert len(save.getvalue()) == 32768
+
+
+def test_source_info_never_lets_git_read_the_terminal(tmp_path, monkeypatch):
+    import subprocess
+    from pokesim import build_info
+    (tmp_path / '.git').mkdir()
+    seen = []
+
+    def fake(command, **options):
+        seen.append(options)
+        return 'a' * 40 if 'rev-parse' in command else ''
+    monkeypatch.setattr(subprocess, 'check_output', fake)
+    assert build_info.source_info(tmp_path)['revision'] == 'a' * 40
+    assert len(seen) == 2 and all(options['stdin'] is subprocess.DEVNULL for options in seen)

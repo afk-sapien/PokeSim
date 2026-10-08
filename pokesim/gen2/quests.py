@@ -135,7 +135,9 @@ def arrive(policy, snapshot):
         return 'wait'
     if policy.goal.key == 'collection_stone_show':
         species, flag = policy.collection['stone_show']
-        slot = next(i for i, mon in enumerate(snapshot.party) if mon.species == species and not mon.egg)
+        slot = next((i for i, mon in enumerate(snapshot.party) if mon.species == species and not mon.egg), None)
+        if slot is None:
+            return 'b'
         policy.menu = ShowPartner(slot, flag)
         return 'a'
     if policy.goal.key == 'collection_stone_pc':
@@ -152,6 +154,8 @@ def arrive(policy, snapshot):
         if box is not None:
             policy.menu = ChangeBox(box)
     else:
+        if len(snapshot.party) < 2:
+            return 'b'
         counts = {move: sum(move in mon.moves for mon in snapshot.party) for move in FIELD_MOVES}
         slot = min(range(1, len(snapshot.party)), key=lambda i: (
             sum(counts[move] == 1 for move in snapshot.party[i].moves if move in FIELD_MOVES),

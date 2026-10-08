@@ -501,7 +501,11 @@ class Emulator:
         elif name == 'load_state':
             path = self.store.state_path(arg)
             if path:
-                self._load_state_file(path)
+                try:
+                    self._load_state_file(path)
+                except ValueError as error:
+                    # A refused rewind (ownership barrier, other cartridge) must never end the adventure.
+                    log.warning('Rewind to %s refused: %s', path.name, error)
         elif name == 'restart':
             self._autosave()
             for path in self.store.states.glob('auto-*.state'):

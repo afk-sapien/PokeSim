@@ -2,10 +2,11 @@
 from pokesim_core.errors import CoreCapabilityError as CoreBackendCapabilityError
 
 
-class CoreCapabilityError(NotImplementedError):
-    """The installed Core and PyBoy RS lack a feature that Gen II requires."""
+class CoreCapabilityError(CoreBackendCapabilityError):
+    """An older Core or PyBoy RS lacks a feature that Gen II requires.
+
+    It is the backend's own capability error, so one handler reports both as 501.
+    """
 
 
-# Core 0.2 raises its own error, a RuntimeError subclass. Gen II raises this package's error,
-# a NotImplementedError subclass. Either means the installed emulator cannot do what was asked.
-CAPABILITY_ERRORS = (CoreCapabilityError, CoreBackendCapabilityError)
+CAPABILITY_ERRORS = (CoreBackendCapabilityError,)

@@ -124,20 +124,53 @@ class Assets:
                 else:
                     write_bundle(self.game_data_dir, version, data.raw)
             ensure(self.game_data_dir, version, report)
+            # The shared store and tables still read the Gen I reference tables, so a library
+            # that only holds Gen II adventures needs them prepared too.
+            self._prepare_gen1(report)
             if self.cancelled.is_set():
                 raise RuntimeError('Application setup was cancelled')
 
+    def _has_gen1_data(self):
+        try:
+            for name in game_data.FILES:
+                game_data.load(name, directory=self.game_data_dir)
+        except RuntimeError:
+            return False
+        return True
+
+    def _adopt_reference(self):
+        """Copy the verified Gen I reference bundle, even into a folder that already holds Gen II data."""
+        try:
+            for name in game_data.FILES:
+                game_data.load(name, directory=self.reference_source)
+        except RuntimeError:
+            return  # a reference without Gen I tables: they are downloaded below instead
+        self.game_data_dir.parent.mkdir(parents=True, exist_ok=True)
+        if not self.game_data_dir.exists():
+            with tempfile.TemporaryDirectory(prefix='.reference-', dir=self.game_data_dir.parent) as temporary:
+                copied = Path(temporary) / 'bundle'
+                shutil.copytree(self.reference_source, copied)
+                copied.rename(self.game_data_dir)
+            return
+        bundle = game_data.bundle_path(self.reference_source)
+        destination = self.game_data_dir / 'bundles' / bundle.name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='.reference-', dir=destination.parent) as temporary:
+            copied = Path(temporary) / 'bundle'
+            shutil.copytree(bundle, copied)
+            if destination.exists():
+                shutil.rmtree(destination)
+            copied.rename(destination)
+        CheckpointStore.atomic_write(self.game_data_dir / 'current.json', (self.reference_source / 'current.json').read_bytes())
+
+    def _prepare_gen1(self, report):
+        if self.reference_source and not self._has_gen1_data():
+            self._adopt_reference()
+        ensure_game_data(self.game_data_dir, report, self.cancelled, self.reference_archive)
+
     def prepare(self, report=lambda message: None):
         with self.guard:
-            if self.reference_source and not self.game_data_dir.exists():
-                for name in game_data.FILES:
-                    game_data.load(name, directory=self.reference_source)
-                self.game_data_dir.parent.mkdir(parents=True, exist_ok=True)
-                with tempfile.TemporaryDirectory(prefix='.reference-', dir=self.game_data_dir.parent) as temporary:
-                    copied = Path(temporary) / 'bundle'
-                    shutil.copytree(self.reference_source, copied)
-                    copied.rename(self.game_data_dir)
-            ensure_game_data(self.game_data_dir, report, self.cancelled, self.reference_archive)
+            self._prepare_gen1(report)
             if self.cancelled.is_set():
                 raise RuntimeError('Application setup was cancelled')
         return self.game_data_dir

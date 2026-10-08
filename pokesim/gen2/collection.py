@@ -8,6 +8,20 @@ def matching_time(value, current):
     return value in {'any', 'rare trees'} or current in value.split('/')
 
 
+def waiting_label(policy, snapshot, mem, current_time):
+    """Say what the idle collection is waiting for. The cartridge clock follows wall time, so a
+    weekday or time of day that is not here yet can be hours or days of real time away."""
+    from .contest import waiting_for_day
+    label = waiting_for_day(policy, snapshot, mem)
+    if label:
+        return label
+    later = sorted({row['time'] for row in policy.data.encounters
+                    if wanted(policy, snapshot, row['species']) and not matching_time(row['time'], current_time)})
+    if later:
+        return f'Waiting for {" or ".join(later[:2])} to find new Pokémon'
+    return 'Explore while waiting for new collection opportunities'
+
+
 def tree_score(x, y, trainer_id):
     # Facing tile coordinates include the four tile map border in cartridge RAM.
     x, y = x + 4, y + 4
@@ -236,7 +250,7 @@ def journey(policy, snapshot, mem, Goal):
             if goal:
                 return goal
             state['phase'] = 'waiting'
-            return Goal('collection_wait', 'Explore while waiting for new collection opportunities', 'ROUTE_29', 12, 8)
+            return Goal('collection_wait', waiting_label(policy, snapshot, mem, current_time), 'ROUTE_29', 12, 8)
     return hunt(policy, snapshot, Goal)
 
 
@@ -269,8 +283,8 @@ def hunt(policy, snapshot, Goal):
             route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
             if route:
                 region = route[-1][1][1]
-                x, y, face = next(point for point in points
-                                  if region in policy.nav.regions.memberships(mid, point[:2], True, True))
+                x, y, face = next((point for point in points
+                                   if region in policy.nav.regions.memberships(mid, point[:2], True, True)), points[0])
             else:
                 state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
                 state['target'] = None
