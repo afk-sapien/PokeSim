@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 import json
 import logging
-import os
+import posixpath
 import shutil
 import threading
 
@@ -129,7 +129,7 @@ class PortraitPacks:
             active = bool(present) and self.registry.setting(self.setting, False) is True
             folders = {folder for folder, _ in self.sets.values()}
             source = (SOURCE + next(iter(folders)).rstrip('/') if len(folders) == 1
-                      else SOURCE + os.path.commonpath(sorted(folders)))
+                      else SOURCE + posixpath.commonpath(sorted(folders)))
             return {'active': 'community' if active else 'default', 'installed': installed,
                     'sets': {name: name in present for name in self.sets},
                     'busy': self.busy, 'completed': self.completed, 'total': self._total(),
