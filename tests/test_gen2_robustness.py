@@ -336,6 +336,26 @@ def test_hung_battle_and_no_position_change_reload():
     assert reloads == ['stuck']
 
 
+def test_long_battle_that_keeps_bringing_out_new_opponents_is_not_hung():
+    """Regression: a level 80 lead against Red's six Pokémon took about 50k frames, past the 54k
+    battle timeout once healing was included, and the run reloaded a save from before Brock."""
+    from pokesim.gen2.emulator import Emulator
+    emu = SimpleNamespace(frame=0, battle_frame=None)
+    seen = lambda species, level=80: SimpleNamespace(in_battle=2, enemy_species=species, enemy_level=level)
+    Emulator._time_battle(emu, seen(25))
+    assert emu.battle_frame == 0
+    for frame, species in [(9000, 25), (18000, 196), (27000, 143), (36000, 25), (45000, 3), (54000, 6)]:
+        emu.frame = frame
+        Emulator._time_battle(emu, seen(species))
+    assert emu.battle_frame == 54000
+    emu.frame = 120000
+    for species in (25, 196, 143):
+        Emulator._time_battle(emu, seen(species))
+    assert emu.battle_frame == 54000
+    Emulator._time_battle(emu, SimpleNamespace(in_battle=0))
+    assert emu.battle_frame is None and emu.battle_opponents == set()
+
+
 def test_a_menu_failure_is_counted_once_per_failure():
     failures = deque(['The Teach menu task made no progress'])
     emu, guard, _, reloads, _ = make_emulator()

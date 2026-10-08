@@ -345,8 +345,29 @@ class Emulator:
         if before and (before.map, before.x, before.y) != (snapshot.map, snapshot.x, snapshot.y) or snapshot.in_battle:
             self.stuck_since = now
             self.stuck_frame, self.stuck_ts = self.frame, now
-        self.battle_frame = (self.battle_frame if self.battle_frame is not None else self.frame) if snapshot.in_battle else None
+        self._time_battle(snapshot)
         self.previous = snapshot
+
+    def _time_battle(self, snapshot):
+        """Restart the hung-battle clock each time a new opposing Pokémon enters.
+
+        A long trainer battle, like Red's six Pokémon against an underlevelled team, can outlast
+        BATTLE_TIMEOUT_SECONDS while still knocking out opponents. Only a battle that stops
+        bringing out new opponents is hung. Each opponent counts once, so switching cannot
+        keep a stuck battle alive forever.
+        """
+        if not snapshot.in_battle:
+            self.battle_frame, self.battle_opponents = None, set()
+            return
+        opponents = getattr(self, 'battle_opponents', None)
+        if self.battle_frame is None or opponents is None:
+            self.battle_frame, opponents = self.frame, set()
+        opponent = (snapshot.enemy_species, snapshot.enemy_level)
+        if opponent not in opponents:
+            if opponents:
+                self.battle_frame = self.frame
+            opponents.add(opponent)
+        self.battle_opponents = opponents
 
     def _note_progress(self, snapshot, now):
         # Wandering to new tiles is not progress, and a reload rewinds to an older save, so only a
