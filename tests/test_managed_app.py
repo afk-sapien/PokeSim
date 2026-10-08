@@ -143,7 +143,21 @@ def test_shared_portraits_work_for_new_adventures_and_allow_local_overrides(clie
     assert client.get(f'/games/{first["id"]}/sprites/25.png').content == b'custom portrait'
     assert client.get(f'/games/{second["id"]}/sprites/25.png').content == b'shared portrait'
     assert client.get(f'/games/{second["id"]}/sprites/0.png').status_code == 404
-    assert client.get(f'/games/{second["id"]}/sprites/152.png').status_code == 404
+    assert client.get(f'/games/{second["id"]}/sprites/252.png').status_code == 404
+
+
+def test_gen2_portraits_cover_all_251_species(client):
+    client, manager = client
+    manager.registry.add_rom('fixture-silver', 'sha1', 'silver')
+    folder = manager.assets.root / 'sprites' / 'silver'
+    folder.mkdir(parents=True)
+    (folder / '25.png').write_bytes(b'silver 25')
+    (folder / '251.png').write_bytes(b'silver 251')
+    row = manager.registry.create('Gen Two', 'fixture-silver', {'starter': 'random'}, identifier())
+    for dex, body in ((25, b'silver 25'), (251, b'silver 251')):
+        response = client.get(f'/games/{row["id"]}/sprites/{dex}.png')
+        assert response.status_code == 200 and response.content == body
+    assert client.get(f'/games/{row["id"]}/sprites/252.png').status_code == 404
 
 
 def test_game_trading_stays_scoped_and_available_when_stopped(client):
