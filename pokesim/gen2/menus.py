@@ -26,6 +26,22 @@ def menu_label(row):
     return re.sub(r'^[\s│▷▶]*(?:H?\d+[\s▷▶]*)?', '', row).strip(' │')
 
 
+def tracked(task, snapshot):
+    """Return the party member a slot task works on, or None once that member has left its slot.
+
+    A task keeps its slot index across checkpoints and handoffs to trade preparation. The first
+    step records who holds the slot, so a later deposit, trade or reorder ends the task instead
+    of indexing past the party or acting on a different Pokémon.
+    """
+    if not 0 <= task.slot < len(snapshot.party):
+        return None
+    mon = snapshot.party[task.slot]
+    key = [getattr(mon, 'trainer_id', None), list(getattr(mon, 'dvs', ()))]
+    if task.member is None:
+        task.member = key
+    return mon if [task.member[0], list(task.member[1])] == key else None
+
+
 def choose(rows, label, *, exact=False):
     target = next((i for i, row in enumerate(rows)
                    if (menu_label(row).casefold() == label.casefold() if exact else has_word(row.casefold(), label.casefold()))), None)
@@ -42,19 +58,21 @@ class Teach:
     phase: str = 'open'
     steps: int = 0
     replace_move: int | None = None
+    member: list | None = None
 
     def step(self, snapshot, mem):
         self.steps += 1
         if self.steps > MAX_STEPS:
             return None
         rows, text = snapshot.tiles, snapshot.text
+        mon = tracked(self, snapshot)
         party_menu = 'CANCEL' in text and 'ABLE' in text and any(row.lstrip().startswith('▶') for row in rows)
         if party_menu:
             if mem.byte('wPutativeTMHMMove') != self.move:
                 self.phase = 'pack'
                 return 'b'
             self.phase = 'confirm'
-        if self.move in snapshot.party[self.slot].moves:
+        if mon is None or self.move in mon.moves:
             self.phase = 'exit'
         if self.phase == 'exit':
             return 'b' if '┌' in rows[12] or 'CANCEL' in text or 'PACK' in text else None
@@ -114,7 +132,6 @@ class Teach:
             return 'a'
         if self.phase == 'learn':
             if 'TYPE/' in text or '▶' in text and 'Which move' in text:
-                mon = snapshot.party[self.slot]
                 protected = {15, 19, 57, 70, 148, 250, 127}
                 target = min(range(4), key=lambda i: 999 if mon.moves[i] in protected else snapshot.data.moves.get(mon.moves[i], {}).get('power', 0)) + 1
                 if self.replace_move in mon.moves and self.replace_move not in protected:
@@ -299,13 +316,15 @@ class Forget:
     move: int
     phase: str = 'greet'
     steps: int = 0
+    member: list | None = None
 
     def step(self, snapshot, mem):
         self.steps += 1
         if self.steps > MAX_STEPS:
             return None
         rows, text = snapshot.tiles, snapshot.text
-        if self.move not in snapshot.party[self.slot].moves:
+        mon = tracked(self, snapshot)
+        if mon is None or self.move not in mon.moves:
             self.phase = 'exit'
         if self.phase == 'exit':
             return 'a' if any('┌' in row for row in rows[12:15]) else None
@@ -333,13 +352,14 @@ class Remedy:
     phase: str = 'open'
     steps: int = 0
     exit_steps: int = 0
+    member: list | None = None
 
     def step(self, snapshot, mem):
         self.steps += 1
         if self.steps > MAX_STEPS:
             return None
         rows, text = snapshot.tiles, snapshot.text
-        if dict(snapshot.items).get(self.item, 0) < self.initial:
+        if dict(snapshot.items).get(self.item, 0) < self.initial or tracked(self, snapshot) is None:
             self.phase = 'exit'
         if self.phase == 'exit':
             if snapshot.in_battle:
@@ -459,8 +479,12 @@ class Lead:
 
     def step(self, snapshot, mem):
         self.steps += 1
-        mon = snapshot.party[0]
-        if (mon.trainer_id, tuple(mon.dvs)) == (self.identity[0], tuple(self.identity[1])) or self.steps > 180:
+        wanted = (self.identity[0], tuple(self.identity[1]))
+        slots = [i for i, mon in enumerate(snapshot.party) if (mon.trainer_id, tuple(mon.dvs)) == wanted]
+        # Follow the Pokémon rather than its old slot, which a deposit or trade may have moved.
+        if slots:
+            self.slot = slots[0]
+        if not slots or self.slot == 0 or self.steps > 180:
             self.phase = 'exit'
         rows, text = snapshot.tiles, snapshot.text
         if self.phase == 'exit':
@@ -493,10 +517,12 @@ class DayCare:
     slot: int | None = None
     steps: int = 0
     exit_steps: int = 0
+    member: list | None = None
 
     def step(self, snapshot, mem):
         self.steps += 1
         done = (snapshot.daycare[self.parent] is None) == (self.slot is None)
+        done = done or self.slot is not None and tracked(self, snapshot) is None
         if done or self.exit_steps or self.steps > 240:
             self.exit_steps += 1
             return 'b' if self.exit_steps < 8 else None
@@ -512,11 +538,14 @@ class FieldMove:
     label: str
     phase: str = 'open'
     steps: int = 0
+    member: list | None = None
 
     def step(self, snapshot, mem):
         self.steps += 1
         rows, text = snapshot.tiles, snapshot.text
-        if self.steps > 180:
+        if self.phase in {'open', 'party'} and tracked(self, snapshot) is None:
+            self.phase = 'exit'
+        if self.steps > 180 or self.phase == 'exit':
             return 'b' if 'CANCEL' in text or 'PACK' in text or '┌' in rows[12] else None
         if self.phase == 'open':
             if 'POKéMON' in text and 'PACK' in text:
@@ -549,10 +578,11 @@ class Fly:
     phase: str = 'open'
     steps: int = 0
     map_wait: int = 0
+    member: list | None = None
 
     def step(self, snapshot, mem):
         self.steps += 1
-        if self.steps > 180:
+        if self.steps > 180 or self.phase in {'open', 'party'} and tracked(self, snapshot) is None:
             self.phase = 'exit'
         rows, text = snapshot.tiles, snapshot.text
         if self.phase == 'open':
@@ -598,11 +628,13 @@ class Give:
     phase: str = 'open'
     steps: int = 0
     exit_steps: int = 0
+    member: list | None = None
 
     def step(self, snapshot, mem):
         self.steps += 1
         rows, text = snapshot.tiles, snapshot.text
-        if snapshot.party[self.slot].held_item == self.item or self.steps > 240:
+        mon = tracked(self, snapshot)
+        if mon is None or mon.held_item == self.item or self.steps > 240:
             self.phase = 'exit'
         if self.phase == 'exit':
             self.exit_steps += 1
@@ -641,11 +673,13 @@ class Take:
     phase: str = 'open'
     steps: int = 0
     exit_steps: int = 0
+    member: list | None = None
 
     def step(self, snapshot, mem):
         self.steps += 1
         rows, text = snapshot.tiles, snapshot.text
-        if not snapshot.party[self.slot].held_item or self.steps > 240:
+        mon = tracked(self, snapshot)
+        if mon is None or not mon.held_item or self.steps > 240:
             self.phase = 'exit'
         if self.phase == 'exit':
             self.exit_steps += 1
@@ -675,10 +709,11 @@ class ShowPartner:
     event: str
     steps: int = 0
     exit_steps: int = 0
+    member: list | None = None
 
     def step(self, snapshot, mem):
         self.steps += 1
-        if snapshot.event(self.event) or self.exit_steps or self.steps > 240:
+        if snapshot.event(self.event) or self.exit_steps or self.steps > 240 or tracked(self, snapshot) is None:
             self.exit_steps += 1
             return 'b' if self.exit_steps < 8 else None
         if 'CANCEL' in snapshot.text and '/' in snapshot.text:
