@@ -29,6 +29,28 @@ CARTRIDGES = (
 )
 
 
+# The shelf in Settings has one slot per game PokeSim plays or is about to play, in this order.
+SLOTS = ('red', 'blue', 'yellow', 'gold', 'silver', 'crystal')
+SLOT_TITLES = {version: f'Pokémon {version.capitalize()}' for version in SLOTS}
+SLOT_GENERATIONS = {'red': 1, 'blue': 1, 'yellow': 1, 'gold': 2, 'silver': 2, 'crystal': 2}
+
+
+def supported_versions():
+    """The versions this build can identify, in shelf order."""
+    known = {cartridge.version for cartridge in CARTRIDGES}
+    return [version for version in SLOTS if version in known] + sorted(known - set(SLOTS))
+
+
+def supported_names():
+    names = [version.capitalize() for version in supported_versions()]
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' or ' + names[-1]
+
+
+def unsupported_message():
+    return (f'This file is not a game PokeSim can play. Add a clean English Pokémon {supported_names()} ROM '
+            '(Crystal must be Rev 1), as a .gb or .gbc file or a ZIP holding one.')
+
+
 def identify(raw):
     digest = hashlib.sha1(raw).hexdigest()
     return next((cartridge for cartridge in CARTRIDGES if cartridge.sha1 == digest), None)
@@ -60,5 +82,5 @@ def unpack(raw):
         except (zipfile.BadZipFile, RuntimeError, NotImplementedError) as error:
             raise ValueError('Choose an intact, unencrypted ROM ZIP') from error
     if identify(raw) is None:
-        raise ValueError('Choose a clean supported Red, Blue, Yellow, Gold, Silver or Crystal ROM')
+        raise ValueError(unsupported_message())
     return raw

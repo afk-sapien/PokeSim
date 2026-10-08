@@ -125,7 +125,7 @@ pokesim-desktop
 ```
 
 1. PokeSim opens your Adventure Library directly in the default browser. No sign-in or owner key is needed.
-2. Choose **New adventure**, enter a name, select your own clean Pokémon Red or Blue (USA, Europe) ROM, and choose a starter.
+2. Open **Settings → Game cartridges** and drop your own clean Pokémon Red, Blue, Yellow, Gold, Silver or Crystal ROM on any slot. PokeSim recognises the game and files it in the right slot. Then choose **New adventure**, pick the game from your installed cartridges, enter a name and choose a starter.
 3. Setup verifies the ROM and downloads a small pinned reference archive to prepare maps and Pokédex information. ROMs are never downloaded.
 4. Start the adventure. Create another game whenever you want, including another copy of the same version.
 

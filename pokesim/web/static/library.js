@@ -466,6 +466,7 @@
     try {
       const data = await api('/api/v1/adventures')
       adventures = data.adventures || []
+      if (page === 'library' || page === 'settings') await refreshCartridges()
       renderAdventures()
       if (page === 'notifications') renderNotifyAdventures()
       if (page === 'trading') await refreshTrades()
@@ -505,48 +506,208 @@
   $('#random-rival').onclick = () => randomizeTrainer('#new-rival', '#new-trainer')
   const KANTO = ['bulbasaur', 'charmander', 'squirtle']
   const JOHTO = ['chikorita', 'cyndaquil', 'totodile']
-  const HEADER_TITLES = {'POKEMON RED': 'red', 'POKEMON BLUE': 'blue', 'POKEMON YELLOW': 'yellow', 'POKEMON_GLD': 'gold', 'POKEMON_SLV': 'silver', 'PM_CRYSTAL': 'crystal'}
-  let fileVersion = ''
-  async function sniffVersion(file) {
-    // Read only the 16-byte cartridge title so a chosen file narrows the starters before upload.
-    try {
-      const bytes = new Uint8Array(await file.slice(0x134, 0x144).arrayBuffer())
-      const title = String.fromCharCode(...bytes).replace(/\0.*$/, '').replace(/[^\x20-\x7e]/g, '')
-      const key = Object.keys(HEADER_TITLES).find(name => title.startsWith(name))
-      return key ? HEADER_TITLES[key] : ''
-    } catch { return '' }
+  // The cartridge shelf: one slot per game, filled from GET /api/v1/cartridges.
+  let cartridges = []
+  let cartridgesLoaded = false
+  let supportedGames = 'Red, Blue, Yellow, Gold, Silver or Crystal'
+  let shelfSignature = ''
+  let pickerSignature = ''
+  let uploadSlot = ''
+  let shelfTargeted = false
+  const cartridgeFeedback = {}
+  const installed = () => cartridges.filter(slot => slot.installed)
+  const versionName = version => capital(String(version || ''))
+  function sizeLabel(bytes) {
+    if (!Number.isFinite(bytes)) return 'Unknown'
+    return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MiB` : `${Math.max(1, Math.round(bytes / 1024))} KiB`
   }
   function startersFor(version) {
-    if (!version) return [...KANTO, 'pikachu', ...JOHTO]
-    if (version === 'yellow') return ['pikachu']
+    const slot = cartridges.find(item => item.version === version)
+    if (slot?.starters?.length) return slot.starters
+    if (!version) return [...KANTO, ...JOHTO]
     return ['gold', 'silver', 'crystal'].includes(version) ? JOHTO : KANTO
   }
+  function cartridgeSlot(slot) {
+    const id = esc(slot.version)
+    const rom = slot.rom
+    const state = !slot.supported ? 'coming' : slot.installed ? 'installed' : 'empty'
+    const users = slot.adventures || []
+    const facts = rom ? `<dl class="cartridge-facts"><div><dt>Hash</dt><dd><code title="SHA-1 ${esc(rom.sha1)}">${esc(rom.short_hash)}</code></dd></div><div><dt>Size</dt><dd>${esc(sizeLabel(rom.size))}</dd></div><div><dt>Added</dt><dd>${rom.added_at ? esc(new Date(rom.added_at * 1000).toLocaleDateString()) : 'Unknown'}</dd></div></dl>` : ''
+    const status = state === 'coming' ? 'Coming in this release'
+      : rom?.file_missing ? '! File missing. Upload it again' : state === 'installed' ? '✓ Installed' : 'Empty slot'
+    const hint = state === 'coming' ? `<p class="note">PokeSim cannot play ${esc(slot.title)} yet.</p>`
+      : state === 'empty' ? '<p class="note">Drop a ROM file here or choose Upload.</p>'
+      : `<p class="note">${users.length ? `Used by ${users.length} ${users.length === 1 ? 'adventure' : 'adventures'}` : 'Not used by any adventure yet'}</p>`
+    const actions = state === 'coming' ? ''
+      : `<div class="cartridge-actions"><button type="button" class="key${state === 'empty' || rom?.file_missing ? ' key--primary' : ''}" data-cartridge-upload="${id}" data-owner aria-label="${state === 'installed' ? 'Replace' : 'Upload'} ${esc(slot.title)}">${state === 'installed' ? 'Replace' : 'Upload'}</button>${state === 'installed' ? `<button type="button" class="key" data-cartridge-remove="${id}" data-owner aria-label="Remove ${esc(slot.title)}">Remove</button>` : ''}</div>`
+    const feedback = cartridgeFeedback[slot.version]
+    return `<article class="cartridge-slot" id="cartridge-${id}" data-slot="${id}" data-state="${state}" aria-labelledby="cartridge-${id}-name"><div class="cartridge-face" aria-hidden="true"><span></span></div><div class="cartridge-info"><h3 class="cartridge-name" id="cartridge-${id}-name">${esc(slot.title)}</h3><p class="cartridge-state micro">${esc(status)}</p>${facts}${hint}</div>${actions}<p class="cartridge-feedback${feedback?.error ? ' is-error' : ''}" role="status">${esc(feedback?.text || '')}</p></article>`
+  }
+  function renderCartridges(slots) {
+    if (slots) {
+      cartridges = slots
+      cartridgesLoaded = true
+    }
+    const markup = cartridges.map(cartridgeSlot).join('')
+    if (page === 'settings' && markup !== shelfSignature) {
+      shelfSignature = markup
+      $('#cartridge-grid').innerHTML = markup
+    }
+    const none = cartridgesLoaded && !installed().length
+    $('#empty-needs-cartridge').hidden = !none
+    $('#empty-ready').hidden = none
+    $('#empty-supported').textContent = supportedGames
+    if (page === 'settings' && cartridgesLoaded && !shelfTargeted && /^#cartridge/.test(location.hash)) {
+      shelfTargeted = true
+      const target = document.getElementById?.(location.hash.slice(1))
+      target?.classList.add('is-target')
+      target?.scrollIntoView({block: 'center'})
+      target?.querySelector('[data-cartridge-upload]')?.focus({preventScroll: true})
+    }
+    permissions()
+  }
+  async function refreshCartridges() {
+    const data = await api('/api/v1/cartridges')
+    supportedGames = data.supported || supportedGames
+    renderCartridges(data.slots || [])
+  }
+  async function uploadCartridge(file, slot) {
+    if (!file) return
+    const target = slot || ''
+    if (target) cartridgeFeedback[target] = {text: `Checking ${file.name}…`}
+    renderCartridges()
+    await act(async () => {
+      let result
+      try {
+        result = await api(`/api/v1/cartridges${target ? `?slot=${encodeURIComponent(target)}` : ''}`,
+          {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: file})
+      } catch (error) {
+        if (target) cartridgeFeedback[target] = {text: error.message, error: true}
+        renderCartridges()
+        throw error
+      }
+      if (target) delete cartridgeFeedback[target]
+      if (result.moved) cartridgeFeedback[target] = {text: `That file was ${result.title}. It went into the ${versionName(result.version)} slot.`}
+      cartridgeFeedback[result.version] = {text: result.message}
+      renderCartridges(result.slots)
+      notice(result.message)
+      document.getElementById?.(`cartridge-${result.version}`)?.scrollIntoView({block: 'nearest'})
+    })
+  }
+  $('#cartridge-file').onchange = () => {
+    const file = $('#cartridge-file').files[0]
+    $('#cartridge-file').value = ''
+    uploadCartridge(file, uploadSlot)
+  }
+  $('#cartridge-grid').onclick = event => {
+    const upload = event.target.closest?.('[data-cartridge-upload]')
+    if (upload && !upload.disabled) {
+      uploadSlot = upload.dataset.cartridgeUpload
+      $('#cartridge-file').click()
+      return
+    }
+    const remove = event.target.closest?.('[data-cartridge-remove]')
+    if (remove && !remove.disabled) openCartridgeRemoval(remove.dataset.cartridgeRemove)
+  }
+  // Dropping a file anywhere on the shelf uploads it. The slot only says where the owner aimed.
+  const dropSlot = event => event.target.closest?.('[data-slot]')
+  $('#cartridge-grid').ondragover = event => {
+    if (!owner || busy || !event.dataTransfer?.types?.includes('Files')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    document.querySelectorAll('.cartridge-slot.is-dragging').forEach(item => { if (item !== dropSlot(event)) item.classList.remove('is-dragging') })
+    dropSlot(event)?.classList.add('is-dragging')
+  }
+  $('#cartridge-grid').ondragleave = event => {
+    const slot = dropSlot(event)
+    if (slot && !slot.contains(event.relatedTarget)) slot.classList.remove('is-dragging')
+  }
+  $('#cartridge-grid').ondrop = event => {
+    event.preventDefault()
+    document.querySelectorAll('.cartridge-slot.is-dragging').forEach(item => item.classList.remove('is-dragging'))
+    if (!owner || busy) return
+    const slot = dropSlot(event)
+    uploadCartridge(event.dataTransfer?.files?.[0], slot?.dataset.state === 'coming' ? '' : slot?.dataset.slot || '')
+  }
+  function openCartridgeRemoval(version) {
+    const slot = cartridges.find(item => item.version === version)
+    if (!slot) return
+    const users = slot.adventures || []
+    $('#cartridge-remove-version').value = version
+    $('#cartridge-remove-heading').textContent = users.length ? `${slot.title} is in use` : `Remove ${slot.title}?`
+    $('#cartridge-remove-description').textContent = users.length
+      ? `${slot.title} cannot be removed while ${users.length === 1 ? 'this adventure uses' : `these ${users.length} adventures use`} it: ${users.map(game => game.name + (game.archived ? ' (archived)' : '')).join(', ')}. Delete ${users.length === 1 ? 'that adventure' : 'those adventures'} first. Archived adventures count, since they can be restored.`
+      : `This deletes the stored ${slot.title} file from PokeSim. You can add it again at any time. Backups are not changed.`
+    const confirm = $('#cartridge-remove-confirm')
+    confirm.hidden = Boolean(users.length)
+    confirm.toggleAttribute('data-blocked', Boolean(users.length))
+    $('#cartridge-remove-dialog .dialog-feedback').textContent = ''
+    permissions()
+    $('#cartridge-remove-dialog').showModal()
+  }
+  $('#cartridge-remove-form').onsubmit = event => {
+    event.preventDefault()
+    act(async () => {
+      const version = $('#cartridge-remove-version').value
+      const result = await api(`/api/v1/cartridges/${encodeURIComponent(version)}`, {method: 'DELETE'})
+      $('#cartridge-remove-dialog').close()
+      delete cartridgeFeedback[version]
+      cartridgeFeedback[version] = {text: result.message}
+      renderCartridges(result.slots)
+      notice(result.message)
+    })
+  }
+  function gameCard(slot, selected) {
+    const id = esc(slot.version)
+    if (!slot.installed) {
+      const action = slot.supported ? `<a class="game-card-add" href="/settings#cartridge-${id}">Add cartridge</a>` : '<span class="game-card-add">Coming in this release</span>'
+      return `<div class="game-card is-missing" data-version="${id}"><span class="game-card-name">${esc(slot.title)}</span><span class="game-card-meta">${slot.supported ? 'Not installed' : 'Not playable yet'}</span>${action}</div>`
+    }
+    return `<label class="game-card" data-version="${id}"><input type="radio" name="game" value="${esc(slot.rom.id)}" data-version="${id}"${selected ? ' checked' : ''}><span class="game-card-name">${esc(slot.title)}</span><span class="game-card-meta">Generation ${slot.generation === 2 ? 'II' : 'I'}</span></label>`
+  }
+  function renderGamePicker() {
+    const ready = installed()
+    const chosen = ready.find(slot => slot.rom.id === $('#rom-id').value)
+    if (!chosen) $('#rom-id').value = ready.length === 1 ? ready[0].rom.id : ''
+    const selected = $('#rom-id').value
+    const markup = [...ready, ...cartridges.filter(slot => !slot.installed)]
+      .map(slot => gameCard(slot, slot.installed && slot.rom.id === selected)).join('')
+    if (markup !== pickerSignature) {
+      pickerSignature = markup
+      $('#game-choices').innerHTML = markup
+    }
+    const none = !ready.length
+    $('#create-form').classList.toggle('needs-cartridge', none)
+    $('#create-needs-cartridge').hidden = !none
+    $('#create-submit').hidden = none
+    $('#create-supported').textContent = supportedGames
+    updateStarters()
+  }
+  function selectedVersion() {
+    return installed().find(slot => slot.rom.id === $('#rom-id').value)?.version || ''
+  }
   function updateStarters() {
-    const file = $('#rom-file').files[0]
-    const version = file ? fileVersion : $('#rom-select').selectedOptions[0]?.dataset.version
-    const choices = startersFor(version)
+    const choices = startersFor(selectedVersion())
     const previous = $('#starter').value
     $('#starter').innerHTML = '<option value="random">Surprise me</option>' + choices.map(name => `<option value="${name}">${name[0].toUpperCase() + name.slice(1)}</option>`).join('')
     $('#starter').value = choices.includes(previous) ? previous : 'random'
   }
-  $('#rom-select').onchange = updateStarters
-  $('#rom-file').onchange = async () => {
-    const file = $('#rom-file').files[0]
-    fileVersion = file ? await sniffVersion(file) : ''
+  $('#game-choices').onchange = event => {
+    if (event.target?.name !== 'game') return
+    $('#rom-id').value = event.target.value
     updateStarters()
   }
   async function openCreate() {
     await act(async () => {
-      const data = await api('/api/v1/assets')
-      $('#rom-select').innerHTML = '<option value="">Add a ROM below</option>' + (data.roms || []).map(rom => `<option value="${esc(rom.id)}" data-version="${esc(rom.version)}">Pokémon ${esc(rom.version)} (${esc(rom.id.slice(0, 8))})</option>`).join('')
-      if (data.roms?.length) $('#rom-select').value = data.roms[0].id
-      updateStarters()
+      await refreshCartridges()
+      renderGamePicker()
       if (!$('#new-name').value.trim()) randomizeAdventure()
       if (!$('#new-trainer').value) randomizeTrainer('#new-trainer', '#new-rival')
       if (!$('#new-rival').value) randomizeTrainer('#new-rival', '#new-trainer')
       $('#create-progress').textContent = ''
       $('#create-dialog').showModal()
-      $('#new-name').focus()
+      if (installed().length) $('#new-name').focus()
+      else $('#create-add-cartridge').focus()
     })
   }
   $('#new-adventure').onclick = openCreate
@@ -637,21 +798,18 @@
   })
   $('#create-form').onsubmit = event => { event.preventDefault()
     act(async () => {
-      let romId = $('#rom-select').value
-      const file = $('#rom-file').files[0]
-      if (file) { $('#create-progress').textContent = 'Checking and adding your ROM…'
-        const rom = await api('/api/v1/assets/rom', {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: file})
-        romId = rom.id
-        if (rom.version && !startersFor(rom.version).includes($('#starter').value) && $('#starter').value !== 'random') {
-          throw new Error(`That starter belongs to a different game. The ROM was added as Pokémon ${rom.version}, so choose one of its starters.`) } }
-      if (!romId) throw new Error('Select an existing ROM or add a ROM file.')
+      const romId = $('#rom-id').value
+      if (!romId) throw new Error(installed().length ? 'Choose the game for this adventure.' : 'Add a game cartridge in Settings first.')
+      const starter = $('#starter').value
+      if (starter !== 'random' && !startersFor(selectedVersion()).includes(starter)) throw new Error('That starter belongs to a different game. Pick one from the list.')
       $('#create-progress').textContent = 'Creating your adventure…'
       const startNow = $('#start-created').checked
-      const result = await write('/api/v1/adventures', {name: $('#new-name').value.trim(), rom_id: romId, starter: $('#starter').value,
+      const result = await write('/api/v1/adventures', {name: $('#new-name').value.trim(), rom_id: romId, starter,
         trainer_name: $('#new-trainer').value.trim().toUpperCase(), rival_name: $('#new-rival').value.trim().toUpperCase()})
       const game = result.adventure || result
       $('#create-dialog').close()
       $('#create-form').reset()
+      $('#rom-id').value = ''
       if (startNow) await write(`/api/v1/adventures/${encodeURIComponent(game.id)}/start`)
       notice('Adventure created. Its status will update as it gets ready.')
     }) }

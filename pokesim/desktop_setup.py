@@ -65,11 +65,11 @@ def read_settings(root):
 
 
 def install_rom(root, raw, starter):
-    from .cartridges import identify, unpack, validate_starter
+    from .cartridges import identify, unsupported_message, unpack, validate_starter
     if raw[:4] == b'PK\x03\x04':
         raw = unpack(raw)
-    if len(raw) > MAX_ROM or hashlib.sha1(raw).hexdigest() not in ROM_NAMES:
-        raise ValueError('Choose a clean supported Red, Blue, Yellow, Gold, Silver or Crystal ROM')
+    if len(raw) > MAX_ROM or (identify(raw) is None and hashlib.sha1(raw).hexdigest() not in ROM_NAMES):
+        raise ValueError(unsupported_message())
     cartridge = identify(raw)
     validate_starter(starter, cartridge.version if cartridge else None)
     if (root / 'rom.gb').exists():

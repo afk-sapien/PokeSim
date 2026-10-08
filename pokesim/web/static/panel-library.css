@@ -736,3 +736,102 @@
 .portrait-preview-caption { grid-column: 1 / -1 }
 .portrait-preview-caption { text-align: center }
 .portrait-preview-caption { margin: 0 }
+
+
+/* ==========================================================================
+   GAME CARTRIDGES
+   One slot per game in Settings, and the game cards in New adventure.
+   ========================================================================== */
+
+.cartridge-shelf { margin-bottom: var(--s5); }
+[data-slot="red"], [data-version="red"] { --cart: #B8332A; }
+[data-slot="blue"], [data-version="blue"] { --cart: #2F5FA8; }
+[data-slot="yellow"], [data-version="yellow"] { --cart: #D9A915; }
+[data-slot="gold"], [data-version="gold"] { --cart: #B08A2E; }
+[data-slot="silver"], [data-version="silver"] { --cart: #8C949C; }
+[data-slot="crystal"], [data-version="crystal"] { --cart: #4AA3B5; }
+.cartridge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: var(--s3);
+  width: 100%;
+}
+.cartridge-slot {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: var(--s2);
+  min-width: 0;
+  padding: var(--s3);
+  background: var(--panel-2);
+  border: var(--hair) solid var(--rule-faint);
+  box-shadow: var(--key-inset);
+}
+.cartridge-slot[data-state="empty"] { border-style: dashed; border-color: var(--rule); background: var(--panel); }
+.cartridge-slot[data-state="coming"] { border-style: dashed; background: var(--panel); color: var(--ink-3); }
+.cartridge-slot.is-dragging { outline: 2px dashed var(--signal); outline-offset: 2px; background: var(--wash); }
+.cartridge-slot.is-target { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* A cartridge silhouette with the game's colour on its label. */
+.cartridge-face {
+  position: relative;
+  height: 56px;
+  background: var(--well);
+  clip-path: polygon(0 0, 82% 0, 100% 18%, 100% 100%, 0 100%);
+}
+.cartridge-face span {
+  position: absolute;
+  inset: 12px 14px 10px;
+  background: var(--cart, var(--cell-off));
+  box-shadow: var(--well-inset);
+}
+.cartridge-slot[data-state="empty"] .cartridge-face span,
+.cartridge-slot[data-state="coming"] .cartridge-face span { background: repeating-linear-gradient(135deg, var(--cell-off) 0 4px, transparent 4px 8px); }
+.cartridge-info { display: grid; align-content: start; gap: var(--s1); min-width: 0; }
+.cartridge-name { font: var(--f-legend) / 1.25 var(--font-panel); letter-spacing: 0.04em; text-transform: uppercase; overflow-wrap: anywhere; }
+.cartridge-state { color: var(--ink-2); }
+.cartridge-slot[data-state="installed"] .cartridge-state { color: var(--ok); }
+.cartridge-facts { display: grid; gap: 2px; margin: 0; font-size: 13px; }
+.cartridge-facts div { display: flex; justify-content: space-between; gap: var(--s2); min-width: 0; }
+.cartridge-facts dt { color: var(--ink-3); }
+.cartridge-facts dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.cartridge-facts code { font: 12px / 1.4 var(--font-mono); }
+.cartridge-info .note { margin: 0; font-size: 13px; }
+.cartridge-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 104px), 1fr)); gap: var(--s2); }
+.cartridge-actions .key { min-height: 44px; min-width: 0; padding-inline: var(--s2); font-size: 13px; letter-spacing: 0.04em; white-space: nowrap; }
+.cartridge-feedback { margin: 0; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+.cartridge-feedback:empty { display: none; }
+.cartridge-feedback.is-error { color: var(--crit); }
+
+.empty-block { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: start; gap: var(--s3); min-width: 0; }
+.empty-block > * { max-width: 100%; overflow-wrap: break-word; }
+
+.game-picker { display: grid; gap: var(--s2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.game-picker legend { padding: 0; margin-bottom: var(--s2); }
+.game-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 130px), 1fr)); gap: var(--s2); }
+.game-card {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 64px;
+  padding: var(--s2) var(--s2) var(--s2) calc(var(--s2) + 6px);
+  background: var(--panel-2);
+  border: var(--hair) solid var(--rule-faint);
+  box-shadow: var(--key-inset);
+  cursor: pointer;
+}
+.game-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 6px; background: var(--cart, var(--cell-off)); }
+.game-card input { position: absolute; opacity: 0; pointer-events: none; }
+.game-card:has(input:checked) { border-color: var(--signal); outline: 2px solid var(--signal); outline-offset: -1px; background: var(--wash); }
+.game-card:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.game-card:has(input:checked) .game-card-meta::after { content: " · Selected"; color: var(--signal); }
+.game-card-name { font: 14px / 1.3 var(--font-text); font-weight: 600; overflow-wrap: anywhere; }
+.game-card-meta { font: var(--f-micro) / 1.4 var(--font-mono); color: var(--ink-3); }
+.game-card.is-missing { cursor: default; border-style: dashed; background: var(--panel); box-shadow: none; color: var(--ink-3); }
+.game-card.is-missing::before { background: repeating-linear-gradient(180deg, var(--cell-off) 0 4px, transparent 4px 8px); }
+.game-card.is-missing .game-card-name { font-weight: 400; }
+.game-card-add { font-size: 13px; }
+a.game-card-add { color: var(--link); text-decoration: underline; }
+.create-needs-cartridge { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: start; gap: var(--s2); padding: var(--s3); border: var(--hair) dashed var(--rule); }
+.create-needs-cartridge[hidden] { display: none; }
+#create-form.needs-cartridge .game-picker { display: none; }
+#create-form.needs-cartridge .sheet-body > :not(.create-needs-cartridge):not(.game-picker) { display: none; }
