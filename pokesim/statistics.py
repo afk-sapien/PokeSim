@@ -209,22 +209,28 @@ def overview(state, records, steps):
             'steps_since': steps.get('started_at'), 'perfect_held': records['milestones']['perfect_held']}
 
 
-def highlights(game):
+def highlights(game, scores=None, species=None):
+    """Strongest Battle Power and best DVs, scored with the adventure generation's own data.
+
+    Gen I defaults read the shared tables; Gen II passes its own scorers and species.
+    """
     from urllib.parse import urlencode
-    from .battle_power import battle_power
-    from .strategy_data import SPECIES
-    from .pokemon import dv_rating
+    if scores is None:
+        from .battle_power import battle_power
+        from .pokemon import dv_rating
+        scores = (battle_power, lambda mon: dv_rating(mon)['dv_total'])
+    if species is None:
+        from .strategy_data import SPECIES as species
     rows = (game or {}).get('party', []) + ((game or {}).get('storage') or {}).get('pokemon', [])
     result = {}
-    for key, score, sort in [('battle', battle_power, 'battle_power'),
-                              ('dvs', lambda mon: dv_rating(mon)['dv_total'], 'dvs')]:
-        known = [(score(mon), mon) for mon in rows if mon.get('species') in SPECIES]
+    for (key, sort), score in zip([('battle', 'battle_power'), ('dvs', 'dvs')], scores):
+        known = [(score(mon), mon) for mon in rows if mon.get('species') in species]
         eligible = [(value, mon) for value, mon in known if value is not None]
         if not eligible:
             result[key] = None
             continue
         value, mon = max(eligible, key=lambda row: row[0])
-        dex = SPECIES[mon['species']]['dex']
+        dex = species[mon['species']]['dex']
         result[key] = {'name': mon.get('nick') or mon.get('name') or f'#{dex}', 'dex': dex,
                        'level': mon.get('level'), 'value': value, 'partial': len(eligible) < len(rows),
                        'url': 'pc?' + urlencode({'scope': 'all', 'q': f'#{dex}', 'sort': sort, 'order': 'desc'})}
