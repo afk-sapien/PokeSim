@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix Gold, Silver and Crystal adventures stalling in a Poké Mart. After a purchase the shop menu task ended while the clerk's box was still up, so the bot pressed A through the clerk's menu again and again, ending with "You don't have enough money." and reloads that landed back in the loop. The buy task now keeps pressing B until the shop screen has been gone for several frames, never chooses or quantities an item the money cannot cover, and a conversation in which nothing changes for 80 decisions drops the shopping errand, backs out with B and is then reported as a failure.
 - Fix Gold, Silver and Crystal adventures standing still beside a person who blocks the tile they chose, such as Amphy at the top of the Olivine Lighthouse. A blocked tile is no longer scored as already reached, the next open side is used, and an objective that stays unreachable is reported as stuck. `tools/play_gen2.py` no longer asks the emulator to run zero frames.
 
 ## 0.5.0

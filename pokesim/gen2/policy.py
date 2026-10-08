@@ -52,6 +52,7 @@ class Policy:
         self.menu = None
         self.shopping = None
         self.shop_location = None
+        self.talk_key, self.talk_frames = None, 0
         self.healing_map = None
         self.completed = {}
         self.collection = {'target': None, 'attempts': {}}
@@ -660,6 +661,32 @@ class Policy:
         return Goal('heal', 'Restore the team at a Pokémon Center', self.data.maps[mid]['constant'],
                     nurse['x'], nurse['y'] + 2, 'up')
 
+    TALK_STALL_FRAMES = 80
+    TALK_FAIL_FRAMES = 110
+
+    def talk_progress(self, snapshot):
+        """Count conversation decisions in which nothing the player owns or stands on has changed.
+
+        A long run means A is repeating a dialogue loop, such as a clerk offering the same purchase
+        again. Drop any shopping errand, back out with B, and in the end report the failure.
+        """
+        key = (snapshot.map, snapshot.x, snapshot.y, snapshot.money, tuple(snapshot.items))
+        if key != self.talk_key:
+            self.talk_key, self.talk_frames = key, 0
+            return False
+        self.talk_frames += 1
+        if self.talk_frames < self.TALK_STALL_FRAMES:
+            return False
+        if self.talk_frames == self.TALK_STALL_FRAMES:
+            self.shopping = self.shop_location = None
+            if self.interaction in ('buy_balls', 'sell_supplies'):
+                self.interaction = None
+        if self.talk_frames >= self.TALK_FAIL_FRAMES:
+            self.talk_frames = 0
+            self.fail(f'A conversation in {snapshot.map_name} made no progress')
+            return False
+        return True
+
     def shop(self, snapshot):
         if (self.in_transmitter_room(snapshot) or self.in_league(snapshot)
                 or self.constant(snapshot).startswith('ICE_PATH_')
@@ -804,6 +831,8 @@ class Policy:
         if snapshot.in_battle:
             self.mode = 'battle'
             return self.battle(snapshot, mem)
+        if not ('┌' in snapshot.tiles[12] or mem.byte('wScriptRunning')):
+            self.talk_key, self.talk_frames = None, 0
         self.nav.observe(snapshot)
         if self.resetting_puzzle is not None and self.resetting_puzzle != snapshot.map:
             self.resetting_puzzle = None
@@ -835,6 +864,8 @@ class Policy:
         # Textboxes cover the bottom six rows. Scripted walking is allowed to finish.
         if '┌' in snapshot.tiles[12] or mem.byte('wScriptRunning'):
             self.mode = 'conversation'
+            if self.talk_progress(snapshot):
+                return Action('b', 8, 36)
             answer = self.unknown_yes_no(snapshot)
             if answer:
                 return Action(answer, 8, 36)
@@ -950,8 +981,13 @@ class Policy:
                 self.menu = Use(self.data.items['GOOD_ROD'])
                 return Action(None, 0, 24)
             if self.goal.key == 'buy_balls' and self.interaction == self.goal.key:
-                item, amount = self.shopping
-                self.menu = Buy(item, amount, dict(snapshot.items).get(item, 0))
+                item, amount = self.shopping or (None, 0)
+                affordable = snapshot.money // self.data.item_attributes[item]['price'] if item else 0
+                if min(amount, affordable) < 1:
+                    # Nothing here can be bought with the money in hand: forget the errand and leave.
+                    self.shopping = self.shop_location = self.interaction = None
+                    return Action('b', 8, 36)
+                self.menu = Buy(item, min(amount, affordable), dict(snapshot.items).get(item, 0))
                 return Action('a', 8, 36)
             if self.goal.key == 'sell_supplies' and self.interaction == self.goal.key:
                 item, count = self.shopping
