@@ -11,7 +11,7 @@ from .naming import NamingController
 from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, boulder_task, seafoam_current_task
 from .move_development import hm_upgrade, move_name
-from .progression import STARTERS, Goal, healing_goal, journey, league_partner, milestones, story_goal
+from .progression import GAME_STARTERS, STARTERS, YELLOW, Goal, healing_goal, journey, league_partner, milestones, story_goal
 from . import training
 from .menus import select, tap
 from .shopping import ShoppingController
@@ -94,10 +94,12 @@ class StrategicPolicy(Policy):
         self.pickups = Pickups()
         self.personality = self.rng.choice(('Sociable', 'Collector', 'Explorer'))
         self.starter_setting = starter if starter is not None else config.STARTER
-        if self.starter_setting not in (*STARTERS, 'random'):
+        if self.starter_setting not in (*GAME_STARTERS, 'random'):
             raise ValueError('Unknown starter choice')
         # A separate draw preserves the existing naming and navigation sequences.
         self.starter = random.Random(seed).choice(STARTERS) if self.starter_setting == 'random' else self.starter_setting
+        if YELLOW:
+            self.starter = GAME_STARTERS[0]
         self.starter_confirmed = False
         self.history = []
         self.failures = {}
@@ -217,9 +219,9 @@ class StrategicPolicy(Policy):
         self.interaction_count = data.get("interaction_count", len(self.interactions))
         self.personality = data.get('personality', self.personality)
         # Earlier policies always chose Bulbasaur. Do not reroll an old lab checkpoint.
-        self.starter = data.get('starter', 'bulbasaur')
-        if self.starter not in STARTERS:
-            self.starter = 'bulbasaur'
+        self.starter = data.get('starter', GAME_STARTERS[0])
+        if self.starter not in GAME_STARTERS:
+            self.starter = GAME_STARTERS[0]
         self.starter_confirmed = bool(data.get('starter_confirmed', False))
         self.history = data.get('history', [])[-8:]
         self.failures = dict(list(data.get('failures', {}).items())[-128:])
@@ -295,7 +297,7 @@ class StrategicPolicy(Policy):
         self.nav.update_story(s)
         if not s.in_battle and kind == "overworld":
             self.nav.update_live(s, mem)
-        if s.party and not self.starter_confirmed:
+        if s.party and not self.starter_confirmed and not YELLOW:
             families = {STARTERS[(d - 1) // 3] for d in s.owned if 1 <= d <= 9}
             if len(families) == 1:
                 self.starter = families.pop()

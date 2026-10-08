@@ -79,7 +79,7 @@ Adventure Settings offers the background colors of the 12 GBC startup choices as
 
 Authentic GBC coloring uses separate background and sprite palettes. That is deferred because the current renderer's public DMG API exposes one whole-screen palette, and existing DMG checkpoints cannot simply be loaded as CGB checkpoints. The labels describe this implementation as GBC-inspired. Color data is cross-checked against [SameBoy's startup palette table](https://github.com/LIJI32/SameBoy/blob/master/BootROMs/cgb_boot.asm).
 
-Manual trade initiation, accounts and OIDC, other generations, Yellow, and ROM hacks remain deferred.
+Manual trade initiation, accounts and OIDC, other generations, Yellow, and ROM hacks remained deferred in 0.4.18. Generation II and Yellow arrive in 0.5.0, see the [0.5.0 release notes](release-notes.md).
 
 ## Live audio buffering
 

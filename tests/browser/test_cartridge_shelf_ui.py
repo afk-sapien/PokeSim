@@ -23,8 +23,9 @@ def synthetic(version):
 def library(tmp_path, monkeypatch):
     fake = tuple(cartridges.Cartridge(version, 2 if version in JOHTO else 1, hashlib.sha1(synthetic(version)).hexdigest(),
                                       f'Pokémon {version.capitalize()}',
-                                      cartridges.JOHTO_STARTERS if version in JOHTO else cartridges.KANTO_STARTERS)
-                 for version in ('red', 'blue', 'gold', 'silver', 'crystal'))
+                                      cartridges.JOHTO_STARTERS if version in JOHTO
+                                      else cartridges.YELLOW_STARTERS if version == 'yellow' else cartridges.KANTO_STARTERS)
+                 for version in cartridges.SLOTS)
     monkeypatch.setattr(cartridges, 'CARTRIDGES', fake)
     managers = []
 
@@ -94,7 +95,8 @@ def test_shelf_places_uploads_by_hash_and_rejects_unknown_files(page, library, w
     expect(grid.locator('.cartridge-slot')).to_have_count(6)
     names = grid.locator('.cartridge-name').all_inner_texts()
     assert [name.lower() for name in names] == [f'pokémon {game}' for game in ('red', 'blue', 'yellow', 'gold', 'silver', 'crystal')]
-    expect(page.locator('#cartridge-yellow')).to_contain_text('Coming in this release')
+    expect(page.locator('#cartridge-yellow')).not_to_contain_text('Coming in this release')
+    expect(page.locator('#cartridge-yellow [data-cartridge-upload]')).to_be_visible()
     no_sideways_scroll(page)
     if width == 390:
         shot(page, 'settings-empty-390')
@@ -116,7 +118,7 @@ def test_shelf_places_uploads_by_hash_and_rejects_unknown_files(page, library, w
     upload(page, 'crystal', {'name': 'notes.gb', 'mimeType': 'application/octet-stream', 'buffer': b'not a game at all' * 40})
     crystal = page.locator('#cartridge-crystal')
     expect(crystal.locator('.cartridge-feedback.is-error')).to_contain_text('This file is not a game PokeSim can play')
-    expect(crystal).to_contain_text('Red, Blue, Gold, Silver or Crystal')
+    expect(crystal).to_contain_text('Red, Blue, Yellow, Gold, Silver or Crystal')
     expect(crystal).to_have_attribute('data-state', 'empty')
     expect(page.locator('#notice')).to_be_hidden()
     assert_even_keys(page)

@@ -12,6 +12,8 @@ import secrets
 
 from pokesim_core.emulator import Emulator as CoreEmulator
 
+from .yellow import YELLOW_SHA1, open_emulator
+
 from .checkpoints import CheckpointStore
 from .events import RunMemory
 from .policies.base import BUTTONS, PolicyContext
@@ -24,10 +26,11 @@ BLUE_SHA1 = 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2'
 class HeadlessRun:
     def __init__(self, rom, checkpoint=None, seed=7, rng=None, reseed=False):
         self.rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
-        self.pb = CoreEmulator(str(rom), window='null', sound_emulated=False)
+        self.pb = open_emulator(str(rom), default=CoreEmulator, window='null', sound_emulated=False)
         self.pb.set_emulation_speed(0)
         self.policy = StrategicPolicy(seed)
-        self.policy.collection.version = 'blue' if self.rom_sha1 == BLUE_SHA1 else 'red'
+        self.policy.collection.version = ('yellow' if self.rom_sha1 == YELLOW_SHA1
+                                          else 'blue' if self.rom_sha1 == BLUE_SHA1 else 'red')
         self.memory = RunMemory()
         self.frame = 0
         # A scenario passes its own generator so that a failure replays the same way.

@@ -1,4 +1,4 @@
-"""Decode the 151 front portraits out of a Red or Blue cartridge.
+"""Decode the 151 front portraits out of a Red, Blue or Yellow cartridge.
 
 The artwork is in the ROM the owner supplied, so there is nothing to ship and nothing to
 download. Ported from pret/pokered `home/uncompress.asm`: a picture is two 1bpp chunks,
@@ -7,7 +7,8 @@ decoded row by row and merged into one 2bpp image.
 
 Verified against pret's own reference PNGs at the pinned revision: all 151 decode
 pixel-for-pixel, including Mew, whose header sits outside the base-stats table because it
-was squeezed into 300 bytes of leftover space late in development.
+was squeezed into 300 bytes of leftover space late in development. Yellow keeps the
+same table and picture banks, with Mew's header inside the table and its picture in bank 9.
 """
 from __future__ import annotations
 
@@ -24,9 +25,9 @@ MEW_INTERNAL = 0x15
 SHADES = ((255, 255, 255, 0), (168, 168, 160, 255), (88, 88, 84, 255), (16, 16, 16, 255))
 
 
-def sprite_bank(internal: int) -> int:
+def sprite_bank(internal: int, yellow: bool = False) -> int:
     """Which ROM bank holds a species' picture, keyed by its internal index."""
-    if internal == MEW_INTERNAL:
+    if internal == MEW_INTERNAL and not yellow:
         return 0x01
     if internal < 0x1F:
         return 0x9
@@ -123,8 +124,8 @@ def _xor(target, source):
         target.buf[i] ^= value
 
 
-def base_stats(rom: bytes, dex: int) -> bytes:
-    if dex == MEW_DEX:
+def base_stats(rom: bytes, dex: int, yellow: bool = False) -> bytes:
+    if dex == MEW_DEX and not yellow:
         return rom[MEW_BASE_STATS:MEW_BASE_STATS + ENTRY]
     offset = BASE_STATS + (dex - 1) * ENTRY
     return rom[offset:offset + ENTRY]
@@ -169,9 +170,11 @@ def decode(rom: bytes, bank: int, pointer: int) -> tuple[list[list[int]], int, i
     return pixels, width, height
 
 
-def front_sprite(rom: bytes, dex: int, internal: int):
-    entry = base_stats(rom, dex)
-    return decode(rom, sprite_bank(internal), int.from_bytes(entry[11:13], 'little'))
+def front_sprite(rom: bytes, dex: int, internal: int, yellow: bool = False):
+    entry = base_stats(rom, dex, yellow)
+    if entry[0] != dex:
+        raise ValueError('The cartridge base stats table does not match the Pokédex')
+    return decode(rom, sprite_bank(internal, yellow), int.from_bytes(entry[11:13], 'little'))
 
 
 def _png(pixels) -> bytes:
@@ -194,12 +197,14 @@ def _png(pixels) -> bytes:
 
 def extract(rom: bytes, species: dict) -> dict[int, bytes]:
     """Decode every front portrait the cartridge holds, as dex number -> PNG bytes."""
+    from .yellow import is_yellow
+    yellow = is_yellow(rom)
     by_dex = {entry['dex']: internal for internal, entry in species.items() if entry.get('dex')}
     out = {}
     for dex in range(1, 152):
         internal = by_dex.get(dex)
         if internal is None:
             continue
-        pixels, _, _ = front_sprite(rom, dex, internal)
+        pixels, _, _ = front_sprite(rom, dex, internal, yellow)
         out[dex] = _png(pixels)
     return out

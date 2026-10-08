@@ -45,6 +45,19 @@ HOOKS = (
     ('bought', 1, rb'\x21\x1d\xd3\xcd..\x30.\xcd..\xfa\x0a\xcf\xa7\x20.\x3e\x01', 8, 1),
     ('vending', 29, rb'\xf0\xdb\x47\x0e\x01\xcd..\x30.\x06\x3c\x0e\x02', 10, 1),
 )
+# The same sites in English Yellow, from pret/pokeyellow. WRAM operands sit one byte
+# lower and the wild battle entry moved to bank 61, where it reaches the loaders by far calls.
+YELLOW_HOOKS = (
+    ('npc_trade', 28, bytes.fromhex('a73e03180137ea12cdc9'), 9, 1),
+    ('wild', 61, rb'\x3e\x01\xea\x56\xd0\x21..\x06\x0f\xcd..\x21..\x06.\xcd..\xfa\x58\xd0', 13, 1),
+    ('trainer', 15, bytes.fromhex('21f0cf227011f2cffa26d112'), 12, 1),
+    ('defeated', 15, rb'\xaf\xea\xf0\xcc\xcd..\xcd..\x7a\xa7\xca..\x21\x14\xd0', 0, 1),
+    ('used', 3, rb'\x21\x1c\xd3\x3e\x01\xea\x95\xcf\xc3..', 0, 2),
+    ('ball', 3, bytes.fromhex('fa59d0a7c0211cd33cea95cf'), 8, 1),
+    ('safari', 3, rb'\x21\x46\xda\x35\xcd..\x3e\x43\xea\x1d\xd1', 3, 1),
+    ('bought', 1, rb'\x21\x1c\xd3\xcd..\x30.\xcd..\xfa\x0a\xcf\xa7\x20.\x3e\x01', 8, 1),
+    ('vending', 29, rb'\xf0\xdb\x47\x0e\x01\xcd..\x30.\x06\x3c\x0e\x02', 10, 1),
+)
 
 
 def initialize(db):
@@ -72,16 +85,17 @@ def increment(db, kind, subject, amount=1):
 
 class ActivityLedger:
     def __init__(self, store, rom_sha1):
-        from .catches import SUPPORTED
+        from .catches import TRACKED, YELLOW
         self.store = store
-        self.supported = rom_sha1 in SUPPORTED
+        self.hooks = YELLOW_HOOKS if rom_sha1 == YELLOW else HOOKS
+        self.supported = rom_sha1 in TRACKED
 
     def attach(self, pb):
         # Attach before the shiny and catch hooks. Our hook sites sit outside
         # their signature bytes even where the routines share an instruction block.
         matches = []
         if self.supported:
-            for kind, bank, pattern, offset, expected in HOOKS:
+            for kind, bank, pattern, offset, expected in getattr(self, 'hooks', HOOKS):
                 data = bytes(pb.memory[bank, 0x4000:0x7fff])
                 found = list(re.finditer(pattern, data, re.DOTALL))
                 if len(found) != expected:

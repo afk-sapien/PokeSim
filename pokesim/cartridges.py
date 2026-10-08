@@ -17,9 +17,12 @@ class Cartridge:
 
 KANTO_STARTERS = ('bulbasaur', 'charmander', 'squirtle')
 JOHTO_STARTERS = ('chikorita', 'cyndaquil', 'totodile')
+# Professor Oak gives Pikachu in Yellow. The other Kanto starters arrive as gifts later.
+YELLOW_STARTERS = ('pikachu',)
 CARTRIDGES = (
     Cartridge('red', 1, 'ea9bcae617fdf159b045185467ae58b2e4a48b9a', 'Pokémon Red', KANTO_STARTERS),
     Cartridge('blue', 1, 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2', 'Pokémon Blue', KANTO_STARTERS),
+    Cartridge('yellow', 1, 'cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1', 'Pokémon Yellow', YELLOW_STARTERS),
     Cartridge('gold', 2, 'd8b8a3600a465308c9953dfa04f0081c05bdcb94', 'Pokémon Gold', JOHTO_STARTERS),
     Cartridge('silver', 2, '49b163f7e57702bc939d642a18f591de55d92dae', 'Pokémon Silver', JOHTO_STARTERS),
     Cartridge('crystal', 2, 'f2f52230b536214ef7c9924f483392993e226cfb', 'Pokémon Crystal (Rev 1)', JOHTO_STARTERS),
@@ -61,7 +64,7 @@ def by_version(version):
 
 
 def validate_starter(starter, version=None):
-    choices = by_version(version).starters if version else (*KANTO_STARTERS, *JOHTO_STARTERS)
+    choices = by_version(version).starters if version else (*KANTO_STARTERS, *YELLOW_STARTERS, *JOHTO_STARTERS)
     if starter != 'random' and starter not in choices:
         raise ValueError('Choose a starter from this cartridge')
 

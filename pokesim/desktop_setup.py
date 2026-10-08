@@ -17,6 +17,16 @@ from .checkpoints import CheckpointStore
 
 REFERENCE_URL = f'https://codeload.github.com/pret/pokered/zip/{game_data.SOURCE_REVISION}'
 REFERENCE_SHA256 = 'd651b4495b353b1521b42494e635aae2ffe9c89c3609f8cf166975c0bc723fcc'
+YELLOW_REFERENCE_URL = f'https://codeload.github.com/pret/pokeyellow/zip/{game_data.YELLOW_REVISION}'
+YELLOW_REFERENCE_SHA256 = 'a0c61786468d7fc7998f6a108166fbd1cef63e6732c194f56d99159a9f0b766e'
+
+
+def reference(variant):
+    """The pret repository name, download URL and archive digest for a Gen 1 variant."""
+    if variant == 'yellow':
+        return 'pokeyellow', YELLOW_REFERENCE_URL, YELLOW_REFERENCE_SHA256
+    return 'pokered', REFERENCE_URL, REFERENCE_SHA256
+
 MAX_ARCHIVE = 16 * 1024 * 1024
 MAX_ROM = 4 * 1024 * 1024
 ROM_NAMES = {
@@ -24,7 +34,7 @@ ROM_NAMES = {
     'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2': 'Pokémon Blue (experimental)',
 }
 from .cartridges import CARTRIDGES
-ROM_NAMES.update({cartridge.sha1: cartridge.title for cartridge in CARTRIDGES if cartridge.generation == 2})
+ROM_NAMES.update({cartridge.sha1: cartridge.title for cartridge in CARTRIDGES if cartridge.generation == 2 or cartridge.version == 'yellow'})
 
 
 def user_directory():
@@ -46,7 +56,7 @@ def read_settings(root):
     try:
         settings = json.loads(path.read_text(encoding='utf-8'))
         if not isinstance(settings, dict) or settings.get('starter') not in {
-            'random', 'bulbasaur', 'charmander', 'squirtle', 'chikorita', 'cyndaquil', 'totodile'
+            'random', 'bulbasaur', 'charmander', 'squirtle', 'pikachu', 'chikorita', 'cyndaquil', 'totodile'
         }:
             raise ValueError('Invalid starter')
         return settings
@@ -68,11 +78,13 @@ def install_rom(root, raw, starter):
     CheckpointStore.atomic_write(root / 'rom.gb', raw)
 
 
-def prepare_archive(raw, destination):
-    if len(raw) > MAX_ARCHIVE or hashlib.sha256(raw).hexdigest() != REFERENCE_SHA256:
+def prepare_archive(raw, destination, variant='red'):
+    name, _, digest = reference(variant)
+    if len(raw) > MAX_ARCHIVE or hashlib.sha256(raw).hexdigest() != digest:
         raise ValueError('Reference download failed verification. Retry setup with an unchanged reference archive.')
     from .prepare_data import generate_bundle
-    prefix = f'pokered-{game_data.SOURCE_REVISION}'
+    revision = game_data.VARIANTS[variant][1]
+    prefix = f'{name}-{revision}'
     with tempfile.TemporaryDirectory(prefix='pokesim-reference-') as temporary:
         root = Path(temporary)
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
@@ -89,13 +101,13 @@ def prepare_archive(raw, destination):
                 else:
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(archive.read(info))
-        return generate_bundle(root / prefix, destination, game_data.SOURCE_REVISION)
+        return generate_bundle(root / prefix, destination, revision, variant)
 
 
-def ensure_game_data(destination, report, cancelled, archive_path=None):
+def ensure_game_data(destination, report, cancelled, archive_path=None, variant='red'):
     try:
         for name in game_data.FILES:
-            game_data.load(name, directory=destination)
+            game_data.load(name, directory=destination, variant=variant)
         return
     except RuntimeError:
         pass
@@ -104,11 +116,12 @@ def ensure_game_data(destination, report, cancelled, archive_path=None):
         with Path(archive_path).open('rb') as stream:
             raw = stream.read(MAX_ARCHIVE + 1)
     else:
-        report('Downloading reference data (about 2 MB)…')
+        report('Downloading Pokémon Yellow reference data (about 2 MB)…' if variant == 'yellow'
+               else 'Downloading reference data (about 2 MB)…')
         chunks = []
         total = 0
         context = ssl.create_default_context(cafile=os.environ.get('SSL_CERT_FILE') or certifi.where())
-        with urlopen(REFERENCE_URL, timeout=30, context=context) as response:
+        with urlopen(reference(variant)[1], timeout=30, context=context) as response:
             while chunk := response.read(65536):
                 if cancelled.is_set():
                     return
@@ -120,4 +133,4 @@ def ensure_game_data(destination, report, cancelled, archive_path=None):
     if cancelled.is_set():
         return
     report('Preparing maps and the Pokédex…')
-    prepare_archive(raw, destination)
+    prepare_archive(raw, destination, variant)

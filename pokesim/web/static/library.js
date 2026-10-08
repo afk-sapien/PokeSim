@@ -509,7 +509,7 @@
   // The cartridge shelf: one slot per game, filled from GET /api/v1/cartridges.
   let cartridges = []
   let cartridgesLoaded = false
-  let supportedGames = 'Red, Blue, Gold, Silver or Crystal'
+  let supportedGames = 'Red, Blue, Yellow, Gold, Silver or Crystal'
   let shelfSignature = ''
   let pickerSignature = ''
   let uploadSlot = ''
@@ -752,13 +752,14 @@
         speedInput.value = speed
       }
       const johto = ['gold', 'silver', 'crystal'].includes(game.version)
+      const colour = johto || game.version === 'yellow'
       $('#settings-palette').value = game.settings?.palette || 'original'
-      // Gold, Silver and Crystal already render in colour, so only the Game Boy games offer a palette.
-      $('#settings-palette-label').hidden = johto
-      $('#settings-palette-note').hidden = johto
+      // Yellow, Gold, Silver and Crystal already render in colour, so only Red and Blue offer a palette.
+      $('#settings-palette-label').hidden = colour
+      $('#settings-palette-note').hidden = colour
       const refused = game.summary?.settings_errors?.palette
       $('#settings-palette-note').textContent = refused ? `This adventure has not accepted the palette yet: ${refused}` : 'GBC-inspired colors applied to the whole screen. Changes apply immediately, including while paused.'
-      $('#settings-palette').disabled = johto
+      $('#settings-palette').disabled = colour
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
       for (const [field, setting] of [['league-rewards', 'league_rewards'], ['mew-event', 'mew_event']]) {
         const input = $(`#settings-${field}`)

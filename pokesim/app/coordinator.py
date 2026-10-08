@@ -387,7 +387,7 @@ class Coordinator:
                 raise ValueError('Both adventures must be running before an exchange')
             if (game.get('provenance') or {}).get('trading_blocked'):
                 raise ValueError(game['provenance'].get('reason') or 'This imported adventure needs its legacy peers reconciled before trading')
-            if game['version'] not in {'red', 'blue', 'gold', 'silver', 'crystal'}:
+            if game['version'] not in {'red', 'blue', 'yellow', 'gold', 'silver', 'crystal'}:
                 raise ValueError('This cartridge has no compatible Cable Club adapter')
         return None
 
@@ -403,7 +403,7 @@ class Coordinator:
                     continue
                 receipt = self._request(aid, 'prepare', {'id': row['id'], 'plan_digest': plan['plan_digest'],
                                                         'selected_key': plan[side + '_key'],
-                                                        'time_capsule': len({self.registry.adventure(p)['version'] in {'red', 'blue'}
+                                                        'time_capsule': len({self.registry.adventure(p)['version'] in {'red', 'blue', 'yellow'}
                                                                              for p in plan['participants']}) == 2})
                 if receipt.get('phase') == 'prepared':
                     if receipt.get('plan_digest') != plan['plan_digest'] or receipt.get('selected_key') != plan[side + '_key']:
@@ -761,7 +761,7 @@ class Coordinator:
         for game in games:
             aid = game['id']
             if (game['state'] != 'running' or game['desired_state'] != 'running' or game['archived']
-                    or game['version'] not in {'red', 'blue', 'gold', 'silver', 'crystal'} or (game.get('provenance') or {}).get('trading_blocked')):
+                    or game['version'] not in {'red', 'blue', 'yellow', 'gold', 'silver', 'crystal'} or (game.get('provenance') or {}).get('trading_blocked')):
                 continue
             try:
                 inventory = self.inventory(aid)

@@ -16,10 +16,11 @@ def synthetic(version):
     return f'synthetic {version} cartridge for tests'.encode() * 64
 
 
-def shelf(monkeypatch, versions=('red', 'blue', 'gold', 'silver', 'crystal')):
+def shelf(monkeypatch, versions=cartridges.SLOTS):
     fake = tuple(cartridges.Cartridge(version, 2 if version in {'gold', 'silver', 'crystal'} else 1,
                                       hashlib.sha1(synthetic(version)).hexdigest(), f'Pokémon {version.capitalize()}',
-                                      cartridges.JOHTO_STARTERS if version in {'gold', 'silver', 'crystal'} else cartridges.KANTO_STARTERS)
+                                      cartridges.JOHTO_STARTERS if version in {'gold', 'silver', 'crystal'}
+                                      else cartridges.YELLOW_STARTERS if version == 'yellow' else cartridges.KANTO_STARTERS)
                  for version in versions)
     monkeypatch.setattr(cartridges, 'CARTRIDGES', fake)
 
@@ -44,9 +45,10 @@ def test_empty_shelf_lists_every_game_in_order(client):
     data = client.get('/api/v1/cartridges').json()
     assert [item['version'] for item in data['slots']] == ['red', 'blue', 'yellow', 'gold', 'silver', 'crystal']
     assert not any(item['installed'] for item in data['slots'])
-    assert slot(data, 'yellow')['supported'] is False
+    assert slot(data, 'yellow')['supported'] is True
+    assert slot(data, 'yellow')['starters'] == ['pikachu']
     assert slot(data, 'gold')['starters'] == ['chikorita', 'cyndaquil', 'totodile']
-    assert data['supported'] == 'Red, Blue, Gold, Silver or Crystal'
+    assert data['supported'] == 'Red, Blue, Yellow, Gold, Silver or Crystal'
 
 
 def test_upload_to_its_own_slot_and_details(client):
@@ -88,14 +90,16 @@ def test_unknown_file_is_rejected_in_plain_words(client):
     assert response.status_code == 409
     detail = response.json()['detail']
     assert detail.startswith('This file is not a game PokeSim can play.')
-    assert 'Red, Blue, Gold, Silver or Crystal' in detail
+    assert 'Red, Blue, Yellow, Gold, Silver or Crystal' in detail
     assert client.post('/api/v1/cartridges', content=b'', headers=headers).status_code == 409
     assert client.post('/api/v1/cartridges?slot=emerald', content=synthetic('red'), headers=headers).status_code == 409
     assert manager.registry.roms() == []
 
 
-def test_yellow_slot_accepts_yellow_once_it_is_identified(client, monkeypatch):
+def test_a_slot_accepts_its_game_once_it_is_identified(client, monkeypatch):
     client, manager, headers = client
+    shelf(monkeypatch, ('red', 'blue', 'gold', 'silver', 'crystal'))
+    assert slot(client.get('/api/v1/cartridges').json(), 'yellow')['supported'] is False
     assert client.post('/api/v1/cartridges?slot=yellow', content=synthetic('yellow'), headers=headers).status_code == 409
     shelf(monkeypatch, ('red', 'blue', 'yellow', 'gold', 'silver', 'crystal'))
     data = client.post('/api/v1/cartridges?slot=yellow', content=synthetic('yellow'), headers=headers).json()

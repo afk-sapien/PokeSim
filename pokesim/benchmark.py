@@ -58,13 +58,13 @@ class Metrics:
 
 
 def run(rom, policy_name, seed, frames, checkpoint=None, target=None, trace=None):
-    from pokesim_core.emulator import Emulator as CoreEmulator
-    pb = CoreEmulator(str(rom), window="null", sound_emulated=False)
+    from .yellow import open_emulator
+    pb = open_emulator(str(rom), window="null", sound_emulated=False)
     pb.set_emulation_speed(0)
     policy = make_policy(policy_name, seed)
     rom_sha = hashlib.sha1(Path(rom).read_bytes()).hexdigest()
     if hasattr(policy, "nav"):
-        policy.nav.use_world = rom_sha in config.KNOWN_ROM_SHA1
+        policy.nav.use_world = rom_sha in config.GEN1_ROM_SHA1
     metrics = Metrics()
     frame = 0
     last_pos = None

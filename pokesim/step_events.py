@@ -6,6 +6,7 @@ from pokesim_core.resets import Flag, update_flags
 
 from . import config
 from .events import Event
+from .game_data import current_variant
 from .legendary_returns import STEPS
 from .ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS
 from .strategy_data import DATA, EVENTS, ITEMS, MAPS, SPECIES, event_set
@@ -13,8 +14,12 @@ from .strategy_data import DATA, EVENTS, ITEMS, MAPS, SPECIES, event_set
 KEY = 'step-events-v1'
 TRADE_FLAGS = 0xD737
 FOSSILS = {'helix': (138, 'HELIX_FOSSIL'), 'dome': (140, 'DOME_FOSSIL'), 'amber': (142, 'OLD_AMBER')}
+# In-game trades for species with no other source, as indexes into TradeMons.
 TRADES = ((1, 122, 'ROUTE_2_TRADE_HOUSE'), (4, 83, 'VERMILION_TRADE_HOUSE'),
           (5, 108, 'ROUTE_18_GATE_2F'), (6, 124, 'CERULEAN_TRADE_HOUSE'))
+if current_variant() == 'yellow':
+    # Yellow trades Mr. Mime only. Its other trades offer species found in the wild.
+    TRADES = ((1, 122, 'ROUTE_2_TRADE_HOUSE'),)
 
 
 def flag(name):

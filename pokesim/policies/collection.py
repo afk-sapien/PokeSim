@@ -6,9 +6,14 @@ from ..duplicates import quality
 from .move_development import evolution_wait, move_name
 from ..investment import automatic_trade_protected, training_investment, potential_power, assessment, GOOD_TAIL, SEARCH_BUDGET
 from functools import lru_cache
-from ..game_data import load
+from ..game_data import current_variant, load
 
 from .progression import GRASS_TILES, Goal, object_goal, at
+
+YELLOW = current_variant() == 'yellow'
+# Yellow's Pikachu refuses the Thunder Stone, and the game treats every Pikachu
+# the player caught as its partner, so Raichu only arrives through a link trade.
+REFUSES_EVOLUTION = {25} if YELLOW else set()
 from .navigation import DIRS
 from .director import AdventureDirector
 from . import training, marathon, league_rotation
@@ -454,6 +459,11 @@ class Collection:
                         return False
                 except ValueError:
                     pass
+        # Yellow gives Bulbasaur to a trainer whose Pikachu is happy, and Squirtle after the Thunder Badge.
+        if YELLOW and source.get('fragment') == 'MELANIE' and getattr(s, 'pikachu_happiness', 0) < 147:
+            return False
+        if YELLOW and source.get('fragment') == 'OFFICER_JENNY' and not s.badges & 4:
+            return False
         if source['map'] in {MAPS['CERULEAN_CAVE_1F'], MAPS['CERULEAN_CAVE_2F'], MAPS['CERULEAN_CAVE_B1F']} and not self.completed_champion:
             return False
         if source.get('fragment') in ('HITMONLEE','HITMONCHAN'):
@@ -469,6 +479,8 @@ class Collection:
         # The unavailable starter families have no wild source in Red or Blue.
         for _ in range(4):
             for sid in tuple(reachable):
+                if dex(sid) in REFUSES_EVOLUTION:
+                    continue
                 reachable.update(e['species'] for e in EVOS.get(sid,[]) if e['method'] != 'trade')
             for sid,rows in sources.items():
                 if any(r['method']=='trade' and r['give'] in reachable for r in rows):
@@ -493,7 +505,9 @@ class Collection:
                 status,reason = 'available','Save coins for the Game Corner prize'
             if d in (134,135,136) and d not in s.owned and not any(dex(p)==133 for p in held) and any(i in s.owned for i in (134,135,136)):
                 status,reason = 'unavailable','Requires another Eevee after the evolution choice'
-            if status != 'caught' and d in range(1,10):
+            if status != 'caught' and d == 26 and YELLOW:
+                status,reason = 'external','Pikachu refuses to evolve in Yellow. Raichu requires a link trade'
+            if status != 'caught' and d in range(1,10) and not YELLOW:
                 family = (d-1)//3
                 if not any(i in s.owned for i in range(family*3+1,family*3+4)):
                     status,reason = 'external','Requires another starter through trading'
@@ -674,7 +688,7 @@ class Collection:
             if held_count(s, sid) <= self.demand().get(dex(sid), 0):
                 continue
             for evo in EVOS.get(sid, []):
-                if evo['method'] == 'trade':
+                if evo['method'] == 'trade' or dex(sid) in REFUSES_EVOLUTION:
                     continue
                 registered = dex(evo['species']) in s.owned
                 evolved = dict(mon, species=evo['species'])
@@ -826,7 +840,7 @@ class Collection:
             room=WORLD[p['map']]['symbol']
             fragment = p['fragment']
             if mode=='trade':
-                fragment=TRADE_NPCS[room]
+                fragment=fragment or TRADE_NPCS[room]
             if mode=='gift' and dex(sid) in (106,107) and not event_set(s.event_flags,'EVENT_BEAT_KARATE_MASTER'):
                 fragment='KARATE_MASTER'
             if mode=='gift' and dex(sid)==133:
@@ -884,12 +898,12 @@ class Collection:
 
     def trade_deposit_target(self, s, project):
         """Keep battle strength, field moves, and reserved partners while making space."""
-        from .team import potential
+        from .team import STAYS_IN_PARTY, potential
         from ..trade.preferences import identity
         choices = self.trade_preferences()
         strongest = max(range(len(s.party)), key=lambda i: s.party[i].level, default=None)
         candidates = [i for i, mon in enumerate(s.party)
-                      if i != strongest and mon.species != project['give']
+                      if i != strongest and mon.species != project['give'] and mon.species not in STAYS_IN_PARTY
                       and choices.get(identity(asdict(mon)), {}).get('state') not in ('locked', 'offered')
                       and not any(move in (15, 19, 57, 70, 148)
                                   and not any(move in other.moves for j, other in enumerate(s.party) if j != i)

@@ -4,7 +4,7 @@ import time
 from pokesim_core.resets import Flag, update_flags
 
 from . import config
-from .catches import SUPPORTED
+from .catches import TRACKED, YELLOW, site
 from .events import Event
 from .legendary import ENCOUNTERS
 from .ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS
@@ -14,6 +14,7 @@ KEY = 'legendary-returns-v1'
 STEPS = 'cartridge-steps-v1'
 STEP_ADDRESS = 0x05ED
 STEP_SIGNATURE = bytes.fromhex('213bd135fa2cd7cb47280b213c')
+STEP = {YELLOW: (0x045E, bytes.fromhex('213ad135fa2bd7cb47280b213b'))}
 
 
 def interval():
@@ -38,7 +39,8 @@ def status(store):
 class StepTracker:
     def __init__(self, store, rom_sha1):
         self.store = store
-        self.supported = rom_sha1 in SUPPORTED
+        self.rom_sha1 = rom_sha1
+        self.supported = rom_sha1 in TRACKED
         self.value = store.get(STEPS) or {'total': 0, 'started_at': time.time()}
         self.value['available'] = self.supported
         self.last_flush = 0
@@ -47,9 +49,10 @@ class StepTracker:
     def attach(self, pb):
         if not self.supported:
             return
-        if bytes(pb.memory[0, STEP_ADDRESS:STEP_ADDRESS + len(STEP_SIGNATURE)]) != STEP_SIGNATURE:
+        address, signature = site(STEP, getattr(self, 'rom_sha1', None), (STEP_ADDRESS, STEP_SIGNATURE))
+        if bytes(pb.memory[0, address:address + len(signature)]) != signature:
             raise ValueError('Walking instruction signature does not match the verified cartridge')
-        pb.hook_register(0, STEP_ADDRESS, self.completed, pb)
+        pb.hook_register(0, address, self.completed, pb)
 
     def completed(self, pb):
         # This instruction runs once per completed, nonscripted walking tile.

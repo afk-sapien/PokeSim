@@ -31,6 +31,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from pokesim_core.emulator import Emulator as CoreEmulator
+
+from ..yellow import open_emulator
 from pokesim_core.emulator_state import retag_checkpoint
 
 from ..checkpoints import CheckpointStore
@@ -85,7 +87,7 @@ def register_arrival(mem, *species):
 def _boot(rom: Path, state: Path, expect_sha1: str | None) -> CoreEmulator:
     if expect_sha1 and hashlib.sha1(rom.read_bytes()).hexdigest() != expect_sha1:
         raise TradeError(f"{state.name} was recorded with a different ROM than {rom.name}")
-    pb = CoreEmulator(str(rom), window="null", sound_emulated=True)
+    pb = open_emulator(str(rom), default=CoreEmulator, window="null", sound_emulated=True)
     pb.set_emulation_speed(0)
     try:
         with open(state, "rb") as f:

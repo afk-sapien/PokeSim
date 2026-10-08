@@ -4,6 +4,7 @@ from collections import Counter
 
 from .battle import HEALING, damage, effectiveness, ranked_moves
 from ..duplicates import quality, spare_entries
+from ..game_data import current_variant
 from ..ram import BOX_CAPACITY, PartyMon
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, event_set
 
@@ -16,6 +17,19 @@ OPPONENTS = {
     258: ('Agatha', 'GENGAR', 60), 259: ('Lance', 'DRAGONITE', 62),
     260: ('the Champion', 'ALAKAZAM', 59),
 }
+if current_variant() == 'yellow':
+    # Yellow's leaders field the teams from the anime, from pret/pokeyellow parties.asm.
+    OPPONENTS.update({
+        1: ('Brock', 'ONIX', 12), 4: ('Lt. Surge', 'RAICHU', 28), 8: ('Erika', 'WEEPINBELL', 32),
+        16: ('Koga', 'VENOMOTH', 50), 32: ('Sabrina', 'ALAKAZAM', 50),
+        64: ('Blaine', 'ARCANINE', 54), 128: ('Giovanni', 'RHYDON', 55),
+    })
+
+
+# Yellow's Pikachu follows the player and loses friendship when it leaves the party,
+# so it never becomes a deposit candidate there.
+STAYS_IN_PARTY = ({sid for sid, data in SPECIES.items() if data.get('name') == 'PIKACHU'}
+                  if current_variant() == 'yellow' else set())
 
 
 def potential(species, teammates=()):
@@ -54,7 +68,7 @@ def release_target(s, protected=(), reserved=()):
 
 def reserve_to_deposit(s, *, prefer_completed=False):
     strongest = max(range(len(s.party)), key=lambda i: s.party[i].level, default=None)
-    candidates = [i for i, p in enumerate(s.party) if i != strongest
+    candidates = [i for i, p in enumerate(s.party) if i != strongest and p.species not in STAYS_IN_PARTY
                   and not any(move in (15, 19, 57, 70, 148)
                               and not any(move in other.moves for j, other in enumerate(s.party) if j != i)
                               for move in p.moves)]
@@ -66,6 +80,14 @@ def development_candidate(s, encounter_level):
     if len(s.party) < 2:
         return None
     lead_level = max(p.level for p in s.party)
+    # Yellow's Pikachu cannot be boxed, so it is trained first. Battle switching covers a tougher opponent
+    # and shares the experience.
+    candidates = [i for i, p in enumerate(s.party)
+                  if p.level < lead_level * 0.8 and p.species in STAYS_IN_PARTY and p.level + 12 >= encounter_level
+                  and p.hp >= p.max_hp * 0.85 and not p.status
+                  and any(MOVES.get(m, {}).get('power') and pp for m, pp in zip(p.moves, p.pp))]
+    if candidates:
+        return candidates[0]
     candidates = [i for i, p in enumerate(s.party)
                   if p.level < lead_level * 0.8 and p.level + 2 >= encounter_level
                   and p.hp >= p.max_hp * 0.85 and not p.status

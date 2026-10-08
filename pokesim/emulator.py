@@ -14,6 +14,8 @@ from pathlib import Path
 from PIL import Image
 from pokesim_core.emulator import Emulator as CoreEmulator
 
+from .yellow import open_emulator
+
 from . import __version__, config
 from .audio import AudioFeed, enable_checkpoint_sound
 from .build_info import build_info
@@ -126,7 +128,8 @@ class Emulator:
         from .activity_ledger import ActivityLedger
         self.activity_ledger = ActivityLedger(store, self.rom_sha1)
         if hasattr(self.policy, "collection"):
-            self.policy.collection.version = "blue" if "Blue" in self.rom_note else "red"
+            self.policy.collection.version = ("yellow" if "Yellow" in self.rom_note
+                                              else "blue" if "Blue" in self.rom_note else "red")
         if hasattr(self.policy, "nav"):
             self.policy.nav.use_world = not self.rom_note.startswith("unverified")
         self.input_epoch = 0
@@ -142,7 +145,7 @@ class Emulator:
     def _check_rom(self) -> str:
         sha = hashlib.sha1(self.rom.read_bytes()).hexdigest()
         self.rom_sha1 = sha
-        known = config.KNOWN_ROM_SHA1.get(sha)
+        known = config.GEN1_ROM_SHA1.get(sha)
         if known:
             log.info("ROM verified: %s", known)
             return known
@@ -154,7 +157,7 @@ class Emulator:
         if getattr(self, 'isolated_ram', False):
             import io
             options['ram_file'] = io.BytesIO(bytes(32768))
-        pb = CoreEmulator(str(self.rom), window="null", sound_emulated=sound, **options)
+        pb = open_emulator(str(self.rom), default=CoreEmulator, window="null", sound_emulated=sound, **options)
         pb.set_emulation_speed(0)
         if getattr(self, 'activity_ledger', None) is not None:
             self.activity_ledger.attach(pb)
@@ -221,7 +224,8 @@ class Emulator:
             "build": build_info(),
             "health": self.health(),
             "paused": self.paused, "speed": self.speed, "policy": self.policy.describe(),
-            "palette": getattr(self, 'palette', 'original'),
+            # Yellow renders its own Game Boy Color palettes, so like Generation II it reports none.
+            "palette": None if self._color_cartridge() else getattr(self, 'palette', 'original'),
             "manual_mode": self.manual_mode, "help_request": None,
             "play_clock": self.play_clock.status(),
             "performance": {"frames": self.executed_frames, "sampled_at": time.monotonic()},
@@ -344,8 +348,13 @@ class Emulator:
         self.pb.save_state(buf)
         return buf.getvalue()
 
+    def _color_cartridge(self):
+        from .game_data import current_variant
+        return current_variant() == 'yellow'
+
     def _image(self) -> Image.Image:
-        return recolor(self.pb.screen.image.convert("RGB"), getattr(self, 'palette', 'original'))
+        image = self.pb.screen.image.convert("RGB")
+        return image if self._color_cartridge() else recolor(image, getattr(self, 'palette', 'original'))
 
     def set_palette(self, value):
         """Called on the emulator thread, including while the game is paused."""
@@ -506,7 +515,7 @@ class Emulator:
         self.pending = [ev for ev in new if ev.still is not None]
         events += [ev for ev in new if ev.still is None]
         restored_legendary = False
-        if (self.rom_sha1 in config.KNOWN_ROM_SHA1 and not self.manual_mode
+        if (self.rom_sha1 in config.GEN1_ROM_SHA1 and not self.manual_mode
                 and not self.store.get('trade_hold')):
             from .legendary_returns import observe as returns_observe, claims
             if hasattr(self, 'step_tracker'):

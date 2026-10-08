@@ -11,8 +11,18 @@ SUPPORTED = {
     'ea9bcae617fdf159b045185467ae58b2e4a48b9a',
     'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2',
 }
+YELLOW = 'cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1'
+# Every cartridge whose instruction sites below are verified. Yellow keeps the
+# same routines one WRAM byte lower, so its operands and addresses differ.
+TRACKED = SUPPORTED | {YELLOW}
 BANK, ADDRESS = 3, 0x5928
 SIGNATURE = bytes.fromhex('fa5ad0a7c0211dd3')
+# ItemUseBall.done per cartridge, from pret/pokered and pret/pokeyellow symbols.
+CAPTURE = {YELLOW: (3, 0x5687, bytes.fromhex('fa59d0a7c0211cd3'))}
+
+
+def site(table, rom_sha1, default):
+    return table.get(rom_sha1, default)
 
 
 def status(store):
@@ -23,7 +33,8 @@ def status(store):
 class CatchTracker:
     def __init__(self, store, rom_sha1, *, fresh=False):
         self.store = store
-        self.supported = rom_sha1 in SUPPORTED
+        self.rom_sha1 = rom_sha1
+        self.supported = rom_sha1 in TRACKED
         with store.lock, store.db:
             row = store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
             value = json.loads(row[0]) if row else self.empty(fresh)
@@ -45,9 +56,10 @@ class CatchTracker:
     def attach(self, pb):
         if not self.supported:
             return
-        if bytes(pb.memory[BANK, ADDRESS:ADDRESS + len(SIGNATURE)]) != SIGNATURE:
+        bank, address, signature = site(CAPTURE, getattr(self, 'rom_sha1', None), (BANK, ADDRESS, SIGNATURE))
+        if bytes(pb.memory[bank, address:address + len(signature)]) != signature:
             raise ValueError('Capture tracking instruction signature does not match the verified cartridge')
-        pb.hook_register(BANK, ADDRESS, self.completed, pb)
+        pb.hook_register(bank, address, self.completed, pb)
 
     def completed(self, pb):
         from .strategy_data import SPECIES

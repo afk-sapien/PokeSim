@@ -10,8 +10,8 @@ const settle = async () => {
 
 function slot(version, romId = '', extra = {}) {
   const johto = ['gold', 'silver', 'crystal'].includes(version)
-  return {version, title: `Pokémon ${version[0].toUpperCase()}${version.slice(1)}`, generation: johto ? 2 : 1, supported: version !== 'yellow',
-    starters: johto ? ['chikorita', 'cyndaquil', 'totodile'] : ['bulbasaur', 'charmander', 'squirtle'], installed: Boolean(romId),
+  return {version, title: `Pokémon ${version[0].toUpperCase()}${version.slice(1)}`, generation: johto ? 2 : 1, supported: true,
+    starters: johto ? ['chikorita', 'cyndaquil', 'totodile'] : version === 'yellow' ? ['pikachu'] : ['bulbasaur', 'charmander', 'squirtle'], installed: Boolean(romId),
     adventures: [], rom: romId ? {id: romId, sha1: 'a'.repeat(40), short_hash: 'aaaaaaaa', size: 1048576, added_at: 1700000000, file_missing: false} : null, ...extra}
 }
 const SHELF = ['red', 'blue', 'yellow', 'gold', 'silver', 'crystal']
@@ -45,7 +45,7 @@ function library(options = {}) {
       }
       const data = path === '/api/v1/session' ? {csrf_token: 'csrf', role: 'owner'}
         : path === '/api/v1/assets' ? {roms: [{id: 'rom', version: 'red'}]}
-        : path === '/api/v1/cartridges' ? {slots: options.slots || [slot('red', 'rom')], supported: 'Red, Blue, Gold, Silver or Crystal'}
+        : path === '/api/v1/cartridges' ? {slots: options.slots || [slot('red', 'rom')], supported: 'Red, Blue, Yellow, Gold, Silver or Crystal'}
         : path === '/api/v1/adventures' && opts.method === 'POST' ? {id: 'a'.repeat(32)}
         : {adventures: []}
       return {ok: true, json: async () => data}
@@ -588,7 +588,8 @@ test('one installed cartridge is preselected and narrows the starters', async ()
   const cards = view.element('#game-choices').innerHTML
   assert.match(cards, /value="gold-rom" data-version="gold" checked/)
   assert.match(cards, /href="\/settings#cartridge-red">Add cartridge/)
-  assert.match(cards, /Coming in this release/)
+  assert.match(cards, /href="\/settings#cartridge-yellow">Add cartridge/)
+  assert.doesNotMatch(cards, /Coming in this release/)
   assert.ok(cards.indexOf('gold-rom') < cards.indexOf('cartridge-red'))
   const html = view.element('#starter').innerHTML
   assert.ok(html.includes('value="chikorita"') && !html.includes('value="squirtle"'))
@@ -628,7 +629,7 @@ test('with no cartridges the library and the dialog both point to Settings', asy
   assert.equal(view.element('#create-needs-cartridge').hidden, false)
   assert.equal(view.element('#create-submit').hidden, true)
   assert.equal(view.element('#rom-id').value, '')
-  assert.equal(view.element('#create-supported').textContent, 'Red, Blue, Gold, Silver or Crystal')
+  assert.equal(view.element('#create-supported').textContent, 'Red, Blue, Yellow, Gold, Silver or Crystal')
 })
 
 test('a starter from the wrong game is refused before the adventure is created', async () => {
@@ -647,7 +648,7 @@ test('a starter from the wrong game is refused before the adventure is created',
 test('settings shows every slot and a wrong-slot upload reports where it went', async () => {
   let shelf = SHELF.map(version => slot(version))
   const view = library({page: 'settings', respond(path, opts) {
-    if (path === '/api/v1/cartridges') return {ok: true, json: async () => ({slots: shelf, supported: 'Red, Blue, Gold, Silver or Crystal'})}
+    if (path === '/api/v1/cartridges') return {ok: true, json: async () => ({slots: shelf, supported: 'Red, Blue, Yellow, Gold, Silver or Crystal'})}
     if (path.startsWith('/api/v1/cartridges?slot=')) shelf = SHELF.map(version => slot(version, version === 'blue' ? 'blue-rom' : ''))
     if (path.startsWith('/api/v1/cartridges?slot=') && opts.method === 'POST') return {ok: true, json: async () => ({
       version: 'blue', title: 'Pokémon Blue', moved: true, message: 'That file is Pokémon Blue, not Pokémon Red, so it went into the Blue slot.',
@@ -656,7 +657,7 @@ test('settings shows every slot and a wrong-slot upload reports where it went', 
   await settle()
   const grid = view.element('#cartridge-grid')
   for (const version of SHELF) assert.match(grid.innerHTML, new RegExp(`id="cartridge-${version}"`))
-  assert.match(grid.innerHTML, /data-slot="yellow" data-state="coming"/)
+  assert.match(grid.innerHTML, /data-slot="yellow" data-state="empty"/)
   view.element('#cartridge-grid').onclick({target: {closest: selector => selector === '[data-cartridge-upload]' ? {dataset: {cartridgeUpload: 'red'}} : null}})
   view.element('#cartridge-file').files = [{name: 'blue.gb', size: 1024}]
   view.element('#cartridge-file').onchange()

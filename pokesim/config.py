@@ -5,6 +5,11 @@ from pathlib import Path
 
 from pokesim_core.rom import KNOWN_ROM_SHA1 as KNOWN_ROM_SHA1
 
+from .yellow import YELLOW_NAME, YELLOW_SHA1
+
+# Gen 1 cartridges whose verified layout PokeSim reads. Yellow uses translated Red addresses.
+GEN1_ROM_SHA1 = {**KNOWN_ROM_SHA1, YELLOW_SHA1: YELLOW_NAME}
+
 
 def _env(name, default):
     return os.environ.get(name, default)

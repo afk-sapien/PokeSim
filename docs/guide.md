@@ -19,7 +19,7 @@ its size and the date it was added. Choose **Upload** on a slot or drop a `.gb`,
 `.gbc` or ZIP file onto it. PokeSim identifies the game from the file's hash, so a
 file dropped on the wrong slot goes into its own slot and the page says where it went.
 Files that are not a supported clean English ROM are refused with the list of games
-PokeSim can play. Yellow shows **Coming in this release** until this build can play it.
+PokeSim can play. A slot for a game this build cannot play shows **Coming in this release**.
 
 **Remove** asks first. It refuses while any adventure, archived or not, uses that
 cartridge, and names those adventures. Delete or move them first.

@@ -7,7 +7,7 @@ from ..policies.base import Action
 from ..interactions.centers import CENTERS
 from ..policies.navigation import Navigator
 from ..policies.collection import LEAGUE
-from ..policies.team import reserve_to_deposit
+from ..policies.team import STAYS_IN_PARTY, reserve_to_deposit
 from ..ram import read_snapshot
 from ..screen import Screen
 from ..trade.preferences import identity
@@ -379,6 +379,7 @@ class Preparation:
         strongest = max(range(len(snap.party)), key=lambda i: snap.party[i].level)
         safe = [i for i, mon in enumerate(snap.party)
                 if i != strongest and keys[i] and keys.count(keys[i]) == 1
+                and mon.species not in STAYS_IN_PARTY
                 and preferences.get(keys[i], {}).get('state') not in protected
                 and not any(move in (15, 19, 57, 70, 148)
                             and not any(move in other.moves for j, other in enumerate(snap.party) if j != i)
