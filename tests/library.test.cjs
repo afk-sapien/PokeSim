@@ -8,6 +8,14 @@ const settle = async () => {
   for (const tick of [1, 2, 3, 4]) await new Promise(resolve => setImmediate(resolve))
 }
 
+function slot(version, romId = '', extra = {}) {
+  const johto = ['gold', 'silver', 'crystal'].includes(version)
+  return {version, title: `Pokémon ${version[0].toUpperCase()}${version.slice(1)}`, generation: johto ? 2 : 1, supported: version !== 'yellow',
+    starters: johto ? ['chikorita', 'cyndaquil', 'totodile'] : ['bulbasaur', 'charmander', 'squirtle'], installed: Boolean(romId),
+    adventures: [], rom: romId ? {id: romId, sha1: 'a'.repeat(40), short_hash: 'aaaaaaaa', size: 1048576, added_at: 1700000000, file_missing: false} : null, ...extra}
+}
+const SHELF = ['red', 'blue', 'yellow', 'gold', 'silver', 'crystal']
+
 function library(options = {}) {
   const elements = new Map()
   const calls = []
@@ -16,7 +24,7 @@ function library(options = {}) {
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
       hidden: selector === '#workspace', value: '', checked: false, files: [], dataset: {}, textContent: '',
-      innerHTML: '', classList: {toggle() {}}, setAttribute() {}, hasAttribute: () => false,
+      innerHTML: '', classList: {toggle() {}}, setAttribute() {}, toggleAttribute() {}, hasAttribute: () => false, click() {},
       querySelectorAll: () => [], querySelector: () => null, insertAdjacentHTML() {},
       focus() {}, showModal() { this.open = true }, close() { this.open = false }, reset() {},
     })
@@ -37,6 +45,7 @@ function library(options = {}) {
       }
       const data = path === '/api/v1/session' ? {csrf_token: 'csrf', role: 'owner'}
         : path === '/api/v1/assets' ? {roms: [{id: 'rom', version: 'red'}]}
+        : path === '/api/v1/cartridges' ? {slots: options.slots || [slot('red', 'rom')], supported: 'Red, Blue, Gold, Silver or Crystal'}
         : path === '/api/v1/adventures' && opts.method === 'POST' ? {id: 'a'.repeat(32)}
         : {adventures: []}
       return {ok: true, json: async () => data}
@@ -61,7 +70,8 @@ test('create can reuse a ROM without starting and sends a stable-format idempote
   const view = library()
   await settle()
   view.element('#new-name').value = 'Second Red'
-  view.element('#rom-select').value = 'rom'
+  await view.element('#new-adventure').onclick()
+  await settle()
   view.element('#starter').value = 'charmander'
   view.element('#start-created').checked = false
   view.element('#create-form').onsubmit({preventDefault() {}})
@@ -188,7 +198,8 @@ test('failed creation retains idempotency key for an identical retry and exposes
   }})
   await settle()
   view.element('#new-name').value = 'Red'
-  view.element('#rom-select').value = 'rom'
+  await view.element('#new-adventure').onclick()
+  await settle()
   view.element('#starter').value = 'random'
   view.element('#create-form').onsubmit({preventDefault() {}})
   await settle()
@@ -211,7 +222,8 @@ test('expired CSRF renews the session and retries the exact creation once', asyn
   }})
   await settle()
   view.element('#new-name').value = 'Red'
-  view.element('#rom-select').value = 'rom'
+  await view.element('#new-adventure').onclick()
+  await settle()
   view.element('#starter').value = 'random'
   view.element('#create-form').onsubmit({preventDefault() {}})
   await settle()
@@ -567,40 +579,90 @@ test('settings render existing backups without an adventure variable', async () 
   assert.match(view.element('#backup-summary').textContent, /1 backup/)
 })
 
-function cartridgeFile(title) {
-  const header = new Uint8Array(16)
-  for (let i = 0; i < title.length; i++) header[i] = title.charCodeAt(i)
-  header[15] = 0x80
-  return {slice: () => ({arrayBuffer: async () => header.buffer})}
-}
-
-test('choosing a cartridge file narrows the starters from its header before upload', async () => {
-  const view = library()
+test('one installed cartridge is preselected and narrows the starters', async () => {
+  const view = library({slots: SHELF.map(version => slot(version, version === 'gold' ? 'gold-rom' : ''))})
   await settle()
-  for (const [title, expected] of [['POKEMON_GLDAAUE', 'chikorita'], ['PM_CRYSTAL', 'totodile'], ['POKEMON RED', 'squirtle'], ['POKEMON BLUE', 'bulbasaur']]) {
-    view.element('#rom-file').files = [cartridgeFile(title)]
-    await view.element('#rom-file').onchange()
-    const html = view.element('#starter').innerHTML
-    assert.ok(html.includes(`value="${expected}"`), title)
-    assert.equal(html.includes('value="chikorita"'), expected === 'chikorita' || expected === 'totodile', title)
-    assert.equal(html.includes('value="squirtle"'), expected === 'squirtle' || expected === 'bulbasaur', title)
-  }
-  view.element('#rom-file').files = [cartridgeFile('SOMETHING ELSE')]
-  await view.element('#rom-file').onchange()
-  assert.ok(view.element('#starter').innerHTML.includes('value="squirtle"') && view.element('#starter').innerHTML.includes('value="totodile"'))
+  await view.element('#new-adventure').onclick()
+  await settle()
+  assert.equal(view.element('#rom-id').value, 'gold-rom')
+  const cards = view.element('#game-choices').innerHTML
+  assert.match(cards, /value="gold-rom" data-version="gold" checked/)
+  assert.match(cards, /href="\/settings#cartridge-red">Add cartridge/)
+  assert.match(cards, /Coming in this release/)
+  assert.ok(cards.indexOf('gold-rom') < cards.indexOf('cartridge-red'))
+  const html = view.element('#starter').innerHTML
+  assert.ok(html.includes('value="chikorita"') && !html.includes('value="squirtle"'))
+  assert.equal(view.element('#create-needs-cartridge').hidden, true)
+  assert.equal(view.element('#create-submit').hidden, false)
+})
+
+test('several cartridges need a choice and the choice sets the game and starters', async () => {
+  const view = library({slots: SHELF.map(version => slot(version, ['red', 'crystal'].includes(version) ? `${version}-rom` : ''))})
+  await settle()
+  await view.element('#new-adventure').onclick()
+  await settle()
+  assert.equal(view.element('#rom-id').value, '')
+  assert.doesNotMatch(view.element('#game-choices').innerHTML, /checked/)
+  view.element('#new-name').value = 'Undecided'
+  view.element('#create-form').onsubmit({preventDefault() {}})
+  await settle()
+  assert.equal(view.calls.some(call => call.path === '/api/v1/adventures' && call.options.method === 'POST'), false)
+  assert.match(view.element('dialog[open] .dialog-feedback').textContent, /Choose the game/)
+  view.element('#game-choices').onchange({target: {name: 'game', value: 'crystal-rom'}})
+  assert.equal(view.element('#rom-id').value, 'crystal-rom')
+  assert.ok(view.element('#starter').innerHTML.includes('value="totodile"'))
+  view.element('#starter').value = 'totodile'
+  view.element('#create-form').onsubmit({preventDefault() {}})
+  await settle()
+  const request = view.calls.find(call => call.path === '/api/v1/adventures' && call.options.method === 'POST')
+  assert.deepEqual([JSON.parse(request.options.body).rom_id, JSON.parse(request.options.body).starter], ['crystal-rom', 'totodile'])
+})
+
+test('with no cartridges the library and the dialog both point to Settings', async () => {
+  const view = library({slots: SHELF.map(version => slot(version))})
+  await settle()
+  assert.equal(view.element('#empty-needs-cartridge').hidden, false)
+  assert.equal(view.element('#empty-ready').hidden, true)
+  await view.element('#new-adventure').onclick()
+  await settle()
+  assert.equal(view.element('#create-needs-cartridge').hidden, false)
+  assert.equal(view.element('#create-submit').hidden, true)
+  assert.equal(view.element('#rom-id').value, '')
+  assert.equal(view.element('#create-supported').textContent, 'Red, Blue, Gold, Silver or Crystal')
 })
 
 test('a starter from the wrong game is refused before the adventure is created', async () => {
-  const view = library({respond: (path, opts) => {
-    if (path === '/api/v1/assets/rom') return {ok: true, json: async () => ({id: 'new', version: 'red'})}
-  }})
+  const view = library()
+  await settle()
+  await view.element('#new-adventure').onclick()
   await settle()
   view.element('#new-name').value = 'Mismatch'
-  view.element('#rom-file').files = [cartridgeFile('unknown')]
-  await view.element('#rom-file').onchange()
   view.element('#starter').value = 'cyndaquil'
   view.element('#create-form').onsubmit({preventDefault() {}})
   await settle()
   assert.equal(view.calls.some(call => call.path === '/api/v1/adventures' && call.options.method === 'POST'), false)
   assert.match(view.element('dialog[open] .dialog-feedback').textContent, /different game/)
+})
+
+test('settings shows every slot and a wrong-slot upload reports where it went', async () => {
+  let shelf = SHELF.map(version => slot(version))
+  const view = library({page: 'settings', respond(path, opts) {
+    if (path === '/api/v1/cartridges') return {ok: true, json: async () => ({slots: shelf, supported: 'Red, Blue, Gold, Silver or Crystal'})}
+    if (path.startsWith('/api/v1/cartridges?slot=')) shelf = SHELF.map(version => slot(version, version === 'blue' ? 'blue-rom' : ''))
+    if (path.startsWith('/api/v1/cartridges?slot=') && opts.method === 'POST') return {ok: true, json: async () => ({
+      version: 'blue', title: 'Pokémon Blue', moved: true, message: 'That file is Pokémon Blue, not Pokémon Red, so it went into the Blue slot.',
+      rom: {id: 'blue-rom'}, slots: shelf})}
+  }})
+  await settle()
+  const grid = view.element('#cartridge-grid')
+  for (const version of SHELF) assert.match(grid.innerHTML, new RegExp(`id="cartridge-${version}"`))
+  assert.match(grid.innerHTML, /data-slot="yellow" data-state="coming"/)
+  view.element('#cartridge-grid').onclick({target: {closest: selector => selector === '[data-cartridge-upload]' ? {dataset: {cartridgeUpload: 'red'}} : null}})
+  view.element('#cartridge-file').files = [{name: 'blue.gb', size: 1024}]
+  view.element('#cartridge-file').onchange()
+  await settle()
+  const upload = view.calls.find(call => call.path === '/api/v1/cartridges?slot=red')
+  assert.equal(upload.options.method, 'POST')
+  assert.match(grid.innerHTML, /data-slot="blue" data-state="installed"/)
+  assert.match(grid.innerHTML, /went into the Blue slot/)
 })

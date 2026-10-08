@@ -11,6 +11,27 @@ pushed to [ntfy](https://ntfy.sh).
 
 Follow the current [installation instructions](../README.md) and [operations guide](operations.md). This page describes gameplay and advanced settings.
 
+## Game cartridges
+
+Settings → Game cartridges has one slot for each game: Red, Blue, Yellow, Gold,
+Silver and Crystal. A filled slot shows a check, the start of the ROM's SHA-1 hash,
+its size and the date it was added. Choose **Upload** on a slot or drop a `.gb`,
+`.gbc` or ZIP file onto it. PokeSim identifies the game from the file's hash, so a
+file dropped on the wrong slot goes into its own slot and the page says where it went.
+Files that are not a supported clean English ROM are refused with the list of games
+PokeSim can play. Yellow shows **Coming in this release** until this build can play it.
+
+**Remove** asks first. It refuses while any adventure, archived or not, uses that
+cartridge, and names those adventures. Delete or move them first.
+
+**New adventure** offers only installed cartridges. Missing games appear greyed out
+with an **Add cartridge** link to their slot. With one cartridge installed it is
+already selected. With none, the Library and the dialog both point you to Settings.
+
+The API is `GET /api/v1/cartridges`, `POST /api/v1/cartridges?slot=<game>` with the
+file as the request body, and `DELETE /api/v1/cartridges/<game>`. The older
+`POST /api/v1/assets/rom` still works.
+
 ## Optional community sprites
 
 Portraits normally come from your own ROM. Settings → Pokémon artwork →

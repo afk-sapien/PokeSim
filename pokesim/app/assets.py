@@ -30,25 +30,122 @@ class Assets:
                                          folder='/sprites/items/', pack='item-artwork', setting='item_artwork')
 
     def install_rom(self, raw):
-        from ..cartridges import identify, unpack
+        return self.add_cartridge(raw)['rom']
+
+    def add_cartridge(self, raw, slot=None):
+        """Verify an uploaded cartridge, store it once and file it under the game it really is.
+
+        `slot` is only the shelf slot the owner aimed at. The hash decides where the cartridge
+        goes, and the result says so when the two differ.
+        """
+        from ..cartridges import SLOT_TITLES, identify, unsupported_message, unpack
+        if slot is not None and slot not in SLOT_TITLES:
+            raise ValueError('Unknown cartridge slot')
         if len(raw) > MAX_ROM:
-            raise ValueError('The cartridge file is too large')
+            raise ValueError('The cartridge file is too large. Game Boy ROMs are at most 2 MB.')
+        if not raw:
+            raise ValueError('The chosen file is empty. Choose your .gb, .gbc or .zip ROM file.')
         if raw[:4] == b'PK\x03\x04':
             raw = unpack(raw)
         cartridge = identify(raw)
         sha1 = hashlib.sha1(raw).hexdigest()
-        if len(raw) > MAX_ROM or sha1 not in ROM_NAMES:
-            raise ValueError('Choose a clean supported Red, Blue, Gold, Silver or Crystal ROM')
+        if len(raw) > MAX_ROM or (cartridge is None and sha1 not in ROM_NAMES):
+            raise ValueError(unsupported_message())
+        version = cartridge.version if cartridge else ROM_NAMES[sha1].split()[1].lower()
         sha256 = hashlib.sha256(raw).hexdigest()
         path = self.root / 'roms' / sha256 / 'rom.gb'
         path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():
-            if hashlib.sha256(path.read_bytes()).hexdigest() != sha256:
-                raise ValueError('Stored ROM verification failed')
-        else:
+        known = sha256 in {row['id'] for row in self.registry.roms()}
+        if not path.exists():
+            status = 'repaired' if known else 'added'
             CheckpointStore.atomic_write(path, raw)
-        version = cartridge.version if cartridge else ROM_NAMES[sha1].split()[1].lower()
-        return self.registry.add_rom(sha256, sha1, version)
+        elif hashlib.sha256(path.read_bytes()).hexdigest() != sha256:
+            # The upload was verified above, so it can safely replace a damaged stored copy.
+            status = 'repaired'
+            CheckpointStore.atomic_write(path, raw)
+        else:
+            status = 'same' if known else 'added'
+        rom = self.registry.add_rom(sha256, sha1, version)
+        title = SLOT_TITLES.get(version, f'Pokémon {version.capitalize()}')
+        moved = slot is not None and slot != version
+        if moved:
+            message = f'That file is {title}, not {SLOT_TITLES[slot]}, so it went into the {version.capitalize()} slot.'
+        elif status == 'same':
+            message = f'{title} is already installed. The file you chose is the same verified cartridge, so nothing changed.'
+        elif status == 'repaired':
+            message = f'{title} was checked and its stored copy replaced.'
+        else:
+            message = f'{title} added. It is ready for new adventures.'
+        return {'rom': rom, 'version': version, 'title': title, 'requested': slot, 'moved': moved,
+                'status': status, 'message': message, 'raw': raw}
+
+    def cartridge_slots(self):
+        """One entry per shelf slot: what is installed there and which adventures use it."""
+        from ..cartridges import CARTRIDGES, SLOT_GENERATIONS, SLOT_TITLES, SLOTS, supported_versions
+        supported = set(supported_versions())
+        starters = {cartridge.version: list(cartridge.starters) for cartridge in CARTRIDGES}
+        rows = self.registry.roms()
+        adventures = self.registry.adventures()
+        versions = list(SLOTS) + sorted({row['version'] for row in rows} - set(SLOTS))
+        slots = []
+        for version in versions:
+            stored = [row for row in rows if row['version'] == version]
+            ids = {row['id'] for row in stored}
+            rom = None
+            for row in stored:
+                path = self.root / 'roms' / row['id'] / 'rom.gb'
+                try:
+                    stat = path.stat()
+                except OSError:
+                    stat = None
+                candidate = {'id': row['id'], 'sha1': row['sha1'], 'short_hash': row['sha1'][:8],
+                             'size': stat.st_size if stat else None, 'added_at': stat.st_mtime if stat else None,
+                             'file_missing': stat is None}
+                if rom is None or (rom['file_missing'] and stat is not None):
+                    rom = candidate
+            slots.append({
+                'version': version,
+                'title': SLOT_TITLES.get(version, f'Pokémon {version.capitalize()}'),
+                'generation': SLOT_GENERATIONS.get(version),
+                'supported': version in supported or bool(stored),
+                'starters': starters.get(version, []),
+                'installed': rom is not None,
+                'rom': rom,
+                'adventures': [{'id': game['id'], 'name': game['name'], 'archived': game['archived']}
+                               for game in adventures if game['rom_id'] in ids],
+            })
+        return slots
+
+    def remove_cartridge(self, version):
+        """Forget a cartridge and delete its stored file, unless an adventure still plays it."""
+        from ..cartridges import SLOT_TITLES
+        title = SLOT_TITLES.get(version, f'Pokémon {version.capitalize()}')
+        with self.registry.lock:
+            ids = [row['id'] for row in self.registry.roms() if row['version'] == version]
+            if not ids:
+                raise KeyError(f'No {title} cartridge is installed')
+            users = [game for game in self.registry.adventures() if game['rom_id'] in ids]
+            if users:
+                names = ', '.join(game['name'] + (' (archived)' if game['archived'] else '') for game in users)
+                count = 'adventure uses' if len(users) == 1 else f'{len(users)} adventures use'
+                raise ValueError(f'{title} cannot be removed because this {count} it: {names}. '
+                                 'Delete those adventures first. Archived adventures count, since they can be restored.')
+            self.registry.remove_roms(ids)
+        for rom_id in ids:
+            shutil.rmtree(self.root / 'roms' / rom_id, ignore_errors=True)
+        return {'version': version, 'title': title, 'message': f'{title} removed. Add it again at any time.'}
+
+    def install_portraits_quietly(self, raw):
+        """Extract portraits right after an upload when the reference data is already prepared.
+
+        Starting an adventure extracts them anyway, so a library without reference data yet
+        simply waits for that.
+        """
+        try:
+            return self.install_portraits(raw)
+        except Exception as error:
+            log.info('Portraits will be extracted when an adventure starts: %s', error)
+            return 0
 
     def install_portraits(self, raw) -> int:
         """Decode the 151 front portraits out of the cartridge the owner just supplied.

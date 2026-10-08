@@ -47,7 +47,7 @@ $launcher = Join-Path $binDir 'pokesim-desktop.exe'
 if ($LASTEXITCODE -ne 0) { throw 'The installed launcher failed. Please include the error in a bug report.' }
 Write-Host "`nPokeSim is installed. Start it with:"
 Write-Host "  & `"$launcher`""
-Write-Host "`nYour browser will open the Library. Add your own Red, Blue, Gold, Silver or Crystal ROM there."
+Write-Host "`nYour browser will open the Library. Add your own Red, Blue, Gold, Silver or Crystal ROM in Settings, Game cartridges."
 Write-Host 'For the short pokesim-desktop command, add the tool directory to PATH with:'
 Write-Host "  & `"$uvBin`" tool update-shell"
 Write-Host 'Then open a new terminal. Save and quit PokeSim before rerunning this installer to update.'

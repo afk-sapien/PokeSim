@@ -124,6 +124,10 @@ class Registry:
             self.db.execute('INSERT OR IGNORE INTO roms VALUES (?, ?, ?)', (rom_id, sha1, version))
         return {'id': rom_id, 'sha1': sha1, 'version': version}
 
+    def remove_roms(self, rom_ids):
+        with self.lock, self.db:
+            self.db.executemany('DELETE FROM roms WHERE id=?', [(rom_id,) for rom_id in rom_ids])
+
     def create(self, name, rom_id, settings, request_id):
         name = str(name).strip()
         if not name or len(name) > 120:
@@ -139,7 +143,7 @@ class Registry:
                 return self.adventure(json.loads(previous['result'])['id'])
             rom = self.db.execute('SELECT * FROM roms WHERE id=?', (rom_id,)).fetchone()
             if rom is None:
-                raise ValueError('Add a verified ROM before creating an adventure')
+                raise ValueError('Add a game cartridge in Settings before creating an adventure')
             from ..cartridges import validate_starter
             validate_starter(settings.get('starter', 'random'), rom['version'])
             aid = identifier()

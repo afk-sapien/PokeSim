@@ -357,17 +357,44 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.get('/api/v1/assets')
     def assets():
-        return {'roms': manager.registry.roms()}
+        return {'roms': manager.registry.roms(), 'cartridges': manager.assets.cartridge_slots()}
 
-    @app.post('/api/v1/assets/rom')
-    async def add_rom(request: Request):
-        manager.check_available()
+    async def read_cartridge(request):
         raw = bytearray()
         async for chunk in request.stream():
             raw.extend(chunk)
             if len(raw) > MAX_ROM:
-                raise HTTPException(413, 'ROM files may be no larger than 1 MB')
-        return await asyncio.to_thread(manager.assets.install_rom, bytes(raw))
+                raise HTTPException(413, 'The cartridge file is too large. Game Boy ROMs are at most 2 MB, and a ZIP may be at most 4 MB.')
+        return bytes(raw)
+
+    async def add_cartridge(request, slot=None):
+        manager.check_available()
+        raw = await read_cartridge(request)
+        result = await asyncio.to_thread(manager.assets.add_cartridge, raw, slot)
+        manager.background(manager.assets.install_portraits_quietly, result.pop('raw'))
+        return result
+
+    @app.post('/api/v1/assets/rom')
+    async def add_rom(request: Request):
+        # Kept for scripts and older pages: the cartridge row, as before, plus where it went.
+        result = await add_cartridge(request)
+        return {**result['rom'], 'title': result['title'], 'message': result['message']}
+
+    @app.get('/api/v1/cartridges')
+    def cartridges():
+        from ..cartridges import supported_names
+        return {'slots': manager.assets.cartridge_slots(), 'supported': supported_names()}
+
+    @app.post('/api/v1/cartridges')
+    async def upload_cartridge(request: Request, slot: str | None = None):
+        result = await add_cartridge(request, slot or None)
+        return {**result, 'slots': manager.assets.cartridge_slots()}
+
+    @app.delete('/api/v1/cartridges/{version}')
+    def remove_cartridge(version: str):
+        manager.check_available()
+        result = manager.assets.remove_cartridge(version)
+        return {**result, 'slots': manager.assets.cartridge_slots()}
 
     @app.post('/api/v1/adventures')
     async def create(request: Request):
