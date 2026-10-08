@@ -16,11 +16,14 @@ class Memory:
     def __init__(self, memory, data):
         self.memory = memory
         self.data = data
+        self.window = getattr(memory, 'snapshot_window', None)
 
     def raw(self, bank, address, size):
         if size == 0:
             return b''
         if 0x8000 <= address < 0xE000:
+            if self.window is not None and (cached := self.window(bank, address, size)) is not None:
+                return cached
             return bytes(self.memory[bank, address:address + size])
         return bytes(self.memory[address:address + size])
 
@@ -38,9 +41,13 @@ class Memory:
         return self.data.text(self.read(name, length))
 
     def tiles(self):
-        raw = self.read('wTilemap', 360)
-        return tuple(''.join(value if len(value := self.data.charmap.get(tile, ' ')) == 1 else ' '
-                             for tile in raw[row:row + 20]) for row in range(0, 360, 20))
+        return tile_rows(self.read('wTilemap', 360), self.data)
+
+
+def tile_rows(raw, data):
+    """The 20x18 tilemap as text rows, with tiles that are not one character shown as spaces."""
+    return tuple(''.join(value if len(value := data.charmap.get(tile, ' ')) == 1 else ' '
+                         for tile in raw[row:row + 20]) for row in range(0, 360, 20))
 
 
 def individual(raw):
@@ -272,28 +279,78 @@ class Snapshot:
                             'pokemon': [mon.to_dict() for mon in self.stored]}}
 
 
-def read_snapshot(memory, data, frame=0):
-    mem = Memory(memory, data)
-    count = mem.byte('wPartyCount')
+# Decoded regions keyed strictly by their raw bytes and the static game data. Each region keeps
+# only its latest entry, so the cache stays small and never outlives a change of those bytes.
+_regions = {}
+
+
+def _region(name, key, data, build):
+    entry = _regions.get(name)
+    if entry is not None and entry[0] is data and entry[1] == key:
+        return entry[2]
+    value = build()
+    _regions[name] = (data, key, value)
+    return value
+
+
+def clear_region_cache():
+    _regions.clear()
+
+
+def _party(raw, data):
+    count, species, mons, names = raw[0], raw[1:7], raw[7:295], raw[295:361]
     party = []
     for slot in range(min(count, 6)):
-        mon = decode_mon(mem.read('wPartyMons', 48, slot * 48), mem.read('wPartyMonNicknames', 11, slot * 11), data,
-                         egg=mem.byte('wPartySpecies', slot) == 0xFD)
+        mon = decode_mon(mons[slot * 48:slot * 48 + 48], names[slot * 11:slot * 11 + 11], data,
+                         egg=species[slot] == 0xFD)
         if mon:
             party.append(mon)
+    return tuple(party)
+
+
+def _box(raw, box, data):
+    count = min(raw[0], 20)
+    stored = []
+    for slot in range(count):
+        mon = decode_mon(raw[22 + slot * 32:54 + slot * 32], raw[882 + slot * 11:893 + slot * 11], data,
+                         box=box, position=slot, egg=raw[1 + slot] == 0xFD)
+        if mon:
+            stored.append(mon)
+    return count, tuple(stored)
+
+
+def _daycare(raw, data):
+    return tuple(decode_mon(raw[2 + i * 43:34 + i * 43], raw[34 + i * 43:45 + i * 43], data) if raw[i] & 1 else None
+                 for i in (0, 1))
+
+
+def _dex(raw):
+    seen = frozenset(dex_flags(raw[:32]))
+    return seen, frozenset(dex_flags(raw[32:])) & seen
+
+
+def _screen(raw, battle, data):
+    rows = tile_rows(raw, data)
+    return mask_hud(rows) if battle else rows
+
+
+def read_snapshot(memory, data, frame=0, *, cache=True):
+    """Decode the observable game state. ``cache`` reuses decoded regions whose bytes are unchanged."""
+    mem = Memory(memory, data)
+    region = _region if cache else (lambda name, key, data, build: build())
+    count = mem.byte('wPartyCount')
+    party_raw = (bytes([count]) + mem.read('wPartySpecies', 6) + mem.read('wPartyMons', 288)
+                 + mem.read('wPartyMonNicknames', 66))
+    party = region('party', party_raw, data, lambda: _party(party_raw, data))
     active_box = mem.byte('wCurBox') & 0x7F
     valid = count <= 6 and active_box < 14 and len(party) == count
     active_box = min(active_box, 13)
     stored, box_counts = [], []
     for box in range(14):
-        name = 'sBox' if box == active_box else f'sBox{box + 1}'
-        count_box = min(mem.byte(name), 20)
+        raw = mem.read('sBox' if box == active_box else f'sBox{box + 1}', 1102)
+        count_box, mons = region(f'box{box}', raw, data, lambda: _box(raw, box, data))
         box_counts.append(count_box)
-        for slot in range(count_box):
-            mon = decode_mon(mem.read(name, 32, 22 + slot * 32), mem.read(name, 11, 882 + slot * 11), data,
-                             box=box, position=slot, egg=mem.byte(name, 1 + slot) == 0xFD)
-            if mon:
-                stored.append(mon)
+        stored.extend(mons)
     pockets = {}
     for pocket, symbol, capacity in [('items', 'wNumItems', 20), ('balls', 'wNumBalls', 12)]:
         size = min(mem.byte(symbol), capacity)
@@ -317,18 +374,19 @@ def read_snapshot(memory, data, frame=0):
         raw = mem.read('wMapObjects', 4, (index + (data.game != 'crystal')) * 16)
         if raw[1] and index not in {item[0] for item in objects}:
             objects.append((index, raw[3] - 4, raw[2] - 4))
-    seen = frozenset(dex_flags(mem.read('wPokedexSeen', 32)))
-    owned = frozenset(dex_flags(mem.read('wPokedexCaught', 32))) & seen
-    daycare = tuple(decode_mon(mem.read(f'wBreedMon{i}', 32), mem.read(f'wBreedMon{i}Nickname', 11), data)
-                    if mem.byte(flag) & 1 else None
-                    for i, flag in [(1, 'wDayCareMan'), (2, 'wDayCareLady')])
+    dex_raw = mem.read('wPokedexSeen', 32) + mem.read('wPokedexCaught', 32)
+    seen, owned = region('dex', dex_raw, data, lambda: _dex(dex_raw))
+    daycare_raw = (mem.read('wDayCareMan', 1) + mem.read('wDayCareLady', 1)
+                   + b''.join(mem.read(f'wBreedMon{i}', 32) + mem.read(f'wBreedMon{i}Nickname', 11) for i in (1, 2)))
+    daycare = region('daycare', daycare_raw, data, lambda: _daycare(daycare_raw, data))
     roamers = []
     for index in (1, 2, 3):
         raw = mem.read(f'wRoamMon{index}', 7)
         if raw[0] in (243, 244, 245):
             roamers.append({'species': raw[0], 'level': raw[1], 'map': raw[2] * 256 + raw[3], 'hp': raw[4]})
     battle = mem.byte('wBattleMode')
-    screen_tiles = mask_hud(mem.tiles()) if battle else mem.tiles()
+    tilemap = mem.read('wTilemap', 360)
+    screen_tiles = region('screen', (battle, tilemap), data, lambda: _screen(tilemap, battle, data))
     return Snapshot(frame, mem.byte('wMapGroup') * 256 + mem.byte('wMapNumber'), mem.byte('wXCoord'), mem.byte('wYCoord'),
                     mem.text('wPlayerName'), mem.text('wRivalName'), tuple(party), tuple(stored), tuple(box_counts), active_box,
                     owned, seen, mem.byte('wJohtoBadges') | (mem.byte('wKantoBadges') << 8),
