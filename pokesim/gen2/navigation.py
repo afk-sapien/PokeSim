@@ -1,9 +1,10 @@
 """Gen II map routing with live collision blocks and object avoidance."""
 from collections import deque
 
+from . import ice
 from .ram import Memory
 from .routes import Regions
-from .world import travel_collision
+from .world import ice_solids, travel_collision
 
 DIRS = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}
 OPPOSITE = {'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'}
@@ -21,6 +22,8 @@ class Navigator:
         self.blocked = {}
         self.previous = None
         self.visits = {}
+        self.explored = {}
+        self.exploring = None
         self.failed_edges = {}
         self.objects = {}
         self.regions = Regions(data)
@@ -38,6 +41,8 @@ class Navigator:
             if index not in visible and abs(x - snapshot.x) <= 4 and abs(y - snapshot.y) <= 4:
                 del known[index]
         known.update(visible)
+        for mid in self.regions.ice_maps:
+            self.regions.observe_solids(mid, ice_solids(self.data, snapshot, mid))
         objects = self.data.maps[snapshot.map]['objects']
         cleared = set(self.regions.cleared_rocks.get(snapshot.map, set()))
         for index, obj in enumerate(objects, 1):
@@ -108,6 +113,11 @@ class Navigator:
         occupied.update((x, y) for index, x, y in snapshot.objects if index in boulders)
         warps = {(warp['x'], warp['y']) for warp in entry['warps']
                  if 0x60 <= grid[warp['y'] * width + warp['x']] <= 0x7F} - targets if avoid_warps else set()
+        # Objects out of sight still stop a slide, so ice maps also count the ones the map data places.
+        occupied |= self.regions.solids.get(snapshot.map, frozenset()) if snapshot.map in self.regions.ice_maps else set()
+        bumped = {(nx, ny) for (mid, nx, ny) in self.blocked if mid == snapshot.map}
+        # Only a warp ends a slide on the spot. Passing over any other target does not stop the player there.
+        doors = {(warp['x'], warp['y']) for warp in entry['warps']}
         origin = (snapshot.x, snapshot.y)
         queue = deque([origin])
         paths = {origin: []}
@@ -133,16 +143,10 @@ class Navigator:
                         or not (self.passable(grid[ny * width + nx], surf=surf)
                                 or can_cut and grid[ny * width + nx] in (0x12, 0x1A))):
                     continue
-                # Ice commits the player to a direction until a wall or dry tile.
-                while grid[ny * width + nx] in (0x23, 0x2B):
-                    sx, sy = nx + dx, ny + dy
-                    if (not 0 <= sx < width or not 0 <= sy < height
-                            or (sx, sy) in occupied or (sx, sy) in warps
-                            or blocked_side(grid[ny * width + nx], button)
-                            or blocked_side(grid[sy * width + sx], OPPOSITE[button])
-                            or not self.passable(grid[sy * width + sx], surf=surf)):
-                        break
-                    nx, ny = sx, sy
+                # Ice commits the player to a direction until a wall, an object or dry ground.
+                if grid[ny * width + nx] in ice.ICE:
+                    nx, ny = ice.slide(grid, width, height, (nx, ny), button, lambda tile: self.passable(tile, surf=surf),
+                                       occupied | warps | bumped, targets & doors)
                 point = (nx, ny)
                 if point in paths:
                     continue
@@ -182,6 +186,36 @@ class Navigator:
                 if destination not in paths and destination not in excluded and (mid, destination) not in self.failed_edges:
                     paths[destination] = paths[mid] + [(mid, destination, points, kind)]
                     queue.append(destination)
+        return None
+
+    def explore(self, snapshot, memory=None, *, surf=False):
+        """Head for the least visited way out of the current region, keeping to one choice until it is reached."""
+        cut = bool(snapshot.badges & 2) and any(15 in mon.moves for mon in snapshot.party)
+        grid = self.collision(snapshot, memory)
+        self.regions.observe(snapshot.map, grid)
+        here = {(snapshot.map, region) for region in
+                self.regions.memberships(snapshot.map, (snapshot.x, snapshot.y), cut, surf, arrive=True)}
+        for node in here:
+            self.explored[node] = self.explored.get(node, 0) + (node != self.exploring)
+        if self.exploring in here:
+            self.exploring = None
+        options = []
+        for node in here:
+            for destination, points, kind in self.regions.edges(node, cut, surf):
+                options.append((destination != self.exploring,
+                                self.explored.get(destination, 0), len(options), destination, points, kind))
+        for _, _, _, destination, points, kind in sorted(options):
+            path = self.local(snapshot, points, memory, surf=surf)
+            if path is None:
+                continue
+            if not path:
+                path = next(([direction] for direction, (dx, dy) in DIRS.items()
+                             if self.local(snapshot, [(snapshot.x + dx, snapshot.y + dy)], memory,
+                                           surf=surf) == [direction]), None)
+                if path is None:
+                    continue
+            self.exploring = destination
+            return path
         return None
 
     def toward(self, snapshot, target_map, targets, memory=None, *, surf=False, excluded=()):
