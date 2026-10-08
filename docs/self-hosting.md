@@ -155,6 +155,7 @@ in a [support request](../SUPPORT.md). Remove private paths or tokens before sha
 - **An empty Library appears after an update:** Stop the service and check your Compose project name and `DATA_PATH`. Restore the original mount before creating any new adventures.
 - **ROM upload asks for prepare-data:** Update to 0.4.6 or newer and retry the upload. Earlier versions could try to generate portraits before automatic reference setup.
 - **First adventure setup fails:** Starting the first adventure downloads a pinned reference archive and generates portraits. Check connectivity and the error shown in the Library. Prepared adventures can run offline.
+- **A Gold, Silver or Crystal adventure shows "Couldn't download the Pokémon game data (no network)":** The first adventure of each of those games downloads its pinned, hash-verified pret source archive once, generates its map data in the data volume, and never needs the network again. The image does not bake that data in, because it is generated from third-party game sources on your machine, just like the Red and Blue reference data. The container needs outbound HTTPS to `codeload.github.com` and `raw.githubusercontent.com` for that first start. PokeSim retries a few seconds apart, and again after 30 seconds, 2 minutes and 5 minutes. Press **Retry** on the adventure once the network is back. A failed start never touches saves.
 
 ### Settings
 

@@ -7,6 +7,7 @@ from pathlib import Path
 import threading
 
 from ..checkpoints import CheckpointStore
+from ..downloads import retrying
 from ..desktop_setup import MAX_ROM, ROM_NAMES, ensure_game_data
 from .. import game_data
 
@@ -166,7 +167,8 @@ class Assets:
     def _prepare_gen1(self, report):
         if self.reference_source and not self._has_gen1_data():
             self._adopt_reference()
-        ensure_game_data(self.game_data_dir, report, self.cancelled, self.reference_archive)
+        retrying(lambda: ensure_game_data(self.game_data_dir, report, self.cancelled, self.reference_archive),
+                 'Pokémon', report)
 
     def prepare(self, report=lambda message: None):
         with self.guard:
