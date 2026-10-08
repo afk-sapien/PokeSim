@@ -13,6 +13,39 @@ def side_wall(tile, direction):
     return tile & 0xF0 in (0xB0, 0xC0) and direction in WALLS[tile & 7]
 
 
+class Search:
+    """A breadth-first search that keeps its progress, so later questions from the same start reuse it.
+
+    The policy asks for routes to many destinations from one place on every step. Each answer is the
+    one a fresh search would give: the goal discovered first, in the same order, with the same path.
+    The owner must drop a search whenever anything its edges depend on changes.
+    """
+    def __init__(self, starts, expand):
+        self.expand = expand
+        self.paths = {start: [] for start in starts}
+        self.nodes = list(self.paths)
+        self.order = {start: index for index, start in enumerate(self.nodes)}
+        self.queue = deque(self.nodes)
+
+    def find(self, goals):
+        found = [self.order[goal] for goal in goals if goal in self.order]
+        while not found and self.queue:
+            node = self.queue.popleft()
+            for destination, step in self.expand(node):
+                if destination in self.paths:
+                    continue
+                self.paths[destination] = self.paths[node] + [step]
+                self.order[destination] = len(self.nodes)
+                self.nodes.append(destination)
+                self.queue.append(destination)
+                if destination in goals:
+                    found.append(self.order[destination])
+        if not found:
+            return None
+        # A fresh list per answer, so a caller cannot change what later answers return.
+        return list(self.paths[self.nodes[min(found)]])
+
+
 class Regions:
     def __init__(self, data):
         self.data = data
@@ -21,6 +54,7 @@ class Regions:
         self.cleared_rocks = {}
         self.solids = {}
         self.slides = {}
+        self.searches = {}
         self.ice_maps = frozenset(mid for mid, entry in data.maps.items() if ice.has_ice(entry['collision']))
 
     def observe_solids(self, mid, points):
@@ -29,17 +63,20 @@ class Regions:
         if self.solids.get(mid, frozenset()) != points:
             self.cache = {key: value for key, value in self.cache.items() if key[0] != mid}
             self.slides = {key: value for key, value in self.slides.items() if key[0] != mid}
+            self.searches = {}
             self.solids[mid] = points
 
     def observe_rocks(self, mid, cleared):
         if self.cleared_rocks.get(mid, set()) != cleared:
             self.cache = {key: value for key, value in self.cache.items() if key[0] != mid}
+            self.searches = {}
             self.cleared_rocks[mid] = set(cleared)
 
     def observe(self, mid, grid):
         previous = self.live.get(mid, self.data.maps[mid]['collision'])
         if previous != grid:
             self.cache = {key: value for key, value in self.cache.items() if key[0] != mid}
+            self.searches = {}
         self.live[mid] = grid
 
     def walkable(self, tile, cut, surf):
@@ -247,15 +284,15 @@ class Regions:
         starts = [(snapshot.map, region)
                   for region in self.memberships(snapshot.map, (snapshot.x, snapshot.y), cut, surf, arrive=True)]
         goals = {(target_map, region) for point in targets for region in self.memberships(target_map, point, cut, surf)}
-        queue = deque(starts)
-        paths = {start: [] for start in starts}
-        while queue:
-            node = queue.popleft()
-            if node in goals:
-                return paths[node]
-            for destination, points, kind in self.edges(node, cut, surf):
-                if destination in paths or (node, destination) in excluded:
-                    continue
-                paths[destination] = paths[node] + [(node, destination, points, kind)]
-                queue.append(destination)
-        return None
+        excluded = frozenset(excluded)
+        key = (tuple(starts), cut, surf, excluded)
+        search = self.searches.get(key)
+        if search is None:
+            def expand(node):
+                for destination, points, kind in self.edges(node, cut, surf):
+                    if (node, destination) not in excluded:
+                        yield destination, (node, destination, points, kind)
+            if len(self.searches) > 512:
+                self.searches = {}
+            search = self.searches[key] = Search(starts, expand)
+        return search.find(goals)
