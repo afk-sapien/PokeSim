@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix Gold, Silver and Crystal adventures standing still beside a person who blocks the tile they chose, such as Amphy at the top of the Olivine Lighthouse. A blocked tile is no longer scored as already reached, the next open side is used, and an objective that stays unreachable is reported as stuck. `tools/play_gen2.py` no longer asks the emulator to run zero frames.
+
 ## 0.5.0
 
 - Fix Gold, Silver and Crystal adventures being restarted about every 65 seconds and ending as failed. The supervisor asked Generation II workers, which have no screen palette, to apply one, and counted the refusal as a failed health check. Optional settings now never decide whether a worker lives, a refusal is reported on the setting, workers that report no palette are left alone, and the Library hides the palette choice for Generation II games. Opening a Generation II adventure on 0.4.x still fails with "Unknown settings: celebi_event" (documented in the operations guide), since that release cannot be changed.
@@ -28,9 +30,12 @@
 - Fix Gen II hangs caused by nicknames that look like menu words. A Pokémon named CANCEL, PROTOTYPE (contains TYPE) or MOSQUITO (contains QUIT) made the bot read the battle screen as the wrong menu and press the same button forever. Battle HUD names and party nicknames are now blanked before the screen is classified, keywords match whole words only, and generated or custom full nicknames can no longer equal a menu word. The same whole-word rule fixes Gen I lookalikes such as FRESH, SODA, PP and RELEASED nicknames, with the 0.4.20 PP fix kept.
 - Add Gen II stuck recovery. A screen that does not change for 1800 frames makes the player back out with B and then try seeded exploratory buttons. Longer trouble reloads an autosave from before it began, with a random idle so the same save does not replay the same hang. Every Gen II menu task now gives up after a step limit, and repeated failures escalate to a reload. The Stuck? badge and notification now come with a real recovery, and reloads, glitched state and help requests are reported truthfully.
 - Fix a KeyError before the game starts that made the trade inventory return HTTP 500. Unknown Gen II YES or NO prompts now answer NO, then YES after three repeats so the story cannot deadlock. Preparing a Gen II trade with every PC box full now fails with a clear message and resumes play instead of pausing, and a leftover trade hold with no live exchange no longer blocks resume.
-
+- Fix a Gen II slot machine stall at 9899 credits. Once the adventure decided to leave, it pressed only B on the Start! box, which does nothing while the reels spin, so it pressed B forever. It now stops the reels with A, backs out of the bet menu, answers NO to Play again, and treats the 9999 coin case cap as the budget. Slot, coin vendor and prize tasks fail to the stuck path when the screen stops changing, a name entry screen closes after 600 presses, and the Gen II player harness no longer ticks zero frames.
 - Generate Gen II game data in CI so the Gen II runtime tests run there, and read all local Gen II test inputs from `GEN2_DATA_DIR` and `GEN2_CARTRIDGE_DIR` (`GEN2_ROM_DIR` is gone).
 - Extend the private-string scan to case-insensitive matches, personal paths, private network addresses and contact details, and make it fail when git is missing.
+- Fix Gen II adventures stalling on ice, found in the Ice Path pocket on the Mahogany side of B2F. The route planner now reads object positions from the map data, treats hidden objects and warp events on plain ice correctly, replans after every slide, and no longer counts a tile it only slides over as somewhere it can stop. When no route to the goal exists the player returns to the main objective, then explores the least visited way out, and finally asks for a reload instead of waiting forever. `tools/check_gen2_ice.py` lists which warps of every ice map can reach which from the generated map data.
+- Make the shiny-not-caught notification low priority, under "Everything else". Narrow the new-adventure starter list from the chosen cartridge file and refuse a starter from the wrong game before creating the adventure.
+- Correct the release documents: rollback wording (Red and Blue need no restore, Gold, Silver and Crystal need 0.5.0, locked-clock checkpoints are refused by 0.4.x), Gen II in the package description, third-party notices, and a test that loads a Rust-written Gen 1 state into PyBoy 2.7.0.
 
 ## 0.4.20
 

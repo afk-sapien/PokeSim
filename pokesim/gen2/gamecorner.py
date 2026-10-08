@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 import re
 
-from .menus import choose
+from .menus import MAX_STEPS, SLOT_MAX_STEPS, choose
 from .quests import room_for_gift
 
 
@@ -58,12 +58,44 @@ def arrive(policy, snapshot):
     return 'a'
 
 
+# A Game Corner task that makes no visible progress is lost. It ends with `failure` set so the
+# policy can hand it to the stuck path instead of pressing the same button for hours.
+IDLE_STEPS = 120
+SLOT_IDLE_STEPS = 240
+SLOT_STEPS = SLOT_MAX_STEPS
+VENDOR_STEPS = MAX_STEPS
+COIN_CASE_FULL = 9999
+SLOT_FLOOR = 9900
+
+
+def watch(menu, key, idle_limit, limit):
+    """Count one decision. True means the task has stopped making progress and has been failed."""
+    menu.steps += 1
+    key = str(key)
+    menu.idle = 0 if key != menu.mark else menu.idle + 1
+    menu.mark = key
+    if not menu.failure and (menu.idle > idle_limit or menu.steps > limit):
+        reason = 'no change for %d steps' % menu.idle if menu.idle > idle_limit else 'over %d steps' % limit
+        menu.failure = 'The %s task made no progress (%s)' % (type(menu).__name__, reason)
+    return bool(menu.failure)
+
+
+def text_box(snapshot):
+    return ' '.join(' '.join(row.strip('┌┐└┘─│ ') for row in snapshot.tiles[12:]).split())
+
+
 @dataclass
 class Coins:
     target: int
     exiting: bool = False
+    steps: int = 0
+    idle: int = 0
+    mark: str = ''
+    failure: str = ''
 
     def step(self, snapshot, mem):
+        if watch(self, (snapshot.coins, snapshot.money, snapshot.text), IDLE_STEPS, VENDOR_STEPS):
+            return None
         self.exiting |= snapshot.coins >= self.target or snapshot.coins > 9949 or snapshot.money < 1000
         if self.exiting:
             return 'b' if '┌' in snapshot.tiles[12] or 'CANCEL' in snapshot.text else None
@@ -81,8 +113,14 @@ class Coins:
 class Prize:
     species: int
     exiting: bool = False
+    steps: int = 0
+    idle: int = 0
+    mark: str = ''
+    failure: str = ''
 
     def step(self, snapshot, mem):
+        if watch(self, (len(snapshot.owned), snapshot.text), IDLE_STEPS, VENDOR_STEPS):
+            return None
         self.exiting |= self.species in snapshot.owned
         if self.exiting:
             return 'b' if '┌' in snapshot.tiles[12] or 'CANCEL' in snapshot.text else None
@@ -95,16 +133,39 @@ class Prize:
 
 @dataclass
 class Slots:
+    """Play one slot machine until the prize budget is reached or the credits fall too low.
+
+    Every machine in the Game Corner runs the same state machine, whatever reel layout it draws:
+    bet menu (B backs out), "Start!" while the reels spin (each A stops one reel and B does
+    nothing), a result box that needs A to advance, then "Play again?" (B means NO). Leaving
+    therefore means stopping the reels, not pressing B, and the task fails if the credits and the
+    box text stop changing.
+    """
     target: int
     exiting: bool = False
+    steps: int = 0
+    idle: int = 0
+    mark: str = ''
+    failure: str = ''
 
     def step(self, snapshot, mem):
-        self.exiting |= snapshot.coins >= self.target or snapshot.coins < 9900
-        if self.exiting:
-            if 'YES' in snapshot.text and 'NO' in snapshot.text:
-                again = 'Play again' in snapshot.text
-                return choose(snapshot.tiles, 'NO' if again else 'YES', exact=True) or 'a'
-            if not mem.byte('wScriptRunning') and '┌' not in snapshot.tiles[12]:
-                return None
+        box = text_box(snapshot)
+        if watch(self, (snapshot.coins, box), SLOT_IDLE_STEPS, SLOT_STEPS):
+            return None
+        self.exiting |= snapshot.coins >= min(self.target, COIN_CASE_FULL) or snapshot.coins < SLOT_FLOOR
+        question = 'YES' in snapshot.text and 'NO' in snapshot.text
+        if question:
+            if self.exiting:
+                # "Play again?" is the only question a machine asks. Anything else is declined too.
+                return choose(snapshot.tiles, 'NO', exact=True) or 'b'
+            return choose(snapshot.tiles, 'YES', exact=True) or 'a'
+        if not self.exiting:
+            return 'a'
+        if 'Bet how many' in box:
             return 'b'
-        return 'a'
+        if 'Start!' in box:
+            # The reels are spinning and wait for A. B does nothing here.
+            return 'a'
+        if not (mem and mem.byte('wScriptRunning')) and '┌' not in snapshot.tiles[12]:
+            return None
+        return 'b'

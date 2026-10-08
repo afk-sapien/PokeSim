@@ -340,7 +340,7 @@ def test_the_settings_database_is_private_to_its_owner(tmp_path):
 
 def test_a_stall_is_routed_by_its_own_category():
     rules = dict((key, kinds) for key, _, _, _, kinds in CATEGORIES)
-    assert rules['stall'] == (('stall', 1), ('shiny_missed', 1))
+    assert rules['stall'] == (('stall', 1),)
     assert CATEGORIES[0][0] == 'stall' and CATEGORIES[0][3] is True
 
 

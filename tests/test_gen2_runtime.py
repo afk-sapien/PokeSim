@@ -1807,3 +1807,90 @@ def test_idle_collection_says_which_time_of_day_it_needs(real_data):
         assert collection.waiting_label(policy, snapshot, mem, 'night') == 'Explore while waiting for new collection opportunities'
     finally:
         collection.wanted = original
+
+
+def _person_fixture(blockers):
+    """A 5x3 room with Jasmine at (2, 1) and living people standing on the given tiles."""
+    from dataclasses import dataclass, field
+    from pokesim.gen2.policy import Policy
+
+    @dataclass(frozen=True)
+    class Snap:
+        map: int = 1
+        x: int = 4
+        y: int = 2
+        badges: int = 0
+        party: tuple = ()
+        frame: int = 0
+        objects: tuple = field(default_factory=tuple)
+
+        def event(self, name):
+            return False
+
+    objects = [{'script': 'Jasmine', 'event': -1, 'x': 2, 'y': 1, 'sprite': 'SPRITE_JASMINE'}]
+    live = [(1, 2, 1)]
+    for index, (x, y) in enumerate(blockers, 2):
+        objects.append({'script': f'Person{index}', 'event': -1, 'x': x, 'y': y, 'sprite': 'SPRITE_MONSTER'})
+        live.append((index, x, y))
+    data = SimpleNamespace(
+        maps={1: {'width': 5, 'height': 3, 'collision': [0] * 15, 'objects': objects, 'warps': [], 'connections': []}},
+        map_ids={'ROOM': 1}, events={}, permissions=[0] * 256)
+    policy = Policy.__new__(Policy)
+    policy.data, policy.memory, policy.nav = data, None, Navigator(data)
+    return policy, Snap(objects=tuple(live))
+
+
+def test_person_goal_skips_tiles_occupied_by_other_people():
+    policy, snapshot = _person_fixture([(3, 1)])
+    assert policy.nav.local(snapshot, [(3, 1)]) is None
+    assert policy.nav.regions.route(snapshot, 1, [(3, 1)]) == []
+    assert policy.reachable_path(snapshot, 1, (3, 1)) is None
+    goal = policy.person(snapshot, 'amphy', 'Help', 'ROOM', 'Jasmine')
+    assert (goal.x, goal.y) != (3, 1)
+    assert policy.nav.local(snapshot, [(goal.x, goal.y)]) is not None
+
+
+def test_person_goal_fails_over_when_the_nearest_side_is_blocked_and_keeps_open_sides():
+    policy, snapshot = _person_fixture([])
+    nearest = policy.person(snapshot, 'amphy', 'Help', 'ROOM', 'Jasmine')
+    assert (nearest.x, nearest.y) in {(3, 1), (2, 2)}
+    policy, snapshot = _person_fixture([(3, 1), (2, 2)])
+    goal = policy.person(snapshot, 'amphy', 'Help', 'ROOM', 'Jasmine')
+    assert (goal.x, goal.y) in {(1, 1), (2, 0)}
+    assert policy.nav.local(snapshot, [(goal.x, goal.y)]) is not None
+
+
+def test_real_lighthouse_jasmine_is_reached_while_amphy_blocks_the_near_side():
+    """Needs private files: set GEN2_CARTRIDGE_DIR, GEN2_DATA_DIR and GEN2_PERSON_STATE (a Gold savestate
+    taken at Olivine Lighthouse 6F with Amphy beside Jasmine, plus a matching .policy.json). Never commit them."""
+    import json
+    from pokesim.gen2.core import boot, lock_clock
+    from pokesim.gen2.policy import Policy
+    from pokesim.gen2.ram import read_snapshot
+    cartridges, data_dir, state = (os.environ.get(name) for name in ('GEN2_CARTRIDGE_DIR', 'GEN2_DATA_DIR', 'GEN2_PERSON_STATE'))
+    if not (cartridges and data_dir and state) or not Path(state).is_file() or not (Path(cartridges) / 'gold.gbc').is_file():
+        pytest.skip('Set GEN2_CARTRIDGE_DIR, GEN2_DATA_DIR and GEN2_PERSON_STATE to private local files')
+    data = GameData.load(data_dir, 'gold')
+    pb = boot(str(Path(cartridges) / 'gold.gbc'), sound=False)
+    lock_clock(pb, True)
+    with open(state, 'rb') as source:
+        pb.load_state(source)
+    policy = Policy(data, seed=1, starter='cyndaquil')
+    metadata = Path(state).with_suffix('.policy.json')
+    if metadata.is_file():
+        policy.load_state_dict(json.loads(metadata.read_text()))
+    frame = 0
+    for _ in range(30):
+        snapshot = read_snapshot(pb.memory, data, frame)
+        action = policy.step(snapshot, pb.memory)
+        if action.button:
+            pb.button_press(action.button)
+        if action.hold > 0:
+            pb.tick(action.hold, True)
+        if action.button:
+            pb.button_release(action.button)
+        if action.gap > 0:
+            pb.tick(action.gap, True)
+        frame += action.hold + action.gap
+    assert policy.unreachable_waits == 0
+    assert (read_snapshot(pb.memory, data, frame).x, read_snapshot(pb.memory, data, frame).y) != (9, 13)

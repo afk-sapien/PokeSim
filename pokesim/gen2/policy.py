@@ -14,7 +14,9 @@ from .puzzles import push_plan
 from .world import update as update_world
 from .naming import Naming
 from .kanto import journey as kanto_journey
-from .menus import MAX_STEPS, RADIO_MAX_STEPS, menu_label, Buy, ChangeBox, DayCare, FieldMove, Fly, Give, Take, Lead, Radio, Forget, Remedy, Sell, ShowPartner, Storage, Teach, Use, choose
+from .menus import MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, menu_label, Buy, ChangeBox, DayCare, FieldMove, Fly, Give, Take, Lead, Radio, Forget, Remedy, Sell, ShowPartner, Storage, Teach, Use, choose
+
+STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) before reporting a blocked objective
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,7 @@ class Policy:
         self.switching = None
         self.refusals = {}
         self.recoveries = 0
+        self.stranded = 0
         self.rescue = deque()
         self.failure = None
         self.menu_ref, self.menu_steps = None, 0
@@ -69,6 +72,7 @@ class Policy:
         self.puzzle_cache = {}
         self.memory = None
         self.resetting_puzzle = None
+        self.unreachable_waits = 0
 
     def state_dict(self):
         return {'starter': self.starter, 'completed': self.completed, 'collection': self.collection, 'demand': self.demand, 'decisions': self.decisions,
@@ -105,8 +109,9 @@ class Policy:
         self.nav.objects = {int(mid): {int(index): tuple(point) for index, point in objects.items()}
                             for mid, objects in state.get('objects', {}).items()}
 
+    STRANDED_LIMIT = 60
     MENU_STEP_LIMIT = MAX_STEPS
-    MENU_STEP_LIMITS = {'Radio': RADIO_MAX_STEPS}
+    MENU_STEP_LIMITS = {'Radio': RADIO_MAX_STEPS, 'Slots': SLOT_MAX_STEPS}
 
     def recover(self, level=1):
         """Drop every half-finished plan and press buttons that back out of unknown screens.
@@ -146,7 +151,13 @@ class Policy:
         if self.menu_steps > limit:
             self.fail(f'The {name} menu task made no progress after {limit} steps')
             return None
-        return menu.step(snapshot, mem)
+        button = menu.step(snapshot, mem)
+        failure = getattr(menu, 'failure', '')
+        if failure:
+            # A Game Corner task saw its screen stop changing and failed itself.
+            self.fail(failure)
+            return None
+        return button
 
     def on_restore(self):
         objects = self.nav.objects
@@ -163,6 +174,7 @@ class Policy:
                 'collection': {'version': self.data.game, 'dex_total': 251,
                                'phase': self.collection.get('phase', 'journey'),
                                'hunting': (self.collection.get('target') or {}).get('species')},
+                'blocked': self.unreachable_waits >= STUCK_WAITS,
                 'reason': self.goal.label if self.goal else 'Start the adventure'}
 
     def journey(self, snapshot, mem):
@@ -575,19 +587,30 @@ class Policy:
                     continue
                 if not self.nav.passable(grid[point[1] * entry['width'] + point[0]]):
                     continue
-                if snapshot.map == mid:
-                    path = self.nav.local(snapshot, [point], self.memory)
-                else:
-                    path = None
-                if path is None:
-                    path = self.nav.regions.route(snapshot, mid, [point], cut=bool(snapshot.badges & 2),
-                                                   surf=bool(snapshot.badges & 8))
+                path = self.reachable_path(snapshot, mid, point)
                 if path is not None:
                     choices.append((len(path), point[0], point[1], face))
         if not choices:
             return Goal(key, label, map_name, x, y + 1, 'up')
         _, x, y, face = min(choices)
         return Goal(key, label, map_name, x, y, face)
+
+    def reachable_path(self, snapshot, mid, point):
+        """Path to a tile, or None when it cannot be reached right now.
+
+        On the current map, a failed local search means the tile is blocked (for example by a
+        person standing on it). regions.route then answers [] for 'same region, use local nav',
+        which must not be read as 'already there'.
+        """
+        same_map = snapshot.map == mid
+        path = self.nav.local(snapshot, [point], self.memory) if same_map else None
+        if path is not None:
+            return path
+        route = self.nav.regions.route(snapshot, mid, [point], cut=bool(snapshot.badges & 2),
+                                       surf=bool(snapshot.badges & 8))
+        if same_map and route == []:
+            return None
+        return route
 
     def in_league(self, snapshot):
         return self.constant(snapshot) in {
@@ -784,7 +807,7 @@ class Policy:
         self.nav.observe(snapshot)
         if self.resetting_puzzle is not None and self.resetting_puzzle != snapshot.map:
             self.resetting_puzzle = None
-        self.goal = self.journey(snapshot, mem)
+        self.goal = journey_goal = self.journey(snapshot, mem)
         if isinstance(self.menu, Storage) and 'BOX is full' in snapshot.text:
             box = next((box for box, count in enumerate(snapshot.box_counts) if count < 20), None)
             if box is not None:
@@ -868,9 +891,21 @@ class Policy:
             return Action(None, 0, 24)
         surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
         path = self.nav.toward(snapshot, target, [(self.goal.x, self.goal.y)], memory, surf=surf)
+        if path is None and self.goal is not journey_goal:
+            # A side errand that cannot be reached from here must not hide the main objective.
+            fallback = self.nav.toward(snapshot, self.data.map_ids[journey_goal.map_name],
+                                       [(journey_goal.x, journey_goal.y)], memory, surf=surf)
+            if fallback is not None:
+                self.goal, path = journey_goal, fallback
         self.mode = self.goal.label
+        if path is not None:
+            self.unreachable_waits = 0
         if path:
+            self.stranded = 0
             return self.walk(snapshot, memory, path)
+        if path is None:
+            return self.stranded_action(snapshot, memory, surf)
+        self.stranded = 0
         if path == []:
             if self.goal.key.startswith('collection_'):
                 from .collection import arrive
@@ -926,7 +961,24 @@ class Policy:
                 self.interaction = self.goal.key
                 return Action(self.goal.face, 8, 8)
             return Action('a', 8, 36)
-        # Briefly wait for moving people or map transitions before replanning.
+        return Action(None, 0, 24)
+
+    def stranded_action(self, snapshot, memory, surf):
+        """No route to the goal exists from here, so look around and, in the end, ask for a reload."""
+        self.stranded += 1
+        if self.stranded >= self.STRANDED_LIMIT:
+            self.stranded = 0
+            self.fail(f'no route to {self.goal.label} from {snapshot.map_name}')
+            return Action(None, 0, 24)
+        path = self.nav.explore(snapshot, memory, surf=surf)
+        if path:
+            self.mode = 'finding another approach'
+            return self.walk(snapshot, memory, path)
+        # Briefly wait for moving people or map transitions before replanning, but do not wait
+        # silently forever: after a long run of waits the objective is reported as stuck.
+        self.unreachable_waits += 1
+        if self.unreachable_waits >= STUCK_WAITS:
+            self.mode = f'Stuck: cannot reach {self.goal.label}'
         return Action(None, 0, 24)
 
     def walk(self, snapshot, memory, path):
