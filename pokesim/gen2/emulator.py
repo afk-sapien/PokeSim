@@ -27,6 +27,8 @@ from .ram import BADGES, read_snapshot
 log = logging.getLogger('pokesim.gen2')
 # A screen that has not changed for half a game minute is a loop, not a pause.
 SCREEN_FRAMES = 1800
+STALL_RELOADS = 3  # reloads in a row without new progress before the run is reported as stalled
+MAX_RELOADS = 12  # and the number after which reloading stops, since it only replays the same trouble
 BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
 
 
@@ -80,6 +82,7 @@ class Emulator:
         self.reloads = 0
         self.last_reload = 0.0
         self.unstick_streak = 0
+        self.best_progress = (0,) * 5
         self.failure_streak = 0
         self.invalid_frame = self.battle_frame = None
         self.screen_key = None
@@ -333,9 +336,9 @@ class Emulator:
         now = time.time()
         if key != self.progress_key:
             self.progress_key, self.progress_frame = key, self.frame
-            self.stall.progress(self.frame, now)
             self.stuck_frame, self.stuck_ts = self.frame, now
-            self.unstick_streak = self.failure_streak = 0
+            self.failure_streak = 0
+        self._note_progress(snapshot, now)
         screen = hash((snapshot.tiles, snapshot.map, snapshot.x, snapshot.y, snapshot.in_battle))
         if screen != self.screen_key:
             self.screen_key, self.screen_frame = screen, self.frame
@@ -344,6 +347,16 @@ class Emulator:
             self.stuck_frame, self.stuck_ts = self.frame, now
         self.battle_frame = (self.battle_frame if self.battle_frame is not None else self.frame) if snapshot.in_battle else None
         self.previous = snapshot
+
+    def _note_progress(self, snapshot, now):
+        # Wandering to new tiles is not progress, and a reload rewinds to an older save, so only a
+        # new high for badges, events, Pokédex entries, areas or experience ends a run of reloads.
+        score = (snapshot.badges.bit_count(), sum(byte.bit_count() for byte in snapshot.event_flags), len(snapshot.owned),
+                 len(self.history['maps']), sum(getattr(mon, 'experience', 0) or 0 for mon in snapshot.party))
+        if any(new > old for new, old in zip(score, self.best_progress)):
+            self.best_progress = tuple(max(new, old) for new, old in zip(score, self.best_progress))
+            self.stall.progress(self.frame, now)
+            self.unstick_streak = 0
 
     def _reset_watch(self):
         """Restart the stuck clocks after a reload, which also rewinds the frame counter."""
@@ -357,6 +370,11 @@ class Emulator:
 
     def _unstick(self, since_ts, why):
         """Go back to an autosave from before the trouble started, or power-cycle when there is none."""
+        if self.unstick_streak >= MAX_RELOADS:
+            # Reloading again would only replay the same trouble. Leave the run as it is, flagged as stalled.
+            log.error('%s and %d reloads did not help, not reloading again', why, self.unstick_streak)
+            self._reset_watch()
+            return
         saves = self.store.autosaves()
         older = [path for path in saves if path.stat().st_mtime < since_ts - 30]
         target = older[-1] if older else (saves[0] if saves else None)
@@ -607,7 +625,7 @@ class Emulator:
         achievement = self.last_achievement
         quiet_minutes = max(0, self.frame - self.progress_frame) / 3600
         live = not self.paused and not self.manual_mode
-        stalled = live and self.stall.stalled(self.frame, time.time())
+        stalled = live and (self.stall.stalled(self.frame, time.time()) or self.unstick_streak >= STALL_RELOADS)
         recovering = time.time() - self.last_reload < 30 or self.policy.mode == 'finding another approach'
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
                 'health': self.health(), 'paused': self.paused, 'manual_mode': self.manual_mode, 'speed': self.speed,

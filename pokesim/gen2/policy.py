@@ -427,7 +427,6 @@ class Policy:
             return self.reset_puzzle_goal(map_name)
         entry = self.data.maps[snapshot.map]
         known = self.nav.objects.setdefault(snapshot.map, {})
-        known.update({index: (x, y) for index, x, y in snapshot.objects})
         active = [(index, obj) for index, obj in enumerate(entry['objects'], 1)
                   if obj['sprite'] == 'SPRITE_BOULDER'
                   and not (obj['event'] in self.data.events and snapshot.event(obj['event']))]
