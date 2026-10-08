@@ -95,7 +95,7 @@ slots, switching to an open box or releasing a spare duplicate when needed. A sh
 caught with a Master Ball when there is one, and otherwise with the normal ball routine.
 If a shiny still cannot be caught, the player runs, and the journal and notifications
 record "Shiny <species> could not be caught: no balls" or "no storage space". That
-notification follows the "Stuck or needs attention" setting. Taking control yourself is
+notification is informational: low priority, under "Everything else", so it does not interrupt like a stall. Taking control yourself is
 never interrupted.
 
 ## Persistence
