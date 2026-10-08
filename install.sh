@@ -74,7 +74,7 @@ main() {
     "$bin_dir/pokesim-desktop" --help >/dev/null
     printf '\n%s\n' 'PokeSim is installed. Start it with:'
     printf '  "%s/pokesim-desktop"\n' "$bin_dir"
-    printf '\n%s\n' 'Your browser will open the Library. Add your own Red, Blue, Gold, Silver or Crystal ROM there.'
+    printf '\n%s\n' 'Your browser will open the Library. Add your own Red, Blue, Gold, Silver or Crystal ROM in Settings, Game cartridges.'
     printf '%s\n' 'For the short pokesim-desktop command, add the tool directory to PATH with:'
     printf '  "%s" tool update-shell\n' "$uv_bin"
     printf '%s\n' 'Then open a new terminal. Save and quit PokeSim before rerunning this installer to update.'

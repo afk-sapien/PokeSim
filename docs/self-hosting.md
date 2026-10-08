@@ -34,8 +34,8 @@ docker compose up -d --wait
 ```
 
 On Windows PowerShell, use `curl.exe` for that download. Open
-[localhost:8930](http://localhost:8930) **on the Docker host** and supply your ROM in the
-Library. Docker pulls the public, versioned image without a registry login or source build.
+[localhost:8930](http://localhost:8930) **on the Docker host** and add your ROM in
+Settings → Game cartridges. Docker pulls the public, versioned image without a registry login or source build.
 The first download can take several minutes. `--wait` reports startup or health failures.
 
 The quick-start file uses a Docker-managed `pokesim-data` volume. Docker initializes its
@@ -126,7 +126,7 @@ docker compose -f compose.quickstart.yaml -f compose.build.yaml up -d --build --
 ```
 
 This builds locally and initializes a named volume. There is no separate `prepare-data`
-service for the current application. Add your ROM in the Library. For an existing
+service for the current application. Add your ROM in Settings → Game cartridges. For an existing
 bind-mount installation, use `compose.yaml` instead of `compose.quickstart.yaml` in both
 commands. Use the same file arguments for subsequent stop, logs, and update commands.
 

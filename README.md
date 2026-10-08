@@ -105,7 +105,10 @@ The expanded name pool and Discord and Telegram support arrived in
 ## Your adventure library
 
 Manage games in one place, with live screens, recent activity, CPU and memory
-usage, and the speed each simulation is actually reaching.
+usage, and the speed each simulation is actually reaching. Each game you own gets
+one cartridge slot in Settings → Game cartridges. Drop a ROM on any slot and PokeSim
+recognises the game and files it in the right one. New adventure then lets you pick
+from the cartridges you have installed.
 
 ![Library with Red and Blue running alongside a saved adventure](docs/images/library.jpg)
 
@@ -127,7 +130,7 @@ curl -fL --retry 3 -o compose.yaml https://github.com/afk-sapien/PokeSim/release
 docker compose up -d --wait
 ```
 
-Open [localhost:8930](http://localhost:8930), add your ROM and create an adventure.
+Open [localhost:8930](http://localhost:8930), add your ROM in Settings → Game cartridges and create an adventure.
 On Windows PowerShell, use `curl.exe`. Docker keeps your library in a persistent
 volume. Keep this folder for future Compose commands.
 
