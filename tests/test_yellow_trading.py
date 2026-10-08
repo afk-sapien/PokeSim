@@ -53,3 +53,31 @@ def test_cable_and_save_paths_open_yellow_through_the_translating_emulator():
     root = Path(__file__).resolve().parents[1] / 'pokesim'
     for path in ('interactions/cable.py', 'interactions/verification.py', 'runtime/participant.py', 'trade/execute.py'):
         assert 'open_emulator(' in (root / path).read_text(), path
+
+
+class _Side:
+    def __init__(self, menu=0):
+        from collections import Counter
+        self.counts = Counter({'TradeCenter_SelectMon': 1})
+        self.menu = menu
+        self.spec = type('Spec', (), {'party_slot': 5})()
+
+    def get(self, name):
+        return self.menu
+
+
+class _Screen:
+    def __init__(self, cursor):
+        self.cursor, self.text, self.top_x, self.top_y = cursor, 'PIKACHU\nCANCEL' if cursor else '', 1, 1
+
+
+@pytest.mark.parametrize('cursor, expected', [(None, None), ((1, 1), 'down')])
+def test_time_capsule_waits_for_the_trade_menu_cursor(monkeypatch, cursor, expected):
+    # Yellow draws the menu fast enough to take a held A as a choice of the first Pokémon.
+    import pokesim.screen
+    from pokesim.gen2.timecapsule import MixedDriver
+    monkeypatch.setattr(pokesim.screen, 'Screen', lambda memory: _Screen(cursor))
+    driver = MixedDriver.__new__(MixedDriver)
+    driver.gen1 = _Side()
+    driver.gen1.pb = type('PB', (), {'memory': None})()
+    assert driver.gen1_button(0) == expected

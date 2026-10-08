@@ -61,6 +61,9 @@ class MixedDriver:
                 and screen.cursor and screen.top_y == 1 and screen.top_x == 1 and 'CANCEL' in screen.text):
             current, target = side.get('wCurrentMenuItem'), side.spec.party_slot
             return 'a' if current == target else 'down' if current < target else 'up'
+        if side.counts['TradeCenter_SelectMon'] == 1 and not side.counts['TradeCenter_Trade'] and not screen.cursor:
+            # Yellow draws the party menu fast enough to take a held A as a choice of the first slot.
+            return None
         if read_snapshot(side.pb.memory, side.frame).map == 239 and not side.counts['CableClub_DoBattleOrTrade'] and step % 3 == 0:
             return 'right' if side.get('hSerialConnectionStatus') == 2 else 'left'
         return 'a'

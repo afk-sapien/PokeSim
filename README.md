@@ -29,6 +29,11 @@ An eight-second clip from a running adventure. [Still image](docs/images/live-ad
 | --- | --- |
 | [![Journal entries](docs/images/journal-panel.jpg)](docs/images/journal-panel.jpg) | [![Adventure stats](docs/images/stats-panel.jpg)](docs/images/stats-panel.jpg) |
 
+Yellow adventures start with Pikachu and follow Yellow's own story, including Jessie and
+James and the gift starters. They trade with Red and Blue over the Cable Club and with Gold,
+Silver and Crystal through the Time Capsule. A new Yellow game was played to the Champion on
+the Rust backend for this release.
+
 Gold, Silver and Crystal adventures play through all 16 badges and Red and work toward
 the 251-species Pokédex, with breeding and held items. Generation II runs on the Rust
 emulator (PyBoy RS through PokeSim Core) only. There is no PyBoy fallback: 0.5.0 does not
