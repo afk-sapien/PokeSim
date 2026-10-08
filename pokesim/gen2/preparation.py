@@ -56,8 +56,14 @@ class Preparation:
         self.emu, self.state = emu, state
         self.menu = None
         self.center = None
+        self.claimed = False
 
     def step(self, snapshot):
+        if not self.claimed:
+            # Preparation owns the screen and the party until it hands the adventure back. A
+            # policy menu left half finished here would resume later with stale party slots.
+            self.emu.policy.menu = None
+            self.claimed = True
         try:
             return self.advance(snapshot)
         except (ValueError, StopIteration) as error:

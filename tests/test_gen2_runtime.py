@@ -762,7 +762,7 @@ def test_replacement_field_partner_request_survives_checkpoint(real_data):
 def test_grandfather_selects_the_requested_partner():
     from pokesim.gen2.menus import ShowPartner
     menu = ShowPartner(3, 'reward')
-    snapshot = SimpleNamespace(text='CANCEL 45/45', tiles=(), event=lambda flag: False)
+    snapshot = SimpleNamespace(text='CANCEL 45/45', tiles=(), event=lambda flag: False, party=(SimpleNamespace(),) * 4)
     assert menu.step(snapshot, SimpleNamespace(byte=lambda name: 1)) == 'down'
     assert menu.step(snapshot, SimpleNamespace(byte=lambda name: 4)) == 'a'
     snapshot.event = lambda flag: True
@@ -955,7 +955,7 @@ def test_time_capsule_team_restoration_takes_priority_over_story(real_data):
 def test_daycare_selects_the_requested_parent_on_gender_list():
     from pokesim.gen2.menus import DayCare
     menu = DayCare(0, 3)
-    snapshot = SimpleNamespace(daycare=(None, None), text='CANCEL\nChoose a POKéMON.', tiles=())
+    snapshot = SimpleNamespace(daycare=(None, None), text='CANCEL\nChoose a POKéMON.', tiles=(), party=(SimpleNamespace(),) * 4)
     assert menu.step(snapshot, SimpleNamespace(byte=lambda name: 1)) == 'down'
     assert menu.step(snapshot, SimpleNamespace(byte=lambda name: 4)) == 'a'
 
@@ -1626,7 +1626,7 @@ def test_recover_can_outpace_damage_between_two_fifths_and_half_hp(real_data):
 
 def test_evolution_item_closes_leftover_pc_dialogue():
     from pokesim.gen2.menus import Remedy
-    snapshot = SimpleNamespace(items=((8, 1),), in_battle=0,
+    snapshot = SimpleNamespace(items=((8, 1),), in_battle=0, party=(SimpleNamespace(),),
         text='The PC turned on.', tiles=(' ',) * 12 + ('┌──────────────────┐',) + (' ',) * 5)
     assert Remedy(8, 0, 1).step(snapshot, None) == 'b'
 
@@ -1636,7 +1636,7 @@ def test_evolution_stone_selects_the_compatible_party_member():
     menu = Remedy(8, 5, 1, phase='party')
     rows = [' '] * 18
     rows[1], rows[2], rows[11], rows[12], rows[13] = '▶FERALIGATR', 'NOT ABLE', 'NIDORINA', 'ABLE', 'CANCEL'
-    snapshot = SimpleNamespace(items=((8, 1),), text='\n'.join(rows), tiles=rows)
+    snapshot = SimpleNamespace(items=((8, 1),), text='\n'.join(rows), tiles=rows, party=(SimpleNamespace(),) * 6)
     assert menu.step(snapshot, None) == 'down'
     rows[1], rows[11] = 'FERALIGATR', '▶NIDORINA'
     snapshot.text = '\n'.join(rows)
