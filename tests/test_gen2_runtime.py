@@ -664,6 +664,31 @@ def test_postgame_restocking_reaches_a_mart_beyond_the_local_map_limit(real_data
     assert policy.shop(snapshot).map_name == 'VIOLET_MART'
 
 
+@pytest.mark.parametrize('owned,expected', [({243, 245, 249, 250}, ('BLACKTHORN_MART', 'ULTRA_BALL')),
+                                             ({243, 244, 245, 249, 250}, None)])
+def test_restock_prefers_ultra_balls_while_a_legendary_is_uncaught(real_data, owned, expected):
+    from pokesim.gen2.policy import Policy, Goal
+    policy = Policy(real_data)
+    policy.completed.update(red=1, ice_path=1)
+    policy.collection['phase'] = 'legendary'
+    ids = real_data.map_ids
+    near, far = ids['ECRUTEAK_MART'], ids['BLACKTHORN_MART']
+    policy.travel_region = lambda snapshot: real_data.maps[near]['region']
+    policy.nav.route = lambda source, target: [None] * (1 if target == near else 3) if target in {near, far} else None
+    policy.nav.regions.route = lambda snapshot, target, *args, **kwargs: [None] * (1 if target == near else 3)
+    policy.person = lambda snapshot, key, label, name, script: Goal(key, label, name, 1, 1)
+    # Twenty Great Balls already meet the legendary ball count; only Ultra Balls are worth the walk.
+    snapshot = SimpleNamespace(map=ids['ECRUTEAK_CITY'], items=(), party=(), owned=owned,
+        pockets={'balls': [(real_data.items['GREAT_BALL'], 20)]}, money=30000, can_catch=True,
+        badges=65535, hall_of_fame_count=1, event=lambda name: True)
+    goal = policy.shop(snapshot)
+    if expected is None:
+        assert goal is None
+        return
+    assert goal.map_name == expected[0]
+    assert policy.shopping == (real_data.items[expected[1]], 20)
+
+
 def test_capture_weakening_rejects_a_lethal_lead_move(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, starter='chikorita')

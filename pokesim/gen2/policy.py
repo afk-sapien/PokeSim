@@ -746,6 +746,16 @@ class Policy:
         requests = []
         unique_encounter = self.goal is not None and self.goal.key in {'sudowoodo', 'snorlax', 'collection_lapras'}
         ball_target = 20 if self.collection.get('phase') == 'legendary' or unique_encounter else 4
+        # Roaming beasts and the other legendaries have catch rates of 3, so every throw counts:
+        # while one is still wanted, an affordable Ultra Ball beats a nearer shop's Great Ball.
+        legendary = snapshot.can_catch and bool(snapshot.badges & 64) and (unique_encounter
+            or self.collection.get('phase') == 'legendary' and not {243, 244, 245, 249, 250} <= set(snapshot.owned))
+        ultra = self.data.items['ULTRA_BALL']
+        ultras = dict(snapshot.pockets['balls']).get(ultra, 0)
+        if (legendary and ultras < 20
+                and snapshot.money - reserve >= self.data.item_attributes[ultra]['price'] * min(5, 20 - ultras)):
+            requests.append((('ULTRA_BALL',), 20 - ultras))
+        # Any ball still beats none when no Ultra Ball counter can be reached.
         if sum(count for _, count in snapshot.pockets['balls']) < ball_target and snapshot.can_catch:
             names = ('ULTRA_BALL', 'GREAT_BALL', 'POKE_BALL') if snapshot.badges & 64 else ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL')
             requests.append((names, 40 if ball_target == 20 else 20))
