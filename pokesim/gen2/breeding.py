@@ -1,4 +1,5 @@
 """Collect missing hatchlings through the cartridge's two parent Day Care."""
+from copy import deepcopy
 from itertools import combinations
 
 from .menus import ChangeBox, DayCare, Storage
@@ -27,6 +28,26 @@ def branch_parents(data, snapshot, baby, branches):
     return branches <= possible
 
 
+def _pre_evolutions(data):
+    """Each species' pre-evolution, the first in species order as a scan of the table would find it.
+
+    The breeding search asks once for every pair of Pokémon the player owns, so the map is built once
+    per species table rather than by scanning the whole table for every pair.
+    """
+    cached = getattr(data, '_pre_evolutions', None)
+    if cached is not None and cached[0] is data.species:
+        return cached[1]
+    previous = {}
+    for sid, row in data.species.items():
+        for evo in row['evolutions']:
+            previous.setdefault(evo['species'], sid)
+    try:
+        data._pre_evolutions = (data.species, previous)
+    except AttributeError:
+        pass
+    return previous
+
+
 def offspring(data, first, second):
     if first.egg or second.egg or first.species == second.species == 132:
         return set()
@@ -41,10 +62,10 @@ def offspring(data, first, second):
         mother = first if first.gender == 'Female' else second
     else:
         return set()
+    previous = _pre_evolutions(data)
     species = mother.species
     for _ in range(2):
-        species = next((sid for sid, row in data.species.items()
-                        if any(evo['species'] == species for evo in row['evolutions'])), species)
+        species = previous.get(species, species)
     return {29, 32} if species == 29 else {species}
 
 
@@ -109,6 +130,54 @@ def nursery(policy, snapshot, Goal):
     return Goal('collection_hatch', 'Walk with the eggs and the Day Care partners', 'GOLDENROD_CITY', x, y)
 
 
+def pairings(policy, snapshot):
+    """Every Day Care pair worth breeding, as (target, first boxed, second boxed, identities, species).
+
+    The search tries every pair of Pokémon in the party, the PC and the Day Care, so it is slow for a
+    large collection. Its answer depends only on those Pokémon, the Pokédex and the demand list, which
+    stay the same across the many policy steps of a menu, a walk or an animation, so the last answer is
+    kept until one of them changes.
+    """
+    data, parents = policy.data, snapshot.daycare
+    key = (snapshot.party, snapshot.stored, parents, frozenset(snapshot.owned), tuple(sorted(policy.demand.items())))
+    cached = getattr(policy, '_breeding_pairings', None)
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    mons = [mon for mon in snapshot.party[1:] + snapshot.stored + tuple(mon for mon in parents if mon)
+            if not mon.egg and (mon.box is not None or not FIELD_MOVES.intersection(mon.moves))]
+    choices = []
+    for first, second in combinations(mons, 2):
+        babies = offspring(data, first, second)
+        missing = babies - snapshot.owned
+        for baby in babies:
+            if (policy.demand.get(baby, 0) and sum(mon.species == baby for mon in snapshot.party + snapshot.stored)
+                    <= policy.demand[baby]):
+                missing.add(baby)
+            level_evolution = any(evo['method'] in {'level', 'happiness', 'stat'}
+                                  and evo['species'] not in snapshot.owned
+                                  for evo in data.species[baby]['evolutions'])
+            if (baby in snapshot.owned and level_evolution
+                    and not any(mon.species == baby and mon.level < 100
+                                for mon in snapshot.party + snapshot.stored)):
+                missing.add(baby)
+        for baby in babies & {133, 236, 43, 60, 79}:
+            branches = {evo['species'] for evo in data.species[baby]['evolutions']}
+            if baby in (43, 60):
+                middle = 44 if baby == 43 else 61
+                branches = {evo['species'] for evo in data.species[middle]['evolutions']}
+                available = sum(mon.species in {baby, middle} for mon in snapshot.party + snapshot.stored)
+                ready = available >= len(branches - snapshot.owned)
+            else:
+                ready = branch_parents(data, snapshot, baby, branches - snapshot.owned)
+            if not ready:
+                missing.add(baby)
+        for target in missing:
+            choices.append((target, first.box is not None, second.box is not None, identity(first), identity(second),
+                            first.species, second.species))
+    policy._breeding_pairings = (key, choices)
+    return choices
+
+
 def journey(policy, snapshot, Goal):
     state, data = policy.collection, policy.data
     parents = snapshot.daycare
@@ -118,39 +187,9 @@ def journey(policy, snapshot, Goal):
     if project is None and any(mon.egg for mon in snapshot.party):
         return nursery(policy, snapshot, Goal)
     if project is None:
-        mons = [mon for mon in snapshot.party[1:] + snapshot.stored + tuple(mon for mon in parents if mon)
-                if not mon.egg and (mon.box is not None or not FIELD_MOVES.intersection(mon.moves))]
-        choices = []
-        for first, second in combinations(mons, 2):
-            babies = offspring(data, first, second)
-            missing = babies - snapshot.owned
-            for baby in babies:
-                if (policy.demand.get(baby, 0) and sum(mon.species == baby for mon in snapshot.party + snapshot.stored)
-                        <= policy.demand[baby]):
-                    missing.add(baby)
-                level_evolution = any(evo['method'] in {'level', 'happiness', 'stat'}
-                                      and evo['species'] not in snapshot.owned
-                                      for evo in data.species[baby]['evolutions'])
-                if (baby in snapshot.owned and level_evolution
-                        and not any(mon.species == baby and mon.level < 100
-                                    for mon in snapshot.party + snapshot.stored)):
-                    missing.add(baby)
-            for baby in babies & {133, 236, 43, 60, 79}:
-                branches = {evo['species'] for evo in data.species[baby]['evolutions']}
-                if baby in (43, 60):
-                    middle = 44 if baby == 43 else 61
-                    branches = {evo['species'] for evo in data.species[middle]['evolutions']}
-                    available = sum(mon.species in {baby, middle} for mon in snapshot.party + snapshot.stored)
-                    ready = available >= len(branches - snapshot.owned)
-                else:
-                    ready = branch_parents(data, snapshot, baby, branches - snapshot.owned)
-                if not ready:
-                    missing.add(baby)
-            for target in missing:
-                choices.append((target, first.box is not None, second.box is not None, identity(first), identity(second),
-                                first.species, second.species))
+        choices = pairings(policy, snapshot)
         if choices and snapshot.money >= 3000:
-            target, _, _, first, second, *species = min(choices)
+            target, _, _, first, second, *species = deepcopy(min(choices))
             project = state['breeding'] = {'target': target, 'parents': [first, second], 'species': species,
                 'duplicate': target in snapshot.owned,
                 'existing': [identity(mon) for mon in snapshot.party + snapshot.stored if mon.species == target]}
