@@ -150,9 +150,11 @@
   function resourceLabels(game) {
     const usage = game.resources
     const off = !running(game) && ['stopped', 'archived', 'failed'].includes(game.state)
+    // A worker held for a trade or a pause runs no frames, so its measured speed is a true 0.0×; say why instead.
+    const paused = Boolean(game.summary?.paused) || ['paused', 'held', 'waiting_for_trade'].includes(game.state)
     return {
       cpu: Number.isFinite(usage?.cpu_percent) ? `${usage.cpu_percent.toFixed(1)}%` : off ? 'Not running' : usage?.cpu_percent === null ? 'Measuring…' : 'Unavailable',
-      speed: off ? 'Not running' : Number.isFinite(usage?.observed_speed) ? `${usage.observed_speed.toFixed(1)}×` : usage?.speed_status === 'measuring' ? 'Measuring…' : 'Unavailable',
+      speed: off ? 'Not running' : paused ? 'Paused' : Number.isFinite(usage?.observed_speed) ? `${usage.observed_speed.toFixed(1)}×` : usage?.speed_status === 'measuring' ? 'Measuring…' : 'Unavailable',
       memory: Number.isFinite(usage?.memory_bytes) ? `${Math.round(usage.memory_bytes / 1048576).toLocaleString()} MiB` : off ? 'Not running' : 'Unavailable'
     }
   }
@@ -162,7 +164,7 @@
       const node = container.querySelector(`[data-usage="${key}"]`)
       if (node) {
         if (node.textContent !== value) node.textContent = value
-        node.classList.toggle('is-pending', ['Measuring…', 'Unavailable', 'Not running'].includes(value))
+        node.classList.toggle('is-pending', ['Measuring…', 'Unavailable', 'Not running', 'Paused'].includes(value))
       }
     }
   }
