@@ -1,10 +1,10 @@
 """Shop interaction state, independent of the strategic policy's PC and battle state."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .battle import BALLS, HEALING, shopping_item
 from .progression import Goal
 from .collection import legendary_project
-from .menus import MenuDecision, select, tap
+from .menus import MenuDecision, tap
 from ..strategy_data import DATA, ITEMS, MAPS, PRICES, WORLD
 
 # Keep finite TMs unless a completely full bag has no ordinary surplus to sell.
@@ -14,6 +14,8 @@ RENEWABLE_TMS = {200 + number for number in (1, 2, 5, 7, 9, 15, 17, 23, 32, 33, 
 # prizes (Surf and the Gold Teeth), so an unaffordable fee is a permanent roadblock, not a delay.
 SAFARI_FEE = 500
 CASH_RESERVE = 300
+# Most units bought or sold in one request, so a long restock still checks the plan between trades.
+TRADE_LIMIT = 20
 # Balls kept in stock so a shiny or rare find is catchable on any route; none can be bought in battle.
 BALL_RESERVE = 10
 SAFARI_GOALS = ('surf', 'teeth')
@@ -46,15 +48,12 @@ class SupplyPlan:
 
 @dataclass
 class ShoppingController:
-    buying: bool = False
     selling: bool = False
-    item: int | None = None
     restocking: bool = False
     fund_target: int = 0
 
     def leave_menu(self):
-        self.buying = self.selling = False
-        self.item = None
+        self.selling = False
 
     @staticmethod
     def item_for(snapshot, stock, goal_key, project):
@@ -153,36 +152,52 @@ class ShoppingController:
                               'Need money or bag space for legendary capture supplies')
         return SupplyPlan(goal, bool(legendary))
 
-    def step(self, snapshot, screen, kind, goal_key, project):
+    def step(self, snapshot, goal_key, project):
+        """Request at the mart menu: sell surplus, buy the next supply, or leave."""
         stock = DATA['marts'].get(WORLD.get(snapshot.map, {}).get('name'), [])
-        if kind == 'shop':
-            self.selling = ((self.selling and len(snapshot.items) > 15) or len(snapshot.items) >= 18
-                            or self.raising_funds(snapshot))
-            if self.selling and (self.fund_index(snapshot) if self.raising_funds(snapshot)
-                                 else self.sale_index(snapshot)) is not None:
-                return MenuDecision(select(screen, 1), 'Sell spare valuables to cover the Safari Zone entry fee'
-                                    if self.raising_funds(snapshot) else
-                                    'Sell surplus items, or a limited TM only when the bag is full, to make room for story items')
-            self.selling = False
-            self.item = self.item_for(snapshot, stock, goal_key, project)
-            self.buying = self.item is not None
-            prepared = not self.buying and legendary_project(project) and ITEMS['ULTRA_BALL'] in stock
-            return MenuDecision(select(screen, 0) if self.buying else tap('b'),
-                                'Restock balls and medicine while keeping a cash reserve', bool(prepared))
-        if kind == 'quantity':
-            return MenuDecision(tap('a') if self.buying or self.selling else tap('b'))
-        if kind == 'list':
-            if self.selling:
-                index = self._sale_choice(snapshot)
-                if index is None:
-                    self.selling = False
-                    return MenuDecision(tap('b'))
-                return MenuDecision(select(screen, index, scroll=True))
-            if self.buying:
-                self.item = self.item_for(snapshot, stock, goal_key, project)
-                if self.item is None:
-                    self.buying = False
-                    return MenuDecision(tap('b'))
-                return MenuDecision(select(screen, stock.index(self.item), scroll=True))
-            return MenuDecision(tap('b'))
-        raise ValueError(f'Unsupported shop menu: {kind}')
+        self.selling = ((self.selling and len(snapshot.items) > 15) or len(snapshot.items) >= 18
+                        or self.raising_funds(snapshot))
+        index = self._sale_choice(snapshot) if self.selling else None
+        if index is not None:
+            item = snapshot.items[index][0]
+            return MenuDecision(tap('b'), 'Sell spare valuables to cover the Safari Zone entry fee'
+                                if self.raising_funds(snapshot) else
+                                'Sell surplus items, or a limited TM only when the bag is full, to make room for story items',
+                                request=('sell', item, self._sale_quantity(snapshot, item)))
+        self.selling = False
+        item = self.item_for(snapshot, stock, goal_key, project)
+        prepared = item is None and legendary_project(project) and ITEMS['ULTRA_BALL'] in stock
+        request = ('buy', item, self._buy_quantity(snapshot, stock, goal_key, project, item)) if item else None
+        return MenuDecision(tap('b'), 'Restock balls and medicine while keeping a cash reserve', bool(prepared),
+                            request)
+
+    def _buy_quantity(self, snapshot, stock, goal_key, project, item):
+        """Units the one-at-a-time rule would buy in a row, replayed on a simulated bag and purse."""
+        price = PRICES.get(item, 0)
+        count = dict(snapshot.items).get(item, 0)
+        quantity = 1
+        while quantity < min(TRADE_LIMIT, 99 - count) and price:
+            items = tuple((i, q + quantity if i == item else q) for i, q in snapshot.items)
+            if item not in dict(snapshot.items):
+                items += ((item, quantity),)
+            after = replace(snapshot, items=items, money=snapshot.money - price * quantity)
+            if self.item_for(after, stock, goal_key, project) != item:
+                break
+            quantity += 1
+        return quantity
+
+    def _sale_quantity(self, snapshot, item):
+        """Units of ``item`` the one-at-a-time rule would sell in a row."""
+        price = PRICES.get(item, 0) // 2
+        quantity = 1
+        while quantity < TRADE_LIMIT:
+            items = tuple((i, q - quantity if i == item else q) for i, q in snapshot.items)
+            items = tuple(row for row in items if row[1])
+            if len(items) < len(snapshot.items):
+                break
+            after = replace(snapshot, items=items, money=snapshot.money + price * quantity)
+            index = self._sale_choice(after) if self.raising_funds(after) or len(after.items) > 15 else None
+            if index is None or after.items[index][0] != item:
+                break
+            quantity += 1
+        return quantity

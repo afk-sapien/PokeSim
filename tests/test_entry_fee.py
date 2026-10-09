@@ -56,11 +56,11 @@ def test_shop_menu_sells_until_the_target_is_met_then_stops():
     shop = ShoppingController()
     state = broke(map=MAPS['FUCHSIA_MART'], x=2, y=5)
     plan(shop, state)
-    counter = Screen(menu({1: '  BUY', 3: '  SELL', 5: '  QUIT'}, (1, 1), top=(1, 1)))
-    assert shop.step(state, counter, 'shop', 'restock', None).actions[0].button != 'b' and shop.selling
+    decision = shop.step(state, 'restock', None)
+    assert decision.request[0] == 'sell' and shop.selling
     funded = broke(map=MAPS['FUCHSIA_MART'], x=2, y=5, money=5214, items=state.items[:2] + state.items[3:])
-    listing = Screen(menu({4: 'POKé BALL', 6: 'FULL RESTORE', 8: 'CANCEL'}, (5, 4), top=(5, 4)))
-    assert shop.step(funded, listing, 'list', 'restock', None).actions[0].button == 'b' and not shop.selling
+    decision = shop.step(funded, 'restock', None)
+    assert (decision.request or ('',))[0] != 'sell' and not shop.selling
 
 
 def test_purchases_leave_the_fee_until_both_safari_prizes_are_collected():

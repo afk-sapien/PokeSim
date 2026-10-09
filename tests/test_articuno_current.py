@@ -77,15 +77,3 @@ def test_completed_first_hole_is_not_reopened_after_room_reentry():
     nav.live_positions = [tuple(obj[:2]) for obj in WORLD[room]['objects']]
     s = state(map=room, event_flags=flags(FIRST))
     assert seafoam_current_task(s, nav) == ('BOULDER4', (9, 12))
-
-
-def test_current_refusal_exits_the_surf_menu():
-    from pokesim.policies.battle import Decision
-    policy = StrategicPolicy(7)
-    policy.intent = Decision('field', 0)
-    policy.field_move = 'SURF'
-    s = state(map=MAPS['SEAFOAM_ISLANDS_B4F'], textbox=True)
-    memory = fake_mem({14: 'The current is', 16: 'much too fast!'})
-    action = policy._dispatch(s, Screen(memory), 'dialogue', memory)[0]
-    assert action.button == 'b'
-    assert policy.intent is None and policy.field_move is None

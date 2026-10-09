@@ -263,6 +263,7 @@ def test_strength_is_only_used_when_a_boulder_push_is_actually_planned():
     from pokesim.policies.base import PolicyContext
     from pokesim.policies.strategic import StrategicPolicy
     from pokesim.strategy_data import MAPS
+    from shortcut_fakes import Recorder
     from test_events import snap
 
     memory = bytearray(65536)
@@ -270,17 +271,20 @@ def test_strength_is_only_used_when_a_boulder_push_is_actually_planned():
              party=(mon(species=0x6E, level=40, hp=100, max_hp=100, moves=(70, 0, 0, 0), pp=(15, 0, 0, 0)),),
              event_flags=flags('EVENT_GOT_POKEDEX'))
     p = StrategicPolicy(7)
+    recorder = Recorder.on(p)
     p.observed_map = s.map
 
-    # No push available: the run must not sit in the Strength menu.
+    # No push available: the run must not use Strength.
     with patch.object(type(p.boulders), 'route', return_value=None):
         p.step(PolicyContext(s, 0, 0, memory))
-    assert p.mode != 'using Strength'
+    assert not recorder.started
 
     # A push is available: Strength is activated so the boulder can be moved.
     with patch.object(type(p.boulders), 'route', return_value='left'):
         p.step(PolicyContext(s, 0, 0, memory))
-    assert p.mode == 'using Strength'
+    assert recorder.last.kind == 'use_field_move' and recorder.last.move == 'STRENGTH'
+    assert p.mode == 'shortcut: use_field_move'
+
 
 def test_victory_road_climbs_only_after_this_floor_is_done():
     # The ascent used to fire on every visit to 2F, replacing whatever the run came for with

@@ -10,6 +10,7 @@ from pokesim.screen import Screen
 from test_disabled_moves import battler
 from test_events import snap
 from test_strategy import menu, mon
+from shortcut_fakes import Recorder
 
 
 def matchup():
@@ -53,16 +54,13 @@ def test_only_unsafe_attacks_escape_wild_battle():
     assert choose_battle(state, player, enemy, 0).kind == 'run'
 
 
-def test_move_menu_rechecks_stale_strength_intent():
+def test_fight_rechecks_stale_strength_intent():
     player, enemy = matchup()
     player = replace(player, moves=(89, 94, 88, 70))
-    memory = menu({13: '      EARTHQUAKE', 14: '      PSYCHIC', 15: '      ROCK THROW',
-                   16: '      STRENGTH'}, (5, 16), 4, (5, 12))
-    battler(memory, W_BATTLE_MON, player)
-    battler(memory, W_ENEMY_MON, enemy)
     state = snap(party=(player,), in_battle=1, enemy_species=165, enemy_level=2)
     policy = StrategicPolicy(1)
+    recorder = Recorder.on(policy)
     policy.intent = Decision('fight', 3)
-    actions = policy._dispatch(state, Screen(memory), 'moves', memory)
-    assert actions[0].button == 'up'
+    policy._fight(state, player, enemy)
+    assert recorder.last.kind == 'choose_move' and recorder.last.slot == 1
     assert policy.reason == 'Use PSYCHIC_M'

@@ -11,7 +11,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pokesim import config
 from pokesim.emulator import Emulator
-from pokesim.policies.base import PolicyContext
+from pokesim.policies.base import Action, PolicyContext, stack_pointer
+from pokesim.shortcuts import ShortcutRunner
+from pokesim_core.shortcuts import ChooseMove
 from pokesim.ram import W_BAG_ITEMS, W_NUM_BAG_ITEMS, read_snapshot
 from pokesim.screen import Screen
 from pokesim.store import Store
@@ -34,6 +36,7 @@ def run(rom, checkpoint, failure, frames, revisit=False):
         restored = None
         restart = None
         guided_return = False
+        knockout = ShortcutRunner()
         trace = []
         initial = emu.snapshot
         assert initial.map == 227 and 150 not in initial.owned
@@ -91,9 +94,11 @@ def run(rom, checkpoint, failure, frames, revisit=False):
                     break
                 if failure == 'knockout' and failed_encounter is None and s.in_battle == 1 and s.enemy_species == 131 and scr.kind(s) in ('battle', 'moves'):
                     # Deliberately override capture controls for the first copied fight only.
-                    actions = emu.policy._root(scr, 'fight') if scr.kind(s) == 'battle' else emu.policy._select(scr, 3)
+                    actions = ((knockout.step(emu.pb.memory, None, emu.frame) if knockout.active else
+                                knockout.start(ChooseMove(3), ('knockout', emu.frame), emu.frame, emu.pb.memory))
+                               or [Action(None, 0, 12)])
                 else:
-                    actions = emu.policy.step(PolicyContext(s, 0, 0, emu.pb.memory))
+                    actions = emu.policy.step(PolicyContext(s, 0, 0, emu.pb.memory, sp=stack_pointer(emu.pb)))
                 for action in actions:
                     if action.button:
                         emu.pb.button_press(action.button)

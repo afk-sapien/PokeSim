@@ -11,6 +11,7 @@ from pokesim.screen import Screen, W_TILEMAP
 from pokesim.strategy_data import ITEMS, MAPS
 from test_events import snap
 from test_strategy import fake_mem, flags, mon, menu
+from shortcut_fakes import PRESS, Recorder
 
 
 def full_box(**changes):
@@ -97,12 +98,14 @@ def test_pc_change_box_never_selects_release():
 
 
 def test_pending_ball_intent_is_cancelled_when_box_is_full():
+    from pokesim.policies.battle import W_BATTLE_MON, W_ENEMY_MON, read_battler
     p = StrategicPolicy(7)
+    shortcuts = Recorder.on(p)
     p.intent = Decision('item', 0)
-    memory = menu({4: 'POKE BALL', 6: 'CANCEL'}, (5, 4), top=(5, 4))
+    memory = bytearray(65536)
     s = full_box(in_battle=1, items=((ITEMS['POKE_BALL'], 3),))
-    assert p._dispatch(s, Screen(memory), 'list', memory)[0].button == 'b'
-    assert p.intent is None
+    p._battle_shortcut(s, read_battler(memory, W_BATTLE_MON), read_battler(memory, W_ENEMY_MON))
+    assert 'use_item' not in shortcuts.kinds() and p.catch_attempts == 0
 
 
 def test_no_deposit_when_active_box_is_full():
@@ -137,13 +140,15 @@ def collection_with_full_box(party_size=5):
 
 def test_full_source_box_allows_withdrawal_instead_of_switching_away():
     p, s = collection_with_full_box()
+    shortcuts = Recorder.on(p)
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'},
                   (1, 1), top=(1, 1))
     action = p.step(PolicyContext(s, 0, 0, memory))[0]
     assert p.goal.key == 'party_collection'
     assert p.pc.operation == 'withdraw'
-    assert action.button == 'a'
+    assert action == PRESS and (shortcuts.last.kind, shortcuts.last.position) == ('withdraw_pokemon', 0)
     assert p._pc_target(s) == 0
+    shortcuts.finish(True)
 
     s = replace(s, frame=s.frame + 100, party=s.party + (mon(species=124, level=8),),
                 boxed_pokemon=s.boxed_pokemon[1:], box_counts=(19,) + (0,) * 11)

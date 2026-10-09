@@ -10,6 +10,7 @@ from pokesim.policies.strategic import StrategicPolicy
 from pokesim.strategy_data import ITEMS, MAPS, SPECIES
 from pokesim.web.pokedex import live_status
 from test_collection import state
+from shortcut_fakes import Recorder
 
 
 def partner(name='STARMIE', **changes):
@@ -104,10 +105,9 @@ def test_policy_opens_hm_menu_for_specific_partner_and_bounds_retries():
     s = state(party=(live(partner()),), items=((ITEMS['HM03'], 1),),
               map=MAPS['PALLET_TOWN'], frame=10000)
     policy = StrategicPolicy(1)
+    shortcuts = Recorder.on(policy)
     policy.goal = Goal('collect_plan', 'Plan', 'Plan')
     policy._overworld(s, bytearray(65536))
     assert policy.goal.key == 'teach_battle'
-    assert policy.intent.kind == 'item'
-    assert policy.intent.target == 0
-    assert s.items[policy.intent.index][0] == ITEMS['HM03']
+    assert (shortcuts.last.kind, shortcuts.last.item, shortcuts.last.target) == ('use_item', ITEMS['HM03'], 0)
     assert policy.move_teaching_after > s.frame

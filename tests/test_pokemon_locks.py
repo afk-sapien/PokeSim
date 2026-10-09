@@ -7,6 +7,7 @@ from pokesim.screen import Screen
 from pokesim.trade.preferences import identity
 from test_duplicates import stored, snapshot
 from test_strategy import menu, mon
+from shortcut_fakes import PRESS, Recorder
 
 
 def test_lock_protects_only_that_individual_from_release():
@@ -21,21 +22,25 @@ def test_lock_protects_only_that_individual_from_release():
     assert policy._release_target(s) == (0, 0)
 
 
-def test_lock_after_list_selection_cancels_release_confirmation():
+def test_lock_during_release_cancels_it():
     copies = [stored(i, trainer_id=100, dvs=(i + 1,) * 5, level=10 + i) for i in range(3)]
     s = snapshot(copies)
     policy = StrategicPolicy(7)
+    recorder = Recorder.on(policy)
     choices = {}
     policy.trade_preferences = lambda: choices
     policy.goal = Goal('party_release', 'Make room', 'Free a slot')
-    policy.menu_context = 'pc'
-    memory = menu({1: '  BULBASAUR', 3: '  BULBASAUR'}, (1, 1), top=(1, 1))
-    assert policy._dispatch(s, Screen(memory), 'list', memory)[0].button == 'a'
+    memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
+    assert policy._dispatch(s, Screen(memory), 'pc', memory)[0] == PRESS
+    assert recorder.last.kind == 'release_pokemon'
+    released = recorder.last.position
+    assert not policy.release_changed(s) and policy.shortcut.active
+    choices[identity(asdict(copies[released]))] = {'state': 'locked'}
+    assert policy._release_target(s) != (0, released)
+    assert policy.release_changed(s) and not policy.shortcut.active
+    # A release prompt the shortcut does not own is always refused.
     confirm = menu({0: 'Once released, BULBASAUR', 1: 'is gone forever. OK?', 12: '  YES', 13: '  NO'},
                    (1, 12), top=(1, 12))
-    assert policy._dispatch(s, Screen(confirm), 'yes_no', confirm)[0].button == 'a'
-    choices[identity(asdict(copies[0]))] = {'state': 'locked'}
-    assert policy._release_target(s) == (0, 1)
     assert policy._dispatch(s, Screen(confirm), 'yes_no', confirm)[0].button == 'down'
 
 

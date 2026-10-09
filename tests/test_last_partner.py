@@ -4,6 +4,7 @@ from pokesim.policies.strategic import StrategicPolicy
 from pokesim.screen import Screen, W_PLAYER_MON_NUMBER
 from test_events import snap
 from test_strategy import menu, mon
+from shortcut_fakes import Recorder
 
 
 def party_menu(active):
@@ -33,7 +34,8 @@ def test_a_switch_aimed_at_a_fainted_or_active_partner_is_dropped():
 
 def test_a_healthy_reserve_is_still_chosen():
     policy = StrategicPolicy(7)
+    recorder = Recorder.on(policy)
     state = snap(party=(mon(hp=0), mon(hp=30), mon(hp=11)), in_battle=2)
     memory = party_menu(0)
     policy._dispatch(state, Screen(memory), 'party', memory)
-    assert policy.intent.kind == 'switch' and policy.intent.index == 1
+    assert recorder.last.kind == 'switch_pokemon' and recorder.last.slot == 1

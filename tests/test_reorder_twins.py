@@ -1,31 +1,33 @@
-"""A reorder is finished when the chosen individual leads, not when its species does."""
-from pokesim.policies.battle import Decision
+"""A reorder is keyed by the chosen individual, not by its species."""
 from pokesim.policies.strategic import StrategicPolicy, individual
-from pokesim.screen import Screen
+from shortcut_fakes import Recorder
 from test_events import snap
-from test_strategy import menu, mon
+from test_strategy import mon
 
 HAUNTER = 0x93
 
 
-def party_menu():
-    return menu({1: ' HAUNTER', 3: ' HAUNTER', 5: ' VENUSAUR'}, (0, 1), top=(0, 1))
-
-
-def test_promoting_the_stronger_twin_is_not_mistaken_for_done():
-    # Two Haunters at a gym door: the weak one led, the strong one was wanted in front, and
-    # comparing species said the job was already finished. The run reopened the menu forever.
+def test_a_failed_reorder_of_one_twin_does_not_block_the_other():
+    # Two Haunters at a gym door: comparing species once said the job was already finished and
+    # the run reopened the menu forever. Each twin is now its own request.
     weak, strong = mon(species=HAUNTER, level=26, max_hp=63, hp=63), mon(species=HAUNTER, level=41, max_hp=106, hp=106)
-    state = snap(party=(weak, strong, mon(level=50)))
     policy = StrategicPolicy(7)
-    policy.order_species, policy.order_signature, policy.order_stage = HAUNTER, individual(strong), 'source'
-    policy.intent = Decision('reorder', 1, reason='Lead with the best available matchup')
-    memory = party_menu()
-    policy._dispatch(state, Screen(memory), 'party', memory)
-    assert policy.intent is not None, 'the weaker twin in front does not complete the reorder'
-    swapped = snap(party=(strong, weak, mon(level=50)))
-    policy._dispatch(swapped, Screen(memory), 'party', memory)
-    assert policy.intent is None
+    shortcuts = Recorder.on(policy)
+    state = snap(party=(mon(level=50), strong, weak))
+    assert policy._reorder(state, 1, 'Lead with the best available matchup')
+    shortcuts.finish(False, frame=state.frame)
+    assert policy._reorder(state, 1, 'Lead with the best available matchup') is None
+    assert policy._reorder(state, 2, 'Lead with the best available matchup')
+    assert shortcuts.last.first == 2
+
+
+def test_a_finished_reorder_restarts_partner_development_from_the_lead():
+    policy = StrategicPolicy(7)
+    shortcuts = Recorder.on(policy)
+    policy.development_index = 2
+    policy._reorder(snap(party=(mon(), mon(level=9), mon(level=30))), 2, 'Train')
+    shortcuts.finish(True)
+    assert policy.development_index == 0
 
 
 def test_individuals_of_one_species_are_distinguished():

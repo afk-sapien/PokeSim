@@ -16,7 +16,7 @@ from .yellow import YELLOW_SHA1, open_emulator
 
 from .checkpoints import CheckpointStore
 from .events import RunMemory
-from .policies.base import BUTTONS, PolicyContext
+from .policies.base import BUTTONS, PolicyContext, stack_pointer
 from .policies.strategic import StrategicPolicy
 from .screen import W_OPTIONS
 
@@ -77,7 +77,7 @@ class HeadlessRun:
 
     def step(self, snapshot):
         self.pb.memory[W_OPTIONS] = (self.pb.memory[W_OPTIONS] & ~7) | 1
-        for action in self.policy.step(PolicyContext(snapshot, 0, 0, self.pb.memory)):
+        for action in self.policy.step(PolicyContext(snapshot, 0, 0, self.pb.memory, stack_pointer(self.pb))):
             if action.button:
                 self.pb.button_press(action.button)
             if action.hold:

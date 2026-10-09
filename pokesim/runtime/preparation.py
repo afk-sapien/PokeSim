@@ -3,13 +3,17 @@ from __future__ import annotations
 
 import time
 
+from pokesim_core.shortcuts import DepositPokemon, WithdrawPokemon
+
 from ..policies.base import Action
 from ..interactions.centers import CENTERS
 from ..policies.navigation import Navigator
+from ..policies.progression import YELLOW
 from ..policies.collection import LEAGUE
 from ..policies.team import STAYS_IN_PARTY, reserve_to_deposit
 from ..ram import read_snapshot
 from ..screen import Screen
+from ..shortcuts import ShortcutRunner, gen1_ui
 from ..trade.preferences import identity
 from ..web.pokedex import live_status
 
@@ -117,6 +121,7 @@ class Preparation:
         self.selection_wait_since = None
         self.walk_wait_since = None
         self.storage_cleanup = None
+        self.shortcut = ShortcutRunner()
 
     def _save(self):
         self.emu.store.set(KEY, self.state)
@@ -234,6 +239,16 @@ class Preparation:
             self._save()
         if snap.in_battle:
             return list(self.traveller.step(ctx))
+        for runner in (self.shortcut, self.storage_cleanup and self.storage_cleanup.shortcut):
+            if runner and runner.active:
+                if runner is not self.shortcut and self.storage_cleanup.release_changed(snap):
+                    return [Action('b', 6, 18)]
+                if runner is self.shortcut and self.operation == 'deposit' and len(snap.party) >= 6:
+                    self._storage_reserve(snap)     # Fails when the reserve moved or became protected.
+                # A PC transfer in flight updates party and box records on different frames.
+                actions = runner.step(ctx.mem, gen1_ui(ctx.sp, YELLOW), snap.frame)
+                if actions:
+                    return actions
         try:
             location, index, mon = selection(snap, self.emu.store.trade_preferences(), self.state['trade_key'])
         except ValueError as error:
@@ -305,29 +320,33 @@ class Preparation:
             if self.operation != 'change_box':
                 return [Action('b', 6, 18)]
             return self._select(screen, 0)
-        if kind == 'pc':
-            if screen.cursor and screen.cursor[0] == 10:
-                if not self._storage_operation_ready(snap, mon):
-                    return [Action('b', 6, 18)]
-                return self._select(screen, 0)
+        if kind == 'pc' and not (screen.cursor and screen.cursor[0] == 10):
             if snap.active_box != self.target_box:
                 self.operation = 'change_box'
                 return self._select(screen, 3)
             self.operation = 'deposit' if len(snap.party) >= 6 else 'withdraw'
-            return self._select(screen, 1 if self.operation == 'deposit' else 0)
-        if kind in {'list', 'party'}:
             if not self._storage_operation_ready(snap, mon):
                 return [Action('b', 6, 18)]
-            if self.operation == 'withdraw':
-                return self._select(screen, index, scroll=True)
-            if self.operation == 'deposit':
-                return self._select(screen, self._storage_reserve(snap), scroll=True)
-            return [Action('b', 6, 18)]
+            return self._transfer(ctx, snap)
         if kind == 'dialogue':
             if self.operation and 'WITHDRAW' in screen.text and 'What' in screen.text:
                 return [Action(None, 0, 12)]
             return [Action('a', 6, 24)]
         return [Action('b', 6, 18)]
+
+    def _transfer(self, ctx, snap):
+        """Deposit the reserve or withdraw the offered partner with a Core shortcut."""
+        operation = self.operation
+        machine = (DepositPokemon(self._storage_reserve(snap)) if operation == 'deposit'
+                   else WithdrawPokemon(selection(snap, self.emu.store.trade_preferences(), self.state['trade_key'])[1]))
+
+        def done(result, finished):
+            if not result.completed:
+                raise ValueError(f'The PC could not {operation} for this trade: {result.outcome}')
+
+        actions = self.shortcut.start(machine, (operation, snap.frame), snap.frame, ctx.mem,
+                                      gen1_ui(ctx.sp, YELLOW), f'{operation} for the trade', done)
+        return actions or [Action(None, 0, 12)]
 
     def _storage_make_room(self, ctx, screen, kind):
         snap = ctx.snapshot
@@ -357,6 +376,7 @@ class Preparation:
                                          'Release one unprotected spare duplicate to free a party slot',
                                          (pc,), 'up', True)
         self.storage_cleanup.menu_context = 'pc'
+        self.storage_cleanup.mem, self.storage_cleanup.sp = ctx.mem, ctx.sp
         return list(self.storage_cleanup._dispatch(snap, screen, kind, ctx.mem))
 
     def _storage_preferences(self):

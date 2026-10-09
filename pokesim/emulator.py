@@ -26,7 +26,7 @@ from .legendary import LegendaryRecovery
 from .play_clock import PlayClock
 from .palettes import PALETTES, recolor, validate_palette
 from .policies import make_policy
-from .policies.base import BUTTONS, Action, PolicyContext
+from .policies.base import BUTTONS, Action, PolicyContext, stack_pointer
 from .ram import SPECIES_NAMES, Snapshot, read_snapshot
 from .screen import W_OPTIONS
 from .stalls import PROGRESS_EVENTS, StallWatch, advanced
@@ -1000,7 +1000,8 @@ class Emulator:
                 if not pending:
                     snap = read_snapshot(self.pb.memory, self.frame)
                     self._report_uncatchable_shiny(snap)
-                    ctx = PolicyContext(snap, time.time() - self.stuck_since, time.time(), self.pb.memory)
+                    ctx = PolicyContext(snap, time.time() - self.stuck_since, time.time(), self.pb.memory,
+                                        stack_pointer(self.pb))
                     preparation = getattr(self, 'preparation', None)
                     pending = list(preparation.step(ctx) if preparation else self.policy.step(ctx))
                     if not preparation and hasattr(self.policy, 'collection'):

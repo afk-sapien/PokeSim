@@ -16,7 +16,6 @@ class StorageController:
     operation: str | None = None
     species: int | None = None
     destination: int | None = None
-    pending_release: tuple | None = None
 
     @staticmethod
     def release_target(snapshot, project, preferences, collection=None):
@@ -76,12 +75,8 @@ class StorageController:
 
     def confirmation(self, snapshot, screen, text, goal_key, project, preferences, context, collection=None):
         if 'GONE FOREVER' in text or 'RELEASED' in text or 'BYE BYE' in text:
-            pending = self.pending_release
-            current = next((mon for mon in snapshot.storage_entries()
-                            if pending and (mon['box'], mon['position']) == pending[:2]), None)
-            allowed = (goal_key == 'party_release' and pending and current == pending[2]
-                       and self.release_target(snapshot, project, preferences, collection) == pending[:2])
-            return MenuDecision(select(screen, 0 if allowed else 1))
+            # Releases run as Core shortcuts, which answer their own prompt. Any other is refused.
+            return MenuDecision(select(screen, 1))
         if context == 'pc' and goal_key.startswith('party_'):
             return MenuDecision(select(screen, 0), 'Confirm the storage prompt')
         return None
@@ -98,17 +93,16 @@ class StorageController:
             return MenuDecision(tap('b') if target is None or target == snapshot.active_box else select(screen, target),
                                 'Select a storage box with room for new catches')
         if kind == 'pc':
-            if not goal_key.startswith('party_'):
+            if not goal_key.startswith('party_') or screen.cursor and screen.cursor[0] == 10:
                 return MenuDecision(tap('b'))
-            if screen.cursor and screen.cursor[0] == 10:
-                return MenuDecision(select(screen, 0))
             if goal_key == 'party_release':
                 release = self.release_target(snapshot, project, preferences, collection)
                 if release is None:
                     return MenuDecision(tap('b'))
                 if release[0] != snapshot.active_box:
                     return MenuDecision(select(screen, 3), 'Open the box holding the spare duplicate')
-                return MenuDecision(select(screen, 2), 'Let a spare duplicate go, keeping one of every species')
+                return MenuDecision(tap('b'), 'Let a spare duplicate go, keeping one of every species',
+                                    request=('release', release[1]))
             if goal_key == 'party_box' or (goal_key in ('party_collection', 'party_league') and len(snapshot.party) < 6
                                            and project and project.get('box') != snapshot.active_box):
                 return MenuDecision(select(screen, 3), 'Change the active storage box without releasing any Pokémon')
@@ -116,17 +110,9 @@ class StorageController:
                     and self.field_move_box(snapshot, goal_key) not in (None, snapshot.active_box)):
                 return MenuDecision(select(screen, 3), 'Open the box holding a partner that can learn the field move')
             self.operation = 'deposit' if len(snapshot.party) >= 6 else 'withdraw'
-            if self.target(snapshot, goal_key, project, preferences, collection) is None:
-                return MenuDecision(tap('b'))
-            return MenuDecision(select(screen, 1 if self.operation == 'deposit' else 0))
-        if kind == 'list':
             target = self.target(snapshot, goal_key, project, preferences, collection)
             if target is None:
                 return MenuDecision(tap('b'))
-            actions = select(screen, target, scroll=True)
-            if goal_key == 'party_release' and actions[0].button == 'a':
-                chosen = next((mon for mon in snapshot.storage_entries()
-                               if (mon['box'], mon['position']) == (snapshot.active_box, target)), None)
-                self.pending_release = (snapshot.active_box, target, chosen) if chosen else None
-            return MenuDecision(actions)
+            return MenuDecision(tap('b'), 'Deposit a reserve Pokémon' if self.operation == 'deposit'
+                                else 'Withdraw a stored partner', request=(self.operation, target))
         raise ValueError(f'Unsupported PC menu: {kind}')

@@ -7,6 +7,11 @@ from ..ram import Snapshot
 BUTTONS = ("up", "down", "left", "right", "a", "b", "start", "select")
 
 
+def stack_pointer(emulator):
+    """The CPU stack pointer of a running emulator, or None when it is not exposed."""
+    return getattr(getattr(emulator, 'register_file', None), 'SP', None)
+
+
 @dataclass(frozen=True)
 class Action:
     """Press `button` for `hold` frames, then release and wait `gap` frames."""
@@ -21,6 +26,7 @@ class PolicyContext:
     stuck_seconds: float        # real seconds since (map, x, y) last changed
     real_time: float
     mem: object = None          # live memory view (pyboy.memory) for policies that read the screen
+    sp: int | None = None       # CPU stack pointer, for Core's continue-only text check
 
 
 class Policy:

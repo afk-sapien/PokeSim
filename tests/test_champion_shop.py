@@ -11,6 +11,7 @@ from pokesim.store import Store
 from pokesim.strategy_data import ITEMS
 from test_tm_shop import purchase_fixture, shop_data, shopper, bought
 from test_battle_power import live, partner
+from shortcut_fakes import PRESS, Recorder
 
 
 def test_offers_start_after_champion_and_cap_without_banking(tmp_path):
@@ -141,6 +142,7 @@ def test_policy_routes_supply_and_uses_owned_pp_up(shop_data):
     from pokesim.policies.strategic import StrategicPolicy
     from pokesim.policies.progression import Goal
     policy = StrategicPolicy(1)
+    recorder = Recorder.on(policy)
     policy.tm_moves, policy.tm_compatible = shop_data
     mon = replace(live(partner(level=90, moves=[57, 58, 85, 94])), max_pp=(15, 10, 15, 10))
     s = shopper(party=(mon,))
@@ -149,9 +151,10 @@ def test_policy_routes_supply_and_uses_owned_pp_up(shop_data):
     assert result.key == 'buy_tm' and action is None
     assert policy.tm_plan['item'] == ITEMS['PP_UP']
     policy.on_restore()
+    recorder = Recorder.on(policy)
     result, action = policy._tm_development(replace(s, items=((ITEMS['PP_UP'], 1),)), goal, False)
-    assert result.key == 'teach_supply' and action[0].button == 'start'
-    assert policy.intent.target == 0
+    assert result.key == 'teach_supply' and action[0] == PRESS
+    assert recorder.last.item == ITEMS['PP_UP'] and recorder.last.target == 0
 
 
 def test_box_list_with_pp_in_a_nickname_is_not_the_pp_up_menu():

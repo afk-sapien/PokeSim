@@ -10,6 +10,7 @@ from pokesim.store import Store
 from pokesim.trade.preferences import identity
 from test_duplicates import snapshot, stored
 from test_strategy import mon
+from shortcut_fakes import PRESS, Recorder, Scripted
 
 
 @pytest.fixture
@@ -255,6 +256,7 @@ def test_full_active_box_deposits_elsewhere_before_switching_to_offer(participan
     emu, snap, candidate = participant
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
+    recorder = Recorder(controller.shortcut)
     party = storage_party()
     full = replace(snap, party=party, boxed_pokemon=((153, 20),) * 20,
                    box_counts=(20, 20, 19) + (20,) * 9, textbox=True)
@@ -271,12 +273,11 @@ def test_full_active_box_deposits_elsewhere_before_switching_to_offer(participan
     assert storage_step(controller, full, memory) == 'a'
 
     available = replace(full, active_box=2, boxed_pokemon=((153, 20),) * 19)
-    assert storage_step(controller, available, storage_menu(1)) == 'a'
+    assert controller.step(PolicyContext(available, 0, 0, storage_menu(1)))[0] == PRESS
     assert controller.operation == 'deposit'
     assert controller.deposit_key == identity(asdict(party[1]))
-    memory = menu({1: '  PARTNER', 3: '  PARTNER', 7: '  CANCEL'}, (0, 3), index=1)
-    assert preparation.Screen(memory).kind(available) == 'party'
-    assert storage_step(controller, available, memory) == 'a'
+    assert recorder.last.kind == 'deposit_pokemon' and recorder.last.slot == 1
+    recorder.finish()
 
     deposited = replace(available, party=party[:1] + party[2:],
                         boxed_pokemon=((153, 20),) * 20, box_counts=(20,) * 12)
@@ -284,11 +285,9 @@ def test_full_active_box_deposits_elsewhere_before_switching_to_offer(participan
     assert controller.operation == 'change_box'
     assert controller.target_box == candidate.box
     opened = replace(deposited, active_box=candidate.box)
-    assert storage_step(controller, opened, storage_menu()) == 'a'
+    assert controller.step(PolicyContext(opened, 0, 0, storage_menu()))[0] == PRESS
     assert controller.operation == 'withdraw'
-    memory = menu({4: '     PARTNER', 6: '     CANCEL'}, (5, 4), top=(5, 4))
-    assert preparation.Screen(memory).kind(opened) == 'list'
-    assert storage_step(controller, opened, memory) == 'a'
+    assert recorder.last.kind == 'withdraw_pokemon' and recorder.last.position == candidate.position
     assert emu.store.get(preparation.KEY)['phase'] == 'storage'
 
 
@@ -308,9 +307,11 @@ def test_protected_preferred_reserve_uses_another_safe_partner(participant, stat
     emu.store.set_trade_preference(identity(asdict(party[1])), {'state': state})
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
+    recorder = Recorder(controller.shortcut)
     full = replace(snap, party=party, textbox=True)
     assert storage_step(controller, full, storage_menu(1)) == 'a'
     assert controller.deposit_key == identity(asdict(party[2]))
+    assert recorder.last.slot == 2
 
 
 def test_storage_reserve_never_drops_strongest_or_unique_field_move(participant):
@@ -322,12 +323,13 @@ def test_storage_reserve_never_drops_strongest_or_unique_field_move(participant)
     assert 'No safe unprotected reserve' in emu.store.get(preparation.KEY)['error']
 
 
-def test_storage_reserve_rechecks_identity_and_protection_in_party_menu(participant):
+def test_storage_reserve_rechecks_identity_and_protection_during_deposit(participant):
     from test_strategy import menu
 
     emu, snap, candidate = participant
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
+    Recorder(controller.shortcut)
     full = replace(snap, party=storage_party(), textbox=True)
     assert storage_step(controller, full, storage_menu(1)) == 'a'
     emu.store.set_trade_preference(controller.deposit_key, {'state': 'locked'})
@@ -337,30 +339,29 @@ def test_storage_reserve_rechecks_identity_and_protection_in_party_menu(particip
 
 
 def test_withdraw_uses_refreshed_identity_position_and_rejects_wrong_box(participant):
-    from test_strategy import menu
-
     emu, snap, candidate = participant
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
-    assert storage_step(controller, snap, storage_menu()) == 'a'
+    recorder = Recorder(controller.shortcut)
     candidate = replace(candidate, position=5)
     moved = replace(snapshot([candidate], party=snap.party), map=89, x=13, y=4, textbox=True)
-    memory = menu({4: '     PARTNER', 6: '     CANCEL'}, (5, 4), index=0, top=(5, 4))
-    memory[0xCC36] = 5
-    assert storage_step(controller, moved, memory) == 'a'
-    assert storage_step(controller, replace(moved, active_box=1), memory) == 'b'
+    assert controller.step(PolicyContext(moved, 0, 0, storage_menu()))[0] == PRESS
+    assert recorder.last.kind == 'withdraw_pokemon' and recorder.last.position == 5
+    controller.shortcut.cancel()
+    assert storage_step(controller, replace(moved, active_box=1), storage_menu()) == 'down'
+    assert controller.operation == 'change_box' and len(recorder.started) == 1
 
 
-def test_stale_deposit_list_closes_after_party_slot_is_free(participant):
-    from test_strategy import menu
-
+def test_finished_deposit_continues_with_the_withdraw(participant):
     emu, snap, candidate = participant
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
+    recorder = Recorder(controller.shortcut)
     full = replace(snap, party=storage_party(), textbox=True)
     assert storage_step(controller, full, storage_menu(1)) == 'a'
-    memory = menu({1: '  PARTNER', 3: '  PARTNER', 7: '  CANCEL'}, (0, 3), index=1)
-    assert storage_step(controller, replace(full, party=full.party[:5]), memory) == 'b'
+    recorder.finish()
+    assert storage_step(controller, replace(full, party=full.party[:5]), storage_menu()) == 'a'
+    assert recorder.kinds() == ['deposit_pokemon', 'withdraw_pokemon']
 
 
 def test_unexpected_pc_confirmation_is_not_accepted(participant):
@@ -377,16 +378,17 @@ def test_unexpected_pc_confirmation_is_not_accepted(participant):
 
 
 def test_selected_reserve_follows_identity_when_party_order_changes(participant):
-    from test_strategy import menu
-
     emu, snap, candidate = participant
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
+    recorder = Recorder(controller.shortcut)
     full = replace(snap, party=storage_party(), textbox=True)
     assert storage_step(controller, full, storage_menu(1)) == 'a'
     reordered = replace(full, party=full.party[:1] + full.party[2:] + full.party[1:2])
-    memory = menu({1: '  PARTNER', 3: '  PARTNER', 7: '  CANCEL'}, (0, 3), index=1)
-    assert storage_step(controller, reordered, memory) == 'down'
+    assert controller._storage_reserve(reordered) == 5
+    controller.shortcut.cancel()
+    assert storage_step(controller, reordered, storage_menu(1)) == 'a'
+    assert recorder.last.slot == 5
     assert controller.deposit_key == identity(asdict(full.party[1]))
 
 
@@ -443,8 +445,8 @@ def test_encounter_during_travel_uses_the_same_traveller(participant):
     assert emu.store.get('trade_hold') is None
 
 
-def test_field_move_menu_sequence_stays_with_traveller(participant):
-    from pokesim.policies.battle import Decision
+def test_field_move_shortcut_stays_with_traveller(participant):
+    from pokesim_core.shortcuts import Done
     from test_strategy import menu
 
     emu, snap, candidate = participant
@@ -454,9 +456,8 @@ def test_field_move_menu_sequence_stays_with_traveller(participant):
                          party=(replace(snap.party[0], moves=(57,)),), start_menu=True)
     traveller = controller.traveller
     traveller.observed_map = travelling.map
-    traveller.intent = Decision('field', 0, reason='Use Surf to cross the water')
-    traveller.intent_since = travelling.frame
-    traveller.field_move = 'SURF'
+    machine = Scripted('use_field_move', ['start', 'a', 'a', 'a', Done('Used SURF.', True)])
+    traveller.shortcut.start(machine, 'surf', travelling.frame, bytearray(65536))
     stages = [
         ('pause', menu({1: '  MON', 3: '  ITEM', 5: '  EXIT'}, (1, 1))),
         ('party', menu({1: '  PARTNER', 7: '  CANCEL'}, (0, 1), top=(0, 1))),
@@ -466,7 +467,7 @@ def test_field_move_menu_sequence_stays_with_traveller(participant):
         assert preparation.Screen(memory).kind(travelling) == kind
         assert storage_step(controller, travelling, memory) == 'a'
         assert controller.traveller is traveller
-        assert traveller.intent.kind == 'field'
+        assert traveller.shortcut.active
         travelling = replace(travelling, frame=travelling.frame + 60)
     emu.policy.step.assert_not_called()
     assert controller.state['phase'] == 'travelling'

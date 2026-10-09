@@ -14,7 +14,7 @@ from pokesim_core.emulator import Emulator as PyBoy
 from pokesim.benchmark import policy_fingerprint
 from pokesim.checkpoints import CheckpointStore
 from pokesim.events import RunMemory, diff
-from pokesim.policies.base import PolicyContext
+from pokesim.policies.base import PolicyContext, stack_pointer
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.ram import read_snapshot
 
@@ -61,7 +61,7 @@ def run(rom, checkpoint, frames):
             achievements.extend({'frame': frame - start, 'type': event.type, 'title': event.title}
                                 for event in events if event.type not in ('playtime', 'release', 'blackout', 'seen'))
             previous = snapshot
-            for action in policy.step(PolicyContext(snapshot, 0, 0, pb.memory)):
+            for action in policy.step(PolicyContext(snapshot, 0, 0, pb.memory, stack_pointer(pb))):
                 if action.button:
                     pb.button_press(action.button)
                 if action.hold:

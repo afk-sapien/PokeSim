@@ -22,7 +22,7 @@ def main():
         game_data_dir=str(args.data.resolve()), speed=0)
     settings.install(managed=True)
     from pokesim.emulator import Emulator
-    from pokesim.policies.base import PolicyContext
+    from pokesim.policies.base import PolicyContext, stack_pointer
     from pokesim.ram import read_snapshot
     from pokesim.runtime.participant import Participant
     from pokesim.store import Store
@@ -54,7 +54,7 @@ def main():
         receipt = participant.prepare(request)
         for step in range(12000):
             snapshot = read_snapshot(emu.pb.memory, emu.frame)
-            actions = emu.preparation.step(PolicyContext(snapshot, 0, time.monotonic(), emu.pb.memory))
+            actions = emu.preparation.step(PolicyContext(snapshot, 0, time.monotonic(), emu.pb.memory, stack_pointer(emu.pb)))
             for action in actions:
                 if action.button:
                     emu.pb.button_press(action.button)

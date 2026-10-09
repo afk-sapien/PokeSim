@@ -245,7 +245,7 @@ def simulate(fixture_path, frames, capture):
         settings = configure(fixture, Path(temporary))
         from pokesim_core.emulator_state import validate_runtime
         from pokesim_core.emulator import Emulator as PyBoy
-        from pokesim.policies.base import Action, PolicyContext
+        from pokesim.policies.base import Action, PolicyContext, stack_pointer
         from pokesim.ram import read_snapshot
         from pokesim.screen import W_OPTIONS
         if hashlib.sha1(Path(settings.rom_path).read_bytes()).hexdigest() != metadata['rom_sha1']:
@@ -271,7 +271,7 @@ def simulate(fixture_path, frames, capture):
                         stuck_frame = frame
                         last_pos = pos
                     # Decision time comes only from emulated frames, never CPU speed.
-                    ctx = PolicyContext(snap, (frame - stuck_frame) / 60, frame / 60, pb.memory)
+                    ctx = PolicyContext(snap, (frame - stuck_frame) / 60, frame / 60, pb.memory, stack_pointer(pb))
                     memory = bytes(pb.memory[0:65536]) if capture else None
                     routes_before = len(timings.route_wall)
                     actions = timings.step(policy, ctx)
