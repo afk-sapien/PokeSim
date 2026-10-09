@@ -12,6 +12,7 @@ import tarfile
 import tempfile
 from urllib.request import urlopen
 
+from ..display_names import place_name, title_name
 from ..downloads import retrying
 from ..experimental.gen2 import PROFILES
 
@@ -431,9 +432,14 @@ class GameData:
         self.game = raw['game']
         for name in ('species', 'moves', 'maps', 'charmap', 'item_attributes'):
             setattr(self, name, {int(key): value for key, value in raw[name].items()})
+        # Display spelling only: generated names come from constants without apostrophes.
+        self.maps = {key: {**value, 'name': place_name(value['name'])} if 'name' in value else value
+                     for key, value in self.maps.items()}
+        self.species = {key: {**value, 'name': title_name(value['name'])} if 'name' in value else value
+                        for key, value in self.species.items()}
         for name in ('items', 'types', 'events', 'map_ids', 'symbols', 'collisions', 'permissions'):
             setattr(self, name, raw[name])
-        self.item_names = {int(key): value.title() for key, value in raw.get('item_names', {}).items()}
+        self.item_names = {int(key): title_name(value) for key, value in raw.get('item_names', {}).items()}
         for name, value in self.items.items():
             if name not in {'NO_ITEM', 'NUM_ITEMS', 'NUM_TMS', 'NUM_HMS'} and not name.startswith(('TM_', 'HM_')):
                 self.item_names.setdefault(value, pretty(name))
@@ -441,6 +447,10 @@ class GameData:
         self.encounters = raw.get('encounters', [])
         self.fly_points = raw.get('fly_points', [])
         self.type_names = {value: pretty(name.removesuffix('_TYPE')) for name, value in self.types.items()}
+
+    def item_name(self, constant):
+        """Display name for an item constant such as METAL_COAT."""
+        return self.item_names.get(self.items.get(constant), pretty(constant))
 
     def text(self, raw):
         return ''.join(self.charmap.get(value, '') for value in bytes(raw).split(bytes([0x50]), 1)[0]).strip()

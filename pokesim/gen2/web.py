@@ -8,6 +8,29 @@ VERSIONS = ('gold', 'silver', 'crystal')
 DEFAULT_VERSION = 'crystal'
 
 
+STAT_CONDITIONS = {'ATK_GT_DEF': 'Attack above Defense', 'ATK_LT_DEF': 'Attack below Defense',
+                   'ATK_EQ_DEF': 'Attack equal to Defense'}
+FRIENDSHIP_TIMES = {'TR_MORNDAY': ' by day', 'TR_NITE': ' at night'}
+
+
+def evolution_label(data, row):
+    """How one evolution happens, in player terms: "Trade holding Metal Coat", "Level 16"."""
+    method, requirements = row['method'], row['requirements']
+    first = requirements[0] if requirements else ''
+    if method == 'level':
+        return f'Level {first}'
+    if method == 'item':
+        return data.item_name(first)
+    if method == 'trade':
+        return f'Trade holding {data.item_name(first)}' if first and first != '-1' else 'Link trade'
+    if method == 'happiness':
+        return 'High friendship' + FRIENDSHIP_TIMES.get(first, '')
+    if method == 'stat':
+        condition = STAT_CONDITIONS.get(requirements[1], '') if len(requirements) > 1 else ''
+        return f'Level {first}' + (f', {condition}' if condition else '')
+    return method.title()
+
+
 class Reference:
     def __init__(self, data):
         self.data = data
@@ -20,7 +43,7 @@ class Reference:
         def evolution(sid, row):
             requirement = ', '.join(row['requirements'])
             return {'dex': sid, 'name': data.species[sid]['name'], 'method': row['method'],
-                    'requirement': requirement, 'label': f'{row["method"].title()} {requirement}'}
+                    'requirement': requirement, 'label': evolution_label(data, row)}
 
         entries = []
         for sid, mon in sorted(data.species.items()):

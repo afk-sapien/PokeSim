@@ -46,13 +46,14 @@ from pokesim_core.gen1 import (
     individual_data as individual_data,
 )
 
+from .display_names import place_name
 from .game_data import load
 from dataclasses import dataclass, fields, replace
 from functools import lru_cache
 from pokesim_core.storage import decode_box, memory_bytes
 
 TABLES = load("tables.json")
-MAP_NAMES = {int(k): v for k, v in TABLES["maps"].items()}
+MAP_NAMES = {int(k): place_name(v) for k, v in TABLES["maps"].items()}   # display spelling
 SPECIES_NAMES = {int(k): v for k, v in TABLES["species"].items()}
 DEX_NAMES = {int(k): v for k, v in TABLES["dex"].items()}
 ITEM_NAMES = {int(k): v for k, v in TABLES["items"].items()}

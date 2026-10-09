@@ -11,6 +11,9 @@ such as a cable partner, a Time Capsule game or an event.
 from dataclasses import asdict, dataclass, field
 from functools import lru_cache
 
+from ..display_names import place_name
+from .web import FRIENDSHIP_TIMES
+
 KINDS = ('wild', 'breed', 'evolve', 'gift', 'static', 'roamer', 'contest', 'swarm', 'prize', 'npc_trade',
          'league_reward', 'walking_reset', 'cable_trade', 'time_capsule', 'event')
 GAMES = frozenset({'gold', 'silver', 'crystal'})
@@ -131,13 +134,13 @@ def _evolution_text(data, parent, evo):
     if method == 'level':
         return f'{name} at level {requirements[0]}' if requirements else f'Level up {name}'
     if method == 'item':
-        return f'{name} with a {requirements[0].replace("_", " ").title()}'
+        return f'{name} with a {data.item_name(requirements[0])}'
     if method == 'happiness':
-        return f'{name} with high friendship' + (f' ({requirements[0].lower()})' if requirements else '')
+        return f'{name} with high friendship' + FRIENDSHIP_TIMES.get(requirements[0] if requirements else '', '')
     if method == 'stat':
         return f'{name} at level {requirements[0]} by its Attack and Defense'
     if method == 'trade':
-        held = requirements[0].replace('_', ' ').title() if requirements and requirements[0] != '-1' else ''
+        held = data.item_name(requirements[0]) if requirements and requirements[0] != '-1' else ''
         return f'Trade {name}' + (f' holding a {held}' if held else '')
     return f'{name} by {method}'
 
@@ -204,7 +207,7 @@ PRIORITY = {kind: rank for rank, kind in enumerate(
 
 def _trade_place(data, trade):
     mid = data.map_ids.get(trade.map_name)
-    return _place(data, mid) if mid is not None else trade.map_name.replace('_', ' ').title()
+    return _place(data, mid) if mid is not None else place_name(trade.map_name.replace('_', ' ').title())
 
 
 def _usable(source):
