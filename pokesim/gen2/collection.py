@@ -4,6 +4,7 @@ from collections import Counter
 from .menus import ChangeBox, FieldMove, Release, Teach, Use
 from .navigation import DIRS
 from .ram import Memory
+from .standdown import hunt_key, stand_down, standing_down
 
 
 def matching_time(value, current):
@@ -319,8 +320,11 @@ def journey(policy, snapshot, mem, Goal):
         return goal
     current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
     target = state.get('target')
+    # With every box full and nothing to release, a hunt could never keep a catch.
+    room = not policy.no_room(snapshot)
     if (target and (not wanted(policy, snapshot, target['species']) or not matching_time(target['time'], current_time)
-                   or policy.decisions - target['started'] > 12000)):
+                   or policy.decisions - target['started'] > 12000 or not room
+                   or standing_down(policy, hunt_key(target['species'])))):
         state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
         state['target'] = target = None
     if target is None:
@@ -330,8 +334,9 @@ def journey(policy, snapshot, mem, Goal):
             return legend
         groups = {}
         items = dict(snapshot.items)
-        for row in data.encounters:
-            if not wanted(policy, snapshot, row['species']) or not matching_time(row['time'], current_time):
+        for row in data.encounters if room else ():
+            if (not wanted(policy, snapshot, row['species']) or not matching_time(row['time'], current_time)
+                    or standing_down(policy, hunt_key(row['species']))):
                 continue
             method = row['method']
             if method not in {'grass', 'surf', 'old rod', 'good rod', 'super rod', 'headbutt', 'rock smash'}:
@@ -434,6 +439,17 @@ def hunt(policy, snapshot, Goal):
                 f'Search for {name} in {data.maps[mid]["name"]}', data.maps[mid]['constant'], x, y, face)
 
 
+def give_up(policy):
+    """Drop the hunt target after the game refused its rod or field move, so the next plan picks another."""
+    state = policy.collection
+    target = state.get('target')
+    if target:
+        state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
+        stand_down(policy, hunt_key(target['species']))
+    state['target'] = None
+    return 'wait'
+
+
 def arrive(policy, snapshot):
     key = policy.goal.key
     from .gamecorner import arrive as prize
@@ -474,7 +490,10 @@ def arrive(policy, snapshot):
             return 'a'
     if key == 'collection_fish':
         method = policy.collection['target']['method']
-        policy.menu = Use(policy.data.items[method.upper().replace(' ', '_')])
+        rod = Use(policy.data.items[method.upper().replace(' ', '_')])
+        if not policy.allowed(rod, snapshot):
+            return give_up(policy)
+        policy.menu = rod
         return 'wait'
     if key == 'collection_field':
         method = policy.collection['target']['method']
@@ -484,10 +503,12 @@ def arrive(policy, snapshot):
             slot = next((i for i, mon in enumerate(snapshot.party) if not mon.egg
                          and move in policy.data.species[mon.species]['machines']
                          and not all(known in {15, 19, 57, 70, 148, 250, 127} for known in mon.moves)), None)
-            if slot is not None:
-                policy.menu = Teach(move, slot)
+            task = Teach(move, slot) if slot is not None else None
         else:
-            policy.menu = FieldMove(slot, 'HEADBUTT' if move == 29 else 'ROCK SMASH')
+            task = FieldMove(slot, 'HEADBUTT' if move == 29 else 'ROCK SMASH')
+        if task is None or not policy.allowed(task, snapshot):
+            return give_up(policy)
+        policy.menu = task
         return 'wait'
     if key in {'collection_wait', 'collection_idle', 'collection_hunt', 'collection_roam_hunt', 'collection_roam_lead', 'collection_static_lead'}:
         return 'wait'

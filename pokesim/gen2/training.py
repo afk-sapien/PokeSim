@@ -1,6 +1,7 @@
 """Raise collected partners through normal battles, held items and evolution."""
-from .menus import ChangeBox, Give, Remedy, Storage, Take
+from .menus import ChangeBox, Give, Release, Remedy, Storage, Take
 from .ram import calculated_stats, experience_at
+from .standdown import stand_down, standing_down, train_key
 
 FIELD_MOVES = {15, 19, 57, 70, 148, 250, 127}
 
@@ -92,6 +93,8 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
             and project['target'] not in prerequisites(data, snapshot)
             and not requested(data, snapshot, demand, project['target'])):
         state['training'] = project = None
+    if project and standing_down(policy, train_key(project['identity'])):
+        state['training'] = project = None
     if project is None:
         choices = projects(data, snapshot, current_time, demand)
         terminal_project = False
@@ -100,6 +103,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
             choices = [(experience_at(100, data.species[mon.species]['growth']) - mon.experience,
                         mon.box is not None, mon.species, identity(mon), mon.species, None)
                        for mon in snapshot.party + snapshot.stored if not mon.egg and mon.level < 100]
+        choices = [row for row in choices if not standing_down(policy, train_key(row[3]))]
         if not choices:
             return None
         _, _, species, key, target, item = min(choices)
@@ -185,10 +189,19 @@ def arrive(policy, snapshot):
         if len(snapshot.party) == 6:
             if snapshot.box_counts[snapshot.active_box] >= 20:
                 box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)
+                spare = policy.release_target(snapshot) if box is None else None
                 if box is not None:
                     policy.menu = ChangeBox(box)
-                    return 'a'
-                return 'b'
+                elif spare is not None:
+                    policy.menu = (ChangeBox(spare.box) if spare.box != snapshot.active_box
+                                   else Release(spare.box, spare.position, [spare.species, spare.trainer_id, list(spare.dvs)]))
+                else:
+                    # No box has room and nothing can be released, so this partner cannot join the party.
+                    stand_down(policy, train_key(project['identity']))
+                    state['training'] = None
+                    state.pop('share_holder', None)
+                    return 'b'
+                return 'a'
             counts = {move: sum(move in row.moves for row in snapshot.party) for move in FIELD_MOVES}
             slot = min(range(1, 6), key=lambda i: (sum(counts[move] == 1 for move in snapshot.party[i].moves if move in FIELD_MOVES),
                                                    snapshot.party[i].held_item == data.items['EXP_SHARE'], snapshot.party[i].level))

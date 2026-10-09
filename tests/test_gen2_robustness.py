@@ -382,7 +382,8 @@ def test_second_consecutive_unstick_raises_a_stuck_event():
     saves = []
     emu = SimpleNamespace(unstick_streak=1, snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 29'),
                           store=SimpleNamespace(autosaves=lambda: saves),
-                          policy=SimpleNamespace(recoveries=4, menu=None, on_restore=lambda: None),
+                          policy=SimpleNamespace(recoveries=4, menu=None, on_restore=lambda: None,
+                                                 collection={}, goal=None, decisions=0),
                           reloads=0, last_reload=0, audio=SimpleNamespace(clear=lambda: None),
                           statistics=SimpleNamespace(previous=None), options_applied=True, _tick=lambda n: None,
                           _reset_watch=lambda: None, _boot=lambda: SimpleNamespace(),

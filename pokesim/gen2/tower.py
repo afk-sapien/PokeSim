@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from .menus import Give, Lead, Take, Teach, choose
 from .ram import Memory, calculated_stats
-from .teams import assemble, key
+from .teams import assemble, assembled, key
 
 MACHINES = ((70, 'HM04'), (57, 'HM03'), (19, 'HM02'), (94, 'TM29'), (89, 'TM26'), (188, 'TM36'), (247, 'TM30'))
 
@@ -135,12 +135,13 @@ def journey(policy, snapshot, Goal, *, force=False):
         goal = assemble(policy, snapshot, state['original'], Goal, 'Restore the adventure team after the Battle Tower')
         if goal:
             return goal
-        policy.collection['tower_result'] = {'wins': state.get('wins', 0), 'level': state['cap']}
+        if not state.get('abandoned'):
+            policy.collection['tower_result'] = {'wins': state.get('wins', 0), 'level': state['cap']}
+            policy.completed['tower'] = snapshot.frame
         policy.collection['tower_after'] = policy.decisions + 50000
         if 'previous_training' in state:
             policy.collection['training'] = state['previous_training']
         policy.collection.pop('tower', None)
-        policy.completed['tower'] = snapshot.frame
         return None
     if not state.get('trained') and 'previous_training' in state:
         from .training import identity, journey as train
@@ -167,6 +168,10 @@ def journey(policy, snapshot, Goal, *, force=False):
     goal = assemble(policy, snapshot, state['team'], Goal, 'Prepare three partners for the Battle Tower')
     if goal:
         return goal
+    if not assembled(snapshot, state['team']):
+        # A partner is gone or storage has no room left, so this challenge stands down.
+        state['abandoned'] = state['returning'] = True
+        return journey(policy, snapshot, Goal)
     options = []
     protected = {15, 19, 57, 70, 148, 250, 127, 105, 92}
     for slot, mon in enumerate(snapshot.party):

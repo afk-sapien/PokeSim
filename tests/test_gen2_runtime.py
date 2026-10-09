@@ -993,10 +993,12 @@ def test_tower_team_has_three_distinct_legal_species():
 def test_time_capsule_team_restoration_takes_priority_over_story(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, seed=1, starter='cyndaquil')
-    policy.collection['time_capsule_restore'] = ['original']
+    from pokesim.gen2.teams import key
+    original = SimpleNamespace(box=0, position=0, to_dict=lambda: {'trainer_id': 1, 'dvs': [1, 2, 3, 4]})
+    policy.collection['time_capsule_restore'] = [key(original)]
     from pokesim.gen2.policy import Goal
     policy.storage_goal = lambda _: Goal('pc', 'PC', 'NEW_BARK_TOWN', 1, 1, 'up')
-    snapshot = SimpleNamespace(party=(), stored=(), map=real_data.map_ids['NEW_BARK_TOWN'])
+    snapshot = SimpleNamespace(party=(), stored=(original,), map=real_data.map_ids['NEW_BARK_TOWN'])
     goal = policy.journey(snapshot, None)
     assert goal.key == 'collection_activity_team'
 

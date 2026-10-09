@@ -482,6 +482,8 @@ class Emulator:
                               f'{why.capitalize()} at {self.snapshot.map_name} and a reload did not help. '
                               f'{self.policy.recoveries} recoveries so far.', priority=HIGH), self.snapshot)
         restored = None
+        from .standdown import carry_over, stalled_objectives
+        stalled = stalled_objectives(self.policy)
         if target:
             log.warning('%s for %.1f game minutes, reloading %s', why, max(0, self.frame - since_frame) / 3600, target.name)
             for path in [target] + [path for path in reversed(saves) if path != target]:
@@ -492,6 +494,7 @@ class Emulator:
                 except (ValueError, OSError):
                     log.exception('Cannot reload Gen II checkpoint %s', path.name)
         if restored:
+            carry_over(self.policy, stalled)
             # The emulator is deterministic, so the same save and choices would replay the same
             # trouble. Idling a random moment moves the game's random numbers along.
             self._tick(1 + secrets.randbelow(180))
