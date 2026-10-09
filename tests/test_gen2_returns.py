@@ -337,7 +337,8 @@ def test_policy_returns_to_catch_returned_legendaries(data):
     policy = SimpleNamespace(data=data, collection={}, returned=set(),
                              person=lambda snapshot, key, *args: SimpleNamespace(key=key))
     snapshot = SimpleNamespace(owned={243, 244, 245, 249, 250, 251}, can_catch=True, items=((wing, 1),),
-                               event=lambda name: name in flags, roamers=(), map=data.map_ids['NEW_BARK_TOWN'])
+                               event=lambda name: name in flags, roamers=(), map=data.map_ids['NEW_BARK_TOWN'],
+                               party=[], stored=[], pockets={'balls': [(data.items['ULTRA_BALL'], 20)]})
     assert legends(policy, snapshot, Goal) is None
     policy.returned = {249}
     assert legends(policy, snapshot, Goal).key == 'legend_lugia'
@@ -363,3 +364,33 @@ def test_returned_statics_make_room_and_need_a_ball_before_the_trip(data):
     snapshot.pockets = {'balls': [(data.items['POKE_BALL'], 5)]}
     snapshot.map = data.map_ids['LANCES_ROOM']
     assert kanto(policy, snapshot, mem, Goal).key != 'snorlax'
+
+
+def test_static_legendary_trip_waits_while_only_the_reserved_master_ball_is_left(data):
+    from pokesim.gen2.quests import ball_ready
+    policy = SimpleNamespace(data=data, returned=set())
+    roamer = {'species': 244, 'level': 40, 'map': data.map_ids['ROUTE_36']}
+    master, ultra = data.items['MASTER_BALL'], data.items['ULTRA_BALL']
+    snapshot = SimpleNamespace(owned={243, 245}, roamers=(roamer,), money=0, pockets={'balls': [(master, 1)]})
+    assert not ball_ready(policy, snapshot)
+    snapshot.pockets = {'balls': [(master, 1), (ultra, 3)]}
+    assert ball_ready(policy, snapshot)
+    # With every beast caught, the Master Ball is free for Lugia or Ho-Oh.
+    snapshot.pockets, snapshot.owned = {'balls': [(master, 1)]}, {243, 244, 245}
+    assert ball_ready(policy, snapshot)
+
+
+def test_static_legendary_trip_waits_for_an_affordable_ultra_ball_stock(data):
+    from pokesim.gen2.quests import ball_ready, static_wanted, ultra_shortfall
+    policy = SimpleNamespace(data=data, returned={249})
+    ultra = data.items['ULTRA_BALL']
+    snapshot = SimpleNamespace(owned={249}, roamers=(), money=50000, pockets={'balls': [(ultra, 3)]},
+                               event=lambda name: False)
+    assert static_wanted(policy, snapshot)
+    # Money for ten Ultra Balls: shop before the trip.
+    assert not ball_ready(policy, snapshot) and not ultra_shortfall(policy, snapshot)
+    snapshot.pockets = {'balls': [(ultra, 10)]}
+    assert ball_ready(policy, snapshot)
+    # Too little money: the collection runs the League for prize money first.
+    snapshot.money, snapshot.pockets = 3000, {'balls': [(ultra, 3)]}
+    assert ultra_shortfall(policy, snapshot)

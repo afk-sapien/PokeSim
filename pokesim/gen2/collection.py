@@ -236,8 +236,10 @@ def journey(policy, snapshot, mem, Goal):
     fees = retrieval_cost(data, snapshot)
     from .. import config
     starter_gifts = getattr(config, 'LEAGUE_REWARDS', False) and not {152, 155, 158} <= snapshot.owned
+    from .quests import static_wanted, ultra_shortfall
     if funding is None and (snapshot.money < 5000 and sum(count for _, count in snapshot.pockets['balls']) < 4
-                            or fees and snapshot.money < fees + 1000 or starter_gifts):
+                            or fees and snapshot.money < fees + 1000 or starter_gifts
+                            or snapshot.can_catch and ultra_shortfall(policy, snapshot) and static_wanted(policy, snapshot)):
         state['funding'] = funding = snapshot.hall_of_fame_count + 1
     if funding is not None:
         state['phase'] = 'league'
@@ -463,6 +465,6 @@ def arrive(policy, snapshot):
         else:
             policy.menu = FieldMove(slot, 'HEADBUTT' if move == 29 else 'ROCK SMASH')
         return 'wait'
-    if key in {'collection_wait', 'collection_hunt', 'collection_roam_hunt', 'collection_roam_lead'}:
+    if key in {'collection_wait', 'collection_hunt', 'collection_roam_hunt', 'collection_roam_lead', 'collection_static_lead'}:
         return 'wait'
     return None

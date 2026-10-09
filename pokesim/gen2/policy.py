@@ -764,12 +764,15 @@ class Policy:
         if fees:
             reserve = max(reserve, fees + 1000)
         requests = []
+        from .quests import static_wanted
         unique_encounter = self.goal is not None and self.goal.key in {'sudowoodo', 'snorlax', 'collection_lapras'}
         ball_target = 20 if self.collection.get('phase') == 'legendary' or unique_encounter else 4
         # Roaming beasts and the other legendaries have catch rates of 3, so every throw counts:
         # while one is still wanted, an affordable Ultra Ball beats a nearer shop's Great Ball.
         legendary = snapshot.can_catch and bool(snapshot.badges & 64) and (unique_encounter
-            or self.collection.get('phase') == 'legendary' and not {243, 244, 245, 249, 250} <= set(snapshot.owned))
+            or self.collection.get('phase') == 'legendary'
+            and not {243, 244, 245, 249, 250} <= set(snapshot.owned) - self.returned
+            or static_wanted(self, snapshot))
         ultra = self.data.items['ULTRA_BALL']
         ultras = dict(snapshot.pockets['balls']).get(ultra, 0)
         if (legendary and ultras < 20
@@ -918,9 +921,10 @@ class Policy:
             return Action('a', 8, 36)
         strongest = max((i for i, mon in enumerate(snapshot.party) if not mon.egg),
                         key=lambda i: snapshot.party[i].level, default=0)
-        # A roaming-beast sleeper leads on purpose even when it is far below the rest of the party.
+        # A roaming-beast or static-legendary sleeper leads on purpose even when it is far below the rest of the party.
         if (strongest and snapshot.party[strongest].level > snapshot.party[0].level + 5
-                and not self.collection.get('roam_lead')):
+                and not self.collection.get('roam_lead')
+                and not (self.goal and self.goal.key in {'legend_lugia', 'legend_ho_oh', 'legend_suicune', 'collection_static_lead'})):
             mon = snapshot.party[strongest]
             self.menu = Lead(strongest, (mon.trainer_id, mon.dvs))
             return Action(None, 0, 24)
@@ -1207,11 +1211,19 @@ class Policy:
         if 'FIGHT' in text and 'TYPE' not in text:
             self.switching = None
             active = mem.byte('wCurBattleMon')
-            if catch and not roaming and not trapped and (partner or snapshot.enemy_species in {245, 249, 250, 251}) and weaken is None and snapshot.enemy_hp > snapshot.enemy_max_hp // 2:
+            # A static legendary only ever calls for the sleeper, and only while it is awake and
+            # unguarded: a switch costs a sleep turn that a ball would use better.
+            static = self.static_legend(snapshot)
+            sleepable = static and not mem.byte('wEnemyMonStatus') and not mem.byte('wEnemyScreens') & 4
+            if (catch and not roaming and not trapped and (partner or snapshot.enemy_species in {245, 249, 250, 251})
+                    and weaken is None and (sleepable if static else snapshot.enemy_hp > snapshot.enemy_max_hp // 2)):
                 candidates = [(self.capture_move(snapshot, mem, slot=i), i)
                               for i, mon in enumerate(snapshot.party)
                               if i != active and not mon.egg and mon.hp > mon.max_hp // 2
                               and (partner or mon.level * 2 >= snapshot.enemy_level)]
+                if static:
+                    candidates = [row for row in candidates if row[0] is not None and self.data.moves.get(
+                        snapshot.party[row[1]].moves[row[0]], {}).get('effect') == 'EFFECT_SLEEP']
                 target = next((i for move, i in candidates if move is not None), None)
                 if target is not None:
                     self.switching = target
@@ -1307,8 +1319,84 @@ class Policy:
             return Action('a', 8, 40)
         return Action('a', 8, 24)
 
+    def static_legend(self, snapshot):
+        """Lugia, Ho-Oh and Crystal's Tin Tower Suicune: catch rate 3, met once at a fixed spot."""
+        return snapshot.enemy_species in {249, 250} or snapshot.enemy_species == 245 and self.data.game == 'crystal'
+
+    def static_capture_move(self, snapshot, mem, mon):
+        """Sleep first, then chip a sleeping legendary to half HP without the risk of a KO.
+
+        In Gen II only sleep and freeze raise the catch chance (+10 on a catch rate of 3, against at
+        most +3 for low HP), and paralysis would block sleep, so it is never used. Lugia and Ho-Oh
+        open with Safeguard and cast it again as it ends, and an awake one Recovers any chip, so while
+        Safeguard is up the balls wait: Disable the Safeguard, else chip or stall until it drops.
+        """
+        usable = [(index, self.data.moves.get(move, {})) for index, move in enumerate(mon.moves) if mon.pp[index]]
+        status = mem.byte('wEnemyMonStatus')
+        guarded = mem.byte('wEnemyScreens') & 4  # SCREENS_SAFEGUARD
+        types = self.data.species[snapshot.enemy_species]['types']
+        sleeper = not status and self.party_sleeper(snapshot)
+        if not status and not guarded:
+            sleep = [(entry['accuracy'], index) for index, entry in usable if entry.get('effect') == 'EFFECT_SLEEP'
+                     and all(self.data.matchups.get((entry['type'], kind), 1) for kind in types)]
+            if sleep:
+                return max(sleep)[1]
+            if sleeper:
+                return None
+        if guarded and sleeper:
+            last = self.data.moves.get(mem.byte('wLastEnemyMove'), {}).get('effect')
+            if last == 'EFFECT_SAFEGUARD' and not mem.byte('wEnemyDisableCount'):
+                disable = next((index for index, entry in usable if entry.get('effect') == 'EFFECT_DISABLE'), None)
+                if disable is not None:
+                    return disable
+        elif not status and any(self.data.moves.get(move, {}).get('effect') in {'EFFECT_HEAL', 'EFFECT_MORNING_SUN'}
+                                for move in mem.read('wEnemyMonMoves', 4)):
+            return None  # Recover undoes the chip, so throw.
+        # Each sleep turn spent chipping is a throw lost (13/256 asleep), while half HP adds about 2/256
+        # per throw, so chip only while plenty of sleep remains (the low bits count the turns left).
+        if status and (snapshot.enemy_hp <= snapshot.enemy_max_hp // 2 or status & 0x07 < 3):
+            return None
+        if not status and not guarded and snapshot.enemy_hp <= snapshot.enemy_max_hp // 2:
+            return None
+        options = []
+        for index, entry in usable:
+            effect = entry.get('effect')
+            if not entry.get('power'):
+                if guarded and sleeper and ('_UP' in (effect or '') or effect == 'EFFECT_DEFENSE_CURL'):
+                    options.append((0, 0, index))  # A harmless stall beats a 3/256 throw.
+                continue
+            hits = {'EFFECT_NORMAL_HIT': 1, 'EFFECT_FALSE_SWIPE': 1, 'EFFECT_DOUBLE_HIT': 2, 'EFFECT_MULTI_HIT': 5}.get(effect)
+            if not hits:
+                continue
+            special = entry['type'] >= 20
+            defense = mem.word('wEnemyMonSpclDef' if special else 'wEnemyMonDefense')
+            attack = mon.stats[4 if special else 1]
+            factor = 1.5 if entry['type'] in self.data.species[mon.species]['types'] else 1
+            for kind in set(types):
+                factor *= self.data.matchups.get((entry['type'], kind), 1)
+            damage = (((2 * mon.level // 5 + 2) * entry['power'] * attack / max(1, defense)) / 50 + 2) * factor * hits
+            # A critical hit doubles damage in Gen II; 2.5x leaves room for that and the top damage roll.
+            if effect == 'EFFECT_FALSE_SWIPE':
+                options.append((2, 0, index))
+            elif 0 < damage * 2.5 < snapshot.enemy_hp:
+                options.append((1, damage, index))
+        return max(options)[2] if options else None
+
+    def party_sleeper(self, snapshot):
+        """Some healthy party Pokémon can still put the static legendary to sleep."""
+        types = self.data.species[snapshot.enemy_species]['types']
+        return any(mon.hp and not mon.egg and any(pp and self.data.moves.get(move, {}).get('effect') == 'EFFECT_SLEEP'
+                                                  and all(self.data.matchups.get((self.data.moves[move]['type'], kind), 1)
+                                                          for kind in types)
+                                                  for move, pp in zip(mon.moves, mon.pp))
+                   for mon in snapshot.party)
+
     def ball_labels(self, snapshot):
         master = ('MASTER BALL',) if snapshot.enemy_species in {243, 244, 245, 249, 250, 251} else ()
+        if master and self.static_legend(snapshot):
+            from .quests import beasts_roaming
+            if beasts_roaming(self, snapshot):
+                master = ()
         regular = ('ULTRA BALL', 'GREAT BALL', 'POKé BALL', 'LURE BALL', 'FAST BALL',
                    'HEAVY BALL', 'LEVEL BALL', 'LOVE BALL', 'FRIEND BALL', 'MOON BALL')
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
@@ -1340,6 +1428,8 @@ class Policy:
                 if sleep:
                     return max(sleep)[1]
             return None
+        if self.static_legend(snapshot):
+            return self.static_capture_move(snapshot, mem, mon)
         if not mem.byte('wEnemyMonStatus'):
             for index, move in enumerate(mon.moves):
                 entry = self.data.moves.get(move, {})

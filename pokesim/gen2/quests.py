@@ -70,15 +70,18 @@ def legends(policy, snapshot, Goal):
                 if not snapshot.event(f'EVENT_BEAT_SAGE_{trainer}'):
                     return policy.person(snapshot, 'sage_' + trainer.lower(), 'Pass the Wise Trio’s test',
                                          'WISE_TRIOS_ROOM', 'TrainerSage' + trainer.title())
-        return Goal('legend_suicune', 'Meet Suicune at the Tin Tower', 'TIN_TOWER_1F', 9, 12)
-    if 249 not in owned and not snapshot.event('EVENT_FOUGHT_LUGIA'):
-        return policy.person(snapshot, 'legend_lugia', 'Seek Lugia in the Whirl Islands', 'WHIRL_ISLAND_LUGIA_CHAMBER', 'Lugia')
+        return static_lead(policy, snapshot, 245, Goal) or Goal('legend_suicune', 'Meet Suicune at the Tin Tower', 'TIN_TOWER_1F', 9, 12)
+    if 249 not in owned and not snapshot.event('EVENT_FOUGHT_LUGIA') and ball_ready(policy, snapshot):
+        return (static_lead(policy, snapshot, 249, Goal)
+                or policy.person(snapshot, 'legend_lugia', 'Seek Lugia in the Whirl Islands', 'WHIRL_ISLAND_LUGIA_CHAMBER', 'Lugia'))
     if (data.game == 'crystal' and 250 not in snapshot.owned
             and {243, 244, 245} <= snapshot.owned and data.items['RAINBOW_WING'] not in items):
         return policy.person(snapshot, 'rainbow_wing', 'Return to the Tin Tower with the three beasts',
                              'TIN_TOWER_1F', 'TinTower1FSage5Script')
-    if 250 not in owned and data.items['RAINBOW_WING'] in items and not snapshot.event('EVENT_FOUGHT_HO_OH'):
-        return policy.person(snapshot, 'legend_ho_oh', 'Seek Ho-Oh above the Tin Tower', 'TIN_TOWER_ROOF', 'TinTowerHoOh')
+    if (250 not in owned and data.items['RAINBOW_WING'] in items and not snapshot.event('EVENT_FOUGHT_HO_OH')
+            and ball_ready(policy, snapshot)):
+        return (static_lead(policy, snapshot, 250, Goal)
+                or policy.person(snapshot, 'legend_ho_oh', 'Seek Ho-Oh above the Tin Tower', 'TIN_TOWER_ROOF', 'TinTowerHoOh'))
     return roamers(policy, snapshot, Goal)
 
 
@@ -192,6 +195,114 @@ def prepare_lead(policy, snapshot, wanted, Goal):
         if policy.menu is None:
             policy.menu = Lead(slot, (mon.trainer_id, mon.dvs))
         return Goal('collection_roam_lead', f'Lead with {mon.name} to put the roaming beasts to sleep',
+                    data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
+    return None
+
+
+ULTRA_STOCK = 10
+
+
+def ultra_shortfall(policy, snapshot):
+    """Fewer than ten Ultra Balls and too little money to buy them before a static legendary trip.
+
+    Asleep, a catch rate of 3 gives about 13/256 per Ultra Ball against about 11/256 per Poké Ball,
+    so the trip waits for a League run to pay for a full stock instead of spending the encounter.
+    """
+    ultras = dict(snapshot.pockets['balls']).get(policy.data.items['ULTRA_BALL'], 0)
+    price = policy.data.item_attributes[policy.data.items['ULTRA_BALL']]['price']
+    return ultras < ULTRA_STOCK and snapshot.money < price * ULTRA_STOCK + 400
+
+
+def static_wanted(policy, snapshot):
+    """Lugia, Ho-Oh or Crystal's Suicune is still to catch and waiting in its room."""
+    owned = snapshot.owned - getattr(policy, 'returned', set())
+    statics = [(249, 'LUGIA'), (250, 'HO_OH')] + ([(245, 'SUICUNE')] if policy.data.game == 'crystal' else [])
+    return any(dex not in owned and not snapshot.event('EVENT_FOUGHT_' + flag) for dex, flag in statics)
+
+
+def ball_ready(policy, snapshot):
+    """A ball other than the Master Ball is in the pack, or no roaming beast still needs the Master Ball,
+    and the Ultra Ball stock is full or cannot be afforded yet.
+
+    Without a ball, a static legendary battle could only knock it out, so the trip waits for a restock.
+    """
+    master = policy.data.items['MASTER_BALL']
+    regular = any(item != master and count for item, count in snapshot.pockets['balls'])
+    return (regular or not beasts_roaming(policy, snapshot)) and not (
+        regular and ULTRA_STOCK > dict(snapshot.pockets['balls']).get(policy.data.items['ULTRA_BALL'], 0)
+        and not ultra_shortfall(policy, snapshot))
+
+
+def beasts_roaming(policy, snapshot):
+    """A roaming beast is still wanted. Those flee, so they are the hardest catch and keep the Master Ball."""
+    owned = snapshot.owned - policy.returned
+    return any(row['species'] not in owned and row['map'] in policy.data.maps for row in snapshot.roamers)
+
+
+def static_level(data, species):
+    """The level a static legendary is met at: the version mascot at 40, the other one at 70, Crystal's at 60."""
+    if data.game == 'crystal':
+        return 40 if species == 245 else 60
+    return 40 if species == {'gold': 250, 'silver': 249}.get(data.game) else 70
+
+
+def sleep_chance(policy, mon, species, level):
+    """Chance this Pokémon puts the legendary to sleep before it faints, from the legendary's strongest hit."""
+    from types import SimpleNamespace
+    from .ram import calculated_stats
+    data = policy.data
+    sleep = sleep_move(data, mon, species)
+    if sleep is None:
+        return 0
+    learned = [move for at, move in data.species[species]['learnset'] if at <= level]
+    moves = list(dict.fromkeys(reversed(learned)))[:4]
+    stats = calculated_stats(data.species[species]['stats'], level, (15,) * 5, (0,) * 5)
+    enemy = SimpleNamespace(species=species, level=level, stats=stats)
+    target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.stats[0],
+                             enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
+    hit = max((policy.move_score(move, enemy, target) for move in moves), default=0)
+    turns = -(-mon.stats[0] // max(1, int(hit))) if hit else 8
+    # A slower sleeper takes the first hit before it can move.
+    tries = min(8, turns if mon.stats[3] > stats[3] else turns - 1)
+    return 1 - (1 - sleep[0] / 100) ** max(0, tries)
+
+
+def static_lead(policy, snapshot, species, Goal):
+    """Withdraw and lead with the Pokémon most likely to put a static legendary to sleep.
+
+    Sleep adds 10 to the catch chance in Gen II, where a catch rate of 3 otherwise gives 3 in 256 per
+    Ultra Ball, so the lead that lands it before fainting matters more than how hard it hits. None once
+    that Pokémon leads, or when no Pokémon knows a sleep move the legendary is not immune to.
+    """
+    from .menus import Lead
+    from .teams import assemble, key
+    data = policy.data
+    level = static_level(data, species)
+    options = [(sleep_chance(policy, mon, species, level), mon.box is None, mon.level, mon)
+               for mon in snapshot.party + snapshot.stored if not mon.egg and mon.species in data.species]
+    options = [row for row in options if row[0] > 0]
+    if not options:
+        return None
+    mon = max(options, key=lambda row: row[:3])[3]
+    # False Swipe chips a sleeping legendary to 1 HP with no risk, so a Pokémon that knows it comes too.
+    swipers = [row for row in snapshot.party + snapshot.stored if not row.egg and row is not mon
+               and any(pp and data.moves.get(move, {}).get('effect') == 'EFFECT_FALSE_SWIPE' for move, pp in zip(row.moves, row.pp))]
+    swiper = None if any(row.box is None for row in swipers) else max(swipers, key=lambda row: row.level, default=None)
+    joining = [row for row in (mon, swiper) if row is not None and row.box is not None]
+    if joining:
+        team = [row for row in snapshot.party if not row.egg]
+        counts = {move: sum(move in row.moves for row in team) for move in FIELD_MOVES}
+        while len(team) + len(joining) > 6:
+            team.remove(min((row for row in team[1:] if row is not mon), key=lambda row: (
+                sum(counts[move] == 1 for move in row.moves if move in FIELD_MOVES),
+                row.held_item == data.items['EXP_SHARE'], row.level)))
+        return assemble(policy, snapshot, [key(row) for row in team + joining], Goal,
+                        f'Bring {mon.name} to put {data.species[species]["name"]} to sleep')
+    slot = snapshot.party.index(mon)
+    if slot:
+        if policy.menu is None:
+            policy.menu = Lead(slot, (mon.trainer_id, mon.dvs))
+        return Goal('collection_static_lead', f'Lead with {mon.name} to put {data.species[species]["name"]} to sleep',
                     data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     return None
 

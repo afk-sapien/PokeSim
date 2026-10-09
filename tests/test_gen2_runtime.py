@@ -660,7 +660,7 @@ def test_postgame_restocking_reaches_a_mart_beyond_the_local_map_limit(real_data
     policy.person = lambda snapshot, key, label, name, script: Goal(key, label, name, 1, 1)
     snapshot = SimpleNamespace(map=real_data.map_ids['SILVER_CAVE_ROOM_2'], items=(), party=(),
         pockets={'balls': ()}, money=20000, can_catch=True, badges=65535, hall_of_fame_count=1,
-        event=lambda name: True)
+        event=lambda name: True, owned=set())
     assert policy.shop(snapshot).map_name == 'VIOLET_MART'
 
 
@@ -2119,3 +2119,107 @@ def test_a_sale_skips_a_shop_whose_clerk_has_left(real_data, monkeypatch):
     # Before the hideout falls the pharmacist runs the shop, so both counters stay open.
     flags.discard('EVENT_TEAM_ROCKET_BASE_POPULATION')
     assert policy.clerk_present(snapshot, entry, pharmacist)
+
+
+def test_static_legendary_is_slept_then_chipped_and_never_paralyzed(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    # Wigglytuff with Thunder Wave, Sing and Tackle against Lugia.
+    lead = SimpleNamespace(species=40, level=54, hp=219, egg=False, status=0, moves=(86, 47, 33, 0),
+        pp=(20, 15, 35, 0), stats=(219, 95, 54, 62, 94, 67))
+    snapshot = SimpleNamespace(party=(lead,), enemy_species=249, enemy_hp=141, enemy_max_hp=141,
+        pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
+    memory = {}
+    mem = SimpleNamespace(byte=lambda name: memory.get(name, 0), word=lambda name: memory.get(name, 120),
+                          read=lambda name, size: memory.get(name, (0,) * size))
+    assert policy.capture_move(snapshot, mem) == 1
+    # Asleep, it cannot Recover, so a weak hit with no KO risk brings it toward half HP.
+    memory['wEnemyMonStatus'] = 3
+    assert policy.capture_move(snapshot, mem) == 2
+    # With one or two sleep turns left, a ball beats another chip.
+    memory['wEnemyMonStatus'] = 2
+    assert policy.capture_move(snapshot, mem) is None
+    memory['wEnemyMonStatus'] = 3
+    snapshot.enemy_hp = 70
+    assert policy.capture_move(snapshot, mem) is None
+    # Awake again: sleep it again before anything else, even below half HP.
+    memory['wEnemyMonStatus'] = 0
+    assert policy.capture_move(snapshot, mem) == 1
+    # Safeguard blocks sleep, and a 3/256 throw is mostly a wasted ball: chip or stall until it drops.
+    memory['wEnemyScreens'] = 4
+    snapshot.enemy_hp = 141
+    assert policy.capture_move(snapshot, mem) == 2
+    # Lugia casts Safeguard again as it ends, so Disable it while it is the last move used.
+    lead.moves, lead.pp = (86, 47, 33, 50), (20, 15, 35, 20)
+    memory['wLastEnemyMove'] = 219  # Safeguard
+    assert policy.capture_move(snapshot, mem) == 3
+    memory['wEnemyDisableCount'] = 4
+    assert policy.capture_move(snapshot, mem) == 2
+    # With no sleeper left, an awake Lugia Recovers any chip: throw.
+    memory['wEnemyScreens'], lead.pp = 0, (20, 0, 35, 20)
+    memory['wEnemyMonMoves'] = (177, 219, 16, 105)  # Aeroblast, Safeguard, Gust, Recover
+    assert policy.capture_move(snapshot, mem) is None
+
+
+def test_static_legendary_awake_brings_in_the_sleeper(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    policy.needed_move = lambda snapshot: 0
+    policy.remedy = lambda *args, **kwargs: False
+    feraligatr = SimpleNamespace(species=160, level=100, hp=363, max_hp=363, egg=False, status=0,
+        moves=(57, 250, 15, 70), pp=(15, 15, 30, 15), stats=(363, 284, 272, 234, 238, 246))
+    wigglytuff = SimpleNamespace(species=40, level=54, hp=219, max_hp=219, egg=False, status=0,
+        moves=(47, 50, 33, 3), pp=(15, 20, 35, 10), stats=(219, 95, 54, 62, 94, 67))
+    snapshot = SimpleNamespace(party=(feraligatr, wigglytuff), stored=(), text='FIGHT', tiles=(),
+        map=real_data.map_ids['WHIRL_ISLAND_LUGIA_CHAMBER'], in_battle=1, enemy_species=249, enemy_hp=60,
+        enemy_max_hp=141, enemy_level=40, owned=set(), can_catch=True, badges=65535, money=10000,
+        roamers=(), pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
+    memory = {}
+    mem = SimpleNamespace(byte=lambda name: memory.get(name, 0), word=lambda name: 120,
+                          read=lambda name, size: memory.get(name, (0,) * size))
+    policy.battle(snapshot, mem)
+    assert policy.switching == 1
+    # Once it sleeps, no switch to a chipper: switching would spend a sleep turn.
+    policy.switching, memory['wEnemyMonStatus'], snapshot.enemy_hp = None, 5, 141
+    policy.battle(snapshot, mem)
+    assert policy.switching is None
+
+
+def test_master_ball_waits_for_the_roaming_beasts(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    roamer = {'species': 244, 'level': 40, 'map': real_data.map_ids['ROUTE_36']}
+    snapshot = SimpleNamespace(enemy_species=249, owned={249}, roamers=(roamer,))
+    assert 'MASTER BALL' not in policy.ball_labels(snapshot)
+    snapshot.owned = {244}
+    assert policy.ball_labels(snapshot)[-1] == 'MASTER BALL'
+    snapshot.enemy_species = 244
+    assert policy.ball_labels(snapshot)[0] == 'MASTER BALL'
+
+
+def test_static_lead_is_the_sleeper_most_likely_to_land_sleep(real_data, monkeypatch):
+    from pokesim.gen2 import teams
+    from pokesim.gen2.quests import static_lead, static_level
+    from pokesim.gen2.policy import Policy, Goal
+    monkeypatch.setattr(teams, 'key', lambda mon: mon.name)
+    policy = Policy(real_data)
+    def mon(species, level, moves, stats, box=None):
+        return SimpleNamespace(species=species, level=level, moves=moves, pp=tuple(10 if m else 0 for m in moves),
+            egg=False, box=box, stats=stats, trainer_id=1, dvs=(level, 0, 0, 0), name=real_data.species[species]['name'],
+            held_item=0, hp=stats[0])
+    feraligatr = mon(160, 100, (57, 250, 15, 70), (363, 284, 272, 234, 238, 246))
+    gloom = mon(44, 21, (71, 79, 77, 78), (59, 37, 37, 25, 44, 40), box=7)
+    wigglytuff = mon(40, 54, (47, 50, 111, 3), (219, 95, 54, 62, 94, 67), box=10)
+    snapshot = SimpleNamespace(party=[feraligatr], stored=[gloom, wigglytuff], map=real_data.map_ids['CIANWOOD_CITY'],
+                               x=1, y=1, active_box=0)
+    policy.storage_goal = lambda snapshot: Goal('storage', 'PC', 'CIANWOOD_POKECENTER_1F', 3, 1, 'up')
+    assert static_level(real_data, 249) == (40 if real_data.game == 'silver' else 70 if real_data.game == 'gold' else 60)
+    goal = static_lead(policy, snapshot, 249, Goal)
+    assert goal.key == 'collection_activity_team'
+    assert policy.collection['activity_team'] == ['Feraligatr', 'Wigglytuff']
+    # Once it is in the party the sleeper moves to the front.
+    snapshot.party, snapshot.stored = [feraligatr, wigglytuff], [gloom]
+    wigglytuff.box = None
+    assert static_lead(policy, snapshot, 249, Goal).key == 'collection_static_lead'
+    snapshot.party = [wigglytuff, feraligatr]
+    assert static_lead(policy, snapshot, 249, Goal) is None
