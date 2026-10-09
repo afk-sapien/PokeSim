@@ -878,8 +878,30 @@ class Collection:
             return object_goal('collect_amber','Collect Old Amber','Revive Aerodactyl at the Cinnabar lab','MUSEUM_1F','SCIENTIST2')
         return None
 
+    _partner_cache = [None, ()]
+
     @staticmethod
     def partner_matches(s, project):
+        """Every held copy of the project's trainee.
+
+        Several planners ask on each step and the answer reads the whole PC, so it is kept until
+        the party, the PC or the trainee changes. Callers get their own rows.
+        """
+        scoped = bool(project.get('scoped_partner'))
+        key = (tuple(s.party), getattr(s, 'stored_details', None), getattr(s, 'stored_pokemon', None),
+               project.get('trainee_key'), scoped, tuple(project['family']) if scoped else None,
+               project.get('trainee_nick') if scoped else None)
+        try:
+            hash(key)
+        except TypeError:
+            return Collection._partner_matches(s, project)
+        cache = Collection._partner_cache
+        if cache[0] != key:
+            cache[:] = [key, tuple(Collection._partner_matches(s, project))]
+        return [dict(row) for row in cache[1]]
+
+    @staticmethod
+    def _partner_matches(s, project):
         from ..trade.preferences import identity
         from pokesim_core.identity import pokemon_identity
         key = project.get('trainee_key')

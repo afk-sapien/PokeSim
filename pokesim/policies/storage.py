@@ -29,8 +29,9 @@ class StorageController:
             protected.add(project['parent'])
         if project.get('method') == 'trade':
             protected.add(project['give'])
+        # Nothing is reserved without trade preferences, so the PC rows are only read when some exist.
         reserved = {(mon['box'], mon['position']) for mon in snapshot.storage_entries()
-                    if preferences.get(identity(mon), {}).get('state') in ('offered', 'locked')}
+                    if preferences.get(identity(mon), {}).get('state') in ('offered', 'locked')} if preferences else set()
         return release_target(snapshot, protected, reserved)
 
     @staticmethod

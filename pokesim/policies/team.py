@@ -53,8 +53,27 @@ def spare_copies(s, protected=()):
             spare_entries([asdict(mon) for mon in s.party], s.storage_entries(), protected)]
 
 
+_RELEASE = [None, None]
+
+
 def release_target(s, protected=(), reserved=()):
-    """Reduce the most numerous species first, keeping its best copy and all protections."""
+    """Reduce the most numerous species first, keeping its best copy and all protections.
+
+    This ranks every stored copy and is asked on every step while storage is tight, so the
+    answer is kept until the party, the PC or the protections change.
+    """
+    key = (tuple(s.party), getattr(s, 'stored_details', None), getattr(s, 'stored_pokemon', None),
+           frozenset(protected), frozenset(reserved))
+    try:
+        hash(key)
+    except TypeError:
+        return _release_target(s, protected, reserved)
+    if _RELEASE[0] != key:
+        _RELEASE[:] = [key, _release_target(s, protected, reserved)]
+    return _RELEASE[1]
+
+
+def _release_target(s, protected, reserved):
     party = [asdict(mon) for mon in s.party]
     stored = s.storage_entries()
     counts = Counter(mon['species'] for mon in [*party, *stored])
@@ -108,8 +127,33 @@ def next_opponent(s):
     return min(260, 256 + current + int(current < 4 and event_set(s.event_flags, flags[current])))
 
 
+_READINESS = {}
+
+
 def readiness(s, bit=None):
+    """Estimate the party against the next opponent, or the one ``bit`` names.
+
+    The planner asks several times per step, so each answer is kept until the opponent, the
+    party or the bag changes. Callers get their own copy, as a fresh estimate would give them.
+    """
     bit = bit or next_opponent(s)
+    tables = (id(SPECIES), id(MOVES), id(OPPONENTS), id(HEALING), id(ITEMS), damage, ranked_moves, effectiveness)
+    if _READINESS.get('tables') != tables or len(_READINESS) > 64:
+        _READINESS.clear()
+        _READINESS['tables'] = tables
+    key = (bit, tuple(s.party), tuple(s.items))
+    try:
+        hash(key)
+    except TypeError:
+        # Stand-in party members that cannot be hashed are estimated every time.
+        return _readiness(s, bit)
+    result = _READINESS.get(key)
+    if result is None:
+        result = _READINESS[key] = _readiness(s, bit)
+    return {**result, 'members': [dict(row) for row in result['members']], 'concerns': list(result['concerns'])}
+
+
+def _readiness(s, bit):
     name, species_name, level = OPPONENTS[bit]
     sid, data = next(((sid, data) for sid, data in SPECIES.items() if data.get('name') == species_name))
     hp, attack, defense, speed, special = data['stats']
