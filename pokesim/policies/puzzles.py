@@ -117,6 +117,8 @@ class BoulderPlanner:
         self.task = None
         # Searches that found no push plan, by task. Victory Road tries several tasks per step.
         self.failed = {}
+        # Walks, square classes and steps of the last search, valid while their inputs match.
+        self._context, self._walks, self._squares = None, {}, ({}, {}, {})
 
     def route(self, snapshot, navigation, task):
         world = WORLD[snapshot.map]
@@ -144,8 +146,15 @@ class BoulderPlanner:
         if known is not None and known[0] == failure and player in known[1]:
             return None
         # The tiles, objects and warps stay the same for the whole search, so each square is
-        # classified once instead of once per walk; the search runs thousands of walks.
-        tiles, floors, steps_between = {}, {}, {}
+        # classified once instead of once per walk; the search runs thousands of walks. They also
+        # stay the same across searches while nothing but the pushed boulder moves, and every push
+        # starts a new search that walks most of the same squares again, so the walks are kept
+        # until any of their inputs changes.
+        context = (task_key, id(world), frozenset(occupied), overrides)
+        if self._context != context or len(self._walks) > 4096:
+            self._context, self._walks, self._squares = context, {}, ({}, {}, {})
+        walks = self._walks
+        tiles, floors, steps_between = self._squares
         def tile(pos):
             if pos not in tiles:
                 tiles[pos] = navigation.active_tile(world, *pos)
@@ -164,7 +173,9 @@ class BoulderPlanner:
                                       and (world['tileset'], there, here) not in PAIR_COLLISIONS)
             return steps_between[key]
         def walk(origin, stone):
-            previous = {origin: None}
+            if (origin, stone) in walks:
+                return walks[origin, stone]
+            previous = walks[origin, stone] = {origin: None}
             queue = deque([origin])
             while queue:
                 point = queue.popleft()

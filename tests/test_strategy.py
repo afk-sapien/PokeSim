@@ -399,3 +399,31 @@ def test_boulder_search_that_failed_is_not_repeated_until_its_inputs_change():
     nav.tile_overrides[(s.map, 0, 0)] = 0
     assert planner.route(moved, nav, task) == BoulderPlanner().route(moved, nav, task)
     assert reads
+
+
+def test_boulder_searches_after_each_push_reuse_walks_and_match_a_fresh_planner():
+    from pokesim.policies.puzzles import BoulderPlanner
+    from pokesim.strategy_data import WORLD
+    s = snap(map=MAPS['VICTORY_ROAD_2F'], x=22, y=16,
+             party=(mon(moves=(70, 0, 0, 0)),),
+             event_flags=flags('EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'))
+    nav = Navigator()
+    nav.update_story(s)
+    nav.live_map = s.map
+    nav.live_positions = [(o[0], o[1]) for o in WORLD[s.map]['objects']]
+    task = ('BOULDER3', (9, 16))
+    index = next(i for i, obj in enumerate(WORLD[s.map]['objects']) if obj[4].endswith(task[0]))
+    planner = BoulderPlanner()
+    assert planner.route(s, nav, task) is not None
+    plan = list(planner.path)
+    walked = len(planner._walks)
+    # The cartridge moves the boulder before the player, so a push leaves a state the plan never
+    # named and the next step searches again. Every such search agrees with a fresh planner.
+    for (x, y, rx, ry), _ in plan[1::3]:
+        nav.live_positions[index] = (rx, ry)
+        here = snap(map=s.map, x=x, y=y, party=s.party, event_flags=s.event_flags)
+        planner.path.clear()
+        fresh = BoulderPlanner()
+        assert planner.route(here, nav, task) == fresh.route(here, nav, task)
+        assert list(planner.path) == list(fresh.path)
+    assert len(planner._walks) < walked * len(plan[1::3])
