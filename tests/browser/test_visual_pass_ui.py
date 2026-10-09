@@ -7,8 +7,8 @@ def gen2_state(status):
         state = status()
         game = state['game']
         partner = {**game['party'][0], 'nick': 'SHRIMPDESK', 'name': 'Staryu', 'dex': 120, 'level': 100}
-        egg = {**game['party'][0], 'nick': 'EGG', 'name': 'Sneasel', 'dex': 215, 'egg': True,
-               'type_names': ['Dark', 'Ice'], 'status_label': 'Egg'}
+        egg = {**game['party'][0], 'nick': 'EGG', 'name': 'Egg', 'dex': None, 'egg': True,
+               'type_names': [], 'status_label': 'Egg'}
         return {**state, 'build': {'revision': '95f4a11' + '0' * 33},
                 'game': {**game, 'party': [partner, egg], 'map_name': 'Azalea Pokémon Center 1F', 'dex_total': 251},
                 'game_clock': {'weekday': 'Tuesday', 'hours': 8, 'minutes': 14, 'time_of_day': 'Morning'},
@@ -28,7 +28,7 @@ def test_gen2_live_page_at_phone_width(page, game, monkeypatch):
     party = page.locator('#party')
     expect(party).to_contain_text('SHRIMPDESK')
     expect(party.locator('.egg-plate')).to_have_count(1)
-    expect(party).not_to_contain_text('Sneasel')
+    assert party.locator('img[src*="sprites/None"]').count() == 0
     assert party.locator('.mon-head .name').evaluate_all(
         'names => names.every(name => name.scrollWidth <= name.clientWidth)')
     heading = page.locator('#live-heading')

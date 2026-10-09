@@ -478,7 +478,7 @@ function renderPartnerDetail() {
   const xp = mon.experience
   const moves = (mon.move_details || []).map((move) => `<div class="move"><span class="nm">${esc(move.name)}</span><span class="pp${move.pp ? '' : ' empty'}">${move.pp}/${move.max_pp} PP</span></div>`).join('')
   const stats = Object.entries(mon.stats || {}).map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${fmt(value)}</dd></div>`).join('')
-  const portrait = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png?v=rom-portraits-1" alt="">` : '<span class="plate-num">?</span>'
+  const portrait = mon.egg ? PokemonTypes.eggPlate : mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png?v=rom-portraits-1" alt="">` : '<span class="plate-num">?</span>'
   set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${portrait}</div><p class="micro">Partner ${selectedPartner.index + 1} · Level ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><div class="type-tags">${PokemonTypes.badges(mon.type_names)}${PokemonTypes.shinyBadge(mon)}</div><p>${esc(mon.name)} · ${mon.hp} / ${mon.max_hp} HP · ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><section><h3 class="micro">Moves</h3><div class="moves">${moves || '<p class="no-moves">No moves yet.</p>'}</div></section><section><h3 class="micro">Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${xp.max_level ? 'MAX LEVEL' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}</section>`)
   fitSprites($('#partner-detail-content'))
 }
