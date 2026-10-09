@@ -4,6 +4,21 @@ from copy import deepcopy
 from .. import config
 from .ram import Memory
 
+NOTICES = 'gen2-legendary-retry-notices-v1'
+
+
+def first_notice(store, species, attempt):
+    """True once per (species, attempt).
+
+    Recovery state travels with each checkpoint, so a reload can reopen the same miss again. The
+    encounter must reopen in the restored RAM, but the player has already been told about it.
+    """
+    notices = store.get(NOTICES) or {}
+    if notices.get(str(species), 0) >= attempt:
+        return False
+    store.set(NOTICES, {**notices, str(species): attempt})
+    return True
+
 
 class Recovery:
     def __init__(self, state=None):

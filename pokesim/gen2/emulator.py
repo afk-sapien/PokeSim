@@ -330,6 +330,7 @@ class Emulator:
         self.statistics.observe(snapshot)
         if not self.store.get('trade_hold') and not self.preparation and not self.manual_mode:
             from . import returns
+            from .legendary import first_notice
             walking = self.steps.value
             notices, changed = returns.observe(self.store, snapshot, self.pb.memory, walking)
             activity, reopened = returns.observe_events(self.store, snapshot, self.pb.memory, walking)
@@ -339,6 +340,8 @@ class Emulator:
                 self._event(event, snapshot)
             for species in self.legendary_recovery.observe(snapshot, self.pb.memory, repeat=ready, blocked=closed):
                 changed = True
+                if not first_notice(self.store, species, self.legendary_recovery.attempts.get(str(species), 0)):
+                    continue
                 self._event(Event('legendary_retry', f'{self.data.species[species]["name"]} can be encountered again',
                     'The encounter ended without a catch. Used supplies and adventure progress are preserved.'), snapshot)
             if changed or reopened:

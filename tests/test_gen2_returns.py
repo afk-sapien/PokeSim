@@ -208,6 +208,32 @@ def test_recovery_restarts_the_gs_ball_quest_after_a_first_celebi_miss(world, mo
     assert recovery.observe(snap, world.memory) == [] and '251' not in recovery.pending
 
 
+def test_a_reload_does_not_repeat_return_or_retry_notices(world):
+    from pokesim.gen2.legendary import Recovery, first_notice
+    from pokesim.gen2.returns import observe
+    snap = world.snapshot
+    flags = ('EVENT_FOUGHT_LUGIA', 'EVENT_WHIRL_ISLAND_LUGIA_CHAMBER_LUGIA')
+    for flag in flags:
+        world.flag(flag)
+    snap.owned = {249}
+    world.walk(100)
+    assert [event.title for event in observe(world.store, snap, world.memory)[0]] == ['Lugia has returned!']
+    # A stuck-recovery reload restores RAM from before the return; the claim is already announced.
+    saved = bytes(world.memory.raw)
+    for flag in flags:
+        world.flag(flag)
+    assert observe(world.store, snap, world.memory)[0] == []
+    world.memory.raw[:] = saved
+    # The restored checkpoint carries the Recovery state from before its retry, so the same retry runs again.
+    state = {'pending': {'249': 0}, 'attempts': {'249': 1}}
+    for _ in range(2):
+        for flag in flags:
+            world.flag(flag)
+        assert Recovery(state).observe(snap, world.memory, repeat={249}) == [249]
+    assert first_notice(world.store, 249, 1) and not first_notice(world.store, 249, 1)
+    assert first_notice(world.store, 249, 2)
+
+
 @pytest.mark.parametrize('key, dex, flags', [
     ('sudowoodo', 185, ('EVENT_FOUGHT_SUDOWOODO', 'EVENT_ROUTE_36_SUDOWOODO')),
     ('snorlax', 143, ('EVENT_FOUGHT_SNORLAX', 'EVENT_VERMILION_CITY_SNORLAX'))])
