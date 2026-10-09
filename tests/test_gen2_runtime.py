@@ -715,6 +715,47 @@ def test_slow_capture_partner_throws_a_ball_before_the_roamer_flees(real_data):
     assert policy.capture_move(snapshot, mem) is None
 
 
+def test_faster_roamer_lead_traps_then_sleeps_and_never_paralyzes(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    # Gengar with Thunder Wave, Mean Look, Hypnosis and Night Shade, faster than Entei.
+    lead = SimpleNamespace(species=94, level=40, status=0, moves=(86, 212, 95, 101),
+        pp=(20, 5, 20, 15), stats=(120, 60, 60, 110, 120, 80))
+    snapshot = SimpleNamespace(party=(lead,), enemy_species=244, enemy_hp=150, enemy_max_hp=150,
+        pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
+    memory = {'wEnemyMonSpeed': 97}
+    mem = SimpleNamespace(byte=lambda name: memory.get(name, 0), word=lambda name: memory.get(name, 0))
+    assert policy.capture_move(snapshot, mem) == 1
+    memory['wPlayerSubStatus5'] = 128
+    assert policy.capture_move(snapshot, mem) == 2
+    memory['wEnemyMonStatus'] = 3
+    assert policy.capture_move(snapshot, mem) is None
+    # Without a sleep move the lead throws balls rather than paralyzing or hitting the beast.
+    memory['wEnemyMonStatus'] = 0
+    lead.pp = (20, 5, 0, 15)
+    assert policy.capture_move(snapshot, mem) is None
+
+
+def test_roamer_lead_is_the_cheapest_sleeper_that_outspeeds_the_beasts(real_data):
+    from pokesim.gen2.quests import roam_lead, roamer_speed
+    from pokesim.gen2.ram import calculated_stats, experience_at
+    policy = SimpleNamespace(data=real_data, memory=None)
+    def mon(species, level, moves, box=None):
+        return SimpleNamespace(species=species, level=level, moves=moves, pp=tuple(10 if m else 0 for m in moves),
+            egg=False, box=box, dvs=(15,) * 5, stat_exp=(0,) * 5,
+            experience=experience_at(level, real_data.species[species]['growth']))
+    feraligatr = mon(160, 100, (57, 0, 0, 0))
+    gengar = mon(94, 30, (122, 109, 101, 95), box=2)
+    drowzee = mon(96, 30, (95, 1, 0, 0), box=2)
+    wanted = [{'species': 244, 'level': 40, 'map': 0}]
+    snapshot = SimpleNamespace(party=(feraligatr,), stored=(gengar, drowzee))
+    chosen, level = roam_lead(policy, snapshot, wanted)
+    assert chosen is gengar
+    assert calculated_stats(real_data.species[94]['stats'], level, gengar.dvs, gengar.stat_exp)[3] > roamer_speed(policy, 244, 40)
+    assert calculated_stats(real_data.species[94]['stats'], level - 1, gengar.dvs, gengar.stat_exp)[3] <= roamer_speed(policy, 244, 40)
+    assert roam_lead(policy, SimpleNamespace(party=(feraligatr,), stored=()), wanted) is None
+
+
 @pytest.mark.parametrize('species,button', [(185, 'a'), (143, 'a'), (19, 'b')])
 def test_last_balls_are_available_for_one_time_encounters(real_data, species, button):
     from pokesim.gen2.policy import Policy
@@ -1403,8 +1444,8 @@ def test_roamer_search_steps_toward_a_neighbour_of_the_beasts_route(real_data, m
     policy = SimpleNamespace(data=real_data, collection={}, decisions=0, memory=None,
         nav=SimpleNamespace(route=lambda start, end: [None] * (1 if end == ids['ROUTE_36'] else 5),
                             local=lambda *args, **kwargs: ['left'], visits={}))
-    snapshot = SimpleNamespace(map=ids['VIOLET_CITY'], x=1, y=8, owned=set(),
-        roamers=[{'species': 243, 'map': ids['ROUTE_37']}])
+    snapshot = SimpleNamespace(map=ids['VIOLET_CITY'], x=1, y=8, owned=set(), party=(), stored=(),
+        roamers=[{'species': 243, 'level': 40, 'map': ids['ROUTE_37']}])
     monkeypatch.setattr(collection, 'encounter_points', lambda *args: [(58, 8, None), (57, 8, None)])
     goal = roamers(policy, snapshot, Goal)
     # Route 36 neighbours the beast's Route 37 and is the nearest such route.
@@ -1412,7 +1453,7 @@ def test_roamer_search_steps_toward_a_neighbour_of_the_beasts_route(real_data, m
     snapshot.map, snapshot.x = ids['ROUTE_36'], 58
     snapshot.roamers[0]['map'] = snapshot.map
     goal = roamers(policy, snapshot, Goal)
-    assert (goal.key, goal.map_name, goal.x, goal.y) == ('collection_hunt', 'ROUTE_36', 57, 8)
+    assert (goal.key, goal.map_name, goal.x, goal.y) == ('collection_roam_hunt', 'ROUTE_36', 57, 8)
 
 
 def test_tower_training_does_not_finish_during_held_item_transfer(real_data, monkeypatch):
@@ -2002,3 +2043,28 @@ def test_real_lighthouse_jasmine_is_reached_while_amphy_blocks_the_near_side():
         frame += action.hold + action.gap
     assert policy.unreachable_waits == 0
     assert (read_snapshot(pb.memory, data, frame).x, read_snapshot(pb.memory, data, frame).y) != (9, 13)
+
+
+def test_a_sale_skips_a_shop_whose_clerk_has_left(real_data, monkeypatch):
+    # Clearing the Rocket hideout sets EVENT_TEAM_ROCKET_BASE_POPULATION, which hides Mahogany Mart's
+    # pharmacist for good; talking to his empty counter used to stall the sale forever.
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data, starter='cyndaquil')
+    mart = real_data.map_ids['MAHOGANY_MART_1F']
+    entry = real_data.maps[mart]
+    flags = {'EVENT_GAVE_MYSTERY_EGG_TO_ELM', 'EVENT_TEAM_ROCKET_BASE_POPULATION', 'EVENT_CLEARED_ROCKET_HIDEOUT'}
+    snapshot = SimpleNamespace(map=mart, x=3, y=4, money=121, badges=0xFFFF, party=[], pockets={'balls': ()},
+                               items=((real_data.items['TM30'], 1),), event=lambda name: name in flags)
+    pharmacist, granny = entry['shops']
+    assert not policy.clerk_present(snapshot, entry, pharmacist)
+    assert policy.clerk_present(snapshot, entry, granny)
+    chosen = []
+    monkeypatch.setattr(policy.nav.regions, 'route', lambda snap, mid, *args, **kwargs: [] if mid == mart else None)
+    monkeypatch.setattr(policy, 'person', lambda snap, key, label, name, script: chosen.append(script)
+                        or Goal(key, script, name, 3, 3, 'left'))
+    goal = policy.shop(snapshot)
+    assert (goal.key, goal.label) == ('sell_supplies', granny['script'])
+    assert pharmacist['script'] not in chosen
+    # Before the hideout falls the pharmacist runs the shop, so both counters stay open.
+    flags.discard('EVENT_TEAM_ROCKET_BASE_POPULATION')
+    assert policy.clerk_present(snapshot, entry, pharmacist)

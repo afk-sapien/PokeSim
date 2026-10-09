@@ -434,6 +434,6 @@ def arrive(policy, snapshot):
         else:
             policy.menu = FieldMove(slot, 'HEADBUTT' if move == 29 else 'ROCK SMASH')
         return 'wait'
-    if key in {'collection_wait', 'collection_hunt'}:
+    if key in {'collection_wait', 'collection_hunt', 'collection_roam_hunt', 'collection_roam_lead'}:
         return 'wait'
     return None

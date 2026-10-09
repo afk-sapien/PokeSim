@@ -571,6 +571,17 @@ class Policy:
         _, x, y, face = min(choices)
         return Goal('fish_surf', 'Catch a partner for field moves', map_name, x, y, face)
 
+    def clerk_present(self, snapshot, entry, shop):
+        """Whether a clerk running this shop's script is on the map.
+
+        A set event flag hides its object, so a shop whose every clerk is hidden cannot be used:
+        Mahogany Mart's Team Rocket pharmacist leaves for good once the hideout is cleared, and
+        the grandmother at the other counter takes over the shop.
+        """
+        return any(obj['script'] == shop['script']
+                   and (obj['event'] not in self.data.events or not snapshot.event(obj['event']))
+                   for obj in entry['objects'])
+
     def person(self, snapshot, key, label, map_name, script):
         mid = self.data.map_ids[map_name]
         entry = self.data.maps[mid]
@@ -716,6 +727,8 @@ class Policy:
                 if entry['region'] != self.travel_region(snapshot):
                     continue
                 for shop in entry['shops']:
+                    if not self.clerk_present(snapshot, entry, shop):
+                        continue
                     goal = self.person(snapshot, 'sell_supplies', 'Sell a spare item for capture supplies', entry['constant'], shop['script'])
                     route = self.nav.regions.route(snapshot, mid, [(goal.x, goal.y)],
                                                   cut=bool(snapshot.badges & 2), surf=bool(snapshot.badges & 8))
@@ -763,6 +776,8 @@ class Policy:
                                                              for _, dest, _, _ in route):
                     continue
                 for shop in entry['shops']:
+                    if not self.clerk_present(snapshot, entry, shop):
+                        continue
                     item = next((self.data.items[name] for name in names
                                  if self.data.items[name] in shop['items']
                                  and self.data.item_attributes[self.data.items[name]]['price'] <= snapshot.money - reserve), None)
@@ -873,7 +888,9 @@ class Policy:
             return Action('a', 8, 36)
         strongest = max((i for i, mon in enumerate(snapshot.party) if not mon.egg),
                         key=lambda i: snapshot.party[i].level, default=0)
-        if strongest and snapshot.party[strongest].level > snapshot.party[0].level + 5:
+        # A roaming-beast sleeper leads on purpose even when it is far below the rest of the party.
+        if (strongest and snapshot.party[strongest].level > snapshot.party[0].level + 5
+                and not self.collection.get('roam_lead')):
             mon = snapshot.party[strongest]
             self.menu = Lead(strongest, (mon.trainer_id, mon.dvs))
             return Action(None, 0, 24)
@@ -1276,6 +1293,21 @@ class Policy:
         mon = snapshot.party[min(mem.byte('wCurBattleMon') if slot is None else slot, len(snapshot.party) - 1)]
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
         if roaming and mon.stats[3] // (4 if mon.status & 64 else 1) <= mem.word('wEnemyMonSpeed'):
+            return None
+        if roaming:
+            # Beasts flee after a faster lead moves unless the lead has Mean Looked them or they sleep.
+            # Sleep is also the only status that raises the Gen II catch rate, so never paralyze or hit.
+            usable = [(index, self.data.moves.get(move, {})) for index, move in enumerate(mon.moves) if mon.pp[index]]
+            if not mem.byte('wPlayerSubStatus5') & 128:
+                trap = next((index for index, entry in usable if entry.get('effect') == 'EFFECT_MEAN_LOOK'), None)
+                if trap is not None:
+                    return trap
+            if not mem.byte('wEnemyMonStatus'):
+                sleep = [(entry['accuracy'], index) for index, entry in usable if entry.get('effect') == 'EFFECT_SLEEP'
+                         and all(self.data.matchups.get((entry['type'], kind), 1)
+                                 for kind in self.data.species[snapshot.enemy_species]['types'])]
+                if sleep:
+                    return max(sleep)[1]
             return None
         if not mem.byte('wEnemyMonStatus'):
             for index, move in enumerate(mon.moves):

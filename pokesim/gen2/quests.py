@@ -96,6 +96,104 @@ def roam_neighbours(data, mid):
     return tuple(data.map_ids[f'ROUTE_{route}'] for route in ROAM_MAPS[int(name[6:])])
 
 
+def roamer_speed(policy, species, level):
+    """The roaming beast's Speed, from its stored DVs once it has been met, else the highest possible.
+
+    Roamers carry no stat experience, and the cartridge keeps their DVs in the roam struct after the
+    first encounter, so the Speed stat is exact from then on.
+    """
+    from .ram import Memory
+    dv = 15
+    if policy.memory is not None and 'wRoamMon1' in policy.data.symbols:
+        mem = Memory(policy.memory, policy.data)
+        for index in (1, 2, 3):
+            raw = mem.read(f'wRoamMon{index}', 7)
+            if raw[0] == species and (raw[5] or raw[6]):
+                dv = raw[6] >> 4
+    return (policy.data.species[species]['stats'][3] + dv) * 2 * level // 100 + 5
+
+
+def sleep_move(data, mon, species):
+    """The most accurate sleep move this Pokémon can still use on the given species, as (accuracy, move)."""
+    moves = [(data.moves[move]['accuracy'], move) for move, pp in zip(mon.moves, mon.pp)
+             if pp and data.moves.get(move, {}).get('effect') == 'EFFECT_SLEEP'
+             and all(data.matchups.get((data.moves[move]['type'], kind), 1) for kind in data.species[species]['types'])]
+    return max(moves, default=None)
+
+
+def roam_lead(policy, snapshot, wanted):
+    """Pick the Pokémon that should lead against the roaming beasts, and the level it needs.
+
+    A roaming beast flees on its first turn before the player can act, unless the player's Pokémon
+    moves first. A faster lead that puts it to sleep stops the flight (TryEnemyFlee keeps a sleeping
+    or frozen opponent in battle), and sleep is also the only status that raises the catch chance in
+    Gen II. Mean Look or Spider Web on the same lead keeps the beast from leaving after it wakes. Only
+    sleep counts on the roamer: switching in a sleeper resets Mean Look and gives the beast its turn.
+    """
+    from .ram import calculated_stats, experience_at
+    data = policy.data
+    need = max(roamer_speed(policy, roamer['species'], roamer['level']) for roamer in wanted)
+    options = []
+    for mon in snapshot.party + snapshot.stored:
+        if mon.egg or mon.species not in data.species:
+            continue
+        sleep = [sleep_move(data, mon, roamer['species']) for roamer in wanted]
+        if None in sleep:
+            continue
+        base = data.species[mon.species]['stats']
+        level = mon.level
+        while level <= 100 and calculated_stats(base, level, mon.dvs, mon.stat_exp)[3] <= need:
+            level += 1
+        if level > 100:
+            continue
+        cost = max(0, experience_at(level, data.species[mon.species]['growth']) - mon.experience)
+        trap = any(pp and data.moves.get(move, {}).get('effect') == 'EFFECT_MEAN_LOOK' for move, pp in zip(mon.moves, mon.pp))
+        options.append(((cost, not trap, -min(sleep)[0], mon.box is not None, mon.level), mon, level))
+    if not options:
+        return None
+    _, mon, level = min(options, key=lambda row: row[0])
+    return mon, level
+
+
+def prepare_lead(policy, snapshot, wanted, Goal):
+    """Train, withdraw and lead with the roamer sleeper. None once it leads the party."""
+    from .menus import Lead
+    from .ram import Memory
+    from .teams import assemble, key
+    from .training import identity, journey as train
+    state, data = policy.collection, policy.data
+    choice = roam_lead(policy, snapshot, wanted)
+    if choice is None:
+        state.pop('roam_lead', None)
+        return None
+    mon, level = choice
+    if mon.level < level:
+        state.pop('roam_lead', None)
+        state['roam_started'] = policy.decisions  # Training time does not count against the search.
+        if policy.memory is None:
+            return None
+        if not state.get('training'):
+            state['training'] = {'identity': identity(mon), 'target': mon.species, 'item': None,
+                                 'species': mon.species, 'terminal': True, 'level_goal': level}
+        return train(policy, snapshot, Memory(policy.memory, data), Goal)
+    state['roam_lead'] = identity(mon)
+    if mon.box is not None:
+        team = [row for row in snapshot.party if not row.egg]
+        if len(team) >= 6:
+            counts = {move: sum(move in row.moves for row in team) for move in FIELD_MOVES}
+            team.remove(min(team[1:], key=lambda row: (sum(counts[move] == 1 for move in row.moves if move in FIELD_MOVES),
+                                                       row.held_item == data.items['EXP_SHARE'], row.level)))
+        return assemble(policy, snapshot, [key(row) for row in team] + [key(mon)], Goal,
+                        f'Bring {mon.name} to lead against the roaming beasts')
+    slot = snapshot.party.index(mon)
+    if slot:
+        if policy.menu is None:
+            policy.menu = Lead(slot, (mon.trainer_id, mon.dvs))
+        return Goal('collection_roam_lead', f'Lead with {mon.name} to put the roaming beasts to sleep',
+                    data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
+    return None
+
+
 def roamers(policy, snapshot, Goal):
     """Track the roaming beasts with the cartridge's own movement rule.
 
@@ -113,12 +211,17 @@ def roamers(policy, snapshot, Goal):
     if policy.decisions - started > 12000:
         state['roam_after'] = policy.decisions + 18000
         state.pop('roam_started', None)
+        state.pop('roam_lead', None)
         return None
     state.pop('roam_destination', None)
     wanted = [row for row in snapshot.roamers
               if row['species'] and row['species'] not in snapshot.owned and row['map'] in data.maps]
     if not wanted:
+        state.pop('roam_lead', None)
         return None
+    goal = prepare_lead(policy, snapshot, wanted, Goal)
+    if goal:
+        return goal
     for roamer in wanted:
         mid, species = roamer['map'], roamer['species']
         if mid != snapshot.map:
@@ -129,7 +232,7 @@ def roamers(policy, snapshot, Goal):
         point = next((p for p in points[:24] if p[:2] != (snapshot.x, snapshot.y)
                       and policy.nav.local(snapshot, [p[:2]], policy.memory, surf=True)), None)
         if point is not None:
-            return Goal('collection_hunt', f'Track {data.species[species]["name"]} through Johto',
+            return Goal('collection_roam_hunt', f'Track {data.species[species]["name"]} through Johto',
                         data.maps[mid]['constant'], *point[:2])
     excluded = {snapshot.map}
     if policy.memory is not None and 'wRoamMons_LastMapGroup' in data.symbols:
