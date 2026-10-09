@@ -1,6 +1,7 @@
 """Retry missed static encounters with the same resource preservation as Gen I."""
 from copy import deepcopy
 
+from .. import config
 from .ram import Memory
 
 
@@ -16,7 +17,7 @@ class Recovery:
 
     def observe(self, snapshot, memory, *, repeat=frozenset(), blocked=frozenset()):
         """Reopen a missed encounter. `repeat` holds walking returns that are owned but not yet caught again."""
-        from .returns import encounter, roaming
+        from .returns import celebi_spent, encounter, roaming, rooms
         data = snapshot.data
         delta = min(120, max(0, snapshot.frame - self.previous)) if self.previous is not None else 0
         self.previous = snapshot.frame
@@ -29,13 +30,19 @@ class Recovery:
         roamers = {row['species'] for row in getattr(snapshot, 'roamers', ())}
         encounters += [(dex, None, None) for dex in (243, 244, 245) if roaming(data, dex)]
         mem, events = Memory(memory, data), []
+        if data.game == 'crystal' and getattr(config, 'CELEBI_EVENT', False) and mem.byte('sGSBallFlag') == 0x0b:
+            # The GS Ball quest ends after one shrine battle, so a miss restarts it at Goldenrod.
+            encounters.append((251, None, None))
         for species, room, flag in encounters:
             key = str(species)
             if species in snapshot.owned and species not in repeat or species in blocked:
                 self.pending.pop(key, None)
                 continue
-            unresolved = (not snapshot.event('EVENT_FOUGHT_' + flag) if room
-                          else not beasts or species in roamers)
+            if species == 251:
+                unresolved = not celebi_spent(snapshot, data)
+            else:
+                unresolved = (not snapshot.event('EVENT_FOUGHT_' + flag) if room
+                              else not beasts or species in roamers)
             if unresolved:
                 self.pending.pop(key, None)
                 continue
@@ -43,7 +50,7 @@ class Recovery:
                 self.attempts[key] = self.attempts.get(key, 0) + 1
                 self.pending[key] = min(180000, 36000 * self.attempts[key])
             self.pending[key] = max(0, self.pending[key] - delta)
-            if (self.pending[key] or room and snapshot.map == data.map_ids[room]
+            if (self.pending[key] or snapshot.map in rooms(data, species)
                     or mem.byte('wScriptRunning') or '┌' in snapshot.tiles[12]):
                 continue
             encounter(memory, data, species, present=True)

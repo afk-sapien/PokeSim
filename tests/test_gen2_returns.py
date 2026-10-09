@@ -184,6 +184,30 @@ def test_recovery_repeats_returned_legendaries_and_rearms_missed_roamers(world):
     assert world.memory.raw[data.symbols['wRoamMon2'][1]:][:5] == bytes((244, 40, mid >> 8, mid & 0xFF, 0))
 
 
+def test_recovery_restarts_the_gs_ball_quest_after_a_first_celebi_miss(world, monkeypatch):
+    from pokesim import config
+    from pokesim.gen2.legendary import Recovery
+    data, snap = world.data, world.snapshot
+    if data.game != 'crystal':
+        pytest.skip('The GS Ball quest is Crystal only')
+    for flag in ('EVENT_GOT_GS_BALL_FROM_GOLDENROD_POKEMON_CENTER', 'EVENT_GAVE_GS_BALL_TO_KURT'):
+        world.flag(flag)
+    recovery = Recovery({'pending': {'251': 0}, 'attempts': {'251': 1}})
+    # Without the custom GS Ball event there is no quest to restart.
+    assert recovery.observe(snap, world.memory) == []
+    monkeypatch.setattr(config, 'CELEBI_EVENT', True, raising=False)
+    world.memory.raw[data.symbols['sGSBallFlag'][1]] = 0x0b
+    snap.map = data.map_ids['ILEX_FOREST']
+    assert recovery.observe(snap, world.memory) == []
+    snap.map = data.map_ids['ROUTE_34']
+    assert recovery.observe(snap, world.memory) == [251]
+    assert not world.event('EVENT_GOT_GS_BALL_FROM_GOLDENROD_POKEMON_CENTER')
+    assert not world.event('EVENT_GAVE_GS_BALL_TO_KURT')
+    # A quest still in progress is left alone.
+    recovery = Recovery({'pending': {'251': 0}, 'attempts': {'251': 1}})
+    assert recovery.observe(snap, world.memory) == [] and '251' not in recovery.pending
+
+
 @pytest.mark.parametrize('key, dex, flags', [
     ('sudowoodo', 185, ('EVENT_FOUGHT_SUDOWOODO', 'EVENT_ROUTE_36_SUDOWOODO')),
     ('snorlax', 143, ('EVENT_FOUGHT_SNORLAX', 'EVENT_VERMILION_CITY_SNORLAX'))])
