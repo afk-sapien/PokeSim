@@ -1,10 +1,87 @@
 """Collect missing hatchlings through the cartridge's two parent Day Care."""
+from collections import Counter
 from copy import deepcopy
+from functools import lru_cache
 from itertools import combinations
 
 from .menus import ChangeBox, DayCare, Storage
 from .training import FIELD_MOVES, identity
 from .ram import calculated_stats, experience_at
+
+
+DITTO = 132
+HAPPINESS_TO_EVOLVE = 220
+
+
+@lru_cache(maxsize=8)
+def families(data):
+    """Every species mapped to its whole evolution family, babies included."""
+    parents = {evo['species']: sid for sid, row in data.species.items() for evo in row['evolutions']}
+    result = {}
+    for species in data.species:
+        root = species
+        while root in parents:
+            root = parents[root]
+        result.setdefault(root, set()).add(species)
+    return {species: frozenset(members) for members in result.values() for species in members}
+
+
+@lru_cache(maxsize=8)
+def single_source(data):
+    """Families this cartridge never offers in the wild, keyed by member.
+
+    Bill's Eevee, Togepi, Kiyo's Tyrogue, Sudowoodo, Snorlax, Lapras and Pokémon that arrived by cable
+    appear once per save. The Day Care is the only way to make another copy, so a family whose members
+    can still breed is worth keeping a parent of and breeding again whenever a copy is wanted.
+    """
+    wild = {row['species'] for row in data.encounters}
+    return {species: family for species, family in families(data).items()
+            if not family & wild and any('NONE' not in data.species[sid]['egg_groups'] for sid in family)}
+
+
+def lines(data, baby):
+    """Each later stage of ``baby`` with the species along its way and the methods that reach it."""
+    result, stack = [], [(baby, frozenset({baby}), frozenset())]
+    while stack:
+        species, path, methods = stack.pop()
+        for evo in data.species[species]['evolutions']:
+            row = (evo['species'], path | {evo['species']}, methods | {evo['method']})
+            result.append(row)
+            stack.append(row)
+    return result
+
+
+def breeding_stock(data, species):
+    """Species whose only held copy should stay home as a Day Care parent.
+
+    ``species`` lists every held Pokémon that is not an egg. The last Ditto pairs with anything, and the
+    last member of a family with no wild source is the only way to breed that family again.
+    """
+    held, single = Counter(species), single_source(data)
+    keep = {DITTO} if held[DITTO] == 1 else set()
+    for sid, count in held.items():
+        if count == 1 and sid in single and sum(held[member] for member in single[sid]) == 1:
+            keep.add(sid)
+    return keep
+
+
+def free_slots(snapshot):
+    counts = getattr(snapshot, 'box_counts', None)
+    return 99 if counts is None else sum(max(0, 20 - count) for count in counts)
+
+
+def descendants_wanted(data, snapshot, demand, baby):
+    """Whether cable demand for a later stage of a single source family needs another hatchling.
+
+    Another adventure asking for Espeon, Umbreon or a Hitmon can only be served by breeding an Eevee or a
+    Tyrogue and raising it here. Stone evolutions are left out because a cartridge has few of each stone.
+    """
+    if baby not in single_source(data):
+        return False
+    held = snapshot.party + snapshot.stored
+    return any(demand.get(target) and 'item' not in methods
+               and sum(mon.species in path for mon in held) <= demand[target]
+               for target, path, methods in lines(data, baby))
 
 
 def retrieval_cost(data, snapshot):
@@ -139,7 +216,8 @@ def pairings(policy, snapshot):
     kept until one of them changes.
     """
     data, parents = policy.data, snapshot.daycare
-    key = (snapshot.party, snapshot.stored, parents, frozenset(snapshot.owned), tuple(sorted(policy.demand.items())))
+    room = free_slots(snapshot) >= 3
+    key = (snapshot.party, snapshot.stored, parents, frozenset(snapshot.owned), tuple(sorted(policy.demand.items())), room)
     cached = getattr(policy, '_breeding_pairings', None)
     if cached is not None and cached[0] == key:
         return cached[1]
@@ -150,6 +228,8 @@ def pairings(policy, snapshot):
         babies = offspring(data, first, second)
         missing = babies - snapshot.owned
         for baby in babies:
+            if descendants_wanted(data, snapshot, policy.demand, baby):
+                missing.add(baby)
             if (policy.demand.get(baby, 0) and sum(mon.species == baby for mon in snapshot.party + snapshot.stored)
                     <= policy.demand[baby]):
                 missing.add(baby)
@@ -172,6 +252,9 @@ def pairings(policy, snapshot):
             if not ready:
                 missing.add(baby)
         for target in missing:
+            if target in snapshot.owned and not room:
+                # A spare copy needs a box slot for each egg and parent shuffle, or the PC errand loops.
+                continue
             choices.append((target, first.box is not None, second.box is not None, identity(first), identity(second),
                             first.species, second.species))
     policy._breeding_pairings = (key, choices)
