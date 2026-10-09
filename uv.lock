@@ -612,7 +612,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "pillow", specifier = ">=10" },
     { name = "playwright", marker = "extra == 'browser-test'", specifier = ">=1.50" },
-    { name = "pokesim-core", extras = ["emulator"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')", url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.3.0/pokesim_core-0.3.0-py3-none-any.whl" },
+    { name = "pokesim-core", extras = ["emulator"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')", path = "tools/temp-wheels/pokesim_core-0.6.0-py3-none-any.whl" },
     { name = "psutil", specifier = ">=7,<8" },
     { name = "pyboy-rs", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" },
     { name = "pyboy-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" },
@@ -626,10 +626,10 @@ provides-extras = ["dev", "browser-test", "acceleration"]
 
 [[package]]
 name = "pokesim-core"
-version = "0.3.0"
-source = { url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.3.0/pokesim_core-0.3.0-py3-none-any.whl" }
+version = "0.6.0"
+source = { path = "tools/temp-wheels/pokesim_core-0.6.0-py3-none-any.whl" }
 wheels = [
-    { url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.3.0/pokesim_core-0.3.0-py3-none-any.whl", hash = "sha256:3b22434cca8985f7d262a644f677fdbd1b48d37883ab1605bd85f56fadf2e3e9" },
+    { filename = "pokesim_core-0.6.0-py3-none-any.whl", hash = "sha256:935660bcc135e2b91ca623f0aea5d52d662f7f62b4011e6dc9212eb825b8cb6e" },
 ]
 
 [package.optional-dependencies]
