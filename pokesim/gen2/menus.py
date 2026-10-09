@@ -1,6 +1,17 @@
-"""Cartridge menu operations driven by observed labels and menu cursors."""
-from dataclasses import dataclass
+"""Cartridge menu operations for Gold, Silver and Crystal.
+
+Item, mart, PC, party and battle menus run Core shortcut machines one input per policy step.
+The tasks kept here cover menus Core has no shortcut for: box changes, the radio, the Move
+Deleter, the Day Care and showing a Pokémon to a person.
+"""
+from dataclasses import KW_ONLY, dataclass, fields
 import re
+
+from pokesim_core.shortcuts import (BuyItem, ChooseMove, DepositPokemon, Done, FieldMove as CoreFieldMove,
+                                    GiveItem, ReorderParty, RunAway, SellItem, SwitchPokemon, TakeItem, UseItem,
+                                    WithdrawPokemon, current_screen)
+from pokesim_core.shortcuts.machine import BACKABLE
+from pokesim_core.shortcuts.screens import normalize
 
 from .screens import has_word
 
@@ -9,10 +20,6 @@ MAX_STEPS = 600
 RADIO_MAX_STEPS = 300
 # A slot session is hundreds of rounds, so it is capped on a long run and on no visible change.
 SLOT_MAX_STEPS = 12000
-
-
-def selected(rows):
-    return next((row.split('▶', 1)[1].strip() for row in rows if '▶' in row), '')
 
 
 def menu_label(row):
@@ -52,265 +59,6 @@ def choose(rows, label, *, exact=False):
 
 
 @dataclass
-class Teach:
-    move: int
-    slot: int
-    phase: str = 'open'
-    steps: int = 0
-    replace_move: int | None = None
-    member: list | None = None
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        if self.steps > MAX_STEPS:
-            return None
-        rows, text = snapshot.tiles, snapshot.text
-        mon = tracked(self, snapshot)
-        party_menu = 'CANCEL' in text and 'ABLE' in text and any(row.lstrip().startswith('▶') for row in rows)
-        if party_menu:
-            if mem.byte('wPutativeTMHMMove') != self.move:
-                self.phase = 'pack'
-                return 'b'
-            self.phase = 'confirm'
-        if mon is None or self.move in mon.moves:
-            self.phase = 'exit'
-        if self.phase == 'exit':
-            return 'b' if '┌' in rows[12] or 'CANCEL' in text or 'PACK' in text else None
-        if self.phase == 'open':
-            if 'PACK' in text:
-                action = choose(rows, 'PACK')
-                if action == 'a':
-                    self.phase = 'pack'
-                return action or 'b'
-            if '┌' in rows[12] or any(label in text for label in ('TURN OFF', 'CHANGE BOX', 'CANCEL')):
-                return 'b'
-            return 'start'
-        if self.phase == 'pack':
-            if not any('▶' in row for row in rows[:12]):
-                return 'wait'
-            if mem.byte('wCurPocket') != 3:
-                return 'right'
-            label = snapshot.data.moves[self.move]['name'].upper()
-            action = choose(rows, label, exact=True)
-            if action == 'a':
-                self.phase = 'use'
-            if action:
-                return action
-            aliases = snapshot.data.items
-            key = snapshot.data.moves[self.move].get('constant', label.replace(' ', '_').replace('-', '_'))
-            item = aliases.get('TM_' + key, aliases.get('HM_' + key))
-            target = next((i for i in range(1, 58)
-                           if aliases.get(f'TM{i:02d}' if i <= 50 else f'HM{i - 50:02d}') == item), 57)
-            visible = [(int(m[2]) + (50 if m[1] else 0), index) for index, row in enumerate(rows[:12])
-                       if (m := re.match(r'(H?)(\d+)[ ▶▷]', row[5:]))]
-            index = next((index for number, index in visible if number == target), None)
-            cursor = next((i for i, row in enumerate(rows[:12]) if '▶' in row), None)
-            if index is not None and cursor is not None:
-                if index == cursor:
-                    self.phase = 'use'
-                    return 'a'
-                return 'down' if index > cursor else 'up'
-            return 'up' if visible and target < min(number for number, _ in visible) or selected(rows) == 'CANCEL' else 'down'
-        if self.phase == 'use':
-            if 'USE' in text:
-                self.phase = 'confirm'
-                return choose(rows, 'USE') or 'a'
-            if '┌' in rows[12]:
-                self.phase = 'confirm'
-            return 'wait'
-        if self.phase == 'confirm':
-            if 'YES' in text and 'NO' in text:
-                self.phase = 'learn'
-                return choose(rows, 'YES', exact=True) or 'a'
-            if party_menu:
-                cursor = next((i // 2 + 1 for i, row in enumerate(rows) if '▶' in row), 1)
-                target = self.slot + 1
-                if cursor == target:
-                    self.phase = 'learn'
-                    return 'a'
-                return 'down' if cursor < target else 'up'
-            return 'a'
-        if self.phase == 'learn':
-            if 'TYPE/' in text or '▶' in text and 'Which move' in text:
-                protected = {15, 19, 57, 70, 148, 250, 127}
-                target = min(range(4), key=lambda i: 999 if mon.moves[i] in protected else snapshot.data.moves.get(mon.moves[i], {}).get('power', 0)) + 1
-                if self.replace_move in mon.moves and self.replace_move not in protected:
-                    target = mon.moves.index(self.replace_move) + 1
-                cursor = mem.byte('wMenuCursorY')
-                return 'a' if cursor == target else 'down' if cursor < target else 'up'
-            return 'a'
-        return None
-
-
-@dataclass
-class Buy:
-    item: int
-    amount: int
-    initial: int
-    phase: str = 'greet'
-    steps: int = 0
-    exit_steps: int = 0
-    clear_frames: int = 0
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        count = dict(snapshot.items).get(self.item, 0)
-        rows, text = snapshot.tiles, snapshot.text
-        price = snapshot.data.item_attributes[self.item]['price']
-        # Never ask for something the wallet cannot cover: the clerk only answers "You don't have
-        # enough money." and the shop would offer the same item again.
-        if count > self.initial or self.steps > 240 or snapshot.money < price:
-            self.phase = 'exit'
-        if self.phase == 'exit':
-            # The clerk's box can be blank for a frame between "Here you go!" and "Anything else?".
-            # Leave only after the shop screen has stayed away for several frames, never on one gap.
-            self.exit_steps += 1
-            showing = '┌' in rows[12] or 'CANCEL' in text or 'BUY' in text or bool(mem.byte('wScriptRunning'))
-            self.clear_frames = 0 if showing else self.clear_frames + 1
-            return 'b' if self.clear_frames < 3 and self.exit_steps <= 40 else None
-        if self.phase == 'greet':
-            if 'BUY' in text:
-                self.phase = 'list'
-                return choose(rows, 'BUY') or 'a'
-            return 'a'
-        if self.phase == 'list':
-            label = snapshot.data.item_names[self.item].upper().replace('POKE ', 'POKé ')
-            action = choose(rows, label, exact=True)
-            if action == 'a':
-                self.phase = 'quantity'
-            return action or 'down'
-        if self.phase == 'quantity':
-            if '×' not in text:
-                return 'a'
-            quantity = mem.byte('wItemQuantityChange')
-            target = min(self.amount, snapshot.money // price)
-            if quantity == target:
-                self.phase = 'confirm'
-                return 'a'
-            return 'up' if quantity < target else 'down'
-        return 'a'
-
-
-@dataclass
-class Sell:
-    item: int
-    initial: int
-    phase: str = 'greet'
-    steps: int = 0
-    exit_steps: int = 0
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        rows, text = snapshot.tiles, snapshot.text
-        if dict(snapshot.items).get(self.item, 0) < self.initial or self.steps > 240:
-            self.phase = 'exit'
-        if self.phase == 'exit':
-            self.exit_steps += 1
-            return 'b' if self.exit_steps < 12 else None
-        if self.phase == 'greet':
-            if 'BUY' in text and 'SELL' in text:
-                button = choose(rows, 'SELL', exact=True)
-                if button == 'a':
-                    self.phase = 'pack'
-                return button or 'a'
-            return 'a'
-        if self.phase == 'pack':
-            if not any('▶' in row for row in rows[:12]):
-                return 'wait'
-            machine = next((i for i in range(1, 51) if snapshot.data.items.get(f'TM{i:02d}') == self.item), None)
-            pocket = 3 if machine else 0
-            if mem.byte('wCurPocket') != pocket:
-                return 'right' if pocket else 'left'
-            if machine:
-                visible = [(int(m[1]), index) for index, row in enumerate(rows[:12])
-                           if (m := re.match(r'(\d+)[ ▶▷]', row[5:]))]
-                index = next((index for number, index in visible if number == machine), None)
-                cursor = next((i for i, row in enumerate(rows) if '▶' in row), None)
-                button = ('a' if index == cursor else 'down' if index > cursor else 'up') if index is not None and cursor is not None else (
-                    'up' if visible and machine < min(number for number, _ in visible) or selected(rows) == 'CANCEL' else 'down')
-            else:
-                button = choose(rows, snapshot.data.item_names[self.item], exact=True) or 'down'
-            if button == 'a':
-                self.phase = 'confirm'
-            return button
-        return choose(rows, 'YES', exact=True) or 'a'
-
-
-@dataclass
-class Use:
-    item: int
-    pocket: int = 2
-    phase: str = 'open'
-    steps: int = 0
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        if self.steps > MAX_STEPS:
-            return None
-        rows, text = snapshot.tiles, snapshot.text
-        if self.item not in dict(snapshot.items):
-            return 'b' if '┌' in rows[12] or 'PACK' in text or 'CANCEL' in text else None
-        if self.phase == 'open':
-            if 'PACK' in text:
-                action = choose(rows, 'PACK')
-                if action == 'a':
-                    self.phase = 'pack'
-                return action or 'b'
-            return 'start'
-        if self.phase == 'pack':
-            if not any('▶' in row for row in rows[:12]):
-                return 'wait'
-            if mem.byte('wCurPocket') != self.pocket:
-                return 'right'
-            action = choose(rows, snapshot.data.item_names[self.item].upper(), exact=True)
-            if action == 'a':
-                self.phase = 'use'
-            return action or 'down'
-        if self.phase == 'use':
-            if 'USE' in text:
-                self.phase = 'finish'
-                return choose(rows, 'USE') or 'a'
-            return 'a'
-        return None
-
-
-@dataclass
-class Storage:
-    operation: str
-    slot: int
-    initial_count: int
-    phase: str = 'open'
-    steps: int = 0
-    exit_steps: int = 0
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        if self.steps > MAX_STEPS:
-            return None
-        rows, text = snapshot.tiles, snapshot.text
-        if len(snapshot.party) != self.initial_count:
-            self.phase = 'exit'
-        if self.phase == 'exit':
-            self.exit_steps += 1
-            return 'b' if self.exit_steps < 12 else None
-        if 'TURN OFF' in text:
-            return choose(rows, 'BILL') or choose(rows, 'SOMEONE') or 'a'
-        if 'CHANGE BOX' in text:
-            self.phase = 'list'
-            return choose(rows, self.operation) or 'a'
-        if 'STATS' in text and self.operation in text:
-            self.phase = 'confirm'
-            return choose(rows, self.operation) or 'a'
-        if self.phase == 'list' and ('Choose' in text or 'CANCEL' in text):
-            cursor = mem.byte('wBillsPC_CursorPosition') + mem.byte('wBillsPC_ScrollPosition')
-            if cursor == self.slot:
-                self.phase = 'submenu'
-                return 'a'
-            return 'down' if cursor < self.slot else 'up'
-        return 'a'
-
-
-@dataclass
 class Forget:
     slot: int
     move: int
@@ -342,62 +90,6 @@ class Forget:
                     self.phase = 'confirm'
                 return action
         return 'a'
-
-
-@dataclass
-class Remedy:
-    item: int
-    slot: int
-    initial: int
-    phase: str = 'open'
-    steps: int = 0
-    exit_steps: int = 0
-    member: list | None = None
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        if self.steps > MAX_STEPS:
-            return None
-        rows, text = snapshot.tiles, snapshot.text
-        if dict(snapshot.items).get(self.item, 0) < self.initial or tracked(self, snapshot) is None:
-            self.phase = 'exit'
-        if self.phase == 'exit':
-            if snapshot.in_battle:
-                return None
-            self.exit_steps += 1
-            return 'b' if self.exit_steps < 12 else None
-        if self.phase == 'open':
-            if snapshot.in_battle and 'FIGHT' in text and 'TYPE' not in text:
-                if mem.byte('wMenuCursorX') > 1:
-                    return 'left'
-                if mem.byte('wMenuCursorY') < 2:
-                    return 'down'
-                self.phase = 'pack'
-                return 'a'
-            if 'PACK' in text:
-                action = choose(rows, 'PACK')
-                if action == 'a':
-                    self.phase = 'pack'
-                return action or 'wait'
-            if not snapshot.in_battle and ('┌' in rows[12] or any(label in text for label in ('TURN OFF', 'CHANGE BOX', 'CANCEL'))):
-                return 'b'
-            return 'a' if snapshot.in_battle else 'start'
-        if self.phase == 'pack':
-            if 'USE' in text:
-                self.phase = 'party'
-                return choose(rows, 'USE') or 'a'
-            if not any('▶' in row for row in rows[:12]):
-                return 'wait'
-            if mem.byte('wCurPocket') != 0:
-                return 'left'
-            label = snapshot.data.item_names[self.item].upper()
-            return choose(rows, label, exact=True) or 'down'
-        if self.phase == 'party':
-            if 'CANCEL' in text and '▶' in text and ('/' in text or 'ABLE' in text):
-                cursor = next((i // 2 for i, row in enumerate(rows) if '▶' in row), 0)
-                return 'a' if cursor == self.slot else 'down' if cursor < self.slot else 'up'
-            return 'a'
-        return None
 
 
 @dataclass
@@ -470,48 +162,6 @@ class Radio:
 
 
 @dataclass
-class Lead:
-    slot: int
-    identity: tuple
-    phase: str = 'open'
-    steps: int = 0
-    exit_steps: int = 0
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        wanted = (self.identity[0], tuple(self.identity[1]))
-        slots = [i for i, mon in enumerate(snapshot.party) if (mon.trainer_id, tuple(mon.dvs)) == wanted]
-        # Follow the Pokémon rather than its old slot, which a deposit or trade may have moved.
-        if slots:
-            self.slot = slots[0]
-        if not slots or self.slot == 0 or self.steps > 180:
-            self.phase = 'exit'
-        rows, text = snapshot.tiles, snapshot.text
-        if self.phase == 'exit':
-            self.exit_steps += 1
-            return 'b' if self.exit_steps < 8 else None
-        if self.phase == 'open':
-            if 'POKéMON' in text and 'PACK' in text:
-                button = choose(rows, 'POKéMON')
-                if button == 'a':
-                    self.phase = 'party'
-                return button or 'wait'
-            return 'start'
-        if self.phase == 'party':
-            if 'STATS' in text and 'SWITCH' in text:
-                button = choose(rows, 'SWITCH', exact=True)
-                if button == 'a':
-                    self.phase = 'switch'
-                return button or 'wait'
-            if 'CANCEL' in text and '/' in text:
-                cursor = mem.byte('wMenuCursorY') - 1
-                return 'a' if cursor == self.slot else 'down' if cursor < self.slot else 'up'
-            return 'wait'
-        cursor = mem.byte('wMenuCursorY') - 1
-        return 'a' if cursor == 0 else 'up'
-
-
-@dataclass
 class DayCare:
     parent: int
     slot: int | None = None
@@ -533,177 +183,6 @@ class DayCare:
 
 
 @dataclass
-class FieldMove:
-    slot: int
-    label: str
-    phase: str = 'open'
-    steps: int = 0
-    member: list | None = None
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        rows, text = snapshot.tiles, snapshot.text
-        if self.phase in {'open', 'party'} and tracked(self, snapshot) is None:
-            self.phase = 'exit'
-        if self.steps > 180 or self.phase == 'exit':
-            return 'b' if 'CANCEL' in text or 'PACK' in text or '┌' in rows[12] else None
-        if self.phase == 'open':
-            if 'POKéMON' in text and 'PACK' in text:
-                button = choose(rows, 'POKéMON')
-                if button == 'a':
-                    self.phase = 'party'
-                return button or 'wait'
-            return 'start'
-        if self.phase == 'party':
-            if 'STATS' in text and 'SWITCH' in text:
-                button = choose(rows, self.label, exact=True)
-                if button == 'a':
-                    self.phase = 'using'
-                return button or 'b'
-            if 'CANCEL' in text and '/' in text:
-                cursor = next((i // 2 for i, row in enumerate(rows) if '▶' in row), 0)
-                return 'a' if cursor == self.slot else 'down' if cursor < self.slot else 'up'
-            return 'wait'
-        if '┌' in rows[12]:
-            return 'a'
-        return None
-
-
-@dataclass
-class Fly:
-    slot: int
-    target: int
-    origin: int
-    destination: int
-    phase: str = 'open'
-    steps: int = 0
-    map_wait: int = 0
-    member: list | None = None
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        if self.steps > 180 or self.phase in {'open', 'party'} and tracked(self, snapshot) is None:
-            self.phase = 'exit'
-        rows, text = snapshot.tiles, snapshot.text
-        if self.phase == 'open':
-            if 'POKéMON' in text and 'PACK' in text:
-                button = choose(rows, 'POKéMON')
-                if button == 'a':
-                    self.phase = 'party'
-                return button or 'wait'
-            return 'start'
-        if self.phase == 'party':
-            if 'STATS' in text and 'SWITCH' in text:
-                button = choose(rows, 'FLY', exact=True)
-                if button == 'a':
-                    self.phase = 'map'
-                return button or 'b'
-            if 'CANCEL' in text and '/' in text:
-                cursor = next((i // 2 for i, row in enumerate(rows) if '▶' in row), 0)
-                return 'a' if cursor == self.slot else 'down' if cursor < self.slot else 'up'
-            return 'wait'
-        if self.phase == 'map':
-            self.map_wait += 1
-            if self.map_wait < 5:
-                return 'wait'
-            if not mem.byte('wStartFlypoint') <= self.target <= mem.byte('wEndFlypoint'):
-                self.phase = 'exit'
-                return 'b'
-            current = mem.byte('wTownMapPlayerIconLandmark')
-            if current == self.target:
-                self.phase = 'flying'
-                return 'a'
-            return 'up'
-        if self.phase == 'flying':
-            if snapshot.map == self.destination:
-                return None
-            return 'wait'
-        return 'b' if 'CANCEL' in text or 'PACK' in text or '┌' in rows[12] else None
-
-
-@dataclass
-class Give:
-    item: int
-    slot: int
-    phase: str = 'open'
-    steps: int = 0
-    exit_steps: int = 0
-    member: list | None = None
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        rows, text = snapshot.tiles, snapshot.text
-        mon = tracked(self, snapshot)
-        if mon is None or mon.held_item == self.item or self.steps > 240:
-            self.phase = 'exit'
-        if self.phase == 'exit':
-            self.exit_steps += 1
-            return 'b' if self.exit_steps < 12 else None
-        if self.phase == 'open':
-            if 'PACK' in text:
-                action = choose(rows, 'PACK')
-                if action == 'a':
-                    self.phase = 'pack'
-                return action or 'wait'
-            if '┌' in rows[12] or any(label in text for label in ('TURN OFF', 'CHANGE BOX', 'CANCEL')):
-                return 'b'
-            return 'start'
-        if self.phase == 'pack':
-            if 'GIVE' in text:
-                action = choose(rows, 'GIVE', exact=True)
-                if action == 'a':
-                    self.phase = 'party'
-                return action or 'wait'
-            if not any('▶' in row for row in rows[:12]):
-                return 'wait'
-            if mem.byte('wCurPocket') != 0:
-                return 'left'
-            return choose(rows, snapshot.data.item_names[self.item].upper(), exact=True) or 'down'
-        if 'YES' in text and 'NO' in text:
-            return choose(rows, 'YES', exact=True) or 'a'
-        if 'CANCEL' in text and '▶' in text and '/' in text:
-            cursor = next((i // 2 for i, row in enumerate(rows) if '▶' in row), 0)
-            return 'a' if cursor == self.slot else 'down' if cursor < self.slot else 'up'
-        return 'a'
-
-
-@dataclass
-class Take:
-    slot: int
-    phase: str = 'open'
-    steps: int = 0
-    exit_steps: int = 0
-    member: list | None = None
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        rows, text = snapshot.tiles, snapshot.text
-        mon = tracked(self, snapshot)
-        if mon is None or not mon.held_item or self.steps > 240:
-            self.phase = 'exit'
-        if self.phase == 'exit':
-            self.exit_steps += 1
-            return 'b' if self.exit_steps < 12 else None
-        if self.phase == 'open':
-            if 'PACK' in text:
-                action = choose(rows, 'POKéMON')
-                if action == 'a':
-                    self.phase = 'party'
-                return action or 'wait'
-            if '┌' in rows[12] or any(label in text for label in ('TURN OFF', 'CHANGE BOX', 'CANCEL')):
-                return 'b'
-            return 'start'
-        if 'TAKE' in text:
-            return choose(rows, 'TAKE', exact=True) or 'a'
-        if 'STATS' in text and 'SWITCH' in text:
-            return choose(rows, 'ITEM', exact=True) or 'a'
-        if 'CANCEL' in text and '▶' in text and '/' in text:
-            cursor = next((i // 2 for i, row in enumerate(rows) if '▶' in row), 0)
-            return 'a' if cursor == self.slot else 'down' if cursor < self.slot else 'up'
-        return 'a'
-
-
-@dataclass
 class ShowPartner:
     slot: int
     event: str
@@ -720,3 +199,342 @@ class ShowPartner:
             cursor = mem.byte('wMenuCursorY') - 1
             return 'a' if cursor == self.slot else 'down' if cursor < self.slot else 'up'
         return choose(snapshot.tiles, 'YES', exact=True) or 'a'
+
+
+def restore(cls, state):
+    """Rebuild a saved task, ignoring fields an older version of the task kept."""
+    names = {field.name for field in fields(cls)}
+    return cls(**{key: value for key, value in state.items() if key in names})
+
+
+# Moves a taught machine never replaces: the HMs the journey needs, Flash and Headbutt.
+PROTECTED_MOVES = frozenset({15, 19, 57, 70, 148, 250, 127})
+# The in-game Fly map names of fly points whose map has another name.
+FLY_NAMES = {'Route 10 North': 'ROUTE 10', 'Route 23': 'INDIGO PLATEAU', 'Silver Cave Outside': 'SILVER CAVE'}
+
+
+def fly_name(data, index):
+    name = data.maps[data.fly_points[index]['map']]['name']
+    return FLY_NAMES.get(name, name.upper())
+
+
+class KeepNickname(UseItem):
+    """A ball throw that leaves the nickname prompt to the policy, which names caught Pokémon."""
+
+    def prompt_answer(self, obs):
+        if 'NICKNAME' in normalize(' '.join(self.recent[-3:] + [obs.text])):
+            return None
+        return super().prompt_answer(obs)
+
+
+@dataclass
+class CoreTask:
+    """Drive one Core shortcut machine from the policy's per-step loop.
+
+    The machine is rebuilt after a checkpoint restore, since only the dataclass fields are
+    saved. ``finished`` guards against repeating an effect that already happened. Mart and PC
+    tasks first reach the clerk's or the PC's menu and press B back to the overworld afterwards.
+    """
+    _: KW_ONLY
+    phase: str = 'start'
+    steps: int = 0
+    exit_steps: int = 0
+
+    battle = False
+    # Screens the machine starts from. None lets the machine open the menus itself.
+    start = None
+    leave = False
+
+    def build(self, snapshot):
+        raise NotImplementedError
+
+    def finished(self, snapshot):
+        return False
+
+    def after(self, done):
+        """Called once with the machine's Done."""
+
+    def approach(self, screen):
+        if self.start is None:
+            if screen in ('pc', 'mart', 'menu', 'yes_no', 'players_pc'):
+                return 'b'
+            return None
+        if screen in BACKABLE or screen == 'yes_no':
+            return 'b'
+        return 'a'
+
+    def step(self, snapshot, mem):
+        self.steps += 1
+        if self.phase == 'exit':
+            return self.exit(mem)
+        machine = getattr(self, 'machine', None)
+        if machine is None:
+            if self.steps > MAX_STEPS or self.finished(snapshot):
+                return self.end(mem)
+            version = snapshot.data.game
+            screen = current_screen(mem.memory, version)
+            if self.start is None or screen not in self.start:
+                button = self.approach(screen)
+                if button and self.steps < 60:
+                    return button
+            machine = self.machine = self.build(snapshot)
+            if machine is None:
+                return self.end(mem)
+        action = machine.step(mem.memory, None)
+        if isinstance(action, Done):
+            self.result = action
+            self.after(action)
+            return self.end(mem)
+        return 'wait' if action is None else action
+
+    def end(self, mem):
+        if self.leave:
+            self.phase = 'exit'
+            return 'wait'
+        return None
+
+    def exit(self, mem):
+        """Press B until the overworld shows on two steps in a row."""
+        self.exit_steps += 1
+        resting = current_screen(mem.memory, mem.data.game) == 'overworld'
+        self.clear = getattr(self, 'clear', 0) + 1 if resting else 0
+        if self.clear >= 2 or self.exit_steps > 40:
+            return None
+        return 'wait' if resting else 'b'
+
+    def key(self):
+        """What the task asks for, so a refused request is not repeated at once."""
+        return (type(self).__name__, *(getattr(self, field.name) for field in fields(self) if not field.kw_only
+                                       and field.name not in ('initial', 'initial_count', 'member', 'box_full')
+                                       and isinstance(getattr(self, field.name), (int, str))))
+
+    @staticmethod
+    def options(snapshot):
+        return {'version': snapshot.data.game}
+
+
+@dataclass
+class Teach(CoreTask):
+    move: int
+    slot: int
+    replace_move: int | None = None
+    member: list | None = None
+
+    def finished(self, snapshot):
+        mon = tracked(self, snapshot)
+        return mon is None or self.move in mon.moves
+
+    def build(self, snapshot):
+        data = snapshot.data
+        key = data.moves[self.move].get('constant', data.moves[self.move]['name'].upper().replace(' ', '_'))
+        item = data.items.get('TM_' + key, data.items.get('HM_' + key))
+        if item is None:
+            return None
+        mon = snapshot.party[self.slot]
+        forget = None
+        if all(mon.moves):
+            forget = min(range(4), key=lambda i: 999 if mon.moves[i] in PROTECTED_MOVES
+                         else data.moves.get(mon.moves[i], {}).get('power', 0))
+            if self.replace_move in mon.moves and self.replace_move not in PROTECTED_MOVES:
+                forget = mon.moves.index(self.replace_move)
+        return UseItem(item, self.slot, forget_move=forget, **self.options(snapshot))
+
+
+@dataclass
+class Buy(CoreTask):
+    item: int
+    amount: int
+    initial: int
+
+    start = ('mart',)
+    leave = True
+
+    def finished(self, snapshot):
+        return dict(snapshot.items).get(self.item, 0) > self.initial
+
+    def build(self, snapshot):
+        price = snapshot.data.item_attributes[self.item]['price']
+        # Never ask for more than the wallet covers or the pack holds.
+        amount = min(self.amount, snapshot.money // price if price else self.amount, 99 - self.initial)
+        return BuyItem(self.item, amount, **self.options(snapshot)) if amount > 0 else None
+
+
+@dataclass
+class Sell(CoreTask):
+    item: int
+    initial: int
+
+    start = ('mart',)
+    leave = True
+
+    def finished(self, snapshot):
+        return dict(snapshot.items).get(self.item, 0) < self.initial
+
+    def build(self, snapshot):
+        return SellItem(self.item, 1, **self.options(snapshot))
+
+
+@dataclass
+class Use(CoreTask):
+    item: int
+
+    def finished(self, snapshot):
+        return self.item not in dict(snapshot.items)
+
+    def build(self, snapshot):
+        return UseItem(self.item, **self.options(snapshot))
+
+
+@dataclass
+class Storage(CoreTask):
+    operation: str
+    slot: int
+    initial_count: int
+    box_full: bool = False
+
+    start = ('pc', 'bills_pc')
+    leave = True
+
+    def finished(self, snapshot):
+        return len(snapshot.party) != self.initial_count
+
+    def build(self, snapshot):
+        shortcut = DepositPokemon if self.operation == 'DEPOSIT' else WithdrawPokemon
+        return shortcut(self.slot, **self.options(snapshot))
+
+    def after(self, done):
+        # The policy changes to a box with room and starts the deposit again.
+        self.box_full = not done.completed and 'box is full' in done.outcome.lower()
+
+
+@dataclass
+class Remedy(CoreTask):
+    item: int
+    slot: int
+    initial: int
+    member: list | None = None
+
+    battle = True
+
+    def finished(self, snapshot):
+        return dict(snapshot.items).get(self.item, 0) < self.initial or tracked(self, snapshot) is None
+
+    def build(self, snapshot):
+        return UseItem(self.item, self.slot, **self.options(snapshot))
+
+
+@dataclass
+class Lead(CoreTask):
+    slot: int
+    identity: tuple
+
+    def finished(self, snapshot):
+        # Follow the Pokémon rather than its old slot, which a deposit or trade may have moved.
+        wanted = (self.identity[0], tuple(self.identity[1]))
+        slots = [i for i, mon in enumerate(snapshot.party) if (mon.trainer_id, tuple(mon.dvs)) == wanted]
+        if slots:
+            self.slot = slots[0]
+        return not slots or self.slot == 0
+
+    def build(self, snapshot):
+        return ReorderParty(self.slot, 0, **self.options(snapshot))
+
+
+@dataclass
+class FieldMove(CoreTask):
+    slot: int
+    label: str
+    member: list | None = None
+
+    def finished(self, snapshot):
+        return tracked(self, snapshot) is None
+
+    def build(self, snapshot):
+        return CoreFieldMove(self.label, self.slot, **self.options(snapshot))
+
+
+@dataclass
+class Fly(CoreTask):
+    slot: int
+    target: int
+    origin: int
+    destination: int
+    member: list | None = None
+
+    def finished(self, snapshot):
+        return snapshot.map == self.destination or tracked(self, snapshot) is None
+
+    def build(self, snapshot):
+        return CoreFieldMove('FLY', self.slot, fly_name(snapshot.data, self.target), **self.options(snapshot))
+
+
+@dataclass
+class Give(CoreTask):
+    item: int
+    slot: int
+    member: list | None = None
+
+    def finished(self, snapshot):
+        mon = tracked(self, snapshot)
+        return mon is None or mon.held_item == self.item
+
+    def build(self, snapshot):
+        return GiveItem(self.item, self.slot, swap=True, **self.options(snapshot))
+
+
+@dataclass
+class Take(CoreTask):
+    slot: int
+    member: list | None = None
+
+    def finished(self, snapshot):
+        mon = tracked(self, snapshot)
+        return mon is None or not mon.held_item
+
+    def build(self, snapshot):
+        return TakeItem(self.slot, **self.options(snapshot))
+
+
+@dataclass
+class Throw(CoreTask):
+    """Throw a ball in a wild battle."""
+    item: int
+
+    battle = True
+
+    def build(self, snapshot):
+        return KeepNickname(self.item, **self.options(snapshot))
+
+
+@dataclass
+class Send(CoreTask):
+    """Send out a party member in battle, from the battle menu or the forced party screen."""
+    slot: int
+
+    battle = True
+
+    def build(self, snapshot):
+        return SwitchPokemon(self.slot, **self.options(snapshot))
+
+
+@dataclass
+class Attack(CoreTask):
+    """Choose a move from FIGHT."""
+    slot: int
+
+    battle = True
+
+    def build(self, snapshot):
+        return ChooseMove(self.slot, **self.options(snapshot))
+
+
+@dataclass
+class Flee(CoreTask):
+    battle = True
+
+    def build(self, snapshot):
+        return RunAway(**self.options(snapshot))
+
+
+TASKS = {cls.__name__: cls for cls in (Teach, Buy, Sell, Use, Storage, Remedy, Lead, FieldMove, Fly, Give, Take,
+                                       Throw, Send, Attack, Flee, Forget, ChangeBox, Radio, DayCare, ShowPartner)}

@@ -262,28 +262,11 @@ def test_hm_pack_label_ignores_decorative_tiles():
     assert choose(rows, 'STRENGTH', exact=True) == 'up'
 
 
-def test_teaching_uses_visible_party_selection_and_advances_learning_text():
-    from pokesim.gen2.menus import Teach
-    rows = [''] * 18
-    rows[1], rows[2] = '   CROCONAW', 'Lv26 ABLE'
-    rows[3], rows[4] = '▶  TOGEPI', 'Lv5 NOT ABLE'
-    rows[13] = ' CANCEL'
-    job = Teach(15, 0, 'confirm')
-    mem = SimpleNamespace(byte=lambda name: 15 if name == 'wPutativeTMHMMove' else 0)
-    snapshot = SimpleNamespace(tiles=rows, text='\n'.join(rows), party=[SimpleNamespace(moves=(10, 43, 55, 44))])
-    assert job.step(snapshot, mem) == 'up'
-    rows[3], rows[1], rows[16] = '   TOGEPI', '▷  CROCONAW', '1, 2 and… Poof!'
-    snapshot.text = '\n'.join(rows)
-    job.phase = 'learn'
-    assert job.step(snapshot, mem) == 'a'
-    assert job.phase == 'learn'
-
-
 def test_policy_checkpoint_retains_active_menu(real_data):
     from pokesim.gen2.policy import Policy
     from pokesim.gen2.menus import Teach
     policy = Policy(real_data, starter='totodile')
-    policy.menu = Teach(70, 0, 'learn', 23)
+    policy.menu = Teach(70, 0, 23)
     policy.learning = True
     policy.interaction = (263, 4, 3)
     restored = Policy(real_data, starter='cyndaquil')
@@ -340,15 +323,6 @@ def test_menu_labels_ignore_background_beside_dialogue_and_pack():
     from pokesim.gen2.menus import choose
     assert choose(('  ザザザ│▶Weak person │', 'ぷザザ  │ Anybody     │'), 'Anybody', exact=True) == 'down'
     assert choose(('グギガゲゴ   FULL RESTORE', '       ▶CANCEL'), 'FULL RESTORE', exact=True) == 'up'
-
-
-def test_machine_search_scrolls_back_from_hms_to_an_earlier_tm(real_data):
-    from pokesim.gen2.menus import Teach
-    rows = ('     H3 SURF', '     H7 WATERFALL', '       ▶CANCEL')
-    snapshot = SimpleNamespace(tiles=rows, text='\n'.join(rows), data=real_data,
-                               party=[SimpleNamespace(moves=(15, 70, 76, 34))])
-    job = Teach(231, 0, phase='pack')
-    assert job.step(snapshot, SimpleNamespace(byte=lambda name: 3)) == 'up'
 
 
 def test_kanto_objectives_use_scripts_available_in_every_version(real_data):
@@ -475,36 +449,29 @@ def test_pack_labels_match_the_cartridge_poke_accent():
     assert choose(('▶POKé BALL', ' CANCEL'), 'POKÉ BALL', exact=True) == 'a'
 
 
-def test_battle_switch_submenu_is_not_the_party_slot_selector(real_data):
+def started(policy):
+    """Report a Core battle shortcut by what it asks for, since fake memory cannot drive it."""
+    policy.battle_task = lambda task, snapshot, mem: SimpleNamespace(button=task.key())
+    return policy
+
+
+def test_battle_switch_submenu_without_a_shortcut_is_closed(real_data):
     from pokesim.gen2.policy import Policy
     rows = ('▷ MOPTAX', '│ SWITCH│', '│ STATS │', '│▶CANCEL│')
     snapshot = SimpleNamespace(text='\n'.join(rows), tiles=rows, party=[], in_battle=2,
                                enemy_species=161, owned=set(), can_catch=True, pockets={'balls': [], 'key': []})
     policy = Policy(real_data)
     policy.needed_move = lambda snapshot: 57
-    policy.switching = 5
-    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: 0)).button == 'up'
+    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: 0)).button == 'b'
 
 
-def test_fainted_voluntary_switch_target_is_replanned(real_data):
+def test_refused_switch_text_is_closed(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
     policy.needed_move = lambda snapshot: 57
-    policy.switching = 1
     snapshot = SimpleNamespace(text='There is no will to battle!', tiles=(), party=[], in_battle=2,
                                enemy_species=161, owned=set(), can_catch=True, pockets={'balls': []})
     assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: 0)).button == 'b'
-    assert policy.switching is None
-
-
-def test_teaching_does_not_select_background_party_under_confirmation(real_data):
-    from pokesim.gen2.menus import Teach
-    rows = ('▷ PARTNER ABLE', 'CANCEL', '│▶YES│', '│ NO │', 'move to make room for SURF?') + ('',) * 13
-    snapshot = SimpleNamespace(tiles=rows, text='\n'.join(rows), data=real_data,
-                               party=[SimpleNamespace(moves=(64, 127, 48, 30))])
-    menu = Teach(57, 0, phase='learn')
-    assert menu.step(snapshot, SimpleNamespace(byte=lambda name: 1)) == 'a'
-    assert menu.phase == 'learn'
 
 
 def test_tyrogue_training_selects_the_actual_stat_branch(real_data):
@@ -705,23 +672,22 @@ def test_capture_weakening_rejects_a_lethal_lead_move(real_data):
 
 def test_ditto_capture_intent_survives_transform_into_an_owned_species(real_data):
     from pokesim.gen2.policy import Policy
-    policy = Policy(real_data)
+    policy = started(Policy(real_data))
     policy.needed_move = lambda snapshot: 0
     policy.capture_move = lambda *args: None
+    policy.remedy = lambda *args, **kwargs: False
     policy.collection['prerequisites'] = [132]
-    rows = [''] * 18
-    rows[4], rows[5], rows[6] = '▶POKé BALL', '× 20', 'CANCEL'
-    snapshot = SimpleNamespace(party=(), stored=(), text='\n'.join(rows), tiles=rows,
+    snapshot = SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
         in_battle=1, enemy_species=157, owned={132, 157}, can_catch=True, badges=65535, money=10000,
         pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
     mem = SimpleNamespace(byte=lambda name: 8 if name == 'wEnemySubStatus5' else 1)
-    assert policy.battle(snapshot, mem).button == 'a'
+    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
 
 
 @pytest.mark.parametrize('field,value', [('wEnemySubStatus5', 128), ('wPlayerWrapCount', 2)])
 def test_trapped_partner_does_not_retry_an_impossible_switch(real_data, field, value):
     from pokesim.gen2.policy import Policy
-    policy = Policy(real_data)
+    policy = started(Policy(real_data))
     policy.needed_move = lambda snapshot: 0
     policy.move_score = lambda move, mon, target: int(mon.species != 160)
     policy.remedy = lambda *args, **kwargs: False
@@ -730,17 +696,12 @@ def test_trapped_partner_does_not_retry_an_impossible_switch(real_data, field, v
         map=real_data.map_ids['SILVER_CAVE_ROOM_2'], in_battle=1, enemy_species=200,
         owned={200}, pockets={'balls': ()})
     mem = SimpleNamespace(byte=lambda name: value if name == field else int(name in {'wMenuCursorX', 'wMenuCursorY'}))
-    assert policy.battle(snapshot, mem).button == 'a'
-    assert policy.switching is None
-    snapshot.text = 'STATS SWITCH'
-    policy.switching = 1
-    assert policy.battle(snapshot, mem).button == 'b'
-    assert policy.switching is None
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
 
 
 def test_roamer_capture_does_not_spend_its_turn_switching_to_a_helper(real_data):
     from pokesim.gen2.policy import Policy
-    policy = Policy(real_data)
+    policy = started(Policy(real_data))
     policy.needed_move = lambda snapshot: 0
     policy.capture_move = lambda snapshot, mem, slot=None: None if slot is None else 0
     policy.move_score = lambda *args: 1
@@ -751,8 +712,7 @@ def test_roamer_capture_does_not_spend_its_turn_switching_to_a_helper(real_data)
         enemy_max_hp=140, enemy_level=40, owned=set(), can_catch=True, badges=65535, money=10000,
         pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
     mem = SimpleNamespace(byte=lambda name: 1 if name in {'wMenuCursorX', 'wMenuCursorY'} else 0)
-    assert policy.battle(snapshot, mem).button == 'down'
-    assert policy.switching is None
+    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['ULTRA_BALL'])
 
 
 def test_slow_capture_partner_throws_a_ball_before_the_roamer_flees(real_data):
@@ -807,18 +767,18 @@ def test_roamer_lead_is_the_cheapest_sleeper_that_outspeeds_the_beasts(real_data
     assert roam_lead(policy, SimpleNamespace(party=(feraligatr,), stored=()), wanted) is None
 
 
-@pytest.mark.parametrize('species,button', [(185, 'a'), (143, 'a'), (19, 'b')])
-def test_last_balls_are_available_for_one_time_encounters(real_data, species, button):
+@pytest.mark.parametrize('species,throw', [(185, True), (143, True), (19, False)])
+def test_last_balls_are_available_for_one_time_encounters(real_data, species, throw):
     from pokesim.gen2.policy import Policy
-    policy = Policy(real_data)
+    policy = started(Policy(real_data))
     policy.needed_move = lambda snapshot: 0
     policy.capture_move = lambda *args: None
-    rows = [''] * 18
-    rows[4], rows[5], rows[6] = '▶POKé BALL', '× 1', 'CANCEL'
-    snapshot = SimpleNamespace(party=(), stored=(), text='\n'.join(rows), tiles=rows,
+    policy.remedy = lambda *args, **kwargs: False
+    snapshot = SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
         in_battle=1, enemy_species=species, owned=set(), can_catch=True, badges=4, money=0,
         pockets={'balls': [(real_data.items['POKE_BALL'], 1)]})
-    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: 1)).button == button
+    button = policy.battle(snapshot, SimpleNamespace(byte=lambda name: 1)).button
+    assert button == (('Throw', real_data.items['POKE_BALL']) if throw else 'a')
 
 
 def test_slot_machine_leaves_when_the_prize_budget_is_reached():
@@ -966,14 +926,6 @@ def test_trade_evolution_item_replacement_requires_an_explicit_request(real_data
     assert available_trade_item(real_data, 123, coat, inventory, replace_held=True) is None
     assert available_trade_item(real_data, 123, berry, {}, replace_held=True) is None
     assert inventory == {coat: 1}
-
-
-def test_native_held_item_swap_selects_yes_even_when_the_cursor_is_on_no():
-    from pokesim.gen2.menus import Give
-    rows = [''] * 18
-    rows[4], rows[6] = ' YES', '▶NO'
-    snapshot = SimpleNamespace(party=(SimpleNamespace(held_item=83),), tiles=rows, text='\n'.join(rows))
-    assert Give(143, 0, phase='party').step(snapshot, None) == 'up'
 
 
 def test_trade_preparation_closes_the_pc_after_link_closed_text(real_data, monkeypatch):
@@ -1462,15 +1414,6 @@ def test_imported_legends_do_not_require_the_local_wing_quest(monkeypatch):
     assert legends(SimpleNamespace(), snapshot, None) is None
 
 
-def test_item_menu_exits_when_the_requested_item_is_unavailable():
-    from pokesim.gen2.menus import Use
-    snapshot = SimpleNamespace(items=(), text='CANCEL', tiles=[''] * 18)
-    menu = Use(59, phase='pack')
-    assert menu.step(snapshot, None) == 'b'
-    snapshot.text = ''
-    assert menu.step(snapshot, None) is None
-
-
 def test_encounter_search_can_leave_and_reenter_a_disconnected_map(real_data, monkeypatch):
     from pokesim.gen2 import collection
     from pokesim.gen2.policy import Goal
@@ -1647,15 +1590,6 @@ def test_tower_strength_preparation_preserves_the_active_menu(real_data):
     assert policy.menu is menu
 
 
-def test_teaching_a_move_closes_leftover_pc_dialogue():
-    from pokesim.gen2.menus import Teach
-    menu = Teach(70, 0)
-    snapshot = SimpleNamespace(party=(SimpleNamespace(moves=(23, 57, 182, 250)),),
-        text='The PC turned on.', tiles=(' ',) * 12 + ('┌──────────────────┐',) + (' ',) * 5)
-    assert menu.step(snapshot, None) == 'b'
-    assert menu.phase == 'open'
-
-
 def test_item_approach_can_cross_an_internal_cave_warp(real_data):
     from dataclasses import dataclass
     from pokesim.gen2.policy import Policy
@@ -1718,10 +1652,10 @@ def test_exp_share_goes_to_training_partner_after_storage_retrieval(real_data):
 
 def test_tower_attack_replacement_keeps_recover(real_data):
     from pokesim.gen2.menus import Teach
-    menu = Teach(89, 0, phase='learn', replace_move=240)
-    snapshot = SimpleNamespace(data=real_data, party=(SimpleNamespace(moves=(105, 56, 240, 129)),),
-        text='TYPE/GROUND', tiles=(' ',) * 18)
-    assert menu.step(snapshot, SimpleNamespace(byte=lambda name: 3)) == 'a'
+    menu = Teach(89, 0, replace_move=240)
+    snapshot = SimpleNamespace(data=real_data, party=(SimpleNamespace(moves=(105, 56, 240, 129)),))
+    machine = menu.build(snapshot)
+    assert machine.item == real_data.items['TM_EARTHQUAKE'] and machine.forget_move == 2
 
 
 def test_tower_teaches_psychic_to_the_stronger_special_attacker(real_data):
@@ -1756,25 +1690,9 @@ def test_box_change_opens_the_pc_from_the_overworld():
 
 def test_psychic_tm_selection_uses_machine_number(real_data):
     from pokesim.gen2.menus import Teach
-    menu = Teach(94, 0, phase='pack')
-    rows = [' '] * 18
-    rows[2], rows[4] = '     29 PSYCHIC', '     30▶SHADOW BALL'
-    snapshot = SimpleNamespace(data=real_data, party=(SimpleNamespace(moves=(33,)),),
-        text='\n'.join(rows), tiles=rows)
-    mem = SimpleNamespace(byte=lambda name: 3)
-    assert menu.step(snapshot, mem) == 'up'
-    rows[2], rows[4] = '     29▶PSYCHIC', '     30 SHADOW BALL'
-    snapshot.text = '\n'.join(rows)
-    assert menu.step(snapshot, mem) == 'a'
-    assert menu.phase == 'use'
-
-
-def test_held_item_menus_close_leftover_pc_dialogue():
-    from pokesim.gen2.menus import Give, Take
-    snapshot = SimpleNamespace(party=(SimpleNamespace(held_item=57),),
-        text='The PC turned on.', tiles=(' ',) * 12 + ('┌──────────────────┐',) + (' ',) * 5)
-    assert Give(146, 0).step(snapshot, None) == 'b'
-    assert Take(0).step(snapshot, None) == 'b'
+    snapshot = SimpleNamespace(data=real_data, party=(SimpleNamespace(moves=(33, 0, 0, 0)),))
+    machine = Teach(94, 0).build(snapshot)
+    assert machine.item == real_data.items['TM29'] and machine.forget_move is None
 
 
 def test_tower_toxic_targets_healthy_bulky_opponents(real_data):
@@ -1820,25 +1738,6 @@ def test_recover_can_outpace_damage_between_two_fifths_and_half_hp(real_data):
     values = {'wBattleMonHP': 100, 'wBattleMonMaxHP': 245, 'wBattleMonDefense': 205, 'wEnemyMonAttack': 217}
     mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: values.get(name, 30), read=lambda *args: bytes([157, 0, 0, 0]))
     assert policy.recovery_move(snapshot, mem, mon, [(50, 2)]) == 0
-
-
-def test_evolution_item_closes_leftover_pc_dialogue():
-    from pokesim.gen2.menus import Remedy
-    snapshot = SimpleNamespace(items=((8, 1),), in_battle=0, party=(SimpleNamespace(),),
-        text='The PC turned on.', tiles=(' ',) * 12 + ('┌──────────────────┐',) + (' ',) * 5)
-    assert Remedy(8, 0, 1).step(snapshot, None) == 'b'
-
-
-def test_evolution_stone_selects_the_compatible_party_member():
-    from pokesim.gen2.menus import Remedy
-    menu = Remedy(8, 5, 1, phase='party')
-    rows = [' '] * 18
-    rows[1], rows[2], rows[11], rows[12], rows[13] = '▶FERALIGATR', 'NOT ABLE', 'NIDORINA', 'ABLE', 'CANCEL'
-    snapshot = SimpleNamespace(items=((8, 1),), text='\n'.join(rows), tiles=rows, party=(SimpleNamespace(),) * 6)
-    assert menu.step(snapshot, None) == 'down'
-    rows[1], rows[11] = 'FERALIGATR', '▶NIDORINA'
-    snapshot.text = '\n'.join(rows)
-    assert menu.step(snapshot, None) == 'a'
 
 
 def test_tower_switches_away_from_a_lethal_fighting_matchup(real_data):
@@ -2177,12 +2076,11 @@ def test_static_legendary_awake_brings_in_the_sleeper(real_data):
     memory = {}
     mem = SimpleNamespace(byte=lambda name: memory.get(name, 0), word=lambda name: 120,
                           read=lambda name, size: memory.get(name, (0,) * size))
-    policy.battle(snapshot, mem)
-    assert policy.switching == 1
+    started(policy)
+    assert policy.battle(snapshot, mem).button == ('Send', 1)
     # Once it sleeps, no switch to a chipper: switching would spend a sleep turn.
-    policy.switching, memory['wEnemyMonStatus'], snapshot.enemy_hp = None, 5, 141
-    policy.battle(snapshot, mem)
-    assert policy.switching is None
+    memory['wEnemyMonStatus'], snapshot.enemy_hp = 5, 141
+    assert policy.battle(snapshot, mem).button[0] != 'Send'
 
 
 def test_master_ball_waits_for_the_roaming_beasts(real_data):

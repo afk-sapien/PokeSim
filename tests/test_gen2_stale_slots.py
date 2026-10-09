@@ -19,15 +19,12 @@ def screen(party, text=''):
                            daycare=(None, None), event=lambda name: False, map=0)
 
 
-def test_restored_give_with_a_slot_past_the_party_end_backs_out():
-    # The live Silver checkpoint: Give(Exp. Share, slot 5) was saved mid-exit, then trade
-    # preparation deposited two Pokémon and the party shrank to four.
-    state = {'item': EXP_SHARE, 'slot': 5, 'phase': 'exit', 'steps': 29, 'exit_steps': 5}
-    menu = Give(**state)
+def test_restored_give_with_a_slot_past_the_party_end_is_finished():
+    # The live Silver checkpoint: Give(Exp. Share, slot 5) was saved, then trade preparation
+    # deposited two Pokémon and the party shrank to four. No Core shortcut is started.
+    menu = Give(**{'item': EXP_SHARE, 'slot': 5, 'steps': 29})
     party = [mon(1, (1, 2, 3, 4, 5)), mon(2, (1, 1, 1, 1, 1)), mon(3, (9, 9, 9, 9, 9), EXP_SHARE), mon(4, (0, 0, 0, 0, 0))]
-    buttons = [menu.step(screen(party), None) for _ in range(12)]
-    assert buttons[0] == 'b'
-    assert None in buttons
+    assert menu.finished(screen(party))
 
 
 @pytest.mark.parametrize('make', [
@@ -55,33 +52,26 @@ def test_slot_menus_end_when_the_slot_is_gone(make):
 def test_give_stops_when_another_pokemon_takes_its_slot():
     first, second = mon(1, (1, 1, 1, 1, 1)), mon(2, (2, 2, 2, 2, 2))
     menu = Give(EXP_SHARE, 1)
-    assert menu.step(screen([first, second]), None) == 'start'
+    assert not menu.finished(screen([first, second]))
     # A trade or deposit puts someone else in slot 1. The item must not go to them.
-    assert menu.step(screen([second, mon(3, (3, 3, 3, 3, 3))]), None) == 'b'
-    assert menu.phase == 'exit'
+    assert menu.finished(screen([second, mon(3, (3, 3, 3, 3, 3))]))
 
 
 def test_slot_target_survives_a_checkpoint_round_trip():
     first, second = mon(1, (1, 1, 1, 1, 1)), mon(2, (2, 2, 2, 2, 2))
     menu = Take(1)
-    menu.step(screen([first, mon(2, (2, 2, 2, 2, 2), EXP_SHARE)]), None)
+    assert not menu.finished(screen([first, mon(2, (2, 2, 2, 2, 2), EXP_SHARE)]))
     restored = Take(**{key: value for key, value in asdict(menu).items()})
     restored.member = [restored.member[0], list(restored.member[1])]
-    assert restored.step(screen([second, first]), None) == 'b'
-    assert restored.phase == 'exit'
+    assert restored.finished(screen([second, first]))
 
 
 def test_lead_follows_its_pokemon_after_the_party_shifts():
     lead = mon(7, (7, 7, 7, 7, 7))
-    menu = Lead(4, (7, [7, 7, 7, 7, 7]), phase='party')
-    rows = ['  '] * 18
-    rows[2] = '▶ MON'
-    snapshot = screen([mon(1, (1, 1, 1, 1, 1)), mon(2, (2, 2, 2, 2, 2)), lead], text='CANCEL /')
-    snapshot.tiles = rows
-    assert menu.step(snapshot, SimpleNamespace(byte=lambda name: 1)) == 'down'
+    menu = Lead(4, (7, [7, 7, 7, 7, 7]))
+    assert not menu.finished(screen([mon(1, (1, 1, 1, 1, 1)), mon(2, (2, 2, 2, 2, 2)), lead]))
     assert menu.slot == 2
-    gone = Lead(4, (7, [7, 7, 7, 7, 7]), phase='party')
-    assert gone.step(screen([mon(1, (1, 1, 1, 1, 1))]), None) == 'b'
+    assert Lead(4, (7, [7, 7, 7, 7, 7])).finished(screen([mon(1, (1, 1, 1, 1, 1))]))
 
 
 def test_trade_preparation_drops_a_half_finished_policy_menu(monkeypatch):

@@ -51,6 +51,8 @@ def memory(**values):
 
 
 def action_of(policy, snapshot, **values):
+    # A Core battle shortcut is reported by what it asks for, since the fake memory has no RAM to drive it.
+    policy.battle_task = lambda task, snapshot, mem: SimpleNamespace(button=task.key(), hold=0, gap=0)
     action = policy.battle(snapshot, memory(**values))
     return action.button, action.hold, action.gap
 
@@ -228,9 +230,8 @@ def test_policy_recovery_drops_plans_and_presses_back_out_buttons(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, seed=1, starter='cyndaquil')
     policy.menu = object()
-    policy.switching = 2
     policy.recover(1)
-    assert policy.menu is None and policy.switching is None
+    assert policy.menu is None
     assert list(policy.rescue) == ['b', 'b', 'b']
     policy.recover(2)
     assert len(policy.rescue) == 24 and set(policy.rescue) <= {'up', 'down', 'left', 'right', 'a', 'b'}

@@ -14,7 +14,9 @@ from .puzzles import push_plan
 from .world import update as update_world
 from .naming import Naming
 from .kanto import journey as kanto_journey
-from .menus import MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, menu_label, Buy, ChangeBox, DayCare, FieldMove, Fly, Give, Take, Lead, Radio, Forget, Remedy, Sell, ShowPartner, Storage, Teach, Use, choose
+from .menus import (MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, TASKS, Attack, Buy, ChangeBox, DayCare, FieldMove, Flee, Fly,
+                    Forget, Give, Lead, Radio, Remedy, Sell, Send, ShowPartner, Storage, Take, Teach, Throw, Use, choose,
+                    menu_label, restore)
 
 STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) before reporting a blocked objective
 
@@ -61,8 +63,11 @@ class Policy:
         self.demand = {}
         self.naming = Naming(seed)
         self.learning = False
-        self.switching = None
         self.refusals = {}
+        # Core shortcuts the game refused, by key, with the frame they may be tried again.
+        self.blocked = {}
+        self.refused_in_row = 0
+        self.result_ref = None
         self.recoveries = 0
         self.stranded = 0
         self.rescue = deque()
@@ -79,7 +84,7 @@ class Policy:
 
     def state_dict(self):
         return {'starter': self.starter, 'completed': self.completed, 'collection': self.collection, 'demand': self.demand, 'decisions': self.decisions,
-                'naming': self.naming.state_dict(), 'learning': self.learning, 'switching': self.switching, 'partner_move': self.partner_move,
+                'naming': self.naming.state_dict(), 'learning': self.learning, 'partner_move': self.partner_move,
                 'menu': {'kind': type(self.menu).__name__, 'state': asdict(self.menu)} if self.menu else None,
                 'shopping': self.shopping, 'shop_location': self.shop_location, 'healing_map': self.healing_map,
                 'interaction': self.interaction, 'resetting_puzzle': self.resetting_puzzle,
@@ -96,11 +101,10 @@ class Policy:
         self.decisions = state.get('decisions', 0)
         self.naming.load_state_dict(state.get('naming', {}))
         self.learning = state.get('learning', False)
-        self.switching = state.get('switching')
         self.partner_move = state.get('partner_move')
         menu = state.get('menu')
-        kinds = {'ShowPartner': ShowPartner, 'Sell': Sell, 'Lead': Lead, 'DayCare': DayCare, 'FieldMove': FieldMove, 'Give': Give, 'Take': Take, 'Fly': Fly, 'Radio': Radio, 'ChangeBox': ChangeBox, 'Buy': Buy, 'Teach': Teach, 'Use': Use, 'Storage': Storage, 'Forget': Forget, 'Remedy': Remedy, 'Trade': Trade}
-        self.menu = kinds[menu['kind']](**menu['state']) if menu and menu.get('kind') in kinds else None
+        kinds = {**TASKS, 'Trade': Trade}
+        self.menu = restore(kinds[menu['kind']], menu['state']) if menu and menu.get('kind') in kinds else None
         if menu and menu.get('kind') in {'Coins', 'Prize', 'Slots'}:
             self.menu = {'Coins': Coins, 'Prize': Prize, 'Slots': Slots}[menu['kind']](**menu['state'])
         self.shopping = tuple(state['shopping']) if state.get('shopping') else None
@@ -124,7 +128,7 @@ class Policy:
         screen that B cannot leave still gets explored, and the same trouble gives the same buttons.
         """
         self.recoveries += 1
-        self.menu = self.interaction = self.switching = None
+        self.menu = self.interaction = None
         self.learning = False
         self.refusals.clear()
         self.on_restore()
@@ -147,10 +151,13 @@ class Policy:
     def menu_step(self, snapshot, mem):
         """Run the current menu task, giving up when it takes implausibly many steps."""
         menu = self.menu
+        name = type(menu).__name__
         if menu is not self.menu_ref:
             self.menu_ref, self.menu_steps = menu, 0
+            if hasattr(menu, 'key') and self.blocked.get(menu.key(), -1) > snapshot.frame:
+                # The game refused this shortcut recently, so it is not tried again yet.
+                return self.refused(f'The game keeps refusing the {name} shortcut')
         self.menu_steps += 1
-        name = type(menu).__name__
         limit = self.MENU_STEP_LIMITS.get(name, self.MENU_STEP_LIMIT)
         if self.menu_steps > limit:
             self.fail(f'The {name} menu task made no progress after {limit} steps')
@@ -161,7 +168,42 @@ class Policy:
             # A Game Corner task saw its screen stop changing and failed itself.
             self.fail(failure)
             return None
+        result = getattr(menu, 'result', None)
+        if result is not None and menu is not self.result_ref:
+            self.result_ref = menu
+            if result.completed:
+                self.refused_in_row = 0
+            elif getattr(menu, 'battle', False) and not isinstance(menu, Remedy) and not snapshot.in_battle:
+                pass  # The battle ended under the shortcut, which is no refusal.
+            elif not getattr(menu, 'box_full', False):
+                self.blocked[self.task_key(menu)] = snapshot.frame + self.RETRY_FRAMES
+                if len(self.blocked) > 64:
+                    self.blocked = {key: frame for key, frame in self.blocked.items() if frame > snapshot.frame}
+                self.refused(f'The game keeps refusing the {name} shortcut')
+                if self.menu is not menu:
+                    return None
         return button
+
+    # A refused Core shortcut waits this long (about a minute of game time) before another try.
+    RETRY_FRAMES = 3600
+    REFUSAL_LIMIT = 20
+
+    @staticmethod
+    def task_key(menu):
+        key = getattr(menu, 'key', None)
+        return key() if key else (type(menu).__name__,)
+
+    def allowed(self, task, snapshot):
+        """Whether the game has not refused this shortcut recently."""
+        return self.blocked.get(self.task_key(task), -1) <= snapshot.frame
+
+    def refused(self, reason):
+        """Count a refusal. Many in a row mean the plan keeps asking for something impossible."""
+        self.refused_in_row += 1
+        if self.refused_in_row > self.REFUSAL_LIMIT:
+            self.refused_in_row = 0
+            self.fail(reason)
+        return None
 
     def on_restore(self):
         objects = self.nav.objects
@@ -871,10 +913,11 @@ class Policy:
                 return Action('b', 8, 36)
         if self.menu is None and snapshot.started and not snapshot.in_battle and ('CANCEL' in snapshot.text or 'PACK' in snapshot.text and 'SAVE' in snapshot.text or 'Teach ' in snapshot.text and 'POKéMON?' in snapshot.text):
             return Action('b', 8, 28)
-        if isinstance(self.menu, Remedy):
+        if getattr(self.menu, 'battle', False):
+            # Remedies run in and out of battle. The other battle shortcuts end with the battle.
             button = self.menu_step(snapshot, mem)
             if button:
-                self.mode = 'Heal the team'
+                self.mode = 'Heal the team' if isinstance(self.menu, Remedy) else 'battle'
                 return Action(None, 0, 24) if button == 'wait' else Action(button, 8, 28)
             self.menu = None
         if snapshot.in_battle:
@@ -886,7 +929,7 @@ class Policy:
         if self.resetting_puzzle is not None and self.resetting_puzzle != snapshot.map:
             self.resetting_puzzle = None
         self.goal = journey_goal = self.journey(snapshot, mem)
-        if isinstance(self.menu, Storage) and 'BOX is full' in snapshot.text:
+        if isinstance(self.menu, Storage) and (self.menu.box_full or 'BOX is full' in snapshot.text):
             box = next((box for box, count in enumerate(snapshot.box_counts) if count < 20), None)
             if box is not None:
                 self.menu = ChangeBox(box)
@@ -926,8 +969,11 @@ class Policy:
                 and not self.collection.get('roam_lead')
                 and not (self.goal and self.goal.key in {'legend_lugia', 'legend_ho_oh', 'legend_suicune', 'collection_static_lead'})):
             mon = snapshot.party[strongest]
-            self.menu = Lead(strongest, (mon.trainer_id, mon.dvs))
-            return Action(None, 0, 24)
+            lead = Lead(strongest, (mon.trainer_id, mon.dvs))
+            if self.allowed(lead, snapshot):
+                # A refused reorder is retried later rather than holding up the journey.
+                self.menu = lead
+                return Action(None, 0, 24)
         for event, move in ([] if self.collection.get('tower') or self.collection.get('contest') or self.collection.get('time_capsule_restore') else [('EVENT_GOT_HM01_CUT', 15), ('EVENT_GOT_HM02_FLY', 19), ('EVENT_GOT_HM03_SURF', 57),
                             ('EVENT_GOT_HM04_STRENGTH', 70), ('EVENT_GOT_HM06_WHIRLPOOL', 250), ('EVENT_GOT_HM07_WATERFALL', 127)]):
             if snapshot.event(event) and not any(move in mon.moves for mon in snapshot.party):
@@ -1144,73 +1190,40 @@ class Policy:
         weaken = self.capture_move(snapshot, mem) if catch else None
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
         trapped = bool(mem.byte('wEnemySubStatus5') & 128 or mem.byte('wPlayerWrapCount'))
-        if trapped:
-            self.switching = None
+        # Core shortcuts pick moves, balls and switches. Any pack or party submenu still open
+        # here belongs to no running shortcut, so it is closed.
         if 'SWITCH' in text and 'STATS' in text:
-            return Action('b' if trapped else choose(snapshot.tiles, 'SWITCH', exact=True) or 'a', 8, 32)
+            return Action('b', 8, 32)
         pocket = mem.byte('wCurPocket')
-        if (('CANCEL' in text or '▶' in text or '▷' in text)
+        if ('QUIT' in text or '×' in text
+                or ('CANCEL' in text or '▶' in text or '▷' in text)
                 and (pocket == 3 and any(re.match(r'(?:H[1-7]|\d{2})[ ▶▷]', row[5:]) for row in snapshot.tiles)
                      or pocket == 2 and any(self.data.item_names.get(item, '').upper() in text
-                                            for item, _ in snapshot.pockets.get('key', ())))):
-            # The pack opened on the TM or key pocket. Close any item menu, then walk to the Balls pocket.
-            return Action('b' if 'QUIT' in text or not catch else 'left')
-        if 'QUIT' in text:
-            return Action((choose(snapshot.tiles, 'USE') or 'a') if 'USE' in text else 'a')
+                                            for item, _ in snapshot.pockets.get('key', ())))
+                or 'CANCEL' in text and '/' not in text and 'ABLE' not in text):
+            return Action('b')
         if any(row.startswith('ぐげござ') for row in snapshot.tiles[:2]):
-            if not catch:
-                return Action('b', 8, 64)
-            if not any('▶' in row for row in snapshot.tiles[:12]):
-                return Action(None, 0, 48)
-            pocket = mem.byte('wCurPocket')
-            if pocket != 1:
-                return Action('left' if pocket > 1 else 'right')
-            if not catch:
-                return Action('b')
-            for label in self.ball_labels(snapshot):
-                button = choose(snapshot.tiles, label, exact=True)
-                if button:
-                    return Action(button)
-            return Action('down')
-        if ('CANCEL' in text and (mem.byte('wCurPocket') == 3
-                and any(re.match(r'(?:H[1-7]|\d{2})[ ▶▷]', row[5:]) for row in snapshot.tiles)
-                or mem.byte('wCurPocket') == 2 and any(self.data.item_names.get(item, '').upper() in text
-                                                     for item, _ in snapshot.pockets.get('key', ())))):
-            return Action('left' if catch else 'b')
-        if '×' in text or 'CANCEL' in text and '/' not in text and 'ABLE' not in text:
-            if not catch:
-                return Action('b')
-            if mem.byte('wCurPocket') != 1:
-                return Action('left' if mem.byte('wCurPocket') > 1 else 'right')
-            labels = self.ball_labels(snapshot)
-            for label in labels:
-                action = choose(snapshot.tiles, label, exact=True)
-                if action:
-                    return Action(action)
-            return Action('down')
+            return Action('b', 8, 64)
         if 'already out' in text:
-            self.switching = None
             return Action('b', 8, 24)
         if 'no will' in text:
-            self.switching = None
             return Action('b', 8, 48)
         if 'CANCEL' in text and '/' in text and 'TYPE' not in text:
             active = min(mem.byte('wCurBattleMon'), max(0, len(snapshot.party) - 1))
-            if snapshot.party and snapshot.party[active].hp and self.switching is None:
+            if snapshot.party and snapshot.party[active].hp:
                 return Action('b')
             target = max((i for i, mon in enumerate(snapshot.party) if mon.hp and not mon.egg),
                          key=lambda i: max((self.move_score(move, snapshot.party[i], opponent)
                                             for move, pp in zip(snapshot.party[i].moves, snapshot.party[i].pp) if pp), default=0),
-                         default=0) + 1
-            if self.switching is not None and snapshot.party[self.switching].hp:
-                target = self.switching + 1
-            else:
-                self.switching = None
+                         default=0)
+            action = self.battle_task(Send(target), snapshot, mem)
+            if action:
+                return action
             cursor = mem.byte('wMenuCursorY')
-            return Action('a' if target == cursor else 'down' if cursor < target else 'up')
+            return Action('a' if target + 1 == cursor else 'down' if cursor < target + 1 else 'up')
         if 'FIGHT' in text and 'TYPE' not in text:
-            self.switching = None
             active = mem.byte('wCurBattleMon')
+            switch = None
             # A static legendary only ever calls for the sleeper, and only while it is awake and
             # unguarded: a switch costs a sleep turn that a ball would use better.
             static = self.static_legend(snapshot)
@@ -1224,56 +1237,40 @@ class Policy:
                 if static:
                     candidates = [row for row in candidates if row[0] is not None and self.data.moves.get(
                         snapshot.party[row[1]].moves[row[0]], {}).get('effect') == 'EFFECT_SLEEP']
-                target = next((i for move, i in candidates if move is not None), None)
-                if target is not None:
-                    self.switching = target
-                    if mem.byte('wMenuCursorX') < 2:
-                        return Action('right')
-                    if mem.byte('wMenuCursorY') > 1:
-                        return Action('up')
-                    return Action('a')
-            if not catch and not trapped and self.collection.get('tower'):
-                target = self.tower_switch(snapshot, mem, active)
-                if target is not None:
-                    self.switching = target
-                    if mem.byte('wMenuCursorX') < 2:
-                        return Action('right')
-                    if mem.byte('wMenuCursorY') > 1:
-                        return Action('up')
-                    return Action('a')
+                switch = next((i for move, i in candidates if move is not None), None)
+            if switch is None and not catch and not trapped and self.collection.get('tower'):
+                switch = self.tower_switch(snapshot, mem, active)
             scores = [max((self.move_score(move, mon, opponent) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
                       if mon.hp and not mon.egg else 0 for mon in snapshot.party]
-            if not catch and not trapped and scores and scores[min(active, len(scores) - 1)] == 0 and max(scores) > 0:
-                self.switching = max(range(len(scores)), key=scores.__getitem__)
-                if mem.byte('wMenuCursorX') < 2:
-                    return Action('right')
-                if mem.byte('wMenuCursorY') > 1:
-                    return Action('up')
-                return Action('a')
+            if (switch is None and not catch and not trapped and scores
+                    and scores[min(active, len(scores) - 1)] == 0 and max(scores) > 0):
+                switch = max(range(len(scores)), key=scores.__getitem__)
+            action = switch is not None and self.battle_task(Send(switch), snapshot, mem)
+            if action:
+                return action
             if self.constant(snapshot) != 'BATTLE_TOWER_BATTLE_ROOM' and self.remedy(snapshot, active=mem.byte('wCurBattleMon')):
                 return Action(None, 0, 24)
             self.learning = False
             if (roaming and not catch and not trapped and snapshot.in_battle == 1
                     and (snapshot.enemy_species not in snapshot.owned or snapshot.enemy_species in self.returned)):
                 # A fainted roaming beast never returns, so leave it for a visit with room and balls.
-                if mem.byte('wMenuCursorX') < 2:
-                    return Action('right')
-                if mem.byte('wMenuCursorY') < 2:
-                    return Action('down')
-                return Action('a')
-            if catch:
-                if weaken is not None:
-                    if mem.byte('wMenuCursorX') > 1:
-                        return Action('left')
-                    if mem.byte('wMenuCursorY') > 1:
-                        return Action('up')
-                    return Action('a')
-                if mem.byte('wMenuCursorX') > 1:
-                    return Action('left')
-                if mem.byte('wMenuCursorY') < 2:
-                    return Action('down')
-                return Action('a')
-            # The cartridge remembers this cursor between turns.
+                action = self.battle_task(Flee(), snapshot, mem)
+                if action:
+                    return action
+            if catch and weaken is None:
+                labels = [label.casefold() for label in self.ball_labels(snapshot)]
+                balls = {self.data.item_names.get(item, '').casefold(): item for item, count in snapshot.pockets['balls'] if count}
+                ball = next((balls[label] for label in labels if label in balls), None)
+                action = ball is not None and self.battle_task(Throw(ball), snapshot, mem)
+                if action:
+                    return action
+            mon = snapshot.party[min(active, len(snapshot.party) - 1)] if snapshot.party else None
+            move = weaken if catch and weaken is not None else self.move_choice(snapshot, mem, mon, opponent, None) if mon else None
+            action = move is not None and self.battle_task(Attack(move), snapshot, mem)
+            if action:
+                return action
+            # No move has PP (Struggle) or the game refused the shortcut, so FIGHT is pressed and
+            # the move list below picks the move. The cartridge remembers this cursor between turns.
             if mem.byte('wMenuCursorX') > 1:
                 return Action('left')
             if mem.byte('wMenuCursorY') > 1:
@@ -1286,33 +1283,15 @@ class Policy:
             slot = min(mem.byte('wCurPartyMon' if self.learning else 'wCurBattleMon'), max(0, len(snapshot.party) - 1))
             if snapshot.party:
                 mon = snapshot.party[slot]
-                options = [(self.move_score(move, mon, opponent), index)
-                           for index, move in enumerate(mon.moves) if move and mon.pp[index]
-                           and not (mem.byte('wPlayerDisableCount') and move == mem.byte('wDisabledMove'))]
-                if not self.learning and self.collection.get('tower'):
-                    reflected = {self.data.moves.get(move, {}).get('effect') for move in mem.read('wEnemyMonMoves', 4)}
-                    options = [(score * (0.1 if score < snapshot.enemy_hp
-                                and ('EFFECT_COUNTER' if self.data.moves[mon.moves[index]]['type'] < 20
-                                     else 'EFFECT_MIRROR_COAT') in reflected else 1), index)
-                               for score, index in options]
-                if not self.learning and snapshot.in_battle == 2 and not self.collection.get('tower'):
-                    normal_available = any(self.data.moves.get(move, {}).get('type') == 0 and mon.pp[index]
-                                           and self.move_score(move, mon, opponent) > 0
-                                           for index, move in enumerate(mon.moves) if move)
-                    if normal_available:
-                        options = [(score * (0.25 if mon.pp[index] <= 5
-                                            and self.data.moves[mon.moves[index]]['type'] != 0 else 1), index)
-                                   for score, index in options]
                 if self.learning:
+                    # Learning a level-up move is a battle prompt that no Core shortcut covers.
                     protected = {15, 19, 57, 70, 148, 250, 127, 29, 249}
                     if all(move in protected for move in mon.moves):
                         return Action('b')
                     target = min(range(4), key=lambda i: 999 if mon.moves[i] in protected else self.data.moves.get(mon.moves[i], {}).get('power', 0)) + 1
                 else:
-                    recovery = self.recovery_move(snapshot, mem, mon, options) if self.collection.get('tower') else None
-                    poison = self.poison_move(snapshot, mem, mon, options) if self.collection.get('tower') else None
-                    target = (recovery + 1 if recovery is not None else poison + 1 if poison is not None else weaken + 1 if weaken is not None
-                              else max(options)[1] + 1 if options else 1)
+                    move = self.move_choice(snapshot, mem, mon, opponent, weaken)
+                    target = 1 if move is None else move + 1
                 cursor = mem.byte('wMenuCursorY')
                 if cursor != target:
                     return Action('down' if cursor < target else 'up', 8, 40)
@@ -1390,6 +1369,44 @@ class Policy:
                                                           for kind in types)
                                                   for move, pp in zip(mon.moves, mon.pp))
                    for mon in snapshot.party)
+
+    def battle_task(self, task, snapshot, mem):
+        """Start a Core battle shortcut now, or return None when the game refused it recently."""
+        if not self.allowed(task, snapshot):
+            return None
+        self.menu = task
+        button = self.menu_step(snapshot, mem)
+        if button:
+            return Action(None, 0, 24) if button == 'wait' else Action(button, 8, 28)
+        if self.menu is task:
+            self.menu = None
+        return None
+
+    def move_choice(self, snapshot, mem, mon, opponent, weaken):
+        """The move slot to use this turn, or None when no move has PP."""
+        options = [(self.move_score(move, mon, opponent), index)
+                   for index, move in enumerate(mon.moves) if move and mon.pp[index]
+                   and not (mem.byte('wPlayerDisableCount') and move == mem.byte('wDisabledMove'))]
+        if self.collection.get('tower'):
+            reflected = {self.data.moves.get(move, {}).get('effect') for move in mem.read('wEnemyMonMoves', 4)}
+            options = [(score * (0.1 if score < snapshot.enemy_hp
+                        and ('EFFECT_COUNTER' if self.data.moves[mon.moves[index]]['type'] < 20
+                             else 'EFFECT_MIRROR_COAT') in reflected else 1), index)
+                       for score, index in options]
+        if snapshot.in_battle == 2 and not self.collection.get('tower'):
+            normal_available = any(self.data.moves.get(move, {}).get('type') == 0 and mon.pp[index]
+                                   and self.move_score(move, mon, opponent) > 0
+                                   for index, move in enumerate(mon.moves) if move)
+            if normal_available:
+                options = [(score * (0.25 if mon.pp[index] <= 5
+                                    and self.data.moves[mon.moves[index]]['type'] != 0 else 1), index)
+                           for score, index in options]
+        recovery = self.recovery_move(snapshot, mem, mon, options) if self.collection.get('tower') else None
+        poison = self.poison_move(snapshot, mem, mon, options) if self.collection.get('tower') else None
+        for choice in (recovery, poison, weaken):
+            if choice is not None:
+                return choice
+        return max(options)[1] if options else None
 
     def ball_labels(self, snapshot):
         master = ('MASTER BALL',) if snapshot.enemy_species in {243, 244, 245, 249, 250, 251} else ()
