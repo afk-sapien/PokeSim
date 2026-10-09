@@ -98,3 +98,21 @@ def test_reloading_stops_after_the_cap():
     module.Emulator._unstick(emu, 0.0, 'stuck')
     assert reloaded == ['reset']
     assert module.STALL_RELOADS <= module.MAX_RELOADS
+
+
+def test_training_a_new_trainee_counts_as_progress_after_a_swap():
+    emu, _ = emulator(3)
+    veteran = SimpleNamespace(trainer_id=1, dvs=(15, 15), species=184, experience=1_000_000)
+    trainee = SimpleNamespace(trainer_id=1, dvs=(9, 9), species=168, experience=100_000)
+    party = lambda *mons: SimpleNamespace(badges=0, event_flags=b'\x00', owned=(), party=list(mons))
+    emu._note_progress(party(veteran), 0.0)
+    emu.unstick_streak = 3
+    emu._note_progress(party(trainee), 1.0)  # the veteran went to the PC, the party total fell
+    assert emu.unstick_streak == 3
+    trainee.experience = 120_000
+    emu._note_progress(party(trainee), 2.0)
+    assert emu.unstick_streak == 0
+    emu.unstick_streak = 3
+    trainee.experience = 110_000  # a reload back to an older save is not progress
+    emu._note_progress(party(trainee), 3.0)
+    assert emu.unstick_streak == 3

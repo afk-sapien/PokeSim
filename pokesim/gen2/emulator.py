@@ -468,7 +468,17 @@ class Emulator:
         # new high for badges, events, Pokédex entries, areas or experience ends a run of reloads.
         score = (snapshot.badges.bit_count(), sum(byte.bit_count() for byte in snapshot.event_flags), len(snapshot.owned),
                  len(self.history['maps']), sum(getattr(mon, 'experience', 0) or 0 for mon in snapshot.party))
-        if any(new > old for new, old in zip(score, self.best_progress)):
+        # The party total drops when a trained Pokémon is swapped for a new trainee, so experience
+        # also counts per Pokémon: any party member beating its own best is progress.
+        best_experience = self.__dict__.setdefault('best_experience', {})
+        trained = False
+        for mon in snapshot.party:
+            key = (getattr(mon, 'trainer_id', None), tuple(getattr(mon, 'dvs', ()) or ()), getattr(mon, 'species', None))
+            experience = getattr(mon, 'experience', 0) or 0
+            if experience > best_experience.get(key, experience):
+                trained = True
+            best_experience[key] = max(experience, best_experience.get(key, 0))
+        if trained or any(new > old for new, old in zip(score, self.best_progress)):
             self.best_progress = tuple(max(new, old) for new, old in zip(score, self.best_progress))
             self.stall.progress(self.frame, now)
             self.unstick_streak = 0
