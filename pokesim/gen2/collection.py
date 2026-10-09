@@ -113,7 +113,8 @@ def league_funding(policy, snapshot, Goal):
 
 def journey(policy, snapshot, mem, Goal):
     data, state = policy.data, policy.collection
-    state['prerequisites'] = sorted(prerequisites(data, snapshot))
+    from .npc_trades import requests as trade_requests
+    state['prerequisites'] = sorted(prerequisites(data, snapshot) | trade_requests(policy, snapshot, getattr(mem, 'memory', None)))
     from .contest import journey as contest
     if state.get('contest'):
         goal = contest(policy, snapshot, Goal)
@@ -160,6 +161,10 @@ def journey(policy, snapshot, mem, Goal):
         return gift
     from .quests import trade_items
     goal = trade_items(policy, snapshot, Goal)
+    if goal:
+        return goal
+    from .npc_trades import journey as npc_trades
+    goal = npc_trades(policy, snapshot, mem, Goal)
     if goal:
         return goal
     if 'tower' not in policy.completed:
@@ -321,6 +326,10 @@ def arrive(policy, snapshot):
         return result
     from .quests import arrive as gift
     result = gift(policy, snapshot)
+    if result is not None:
+        return result
+    from .npc_trades import arrive as npc_trade
+    result = npc_trade(policy, snapshot)
     if result is not None:
         return result
     from .training import arrive as train

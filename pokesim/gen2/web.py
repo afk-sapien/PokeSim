@@ -57,6 +57,16 @@ class Reference:
         return json.dumps({'version': version, 'generation': 2, 'count': 251, 'entries': entries}).encode()
 
 
+def dex_plan(game, collection, data):
+    """The Gen 2 Pokédex status table: per-species state, plan status and every known source."""
+    from .dex_sources import describe
+    held = {mon.get('species') for mon in game.get('party', [])}
+    held |= {mon.get('species') for mon in (game.get('storage') or {}).get('pokemon', [])}
+    held.discard(None)
+    return describe(data, game.get('dex_owned', []), game.get('dex_seen', []), held,
+                    collection.get('npc_trades', ()))
+
+
 def live_status(game, collection=None, *, data=None, **kwargs):
     collection = collection or {}
     game = game or {}
@@ -67,10 +77,13 @@ def live_status(game, collection=None, *, data=None, **kwargs):
     storage = game.get('storage')
     if storage:
         storage = {**storage, 'pokemon': [rated(mon) for mon in storage.get('pokemon', [])]}
+    plan = collection.get('plan') or []
+    if not plan and data is not None and getattr(data, 'game', None) in ('gold', 'silver', 'crystal'):
+        plan = dex_plan(game, collection, data)
     return {'started': bool(game), 'version': collection.get('version', DEFAULT_VERSION),
             'generation': 2, 'dex_total': 251, 'owned': game.get('dex_owned', []),
             'seen': game.get('dex_seen', []), 'party': [{**rated(mon), 'slot': index + 1} for index, mon in enumerate(game.get('party', []))],
             'storage': storage, 'player_name': game.get('player_name', ''),
-            'playtime': game.get('playtime', ''), 'plan': collection.get('plan', []),
+            'playtime': game.get('playtime', ''), 'plan': plan,
             'phase': collection.get('phase', 'journey'), 'hunting': collection.get('hunting'),
             'protected_species': collection.get('protected_species', []), 'catches': {}}

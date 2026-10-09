@@ -86,6 +86,7 @@ class Policy:
 
     def load_state_dict(self, state):
         from .gamecorner import Coins, Prize, Slots
+        from .npc_trades import Trade
         self.starter = state.get('starter', self.starter)
         self.completed = state.get('completed', {})
         self.collection = state.get('collection', {'target': None, 'attempts': {}})
@@ -96,7 +97,7 @@ class Policy:
         self.switching = state.get('switching')
         self.partner_move = state.get('partner_move')
         menu = state.get('menu')
-        kinds = {'ShowPartner': ShowPartner, 'Sell': Sell, 'Lead': Lead, 'DayCare': DayCare, 'FieldMove': FieldMove, 'Give': Give, 'Take': Take, 'Fly': Fly, 'Radio': Radio, 'ChangeBox': ChangeBox, 'Buy': Buy, 'Teach': Teach, 'Use': Use, 'Storage': Storage, 'Forget': Forget, 'Remedy': Remedy}
+        kinds = {'ShowPartner': ShowPartner, 'Sell': Sell, 'Lead': Lead, 'DayCare': DayCare, 'FieldMove': FieldMove, 'Give': Give, 'Take': Take, 'Fly': Fly, 'Radio': Radio, 'ChangeBox': ChangeBox, 'Buy': Buy, 'Teach': Teach, 'Use': Use, 'Storage': Storage, 'Forget': Forget, 'Remedy': Remedy, 'Trade': Trade}
         self.menu = kinds[menu['kind']](**menu['state']) if menu and menu.get('kind') in kinds else None
         if menu and menu.get('kind') in {'Coins', 'Prize', 'Slots'}:
             self.menu = {'Coins': Coins, 'Prize': Prize, 'Slots': Slots}[menu['kind']](**menu['state'])
@@ -174,7 +175,8 @@ class Policy:
                 'objective': {'key': self.goal.key, 'label': self.goal.label, 'reason': self.goal.label} if self.goal else {},
                 'collection': {'version': self.data.game, 'dex_total': 251,
                                'phase': self.collection.get('phase', 'journey'),
-                               'hunting': (self.collection.get('target') or {}).get('species')},
+                               'hunting': (self.collection.get('target') or {}).get('species'),
+                               'npc_trades': [row['index'] for row in self.collection.get('npc_trades', [])]},
                 'blocked': self.unreachable_waits >= STUCK_WAITS,
                 'reason': self.goal.label if self.goal else 'Start the adventure'}
 
