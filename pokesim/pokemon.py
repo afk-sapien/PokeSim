@@ -64,20 +64,41 @@ def experience_at_level(level, growth):
     return cube
 
 
+def experience_details(total, level, growth):
+    """Progress through the current level on the species' XP curve, or None without one."""
+    if not growth or type(total) is not int or type(level) is not int or not 1 <= level <= 100:
+        return None
+    floor = experience_at_level(level, growth)
+    ceiling = experience_at_level(level + 1, growth)
+    capped = level >= 100
+    span = max(1, ceiling - floor)
+    earned = max(0, min(span, total - floor))
+    return {"total": total, "earned": earned, "needed": span,
+            "remaining": 0 if capped else max(0, ceiling - total),
+            "percent": 100 if capped else round(100 * earned / span, 1), "max_level": capped}
+
+
+def move_details(moves, pp=None, max_pp=None):
+    """Name, type, power and accuracy for each known move, with PP where the source has it."""
+    rows = []
+    for i, mid in enumerate(moves or ()):
+        if not mid:
+            continue
+        move = MOVES.get(mid, {})
+        row = {"name": move.get("name", f"Move {mid}").replace("_", " ").title(),
+               "type": TYPES.get(move.get("type"), "Unknown"),
+               "power": move.get("power"), "accuracy": move.get("accuracy")}
+        if pp is not None and i < len(pp):
+            row["pp"] = pp[i]
+            row["max_pp"] = max_pp[i] if max_pp is not None and i < len(max_pp) else move.get("pp", 0)
+        rows.append(row)
+    return rows
+
+
 def party_details(mon):
     from .shiny import is_shiny
     species = SPECIES.get(mon.species, {})
-    growth = species.get("growth")
-    xp = None
-    if growth and mon.level > 0:
-        floor = experience_at_level(mon.level, growth)
-        ceiling = experience_at_level(mon.level + 1, growth)
-        capped = mon.level >= 100
-        span = max(1, ceiling - floor)
-        earned = max(0, min(span, mon.experience - floor))
-        xp = {"total": mon.experience, "earned": earned, "needed": span,
-              "remaining": 0 if capped else max(0, ceiling - mon.experience),
-              "percent": 100 if capped else round(100 * earned / span, 1), "max_level": capped}
+    xp = experience_details(mon.experience, mon.level, species.get("growth")) if mon.level > 0 else None
     status = "Fainted" if mon.hp <= 0 else "Asleep" if mon.status & 7 else next(
         (label for bit, label in ((8, "Poisoned"), (16, "Burned"), (32, "Frozen"), (64, "Paralyzed"))
          if mon.status & bit), "Healthy")
@@ -86,7 +107,4 @@ def party_details(mon):
             "dvs": mon.dvs, "stat_exp": mon.stat_exp, "shiny": is_shiny({"dvs": mon.dvs}),
             "type_names": list(dict.fromkeys(TYPES.get(t, "Unknown") for t in mon.types)),
             "stats": {"Attack": mon.attack, "Defense": mon.defense, "Speed": mon.speed, "Special": mon.special},
-            "move_details": [{"name": MOVES.get(mid, {}).get("name", f"Move {mid}").replace("_", " ").title(),
-                              "type": TYPES.get(MOVES.get(mid, {}).get("type"), "Unknown"),
-                              "pp": pp, "max_pp": mon.max_pp[i] if i < len(mon.max_pp) else MOVES.get(mid, {}).get("pp", 0)}
-                             for i, (mid, pp) in enumerate(zip(mon.moves, mon.pp)) if mid]}
+            "move_details": move_details(mon.moves, mon.pp, mon.max_pp)}

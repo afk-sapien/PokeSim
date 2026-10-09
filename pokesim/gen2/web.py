@@ -1,7 +1,7 @@
 """Generation II data presented through the shared adventure interface."""
 import json
 
-from .battle_power import battle_power
+from .battle_power import battle_power, hidden_power
 from .ram import STAT_NAMES
 
 VERSIONS = ('gold', 'silver', 'crystal')
@@ -72,7 +72,14 @@ def live_status(game, collection=None, *, data=None, **kwargs):
     game = game or {}
 
     def rated(mon):
-        return {**mon, 'battle_power': battle_power(mon, data) if data is not None else None}
+        extra = {'battle_power': battle_power(mon, data) if data is not None else None}
+        dvs = mon.get('dvs')
+        if data is not None and not mon.get('egg') and isinstance(dvs, (list, tuple)) and len(dvs) == 5:
+            kind, power = hidden_power(data, dvs)
+            names = getattr(data, 'type_names', None) or {
+                value: key.removesuffix('_TYPE').title() for key, value in data.types.items()}
+            extra['hidden_power'] = {'type': names.get(kind, 'Normal'), 'power': power}
+        return {**mon, **extra}
 
     storage = game.get('storage')
     if storage:

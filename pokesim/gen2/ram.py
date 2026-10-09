@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from math import isqrt
 
 from ..experimental.gen2 import dex_flags
@@ -111,6 +112,8 @@ class Mon:
     box: int | None = None
     position: int | None = None
     data: object = field(default=None, repr=False, compare=False)
+    pokerus: int = 0
+    caught: int = 0
 
     @property
     def name(self):
@@ -141,7 +144,8 @@ class Mon:
                 entry = self.data.moves.get(move, {})
                 details.append({'id': move, 'name': entry.get('name', f'Move {move}'),
                                 'type': self.data.type_names.get(entry.get('type'), 'Normal'),
-                                'pp': self.pp[index], 'max_pp': self.max_pp[index]})
+                                'pp': self.pp[index], 'max_pp': self.max_pp[index],
+                                'power': entry.get('power'), 'accuracy': entry.get('accuracy')})
         condition = ('Egg' if self.egg else 'Fainted' if self.hp == 0 else 'Asleep' if self.status & 7 else
                      next((name for flag, name in ((8, 'Poisoned'), (16, 'Burned'), (32, 'Frozen'), (64, 'Paralyzed'))
                            if self.status & flag), 'Healthy'))
@@ -162,11 +166,49 @@ class Mon:
                   'status_label': condition, 'experience': experience_progress(self.experience, self.level, species.get('growth')),
                   'box': self.box + 1 if self.box is not None else None,
                   'position': self.position + 1 if self.position is not None else None}
+        strain, days = self.pokerus >> 4, self.pokerus & 15
+        result['pokerus'] = 'infected' if strain and days else 'cured' if strain else None
+        if getattr(self.data, 'game', None) == 'crystal' and self.caught:
+            result['caught'] = caught_details(self.caught, self.data)
         if self.egg:
+            # Until it hatches, the friendship byte counts egg cycles; each takes 256 steps.
+            result['egg_cycles'] = self.friendship
             # The cartridge keeps the species inside an unhatched egg, but nothing in the game shows it.
             # Views get an egg with no Pokédex number, portrait or types. The species stays for identity checks.
             result.update(dex=None, name='Egg', types=[], type_names=[])
         return result
+
+
+TIMES_OF_DAY = {1: 'Morning', 2: 'Day', 3: 'Night'}
+
+
+def landmark_name(data, landmark):
+    """A landmark takes the name of its town or route map, else its first map without the floor."""
+    names = getattr(data, '_landmark_names', None)
+    if names is None:
+        names = {}
+        maps = [entry for entry in getattr(data, 'maps', {}).values() if 'landmark' in entry]
+        for entry in sorted(maps, key=lambda entry: entry.get('environment') not in ('TOWN', 'ROUTE')):
+            names.setdefault(entry['landmark'], entry['name'])
+        suffix = re.compile(r' (B?\d+F|Outside|Violet Entrance|Entrance|Room \d+|Roof|Pokémon Center|[NS][EW])$', re.IGNORECASE)
+        for key, value in names.items():
+            while suffix.search(value):
+                value = suffix.sub('', value)
+            names[key] = value
+        try:
+            data._landmark_names = names
+        except AttributeError:
+            pass
+    return names.get(landmark)
+
+
+def caught_details(word, data):
+    """Crystal's caught data: time and level in the high byte, OT gender and landmark in the low."""
+    high, low = word >> 8, word & 255
+    landmark = low & 127
+    place = ('Event' if landmark == 0x7F else 'Gift' if landmark == 0x7E
+             else None if landmark == 0 else landmark_name(data, landmark))
+    return {'level': (high & 63) or None, 'time': TIMES_OF_DAY.get(high >> 6), 'location': place}
 
 
 def decode_mon(raw, name, data, *, egg=False, box=None, position=None):
@@ -186,7 +228,7 @@ def decode_mon(raw, name, data, *, egg=False, box=None, position=None):
     return Mon(species, data.text(name), level, hp, stats[0], status, raw[1], moves,
                tuple(value & 63 for value in raw[23:27]), max_pp, stats,
                int.from_bytes(raw[8:11], 'big'), dvs, training, int.from_bytes(raw[6:8], 'big'),
-               raw[27], egg, box, position, data)
+               raw[27], egg, box, position, data, raw[28], int.from_bytes(raw[29:31], 'big'))
 
 
 @dataclass(frozen=True)

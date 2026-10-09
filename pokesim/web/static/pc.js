@@ -141,20 +141,112 @@ function render() {
   fitSprites($('#pc-grid'))
 }
 
+// Gen I and II split physical and special by type; a move with no power is a status move.
+const SPECIAL_TYPES = new Set(['Fire', 'Water', 'Grass', 'Electric', 'Psychic', 'Ice', 'Dragon', 'Dark'])
+const moveCategory = move => !move.power ? 'Status' : SPECIAL_TYPES.has(move.type) ? 'Special' : 'Physical'
+const fmt = value => Number(value).toLocaleString()
+
+// Sixteen discrete cells, matching the live party meters; a sliver still lights one cell.
+function gauge(percent, level, label) {
+  const value = Math.max(0, Math.min(100, Number(percent) || 0))
+  const lit = value > 0 ? Math.max(1, Math.round(value / 100 * 16)) : 0
+  return `<span class="meter" data-level="${level}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(value)}" aria-label="${esc(label)}">${Array.from({length: 16}, (_, i) => `<i${i < lit ? ' class="on"' : ''}></i>`).join('')}</span>`
+}
+
+// Gen II sends progress as the experience itself; Gen I sends it beside the running total.
+function experienceProgress(mon) {
+  if (mon.experience_progress && typeof mon.experience_progress === 'object') return mon.experience_progress
+  return mon.experience && typeof mon.experience === 'object' ? mon.experience : null
+}
+
+// Mirrors the trade control below the popup: its state, and why when it is not offered.
+function tradeState(mon) {
+  if (mon.shiny || mon.perfect_dvs) return {state: 'Protected', note: 'Kept from release and trading'}
+  const offer = globalThis.TradeUI?.find(mon.trade_key)
+  if (offer?.locked || offer?.preference === 'locked' || (!offer && (mon.trade_locked || mon.trade_preference === 'locked'))) return {state: 'Locked', note: ''}
+  if (offer?.listed || offer?.preference === 'offered' || (!offer && mon.trade_preference === 'offered')) return {state: 'Offered', note: offer?.source || ''}
+  return offer ? {state: 'Not offered', note: offer.reason || ''} : null
+}
+
+function moveList(mon) {
+  const moves = mon.move_details || []
+  if (!moves.length) return '<p class="detail-meta">No moves recorded.</p>'
+  return `<ul class="pc-moves">${moves.map(original => {
+    // Hidden Power takes its type and power from the DVs, not from the move table.
+    const move = original.name === 'Hidden Power' && mon.hidden_power ? {...original, ...mon.hidden_power} : original
+    const known = Number.isFinite(move.pp) && Number.isFinite(move.max_pp)
+    const pp = known ? `<span class="pc-move-pp${move.pp ? '' : ' empty'}"><b>${move.pp}</b>/${move.max_pp} PP</span>` : ''
+    const specs = Number.isFinite(move.power) ? [moveCategory(move), move.power ? `Pow ${move.power}` : 'Pow —',
+      Number.isFinite(move.accuracy) && move.accuracy ? `Acc ${move.accuracy}%` : 'Acc —'] : []
+    return `<li class="pc-move"><span class="pc-move-name">${esc(move.name)}</span>${pp}<span class="pc-move-specs">${PokemonTypes.badges([move.type])}${specs.map(spec => `<span>${esc(spec)}</span>`).join('')}</span></li>`
+  }).join('')}</ul>`
+}
+
+function conditionRows(mon) {
+  const rows = []
+  if (Number.isFinite(mon.hp) && Number.isFinite(mon.max_hp) && mon.max_hp > 0) {
+    const percent = mon.hp / mon.max_hp * 100
+    rows.push(`<div class="meter-row"><span class="micro">HP</span>${gauge(percent, percent < 20 ? 'crit' : percent < 50 ? 'warn' : 'ok', `Health: ${mon.hp} of ${mon.max_hp}`)}<span class="value">${fmt(mon.hp)}/${fmt(mon.max_hp)}</span></div>`)
+  }
+  const xp = experienceProgress(mon)
+  if (xp && Number.isFinite(xp.percent)) {
+    rows.push(`<div class="meter-row"><span class="micro">XP</span>${gauge(xp.percent, 'signal', `Progress to level ${mon.level + 1}`)}<span class="value">${xp.max_level ? 'MAX' : `${Math.round(xp.percent)}%`}</span></div>`)
+  }
+  return rows.join('')
+}
+
+function facts(mon) {
+  const cell = (label, value, note = '') => `<div><dt>${label}</dt><dd>${value}${note ? `<small>${note}</small>` : ''}</dd></div>`
+  const number = value => Number.isFinite(value) ? fmt(value) : 'Unavailable'
+  const out = []
+  const xp = experienceProgress(mon)
+  const total = xp?.total ?? (Number.isFinite(mon.experience) ? mon.experience : null)
+  if (Number.isFinite(total)) out.push(cell('Experience', fmt(total), xp ? xp.max_level ? 'Max level' : `${fmt(xp.remaining)} to Lv. ${mon.level + 1}` : ''))
+  if (mon.battle_power !== undefined) out.push(cell('Battle Power', number(mon.battle_power)))
+  out.push(cell('Stat Power', number(mon.power)))
+  out.push(cell('Potential Stat Power', number(mon.potential_power)))
+  if (mon.hidden_power) out.push(cell('Hidden Power', `${PokemonTypes.badges([mon.hidden_power.type])} ${mon.hidden_power.power}`))
+  if (Number.isFinite(mon.friendship)) out.push(cell('Friendship', `${mon.friendship}<span class="unit">/255</span>`))
+  if (Number.isFinite(mon.trainer_id)) out.push(cell('Original trainer', `ID ${String(mon.trainer_id).padStart(5, '0')}`))
+  if (mon.caught) out.push(cell('Caught', esc(mon.caught.location || 'Unknown place'), [mon.caught.level ? `Lv. ${mon.caught.level}` : '', mon.caught.time].filter(Boolean).map(esc).join(' · ')))
+  if ('pokerus' in mon) out.push(cell('Pokérus', mon.pokerus === 'infected' ? '<span class="tag tag--warn">Infected</span>' : mon.pokerus === 'cured' ? '<span class="tag">Cured</span>' : 'None'))
+  if (mon.elite_four_wins !== undefined) out.push(cell('Elite Four wins', mon.elite_four_wins === null ? 'Unknown' : `${fmt(mon.elite_four_wins)}${mon.elite_four_wins_incomplete ? '+' : ''}`))
+  const trade = tradeState(mon)
+  if (trade) out.push(cell('Trade', trade.state, esc(trade.note)))
+  return `<dl class="pc-facts">${out.join('')}</dl>`
+}
+
+function eggFacts(mon) {
+  const cycles = mon.egg_cycles
+  const rows = [`<div><dt>Hatches in</dt><dd>${Number.isFinite(cycles) ? `${fmt(cycles)} egg cycle${cycles === 1 ? '' : 's'}<small>About ${fmt(cycles * 256)} steps in the party</small>` : 'Unknown'}</dd></div>`]
+  const trade = tradeState(mon)
+  if (trade) rows.push(`<div><dt>Trade</dt><dd>${trade.state}${trade.note ? `<small>${esc(trade.note)}</small>` : ''}</dd></div>`)
+  return `<dl class="pc-facts">${rows.join('')}</dl>`
+}
+
 function detail(mon) {
   detailKey = mon.trade_key
   const labels = Object.keys(mon.calculated_stats || {})
   const known = mon.dvs?.length === 5 && mon.stat_exp?.length === 5
-  $('#pc-detail-body').innerHTML = `<div class="pc-detail-head"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${mon.egg ? PokemonTypes.eggPlate : `<img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png?v=rom-portraits-1" alt="">`}</div><p class="micro">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>${PokemonTypes.shinyBadge(mon)}${ratingBadge(mon)}${mon.perfect_dvs || mon.shiny ? '<p class="detail-meta">Protected from automatic release and trading.</p>' : ''}<p>${esc(mon.name)} · Level ${mon.level}${mon.gender ? ` · ${esc(mon.gender)}` : ''}</p>${mon.held_item_name ? `<p>Holding ${esc(mon.held_item_name)}</p>` : ''}<div class="type-tags">${PokemonTypes.badges(mon.type_names)}</div></div>
-    ${known ? `<table class="individual-stats"><caption>Stats</caption><thead><tr><th>Stat</th><th>Value</th><th>DV</th><th>Stat exp.</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[Math.min(i, 4)]}</td><td>${mon.stat_exp[Math.min(i, 4)].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.stat_total) ? mon.stat_total.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')}</td><td>${formatTotal(mon, 'stat_exp')}</td></tr></tfoot></table>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'}
-    ${mon.battle_power === undefined ? '' : `<p class="detail-meta"><strong>Battle Power: ${Number.isFinite(mon.battle_power) ? mon.battle_power.toLocaleString() : 'Unavailable'}</strong></p>
-    <p class="detail-meta">Battle Power rates known moves at full health and PP. Matchups can change the result.</p>`}
-    <p class="detail-meta"><strong>Stat Power: ${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</strong></p>
-    <p class="detail-meta">Potential Stat Power: ${Number.isFinite(mon.potential_power) ? mon.potential_power.toLocaleString() : 'Unavailable'}</p>
-    ${Number.isFinite(mon.dv_top_percent) ? `<p class="detail-meta">DV quality (est.): top ${mon.dv_top_percent.toLocaleString(undefined, {maximumSignificantDigits: 3})}% · Higher roll: ${mon.dv_better_percent.toLocaleString(undefined, {maximumSignificantDigits: 3})}%</p>` : ''}
-    <p class="detail-meta">${Number(mon.experience?.total ?? mon.experience ?? 0).toLocaleString()} total experience</p>
-    <a class="dex-open key" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer">Stats guide ↗</a>
-    ${mon.dex ? `<a class="dex-open key" href="${PokeSim.base}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex ↗</a>` : ''}`
+  const status = mon.status_label || (Number.isFinite(mon.hp) ? mon.hp ? 'Healthy' : 'Fainted' : '')
+  const statusTag = !mon.egg && status ? `<span class="tag pc-status${status === 'Healthy' ? '' : mon.hp ? ' tag--warn' : ' tag--crit'}">${esc(status)}</span>` : ''
+  const head = `<div class="pc-detail-head"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${mon.egg ? PokemonTypes.eggPlate : `<img src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png?v=rom-portraits-1" alt="">`}</div><p class="micro">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}${mon.dex ? ` · No.${String(mon.dex).padStart(3, '0')}` : ''}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>${mon.egg ? '' : `<div class="pc-tags">${PokemonTypes.shinyBadge(mon)}${ratingBadge(mon)}${statusTag}</div>`}${mon.perfect_dvs || mon.shiny ? '<p class="detail-meta">Protected from automatic release and trading.</p>' : ''}<p>${mon.egg ? 'Not yet hatched' : `${esc(mon.name)} · Level ${mon.level}${mon.gender ? ` · ${esc(mon.gender)}` : ''}`}</p>${mon.held_item_name ? `<p>Holding ${esc(mon.held_item_name)}</p>` : ''}<div class="type-tags">${PokemonTypes.badges(mon.type_names)}</div></div>`
+  const section = (title, body) => `<section class="pc-detail-section"><h3 class="micro">${title}</h3>${body}</section>`
+  const links = `<div class="pc-detail-links"><a class="dex-open key" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer">Stats guide ↗</a>${mon.dex ? `<a class="dex-open key" href="${PokeSim.base}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex ↗</a>` : ''}</div>`
+  if (mon.egg) {
+    $('#pc-detail-body').innerHTML = head + section('Egg', eggFacts(mon)) + '<p class="detail-meta pc-detail-note">Its species, moves and stats appear once it hatches.</p>'
+  } else {
+    const condition = conditionRows(mon)
+    const stats = known ? `<table class="individual-stats"><caption>Stats</caption><thead><tr><th>Stat</th><th>Value</th><th>DV</th><th>Stat exp.</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[Math.min(i, 4)]}</td><td>${mon.stat_exp[Math.min(i, 4)].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.stat_total) ? mon.stat_total.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')}</td><td>${formatTotal(mon, 'stat_exp')}</td></tr></tfoot></table>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'
+    const quality = Number.isFinite(mon.dv_top_percent) ? `<p class="detail-meta">DV quality (est.): top ${mon.dv_top_percent.toLocaleString(undefined, {maximumSignificantDigits: 3})}% · Higher roll: ${mon.dv_better_percent.toLocaleString(undefined, {maximumSignificantDigits: 3})}%</p>` : ''
+    const battleNote = mon.battle_power === undefined ? '' : '<p class="detail-meta">Battle Power rates known moves at full health and PP. Matchups can change the result.</p>'
+    $('#pc-detail-body').innerHTML = head
+      + (condition ? section('Condition', `<div class="mon-meters pc-gauges">${condition}</div>`) : '')
+      + section('Moves', moveList(mon))
+      + section('Record', facts(mon) + battleNote)
+      + `<section class="pc-detail-section">${stats}${quality}</section>`
+      + links
+  }
   $('#pc-trade-action').innerHTML = globalThis.TradeUI?.control(detailKey) || ''
   $('#pc-detail').showModal()
   fitSprites($('#pc-detail-body'))
