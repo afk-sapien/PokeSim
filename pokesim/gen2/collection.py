@@ -1,5 +1,7 @@
 """Persistent postgame expeditions using version and time specific encounters."""
-from .menus import ChangeBox, FieldMove, Teach, Use
+from collections import Counter
+
+from .menus import ChangeBox, FieldMove, Release, Teach, Use
 from .navigation import DIRS
 from .ram import Memory
 
@@ -93,8 +95,22 @@ def unown_missing(policy, snapshot):
     return letters - set(mem.read('wUnownDex', 26))
 
 
+_HELD = [None, (), Counter()]
+
+
+def held_counts(snapshot):
+    """Copies of each species in the party and every box, eggs aside.
+
+    Planning asks for every encounter row on each step, so the count is made once per snapshot.
+    """
+    objects, sizes = (snapshot, snapshot.party, snapshot.stored), (len(snapshot.party), len(snapshot.stored))
+    if _HELD[0] is None or any(old is not new for old, new in zip(_HELD[0], objects)) or _HELD[1] != sizes:
+        _HELD[:] = [objects, sizes, Counter(mon.species for mon in snapshot.party + snapshot.stored if not mon.egg)]
+    return _HELD[2]
+
+
 def wanted(policy, snapshot, species):
-    held = sum(mon.species == species and not mon.egg for mon in snapshot.party + snapshot.stored)
+    held = held_counts(snapshot)[species]
     return (species not in snapshot.owned
             or species in policy.collection.get('prerequisites', ()) and not held
             or held < policy.demand.get(species, 0) + 1 and bool(policy.demand.get(species))
@@ -367,7 +383,8 @@ def journey(policy, snapshot, mem, Goal):
             if goal:
                 return goal
             state['phase'] = 'waiting'
-            return Goal('collection_wait', waiting_label(policy, snapshot, mem, current_time), 'ROUTE_29', 12, 8)
+            # Nothing can be done until the cartridge clock reaches another day or time of day.
+            return Goal('collection_idle', waiting_label(policy, snapshot, mem, current_time), 'ROUTE_29', 12, 8)
     return hunt(policy, snapshot, Goal)
 
 
@@ -443,6 +460,13 @@ def arrive(policy, snapshot):
     result = train(policy, snapshot)
     if result is not None:
         return result
+    if key == 'collection_release':
+        mon = policy.release_target(snapshot)
+        if mon is None:
+            return 'wait'
+        policy.menu = (ChangeBox(mon.box) if mon.box != snapshot.active_box
+                       else Release(mon.box, mon.position, [mon.species, mon.trainer_id, list(mon.dvs)]))
+        return 'a'
     if key == 'collection_box':
         box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)
         if box is not None:
@@ -465,6 +489,6 @@ def arrive(policy, snapshot):
         else:
             policy.menu = FieldMove(slot, 'HEADBUTT' if move == 29 else 'ROCK SMASH')
         return 'wait'
-    if key in {'collection_wait', 'collection_hunt', 'collection_roam_hunt', 'collection_roam_lead', 'collection_static_lead'}:
+    if key in {'collection_wait', 'collection_idle', 'collection_hunt', 'collection_roam_hunt', 'collection_roam_lead', 'collection_static_lead'}:
         return 'wait'
     return None

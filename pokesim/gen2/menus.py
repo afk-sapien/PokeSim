@@ -8,8 +8,8 @@ from dataclasses import KW_ONLY, dataclass, fields
 import re
 
 from pokesim_core.shortcuts import (BuyItem, ChangeBox as CoreChangeBox, ChooseMove, DeleteMove, DepositPokemon,
-                                    Done, FieldMove as CoreFieldMove, GiveItem, LearnMove, ReorderParty, RunAway,
-                                    SellItem, SwitchPokemon, TakeItem, UseItem, WithdrawPokemon, current_screen)
+                                    Done, FieldMove as CoreFieldMove, GiveItem, LearnMove, ReleasePokemon, ReorderParty,
+                                    RunAway, SellItem, SwitchPokemon, TakeItem, UseItem, WithdrawPokemon, current_screen)
 from pokesim_core.shortcuts.machine import BACKABLE
 
 from .screens import has_word
@@ -444,6 +444,31 @@ class ChangeBox(CoreTask):
 
 
 @dataclass
+class Release(CoreTask):
+    """Let the spare at ``position`` of the open box go through BILL's PC. Releasing is permanent.
+
+    ``member`` records who the spare is, so the task ends without input when anyone else sits in
+    that slot. Core releases whoever is there and does not check.
+    """
+    box: int
+    position: int
+    member: list | None = None
+
+    start = ('pc', 'bills_pc')
+    leave = True
+
+    def spare(self, snapshot):
+        mon = next((mon for mon in snapshot.stored if mon.box == self.box and mon.position == self.position), None)
+        return mon is not None and not mon.egg and [mon.species, mon.trainer_id, list(mon.dvs)] == self.member
+
+    def finished(self, snapshot):
+        return snapshot.active_box != self.box or not self.spare(snapshot)
+
+    def build(self, snapshot):
+        return ReleasePokemon(self.position, allow_release=True, **self.options(snapshot))
+
+
+@dataclass
 class Forget(CoreTask):
     """Have the Move Deleter remove ``move`` from the party member in ``slot``. Start at its greeting."""
     slot: int
@@ -511,4 +536,4 @@ class Flee(CoreTask):
 
 
 TASKS = {cls.__name__: cls for cls in (Teach, Buy, Sell, Use, Storage, Remedy, Lead, FieldMove, Fly, Give, Take,
-                                       Throw, Send, Attack, Flee, Forget, ChangeBox, Learn, Radio, DayCare, ShowPartner)}
+                                       Throw, Send, Attack, Flee, Forget, ChangeBox, Release, Learn, Radio, DayCare, ShowPartner)}

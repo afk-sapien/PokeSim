@@ -351,8 +351,10 @@ def test_returned_statics_make_room_and_need_a_ball_before_the_trip(data):
     policy.storage_goal = lambda snapshot: Goal('box', 'box', 'GOLDENROD_POKECENTER_1F', 3, 3, 'up')
     policy.person = lambda snapshot, key, *args: Goal(key, key, 'PEWTER_GYM', 0, 0)
     shown = {'EVENT_ROUTE_36_SUDOWOODO', 'EVENT_VERMILION_CITY_SNORLAX', 'EVENT_TRAINERS_IN_CERULEAN_GYM'}
+    # The party is full and the open box has no slot, while another box still does.
     snapshot = SimpleNamespace(event=lambda name: name not in shown, can_catch=False, frame=0, badges=0xFFFF,
-                               map=data.map_ids['VERMILION_CITY'], pockets={'balls': [(data.items['POKE_BALL'], 5)]})
+                               map=data.map_ids['VERMILION_CITY'], pockets={'balls': [(data.items['POKE_BALL'], 5)]},
+                               box_counts=(20,) * 13 + (12,))
     mem = SimpleNamespace(byte=lambda name: 0xFF)
     assert kanto(policy, snapshot, mem, Goal).label == 'Make room for Snorlax'
     snapshot.can_catch = True

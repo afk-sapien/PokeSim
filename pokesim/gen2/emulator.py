@@ -67,6 +67,19 @@ class Event:
     notable: bool = True
 
 
+def reload_target(store, saves, since_frame):
+    """The newest autosave made at least SCREEN_FRAMES of game time before ``since_frame``.
+
+    Autosaves record the game frame, the clock the stuck guards count in, so the choice does not
+    depend on wall-clock time or emulation speed. The oldest save is the fallback.
+    """
+    for path in reversed(saves):
+        frame = (store.checkpoint_metadata(path) or {}).get('frame')
+        if isinstance(frame, int) and frame < since_frame - SCREEN_FRAMES:
+            return path
+    return saves[0] if saves else None
+
+
 class Emulator:
     generation = 2
 
@@ -83,6 +96,7 @@ class Emulator:
         self.options_applied = False
         self.policy = Policy(self.data, seed=config.SEED, starter=config.STARTER)
         self.policy.load_state_dict(store.get('policy_state', {}))
+        self.policy.trade_preferences = store.trade_preferences
         self.speed = config.SPEED
         self.paused = False
         self.manual_mode = False
@@ -108,6 +122,8 @@ class Emulator:
         self.reloads = 0
         self.last_reload = 0.0
         self.unstick_streak = 0
+        self.reloads_exhausted = False
+        self.waiting = False
         self.best_progress = (0,) * 5
         self.failure_streak = 0
         self.invalid_frame = self.battle_frame = None
@@ -436,6 +452,7 @@ class Emulator:
             self.best_progress = tuple(max(new, old) for new, old in zip(score, self.best_progress))
             self.stall.progress(self.frame, now)
             self.unstick_streak = 0
+            self.reloads_exhausted = False
 
     def _reset_watch(self):
         """Restart the stuck clocks after a reload, which also rewinds the frame counter."""
@@ -447,16 +464,18 @@ class Emulator:
         self._reward_check_frame = self.frame
         self.stall.frame = None
 
-    def _unstick(self, since_ts, why):
+    def _unstick(self, since_frame, why):
         """Go back to an autosave from before the trouble started, or power-cycle when there is none."""
         if self.unstick_streak >= MAX_RELOADS:
-            # Reloading again would only replay the same trouble. Leave the run as it is, flagged as stalled.
-            log.error('%s and %d reloads did not help, not reloading again', why, self.unstick_streak)
+            # Reloading again would only replay the same trouble. Leave the run as it is, flagged as
+            # stalled, and say so once rather than at every guard check.
+            if not getattr(self, 'reloads_exhausted', False):
+                log.error('%s and %d reloads did not help, not reloading again', why, self.unstick_streak)
+                self.reloads_exhausted = True
             self._reset_watch()
             return
         saves = self.store.autosaves()
-        older = [path for path in saves if path.stat().st_mtime < since_ts - 30]
-        target = older[-1] if older else (saves[0] if saves else None)
+        target = reload_target(self.store, saves, since_frame)
         self.unstick_streak += 1
         if self.unstick_streak == 2 and self.snapshot is not None and self.snapshot.valid and self.snapshot.started:
             self._event(Event('stall', 'Stuck? The adventure had to reload twice',
@@ -464,7 +483,7 @@ class Emulator:
                               f'{self.policy.recoveries} recoveries so far.', priority=HIGH), self.snapshot)
         restored = None
         if target:
-            log.warning('%s for %ds, reloading %s', why, time.time() - since_ts, target.name)
+            log.warning('%s for %.1f game minutes, reloading %s', why, max(0, self.frame - since_frame) / 3600, target.name)
             for path in [target] + [path for path in reversed(saves) if path != target]:
                 try:
                     self._load_state_file(path)
@@ -499,19 +518,30 @@ class Emulator:
         snapshot = self.snapshot
         if snapshot is None or self.frame - self.last_reload_frame < 3600:
             return
+        if self.policy.idle(snapshot):
+            # Standing still until the cartridge clock reaches another day is the plan, not a
+            # stuck run. Reloading cannot hurry the clock and only rewinds the adventure.
+            self.stuck_frame = self.screen_frame = self.progress_frame = self.frame
+            self.stuck_ts = time.time()
+            self.stall.frame = None
+            self.waiting = True
+            return
+        self.waiting = False
         limit, frame = config.STUCK_RELOAD_SECONDS * 60, self.frame
         failure = self.policy.take_failure()
         if failure:
             self.failure_streak += 1
             log.warning('policy gave up: %s', failure)
         if self.invalid_frame is not None and frame - self.invalid_frame > 600:
-            self._unstick(self.stuck_ts, 'game state glitched')
+            self._unstick(self.invalid_frame, 'game state glitched')
         elif self.failure_streak >= 3:
-            self._unstick(self.stuck_ts, 'a menu task kept failing')
+            self._unstick(self.stuck_frame, 'a menu task kept failing')
         elif self.battle_frame is not None and frame - self.battle_frame > config.BATTLE_TIMEOUT_SECONDS * 60:
-            self._unstick(self.stuck_ts, 'battle never ended')
-        elif frame - self.stuck_frame > limit or frame - self.progress_frame > 3 * limit:
-            self._unstick(self.stuck_ts, 'stuck')
+            self._unstick(self.battle_frame, 'battle never ended')
+        elif frame - self.stuck_frame > limit:
+            self._unstick(self.stuck_frame, 'stuck')
+        elif frame - self.progress_frame > 3 * limit:
+            self._unstick(self.progress_frame, 'no progress')
         elif frame - self.screen_frame >= SCREEN_FRAMES:
             level = 1 if self.policy.recoveries % 3 == 0 else 2
             self.policy.recover(level)
@@ -626,6 +656,7 @@ class Emulator:
             self.previous = self.snapshot = None
             self.history = {'maps': [], 'owned': [], 'badges': 0, 'league': 0}
             self.policy = Policy(self.data, seed=config.SEED, starter=config.STARTER)
+            self.policy.trade_preferences = self.store.trade_preferences
             self.play_clock = PlayClock()
             self.paused = self.manual_mode = False
             self._autosave()
@@ -705,7 +736,8 @@ class Emulator:
         achievement = self.last_achievement
         quiet_minutes = max(0, self.frame - self.progress_frame) / 3600
         live = not self.paused and not self.manual_mode
-        stalled = live and (self.stall.stalled(self.frame, time.time()) or self.unstick_streak >= STALL_RELOADS)
+        waiting = live and self.waiting
+        stalled = live and not waiting and (self.stall.stalled(self.frame, time.time()) or self.unstick_streak >= STALL_RELOADS)
         recovering = time.time() - self.last_reload < 30 or self.policy.mode == 'finding another approach'
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
                 'health': self.health(), 'paused': self.paused, 'manual_mode': self.manual_mode, 'speed': self.speed,
@@ -717,7 +749,8 @@ class Emulator:
                 'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,
                 'help_request': {'reason': 'The policy has stopped making game progress',
                                  'action': self.policy.mode} if stalled else None,
-                'progress': {'state': 'stalled' if stalled else 'recovering' if recovering else 'making_progress',
+                'progress': {'state': 'stalled' if stalled else 'waiting' if waiting else 'recovering' if recovering
+                             else 'making_progress',
                              'last_achievement': achievement, 'quiet_game_minutes': round(quiet_minutes, 1)},
                 'league_rewards': rewards.status(self.store), 'legendary_recovery': self.legendary_recovery.state_dict()}
 

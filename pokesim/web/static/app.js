@@ -204,7 +204,7 @@ async function refreshState() {
     const strategy = state.strategy
     const objective = objectiveOf(strategy)
     const planning = objective?.id === PLANNING
-    set('#progress-state', 'textContent', paused ? 'Paused' : planning ? 'Choosing what is next' : ({exploring: 'Exploring', making_progress: 'Making progress', recovering: 'Recovering', stalled: 'Stuck?'}[progress?.state] || 'Exploring'))
+    set('#progress-state', 'textContent', paused ? 'Paused' : planning ? 'Choosing what is next' : ({exploring: 'Exploring', making_progress: 'Making progress', recovering: 'Recovering', waiting: 'Waiting', stalled: 'Stuck?'}[progress?.state] || 'Exploring'))
     const achievement = progress?.last_achievement
     const age = achievement?.age_seconds || 0
     const since = age < 60 ? 'just now' : age < 3600 ? `${Math.floor(age / 60)}m ago` : `${Math.floor(age / 3600)}h ago`

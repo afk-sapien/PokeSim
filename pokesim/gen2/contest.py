@@ -54,6 +54,8 @@ def journey(policy, snapshot, Goal, *, force=False):
                 or mem.byte('wDailyFlags1') & 2 or policy.collection.get('tower')):
             return None
         if not snapshot.can_catch:
+            if policy.no_room(snapshot):
+                return None
             goal = policy.storage_goal(snapshot)
             return Goal('collection_box', 'Make room for the Bug-Catching Contest', goal.map_name, goal.x, goal.y, goal.face)
         state = policy.collection['contest'] = {'entered': False, 'started': policy.decisions}

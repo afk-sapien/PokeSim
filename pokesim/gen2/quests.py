@@ -43,6 +43,8 @@ def legends(policy, snapshot, Goal):
     data = policy.data
     policy.collection['phase'] = 'legendary'
     if not snapshot.can_catch:
+        if policy.no_room(snapshot):
+            return None
         goal = policy.storage_goal(snapshot)
         return Goal('collection_box', 'Make room for the legendary encounter', goal.map_name, goal.x, goal.y, goal.face)
     if not snapshot.event('EVENT_GOT_MASTER_BALL_FROM_ELM'):

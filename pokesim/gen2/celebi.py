@@ -74,6 +74,8 @@ def journey(policy, snapshot, Goal):
         if policy.data.items['GS_BALL'] not in dict(snapshot.items):
             return Goal('celebi_kurt_returns', 'Meet Kurt outside his house', 'AZALEA_TOWN', 9, 6)
         if not snapshot.can_catch:
+            if policy.no_room(snapshot):
+                return None
             goal = policy.storage_goal(snapshot)
             return Goal('collection_box', 'Make room for Celebi', goal.map_name, goal.x, goal.y, goal.face)
         return Goal('legend_celebi', 'Bring the GS Ball to the Ilex Forest shrine', 'ILEX_FOREST', 8, 23, 'up')

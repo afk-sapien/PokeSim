@@ -286,7 +286,7 @@ def make_emulator(**extra):
     recoveries = []
     reloads = []
     policy = SimpleNamespace(recoveries=0, failure=None, details=lambda: {},
-                             take_failure=lambda: None,
+                             take_failure=lambda: None, idle=lambda snapshot: False,
                              recover=lambda level: recoveries.append(level))
     values = dict(paused=False, manual_mode=False, preparation=None, store=SimpleNamespace(get=lambda key: None),
                   snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 29'), frame=100000,

@@ -14,7 +14,7 @@ from .puzzles import push_plan
 from .world import update as update_world
 from .naming import Naming
 from .kanto import journey as kanto_journey
-from .menus import (MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, TASKS, Attack, Buy, ChangeBox, DayCare, FieldMove, Flee, Fly,
+from .menus import (MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, TASKS, Attack, Buy, ChangeBox, DayCare, FieldMove, Flee, Fly, Release,
                     Forget, Give, Lead, Learn, Radio, Remedy, Sell, Send, ShowPartner, Storage, Take, Teach, Throw, Use, choose,
                     menu_label, restore)
 
@@ -66,6 +66,9 @@ class Policy:
         self.refusals = {}
         # Core shortcuts the game refused, by key, with the frame they may be tried again.
         self.blocked = {}
+        # The emulator replaces this with the store's trade preferences. Locked and offered partners are never released.
+        self.trade_preferences = dict
+        self.release_cache = (None, None)
         self.refused_in_row = 0
         self.result_ref = None
         self.recoveries = 0
@@ -582,11 +585,62 @@ class Policy:
             # The League rooms only lead forward, so finish the run before going back for it.
             return None
         if not snapshot.can_catch:
+            if self.no_room(snapshot):
+                return None
             goal = self.storage_goal(snapshot)
             return Goal('collection_box', f'Make room for {name}', goal.map_name, goal.x, goal.y, goal.face)
         master = self.data.items['MASTER_BALL']
         # The Master Ball stays reserved for legendaries, and a battle without a ball only knocks it out.
         return False if any(item != master and count for item, count in snapshot.pockets['balls']) else None
+
+    def release_target(self, snapshot):
+        """The spare duplicate to release next, or None. Kept until storage or the plans change."""
+        from .release import plan_partners, target
+        partners = plan_partners(self.collection)
+        key = (snapshot.party, snapshot.stored, snapshot.active_box, tuple(sorted(self.demand.items())),
+               tuple(self.collection.get('prerequisites', ())), tuple(sorted(map(str, partners))),
+               self.decisions // 600)
+        if self.release_cache[0] != key:
+            from .breeding import breeding_stock
+            keep = breeding_stock(self.data, [mon.species for mon in snapshot.party + snapshot.stored if not mon.egg])
+            mon = target(snapshot, self.demand, keep, self.trade_preferences(), partners,
+                         allowed=lambda mon: self.allowed(Release(mon.box, mon.position), snapshot))
+            self.release_cache = (key, mon)
+        return self.release_cache[1]
+
+    def idle(self, snapshot):
+        """Whether the plan is to stand still until the cartridge clock reaches another day or time.
+
+        The emulator does not treat this wait as a stuck run, since the wall-clock day cannot be hurried.
+        """
+        goal = self.goal
+        return (goal is not None and goal.key == 'collection_idle' and self.menu is None and not snapshot.in_battle
+                and self.data.map_ids.get(goal.map_name) == snapshot.map and (goal.x, goal.y) == (snapshot.x, snapshot.y))
+
+    def no_room(self, snapshot):
+        """Every box is full and nothing can be released, so a catch has nowhere to go."""
+        return (not snapshot.can_catch and all(count >= 20 for count in snapshot.box_counts)
+                and self.release_target(snapshot) is None)
+
+    def release_goal(self, snapshot, mem):
+        """Visit a PC to let a spare duplicate go while fewer than RELEASE_BUFFER box slots are free.
+
+        Without this a full PC leaves every catch, one-time encounter and field-move errand
+        walking to a PC that has nowhere to put anything.
+        """
+        from .release import RELEASE_BUFFER, headroom
+        if (headroom(snapshot) >= RELEASE_BUFFER or self.in_league(snapshot) or self.in_transmitter_room(snapshot)
+                or snapshot.map == self.data.map_ids['POKECENTER_2F'] or self.collection.get('time_capsule_restore')
+                or self.collection.get('tower') or mem.byte('wStatusFlags2') & 4):
+            return None
+        mon = self.release_target(snapshot)
+        if mon is None:
+            return None
+        goal = self.storage_goal(snapshot)
+        if goal.key != 'storage':
+            return None
+        return Goal('collection_release', 'Make room in storage',
+                    goal.map_name, goal.x, goal.y, goal.face)
 
     def storage_goal(self, snapshot):
         choices, unreachable = [], []
@@ -929,6 +983,9 @@ class Policy:
         if self.resetting_puzzle is not None and self.resetting_puzzle != snapshot.map:
             self.resetting_puzzle = None
         self.goal = journey_goal = self.journey(snapshot, mem)
+        release = self.release_goal(snapshot, mem)
+        if release:
+            self.goal = journey_goal = release
         if isinstance(self.menu, Storage) and (self.menu.box_full or 'BOX is full' in snapshot.text):
             box = next((box for box, count in enumerate(snapshot.box_counts) if count < 20), None)
             if box is not None:
