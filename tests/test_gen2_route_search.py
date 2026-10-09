@@ -110,3 +110,35 @@ def test_kept_searches_match_fresh_searches_across_the_world(real_data):
                 assert (nav.regions.route(here, target_map, [point], cut=cut, surf=surf)
                         == fresh_regions_route(nav.regions, here, target_map, [point], cut=cut, surf=surf))
             assert nav.route(start_map, target_map) == fresh_map_route(nav, start_map, target_map)
+
+
+def test_kept_region_edges_follow_changes_to_the_maps_they_lead_into(real_data):
+    regions = Regions(real_data)
+    rng = random.Random(9)
+    linked = [mid for mid, entry in sorted(real_data.maps.items()) if entry['connections'] and entry['warps']]
+
+    def nodes(mid):
+        return {(mid, region) for flags in ((False, False), (True, True))
+                for region in set(regions.regions(mid, *flags).values())}
+
+    def check(mids):
+        for mid in mids:
+            for node in nodes(mid):
+                for flags in ((False, False), (True, True)):
+                    kept = list(regions.edges(node, *flags))
+                    assert kept == list(regions._edges(node, *flags))
+                    # Each caller gets its own point lists to change.
+                    for _, points, _ in kept:
+                        points.append(None)
+                    assert list(regions.edges(node, *flags)) == list(regions._edges(node, *flags))
+
+    for mid in rng.sample(linked, 6):
+        entry = real_data.maps[mid]
+        neighbours = [row['map'] for row in entry['connections']] + [warp['map'] for warp in entry['warps']]
+        check([mid])
+        # Wall off every square of a neighbour, then of the map itself, and read the edges again.
+        for changed in (neighbours[0], mid):
+            regions.observe(changed, [7] * len(real_data.maps[changed]['collision']))
+            check([mid, changed])
+        regions.observe_rocks(mid, {1})
+        check([mid])

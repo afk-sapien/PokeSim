@@ -2,7 +2,7 @@
 from collections import deque
 
 from . import ice
-from .ram import Memory
+from .ram import Memory, Snapshot
 from .routes import Regions, Search
 from .world import ice_solids, travel_collision
 
@@ -103,10 +103,18 @@ class Navigator:
         stride = width // 2 + 6
         mem = Memory(memory, self.data)
         blocks = mem.read('wOverworldMapBlocks', stride * (height // 2 + 6))
-        table = entry['block_collision']
-        grid = [table[block][(y % 2) * 2 + x % 2] if (block := blocks[(y // 2 + 3) * stride + x // 2 + 3]) < len(table) else 7
-                for y in range(height) for x in range(width)]
-        return travel_collision(self.data, snapshot, snapshot.map, grid)
+        # The grid is a function of the map, its loaded blocks, and the flags and items the travel
+        # rules read, so it is decoded again only when one of those changes.
+        # Stand-in snapshots without flags or items are decoded every time.
+        key = (snapshot.map, blocks, snapshot.event_flags, snapshot.items) if isinstance(snapshot, Snapshot) else None
+        cached = getattr(self, '_collision', None)
+        if key is None or cached is None or cached[0] != key:
+            table = entry['block_collision']
+            grid = [table[block][(y % 2) * 2 + x % 2] if (block := blocks[(y // 2 + 3) * stride + x // 2 + 3]) < len(table) else 7
+                    for y in range(height) for x in range(width)]
+            cached = self._collision = key, travel_collision(self.data, snapshot, snapshot.map, grid)
+        # Each caller gets its own list, as a fresh decode would give it.
+        return list(cached[1])
 
     def passable(self, collision, *, surf=False):
         permission = self.data.permissions[collision] & 15

@@ -88,15 +88,36 @@ def worth_trading(policy, snapshot, trade):
     return spare >= 2 or spare >= 1 and trade.request not in policy.collection.get('prerequisites', ())
 
 
+_WILD = [None, frozenset()]
+_REQUESTS = [None, frozenset()]
+
+
 def wild(data, species):
-    return any(row['species'] == species for row in data.encounters)
+    encounters = data.encounters
+    if _WILD[0] is not encounters:
+        _WILD[:] = [encounters, frozenset(row['species'] for row in encounters)]
+    return species in _WILD[1]
 
 
 def requests(policy, snapshot, memory):
-    """Requested species worth catching because the trade would register a new species."""
+    """Requested species worth catching because the trade would register a new species.
+
+    Runs every step, so the set is kept until the trade flags, the dex or a held copy changes.
+    """
     if memory is None or 'wTradeFlags' not in policy.data.symbols:
         return set()
     value = flags(memory, policy.data)
+    key = (policy.data, policy.data.encounters, value, snapshot.owned, snapshot.party, snapshot.stored)
+    cached = _REQUESTS[0]
+    if (cached is not None and cached[0] is key[0] and cached[1] is key[1]
+            and cached[2:] == key[2:]):
+        return set(_REQUESTS[1])
+    found = _requests(policy, snapshot, value)
+    _REQUESTS[:] = [key, frozenset(found)]
+    return found
+
+
+def _requests(policy, snapshot, value):
     return {trade.request for trade in trades(policy.data.game)
             if not value >> trade.index & 1 and trade.give not in snapshot.owned
             and not any(qualifies(mon, trade) for mon in snapshot.party + snapshot.stored)

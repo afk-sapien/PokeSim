@@ -55,7 +55,24 @@ class Regions:
         self.solids = {}
         self.slides = {}
         self.searches = {}
+        # Edges out of a region, kept per map until that map or a neighbour it leads into changes.
+        self.edge_cache = {}
+        self._dependents = None
         self.ice_maps = frozenset(mid for mid, entry in data.maps.items() if ice.has_ice(entry['collision']))
+
+    def forget_edges(self, mid):
+        """Drop the edges of every map whose warps or connections read the map that changed."""
+        if not self.edge_cache:
+            return
+        if self._dependents is None:
+            dependents = {}
+            for source, entry in self.data.maps.items():
+                for target in [warp['map'] for warp in entry['warps']] + [row['map'] for row in entry['connections']]:
+                    dependents.setdefault(target, set()).add(source)
+            self._dependents = dependents
+        self.edge_cache.pop(mid, None)
+        for source in self._dependents.get(mid, ()):
+            self.edge_cache.pop(source, None)
 
     def observe_solids(self, mid, points):
         """Remember which tiles of an ice map hold objects, since those end or block slides."""
@@ -64,12 +81,14 @@ class Regions:
             self.cache = {key: value for key, value in self.cache.items() if key[0] != mid}
             self.slides = {key: value for key, value in self.slides.items() if key[0] != mid}
             self.searches = {}
+            self.forget_edges(mid)
             self.solids[mid] = points
 
     def observe_rocks(self, mid, cleared):
         if self.cleared_rocks.get(mid, set()) != cleared:
             self.cache = {key: value for key, value in self.cache.items() if key[0] != mid}
             self.searches = {}
+            self.forget_edges(mid)
             self.cleared_rocks[mid] = set(cleared)
 
     def observe(self, mid, grid):
@@ -77,6 +96,7 @@ class Regions:
         if previous != grid:
             self.cache = {key: value for key, value in self.cache.items() if key[0] != mid}
             self.searches = {}
+            self.forget_edges(mid)
         self.live[mid] = grid
 
     def walkable(self, tile, cut, surf):
@@ -226,6 +246,16 @@ class Regions:
                 if (neighbor := (x + dx, y + dy)) in labels}
 
     def edges(self, node, cut, surf):
+        mid, region = node
+        cached = self.edge_cache.setdefault(mid, {})
+        key = (region, cut, surf)
+        if key not in cached:
+            cached[key] = tuple(self._edges(node, cut, surf))
+        # Callers own their point lists, as they did when every call built new ones.
+        for destination, points, kind in cached[key]:
+            yield destination, list(points), kind
+
+    def _edges(self, node, cut, surf):
         mid, region = node
         entry = self.data.maps[mid]
         labels = self.regions(mid, cut, surf)
