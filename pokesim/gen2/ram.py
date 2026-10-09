@@ -162,6 +162,10 @@ class Mon:
                   'status_label': condition, 'experience': experience_progress(self.experience, self.level, species.get('growth')),
                   'box': self.box + 1 if self.box is not None else None,
                   'position': self.position + 1 if self.position is not None else None}
+        if self.egg:
+            # The cartridge keeps the species inside an unhatched egg, but nothing in the game shows it.
+            # Views get an egg with no Pokédex number, portrait or types. The species stays for identity checks.
+            result.update(dex=None, name='Egg', types=[], type_names=[])
         return result
 
 

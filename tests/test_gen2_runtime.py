@@ -1253,6 +1253,80 @@ def test_pending_eggs_hatch_before_recalculating_breeding_pairs(real_data, monke
     assert policy.collection.get('breeding') is None
 
 
+
+def breeding_mons():
+    """Rhyhorn and Slowpoke from one trainer that share all five DVs, plus a Dratini."""
+    dvs = (1, 0, 10, 12, 11)
+    def mon(species, gender, moves=(33,), **extra):
+        return SimpleNamespace(species=species, gender=gender, moves=moves, egg=False, box=None,
+                               trainer_id=7726, dvs=extra.pop('dvs', dvs), level=extra.pop('level', 30), **extra)
+    return mon(111, 'Female'), mon(79, 'Female'), mon(147, 'Male', dvs=(3, 15, 4, 2, 6))
+
+
+def test_day_care_parents_with_matching_dvs_are_told_apart_by_species(real_data, monkeypatch):
+    from pokesim.gen2 import breeding
+    from pokesim.gen2.training import identity
+    rhyhorn, slowpoke, dratini = breeding_mons()
+    assert identity(rhyhorn) == identity(slowpoke)
+    lead = SimpleNamespace(species=157, egg=False, trainer_id=2, dvs=(1,) * 5, moves=(15,))
+    snapshot = SimpleNamespace(party=(lead, rhyhorn, slowpoke, dratini), stored=(), daycare=(None, None))
+    legacy = {'target': 79, 'parents': [identity(slowpoke), identity(dratini)]}
+    project = breeding.recorded_species(real_data, snapshot, legacy)
+    assert project['species'] == [79, 147]
+    monkeypatch.setattr(breeding, 'DayCare', lambda *args: args)
+    policy = SimpleNamespace(goal=SimpleNamespace(key='collection_breed_leave_0'), collection={'breeding': project})
+    assert breeding.arrive(policy, snapshot) == 'a'
+    assert policy.menu == (0, 2)
+    snapshot.party = (lead, rhyhorn, dratini)
+    assert breeding.recorded_species(real_data, snapshot, legacy) is None
+
+
+def test_day_care_pair_that_cannot_make_the_target_starts_over(real_data):
+    from pokesim.gen2.breeding import journey
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.training import identity
+    rhyhorn, _, dratini = breeding_mons()
+    project = {'target': 79, 'parents': [identity(rhyhorn), identity(dratini)], 'species': [111, 147]}
+    snapshot = SimpleNamespace(party=(), stored=(), daycare=(rhyhorn, dratini), egg_ready=False,
+                               owned=set(range(1, 252)) - {79}, money=0)
+    policy = SimpleNamespace(data=real_data, collection={'breeding': project}, demand={})
+    assert journey(policy, snapshot, Goal) is None
+    assert policy.collection['breeding'] is None
+
+
+def test_breeding_deposits_keep_the_only_field_move_partner(real_data):
+    from pokesim.gen2.breeding import make_room, spare_slots
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.training import identity
+    def mon(species, level, moves, egg=False):
+        return SimpleNamespace(species=species, level=level, moves=moves, egg=egg, trainer_id=1, dvs=(species % 16,) * 5)
+    lead = mon(157, 50, (53, 15, 0, 0))
+    wartortle = mon(8, 20, (55, 127, 0, 0))
+    furret, sneasel = mon(162, 35, (33, 0, 0, 0)), mon(215, 25, (98, 0, 0, 0))
+    project = {'target': 215, 'parents': [identity(sneasel), [2, [0] * 5]], 'species': [215, 132],
+               'duplicate': True, 'existing': [identity(sneasel)]}
+    snapshot = SimpleNamespace(party=(lead, wartortle, furret, sneasel), owned={215})
+    assert spare_slots(snapshot, project) == [2]
+    snapshot.party = (lead, wartortle, furret, sneasel, mon(215, 5, (0,) * 4, egg=True))
+    assert spare_slots(snapshot, project) == [3, 2]
+    snapshot.party = (lead, wartortle) + tuple(mon(215, 5, (0,) * 4, egg=True) for _ in range(4))
+    snapshot.map, snapshot.x, snapshot.y = real_data.map_ids['GOLDENROD_CITY'], 5, 5
+    policy = SimpleNamespace(data=real_data, collection={})
+    assert make_room(policy, snapshot, Goal, 'Make room', project).key == 'collection_hatch'
+
+
+def test_party_eggs_hide_their_species(real_data):
+    from pokesim.gen2.ram import Mon
+    fields = dict(species=215, nick='EGG', level=5, hp=20, max_hp=20, status=0, held_item=0, moves=(98, 43, 0, 0),
+                  pp=(30, 30, 0, 0), max_pp=(30, 30, 0, 0), stats=(20, 12, 10, 14, 9, 10), experience=125,
+                  dvs=(1, 2, 3, 4, 5), stat_exp=(0,) * 5, trainer_id=1, friendship=20, data=real_data)
+    egg = Mon(egg=True, **fields).to_dict()
+    assert (egg['dex'], egg['name'], egg['types'], egg['type_names']) == (None, 'Egg', [], [])
+    assert egg['species'] == 215
+    hatched = Mon(**fields).to_dict()
+    assert hatched['dex'] == 215 and hatched['types']
+
+
 def test_imported_legends_do_not_require_the_local_wing_quest(monkeypatch):
     from pokesim.gen2 import celebi
     from pokesim.gen2.quests import legends
