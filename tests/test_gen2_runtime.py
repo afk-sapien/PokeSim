@@ -1254,6 +1254,39 @@ def test_pending_eggs_hatch_before_recalculating_breeding_pairs(real_data, monke
 
 
 
+def test_pre_evolutions_match_a_scan_of_the_species_table(real_data):
+    from pokesim.gen2.breeding import _pre_evolutions
+    previous = _pre_evolutions(real_data)
+    for species in real_data.species:
+        scanned = next((sid for sid, row in real_data.species.items()
+                        if any(evo['species'] == species for evo in row['evolutions'])), None)
+        assert previous.get(species) == scanned
+    assert _pre_evolutions(real_data) is previous
+
+
+def test_breeding_pair_search_is_reused_until_the_collection_changes(real_data, monkeypatch):
+    from pokesim.gen2 import breeding
+    def mon(species, gender, dvs, box=None):
+        return SimpleNamespace(species=species, moves=(33,), egg=False, box=box, gender=gender,
+            trainer_id=1, dvs=dvs, level=20)
+    lead = mon(155, 'Male', (0, 2, 4, 6, 8))
+    ditto, pikachu = mon(132, 'Genderless', (0, 1, 3, 5, 7)), mon(25, 'Male', (0, 2, 4, 6, 8), box=0)
+    snapshot = SimpleNamespace(party=(lead, ditto), stored=(pikachu,), daycare=(None, None), owned={25, 132, 155})
+    policy = SimpleNamespace(data=real_data, collection={}, demand={})
+    calls = []
+    real_offspring = breeding.offspring
+    monkeypatch.setattr(breeding, 'offspring', lambda *args: calls.append(args) or real_offspring(*args))
+    first = breeding.pairings(policy, snapshot)
+    assert [row[0] for row in first] == [172] and len(calls) == 1
+    assert breeding.pairings(policy, SimpleNamespace(**vars(snapshot))) == first and len(calls) == 1
+    snapshot.owned = snapshot.owned | {172}
+    assert breeding.pairings(policy, snapshot) == [] and len(calls) == 2
+    policy.demand[172] = 1
+    assert [row[0] for row in breeding.pairings(policy, snapshot)] == [172] and len(calls) == 3
+    snapshot.stored = ()
+    assert breeding.pairings(policy, snapshot) == [] and len(calls) == 3
+
+
 def breeding_mons():
     """Rhyhorn and Slowpoke from one trainer that share all five DVs, plus a Dratini."""
     dvs = (1, 0, 10, 12, 11)

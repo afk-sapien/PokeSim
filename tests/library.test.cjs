@@ -667,3 +667,28 @@ test('settings shows every slot and a wrong-slot upload reports where it went', 
   assert.match(grid.innerHTML, /data-slot="blue" data-state="installed"/)
   assert.match(grid.innerHTML, /went into the Blue slot/)
 })
+
+test('a game paused for a trade shows Paused rather than a measured 0.0× speed', async () => {
+  const resources = {cpu_percent: 2.1, memory_bytes: 160 * 1048576, observed_speed: 0, speed_status: 'ready'}
+  const games = [
+    {id: 'a'.repeat(32), name: 'Trading', version: 'silver', state: 'running', resources, summary: {paused: true}},
+    {id: 'b'.repeat(32), name: 'Held', version: 'red', state: 'waiting_for_trade', resources, summary: {}},
+    {id: 'c'.repeat(32), name: 'Walking', version: 'gold', state: 'running', resources: {...resources, observed_speed: 2.3}, summary: {paused: false}},
+  ]
+  const view = library({respond: path => path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: games})} : null})
+  const labels = {}
+  view.element('#adventure-list').querySelector = selector => {
+    const id = selector.match(/data-adventure-id="(\w+)"/)?.[1]
+    return id && {querySelector: usage => {
+      const key = usage.match(/data-usage="(\w+)"/)[1]
+      return {set textContent(value) { labels[`${id[0]}-${key}`] = value }, get textContent() { return labels[`${id[0]}-${key}`] }, classList: {toggle() {}}}
+    }}
+  }
+  await settle()
+  view.poll()
+  await settle()
+  assert.equal(labels['a-speed'], 'Paused')
+  assert.equal(labels['b-speed'], 'Paused')
+  assert.equal(labels['c-speed'], '2.3×')
+  assert.equal(labels['a-cpu'], '2.1%')
+})
