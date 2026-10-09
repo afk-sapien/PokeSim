@@ -9,16 +9,41 @@ def identity(mon):
     return [mon.trainer_id, list(mon.dvs)]
 
 
-def projects(data, snapshot, current_time):
+def happiness_levels(friendship):
+    """Level ups needed to reach evolution friendship, using the cartridge's +5, +3 and +2 tiers."""
+    levels = 0
+    while friendship < 220:
+        friendship += 5 if friendship < 100 else 3 if friendship < 200 else 2
+        levels += 1
+    return levels
+
+
+def requested(data, snapshot, demand, species):
+    """Whether cable demand wants another evolved copy of a family with no wild source."""
+    from .breeding import single_source
+    held = sum(mon.species == species and not mon.egg for mon in snapshot.party + snapshot.stored)
+    return species in single_source(data) and bool(demand.get(species)) and held <= demand[species]
+
+
+def wrong_time(evo, current_time):
+    if evo['method'] != 'happiness':
+        return False
+    return (evo['requirements'][0] == 'TR_NITE' and current_time != 'night'
+            or evo['requirements'][0] == 'TR_MORNDAY' and current_time == 'night')
+
+
+def projects(data, snapshot, current_time, demand=None):
     from .collection import prerequisites
     needed = prerequisites(data, snapshot)
+    demand = demand or {}
     inventory = dict(snapshot.items)
     rows = []
     for mon in snapshot.party + snapshot.stored:
         if mon.egg:
             continue
         for evo in data.species[mon.species]['evolutions']:
-            if evo['species'] in snapshot.owned and evo['species'] not in needed or evo['method'] == 'trade':
+            if (evo['species'] in snapshot.owned and evo['species'] not in needed
+                    and not requested(data, snapshot, demand, evo['species']) or evo['method'] == 'trade'):
                 continue
             if mon.level == 100 and evo['method'] != 'item':
                 continue
@@ -37,11 +62,9 @@ def projects(data, snapshot, current_time):
                     if requirements[1] != condition:
                         continue
                 if evo['method'] == 'happiness':
-                    if requirements[0] == 'TR_NITE' and current_time != 'night':
+                    if wrong_time(evo, current_time):
                         continue
-                    if requirements[0] == 'TR_MORNDAY' and current_time == 'night':
-                        continue
-                    level += max(0, 220 - mon.friendship) // 5
+                    level = mon.level + max(1, happiness_levels(mon.friendship))
                 if level > 100:
                     continue
                 cost = experience_at(level, data.species[mon.species]['growth']) - mon.experience
@@ -64,11 +87,13 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
     project = state.get('training')
     from .collection import prerequisites
+    demand = getattr(policy, 'demand', {})
     if (project and not project.get('terminal') and project['target'] in snapshot.owned
-            and project['target'] not in prerequisites(data, snapshot)):
+            and project['target'] not in prerequisites(data, snapshot)
+            and not requested(data, snapshot, demand, project['target'])):
         state['training'] = project = None
     if project is None:
-        choices = projects(data, snapshot, current_time)
+        choices = projects(data, snapshot, current_time, demand)
         terminal_project = False
         if not choices and terminal:
             terminal_project = True
@@ -86,6 +111,17 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         return None
     if project.get('terminal'):
         project['species'] = project['target'] = mon.species
+    evo = next((evo for evo in data.species[mon.species]['evolutions'] if evo['species'] == project['target']), None)
+    if (evo and not project.get('terminal') and wrong_time(evo, current_time)
+            and happiness_levels(mon.friendship) <= 1 and mon.held_item != data.items['EVERSTONE']):
+        # The next level brings evolution friendship, and Espeon needs morning or day while Umbreon needs
+        # night. Exp. Share would level this Eevee in any battle, so it waits without the share.
+        if mon.box is None and mon.held_item == share:
+            state['take_slot'] = snapshot.party.index(mon)
+            return Goal('collection_take', f'Hold {mon.name} back until the time of day suits',
+                        data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
+        state['training'] = None
+        return None
     if mon.held_item == data.items['EVERSTONE']:
         state['take_slot'] = snapshot.party.index(mon) if mon.box is None else None
         if mon.box is None:

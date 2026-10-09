@@ -37,12 +37,17 @@ def offers(emu, payload):
     party = payload.get('party') or []
     stored = (payload.get('storage') or {}).get('pokemon') or []
     held = Counter(mon['species'] for mon in party + stored)
+    from .breeding import breeding_stock
+    stock = breeding_stock(emu.data, [mon['species'] for mon in party + stored if not mon.get('egg')])
     result = []
     for mon in stored:
         preference = mon.get('trade_preference', 'auto')
         dvs = mon.get('dvs', ())
         if (mon.get('egg') or not mon.get('trade_key') or mon.get('trade_ambiguous')
                 or preference in {'locked', 'withdrawn'} or tuple(dvs) == (15,) * 5):
+            continue
+        if preference != 'offered' and mon['species'] in stock:
+            # The Day Care breeds a spare to send instead, so the parent itself stays.
             continue
         if preference != 'offered' and (mon.get('shiny') or sum(mon.get('stat_exp', ())) >= 20000):
             continue

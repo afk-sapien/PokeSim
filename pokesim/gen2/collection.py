@@ -90,7 +90,9 @@ def prerequisites(data, snapshot):
     for baby, parents in babies.items():
         if baby not in snapshot.owned and not parents & held:
             needed.update(parents)
-    if len(snapshot.owned) < 251 and 132 not in held:
+    if 132 not in held:
+        # Ditto stays even after the Pokédex is full. It is the Day Care partner for every gift and
+        # static that has no wild source, and for genderless families like Magnemite and Staryu.
         needed.add(132)
     return needed
 
