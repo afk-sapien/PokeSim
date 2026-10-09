@@ -347,3 +347,26 @@ def test_returning_through_victory_road_can_solve_the_second_switch_first():
     assert planner.route(s, nav, ('BOULDER3', (9, 16))) is not None
     assert planner.path[-1][0][2:] == (10, 16)
     assert planner.path[-1][1] == 'left'
+
+
+def test_boulder_search_reads_each_square_once_per_plan():
+    from collections import Counter
+    from pokesim.policies.puzzles import BoulderPlanner
+    from pokesim.strategy_data import WORLD
+    s = snap(map=MAPS['VICTORY_ROAD_2F'], x=22, y=16,
+             party=(mon(moves=(70, 0, 0, 0)),),
+             event_flags=flags('EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'))
+    nav = Navigator()
+    nav.update_story(s)
+    nav.live_map = s.map
+    nav.live_positions = [(o[0], o[1]) for o in WORLD[s.map]['objects']]
+    reads = Counter()
+    active_tile = nav.active_tile
+    def counted(world, x, y):
+        reads[x, y] += 1
+        return active_tile(world, x, y)
+    nav.active_tile = counted
+    planner = BoulderPlanner()
+    assert planner.route(s, nav, ('BOULDER3', (9, 16))) is not None
+    assert planner.path[-1][0][2:] == (10, 16)
+    assert reads and max(reads.values()) == 1

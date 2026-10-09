@@ -134,9 +134,26 @@ class BoulderPlanner:
                     if i != index and i < len(navigation.live_positions)
                     and (snapshot.map, obj[0], obj[1]) not in navigation.cleared_objects}
         warps = {tuple(w[:2]) for w in world['warps'] if w[1] != world['height'] - 1}
+        # The tiles, objects and warps stay the same for the whole search, so each square is
+        # classified once instead of once per walk; the search runs thousands of walks.
+        tiles, floors, steps_between = {}, {}, {}
+        def tile(pos):
+            if pos not in tiles:
+                tiles[pos] = navigation.active_tile(world, *pos)
+            return tiles[pos]
         def floor(pos):
-            return (pos not in occupied and pos not in warps and
-                    (navigation.active_tile(world, *pos) in world['passable'] or pos == task[1]))
+            if pos not in floors:
+                floors[pos] = (pos not in occupied and pos not in warps and
+                               (tile(pos) in world['passable'] or pos == task[1]))
+            return floors[pos]
+        def open_step(point, dest):
+            key = (point, dest)
+            if key not in steps_between:
+                here, there = tile(point), tile(dest)
+                steps_between[key] = (floor(dest) and (snapshot.map, *dest) not in SEAFOAM_HOLES
+                                      and (world['tileset'], here, there) not in PAIR_COLLISIONS
+                                      and (world['tileset'], there, here) not in PAIR_COLLISIONS)
+            return steps_between[key]
         def walk(origin, stone):
             previous = {origin: None}
             queue = deque([origin])
@@ -144,12 +161,7 @@ class BoulderPlanner:
                 point = queue.popleft()
                 for direction, (dx, dy) in DIRS.items():
                     dest = (point[0] + dx, point[1] + dy)
-                    here = navigation.active_tile(world, *point)
-                    there = navigation.active_tile(world, *dest)
-                    pair_blocked = ((world['tileset'], here, there) in PAIR_COLLISIONS
-                                    or (world['tileset'], there, here) in PAIR_COLLISIONS)
-                    if (dest != stone and dest not in previous and floor(dest) and not pair_blocked
-                            and (snapshot.map, *dest) not in SEAFOAM_HOLES):
+                    if dest != stone and dest not in previous and open_step(point, dest):
                         previous[dest] = (point, direction)
                         queue.append(dest)
             return previous
