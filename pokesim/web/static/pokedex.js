@@ -319,7 +319,8 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowRight') step(1)
 })
 
-// One status request serves both the first paint and the grid once the reference lands.
+// The status request starts at once, but counts paint only after the reference sets
+// dexTotal, so a Gen II Pokédex never flashes the Gen I total of 151.
 const firstStatus = fetchStatus()
 firstStatus.catch(() => {})
 loadReference().then(() => {
@@ -329,6 +330,6 @@ loadReference().then(() => {
   if (requested >= 1 && requested <= dexTotal) renderDetail(requested)
 }).catch(() => {
   $('#grid').innerHTML = '<p class="dex-empty">The Pokédex data could not be loaded. Refresh to try again.</p>'
+  refreshStatus(firstStatus)
 })
-refreshStatus(firstStatus)
 setInterval(() => { if (!document.hidden) refreshStatus() }, 12000)

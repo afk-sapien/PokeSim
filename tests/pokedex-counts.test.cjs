@@ -120,3 +120,41 @@ test('unsupported games display unavailable catch counts while retaining current
   assert.match(view.element('#detail-body').innerHTML, /<dt>Have<\/dt><dd>3<\/dd>/)
   assert.match(view.element('#detail-body').innerHTML, /Party 1 · PC 2/)
 })
+
+test('a Gen II Pokédex never paints counts against the Gen I total while its reference loads', async () => {
+  const painted = []
+  const elements = new Map()
+  const element = selector => {
+    if (!elements.has(selector)) {
+      const node = {value: ['#type-filter', '#status-filter'].includes(selector) ? 'all' : '',
+        textContent: '', hidden: false, scrollTop: 0, focus() {},
+        classList: {add() {}, remove() {}}, querySelectorAll: () => []}
+      let html = ''
+      Object.defineProperty(node, 'innerHTML', {get: () => html, set: value => {
+        html = value
+        if (selector === '#sum-owned') painted.push(value)
+      }})
+      elements.set(selector, node)
+    }
+    return elements.get(selector)
+  }
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const context = vm.createContext({
+    document: {querySelector: element, activeElement: element('#search'), hidden: false, addEventListener() {}},
+    window: {addEventListener() {}}, location: {hash: '', pathname: '/games/gold/pokedex'},
+    history: {replaceState() {}}, setInterval() {},
+    PokeSim: {base: '/games/gold', fetch: async path => {
+      if (path === '/api/pokedex') await gate
+      return {ok: true, json: async () => path === '/api/pokedex'
+        ? {entries: reference, count: 251, generation: 2} : status()}
+    }},
+  })
+  vm.runInContext(source, context)
+  await settle()
+  assert.deepEqual(painted, [])
+  release()
+  await settle()
+  assert.ok(painted.length)
+  assert.ok(painted.every(html => html.includes('/251<')), painted.join(' | '))
+})
