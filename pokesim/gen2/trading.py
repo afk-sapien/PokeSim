@@ -24,32 +24,66 @@ def status(emu, payload, adventure_id):
     return {'connected': bool(adventure_id), 'instance': adventure_id or emu.data.game,
             'version': emu.data.game, 'generation': 2, 'managed': bool(adventure_id),
             'viewer_only': config.VIEWER_ONLY, 'holding': bool(emu.store.get('trade_hold')),
-            'offers': offers(emu, payload), 'opportunities': [], 'history': emu.store.events(types=['trade'], limit=50),
+            'offers': listings(emu, payload), 'opportunities': [], 'history': emu.store.events(types=['trade'], limit=50),
             'peers': [], 'trading': {'enabled': bool(adventure_id), 'managed': bool(adventure_id)},
             'message': 'Useful exchanges happen automatically with compatible adventures in this library.'}
 
 
+def _paused(emu, snapshot):
+    """Why no boxed Pokémon can be offered right now, or '' when trading is open."""
+    collection = emu.policy.collection
+    if snapshot is None:
+        return 'Waiting for the game to start'
+    if emu.policy.in_league(snapshot):
+        return 'Trading pauses during the Pokémon League'
+    if collection.get('tower') or collection.get('contest'):
+        return 'Trading pauses during the current event'
+    if collection.get('time_capsule_restore'):
+        return 'Trading pauses while the team is restored'
+    return ''
+
+
+def _kept(mon, stock):
+    """Why one boxed Pokémon stays out of automatic offers, or '' when it is eligible."""
+    preference = mon.get('trade_preference', 'auto')
+    if mon.get('egg'):
+        return 'Eggs are not traded'
+    if not mon.get('trade_key') or mon.get('trade_ambiguous'):
+        return 'Individual identity is ambiguous'
+    if preference == 'locked':
+        return 'Locked against trading and automatic release'
+    if preference == 'withdrawn':
+        return 'Withdrawn by you'
+    if tuple(mon.get('dvs', ())) == (15,) * 5:
+        return 'Perfect DV partner preserved for the collection'
+    if preference == 'offered':
+        return ''
+    if mon['species'] in stock:
+        # The Day Care breeds a spare to send instead, so the parent itself stays.
+        return 'Kept as a Day Care parent; a bred spare is sent instead'
+    if mon.get('shiny'):
+        return 'Shiny partner preserved for the collection'
+    if sum(mon.get('stat_exp', ())) >= 20000:
+        return 'Trained partner kept by automatic selection'
+    return ''
+
+
+def _stock(emu, rows):
+    from .breeding import breeding_stock
+    return breeding_stock(emu.data, [mon['species'] for mon in rows if not mon.get('egg')])
+
+
 def offers(emu, payload):
     snapshot = emu.snapshot
-    if (snapshot is None or emu.policy.in_league(snapshot) or emu.policy.collection.get('tower')
-            or emu.policy.collection.get('contest') or emu.policy.collection.get('time_capsule_restore')):
+    if _paused(emu, snapshot):
         return []
     party = payload.get('party') or []
     stored = (payload.get('storage') or {}).get('pokemon') or []
     held = Counter(mon['species'] for mon in party + stored)
-    from .breeding import breeding_stock
-    stock = breeding_stock(emu.data, [mon['species'] for mon in party + stored if not mon.get('egg')])
+    stock = _stock(emu, party + stored)
     result = []
     for mon in stored:
-        preference = mon.get('trade_preference', 'auto')
-        dvs = mon.get('dvs', ())
-        if (mon.get('egg') or not mon.get('trade_key') or mon.get('trade_ambiguous')
-                or preference in {'locked', 'withdrawn'} or tuple(dvs) == (15,) * 5):
-            continue
-        if preference != 'offered' and mon['species'] in stock:
-            # The Day Care breeds a spare to send instead, so the parent itself stays.
-            continue
-        if preference != 'offered' and (mon.get('shiny') or sum(mon.get('stat_exp', ())) >= 20000):
+        if _kept(mon, stock):
             continue
         equip = available_trade_item(emu.data, mon['species'], mon.get('held_item', 0), dict(snapshot.items))
         raw = bytes([mon['species'], equip or mon.get('held_item', 0)])
@@ -57,6 +91,40 @@ def offers(emu, payload):
         result.append({**mon, 'time_capsule_compatible': compatible(actual, emu.data), 'last_copy': held[mon['species']] == 1,
                        'arrived_dex': evolved_species(raw, emu.data), 'equip_item': equip, 'cartridge_generation': 2})
     return result
+
+
+def listings(emu, payload):
+    """Every party and boxed Pokémon with its trade state, so the PC can explain any of them.
+
+    offers() stays the eligibility list the coordinator trades from; this view adds the
+    Pokémon it leaves out, each with the reason, in the shape the Gen I listings use.
+    """
+    party = payload.get('party') or []
+    stored = (payload.get('storage') or {}).get('pokemon') or []
+    eligible = {mon['trade_key']: mon for mon in offers(emu, payload)}
+    paused = _paused(emu, emu.snapshot)
+    stock = _stock(emu, party + stored)
+    rows = []
+    for mon in stored:
+        preference = mon.get('trade_preference', 'auto')
+        shiny, perfect = bool(mon.get('shiny')), tuple(mon.get('dvs', ())) == (15,) * 5
+        editable = bool(mon.get('trade_key')) and not mon.get('trade_ambiguous') and not mon.get('egg')
+        listed = mon.get('trade_key') in eligible
+        rows.append({**eligible.get(mon.get('trade_key'), mon), 'shiny': shiny, 'perfect_dvs': perfect,
+                     'preference': preference, 'locked': preference == 'locked', 'listed': listed,
+                     'reason': '' if listed else paused or _kept(mon, stock) or 'Kept by automatic selection',
+                     'can_offer': editable and not shiny and not perfect and preference != 'locked',
+                     'editable': editable,
+                     'source': 'Selected by you' if preference == 'offered' else 'Automatic'})
+    for mon in party:
+        preference = mon.get('trade_preference', 'auto')
+        rows.append({**mon, 'box': 0, 'position': mon.get('slot'), 'listed': False,
+                     'shiny': bool(mon.get('shiny')), 'perfect_dvs': tuple(mon.get('dvs', ())) == (15,) * 5,
+                     'locked': preference == 'locked', 'preference': preference, 'source': 'Selected by you',
+                     'reason': 'Locked against trading and automatic release' if preference == 'locked' else 'Active party is protected',
+                     'can_offer': False,
+                     'editable': bool(mon.get('trade_key')) and not mon.get('trade_ambiguous') and not mon.get('egg')})
+    return rows
 
 
 def display(row, data):
