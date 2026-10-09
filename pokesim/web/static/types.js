@@ -16,5 +16,9 @@
     return labels.has(key) ? `type-${key}` : 'type-unknown'
   }
   const shinyBadge = mon => mon?.shiny ? '<span class="tag shiny-badge" title="Gen 2 shiny DVs. Collected shiny partners are protected from automatic release and trading.">★ Shiny</span>' : ''
-  globalThis.PokemonTypes = {badges, portraitClass, shinyBadge}
+  // An egg has not hatched, so its species, types, DVs and moves are not shown yet.
+  const asEgg = mon => mon?.egg ? {...mon, name: 'Egg', nick: 'Egg', dex: null, type_names: [], shiny: false,
+    dvs: null, dv_stars: null, perfect_dvs: false, move_details: [], experience: null, held_item_name: null} : mon
+  const eggPlate = '<span class="plate-num egg-plate">EGG</span>'
+  globalThis.PokemonTypes = {badges, portraitClass, shinyBadge, asEgg, eggPlate}
 })()

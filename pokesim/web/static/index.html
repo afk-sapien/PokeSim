@@ -35,11 +35,11 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <div class="who"><p class="micro">Trainer · <span id="trainer-rival"></span></p><h1 id="trainer-name">Getting ready</h1></div>
 <div class="stats">
 <div class="stat"><span class="micro">Badges <small id="badge-count">0 / 8</small></span><div class="badge-bank" id="badges"></div></div>
-<div class="stat"><span class="micro">Registered</span><strong class="readout" id="dex-count">0<span class="unit">/151</span></strong></div>
+<div class="stat"><span class="micro">Registered</span><strong class="readout" id="dex-count">0<span class="unit">/${dex_total}</span></strong></div>
 <div class="stat"><span class="micro">Areas</span><strong class="readout" id="areas">0</strong></div>
 <div class="stat"><span class="micro">League wins</span><strong class="readout" id="league-wins" title="Completed Elite Four and Champion runs">0</strong></div>
 <div class="stat"><span class="micro">Money</span><strong class="readout" id="money">₽0</strong></div>
-<div class="stat"><span class="micro">Play hours <small id="clock-note"></small></span><strong class="readout" id="playtime">00:00</strong></div>
+<div class="stat"><span class="micro">Play hours <small id="clock-note"></small></span><strong class="readout" id="playtime">00:00</strong><span class="note" id="game-clock" hidden></span></div>
 </div>
 </header>
 
@@ -48,7 +48,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <section class="game-card" aria-labelledby="live-heading">
 <div class="column-head"><p class="legend legend--ink">On screen</p><span class="micro screen-corner">POKÉMON · GAME BOY</span></div>
 <div class="bezel">
-<div class="bezel-head"><span class="on-air"><i class="lamp lamp--blink" data-on="crit" aria-hidden="true"></i>LIVE</span><h2 id="live-heading">Somewhere in Kanto</h2><span class="coords" id="coordinates">KANTO</span><button class="bezel-key" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">↗</button></div>
+<div class="bezel-head"><span class="on-air"><i class="lamp lamp--blink" data-on="crit" aria-hidden="true"></i><span class="on-air-label">LIVE</span></span><h2 id="live-heading">Somewhere in ${region}</h2><span class="coords" id="coordinates">KANTO</span><button class="bezel-key" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">↗</button></div>
 <div class="screen-well" id="screen"><img id="stream" alt="Live Pokémon game"></div>
 <div class="bezel-foot"><span class="activity" id="game-activity">The adventure is loading…</span><span class="mode"><i class="lamp" data-on="ok" aria-hidden="true"></i><span id="control-mode">AI is playing</span></span></div>
 </div>

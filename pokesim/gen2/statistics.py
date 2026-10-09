@@ -6,8 +6,12 @@ KEY = 'adventure-statistics-v1'
 
 
 class Statistics:
-    def __init__(self, store):
+    def __init__(self, store, clock=None):
+        from ..adventure_records import RecordTracker
         self.store = store
+        # First achievements, timed on the app play clock like Gen I.
+        self.records = RecordTracker(store, generation=2)
+        self.clock = clock
         self.value = store.get(KEY) or {'started_at': None, 'counters': dict.fromkeys(
             ('steps', 'battles', 'damage_dealt', 'damage_taken', 'active_frames'), 0)}
         self.previous = None
@@ -20,6 +24,7 @@ class Statistics:
         now = time.time()
         if self.value['started_at'] is None:
             self.value['started_at'] = now
+        self.records.observe(snapshot, self.clock() if self.clock else None, now=now)
         before, counters = self.previous, self.value['counters']
         if before and 0 < snapshot.frame - before.frame <= 120:
             counters['active_frames'] += snapshot.frame - before.frame

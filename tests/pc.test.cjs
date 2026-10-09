@@ -299,3 +299,12 @@ test('DV probability labels stay compact and retain very rare nonzero tails', as
   assert.match(detail, /Higher roll: 0%/)
   assert.doesNotMatch(detail, /65,536|uniform|independent fifth/)
 })
+
+test('eggs show as Eggs without their species, types or sprite', async () => {
+  const view = pc([mon(1, 1, 5, {egg: true, name: 'Sneasel', nick: 'EGG', type_names: ['Dark', 'Ice'], dex: 215})], '?box=1')
+  await view.ready()
+  const html = view.element('#pc-grid').innerHTML
+  assert.match(html, /EGG<\/span>/)
+  assert.match(html, /Egg · Lv\. 5/)
+  assert.doesNotMatch(html, /Sneasel|sprites\/215|Dark/)
+})

@@ -20,6 +20,7 @@ from . import training, marathon, league_rotation
 from ..shiny import is_shiny
 from ..milestones import is_perfect, level_credit
 from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, EVENTS, event_set, object_hidden
+from ..ram import MAP_NAMES
 
 DATA = load('collection.json')
 EVOS = {int(sid): rows for sid, rows in DATA['evolutions'].items()}
@@ -29,6 +30,11 @@ CENTERS = tuple((m, 13, 4) for m, w in WORLD.items() if 'Pokecenter' in w['name'
 CENTERS += ((MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8),)
 LEAGUE = {MAPS[n] for n in ('LORELEIS_ROOM','BRUNOS_ROOM','AGATHAS_ROOM','LANCES_ROOM','CHAMPIONS_ROOM','HALL_OF_FAME')}
 REPEATABLE = {'grass', 'surf', 'fish', 'safari'}
+
+
+def place(map_id):
+    """The map as the player reads it, e.g. Seafoam Islands B3F, not SeafoamIslandsB3F."""
+    return MAP_NAMES.get(map_id) or WORLD[map_id]['name']
 
 
 def held_count(snapshot, species):
@@ -829,7 +835,7 @@ class Collection:
             points=tiles(p)
             purpose = ('a partner another adventure needs' if self.demand().get(dex(sid), 0)
                        else 'more chances to find high DV partners' if p.get('dv_hunt') else 'another partner for the collection' if p.get('repeat') else 'a missing Pokédex entry')
-            return Goal('collect_hunt','Find '+name(sid),f'Search {WORLD[p["map"]]["name"]} for {purpose}',
+            return Goal('collect_hunt','Find '+name(sid),f'Search {place(p["map"])} for {purpose}',
                         tuple(t[:3] for t in points), approaches=tuple(t for t in points if t[3]))
         if mode in ('gift','static','trade','fossil'):
             if mode == 'static' and dex(sid) == 144 and not all(event_set(s.event_flags, flag) for flag in
@@ -855,7 +861,7 @@ class Collection:
         if mode=='trainer':
             return object_goal('collect_trainer','Meet an unbeaten trainer','Explore and earn experience and supplies',WORLD[p['map']]['symbol'],p['fragment'])
         if mode=='explore':
-            return Goal('collect_explore','Explore '+WORLD[p['map']]['name'],'Visit an area that has not been explored',(tuple(p['target']),))
+            return Goal('collect_explore','Explore '+place(p['map']),'Visit an area that has not been explored',(tuple(p['target']),))
         if mode=='prize':
             if not dict(s.items).get(ITEMS['COIN_CASE']):
                 return object_goal('collect_coins','Get the Coin Case','Prepare to exchange coins for Porygon','CELADON_DINER','FISHER')

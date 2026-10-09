@@ -18,7 +18,7 @@ from .. import config
 from ..capability import CAPABILITY_ERRORS
 from .event_page import render_event
 from .feed import render_feed
-from .pages import render_game_page
+from .pages import GEN2_CONTEXT, render_game_page
 from ..trade import preferences
 
 STATIC = Path(__file__).parent / "static"
@@ -74,7 +74,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         raise ValueError('Invalid adventure base path')
     def page(name: str, **context):
         return render_game_page(name, base_path=base_path, adventure_id=adventure_id,
-                                adventure_name=adventure_name, **context)
+                                adventure_name=adventure_name, **(GEN2_CONTEXT if gen2 else {}), **context)
 
     app = FastAPI(title="pokesim", docs_url=None, redoc_url=None, openapi_url=None)
     export_lock = threading.Lock()
@@ -128,6 +128,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get('/api/statistics/activity')
     def activity_statistics():
+        if gen2:
+            from ..activity_ledger import gen2_status
+            return {**gen2_status(emu.data, (emu.status() or {}).get('game')), 'champion_shop': None}
         from ..activity_ledger import status
         from ..champion_shop import status as shop_status
         return {**status(store, emu.status().get('game')), 'champion_shop': shop_status(store)}
@@ -137,13 +140,31 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         from ..statistics import status, recent, overview, highlights
         from ..adventure_records import status as record_status
         if gen2:
-            from ..gen2.steps import status as mew_status
+            from ..gen2.steps import STEPS, status as mew_status
             from ..gen2.battle_power import battle_power as gen2_power
-            return {**status(store), 'legendary_returns': {}, 'event_returns': {},
-                    'highlights': highlights((emu.status() or {}).get('game'),
-                                             (lambda mon: gen2_power(mon, emu.data), lambda mon: None if mon.get('egg') else mon.get('dv_total')),
+            from ..gen2.tracking import CAPTURES, apply as gen2_goals
+            current = emu.status() or {}
+            game = current.get('game') or {}
+            goals = gen2_goals({'party': game.get('party', []), 'storage': game.get('storage')}, store)['milestones']
+            walked = store.get(STEPS) or {}
+            held = [mon for mon in game.get('party', []) + (game.get('storage') or {}).get('pokemon', [])
+                    if not mon.get('egg')]
+            return {**status(store),
+                    'overview': overview(current, {'milestones': goals}, {
+                        'steps': walked.get('total'), 'available': bool(walked), 'started_at': walked.get('started_at')}),
+                    'milestone_records': record_status(store, 2), 'recent': recent(store),
+                    'legendary_returns': {}, 'event_returns': {},
+                    'highlights': highlights(game, (lambda mon: gen2_power(mon, emu.data),
+                                                    lambda mon: None if mon.get('egg') else mon.get('dv_total')),
                                              emu.data.species),
-                    'mew_returns': mew_status(store), 'marathon': {}}
+                    'collection_records': {'catches': store.get(CAPTURES) or {'available': False},
+                                           'perfect_found': goals['perfect_found'],
+                                           'perfect_count_is_minimum': goals['perfect_count_is_minimum'],
+                                           # Gen II keeps no shiny encounter receipts, only what is held now.
+                                           'shiny': {'available': False, 'seen': None, 'acquired': None,
+                                                     'held': sum(bool(mon.get('shiny')) for mon in held)}},
+                    # The Kanto Marathon is a Red, Blue and Yellow race.
+                    'mew_returns': mew_status(store), 'marathon': None}
         from ..legendary_returns import status as returns_status
         current = emu.status()
         collection = (current.get('strategy') or {}).get('collection') or {}
@@ -368,7 +389,10 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get("/frame.jpg")
     def frame():
-        return Response(emu.current_frame(), media_type="image/png", headers={"Cache-Control": "no-store"})
+        # The library thumbnail polls this, so skip blank transition frames where the game keeps them.
+        still = getattr(emu, 'still_frame', None)
+        return Response(still() if callable(still) else emu.current_frame(), media_type="image/png",
+                        headers={"Cache-Control": "no-store"})
 
     @app.get("/stream")
     async def stream():

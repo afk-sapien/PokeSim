@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from string import Template
 
-from pokesim import __version__
+from pokesim.build_info import version_label
 
 STATIC = Path(__file__).parent / 'static'
 ASSET = re.compile(r'(/static/)([A-Za-z0-9_./-]+?)(?:\?v=[A-Za-z0-9_.-]*)?"')
@@ -41,6 +41,11 @@ def template(name):
     return _template(name, (STATIC / name).stat().st_mtime_ns)
 
 
+# Red, Blue and Yellow register 151 species across eight badges. Gold and Silver override these.
+GAME_CONTEXT = {'dex_total': '151', 'region': 'Kanto', 'badge_total': '8', 'marathon_hidden': ''}
+GEN2_CONTEXT = {'dex_total': '251', 'region': 'Johto and Kanto', 'badge_total': '16', 'marathon_hidden': ' hidden'}
+
+
 def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', **context):
     navigation = ''
     if base_path:
@@ -56,9 +61,9 @@ def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', 
         adventure_name=html.escape(adventure_name or 'This adventure', quote=True),
         # Printed into the page, so the brandplate is its full width at first paint
         # instead of growing when app.js reads the version from the status.
-        app_version=f'v{__version__}',
+        app_version=html.escape(version_label()),
         brand_label='PokeSim library' if base_path else 'PokeSim home',
         save_export_control='' if base_path else (
             '<button id="export-save" class="key" title="Download your current progress for another emulator">'
             'Download .sav</button>'),
-        library_nav=navigation, **context)
+        library_nav=navigation, **{**GAME_CONTEXT, **context})
