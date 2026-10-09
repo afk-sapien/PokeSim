@@ -370,3 +370,32 @@ def test_boulder_search_reads_each_square_once_per_plan():
     assert planner.route(s, nav, ('BOULDER3', (9, 16))) is not None
     assert planner.path[-1][0][2:] == (10, 16)
     assert reads and max(reads.values()) == 1
+
+
+def test_boulder_search_that_failed_is_not_repeated_until_its_inputs_change():
+    from dataclasses import replace
+    from pokesim.policies.puzzles import BoulderPlanner, boulder_task
+    from pokesim.strategy_data import WORLD
+    s = snap(map=MAPS['VICTORY_ROAD_3F'], x=27, y=15, party=(mon(moves=(70, 0, 0, 0)),))
+    nav = Navigator()
+    nav.update_story(s)
+    nav.live_map = s.map
+    nav.live_positions = [(o[0], o[1]) for o in WORLD[s.map]['objects']]
+    reads = []
+    active_tile = nav.active_tile
+    def counted(world, x, y):
+        reads.append((x, y))
+        return active_tile(world, x, y)
+    nav.active_tile = counted
+    planner = BoulderPlanner()
+    task = boulder_task(s)
+    assert planner.route(s, nav, task) is None and reads
+    # Another square of the area the search walked fails the same way without a search.
+    moved = next(replace(s, x=x, y=y) for x, y in sorted(set(reads)) if (x, y) != (27, 15)
+                 and planner.failed[(s.map, task)][1] and (x, y) in planner.failed[(s.map, task)][1])
+    reads.clear()
+    assert planner.route(moved, nav, task) is None and not reads
+    # A changed tile searches again and still agrees with a fresh planner.
+    nav.tile_overrides[(s.map, 0, 0)] = 0
+    assert planner.route(moved, nav, task) == BoulderPlanner().route(moved, nav, task)
+    assert reads

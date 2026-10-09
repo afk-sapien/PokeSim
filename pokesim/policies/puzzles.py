@@ -115,6 +115,8 @@ class BoulderPlanner:
     def __init__(self):
         self.path = deque()
         self.task = None
+        # Searches that found no push plan, by task. Victory Road tries several tasks per step.
+        self.failed = {}
 
     def route(self, snapshot, navigation, task):
         world = WORLD[snapshot.map]
@@ -134,6 +136,13 @@ class BoulderPlanner:
                     if i != index and i < len(navigation.live_positions)
                     and (snapshot.map, obj[0], obj[1]) not in navigation.cleared_objects}
         warps = {tuple(w[:2]) for w in world['warps'] if w[1] != world['height'] - 1}
+        # A push plan that does not exist stays missing while the player walks inside the area
+        # the search started from and no boulder or tile moves, so it is not searched again.
+        overrides = frozenset(item for item in navigation.tile_overrides.items() if item[0][0] == snapshot.map)
+        failure = (task_key, rock, id(world), frozenset(occupied), overrides)
+        known = self.failed.get(task_key)
+        if known is not None and known[0] == failure and player in known[1]:
+            return None
         # The tiles, objects and warps stay the same for the whole search, so each square is
         # classified once instead of once per walk; the search runs thousands of walks.
         tiles, floors, steps_between = {}, {}, {}
@@ -167,12 +176,15 @@ class BoulderPlanner:
             return previous
         queue = deque([(player, rock, ())])
         seen = set()
+        area = None
         while queue and len(seen) < 8000:
             person, stone, path = queue.popleft()
             if stone == task[1]:
                 self.path.extend(path)
                 return self.path[0][1] if self.path else None
             reachable = walk(person, stone)
+            if area is None:
+                area = frozenset(reachable)
             key = (min(reachable), stone)
             if key in seen:
                 continue
@@ -191,4 +203,7 @@ class BoulderPlanner:
                 steps.reverse()
                 steps.append(((*behind, *stone), direction))
                 queue.append((stone, ahead, path + tuple(steps)))
+        # Every push from the area was tried, so any other square of it fails the same way. A
+        # search cut short by its limit is only known to fail from this exact square.
+        self.failed[task_key] = (failure, area if not queue and area else frozenset({player}))
         return None
