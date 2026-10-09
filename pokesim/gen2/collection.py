@@ -15,6 +15,8 @@ def waiting_label(policy, snapshot, mem, current_time):
     label = waiting_for_day(policy, snapshot, mem)
     if label:
         return label
+    if wanted(policy, snapshot, LAPRAS) and mem.byte('wCurDay') % 7 != FRIDAY:
+        return 'Waiting for Friday: Lapras surfaces in Union Cave'
     later = sorted({row['time'] for row in policy.data.encounters
                     if wanted(policy, snapshot, row['species']) and not matching_time(row['time'], current_time)})
     if later:
@@ -45,7 +47,8 @@ def encounter_points(policy, snapshot, mid, method, *, rare=False):
                 continue
             if method in {'grass', 'surf'}:
                 good = tile in (0x10, 0x14, 0x18, 0x1C) if method == 'grass' else tile in (0x21, 0x29)
-                good |= method == 'grass' and entry['environment'] == 'CAVE' and tile == 0
+                # The cartridge treats every floor tile of a cave or dungeon as an encounter tile.
+                good |= method == 'grass' and entry['environment'] in {'CAVE', 'DUNGEON'} and tile == 0
                 if good:
                     points.append((x, y, None))
             elif method.endswith('rod') and policy.nav.passable(tile):
@@ -67,11 +70,79 @@ def encounter_points(policy, snapshot, mid, method, *, rare=False):
     return points
 
 
+UNOWN = 201
+# Letters each solved Ruins of Alph puzzle unlocks, in wUnlockedUnowns bit order (pret data/wild/unlocked_unowns.asm).
+UNOWN_SETS = (range(1, 12), range(12, 19), range(19, 24), range(24, 27))
+LAPRAS, FRIDAY = 131, 5
+
+
+def unown_letter(dvs):
+    """Letter number, 1 for A to 26 for Z, from the two DV bytes (pret GetUnownLetter)."""
+    first, second = dvs[0], dvs[1]
+    value = ((first & 0x60) << 1) | ((first & 0x06) << 3) | ((second & 0x60) >> 3) | ((second & 0x06) >> 1)
+    return value // 10 + 1
+
+
+def unown_missing(policy, snapshot):
+    """Unown letters the solved puzzles let appear but the Unown Pokédex still lacks."""
+    if getattr(policy, 'memory', None) is None or 'wUnownDex' not in policy.data.symbols:
+        return set()
+    mem = Memory(policy.memory, policy.data)
+    unlocked = mem.byte('wUnlockedUnowns')
+    letters = {letter for bit, group in enumerate(UNOWN_SETS) if unlocked >> bit & 1 for letter in group}
+    return letters - set(mem.read('wUnownDex', 26))
+
+
 def wanted(policy, snapshot, species):
     held = sum(mon.species == species and not mon.egg for mon in snapshot.party + snapshot.stored)
     return (species not in snapshot.owned
             or species in policy.collection.get('prerequisites', ()) and not held
-            or held < policy.demand.get(species, 0) + 1 and bool(policy.demand.get(species)))
+            or held < policy.demand.get(species, 0) + 1 and bool(policy.demand.get(species))
+            or species == UNOWN and bool(unown_missing(policy, snapshot)))
+
+
+def lapras(policy, snapshot, mem, Goal):
+    """Meet the Union Cave Lapras, which surfaces on Fridays until the day's battle sets its flag."""
+    if (not wanted(policy, snapshot, LAPRAS) or mem.byte('wCurDay') % 7 != FRIDAY
+            or mem.byte('wDailyFlags2') & 2 or not snapshot.badges & 8
+            or not snapshot.event('EVENT_GOT_HM03_SURF') or not snapshot.can_catch):
+        policy.collection.pop('lapras', None)
+        return None
+    # Give up for the day if the meeting never happens, so other Friday work still gets done.
+    started = policy.collection.setdefault('lapras', policy.decisions)
+    if policy.decisions - started > 3000:
+        return None
+    if not any(57 in mon.moves or 57 in policy.data.species[mon.species]['machines']
+               for mon in snapshot.party if not mon.egg):
+        return None
+    data = policy.data
+    mid = data.map_ids['UNION_CAVE_B2F']
+    entry = data.maps[mid]
+    index, obj = next((i, obj) for i, obj in enumerate(entry['objects'], 1) if obj['script'] == 'UnionCaveLapras')
+    # Objects are briefly missing right after a warp, so fall back to the spawn point.
+    x, y = next(((x, y) for i, x, y in snapshot.objects if i == index), (obj['x'], obj['y'])) \
+        if snapshot.map == mid else (obj['x'], obj['y'])
+    grid = policy.nav.collision(snapshot, policy.memory) if snapshot.map == mid else entry['collision']
+    choices = []
+    for face, (dx, dy) in DIRS.items():
+        px, py = x - dx, y - dy
+        if not (0 <= px < entry['width'] and 0 <= py < entry['height']):
+            continue
+        if not policy.nav.passable(grid[py * entry['width'] + px], surf=True):
+            continue
+        if snapshot.map == mid:
+            # Lapras swims around, so only a water tile reachable right now beside it will do.
+            path = policy.nav.local(snapshot, [(px, py)], policy.memory, surf=True)
+            if path is None:
+                continue
+            choices.append((len(path), px, py, face))
+        else:
+            # From afar, head for the side facing the western shore the player surfs out from.
+            choices.append((px, px, py, face))
+    if not choices:
+        return Goal('collection_lapras', 'Find the Friday Lapras in Union Cave', 'UNION_CAVE_B2F', 4, 31)
+    _, px, py, face = min(choices)
+    return Goal('collection_lapras', 'Catch the Friday Lapras in Union Cave', 'UNION_CAVE_B2F', px, py, face)
 
 
 def prerequisites(data, snapshot):
@@ -152,6 +223,9 @@ def journey(policy, snapshot, mem, Goal):
         return league_funding(policy, snapshot, Goal)
     from .ruins import journey as ruins
     goal = ruins(policy, snapshot, Goal)
+    if goal:
+        return goal
+    goal = lapras(policy, snapshot, mem, Goal)
     if goal:
         return goal
     from .quests import gifts

@@ -1024,7 +1024,9 @@ def test_time_capsule_preserves_league_counts_across_return_trade(real_data):
 
 def test_contest_uses_park_balls_and_runs_from_low_scores():
     from pokesim.gen2.contest import control
-    policy = SimpleNamespace(collection={'contest': {'entered': True}})
+    # Every contest species already has a wild table, so only the score decides.
+    data = SimpleNamespace(encounters=[{'species': species} for species in range(1, 252)])
+    policy = SimpleNamespace(collection={'contest': {'entered': True}}, data=data)
     snapshot = SimpleNamespace(in_battle=1, text='FIGHT POKéMON PACK RUN', tiles=())
     values = {'wEnemyMonSpecies': 123, 'wEnemyMonMaxHP': 55, 'wEnemyMonHP': 55,
               'wContestMonSpecies': 0, 'wParkBallsRemaining': 20, 'wMenuCursorX': 1, 'wMenuCursorY': 1,
