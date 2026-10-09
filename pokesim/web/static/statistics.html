@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="pokesim-base" content="${game_base}">
 <meta name="pokesim-adventure" content="${adventure_id}">
+<meta name="pokesim-dex-total" content="${dex_total}">
 <script src="${game_base}/static/routes.js"></script>
 <script src="${game_base}/static/panel.js?v=panel-4"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -81,7 +82,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <p class="micro" id="statistics-window"></p>
 <div id="statistics-charts"></div>
 <section class="statistics-section" id="event-returns" hidden aria-labelledby="event-returns-heading"><div class="column-head"><h2 class="legend legend--ink" id="event-returns-heading">Return visits &amp; gifts</h2><span class="micro" id="event-return-summary"></span></div><div class="return-grid" id="event-return-list"></div></section>
-<section class="statistics-section" id="marathon-records" aria-labelledby="marathon-heading">
+<section class="statistics-section" id="marathon-records" aria-labelledby="marathon-heading"${marathon_hidden}>
 <div class="column-head"><h2 class="legend legend--ink" id="marathon-heading">Kanto Marathon</h2><span class="micro">Game time</span></div>
 <div class="progress-panel marathon-records">
 <div><span class="micro">Personal best</span><strong class="readout" id="marathon-best">No finish yet</strong></div>

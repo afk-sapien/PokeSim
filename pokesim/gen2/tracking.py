@@ -117,7 +117,7 @@ class Tracker:
 def apply(payload, store):
     goals = {**empty_goals(), **(store.get(MILESTONES) or {})}
     groups = goals.pop('perfect_groups')
-    held = payload['party'] + (payload.get('storage') or {}).get('pokemon', [])
+    held = [mon for mon in payload['party'] + (payload.get('storage') or {}).get('pokemon', []) if not mon.get('egg')]
     goals.update(perfect_found=max(goals['perfect_catches'], sum(groups.values())), perfect_count_is_minimum=True,
                  perfect_held=sum(mon.get('dv_total') == 75 for mon in held),
                  three_star_held=sum(mon.get('dv_stars') == 3 for mon in held))

@@ -201,7 +201,8 @@ def recent(store, *, now=None):
 
 def overview(state, records, steps):
     game = state.get('game') or {}
-    rows = game.get('party', []) + (game.get('storage') or {}).get('pokemon', [])
+    # An Egg is not a Pokémon held yet.
+    rows = [mon for mon in game.get('party', []) + (game.get('storage') or {}).get('pokemon', []) if not mon.get('egg')]
     return {'play_clock': state.get('play_clock'),
             'league_wins': (state.get('league_rewards') or {}).get('wins', game.get('hall_of_fame_count')),
             'held': len(rows) if game else None, 'areas': state.get('areas_discovered'),

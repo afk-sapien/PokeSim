@@ -7,9 +7,14 @@
   const INSET = 3
   // Badges are over within the first day, so the long goals take their place. A series without
   // a max scales to its own best and shows no denominator.
-  const SERIES = [
-    {key: 'owned', label: 'Pokédex registered', max: 151},
-    {key: 'level100', label: 'Level 100 species', max: 151},
+  // The page names its cartridge's Pokédex size: 151 in Kanto, 251 with Johto.
+  const dexTotal = () => {
+    const size = Number(document.querySelector('meta[name="pokesim-dex-total"]')?.content)
+    return Number.isInteger(size) && size > 0 ? size : 151
+  }
+  const series = (total = dexTotal()) => [
+    {key: 'owned', label: 'Pokédex registered', max: total},
+    {key: 'level100', label: 'Level 100 species', max: total},
     {key: 'perfect', label: 'Perfect finds'},
     {key: 'league', label: 'League wins'},
   ]
@@ -34,7 +39,7 @@
     return path + (active ? `H${WIDTH}` : '')
   }
 
-  function describe(rows, until, seriesList = SERIES) {
+  function describe(rows, until, seriesList = series()) {
     const start = rows[0].ts
     return seriesList.map((series) => {
       const values = rows.map((row) => row[series.key]).filter((value) => value != null)
@@ -83,7 +88,7 @@
     }
   }
 
-  globalThis.Progress = {stepPath, describe, render, refresh, WIDTH, HEIGHT}
+  globalThis.Progress = {stepPath, describe, render, refresh, series, WIDTH, HEIGHT}
   if (document.querySelector('#road')) {
     refresh()
     setInterval(() => { if (!document.hidden) refresh() }, 60000)

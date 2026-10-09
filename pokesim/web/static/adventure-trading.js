@@ -8,7 +8,7 @@
     verifying: 'Checking both saves', staging: 'Checking both saves',
     committed: 'Saving the exchange', applying: 'Saving the exchange', releasing: 'Returning to the adventure'
   }
-  const dexNumber = mon => Number.isInteger(mon?.dex) && mon.dex >= 1 && mon.dex <= 151 ? mon.dex : null
+  const dexNumber = mon => Number.isInteger(mon?.dex) && mon.dex >= 1 && mon.dex <= 251 ? mon.dex : null
   function pokemon(mon, direction, completed, failed) {
     const receiving = direction === 'received'
     const label = completed ? receiving ? 'You received' : 'You sent'

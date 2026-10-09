@@ -4,14 +4,14 @@ const test = require('node:test')
 const vm = require('node:vm')
 const source = fs.readFileSync('pokesim/web/static/progress.js', 'utf8')
 
-function load(present = false) {
+function load(present = false, dexTotal = null) {
   const elements = new Map()
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {hidden: true, textContent: '', innerHTML: ''})
     return elements.get(selector)
   }
   const context = vm.createContext({
-    document: {querySelector: selector => present ? element(selector) : null, hidden: false},
+    document: {querySelector: selector => selector.startsWith('meta[') ? (dexTotal ? {content: String(dexTotal)} : null) : present ? element(selector) : null, hidden: false},
     setInterval() {}, Date, Math, Number, String,
     PokeSim: {fetch: async () => ({ok: true, json: async () => []})},
   })
@@ -74,4 +74,10 @@ test('focused DV scale shows small improvements within labeled bounds', () => {
   assert.equal(series.min, 67)
   assert.equal(series.max, 70)
   assert.equal(series.path, 'M0.0,41.7H600.0V22.3H600')
+})
+
+test('Gold and Silver charts measure the Pokédex against 251', () => {
+  const {Progress} = load(false, 251)
+  const [owned, level100] = Progress.describe([{ts: 0, owned: 146, level100: 3}], 10)
+  assert.deepEqual([owned.max, level100.max], [251, 251])
 })

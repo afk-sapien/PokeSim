@@ -41,6 +41,10 @@ GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/s
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
                    'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml'}
 
+# Pages a person opens. A stopped adventure answers these with its status page, not raw JSON.
+GAME_PAGES = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon',
+              'stats/items', 'trading'}
+
 
 def public_game_path(method, path):
     """Allow public routes before HTTP client URL normalization can change them."""
@@ -740,7 +744,7 @@ def create_app(manager, shutdown=lambda: None):
             if image is not None:
                 return FileResponse(image, media_type='image/png')
         if adventure['state'] not in {'running', 'recovering'}:
-            if path in {'', 'pc', 'pokedex', 'journal', 'trading'}:
+            if path in GAME_PAGES:
                 from ..web.library import render_library
                 return HTMLResponse(render_library('stopped', adventure))
             raise HTTPException(409, 'This adventure is stopped or starting')

@@ -201,3 +201,25 @@ def status(store, game=None):
             'items': [{'id': item, 'name': name, 'bought': count('bought', item),
                        'used': count('used', item) if item in CONSUMABLES else None,
                        'bag': bag[item] if game else None} for item, name in sorted(ITEMS.items())]}
+
+
+def gen2_status(data, game=None):
+    """List all 251 species and the bag for Gold, Silver and Crystal.
+
+    The action receipts read Red, Blue and Yellow RAM, so only what is held now is known here.
+    """
+    held = Counter()
+    for mon in [*(game or {}).get('party', []), *((game or {}).get('storage') or {}).get('pokemon', [])]:
+        if not mon.get('egg') and 1 <= (mon.get('dex') or 0) <= 251:
+            held[mon['dex']] += 1
+    bag = Counter()
+    for item in (game or {}).get('items', []):
+        bag[item['id']] += item['qty']
+    names = {entry['dex']: entry['name'] for entry in data.species.values() if 1 <= entry.get('dex', 0) <= 251}
+    return {'started_at': None, 'available': False, 'generation': 2, 'trade_records': {},
+            'captures_since': None, 'captures_available': False,
+            'pokemon': [{'id': dex, 'name': name, 'wild': None, 'trainer': None, 'defeated': None, 'caught': None,
+                         'gift': None, 'traded_in': None, 'traded_out': None, 'held': held[dex] if game else None}
+                        for dex, name in sorted(names.items())],
+            'items': [{'id': item, 'name': name, 'bought': None, 'used': None, 'bag': bag[item] if game else None}
+                      for item, name in sorted(data.item_names.items()) if bag[item] or not game]}

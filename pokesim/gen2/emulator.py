@@ -25,6 +25,32 @@ from .policy import Action, Policy
 from .ram import BADGES, read_snapshot
 
 log = logging.getLogger('pokesim.gen2')
+
+
+WEEKDAYS = ('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
+TIME_OF_DAY = ('Morning', 'Day', 'Night')
+
+
+def game_clock(memory, data):
+    """The cartridge clock as the game last showed it: weekday, time and part of the day."""
+    from .ram import Memory
+    try:
+        mem = Memory(memory, data)
+        day, period = mem.byte('wCurDay'), mem.byte('wTimeOfDay')
+        hours, minutes = mem.byte('hHours'), mem.byte('hMinutes')
+    except (KeyError, IndexError, TypeError):
+        return None
+    if hours > 23 or minutes > 59:
+        return None
+    return {'weekday': WEEKDAYS[day % 7], 'hours': hours, 'minutes': minutes,
+            'time_of_day': TIME_OF_DAY[period] if period < len(TIME_OF_DAY) else None}
+
+
+def solid(image):
+    """Whether a frame is one flat colour, like the white flash between Gold and Silver screens."""
+    extrema = image.getextrema()
+    bands = extrema if isinstance(extrema[0], tuple) else (extrema,)
+    return all(low == high for low, high in bands)
 # A screen that has not changed for half a game minute is a loop, not a pause.
 SCREEN_FRAMES = 1800
 STALL_RELOADS = 3  # reloads in a row without new progress before the run is reported as stalled
@@ -96,7 +122,7 @@ class Emulator:
         from .tracking import Tracker
         self.tracker = Tracker(store, self.data, fresh=not bool(store.autosaves()))
         from .statistics import Statistics
-        self.statistics = Statistics(store)
+        self.statistics = Statistics(store, clock=lambda: self.play_clock.status())
         from .legendary import Recovery
         self.legendary_recovery = Recovery()
         from .steps import StepTracker
@@ -188,8 +214,17 @@ class Emulator:
 
     def _shot_png(self):
         output = io.BytesIO()
-        self.pb.screen.image.save(output, format='PNG')
+        image = self.pb.screen.image
+        image.save(output, format='PNG')
+        # Gold and Silver flash a single colour between screens. A thumbnail keeps the last picture.
+        if not solid(image):
+            self.still_image = output.getvalue()
         return output.getvalue()
+
+    def still_frame(self, timeout=1):
+        """The latest frame that shows a picture, never a blank screen transition."""
+        frame = self.current_frame(timeout)
+        return getattr(self, 'still_image', b'') or frame
 
     def _publish_frame(self):
         with self.frame_cond:
@@ -288,6 +323,7 @@ class Emulator:
             self.pb.memory[bank, address] = value
             self.options_applied = True
         self.play_clock.seed(snapshot.playtime_seconds)
+        self.game_clock = game_clock(self.pb.memory, self.data)
         self.tracker.observe(snapshot)
         from .steps import observe_mew
         self.steps.flush()
@@ -559,6 +595,7 @@ class Emulator:
             self.tracker.reset()
             self.steps.flush(force=True)
             self.statistics.previous = None
+            self.statistics.records.reset()
             from .legendary import Recovery
             self.legendary_recovery = Recovery()
             self.pb = self._boot()
@@ -652,7 +689,7 @@ class Emulator:
                 'health': self.health(), 'paused': self.paused, 'manual_mode': self.manual_mode, 'speed': self.speed,
                 'policy': self.policy.describe(), 'strategy': self.policy.details(), 'frame': self.frame,
                 'game': self.snapshot.to_dict() if self.snapshot else None, 'rom': self.rom_note,
-                'play_clock': self.play_clock.status(), 'performance': {'frames': self.executed_frames, 'sampled_at': time.monotonic()},
+                'play_clock': self.play_clock.status(), 'game_clock': getattr(self, 'game_clock', None), 'performance': {'frames': self.executed_frames, 'sampled_at': time.monotonic()},
                 'uptime': int(time.time() - self.started_at), 'stuck_seconds': int(time.time() - self.stuck_since),
                 'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,
                 'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,

@@ -111,13 +111,15 @@
     document.querySelector('#stats-perfect-note').textContent = records.perfect_count_is_minimum
       ? 'Verified minimum of individual finds' : 'Individual finds'
     document.querySelector('#stats-shiny-seen').textContent = shiny?.available ? number(shiny.seen) : 'Not tracked'
-    document.querySelector('#stats-shiny-acquired').textContent = shiny ? number(shiny.acquired) : 'Not tracked'
-    document.querySelector('#stats-shiny-held').textContent = shiny ? number(shiny.held) : 'Not tracked'
+    document.querySelector('#stats-shiny-acquired').textContent = shiny ? display(shiny.acquired) : 'Not tracked'
+    document.querySelector('#stats-shiny-held').textContent = shiny ? display(shiny.held) : 'Not tracked'
 
     document.querySelectorAll('.stats-overview .readout, #collection-details .readout').forEach(node => {
       node.classList.toggle('readout--missing', node.textContent === 'Not tracked')
     })
 
+    // Gold, Silver and Crystal have no Kanto Marathon, so the server sends null.
+    document.querySelector('#marathon-records').hidden = data.marathon === null
     const marathon = data.marathon || {}
     document.querySelector('#marathon-best').textContent = marathon.best_frames == null
       ? 'No finish yet' : raceTime(marathon.best_frames)
