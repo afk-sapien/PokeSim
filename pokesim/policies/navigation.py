@@ -52,6 +52,9 @@ class _Directions(dict):
         self._owner._touch(self._map)
 
     def __setitem__(self, key, value):
+        # Walking an edge again records what is already known, which leaves searches valid.
+        if key in self and self[key] == value:
+            return
         super().__setitem__(key, value)
         self._touch()
 
@@ -76,7 +79,8 @@ class _Directions(dict):
         self._touch()
 
     def setdefault(self, key, default=None):
-        self._touch()
+        if key not in self:
+            self._touch()
         return super().setdefault(key, default)
 
     def __ior__(self, other):
@@ -185,6 +189,10 @@ class Navigator:
         self._graph_signature = None
         self._map_signatures = {}
         self._edges_seen = None
+        # Counts changes to the searched graph, so a search that found nothing is not repeated
+        # until the graph it ran on changes.
+        self._graph_generation = 0
+        self._failed_route = None
         self._neighbor_cache = {}
         self._compiled_graph = None
         self._open_navigation = None
@@ -475,6 +483,7 @@ class Navigator:
                      frozenset(PAIR_COLLISIONS), frozenset(LEDGES), frozenset(MAPS.items()),
                      frozenset(WATER_TILESETS), tuple(DIRS.items()))
         if signature != self._graph_signature:
+            self._graph_generation += 1
             self._graph_signature = signature
             self._map_signatures.clear()
             self._neighbor_cache.clear()
@@ -503,6 +512,7 @@ class Navigator:
             key = (edges.map_versions.get(m), tuple(blocked.get(m, ())),
                    tuple(self.live_positions) if self.live_map == m else ())
             if key != self._map_signatures.get(m):
+                self._graph_generation += 1
                 self._map_signatures[m] = key
                 self._neighbor_cache.pop(m, None)
                 self._world_indices.pop(m, None)
@@ -664,7 +674,12 @@ class Navigator:
         self.target = goals
         self.path.clear()
         neighbors = self._search_neighbors(frame)
+        failure = None
         if getattr(self.neighbors, '__func__', None) is Navigator.neighbors:
+            # An unreachable goal would otherwise search the whole graph again on every step.
+            failure = (self._graph_generation, pos, goals, limit)
+            if failure == self._failed_route:
+                return None
             from .navigation_numba import SearchGraph, disable, kernel
             run = kernel()
             if run is not None:
@@ -672,6 +687,8 @@ class Navigator:
                     if self._compiled_graph is None or self._compiled_graph.signature is not self._graph_signature:
                         self._compiled_graph = SearchGraph(run, self._graph_signature, DIRS)
                     self.path.extend(self._compiled_graph.route(pos, goals, limit, neighbors, self._neighbor_cache))
+                    if not self.path:
+                        self._failed_route = failure
                     return self.path[0][1] if self.path else None
                 except Exception as error:
                     disable(error)
@@ -693,6 +710,8 @@ class Navigator:
             p, dr = prev[found]
             self.path.appendleft((p, dr, found))
             found = p
+        if not self.path and failure is not None:
+            self._failed_route = failure
         return self.path[0][1] if self.path else None
 
     def explore(self, pos, frame, rng):
