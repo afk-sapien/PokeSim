@@ -48,6 +48,59 @@ def offspring(data, first, second):
     return {29, 32} if species == 29 else {species}
 
 
+def member(mon, project, index):
+    """Whether ``mon`` is the project's parent in Day Care slot ``index``.
+
+    Trainer ID and DVs alone are not unique. Two boxed Pokémon caught by the same trainer can share
+    all five DVs, so a project also records each parent's species once it knows them.
+    """
+    species = project.get('species')
+    return identity(mon) == project['parents'][index] and (species is None or mon.species == species[index])
+
+
+def parent(mon, project):
+    return any(member(mon, project, index) for index in range(2))
+
+
+def recorded_species(data, snapshot, project):
+    """Fill in the parent species of a project saved before they were recorded, or None when no pair fits."""
+    pool = snapshot.party + snapshot.stored + tuple(mon for mon in snapshot.daycare if mon)
+    options = [[mon for mon in pool if identity(mon) == wanted] for wanted in project['parents']]
+    for first in options[0]:
+        for second in options[1]:
+            if first is not second and project['target'] in offspring(data, first, second):
+                return {**project, 'species': [first.species, second.species]}
+    return None
+
+
+def finished(project, snapshot):
+    return (project['target'] in snapshot.owned and not project.get('duplicate')
+            or any(mon.species == project['target'] and (mon.egg or identity(mon) not in project.get('existing', []))
+                   for mon in snapshot.party))
+
+
+def spare_slots(snapshot, project):
+    """Party slots the breeding errands may send to the PC, best choice first.
+
+    A parent still needed at the Day Care stays, and so does the only party member that knows a field
+    move. Storing that one would make the policy fetch it straight back for the next HM obstacle.
+    """
+    party, complete = snapshot.party, finished(project, snapshot)
+    def sole_field_move(slot):
+        others = {move for i, mon in enumerate(party) if i != slot and not mon.egg for move in mon.moves}
+        return bool(FIELD_MOVES.intersection(party[slot].moves) - others)
+    slots = [i for i, mon in enumerate(party) if i and not mon.egg and not sole_field_move(i)
+             and (complete or not parent(mon, project))]
+    return sorted(slots, key=lambda i: (bool(FIELD_MOVES.intersection(party[i].moves)), party[i].level))
+
+
+def make_room(policy, snapshot, Goal, label, project):
+    if not spare_slots(snapshot, project) and any(mon.egg for mon in snapshot.party):
+        # Every member is needed. Hatching an egg gives the party a Pokémon it can spare.
+        return nursery(policy, snapshot, Goal)
+    return pc_goal(policy, snapshot, Goal, label)
+
+
 def nursery(policy, snapshot, Goal):
     y = policy.collection.setdefault('nursery_end', 10)
     if snapshot.map == policy.data.map_ids['GOLDENROD_CITY'] and (snapshot.x, snapshot.y) == (20, y):
@@ -60,6 +113,8 @@ def journey(policy, snapshot, Goal):
     state, data = policy.collection, policy.data
     parents = snapshot.daycare
     project = state.get('breeding')
+    if project is not None and 'species' not in project:
+        project = state['breeding'] = recorded_species(data, snapshot, project)
     if project is None and any(mon.egg for mon in snapshot.party):
         return nursery(policy, snapshot, Goal)
     if project is None:
@@ -92,10 +147,11 @@ def journey(policy, snapshot, Goal):
                 if not ready:
                     missing.add(baby)
             for target in missing:
-                choices.append((target, first.box is not None, second.box is not None, identity(first), identity(second)))
+                choices.append((target, first.box is not None, second.box is not None, identity(first), identity(second),
+                                first.species, second.species))
         if choices and snapshot.money >= 3000:
-            target, _, _, first, second = min(choices)
-            project = state['breeding'] = {'target': target, 'parents': [first, second],
+            target, _, _, first, second, *species = min(choices)
+            project = state['breeding'] = {'target': target, 'parents': [first, second], 'species': species,
                 'duplicate': target in snapshot.owned,
                 'existing': [identity(mon) for mon in snapshot.party + snapshot.stored if mon.species == target]}
     if project is None:
@@ -103,29 +159,33 @@ def journey(policy, snapshot, Goal):
     state['phase'] = 'breeding'
     if snapshot.egg_ready:
         if len(snapshot.party) == 6:
-            return pc_goal(policy, snapshot, Goal, 'Make room for the Day Care egg')
+            return make_room(policy, snapshot, Goal, 'Make room for the Day Care egg', project)
         return policy.person(snapshot, 'collection_breed_egg', 'Receive the Day Care egg', 'ROUTE_34', 'DayCareManScript_Outside')
-    complete = (project['target'] in snapshot.owned and not project.get('duplicate')
-                or any(mon.species == project['target'] and (mon.egg or identity(mon) not in project.get('existing', []))
-                       for mon in snapshot.party))
-    for index, parent in enumerate(parents):
-        if parent and (complete or identity(parent) != project['parents'][index]):
+    complete = finished(project, snapshot)
+    if (not complete and all(parents) and all(member(mon, project, index) for index, mon in enumerate(parents))
+            and project['target'] not in offspring(data, *parents)):
+        # These two can never produce the target, so walking with them would wait forever.
+        state['breeding'] = None
+        return None
+    for index, mon in enumerate(parents):
+        if mon and (complete or not member(mon, project, index)):
             if len(snapshot.party) == 6:
-                return pc_goal(policy, snapshot, Goal, 'Make room to retrieve the Day Care partner')
+                return make_room(policy, snapshot, Goal, 'Make room to retrieve the Day Care partner', project)
             return policy.person(snapshot, 'collection_breed_take_' + str(index), 'Retrieve the Day Care partner',
                                  'DAY_CARE', 'DayCareManScript_Inside' if index == 0 else 'DayCareLadyScript')
     if complete:
         state['breeding'] = None
         return nursery(policy, snapshot, Goal) if any(mon.egg for mon in snapshot.party) else None
-    for index, parent in enumerate(parents):
-        if parent:
+    for index, current in enumerate(parents):
+        if current:
             continue
-        mon = next((mon for mon in snapshot.party + snapshot.stored if identity(mon) == project['parents'][index]), None)
+        mon = next((mon for mon in snapshot.party + snapshot.stored if member(mon, project, index)), None)
         if mon is None:
             state['breeding'] = None
             return None
         if mon.box is not None:
             state['breed_withdraw'] = identity(mon)
+            state['breed_withdraw_species'] = mon.species
             return pc_goal(policy, snapshot, Goal, 'Bring the breeding partner from storage')
         return policy.person(snapshot, 'collection_breed_leave_' + str(index), 'Leave a partner at the Day Care',
                              'DAY_CARE', 'DayCareManScript_Inside' if index == 0 else 'DayCareLadyScript')
@@ -146,7 +206,7 @@ def arrive(policy, snapshot):
         return None
     if key.startswith('collection_breed_leave_'):
         index = int(key[-1])
-        slot = next((i for i, mon in enumerate(snapshot.party) if identity(mon) == project['parents'][index]), None)
+        slot = next((i for i, mon in enumerate(snapshot.party) if member(mon, project, index)), None)
         if slot is None:
             return 'b'
         policy.menu = DayCare(index, slot)
@@ -162,14 +222,14 @@ def arrive(policy, snapshot):
                     policy.menu = ChangeBox(box)
                     return 'a'
                 return 'b'
-            candidates = [i for i, mon in enumerate(snapshot.party) if i and not mon.egg
-                          and identity(mon) not in project['parents']]
+            candidates = spare_slots(snapshot, project)
             if not candidates:
                 return 'b'
-            slot = min(candidates, key=lambda i: (bool(FIELD_MOVES.intersection(snapshot.party[i].moves)), snapshot.party[i].level))
-            policy.menu = Storage('DEPOSIT', slot, 6)
+            policy.menu = Storage('DEPOSIT', candidates[0], 6)
         else:
-            mon = next((mon for mon in snapshot.stored if identity(mon) == state.get('breed_withdraw')), None)
+            species = state.get('breed_withdraw_species')
+            mon = next((mon for mon in snapshot.stored if identity(mon) == state.get('breed_withdraw')
+                        and (species is None or mon.species == species)), None)
             if mon:
                 policy.menu = ChangeBox(mon.box) if mon.box != snapshot.active_box else Storage('WITHDRAW', mon.position, len(snapshot.party))
         return 'a'
