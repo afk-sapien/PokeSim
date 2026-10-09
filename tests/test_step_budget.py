@@ -24,6 +24,8 @@ MAX_MS = 50
 STEPS = 60
 # Shared CI runners are slower and noisier than a workstation, so the clock is scaled there.
 SCALE = float(os.environ.get('POKESIM_STEP_BUDGET_SCALE', '1'))
+# CPU time of this thread, so a runner that deschedules the test mid-step does not count as a slow step.
+clock = time.thread_time
 
 
 def budget(times):
@@ -113,9 +115,9 @@ def test_gen1_step_stays_within_budget_on_a_large_state():
     times = []
     for step in range(STEPS):
         snapshot = replace(snapshot, frame=100 + step * 16)
-        start = time.perf_counter()
+        start = clock()
         actions = policy.step(PolicyContext(snapshot, 0, step / 4, memory))
-        times.append(time.perf_counter() - start)
+        times.append(clock() - start)
         if actions and actions[0].button:
             snapshot = walk(policy, snapshot, actions[0])
     assert len(policy.nav.edges) > 20000
@@ -206,9 +208,9 @@ def test_gen2_step_stays_within_budget_on_a_large_state(game):
     times, maps = [], {mid}
     for step in range(120):
         snapshot = replace(snapshot, frame=100 + step * 16)
-        start = time.perf_counter()
+        start = clock()
         action = policy.step(snapshot, memory)
-        times.append(time.perf_counter() - start)
+        times.append(clock() - start)
         if action.button in {'up', 'down', 'left', 'right'}:
             snapshot = gen2_walk(policy, snapshot, memory, action.button)
             maps.add(snapshot.map)
