@@ -562,10 +562,16 @@ test('Gold, Silver and Crystal adventures hide the palette and never send one', 
   view.click('settings', game.id)
   assert.equal(view.element('#settings-palette-label').hidden, true)
   assert.equal(view.element('#settings-palette-note').hidden, true)
+  assert.equal(view.element('#settings-event-steps-label').textContent, 'Steps between Sudowoodo and Snorlax returns')
+  view.element('#settings-legendary-steps').value = '500'
+  view.element('#settings-event-steps').value = '200'
   view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
   await settle()
   const settings = JSON.parse(view.calls.find(call => call.options.method === 'PATCH').options.body).settings
   assert.equal('palette' in settings, false)
+  assert.equal(settings.legendary_return_steps, 500)
+  assert.equal(settings.event_return_steps, 200)
+  assert.equal('fossil_preference' in settings, false)
 })
 
 test('settings render existing backups without an adventure variable', async () => {

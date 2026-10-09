@@ -781,11 +781,13 @@
         input.value = game.settings?.[setting] ?? fallback
         input.disabled = running(game)
       }
-      for (const field of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) {
+      // Gold, Silver and Crystal return legendaries, Sudowoodo and Snorlax. They have no fossil or Dojo choice.
+      for (const field of ['fossil-preference', 'dojo-preference']) {
         const input = $(`#settings-${field}`)
         input.closest('label').hidden = johto
         input.disabled = johto || running(game)
       }
+      $('#settings-event-steps-label').textContent = johto ? 'Steps between Sudowoodo and Snorlax returns' : 'Steps between gift and trade returns'
       $('#adventure-settings').showModal()
       return
     }
@@ -822,7 +824,7 @@
       const game = adventures.find(item => item.id === $('#settings-id').value)
       const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, celebi_event: $('#settings-celebi-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
       if (['gold', 'silver', 'crystal'].includes(game?.version)) {
-        for (const field of ['legendary_return_steps', 'event_return_steps', 'fossil_preference', 'dojo_preference']) delete rewards[field]
+        for (const field of ['fossil_preference', 'dojo_preference']) delete rewards[field]
       }
       const result = await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
         settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), ...($('#settings-palette').disabled ? {} : {palette: $('#settings-palette').value || 'original'}), ...rewards}}, 'PATCH')

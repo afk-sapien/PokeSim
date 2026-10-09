@@ -36,7 +36,9 @@ def legends(policy, snapshot, Goal):
     celebi = journey(policy, snapshot, Goal)
     if celebi:
         return celebi
-    if {243, 244, 245, 249, 250} <= snapshot.owned:
+    # A walking return makes an owned legendary worth another capture.
+    owned = snapshot.owned - getattr(policy, 'returned', set())
+    if {243, 244, 245, 249, 250} <= owned:
         return None
     data = policy.data
     policy.collection['phase'] = 'legendary'
@@ -69,13 +71,13 @@ def legends(policy, snapshot, Goal):
                     return policy.person(snapshot, 'sage_' + trainer.lower(), 'Pass the Wise Trio’s test',
                                          'WISE_TRIOS_ROOM', 'TrainerSage' + trainer.title())
         return Goal('legend_suicune', 'Meet Suicune at the Tin Tower', 'TIN_TOWER_1F', 9, 12)
-    if 249 not in snapshot.owned and not snapshot.event('EVENT_FOUGHT_LUGIA'):
+    if 249 not in owned and not snapshot.event('EVENT_FOUGHT_LUGIA'):
         return policy.person(snapshot, 'legend_lugia', 'Seek Lugia in the Whirl Islands', 'WHIRL_ISLAND_LUGIA_CHAMBER', 'Lugia')
     if (data.game == 'crystal' and 250 not in snapshot.owned
             and {243, 244, 245} <= snapshot.owned and data.items['RAINBOW_WING'] not in items):
         return policy.person(snapshot, 'rainbow_wing', 'Return to the Tin Tower with the three beasts',
                              'TIN_TOWER_1F', 'TinTower1FSage5Script')
-    if 250 not in snapshot.owned and data.items['RAINBOW_WING'] in items and not snapshot.event('EVENT_FOUGHT_HO_OH'):
+    if 250 not in owned and data.items['RAINBOW_WING'] in items and not snapshot.event('EVENT_FOUGHT_HO_OH'):
         return policy.person(snapshot, 'legend_ho_oh', 'Seek Ho-Oh above the Tin Tower', 'TIN_TOWER_ROOF', 'TinTowerHoOh')
     return roamers(policy, snapshot, Goal)
 
@@ -205,6 +207,7 @@ def roamers(policy, snapshot, Goal):
     from .collection import encounter_points
     from .ram import Memory
     state, data = policy.collection, policy.data
+    owned = snapshot.owned - getattr(policy, 'returned', set())
     if policy.decisions < state.get('roam_after', 0):
         return None
     started = state.setdefault('roam_started', policy.decisions)
@@ -215,7 +218,7 @@ def roamers(policy, snapshot, Goal):
         return None
     state.pop('roam_destination', None)
     wanted = [row for row in snapshot.roamers
-              if row['species'] and row['species'] not in snapshot.owned and row['map'] in data.maps]
+              if row['species'] and row['species'] not in owned and row['map'] in data.maps]
     if not wanted:
         state.pop('roam_lead', None)
         return None

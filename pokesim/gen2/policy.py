@@ -56,6 +56,8 @@ class Policy:
         self.healing_map = None
         self.completed = {}
         self.collection = {'target': None, 'attempts': {}}
+        # Owned one-time encounters that a walking return brought back for another capture.
+        self.returned = set()
         self.demand = {}
         self.naming = Naming(seed)
         self.learning = False
@@ -258,8 +260,14 @@ class Policy:
                 if not snapshot.event('EVENT_TALKED_TO_FLORIA_AT_FLOWER_SHOP'):
                     return self.person(snapshot, 'floria_shop', 'Visit Floria at the flower shop', 'GOLDENROD_FLOWER_SHOP', 'FlowerShopFloriaScript')
             return self.person(snapshot, 'squirtbottle', 'Borrow the SquirtBottle', 'GOLDENROD_FLOWER_SHOP', 'FlowerShopTeacherScript')
+        # The tree also stands again after a fled battle or a walking return.
         if not snapshot.event('EVENT_FOUGHT_SUDOWOODO'):
             return Goal('sudowoodo', 'Investigate the moving tree', 'ROUTE_36', 35, 10, 'up')
+        if not snapshot.event('EVENT_ROUTE_36_SUDOWOODO'):
+            # The tree stands again after a fled battle or a walking return.
+            goal = self.returned_encounter(snapshot, Goal, 'Sudowoodo')
+            if goal is not None:
+                return goal or Goal('sudowoodo', 'Investigate the moving tree', 'ROUTE_36', 35, 10, 'up')
         self.completed.setdefault('sudowoodo', snapshot.frame)
         if self.data.game == 'crystal' and not snapshot.event('EVENT_RELEASED_THE_BEASTS'):
             if not snapshot.event('EVENT_HOLE_IN_BURNED_TOWER'):
@@ -525,6 +533,18 @@ class Policy:
                 and not any(127 in mon.moves for mon in snapshot.party)):
             return self.data.maps[self.data.map_ids['NEW_BARK_TOWN']]['region']
         return self.data.maps[snapshot.map]['region']
+
+    def returned_encounter(self, snapshot, Goal, name):
+        """Prepare for a one-time encounter that came back: a storage goal, False to go now, None to wait."""
+        if self.in_league(snapshot) or self.in_transmitter_room(snapshot):
+            # The League rooms only lead forward, so finish the run before going back for it.
+            return None
+        if not snapshot.can_catch:
+            goal = self.storage_goal(snapshot)
+            return Goal('collection_box', f'Make room for {name}', goal.map_name, goal.x, goal.y, goal.face)
+        master = self.data.items['MASTER_BALL']
+        # The Master Ball stays reserved for legendaries, and a battle without a ball only knocks it out.
+        return False if any(item != master and count for item, count in snapshot.pockets['balls']) else None
 
     def storage_goal(self, snapshot):
         choices, unreachable = [], []
@@ -1109,7 +1129,8 @@ class Policy:
             # Each Unown letter counts separately in the Unown Pokédex, so catch every missing letter.
             from .collection import unown_letter, unown_missing
             requested |= unown_letter(mem.read('wEnemyMonDVs', 2)) in unown_missing(self, snapshot)
-        catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or requested)
+        catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or requested
+                                              or catch_species in self.returned)
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in
                     {label.casefold() for label in self.ball_labels(snapshot)} for item, count in snapshot.pockets['balls'] if count))
         if (catch and not partner and snapshot.enemy_species not in {130, 143, 185, 243, 244, 245, 249, 250, 251}
@@ -1221,7 +1242,7 @@ class Policy:
                 return Action(None, 0, 24)
             self.learning = False
             if (roaming and not catch and not trapped and snapshot.in_battle == 1
-                    and snapshot.enemy_species not in snapshot.owned):
+                    and (snapshot.enemy_species not in snapshot.owned or snapshot.enemy_species in self.returned)):
                 # A fainted roaming beast never returns, so leave it for a visit with room and balls.
                 if mem.byte('wMenuCursorX') < 2:
                     return Action('right')

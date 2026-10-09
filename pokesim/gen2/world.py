@@ -56,7 +56,7 @@ def travel_collision(data, snapshot, mid, grid):
         for event, x in [('EVENT_OPENED_MT_SILVER', 7), ('EVENT_FOUGHT_SNORLAX', 12)]:
             if not snapshot.event(event):
                 grid[5 * data.maps[mid]['width'] + x] = 7
-    if name == 'ROUTE_36' and not snapshot.event('EVENT_FOUGHT_SUDOWOODO'):
+    if name == 'ROUTE_36' and not snapshot.event('EVENT_ROUTE_36_SUDOWOODO'):
         grid = list(grid)
         grid[9 * data.maps[mid]['width'] + 35] = 7
     if name == 'ROUTE_19' and not snapshot.event('EVENT_CINNABAR_ROCKS_CLEARED'):
@@ -71,7 +71,7 @@ def travel_collision(data, snapshot, mid, grid):
         width = data.maps[mid]['width']
         for y in (4, 5):
             grid[y * width + 5] = 7
-    if name == 'VERMILION_CITY' and not snapshot.event('EVENT_FOUGHT_SNORLAX'):
+    if name == 'VERMILION_CITY' and not snapshot.event('EVENT_VERMILION_CITY_SNORLAX'):
         grid = list(grid)
         width = data.maps[mid]['width']
         for y in (8, 9):

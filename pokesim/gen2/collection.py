@@ -224,6 +224,12 @@ def journey(policy, snapshot, mem, Goal):
     if funding is not None:
         state['phase'] = 'league'
         return league_funding(policy, snapshot, Goal)
+    if getattr(policy, 'returned', set()) & {243, 244, 245, 249, 250, 251}:
+        # A returned legendary waits at its original home ahead of routine collection.
+        from .quests import legends
+        goal = legends(policy, snapshot, Goal)
+        if goal:
+            return goal
     from .ruins import journey as ruins
     goal = ruins(policy, snapshot, Goal)
     if goal:

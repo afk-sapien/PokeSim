@@ -44,8 +44,14 @@ def journey(policy, snapshot, mem, Goal):
         return person('misty', 'Challenge Misty', 'CERULEAN_GYM', 'CeruleanGymMistyScript')
     if not mem.byte('wPokegearFlags') & 8:
         return person('expansion', 'Receive the Kanto radio expansion', 'LAV_RADIO_TOWER_1F', 'LavRadioTower1FGentlemanScript')
+    snorlax = Goal('snorlax', 'Wake Snorlax with the Poké Flute channel', 'VERMILION_CITY', 36, 8, 'left')
     if not snapshot.event('EVENT_FOUGHT_SNORLAX'):
-        return Goal('snorlax', 'Wake Snorlax with the Poké Flute channel', 'VERMILION_CITY', 36, 8, 'left')
+        return snorlax
+    if not snapshot.event('EVENT_VERMILION_CITY_SNORLAX'):
+        # A walking return shows Snorlax again without clearing the fought flag.
+        goal = policy.returned_encounter(snapshot, Goal, 'Snorlax')
+        if goal is not None:
+            return goal or snorlax
     if not snapshot.badges & 256:
         return person('brock', 'Challenge Brock', 'PEWTER_GYM', 'PewterGymBrockScript')
     if not snapshot.badges & 16384:

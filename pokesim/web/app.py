@@ -141,6 +141,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         from ..adventure_records import status as record_status
         if gen2:
             from ..gen2.steps import STEPS, status as mew_status
+            from ..gen2 import returns as gen2_returns
             from ..gen2.battle_power import battle_power as gen2_power
             from ..gen2.tracking import CAPTURES, apply as gen2_goals
             current = emu.status() or {}
@@ -153,7 +154,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                     'overview': overview(current, {'milestones': goals}, {
                         'steps': walked.get('total'), 'available': bool(walked), 'started_at': walked.get('started_at')}),
                     'milestone_records': record_status(store, 2), 'recent': recent(store),
-                    'legendary_returns': {}, 'event_returns': {},
+                    'legendary_returns': gen2_returns.status(store), 'event_returns': gen2_returns.event_status(store),
                     'highlights': highlights(game, (lambda mon: gen2_power(mon, emu.data),
                                                     lambda mon: None if mon.get('egg') else mon.get('dv_total')),
                                              emu.data.species),

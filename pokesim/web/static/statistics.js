@@ -141,7 +141,7 @@
     activityPanel.hidden = !activities?.enabled && !mew?.enabled && !legendaryAvailable
     const activityList = document.querySelector('#event-return-list')
     activityList.replaceChildren()
-    const labels = {eevee: 'Eevee', dojo: 'Dojo rematch', fossil: 'Fossil expedition', trade_1: 'Mr. Mime exchange', trade_4: 'Farfetch’d exchange', trade_5: 'Lickitung exchange', trade_6: 'Jynx exchange'}
+    const labels = {sudowoodo: 'Sudowoodo', snorlax: 'Snorlax', eevee: 'Eevee', dojo: 'Dojo rematch', fossil: 'Fossil expedition', trade_1: 'Mr. Mime exchange', trade_4: 'Farfetch’d exchange', trade_5: 'Lickitung exchange', trade_6: 'Jynx exchange'}
     const cards = (activities?.enabled ? activities.activities : []).map(row => {
       const remaining = Math.max(0, row.remaining)
       const ready = row.ready
@@ -159,7 +159,7 @@
       detail: mew.first_gift ? 'Your first Mew awaits a League victory.' : mew.league_required ? 'Claim another Mew with your next victory.' : 'steps remaining, then a League win',
       remaining: mew.remaining, interval: mew.first_gift ? null : mew.interval})
     if (legendaryAvailable) {
-      const names = {144: 'Articuno', 145: 'Zapdos', 146: 'Moltres', 150: 'Mewtwo'}
+      const names = {144: 'Articuno', 145: 'Zapdos', 146: 'Moltres', 150: 'Mewtwo', 243: 'Raikou', 244: 'Entei', 245: 'Suicune', 249: 'Lugia', 250: 'Ho-Oh', 251: 'Celebi'}
       const ready = returns.ready.length > 0
       cards.push({title: 'Legendary returns', key: 'legendary',
         state: ready ? 'ready' : 'walking', badge: ready ? 'Ready' : 'Walking',

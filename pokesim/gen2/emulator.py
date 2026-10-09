@@ -329,9 +329,20 @@ class Emulator:
         self.steps.flush()
         self.statistics.observe(snapshot)
         if not self.store.get('trade_hold') and not self.preparation and not self.manual_mode:
-            for species in self.legendary_recovery.observe(snapshot, self.pb.memory):
+            from . import returns
+            walking = self.steps.value
+            notices, changed = returns.observe(self.store, snapshot, self.pb.memory, walking)
+            activity, reopened = returns.observe_events(self.store, snapshot, self.pb.memory, walking)
+            ready, closed = returns.claims(self.store)
+            self.policy.returned = ready | returns.returned_events(self.store)
+            for event in notices + activity:
+                self._event(event, snapshot)
+            for species in self.legendary_recovery.observe(snapshot, self.pb.memory, repeat=ready, blocked=closed):
+                changed = True
                 self._event(Event('legendary_retry', f'{self.data.species[species]["name"]} can be encountered again',
                     'The encounter ended without a catch. Used supplies and adventure progress are preserved.'), snapshot)
+            if changed or reopened:
+                snapshot = self.snapshot = read_snapshot(self.pb.memory, self.data, self.frame)
         if snapshot.map not in self.history['maps']:
             self.history['maps'].append(snapshot.map)
             self._event(Event('map', f'Arrived at {snapshot.map_name}', priority=2), snapshot)

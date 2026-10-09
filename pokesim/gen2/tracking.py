@@ -72,6 +72,8 @@ class Tracker:
             if not db.execute('INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
                               (fingerprint, species, time.time())).rowcount:
                 return
+            from .returns import consume
+            consume(db, species)
             value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (CAPTURES,)).fetchone()[0])
             value['counts'][str(species)] = value['counts'].get(str(species), 0) + 1
             value['total'] += 1
