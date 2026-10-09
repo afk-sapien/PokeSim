@@ -70,6 +70,16 @@ def record_result(policy, cap, wins):
     failed[str(cap)] = {'streak': streak, 'until': policy.decisions + RETRY_AFTER * 2 ** min(streak, 5)}
 
 
+def holds_lead(policy):
+    """Whether the prepared Tower team's lead is chosen by the Tower, not by level.
+
+    The Tower leads with its strongest partner, which can sit more than five levels below another
+    partner. A general reorder by level would swap it out after every Tower reorder, forever.
+    """
+    state = policy.collection.get('tower')
+    return bool(state and state.get('preparation_center') and not state.get('returning'))
+
+
 def select_team(snapshot, skip=()):
     def strength(mon):
         value = (sum(mon.stats) - mon.level - 35) / mon.level

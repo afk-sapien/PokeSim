@@ -1037,18 +1037,11 @@ class Policy:
             if answer:
                 return Action(answer, 8, 36)
             return Action('a', 8, 36)
-        strongest = max((i for i, mon in enumerate(snapshot.party) if not mon.egg),
-                        key=lambda i: snapshot.party[i].level, default=0)
-        # A roaming-beast or static-legendary sleeper leads on purpose even when it is far below the rest of the party.
-        if (strongest and snapshot.party[strongest].level > snapshot.party[0].level + 5
-                and not self.collection.get('roam_lead')
-                and not (self.goal and self.goal.key in {'legend_lugia', 'legend_ho_oh', 'legend_suicune', 'collection_static_lead'})):
-            mon = snapshot.party[strongest]
-            lead = Lead(strongest, (mon.trainer_id, mon.dvs))
-            if self.allowed(lead, snapshot):
-                # A refused reorder is retried later rather than holding up the journey.
-                self.menu = lead
-                return Action(None, 0, 24)
+        lead = self.level_lead(snapshot)
+        if lead and self.allowed(lead, snapshot):
+            # A refused reorder is retried later rather than holding up the journey.
+            self.menu = lead
+            return Action(None, 0, 24)
         for event, move in ([] if self.collection.get('tower') or self.collection.get('contest') or self.collection.get('time_capsule_restore') else [('EVENT_GOT_HM01_CUT', 15), ('EVENT_GOT_HM02_FLY', 19), ('EVENT_GOT_HM03_SURF', 57),
                             ('EVENT_GOT_HM04_STRENGTH', 70), ('EVENT_GOT_HM06_WHIRLPOOL', 250), ('EVENT_GOT_HM07_WATERFALL', 127)]):
             if snapshot.event(event) and not any(move in mon.moves for mon in snapshot.party):
@@ -1568,6 +1561,21 @@ class Policy:
         return SimpleNamespace(enemy_species=snapshot.enemy_species, enemy_level=snapshot.enemy_level,
             enemy_hp=snapshot.enemy_hp, enemy_defense=mem.word('wEnemyMonDefense'),
             enemy_special_defense=mem.word('wEnemyMonSpclDef'))
+
+    def level_lead(self, snapshot):
+        """Move the highest-level Pokémon to the front when the lead lags well behind it."""
+        from .tower import holds_lead
+        strongest = max((i for i, mon in enumerate(snapshot.party) if not mon.egg),
+                        key=lambda i: snapshot.party[i].level, default=0)
+        if not strongest or snapshot.party[strongest].level <= snapshot.party[0].level + 5:
+            return None
+        # A roaming-beast or static-legendary sleeper leads on purpose even when it is far below the rest of the
+        # party, and so does the Tower team's chosen lead, which the Tower preparation would otherwise swap back.
+        if (self.collection.get('roam_lead') or holds_lead(self)
+                or self.goal and self.goal.key in {'legend_lugia', 'legend_ho_oh', 'legend_suicune', 'collection_static_lead'}):
+            return None
+        mon = snapshot.party[strongest]
+        return Lead(strongest, (mon.trainer_id, mon.dvs))
 
     def tower_switch(self, snapshot, mem, active):
         if active >= len(snapshot.party):
