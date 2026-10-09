@@ -262,6 +262,11 @@ def journey(policy, snapshot, mem, Goal):
     goal = prizes(policy, snapshot, Goal)
     if goal:
         return goal
+    if state.get('funding') is not None:
+        # The prize partner just asked for League prize money. Start that run now, or one decision
+        # picks a later goal such as the Tohjo Falls Moon Stone and the next one walks away from it.
+        state['phase'] = 'league'
+        return league_funding(policy, snapshot, Goal)
     from .quests import stones
     goal = stones(policy, snapshot, Goal)
     if goal:

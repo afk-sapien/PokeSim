@@ -65,6 +65,32 @@ def test_game_corner_waits_for_earned_money(real_data):
     assert policy.collection['funding'] == 3
 
 
+def test_game_corner_funding_starts_the_league_run_in_the_same_decision(real_data, monkeypatch):
+    # A Crystal replay alternated between the Tohjo Falls Moon Stone and League funding after every
+    # Hall of Fame entry, because the Game Corner asked for funding and then let a later goal through.
+    from pokesim.gen2 import celebi, contest, npc_trades, quests, ruins, tower
+    from pokesim.gen2 import breeding
+    from pokesim.gen2.collection import journey
+    from pokesim.gen2.gamecorner import prizes
+    from pokesim.gen2.policy import Goal, Policy
+    for module in (ruins, tower, celebi, contest, breeding, npc_trades):
+        monkeypatch.setattr(module, 'journey', lambda *args, **kwargs: None)
+    monkeypatch.setattr(npc_trades, 'requests', lambda *args: set())
+    monkeypatch.setattr(quests, 'gifts', lambda *args: None)
+    monkeypatch.setattr(quests, 'trade_items', lambda *args: None)
+    policy = Policy(real_data)
+    policy.person = lambda snapshot, key, *args: key
+    prize = prizes(real_data.game)[-1][0]
+    snapshot = SimpleNamespace(map=real_data.map_ids['NEW_BARK_TOWN'], can_catch=True, box_counts=(5,) * 14,
+        hall_of_fame_count=11, money=32980, coins=0, items=((real_data.items['COIN_CASE'], 1),),
+        pockets={'balls': [(1, 14)]}, daycare=(None, None), party=(), stored=(),
+        owned=set(range(1, 252)) - {prize}, event=lambda name: name != 'EVENT_WILLS_ROOM_ENTRANCE_CLOSED')
+    policy.collection['funding'] = 11
+    assert journey(policy, snapshot, None, Goal) == 'funds_will'
+    assert policy.collection['funding'] == 12
+    assert journey(policy, snapshot, None, Goal) == 'funds_will'
+
+
 def test_game_corner_menu_survives_policy_reload(real_data):
     from pokesim.gen2.gamecorner import Coins
     from pokesim.gen2.policy import Policy
