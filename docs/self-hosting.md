@@ -173,6 +173,8 @@ The Library opens directly without a sign-in or owner key. Its default published
 
 The Compose service uses an init process to reap children and allows 90 seconds for orderly shutdown. Keep a single manager process per application folder. Do not add Uvicorn workers or share one application volume between containers.
 
+The image includes the optional [navigation acceleration](desktop.md#optional-navigation-acceleration). Each Red or Blue adventure compiles its route search once at startup and keeps the compiled code in `/tmp/numba-cache`. The compiled search gives the same moves as the Python one. It makes repeated searches faster and uses about 115 MB more memory per adventure. Set `POKESIM_NAVIGATION_BACKEND=python` in the service environment to use the Python search instead.
+
 A native server uses the same application:
 
 ```sh

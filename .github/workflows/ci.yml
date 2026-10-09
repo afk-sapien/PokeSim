@@ -155,6 +155,9 @@ jobs:
           assert not (Path(pokesim.__file__).parent / 'data/strategy.json').exists()
           assert list(Path('/usr/share/pokesim/sources').glob('pyboy-rs-*.tar.gz'))
           pokesim_core.emulator.check_runtime()
+          from pokesim.policies.navigation_numba import kernel
+          assert kernel() is not None, 'the image should compile route searches'
+          assert os.listdir(os.environ['NUMBA_CACHE_DIR']), 'compiled searches should be cached'
           PYCODE
   container-proxy:
     runs-on: ubuntu-latest

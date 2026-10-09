@@ -12,13 +12,16 @@ ARG EMULATOR_SOURCE_URL=https://github.com/afk-sapien/pyboy-rs/releases/download
 ARG EMULATOR_SOURCE_SHA256=e47c792c52e328105f268b4539ac794abd02cdf34e17ea8837b5d5b4694b54a0
 ADD --checksum=sha256:${EMULATOR_SOURCE_SHA256} ${EMULATOR_SOURCE_URL} /emulator-source/pyboy-rs-source.tar.gz
 # The locked dependencies are release wheels, so this stage needs no compiler or Rust toolchain.
-RUN uv sync --frozen --no-dev --no-editable \
+# The acceleration extra compiles route searches with numba. Its lock markers only select it where
+# wheels exist (amd64 and arm64 Linux here), and navigation falls back to Python without it.
+RUN uv sync --frozen --no-dev --no-editable --extra acceleration \
     && .venv/bin/python tools/bundle_dependency_sources.py /notices --emulator-source /emulator-source/pyboy-rs-source.tar.gz
 
 FROM python:3.14-slim-trixie
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     DATA_DIR=/data ROM_PATH=/roms/pokered.gb PORT=8000 HOST=0.0.0.0 \
-    SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy PATH=/app/.venv/bin:$PATH
+    SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy PATH=/app/.venv/bin:$PATH \
+    NUMBA_CACHE_DIR=/tmp/numba-cache
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/* \
