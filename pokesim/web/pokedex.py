@@ -10,7 +10,7 @@ from functools import lru_cache
 from urllib.parse import quote
 
 from ..game_data import load
-from ..pokemon import STAT_NAMES, TYPES, experience_details, move_details, stored_strength
+from ..pokemon import STAT_NAMES, TYPES, experience_details, stored_condition, stored_strength
 from ..investment import assessment
 from ..battle_power import battle_power
 from ..ram import DEX_NAMES, MAP_NAMES, MOVES as MOVE_TABLE
@@ -191,7 +191,7 @@ def live_status(game: dict | None, collection: dict | None = None, *, league_rew
         "storage": {**storage,
                     "pokemon": [{**mon, "dex": dex_of.get(mon["species"]),
                                  "type_names": species_types(mon["species"]),
-                                 "move_details": move_details(mon.get("moves")),
+                                 **stored_condition(mon),
                                  "experience_progress": experience_details(
                                      mon.get("experience"), mon.get("level"),
                                      SPECIES.get(mon["species"], {}).get("growth")), **stored_strength(mon), **assessment(mon), 'battle_power': battle_power(mon)}

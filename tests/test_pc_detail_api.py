@@ -11,7 +11,8 @@ from pokesim.web.pokedex import live_status
 def gen1_snapshot():
     party = (PartyMon(153, 12, 30, 15, 'LEAF', moves=(22, 33, 0, 0), pp=(3, 35, 0, 0), max_pp=(16, 35, 0, 0),
                       experience=2300, dvs=(8,) * 5, stat_exp=(0,) * 5, trainer_id=100),)
-    boxed = (StoredMon(0, 0, 153, 20, 'BUD', (33, 45, 0, 0), 6000, (1,) * 5, (0,) * 5, 100),)
+    boxed = (StoredMon(0, 0, 153, 20, 'BUD', (33, 45, 0, 0), 6000, (1,) * 5, (0,) * 5, 100,
+                       hp=31, status=0, pp=(20, 0, 0, 0), max_pp=(35, 40, 0, 0)),)
     return Snapshot(frame=1, map=1, x=1, y=1, badges=0, party=party, owned=frozenset(), seen=frozenset(),
                     money=0, items=(), in_battle=0, battle_type=0, enemy_species=0, enemy_level=0, opponent=0,
                     player_name='RED', rival_name='BLUE', playtime=(0, 0, 0), textbox=False, start_menu=False,
@@ -28,9 +29,31 @@ def test_gen1_party_and_boxes_carry_move_details_and_level_progress():
     assert lead['experience_progress']['remaining'] == 235
     boxed = status['storage']['pokemon'][0]
     assert [move['name'] for move in boxed['move_details']] == ['Tackle', 'Growl']
-    assert 'pp' not in boxed['move_details'][0] and boxed['move_details'][1]['power'] == 0
+    assert boxed['move_details'][0]['pp'] == 20 and boxed['move_details'][0]['max_pp'] == 35
+    assert boxed['move_details'][1] == {'name': 'Growl', 'type': 'Normal', 'power': 0, 'accuracy': 100,
+                                        'pp': 0, 'max_pp': 40}
+    # Bulbasaur 45 base HP, HP DV 1, no stat exp, level 20: (46 * 2) * 20 // 100 + 30.
+    assert boxed['max_hp'] == 48 and boxed['hp'] == 31 and boxed['status_label'] == 'Healthy'
     assert boxed['experience'] == 6000
     assert boxed['experience_progress']['total'] == 6000 and not boxed['experience_progress']['max_level']
+
+
+def test_gen1_box_records_decode_current_hp_status_and_pp_ups():
+    from pokesim.ram import _decode_box
+    raw = bytearray(33)
+    raw[0], raw[3], raw[4] = 153, 20, 8          # Bulbasaur (internal 153), level 20, poisoned
+    raw[1:3] = (12).to_bytes(2, 'big')
+    raw[8:10] = bytes((33, 45))                 # Tackle, Growl
+    raw[27:29] = bytes((0x11, 0x11))           # HP DV 15: (60 * 2) * 20 // 100 + 30 = 54
+    raw[29], raw[30] = 0x80 | 30, 0x40 | 7      # two PP Ups on Tackle, one on Growl
+    _decode_box.cache_clear()
+    mon = _decode_box(0, bytes(raw), bytes([0x50] * 11))[0]
+    assert mon.hp == 12 and mon.status == 8 and mon.pp == (30, 7, 0, 0)
+    assert mon.max_pp == (35 + 7 * 2, 40 + 7, 0, 0)  # each PP Up adds at most 7
+    row = live_status(Snapshot(**{**gen1_snapshot().__dict__, 'stored_details': (mon,),
+                                  'stored_pokemon': ((0, 153, 20, mon.nick),)}).to_dict())['storage']['pokemon'][0]
+    assert row['hp'] == 12 and row['max_hp'] == 54 and row['status_label'] == 'Poisoned'
+    assert [(move['pp'], move['max_pp']) for move in row['move_details']] == [(30, 49), (7, 47)]
 
 
 def test_crystal_caught_data_names_events_gifts_and_unknown_places():

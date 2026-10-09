@@ -95,14 +95,27 @@ def move_details(moves, pp=None, max_pp=None):
     return rows
 
 
+def status_label(hp, status):
+    return "Fainted" if hp <= 0 else "Asleep" if status & 7 else next(
+        (label for bit, label in ((8, "Poisoned"), (16, "Burned"), (32, "Frozen"), (64, "Paralyzed"))
+         if status & bit), "Healthy")
+
+
+def stored_condition(mon):
+    """HP, status and PP for a boxed Gen I record, which stores current HP and PP but not maximum HP."""
+    hp, pp = mon.get("hp"), mon.get("pp")
+    stats = stored_strength(mon)["calculated_stats"]
+    out = {"move_details": move_details(mon.get("moves"), pp or None, mon.get("max_pp") or None)}
+    if type(hp) is int and stats:
+        out.update(hp=min(hp, stats["HP"]), max_hp=stats["HP"], status_label=status_label(hp, mon.get("status") or 0))
+    return out
+
+
 def party_details(mon):
     from .shiny import is_shiny
     species = SPECIES.get(mon.species, {})
     xp = experience_details(mon.experience, mon.level, species.get("growth")) if mon.level > 0 else None
-    status = "Fainted" if mon.hp <= 0 else "Asleep" if mon.status & 7 else next(
-        (label for bit, label in ((8, "Poisoned"), (16, "Burned"), (32, "Frozen"), (64, "Paralyzed"))
-         if mon.status & bit), "Healthy")
-    return {"dex": species.get("dex"), "experience": xp, "status_label": status,
+    return {"dex": species.get("dex"), "experience": xp, "status_label": status_label(mon.hp, mon.status),
             **({'trainer_id': mon.trainer_id} if mon.trainer_id is not None else {}),
             "dvs": mon.dvs, "stat_exp": mon.stat_exp, "shiny": is_shiny({"dvs": mon.dvs}),
             "type_names": list(dict.fromkeys(TYPES.get(t, "Unknown") for t in mon.types)),

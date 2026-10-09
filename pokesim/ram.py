@@ -115,6 +115,12 @@ class StoredMon:
     dvs: tuple[int, ...]
     stat_exp: tuple[int, ...]
     trainer_id: int | None = None
+    # Gen I box records keep current HP, status and PP. Maximum HP is not stored
+    # and is recalculated from the stats when the Pokémon is withdrawn.
+    hp: int | None = None
+    status: int = 0
+    pp: tuple[int, ...] = ()
+    max_pp: tuple[int, ...] = ()
 
 
 _STORED_FIELDS = tuple(field.name for field in fields(StoredMon))
@@ -287,10 +293,22 @@ def read_stored_pokemon(mem):
 @lru_cache(maxsize=128)
 def _decode_box(box, structs, names):
     """Cache immutable records by their bytes, never by emulator identity or time."""
+    from .strategy_data import MOVES as MOVE_DATA
     return tuple(StoredMon(box, mon.position, mon.species, mon.level, mon.nick,
-                           mon.moves, mon.experience, mon.dvs, mon.stat_exp, mon.trainer_id)
+                           mon.moves, mon.experience, mon.dvs, mon.stat_exp, mon.trainer_id,
+                           hp=mon.hp, status=mon.status, pp=mon.pp,
+                           max_pp=_max_pp(mon.moves, structs[mon.position * 33 + 29:mon.position * 33 + 33], MOVE_DATA))
                  for mon in decode_box(structs, names)
                  if mon.species in SPECIES_NAMES and 1 <= mon.level <= 100)
+
+
+def _max_pp(moves, raw_pp, move_data):
+    """Maximum PP with PP Ups (top two bits of each PP byte), as the party decoder computes it."""
+    out = []
+    for move, value in zip(moves, raw_pp):
+        base = move_data.get(move, {}).get('pp', 0)
+        out.append(base + min(7, base // 5) * (value >> 6))
+    return tuple(out)
 
 
 _box_bytes = memory_bytes
