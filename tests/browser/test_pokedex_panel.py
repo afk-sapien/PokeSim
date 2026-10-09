@@ -75,3 +75,29 @@ def test_scrolled_content_never_shows_between_the_rail_and_what_is_pinned_under_
         # The filter strip sits on the rail's lip, with no gap for cards to show through.
         filters = page.locator('.filters').bounding_box()
         assert filters['y'] - (rail['y'] + rail['height']) <= 4
+
+
+def test_pokedex_detail_lists_how_the_sim_gets_a_species(page, game):
+    url, _, _, _ = game
+    sources = [{'kind': 'npc_trade', 'label': 'Kyle’s trade', 'detail': 'Violet City, for a Bellsprout',
+                'planned': False, 'external': False, 'config': '', 'needs': [69]},
+               {'kind': 'walking_reset', 'label': 'Walking reset', 'detail': 'Retry the static encounter',
+                'planned': True, 'external': False, 'config': '', 'needs': []}]
+
+    def with_plan(route):
+        body = route.fetch().json()
+        body['plan'] = [{'dex': 2, 'species': 2, 'status': 'planned', 'reason': 'Walking reset: soon.',
+                         'state': 'missing', 'sources': sources}]
+        route.fulfill(json=body)
+
+    page.route('**/api/pokedex/status', with_plan)
+    page.goto(url + '/pokedex')
+    expect(page.locator('.dex-card')).to_have_count(151)
+    page.locator('#status-filter').select_option('planned')
+    expect(page.locator('.dex-card')).to_have_count(1)
+    page.locator('.dex-card[data-dex="2"]').click()
+    section = page.get_by_role('region', name='How the sim gets it')
+    expect(section.locator('li')).to_have_count(2)
+    expect(section).to_contain_text('Kyle’s trade')
+    expect(section.locator('li').nth(1).locator('.tag--signal')).to_have_text('Planned')
+    expect(page.locator('.plan-note')).to_contain_text('Planned for this run')

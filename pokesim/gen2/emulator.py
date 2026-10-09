@@ -338,6 +338,14 @@ class Emulator:
         for dex in sorted(snapshot.owned - set(self.history['owned'])):
             self.history['owned'].append(dex)
             self._event(Event('catch', f'{self.data.species[dex]["name"]} joined the Pokédex', priority=4), snapshot)
+        from .npc_trades import completed
+        if 'npc_trades' not in self.history:
+            # Trades finished before this record existed are history, not news.
+            completed(self.pb.memory, self.data, self.history.setdefault('npc_trades', []))
+        for trade in completed(self.pb.memory, self.data, self.history['npc_trades']):
+            self._event(Event('trade', f'Traded {self.data.species[trade.request]["name"]} to {trade.npc} for '
+                              f'{self.data.species[trade.give]["name"]}', 'An in-game trade completed on this cartridge.',
+                              priority=4), snapshot)
         for i, badge in enumerate(BADGES):
             if snapshot.badges & (1 << i) and not self.history['badges'] & (1 << i):
                 self.history['badges'] |= 1 << i

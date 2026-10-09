@@ -12,7 +12,7 @@ const outOf = (n) => `${n}<span class="unit">/${dexTotal}</span>`
 function paintBank(selector, value) {
   $(selector).innerHTML = cells(value > 0 ? Math.max(1, Math.round(value / dexTotal * BANK_CELLS)) : 0, BANK_CELLS)
 }
-const PLAN_LABELS = {available: 'Possible in this run', caught: 'Already registered', external: 'Needs another game', unavailable: 'Out of reach for now'}
+const PLAN_LABELS = {available: 'Possible in this run', caught: 'Already registered', external: 'Needs another game', planned: 'Planned for this run', unavailable: 'Out of reach for now'}
 
 let dexTotal = 151
 let entries = []
@@ -55,6 +55,7 @@ function matches(entry) {
   if (query && !entry.name.toLowerCase().includes(query) && !num(entry.dex).includes(query.replace(/^#/, ''))) return false
   if (type !== 'all' && !entry.types.includes(type)) return false
   if (filter === 'available') return plan.get(entry.dex)?.status === 'available'
+  if (filter === 'planned') return plan.get(entry.dex)?.status === 'planned'
   if (filter === 'maxed') return maxed.has(entry.dex)
   if (filter === 'unmastered') return !maxed.has(entry.dex)
   if (filter === 'quality') return highQualitySpecies.has(entry.dex)
@@ -123,6 +124,12 @@ function placeLine(place) {
     <strong>${esc(place.map_name)}</strong><small>${extra.filter(Boolean).map(esc).join(' · ')}</small></li>`
 }
 
+function sourceLine(source) {
+  const flag = source.planned ? '<span class="tag tag--signal">Planned</span>' : source.external ? '<span class="tag">Outside this cartridge</span>' : ''
+  return `<li><span class="tag place-method ${esc(source.kind)}">${esc(source.kind.replace(/_/g, ' '))}</span>
+    <strong>${esc(source.label)} ${flag}</strong><small>${esc(source.detail || '')}</small></li>`
+}
+
 function renderDetail(dex, refresh = false) {
   const entry = byDex.get(dex)
   if (!entry) return
@@ -154,6 +161,8 @@ function renderDetail(dex, refresh = false) {
       <div class="link-row"><a class="key" href="${PokeSim.base}/pc?scope=all&q=%23${num(dex)}&sort=power&order=desc">View in PC ↗</a></div>
     </section>
     ${project && state !== 'caught' ? `<p class="plan-note"><b>${esc(PLAN_LABELS[project.status] || 'Status')}</b> ${esc(project.reason || '')}</p>` : ''}
+    ${project?.sources?.length ? `<section class="detail-section" aria-label="How the sim gets it"><h3>How the sim gets it</h3>
+      <ul class="place-list source-list">${project.sources.map(sourceLine).join('')}</ul></section>` : ''}
     ${copies.length ? `<section class="detail-section"><h3>With you right now</h3><ul class="copy-list">${copies.map((copy) =>
       `<li><strong>${esc(copy.nick || entry.name)}</strong>${PokemonTypes.shinyBadge(copy)}<span>Lv. ${copy.level} · ${esc(copy.where)} · ${copy.stars ? `${copy.stars}★ DVs` : 'DVs unknown'}</span></li>`).join('')}</ul></section>` : ''}
     <section class="detail-section"><h3>Base stats</h3>
