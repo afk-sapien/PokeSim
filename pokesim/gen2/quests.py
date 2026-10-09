@@ -80,8 +80,32 @@ def legends(policy, snapshot, Goal):
     return roamers(policy, snapshot, Goal)
 
 
+# Where a roaming beast may go next from each route (pret data/wild/roammon_maps.asm, the same in all three games).
+ROAM_MAPS = {
+    29: (30, 46), 30: (29, 31), 31: (30, 32, 36), 32: (36, 31, 33), 33: (32, 34), 34: (33, 35),
+    35: (34, 36), 36: (35, 31, 32, 37), 37: (36, 38, 42), 38: (37, 39, 42), 39: (38,),
+    42: (43, 44, 37, 38), 43: (42, 44), 44: (42, 43, 45), 45: (44, 46), 46: (45, 29),
+}
+
+
+def roam_neighbours(data, mid):
+    """Maps a roamer standing on mid can move to when the player next crosses a map connection."""
+    name = data.maps.get(mid, {}).get('constant', '')
+    if not name.startswith('ROUTE_') or not name[6:].isdigit() or int(name[6:]) not in ROAM_MAPS:
+        return ()
+    return tuple(data.map_ids[f'ROUTE_{route}'] for route in ROAM_MAPS[int(name[6:])])
+
+
 def roamers(policy, snapshot, Goal):
+    """Track the roaming beasts with the cartridge's own movement rule.
+
+    Each time the player crosses a map connection, every roamer steps to a random neighbour of its
+    route that is not the map the player left before the current one (wRoamMons_LastMap). Walking
+    into a neighbour of a roamer's route that is not that excluded map gives the roamer a fair
+    chance to step into the same map, and then its grass is searched.
+    """
     from .collection import encounter_points
+    from .ram import Memory
     state, data = policy.collection, policy.data
     if policy.decisions < state.get('roam_after', 0):
         return None
@@ -90,35 +114,48 @@ def roamers(policy, snapshot, Goal):
         state['roam_after'] = policy.decisions + 18000
         state.pop('roam_started', None)
         return None
-    choices = []
-    for roamer in snapshot.roamers:
+    state.pop('roam_destination', None)
+    wanted = [row for row in snapshot.roamers
+              if row['species'] and row['species'] not in snapshot.owned and row['map'] in data.maps]
+    if not wanted:
+        return None
+    for roamer in wanted:
         mid, species = roamer['map'], roamer['species']
-        if species in snapshot.owned or mid not in data.maps or mid != snapshot.map:
+        if mid != snapshot.map:
+            continue
+        points = sorted(encounter_points(policy, snapshot, mid, 'grass'),
+                        key=lambda p: (abs(p[0] - snapshot.x) + abs(p[1] - snapshot.y),
+                                       policy.nav.visits.get((mid, *p[:2]), 0)))
+        point = next((p for p in points[:24] if p[:2] != (snapshot.x, snapshot.y)
+                      and policy.nav.local(snapshot, [p[:2]], policy.memory, surf=True)), None)
+        if point is not None:
+            return Goal('collection_hunt', f'Track {data.species[species]["name"]} through Johto',
+                        data.maps[mid]['constant'], *point[:2])
+    excluded = {snapshot.map}
+    if policy.memory is not None and 'wRoamMons_LastMapGroup' in data.symbols:
+        mem = Memory(policy.memory, data)
+        excluded.add(mem.byte('wRoamMons_LastMapGroup') * 256 + mem.byte('wRoamMons_LastMapNumber'))
+    candidates = {mid: roamer['species'] for roamer in wanted
+                  for mid in roam_neighbours(data, roamer['map']) if mid not in excluded}
+    if not candidates:
+        # Every neighbour is excluded right now: any other roaming route still moves the beasts.
+        candidates = {data.map_ids[f'ROUTE_{route}']: wanted[0]['species'] for route in ROAM_MAPS
+                      if data.map_ids[f'ROUTE_{route}'] not in excluded}
+    choices = []
+    for mid, species in candidates.items():
+        route = policy.nav.route(snapshot.map, mid)
+        if route is None:
             continue
         points = encounter_points(policy, snapshot, mid, 'grass')
-        route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
-        if route is None or not points:
-            continue
-        points = sorted(points, key=lambda p: (abs(p[0] - snapshot.x) + abs(p[1] - snapshot.y),
-                                                policy.nav.visits.get((mid, *p[:2]), 0)))
-        point = next((p for p in points if p[:2] != (snapshot.x, snapshot.y)
-                      and policy.nav.local(snapshot, [p[:2]], policy.memory, surf=True)), None)
-        if point is None:
-            continue
-        choices.append((len(route), species, mid, point))
-    if choices:
-        _, species, mid, (x, y, _) = min(choices)
-        return Goal('collection_hunt', f'Track {data.species[species]["name"]} through Johto', data.maps[mid]['constant'], x, y)
-    if any(row['species'] not in snapshot.owned and row['map'] in data.maps for row in snapshot.roamers):
-        # A two-map reversal excludes the route through the native last-map rule.
-        # Visiting the ruins through its gate gives the roamers a fresh route entry.
-        destination = state.get('roam_destination', 'ROUTE_36')
-        if snapshot.map == data.map_ids[destination]:
-            destination = 'RUINS_OF_ALPH_OUTSIDE' if destination == 'ROUTE_36' else 'ROUTE_36'
-        state['roam_destination'] = destination
-        x, y = (47, 12) if destination == 'ROUTE_36' else (7, 6)
-        return Goal('collection_roam_shift', 'Search the ruins border for roaming legends', destination, x, y)
-    return None
+        if points:
+            choices.append((len(route), mid, species, points))
+    if not choices:
+        return None
+    _, mid, species, points = min(choices, key=lambda row: row[:2])
+    width = data.maps[mid]['width']
+    x, y, _ = min(points, key=lambda p: min(p[0], width - 1 - p[0], p[1], data.maps[mid]['height'] - 1 - p[1]))
+    return Goal('collection_roam_shift', f'Head where {data.species[species]["name"]} may roam next',
+                data.maps[mid]['constant'], x, y)
 
 
 def arrive(policy, snapshot):

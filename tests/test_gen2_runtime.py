@@ -1024,7 +1024,9 @@ def test_time_capsule_preserves_league_counts_across_return_trade(real_data):
 
 def test_contest_uses_park_balls_and_runs_from_low_scores():
     from pokesim.gen2.contest import control
-    policy = SimpleNamespace(collection={'contest': {'entered': True}})
+    # Every contest species already has a wild table, so only the score decides.
+    data = SimpleNamespace(encounters=[{'species': species} for species in range(1, 252)])
+    policy = SimpleNamespace(collection={'contest': {'entered': True}}, data=data)
     snapshot = SimpleNamespace(in_battle=1, text='FIGHT POKéMON PACK RUN', tiles=())
     values = {'wEnemyMonSpecies': 123, 'wEnemyMonMaxHP': 55, 'wEnemyMonHP': 55,
               'wContestMonSpecies': 0, 'wParkBallsRemaining': 20, 'wMenuCursorX': 1, 'wMenuCursorY': 1,
@@ -1393,25 +1395,22 @@ def test_encounter_search_can_leave_and_reenter_a_disconnected_map(real_data, mo
     assert state['target']['species'] == 125
 
 
-def test_roamer_search_cycles_a_border_until_a_beast_is_on_the_current_route(real_data, monkeypatch):
+def test_roamer_search_steps_toward_a_neighbour_of_the_beasts_route(real_data, monkeypatch):
     from pokesim.gen2 import collection
     from pokesim.gen2.quests import roamers
     from pokesim.gen2.policy import Goal
+    ids = real_data.map_ids
     policy = SimpleNamespace(data=real_data, collection={}, decisions=0, memory=None,
-        nav=SimpleNamespace(regions=SimpleNamespace(route=lambda *args, **kwargs: []),
+        nav=SimpleNamespace(route=lambda start, end: [None] * (1 if end == ids['ROUTE_36'] else 5),
                             local=lambda *args, **kwargs: ['left'], visits={}))
-    snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_CITY'], x=1, y=8, owned=set(),
-        roamers=[{'species': 243, 'map': real_data.map_ids['ROUTE_42']}])
-    assert roamers(policy, snapshot, Goal).map_name == 'ROUTE_36'
-    snapshot.map, snapshot.x = real_data.map_ids['ROUTE_36'], 58
-    assert roamers(policy, snapshot, Goal).map_name == 'RUINS_OF_ALPH_OUTSIDE'
-    snapshot.map = real_data.map_ids['ROUTE_36_RUINS_OF_ALPH_GATE']
-    assert roamers(policy, snapshot, Goal).map_name == 'RUINS_OF_ALPH_OUTSIDE'
-    snapshot.map = real_data.map_ids['RUINS_OF_ALPH_OUTSIDE']
-    assert roamers(policy, snapshot, Goal).map_name == 'ROUTE_36'
-    snapshot.map = real_data.map_ids['ROUTE_36']
-    snapshot.roamers[0]['map'] = snapshot.map
+    snapshot = SimpleNamespace(map=ids['VIOLET_CITY'], x=1, y=8, owned=set(),
+        roamers=[{'species': 243, 'map': ids['ROUTE_37']}])
     monkeypatch.setattr(collection, 'encounter_points', lambda *args: [(58, 8, None), (57, 8, None)])
+    goal = roamers(policy, snapshot, Goal)
+    # Route 36 neighbours the beast's Route 37 and is the nearest such route.
+    assert (goal.key, goal.map_name) == ('collection_roam_shift', 'ROUTE_36')
+    snapshot.map, snapshot.x = ids['ROUTE_36'], 58
+    snapshot.roamers[0]['map'] = snapshot.map
     goal = roamers(policy, snapshot, Goal)
     assert (goal.key, goal.map_name, goal.x, goal.y) == ('collection_hunt', 'ROUTE_36', 57, 8)
 
@@ -1883,21 +1882,23 @@ def _clock_policy(real_data, day, daily=0):
     policy = Policy(real_data, starter='cyndaquil')
     policy.collection = {}
     mem = SimpleNamespace(byte=lambda name: {'wCurDay': day, 'wDailyFlags1': daily}.get(name, 0))
-    snapshot = SimpleNamespace(owned=set(), items=[])
+    snapshot = SimpleNamespace(owned=set(), items=[], party=[], stored=[])
     return policy, snapshot, mem
 
 
 def test_idle_collection_says_it_is_waiting_for_a_contest_day(real_data):
-    from pokesim.gen2.contest import waiting_for_day
+    from pokesim.gen2.contest import CONTEST_SPECIES, targets, waiting_for_day
     policy, snapshot, mem = _clock_policy(real_data, day=1)
     assert 'Tuesday, Thursday or Saturday' in waiting_for_day(policy, snapshot, mem)
     policy, snapshot, mem = _clock_policy(real_data, day=2)
     assert waiting_for_day(policy, snapshot, mem) is None
     policy, snapshot, mem = _clock_policy(real_data, day=2, daily=2)
     assert 'tomorrow' in waiting_for_day(policy, snapshot, mem)
-    # Sun Stones already in the bag mean there is nothing to wait for.
+    # Sun Stones already in the bag and every contest-only species owned mean there is nothing to wait for.
     policy, snapshot, mem = _clock_policy(real_data, day=1)
     snapshot.owned = {182, 192}
+    assert 'Tuesday, Thursday or Saturday' in waiting_for_day(policy, snapshot, mem) or not targets(policy, snapshot)
+    snapshot.owned = {182, 192, *CONTEST_SPECIES}
     assert waiting_for_day(policy, snapshot, mem) is None
 
 
@@ -1908,7 +1909,7 @@ def test_idle_collection_says_which_time_of_day_it_needs(real_data):
     snapshot.owned = {182, 192}
     policy.demand = {}
     original = collection.wanted
-    collection.wanted = lambda *_: True
+    collection.wanted = lambda policy, snapshot, species: species != collection.LAPRAS
     try:
         assert collection.waiting_label(policy, snapshot, mem, 'day') == 'Waiting for night to find new Pokémon'
         assert collection.waiting_label(policy, snapshot, mem, 'night') == 'Explore while waiting for new collection opportunities'

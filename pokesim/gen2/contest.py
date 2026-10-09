@@ -18,13 +18,26 @@ def score(mem, prefix):
 CONTEST_DAYS = (2, 4, 6)
 
 
+# Every contest encounter table (pret data/wild/bug_contest_mons.asm), the same in all three games.
+CONTEST_SPECIES = (10, 11, 12, 13, 14, 15, 48, 46, 123, 127)
+
+
 def needs_sun_stone(policy, snapshot):
     return len({182, 192} - snapshot.owned) > dict(snapshot.items).get(policy.data.items['SUN_STONE'], 0)
 
 
+def targets(policy, snapshot):
+    """Wanted contest species this cartridge has nowhere else to catch, like Scyther, Pinsir and the
+    Weedle line in Gold or the Caterpie line in Silver."""
+    from .collection import wanted
+    wild = {row['species'] for row in policy.data.encounters}
+    return {species for species in CONTEST_SPECIES if species not in wild and wanted(policy, snapshot, species)}
+
+
 def waiting_for_day(policy, snapshot, mem):
-    """Why the Sun Stone work is idle, in words for the status line, or None when it is not waiting."""
-    if not needs_sun_stone(policy, snapshot) or policy.collection.get('contest') or policy.collection.get('tower'):
+    """Why the contest work is idle, in words for the status line, or None when it is not waiting."""
+    if (not needs_sun_stone(policy, snapshot) and not targets(policy, snapshot)
+            or policy.collection.get('contest') or policy.collection.get('tower')):
         return None
     if mem.byte('wCurDay') % 7 in CONTEST_DAYS:
         return 'Waiting for tomorrow: the Bug-Catching Contest was already entered today' if mem.byte('wDailyFlags1') & 2 else None
@@ -36,7 +49,7 @@ def journey(policy, snapshot, Goal, *, force=False):
     state = policy.collection.get('contest')
     running = bool(mem.byte('wStatusFlags2') & 4)
     if state is None:
-        needed = needs_sun_stone(policy, snapshot)
+        needed = needs_sun_stone(policy, snapshot) or bool(targets(policy, snapshot))
         if (not force and not needed or mem.byte('wCurDay') % 7 not in CONTEST_DAYS
                 or mem.byte('wDailyFlags1') & 2 or policy.collection.get('tower')):
             return None
@@ -49,7 +62,10 @@ def journey(policy, snapshot, Goal, *, force=False):
         state['entered'] = True
         if name != 'NATIONAL_PARK_BUG_CONTEST':
             return Goal('contest_results', 'Finish the Bug-Catching Contest', name, snapshot.x, snapshot.y)
-        if (score(mem, 'wContestMon') >= 376 or not mem.byte('wParkBallsRemaining')
+        wanted = targets(policy, snapshot)
+        # A wanted species only counts once the judges see it, so take it straight to them.
+        if (mem.byte('wContestMonSpecies') in wanted
+                or score(mem, 'wContestMon') >= 376 and not wanted or not mem.byte('wParkBallsRemaining')
                 or policy.decisions - state['started'] > 5000):
             return Goal('contest_finish', 'Take the contest catch to the judges', 'ROUTE_35_NATIONAL_PARK_GATE', 3, 1)
         from .collection import encounter_points
@@ -77,11 +93,17 @@ def control(policy, snapshot, mem):
     if not policy.collection.get('contest') or not snapshot.in_battle or not mem.byte('wStatusFlags2') & 4:
         return None
     text = snapshot.text
+    wanted = targets(policy, snapshot)
+    enemy, held = mem.byte('wEnemyMonSpecies'), mem.byte('wContestMonSpecies')
     if 'YES' in text and 'NO' in text:
-        keep = score(mem, 'wEnemyMon') >= score(mem, 'wContestMon')
+        if enemy in wanted or held in wanted:
+            keep = held not in wanted
+        else:
+            keep = score(mem, 'wEnemyMon') >= score(mem, 'wContestMon')
         return choose(snapshot.tiles, 'YES' if keep else 'NO', exact=True) or 'a'
     if 'FIGHT' in text and 'TYPE' not in text:
-        catching = (score(mem, 'wEnemyMon') > max(350, score(mem, 'wContestMon'))
+        catching = ((enemy in wanted and held not in wanted
+                     or score(mem, 'wEnemyMon') > max(350, score(mem, 'wContestMon')) and held not in wanted)
                     and bool(mem.byte('wParkBallsRemaining')))
         x = 1 if catching else 2
         current = mem.byte('wMenuCursorX')

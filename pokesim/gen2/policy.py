@@ -731,7 +731,7 @@ class Policy:
         if fees:
             reserve = max(reserve, fees + 1000)
         requests = []
-        unique_encounter = self.goal is not None and self.goal.key in {'sudowoodo', 'snorlax'}
+        unique_encounter = self.goal is not None and self.goal.key in {'sudowoodo', 'snorlax', 'collection_lapras'}
         ball_target = 20 if self.collection.get('phase') == 'legendary' or unique_encounter else 4
         if sum(count for _, count in snapshot.pockets['balls']) < ball_target and snapshot.can_catch:
             names = ('ULTRA_BALL', 'GREAT_BALL', 'POKE_BALL') if snapshot.badges & 64 else ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL')
@@ -1078,6 +1078,10 @@ class Policy:
         requested |= (catch_species in self.collection.get('prerequisites', ())
                       and not any(mon.species == catch_species and not mon.egg
                                   for mon in snapshot.party + snapshot.stored))
+        if catch_species == 201:
+            # Each Unown letter counts separately in the Unown Pokédex, so catch every missing letter.
+            from .collection import unown_letter, unown_missing
+            requested |= unown_letter(mem.read('wEnemyMonDVs', 2)) in unown_missing(self, snapshot)
         catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or requested)
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in
                     {label.casefold() for label in self.ball_labels(snapshot)} for item, count in snapshot.pockets['balls'] if count))
@@ -1189,6 +1193,14 @@ class Policy:
             if self.constant(snapshot) != 'BATTLE_TOWER_BATTLE_ROOM' and self.remedy(snapshot, active=mem.byte('wCurBattleMon')):
                 return Action(None, 0, 24)
             self.learning = False
+            if (roaming and not catch and not trapped and snapshot.in_battle == 1
+                    and snapshot.enemy_species not in snapshot.owned):
+                # A fainted roaming beast never returns, so leave it for a visit with room and balls.
+                if mem.byte('wMenuCursorX') < 2:
+                    return Action('right')
+                if mem.byte('wMenuCursorY') < 2:
+                    return Action('down')
+                return Action('a')
             if catch:
                 if weaken is not None:
                     if mem.byte('wMenuCursorX') > 1:
