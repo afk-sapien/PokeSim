@@ -238,18 +238,34 @@ def observe_events(store, snapshot, memory, walking=None):
             # An older checkpoint cannot reopen a return that was already caught.
             for flag in flags:
                 changed |= write_flag(memory, data, flag, True)
-            if key == 'sudowoodo':
-                changed |= write_byte(memory, data, 'wVariableSprites', SPRITE_TWIN, WEIRD_TREE)
+        if key == 'sudowoodo' and ticket['state'] == 'walking' and ticket['cycle']:
+            # Between returns the variable sprite belongs to Route 37's twins, as after the first battle.
+            changed |= write_byte(memory, data, 'wVariableSprites', SPRITE_TWIN, WEIRD_TREE)
+    if ok and (sprite := weird_tree(snapshot)) is not None:
+        changed |= write_byte(memory, data, 'wVariableSprites', sprite, WEIRD_TREE)
     if value != saved:
         store.set(EVENTS, value)
     return events, changed
 
 
+def weird_tree(snapshot):
+    """The sprite the next map load should use for SPRITE_WEIRD_TREE while a returned Sudowoodo is out.
+
+    Route 37's twins use the same variable sprite as Sudowoodo, and a map load reads it once. So the
+    byte shows the twins on the approaches to Route 37 and Sudowoodo everywhere else, including the
+    edge of Route 37 that leads back to Route 36.
+    """
+    if not snapshot.event('EVENT_FOUGHT_SUDOWOODO') or snapshot.event('EVENT_ROUTE_36_SUDOWOODO'):
+        return None
+    entry = snapshot.data.maps.get(snapshot.map, {})
+    name = entry.get('constant')
+    twins = (name == 'ECRUTEAK_CITY' or name == 'ROUTE_37' and snapshot.y < entry['height'] - 5
+             or name == 'ROUTE_36' and snapshot.y < 4)
+    return SPRITE_TWIN if twins else SPRITE_SUDOWOODO
+
+
 def open_activity(memory, data, key, flags):
     changed = write_flag(memory, data, flags[1], False)
-    if key == 'sudowoodo':
-        # The tree sprite turns into a Twin after the first battle.
-        changed |= write_byte(memory, data, 'wVariableSprites', SPRITE_SUDOWOODO, WEIRD_TREE)
     return changed
 
 

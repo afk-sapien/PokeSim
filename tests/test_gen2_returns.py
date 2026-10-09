@@ -219,6 +219,28 @@ def test_overworld_statics_return_after_walking_until_caught(world, key, dex, fl
         assert world.byte('wVariableSprites', 4) == 0x26
 
 
+def test_route_37_twins_keep_their_sprite_while_sudowoodo_is_out(world):
+    from pokesim.gen2.returns import observe_events
+    data, snap = world.data, world.snapshot
+    world.flag('EVENT_FOUGHT_SUDOWOODO')
+    world.walk(10)
+    observe_events(world.store, snap, world.memory)
+    world.walk(60)
+    observe_events(world.store, snap, world.memory)
+    assert world.byte('wVariableSprites', 4) == 0x52
+    # The twins' map loads with their own sprite, and its south edge loads Sudowoodo for Route 36.
+    for name, y, sprite in (('ROUTE_36', 2, 0x26), ('ROUTE_37', 6, 0x26), ('ROUTE_37', 15, 0x52),
+                            ('ECRUTEAK_CITY', 6, 0x26), ('ROUTE_36', 9, 0x52), ('VIOLET_CITY', 6, 0x52)):
+        snap.map, snap.y = data.map_ids[name], y
+        observe_events(world.store, snap, world.memory)
+        assert world.byte('wVariableSprites', 4) == sprite, (name, y)
+    # Once it is caught again, the sprite belongs to the twins.
+    capture(world.store, 185)
+    world.flag('EVENT_ROUTE_36_SUDOWOODO')
+    observe_events(world.store, snap, world.memory)
+    assert world.byte('wVariableSprites', 4) == 0x26
+
+
 @pytest.mark.parametrize('flag, visible', [
     ('EVENT_ROUTE_36_SUDOWOODO', 'ROUTE_36'), ('EVENT_VERMILION_CITY_SNORLAX', 'VERMILION_CITY')])
 def test_returned_statics_block_their_tile_but_keep_the_gate_open(data, flag, visible):
