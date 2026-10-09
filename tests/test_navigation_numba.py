@@ -162,7 +162,25 @@ def test_initial_compilation_failure_falls_back_once(monkeypatch):
     monkeypatch.setitem(sys.modules, 'numba', SimpleNamespace(njit=compile_failure))
     assert compiled.kernel() is None
     assert compiled.kernel() is None
-    assert len(calls) == 1
+    # One cached and one uncached attempt, and never again once both failed.
+    assert len(calls) == 2
+
+
+def test_uncacheable_install_still_compiles_without_a_cache(monkeypatch):
+    from types import SimpleNamespace
+    calls = []
+    def njit(cache):
+        calls.append(cache)
+        if cache:
+            raise RuntimeError("cannot cache function '_advance': no locator available")
+        return lambda function: function
+    monkeypatch.delenv('POKESIM_NAVIGATION_BACKEND', raising=False)
+    monkeypatch.setattr(compiled, '_kernel', None)
+    monkeypatch.setattr(compiled, '_unavailable', False)
+    monkeypatch.setitem(sys.modules, 'numba', SimpleNamespace(njit=njit))
+    assert compiled.kernel() is compiled._advance
+    assert compiled.kernel() is compiled._advance
+    assert calls == [True, False]
 
 
 def test_runtime_kernel_failure_retries_python_and_disables_backend(monkeypatch):
