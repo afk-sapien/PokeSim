@@ -253,7 +253,12 @@ def test_level_up_replacement_preserves_hm_moves(real_data):
                                tiles=(), party=[mon], in_battle=2, enemy_species=39, badges=0, owned=set(),
                                can_catch=True, pockets={'balls': []})
     values = {'wCurBattleMon': 0, 'wMenuCursorY': 1}
+    started = []
+    # The Core shortcut is tried first. When it is refused, the move list is answered directly.
+    policy.battle_task = lambda task, snapshot, mem: started.append(task)
     assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: values.get(name, 0))).button == 'down'
+    assert type(started[0]).__name__ == 'Learn' and started[0].forget in (1, 2, 3)
+    assert policy.learn_slot(SimpleNamespace(moves=(15, 57, 70, 148))) == 'keep'
 
 
 def test_hm_pack_label_ignores_decorative_tiles():
@@ -1677,15 +1682,18 @@ def test_tower_teaches_psychic_to_the_stronger_special_attacker(real_data):
     assert policy.menu.move == 94 and policy.menu.slot == 1
 
 
-def test_box_change_opens_the_pc_from_the_overworld():
-    from pokesim.gen2.menus import ChangeBox
-    menu = ChangeBox(3)
-    snapshot = SimpleNamespace(active_box=0, text='', tiles=(' ',) * 18)
-    assert menu.step(snapshot, None) == 'a'
-    snapshot.text = 'The PC turned on.'
-    assert menu.step(snapshot, None) == 'a'
-    snapshot.text = 'Choose a POKéMON. CANCEL'
-    assert menu.step(snapshot, None) == 'b'
+def test_box_change_opens_the_pc_and_runs_the_core_shortcut(monkeypatch):
+    from pokesim.gen2 import menus
+    screens = iter(['overworld', 'pc'])
+    monkeypatch.setattr(menus, 'current_screen', lambda memory, version: next(screens))
+    menu = menus.ChangeBox(3)
+    snapshot = SimpleNamespace(active_box=0, data=SimpleNamespace(game='crystal'))
+    mem = SimpleNamespace(memory=None)
+    assert menu.step(snapshot, mem) == 'a'
+    monkeypatch.setattr(menus.CoreChangeBox, 'step', lambda self, memory, ui: 'down')
+    assert menu.step(snapshot, mem) == 'down'
+    assert isinstance(menu.machine, menus.CoreChangeBox) and menu.machine.box == 3
+    assert menus.ChangeBox(0).finished(snapshot)
 
 
 def test_psychic_tm_selection_uses_machine_number(real_data):

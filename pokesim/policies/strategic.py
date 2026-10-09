@@ -2,8 +2,8 @@
 import random
 from dataclasses import asdict
 
-from pokesim_core.shortcuts import (BuyItem, ChooseMove, DepositPokemon, FieldMove, ReleasePokemon, ReorderParty,
-                                    RunAway, SellItem, SwitchPokemon, UseItem, WithdrawPokemon, item_kind)
+from pokesim_core.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositPokemon, FieldMove, LearnMove, ReleasePokemon,
+                                    ReorderParty, RunAway, SellItem, SwitchPokemon, UseItem, WithdrawPokemon, item_kind)
 
 from .base import Action, Policy
 from ..textmatch import ScreenText
@@ -446,7 +446,7 @@ class StrategicPolicy(Policy):
             if "DELETE" in text or "FORGET" in text or "LEARN" in text:
                 learner = min(mem[W_WHICH_POKEMON], max(0, len(s.party) - 1))
                 slot = replacement_slot(s.party[learner], mem[W_MOVE_NUM]) if s.party else None
-                return self._select(scr, 0 if slot is not None else 1)
+                return self._learn(s, slot) or self._select(scr, 0 if slot is not None else 1)
             return self._select(scr, 0)
         if kind == 'prize':
             return self._select(scr,2) if self.goal.key == 'collect_prize' else tap('b')
@@ -457,7 +457,7 @@ class StrategicPolicy(Policy):
             learner = min(mem[W_WHICH_POKEMON], max(0, len(s.party) - 1))
             slot = replacement_slot(s.party[learner], mem[W_MOVE_NUM]) if s.party else None
             self.reason = "Keep useful coverage and protect HM moves"
-            return tap("b") if slot is None else self._select(scr, slot)
+            return self._learn(s, slot) or (tap("b") if slot is None else self._select(scr, slot))
         if not s.in_battle:
             self.used_status.clear()
             self.battle_key = None
@@ -1073,6 +1073,8 @@ class StrategicPolicy(Policy):
             machine, key = DepositPokemon(*args), ('deposit', individual(s.party[args[0]]))
         elif operation == 'withdraw':
             machine, key = WithdrawPokemon(*args), ('withdraw', s.active_box, *args, len(s.party))
+        elif operation == 'change_box':
+            machine, key = ChangeBox(*args), ('change_box', *args)
         elif operation == 'release':
             machine, key = ReleasePokemon(*args, allow_release=True), ('release', s.active_box, *args)
         else:
@@ -1180,6 +1182,12 @@ class StrategicPolicy(Policy):
             self.reason = purpose
             self.watch.expected = None
         return actions
+
+    def _learn(self, s, slot):
+        """Answer a learn-a-new-move prompt through Core: replace ``slot``, or keep the moves when None."""
+        forget = 'keep' if slot is None else slot
+        return self._start_shortcut(s, LearnMove(forget), ('learn', forget),
+                                    "Keep useful coverage and protect HM moves")
 
     def _use_item(self, snapshot, item, target=0, purpose=None):
         if not any(mid == item and qty for mid, qty in snapshot.items):

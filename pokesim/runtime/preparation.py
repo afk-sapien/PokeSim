@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 
-from pokesim_core.shortcuts import DepositPokemon, WithdrawPokemon
+from pokesim_core.shortcuts import ChangeBox, DepositPokemon, WithdrawPokemon
 
 from ..policies.base import Action
 from ..interactions.centers import CENTERS
@@ -323,7 +323,10 @@ class Preparation:
         if kind == 'pc' and not (screen.cursor and screen.cursor[0] == 10):
             if snap.active_box != self.target_box:
                 self.operation = 'change_box'
-                return self._select(screen, 3)
+                actions = self.shortcut.start(ChangeBox(self.target_box), ('change_box', self.target_box, snap.frame),
+                                              snap.frame, ctx.mem, gen1_ui(ctx.sp, YELLOW),
+                                              'Change to the box for the trade')
+                return actions or self._select(screen, 3)
             self.operation = 'deposit' if len(snap.party) >= 6 else 'withdraw'
             if not self._storage_operation_ready(snap, mon):
                 return [Action('b', 6, 18)]

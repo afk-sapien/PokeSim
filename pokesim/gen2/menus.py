@@ -1,17 +1,16 @@
 """Cartridge menu operations for Gold, Silver and Crystal.
 
-Item, mart, PC, party and battle menus run Core shortcut machines one input per policy step.
-The tasks kept here cover menus Core has no shortcut for: box changes, the radio, the Move
-Deleter, the Day Care and showing a Pokémon to a person.
+Item, mart, PC, party, box change, Move Deleter and battle menus run Core shortcut machines one
+input per policy step. The tasks kept here cover menus Core has no shortcut for: the radio, the
+Day Care and showing a Pokémon to a person.
 """
 from dataclasses import KW_ONLY, dataclass, fields
 import re
 
-from pokesim_core.shortcuts import (BuyItem, ChooseMove, DepositPokemon, Done, FieldMove as CoreFieldMove,
-                                    GiveItem, ReorderParty, RunAway, SellItem, SwitchPokemon, TakeItem, UseItem,
-                                    WithdrawPokemon, current_screen)
+from pokesim_core.shortcuts import (BuyItem, ChangeBox as CoreChangeBox, ChooseMove, DeleteMove, DepositPokemon,
+                                    Done, FieldMove as CoreFieldMove, GiveItem, LearnMove, ReorderParty, RunAway,
+                                    SellItem, SwitchPokemon, TakeItem, UseItem, WithdrawPokemon, current_screen)
 from pokesim_core.shortcuts.machine import BACKABLE
-from pokesim_core.shortcuts.screens import normalize
 
 from .screens import has_word
 
@@ -56,75 +55,6 @@ def choose(rows, label, *, exact=False):
     if target is None or cursor is None:
         return None
     return 'a' if target == cursor else 'down' if target > cursor else 'up'
-
-
-@dataclass
-class Forget:
-    slot: int
-    move: int
-    phase: str = 'greet'
-    steps: int = 0
-    member: list | None = None
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        if self.steps > MAX_STEPS:
-            return None
-        rows, text = snapshot.tiles, snapshot.text
-        mon = tracked(self, snapshot)
-        if mon is None or self.move not in mon.moves:
-            self.phase = 'exit'
-        if self.phase == 'exit':
-            return 'a' if any('┌' in row for row in rows[12:15]) else None
-        if 'CANCEL' in text and '▶' in text and '/' in text:
-            cursor = next((i // 2 for i, row in enumerate(rows) if '▶' in row), 0)
-            if cursor == self.slot:
-                self.phase = 'move'
-                return 'a'
-            return 'down' if cursor < self.slot else 'up'
-        if self.phase == 'move' and '▶' in text:
-            label = snapshot.data.moves[self.move]['name'].upper()
-            action = choose(rows, label, exact=True)
-            if action:
-                if action == 'a':
-                    self.phase = 'confirm'
-                return action
-        return 'a'
-
-
-@dataclass
-class ChangeBox:
-    box: int
-    phase: str = 'open'
-    steps: int = 0
-    exit_steps: int = 0
-
-    def step(self, snapshot, mem):
-        self.steps += 1
-        if self.steps > MAX_STEPS:
-            return None
-        rows, text = snapshot.tiles, snapshot.text
-        if snapshot.active_box == self.box:
-            self.phase = 'exit'
-        if self.phase == 'exit':
-            self.exit_steps += 1
-            return 'b' if self.exit_steps < 16 else None
-        if 'TURN OFF' in text:
-            return choose(rows, 'BILL') or choose(rows, 'SOMEONE') or 'a'
-        if 'CHANGE BOX' in text:
-            self.phase = 'boxes'
-            return choose(rows, 'CHANGE BOX') or 'a'
-        if self.phase == 'open':
-            if 'STATS' in text:
-                return choose(rows, 'CANCEL') or 'b'
-            return 'b' if 'CANCEL' in text or 'PACK' in text else 'a'
-        if 'SWITCH' in text and 'NAME' in text:
-            self.phase = 'save'
-            return choose(rows, 'SWITCH') or 'a'
-        if self.phase == 'boxes' and 'Choose a BOX' in text:
-            cursor = mem.byte('wMenuSelection') - 1
-            return 'a' if cursor == self.box else 'down' if cursor < self.box else 'up'
-        return 'a'
 
 
 @dataclass
@@ -216,15 +146,6 @@ FLY_NAMES = {'Route 10 North': 'ROUTE 10', 'Route 23': 'INDIGO PLATEAU', 'Silver
 def fly_name(data, index):
     name = data.maps[data.fly_points[index]['map']]['name']
     return FLY_NAMES.get(name, name.upper())
-
-
-class KeepNickname(UseItem):
-    """A ball throw that leaves the nickname prompt to the policy, which names caught Pokémon."""
-
-    def prompt_answer(self, obs):
-        if 'NICKNAME' in normalize(' '.join(self.recent[-3:] + [obs.text])):
-            return None
-        return super().prompt_answer(obs)
 
 
 @dataclass
@@ -503,7 +424,56 @@ class Throw(CoreTask):
     battle = True
 
     def build(self, snapshot):
-        return KeepNickname(self.item, **self.options(snapshot))
+        # The policy names caught Pokémon, so the nickname prompt is handed back to it.
+        return UseItem(self.item, nickname='caller', **self.options(snapshot))
+
+
+@dataclass
+class ChangeBox(CoreTask):
+    """Make ``box`` the current box through BILL's PC. The game saves as part of the change."""
+    box: int
+
+    start = ('pc', 'bills_pc')
+    leave = True
+
+    def finished(self, snapshot):
+        return snapshot.active_box == self.box
+
+    def build(self, snapshot):
+        return CoreChangeBox(self.box, **self.options(snapshot))
+
+
+@dataclass
+class Forget(CoreTask):
+    """Have the Move Deleter remove ``move`` from the party member in ``slot``. Start at its greeting."""
+    slot: int
+    move: int
+    member: list | None = None
+
+    start = ('dialogue', 'yes_no')
+
+    def approach(self, screen):
+        # The greeting is still opening after the A press that started the task.
+        return 'wait'
+
+    def finished(self, snapshot):
+        mon = tracked(self, snapshot)
+        return mon is None or self.move not in mon.moves
+
+    def build(self, snapshot):
+        mon = snapshot.party[self.slot]
+        return DeleteMove(self.slot, mon.moves.index(self.move), **self.options(snapshot))
+
+
+@dataclass
+class Learn(CoreTask):
+    """Answer a level-up learn-a-new-move prompt in battle. ``forget`` is a move slot or 'keep'."""
+    forget: int | str
+
+    battle = True
+
+    def build(self, snapshot):
+        return LearnMove(self.forget, **self.options(snapshot))
 
 
 @dataclass
@@ -524,6 +494,10 @@ class Attack(CoreTask):
 
     battle = True
 
+    def approach(self, screen):
+        # The battle menu reads as dialogue while it draws. ChooseMove refuses there.
+        return 'wait' if screen in ('dialogue', 'transition') else None
+
     def build(self, snapshot):
         return ChooseMove(self.slot, **self.options(snapshot))
 
@@ -537,4 +511,4 @@ class Flee(CoreTask):
 
 
 TASKS = {cls.__name__: cls for cls in (Teach, Buy, Sell, Use, Storage, Remedy, Lead, FieldMove, Fly, Give, Take,
-                                       Throw, Send, Attack, Flee, Forget, ChangeBox, Radio, DayCare, ShowPartner)}
+                                       Throw, Send, Attack, Flee, Forget, ChangeBox, Learn, Radio, DayCare, ShowPartner)}

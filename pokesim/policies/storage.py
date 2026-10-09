@@ -81,15 +81,29 @@ class StorageController:
             return MenuDecision(select(screen, 0), 'Confirm the storage prompt')
         return None
 
+    def box_target(self, snapshot, goal_key, project, preferences, collection=None):
+        """The box a storage goal wants as the current box, or None."""
+        if goal_key == 'party_release':
+            release = self.release_target(snapshot, project, preferences, collection)
+            return release[0] if release else None
+        if goal_key == 'party_box':
+            return snapshot.next_free_box
+        if goal_key in FIELD_MOVE_GOALS:
+            return self.field_move_box(snapshot, goal_key)
+        return project.get('box') if goal_key in ('party_collection', 'party_league') and project else None
+
+    @staticmethod
+    def change_box(screen, box, reason):
+        """Change boxes with the Core shortcut. CHANGE BOX is opened by hand if Core refuses."""
+        if box is None:
+            return MenuDecision(select(screen, 3), reason)
+        return MenuDecision(select(screen, 3), reason, request=('change_box', box))
+
     def step(self, snapshot, screen, kind, goal_key, project, preferences, collection=None):
         if kind == 'pc_root':
             return MenuDecision(select(screen, 0) if goal_key.startswith('party_') else tap('b'))
         if kind == 'change_box':
-            release = self.release_target(snapshot, project, preferences, collection) if goal_key == 'party_release' else None
-            target = ((release[0] if release else None) if goal_key == 'party_release' else
-                      snapshot.next_free_box if goal_key == 'party_box' else
-                      self.field_move_box(snapshot, goal_key) if goal_key in FIELD_MOVE_GOALS else
-                      project.get('box') if goal_key in ('party_collection', 'party_league') and project else None)
+            target = self.box_target(snapshot, goal_key, project, preferences, collection)
             return MenuDecision(tap('b') if target is None or target == snapshot.active_box else select(screen, target),
                                 'Select a storage box with room for new catches')
         if kind == 'pc':
@@ -100,15 +114,17 @@ class StorageController:
                 if release is None:
                     return MenuDecision(tap('b'))
                 if release[0] != snapshot.active_box:
-                    return MenuDecision(select(screen, 3), 'Open the box holding the spare duplicate')
+                    return self.change_box(screen, release[0], 'Open the box holding the spare duplicate')
                 return MenuDecision(tap('b'), 'Let a spare duplicate go, keeping one of every species',
                                     request=('release', release[1]))
             if goal_key == 'party_box' or (goal_key in ('party_collection', 'party_league') and len(snapshot.party) < 6
                                            and project and project.get('box') != snapshot.active_box):
-                return MenuDecision(select(screen, 3), 'Change the active storage box without releasing any Pokémon')
+                return self.change_box(screen, self.box_target(snapshot, goal_key, project, preferences, collection),
+                                       'Change the active storage box without releasing any Pokémon')
             if (goal_key in FIELD_MOVE_GOALS and len(snapshot.party) < 6
                     and self.field_move_box(snapshot, goal_key) not in (None, snapshot.active_box)):
-                return MenuDecision(select(screen, 3), 'Open the box holding a partner that can learn the field move')
+                return self.change_box(screen, self.field_move_box(snapshot, goal_key),
+                                       'Open the box holding a partner that can learn the field move')
             self.operation = 'deposit' if len(snapshot.party) >= 6 else 'withdraw'
             target = self.target(snapshot, goal_key, project, preferences, collection)
             if target is None:

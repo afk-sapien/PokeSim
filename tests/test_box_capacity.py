@@ -97,6 +97,16 @@ def test_pc_change_box_never_selects_release():
     assert p._dispatch(full_box(), Screen(memory), 'pc', memory)[0].button == 'a'
 
 
+def test_pc_change_box_runs_the_core_shortcut():
+    p = StrategicPolicy(7)
+    p.goal = Goal('party_box', 'Switch boxes', 'Make room')
+    recorder = Recorder.on(p)
+    memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
+    s = full_box()
+    assert p._dispatch(s, Screen(memory), 'pc', memory)[0] == PRESS
+    assert recorder.last.kind == 'change_box' and recorder.last.box == s.next_free_box
+
+
 def test_pending_ball_intent_is_cancelled_when_box_is_full():
     from pokesim.policies.battle import W_BATTLE_MON, W_ENEMY_MON, read_battler
     p = StrategicPolicy(7)

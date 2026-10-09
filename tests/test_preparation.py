@@ -348,8 +348,19 @@ def test_withdraw_uses_refreshed_identity_position_and_rejects_wrong_box(partici
     assert controller.step(PolicyContext(moved, 0, 0, storage_menu()))[0] == PRESS
     assert recorder.last.kind == 'withdraw_pokemon' and recorder.last.position == 5
     controller.shortcut.cancel()
-    assert storage_step(controller, replace(moved, active_box=1), storage_menu()) == 'down'
-    assert controller.operation == 'change_box' and len(recorder.started) == 1
+    assert storage_step(controller, replace(moved, active_box=1), storage_menu()) == 'a'
+    assert controller.operation == 'change_box' and len(recorder.started) == 2
+    assert recorder.last.kind == 'change_box' and recorder.last.box == controller.target_box != 1
+
+
+def test_box_change_falls_back_to_the_menu_when_core_refuses(participant):
+    emu, snap, candidate = participant
+    preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
+    controller = emu.preparation
+    Recorder(controller.shortcut, refuse={'change_box'})
+    moved = replace(snapshot([candidate], party=snap.party), map=89, x=13, y=4, textbox=True, active_box=1)
+    assert storage_step(controller, moved, storage_menu()) == 'down'
+    assert controller.operation == 'change_box'
 
 
 def test_finished_deposit_continues_with_the_withdraw(participant):

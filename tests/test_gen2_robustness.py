@@ -273,8 +273,9 @@ def test_menu_tasks_give_up_after_their_step_limit(real_data, name, limit):
 def test_every_menu_task_has_a_step_limit():
     import inspect
     from pokesim.gen2 import menus
-    for name in ('Teach', 'Use', 'Storage', 'Forget', 'Remedy', 'ChangeBox'):
-        assert 'MAX_STEPS' in inspect.getsource(getattr(menus, name).step), name
+    assert 'MAX_STEPS' in inspect.getsource(menus.CoreTask.step)
+    for name in ('Teach', 'Use', 'Storage', 'Forget', 'Remedy', 'ChangeBox', 'Learn'):
+        assert issubclass(getattr(menus, name), menus.CoreTask), name
     assert 'RADIO_MAX_STEPS' in inspect.getsource(menus.Radio.step)
     assert menus.RADIO_MAX_STEPS < menus.MAX_STEPS
 

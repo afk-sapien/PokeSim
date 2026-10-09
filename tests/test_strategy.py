@@ -431,3 +431,17 @@ def test_boulder_searches_after_each_push_reuse_walks_and_match_a_fresh_planner(
         assert planner.route(here, nav, task) == fresh.route(here, nav, task)
         assert list(planner.path) == list(fresh.path)
     assert len(planner._walks) < walked * len(plan[1::3])
+
+
+def test_learn_prompt_runs_the_core_shortcut_and_falls_back_to_the_menu():
+    from shortcut_fakes import PRESS, Recorder
+    s = snap(in_battle=1, party=(mon(moves=(33, 22, 45, 15)),))
+    mem = menu({8: '      TACKLE', 14: 'Which move to forget'}, (5, 8), 0, (5, 8))
+    pol = StrategicPolicy(1)
+    recorder = Recorder.on(pol)
+    actions = pol._dispatch(s, Screen(mem), 'learn_move', mem)
+    assert actions[0] == PRESS and recorder.last.kind == 'learn_move'
+    assert recorder.last.forget == 'keep' or 0 <= recorder.last.forget < 3
+    pol = StrategicPolicy(1)
+    Recorder.on(pol, refuse={'learn_move'})
+    assert pol._dispatch(s, Screen(mem), 'learn_move', mem)[0].button in ('a', 'b', 'up', 'down')

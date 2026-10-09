@@ -15,7 +15,7 @@ from .world import update as update_world
 from .naming import Naming
 from .kanto import journey as kanto_journey
 from .menus import (MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, TASKS, Attack, Buy, ChangeBox, DayCare, FieldMove, Flee, Fly,
-                    Forget, Give, Lead, Radio, Remedy, Sell, Send, ShowPartner, Storage, Take, Teach, Throw, Use, choose,
+                    Forget, Give, Lead, Learn, Radio, Remedy, Sell, Send, ShowPartner, Storage, Take, Teach, Throw, Use, choose,
                     menu_label, restore)
 
 STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) before reporting a blocked objective
@@ -1266,6 +1266,8 @@ class Policy:
                     return action
             mon = snapshot.party[min(active, len(snapshot.party) - 1)] if snapshot.party else None
             move = weaken if catch and weaken is not None else self.move_choice(snapshot, mem, mon, opponent, None) if mon else None
+            if move is None and mon and not any(mon.pp):
+                move = 0  # FIGHT with no PP left is Struggle, which the Core shortcut runs.
             action = move is not None and self.battle_task(Attack(move), snapshot, mem)
             if action:
                 return action
@@ -1278,17 +1280,22 @@ class Policy:
             return Action('a')
         if any(phrase in text for phrase in ('trying to learn', 'Which move', 'HM moves', 'Forget an')):
             self.learning = True
+            if snapshot.party:
+                action = self.battle_task(Learn(self.learn_slot(snapshot.party[min(
+                    mem.byte('wCurPartyMon'), len(snapshot.party) - 1)])), snapshot, mem)
+                if action:
+                    return action
         if ('TYPE/' in text or 'Disabled!' in text or 'No PP' in text or 'TYPE' in text and '/' in text
                 or self.learning and '▶' in text and 'Which move' in text):
             slot = min(mem.byte('wCurPartyMon' if self.learning else 'wCurBattleMon'), max(0, len(snapshot.party) - 1))
             if snapshot.party:
                 mon = snapshot.party[slot]
                 if self.learning:
-                    # Learning a level-up move is a battle prompt that no Core shortcut covers.
-                    protected = {15, 19, 57, 70, 148, 250, 127, 29, 249}
-                    if all(move in protected for move in mon.moves):
+                    # The Core shortcut was refused, so the move list is answered directly.
+                    forget = self.learn_slot(mon)
+                    if forget == 'keep':
                         return Action('b')
-                    target = min(range(4), key=lambda i: 999 if mon.moves[i] in protected else self.data.moves.get(mon.moves[i], {}).get('power', 0)) + 1
+                    target = forget + 1
                 else:
                     move = self.move_choice(snapshot, mem, mon, opponent, weaken)
                     target = 1 if move is None else move + 1
@@ -1370,9 +1377,19 @@ class Policy:
                                                   for move, pp in zip(mon.moves, mon.pp))
                    for mon in snapshot.party)
 
+    LEARN_PROTECTED = frozenset({15, 19, 57, 70, 148, 250, 127, 29, 249})
+
+    def learn_slot(self, mon):
+        """The move slot a new level-up move replaces: the weakest unprotected one, or 'keep'."""
+        if all(move in self.LEARN_PROTECTED for move in mon.moves):
+            return 'keep'
+        return min(range(4), key=lambda i: 999 if mon.moves[i] in self.LEARN_PROTECTED
+                   else self.data.moves.get(mon.moves[i], {}).get('power', 0))
+
     def battle_task(self, task, snapshot, mem):
         """Start a Core battle shortcut now, or return None when the game refused it recently."""
-        if not self.allowed(task, snapshot):
+        if not self.allowed(task, snapshot) or mem.byte('wBattleType') == 3:
+            # Battle type 3 is the catching tutorial, which takes no input from the player.
             return None
         self.menu = task
         button = self.menu_step(snapshot, mem)
