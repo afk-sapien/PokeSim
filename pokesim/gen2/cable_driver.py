@@ -2,7 +2,7 @@
 import time
 
 from ..interactions.cable import checked
-from .menus import choose
+from .menus import choose, close_pc
 from .navigation import Navigator
 from .ram import read_snapshot
 
@@ -40,7 +40,7 @@ class CableDriver:
                 return 'a' if cursor == target else 'down' if cursor < target else 'up'
             return 'a'
         if 'TURN OFF' in s.text:
-            return choose(s.tiles, 'TURN OFF') or 'b'
+            return close_pc(s)
         if 'CHANGE BOX' in s.text or 'Choose a' in s.text or 'STATS' in s.text:
             return 'b'
         if '┌' in s.tiles[12] or m.byte('wScriptRunning') and name not in {'TRADE_CENTER', 'TIME_CAPSULE'}:

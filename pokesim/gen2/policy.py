@@ -16,7 +16,7 @@ from .naming import Naming
 from .kanto import journey as kanto_journey
 from .menus import (MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, TASKS, Attack, Buy, ChangeBox, DayCare, FieldMove, Flee, Fly, Release,
                     Forget, Give, Lead, Learn, Radio, Remedy, Sell, Send, ShowPartner, Storage, Take, Teach, Throw, Use, choose,
-                    menu_label, restore)
+                    close_pc, menu_label, restore)
 
 STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) before reporting a blocked objective
 
@@ -50,6 +50,9 @@ class Policy:
         self.nav = Navigator(data)
         self.decisions = 0
         self.mode = 'opening'
+        # True while the last step backed out of a screen no plan owns. A checkpoint taken then
+        # would bring the run back into that screen, so the emulator skips it.
+        self.backing_out = False
         self.goal = None
         self.menu = None
         self.shopping = None
@@ -930,8 +933,10 @@ class Policy:
     def step(self, snapshot, memory):
         self.memory = memory
         self.decisions += 1
+        self.backing_out = False
         if self.rescue:
             self.mode = 'finding another approach'
+            self.backing_out = True
             return Action(self.rescue.popleft(), 8, 24)
         mem = Memory(memory, self.data)
         from .ruins import control
@@ -962,10 +967,13 @@ class Policy:
             return Action(tower_button, 6, 26)
         if self.menu is None and not snapshot.in_battle and self.constant(snapshot).endswith('POKECENTER_1F'):
             if 'TURN OFF' in snapshot.text:
-                return Action(choose(snapshot.tiles, 'TURN OFF') or 'b', 8, 36)
+                self.mode, self.backing_out = 'Close the PC', True
+                return Action(close_pc(snapshot), 8, 36)
             if 'CHANGE BOX' in snapshot.text or 'Choose a' in snapshot.text:
+                self.mode, self.backing_out = 'Close the PC', True
                 return Action('b', 8, 36)
         if self.menu is None and snapshot.started and not snapshot.in_battle and ('CANCEL' in snapshot.text or 'PACK' in snapshot.text and 'SAVE' in snapshot.text or 'Teach ' in snapshot.text and 'POKéMON?' in snapshot.text):
+            self.mode, self.backing_out = 'Close a menu', True
             return Action('b', 8, 28)
         if getattr(self.menu, 'battle', False):
             # Remedies run in and out of battle. The other battle shortcuts end with the battle.

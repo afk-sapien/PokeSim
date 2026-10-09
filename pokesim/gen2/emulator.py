@@ -67,17 +67,33 @@ class Event:
     notable: bool = True
 
 
+def settled(metadata):
+    """Whether a checkpoint was taken with no menu task running and nothing being backed out of.
+
+    A reload drops the running menu task, so a save taken inside a menu brings the run back into a
+    screen no plan owns. Saves from before this flag existed count when no menu task was saved.
+    """
+    if 'settled' in metadata:
+        return bool(metadata['settled'])
+    return not (metadata.get('policy_state') or {}).get('menu')
+
+
 def reload_target(store, saves, since_frame):
-    """The newest autosave made at least SCREEN_FRAMES of game time before ``since_frame``.
+    """The newest settled autosave made at least SCREEN_FRAMES of game time before ``since_frame``.
 
     Autosaves record the game frame, the clock the stuck guards count in, so the choice does not
-    depend on wall-clock time or emulation speed. The oldest save is the fallback.
+    depend on wall-clock time or emulation speed. A save taken inside a menu is used only when no
+    settled save is old enough. The oldest save is the fallback.
     """
+    early = []
     for path in reversed(saves):
-        frame = (store.checkpoint_metadata(path) or {}).get('frame')
+        metadata = store.checkpoint_metadata(path) or {}
+        frame = metadata.get('frame')
         if isinstance(frame, int) and frame < since_frame - SCREEN_FRAMES:
-            return path
-    return saves[0] if saves else None
+            if settled(metadata):
+                return path
+            early.append(path)
+    return early[0] if early else saves[0] if saves else None
 
 
 class Emulator:
@@ -259,12 +275,16 @@ class Emulator:
                 'policy_state': self.policy.state_dict(), 'run_memory': {}, 'play_clock': self.play_clock.state_dict(),
                 'gen2_history': self.history, 'legendary_recovery': self.legendary_recovery.state_dict(),
                 'trade_id': self.store.get('trade_barrier'),
-                'reward_id': self.store.get('custom-reward-barrier-v1')}
+                'reward_id': self.store.get('custom-reward-barrier-v1'),
+                'settled': self.policy.menu is None and not getattr(self.policy, 'backing_out', False)}
 
     def _autosave(self, trade_prepare=False):
         if self.store.get('trade_hold') and not trade_prepare:
             return
         if self.snapshot is not None and not self.snapshot.valid:
+            return
+        # A save taken while backing out of a screen no plan owns would only bring the run back there.
+        if not trade_prepare and getattr(self.policy, 'backing_out', False):
             return
         # Keep older saves intact while the run is wedged so a reload has somewhere good to go.
         if not trade_prepare and (self.frame - self.screen_frame >= SCREEN_FRAMES
@@ -712,7 +732,7 @@ class Emulator:
                 if self.frame >= self._guard_frame:
                     self._guard_frame = self.frame + 60
                     self._check_guards()
-                if time.monotonic() >= next_save:
+                if time.monotonic() >= next_save and not getattr(self.policy, 'backing_out', False):
                     self._autosave()
                     next_save = time.monotonic() + config.AUTOSAVE_SECONDS
         except Exception as error:

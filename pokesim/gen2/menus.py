@@ -57,6 +57,18 @@ def choose(rows, label, *, exact=False):
     return 'a' if target == cursor else 'down' if target > cursor else 'up'
 
 
+def close_pc(snapshot):
+    """The button that leaves a Pokémon Center PC whose list (BILL's PC ... TURN OFF) is on screen.
+
+    The list stays drawn under messages such as "BILL's PC accessed." and "POKéMON Storage System
+    opened.", and those hold the cursor until they are dismissed. Moving toward TURN OFF works only
+    while the list asks "Access whose PC?". Otherwise B dismisses the message and backs out.
+    """
+    if 'whose PC' in snapshot.text:
+        return choose(snapshot.tiles, 'TURN OFF') or 'b'
+    return 'b'
+
+
 @dataclass
 class Radio:
     phase: str = 'open'
