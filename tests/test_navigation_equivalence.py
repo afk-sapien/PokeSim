@@ -329,3 +329,50 @@ def test_live_memory_updates_invalidate_cached_npc_positions(terrain):
     nav.update_live(SimpleNamespace(map=FIELD), memory)
     assert ('down', (FIELD, 2, 1)) in nav._search_neighbors(0)((FIELD, 2, 0))
     assert_graph_parity(nav, terrain['WORLD'], 0)
+
+
+def test_every_edge_edit_advances_its_map_stamp(terrain):
+    import pickle
+    nav = navigation.Navigator()
+    edits = [
+        lambda: nav.edges.__setitem__((FIELD, 0, 0), {'right': (FIELD, 1, 0)}),
+        lambda: nav.edges[(FIELD, 0, 0)].__setitem__('down', (FIELD, 0, 1)),
+        lambda: nav.edges.setdefault((FIELD, 0, 0), {}).__setitem__('up', None),
+        lambda: nav.edges[(FIELD, 0, 0)].pop('up'),
+        lambda: nav.edges[(FIELD, 0, 0)].update({'left': (FIELD, 0, 0)}),
+        lambda: nav.edges[(FIELD, 0, 0)].clear(),
+        lambda: nav.edges.pop((FIELD, 0, 0)),
+        lambda: nav.edges.update({(FIELD, 1, 1): {'up': (FIELD, 1, 0)}}),
+        lambda: nav.edges.clear(),
+    ]
+    for edit in edits:
+        before = (nav.edges.version, nav.edges.map_versions.get(FIELD))
+        edit()
+        assert nav.edges.version != before[0] and nav.edges.map_versions[FIELD] != before[1]
+        assert ROOM not in nav.edges.map_versions
+    nav.edges[(ROOM, 0, 0)] = {'right': (ROOM, 1, 0)}
+    for copied in (deepcopy(nav.edges), pickle.loads(pickle.dumps(nav.edges))):
+        assert copied == nav.edges and isinstance(copied, navigation.EdgeMap)
+        copied[(ROOM, 0, 0)]['right'] = (ROOM, 0, 1)
+        assert nav.edges[(ROOM, 0, 0)] == {'right': (ROOM, 1, 0)}
+    nav.edges = {(ROOM, 0, 0): {'down': (ROOM, 0, 1)}}
+    assert isinstance(nav.edges, navigation.EdgeMap)
+    assert_graph_parity(nav, terrain['WORLD'], 0)
+
+
+def test_unchanged_edges_are_not_regrouped_between_searches(terrain):
+    nav = navigation.Navigator()
+    nav.edges.update({(FIELD, x, y): {'right': (FIELD, x + 1, y)} for x in range(6) for y in range(6)})
+    nav._search_neighbors(0)
+    rekeyed = []
+    signatures = nav._map_signatures
+    class Recording(dict):
+        def __setitem__(self, key, value):
+            rekeyed.append(key)
+            super().__setitem__(key, value)
+    nav._map_signatures = Recording(signatures)
+    nav._search_neighbors(0)
+    assert rekeyed == []
+    nav.edges[(FIELD, 0, 0)]['down'] = (FIELD, 0, 1)
+    nav._search_neighbors(0)
+    assert rekeyed == [FIELD]

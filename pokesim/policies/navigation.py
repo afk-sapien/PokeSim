@@ -1,5 +1,7 @@
 """Directed navigation with observed actions, static geometry, and temporary obstacles."""
 from collections import deque
+from copy import deepcopy
+from itertools import count
 import os
 
 from ..strategy_data import DATA, ITEMS, MAPS, WORLD, event_set
@@ -35,6 +37,131 @@ def cinnabar_gate_open(flags, index):
     return event_set(flags, f'EVENT_CINNABAR_GYM_GATE{index + 1}_UNLOCKED')
 
 
+_STAMPS = count(1)
+
+
+class _Directions(dict):
+    """Observed directions from one square that stamp their map on every edit."""
+    __slots__ = ('_owner', '_map')
+
+    def __init__(self, owner, m, values=()):
+        super().__init__(values)
+        self._owner, self._map = owner, m
+
+    def _touch(self):
+        self._owner._touch(self._map)
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self._touch()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._touch()
+
+    def pop(self, *args):
+        self._touch()
+        return super().pop(*args)
+
+    def popitem(self):
+        self._touch()
+        return super().popitem()
+
+    def clear(self):
+        super().clear()
+        self._touch()
+
+    def update(self, *args, **kwargs):
+        super().update(*args, **kwargs)
+        self._touch()
+
+    def setdefault(self, key, default=None):
+        self._touch()
+        return super().setdefault(key, default)
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+    def __copy__(self):
+        return dict(self)
+
+    def __deepcopy__(self, memo):
+        return deepcopy(dict(self), memo)
+
+    def __reduce__(self):
+        return dict, (dict(self),)
+
+
+class EdgeMap(dict):
+    """Observed edges by square with a stamp per map that changes on every edit.
+
+    Searches compare stamps instead of rereading every edge, so the cost of noticing an edit
+    does not grow with the number of squares the run has walked.
+    """
+
+    def __init__(self, values=()):
+        super().__init__()
+        self.version = 0
+        self.map_versions = {}
+        for key, directions in dict(values).items():
+            self[key] = directions
+
+    def _touch(self, m):
+        self.version = self.map_versions[m] = next(_STAMPS)
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, _Directions(self, key[0], value))
+        self._touch(key[0])
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._touch(key[0])
+
+    def pop(self, key, *default):
+        if key in self:
+            self._touch(key[0])
+        return super().pop(key, *default)
+
+    def popitem(self):
+        key, value = super().popitem()
+        self._touch(key[0])
+        return key, value
+
+    def clear(self):
+        maps = {key[0] for key in self}
+        super().clear()
+        for m in maps:
+            self._touch(m)
+
+    def update(self, *args, **kwargs):
+        for key, value in dict(*args, **kwargs).items():
+            self[key] = value
+
+    def setdefault(self, key, default=None):
+        if key not in self:
+            self[key] = {} if default is None else default
+        return self[key]
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+    def __copy__(self):
+        return EdgeMap(self)
+
+    def __deepcopy__(self, memo):
+        return EdgeMap({key: deepcopy(dict(value), memo) for key, value in self.items()})
+
+    def __reduce__(self):
+        return EdgeMap, ({key: dict(value) for key, value in self.items()},)
+
+
+# The packaged world tables are never edited, so a search signs them once by identity.
+# Substituted tables, as tests use, are still compared by content on every search.
+_PACKAGED_WORLD = WORLD
+
+
 class Navigator:
     def __init__(self):
         self.visits = {}
@@ -57,12 +184,21 @@ class Navigator:
         self._world_indices = {}
         self._graph_signature = None
         self._map_signatures = {}
+        self._edges_seen = None
         self._neighbor_cache = {}
         self._compiled_graph = None
         self._open_navigation = None
         self._story_key = None
         self._story_result = None
         self._cache_story = os.environ.get('POKESIM_EXPERIMENT_STORY_CACHE', '1') != '0'
+
+    @property
+    def edges(self):
+        return self._edges
+
+    @edges.setter
+    def edges(self, value):
+        self._edges = value if isinstance(value, EdgeMap) else EdgeMap(value)
 
     def update_live(self, snapshot, memory):
         self.live_map = snapshot.map
@@ -328,7 +464,10 @@ class Navigator:
         # Custom graph providers retain their existing expansion semantics.
         if getattr(self.neighbors, '__func__', None) is not Navigator.neighbors:
             return lambda pos: self.neighbors(pos, frame)
-        worlds = tuple((m, self._world_signature(w)) for m, w in WORLD.items())
+        if WORLD is _PACKAGED_WORLD:
+            worlds = id(WORLD)
+        else:
+            worlds = tuple((m, self._world_signature(w)) for m, w in WORLD.items())
         signature = (worlds, self.use_world, self.can_surf, self.can_cut,
                      frozenset(self.cleared_objects), frozenset(self.tile_overrides.items()),
                      frozenset(self.story_blocks), frozenset(self.closed_passages),
@@ -340,18 +479,28 @@ class Navigator:
             self._map_signatures.clear()
             self._neighbor_cache.clear()
             self._world_indices.clear()
-        # Snapshots only detect edits, so they need no per-tile hash tables.
-        # A changed insertion order can conservatively invalidate the map too.
-        edges = {}
-        for pos, directions in self.edges.items():
-            edges.setdefault(pos[0], []).append((pos, tuple(directions.items())))
+            self._edges_seen = None
+        # Edge stamps change on every edit, so only maps with new stamps are compared.
+        edges = self._edges
+        seen = self._edges_seen
+        if seen is None or seen[0] is not edges:
+            changed = set(WORLD) | set(edges.map_versions) | set(self._map_signatures)
+        elif seen[1] != edges.version:
+            changed = {m for m, stamp in edges.map_versions.items() if seen[2].get(m) != stamp}
+        else:
+            changed = set()
+        self._edges_seen = (edges, edges.version, dict(edges.map_versions))
         blocked = {}
         for (pos, dr), until in self.blocked.items():
             if until > frame:
                 blocked.setdefault(pos[0], []).append((pos, dr))
-        maps = set(WORLD) | set(edges) | set(blocked) | set(self._map_signatures)
-        for m in maps:
-            key = (tuple(edges.get(m, ())), tuple(blocked.get(m, ())),
+        # Blocks expire with the frame and live objects move, so their maps are always compared.
+        changed.update(blocked)
+        changed.update(m for m, key in self._map_signatures.items() if key[1] or key[2])
+        if self.live_map is not None:
+            changed.add(self.live_map)
+        for m in changed:
+            key = (edges.map_versions.get(m), tuple(blocked.get(m, ())),
                    tuple(self.live_positions) if self.live_map == m else ())
             if key != self._map_signatures.get(m):
                 self._map_signatures[m] = key
