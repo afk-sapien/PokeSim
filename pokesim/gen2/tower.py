@@ -46,7 +46,31 @@ def forecast(mon, cap):
         stats=calculated_stats(data.species[species]['stats'], cap, mon.dvs, mon.stat_exp))
 
 
-def select_team(snapshot):
+# Decisions between two Tower challenges, and the base of the back-off after a challenge that fell short.
+RETRY_AFTER = 50000
+
+
+def resting_caps(policy):
+    """Level caps whose last challenge fell short of seven wins and are still backing off."""
+    failed = policy.collection.get('tower_failed') or {}
+    return {int(cap) for cap, row in failed.items() if policy.decisions < row['until']}
+
+
+def record_result(policy, cap, wins):
+    """Back a level cap off for longer after each challenge there that fell short of seven wins.
+
+    Only a full set of seven earns the Tower prize, so a team that keeps losing at one cap would
+    otherwise repeat the same challenge forever while other work waits.
+    """
+    failed = policy.collection.setdefault('tower_failed', {})
+    if wins >= 7:
+        failed.pop(str(cap), None)
+        return
+    streak = (failed.get(str(cap)) or {}).get('streak', 0) + 1
+    failed[str(cap)] = {'streak': streak, 'until': policy.decisions + RETRY_AFTER * 2 ** min(streak, 5)}
+
+
+def select_team(snapshot, skip=()):
     def strength(mon):
         value = (sum(mon.stats) - mon.level - 35) / mon.level
         data = getattr(mon, 'data', None)
@@ -58,6 +82,8 @@ def select_team(snapshot):
         return value
     choices = []
     for cap in range(10, 101, 10):
+        if cap in skip:
+            continue
         candidates = []
         for mon in snapshot.party + snapshot.stored:
             if mon.egg or not cap - 20 < mon.level <= cap or cap < 70 and mon.species in {150, 151, 249, 250, 251}:
@@ -113,7 +139,7 @@ def journey(policy, snapshot, Goal, *, force=False):
                 and not any(mon.held_item == berry for mon in snapshot.party + snapshot.stored)):
             return policy.person(snapshot, 'tower_berry', 'Collect a paralysis-curing berry for the Tower',
                                  'VIOLET_CITY', 'VioletCityFruitTree')
-        selected = select_team(snapshot)
+        selected = select_team(snapshot, resting_caps(policy))
         if not selected:
             return None
         cap, team = selected
@@ -138,7 +164,8 @@ def journey(policy, snapshot, Goal, *, force=False):
         if not state.get('abandoned'):
             policy.collection['tower_result'] = {'wins': state.get('wins', 0), 'level': state['cap']}
             policy.completed['tower'] = snapshot.frame
-        policy.collection['tower_after'] = policy.decisions + 50000
+            record_result(policy, state['cap'], state.get('wins', 0))
+        policy.collection['tower_after'] = policy.decisions + RETRY_AFTER
         if 'previous_training' in state:
             policy.collection['training'] = state['previous_training']
         policy.collection.pop('tower', None)

@@ -612,13 +612,23 @@ class Policy:
         return self.release_cache[1]
 
     def idle(self, snapshot):
-        """Whether the plan is to stand still until the cartridge clock reaches another day or time.
+        """Whether the run stands on its clock-wait tile, the moment between two patrol steps.
 
-        The emulator does not treat this wait as a stuck run, since the wall-clock day cannot be hurried.
+        The emulator does not treat this pause as a stuck run, since the wall-clock day cannot be hurried.
         """
         goal = self.goal
-        return (goal is not None and goal.key == 'collection_idle' and self.menu is None and not snapshot.in_battle
-                and self.data.map_ids.get(goal.map_name) == snapshot.map and (goal.x, goal.y) == (snapshot.x, snapshot.y))
+        return (self.waiting(snapshot) and not snapshot.in_battle
+                and (goal.x, goal.y) == (snapshot.x, snapshot.y))
+
+    def waiting(self, snapshot):
+        """Whether the run is walking the grass on purpose until the cartridge clock opens new work.
+
+        The patrol earns no new progress, so the emulator does not reload it for lack of progress,
+        but a patrol that stops moving is still caught by the stuck and frozen screen checks.
+        """
+        goal = self.goal
+        return (goal is not None and goal.key == 'collection_idle' and self.menu is None
+                and self.data.map_ids.get(goal.map_name) == snapshot.map)
 
     def no_room(self, snapshot):
         """Every box is full and nothing can be released, so a catch has nowhere to go."""

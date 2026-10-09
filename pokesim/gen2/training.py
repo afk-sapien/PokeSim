@@ -95,6 +95,10 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         state['training'] = project = None
     if project and standing_down(policy, train_key(project['identity'])):
         state['training'] = project = None
+    # A full party with every box full and nothing to release cannot swap anyone in at the PC, so
+    # stored partners and a stored Exp. Share are out of reach. Plan only around the party then,
+    # instead of walking to the PC to stand each stored partner down in turn.
+    sealed = len(snapshot.party) >= 6 and bool(getattr(policy, 'no_room', lambda snapshot: False)(snapshot))
     if project is None:
         choices = projects(data, snapshot, current_time, demand)
         terminal_project = False
@@ -103,7 +107,8 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
             choices = [(experience_at(100, data.species[mon.species]['growth']) - mon.experience,
                         mon.box is not None, mon.species, identity(mon), mon.species, None)
                        for mon in snapshot.party + snapshot.stored if not mon.egg and mon.level < 100]
-        choices = [row for row in choices if not standing_down(policy, train_key(row[3]))]
+        choices = [row for row in choices if not standing_down(policy, train_key(row[3]))
+                   and not (row[1] and sealed)]
         if not choices:
             return None
         _, _, species, key, target, item = min(choices)
@@ -131,6 +136,9 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         if mon.box is None:
             return Goal('collection_take', 'Remove Everstone before evolution', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     state['phase'] = 'evolving'
+    if mon.box is not None and sealed:
+        state['training'] = None
+        return None
     if mon.box is not None:
         goal = policy.storage_goal(snapshot)
         return Goal('collection_train_pc', f'Prepare {mon.name} for training', goal.map_name, goal.x, goal.y, goal.face)
@@ -143,6 +151,8 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
             return Goal('collection_take', 'Pass Exp. Share to the next partner', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
         if not inventory.get(share):
             holder = next((row for row in snapshot.stored if row.held_item == share), None)
+            if holder and sealed:
+                return None
             if holder:
                 state['share_holder'] = identity(holder)
                 goal = policy.storage_goal(snapshot)

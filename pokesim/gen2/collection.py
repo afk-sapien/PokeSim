@@ -388,9 +388,51 @@ def journey(policy, snapshot, mem, Goal):
             if goal:
                 return goal
             state['phase'] = 'waiting'
-            # Nothing can be done until the cartridge clock reaches another day or time of day.
-            return Goal('collection_idle', waiting_label(policy, snapshot, mem, current_time), 'ROUTE_29', 12, 8)
+            # Nothing else is useful until the cartridge clock reaches another day or time of day.
+            # The plan is rebuilt every step, so the clock-gated work starts as soon as its window opens.
+            return patrol(policy, snapshot, Goal, waiting_label(policy, snapshot, mem, current_time))
     return hunt(policy, snapshot, Goal)
+
+
+# Where the run passes time when nothing but the cartridge clock can unlock more work.
+PATROL_MAP, PATROL_HOME = 'ROUTE_29', (12, 8)
+
+
+def patrol_label(label):
+    """Say the run keeps busy in the grass while it waits for the clock."""
+    for prefix in ('Waiting for ', 'Explore while waiting for '):
+        if label.startswith(prefix):
+            return 'Train in the grass while waiting for ' + label[len(prefix):]
+    return label
+
+
+def patrol(policy, snapshot, Goal, label):
+    """Walk between the Route 29 grass tiles while waiting for a weekday or time of day.
+
+    The cartridge clock follows wall time, so a wait can last days of real time. Standing still
+    for that long looks like a frozen run and does nothing, while walking the grass keeps the
+    screen moving and battles wild Pokémon until the plan finds real work again.
+    """
+    data = policy.data
+    mid = data.map_ids[PATROL_MAP]
+    label = patrol_label(label)
+    if snapshot.map != mid:
+        return Goal('collection_idle', label, PATROL_MAP, *PATROL_HOME)
+    here = (snapshot.x, snapshot.y)
+    points = sorted((point[:2] for point in encounter_points(policy, snapshot, mid, 'grass') if point[:2] != here),
+                    key=lambda point: (abs(point[0] - here[0]) + abs(point[1] - here[1]),
+                                       policy.nav.visits.get((mid, *point), 0)))
+    candidates = []
+    for x, y in points[:24]:
+        path = policy.nav.local(snapshot, [(x, y)], policy.memory)
+        if path:
+            candidates.append((policy.nav.visits.get((mid, x, y), 0), len(path), x, y))
+            if len(candidates) >= 4:
+                break
+    if not candidates:
+        return Goal('collection_idle', label, PATROL_MAP, *PATROL_HOME)
+    _, _, x, y = min(candidates)
+    return Goal('collection_idle', label, PATROL_MAP, x, y)
 
 
 def hunt(policy, snapshot, Goal):

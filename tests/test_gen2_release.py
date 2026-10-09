@@ -94,7 +94,7 @@ def guard_emulator(idle):
     from pokesim.gen2.emulator import Emulator
     reloads, recoveries = [], []
     policy = SimpleNamespace(recoveries=0, take_failure=lambda: None, idle=lambda snapshot: idle,
-                             recover=lambda level: recoveries.append(level))
+                             waiting=lambda snapshot: idle, recover=lambda level: recoveries.append(level))
     emu = SimpleNamespace(paused=False, manual_mode=False, preparation=None, store=SimpleNamespace(get=lambda key: None),
                           snapshot=SimpleNamespace(valid=True, started=True), frame=10 ** 6, last_reload_frame=0,
                           policy=policy, failure_streak=0, invalid_frame=None, battle_frame=None, stuck_frame=0,

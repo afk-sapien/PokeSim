@@ -549,7 +549,12 @@ class Emulator:
             self.stall.frame = None
             self.waiting = True
             return
-        self.waiting = False
+        # Walking the grass while the clock is wrong is the plan too. It earns no progress, so only
+        # the progress clocks restart; a patrol that stops moving still trips the stuck checks.
+        self.waiting = bool(self.policy.waiting(snapshot))
+        if self.waiting:
+            self.progress_frame = self.frame
+            self.stall.frame = None
         limit, frame = config.STUCK_RELOAD_SECONDS * 60, self.frame
         failure = self.policy.take_failure()
         if failure:
