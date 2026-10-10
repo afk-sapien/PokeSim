@@ -636,7 +636,7 @@ def create_app(manager, shutdown=lambda: None):
         manager.check_available()
         data = await json_body(request)
         if isinstance(data, dict):
-            session_writer(data.get('left_id'), data.get('right_id'))
+            await asyncio.to_thread(session_writer, data.get('left_id'), data.get('right_id'))
         status = await asyncio.to_thread(manager.coordinator.sessions.create, data)
         if status['transaction_phase'] == 'preparing' and status['decision'] is None:
             manager.coordinator.sessions.start(status['id'])
@@ -656,7 +656,7 @@ def create_app(manager, shutdown=lambda: None):
         if action not in {'input', 'finish', 'cancel'}:
             raise HTTPException(404)
         status = await asyncio.to_thread(sessions.status, validate_id(sid))
-        session_writer(status['left_id'], status['right_id'])
+        await asyncio.to_thread(session_writer, status['left_id'], status['right_id'])
         if action == 'input':
             data = await json_body(request)
             return await asyncio.to_thread(sessions.press, sid, data)
@@ -700,16 +700,18 @@ def create_app(manager, shutdown=lambda: None):
         data = await json_body(request)
         if not isinstance(data, dict) or set(data) - {'enabled', 'wishlist'}:
             raise HTTPException(400, 'Send enabled and wishlist only')
-        if manager.offers.viewer_only(aid):
-            raise HTTPException(403, 'This adventure is view-only')
-        game = manager.registry.adventure(aid)
-        try:
-            await asyncio.to_thread(trade_settings.update, manager.registry, aid, enabled=data.get('enabled'),
-                                    wishlist=data.get('wishlist'),
-                                    dex_total=251 if game['version'] in {'gold', 'silver', 'crystal'} else 151)
-        except ValueError as error:
-            raise HTTPException(400, str(error)) from error
-        return await asyncio.to_thread(auto_settings_public, aid)
+
+        def write():
+            if manager.offers.viewer_only(aid):
+                raise HTTPException(403, 'This adventure is view-only')
+            game = manager.registry.adventure(aid)
+            try:
+                trade_settings.update(manager.registry, aid, enabled=data.get('enabled'), wishlist=data.get('wishlist'),
+                                      dex_total=251 if game['version'] in {'gold', 'silver', 'crystal'} else 151)
+            except ValueError as error:
+                raise HTTPException(400, str(error)) from error
+            return auto_settings_public(aid)
+        return await asyncio.to_thread(write)
 
     def auto_settings_public(aid):
         game = manager.registry.adventure(aid)

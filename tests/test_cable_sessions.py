@@ -1,4 +1,5 @@
 """Manual Cable Club sessions: party invariants, lifecycle and rollback."""
+import asyncio
 import hashlib
 import json
 import subprocess
@@ -360,7 +361,13 @@ def test_view_only_links_cannot_drive_a_session(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, 'start', lambda: None)
     manager.registry.add_rom('gold', 'sha-gold', 'gold')
     games = [manager.registry.create(name, 'gold', {}, identifier()) for name in ('One', 'Two')]
-    monkeypatch.setattr(manager.offers, 'viewer_only', lambda aid: aid == games[1]['id'])
+    on_loop = []
+
+    def viewer_only(aid):
+        # The check reads the registry, so it must run off the library's event loop.
+        on_loop.append(running_loop())
+        return aid == games[1]['id']
+    monkeypatch.setattr(manager.offers, 'viewer_only', viewer_only)
     with TestClient(create_app(manager)) as client:
         client.headers['X-PokeSim-CSRF'] = client.get('/api/v1/session').json()['csrf_token']
         response = client.post('/api/v1/interactions/cable-sessions',
@@ -368,7 +375,16 @@ def test_view_only_links_cannot_drive_a_session(tmp_path, monkeypatch):
         assert response.status_code == 403
         response = client.post(f'/view/{games[0]["id"]}/api/v1/interactions/cable-sessions', json={})
         assert response.status_code in {403, 404}
+    assert on_loop and not any(on_loop)
     manager.close()
+
+
+def running_loop():
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
 
 
 def test_pacing_starts_when_the_owner_takes_the_controllers(tmp_path):

@@ -67,7 +67,7 @@ def managed(tmp_path, monkeypatch):
     with TestClient(application) as client:
         # A valid session and CSRF token, so a refusal below is the view boundary and not CSRF.
         client.headers['X-PokeSim-CSRF'] = client.get('/api/v1/session').json()['csrf_token']
-        yield SimpleNamespace(client=client, aid=adventure['id'], forwarded=forwarded, app=application)
+        yield SimpleNamespace(client=client, aid=adventure['id'], forwarded=forwarded, app=application, manager=manager)
 
 
 @pytest.mark.parametrize('method,path', [

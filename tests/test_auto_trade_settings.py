@@ -1,4 +1,5 @@
 """Automatic trading settings: on or off, a wish list, Trade first, and hand-picked trades first."""
+import asyncio
 import threading
 import time
 
@@ -12,6 +13,7 @@ from pokesim.gen2 import trading as gen2_trading
 
 from test_managed_coordinator import Peer, setup  # noqa: F401  (fixture)
 from test_view_links import managed  # noqa: F401  (fixture)
+from test_cable_sessions import running_loop
 
 
 class Chosen(Exception):
@@ -227,3 +229,17 @@ def test_auto_settings_route_reads_writes_and_respects_view_only(managed, monkey
     monkeypatch.setattr(config, 'VIEWER_ONLY', True)
     assert client.put(path, json={'enabled': True}).status_code == 403
     assert client.get(path).json()['enabled'] is False
+
+
+def test_saving_auto_settings_reads_the_registry_off_the_event_loop(managed, monkeypatch):  # noqa: F811
+    client, aid = managed.client, managed.aid
+    registry = managed.manager.registry
+    on_loop = []
+    real = registry.adventure
+
+    def adventure(*args, **kwargs):
+        on_loop.append(running_loop())
+        return real(*args, **kwargs)
+    monkeypatch.setattr(registry, 'adventure', adventure)
+    response = client.put(f'/api/v1/interactions/auto-settings?adventure_id={aid}', json={'enabled': False})
+    assert response.status_code == 200 and on_loop and not any(on_loop)
