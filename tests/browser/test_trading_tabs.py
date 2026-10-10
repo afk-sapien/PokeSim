@@ -37,6 +37,7 @@ class Library:
     def __init__(self, page, url, *, starts_now=True, mine_key='box-1', viewer_only=False):
         self.page, self.url = page, url
         self.viewer_only = viewer_only
+        self.limits_held = None
         self.starts_now = starts_now
         self.mine_key = mine_key
         self.posted = []
@@ -120,6 +121,10 @@ class Library:
         self.json(route, body)
 
     def limits(self, route):
+        if self.limits_held is not None and not self.limits_held:
+            # The first answer is held so a test can send it after a newer request.
+            self.limits_held.append(route)
+            return
         self.json(route, {'pokemon': [self.side(RED, 'Second Red', {'key': '1', 'name': 'Pidgey', 'dex': 16, 'level': 9, 'blocked': ''}),
                                       self.side(RED, 'Second Red', {'key': '2', 'name': 'Mew', 'dex': 151, 'level': 5,
                                                                     'blocked': 'Mew stays in this game'})],
@@ -310,6 +315,30 @@ def test_a_view_only_adventure_keeps_its_pokemon_disabled_after_a_search(page, g
     for button in page.locator('#pick-mine .pick-item').all():
         expect(button).to_be_disabled()
     expect(page.locator('#pick-game-step')).to_be_hidden()
+
+
+@pytest.mark.parametrize('late', ['answer', 'error'])
+def test_a_late_limits_answer_does_not_replace_the_newer_list(page, game, late):
+    library = Library(page, game[0])
+    library.limits_held = []
+    library.open()
+    page.locator('#pick-mine [data-key="box-1"]').click()
+    page.locator(f'[data-game="{RED}"]').click()
+    page.wait_for_function('document.querySelector("#pick-theirs").textContent.includes("Reading")')
+    # Pick again, so the first answer now belongs to an earlier pick.
+    page.locator('#pick-mine [data-key="box-1"]').click()
+    page.locator(f'[data-game="{RED}"]').click()
+    expect(page.locator('#pick-theirs')).to_contain_text('Pidgey')
+    old = library.limits_held[0]
+    if late == 'error':
+        library.json(old, {'detail': 'An old answer failed'}, 500)
+    else:
+        library.json(old, {'pokemon': [library.side(RED, 'Second Red', {'key': '9', 'name': 'Rattata', 'dex': 19, 'blocked': ''})],
+                           'to': {'adventure_id': RED, 'adventure_name': 'Second Red'}, 'starts_now': True})
+    page.wait_for_timeout(200)
+    expect(page.locator('#pick-theirs')).to_contain_text('Pidgey')
+    expect(page.locator('#pick-theirs')).not_to_contain_text('Rattata')
+    expect(page.locator('#pick-theirs')).not_to_contain_text('old answer')
 
 
 @pytest.mark.parametrize('width', [1280, 390])

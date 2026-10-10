@@ -43,7 +43,7 @@
   }
 
   // Trade: your Pokémon, then a game, then their Pokémon, then confirm.
-  const pick = {mine: [], mon: null, game: null, theirs: [], their: null, limits: null, busy: false, viewerOnly: false}
+  const pick = {mine: [], mon: null, game: null, theirs: [], their: null, limits: null, busy: false, viewerOnly: false, asked: null}
   const note = (selector, text) => { const el = $(selector)
     if (!el) return
     el.textContent = text || ''
@@ -137,14 +137,19 @@
     show('#pick-confirm-step', false)
     show('#pick-theirs-step', true)
     $('#pick-theirs').innerHTML = '<p class="empty-note">Reading their Pokémon…</p>'
+    const key = pick.mon.key
+    // Only the latest request may fill the list. An answer for an earlier Pokémon or game, or its error, is dropped.
+    const ask = pick.asked = {}
+    const stale = () => pick.asked !== ask || pick.game !== id || pick.mon?.key !== key
     try {
-      const data = await json(await PokeSim.api(`${OFFERS}/limits?from_id=${encodeURIComponent(aid)}&from_key=${encodeURIComponent(pick.mon.key)}&to_id=${encodeURIComponent(id)}`, {cache: 'no-store'}), 'Could not read their Pokémon.')
-      if (pick.game !== id) return
+      const data = await json(await PokeSim.api(`${OFFERS}/limits?from_id=${encodeURIComponent(aid)}&from_key=${encodeURIComponent(key)}&to_id=${encodeURIComponent(id)}`, {cache: 'no-store'}), 'Could not read their Pokémon.')
+      if (stale()) return
       pick.limits = data
       pick.theirs = data.pokemon || []
       $('#pick-theirs-count').textContent = pick.theirs.length ? `${pick.theirs.length} Pokémon` : ''
       renderList('#pick-theirs', pick.theirs, null, '#pick-theirs-search')
     } catch (error) {
+      if (stale()) return
       $('#pick-theirs').innerHTML = `<p class="empty-note">${esc(error.message)}</p>`
     }
   }
