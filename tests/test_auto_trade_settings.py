@@ -1,4 +1,7 @@
 """Automatic trading settings: on or off, a wish list, Trade first, and hand-picked trades first."""
+import threading
+import time
+
 import pytest
 
 from pokesim import config
@@ -26,6 +29,32 @@ def chosen(coordinator):
         coordinator.schedule_once()
     data = picked.value.args[0]
     return {data['left_id'], data['right_id']}
+
+
+class SlowRegistry:
+    """Holds the shared value and pauses between reading it and writing it back."""
+    def __init__(self):
+        self.values = {}
+
+    def setting(self, key, default=None):
+        value = self.values.get(key, default)
+        time.sleep(0.01)
+        return {**value} if isinstance(value, dict) else value
+
+    def set_setting(self, key, value):
+        self.values[key] = value
+
+
+def test_changes_to_different_adventures_at_once_all_stick():
+    registry = SlowRegistry()
+    ids = [identifier() for _ in range(8)]
+    threads = [threading.Thread(target=trade_settings.update, args=(registry, aid), kwargs={'enabled': False})
+               for aid in ids]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert all(trade_settings.get(registry, aid)['enabled'] is False for aid in ids)
 
 
 def test_settings_default_on_with_an_empty_wish_list(setup):  # noqa: F811

@@ -5,10 +5,14 @@ that validates adventure settings still opens the library after a downgrade.
 """
 from __future__ import annotations
 
+import threading
+
 from .registry import validate_id
 
 KEY = 'trade_auto'
 MAX_WISHES = 50
+# Every adventure's settings share one registry value, so each change reads and writes it whole.
+_write = threading.Lock()
 
 
 def _all(registry):
@@ -35,6 +39,11 @@ def update(registry, aid, *, enabled=None, wishlist=None, dex_total=251):
     validate_id(aid)
     if enabled is not None and not isinstance(enabled, bool):
         raise ValueError('Auto trading is either on or off')
+    with _write:
+        return _update(registry, aid, enabled, wishlist, dex_total)
+
+
+def _update(registry, aid, enabled, wishlist, dex_total):
     current = get(registry, aid)
     if enabled is not None:
         current['enabled'] = enabled
