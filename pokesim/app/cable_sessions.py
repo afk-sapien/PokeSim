@@ -353,6 +353,7 @@ class CableSessions:
 
     def verify(self, row, manifest):
         """Check the published parties again in this process before either adventure stages them."""
+        from ..gen2.cable_verification import evolved_species
         from ..gen2.manual_session import verify_parties
         from ..interactions.cable import CableError
         participants = manifest.get('participants') or {}
@@ -364,9 +365,20 @@ class CableSessions:
             trades = [item['evidence']['trades'] for item in rows]
             if min(trades) < 1:
                 raise ValueError(NO_TRADE)
-            verify_parties(before, after, trades)
+            # A trade can evolve the Pokémon that arrives, as Session.finish allows for.
+            data = self.game_data(row)
+            verify_parties(before, after, trades, lambda raw: evolved_species(raw, data))
         except (CableError, KeyError, TypeError, AttributeError) as error:
             raise ValueError(f'Cable session result failed verification: {error}') from error
+
+    def game_data(self, row):
+        """The Gen II game data for this session. Every Gen II cartridge numbers items the same."""
+        from ..gen2.data import GameData
+        version = self.registry.adventure(row['plan']['participants'][0])['version']
+        try:
+            return GameData.load(self.coordinator.manager.assets.game_data_dir, version)
+        except (OSError, ValueError) as error:
+            raise ValueError(f'Cable session result could not be checked without game data: {error}') from error
 
     def forget(self, tid):
         with self.guard:

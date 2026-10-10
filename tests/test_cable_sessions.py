@@ -13,6 +13,7 @@ import pytest
 from pokesim.app import cable_sessions
 from pokesim.app.coordinator import Coordinator
 from pokesim.app.registry import Registry, identifier
+from pokesim.gen2.data import GameData
 from pokesim.gen2.manual_session import verify_parties
 from pokesim.interactions.cable import CableError
 
@@ -26,6 +27,8 @@ def mon(species, ident):
 
 
 PIDGEOT, ODDISH, GYARADOS, DODRIO = mon(18, 1), mon(43, 2), mon(130, 3), mon(85, 4)
+# Gen II item numbers, the same in Gold, Silver and Crystal.
+ITEMS = {'EVERSTONE': 0x70, 'KINGS_ROCK': 0x52, 'METAL_COAT': 0x8F, 'DRAGON_SCALE': 0x97, 'UP_GRADE': 0xAC}
 
 
 def test_a_one_for_one_swap_passes_with_evidence():
@@ -166,8 +169,15 @@ def club(tmp_path, monkeypatch):
         payload = json.dumps([*parties['parties'], ADAPTER_ID])
         return real_popen([sys.executable, str(worker), *arguments, payload], **kwargs)
     monkeypatch.setattr(cable_sessions.subprocess, 'Popen', popen)
+    loaded = []
+
+    def load(root, version):
+        loaded.append((root, version))
+        return SimpleNamespace(items=ITEMS)
+    monkeypatch.setattr(GameData, 'load', staticmethod(load))
     yield SimpleNamespace(coordinator=coordinator, sessions=coordinator.sessions, registry=registry, peers=peers,
-                          gold=games[0]['id'], silver=games[1]['id'], red=games[2]['id'], parties=parties)
+                          gold=games[0]['id'], silver=games[1]['id'], red=games[2]['id'], parties=parties,
+                          loaded=loaded)
     coordinator.close()
     registry.close()
 
@@ -251,6 +261,20 @@ def test_a_duplicated_party_never_stages(club):
     status = club.sessions.status(sid)
     assert status['phase'] == 'rolled_back'
     assert all('stage' not in club.peers[aid].operations() for aid in (club.gold, club.silver))
+
+
+def test_a_trade_evolution_in_a_session_is_kept(club):
+    haunter, gengar = mon(93, 5), mon(94, 5)
+    club.parties['parties'] = [hexed([[haunter, ODDISH], [GYARADOS, DODRIO]]),
+                               hexed([[GYARADOS, ODDISH], [gengar, DODRIO]])]
+    sid, thread = open_session(club)
+    wait_for(club.sessions, sid, {'in_session'})
+    club.sessions.press(sid, {'side': 'left', 'button': 'a'})
+    club.sessions.finish(sid)
+    thread.join(20)
+    status = club.sessions.status(sid)
+    assert status['phase'] == 'done' and status['decision'] == 'COMMIT', status
+    assert club.loaded == [(club.coordinator.manager.assets.game_data_dir, 'gold')]
 
 
 def test_the_worker_losing_its_parent_cancels_the_session():
