@@ -3,7 +3,7 @@ const fs = require('node:fs')
 const test = require('node:test')
 const vm = require('node:vm')
 const crypto = require('node:crypto').webcrypto
-const source = fs.readFileSync('pokesim/web/static/library.js', 'utf8')
+const source = fs.readFileSync('pokesim/web/static/trade-progress.js', 'utf8') + String.fromCharCode(59) + '\n' + fs.readFileSync('pokesim/web/static/library.js', 'utf8')
 const settle = async () => {
   for (const tick of [1, 2, 3, 4]) await new Promise(resolve => setImmediate(resolve))
 }

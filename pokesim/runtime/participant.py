@@ -236,6 +236,7 @@ def manual_rows(payload, generation, last_party_blocked=False):
                      'location': location, 'box': mon.get('box') if location == 'box' else None,
                      'slot': mon.get('position') if location == 'box' else mon.get('slot'),
                      'egg': bool(mon.get('egg')), 'shiny': bool(mon.get('shiny')),
+                     'power': mon.get('power'), 'battle_power': mon.get('battle_power'),
                      'cartridge_generation': generation, 'blocked': blocked})
     return rows
 

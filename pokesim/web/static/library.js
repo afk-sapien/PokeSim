@@ -258,21 +258,7 @@
     }
     permissions()
   }
-  function tradePhase(trade) {
-    if (trade.decision === 'ABORT' || trade.error || ['recovering', 'aborting', 'aborted'].includes(trade.phase)) {
-      return trade.decision === 'COMMIT' ? 'Finishing the exchange safely' : 'Getting ready to try again'
-    }
-    const labels = {
-      proposed: 'Getting ready', preparing: 'Heading to the Cable Club',
-      connecting: 'Connecting the games', trading: 'Exchanging Pokémon',
-      saving: 'Saving progress', leaving: 'Leaving the Cable Club',
-      resuming: 'Returning to the adventure', returning: 'Returning to the adventure',
-      verifying: 'Checking both saves', staging: 'Checking both saves',
-      committed: 'Saving the exchange', applying: 'Saving the exchange',
-      releasing: 'Returning to the adventure', completed: 'Trade completed'
-    }
-    return labels[trade.phase || trade.state || trade.status] || 'Getting ready'
-  }
+  const tradePhase = trade => TradeProgress.phase(trade)
   function tradePartner(id, mon, completed, failed) {
     const game = adventures.find(item => item.id === id)
     const title = game ? `<a href="${gameUrl(id)}trading">${esc(game.name)} ↗</a>` : 'Adventure unavailable'
@@ -322,14 +308,6 @@
   }
   // Manual trades: the owner picks any Pokémon on each side. Only hard cable limits can block one.
   const manual = {options: [], choice: {left: {game: '', key: ''}, right: {game: '', key: ''}}, current: '', loaded: false, status: null}
-  const manualSteps = [
-    ['queued', 'Waiting for the Cable Club'], ['preparing', 'Heading to the Cable Club'],
-    ['connecting', 'Connecting the games'], ['trading', 'Exchanging Pokémon'],
-    ['verifying', 'Checking both saves'], ['committed', 'Saving the trade'], ['completed', 'Trade complete']]
-  const manualStepOf = {queued: 0, checking: 0, preparing: 1, connecting: 2, trading: 3, saving: 3, leaving: 3, resuming: 3,
-    returning: 3, verifying: 4, staging: 4, committed: 5, releasing: 5, completed: 6}
-  const preparationLabels = {travelling: 'travelling to a Pokémon Center', storage: 'at the PC', rendezvous: 'at the Cable Club counter',
-    ready: 'ready at the Cable Club'}
   const manualGame = side => manual.options.find(game => game.id === manual.choice[side].game)
   const manualMon = side => manualGame(side)?.pokemon.find(mon => mon.trade_key === manual.choice[side].key)
   const otherSide = side => side === 'left' ? 'right' : 'left'
@@ -414,46 +392,18 @@
     manual.loaded = true
     renderManual()
   }
-  function manualOutcome(status) {
-    if (status.state === 'rejected') return {done: true, failed: true, text: status.error || 'This trade could not start.'}
-    if (status.state === 'cancelled') return {done: true, failed: true, text: 'Trade cancelled. Both adventures kept their Pokémon.'}
-    if (status.phase === 'aborted') {
-      const detail = status.error && status.error !== status.failure_reason ? ` ${status.error}` : ''
-      return {done: true, failed: true, text: `${status.failure_reason || 'The trade did not complete.'}${detail}`}
-    }
-    if (status.phase === 'completed') {
-      const display = status.display || {}
-      const got = id => display[id]?.received?.name
-      const name = id => manual.options.find(game => game.id === id)?.name || adventures.find(game => game.id === id)?.name || 'An adventure'
-      const parts = [status.left_id, status.right_id].filter(got).map(id => `${name(id)} received ${got(id)}.`)
-      return {done: true, failed: false, text: `Trade complete. ${parts.join(' ')}`.trim()}
-    }
-    return {done: false}
-  }
+  const manualName = id => manual.options.find(game => game.id === id)?.name || adventures.find(game => game.id === id)?.name || 'An adventure'
+  const manualOutcome = status => TradeProgress.outcome(status, manualName)
   function renderManualStatus(status) {
     manual.status = status
     $('#trade-progress').hidden = !status
     if (!status) return
-    const name = id => manual.options.find(game => game.id === id)?.name || adventures.find(game => game.id === id)?.name || 'An adventure'
-    $('#trade-progress-title').textContent = `${name(status.left_id)} ⇄ ${name(status.right_id)}`
-    const outcome = manualOutcome(status)
-    const step = status.state === 'queued' ? 0 : manualStepOf[status.phase] ?? 0
-    const stopping = ['aborting', 'aborted', 'recovering'].includes(status.phase) || ['rejected', 'cancelled'].includes(status.state)
-    $('#trade-steps').innerHTML = manualSteps.map(([, label], index) => {
-      const state = outcome.done && !outcome.failed ? 'done' : index < step ? 'done' : index === step && !stopping ? 'now' : 'todo'
-      return `<li class="manual-step is-${state}"${state === 'now' ? ' aria-current="step"' : ''}>${esc(label)}</li>`
-    }).join('')
-    let text = ''
-    if (status.state === 'queued') text = status.position > 1 ? `Waiting in line. ${status.position - 1} chosen ${status.position === 2 ? 'trade goes' : 'trades go'} first.` : 'Waiting for the Cable Club to be free.'
-    else if (status.state === 'starting') text = 'Checking both Pokémon with their adventures.'
-    else if (status.phase === 'preparing') {
-      const sides = Object.entries(status.preparation || {}).map(([id, phase]) => `${name(id)} is ${preparationLabels[phase] || 'getting ready'}`)
-      text = sides.length ? `${sides.join('. ')}.` : 'Both adventures are heading to the Cable Club.'
-    } else if (['aborting', 'recovering'].includes(status.phase)) text = 'Stopping the trade safely. Both adventures keep their Pokémon.'
-    else if (!outcome.done) text = tradePhase(status)
-    $('#trade-progress-text').textContent = text
-    $('#trade-result').textContent = outcome.done ? outcome.text : ''
-    $('#trade-result').classList.toggle('error', Boolean(outcome.failed))
+    $('#trade-progress-title').textContent = `${manualName(status.left_id)} ⇄ ${manualName(status.right_id)}`
+    const shown = TradeProgress.view(status, manualName)
+    $('#trade-steps').innerHTML = shown.steps
+    $('#trade-progress-text').textContent = shown.text
+    $('#trade-result').textContent = shown.outcome.done ? shown.outcome.text : ''
+    $('#trade-result').classList.toggle('error', Boolean(shown.outcome.failed))
     $('#trade-cancel').hidden = !status.cancellable
   }
   async function refreshManualTrade() {

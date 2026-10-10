@@ -418,6 +418,65 @@
 .pc-trade-action:empty { display: none; }
 .pc-trade-action .trade-meta { display: block; margin-bottom: var(--s2); font-size: 13px; color: var(--ink-2); }
 .pc-trade-action .partner-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
+/* ---- trade offers ------------------------------------------------------ */
+.pc-trade-action .offer-trade-button { margin-top: var(--s2) }
+.pc-trade-action .offer-reason { margin: 0 }
+.pc-trade-action .offer-reason { font-size: 14px }
+.pc-trade-action .offer-reason { color: var(--ink-2) }
+.pc-trade-action .offer-error { margin-top: var(--s2) }
+.pc-trade-action .offer-error { color: var(--crit) }
+.offer-blocked-tag { color: var(--ink-3) }
+.offer-blocked-tag { border-style: dashed }
+.pc-offer-banner { display: flex }
+.pc-offer-banner { flex-wrap: wrap }
+.pc-offer-banner { align-items: center }
+.pc-offer-banner { gap: var(--s3) var(--s4) }
+.pc-offer-banner { margin-bottom: var(--s4) }
+.pc-offer-banner { padding: var(--s3) var(--s4) }
+.pc-offer-banner[hidden] { display: none }
+.pc-offer-banner .offer-banner-plate { width: 72px }
+.pc-offer-banner .offer-banner-plate { flex: 0 0 auto }
+.pc-offer-banner .offer-banner-read { flex: 1 1 220px }
+.pc-offer-banner .offer-banner-read { min-width: 0 }
+.pc-offer-banner h2 { font: var(--f-read) / 1.1 var(--font-panel) }
+.pc-offer-banner h2 { letter-spacing: 0.04em }
+.pc-offer-banner h2 { text-transform: uppercase }
+.pc-offer-banner h2 { overflow-wrap: anywhere }
+.pc-offer-banner p { margin: var(--s1) 0 0 }
+.pc-offer-banner .offer-reason { color: var(--crit) }
+.offer-dialog { width: min(480px, calc(100% - 2 * var(--s4))) }
+.offer-dialog { max-height: calc(100vh - 2 * var(--s6)) }
+.offer-dialog { padding: var(--s4) }
+.offer-dialog { background: var(--panel) }
+.offer-dialog { color: var(--ink) }
+.offer-dialog { border: var(--hair) solid var(--rule) }
+.offer-dialog { box-shadow: var(--key-inset), 6px 6px 0 var(--bevel-lo) }
+.offer-dialog::backdrop { background: rgba(10, 12, 10, 0.55) }
+.offer-dialog h2 { margin: 0 var(--s7) var(--s2) 0 }
+.offer-dialog h2 { font: var(--f-read) / 1.1 var(--font-panel) }
+.offer-dialog h2 { letter-spacing: 0.04em }
+.offer-dialog h2 { text-transform: uppercase }
+.offer-targets { display: grid }
+.offer-targets { gap: var(--s2) }
+.offer-targets { margin: var(--s3) 0 0 }
+.offer-targets { padding: 0 }
+.offer-targets { list-style: none }
+.offer-target { display: grid }
+.offer-target { gap: var(--s1) }
+.offer-target { width: 100% }
+.offer-target { padding: var(--s3) }
+.offer-target { text-align: left }
+.offer-target { color: var(--ink) }
+.offer-target { background: var(--panel-2) }
+.offer-target { border: var(--hair) solid var(--rule) }
+.offer-target { cursor: pointer }
+.offer-target:hover:not(:disabled), .offer-target:focus-visible { border-color: var(--signal) }
+.offer-target:disabled { cursor: not-allowed }
+.offer-target:disabled { color: var(--ink-3) }
+.offer-target small { font-size: 13px }
+.offer-target small { color: var(--ink-2) }
+.offer-target .offer-reason { color: var(--warn) }
 .pc-trade-action .partner-actions button {
   min-height: 40px;
   padding: 0 var(--s4);

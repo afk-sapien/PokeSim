@@ -89,6 +89,8 @@ class Manager:
         self.session_lock = threading.Lock()
         from .coordinator import Coordinator
         self.coordinator = Coordinator(self)
+        from .offers import TradeOffers
+        self.offers = TradeOffers(self)
 
     @staticmethod
     def validate_adventure_settings(values):
@@ -279,6 +281,12 @@ def create_app(manager, shutdown=lambda: None):
     @app.exception_handler(CoreBackendCapabilityError)
     async def unsupported(request, error):
         return JSONResponse({'detail': str(error)}, status_code=501)
+
+    from .offers import ViewOnlyError
+
+    @app.exception_handler(ViewOnlyError)
+    async def view_only(request, error):
+        return JSONResponse({'detail': str(error)}, status_code=403)
 
     @app.exception_handler(RuntimeError)
     async def unavailable(request, error):
@@ -640,6 +648,45 @@ def create_app(manager, shutdown=lambda: None):
     async def cancel_manual_trade(mid: str):
         return await asyncio.to_thread(manager.coordinator.cancel_manual, validate_id(mid))
 
+    # Trade offers: one adventure asks another for a Pokémon. Accepting queues a manual trade.
+    @app.get('/api/v1/interactions/trade-offers')
+    async def trade_offers(adventure_id: str):
+        return await asyncio.to_thread(manager.offers.for_adventure, validate_id(adventure_id))
+
+    @app.get('/api/v1/interactions/trade-offers/targets')
+    def trade_offer_targets(from_id: str):
+        return manager.offers.targets(validate_id(from_id))
+
+    @app.get('/api/v1/interactions/trade-offers/limits')
+    async def trade_offer_limits(from_id: str, from_key: str, to_id: str):
+        return await asyncio.to_thread(manager.offers.limits, validate_id(from_id), from_key, validate_id(to_id))
+
+    @app.post('/api/v1/interactions/trade-offers')
+    async def create_trade_offer(request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        return await asyncio.to_thread(manager.offers.create, data)
+
+    @app.get('/api/v1/interactions/trade-offers/{oid}')
+    async def trade_offer(oid: str):
+        return await asyncio.to_thread(manager.offers.status, validate_id(oid))
+
+    @app.post('/api/v1/interactions/trade-offers/{oid}/accept')
+    async def accept_trade_offer(oid: str):
+        manager.check_available()
+        offer = await asyncio.to_thread(manager.offers.accept, validate_id(oid))
+        if offer['status'] == 'accepted':
+            manager.background(manager.coordinator.drain_manual)
+        return offer
+
+    @app.post('/api/v1/interactions/trade-offers/{oid}/decline')
+    async def decline_trade_offer(oid: str):
+        return await asyncio.to_thread(manager.offers.decline, validate_id(oid))
+
+    @app.post('/api/v1/interactions/trade-offers/{oid}/withdraw')
+    async def withdraw_trade_offer(oid: str):
+        return await asyncio.to_thread(manager.offers.withdraw, validate_id(oid))
+
     @app.post('/api/v1/interactions/{tid}/cancel')
     async def cancel(tid: str):
         return await asyncio.to_thread(manager.coordinator.cancel, tid)
@@ -776,7 +823,7 @@ def create_app(manager, shutdown=lambda: None):
         if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
             asset = path.removeprefix('static/')
             if asset in {'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css',
-                         'adventure-trading.js', 'fonts/pokesim-panel.woff2'}:
+                         'adventure-trading.js', 'trade-progress.js', 'fonts/pokesim-panel.woff2'}:
                 return FileResponse(STATIC / asset)
         sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)
         if sprite and request.method in {'GET', 'HEAD'}:

@@ -59,6 +59,54 @@ The API is `GET /api/v1/interactions/manual-trades/options`, `POST` and `GET
 and `POST /api/v1/interactions/manual-trades/{id}/cancel`. A request sends
 `left_id`, `left_key`, `right_id`, `right_key` and an optional `request_id`.
 
+## Trade offers between adventures
+
+A trade offer asks another adventure for one of its Pokémon. Make a trade on the
+Library's Trade page stays the admin trade, which runs at once. An offer waits
+until the other adventure's Trading page accepts it.
+
+1. In an adventure's PC, open a Pokémon and press **Offer trade**.
+2. Pick another adventure. Stopped, archived and busy adventures are listed with
+   the reason they cannot trade now.
+3. That adventure's PC opens in offer mode, with the same views, filters and
+   sorting, sorted by Battle Power. A banner shows the Pokémon you are offering.
+   Pokémon the cable cannot take are tagged Cannot trade, and their detail says why.
+4. Open the Pokémon you want and press **Send offer**. The sender's Trading page
+   opens with the offer listed.
+
+Each Trading page lists **Offers for this adventure** with Accept and Decline, and
+**Offers this adventure sent** with Withdraw. Each card shows both Pokémon with their
+portrait, level, Battle Power and Stat Power, the offer's status and its reason.
+Accepting checks both Pokémon again and then puts the trade in the same queue as
+Make a trade, so the card shows the same steps from waiting for the Cable Club to
+the saved trade.
+
+Only the limits from [Make a trade](#make-a-trade) apply. Locks, offers for
+automatic trading, party protection and the last-copy rule do not. An offer is
+`pending` until it is answered. It becomes `declined` or `withdrawn` when answered,
+`accepted` while its trade runs, and then `completed` or `failed`. It is `expired`
+after 7 days without an answer, when either adventure is archived or deleted, or
+when a Pokémon in it has left its adventure by the time it is accepted. A Pokémon
+that is still there but can no longer be traded, such as one that became the only
+party member able to battle, makes the offer `failed` with that reason. If the
+other adventure is only stopped, Accept says so and the offer keeps waiting.
+An adventure can have 25 offers waiting at once.
+
+Offers are saved in the Library database, so they survive restarts. View links and
+`VIEWER_ONLY` instances show no offer controls, and the server refuses every offer
+write from them. An adventure whose settings make it view only cannot send, accept,
+decline or withdraw offers either.
+
+The API is under `/api/v1/interactions/trade-offers`:
+
+- `GET ?adventure_id=` lists an adventure's incoming and outgoing offers.
+- `GET /targets?from_id=` and `GET /limits?from_id=&from_key=&to_id=` feed the PC
+  picker.
+- `POST` creates an offer from `from_id`, `from_key`, `to_id`, `to_key` and an
+  optional `request_id`.
+- `GET /{id}` reads one offer, and `POST /{id}/accept`, `/{id}/decline` and
+  `/{id}/withdraw` answer it.
+
 Preferences are saved per game in SQLite, separately from cartridge checkpoints.
 Trainer ID and DVs identify a partner across box moves, renaming, evolution, and
 training. Generation I has no unique individual identifier. When multiple held

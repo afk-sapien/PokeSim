@@ -45,7 +45,7 @@
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({action: 'speed', value: speed}),
     })
-  globalThis.PokeSim = {base, adventureId, url, fetch: gameFetch, session, setSpeed}
+  globalThis.PokeSim = {base, adventureId, url, fetch: gameFetch, api: request, session, setSpeed}
   if (!base || !adventureId) return
   document.addEventListener('DOMContentLoaded', async () => {
     const switcher = document.querySelector('#adventure-switcher')

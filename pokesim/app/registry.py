@@ -59,6 +59,14 @@ class Registry:
             self.db.execute('''CREATE TABLE IF NOT EXISTS interactions (
                 id TEXT PRIMARY KEY, plan TEXT NOT NULL, decision TEXT, phase TEXT NOT NULL,
                 result TEXT, error TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL)''')
+            # Offers one adventure makes to another. An accepted offer links to the manual trade it queued.
+            self.db.execute('''CREATE TABLE IF NOT EXISTS trade_offers (
+                id TEXT PRIMARY KEY, from_id TEXT NOT NULL, from_key TEXT NOT NULL,
+                to_id TEXT NOT NULL, to_key TEXT NOT NULL, status TEXT NOT NULL, reason TEXT,
+                manual_id TEXT, display TEXT NOT NULL DEFAULT '{}',
+                created_at REAL NOT NULL, updated_at REAL NOT NULL)''')
+            self.db.execute('CREATE INDEX IF NOT EXISTS trade_offers_from ON trade_offers (from_id)')
+            self.db.execute('CREATE INDEX IF NOT EXISTS trade_offers_to ON trade_offers (to_id)')
             columns = {row[1] for row in self.db.execute('PRAGMA table_info(adventures)')}
             if 'provenance' not in columns:
                 self.db.execute("ALTER TABLE adventures ADD COLUMN provenance TEXT NOT NULL DEFAULT '{}'")
@@ -266,6 +274,66 @@ class Registry:
             self.db.execute('UPDATE interactions SET ' + ','.join(f'{key}=?' for key in encoded) + ' WHERE id=?',
                             (*encoded.values(), tid))
         return self.transaction(tid)
+
+    @staticmethod
+    def _decode_offer(row):
+        if row is None:
+            return None
+        item = dict(row)
+        item['display'] = json.loads(item['display'])
+        return item
+
+    def trade_offer(self, oid):
+        validate_id(oid)
+        with self.lock:
+            row = self.db.execute('SELECT * FROM trade_offers WHERE id=?', (oid,)).fetchone()
+        if row is None:
+            raise KeyError('Trade offer not found')
+        return self._decode_offer(row)
+
+    def trade_offers(self, adventure_id=None, statuses=None):
+        """Offers from or to one adventure, or every offer, newest first."""
+        query, parameters, conditions = 'SELECT * FROM trade_offers', [], []
+        if adventure_id is not None:
+            validate_id(adventure_id)
+            conditions.append('(from_id=? OR to_id=?)')
+            parameters += [adventure_id, adventure_id]
+        if statuses is not None:
+            statuses = list(statuses)
+            conditions.append('status IN (' + ','.join('?' * len(statuses)) + ')')
+            parameters += statuses
+        if conditions:
+            query += ' WHERE ' + ' AND '.join(conditions)
+        with self.lock:
+            rows = self.db.execute(query + ' ORDER BY created_at DESC, id LIMIT 1000', parameters).fetchall()
+        return [self._decode_offer(row) for row in rows]
+
+    def create_trade_offer(self, offer):
+        now = time.time()
+        with self.lock, self.db:
+            self.db.execute('INSERT INTO trade_offers VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                            (offer['id'], offer['from_id'], offer['from_key'], offer['to_id'], offer['to_key'],
+                             'pending', None, None, json.dumps(offer.get('display') or {}), now, now))
+        return self.trade_offer(offer['id'])
+
+    def update_trade_offer(self, oid, expect=None, **values):
+        """Change an offer, only while its status is still one of `expect` when given."""
+        if not values or not set(values) <= {'status', 'reason', 'manual_id'}:
+            raise ValueError('Unsupported trade offer update')
+        with self.lock, self.db:
+            current = self.trade_offer(oid)
+            if expect is not None and current['status'] not in expect:
+                return None
+            self.db.execute('UPDATE trade_offers SET ' + ','.join(f'{key}=?' for key in values) + ', updated_at=? WHERE id=?',
+                            (*values.values(), time.time(), oid))
+        return self.trade_offer(oid)
+
+    def prune_trade_offers(self, keep):
+        """Forget the oldest finished offers beyond the newest `keep`."""
+        with self.lock, self.db:
+            self.db.execute('''DELETE FROM trade_offers WHERE status NOT IN ('pending','accepted') AND id NOT IN
+                (SELECT id FROM trade_offers WHERE status NOT IN ('pending','accepted')
+                 ORDER BY updated_at DESC LIMIT ?)''', (keep,))
 
     def close(self):
         with self.lock:
