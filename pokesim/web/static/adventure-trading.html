@@ -15,7 +15,7 @@
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=glow-2">
-<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=tabs-1">
+<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=tabs-2">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
@@ -80,6 +80,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="section-head"><h2 class="legend legend--ink">Trade settings</h2><span class="micro" id="auto-count"></span></div>
 <p class="trade-help"><b>Auto decides</b> may trade spare duplicates. <b>Trade first</b> goes before anything else. <b>Keep</b> is never traded automatically. Automatic trades also never take a shiny, a last copy or your active party. Trades you pick yourself ignore all of this.</p>
 <label class="pick-search"><span class="micro">Search</span><input type="search" id="auto-search" placeholder="Name, nickname or No." autocomplete="off"></label>
+<p id="trade-setting-status" class="vh" role="status" aria-live="polite" data-trade-status></p>
 <div id="auto-list" class="auto-list"><p class="empty-note">Loading trade settings…</p></div>
 </section>
 
@@ -98,8 +99,8 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="${game_base}/static/trade-progress.js?v=offers-1"></script>
-<script src="${game_base}/static/trade-ui.js?v=tabs-1"></script>
-<script src="${game_base}/static/adventure-trading.js?v=tabs-1"></script>
-<script src="${game_base}/static/trade-tabs.js?v=tabs-1"></script>
+<script src="${game_base}/static/trade-ui.js?v=tabs-2"></script>
+<script src="${game_base}/static/adventure-trading.js?v=tabs-2"></script>
+<script src="${game_base}/static/trade-tabs.js?v=tabs-2"></script>
 </body>
 </html>

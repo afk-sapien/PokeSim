@@ -78,3 +78,12 @@ test('viewer-only and held states disable the setting', async () => {
     assert.match(view.api.control('partner'), /disabled>/)
   }
 })
+
+test('the saved setting shows under its own row only', async () => {
+  const view = ui()
+  await view.api.refresh()
+  await view.api.change({value:'keep', dataset:{tradeKey:'partner', tradeSetting:'auto'}})
+  assert.match(view.api.control('partner'), /<span class="trade-saved">Keep\. Automatic trading never trades it\.<\/span>$/)
+  await view.api.change({value:'broken', dataset:{tradeKey:'partner', tradeSetting:'keep'}})
+  assert.match(view.api.control('partner'), /class="trade-saved is-error">This Pokémon left the collection/)
+})

@@ -254,7 +254,10 @@ def test_auto_tab_switch_wish_list_and_settings(page, game, width):
     assert library.saved[-1] == {'wishlist': [25]}
     setting = page.get_by_label('Trade setting for BUD')
     setting.select_option('keep')
-    expect(page.locator('#toast')).to_contain_text('never trades it')
+    # The saved setting shows under its own row, not in a toast over the list.
+    expect(page.locator('#auto-list .trade-saved')).to_contain_text('never trades it')
+    expect(page.locator('#trade-setting-status')).to_contain_text('never trades it')
+    expect(page.locator('#toast')).to_be_hidden()
     assert any(value['state'] == 'locked' for value in store.trade_preferences().values())
     expect(page.locator('#auto-list')).not_to_contain_text('Kept by')
     shoot(page, f'auto-{width}')

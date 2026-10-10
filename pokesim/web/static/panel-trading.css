@@ -521,3 +521,9 @@ main.shell { padding-bottom: var(--s7); }
   .trade-tabs [role="tab"][aria-selected="true"] { outline: 2px solid Highlight }
   .pick-item[aria-checked="true"] { outline: 2px solid Highlight }
 }
+
+/* ---- trade setting saved note ------------------------------------------ */
+.trade-saved { flex-basis: 100% }
+.trade-saved { font-size: 13px }
+.trade-saved { color: var(--ok) }
+.trade-saved.is-error { color: var(--crit) }
