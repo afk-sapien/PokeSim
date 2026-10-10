@@ -442,3 +442,30 @@ def test_stale_trade_hold_is_cleared_when_the_exchange_is_gone(monkeypatch):
     store = SimpleNamespace(get=data.get, set=data.__setitem__)
     Emulator._clear_stale_hold(SimpleNamespace(store=store))
     assert data['trade_hold'] is None
+
+
+def test_walking_an_egg_toward_hatching_is_progress():
+    """A Day Care walk outlasts the no-progress limit, so each egg cycle and each hatch must count.
+
+    A hatched egg keeps its species, level and experience, so a run breeding a species it already
+    owns once looked idle for its whole walk and was reloaded, losing the eggs it had hatched.
+    """
+    from pokesim.gen2.emulator import progress_key
+
+    def key(*party, steps=0, compatible=False):
+        snapshot = SimpleNamespace(event_flags=bytes(64), badges=0, owned=frozenset({7}), items=(), party=party,
+                                   step_count=steps, breeding_compatible=compatible)
+        return progress_key(10, 3, snapshot)
+
+    lead = mon(species=7, level=40, experience=60000, friendship=70)
+    egg = lambda cycles: mon(species=7, level=5, experience=135, egg=True, friendship=cycles)
+    assert key(lead, egg(20)) == key(lead, egg(20))
+    assert key(lead, egg(19)) != key(lead, egg(20))
+    hatched = mon(species=7, level=5, experience=135, friendship=120)
+    assert key(lead, hatched) != key(lead, egg(0))
+    # Friendship of a hatched Pokémon rises while walking without ever ending, so it is not progress.
+    assert key(mon(species=7, level=40, experience=60000, friendship=71), hatched) == key(lead, hatched)
+    assert key(lead, mon(species=7, level=5, experience=135, friendship=121)) == key(lead, hatched)
+    # Each step while a compatible pair waits is another draw at an egg; once it is made, steps are just walking.
+    assert key(lead, steps=41, compatible=True) != key(lead, steps=40, compatible=True)
+    assert key(lead, steps=41) == key(lead, steps=40)

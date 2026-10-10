@@ -78,6 +78,25 @@ def settled(metadata):
     return not (metadata.get('policy_state') or {}).get('menu')
 
 
+def progress_key(tiles, maps, snapshot):
+    """What must change within the no-progress limit for a run to count as getting somewhere.
+
+    Hit points and PP move during a battle that never ends, so they are not progress. The Day Care
+    walk can outlast the limit with nothing else changing, so it counts two things that end:
+
+    - An egg keeps its species, level and experience when it hatches, and walking one to hatching
+      takes longer than the limit for many species. Each egg cycle counts, the friendship byte that
+      drops every 256 steps until the egg hatches.
+    - While a compatible pair waits for an egg, every step is another draw at it, and a poorly
+      matched pair can take longer than the limit to make one. The cartridge clears the flag once
+      the egg is made, so steps stop counting after that.
+    """
+    return (tiles, maps, snapshot.event_flags, snapshot.badges, snapshot.owned, snapshot.items,
+            tuple((mon.species, mon.level, mon.experience, mon.egg, mon.friendship if mon.egg else None)
+                  for mon in snapshot.party),
+            snapshot.step_count if snapshot.breeding_compatible else None)
+
+
 def reload_target(store, saves, since_frame):
     """The newest settled autosave made at least SCREEN_FRAMES of game time before ``since_frame``.
 
@@ -423,10 +442,7 @@ class Emulator:
                 elif mon.level > old.level and not mon.egg:
                     self._event(Event('level', f'{mon.nick} grew to level {mon.level}',
                                       priority=4 if mon.level in (50, 100) else 2, notable=mon.level % 10 == 0), snapshot)
-        # Hit points and PP move during a battle that never ends, so they are not progress.
-        key = (len(self.policy.nav.visits), len(self.history['maps']), snapshot.event_flags, snapshot.badges,
-               snapshot.owned, snapshot.items,
-               tuple((mon.species, mon.level, mon.experience) for mon in snapshot.party))
+        key = progress_key(len(self.policy.nav.visits), len(self.history['maps']), snapshot)
         now = time.time()
         if key != self.progress_key:
             self.progress_key, self.progress_frame = key, self.frame
