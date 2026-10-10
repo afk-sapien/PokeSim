@@ -34,8 +34,9 @@ def shoot(page, name):
 class Library:
     """The library API the managed Trading page talks to, with the real game worker behind it."""
 
-    def __init__(self, page, url, *, starts_now=True, mine_key='box-1'):
+    def __init__(self, page, url, *, starts_now=True, mine_key='box-1', viewer_only=False):
         self.page, self.url = page, url
+        self.viewer_only = viewer_only
         self.starts_now = starts_now
         self.mine_key = mine_key
         self.posted = []
@@ -102,7 +103,7 @@ class Library:
                 {'key': 'party-0', 'name': 'Meganium', 'dex': 154, 'level': 30, 'location': 'party', 'shiny': True, 'blocked': ''},
                 {'key': 'egg', 'name': 'Egg', 'location': 'party', 'blocked': 'Eggs cannot be traded'}]
         self.json(route, {'adventure_id': FROM, 'reason': '', 'pokemon': [self.side(FROM, 'Crystal', row) for row in rows],
-                          'viewer_only': False})
+                          'viewer_only': self.viewer_only})
 
     def targets(self, route):
         key = parse_qs(urlparse(route.request.url).query)['from_key'][0]
@@ -293,6 +294,22 @@ def test_a_late_answer_for_an_earlier_pokemon_does_not_replace_the_current_one(p
     expect(blue).to_contain_text(REASON)
     expect(page.locator('#pick-games')).not_to_contain_text('Meganium')
     expect(page.locator(f'[data-game="{RED}"]')).to_be_enabled()
+
+
+def test_a_view_only_adventure_keeps_its_pokemon_disabled_after_a_search(page, game):
+    library = Library(page, game[0], viewer_only=True)
+    library.open()
+    expect(page.locator('#pick-note')).to_contain_text('view-only')
+    bud = page.locator('#pick-mine [data-key="box-1"]')
+    expect(bud).to_be_disabled()
+    page.locator('#pick-mine-search').fill('bud')
+    expect(page.locator('#pick-mine .pick-item')).to_have_count(1)
+    expect(bud).to_be_disabled()
+    page.locator('#pick-mine-search').fill('')
+    expect(page.locator('#pick-mine .pick-item')).to_have_count(3)
+    for button in page.locator('#pick-mine .pick-item').all():
+        expect(button).to_be_disabled()
+    expect(page.locator('#pick-game-step')).to_be_hidden()
 
 
 @pytest.mark.parametrize('width', [1280, 390])

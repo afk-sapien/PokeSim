@@ -43,7 +43,7 @@
   }
 
   // Trade: your Pokémon, then a game, then their Pokémon, then confirm.
-  const pick = {mine: [], mon: null, game: null, theirs: [], their: null, limits: null, busy: false}
+  const pick = {mine: [], mon: null, game: null, theirs: [], their: null, limits: null, busy: false, viewerOnly: false}
   const note = (selector, text) => { const el = $(selector)
     if (!el) return
     el.textContent = text || ''
@@ -51,18 +51,20 @@
   const matches = (mon, text) => !text || [mon.name, mon.nickname, mon.dex && String(mon.dex), mon.dex && `#${String(mon.dex).padStart(3, '0')}`]
     .some(value => value && String(value).toLowerCase().includes(text))
   const place = mon => mon.box ? `Box ${mon.box}` : 'Party'
-  function monButton(mon, chosen) {
+  function monButton(mon, chosen, mine) {
     const sprite = mon.sprite_url ? `<img src="${esc(mon.sprite_url)}" alt="" loading="lazy">` : '<span class="plate-num" aria-hidden="true">?</span>'
     const nickname = mon.nickname && mon.nickname.toLowerCase() !== String(mon.name || '').toLowerCase() ? ` “${esc(mon.nickname)}”` : ''
     const level = Number.isInteger(mon.level) ? `Lv. ${mon.level}` : ''
     const meta = [level, place(mon), mon.shiny ? 'Shiny' : ''].filter(Boolean).join(' · ')
     const blocked = mon.blocked ? `<span class="pick-reason">${esc(mon.blocked)}</span>` : ''
-    return `<button type="button" class="pick-item" role="radio" aria-checked="${chosen ? 'true' : 'false'}" data-key="${esc(mon.key)}"${mon.blocked ? ' aria-disabled="true" disabled' : ''}><span class="plate pick-plate">${sprite}</span><span class="pick-read"><b>${esc(mon.name || 'Unknown Pokémon')}${nickname}</b><span class="micro">${esc(meta)}</span>${blocked}</span></button>`
+    const off = mon.blocked || (mine && pick.viewerOnly)
+    return `<button type="button" class="pick-item" role="radio" aria-checked="${chosen ? 'true' : 'false'}" data-key="${esc(mon.key)}"${off ? ' aria-disabled="true" disabled' : ''}><span class="plate pick-plate">${sprite}</span><span class="pick-read"><b>${esc(mon.name || 'Unknown Pokémon')}${nickname}</b><span class="micro">${esc(meta)}</span>${blocked}</span></button>`
   }
   function renderList(selector, rows, chosen, search) {
     const text = String($(search)?.value || '').trim().toLowerCase()
     const shown = rows.filter(mon => matches(mon, text))
-    $(selector).innerHTML = shown.map(mon => monButton(mon, mon.key === chosen)).join('')
+    // A view-only adventure lists its own Pokémon but cannot send them, on every render.
+    $(selector).innerHTML = shown.map(mon => monButton(mon, mon.key === chosen, selector === '#pick-mine')).join('')
       || `<p class="empty-note">${rows.length ? 'No Pokémon match this search.' : 'No Pokémon to trade here.'}</p>`
     globalThis.Panel?.fitSprites?.($(selector))
   }
@@ -94,6 +96,7 @@
     try {
       const data = await json(await PokeSim.api(`${OFFERS}/pokemon?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not read this adventure’s Pokémon.')
       pick.mine = data.pokemon || []
+      pick.viewerOnly = Boolean(data.viewer_only)
       $('#pick-mine-count').textContent = pick.mine.length ? `${pick.mine.length} Pokémon` : ''
       if (data.viewer_only) note('#pick-note', 'This adventure is view-only. It can receive offers but cannot send them.')
       else note('#pick-note', data.reason || '')
@@ -103,14 +106,13 @@
         renderList('#pick-mine', pick.mine, null, '#pick-mine-search')
         await chooseMine(first.key)
       } else reset()
-      if (data.viewer_only) for (const button of document.querySelectorAll('#pick-mine .pick-item')) button.disabled = true
     } catch (error) {
       $('#pick-mine').innerHTML = `<p class="empty-note">${esc(error.message)}</p>`
     }
   }
   async function chooseMine(key) {
     const mon = pick.mine.find(row => row.key === key)
-    if (!mon || mon.blocked) return
+    if (!mon || mon.blocked || pick.viewerOnly) return
     pick.mon = mon
     reset(true)
     note('#pick-note', '')
