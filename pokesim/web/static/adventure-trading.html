@@ -9,13 +9,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#20241F" media="(prefers-color-scheme: dark)">
-<meta name="description" content="Automatic trading activity and completed exchanges for this adventure.">
+<meta name="description" content="Trade Pokémon, answer offers, set automatic trading and see the history of this adventure.">
 <title>${adventure_name} trading · pokesim</title>
 <link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=glow-2">
-<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=offers-1">
+<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=tabs-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
@@ -31,19 +31,61 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <main id="main" class="shell">
 <header class="identity page-head">
-<div class="who"><p class="micro">${adventure_name}</p><h1>This adventure’s trades</h1><p class="page-lede">Useful exchanges happen automatically with other adventures. Your team and locked Pokémon stay protected.</p></div>
+<div class="who"><p class="micro">${adventure_name}</p><h1>Trading</h1><p class="page-lede">Pick a trade yourself, answer offers, or let this adventure trade automatically. Everything about trading lives on this page.</p></div>
 </header>
 
 <section class="trade-overview" aria-label="Automatic trading status">
 <div class="trade-overview-read"><p class="micro"><i class="lamp" id="trade-lamp" aria-hidden="true"></i>Automatic trading</p><h2 class="headline" id="trade-status">Connecting…</h2><p class="body" id="trade-activity">Checking this adventure’s trades.</p></div>
-<a class="key trade-pc-link" href="${game_base}/pc?scope=all">Open its PC <span aria-hidden="true">↗</span></a>
 </section>
 <p id="trade-connection-note" class="trade-notice" role="status" hidden></p>
 
-<section id="trade-offers-section" class="trade-section offers-section" aria-labelledby="offers-heading" hidden><div class="section-head"><h2 class="legend legend--ink" id="offers-heading">Trade offers</h2><span class="micro">Accepted offers wait in line for the Cable Club</span></div><p id="offers-note" class="trade-notice" role="status" aria-live="polite"></p><h3 class="micro offers-subhead">Offers for this adventure</h3><div id="offers-incoming" class="deal-list" aria-live="polite"></div><h3 class="micro offers-subhead">Offers this adventure sent</h3><div id="offers-outgoing" class="deal-list" aria-live="polite"></div></section>
 <section id="current-exchange-section" class="trade-section" aria-labelledby="current-heading"><div class="section-head"><h2 class="legend legend--ink" id="current-heading">Current exchange</h2></div><div id="trade-active" class="deal-list" aria-live="polite">Checking for an exchange…</div></section>
-<section class="trade-section" aria-labelledby="history-heading"><div class="section-head"><h2 class="legend legend--ink" id="history-heading">Recent completed trades</h2><span class="micro" id="trade-history-count"></span></div><div id="trade-history" class="deal-list" aria-live="polite">Loading this adventure’s history…</div></section>
-<section id="trade-failures-section" class="trade-section" aria-labelledby="failures-heading" hidden><details class="attempts cable-attempts"><summary id="failures-heading">Recent attempts that did not complete</summary><div id="trade-failures" class="deal-list" aria-live="polite"></div></details></section>
+
+<div class="trade-tabs" role="tablist" aria-label="Trading">
+<button type="button" role="tab" id="tab-trade" aria-controls="panel-trade" aria-selected="true" tabindex="0">Trade</button>
+<button type="button" role="tab" id="tab-offers" aria-controls="panel-offers" aria-selected="false" tabindex="-1">Offers <span class="tab-count" id="offers-count" hidden></span></button>
+<button type="button" role="tab" id="tab-auto" aria-controls="panel-auto" aria-selected="false" tabindex="-1">Auto</button>
+<button type="button" role="tab" id="tab-history" aria-controls="panel-history" aria-selected="false" tabindex="-1">History</button>
+<button type="button" role="tab" id="tab-cable" aria-disabled="true" aria-selected="false" tabindex="-1" disabled title="Cable Club is coming soon">Cable Club <span class="tab-soon">coming soon</span></button>
+</div>
+
+<section id="panel-trade" class="trade-panel" role="tabpanel" aria-labelledby="tab-trade" tabindex="0">
+<p id="pick-note" class="trade-notice" role="status" aria-live="polite" hidden></p>
+<ol class="pick-steps">
+<li class="pick-step" id="pick-mine-step"><div class="section-head"><h2 class="legend legend--ink">1. Your Pokémon</h2><span class="micro" id="pick-mine-count"></span></div>
+<label class="pick-search"><span class="micro">Search</span><input type="search" id="pick-mine-search" placeholder="Name, nickname or No." autocomplete="off"></label>
+<div id="pick-mine" class="pick-list" role="radiogroup" aria-label="Your Pokémon"><p class="empty-note">Loading this adventure’s Pokémon…</p></div></li>
+<li class="pick-step" id="pick-game-step" hidden><div class="section-head"><h2 class="legend legend--ink">2. Trade with</h2></div>
+<div id="pick-games" class="pick-list pick-games" role="radiogroup" aria-label="Game to trade with"></div></li>
+<li class="pick-step" id="pick-theirs-step" hidden><div class="section-head"><h2 class="legend legend--ink">3. Their Pokémon</h2><span class="micro" id="pick-theirs-count"></span></div>
+<label class="pick-search"><span class="micro">Search</span><input type="search" id="pick-theirs-search" placeholder="Name, nickname or No." autocomplete="off"></label>
+<div id="pick-theirs" class="pick-list" role="radiogroup" aria-label="Their Pokémon"></div></li>
+<li class="pick-step" id="pick-confirm-step" hidden><div class="section-head"><h2 class="legend legend--ink">4. Confirm</h2></div>
+<div id="pick-summary" class="deal trade-deal"></div>
+<div class="offer-answer pick-actions"><button type="button" class="key key--primary" id="pick-confirm">Trade now</button><button type="button" class="key" id="pick-reset">Start over</button></div></li>
+</ol>
+</section>
+
+<section id="panel-offers" class="trade-panel" role="tabpanel" aria-labelledby="tab-offers" tabindex="0" hidden>
+<div id="trade-offers-section" class="offers-section"><p id="offers-note" class="trade-notice" role="status" aria-live="polite"></p><div class="section-head"><h2 class="legend legend--ink" id="offers-heading">Offers for this adventure</h2><span class="micro">Accepted offers wait in line for the Cable Club</span></div><div id="offers-incoming" class="deal-list" aria-live="polite"></div><div class="section-head offers-subhead"><h2 class="legend legend--ink">Offers this adventure sent</h2></div><div id="offers-outgoing" class="deal-list" aria-live="polite"></div></div>
+</section>
+
+<section id="panel-auto" class="trade-panel" role="tabpanel" aria-labelledby="tab-auto" tabindex="0" hidden>
+<p id="auto-note" class="trade-notice" role="status" aria-live="polite" hidden></p>
+<div class="auto-switch-row"><button type="button" role="switch" id="auto-switch" class="auto-switch" aria-checked="true" aria-describedby="auto-switch-help"><span class="auto-switch-track" aria-hidden="true"></span><span>Auto trading</span> <b id="auto-switch-state">On</b></button><p class="trade-help" id="auto-switch-help">Off stops only automatic trades. Trades you pick on the Trade tab still happen.</p></div>
+<div class="section-head"><h2 class="legend legend--ink" id="wish-heading">Wish list</h2><span class="micro">Species this adventure wants</span></div>
+<p class="trade-help">Automatic trading looks for another game that has a wished species and gives a Trade first or spare Pokémon in return.</p>
+<form id="wish-form" class="wish-form" aria-labelledby="wish-heading"><label class="pick-search"><span class="micro">Add a species</span><input id="wish-input" list="wish-species" autocomplete="off" placeholder="Species name or No."></label><button type="submit" class="key" id="wish-add">Add</button><datalist id="wish-species"></datalist></form>
+<ul id="wish-list" class="wish-list" aria-live="polite"></ul>
+<div class="section-head"><h2 class="legend legend--ink">Trade settings</h2><span class="micro" id="auto-count"></span></div>
+<p class="trade-help"><b>Auto decides</b> may trade spare duplicates. <b>Trade first</b> goes before anything else. <b>Keep</b> is never traded automatically. Automatic trades also never take a shiny, a last copy or your active party. Trades you pick yourself ignore all of this.</p>
+<label class="pick-search"><span class="micro">Search</span><input type="search" id="auto-search" placeholder="Name, nickname or No." autocomplete="off"></label>
+<div id="auto-list" class="auto-list"><p class="empty-note">Loading trade settings…</p></div>
+</section>
+
+<section id="panel-history" class="trade-panel" role="tabpanel" aria-labelledby="tab-history" tabindex="0" hidden>
+<div class="section-head"><h2 class="legend legend--ink" id="history-heading">Trades and attempts</h2><span class="micro" id="trade-history-count"></span></div><div id="trade-history" class="deal-list" aria-live="polite">Loading this adventure’s history…</div>
+</section>
 </main>
 
 <footer class="plate-foot">
@@ -56,6 +98,8 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="${game_base}/static/trade-progress.js?v=offers-1"></script>
-<script src="${game_base}/static/adventure-trading.js?v=offers-1"></script>
+<script src="${game_base}/static/trade-ui.js?v=tabs-1"></script>
+<script src="${game_base}/static/adventure-trading.js?v=tabs-1"></script>
+<script src="${game_base}/static/trade-tabs.js?v=tabs-1"></script>
 </body>
 </html>

@@ -57,22 +57,26 @@
       $('#connection').classList.toggle('is-offline', false)
       $('#trade-connection-note').hidden = true
       const running = data.adventure.state === 'running' && !data.adventure.archived
-      setLamp(data.active.length ? 'signal' : !running ? 'warn' : data.attention ? 'warn' : 'ok')
+      const off = data.auto_enabled === false
+      setLamp(data.active.length ? 'signal' : !running || off ? 'warn' : data.attention ? 'warn' : 'ok')
       $('#trade-status').textContent = data.active.length ? 'Exchange in progress' : !running ? 'Waiting for this adventure'
-        : data.attention ? 'Trades have not been completing' : 'On · No approvals needed'
+        : off ? 'Off' : data.attention ? 'Trades have not been completing' : 'On · No approvals needed'
       $('#trade-activity').textContent = data.active.length ? 'This adventure is trading. Other adventures keep playing.'
         : !running ? 'Trades resume when this adventure is running. Its history stays here.'
+        : off ? 'Automatic trading is off. Trades you pick on the Trade tab still happen.'
         : data.attention?.message || 'This adventure will trade when a useful exchange is ready.'
       $('#current-exchange-section').hidden = !data.active.length
       $('#trade-active').innerHTML = data.active.length ? data.active.map(trade => exchange(trade)).join('')
         : '<p class="empty-note">No exchange in progress for this adventure.</p>'
+      // Completed trades and attempts that did not complete, in one list, newest first.
       const completed = data.history.filter(trade => trade.phase === 'completed' && trade.decision === 'COMMIT')
-      $('#trade-history-count').textContent = `${completed.length}${completed.length === 20 ? '+' : ''} recent ${completed.length === 1 ? 'exchange' : 'exchanges'}`
-      $('#trade-history').innerHTML = completed.length ? completed.map(trade => exchange(trade, true)).join('')
-        : '<p class="empty-note">This adventure’s completed trades will appear here.</p>'
       const failures = data.recent_failures || []
-      $('#trade-failures-section').hidden = !failures.length
-      $('#trade-failures').innerHTML = failures.map(trade => exchange(trade)).join('')
+      const rows = [...completed.map(trade => [trade, true]), ...failures.map(trade => [trade, false])]
+        .sort((a, b) => (b[0].updated_at || 0) - (a[0].updated_at || 0))
+      $('#trade-history-count').textContent = `${completed.length}${completed.length === 20 ? '+' : ''} completed`
+        + (failures.length ? ` · ${failures.length} did not complete` : '')
+      $('#trade-history').innerHTML = rows.length ? rows.map(([trade, done]) => exchange(trade, done)).join('')
+        : '<p class="empty-note">This adventure’s trades will appear here.</p>'
       globalThis.Panel?.fitSprites?.(document)
     } catch (_) {
       $('#status').textContent = 'Reconnecting…'
@@ -124,11 +128,23 @@
     $('#offers-incoming').innerHTML = data.incoming.map(offer => offerCard(offer, true, viewerOnly)).join('')
       || '<p class="empty-note">No offers from other adventures yet.</p>'
     $('#offers-outgoing').innerHTML = data.outgoing.map(offer => offerCard(offer, false, viewerOnly)).join('')
-      || '<p class="empty-note">Open a Pokémon in the PC and choose Offer trade.</p>'
+      || '<p class="empty-note">Pick a trade on the Trade tab. Offers to view-only adventures wait here for an answer.</p>'
+    // The tab badge counts offers still open: waiting for an answer or for the Cable Club.
+    const open = [...data.incoming, ...data.outgoing].filter(offer => ['pending', 'accepted'].includes(offer.status)).length
+    const count = $('#offers-count')
+    if (count) {
+      count.textContent = open ? String(open) : ''
+      count.hidden = !open
+      count.setAttribute?.('aria-label', `${open} open ${open === 1 ? 'offer' : 'offers'}`)
+    }
     globalThis.Panel?.fitSprites?.($('#trade-offers-section'))
   }
-  async function refreshOffers() {
-    if (!offerOwner) return
+  async function refreshOffers(force = false) {
+    if (force) offerSignature = ''
+    if (!offerOwner) {
+      if ($('#offers-incoming')) $('#offers-incoming').innerHTML = '<p class="empty-note">Offers are answered from the owner’s page, not from a view link.</p>'
+      return
+    }
     try {
       const response = await PokeSim.api(`${OFFERS}?adventure_id=${encodeURIComponent(PokeSim.adventureId)}`, {cache: 'no-store'})
       if (!response.ok) throw new Error('Unavailable')
@@ -167,5 +183,5 @@
     refreshOffers() }
   poll()
   setInterval(() => { if (!document.hidden) poll() }, 5000)
-  globalThis.AdventureTrading = {refreshOffers}
+  globalThis.AdventureTrading = {refresh, refreshOffers, offerOwner, exchange, offerSide}
 })()

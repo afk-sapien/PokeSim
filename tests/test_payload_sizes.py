@@ -116,7 +116,7 @@ def test_trading_offers_carry_only_what_the_trading_pages_draw(tmp_path, monkeyp
 
 def test_offer_fields_cover_every_field_the_trade_controls_read():
     read = set(re.findall(r'\bmon\.(\w+)', (STATIC / 'trade-ui.js').read_text()))
-    block = next(line for line in (STATIC / 'trading.js').read_text().splitlines() if "view === 'block'" in line)
+    block = next(line for line in (STATIC / 'trading.js').read_text().splitlines() if "view === 'auto'" in line)
     script = (STATIC / 'trading.js').read_text()
     start = script.index(block)
     read |= set(re.findall(r'\bmon\.(\w+)', script[start:script.index("view === 'opportunities'")]))

@@ -56,6 +56,7 @@ required = {
     'pokesim/web/pages.py',
     'pokesim/web/static/adventure-trading.html',
     'pokesim/web/static/adventure-trading.js',
+    'pokesim/web/static/trade-tabs.js',
     'pokesim/web/static/library.html',
     'pokesim/web/static/library.js',
     'pokesim/web/static/panel-library.css',

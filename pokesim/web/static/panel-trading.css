@@ -334,3 +334,190 @@ main.shell { padding-bottom: var(--s7); }
 .manual-result { font-weight: 600 }
 .manual-result { color: var(--ink) }
 .manual-result.error { color: var(--crit) }
+
+/* ---- trading tabs ------------------------------------------------------- */
+.trade-tabs { display: flex }
+.trade-tabs { flex-wrap: wrap }
+.trade-tabs { gap: var(--s1) }
+.trade-tabs { margin: var(--s5) 0 0 }
+.trade-tabs { border-bottom: var(--hair) solid var(--rule) }
+.trade-tabs [role="tab"] { display: inline-flex }
+.trade-tabs [role="tab"] { align-items: center }
+.trade-tabs [role="tab"] { gap: var(--s2) }
+.trade-tabs [role="tab"] { min-height: 44px }
+.trade-tabs [role="tab"] { padding: 0 var(--s4) }
+.trade-tabs [role="tab"] { margin-bottom: calc(-1 * var(--hair)) }
+.trade-tabs [role="tab"] { background: var(--panel-2) }
+.trade-tabs [role="tab"] { color: var(--ink-2) }
+.trade-tabs [role="tab"] { border: var(--hair) solid var(--rule-faint) }
+.trade-tabs [role="tab"] { font: var(--f-legend) / 1 var(--font-panel) }
+.trade-tabs [role="tab"] { letter-spacing: var(--track-legend) }
+.trade-tabs [role="tab"] { text-transform: uppercase }
+.trade-tabs [role="tab"] { cursor: pointer }
+.trade-tabs [role="tab"]:hover:not(:disabled) { color: var(--ink) }
+.trade-tabs [role="tab"][aria-selected="true"] { background: var(--panel) }
+.trade-tabs [role="tab"][aria-selected="true"] { color: var(--ink) }
+.trade-tabs [role="tab"][aria-selected="true"] { border-color: var(--rule) }
+.trade-tabs [role="tab"][aria-selected="true"] { border-bottom-color: var(--panel) }
+.trade-tabs [role="tab"][aria-selected="true"] { box-shadow: inset 0 3px 0 var(--signal) }
+.trade-tabs [role="tab"]:disabled { cursor: not-allowed }
+.trade-tabs [role="tab"]:disabled { color: var(--ink-3) }
+.trade-tabs [role="tab"]:disabled { border-style: dashed }
+.tab-count { min-width: 20px }
+.tab-count { padding: 2px 6px }
+.tab-count { background: var(--signal) }
+.tab-count { color: var(--panel) }
+.tab-count { font: var(--f-micro) / 1.2 var(--font-mono) }
+.tab-count { text-align: center }
+.tab-count[hidden] { display: none }
+.tab-soon { font: var(--f-micro) / 1 var(--font-mono) }
+.tab-soon { text-transform: none }
+.tab-soon { letter-spacing: 0 }
+.trade-panel { padding: var(--s4) 0 var(--s6) }
+.trade-panel[hidden] { display: none }
+.trade-panel:focus-visible { outline: 2px solid var(--signal) }
+.trade-panel .section-head { margin-top: var(--s4) }
+
+/* ---- picking a trade ---------------------------------------------------- */
+.pick-steps { display: grid }
+.pick-steps { gap: var(--s4) }
+.pick-steps { margin: 0 }
+.pick-steps { padding: 0 }
+.pick-steps { list-style: none }
+.pick-step[hidden] { display: none }
+.pick-search { display: grid }
+.pick-search[hidden] { display: none }
+.pick-search { gap: var(--s1) }
+.pick-search { margin: var(--s2) 0 var(--s3) }
+.pick-search { max-width: 420px }
+.pick-search input { min-height: 44px }
+.pick-search input { padding: 0 var(--s3) }
+.pick-search input { background: var(--well) }
+.pick-search input { color: var(--ink) }
+.pick-search input { border: var(--hair) solid var(--rule) }
+.pick-search input { font: 16px / 1.2 var(--font-mono) }
+.pick-list { display: grid }
+.pick-list { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) }
+.pick-list { gap: var(--s2) }
+.pick-list { max-height: 420px }
+.pick-list { overflow-y: auto }
+.pick-list { padding: 2px }
+.pick-games { max-height: none }
+.pick-item { display: flex }
+.pick-item { align-items: center }
+.pick-item { gap: var(--s3) }
+.pick-item { min-height: 56px }
+.pick-item { padding: var(--s2) var(--s3) }
+.pick-item { text-align: left }
+.pick-item { color: var(--ink) }
+.pick-item { background: var(--panel-2) }
+.pick-item { border: var(--hair) solid var(--rule) }
+.pick-item { cursor: pointer }
+.pick-item:hover:not(:disabled), .pick-item:focus-visible { border-color: var(--signal) }
+.pick-item[aria-checked="true"] { border-color: var(--signal) }
+.pick-item[aria-checked="true"] { box-shadow: inset 4px 0 0 var(--signal) }
+.pick-item:disabled { cursor: not-allowed }
+.pick-item:disabled { color: var(--ink-3) }
+.pick-item:disabled { background: var(--panel) }
+.pick-item:disabled { border-style: dashed }
+.pick-plate { width: 48px }
+.pick-plate { height: 48px }
+.pick-plate { flex: 0 0 auto }
+.pick-read { display: grid }
+.pick-read { gap: 2px }
+.pick-read { min-width: 0 }
+.pick-read b { overflow-wrap: anywhere }
+.pick-reason { font-size: 13px }
+.pick-reason { color: var(--warn) }
+.pick-actions { padding: var(--s3) 0 0 }
+#pick-summary .trade-help { margin: 0 }
+#pick-summary .trade-help { padding: 0 var(--s4) var(--s4) }
+
+/* ---- automatic trading -------------------------------------------------- */
+.auto-switch-row { display: flex }
+.auto-switch-row { flex-wrap: wrap }
+.auto-switch-row { align-items: center }
+.auto-switch-row { gap: var(--s2) var(--s4) }
+.auto-switch { display: inline-flex }
+.auto-switch { align-items: center }
+.auto-switch { gap: var(--s2) }
+.auto-switch { min-height: 44px }
+.auto-switch { padding: 0 var(--s4) }
+.auto-switch { background: var(--panel-2) }
+.auto-switch { color: var(--ink) }
+.auto-switch { border: var(--hair) solid var(--rule) }
+.auto-switch { font: var(--f-legend) / 1 var(--font-panel) }
+.auto-switch { text-transform: uppercase }
+.auto-switch { cursor: pointer }
+.auto-switch:disabled { cursor: not-allowed }
+.auto-switch:disabled { opacity: 0.6 }
+.auto-switch-track { position: relative }
+.auto-switch-track { width: 36px }
+.auto-switch-track { height: 20px }
+.auto-switch-track { background: var(--well) }
+.auto-switch-track { border: var(--hair) solid var(--rule) }
+.auto-switch-track::after { content: "" }
+.auto-switch-track::after { position: absolute }
+.auto-switch-track::after { top: 2px }
+.auto-switch-track::after { left: 2px }
+.auto-switch-track::after { width: 14px }
+.auto-switch-track::after { height: 14px }
+.auto-switch-track::after { background: var(--ink-3) }
+.auto-switch[aria-checked="true"] .auto-switch-track { background: var(--signal) }
+.auto-switch[aria-checked="true"] .auto-switch-track::after { left: 18px }
+.auto-switch[aria-checked="true"] .auto-switch-track::after { background: var(--panel) }
+.auto-switch-row .trade-help { margin: 0 }
+.wish-form { display: flex }
+.wish-form { flex-wrap: wrap }
+.wish-form { align-items: end }
+.wish-form { gap: var(--s2) }
+.wish-form .pick-search { flex: 1 1 240px }
+.wish-form .pick-search { margin-bottom: 0 }
+.wish-form .key { min-height: 44px }
+.wish-list { display: flex }
+.wish-list { flex-wrap: wrap }
+.wish-list { gap: var(--s2) }
+.wish-list { margin: var(--s3) 0 0 }
+.wish-list { padding: 0 }
+.wish-list { list-style: none }
+.wish { display: inline-flex }
+.wish { align-items: center }
+.wish { gap: var(--s2) }
+.wish { padding: var(--s1) var(--s1) var(--s1) var(--s3) }
+.wish { background: var(--panel-2) }
+.wish { border: var(--hair) solid var(--rule) }
+.wish .key { min-height: 36px }
+.auto-list { display: grid }
+.auto-list { gap: var(--s1) }
+.auto-row { display: flex }
+.auto-row { flex-wrap: wrap }
+.auto-row { align-items: center }
+.auto-row { justify-content: space-between }
+.auto-row { gap: var(--s2) var(--s4) }
+.auto-row { padding: var(--s2) var(--s3) }
+.auto-row { background: var(--panel-2) }
+.auto-row { border: var(--hair) solid var(--rule-faint) }
+.auto-row .plate { width: 48px }
+.auto-row .plate { height: 48px }
+.auto-row .pick-read { flex: 1 1 160px }
+.trade-setting select { min-height: 40px }
+.trade-setting select { padding: 0 var(--s2) }
+.trade-setting select { background: var(--panel) }
+.trade-setting select { color: var(--ink) }
+.trade-setting select { border: var(--hair) solid var(--rule) }
+.trade-setting select { font: 15px / 1.2 var(--font-mono) }
+.trade-setting select:disabled { opacity: 0.6 }
+
+@media (max-width: 640px) {
+  .trade-tabs [role="tab"] { flex: 1 1 auto }
+  .trade-tabs [role="tab"] { justify-content: center }
+  .trade-tabs [role="tab"] { padding: 0 var(--s3) }
+  .pick-list { grid-template-columns: minmax(0, 1fr) }
+  .pick-search { max-width: none }
+  .auto-row .trade-setting { width: 100% }
+  .auto-row .trade-setting select { width: 100% }
+}
+@media (forced-colors: active) {
+  .trade-tabs [role="tab"][aria-selected="true"] { outline: 2px solid Highlight }
+  .pick-item[aria-checked="true"] { outline: 2px solid Highlight }
+}

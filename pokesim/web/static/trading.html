@@ -9,13 +9,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#20241F" media="(prefers-color-scheme: dark)">
-<meta name="description" content="Your adventure’s trading block, automatic matches, and previous exchanges.">
+<meta name="description" content="Trade settings, automatic matches and previous exchanges for your adventure.">
 <title>Partners between adventures. · pokesim</title>
 <link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=glow-2">
-<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=panel-1">
+<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=tabs-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
@@ -31,17 +31,17 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <main id="main" class="shell">
 <header class="identity page-head">
-<div class="who"><p class="micro">Link cable</p><h1>Trading</h1><p class="page-lede">Offer a partner, discover a match, and let the adventures handle the exchange.</p></div>
+<div class="who"><p class="micro">Link cable</p><h1>Trading</h1><p class="page-lede">Set how each Pokémon trades, see possible matches, and let the adventures handle the exchange.</p></div>
 </header>
 
 <section class="trade-overview" aria-label="Automatic trading status">
 <div class="trade-overview-read"><p class="micro"><i class="lamp" id="trade-lamp" aria-hidden="true"></i>Automatic trading</p><h2 class="headline" id="trade-status">Connecting…</h2><p class="body" id="trade-activity">Checking on the other adventure.</p></div>
-<a class="key trade-pc-link" href="${game_base}/pc?scope=all">Choose in the PC <span aria-hidden="true">↗</span></a>
 </section>
 <p id="trade-connection-note" class="trade-notice" role="status" hidden></p>
 
-<div id="trade-tabs" class="tabs view-switch" role="group" aria-label="Trading view"><button data-view="block" aria-pressed="true">Trading block</button><button data-view="opportunities" aria-pressed="false">Opportunities</button><button data-view="history" aria-pressed="false">History</button></div>
-<section id="trade-content" class="trade-content" aria-live="polite"><p class="empty-note">Opening the trading room…</p></section>
+<div id="trade-tabs" class="trade-tabs" role="tablist" aria-label="Trading"><button type="button" role="tab" id="tab-auto" data-view="auto" aria-controls="trade-content" aria-selected="true" tabindex="0">Auto</button><button type="button" role="tab" id="tab-opportunities" data-view="opportunities" aria-controls="trade-content" aria-selected="false" tabindex="-1">Opportunities</button><button type="button" role="tab" id="tab-history" data-view="history" aria-controls="trade-content" aria-selected="false" tabindex="-1">History</button></div>
+<label class="pick-search" id="trade-search-row"><span class="micro">Search</span><input type="search" id="trade-search" placeholder="Name, nickname or No." autocomplete="off"></label>
+<section id="trade-content" class="trade-content trade-panel" role="tabpanel" aria-labelledby="tab-auto" tabindex="0" aria-live="polite"><p class="empty-note">Opening the trading room…</p></section>
 </main>
 
 <footer class="plate-foot">
@@ -53,7 +53,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="${game_base}/static/trade-ui.js?v=locks-1"></script>
-<script src="${game_base}/static/trading.js?v=panel-2"></script>
+<script src="${game_base}/static/trade-ui.js?v=tabs-1"></script>
+<script src="${game_base}/static/trading.js?v=tabs-1"></script>
 </body>
 </html>

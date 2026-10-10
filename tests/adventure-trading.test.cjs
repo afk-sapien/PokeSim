@@ -71,12 +71,24 @@ test('failed attempts explain missing trades and remain distinct from completed 
   await settle()
   assert.equal(view.element('#trade-status').textContent, 'Trades have not been completing')
   assert.match(view.element('#trade-activity').textContent, /3 recent.*Cable Club/)
-  assert.equal(view.element('#trade-failures-section').hidden, false)
-  assert.match(view.element('#trade-failures').innerHTML, /Blue &lt.Ripple&gt./)
-  assert.match(view.element('#trade-failures').innerHTML, /Trade did not complete/)
-  assert.match(view.element('#trade-failures').innerHTML, /could not reach the Cable Club/)
-  assert.doesNotMatch(view.element('#trade-failures').innerHTML, /private|Trade completed/)
-  assert.doesNotMatch(view.element('#trade-history').innerHTML, /Blue/)
+  // Attempts that did not complete sit in the one History list, next to completed trades.
+  const html = view.element('#trade-history').innerHTML
+  assert.match(html, /Blue &lt.Ripple&gt./)
+  assert.match(html, /Trade did not complete/)
+  assert.match(html, /could not reach the Cable Club/)
+  assert.doesNotMatch(html, /private|Trade completed/)
+  assert.equal(view.element('#trade-history-count').textContent, '0 completed · 1 did not complete')
+})
+
+test('history lists completed trades and failed attempts together, newest first', async () => {
+  const view = page('red', () => ({
+    adventure: {id: 'red', version: 'red', state: 'running'}, active: [],
+    history: [{phase: 'completed', decision: 'COMMIT', peer_name: 'Older Blue', updated_at: 1000}],
+    recent_failures: [{phase: 'aborted', decision: 'ABORT', peer_name: 'Newer Green', updated_at: 2000}],
+  }))
+  await settle()
+  const html = view.element('#trade-history').innerHTML
+  assert.ok(html.indexOf('Newer Green') < html.indexOf('Older Blue'))
 })
 
 test('a new attempt is shown as active even when earlier attempts failed', async () => {
@@ -88,7 +100,7 @@ test('a new attempt is shown as active even when earlier attempts failed', async
   await settle()
   assert.equal(view.element('#trade-status').textContent, 'Exchange in progress')
   assert.match(view.element('#trade-active').innerHTML, /Getting ready for the Cable Club/)
-  assert.equal(view.element('#trade-failures-section').hidden, true)
+  assert.equal(view.element('#current-exchange-section').hidden, false)
 })
 
 test('completed cards show the exact sent and received Pokemon with scoped sprites and evolution', async () => {
@@ -113,7 +125,7 @@ test('completed cards show the exact sent and received Pokemon with scoped sprit
   assert.match(html, /pokedex#68/)
   assert.match(html, /<time datetime="1970-01-01T00:16:40.000Z">/)
   assert.match(html, new RegExp(`/games/${'b'.repeat(32)}/trading`))
-  assert.equal(view.element('#trade-history-count').textContent, '1 recent exchange')
+  assert.equal(view.element('#trade-history-count').textContent, '1 completed')
 })
 
 test('planned and failed trades never claim a Pokemon was received or evolved', async () => {
@@ -127,9 +139,9 @@ test('planned and failed trades never claim a Pokemon was received or evolved', 
   await settle()
   assert.match(view.element('#trade-active').innerHTML, /Sending/)
   assert.match(view.element('#trade-active').innerHTML, /Receiving/)
-  assert.match(view.element('#trade-failures').innerHTML, /Planned offer/)
-  assert.match(view.element('#trade-failures').innerHTML, /Planned return/)
-  for (const area of ['#trade-active', '#trade-failures']) {
+  assert.match(view.element('#trade-history').innerHTML, /Planned offer/)
+  assert.match(view.element('#trade-history').innerHTML, /Planned return/)
+  for (const area of ['#trade-active', '#trade-history']) {
     assert.doesNotMatch(view.element(area).innerHTML, /You received|Trade evolution|Saved in both/)
   }
 })

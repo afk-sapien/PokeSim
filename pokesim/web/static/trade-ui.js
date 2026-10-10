@@ -1,5 +1,8 @@
 (() => {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
+  // One trade setting per Pokémon. Automatic trades follow it, trades you pick yourself ignore it.
+  const SETTINGS = [['auto', 'Auto decides'], ['first', 'Trade first'], ['keep', 'Keep']]
+  const LEGACY = {offered: 'first', locked: 'keep', withdrawn: 'keep'}
   let status = null
   let loading = false
   let writing = false
@@ -7,20 +10,17 @@
   let toastTimer = null
   const listeners = []
   const find = key => status?.offers?.find(mon => mon.trade_key === key)
-  function control(key) {
+  const setting = mon => mon?.setting || LEGACY[mon?.preference] || 'auto'
+  function control(key, label) {
     const mon = find(key)
-    if (!mon) return '<span class="trade-meta">Trading details unavailable</span>'
-    if (mon.shiny) return '<span class="trade-meta">★ Shiny partner preserved from release and trading</span>'
-    if (mon.perfect_dvs) return '<span class="trade-meta">✦ Perfect DV partner preserved from release and trading</span>'
-    const selected = mon.listed || mon.preference === 'offered'
-    const lockDisabled = writing || status.viewer_only || status.holding || !mon.editable
-    const disabled = lockDisabled || !status.connected
-    const locked = mon.locked || mon.preference === 'locked'
-    const label = locked ? 'Locked against trading and automatic release' : mon.listed ? mon.source : mon.reason || 'Not offered'
-    const button = !locked && (selected || mon.can_offer)
-      ? `<button data-trade-key="${esc(key)}" data-trade-state="${selected ? 'withdrawn' : 'offered'}" ${disabled ? 'disabled' : ''}>${selected ? 'Withdraw offer' : 'Offer for trade'}</button>` : ''
-    const lock = `<button data-trade-key="${esc(key)}" data-trade-state="${locked ? 'unlocked' : 'locked'}" ${lockDisabled ? 'disabled' : ''}>${locked ? 'Unlock Pokémon' : 'Lock Pokémon'}</button>`
-    return `<span class="trade-meta">${locked ? '<span aria-hidden="true">🔒</span> ' : ''}${esc(label)}</span><div class="partner-actions">${button}${lock}</div>`
+    if (!mon) return '<span class="trade-meta">Trade setting unavailable</span>'
+    const current = setting(mon)
+    const disabled = writing || !status || status.viewer_only || status.holding || !mon.editable
+    // Shiny and perfect Pokémon never trade automatically, so Trade first means nothing for them.
+    const noFirst = mon.shiny || mon.perfect_dvs
+    const options = SETTINGS.map(([value, text]) => `<option value="${value}"${value === current ? ' selected' : ''}${value === 'first' && noFirst && current !== 'first' ? ' disabled' : ''}>${text}</option>`).join('')
+    const name = label || mon.nick || mon.name || 'this Pokémon'
+    return `<label class="trade-setting"><span class="vh">Trade setting for ${esc(name)}</span><select data-trade-key="${esc(key)}" data-trade-setting="${esc(current)}"${disabled ? ' disabled' : ''}>${options}</select></label>`
   }
   function notify() { listeners.forEach(fn => fn(status)) }
   async function refresh() {
@@ -32,27 +32,31 @@
       if (!response.ok) throw new Error('Trading is reconnecting.')
       status = await response.json()
     } catch (_) {
-      status = {...status, connected: false, message: 'Trading is reconnecting. Please try again shortly.'}
+      status = {...status, connected: false, unreachable: true, message: 'Trading is reconnecting. Please try again shortly.'}
     } finally { loading = false
       notify() } })()
     return pending
   }
-  async function change(button) {
-    if (writing || button.disabled) return
+  const messages = {auto: 'Auto decides. Automatic trading may use it when it is a spare.',
+    first: 'Trade first. Automatic trading uses it before anything else.',
+    keep: 'Keep. Automatic trading never trades it.'}
+  async function change(control) {
+    if (writing || control.disabled) return
+    const state = control.value || control.dataset?.tradeState
+    if (!state || state === control.dataset?.tradeSetting) return
     writing = true
-    button.disabled = true
+    control.disabled = true
     let message
     try {
       const response = await PokeSim.fetch('/api/trading/preferences', {method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({key: button.dataset.tradeKey, state: button.dataset.tradeState})})
+        body: JSON.stringify({key: control.dataset.tradeKey, state})})
       const result = await response.json()
-      if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not update this offer.')
-      const messages = {withdrawn:'Offer withdrawn. Automatic trading will skip this Pokémon.',
-        locked:'Pokémon locked. Trading and automatic release are blocked.',
-        unlocked:'Pokémon unlocked. Normal eligibility restored, with no previous manual offer.'}
-      message = messages[button.dataset.tradeState] || 'Offer saved. Suitable trades happen automatically.'
-    } catch (error) { message = error.message }
-    finally { writing = false }
+      if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not save this setting.')
+      message = messages[state] || 'Setting saved.'
+    } catch (error) {
+      message = error.message
+      if (control.dataset?.tradeSetting && 'value' in control) control.value = control.dataset.tradeSetting
+    } finally { writing = false }
     const toast = document.querySelector('#toast')
     if (toast) { toast.textContent = message
       toast.hidden = false
@@ -61,5 +65,5 @@
     await pending
     await refresh()
   }
-  globalThis.TradeUI = {esc, control, find, change, refresh, subscribe: fn => listeners.push(fn), status: () => status}
+  globalThis.TradeUI = {esc, control, find, change, refresh, setting, SETTINGS, subscribe: fn => listeners.push(fn), status: () => status}
 })()

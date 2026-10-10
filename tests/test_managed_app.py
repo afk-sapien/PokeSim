@@ -182,9 +182,11 @@ def test_game_trading_stays_scoped_and_available_when_stopped(client):
     assert 'location' not in response.headers
     assert 'First Red' in response.text
     assert f'href="{base}/trading"' in response.text
-    assert f'href="{base}/pc?scope=all"' in response.text
+    # Everything trading lives on this page, so it has its tabs and no detour to the PC.
+    assert 'role="tablist"' in response.text
+    assert f'href="{base}/pc?scope=all"' not in response.text
     assert 'href="/trading"' not in response.text
-    for asset in ('adventure-trading.js', 'trade-progress.js', 'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css'):
+    for asset in ('adventure-trading.js', 'trade-progress.js', 'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css', 'trade-ui.js', 'trade-tabs.js'):
         assert client.get(base + '/static/' + asset).status_code == 200
     data = client.get(base + '/api/interactions').json()
     assert data['adventure']['id'] == a['id']
