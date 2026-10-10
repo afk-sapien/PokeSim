@@ -89,7 +89,9 @@ A previously silent save may need the next music change before all channels play
 | `/stream` | MJPEG stream of the screen (`/frame.jpg` for a single frame) |
 | `/feed.xml` | Atom feed of notable events; `?all=1` for everything, `?types=badge,catch` or `?min_priority=4` to filter |
 | `/events/{id}` | one event and screenshot, with rewind available when a saved state and access policy allow it |
-| `/api/state` | JSON: emulator status + parsed game state |
+| `/api/state` | JSON: emulator status + parsed game state. Boxed Pokémon are left out; `?storage=1` adds them |
+| `/api/summary` | JSON: playback, health, pace and the current map, without game data, for health checks |
+| `/api/pokedex/status` | JSON: Pokédex, party, boxes and collection plan in full. `?view=pc` leaves out the plan; `?view=dex` keeps only who holds each species |
 | `/api/events` | JSON event list (`limit`, `all`, `types`, `min_priority`, `before`) |
 | `/api/progress` | JSON history of badges, Pokédex owned and seen, League wins, level 100 species and perfect finds, one row per change |
 | `/api/control` | POST an `action` and optional `value`. Actions: `pause`, `resume`, `take_control`, `save`, `restart`, `speed`, `load_state`, `press` |

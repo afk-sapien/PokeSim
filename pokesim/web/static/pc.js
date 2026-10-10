@@ -266,7 +266,7 @@ async function refresh() {
   if (busy) return
   busy = true
   try {
-    const response = await PokeSim.fetch('/api/pokedex/status', {cache: 'no-store'})
+    const response = await PokeSim.fetch('/api/pokedex/status?view=pc', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
     const status = await response.json()
     storage = status.storage

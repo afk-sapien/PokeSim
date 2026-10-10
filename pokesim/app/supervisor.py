@@ -458,7 +458,7 @@ class Supervisor:
                     continue
                 try:
                     child.request('GET', '/healthz', timeout=3)
-                    status = child.request('GET', '/api/state', timeout=3)
+                    status = child.request('GET', '/api/summary', timeout=3)
                     child.pace.observe(status.get('performance'))
                     settings_errors = self.sync_optional(aid, child, status)
                     self.unhealthy_since.pop(aid, None)

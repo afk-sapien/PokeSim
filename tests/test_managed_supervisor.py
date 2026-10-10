@@ -87,7 +87,7 @@ def test_healthy_http_with_stalled_game_state_still_reaches_watchdog(supervisor,
     stops = []
 
     def request(method, path, **kwargs):
-        if path == '/api/state':
+        if path == '/api/summary':
             raise RuntimeError('Emulator state is stalled')
         return {'ok': True}
 
@@ -271,7 +271,7 @@ def test_worker_without_a_palette_is_never_sent_one_and_stays_healthy(supervisor
 
     def request(method, path, data=None, timeout=None):
         paths.append(path)
-        if path == '/api/state':
+        if path == '/api/summary':
             return {'speed': 1, 'game': {}, 'frame': 1}   # Generation II reports no palette
         if path == '/internal/palette':
             raise RuntimeError('Gen II has no palette')
@@ -291,7 +291,7 @@ def test_refused_optional_setting_is_reported_and_never_fails_health(supervisor)
     supervisor.registry.update(aid, settings={'palette': 'blue', 'speed': 4})
 
     def request(method, path, data=None, timeout=None):
-        if path == '/api/state':
+        if path == '/api/summary':
             return {'speed': 1, 'palette': 'original', 'game': {}, 'frame': 1}
         if path in {'/internal/palette', '/internal/speed'}:
             raise RuntimeError('refused')

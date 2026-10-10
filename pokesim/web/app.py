@@ -52,6 +52,43 @@ def rewind_refusal(store, state_name):
     return None
 
 
+# The page polls trading, state and the Pokédex every few seconds. Full Pokémon records
+# (moves, stats, experience) stay available to Python callers through emu.status(); the
+# routes below send each page only what it draws.
+OFFER_FIELDS = ('trade_key', 'dex', 'species', 'name', 'nick', 'level', 'box', 'position', 'slot', 'egg', 'shiny',
+                'perfect_dvs', 'listed', 'preference', 'editable', 'locked', 'source', 'reason', 'can_offer')
+HOLDER_FIELDS = ('dex', 'species', 'nick', 'name', 'level', 'dv_stars', 'shiny', 'egg', 'box', 'position', 'slot')
+
+
+def pick(mon, fields):
+    return {key: mon[key] for key in fields if key in mon} if isinstance(mon, dict) else mon
+
+
+def slim_offers(result):
+    """Trading pages draw an offer's name, place and controls, never its moves or stats."""
+    if isinstance(result, dict) and isinstance(result.get('offers'), list):
+        result = {**result, 'offers': [pick(mon, OFFER_FIELDS) for mon in result['offers']]}
+    return result
+
+
+def without_stored_pokemon(status):
+    """Live state without the boxed Pokémon list, the bulk of the payload. Box counts stay."""
+    game = status.get('game') if isinstance(status, dict) else None
+    storage = game.get('storage') if isinstance(game, dict) else None
+    if not isinstance(storage, dict) or 'pokemon' not in storage:
+        return status
+    return {**status, 'game': {**game, 'storage': {key: value for key, value in storage.items() if key != 'pokemon'}}}
+
+
+def status_summary(status):
+    """What the supervisor and backups read: playback, health and pace, with no game data."""
+    if not isinstance(status, dict):
+        return status
+    game = status.get('game') or {}
+    return {**{key: value for key, value in status.items() if key not in ('game', 'strategy')},
+            'game': {key: game[key] for key in ('map_name', 'playtime') if key in game}}
+
+
 def live_status(*args, **kwargs):
     from .pokedex import live_status as implementation
     return implementation(*args, **kwargs)
@@ -226,6 +263,20 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return Response(reference_json(version), media_type="application/json")
 
     @app.get("/api/pokedex/status")
+    def pokedex_route(view: Literal['pc', 'dex'] | None = Query(None)):
+        payload = pokedex_status()
+        if view == 'pc':
+            # The PC draws party and boxes in full but never the collection plan.
+            return {key: value for key, value in payload.items() if key != 'plan'}
+        if view == 'dex':
+            # The Pokédex lists who holds each species, never their moves or stats.
+            storage = payload.get('storage')
+            if isinstance(storage, dict):
+                storage = {**storage, 'pokemon': [pick(mon, HOLDER_FIELDS) for mon in storage.get('pokemon') or []]}
+            return {**payload, 'party': [pick(mon, HOLDER_FIELDS) for mon in payload.get('party') or []],
+                    'storage': storage}
+        return payload
+
     def pokedex_status():
         status = emu.status()
         payload = (gen2_live_status if gen2 else live_status)(status.get("game"), (status.get("strategy") or {}).get("collection"),
@@ -247,7 +298,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         payload = pokedex_status()
         if gen2:
             from ..gen2.trading import status
-            return {**status(emu, payload, adventure_id), 'viewer_only': view_only()}
+            return slim_offers({**status(emu, payload, adventure_id), 'viewer_only': view_only()})
         from . import trading
         if base_path:
             participant = getattr(app.state, 'participant', None)
@@ -255,8 +306,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                 payload = participant.runtime.call(participant.inventory)
             result = trading.unavailable(payload, adventure_id, 'Useful exchanges happen automatically with eligible adventures in this library.')
             result.update(connected=True, managed=True, trading={'managed': True, 'enabled': True})
-            return {**result, 'viewer_only': view_only(),
-                    'holding': bool(store.get('trade_hold'))}
+            return slim_offers({**result, 'viewer_only': view_only(),
+                                'holding': bool(store.get('trade_hold'))})
         instance = config.TRADING_INSTANCE or payload['version']
         try:
             result = trading.perspective(payload, trading.board(), instance)
@@ -264,8 +315,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             message = ('Trading is not connected to this game yet.' if not config.TRADING_URL else
                        'Trading is reconnecting. Offers and history will refresh when the coordinator is available.')
             result = trading.unavailable(payload, instance, message)
-        return {**result, 'viewer_only': view_only(),
-                'holding': bool(store.get('trade_hold'))}
+        return slim_offers({**result, 'viewer_only': view_only(),
+                            'holding': bool(store.get('trade_hold'))})
 
     @app.post('/api/trading/preferences')
     def trading_preference(choice: TradePreference):
@@ -293,8 +344,17 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/state")
-    def state():
+    def state(storage: bool = Query(False)):
+        """Live state. `?storage=1` adds the boxed Pokémon list, which the live page never draws."""
         status = emu.status()
+        if not storage:
+            status = without_stored_pokemon(status)
+        return {**status, 'viewer_only': view_only()} if isinstance(status, dict) else status
+
+    @app.get("/api/summary")
+    def summary():
+        """A small health and playback view for the supervisor, which polls every few seconds."""
+        status = status_summary(emu.status())
         return {**status, 'viewer_only': view_only()} if isinstance(status, dict) else status
 
     @app.get("/healthz")

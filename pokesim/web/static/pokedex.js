@@ -244,7 +244,7 @@ async function loadReference() {
 }
 
 async function fetchStatus() {
-  const response = await PokeSim.fetch('/api/pokedex/status', {cache: 'no-store'})
+  const response = await PokeSim.fetch('/api/pokedex/status?view=dex', {cache: 'no-store'})
   if (!response.ok) throw new Error('Unavailable')
   return response.json()
 }
