@@ -1,0 +1,24 @@
+.cable-status { display: grid; gap: var(--s2); margin-block: var(--s5); }
+.cable-actions { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.cable-link { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); }
+.cable-side { display: grid; gap: var(--s3); padding: var(--s3); border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); }
+.cable-side:focus-visible, .cable-side.is-focused { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cable-screen { aspect-ratio: 10 / 9; }
+.cable-screen img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; display: block; }
+.cable-pad { display: grid; grid-template-columns: auto auto; grid-template-areas: "dpad ab" "menu menu"; justify-content: space-between; align-items: center; gap: var(--s3); }
+.cable-dpad { grid-area: dpad; display: grid; grid-template-columns: repeat(3, 2.75rem); grid-template-rows: repeat(3, 2.75rem); }
+.cable-dpad [data-button="up"] { grid-column: 2; grid-row: 1; }
+.cable-dpad [data-button="left"] { grid-column: 1; grid-row: 2; }
+.cable-dpad [data-button="right"] { grid-column: 3; grid-row: 2; }
+.cable-dpad [data-button="down"] { grid-column: 2; grid-row: 3; }
+.cable-ab { grid-area: ab; display: flex; gap: var(--s3); }
+.cable-ab .key { width: 3.25rem; height: 3.25rem; border-radius: 50%; }
+.cable-menu { grid-area: menu; display: flex; justify-content: center; gap: var(--s3); }
+.cable-pad .key { justify-content: center; padding: 0; min-width: 2.75rem; touch-action: manipulation; }
+.cable-pad .key:disabled { opacity: .45; }
+.cable-menu .key { padding-inline: var(--s3); }
+.cable-keys { margin-block: var(--s4); }
+body.is-viewer .cable-pad, body.is-viewer .cable-actions, body.is-viewer .cable-keys { display: none; }
+@media (max-width: 720px) {
+  .cable-link { grid-template-columns: minmax(0, 1fr); }
+}

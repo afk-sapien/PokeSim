@@ -340,7 +340,7 @@ def main(argv=None):
     if '--check-runtime' in args:
         return legacy_main(args)
     from .__main__ import main as application_main
-    if args and args[0] in {'--worker', 'worker', '--link-session'}:
+    if args and args[0] in {'--worker', 'worker', '--link-session', '--cable-session'}:
         return application_main(args)
     return application_main(['--desktop', *args])
 

@@ -41,7 +41,8 @@ log = logging.getLogger(__name__)
 STATIC = Path(__file__).parents[1] / 'web' / 'static'
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon', 'stats/items', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
-                   'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml'}
+                   'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml',
+                   'cable', 'api/cable'}
 
 # Pages a person opens. A stopped adventure answers these with its status page, not raw JSON.
 GAME_PAGES = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon',
@@ -649,6 +650,39 @@ def create_app(manager, shutdown=lambda: None):
     async def cancel_manual_trade(mid: str):
         return await asyncio.to_thread(manager.coordinator.cancel_manual, validate_id(mid))
 
+    # Cable Club sessions: the owner drives two linked Gen II adventures by hand.
+    def session_writer(*aids):
+        from .offers import ViewOnlyError
+        if any(isinstance(aid, str) and manager.offers.viewer_only(aid) for aid in aids):
+            raise ViewOnlyError('This adventure is view-only')
+
+    @app.post('/api/v1/interactions/cable-sessions')
+    async def create_cable_session(request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        if isinstance(data, dict):
+            session_writer(data.get('left_id'), data.get('right_id'))
+        status = await asyncio.to_thread(manager.coordinator.sessions.create, data)
+        if status['transaction_phase'] == 'preparing' and status['decision'] is None:
+            manager.coordinator.sessions.start(status['id'])
+        return status
+
+    @app.get('/api/v1/interactions/cable-sessions/{sid}')
+    async def cable_session(sid: str):
+        return await asyncio.to_thread(manager.coordinator.sessions.status, validate_id(sid))
+
+    @app.post('/api/v1/interactions/cable-sessions/{sid}/{action}')
+    async def cable_session_action(sid: str, action: str, request: Request):
+        sessions = manager.coordinator.sessions
+        if action not in {'input', 'finish', 'cancel'}:
+            raise HTTPException(404)
+        status = await asyncio.to_thread(sessions.status, validate_id(sid))
+        session_writer(status['left_id'], status['right_id'])
+        if action == 'input':
+            data = await json_body(request)
+            return await asyncio.to_thread(sessions.press, sid, data)
+        return await asyncio.to_thread(getattr(sessions, action), sid)
+
     # Trade offers: one adventure asks another for a Pokémon. Accepting queues a manual trade.
     @app.get('/api/v1/interactions/trade-offers')
     async def trade_offers(adventure_id: str):
@@ -858,12 +892,20 @@ def create_app(manager, shutdown=lambda: None):
             from ..web.pages import render_game_page
             return HTMLResponse(render_game_page('adventure-trading.html', base_path=f"/{'view' if viewer else 'games'}/{aid}",
                 adventure_id=aid, adventure_name=adventure['name'], viewer=viewer))
+        if path == 'cable' and request.method in {'GET', 'HEAD'}:
+            from ..web.pages import render_game_page
+            return HTMLResponse(render_game_page('cable-club.html', base_path=f"/{'view' if viewer else 'games'}/{aid}",
+                adventure_id=aid, adventure_name=adventure['name'], viewer=viewer,
+                viewer_flag='true' if viewer else 'false'))
+        if path == 'api/cable' and request.method in {'GET', 'HEAD'}:
+            return JSONResponse(await run_in_threadpool(manager.coordinator.sessions.for_adventure, aid))
         if path == 'api/interactions' and request.method in {'GET', 'HEAD'}:
             return JSONResponse(await run_in_threadpool(manager.coordinator.adventure_status, aid))
         if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
             asset = path.removeprefix('static/')
             if asset in {'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css',
-                         'adventure-trading.js', 'trade-progress.js', 'trade-ui.js', 'trade-tabs.js', 'fonts/pokesim-panel.woff2'}:
+                         'adventure-trading.js', 'trade-progress.js', 'trade-ui.js', 'trade-tabs.js',
+                         'fonts/pokesim-panel.woff2', 'cable-club.js', 'cable-club.css'}:
                 return FileResponse(STATIC / asset)
         sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)
         if sprite and request.method in {'GET', 'HEAD'}:

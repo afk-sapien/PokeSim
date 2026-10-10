@@ -114,6 +114,37 @@ The admin API is `GET /api/v1/interactions/manual-trades/options`, `POST` and `G
 and `POST /api/v1/interactions/manual-trades/{id}/cancel`. A request sends
 `left_id`, `left_key`, `right_id`, `right_key` and an optional `request_id`.
 
+## Cable Club sessions
+
+A Cable Club session lets you hold both controllers and trade by hand, the way
+two people trade with a link cable. Open `/games/<id>/cable?with=<other id>` and
+press Start session. Sessions work between two Gold, Silver or Crystal
+adventures for now. Red, Blue and Yellow adventures and Time Capsule pairs show
+a reason instead.
+
+Both adventures walk to the Cable Club and save there, as for any trade. The page
+then shows both screens side by side, or stacked on a phone, with a d-pad, A, B,
+Start and Select under each. The keyboard drives the game you last clicked or
+focused: arrows move, X or Z is A, C or Backspace is B, Enter is Start and Shift
+is Select. The status line reads preparing, travelling, ready, in session,
+checking, done or rolled back, with the reason.
+
+Trade as many Pokémon as you like, then press Finish. Both trainers leave the
+Trade Center and save through the cartridge. PokeSim then checks that the two
+adventures still hold the same Pokémon between them, that each side received
+exactly what the other sent (or its trade evolution), that nothing was copied or
+lost, and that nothing but the parties changed. Only then are both saves kept.
+Otherwise both adventures go back to their Pokémon Center saves, and so do they
+after Cancel, after five minutes without a button press, after finishing without
+a trade, or if PokeSim stops during the session. One session runs at a time, and
+both adventures count as busy until it ends. A view link shows the screens and
+the status without controls.
+
+The API is `POST /api/v1/interactions/cable-sessions` with `left_id`, `right_id`
+and an optional `request_id`, `GET /api/v1/interactions/cable-sessions/{id}`, and
+`POST /api/v1/interactions/cable-sessions/{id}/input` with `side` (`left` or
+`right`) and `button`, `.../finish` and `.../cancel`.
+
 ## Offers
 
 An offer from the Trade tab to an adventure you control starts at once, because

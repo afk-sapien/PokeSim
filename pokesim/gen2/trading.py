@@ -200,6 +200,8 @@ class Participant(BaseParticipant):
         return {'requests': self.emu.policy.demand}
 
     def prepare(self, data):
+        if data.get('session'):
+            return self.prepare_session(data)
         tid = validate_id(data['id'])
         selected, plan_digest = data['selected_key'], data['plan_digest']
         record = self.store.get(PREFIX + tid)
@@ -254,7 +256,66 @@ class Participant(BaseParticipant):
         record['outgoing_league_record'] = export(self.store, self.emu.data, snapshot.party[prepared['party_slot']].to_dict())
         return _save(self.store, record)
 
+    def prepare_session(self, data):
+        """Walk to the Cable Club with the whole party for a session the owner drives."""
+        tid, plan_digest = validate_id(data['id']), data['plan_digest']
+        record = self.store.get(PREFIX + tid)
+        if record:
+            if record['plan_digest'] != plan_digest or not record.get('session'):
+                raise ValueError('Interaction parameters changed')
+            if record['phase'] != 'preparing':
+                return record
+        else:
+            if self.store.get('trade_hold'):
+                raise ValueError(BUSY)
+            if any(row['phase'] not in {'aborted', 'released'} for row in _records(self.store)):
+                raise ValueError('Another interaction already reserves this adventure')
+            record = _save(self.store, {'id': tid, 'phase': 'preparing', 'decision': None,
+                'plan_digest': plan_digest, 'selected_key': None, 'cartridge_generation': 2,
+                'was_paused': self.emu.paused, 'was_manual': self.emu.manual_mode,
+                'time_capsule': False, 'manual': True, 'session': True})
+        prepared = begin(self.emu, None, tid, manual=True, session=True)
+        if prepared['phase'] == 'failed':
+            raise ValueError(prepared.get('error', 'Trade preparation failed'))
+        if prepared['phase'] != 'ready':
+            return {**record, 'preparation': prepared}
+        hold = self.store.get('trade_hold')
+        if not hold or hold['id'] != tid or not hold.get('source'):
+            raise ValueError('The prepared source checkpoint is missing')
+        source = self.store.state_path(hold['source'])
+        raw = source.read_bytes()
+        directory = self.root / tid
+        directory.mkdir(exist_ok=True)
+        path = directory / 'source.state'
+        CheckpointStore.atomic_write(path, raw)
+        snapshot = read_snapshot(self.emu.pb.memory, self.emu.data, self.emu.frame)
+        if snapshot.map != self.emu.data.map_ids['POKECENTER_2F'] or snapshot.in_battle:
+            raise ValueError('Prepared adventure is not in a Pokémon Center')
+        record.update(phase='prepared', source_name=source.name, source_metadata=self.store.checkpoint_metadata(source),
+                      source_center_map=snapshot.map, outgoing_display=None, outgoing=None,
+                      source={'adventure_id': self.bootstrap.adventure_id, 'rom_path': self.runtime.settings.rom_path,
+                              'game_data_dir': self.runtime.settings.game_data_dir,
+                              'checkpoint_path': str(path), 'cartridge_save_path': None,
+                              'checkpoint_sha256': hashlib.sha256(raw).hexdigest(),
+                              'party_slot': 0, 'selected_key': None})
+        return _save(self.store, record)
+
     def incoming_record(self, record, data):
+        if record.get('session'):
+            # The first exchange tells the journal story. A session carries no League records.
+            result = data['result']
+            before = [{key: bytes.fromhex(value) for key, value in row.items()} for row in result['party_before']]
+            after = [{key: bytes.fromhex(value) for key, value in row.items()} for row in result['party_after']]
+            from .manual_session import fingerprint
+            kept = Counter(fingerprint(row) for row in after)
+            lost = [row for row in before if not kept[fingerprint(row)]]
+            had = Counter(fingerprint(row) for row in before)
+            gained = [row for row in after if not had[fingerprint(row)]]
+            record['outgoing_display'] = display(lost[0], self.emu.data) if lost else None
+            record['incoming_display'] = display(gained[0], self.emu.data) if gained else None
+            record['outgoing'] = {key: value.hex() for key, value in lost[0].items()} if lost else None
+            record['incoming_league_record'] = None
+            return
         incoming = {key: bytes.fromhex(value) for key, value in data['incoming'].items()}
         incoming = convert(incoming, 2, self.emu.data)
         record['incoming_display'] = display(incoming, self.emu.data)
@@ -267,7 +328,45 @@ class Participant(BaseParticipant):
             league = to_gen2(league, data['incoming'], self.emu.data)
         record['incoming_league_record'] = validate(league, self.emu.data, mon.to_dict())
 
+    def verify_session(self, record, result, state, save):
+        """Check this side of an owner-driven session against its own prepared source."""
+        from .manual_session import fingerprint, verify_progress
+        data = self.emu.data
+        rom = Path(self.runtime.settings.rom_path).read_bytes()
+        decode = lambda rows: [{key: bytes.fromhex(value) for key, value in row.items()} for row in rows]
+        claimed_before, claimed_after = decode(result['party_before']), decode(result['party_after'])
+        trades = result['evidence']['trades']
+        pb = boot(io.BytesIO(rom), sound=False)
+        try:
+            pb.load_state(io.BytesIO(_artifact(record['source']['checkpoint_path'], record['source']['checkpoint_sha256'])))
+            before, snapshot = party(pb, data), read_snapshot(pb.memory, data)
+            if snapshot.map != data.map_ids['POKECENTER_2F'] or snapshot.in_battle:
+                raise ValueError('Prepared source is outside the Pokémon Center')
+            if before != claimed_before:
+                raise ValueError('The session started from a different party')
+            pb.load_state(io.BytesIO(state))
+            after = party(pb, data)
+            if after != claimed_after or len(after) != len(before):
+                raise ValueError('The staged checkpoint differs from the verified session')
+            if Memory(pb.memory, data).byte('wLinkMode') != 0:
+                raise ValueError('The returned checkpoint is still in link mode')
+            verify_progress(snapshot, read_snapshot(pb.memory, data))
+            lost = Counter(map(fingerprint, before)) - Counter(map(fingerprint, after))
+            gained = Counter(map(fingerprint, after)) - Counter(map(fingerprint, before))
+            if not 0 < trades or sum(lost.values()) > trades or sum(lost.values()) != sum(gained.values()):
+                raise ValueError('The session did not exchange Pokémon one for one')
+            restarted = continue_save(rom, save, data, rtc=checkpoint_clock(rom, state))
+            try:
+                if party(restarted, data) != after:
+                    raise ValueError('Cartridge save differs from the staged checkpoint')
+            finally:
+                restarted.stop(save=False)
+        finally:
+            pb.stop(save=False)
+
     def verify_result(self, record, result, state, save, incoming):
+        if record.get('session'):
+            return self.verify_session(record, result, state, save)
         data = self.emu.data
         rom = Path(self.runtime.settings.rom_path).read_bytes()
         pb = boot(io.BytesIO(rom), sound=False)

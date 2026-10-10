@@ -21,7 +21,8 @@ def selected(snapshot, preferences, key):
     return matches[0]
 
 
-def begin(emu, key, tid, *, time_capsule=False, manual=False):
+def begin(emu, key, tid, *, time_capsule=False, manual=False, session=False):
+    """Start walking to the Cable Club. A session (key None) brings the party as it is."""
     saved = emu.store.get(KEY)
     if saved and saved['id'] == tid:
         if saved.get('trade_key') != key:
@@ -36,7 +37,10 @@ def begin(emu, key, tid, *, time_capsule=False, manual=False):
     snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
     # A manual trade is the owner's own choice, so trade preferences and party protection do not apply.
     preferences = {} if manual else emu.store.trade_preferences()
-    if selected(snapshot, preferences, key)[0] != 'box' and not manual:
+    if session:
+        if key is not None or time_capsule:
+            raise ValueError('A Cable Club session brings the whole party and no selected Pokémon')
+    elif selected(snapshot, preferences, key)[0] != 'box' and not manual:
         raise ValueError('Choose a boxed offer. Active party members are protected')
     if time_capsule:
         from .timecapsule import compatible, unlocked
@@ -48,6 +52,8 @@ def begin(emu, key, tid, *, time_capsule=False, manual=False):
              'deadline': time.time() + 1800, 'party_slot': None, 'time_capsule': time_capsule}
     if manual:
         state['manual'] = True
+    if session:
+        state['session'] = True
     if time_capsule:
         state['original_party'] = [identity(mon.to_dict()) for mon in snapshot.party]
     emu.store.set(KEY, state)
@@ -124,11 +130,14 @@ class Preparation:
             if path is None:
                 return Action(None, 0, 24)
             return Action('up' if mem.byte('wPlayerDirection') & 12 != 4 else 'a', 8, 32)
-        location, slot, mon = selected(snapshot, {} if state.get('manual') else emu.store.trade_preferences(), state['trade_key'])
-        from .timecapsule import compatible
-        incompatible = next((i for i, member in enumerate(snapshot.party) if not compatible(member, data)), None)
-        needs_storage = location != 'party' or state.get('time_capsule') and incompatible is not None
-        if location == 'party' and not state.get('time_capsule'):
+        if state.get('session'):
+            location, slot, mon, incompatible, needs_storage = 'party', 0, None, None, False
+        else:
+            location, slot, mon = selected(snapshot, {} if state.get('manual') else emu.store.trade_preferences(), state['trade_key'])
+            from .timecapsule import compatible
+            incompatible = next((i for i, member in enumerate(snapshot.party) if not compatible(member, data)), None)
+            needs_storage = location != 'party' or state.get('time_capsule') and incompatible is not None
+        if location == 'party' and not state.get('time_capsule') and mon is not None:
             from .cable_verification import available_trade_item
             item = available_trade_item(data, mon.species, mon.held_item, dict(snapshot.items),
                                         replace_held=state.get('replace_held', False))

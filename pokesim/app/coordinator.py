@@ -93,6 +93,8 @@ class Coordinator:
         self.manual_guard = threading.Lock()
         self.manual_drain = threading.Lock()
         self.manual_progress = {}
+        from .cable_sessions import CableSessions
+        self.sessions = CableSessions(self)
 
     def _species(self, species):
         if self.display_species is None:
@@ -246,6 +248,11 @@ class Coordinator:
     @staticmethod
     def _failure_reason(row):
         error = row.get('error') or ''
+        if row['plan'].get('kind') == 'cable_session':
+            from .cable_sessions import REASONS
+            for key, message in REASONS.items():
+                if key in error:
+                    return message
         if 'No supported walking route to the Cable Club' in error:
             return 'An adventure could not reach the Cable Club from its current location.'
         if 'route to the Cable Club is blocked by an unresolved obstacle' in error:
@@ -457,6 +464,8 @@ class Coordinator:
                                                 for p in plan['participants']}) == 2}
                 if plan.get('manual'):
                     request['manual'] = True
+                if plan.get('session'):
+                    request['session'] = True
                 receipt = self._request(aid, 'prepare', request)
                 if plan.get('manual'):
                     with self.view_guard:
@@ -587,11 +596,14 @@ class Coordinator:
             if row['decision']:
                 return self._recover(row)
             try:
+                session = self.sessions.is_session(row)
                 prepared = self._prepare(row)
-                session_plan = self._session_plan(row, prepared)
+                session_plan = (self.sessions.plan if session else self._session_plan)(row, prepared)
                 self.registry.update_transaction(tid, phase='connecting')
-                manifest = self._run_cable(row, session_plan)
+                manifest = (self.sessions.run if session else self._run_cable)(row, session_plan)
                 self._verify_manifest(row, session_plan, manifest)
+                if session:
+                    self.sessions.verify(row, manifest)
                 manifest['display'] = self._trade_display(row, prepared, manifest)
                 with self.guard:
                     if self.closed.is_set() or self.registry.transaction(tid)['decision'] == 'ABORT':
@@ -601,7 +613,7 @@ class Coordinator:
                         peer = next(other for other in row['plan']['participants'] if other != aid)
                         result = manifest['participants'][aid]
                         receipt = self._request(aid, 'stage', {'id': tid, 'attempt_id': row['plan']['attempt_id'],
-                            'plan_digest': row['plan']['plan_digest'], 'result': result, 'incoming': prepared[peer]['outgoing'],
+                            'plan_digest': row['plan']['plan_digest'], 'result': result, 'incoming': prepared[peer].get('outgoing') or {},
                             'incoming_league_record': prepared[peer].get('outgoing_league_record')})
                         if (receipt.get('phase') != 'staged' or receipt.get('attempt_id') != row['plan']['attempt_id']
                                 or receipt.get('plan_digest') != row['plan']['plan_digest']

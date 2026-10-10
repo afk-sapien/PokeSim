@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="pokesim-base" content="${game_base}">
+<meta name="pokesim-adventure" content="${adventure_id}">
+<meta name="pokesim-viewer" content="${viewer_flag}">
+<script src="${game_base}/static/routes.js?v=offers-1"></script>
+<script src="${game_base}/static/panel.js?v=panel-4"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#20241F" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Link two adventures at the Cable Club and trade by hand.">
+<title>${adventure_name} Cable Club · pokesim</title>
+<link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
+<link rel="stylesheet" href="${game_base}/static/panel.css?v=glow-2">
+<link rel="stylesheet" href="${game_base}/static/cable-club.css?v=cable-1">
+</head>
+<body data-page="cable">
+<a class="skip-link" href="#main">Skip to the Cable Club.</a>
+
+<header class="rail">
+<div class="shell rail-inner">
+<a class="brandplate" href="/" aria-label="${brand_label}" title="${brand_label}"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model" id="app-version">${app_version}</span></span></a>
+${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a><a href="${game_base}/pokedex">Pokédex</a><a href="${game_base}/pc">PC</a><a href="${game_base}/trading" aria-current="page">Trading</a><a href="${game_base}/journal">Journal</a><a href="${game_base}/stats">Stats</a></nav>
+<span class="connection" id="connection"><i class="lamp" aria-hidden="true"></i><span id="status">Connecting</span></span>
+</div>
+</header>
+
+<main id="main" class="shell">
+<header class="identity page-head">
+<div class="who"><p class="micro">${adventure_name}</p><h1>Cable Club</h1><p class="page-lede">Both trainers walk to the Cable Club and save. Then you hold both controllers. Trade as many Pokémon as you like, then press Finish. Cancel puts both adventures back on their Pokémon Center saves.</p></div>
+</header>
+
+<section class="cable-status" aria-label="Session status">
+<p class="micro"><i class="lamp" id="cable-lamp" aria-hidden="true"></i>Session</p>
+<h2 class="headline" id="cable-phase">Checking the Cable Club…</h2>
+<p class="body" id="cable-reason" role="status" aria-live="polite"></p>
+<div class="cable-actions">
+<button type="button" class="key key--primary" id="cable-start" hidden>Start session</button>
+<button type="button" class="key key--primary" id="cable-finish" disabled>Finish</button>
+<button type="button" class="key" id="cable-cancel" disabled>Cancel</button>
+</div>
+</section>
+
+<section class="cable-link" aria-label="Linked games">
+<div class="cable-side" data-side="left" tabindex="0" aria-label="Left game. Focus it to use the keyboard.">
+<p class="micro cable-name" id="cable-left-name">Left adventure</p>
+<div class="screen-well cable-screen"><img id="cable-left-screen" alt="Left game screen"></div>
+<div class="cable-pad" role="group" aria-label="Left controller">
+<div class="cable-dpad"><button type="button" class="key" data-button="up" aria-label="Up">▲</button><button type="button" class="key" data-button="left" aria-label="Left">◀</button><button type="button" class="key" data-button="right" aria-label="Right">▶</button><button type="button" class="key" data-button="down" aria-label="Down">▼</button></div>
+<div class="cable-ab"><button type="button" class="key" data-button="b">B</button><button type="button" class="key" data-button="a">A</button></div>
+<div class="cable-menu"><button type="button" class="key" data-button="select">Select</button><button type="button" class="key" data-button="start">Start</button></div>
+</div>
+</div>
+<div class="cable-side" data-side="right" tabindex="0" aria-label="Right game. Focus it to use the keyboard.">
+<p class="micro cable-name" id="cable-right-name">Right adventure</p>
+<div class="screen-well cable-screen"><img id="cable-right-screen" alt="Right game screen"></div>
+<div class="cable-pad" role="group" aria-label="Right controller">
+<div class="cable-dpad"><button type="button" class="key" data-button="up" aria-label="Up">▲</button><button type="button" class="key" data-button="left" aria-label="Left">◀</button><button type="button" class="key" data-button="right" aria-label="Right">▶</button><button type="button" class="key" data-button="down" aria-label="Down">▼</button></div>
+<div class="cable-ab"><button type="button" class="key" data-button="b">B</button><button type="button" class="key" data-button="a">A</button></div>
+<div class="cable-menu"><button type="button" class="key" data-button="select">Select</button><button type="button" class="key" data-button="start">Start</button></div>
+</div>
+</div>
+</section>
+<p class="micro cable-keys">Keyboard for the focused game: arrows move, X or Z is A, C or Backspace is B, Enter is Start, Shift is Select.</p>
+</main>
+
+<footer class="plate-foot">
+<div class="shell">
+<p>A small window into a very big adventure.</p>
+<div class="theme" role="group" aria-label="Colour theme"><button data-theme-choice="light" aria-pressed="false">Light</button><button data-theme-choice="auto" aria-pressed="false">Auto</button><button data-theme-choice="dark" aria-pressed="false">Dark</button></div>
+<div class="links"><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">GitHub ↗</a></div>
+</div>
+</footer>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="${game_base}/static/cable-club.js?v=cable-1"></script>
+</body>
+</html>

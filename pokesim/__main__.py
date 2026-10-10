@@ -73,6 +73,9 @@ def main(argv=None):
     if args and args[0] == '--link-session':
         from .interactions.link_worker import main as link_main
         return link_main(args[1:])
+    if args and args[0] == '--cable-session':
+        from .gen2.manual_session import main as session_main
+        return session_main(args[1:])
     admin_index = 0
     while admin_index < len(args):
         if args[admin_index] == '--data-dir':
