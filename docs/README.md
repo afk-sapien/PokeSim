@@ -19,7 +19,7 @@ This index separates current instructions, future plans, and historical evidence
 | Trading screen, offers, and broker connections | [Trading](trading.md) |
 | Automatic library exchanges | [Automatic trading](automatic-trading.md) |
 | Backups, upgrades, recovery, and storage | [Operations](operations.md) |
-| Authenticated remote access | [HTTPS proxy](proxy.md) |
+| Remote access | [Self-hosting](self-hosting.md#configure-ports-and-remote-access) |
 
 ## Develop and maintain
 

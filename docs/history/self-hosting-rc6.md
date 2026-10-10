@@ -55,7 +55,7 @@ Progress, policy memory, screenshots, and the journal live in `./data`. The cont
 
 The browser displays up to 10 frames per second independently of game speed. It waits for each image to download and decode before requesting another, retains the last good image during a connection failure, and retries automatically. Hidden tabs stop downloading game images. The `/stream` MJPEG endpoint remains available for other clients.
 
-The default port is accessible only on the Docker host. For remote access, use the [authenticated HTTPS proxy recipe](../proxy.md) or a private network. The app has no built-in authentication. Anyone who can reach an instance with controls enabled can control, reset, and rewind its game.
+The default port is accessible only on the Docker host. For remote access, use the authenticated HTTPS proxy recipe (since removed) or a private network. The app has no built-in authentication. Anyone who can reach an instance with controls enabled can control, reset, and rewind its game.
 
 Set `VIEWER_ONLY=1` in `.env` to disable every game control endpoint, then recreate the container. This does not authenticate viewers.
 

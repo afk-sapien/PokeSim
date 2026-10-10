@@ -93,8 +93,10 @@ ssh -L 8930:127.0.0.1:8930 user@your-server
 
 Then open [localhost:8930](http://localhost:8930) on that computer. For a trusted LAN,
 set both `BIND_ADDRESS=0.0.0.0` and `PUBLIC_URL=http://YOUR_SERVER_IP:8930`, then recreate
-the container. Anyone who can reach that address can manage the library. Use authenticated
-HTTPS for broader access. Setting `PUBLIC_URL` alone does not expose the listening port.
+the container. Anyone who can reach that address can manage the library. PokeSim has no
+built-in login, so never expose it directly to the internet. For remote access, put it
+behind something that adds authentication, such as Tailscale, Cloudflare Access, or your
+own reverse proxy with a login. Setting `PUBLIC_URL` alone does not expose the listening port.
 
 ### Back up, update, and remove
 
@@ -169,7 +171,7 @@ in a [support request](../SUPPORT.md). Remove private paths or tokens before sha
 
 Phone notifications need no setting here. Open the Library, choose **Notifications**, generate a topic, and subscribe to it in the [ntfy](https://ntfy.sh) app. See the [guide](guide.md#notifications). `NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY`, and `NTFY_MUTE` are still read from the environment as defaults until notifications are saved in the Library.
 
-The Library opens directly without a sign-in or owner key. Its default published port is local-only. Anyone who can reach the Library can manage adventures, so remote access belongs behind an authenticated HTTPS reverse proxy or on a trusted private network. Point an existing authenticated proxy at the manager and preserve the Host matching `PUBLIC_URL`, which must be the browser-facing address. The application checks Host and Origin and protects browser writes against cross-site requests. These protections do not authenticate remote users. Worker credentials and private ports remain internal.
+The Library opens directly without a sign-in or owner key. Its default published port is local-only. Anyone who can reach the Library can manage adventures, so remote access belongs behind something that adds authentication, such as Tailscale, Cloudflare Access, or your own reverse proxy with a login. Point a reverse proxy at the manager and preserve the Host matching `PUBLIC_URL`, which must be the browser-facing address. The application checks Host and Origin and protects browser writes against cross-site requests. These protections do not authenticate remote users. Worker credentials and private ports remain internal.
 
 The Compose service uses an init process to reap children and allows 90 seconds for orderly shutdown. Keep a single manager process per application folder. Do not add Uvicorn workers or share one application volume between containers.
 

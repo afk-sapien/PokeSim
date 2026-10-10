@@ -138,7 +138,7 @@ Prepared adventures run offline. Adding another adventure can reuse an installed
 - Opening PokeSim twice reopens the same application. The application and each adventure have exclusive process locks.
 - A stopped adventure uses no emulator process. Starting it resumes from its saved checkpoint.
 - Keep the computer awake to advance the games. Sleeping or powered-off computers do not accumulate simulated progress.
-- Desktop launch uses an available loopback port, accessible only from your computer. The Library has no account or owner-key step. For remote access, use an authenticated reverse proxy or a trusted private network as described in [self-hosting](self-hosting.md). Anyone who can reach the Library can manage its adventures.
+- Desktop launch uses an available loopback port, accessible only from your computer. The Library has no account or owner-key step. Never expose it directly to the internet. For remote access, put it behind something that adds authentication, such as Tailscale, Cloudflare Access, or your own reverse proxy with a login. See [self-hosting](self-hosting.md#configure-ports-and-remote-access). Anyone who can reach the Library can manage its adventures.
 
 ## Notifications
 

@@ -167,8 +167,10 @@ package-manager prerequisites, updates and removal.
 
 Games continue after you close the browser tab. Keep the host awake and use
 **Save and quit** to stop cleanly. The Library has no login, so anyone who can
-reach it can manage it. Default installations bind to localhost. Use a private
-network or an authenticated HTTPS proxy for remote access.
+reach it can manage it. Default installations bind to localhost. Never expose it
+directly to the internet. For remote access, put it behind something that adds
+authentication, such as Tailscale, Cloudflare Access, or your own reverse proxy with
+a login.
 
 ## Help and documentation
 

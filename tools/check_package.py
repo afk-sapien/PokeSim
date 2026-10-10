@@ -123,15 +123,15 @@ for artifact in artifacts:
             identity = json.load(archive.extractfile(f'pokesim-{release_version}/pokesim/_build.json'))
         assert {'uv.lock', 'setup.py', 'THIRD_PARTY_NOTICES.md', 'RELEASE_STATUS.md',
                 'Dockerfile', '.dockerignore', '.env.example', 'compose.yaml',
-                'compose.build.yaml', 'compose.proxy.yaml', 'compose.quickstart.yaml',
-                'install.sh', 'install.ps1', 'deploy/Caddyfile',
+                'compose.build.yaml', 'compose.quickstart.yaml',
+                'install.sh', 'install.ps1',
                 'docs/README.md', 'docs/images/live-adventure.jpg',
                 'docs/images/live-adventure.gif',
                 'docs/images/pc-panel.jpg', 'docs/images/pokedex-panel.jpg',
                 'docs/images/journal-panel.jpg', 'docs/images/stats-panel.jpg',
                 'docs/images/library.jpg',
                 'tools/check_web.py', 'tools/check_docs.py',
-                'deploy/proxy.env.example', 'docs/validation/README.md'} <= names
+                'docs/validation/README.md'} <= names
     missing = required - names
     assert identity['version'] == release_version, f'{artifact}: build version mismatch'
     assert not missing, f'{artifact}: missing runtime files {missing}'

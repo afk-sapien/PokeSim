@@ -161,30 +161,6 @@ def test_quickstart_test_ignores_inherited_compose_configuration(tmp_path, monke
     assert command[command.index('--project-name') + 1] == 'disposable-test'
 
 
-@pytest.mark.parametrize('data_path,kind', [('pokesim-data', 'volume'), ('./my-library', 'bind')])
-def test_proxy_preserves_quickstart_storage(tmp_path, data_path, kind):
-    docker = shutil.which('docker')
-    if docker is None or subprocess.run([docker, 'compose', 'version'], capture_output=True).returncode:
-        pytest.skip('Compose configuration check needs the Compose v2 CLI')
-    for source, destination in [('compose.quickstart.yaml', 'compose.yaml'), ('compose.proxy.yaml', 'compose.proxy.yaml')]:
-        shutil.copyfile(ROOT / source, tmp_path / destination)
-    (tmp_path / '.env').write_text('')
-    env = compose_environment('pokesim:test', 18933)
-    env.update(DATA_PATH=data_path, AUTH_USER='test', AUTH_HASH='unused-config-check', PUBLIC_URL='https://localhost:9443')
-    configs = []
-    for name in ('compose.yaml', 'compose.proxy.yaml'):
-        result = subprocess.run([docker, 'compose', '-p', 'same-library', '--env-file', str(tmp_path / '.env'),
-                                 '-f', str(tmp_path / name), 'config', '--format', 'json'],
-                                env=env, text=True, capture_output=True, check=True)
-        config = json.loads(result.stdout)
-        mount = config['services']['pokesim']['volumes'][0]
-        assert mount['type'] == kind
-        if kind == 'volume':
-            assert config['volumes'][mount['source']]['name'] == 'same-library_pokesim-data'
-        configs.append(mount)
-    assert configs[0] == configs[1]
-
-
 def test_public_quickstart_uses_completed_release_assets():
     for name in ('README.md', 'docs/desktop.md', 'docs/self-hosting.md'):
         text = (ROOT / name).read_text()

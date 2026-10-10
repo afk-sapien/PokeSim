@@ -18,12 +18,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Exact job names that must be present and successful, as GitHub reports them (a matrix job's name carries its
 # parameters in parentheses). Matching is exact on purpose: a prefix would let 'install (macos-15' be satisfied
-# by the 'macos-15-intel' job and 'container' by 'container-proxy'. tests/test_release_gates.py derives the
+# by the 'macos-15-intel' job and 'container' by a job such as 'container-extra'. tests/test_release_gates.py derives the
 # expected names from the workflow files, so adding, renaming or removing a job there fails until this list agrees.
 REQUIRED = {
     'ci.yml': [
         'dependency-audit', 'lint', 'tests (3.11)', 'tests (3.12)', 'tests (3.14)',
-        'browser (1/4)', 'browser (2/4)', 'browser (3/4)', 'browser (4/4)', 'container', 'container-proxy',
+        'browser (1/4)', 'browser (2/4)', 'browser (3/4)', 'browser (4/4)', 'container',
     ],
     'python-install.yml': [
         'native tests (ubuntu-22.04, 1/1)', 'native tests (ubuntu-24.04-arm, 1/1)',
@@ -36,8 +36,7 @@ REQUIRED = {
 }
 # A step that must have succeeded somewhere in the run, so a gate cannot be satisfied by renaming it away.
 REQUIRED_STEPS = {
-    'ci.yml': ['Exercise real browser flows', 'Verify the authenticated HTTPS proxy',
-               'Reject fixable high and critical image vulnerabilities'],
+    'ci.yml': ['Exercise real browser flows', 'Reject fixable high and critical image vulnerabilities'],
     'python-install.yml': ['Test native service and Python launcher', 'Verify the user-facing installer and repeat installation'],
 }
 

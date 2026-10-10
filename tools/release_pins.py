@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Files whose content carries dependency pins or installer URLs. Docs and tests may mention the markers.
 PIN_FILES = ['pyproject.toml', 'uv.lock', 'Dockerfile', 'install.sh', 'install.ps1',
-             'compose.yaml', 'compose.quickstart.yaml', 'compose.build.yaml', 'compose.proxy.yaml']
+             'compose.yaml', 'compose.quickstart.yaml', 'compose.build.yaml']
 # Anything matching one of these in a pin file means the temporary wheels are still in use.
 TEMP_PATTERNS = [r'refs/heads/', r'temp-wheels', r'TEMP_REMOVE_BEFORE_RELEASE', r'TEMP-\d+\.\d+\.\d+-']
 TEMP_PATHS = ['tools/temp-wheels', 'TEMP_REMOVE_BEFORE_RELEASE.md']
