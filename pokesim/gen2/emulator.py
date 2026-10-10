@@ -320,12 +320,21 @@ class Emulator:
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
         return path
 
-    def _load_state_file(self, path):
-        metadata = self.store.checkpoint_metadata(path)
+    def _behind_barrier(self, metadata):
+        """Whether a checkpoint predates the latest completed trade or custom reward.
+
+        Loading one would undo that trade or reward, so it is never a place to go back to.
+        """
         for key, field in [('trade_barrier', 'trade_id'), ('custom-reward-barrier-v1', 'reward_id')]:
             barrier = self.store.get(key)
             if barrier and (metadata or {}).get(field) != barrier:
-                raise ValueError('Checkpoint predates a completed trade or custom reward')
+                return True
+        return False
+
+    def _load_state_file(self, path):
+        metadata = self.store.checkpoint_metadata(path)
+        if self._behind_barrier(metadata):
+            raise ValueError('Checkpoint predates a completed trade or custom reward')
         if metadata and (metadata.get('rom_sha1') != self.rom_sha1 or metadata.get('generation') != 2):
             raise ValueError('This checkpoint belongs to a different cartridge')
         if metadata is None:
@@ -525,7 +534,11 @@ class Emulator:
                 self.reloads_exhausted = True
             self._reset_watch()
             return
-        saves = self.store.autosaves()
+        all_saves = self.store.autosaves()
+        # A save from before a completed trade or reward is refused on load. Choosing it anyway
+        # spent a reload on an error and fell back to whatever came next, so the watchdog swung
+        # between the refused save and the newest one until it ran out of reloads.
+        saves = [path for path in all_saves if not self._behind_barrier(self.store.checkpoint_metadata(path))]
         target = reload_target(self.store, saves, since_frame)
         self.unstick_streak += 1
         if self.unstick_streak == 2 and self.snapshot is not None and self.snapshot.valid and self.snapshot.started:
@@ -549,6 +562,12 @@ class Emulator:
             # The emulator is deterministic, so the same save and choices would replay the same
             # trouble. Idling a random moment moves the game's random numbers along.
             self._tick(1 + secrets.randbelow(180))
+        elif all_saves and not saves:
+            # Every save predates the trade or reward. Power-cycling falls back on the cartridge's own
+            # save, which can predate it too, so keep playing from here instead.
+            log.warning('%s and every save predates a completed trade or reward, not reloading', why)
+            self._reset_watch()
+            return
         else:
             log.warning('%s and no save state to go back to, power-cycling', why)
             self.pb.stop(save=False)

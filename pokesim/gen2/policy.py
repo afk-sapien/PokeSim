@@ -534,6 +534,11 @@ class Policy:
     def partner_goal(self, snapshot, move):
         if any(not mon.egg and move in self.data.species[mon.species]['machines'] for mon in snapshot.party):
             return None
+        if self.no_room(snapshot):
+            # A full team, every box full and no spare to release leave nowhere to put a team member
+            # down, so a partner can be neither withdrawn nor caught. A trade that sends the partner
+            # away can leave the run here; visiting the PC would only fail to deposit forever.
+            return None
         candidates = [mon for mon in snapshot.stored if not mon.egg
                       and move in self.data.species[mon.species]['machines']]
         if len(snapshot.party) == 6 or candidates:
@@ -1055,7 +1060,7 @@ class Policy:
                     return Action(None, 0, 24)
                 compatible = [mon for mon in snapshot.party if not mon.egg
                               and move in self.data.species[mon.species]['machines']]
-                if not compatible and move in {57, 250, 127}:
+                if not compatible and move in {57, 250, 127} and not self.no_room(snapshot):
                     self.partner_move = move
                     self.goal = self.partner_goal(snapshot, move)
                     break
