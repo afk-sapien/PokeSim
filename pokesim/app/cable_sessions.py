@@ -33,7 +33,11 @@ GEN1_UNSUPPORTED = 'Red, Blue and Yellow Cable Club sessions are not yet support
 CAPSULE_UNSUPPORTED = 'Time Capsule sessions between Gen I and Gen II are not yet supported.'
 NO_TRADE = 'Finished without a trade'
 IDLE = 'No buttons were pressed for five minutes'
+BUSY = 'The Cable Club was still finishing another exchange'
+# How long a new session waits for the exchange before it to finish.
+EXECUTION_WAIT = 120
 REASONS = {
+    BUSY: 'The Cable Club was still finishing another exchange. Both adventures kept their saves, so try again.',
     NO_TRADE: 'The session finished without a trade. Both adventures went back to their Pokémon Center saves.',
     IDLE: 'No buttons were pressed for five minutes, so the session ended. Both adventures went back to their Pokémon Center saves.',
     'Cancelled by the owner': 'The session was cancelled. Both adventures went back to their Pokémon Center saves.',
@@ -47,6 +51,7 @@ class CableSessions:
         self.guard = threading.Lock()
         self.live = {}
         self.idle_seconds = IDLE_SECONDS
+        self.execution_wait = EXECUTION_WAIT
 
     @staticmethod
     def is_session(row):
@@ -103,7 +108,8 @@ class CableSessions:
         """Run the session to its end on its own thread. A session can stay open for an hour."""
         def run():
             try:
-                self.coordinator.execute(tid)
+                # The exchange before this one may still be finishing, so wait for it.
+                self.coordinator.execute(tid, wait=self.execution_wait)
             except Exception:
                 log.exception('Cable Club session %s failed', tid)
         thread = threading.Thread(target=run, daemon=True, name='cable-session')

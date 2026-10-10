@@ -586,8 +586,15 @@ class Coordinator:
                 or manifest.get('plan_sha256') != expected or set(manifest.get('participants', {})) != set(row['plan']['participants'])):
             raise ValueError('Cable output does not match this exact paired attempt')
 
-    def execute(self, tid):
-        if not self.execution.acquire(blocking=False):
+    def execute(self, tid, wait=None):
+        """Run one exchange. With ``wait``, queue behind the one finishing for up to that many seconds."""
+        if not (self.execution.acquire(timeout=wait) if wait else self.execution.acquire(blocking=False)):
+            if wait:
+                # Nothing was prepared yet, so the next recovery pass only has to tell both sides.
+                with self.guard:
+                    if self.registry.transaction(tid)['decision'] is None:
+                        from .cable_sessions import BUSY
+                        self.registry.update_transaction(tid, decision='ABORT', phase='recovering', error=BUSY)
             return self.registry.transaction(tid)
         try:
             row = self.registry.transaction(tid)

@@ -277,6 +277,34 @@ def test_a_trade_evolution_in_a_session_is_kept(club):
     assert club.loaded == [(club.coordinator.manager.assets.game_data_dir, 'gold')]
 
 
+def test_a_session_waits_for_the_exchange_before_it_to_finish(club):
+    club.coordinator.execution.acquire()
+    sid, thread = open_session(club)
+    time.sleep(0.3)
+    assert club.sessions.status(sid)['phase'] == 'preparing' and club.peers[club.gold].calls == []
+    club.coordinator.execution.release()
+    wait_for(club.sessions, sid, {'in_session'})
+    club.sessions.cancel(sid)
+    thread.join(20)
+
+
+def test_a_session_that_cannot_start_rolls_back_instead_of_hanging(club):
+    club.sessions.execution_wait = 0.2
+    club.coordinator.execution.acquire()
+    try:
+        sid, thread = open_session(club)
+        thread.join(5)
+        status = club.sessions.status(sid)
+        assert status['phase'] == 'rolling_back' and 'try again' in status['reason']
+    finally:
+        club.coordinator.execution.release()
+    club.coordinator.next_recovery_at = 0
+    club.coordinator.schedule_once()
+    status = club.sessions.status(sid)
+    assert status['phase'] == 'rolled_back' and 'try again' in status['reason']
+    assert all(club.peers[aid].operations() == ['abort'] for aid in (club.gold, club.silver))
+
+
 def test_the_worker_losing_its_parent_cancels_the_session():
     import io
     from pokesim.gen2.manual_session import read_commands
