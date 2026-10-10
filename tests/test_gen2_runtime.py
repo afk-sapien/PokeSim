@@ -1890,15 +1890,20 @@ def _clock_policy(real_data, day, daily=0):
 def test_idle_collection_says_it_is_waiting_for_a_contest_day(real_data):
     from pokesim.gen2.contest import CONTEST_SPECIES, targets, waiting_for_day
     policy, snapshot, mem = _clock_policy(real_data, day=1)
-    assert 'Tuesday, Thursday or Saturday' in waiting_for_day(policy, snapshot, mem)
+    assert waiting_for_day(policy, snapshot, mem) == 'Waiting for Tuesday: the Bug-Catching Contest'
+    policy, snapshot, mem = _clock_policy(real_data, day=5)
+    assert waiting_for_day(policy, snapshot, mem) == 'Waiting for Saturday: the Bug-Catching Contest'
     policy, snapshot, mem = _clock_policy(real_data, day=2)
     assert waiting_for_day(policy, snapshot, mem) is None
-    policy, snapshot, mem = _clock_policy(real_data, day=2, daily=2)
-    assert 'tomorrow' in waiting_for_day(policy, snapshot, mem)
+    # Entered already: the next contest is two days away, or three from Saturday, never tomorrow.
+    for day, after in ((2, 'Thursday'), (4, 'Saturday'), (6, 'Tuesday')):
+        policy, snapshot, mem = _clock_policy(real_data, day=day, daily=2)
+        assert waiting_for_day(policy, snapshot, mem) == (
+            f'Waiting for {after}: the Bug-Catching Contest was already entered today')
     # Sun Stones already in the bag and every contest-only species owned mean there is nothing to wait for.
     policy, snapshot, mem = _clock_policy(real_data, day=1)
     snapshot.owned = {182, 192}
-    assert 'Tuesday, Thursday or Saturday' in waiting_for_day(policy, snapshot, mem) or not targets(policy, snapshot)
+    assert 'Tuesday' in (waiting_for_day(policy, snapshot, mem) or '') or not targets(policy, snapshot)
     snapshot.owned = {182, 192, *CONTEST_SPECIES}
     assert waiting_for_day(policy, snapshot, mem) is None
 

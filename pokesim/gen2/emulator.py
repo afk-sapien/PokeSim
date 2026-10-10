@@ -508,6 +508,11 @@ class Emulator:
         self.screen_key = self.progress_key = None
         self.invalid_frame = self.battle_frame = None
         self._reward_check_frame = self.frame
+        # A reload rewinds the frame counter, so the next guard check must be due from the restored
+        # frame. Left at the old frame, the guards slept until the run caught up, a clock wait was
+        # never seen and its progress clock never restarted, and the first check then reloaded it.
+        self._guard_frame = self.frame
+        self.waiting = False
         self.stall.frame = None
 
     def _unstick(self, since_frame, why):

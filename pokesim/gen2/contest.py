@@ -39,9 +39,20 @@ def waiting_for_day(policy, snapshot, mem):
     if (not needs_sun_stone(policy, snapshot) and not targets(policy, snapshot)
             or policy.collection.get('contest') or policy.collection.get('tower')):
         return None
-    if mem.byte('wCurDay') % 7 in CONTEST_DAYS:
-        return 'Waiting for tomorrow: the Bug-Catching Contest was already entered today' if mem.byte('wDailyFlags1') & 2 else None
-    return 'Waiting for Tuesday, Thursday or Saturday: the Bug-Catching Contest'
+    day = mem.byte('wCurDay') % 7
+    if day in CONTEST_DAYS:
+        if not mem.byte('wDailyFlags1') & 2:
+            return None
+        return f'Waiting for {next_contest_day(day)}: the Bug-Catching Contest was already entered today'
+    return f'Waiting for {next_contest_day(day)}: the Bug-Catching Contest'
+
+
+WEEKDAYS = ('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
+
+
+def next_contest_day(day):
+    """The name of the first contest day after the cartridge's current weekday."""
+    return WEEKDAYS[next((day + step) % 7 for step in range(1, 8) if (day + step) % 7 in CONTEST_DAYS)]
 
 
 def journey(policy, snapshot, Goal, *, force=False):

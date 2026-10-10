@@ -47,6 +47,28 @@ def test_without_a_patrol_lack_of_progress_still_reloads():
     assert reloads == [(0, 'no progress')] and not emu.waiting
 
 
+def test_a_rewinding_reload_keeps_the_guards_watching_the_clock_wait():
+    # A reload rewinds the frame counter. The guards must run again from the restored frame, or a
+    # clock patrol after the reload is never seen as waiting and its progress clock never restarts.
+    from pokesim.gen2.emulator import Emulator
+    emu = SimpleNamespace(frame=369_120_000, _guard_frame=369_120_060, stall=SimpleNamespace(frame=5), waiting=True)
+    emu.frame = 368_994_723
+    Emulator._reset_watch(emu)
+    assert emu.frame >= emu._guard_frame and not emu.waiting
+    # The patrol then counts as waiting at the first check, 60 frames after the reload grace ends.
+    emu.frame += 3600
+    policy = SimpleNamespace(recoveries=0, take_failure=lambda: None, idle=lambda snapshot: False,
+                             waiting=lambda snapshot: True, recover=lambda level: None)
+    reloads = []
+    emu.__dict__.update(paused=False, manual_mode=False, preparation=None, store=SimpleNamespace(get=lambda key: None),
+                        snapshot=SimpleNamespace(valid=True, started=True), policy=policy, failure_streak=0)
+    emu._unstick = lambda since, why: reloads.append((since, why))
+    emu._check_stall = lambda: None
+    assert emu.frame >= emu._guard_frame
+    Emulator._check_guards(emu)
+    assert emu.waiting and emu.progress_frame == emu.frame and not reloads
+
+
 def test_patrol_labels_say_the_run_keeps_training():
     from pokesim.gen2.collection import patrol_label
     assert (patrol_label('Waiting for Tuesday, Thursday or Saturday: the Bug-Catching Contest')
