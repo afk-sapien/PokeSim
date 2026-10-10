@@ -1,4 +1,4 @@
-"""Offers persist by individual and withdrawals reach the automatic selector."""
+"""Trade settings persist by individual and reach the automatic selector."""
 from copy import deepcopy
 import json
 from unittest.mock import Mock
@@ -40,8 +40,9 @@ def test_choice_follows_box_moves_training_and_evolution_after_restart(tmp_path,
     store = Store(tmp_path)
     rows = preferences.apply(moved, store.trade_preferences())['storage']['pokemon']
     assert rows[0]['trade_key'] == key
-    assert rows[0]['trade_preference'] == state
-    assert rows[0]['trade_locked'] == (state == 'locked')
+    # Withdrawn and locked both became Keep.
+    assert rows[0]['trade_preference'] == preferences.KEEP
+    assert rows[0]['trade_setting'] == 'keep' and rows[0]['trade_locked']
     assert rows[1]['trade_preference'] == 'auto'
     assert 'trade_key' not in mon
     store.close()
@@ -54,7 +55,7 @@ def test_withdrawal_excludes_automatic_and_last_copy_offers():
     blue = normal(payload('blue', ZUBAT))
     assert not routine.proposals([red, blue], allow_last_copies=True)
     row = routine.listings(red)[0]
-    assert not row['listed'] and row['reason'] == 'Withdrawn by you'
+    assert not row['listed'] and row['setting'] == 'keep'
     data['storage']['pokemon'] = data['storage']['pokemon'][:1]
     assert not routine.offers(normal(data, {key: {'state': 'withdrawn'}}), True)
 
@@ -219,24 +220,58 @@ def test_completed_trade_clears_preference_once_with_its_journal(tmp_path, monke
     store.close()
 
 
-def test_lock_overrides_offer_and_requires_explicit_unlock(game):
+def test_one_setting_switches_freely_between_auto_first_and_keep(game):
     client, store, _ = game
     key = client.get('/api/pokedex/status').json()['storage']['pokemon'][1]['trade_key']
     def change(state):
         return client.post('/api/trading/preferences', json={'key': key, 'state': state})
-    assert change('offered').status_code == 200
-    assert change('locked').status_code == 200
-    for state in ('offered', 'withdrawn', 'auto'):
-        assert change(state).status_code == 409
-        assert store.trade_preferences()[key]['state'] == 'locked'
+    for state, stored in (('first', 'offered'), ('keep', 'locked'), ('auto', 'auto'), ('keep', 'locked'),
+                          ('first', 'offered'), ('auto', 'auto')):
+        assert change(state).status_code == 200
+        assert store.trade_preferences()[key]['state'] == stored
+    assert change('keep').status_code == 200
     row = next(mon for mon in client.get('/api/trading').json()['offers'] if mon['trade_key'] == key)
-    assert row['locked'] and not row['listed'] and not row['can_offer']
-    assert 'Locked' in row['reason']
+    assert row['setting'] == 'keep' and not row['listed']
+    # Older clients still send the earlier names.
     assert change('unlocked').status_code == 200
     assert store.trade_preferences()[key]['state'] == 'auto'
-    row = next(mon for mon in client.get('/api/trading').json()['offers'] if mon['trade_key'] == key)
-    assert not row['locked'] and not row['listed']
-    assert change('unlocked').status_code == 409
+    assert change('withdrawn').status_code == 200
+    assert store.trade_preferences()[key]['state'] == 'locked'
+
+
+def test_migration_turns_withdrawn_into_keep_once(tmp_path):
+    import sqlite3
+    store = Store(tmp_path)
+    store.close()
+    db = sqlite3.connect(tmp_path / 'pokesim.sqlite')
+    with db:
+        db.execute('DELETE FROM kv WHERE k=?', (preferences.MIGRATED,))
+        for key, state in (('a', 'withdrawn'), ('b', 'locked'), ('c', 'offered'), ('d', 'auto'), ('e', 'unlocked')):
+            db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)',
+                       (preferences.PREFIX + key, json.dumps({'state': state, 'name': key})))
+    db.close()
+    store = Store(tmp_path)
+    expected = {'a': 'locked', 'b': 'locked', 'c': 'offered', 'd': 'auto', 'e': 'auto'}
+    assert {key: value['state'] for key, value in store.trade_preferences().items()} == expected
+    assert store.trade_preferences()['a']['name'] == 'a'
+    assert preferences.migrate(store.db) == 0
+    with store.db:
+        store.db.execute('DELETE FROM kv WHERE k=?', (preferences.MIGRATED,))
+        assert preferences.migrate(store.db) == 0
+    assert {key: value['state'] for key, value in store.trade_preferences().items()} == expected
+    store.close()
+
+
+def test_trade_first_is_refused_for_shiny_and_perfect(tmp_path):
+    store = Store(tmp_path)
+    data = payload()
+    mon = data['storage']['pokemon'][0]
+    mon['dvs'] = [15] * 5
+    with pytest.raises(ValueError, match='Trade first'):
+        preferences.update(store, data, preferences.identity(mon), 'first')
+    preferences.update(store, data, preferences.identity(mon), 'keep')
+    assert store.trade_preferences()[preferences.identity(mon)]['state'] == 'locked'
+    store.close()
 
 
 def test_locked_partner_cannot_join_any_trade_planner():

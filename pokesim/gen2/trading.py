@@ -11,7 +11,7 @@ from .. import config
 from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
 from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, manual_rows
-from ..trade.preferences import apply
+from ..trade.preferences import apply, name as setting_name
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin
 from .ram import Memory, read_snapshot
@@ -56,13 +56,14 @@ def _kept(mon, stock):
         return 'Withdrawn by you'
     if tuple(mon.get('dvs', ())) == (15,) * 5:
         return 'Perfect DV partner preserved for the collection'
+    if mon.get('shiny'):
+        # Built-in automatic rule: shinies never travel automatically, even when set to Trade first.
+        return 'Shiny partner preserved for the collection'
     if preference == 'offered':
         return ''
     if mon['species'] in stock:
         # The Day Care breeds a spare to send instead, so the parent itself stays.
         return 'Kept as a Day Care parent; a bred spare is sent instead'
-    if mon.get('shiny'):
-        return 'Shiny partner preserved for the collection'
     if sum(mon.get('stat_exp', ())) >= 20000:
         return 'Trained partner kept by automatic selection'
     return ''
@@ -111,7 +112,8 @@ def listings(emu, payload):
         editable = bool(mon.get('trade_key')) and not mon.get('trade_ambiguous') and not mon.get('egg')
         listed = mon.get('trade_key') in eligible
         rows.append({**eligible.get(mon.get('trade_key'), mon), 'shiny': shiny, 'perfect_dvs': perfect,
-                     'preference': preference, 'locked': preference == 'locked', 'listed': listed,
+                     'preference': preference, 'setting': setting_name(preference),
+                     'locked': preference == 'locked', 'listed': listed,
                      'reason': '' if listed else paused or _kept(mon, stock) or 'Kept by automatic selection',
                      'can_offer': editable and not shiny and not perfect and preference != 'locked',
                      'editable': editable,
@@ -120,7 +122,8 @@ def listings(emu, payload):
         preference = mon.get('trade_preference', 'auto')
         rows.append({**mon, 'box': 0, 'position': mon.get('slot'), 'listed': False,
                      'shiny': bool(mon.get('shiny')), 'perfect_dvs': tuple(mon.get('dvs', ())) == (15,) * 5,
-                     'locked': preference == 'locked', 'preference': preference, 'source': 'Selected by you',
+                     'locked': preference == 'locked', 'preference': preference,
+                     'setting': setting_name(preference), 'source': 'Selected by you',
                      'reason': 'Locked against trading and automatic release' if preference == 'locked' else 'Active party is protected',
                      'can_offer': False,
                      'editable': bool(mon.get('trade_key')) and not mon.get('trade_ambiguous') and not mon.get('egg')})

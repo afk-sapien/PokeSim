@@ -33,6 +33,7 @@ from ..desktop_setup import MAX_ROM, user_directory
 from ..platform_io import lock_file
 from ..web.security import VIEWER_HEADER, protect_response, public_origin, viewer_allows
 from .assets import Assets
+from . import trade_settings
 from .registry import Registry, identifier, validate_id
 from .supervisor import Supervisor
 
@@ -661,11 +662,50 @@ def create_app(manager, shutdown=lambda: None):
     async def trade_offer_limits(from_id: str, from_key: str, to_id: str):
         return await asyncio.to_thread(manager.offers.limits, validate_id(from_id), from_key, validate_id(to_id))
 
+    @app.get('/api/v1/interactions/trade-offers/pokemon')
+    async def trade_offer_pokemon(adventure_id: str):
+        return await asyncio.to_thread(manager.offers.pokemon, validate_id(adventure_id))
+
     @app.post('/api/v1/interactions/trade-offers')
     async def create_trade_offer(request: Request):
         manager.check_available()
         data = await json_body(request)
-        return await asyncio.to_thread(manager.offers.create, data)
+        offer = await asyncio.to_thread(manager.offers.create, data)
+        if offer['status'] == 'accepted':
+            manager.background(manager.coordinator.drain_manual)
+        return offer
+
+    # Automatic trading settings: on or off and a wish list, per adventure.
+    @app.get('/api/v1/interactions/auto-settings')
+    async def auto_settings(adventure_id: str):
+        return await asyncio.to_thread(auto_settings_public, validate_id(adventure_id))
+
+    @app.put('/api/v1/interactions/auto-settings')
+    async def set_auto_settings(adventure_id: str, request: Request):
+        manager.check_available()
+        aid = validate_id(adventure_id)
+        data = await json_body(request)
+        if not isinstance(data, dict) or set(data) - {'enabled', 'wishlist'}:
+            raise HTTPException(400, 'Send enabled and wishlist only')
+        if manager.offers.viewer_only(aid):
+            raise HTTPException(403, 'This adventure is view-only')
+        game = manager.registry.adventure(aid)
+        try:
+            await asyncio.to_thread(trade_settings.update, manager.registry, aid, enabled=data.get('enabled'),
+                                    wishlist=data.get('wishlist'),
+                                    dex_total=251 if game['version'] in {'gold', 'silver', 'crystal'} else 151)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        return await asyncio.to_thread(auto_settings_public, aid)
+
+    def auto_settings_public(aid):
+        game = manager.registry.adventure(aid)
+        settings = trade_settings.get(manager.registry, aid)
+        names = manager.coordinator.species_names(2 if game['version'] in {'gold', 'silver', 'crystal'} else 1)
+        return {'adventure_id': aid, **settings,
+                'wishes': [{'dex': dex, 'name': names.get(dex) or f'No. {dex}'} for dex in settings['wishlist']],
+                'species': [{'dex': dex, 'name': name} for dex, name in sorted(names.items())],
+                'viewer_only': manager.offers.viewer_only(aid)}
 
     @app.get('/api/v1/interactions/trade-offers/{oid}')
     async def trade_offer(oid: str):
@@ -823,7 +863,7 @@ def create_app(manager, shutdown=lambda: None):
         if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
             asset = path.removeprefix('static/')
             if asset in {'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css',
-                         'adventure-trading.js', 'trade-progress.js', 'fonts/pokesim-panel.woff2'}:
+                         'adventure-trading.js', 'trade-progress.js', 'trade-ui.js', 'trade-tabs.js', 'fonts/pokesim-panel.woff2'}:
                 return FileResponse(STATIC / asset)
         sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)
         if sprite and request.method in {'GET', 'HEAD'}:

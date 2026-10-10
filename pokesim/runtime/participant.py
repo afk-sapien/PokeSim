@@ -294,6 +294,7 @@ class Participant:
             from ..broker.routine import EVOLVES
             from ..strategy_data import SPECIES
             candidates.append({**mon.as_side(), 'last_copy': inv.held[mon.species] == 1,
+                               'trade_preference': mon.trade_preference,
                                'arrived_dex': SPECIES[EVOLVES.get(mon.species, mon.species)]['dex']})
         return {**payload, 'adventure_id': self.bootstrap.adventure_id,
                 'generation': self.bootstrap.generation, 'offers': candidates,

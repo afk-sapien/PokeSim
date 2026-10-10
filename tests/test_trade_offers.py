@@ -16,6 +16,9 @@ from test_view_links import instance_controls, managed, writes  # noqa: F401  (f
 def offers(setup):  # noqa: F811
     setup.manager.coordinator = setup.coordinator
     setup.manager.offers = TradeOffers(setup.manager)
+    # These tests answer offers by hand. Offers between two owned adventures start at once,
+    # which test_offer_to_an_owned_adventure_starts_at_once covers.
+    setup.manager.offers.auto_accept = False
     for peer in setup.peers.values():
         peer.pokemon[0].update(level=20, power=180, battle_power=95)
     return setup

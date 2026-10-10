@@ -17,7 +17,9 @@ import threading
 import time
 
 from ..checkpoints import CheckpointStore
+from . import trade_settings
 from .registry import digest, identifier, validate_id
+from ..trade.preferences import FIRST
 
 log = logging.getLogger(__name__)
 TERMINAL = {'completed', 'aborted'}
@@ -103,6 +105,20 @@ class Coordinator:
             except (RuntimeError, KeyError):
                 return {}
         return self.display_species.get(str(species), {})
+
+    def species_names(self, generation):
+        """Pokédex number to species name for one generation, for the wish list."""
+        if generation == 2:
+            names = {dex: (row.get('name') or '').replace('_', ' ').title() for dex, row in self._gen2_species().items()
+                     if type(dex) is int and 1 <= dex <= 251}
+            if names:
+                return names
+        from ..game_data import load
+        try:
+            table = load('tables.json', directory=self.manager.assets.game_data_dir)['dex']
+        except (RuntimeError, KeyError):
+            return {}
+        return {int(dex): name for dex, name in table.items() if str(dex).isdigit()}
 
     def _gen2_species(self):
         """Gen II species rows, read once. Loading a bundle parses and checksums about 3 MB, and
@@ -307,6 +323,7 @@ class Coordinator:
         return {'adventure': {key: game[key] for key in ('id', 'name', 'version', 'state', 'archived')},
                 'active': [public(row) for row in self.registry.transactions(unresolved=True, adventure_id=aid)],
                 'attention': self._attention(rows),
+                'auto_enabled': trade_settings.get(self.registry, aid)['enabled'],
                 'recent_failures': [public(row) for row in [r for r in rows if r['phase'] == 'aborted'][:5]],
                 'history': [public(row) for row in [r for r in rows
                             if r['phase'] == 'completed' and r['decision'] == 'COMMIT'][:20]]}
@@ -818,8 +835,13 @@ class Coordinator:
             except (RuntimeError, OSError):
                 continue
         self._refresh_collection_demand(inventories)
-        inventories = [(aid, inv) for aid, inv in inventories
-                       if time.time() - last.get(aid, 0) >= COOLDOWN_SECONDS]
+        # Auto trading switched off stops only automatic trades. The game still counts towards
+        # what the others are asked to collect, and hand-picked trades still reach it.
+        settings = {aid: trade_settings.get(self.registry, aid) for aid, _ in inventories}
+        reserved = self.hand_picked_keys()
+        inventories = [self._auto_offers(aid, inv, reserved) for aid, inv in inventories
+                       if settings[aid]['enabled'] and time.time() - last.get(aid, 0) >= COOLDOWN_SECONDS]
+        wishes = {aid: trade_settings.wanted(settings[aid], inv) for aid, inv in inventories}
         candidates = []
         for index, (left_id, left) in enumerate(inventories):
             for right_id, right in inventories[index + 1:]:
@@ -833,7 +855,9 @@ class Coordinator:
                     for take, mine in zip(takes, mine_by_take):
                         if not self._compatible_pair(left, right, give, take):
                             continue
-                        if not mine + theirs or not self._last_copies_useful(give, take, mine, theirs):
+                        wished = (int(take.get('arrived_dex', take.get('dex')) in wishes[left_id])
+                                  + int(give.get('arrived_dex', give.get('dex')) in wishes[right_id]))
+                        if not (mine + theirs or wished) or not self._last_copies_useful(give, take, mine, theirs):
                             continue
                         # Do not circulate the same individual for repeat quality gains.
                         # A newly available Pokédex entry still justifies its return.
@@ -843,7 +867,9 @@ class Coordinator:
                         repetition = sum(recent_species[aid, dex] for aid, dex in {
                             (left_id, give.get('dex')), (left_id, take.get('arrived_dex', take.get('dex'))),
                             (right_id, take.get('dex')), (right_id, give.get('arrived_dex', give.get('dex')))})
-                        rank = (mine + theirs, bool(mine and theirs), -repetition,
+                        # A wish list hit comes first, then Pokémon the owners set to Trade first.
+                        first = sum(mon.get('trade_preference') == FIRST for mon in (give, take))
+                        rank = (wished, first, mine + theirs, bool(mine and theirs), -repetition,
                                 -max(last.get(left_id, 0), last.get(right_id, 0)),
                                 -(give.get('level', 0) + take.get('level', 0)),
                                 give.get('trade_key') or '', take.get('trade_key') or '')
@@ -859,6 +885,31 @@ class Coordinator:
             return self.execute(row['id'])
         self.last_message = 'Your adventures are playing. They will trade when a useful exchange is ready.'
         return None
+
+    def hand_picked_keys(self):
+        """Pokémon in a hand-picked trade that has not finished, as (adventure, trade key) pairs.
+
+        Automatic trading never selects them, so an offer or a queued trade the owner chose
+        does not lose its Pokémon to an automatic exchange first.
+        """
+        keys = set()
+        for entry in self._manual_entries():
+            if entry['state'] in MANUAL_WAITING:
+                keys |= {(entry['left_id'], entry['left_key']), (entry['right_id'], entry['right_key'])}
+        try:
+            offers = self.registry.trade_offers(statuses=['pending', 'accepted'])
+        except (AttributeError, KeyError):
+            offers = []
+        for offer in offers:
+            keys |= {(offer['from_id'], offer['from_key']), (offer['to_id'], offer['to_key'])}
+        return keys
+
+    @staticmethod
+    def _auto_offers(aid, inventory, reserved):
+        """The offers automatic trading may use: never a shiny and never a hand-picked Pokémon."""
+        offers = [offer for offer in inventory.get('offers') or []
+                  if not offer.get('shiny') and (aid, offer.get('trade_key')) not in reserved]
+        return aid, {**inventory, 'offers': offers}
 
     # Manual trades: the owner picks both Pokémon and only hard cable limits can refuse them.
 

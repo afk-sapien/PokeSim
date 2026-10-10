@@ -92,6 +92,9 @@ class Store:
                 WHEN type IN ('map', 'blackout', 'playtime') THEN 2
                 ELSE 3 END""")
             self.db.commit()
+        from .trade.preferences import migrate as migrate_trade_settings
+        with self.db:
+            migrate_trade_settings(self.db)
 
     # --- events ---
     def add_event(self, ev, snapshot, shot_png: bytes | None, state_bytes: bytes | None) -> int:
@@ -232,19 +235,13 @@ class Store:
             return read(self.db)
 
     def set_trade_preference(self, key, value):
-        from .trade.preferences import PREFIX
+        from .trade.preferences import LEGACY, PREFIX
+        # One setting per Pokémon and no lock order: Auto decides, Trade first or Keep.
+        value = {**value, 'state': LEGACY.get(value['state'], value['state'])}
         with self.lock, self.db:
             hold = self.db.execute("SELECT v FROM kv WHERE k='trade_hold'").fetchone()
             if hold and json.loads(hold[0]):
                 raise ValueError('An exchange is in progress. Try again when it finishes.')
-            previous = self.db.execute('SELECT v FROM kv WHERE k=?', (PREFIX + key,)).fetchone()
-            locked = previous and json.loads(previous[0]).get('state') == 'locked'
-            if locked and value['state'] not in ('locked', 'unlocked'):
-                raise ValueError('This Pokémon is locked. Unlock it before changing its trade availability.')
-            if value['state'] == 'unlocked':
-                if not locked:
-                    raise ValueError('This Pokémon is no longer locked. Refresh its details.')
-                value = {**value, 'state': 'auto'}
             self.db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)',
                             (PREFIX + key, json.dumps(value)))
 

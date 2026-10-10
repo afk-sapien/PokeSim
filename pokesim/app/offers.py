@@ -45,6 +45,10 @@ def _name(display, fallback='The Pokémon'):
 
 
 class TradeOffers:
+    # One library owner controls every adventure that is not view-only, so an offer to such
+    # an adventure has nobody else to ask and starts at once.
+    auto_accept = True
+
     def __init__(self, manager):
         self.manager = manager
         self.guard = threading.Lock()
@@ -223,10 +227,33 @@ class TradeOffers:
             reason = take.get('blocked') or self._pair_reason(give_inventory, take_inventory, give, take)
             if reason:
                 blocked[take['trade_key']] = reason
+        pokemon = [{**self._side(to_id, receiver['name'], receiver['version'], self._snapshot(take)),
+                    'key': take['trade_key'], 'blocked': give_reason or blocked.get(take['trade_key'], '')}
+                   for take in take_inventory.get('pokemon') or [] if take.get('trade_key')]
         return {'from': {**self._side(from_id, sender['name'], sender['version'], self._snapshot(give)),
                          'key': from_key, 'blocked': give_reason},
-                'to': {'adventure_id': to_id, 'adventure_name': receiver['name'], 'version': receiver['version']},
-                'blocked': blocked, 'viewer_only': self.viewer_only(from_id)}
+                'to': {'adventure_id': to_id, 'adventure_name': receiver['name'], 'version': receiver['version'],
+                       'viewer_only': self.viewer_only(to_id)},
+                'blocked': blocked, 'pokemon': pokemon, 'viewer_only': self.viewer_only(from_id),
+                'starts_now': not self.viewer_only(from_id) and not self.viewer_only(to_id)}
+
+    def pokemon(self, aid):
+        """Every Pokémon one adventure could trade by hand, with only hard limits marked."""
+        validate_id(aid)
+        game = self.registry.adventure(aid)
+        reason = self.coordinator.manual_game_reason(game)
+        inventory = {}
+        if not reason:
+            try:
+                inventory = self.coordinator.manual_inventory(aid)
+            except (RuntimeError, OSError, KeyError, ValueError) as error:
+                reason = f'This adventure did not answer: {error}'
+        reason = reason or inventory.get('reason') or ''
+        rows = [{**self._side(aid, game['name'], game['version'], self._snapshot(mon)),
+                 'key': mon['trade_key'], 'blocked': mon.get('blocked') or ''}
+                for mon in inventory.get('pokemon') or [] if mon.get('trade_key')]
+        return {'adventure_id': aid, 'adventure_name': game['name'], 'version': game['version'],
+                'reason': reason, 'pokemon': rows, 'viewer_only': self.viewer_only(aid)}
 
     # Lifecycle
 
@@ -262,6 +289,13 @@ class TradeOffers:
                 raise ValueError(f'This adventure already has {MAX_PENDING} offers waiting. Withdraw one first')
             row = self.registry.create_trade_offer({'id': oid, **selection,
                                                     'display': {'from': self._snapshot(give), 'to': self._snapshot(take)}})
+        if self.auto_accept and not self.viewer_only(selection['to_id']):
+            # The owner controls both adventures, so there is nobody else to ask: the trade
+            # starts now. When it cannot start yet, the offer simply waits like any other.
+            try:
+                return self.accept(oid)
+            except (ValueError, ViewOnlyError):
+                row = self.registry.trade_offer(oid)
         return self.public(row)
 
     def accept(self, oid):

@@ -56,7 +56,8 @@ def rewind_refusal(store, state_name):
 # (moves, stats, experience) stay available to Python callers through emu.status(); the
 # routes below send each page only what it draws.
 OFFER_FIELDS = ('trade_key', 'dex', 'species', 'name', 'nick', 'level', 'box', 'position', 'slot', 'egg', 'shiny',
-                'perfect_dvs', 'listed', 'preference', 'editable', 'locked', 'source', 'reason', 'can_offer')
+                'perfect_dvs', 'listed', 'preference', 'editable', 'locked', 'source', 'reason', 'can_offer',
+                'setting')
 HOLDER_FIELDS = ('dex', 'species', 'nick', 'name', 'level', 'dv_stars', 'shiny', 'egg', 'box', 'position', 'slot')
 
 
@@ -101,7 +102,7 @@ class Control(BaseModel):
 
 class TradePreference(BaseModel):
     key: str
-    state: Literal['offered', 'withdrawn', 'auto', 'locked', 'unlocked']
+    state: Literal['auto', 'first', 'keep', 'offered', 'withdrawn', 'locked', 'unlocked']
 
 
 def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adventure_name: str = '',

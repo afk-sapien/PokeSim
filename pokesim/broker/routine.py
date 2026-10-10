@@ -3,6 +3,7 @@ from ..strategy_data import SPECIES
 from ..shiny import is_shiny
 from ..milestones import is_perfect
 from ..ram import DEX_NAMES
+from ..trade.preferences import name as setting_name
 from ..policies.collection import EVOS
 
 EVOLVES = {sid: row['species'] for sid, rows in EVOS.items() for row in rows if row['method'] == 'trade'}
@@ -61,6 +62,7 @@ def listings(inv, allow_last_copies=False):
                   'Last copy is protected' if inv.held[mon.species] == 1 and not allow_last_copies else
                   'Kept by automatic selection' if slot not in eligible else '')
         rows.append({**mon.as_side(), 'shiny': shiny, 'perfect_dvs': perfect, 'preference': mon.trade_preference,
+                     'setting': setting_name(mon.trade_preference),
                      'locked': mon.trade_preference == 'locked',
                      'listed': slot in eligible, 'reason': reason,
                      'can_offer': (slot in tradeable or mon.investment_protected
@@ -72,7 +74,8 @@ def listings(inv, allow_last_copies=False):
     for mon in inv.party:
         rows.append({**mon, 'box': 0, 'position': mon.get('slot'), 'listed': False,
                      'locked': mon.get('trade_preference') == 'locked',
-                     'preference': mon.get('trade_preference', 'auto'), 'source': 'Selected by you',
+                     'preference': mon.get('trade_preference', 'auto'),
+                     'setting': setting_name(mon.get('trade_preference', 'auto')), 'source': 'Selected by you',
                      'reason': 'Locked against trading and automatic release' if mon.get('trade_preference') == 'locked' else 'Active party is protected',
                      'editable': bool(mon.get('trade_key'))
                      and not mon.get('trade_ambiguous')})
