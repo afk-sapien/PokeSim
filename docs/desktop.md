@@ -161,13 +161,13 @@ unlimited. Both games retain their own settings afterward.
 
 ## Trading
 
-Trading is automatic across all eligible running adventures in the same library. New adventures join automatically. There are no groups to configure or exchanges to choose. Each adventure’s Trading page shows only its own current exchange and recent completed trades, with the adventure navigation kept in place. Its history remains available while stopped. The Library’s Trading page provides an overview across all adventures. Participation requires a compatible game and an eligible boxed Pokémon. Active party members and locked Pokémon are protected.
+Trading is automatic across all eligible running adventures in the same library. New adventures join automatically. There are no groups to configure or exchanges to choose. Each adventure’s Trading page shows only its own current exchange and recent completed trades, with the adventure navigation kept in place. Its history remains available while stopped. The Library’s Trading page provides an overview across all adventures. Participation requires a compatible game and an eligible boxed Pokémon. Active party members and Pokémon set to Keep are protected.
 
 Games finish battles or menus before preparing for an exchange. Interrupted exchanges recover automatically from their recorded decisions.
 
 Preparation routes each adventure to a reachable Pokémon Center, using normal movement, battles, field moves, and PC input to retrieve the chosen individual. Games can use different centers. When the active box is full, preparation uses another box with space for a safe party reserve. Both games then enter a temporary paired Cable Club session. The games execute the exchange, evolution, and save. Both verified results must commit before ordinary play resumes. No direct Pokémon record swap is used as a fallback.
 
-If every box and the party are full, preparation uses the existing duplicate cleanup rules to release one unprotected spare through the PC. The selected trade offer and locked Pokémon are protected. If there is no safe duplicate to release, the attempt stops and reports the storage problem.
+If every box and the party are full, preparation uses the existing duplicate cleanup rules to release one unprotected spare through the PC. The selected trade offer and Pokémon set to Keep are protected. If there is no safe duplicate to release, the attempt stops and reports the storage problem.
 
 The current adapter supports clean English Red and Blue at all twelve Cable Club centers, including the Indigo Plateau lobby. Each cartridge returns to its own original center after trading. An adventure without a supported route waits or reports a preparation failure. Trading pages show recent failed attempts and their reasons alongside completed exchanges. Link battles and trading with another application installation are not implemented.
 
@@ -293,4 +293,4 @@ Duplicate captures, Pokémon sent directly to the PC, committed League reward gi
 
 Existing adventures begin tracking when the updated version first runs and display the tracking date. Missing wild-capture totals cannot be reconstructed reliably from Pokédex flags or journal summaries. Capture tracking uses verified English retail Red and Blue cartridge routines. Other ROMs display an unavailable catch count while still showing current ownership.
 
-Automatic trade selection remembers which individual Pokémon have already belonged to each campaign. Returning an individual must unlock a new Pokédex entry, rather than repeat a previous quality upgrade. Among equally useful exchanges, the scheduler favors species traded less often in each adventure's last eight completed exchanges. It compares all eligible game pairs while preserving party, last-copy, project, and locked-Pokémon protections.
+Automatic trade selection remembers which individual Pokémon have already belonged to each campaign. Returning an individual must unlock a new Pokédex entry, rather than repeat a previous quality upgrade. Among equally useful exchanges, the scheduler favors species traded less often in each adventure's last eight completed exchanges. It compares all eligible game pairs while preserving party, last-copy, project, and Keep protections.
