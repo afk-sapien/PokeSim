@@ -38,12 +38,15 @@
     return data
   }
 
+  // The server swaps each side's stream between the session preview and the game itself as the phase moves on,
+  // and an ended multipart stream never reconnects, so every new phase binds fresh streams.
   function streams(status) {
-    const key = `${status.left_id}:${status.right_id}`
+    const key = `${status.left_id}:${status.right_id}:${status.phase}`
     if (streaming === key) return
     streaming = key
-    $('#cable-left-screen').src = `${prefix}/${encodeURIComponent(status.left_id)}/stream`
-    $('#cable-right-screen').src = `${prefix}/${encodeURIComponent(status.right_id)}/stream`
+    const phase = encodeURIComponent(status.phase)
+    $('#cable-left-screen').src = `${prefix}/${encodeURIComponent(status.left_id)}/stream?phase=${phase}`
+    $('#cable-right-screen').src = `${prefix}/${encodeURIComponent(status.right_id)}/stream?phase=${phase}`
   }
 
   function render(status, reason) {
@@ -74,16 +77,11 @@
 
   async function refresh() {
     try {
-      if (session && session.cancellable) {
-        const response = await fetch(`/api/v1/interactions/cable-sessions/${encodeURIComponent(session.id)}`, {cache: 'no-store'})
-        if (!response.ok) throw new Error('Could not read the session.')
-        render(await response.json())
-      } else {
-        const response = await PokeSim.fetch('/api/cable', {cache: 'no-store'})
-        if (!response.ok) throw new Error('Could not read the Cable Club.')
-        const data = await response.json()
-        render(data.session && data.session.cancellable ? data.session : (session || data.session), data.reason)
-      }
+      // The game's own Cable Club API answers both the owner page and a view link.
+      const response = await PokeSim.fetch('/api/cable', {cache: 'no-store'})
+      if (!response.ok) throw new Error('Could not read the Cable Club.')
+      const data = await response.json()
+      render(data.session || session, data.reason)
       $('#status').textContent = 'Connected'
     } catch (error) {
       $('#status').textContent = 'Reconnecting'
