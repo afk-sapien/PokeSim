@@ -414,7 +414,7 @@ def create_app(manager, shutdown=lambda: None):
             'speed': data.get('speed', 1),
             'league_rewards': data.get('league_rewards', True),
             'mew_event': data.get('mew_event', True),
-            'celebi_event': data.get('celebi_event', False),
+            'celebi_event': data.get('celebi_event', True),
             'legendary_return_steps': data.get('legendary_return_steps', 1000000),
             'event_return_steps': data.get('event_return_steps', 100000),
             'mew_return_steps': data.get('mew_return_steps', 1000000),
