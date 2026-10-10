@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import re
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -12,7 +13,9 @@ from test_flows import expect
 FROM = 'a' * 32
 RED = 'b' * 32
 BLUE = 'c' * 32
-REASON = 'LEAF cannot go to a Red, Blue or Yellow game. Chikorita did not exist in Gen I'
+REASON = 'Busy Blue is busy finishing another trade'
+# The reason Busy Blue gives for the shiny Meganium, which is not a Gen I species.
+MEGANIUM = 'Meganium cannot go to a Red, Blue or Yellow game. Meganium did not exist in Gen I'
 JSON = 'application/json'
 
 
@@ -36,6 +39,7 @@ class Library:
         self.posted = []
         self.saved = []
         self.offers = []
+        self.held = {}
         self.auto = {'adventure_id': FROM, 'enabled': True, 'wishlist': [], 'wishes': [], 'viewer_only': False,
                      'species': [{'dex': 1, 'name': 'Bulbasaur'}, {'dex': 16, 'name': 'Pidgey'}, {'dex': 25, 'name': 'Pikachu'}]}
         trading = render_game_page('adventure-trading.html', base_path=f'/games/{FROM}', adventure_id=FROM,
@@ -93,11 +97,18 @@ class Library:
                           'viewer_only': False})
 
     def targets(self, route):
-        assert 'from_key=' in route.request.url
-        self.json(route, {'adventures': [
-            {'id': RED, 'name': 'Second Red', 'version': 'red', 'generation': 1, 'available': True, 'reason': ''},
-            {'id': BLUE, 'name': 'Busy Blue', 'version': 'blue', 'generation': 1, 'available': False, 'reason': REASON}],
-            'viewer_only': False})
+        key = parse_qs(urlparse(route.request.url).query)['from_key'][0]
+        reason = MEGANIUM if key == 'party-0' else REASON
+        body = {'adventures': [
+            {'id': RED, 'name': 'Second Red', 'version': 'red', 'generation': 1, 'available': key != 'party-0',
+             'reason': MEGANIUM if key == 'party-0' else ''},
+            {'id': BLUE, 'name': 'Busy Blue', 'version': 'blue', 'generation': 1, 'available': False, 'reason': reason}],
+            'from_key': key, 'viewer_only': False}
+        if key in self.held:
+            # Held back so a test can answer it late, after another Pokémon was picked.
+            self.held[key] = (route, body)
+            return
+        self.json(route, body)
 
     def limits(self, route):
         self.json(route, {'pokemon': [self.side(RED, 'Second Red', {'key': '1', 'name': 'Pidgey', 'dex': 16, 'level': 9, 'blocked': ''}),
@@ -250,3 +261,23 @@ def test_auto_tab_switch_wish_list_and_settings(page, game, width):
     page.get_by_role('button', name='Remove Pikachu from the wish list').click()
     expect(page.locator('#wish-list')).not_to_contain_text('Pikachu')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+def test_a_late_answer_for_an_earlier_pokemon_does_not_replace_the_current_one(page, game):
+    url = game[0]
+    library = Library(page, url)
+    library.held['party-0'] = None
+    library.open()
+    page.locator('#pick-mine [data-key="party-0"]').click()
+    page.wait_for_function('document.querySelector("#pick-games").textContent.includes("Checking")')
+    page.locator('#pick-mine [data-key="box-1"]').click()
+    blue = page.locator(f'[data-game="{BLUE}"]')
+    expect(blue).to_contain_text(REASON)
+    route, body = library.held['party-0']
+    library.json(route, body)
+    page.wait_for_timeout(200)
+    expect(page.locator('#pick-mine [aria-checked="true"]')).to_contain_text('BUD')
+    expect(blue).to_contain_text(REASON)
+    expect(page.locator('#pick-games')).not_to_contain_text('Meganium')
+    expect(page.locator(f'[data-game="{RED}"]')).to_be_enabled()
+

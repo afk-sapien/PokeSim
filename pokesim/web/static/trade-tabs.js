@@ -115,12 +115,14 @@
     $('#pick-games').innerHTML = '<p class="empty-note">Checking which games can take it…</p>'
     try {
       const data = await json(await PokeSim.api(`${OFFERS}/targets?from_id=${encodeURIComponent(aid)}&from_key=${encodeURIComponent(key)}`, {cache: 'no-store'}), 'Could not check the other games.')
-      if (pick.mon !== mon) return
+      // A slower answer for a Pokémon picked earlier must not show its reasons for this one.
+      if (pick.mon?.key !== key || (data.from_key !== undefined && data.from_key !== key)) return
       const games = data.adventures || []
       $('#pick-games').innerHTML = games.map(game => `<button type="button" class="pick-item pick-game" role="radio" aria-checked="false" data-game="${esc(game.id)}"${game.available ? '' : ' aria-disabled="true" disabled'}><span class="pick-read"><b>${esc(game.name)}</b><span class="micro">${esc(game.version)}</span>${game.available ? '' : `<span class="pick-reason">${esc(game.reason)}</span>`}</span></button>`).join('')
         || '<p class="empty-note">There is no other adventure to trade with yet.</p>'
       $('#pick-game-step').scrollIntoView?.({block: 'nearest'})
     } catch (error) {
+      if (pick.mon?.key !== key) return
       $('#pick-games').innerHTML = `<p class="empty-note">${esc(error.message)}</p>`
     }
   }

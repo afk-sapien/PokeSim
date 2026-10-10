@@ -201,7 +201,7 @@ class TradeOffers:
         rows = [{'id': game['id'], 'name': game['name'], 'version': game['version'],
                  'generation': 2 if game['version'] in {'gold', 'silver', 'crystal'} else 1,
                  'available': not reasons[game['id']], 'reason': reasons[game['id']]} for game in games]
-        return {'adventures': rows, 'viewer_only': self.viewer_only(from_id)}
+        return {'adventures': rows, 'from_key': from_key, 'viewer_only': self.viewer_only(from_id)}
 
     def limits(self, from_id, from_key, to_id):
         """Hard limits for offering one Pokémon to each Pokémon in another adventure.
