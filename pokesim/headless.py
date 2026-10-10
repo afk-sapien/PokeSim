@@ -6,15 +6,17 @@ in the other and in the application.
 from __future__ import annotations
 
 import hashlib
-from importlib.metadata import version
+from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
 import json
 import secrets
 
-from pyboy import PyBoy
+from pokesim_core.emulator import Emulator as CoreEmulator
+
+from .yellow import YELLOW_SHA1, open_emulator
 
 from .checkpoints import CheckpointStore
 from .events import RunMemory
-from .policies.base import BUTTONS, PolicyContext
+from .policies.base import BUTTONS, PolicyContext, stack_pointer
 from .policies.strategic import StrategicPolicy
 from .screen import W_OPTIONS
 
@@ -24,10 +26,11 @@ BLUE_SHA1 = 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2'
 class HeadlessRun:
     def __init__(self, rom, checkpoint=None, seed=7, rng=None, reseed=False):
         self.rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
-        self.pb = PyBoy(str(rom), window='null', sound_emulated=False)
+        self.pb = open_emulator(str(rom), default=CoreEmulator, window='null', sound_emulated=False)
         self.pb.set_emulation_speed(0)
         self.policy = StrategicPolicy(seed)
-        self.policy.collection.version = 'blue' if self.rom_sha1 == BLUE_SHA1 else 'red'
+        self.policy.collection.version = ('yellow' if self.rom_sha1 == YELLOW_SHA1
+                                          else 'blue' if self.rom_sha1 == BLUE_SHA1 else 'red')
         self.memory = RunMemory()
         self.frame = 0
         # A scenario passes its own generator so that a failure replays the same way.
@@ -43,7 +46,8 @@ class HeadlessRun:
         metadata = CheckpointStore(path.parent).checkpoint_metadata(path)
         if not metadata:
             raise ValueError('A checkpoint manifest is required for a faithful replay')
-        if metadata['rom_sha1'] != self.rom_sha1 or metadata['pyboy_version'] != version('pyboy'):
+        validate_runtime(metadata)
+        if metadata['rom_sha1'] != self.rom_sha1:
             raise ValueError('ROM or emulator version does not match the checkpoint')
         self.policy.load_state_dict(metadata['policy_state'])
         self.memory = RunMemory.from_dict(metadata['run_memory'])
@@ -66,14 +70,14 @@ class HeadlessRun:
         with path.open('wb') as stream:
             self.pb.save_state(stream)
         manifest = {'format': 1, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
-                    'pyboy_version': version('pyboy'), 'rom_sha1': self.rom_sha1, 'policy': 'strategic',
+                    **checkpoint_metadata(), 'rom_sha1': self.rom_sha1, 'policy': 'strategic',
                     'policy_state': self.policy.state_dict(), 'run_memory': self.memory.to_dict(),
                     'frame': self.frame}
         path.with_suffix('.json').write_text(json.dumps(manifest))
 
     def step(self, snapshot):
         self.pb.memory[W_OPTIONS] = (self.pb.memory[W_OPTIONS] & ~7) | 1
-        for action in self.policy.step(PolicyContext(snapshot, 0, 0, self.pb.memory)):
+        for action in self.policy.step(PolicyContext(snapshot, 0, 0, self.pb.memory, stack_pointer(self.pb))):
             if action.button:
                 self.pb.button_press(action.button)
             if action.hold:

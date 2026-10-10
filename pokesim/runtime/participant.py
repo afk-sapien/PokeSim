@@ -19,6 +19,8 @@ PREFIX = 'managed_interaction:'
 FINAL = ('released', 'aborted')
 KEEP_FINISHED = 20
 RECLAIM_BYTES = 32 * 2 ** 20
+# A trade hold lasts while the adventure walks to a Pokémon Center, trades and saves.
+BUSY = 'Busy finishing a trade — available again in a few minutes'
 log = logging.getLogger(__name__)
 
 
@@ -62,7 +64,8 @@ def _promote(store, record):
         raise ValueError('The interaction has no durable commit receipt')
     stage = record['staged']
     state = _artifact(stage['state_path'], stage['checkpoint_sha256'])
-    metadata = {**record['source_metadata'], 'sha256': stage['checkpoint_sha256'], 'trade_id': record['id']}
+    from pokesim_core.emulator_state import retag_checkpoint
+    metadata = {**retag_checkpoint(record['source_metadata']), 'sha256': stage['checkpoint_sha256'], 'trade_id': record['id']}
     path = store.states / f"auto-v1-link-{record['id']}.state"
     if not path.exists():
         CheckpointStore.atomic_write(path, state)
@@ -70,15 +73,20 @@ def _promote(store, record):
         raise ValueError('The committed checkpoint is damaged')
     CheckpointStore.atomic_write(path.with_suffix('.json'), json.dumps(metadata).encode())
     with store.lock, store.db:
-        from ..league_partners import merge
+        if record.get('cartridge_generation') != 2:
+            from ..league_partners import merge
+        else:
+            from ..gen2.league import merge
         merge(store.db, record.get('incoming_league_record'))
         store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', ('trade_barrier', json.dumps(record['id'])))
         hold = {'id': record['id'], 'source': record['source_name'], 'phase': 'prepared'}
         store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', ('trade_hold', json.dumps(hold)))
         marker = 'managed_journal:' + record['id']
         if not store.db.execute('SELECT 1 FROM kv WHERE k=?', (marker,)).fetchone():
-            from ..interactions.centers import CENTERS
-            location = CENTERS.get(record.get('source_center_map'), {}).get('name', 'Pokémon Center')
+            location = 'Pokémon Center'
+            if record.get('cartridge_generation') != 2:
+                from ..interactions.centers import CENTERS
+                location = CENTERS.get(record.get('source_center_map'), {}).get('name', location)
             title, body, detail = _trade_story(record)
             store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime,detail)
                 VALUES (?,?,?,?,?,?,?,?,?)''', (time.time(), 'trade', title, body, 1, 4, location, '',
@@ -117,10 +125,14 @@ def _trade_story(record):
     """A journal entry that says what crossed the cable, falling back to the old wording."""
     generic = ('Cable Club trade completed',
                'Both cartridges completed their exchange and saved the result.', None)
-    sent, got = _traded_mon(record.get('outgoing')), _traded_mon(record.get('incoming'))
+    sent = record.get('outgoing_display') or _traded_mon(record.get('outgoing'))
+    got = record.get('incoming_display') or _traded_mon(record.get('incoming'))
     if not sent or not got:
         return generic
-    from ..strategy_data import SPECIES
+    if record.get('cartridge_generation') == 2:
+        SPECIES = {mon['species']: {'dex': mon['species']} for mon in (sent, got)}
+    else:
+        from ..strategy_data import SPECIES
     # The checkpoint manifest carries no trainer name, so the names come from the Pokemon: the
     # original trainer of the one that arrived is the adventure on the other end of the cable.
     peer = got.get('trainer') or ''
@@ -202,6 +214,35 @@ def _reclaim(store, threshold=RECLAIM_BYTES):
     return free * size
 
 
+def manual_rows(payload, generation, last_party_blocked=False):
+    """Every party and boxed Pokémon the owner may pick for a manual trade.
+
+    No trade preference or protection rule hides a Pokémon here. A row is only blocked
+    when the cable itself cannot carry it, and the reason says why.
+    """
+    party = payload.get('party') or []
+    stored = (payload.get('storage') or {}).get('pokemon') or []
+    battlers = [mon for mon in party if not mon.get('egg')]
+    rows = []
+    for location, mon in [('party', mon) for mon in party] + [('box', mon) for mon in stored]:
+        if mon.get('egg'):
+            blocked = 'Eggs cannot be traded'
+        elif not mon.get('trade_key') or mon.get('trade_ambiguous'):
+            blocked = 'Another Pokémon has the same trainer and stats, so this one cannot be picked out safely'
+        elif location == 'party' and last_party_blocked and len(battlers) <= 1:
+            blocked = 'The game refuses to trade away the only Pokémon that can battle'
+        else:
+            blocked = ''
+        rows.append({'trade_key': mon.get('trade_key'), 'species': mon.get('species'), 'dex': mon.get('dex'),
+                     'name': mon.get('name'), 'nickname': mon.get('nick'), 'level': mon.get('level'),
+                     'location': location, 'box': mon.get('box') if location == 'box' else None,
+                     'slot': mon.get('position') if location == 'box' else mon.get('slot'),
+                     'egg': bool(mon.get('egg')), 'shiny': bool(mon.get('shiny')),
+                     'power': mon.get('power'), 'battle_power': mon.get('battle_power'),
+                     'cartridge_generation': generation, 'blocked': blocked})
+    return rows
+
+
 def recover_storage(store):
     """Reconcile committed files before the emulator chooses its startup checkpoint."""
     with store.lock:
@@ -258,6 +299,32 @@ class Participant:
                 'generation': self.bootstrap.generation, 'offers': candidates,
                 'revision': digest(payload), 'holding': bool(self.store.get('trade_hold'))}
 
+    def manual_inventory(self):
+        """The whole party and PC for a manual trade, with only hard limits marked."""
+        from ..web.pokedex import live_status
+        from ..trade.preferences import apply
+        status = self.emu.status()
+        payload = apply(live_status(status.get('game'), (status.get('strategy') or {}).get('collection')), {})
+        hold = self.store.get('trade_hold')
+        holding = bool(hold)
+        reason = (BUSY if holding else
+                  'Resume autonomous play in this adventure before trading' if self.emu.paused or self.emu.manual_mode else
+                  'Waiting for the game to start' if not payload.get('started', True) else '')
+        return {'adventure_id': self.bootstrap.adventure_id, 'cartridge_generation': 1, 'holding': holding,
+                'hold_id': hold.get('id') if isinstance(hold, dict) else None,
+                'time_capsule_ready': False, 'reason': reason, 'pokemon': manual_rows(payload, 1)}
+
+    def manual_choice(self, selected):
+        inventory = self.manual_inventory()
+        if inventory['reason']:
+            raise ValueError(inventory['reason'])
+        row = next((row for row in inventory['pokemon'] if row['trade_key'] == selected), None)
+        if row is None:
+            raise ValueError('The selected Pokémon is no longer in this adventure')
+        if row['blocked']:
+            raise ValueError(row['blocked'])
+        return row
+
     def collection_demand(self, data):
         requests = data.get('requests', {})
         if not isinstance(requests, dict) or len(requests) > 151:
@@ -283,15 +350,18 @@ class Participant:
             if record['phase'] != 'preparing':
                 return record
         else:
-            if selected not in {row.get('trade_key') for row in self.inventory()['offers']}:
+            if data.get('manual'):
+                self.manual_choice(selected)
+            elif selected not in {row.get('trade_key') for row in self.inventory()['offers']}:
                 raise ValueError('The selected Pokémon is not an eligible boxed offer')
             if any(row['phase'] not in {'aborted', 'released'} for row in _records(self.store)):
                 raise ValueError('Another interaction already reserves this adventure')
             record = _save(self.store, {'id': tid, 'phase': 'preparing', 'decision': None,
                 'plan_digest': plan_digest, 'selected_key': selected,
-                'was_paused': self.emu.paused, 'was_manual': self.emu.manual_mode})
+                'was_paused': self.emu.paused, 'was_manual': self.emu.manual_mode,
+                'time_capsule': bool(data.get('time_capsule')), 'manual': bool(data.get('manual'))})
         from .preparation import begin
-        prepared = begin(self.emu, selected, tid)
+        prepared = begin(self.emu, selected, tid, manual=record.get('manual', False))
         if prepared.get('phase') == 'failed':
             raise ValueError(prepared.get('error', 'Trade preparation failed'))
         if prepared.get('phase') != 'ready':
@@ -363,15 +433,7 @@ class Participant:
         raw = _artifact(result['state_path'], result['checkpoint_sha256'])
         save = _artifact(result['cartridge_save_path'], result['cartridge_sha256'])
         self.verify_result(record, result, raw, save, data['incoming'])
-        from ..league_partners import validate
-        from ..trade.preferences import identity
-        from ..ram import individual_data
-        incoming_mon = individual_data(bytes.fromhex(data['incoming']['struct']))
-        incoming_mon['species'] = bytes.fromhex(data['incoming']['struct'])[0]
-        from ..ram import decode_text
-        incoming_mon['nick'] = decode_text(bytes.fromhex(data['incoming']['nickname']))
-        incoming_key = identity(incoming_mon)
-        record['incoming_league_record'] = validate(data.get('incoming_league_record'), incoming_key, incoming_mon)
+        self.incoming_record(record, data)
         directory = self.root / record['id']
         target, cartridge = directory / 'staged.state', directory / 'staged.sav'
         CheckpointStore.atomic_write(target, raw)
@@ -381,14 +443,34 @@ class Participant:
                       incoming=dict(data['incoming']))
         return _save(self.store, record)
 
+    def incoming_record(self, record, data):
+        from ..league_partners import validate
+        from ..trade.preferences import identity
+        from ..ram import individual_data
+        if record.get('time_capsule'):
+            from ..gen2.timecapsule_conversion import convert
+            from ..gen2.timecapsule_records import bundle, to_gen1
+            game_data = bundle(self.runtime.settings.game_data_dir)
+            league = to_gen1(data.get('incoming_league_record'), data['incoming'], game_data)
+            converted = convert({key: bytes.fromhex(value) for key, value in data['incoming'].items()}, 1, game_data)
+            data = {**data, 'incoming': {key: value.hex() for key, value in converted.items()},
+                    'incoming_league_record': league}
+            record['incoming_display'] = _traded_mon(data['incoming'])
+        incoming_mon = individual_data(bytes.fromhex(data['incoming']['struct']))
+        incoming_mon['species'] = bytes.fromhex(data['incoming']['struct'])[0]
+        from ..ram import decode_text
+        incoming_mon['nick'] = decode_text(bytes.fromhex(data['incoming']['nickname']))
+        incoming_key = identity(incoming_mon)
+        record['incoming_league_record'] = validate(data.get('incoming_league_record'), incoming_key, incoming_mon)
+
     def verify_result(self, record, result, state, save, incoming):
         from types import SimpleNamespace
-        from pyboy import PyBoy
+        from ..yellow import open_emulator
         from ..interactions.cable_metadata import BUILDS
         from ..interactions.verification import party, boxed_inventory, verify_exchange, verify_restarts
         symbols = BUILDS[self.emu.rom_sha1]['symbols']
         rom = Path(self.runtime.settings.rom_path).read_bytes()
-        pb = PyBoy(io.BytesIO(rom), ram_file=io.BytesIO(bytes(32768)), window='null', sound_emulated=False, log_level='ERROR')
+        pb = open_emulator(io.BytesIO(rom), ram_file=io.BytesIO(bytes(32768)), window='null', sound_emulated=False, log_level='ERROR')
         pb.set_emulation_speed(0)
         try:
             pb.load_state(io.BytesIO(_artifact(record['source']['checkpoint_path'], record['source']['checkpoint_sha256'])))
@@ -404,8 +486,12 @@ class Participant:
             side = SimpleNamespace(pb=pb, sym=symbols, frame=0, attached=False, rom_bytes=rom,
                 source_center_map=source.map,
                 counts=result['evidence']['transport'], get=lambda name: pb.memory[symbols[name][1]])
-            expected, _ = verify_exchange(side, before,
-                {key: bytes.fromhex(value) for key, value in incoming.items()}, record['source']['party_slot'], boxes)
+            received = {key: bytes.fromhex(value) for key, value in incoming.items()}
+            if record.get('time_capsule'):
+                from ..gen2.timecapsule_conversion import convert
+                from ..gen2.timecapsule_records import bundle
+                received = convert(received, 1, bundle(self.runtime.settings.game_data_dir))
+            expected, _ = verify_exchange(side, before, received, record['source']['party_slot'], boxes)
             verify_restarts(side, state, save, expected)
         finally:
             pb.stop(save=False)
@@ -463,7 +549,10 @@ class Participant:
             return record
         record.update(decision='ABORT', phase='aborting')
         _save(self.store, record)
-        from .preparation import cancel
+        if getattr(self.emu, 'generation', 1) == 2:
+            cancel = lambda emu, tid: None
+        else:
+            from .preparation import cancel
         hold = self.store.get('trade_hold')
         if hold and hold['id'] == tid:
             if record.get('source_name'):
@@ -483,13 +572,17 @@ class Participant:
         return _save(self.store, record)
 
 
-def install(app, runtime):
-    participant = Participant(runtime, app.state.bootstrap)
+def install(app, runtime, participant_type=Participant):
+    participant = participant_type(runtime, app.state.bootstrap)
     app.state.participant = participant
 
     @app.get('/internal/participant/inventory')
     def inventory():
         return runtime.call(participant.inventory)
+
+    @app.get('/internal/participant/manual-inventory')
+    def manual_inventory():
+        return runtime.call(participant.manual_inventory)
 
     @app.get('/internal/participant/status/{tid}')
     def status(tid: str):

@@ -39,6 +39,24 @@
   const dateLabel = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : String(value || '')
   const gameUrl = id => `/games/${encodeURIComponent(id)}/`
   const running = game => ['running', 'paused', 'held', 'waiting_for_trade'].includes(game.state)
+  const capital = text => text ? text[0].toUpperCase() + text.slice(1) : ''
+  const stateLabel = game => game.archived ? 'Archived' : capital((game.state || 'stopped').replaceAll('_', ' '))
+  const gameName = game => `Pokémon ${capital(game.version)}`
+  const transitionalStates = ['starting', 'stopping', 'preparing', 'setting_up', 'recovering', 'deleting']
+  const offline = /urlopen error|No address associated|Name or service not known|Temporary failure in name resolution|Network is unreachable|timed out|Connection (refused|reset|aborted)|getaddrinfo/i
+  // The server words most failures already. Raw network errors from older starts are translated here.
+  function explainError(game) {
+    const raw = typeof game.error === 'string' ? game.error : game.error ? JSON.stringify(game.error) : ''
+    if (!raw) return ''
+    if (offline.test(raw)) return `Couldn't download the ${gameName(game)} game data (no network). Retry.`
+    return raw
+  }
+  function retryNote(game) {
+    const due = game.summary?.next_retry
+    if (!due || game.state !== 'failed') return ''
+    const minutes = Math.max(1, Math.round((due * 1000 - Date.now()) / 60000))
+    return `PokeSim will also try again by itself in about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`
+  }
   function notice(message, error = false) {
     $('#notice').textContent = message
     $('#notice').hidden = !message
@@ -114,7 +132,7 @@
     link.click()
     link.remove()
     setTimeout(() => URL.revokeObjectURL(url), 60000)
-    notice('Save downloaded. Load it with the matching Red or Blue ROM in your emulator.')
+    notice('Save downloaded. Load it with the matching game ROM in your emulator.')
   }
   async function act(operation) {
     if (busy) return
@@ -132,9 +150,11 @@
   function resourceLabels(game) {
     const usage = game.resources
     const off = !running(game) && ['stopped', 'archived', 'failed'].includes(game.state)
+    // A worker held for a trade or a pause runs no frames, so its measured speed is a true 0.0×; say why instead.
+    const paused = Boolean(game.summary?.paused) || ['paused', 'held', 'waiting_for_trade'].includes(game.state)
     return {
       cpu: Number.isFinite(usage?.cpu_percent) ? `${usage.cpu_percent.toFixed(1)}%` : off ? 'Not running' : usage?.cpu_percent === null ? 'Measuring…' : 'Unavailable',
-      speed: off ? 'Not running' : Number.isFinite(usage?.observed_speed) ? `${usage.observed_speed.toFixed(1)}×` : usage?.speed_status === 'measuring' ? 'Measuring…' : 'Unavailable',
+      speed: off ? 'Not running' : paused ? 'Paused' : Number.isFinite(usage?.observed_speed) ? `${usage.observed_speed.toFixed(1)}×` : usage?.speed_status === 'measuring' ? 'Measuring…' : 'Unavailable',
       memory: Number.isFinite(usage?.memory_bytes) ? `${Math.round(usage.memory_bytes / 1048576).toLocaleString()} MiB` : off ? 'Not running' : 'Unavailable'
     }
   }
@@ -144,13 +164,13 @@
       const node = container.querySelector(`[data-usage="${key}"]`)
       if (node) {
         if (node.textContent !== value) node.textContent = value
-        node.classList.toggle('is-pending', ['Measuring…', 'Unavailable', 'Not running'].includes(value))
+        node.classList.toggle('is-pending', ['Measuring…', 'Unavailable', 'Not running', 'Paused'].includes(value))
       }
     }
   }
   function card(game) {
     const active = running(game)
-    const transitional = ['starting', 'stopping', 'preparing', 'setting_up', 'recovering', 'deleting'].includes(game.state)
+    const transitional = transitionalStates.includes(game.state)
     const summary = game.summary || {}
     const activity = summary.message || summary.activity || summary.game?.location || summary.map || (active ? 'Adventure in progress' : 'Your saves are waiting here')
     const wins = summary.league_rewards?.wins
@@ -160,21 +180,49 @@
     const resources = '<dl class="card-resources" aria-label="Resource usage" aria-live="off"><div><dt title="100% CPU means one fully used processor core">CPU (1 core)</dt><dd data-usage="cpu">Measuring…</dd></div><div><dt title="Resident memory for this simulation, excluding the shared library process">Memory</dt><dd data-usage="memory">Measuring…</dd></div><div><dt title="Simulated seconds per real second, measured over the latest health-check interval">Actual speed</dt><dd data-usage="speed">Measuring…</dd></div></dl>'
     const provenance = game.provenance?.trading_blocked ? `<p class="card-error">${esc(game.provenance.reason || 'Legacy trade history needs reconciliation before trading.')}</p>` : ''
     const stalled = active && summary.stalled ? '<p class="card-error">Stuck? No progress for a while. Open the adventure to see its objective.</p>' : ''
-    const failure = game.error ? `<p class="card-error">${esc(typeof game.error === 'string' ? game.error : JSON.stringify(game.error))}</p>` : ''
+    const failure = game.error ? `<p class="card-error">${esc(explainError(game))}</p>` : ''
     const lamp = game.archived ? '' : failure || game.state === 'error' ? 'crit' : transitional || (active && summary.stalled) ? 'warn' : active ? 'ok' : ''
     const download = `<button class="key" data-action="download-save" data-id="${esc(game.id)}" data-owner ${!active ? 'disabled data-blocked title="Start this adventure to download its save"' : 'title="Download a .sav file for another emulator"'}>Download</button>`
     const screen = active
       ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${esc(game.name)} game screen" loading="lazy" width="160" height="144"></div>`
-      : `<div class="card-screen card-screen--off"><span class="micro">${game.archived ? 'Archived' : 'Saved · not running'}</span></div>`
+      : `<div class="card-screen card-screen--off"><span class="micro">${game.archived ? 'Archived' : game.state === 'failed' ? 'Failed to start · saves kept' : transitional ? esc(stateLabel(game)) + '…' : 'Stopped · saves kept'}</span></div>`
     const blocked = transitional ? 'disabled data-blocked' : ''
     const settings = `<button class="key card-settings" data-action="settings" data-id="${esc(game.id)}" data-owner ${blocked} aria-label="Settings" title="Adventure settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3h6l1 3 3-1 3 5-2 2 2 2-3 5-3-1-1 3H9l-1-3-3 1-3-5 2-2-2-2 3-5 3 1Z"/><circle cx="12" cy="12" r="3"/></svg></button>`
-    const primary = `<div class="card-open"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${settings}</div>`
-    const lifecycle = game.archived
+    // A stopped or failed adventure has no live view, so its main key starts it right here.
+    const startable = !active && !transitional && !game.archived
+    const primary = startable
+      ? `<div class="card-open"><button class="key key--primary" data-action="start" data-id="${esc(game.id)}" data-owner>${game.state === 'failed' ? 'Retry' : 'Start'}</button>${settings}</div>`
+      : `<div class="card-open"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${settings}</div>`
+    const details = `<a class="key" href="${gameUrl(game.id)}">Details</a>`
+    const lifecycle = startable ? details : game.archived
       ? `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner ${blocked}>Restore</button>`
       : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${blocked} ${active ? 'title="Save progress and stop this adventure"' : ''}>${transitional ? esc(game.state) : active ? 'Stop' : 'Start'}</button>`
     const archive = game.archived ? '' : `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner ${blocked} title="Save, stop, and archive this adventure">Archive</button>`
     const deletion = `<button class="key key--danger" data-action="delete" data-id="${esc(game.id)}" data-owner ${transitional && game.state !== 'deleting' ? blocked : ''}>${game.state === 'deleting' ? 'Retry deletion' : 'Delete'}</button>`
-    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(game.archived ? 'archived' : game.state || 'stopped')}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.state === 'deleting' ? '<p class="card-note">Deletion is incomplete. Retry to finish removing this adventure.</p>' : game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions">${primary}<div class="card-operations">${lifecycle}${download}${archive}${deletion}</div></div></article>`
+    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(stateLabel(game))}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.state === 'deleting' ? '<p class="card-note">Deletion is incomplete. Retry to finish removing this adventure.</p>' : game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions">${primary}<div class="card-operations">${lifecycle}${download}${archive}${deletion}</div></div></article>`
+  }
+  function stoppedLede(game) {
+    if (game.archived) return 'Archived adventures keep all their saves. Restore it from the library to play again.'
+    if (game.state === 'failed') return 'It could not start. Your saves are untouched.'
+    if (transitionalStates.includes(game.state)) return 'Getting ready. This page opens the live view when it is running.'
+    return 'Stopped. Your saves are kept. Start it to return to the live view, PC, and journal.'
+  }
+  // The page for an adventure that is not running: what happened, why, and one big key to fix it.
+  function stoppedPage(game) {
+    const failed = game.state === 'failed'
+    const busyState = transitionalStates.includes(game.state)
+    const lamp = failed ? 'crit' : busyState ? 'warn' : ''
+    const headline = game.archived ? 'Archived' : failed ? 'Failed to start' : busyState ? `${stateLabel(game)}…` : 'Stopped'
+    const setup = busyState && game.summary?.setup ? `<p class="status-detail">${esc(game.summary.setup)}…</p>` : ''
+    const reason = failed && game.error ? explainError(game) : ''
+    const raw = typeof game.error === 'string' ? game.error : ''
+    const technical = reason && raw && raw !== reason ? `<details class="status-technical"><summary>Technical details</summary><p>${esc(raw)}</p></details>` : ''
+    const again = failed ? retryNote(game) : ''
+    const action = game.archived ? `<button class="key key--primary key--large" data-action="restore" data-id="${esc(game.id)}" data-owner>Restore adventure</button>`
+      : busyState ? `<button class="key key--primary key--large" disabled>${esc(stateLabel(game))}…</button>`
+      : `<button class="key key--primary key--large" data-action="start" data-id="${esc(game.id)}" data-owner>${failed ? 'Retry' : 'Start adventure'}</button>`
+    const links = `<a class="key" href="${gameUrl(game.id)}trading">Cable Club trading</a><a class="key" href="/">Back to the library</a>`
+    return `<article class="adventure-status ${esc(game.version)}" data-state="${esc(game.state || 'stopped')}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">${esc(gameName(game).toUpperCase())}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(stateLabel(game))}</span></header><div class="status-body"><h2 class="status-headline">${esc(headline)}</h2>${reason ? `<p class="card-error" role="alert">${esc(reason)}</p>` : ''}${setup}${technical}${again ? `<p class="note">${esc(again)}</p>` : ''}<div class="status-actions">${action}</div><p class="note">Your saves are safe while it is not running. The live view, PC, Pokédex, and journal open once it is running.</p><nav class="status-links" aria-label="Adventure">${links}</nav></div></article>`
   }
   function renderAdventures() {
     const visible = adventures.filter(game => $('#show-archived').checked || !game.archived)
@@ -202,34 +250,20 @@
     if (page === 'stopped') {
       const game = adventures.find(item => item.id === currentId)
       $('#stopped-title').textContent = game?.name || 'Adventure unavailable'
-      const stoppedMarkup = game ? card(game) : '<p>This adventure is not in the current library.</p>'
+      const stoppedMarkup = game ? stoppedPage(game) : '<p class="stopped-missing">This adventure is not in the current library. <a href="/">Back to the library</a></p>'
       if (stoppedSignature !== stoppedMarkup) { $('#stopped-card').innerHTML = stoppedMarkup
         stoppedSignature = stoppedMarkup }
-      if (game) updateResources($('#stopped-card'), game)
+      if (game) $('#stopped-lede').textContent = stoppedLede(game)
       if (game && running(game)) location.replace(gameUrl(game.id))
     }
     permissions()
   }
-  function tradePhase(trade) {
-    if (trade.decision === 'ABORT' || trade.error || ['recovering', 'aborting', 'aborted'].includes(trade.phase)) {
-      return trade.decision === 'COMMIT' ? 'Finishing the exchange safely' : 'Getting ready to try again'
-    }
-    const labels = {
-      proposed: 'Getting ready', preparing: 'Heading to the Cable Club',
-      connecting: 'Connecting the games', trading: 'Exchanging Pokémon',
-      saving: 'Saving progress', leaving: 'Leaving the Cable Club',
-      resuming: 'Returning to the adventure', returning: 'Returning to the adventure',
-      verifying: 'Checking both saves', staging: 'Checking both saves',
-      committed: 'Saving the exchange', applying: 'Saving the exchange',
-      releasing: 'Returning to the adventure', completed: 'Trade completed'
-    }
-    return labels[trade.phase || trade.state || trade.status] || 'Getting ready'
-  }
+  const tradePhase = trade => TradeProgress.phase(trade)
   function tradePartner(id, mon, completed, failed) {
     const game = adventures.find(item => item.id === id)
     const title = game ? `<a href="${gameUrl(id)}trading">${esc(game.name)} ↗</a>` : 'Adventure unavailable'
     const label = completed ? 'Received' : failed ? 'Planned to receive' : 'Receiving'
-    const dex = Number.isInteger(mon?.dex) && mon.dex >= 1 && mon.dex <= 151 ? mon.dex : null
+    const dex = Number.isInteger(mon?.dex) && mon.dex >= 1 && mon.dex <= 251 ? mon.dex : null
     const sprite = dex && game ? `<div class="plate plate--trade"><img src="${gameUrl(id)}sprites/${dex}.png?v=rom-portraits-1" alt="" loading="lazy"></div>`
       : '<div class="plate plate--trade exchange-placeholder" aria-hidden="true"><span class="plate-num">?</span></div>'
     const name = mon?.name ? esc(mon.name) : 'Pokémon details unavailable'
@@ -272,6 +306,146 @@
     $('#trade-failures-section').hidden = !failures.length
     $('#trade-failures').innerHTML = failures.map(trade => describeTrade(trade)).join('')
   }
+  // Manual trades: the owner picks any Pokémon on each side. Only hard cable limits can block one.
+  const manual = {options: [], choice: {left: {game: '', key: ''}, right: {game: '', key: ''}}, current: '', loaded: false, status: null}
+  const manualGame = side => manual.options.find(game => game.id === manual.choice[side].game)
+  const manualMon = side => manualGame(side)?.pokemon.find(mon => mon.trade_key === manual.choice[side].key)
+  const otherSide = side => side === 'left' ? 'right' : 'left'
+  function manualLocation(mon) {
+    return mon.location === 'party' ? `Party slot ${mon.slot}` : `Box ${mon.box}, slot ${mon.slot}`
+  }
+  function manualMonName(mon) {
+    if (!mon) return 'a Pokémon'
+    return mon.nickname && mon.nickname.toLowerCase() !== String(mon.name || '').toLowerCase() ? `${mon.nickname} (${mon.name})` : mon.name || 'a Pokémon'
+  }
+  // A Gen II Pokémon going to a Gen I game must fit through the Time Capsule.
+  function manualBlocked(side, mon) {
+    if (mon.blocked) return mon.blocked
+    const game = manualGame(side)
+    const other = manualGame(otherSide(side))
+    if (!game || !other || game.generation === other.generation || game.generation !== 2) return ''
+    if (!game.time_capsule_ready) return 'This adventure cannot use the Time Capsule yet. It opens the day after meeting Bill.'
+    if (!mon.time_capsule_compatible) return `Cannot go to ${gameName(other)}. ${mon.time_capsule_reason || 'It cannot go through the Time Capsule.'}`
+    return ''
+  }
+  function renderManualSide(side) {
+    const select = $(`#manual-${side}-game`)
+    const chosen = manual.choice[side]
+    const taken = manual.choice[otherSide(side)].game
+    select.innerHTML = '<option value="">Choose an adventure</option>' + manual.options.map(game => {
+      const note = game.id === taken ? ' (chosen on the other side)' : game.available ? '' : ' (unavailable)'
+      return `<option value="${esc(game.id)}"${game.id === chosen.game ? ' selected' : ''}${game.id === taken ? ' disabled' : ''}>${esc(game.name)} · ${esc(gameName(game))}${esc(note)}</option>`
+    }).join('')
+    select.value = chosen.game
+    const game = manualGame(side)
+    $(`#manual-${side}-reason`).textContent = !game ? '' : game.available ? `${game.pokemon.length} Pokémon in the party and PC` : game.reason
+    const filter = String($(`#manual-${side}-filter`).value || '').trim().toLowerCase()
+    const rows = game?.available ? game.pokemon.filter(mon => !filter || [mon.name, mon.nickname, manualLocation(mon)]
+      .some(text => String(text || '').toLowerCase().includes(filter))) : []
+    $(`#manual-${side}-list`).innerHTML = !game ? '<p class="note">Choose an adventure to see its Pokémon.</p>'
+      : !game.available ? '' : rows.length ? rows.map(mon => {
+        const blocked = manualBlocked(side, mon)
+        const picked = mon.trade_key && mon.trade_key === chosen.key
+        const sprite = mon.sprite_url ? `<div class="plate plate--mini"><img src="${esc(mon.sprite_url)}" alt="" loading="lazy"></div>`
+          : '<div class="plate plate--mini exchange-placeholder" aria-hidden="true"><span class="plate-num">?</span></div>'
+        const nickname = mon.nickname && mon.nickname.toLowerCase() !== String(mon.name || '').toLowerCase() ? `<span class="manual-nick">“${esc(mon.nickname)}”</span>` : ''
+        const level = Number.isInteger(mon.level) ? ` · Lv. ${mon.level}` : ''
+        return `<button type="button" class="manual-mon${picked ? ' is-picked' : ''}" data-manual-side="${side}" data-manual-key="${esc(mon.trade_key || '')}" aria-pressed="${picked}"${blocked ? ' disabled' : ''}>${sprite}<span class="manual-text"><strong>${esc(mon.name || 'Unknown')}${mon.shiny ? ' ✦' : ''}</strong>${nickname}<span class="micro">${esc(manualLocation(mon))}${level}</span>${blocked ? `<span class="manual-why">${esc(blocked)}</span>` : ''}</span></button>`
+      }).join('') : '<p class="note">No Pokémon match this search.</p>'
+  }
+  function manualProblem() {
+    for (const side of ['left', 'right']) {
+      const game = manualGame(side)
+      if (!game) return 'Choose an adventure on each side.'
+      if (!game.available) return `${game.name}: ${game.reason}`
+    }
+    for (const side of ['left', 'right']) {
+      const mon = manualMon(side)
+      if (!mon) return 'Choose a Pokémon on each side.'
+      const blocked = manualBlocked(side, mon)
+      if (blocked) return `${manualMonName(mon)}: ${blocked}`
+    }
+    return ''
+  }
+  function renderManual() {
+    for (const side of ['left', 'right']) {
+      const mon = manualMon(side)
+      if (manual.choice[side].key && (!mon || manualBlocked(side, mon))) manual.choice[side].key = ''
+      renderManualSide(side)
+    }
+    const problem = manualProblem()
+    const left = manualGame('left')
+    const right = manualGame('right')
+    $('#trade-summary').textContent = problem ? 'Choose an adventure and a Pokémon on each side.'
+      : `${left.name} sends ${manualMonName(manualMon('left'))}. ${right.name} sends ${manualMonName(manualMon('right'))}.`
+    $('#trade-limit').textContent = problem && !/^Choose/.test(problem) ? problem : ''
+    $('#trade-submit').toggleAttribute('data-blocked', Boolean(problem))
+    permissions()
+  }
+  async function loadManualOptions() {
+    $('#trade-summary').textContent = 'Checking your adventures…'
+    const data = await api('/api/v1/interactions/manual-trades/options')
+    manual.options = data.adventures || []
+    for (const side of ['left', 'right']) {
+      if (!manualGame(side)) manual.choice[side] = {game: '', key: ''}
+    }
+    manual.loaded = true
+    renderManual()
+  }
+  const manualName = id => manual.options.find(game => game.id === id)?.name || adventures.find(game => game.id === id)?.name || 'An adventure'
+  const manualOutcome = status => TradeProgress.outcome(status, manualName)
+  function renderManualStatus(status) {
+    manual.status = status
+    $('#trade-progress').hidden = !status
+    if (!status) return
+    $('#trade-progress-title').textContent = `${manualName(status.left_id)} ⇄ ${manualName(status.right_id)}`
+    const shown = TradeProgress.view(status, manualName)
+    $('#trade-steps').innerHTML = shown.steps
+    $('#trade-progress-text').textContent = shown.text
+    $('#trade-result').textContent = shown.outcome.done ? shown.outcome.text : ''
+    $('#trade-result').classList.toggle('error', Boolean(shown.outcome.failed))
+    $('#trade-cancel').hidden = !status.cancellable
+  }
+  async function refreshManualTrade() {
+    if (!manual.loaded) await loadManualOptions()
+    if (!manual.current) {
+      const data = await api('/api/v1/interactions/manual-trades')
+      const open = (data.trades || []).find(trade => !manualOutcome(trade).done)
+      if (open) manual.current = open.id
+    }
+    if (!manual.current) return renderManualStatus(null)
+    const status = await api(`/api/v1/interactions/manual-trades/${encodeURIComponent(manual.current)}`)
+    const finished = manualOutcome(status).done && !manualOutcome(manual.status || {}).done && manual.status?.id === status.id
+    renderManualStatus(status)
+    if (finished) await loadManualOptions()
+  }
+  document.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-manual-key]')
+    if (!button || button.disabled || page !== 'trade') return
+    const side = button.dataset.manualSide
+    manual.choice[side].key = manual.choice[side].key === button.dataset.manualKey ? '' : button.dataset.manualKey
+    renderManual()
+  })
+  for (const side of ['left', 'right']) {
+    $(`#manual-${side}-game`).onchange = () => {
+      manual.choice[side] = {game: $(`#manual-${side}-game`).value, key: ''}
+      renderManual()
+    }
+    $(`#manual-${side}-filter`).oninput = () => renderManualSide(side)
+  }
+  $('#trade-reload').onclick = () => act(loadManualOptions)
+  $('#trade-submit').onclick = () => act(async () => {
+    const problem = manualProblem()
+    if (problem) throw new Error(problem)
+    const status = await write('/api/v1/interactions/manual-trades', {left_id: manual.choice.left.game, left_key: manual.choice.left.key,
+      right_id: manual.choice.right.game, right_key: manual.choice.right.key})
+    manual.current = status.id
+    renderManualStatus(status)
+  })
+  $('#trade-cancel').onclick = () => act(async () => {
+    if (!manual.current) return
+    renderManualStatus(await write(`/api/v1/interactions/manual-trades/${encodeURIComponent(manual.current)}/cancel`))
+  })
   let savedBackups = []
   let backupPage = 0
   let backupToDelete = null
@@ -420,9 +594,11 @@
     try {
       const data = await api('/api/v1/adventures')
       adventures = data.adventures || []
+      if (page === 'library' || page === 'settings') await refreshCartridges()
       renderAdventures()
       if (page === 'notifications') renderNotifyAdventures()
       if (page === 'trading') await refreshTrades()
+      if (page === 'trade') await refreshManualTrade()
       connection('Connected', false)
     } catch (error) { connection('Reconnecting…', true)
       notice(error.message, true) }
@@ -457,17 +633,212 @@
   }
   $('#random-trainer').onclick = () => randomizeTrainer('#new-trainer', '#new-rival')
   $('#random-rival').onclick = () => randomizeTrainer('#new-rival', '#new-trainer')
+  const KANTO = ['bulbasaur', 'charmander', 'squirtle']
+  const JOHTO = ['chikorita', 'cyndaquil', 'totodile']
+  // The cartridge shelf: one slot per game, filled from GET /api/v1/cartridges.
+  let cartridges = []
+  let cartridgesLoaded = false
+  let supportedGames = 'Red, Blue, Yellow, Gold, Silver or Crystal'
+  let shelfSignature = ''
+  let pickerSignature = ''
+  let uploadSlot = ''
+  let shelfTargeted = false
+  const cartridgeFeedback = {}
+  const installed = () => cartridges.filter(slot => slot.installed)
+  const versionName = version => capital(String(version || ''))
+  function sizeLabel(bytes) {
+    if (!Number.isFinite(bytes)) return 'Unknown'
+    return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MiB` : `${Math.max(1, Math.round(bytes / 1024))} KiB`
+  }
+  function startersFor(version) {
+    const slot = cartridges.find(item => item.version === version)
+    if (slot?.starters?.length) return slot.starters
+    if (!version) return [...KANTO, ...JOHTO]
+    return ['gold', 'silver', 'crystal'].includes(version) ? JOHTO : KANTO
+  }
+  function cartridgeSlot(slot) {
+    const id = esc(slot.version)
+    const rom = slot.rom
+    const state = !slot.supported ? 'coming' : slot.installed ? 'installed' : 'empty'
+    const users = slot.adventures || []
+    const facts = rom ? `<dl class="cartridge-facts"><div><dt>Hash</dt><dd><code title="SHA-1 ${esc(rom.sha1)}">${esc(rom.short_hash)}</code></dd></div><div><dt>Size</dt><dd>${esc(sizeLabel(rom.size))}</dd></div><div><dt>Added</dt><dd>${rom.added_at ? esc(new Date(rom.added_at * 1000).toLocaleDateString()) : 'Unknown'}</dd></div></dl>` : ''
+    const status = state === 'coming' ? 'Coming in this release'
+      : rom?.file_missing ? '! File missing. Upload it again' : state === 'installed' ? '✓ Installed' : 'Empty slot'
+    const hint = state === 'coming' ? `<p class="note">PokeSim cannot play ${esc(slot.title)} yet.</p>`
+      : state === 'empty' ? '<p class="note">Drop a ROM file here or choose Upload.</p>'
+      : `<p class="note">${users.length ? `Used by ${users.length} ${users.length === 1 ? 'adventure' : 'adventures'}` : 'Not used by any adventure yet'}</p>`
+    // Every slot reserves the same two button places so the keys line up across a row.
+    const spacer = '<span class="cartridge-action-spacer" aria-hidden="true"></span>'
+    const actions = state === 'coming' ? `<div class="cartridge-actions">${spacer}${spacer}</div>`
+      : `<div class="cartridge-actions"><button type="button" class="key${state === 'empty' || rom?.file_missing ? ' key--primary' : ''}" data-cartridge-upload="${id}" data-owner aria-label="${state === 'installed' ? 'Replace' : 'Upload'} ${esc(slot.title)}">${state === 'installed' ? 'Replace' : 'Upload'}</button>${state === 'installed' ? `<button type="button" class="key" data-cartridge-remove="${id}" data-owner aria-label="Remove ${esc(slot.title)}">Remove</button>` : spacer}</div>`
+    const feedback = cartridgeFeedback[slot.version]
+    return `<article class="cartridge-slot" id="cartridge-${id}" data-slot="${id}" data-state="${state}" aria-labelledby="cartridge-${id}-name"><div class="cartridge-face" aria-hidden="true"><span></span></div><div class="cartridge-info"><h3 class="cartridge-name" id="cartridge-${id}-name">${esc(slot.title)}</h3><p class="cartridge-state micro">${esc(status)}</p>${facts}${hint}</div><p class="cartridge-feedback${feedback?.error ? ' is-error' : ''}" role="status">${esc(feedback?.text || '')}</p>${actions}</article>`
+  }
+  function renderCartridges(slots) {
+    if (slots) {
+      cartridges = slots
+      cartridgesLoaded = true
+    }
+    const markup = cartridges.map(cartridgeSlot).join('')
+    if (page === 'settings' && markup !== shelfSignature) {
+      shelfSignature = markup
+      $('#cartridge-grid').innerHTML = markup
+    }
+    const none = cartridgesLoaded && !installed().length
+    $('#empty-needs-cartridge').hidden = !none
+    $('#empty-ready').hidden = none
+    $('#empty-supported').textContent = supportedGames
+    if (page === 'settings' && cartridgesLoaded && !shelfTargeted && /^#cartridge/.test(location.hash)) {
+      shelfTargeted = true
+      const target = document.getElementById?.(location.hash.slice(1))
+      target?.classList.add('is-target')
+      target?.scrollIntoView({block: 'center'})
+      target?.querySelector('[data-cartridge-upload]')?.focus({preventScroll: true})
+    }
+    permissions()
+  }
+  async function refreshCartridges() {
+    const data = await api('/api/v1/cartridges')
+    supportedGames = data.supported || supportedGames
+    renderCartridges(data.slots || [])
+  }
+  async function uploadCartridge(file, slot) {
+    if (!file) return
+    const target = slot || ''
+    if (target) cartridgeFeedback[target] = {text: `Checking ${file.name}…`}
+    renderCartridges()
+    await act(async () => {
+      let result
+      try {
+        result = await api(`/api/v1/cartridges${target ? `?slot=${encodeURIComponent(target)}` : ''}`,
+          {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: file})
+      } catch (error) {
+        // The slot shows the error, so the page banner stays quiet.
+        if (!target) throw error
+        cartridgeFeedback[target] = {text: error.message, error: true}
+        renderCartridges()
+        return
+      }
+      if (target) delete cartridgeFeedback[target]
+      if (result.moved) cartridgeFeedback[target] = {text: `That file was ${result.title}. It went into the ${versionName(result.version)} slot.`}
+      cartridgeFeedback[result.version] = {text: result.message}
+      renderCartridges(result.slots)
+      document.getElementById?.(`cartridge-${result.version}`)?.scrollIntoView({block: 'nearest'})
+    })
+  }
+  $('#cartridge-file').onchange = () => {
+    const file = $('#cartridge-file').files[0]
+    $('#cartridge-file').value = ''
+    uploadCartridge(file, uploadSlot)
+  }
+  $('#cartridge-grid').onclick = event => {
+    const upload = event.target.closest?.('[data-cartridge-upload]')
+    if (upload && !upload.disabled) {
+      uploadSlot = upload.dataset.cartridgeUpload
+      $('#cartridge-file').click()
+      return
+    }
+    const remove = event.target.closest?.('[data-cartridge-remove]')
+    if (remove && !remove.disabled) openCartridgeRemoval(remove.dataset.cartridgeRemove)
+  }
+  // Dropping a file anywhere on the shelf uploads it. The slot only says where the owner aimed.
+  const dropSlot = event => event.target.closest?.('[data-slot]')
+  $('#cartridge-grid').ondragover = event => {
+    if (!owner || busy || !event.dataTransfer?.types?.includes('Files')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    document.querySelectorAll('.cartridge-slot.is-dragging').forEach(item => { if (item !== dropSlot(event)) item.classList.remove('is-dragging') })
+    dropSlot(event)?.classList.add('is-dragging')
+  }
+  $('#cartridge-grid').ondragleave = event => {
+    const slot = dropSlot(event)
+    if (slot && !slot.contains(event.relatedTarget)) slot.classList.remove('is-dragging')
+  }
+  $('#cartridge-grid').ondrop = event => {
+    event.preventDefault()
+    document.querySelectorAll('.cartridge-slot.is-dragging').forEach(item => item.classList.remove('is-dragging'))
+    if (!owner || busy) return
+    const slot = dropSlot(event)
+    uploadCartridge(event.dataTransfer?.files?.[0], slot?.dataset.state === 'coming' ? '' : slot?.dataset.slot || '')
+  }
+  function openCartridgeRemoval(version) {
+    const slot = cartridges.find(item => item.version === version)
+    if (!slot) return
+    const users = slot.adventures || []
+    $('#cartridge-remove-version').value = version
+    $('#cartridge-remove-heading').textContent = users.length ? `${slot.title} is in use` : `Remove ${slot.title}?`
+    $('#cartridge-remove-description').textContent = users.length
+      ? `${slot.title} cannot be removed while ${users.length === 1 ? 'this adventure uses' : `these ${users.length} adventures use`} it: ${users.map(game => game.name + (game.archived ? ' (archived)' : '')).join(', ')}. Delete ${users.length === 1 ? 'that adventure' : 'those adventures'} first. Archived adventures count, since they can be restored.`
+      : `This deletes the stored ${slot.title} file from PokeSim. You can add it again at any time. Backups are not changed.`
+    const confirm = $('#cartridge-remove-confirm')
+    confirm.hidden = Boolean(users.length)
+    confirm.toggleAttribute('data-blocked', Boolean(users.length))
+    $('#cartridge-remove-dialog .dialog-feedback').textContent = ''
+    permissions()
+    $('#cartridge-remove-dialog').showModal()
+  }
+  $('#cartridge-remove-form').onsubmit = event => {
+    event.preventDefault()
+    act(async () => {
+      const version = $('#cartridge-remove-version').value
+      const result = await api(`/api/v1/cartridges/${encodeURIComponent(version)}`, {method: 'DELETE'})
+      $('#cartridge-remove-dialog').close()
+      delete cartridgeFeedback[version]
+      cartridgeFeedback[version] = {text: result.message}
+      renderCartridges(result.slots)
+    })
+  }
+  function gameCard(slot, selected) {
+    const id = esc(slot.version)
+    if (!slot.installed) {
+      const action = slot.supported ? `<a class="game-card-add" href="/settings#cartridge-${id}">Add cartridge</a>` : '<span class="game-card-add">Coming in this release</span>'
+      return `<div class="game-card is-missing" data-version="${id}"><span class="game-card-name">${esc(slot.title)}</span><span class="game-card-meta">${slot.supported ? 'Not installed' : 'Not playable yet'}</span>${action}</div>`
+    }
+    return `<label class="game-card" data-version="${id}"><input type="radio" name="game" value="${esc(slot.rom.id)}" data-version="${id}"${selected ? ' checked' : ''}><span class="game-card-name">${esc(slot.title)}</span><span class="game-card-meta">Generation ${slot.generation === 2 ? 'II' : 'I'}</span></label>`
+  }
+  function renderGamePicker() {
+    const ready = installed()
+    const chosen = ready.find(slot => slot.rom.id === $('#rom-id').value)
+    if (!chosen) $('#rom-id').value = ready.length === 1 ? ready[0].rom.id : ''
+    const selected = $('#rom-id').value
+    const markup = [...ready, ...cartridges.filter(slot => !slot.installed)]
+      .map(slot => gameCard(slot, slot.installed && slot.rom.id === selected)).join('')
+    if (markup !== pickerSignature) {
+      pickerSignature = markup
+      $('#game-choices').innerHTML = markup
+    }
+    const none = !ready.length
+    $('#create-form').classList.toggle('needs-cartridge', none)
+    $('#create-needs-cartridge').hidden = !none
+    $('#create-submit').hidden = none
+    $('#create-supported').textContent = supportedGames
+    updateStarters()
+  }
+  function selectedVersion() {
+    return installed().find(slot => slot.rom.id === $('#rom-id').value)?.version || ''
+  }
+  function updateStarters() {
+    const choices = startersFor(selectedVersion())
+    const previous = $('#starter').value
+    $('#starter').innerHTML = '<option value="random">Surprise me</option>' + choices.map(name => `<option value="${name}">${name[0].toUpperCase() + name.slice(1)}</option>`).join('')
+    $('#starter').value = choices.includes(previous) ? previous : 'random'
+  }
+  $('#game-choices').onchange = event => {
+    if (event.target?.name !== 'game') return
+    $('#rom-id').value = event.target.value
+    updateStarters()
+  }
   async function openCreate() {
     await act(async () => {
-      const data = await api('/api/v1/assets')
-      $('#rom-select').innerHTML = '<option value="">Add a ROM below</option>' + (data.roms || []).map(rom => `<option value="${esc(rom.id)}">Pokémon ${esc(rom.version)} (${esc(rom.id.slice(0, 8))})</option>`).join('')
-      if (data.roms?.length) $('#rom-select').value = data.roms[0].id
+      await refreshCartridges()
+      renderGamePicker()
       if (!$('#new-name').value.trim()) randomizeAdventure()
       if (!$('#new-trainer').value) randomizeTrainer('#new-trainer', '#new-rival')
       if (!$('#new-rival').value) randomizeTrainer('#new-rival', '#new-trainer')
       $('#create-progress').textContent = ''
       $('#create-dialog').showModal()
-      $('#new-name').focus()
+      if (installed().length) $('#new-name').focus()
+      else $('#create-add-cartridge').focus()
     })
   }
   $('#new-adventure').onclick = openCreate
@@ -509,7 +880,15 @@
         speedInput.add(new Option(`${speed}×`, speed))
         speedInput.value = speed
       }
+      const johto = ['gold', 'silver', 'crystal'].includes(game.version)
+      const colour = johto || game.version === 'yellow'
       $('#settings-palette').value = game.settings?.palette || 'original'
+      // Yellow, Gold, Silver and Crystal already render in colour, so only Red and Blue offer a palette.
+      $('#settings-palette-label').hidden = colour
+      $('#settings-palette-note').hidden = colour
+      const refused = game.summary?.settings_errors?.palette
+      $('#settings-palette-note').textContent = refused ? `This adventure has not accepted the palette yet: ${refused}` : 'GBC-inspired colors applied to the whole screen. Changes apply immediately, including while paused.'
+      $('#settings-palette').disabled = colour
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
       for (const [field, setting] of [['league-rewards', 'league_rewards'], ['mew-event', 'mew_event']]) {
         const input = $(`#settings-${field}`)
@@ -517,6 +896,11 @@
         input.toggleAttribute('data-blocked', running(game))
         input.disabled = running(game)
       }
+      $('#settings-celebi-label').hidden = game.version !== 'crystal'
+      $('#settings-celebi-note').hidden = game.version !== 'crystal'
+      $('#settings-celebi-event').checked = Boolean(game.settings?.celebi_event)
+      $('#settings-celebi-event').disabled = running(game) || game.version !== 'crystal'
+      $('#settings-celebi-event').toggleAttribute('data-blocked', running(game) || game.version !== 'crystal')
       $('#settings-legendary-steps').value = game.settings?.legendary_return_steps ?? 1000000
       $('#settings-legendary-steps').disabled = running(game)
       for (const [field, setting, fallback] of [['event-steps', 'event_return_steps', 100000], ['mew-steps', 'mew_return_steps', 1000000], ['fossil-preference', 'fossil_preference', 'auto'], ['dojo-preference', 'dojo_preference', 'auto']]) {
@@ -524,6 +908,13 @@
         input.value = game.settings?.[setting] ?? fallback
         input.disabled = running(game)
       }
+      // Gold, Silver and Crystal return legendaries, Sudowoodo and Snorlax. They have no fossil or Dojo choice.
+      for (const field of ['fossil-preference', 'dojo-preference']) {
+        const input = $(`#settings-${field}`)
+        input.closest('label').hidden = johto
+        input.disabled = johto || running(game)
+      }
+      $('#settings-event-steps-label').textContent = johto ? 'Steps between Sudowoodo and Snorlax returns' : 'Steps between gift and trade returns'
       $('#adventure-settings').showModal()
       return
     }
@@ -540,28 +931,30 @@
   })
   $('#create-form').onsubmit = event => { event.preventDefault()
     act(async () => {
-      let romId = $('#rom-select').value
-      const file = $('#rom-file').files[0]
-      if (file) { $('#create-progress').textContent = 'Checking and adding your ROM…'
-        const rom = await api('/api/v1/assets/rom', {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: file})
-        romId = rom.id }
-      if (!romId) throw new Error('Select an existing ROM or add a ROM file.')
+      const romId = $('#rom-id').value
+      if (!romId) throw new Error(installed().length ? 'Choose the game for this adventure.' : 'Add a game cartridge in Settings first.')
+      const starter = $('#starter').value
+      if (starter !== 'random' && !startersFor(selectedVersion()).includes(starter)) throw new Error('That starter belongs to a different game. Pick one from the list.')
       $('#create-progress').textContent = 'Creating your adventure…'
       const startNow = $('#start-created').checked
-      const result = await write('/api/v1/adventures', {name: $('#new-name').value.trim(), rom_id: romId, starter: $('#starter').value,
+      const result = await write('/api/v1/adventures', {name: $('#new-name').value.trim(), rom_id: romId, starter,
         trainer_name: $('#new-trainer').value.trim().toUpperCase(), rival_name: $('#new-rival').value.trim().toUpperCase()})
       const game = result.adventure || result
       $('#create-dialog').close()
       $('#create-form').reset()
+      $('#rom-id').value = ''
       if (startNow) await write(`/api/v1/adventures/${encodeURIComponent(game.id)}/start`)
       notice('Adventure created. Its status will update as it gets ready.')
     }) }
   $('#adventure-settings-form').onsubmit = event => { event.preventDefault()
     act(async () => {
       const game = adventures.find(item => item.id === $('#settings-id').value)
-      const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
+      const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, celebi_event: $('#settings-celebi-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
+      if (['gold', 'silver', 'crystal'].includes(game?.version)) {
+        for (const field of ['fossil_preference', 'dojo_preference']) delete rewards[field]
+      }
       const result = await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
-        settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), palette: $('#settings-palette').value || 'original', ...rewards}}, 'PATCH')
+        settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), ...($('#settings-palette').disabled ? {} : {palette: $('#settings-palette').value || 'original'}), ...rewards}}, 'PATCH')
       $('#adventure-settings').close()
       const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette'].filter(Boolean).join(' and ')
       notice(pending ? `Settings saved. The ${pending} will apply when this adventure reconnects.` : 'Adventure settings saved.')
@@ -775,8 +1168,9 @@
   function renderPortraits(data) {
     $('#portrait-state').textContent = data.busy ? `Downloading ${data.completed} / ${data.total}` : data.active === 'community' ? 'Community sprites active' : 'Default sprites active'
     const install = $('#portrait-install')
-    install.textContent = data.busy ? 'Downloading…' : data.installed ? 'Use community sprites' : 'Install community sprite pack'
-    install.hidden = data.active === 'community' && !data.busy
+    const partial = !data.installed && Object.values(data.sets || {}).some(Boolean)
+    install.textContent = data.busy ? 'Downloading…' : data.installed ? 'Use community sprites' : partial ? 'Download artwork for all games' : 'Install community sprite pack'
+    install.hidden = data.active === 'community' && data.installed && !data.busy
     install.toggleAttribute('data-blocked', data.busy)
     const restore = $('#portrait-default')
     restore.hidden = data.active !== 'community'
@@ -784,12 +1178,13 @@
     $('#portrait-source').href = data.source
     $('#portrait-license').href = data.license
     $('#portrait-progress').hidden = !data.busy
+    $('#portrait-progress').max = data.total
     $('#portrait-progress').value = data.completed
-    $('#portrait-feedback').textContent = data.error || (data.busy ? 'Your current artwork stays in place until all 151 sprites are ready.' : data.installed ? 'Reopen adventure pages after switching artwork.' : '')
+    $('#portrait-feedback').textContent = data.error || (data.busy ? `Your current artwork stays in place until all ${data.total} sprites for every game are ready.` : data.installed ? 'Reopen adventure pages after switching artwork.' : partial ? 'This older pack only covers Red and Blue. Download the rest to cover every game.' : '')
     $('#portrait-feedback').classList.toggle('is-error', Boolean(data.error))
     const preview = $('#portrait-preview')
-    preview.hidden = !data.installed
-    if (data.installed && preview.dataset.revision !== data.revision) {
+    preview.hidden = !data.installed && !partial
+    if (!preview.hidden && preview.dataset.revision !== data.revision) {
       preview.dataset.revision = data.revision
       preview.innerHTML = [[1, 'Bulbasaur'], [6, 'Charizard'], [25, 'Pikachu']].map(([dex, name]) => `<div class="plate"><img src="/api/v1/portraits/preview/${dex}.png?v=${encodeURIComponent(data.revision)}" alt="${name}"></div>`).join('') + '<p class="note portrait-preview-caption">Community pack preview</p>'
     }
@@ -835,7 +1230,7 @@
     await initializeSession()
     $('#workspace').hidden = false
     document.querySelectorAll('[data-view]').forEach(section => { section.hidden = section.dataset.view !== page })
-    document.querySelector(`[data-nav="${page}"]`)?.setAttribute('aria-current', 'page')
+    document.querySelector(`[data-nav="${page === 'stopped' ? 'library' : page === 'trade' ? 'trading' : page}"]`)?.setAttribute('aria-current', 'page')
     if (page === 'settings' && owner) {
       renderNicknameSettings(await api('/api/v1/settings'))
       await refreshBackups()

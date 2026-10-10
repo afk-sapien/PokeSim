@@ -1,4 +1,5 @@
 """Check installed Python workers and real child-process supervision using PyBoy's demo."""
+import os
 from pathlib import Path
 import secrets
 import sys
@@ -6,14 +7,15 @@ import tempfile
 
 
 def main():
+    os.environ.setdefault('POKESIM_WORKER_STACK_DUMP', '30')
     import httpx
-    import pyboy
+    from pokesim_core import emulator as pyboy
     from pokesim.app.supervisor import Child
     from pokesim import game_data
     reference = game_data.directory().resolve()
     for name in game_data.FILES:
         game_data.load(name, directory=reference)
-    demo = Path(pyboy.__file__).with_name('default_rom.gb').resolve()
+    demo = pyboy.demo_rom().resolve()
     with tempfile.TemporaryDirectory(prefix='pokesim-python-workers-') as temporary:
         root = Path(temporary)
         children = []

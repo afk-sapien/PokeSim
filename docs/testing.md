@@ -21,6 +21,19 @@ The default suite skips the opt-in real-browser tests. The Node tests check isol
 browser logic. Lifecycle tests cover final-save failure, startup cleanup, process locks,
 shutdown timeout, and the distinct behavior of restore, resume, restart, and trade holds.
 
+## Gen 2 test data
+
+Gen 2 regression tests read two optional folders and skip when they are unset.
+
+| Variable | Contents | Needs a cartridge |
+| --- | --- | --- |
+| `GEN2_DATA_DIR` | Generated game data for Gold, Silver and Crystal | No |
+| `GEN2_CARTRIDGE_DIR` | Your own `gold.gbc`, `silver.gbc` and `crystal.gbc` | Yes |
+
+CI sets `GEN2_DATA_DIR` only. Create the same data locally with
+`uv run --locked python tools/prepare_gen2_test_data.py .release-local/gen2-data`.
+Cartridge tests need your own files and never run in CI.
+
 ## Real Chromium flows
 
 Install the optional browser dependency and its browser binary:
@@ -171,7 +184,7 @@ The wheel check runs outside the repository and resolves the wheel's declared
 dependencies. It tests the installed launcher, setup assets, duplicate launch, and
 protected shutdown. It needs uv and access to the package index.
 
-Native runtime checks use PyBoy's demonstration ROM and verified reference data. They do not
+Native runtime checks use the demonstration ROM bundled with PyBoy RS and verified reference data. They do not
 validate Pokémon cartridge playback on that platform.
 
 For an isolated server installation test:
@@ -182,7 +195,7 @@ uv run --locked python tools/check_container.py pokesim:check
 ```
 
 The test creates a uniquely named Compose project, disposable named volume, and
-random localhost port. It uses only PyBoy's demo ROM, downloads verified reference
+random localhost port. It uses only the bundled demo ROM, downloads verified reference
 data, checks HTTP health, stops cleanly, verifies saved checkpoint hashes, and
 restarts from a checkpoint. It removes only its test project and volume afterward.
 It does not touch an existing adventure or establish autonomous campaign progress.

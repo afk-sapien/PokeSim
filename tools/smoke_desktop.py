@@ -18,7 +18,7 @@ def main():
         parser.error('Supply pokesim-desktop or python -m pokesim.desktop')
     cookies = CookieJar()
     opener = build_opener(ProxyHandler({}), HTTPCookieProcessor(cookies))
-    with tempfile.TemporaryDirectory(prefix='pokesim-smoke-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='pokesim-smoke-', ignore_cleanup_errors=True) as temporary:
         root = Path(temporary)
         command = [*args.command, '--no-browser', '--data-dir', str(root)]
         with (root / 'process.log').open('w') as output:

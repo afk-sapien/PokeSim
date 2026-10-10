@@ -10,20 +10,33 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-# Job-name prefixes that must be present and successful. Matrix jobs append their parameters in parentheses
-# or after a comma, so these match by prefix. Removing a job from a workflow must fail the gate loudly.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# Exact job names that must be present and successful, as GitHub reports them (a matrix job's name carries its
+# parameters in parentheses). Matching is exact on purpose: a prefix would let 'install (macos-15' be satisfied
+# by the 'macos-15-intel' job and 'container' by a job such as 'container-extra'. tests/test_release_gates.py derives the
+# expected names from the workflow files, so adding, renaming or removing a job there fails until this list agrees.
 REQUIRED = {
-    'ci.yml': ['dependency-audit', 'lint', 'tests (3.11', 'tests (3.12', 'tests (3.14', 'container'],
-    'python-install.yml': ['install (ubuntu-22.04', 'install (ubuntu-24.04-arm', 'install (windows-latest',
-                           'install (macos-15-intel', 'install (macos-15', 'acceleration'],
+    'ci.yml': [
+        'dependency-audit', 'lint', 'tests (3.11)', 'tests (3.12)', 'tests (3.14)',
+        'browser (1/4)', 'browser (2/4)', 'browser (3/4)', 'browser (4/4)', 'container',
+    ],
+    'python-install.yml': [
+        'native tests (ubuntu-22.04, 1/1)', 'native tests (ubuntu-24.04-arm, 1/1)',
+        'native tests (macos-15, 1/1)', 'native tests (macos-15-intel, 1/1)',
+        'native tests (windows-latest, 1/4)', 'native tests (windows-latest, 2/4)',
+        'native tests (windows-latest, 3/4)', 'native tests (windows-latest, 4/4)',
+        'install (ubuntu-22.04)', 'install (ubuntu-24.04-arm)', 'install (windows-latest)',
+        'install (macos-15-intel)', 'install (macos-15)', 'acceleration',
+    ],
 }
 # A step that must have succeeded somewhere in the run, so a gate cannot be satisfied by renaming it away.
 REQUIRED_STEPS = {
-    'ci.yml': ['Exercise real browser flows', 'Verify the authenticated HTTPS proxy',
-               'Reject fixable high and critical image vulnerabilities'],
+    'ci.yml': ['Exercise real browser flows', 'Reject fixable high and critical image vulnerabilities'],
     'python-install.yml': ['Test native service and Python launcher', 'Verify the user-facing installer and repeat installation'],
 }
 
@@ -55,9 +68,9 @@ def judge(workflow, jobs):
     if bad:
         return 'fail', 'not successful: ' + ', '.join(bad)
     names = [job['name'] for job in jobs]
-    for prefix in REQUIRED[workflow]:
-        if not any(name.startswith(prefix) for name in names):
-            return 'fail', f'required job missing: {prefix}'
+    for required in REQUIRED[workflow]:
+        if required not in names:
+            return 'fail', f'required job missing: {required}'
     for step in REQUIRED_STEPS[workflow]:
         ok = any(item['name'] == step and item['conclusion'] == 'success' for job in jobs for item in job.get('steps', []))
         if not ok:
@@ -89,10 +102,17 @@ def main():
     parser.add_argument('--repo', default=os.environ.get('GITHUB_REPOSITORY'))
     parser.add_argument('--sha', required=True)
     parser.add_argument('--timeout', type=int, default=1800, help='seconds to wait for runs that are still going')
+    parser.add_argument('--tree', type=Path, help='checkout of the release revision whose pins must be final')
     parser.add_argument('--interval', type=int, default=20)
     arguments = parser.parse_args()
     token = os.environ['GH_TOKEN']
     deadline = time.monotonic() + arguments.timeout
+    if arguments.tree:
+        import release_pins
+        problems = release_pins.local_problems(arguments.tree)
+        if problems:
+            sys.exit('Release pins are not final, so this commit cannot be published:\n  ' + '\n  '.join(problems))
+        print('Release pins are final', flush=True)
     pending = set(REQUIRED)
     while True:
         for workflow in sorted(pending):

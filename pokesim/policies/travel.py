@@ -1,5 +1,4 @@
 """Directed journeys reuse ordinary battle, menu, and field-move controls."""
-from .battle import Decision
 from .navigation import Navigator
 from .progression import Goal
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, boulder_task
@@ -75,10 +74,9 @@ class TravelPolicy(StrategicPolicy):
                     partner = next((i for i, mon in enumerate(s.party) if 70 in mon.moves), None)
                     if partner is None:
                         raise ValueError('The route to the Cable Club needs a partner with Strength')
-                    self.field_move = 'STRENGTH'
-                    self.intent = Decision('field', partner, reason='Open the route to the Cable Club with Strength')
-                    self.intent_since = s.frame
-                    return tap('start')
+                    actions = self._field(s, 'STRENGTH', partner, 'Open the route to the Cable Club with Strength')
+                    if actions:
+                        return actions
                 self.nav.issued(pos, direction, s.frame)
                 return tap(direction, 16, 16)
             if s.map == MAPS['VICTORY_ROAD_2F']:

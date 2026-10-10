@@ -77,6 +77,10 @@ def serve(bootstrap, parent_stream, ready_stream):
     from .simulation import SimulationRuntime
     from ..web.app import create_app
 
+    # Load numpy before the liveness thread blocks reading stdin. With the Rust emulator nothing
+    # else imports it this early, and on Windows its first import stalled behind that blocked read.
+    import numpy  # noqa: F401
+
     parent_gone = threading.Event()
     finished = threading.Event()
 
@@ -137,6 +141,8 @@ def serve(bootstrap, parent_stream, ready_stream):
                 value = validate_palette(data['palette'])
             except ValueError as error:
                 raise HTTPException(400, str(error)) from error
+            if not hasattr(runtime.emulator, 'set_palette'):
+                raise HTTPException(409, 'This game does not support screen palettes')
             return runtime.call(lambda: runtime.emulator.set_palette(value))
 
         @app.post('/internal/nicknames')
@@ -168,7 +174,10 @@ def serve(bootstrap, parent_stream, ready_stream):
             server.should_exit = True
             return {'ok': True}
 
-        from .participant import install
+        if getattr(runtime.emulator, 'generation', 1) == 2:
+            from ..gen2.trading import install
+        else:
+            from .participant import install
         install(app, runtime)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             # Accepted sockets inherit this; see the manager's listener.
@@ -244,6 +253,10 @@ def main():
             pass
     sys.stdout = sys.stderr
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    # Diagnostic for a worker that stalls before reporting ready: dump every thread's stack once.
+    if os.environ.get('POKESIM_WORKER_STACK_DUMP', '').isdigit():
+        import faulthandler
+        faulthandler.dump_traceback_later(int(os.environ['POKESIM_WORKER_STACK_DUMP']), file=sys.stderr)
     try:
         bootstrap = Bootstrap.read(sys.stdin)
         # Install data paths before imports that eagerly load generated tables.

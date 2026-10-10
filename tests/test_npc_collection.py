@@ -14,6 +14,7 @@ from pokesim.screen import Screen
 from pokesim.trade.preferences import identity
 from test_collection import sid, state
 from test_strategy import flags, menu, mon
+from shortcut_fakes import Scripted
 
 
 def stored(species, position=0, level=20, trainer=7):
@@ -175,15 +176,16 @@ def test_legacy_dojo_project_keeps_its_selected_gift():
 
 
 def test_npc_project_does_not_steal_field_move_party_selection_during_travel():
-    from pokesim.policies.battle import Decision
+    from pokesim.policies.base import PolicyContext
     p = StrategicPolicy(1)
     p.collection.project = trade(p.collection, 124)
     p.goal = Goal('collect_trade', 'Trade', 'Reach the trader')
-    p.intent = Decision('field', 0, 0, 'Use Cut')
     s = state(party=(mon(level=70, moves=(15,)), mon(species=sid(61), level=30)))
     mem = menu({1: '  CUT USER', 3: '  POLIWHIRL'}, (1, 1), top=(1, 1))
-    assert p._dispatch(s, Screen(mem), 'party', mem)[0].button == 'a'
-    assert not getattr(p, 'pending_trade_key', None)
+    p.collection.observe = lambda *args, **kwargs: None
+    p.shortcut.start(Scripted('use_field_move', ['a', 'a']), 'cut', s.frame, mem)
+    assert p.step(PolicyContext(s, 0, 0, mem))[0].button == 'a'
+    assert p.shortcut.active and not getattr(p, 'pending_trade_key', None)
 
 
 @pytest.mark.parametrize('target,npc', [(122, 'GAMEBOY_KID'), (124, 'GAMBLER')])

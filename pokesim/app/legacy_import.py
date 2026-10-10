@@ -10,6 +10,8 @@ import sqlite3
 import tempfile
 import time
 
+from pokesim_core.emulator_state import same_runtime_or_recorded_migration
+
 from ..checkpoints import CheckpointStore
 from ..platform_io import lock_file, sync_directory
 from ..runtime.simulation import AdventureLock
@@ -116,7 +118,7 @@ def validate_pair(sources, roms, coordinator_root):
         rom_sha1 = hashlib.sha1(roms[name].read_bytes()).hexdigest()
         if metadata.get('rom_sha1') != rom_sha1 or output_metadata.get('rom_sha1') != rom_sha1:
             raise ValueError('Legacy peer ROM does not match the retained lineage')
-        if (metadata.get('pyboy_version') != output_metadata.get('pyboy_version')
+        if (not same_runtime_or_recorded_migration(metadata, output_metadata)
                 or metadata.get('policy') != output_metadata.get('policy')):
             raise ValueError('Legacy checkpoint runtime changed without recorded migration')
         with _database(work / 'before' / name / 'pokesim.sqlite') as db:

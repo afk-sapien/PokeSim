@@ -1,20 +1,16 @@
 """Persistent per-partner offers, independent of box positions and training."""
-import hashlib
+from pokesim_core.identity import pokemon_identity
 import json
 from collections import Counter
 
 from ..shiny import is_shiny
-from ..milestones import is_perfect
+from ..dvs import is_perfect
 
 PREFIX = 'trade_offer:'
 
 
 def identity(mon):
-    trainer = mon.get('trainer_id')
-    dvs = mon.get('dvs', ())
-    if trainer is None or len(dvs) != 5:
-        return None
-    return hashlib.sha256(json.dumps([trainer, list(dvs)]).encode()).hexdigest()[:24]
+    return pokemon_identity(mon.get('trainer_id'), mon.get('dvs', ()))
 
 
 def read(db):

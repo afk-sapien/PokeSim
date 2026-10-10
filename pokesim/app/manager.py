@@ -25,11 +25,13 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
+from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, user_directory
 from ..platform_io import lock_file
-from ..web.security import protect_response, public_origin
+from ..web.security import VIEWER_HEADER, protect_response, public_origin, viewer_allows
 from .assets import Assets
 from .registry import Registry, identifier, validate_id
 from .supervisor import Supervisor
@@ -39,6 +41,10 @@ STATIC = Path(__file__).parents[1] / 'web' / 'static'
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon', 'stats/items', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
                    'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml'}
+
+# Pages a person opens. A stopped adventure answers these with its status page, not raw JSON.
+GAME_PAGES = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon',
+              'stats/items', 'trading'}
 
 
 def public_game_path(method, path):
@@ -83,12 +89,14 @@ class Manager:
         self.session_lock = threading.Lock()
         from .coordinator import Coordinator
         self.coordinator = Coordinator(self)
+        from .offers import TradeOffers
+        self.offers = TradeOffers(self)
 
     @staticmethod
     def validate_adventure_settings(values):
         allowed = {'trainer_name', 'rival_name', 'speed', 'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
                    'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards',
-                   'mew_event', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
+                   'mew_event', 'celebi_event', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
                    'fossil_preference', 'dojo_preference', 'event_retention_days', 'palette'}
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError('Unsupported adventure settings')
@@ -103,11 +111,11 @@ class Manager:
         if 'speed' in result:
             from ..runtime.settings import validate_speed
             validate_speed(result['speed'])
-        if result['starter'] not in {'random', 'bulbasaur', 'charmander', 'squirtle'}:
-            raise ValueError('Choose a listed starter')
+        from ..cartridges import validate_starter
+        validate_starter(result['starter'])
         if result['policy'] not in {'strategic', 'guided_random', 'smart_random'}:
             raise ValueError('Unknown adventure policy')
-        for name in ('auto_start', 'fast_text', 'battle_animations', 'viewer_only', 'league_rewards', 'mew_event'):
+        for name in ('auto_start', 'fast_text', 'battle_animations', 'viewer_only', 'league_rewards', 'mew_event', 'celebi_event'):
             if name in result and type(result[name]) is not bool:
                 raise ValueError(f'{name} must be a boolean')
         # Every notable event keeps a full save state beside its screenshot, which is about
@@ -134,6 +142,7 @@ class Manager:
                     if self.coordinator.reserved(aid):
                         return row
                     return self.supervisor.stop(aid, preserve_desired=True)
+                self.supervisor.setup_retries.pop(aid, None)
                 return self.supervisor.start(aid)
         except Exception as error:
             row = self.registry.adventure(aid)
@@ -269,6 +278,16 @@ def create_app(manager, shutdown=lambda: None):
     async def missing(request, error):
         return JSONResponse({'detail': str(error).strip("'")}, status_code=404)
 
+    @app.exception_handler(CoreBackendCapabilityError)
+    async def unsupported(request, error):
+        return JSONResponse({'detail': str(error)}, status_code=501)
+
+    from .offers import ViewOnlyError
+
+    @app.exception_handler(ViewOnlyError)
+    async def view_only(request, error):
+        return JSONResponse({'detail': str(error)}, status_code=403)
+
     @app.exception_handler(RuntimeError)
     async def unavailable(request, error):
         return JSONResponse({'detail': str(error)}, status_code=409)
@@ -281,6 +300,8 @@ def create_app(manager, shutdown=lambda: None):
         origin = request.headers.get('origin')
         if origin and origin != f'{expected.scheme}://{expected.netloc}':
             return JSONResponse({'detail': 'Requests must come from this PokeSim application'}, status_code=403)
+        if request.url.path.startswith('/view/') and request.method not in {'GET', 'HEAD'}:
+            return JSONResponse({'detail': 'This is a view-only link'}, status_code=403)
         changing = request.method not in {'GET', 'HEAD', 'OPTIONS'}
         if request.headers.get('sec-fetch-site') == 'cross-site' and (changing or request.url.path == '/api/v1/session'):
             return JSONResponse({'detail': 'Requests must come from this PokeSim application'}, status_code=403)
@@ -304,6 +325,7 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.get('/', response_class=HTMLResponse)
     @app.get('/trading', response_class=HTMLResponse)
+    @app.get('/trade', response_class=HTMLResponse)
     @app.get('/notifications', response_class=HTMLResponse)
     @app.get('/settings', response_class=HTMLResponse)
     def home(request: Request):
@@ -351,17 +373,44 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.get('/api/v1/assets')
     def assets():
-        return {'roms': manager.registry.roms()}
+        return {'roms': manager.registry.roms(), 'cartridges': manager.assets.cartridge_slots()}
 
-    @app.post('/api/v1/assets/rom')
-    async def add_rom(request: Request):
-        manager.check_available()
+    async def read_cartridge(request):
         raw = bytearray()
         async for chunk in request.stream():
             raw.extend(chunk)
             if len(raw) > MAX_ROM:
-                raise HTTPException(413, 'ROM files may be no larger than 1 MB')
-        return await asyncio.to_thread(manager.assets.install_rom, bytes(raw))
+                raise HTTPException(413, 'The cartridge file is too large. Game Boy ROMs are at most 2 MB, and a ZIP may be at most 4 MB.')
+        return bytes(raw)
+
+    async def add_cartridge(request, slot=None):
+        manager.check_available()
+        raw = await read_cartridge(request)
+        result = await asyncio.to_thread(manager.assets.add_cartridge, raw, slot)
+        manager.background(manager.assets.install_portraits_quietly, result.pop('raw'))
+        return result
+
+    @app.post('/api/v1/assets/rom')
+    async def add_rom(request: Request):
+        # Kept for scripts and older pages: the cartridge row, as before, plus where it went.
+        result = await add_cartridge(request)
+        return {**result['rom'], 'title': result['title'], 'message': result['message']}
+
+    @app.get('/api/v1/cartridges')
+    def cartridges():
+        from ..cartridges import supported_names
+        return {'slots': manager.assets.cartridge_slots(), 'supported': supported_names()}
+
+    @app.post('/api/v1/cartridges')
+    async def upload_cartridge(request: Request, slot: str | None = None):
+        result = await add_cartridge(request, slot or None)
+        return {**result, 'slots': manager.assets.cartridge_slots()}
+
+    @app.delete('/api/v1/cartridges/{version}')
+    def remove_cartridge(version: str):
+        manager.check_available()
+        result = manager.assets.remove_cartridge(version)
+        return {**result, 'slots': manager.assets.cartridge_slots()}
 
     @app.post('/api/v1/adventures')
     async def create(request: Request):
@@ -374,6 +423,7 @@ def create_app(manager, shutdown=lambda: None):
             'speed': data.get('speed', 1),
             'league_rewards': data.get('league_rewards', True),
             'mew_event': data.get('mew_event', True),
+            'celebi_event': data.get('celebi_event', True),
             'legendary_return_steps': data.get('legendary_return_steps', 1000000),
             'event_return_steps': data.get('event_return_steps', 100000),
             'mew_return_steps': data.get('mew_return_steps', 1000000),
@@ -574,6 +624,69 @@ def create_app(manager, shutdown=lambda: None):
         manager.background(manager.coordinator.execute, row['id'])
         return row
 
+    @app.get('/api/v1/interactions/manual-trades/options')
+    async def manual_trade_options():
+        return await asyncio.to_thread(manager.coordinator.manual_options)
+
+    @app.get('/api/v1/interactions/manual-trades')
+    def manual_trades():
+        return manager.coordinator.manual_statuses()
+
+    @app.post('/api/v1/interactions/manual-trades')
+    async def manual_trade(request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        entry = await asyncio.to_thread(manager.coordinator.enqueue_manual, data)
+        manager.background(manager.coordinator.drain_manual)
+        return manager.coordinator.manual_status(entry['id'])
+
+    @app.get('/api/v1/interactions/manual-trades/{mid}')
+    def manual_trade_status(mid: str):
+        return manager.coordinator.manual_status(validate_id(mid))
+
+    @app.post('/api/v1/interactions/manual-trades/{mid}/cancel')
+    async def cancel_manual_trade(mid: str):
+        return await asyncio.to_thread(manager.coordinator.cancel_manual, validate_id(mid))
+
+    # Trade offers: one adventure asks another for a Pokémon. Accepting queues a manual trade.
+    @app.get('/api/v1/interactions/trade-offers')
+    async def trade_offers(adventure_id: str):
+        return await asyncio.to_thread(manager.offers.for_adventure, validate_id(adventure_id))
+
+    @app.get('/api/v1/interactions/trade-offers/targets')
+    async def trade_offer_targets(from_id: str, from_key: str | None = None):
+        return await asyncio.to_thread(manager.offers.targets, validate_id(from_id), from_key)
+
+    @app.get('/api/v1/interactions/trade-offers/limits')
+    async def trade_offer_limits(from_id: str, from_key: str, to_id: str):
+        return await asyncio.to_thread(manager.offers.limits, validate_id(from_id), from_key, validate_id(to_id))
+
+    @app.post('/api/v1/interactions/trade-offers')
+    async def create_trade_offer(request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        return await asyncio.to_thread(manager.offers.create, data)
+
+    @app.get('/api/v1/interactions/trade-offers/{oid}')
+    async def trade_offer(oid: str):
+        return await asyncio.to_thread(manager.offers.status, validate_id(oid))
+
+    @app.post('/api/v1/interactions/trade-offers/{oid}/accept')
+    async def accept_trade_offer(oid: str):
+        manager.check_available()
+        offer = await asyncio.to_thread(manager.offers.accept, validate_id(oid))
+        if offer['status'] == 'accepted':
+            manager.background(manager.coordinator.drain_manual)
+        return offer
+
+    @app.post('/api/v1/interactions/trade-offers/{oid}/decline')
+    async def decline_trade_offer(oid: str):
+        return await asyncio.to_thread(manager.offers.decline, validate_id(oid))
+
+    @app.post('/api/v1/interactions/trade-offers/{oid}/withdraw')
+    async def withdraw_trade_offer(oid: str):
+        return await asyncio.to_thread(manager.offers.withdraw, validate_id(oid))
+
     @app.post('/api/v1/interactions/{tid}/cancel')
     async def cancel(tid: str):
         return await asyncio.to_thread(manager.coordinator.cancel, tid)
@@ -681,52 +794,69 @@ def create_app(manager, shutdown=lambda: None):
     def quit_app():
         return JSONResponse({'ok': True}, background=BackgroundTask(shutdown))
 
+    # A view link: the same game pages, watched without controls. Expose only /view/ to share.
+    @app.api_route('/view/{aid}/{path:path}', methods=['GET', 'HEAD'])
+    async def view(aid: str, path: str, request: Request):
+        if not viewer_allows(request.method, path):
+            raise HTTPException(403, 'This is a view-only link')
+        return await game(aid, path, request, viewer=True)
+
     @app.api_route('/games/{aid}/{path:path}', methods=['GET', 'POST', 'HEAD'])
-    async def game(aid: str, path: str, request: Request):
+    async def games(aid: str, path: str, request: Request):
+        return await game(aid, path, request)
+
+    async def game(aid, path, request, viewer=False):
         if not public_game_path(request.method, path):
             raise HTTPException(404)
-        adventure = manager.registry.adventure(aid)
+        # Everything below that reads the registry, the coordinator or the disk runs in a worker
+        # thread. This handler shares one event loop with every page of every adventure, so a
+        # blocking call here (a registry lock held across a commit, a slow trade history) would
+        # stall the whole library, not just this request. Starlette's request pool, not the
+        # default executor: background trades hold default-executor threads for minutes.
+        adventure = await run_in_threadpool(manager.registry.adventure, aid)
         if path == 'trading' and request.method in {'GET', 'HEAD'}:
             from ..web.pages import render_game_page
-            return HTMLResponse(render_game_page('adventure-trading.html', base_path=f'/games/{aid}',
-                adventure_id=aid, adventure_name=adventure['name']))
+            return HTMLResponse(render_game_page('adventure-trading.html', base_path=f"/{'view' if viewer else 'games'}/{aid}",
+                adventure_id=aid, adventure_name=adventure['name'], viewer=viewer))
         if path == 'api/interactions' and request.method in {'GET', 'HEAD'}:
-            return JSONResponse(manager.coordinator.adventure_status(aid))
+            return JSONResponse(await run_in_threadpool(manager.coordinator.adventure_status, aid))
         if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
             asset = path.removeprefix('static/')
             if asset in {'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css',
-                         'adventure-trading.js', 'fonts/pokesim-panel.woff2'}:
+                         'adventure-trading.js', 'trade-progress.js', 'fonts/pokesim-panel.woff2'}:
                 return FileResponse(STATIC / asset)
         sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)
         if sprite and request.method in {'GET', 'HEAD'}:
             dex = int(sprite[1])
-            if not 1 <= dex <= 151:
+            if not 1 <= dex <= 251:
                 raise HTTPException(404)
-            image = manager.assets.sprite_path(aid, dex)
+            image = await run_in_threadpool(manager.assets.sprite_path, aid, dex)
             if image is not None:
                 return FileResponse(image, media_type='image/png')
         if adventure['state'] not in {'running', 'recovering'}:
-            if path in {'', 'pc', 'pokedex', 'journal', 'trading'}:
+            if path in GAME_PAGES and viewer:
+                return HTMLResponse('<!doctype html><title>PokeSim</title><p>This adventure is not running right now.</p>', status_code=409)
+            if path in GAME_PAGES:
                 from ..web.library import render_library
                 return HTMLResponse(render_library('stopped', adventure))
             raise HTTPException(409, 'This adventure is stopped or starting')
         if path in {'frame.jpg', 'stream'}:
-            active = next((row for row in manager.registry.transactions(True)
+            active = next((row for row in await run_in_threadpool(manager.registry.transactions, True)
                            if aid in row['plan']['participants'] and row['decision'] is None), None)
             if active:
                 side = 'left' if active['plan']['participants'][0] == aid else 'right'
                 preview_path = (manager.root / 'interactions' / active['id'] / 'attempts'
                                 / active['plan']['attempt_id'] / 'outputs' / (side + '.jpg'))
-                if preview_path.is_file():
+                if await run_in_threadpool(preview_path.is_file):
                     if path == 'frame.jpg':
                         return FileResponse(preview_path, media_type='image/jpeg')
                     async def provisional_frames():
                         try:
                             while not manager.closing:
-                                current = manager.registry.transaction(active['id'])
+                                current = await run_in_threadpool(manager.registry.transaction, active['id'])
                                 if current['decision'] is not None:
                                     break
-                                raw = preview_path.read_bytes()
+                                raw = await run_in_threadpool(preview_path.read_bytes)
                                 yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + raw + b'\r\n'
                                 await asyncio.sleep(0.1)
                         except (OSError, asyncio.CancelledError):
@@ -740,7 +870,7 @@ def create_app(manager, shutdown=lambda: None):
             if len(body) > 65536:
                 raise HTTPException(413, 'Game request is too large')
         body = bytes(body)
-        if request.method == 'POST' and manager.coordinator.reserved(aid):
+        if request.method == 'POST' and await run_in_threadpool(manager.coordinator.reserved, aid):
             raise HTTPException(409, 'A trade holds this adventure')
         if app.state.children is None:
             app.state.children = httpx.AsyncClient(
@@ -748,7 +878,7 @@ def create_app(manager, shutdown=lambda: None):
                 limits=httpx.Limits(max_connections=None, max_keepalive_connections=32))
         client = app.state.children
         target = httpx.URL(child.url).copy_with(path='/' + path, query=request.scope['query_string'])
-        headers = {'Authorization': 'Bearer ' + child.token}
+        headers = {'Authorization': 'Bearer ' + child.token, **({VIEWER_HEADER: '1'} if viewer else {})}
         if request.headers.get('content-type'):
             headers['Content-Type'] = request.headers['content-type']
         try:
@@ -766,7 +896,8 @@ def create_app(manager, shutdown=lambda: None):
                 await response.aclose()
         safe_headers = {key: value for key, value in response.headers.items()
                         if key.lower() in {'content-type', 'cache-control', 'location', 'content-disposition',
-                                           'x-audio-state', 'x-audio-sequence', 'x-audio-rate', 'x-audio-speed'}}
+                                           'x-audio-state', 'x-audio-sequence', 'x-audio-rate', 'x-audio-speed',
+                                           'x-audio-mode', 'x-audio-dropped'}}
         return StreamingResponse(stream(), status_code=response.status_code, headers=safe_headers)
 
     return app

@@ -1,7 +1,10 @@
 """SQLite event log + key/value run state + screenshot files."""
 from __future__ import annotations
 
+from contextlib import contextmanager
+from copy import deepcopy
 import json
+import os
 import logging
 import sqlite3
 import tempfile
@@ -13,6 +16,11 @@ from . import progress
 from .checkpoints import CheckpointStore, compress_state
 
 log = logging.getLogger(__name__)
+
+OBSERVATION_READ_KEYS = frozenset({
+    'cartridge-steps-v1', 'mew-returns-v1', 'pokesim-mew-v1', 'legendary-returns-v1',
+    'step-events-v1', 'pokedex-milestones-v1', 'shiny-statistics-v1',
+})
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -62,6 +70,10 @@ class Store:
             from .trade_statistics import initialize as initialize_trade_statistics
             initialize_trade_statistics(self.db)
         self.lock = threading.Lock()
+        self._read_local = threading.local()
+        self._read_cache = {}
+        self._read_epoch = None
+        self._cache_reads = os.environ.get('POKESIM_EXPERIMENT_READ_CACHE', '1') != '0'
 
     def _migrate(self):
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(events)")}
@@ -94,7 +106,9 @@ class Store:
                          "%d:%02d:%02d" % snapshot.playtime))
                     eid = cur.lastrowid
                     won = False
-                    if ev.type == 'champion':
+                    if ev.type == 'champion' and getattr(snapshot, 'generation', 1) == 2:
+                        won = True
+                    elif ev.type == 'champion':
                         from .league_partners import record
                         won = record(self.db, snapshot, ev.title, eid)
                     progress.record(self.db, ts, snapshot, won)
@@ -167,9 +181,45 @@ class Store:
         return {r["type"]: r["n"] for r in rows}
 
     # --- kv ---
+    @contextmanager
+    def observation_reads(self):
+        """Reuse committed observation facts within an observation phase.
+
+        External commits are checked at each scope entry. Same-connection writes
+        invalidate immediately. Trade controls and reads in transactions always
+        query SQLite. Returned objects remain detached from the cache.
+        """
+        depth = getattr(self._read_local, 'depth', 0)
+        if self._cache_reads:
+            with self.lock:
+                version = self.db.execute('PRAGMA data_version').fetchone()[0]
+                epoch = (version, self.db.total_changes)
+                if epoch != self._read_epoch:
+                    self._read_cache.clear()
+                    self._read_epoch = epoch
+        self._read_local.depth = depth + 1
+        try:
+            yield
+        finally:
+            self._read_local.depth = depth
+
     def get(self, k, default=None):
         with self.lock:
+            cached = (self._cache_reads and k in OBSERVATION_READ_KEYS and getattr(self._read_local, 'depth', 0)
+                      and not self.db.in_transaction)
+            if cached:
+                epoch = (self._read_epoch[0], self.db.total_changes)
+                if epoch != self._read_epoch:
+                    self._read_cache.clear()
+                    self._read_epoch = epoch
+                if k in self._read_cache:
+                    exists, value = self._read_cache[k]
+                    return deepcopy(value) if exists else default
             r = self.db.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone()
+            if cached:
+                value = json.loads(r["v"]) if r else None
+                self._read_cache[k] = (r is not None, value)
+                return deepcopy(value) if r else default
         return json.loads(r["v"]) if r else default
 
     def set(self, k, v):

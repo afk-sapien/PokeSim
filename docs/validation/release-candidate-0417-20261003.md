@@ -81,11 +81,11 @@ Deployment completed successfully on October 3. The home server selects the
 candidate image persistently through its existing Compose environment file.
 The previous image remains available for rollback.
 
-- Verified cold backup: `/docker/pokesim-app/backups/pre-0.4.17-20261003T174532Z.tar.gz`
+- Verified cold backup: `/opt/pokesim/backups/pre-0.4.17-20261003T174532Z.tar.gz`
 - Backup size: 610,123,268 bytes, with 68,885 archive entries
 - Backup SHA-256: `b1f9219fa9ce442a206579fceab22c9b66640a0890d16b03982309a5fa1161c7`
-- Deployment receipt: `/docker/pokesim-app/backups/candidate-0.4.17-20261003T174532Z.json`
-- Previous environment: `/docker/pokesim-app/.env.bak-20261003T174532Z-pre-0.4.17`
+- Deployment receipt: `/opt/pokesim/backups/candidate-0.4.17-20261003T174532Z.json`
+- Previous environment: `/opt/pokesim/.env.bak-20261003T174532Z-pre-0.4.17`
 
 After deployment, Red, Blue, Fresh Start and Release Check all reported 0.4.17,
 healthy workers and advancing frames. Each reported zero reloads since restart.
@@ -114,7 +114,7 @@ and speed-control browser tests passed. The complete candidate was rebuilt as
 It supersedes the initial candidate on the home server.
 
 The verified backup and deployment receipt use timestamp `20261003T175545Z`
-under `/docker/pokesim-app/backups/`. The service is healthy and all four running
+under `/opt/pokesim/backups/`. The service is healthy and all four running
 adventures resumed. The actual desktop and mobile controls were visually checked
 on the server after deployment. Public publication remains on hold.
 
@@ -135,7 +135,7 @@ The full image `pokesim-local:0.4.17-candidate-20261003-ui2` supersedes ui1 on t
 home server. Its image ID is
 `sha256:d3b236f437018807205e5d67a294f85f3ea8cb5160a9eaa337536734f8de3db8`.
 The cold backup and deployment receipt use timestamp `20261003T180310Z` under
-`/docker/pokesim-app/backups/`. The container is healthy, all four previously
+`/opt/pokesim/backups/`. The container is healthy, all four previously
 running adventures resumed and Bababa stayed stopped. Actual server stats cards
 were visually inspected at 1280px and 320px. Public publication remains on hold.
 
@@ -180,7 +180,7 @@ custom portrait overrides remain supported.
 The home server now runs `pokesim-local:0.4.17-candidate-20261003-ui3`, image
 `sha256:c6acf2472d434382a10dbf5a98d809a08d24b1a6ae89d087ede274d8c2545841`.
 The verified cold backup and deployment receipt are timestamped
-`20261003T182246Z` under `/docker/pokesim-app/backups/`. The service is healthy,
+`20261003T182246Z` under `/opt/pokesim/backups/`. The service is healthy,
 all four running adventures resumed and Bababa remains stopped. On the public
 server, the actual rendered Live, PC and Pokédex images passed pixel-palette,
 versioned-URL and cache-header checks. The Pokédex screenshot was visually
@@ -226,7 +226,7 @@ starts and shutdown cancellation. Request tests enforce CSRF on both mutations.
 The home server now runs `pokesim-local:0.4.17-candidate-20261003-ui4`, image
 `sha256:c51a0aad70a107cb9e779823a37e8bed9311a98f601adcecb3df08e7e20cfd33`.
 The complete cold backup and deployment receipt use timestamp `20261003T190139Z`
-under `/docker/pokesim-app/backups/`. The deployed Settings panel was visually
+under `/opt/pokesim/backups/`. The deployed Settings panel was visually
 inspected at desktop and phone widths. Its API confirms the pack is uninstalled
 and defaults remain active. All four previously running adventures resumed.
 The local preview backend was also restarted and its adventure is running.
@@ -290,7 +290,7 @@ The complete candidate, including the backup fix, is deployed as
 `pokesim-local:0.4.17-candidate-20261003-ui5`, image
 `sha256:43fdfc6ec5c9c4e64ce2826e0083bece3cb3bc604df94f8a34aa47e3b436999d`.
 The verified cold backup is
-`/docker/pokesim-app/backups/pre-0.4.17-20261003T194411Z.tar.gz`, with SHA-256
+`/opt/pokesim/backups/pre-0.4.17-20261003T194411Z.tar.gz`, with SHA-256
 `afc25800f5ea46282cfbd03f22f075a6949ff4d76eddcb05404e11a5073f407b`.
 The deployment receipt has the same timestamp in the backups directory.
 

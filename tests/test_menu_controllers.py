@@ -12,10 +12,8 @@ from test_strategy import menu
 def test_shop_choices_do_not_mutate_the_callers_goal_or_project():
     shop = ShoppingController()
     project = {'method': 'train', 'parent': 153}
-    memory = menu({1: '  BUY', 3: '  SELL', 5: '  QUIT'}, (1, 1), top=(1, 1))
-    decision = shop.step(shopping_state(), Screen(memory), 'shop', 'party_upgrade', project)
-    assert decision.actions[0].button == 'a' and shop.buying
-    assert shop.item == ITEMS['GREAT_BALL']
+    decision = shop.step(shopping_state(), 'party_upgrade', project)
+    assert decision.request[:2] == ('buy', ITEMS['GREAT_BALL']) and decision.request[2] >= 1
     assert project == {'method': 'train', 'parent': 153}
 
 

@@ -1,4 +1,4 @@
-"""Headless PyBoy loop: policy-driven input, save states, RAM diff -> events, frame publishing."""
+"""Headless CoreEmulator loop: policy-driven input, save states, RAM diff -> events, frame publishing."""
 from __future__ import annotations
 
 import hashlib
@@ -7,25 +7,27 @@ import logging
 import queue
 import secrets
 import threading
-from importlib.metadata import version
+from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
 import time
 from pathlib import Path
 
 from PIL import Image
-from pyboy import PyBoy
+from pokesim_core.emulator import Emulator as CoreEmulator
+
+from .yellow import open_emulator
 
 from . import __version__, config
 from .audio import AudioFeed, enable_checkpoint_sound
 from .build_info import build_info
 from .checkpoints import open_state
-from .events import HIGH, Event, RunMemory, diff
+from .events import HIGH, LOW, Event, RunMemory, diff
 from . import rewards
 from .legendary import LegendaryRecovery
 from .play_clock import PlayClock
 from .palettes import PALETTES, recolor, validate_palette
 from .policies import make_policy
-from .policies.base import BUTTONS, Action, PolicyContext
-from .ram import Snapshot, read_snapshot
+from .policies.base import BUTTONS, Action, PolicyContext, stack_pointer
+from .ram import SPECIES_NAMES, Snapshot, read_snapshot
 from .screen import W_OPTIONS
 from .stalls import PROGRESS_EVENTS, StallWatch, advanced
 from .strategy_data import MAPS
@@ -126,7 +128,8 @@ class Emulator:
         from .activity_ledger import ActivityLedger
         self.activity_ledger = ActivityLedger(store, self.rom_sha1)
         if hasattr(self.policy, "collection"):
-            self.policy.collection.version = "blue" if "Blue" in self.rom_note else "red"
+            self.policy.collection.version = ("yellow" if "Yellow" in self.rom_note
+                                              else "blue" if "Blue" in self.rom_note else "red")
         if hasattr(self.policy, "nav"):
             self.policy.nav.use_world = not self.rom_note.startswith("unverified")
         self.input_epoch = 0
@@ -142,19 +145,19 @@ class Emulator:
     def _check_rom(self) -> str:
         sha = hashlib.sha1(self.rom.read_bytes()).hexdigest()
         self.rom_sha1 = sha
-        known = config.KNOWN_ROM_SHA1.get(sha)
+        known = config.GEN1_ROM_SHA1.get(sha)
         if known:
             log.info("ROM verified: %s", known)
             return known
         log.warning("ROM sha1 %s is not a known clean Red/Blue dump; RAM addresses may be off", sha)
         return f"unverified ROM (sha1 {sha[:12]})"
 
-    def _boot(self, *, sound=True) -> PyBoy:
+    def _boot(self, *, sound=True) -> CoreEmulator:
         options = {'color_palette': PALETTES['original']}
         if getattr(self, 'isolated_ram', False):
             import io
             options['ram_file'] = io.BytesIO(bytes(32768))
-        pb = PyBoy(str(self.rom), window="null", sound_emulated=sound, **options)
+        pb = open_emulator(str(self.rom), default=CoreEmulator, window="null", sound_emulated=sound, **options)
         pb.set_emulation_speed(0)
         if getattr(self, 'activity_ledger', None) is not None:
             self.activity_ledger.attach(pb)
@@ -221,7 +224,8 @@ class Emulator:
             "build": build_info(),
             "health": self.health(),
             "paused": self.paused, "speed": self.speed, "policy": self.policy.describe(),
-            "palette": getattr(self, 'palette', 'original'),
+            # Yellow renders its own Game Boy Color palettes, so like Generation II it reports none.
+            "palette": None if self._color_cartridge() else getattr(self, 'palette', 'original'),
             "manual_mode": self.manual_mode, "help_request": None,
             "play_clock": self.play_clock.status(),
             "performance": {"frames": self.executed_frames, "sampled_at": time.monotonic()},
@@ -285,8 +289,7 @@ class Emulator:
         if metadata:
             if metadata.get("rom_sha1") != self.rom_sha1:
                 raise ValueError("Checkpoint was created with a different ROM")
-            if metadata.get("pyboy_version") != version("pyboy"):
-                raise ValueError("Checkpoint requires a different PyBoy version")
+            validate_runtime(metadata)
             if metadata.get("policy") != config.POLICY:
                 raise ValueError("Checkpoint requires a different policy")
         with open_state(path) as f:
@@ -345,8 +348,13 @@ class Emulator:
         self.pb.save_state(buf)
         return buf.getvalue()
 
+    def _color_cartridge(self):
+        from .game_data import current_variant
+        return current_variant() == 'yellow'
+
     def _image(self) -> Image.Image:
-        return recolor(self.pb.screen.image.convert("RGB"), getattr(self, 'palette', 'original'))
+        image = self.pb.screen.image.convert("RGB")
+        return image if self._color_cartridge() else recolor(image, getattr(self, 'palette', 'original'))
 
     def set_palette(self, value):
         """Called on the emulator thread, including while the game is paused."""
@@ -367,8 +375,8 @@ class Emulator:
 
     def audio_packet(self, after):
         state = 'paused' if self.paused and not self.manual_mode else 'playing'
-        sequence, pcm, speed = self.audio.read(after, state)
-        return state, sequence, pcm, speed
+        sequence, pcm, speed, dropped = self.audio.read(after, state)
+        return state, sequence, pcm, speed, dropped
 
     def current_frame(self, timeout: float = 1.0) -> bytes:
         """The latest frame, waiting for the first one if the run has only just started."""
@@ -396,17 +404,32 @@ class Emulator:
             self.frame_seq += 1
             self.frame_cond.notify_all()
 
-    def _protect_shiny(self, snapshot):
+    def _report_uncatchable_shiny(self, snapshot):
+        """Say once per battle why a shiny cannot be caught. The policy runs from it as usual.
+
+        Balls cannot be bought and storage cannot be freed in battle, so pausing would only
+        look like a stall. The supply and storage reserves are what keep a shiny catchable.
+        """
+        if not snapshot.enemy_shiny or snapshot.in_battle != 1:
+            self._shiny_reported = False
+            return False
         from .strategy_data import ITEMS
         balls = {ITEMS[name] for name in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL', 'MASTER_BALL')}
-        if (not self.manual_mode and snapshot.enemy_shiny
-                and (not snapshot.can_catch or snapshot.battle_type == 0
-                     and not any(item in balls and qty for item, qty in snapshot.items))):
-            self.snapshot = snapshot
-            self.paused = True
-            self._autosave()
+        if not snapshot.can_catch:
+            why = 'no storage space'
+        elif snapshot.battle_type == 0 and not any(item in balls and qty for item, qty in snapshot.items):
+            why = 'no balls'
+        else:
+            return False
+        if getattr(self, '_shiny_reported', False):
             return True
-        return False
+        self._shiny_reported = True
+        species = SPECIES_NAMES.get(snapshot.enemy_species) or 'Pokémon'
+        self._handle_events([Event('shiny_missed', f'Shiny {species} could not be caught: {why}',
+                                   f'A shiny {species} appeared with {why}, so the adventure ran from it. '
+                                   'The supply and storage reserves should prevent this.',
+                                   priority=LOW, tags='star')], snapshot)
+        return True
 
     def _sync_audio(self, enabled):
         if enabled == self._audio_enabled:
@@ -455,6 +478,10 @@ class Emulator:
 
     def _observe(self):
         self._retake_shots()
+        with self.store.observation_reads():
+            self._observe_snapshot()
+
+    def _observe_snapshot(self):
         snap = read_snapshot(self.pb.memory, self.frame)
         if snap.started:
             self.play_clock.seed(snap.playtime_seconds)
@@ -488,7 +515,7 @@ class Emulator:
         self.pending = [ev for ev in new if ev.still is not None]
         events += [ev for ev in new if ev.still is None]
         restored_legendary = False
-        if (self.rom_sha1 in config.KNOWN_ROM_SHA1 and not self.manual_mode
+        if (self.rom_sha1 in config.GEN1_ROM_SHA1 and not self.manual_mode
                 and not self.store.get('trade_hold')):
             from .legendary_returns import observe as returns_observe, claims
             if hasattr(self, 'step_tracker'):
@@ -611,7 +638,7 @@ class Emulator:
 
     def _manifest(self):
         return {
-            "app_version": __version__, "pyboy_version": version("pyboy"),
+            "app_version": __version__, **checkpoint_metadata(),
             "rom_sha1": self.rom_sha1, "policy": config.POLICY,
             "policy_state": self.policy.state_dict(), "run_memory": self.mem.to_dict(),
             "frame": self.frame, "play_clock": self.play_clock.state_dict(),
@@ -896,8 +923,12 @@ class Emulator:
         elif name == "load_state":
             p = self.store.state_path(arg)
             if p:
-                self._load_state_file(p)
-                log.info("loaded %s", p.name)
+                try:
+                    self._load_state_file(p)
+                except ValueError as error:
+                    log.warning("Rewind to %s refused: %s", p.name, error)
+                else:
+                    log.info("loaded %s", p.name)
         elif name == "restart":
             log.warning("restarting run from power-on")
             if hasattr(self, 'statistics'):
@@ -968,9 +999,9 @@ class Emulator:
                     continue
                 if not pending:
                     snap = read_snapshot(self.pb.memory, self.frame)
-                    if self._protect_shiny(snap):
-                        continue
-                    ctx = PolicyContext(snap, time.time() - self.stuck_since, time.time(), self.pb.memory)
+                    self._report_uncatchable_shiny(snap)
+                    ctx = PolicyContext(snap, time.time() - self.stuck_since, time.time(), self.pb.memory,
+                                        stack_pointer(self.pb))
                     preparation = getattr(self, 'preparation', None)
                     pending = list(preparation.step(ctx) if preparation else self.policy.step(ctx))
                     if not preparation and hasattr(self.policy, 'collection'):

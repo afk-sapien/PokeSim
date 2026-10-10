@@ -118,7 +118,7 @@ test('power bookmarks survive refresh and details show the five stat breakdown',
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
   const detail = view.element('#pc-detail-body').innerHTML
   assert.match(detail, /Total<\/th><td>415/)
-  assert.match(detail, /Power: 144/)
+  assert.match(detail, /Stat Power<\/dt><dd>144/)
   assert.match(detail, /HP<\/th><td>110/)
   assert.match(detail, /Attack<\/th><td>75/)
   assert.match(detail, /Special<\/th><td>70/)
@@ -294,8 +294,74 @@ test('DV probability labels stay compact and retain very rare nonzero tails', as
   await view.ready()
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
   const detail = view.element('#pc-detail-body').innerHTML
-  assert.match(detail, /Potential Stat Power: 3,200/)
+  assert.match(detail, /Potential Stat Power<\/dt><dd>3,200/)
   assert.match(detail, /DV quality \(est\.\): top 0\.00153%/)
   assert.match(detail, /Higher roll: 0%/)
   assert.doesNotMatch(detail, /65,536|uniform|independent fifth/)
+})
+
+test('eggs show as Eggs without their species, types or sprite', async () => {
+  const view = pc([mon(1, 1, 5, {egg: true, name: 'Sneasel', nick: 'EGG', type_names: ['Dark', 'Ice'], dex: 215}),
+    mon(1, 2, 5, {egg: true, name: 'Egg', nick: 'EGG', type_names: [], dex: null})], '?box=1')
+  await view.ready()
+  const html = view.element('#pc-grid').innerHTML
+  assert.match(html, /class="egg-plate" role="img" aria-label="Egg"/)
+  assert.match(html, /Egg · Lv\. 5/)
+  assert.doesNotMatch(html, /Sneasel|sprites\/|Dark/)
+})
+
+test('details list moves, condition and the full record for Gen I partners', async () => {
+  const party = [mon(undefined, undefined, 15, {slot: 1, hp: 4, max_hp: 30, status_label: 'Poisoned', trainer_id: 42,
+    experience: 2300, experience_progress: {total: 2300, remaining: 235, percent: 53, max_level: false},
+    elite_four_wins: 2, elite_four_wins_incomplete: false,
+    move_details: [{name: 'Vine Whip', type: 'Grass', pp: 0, max_pp: 10, power: 35, accuracy: 100},
+      {name: 'Growl', type: 'Normal', pp: 40, max_pp: 40, power: 0, accuracy: 100},
+      {name: 'Tackle', type: 'Normal', power: 35, accuracy: 95}]})]
+  const view = pc([], '?box=party', party)
+  await view.ready()
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  const detail = view.element('#pc-detail-body').innerHTML
+  assert.match(detail, /pc-move-pp empty"><b>0<\/b>\/10 PP/)
+  assert.match(detail, /type-grass">Grass<\/span><span>Special<\/span><span>Pow 35<\/span><span>Acc 100%/)
+  assert.match(detail, /<span>Status<\/span><span>Pow —<\/span>/)
+  assert.match(detail, /Tackle<\/span><span class="pc-move-specs">.*Physical/)
+  assert.equal((detail.match(/class="pc-move-pp/g) || []).length, 2)
+  assert.match(detail, /aria-label="Health: 4 of 30"/)
+  assert.match(detail, /data-level="crit"/)
+  assert.match(detail, /tag--warn">Poisoned/)
+  assert.match(detail, /Experience<\/dt><dd>2,300<small>235 to Lv\. 16/)
+  assert.match(detail, /Original trainer<\/dt><dd>ID 00042/)
+  assert.match(detail, /Elite Four wins<\/dt><dd>2</)
+  assert.doesNotMatch(detail, /Friendship|Hidden Power|Pokérus|Caught/)
+})
+
+test('Gen II details add Hidden Power, friendship, caught data and Pokérus', async () => {
+  const party = [mon(undefined, undefined, 50, {slot: 1, hp: 151, max_hp: 151, friendship: 255, trainer_id: 7,
+    experience: {total: 125000, remaining: 0, percent: 100, max_level: true}, pokerus: 'infected',
+    hidden_power: {type: 'Fire', power: 70}, caught: {level: 3, location: 'Route 29', time: 'Morning'},
+    elite_four_wins: null, move_details: [{name: 'Hidden Power', type: 'Normal', pp: 15, max_pp: 15, power: 1, accuracy: 100}]})]
+  const view = pc([], '?box=party', party)
+  await view.ready()
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  const detail = view.element('#pc-detail-body').innerHTML
+  assert.match(detail, /type-fire">Fire<\/span><span>Special<\/span><span>Pow 70/)
+  assert.match(detail, /Hidden Power<\/dt><dd><span class="tag type-badge type-fire">Fire<\/span> 70/)
+  assert.match(detail, /Friendship<\/dt><dd>255/)
+  assert.match(detail, /Caught<\/dt><dd>Route 29<small>Lv\. 3 · Morning/)
+  assert.match(detail, /Pokérus<\/dt><dd><span class="tag tag--warn">Infected/)
+  assert.match(detail, /Elite Four wins<\/dt><dd>Unknown/)
+  assert.match(detail, /Max level/)
+  assert.match(detail, />MAX</)
+})
+
+test('egg details show only hatching progress', async () => {
+  const view = pc([mon(1, 1, 5, {egg: true, name: 'Sneasel', nick: 'EGG', dex: 215, egg_cycles: 1, friendship: 1,
+    trainer_id: 9, hp: 20, max_hp: 20, type_names: ['Dark', 'Ice'], hidden_power: {type: 'Fire', power: 70},
+    move_details: [{name: 'Scratch', type: 'Normal', pp: 35, max_pp: 35, power: 40, accuracy: 100}]})], '?box=1')
+  await view.ready()
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  const detail = view.element('#pc-detail-body').innerHTML
+  assert.match(detail, /1 egg cycle<small>About 256 steps/)
+  assert.match(detail, /Not yet hatched/)
+  assert.doesNotMatch(detail, /Sneasel|Scratch|Friendship|Hidden Power|individual-stats|role="meter"|Dark/)
 })

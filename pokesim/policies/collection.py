@@ -6,15 +6,21 @@ from ..duplicates import quality
 from .move_development import evolution_wait, move_name
 from ..investment import automatic_trade_protected, training_investment, potential_power, assessment, GOOD_TAIL, SEARCH_BUDGET
 from functools import lru_cache
-from ..game_data import load
+from ..game_data import current_variant, load
 
 from .progression import GRASS_TILES, Goal, object_goal, at
+
+YELLOW = current_variant() == 'yellow'
+# Yellow's Pikachu refuses the Thunder Stone, and the game treats every Pikachu
+# the player caught as its partner, so Raichu only arrives through a link trade.
+REFUSES_EVOLUTION = {25} if YELLOW else set()
 from .navigation import DIRS
 from .director import AdventureDirector
 from . import training, marathon, league_rotation
 from ..shiny import is_shiny
 from ..milestones import is_perfect, level_credit
 from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, EVENTS, event_set, object_hidden
+from ..ram import MAP_NAMES
 
 DATA = load('collection.json')
 EVOS = {int(sid): rows for sid, rows in DATA['evolutions'].items()}
@@ -24,6 +30,11 @@ CENTERS = tuple((m, 13, 4) for m, w in WORLD.items() if 'Pokecenter' in w['name'
 CENTERS += ((MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8),)
 LEAGUE = {MAPS[n] for n in ('LORELEIS_ROOM','BRUNOS_ROOM','AGATHAS_ROOM','LANCES_ROOM','CHAMPIONS_ROOM','HALL_OF_FAME')}
 REPEATABLE = {'grass', 'surf', 'fish', 'safari'}
+
+
+def place(map_id):
+    """The map as the player reads it, e.g. Seafoam Islands B3F, not SeafoamIslandsB3F."""
+    return MAP_NAMES.get(map_id) or WORLD[map_id]['name']
 
 
 def held_count(snapshot, species):
@@ -454,6 +465,11 @@ class Collection:
                         return False
                 except ValueError:
                     pass
+        # Yellow gives Bulbasaur to a trainer whose Pikachu is happy, and Squirtle after the Thunder Badge.
+        if YELLOW and source.get('fragment') == 'MELANIE' and getattr(s, 'pikachu_happiness', 0) < 147:
+            return False
+        if YELLOW and source.get('fragment') == 'OFFICER_JENNY' and not s.badges & 4:
+            return False
         if source['map'] in {MAPS['CERULEAN_CAVE_1F'], MAPS['CERULEAN_CAVE_2F'], MAPS['CERULEAN_CAVE_B1F']} and not self.completed_champion:
             return False
         if source.get('fragment') in ('HITMONLEE','HITMONCHAN'):
@@ -469,6 +485,8 @@ class Collection:
         # The unavailable starter families have no wild source in Red or Blue.
         for _ in range(4):
             for sid in tuple(reachable):
+                if dex(sid) in REFUSES_EVOLUTION:
+                    continue
                 reachable.update(e['species'] for e in EVOS.get(sid,[]) if e['method'] != 'trade')
             for sid,rows in sources.items():
                 if any(r['method']=='trade' and r['give'] in reachable for r in rows):
@@ -493,7 +511,9 @@ class Collection:
                 status,reason = 'available','Save coins for the Game Corner prize'
             if d in (134,135,136) and d not in s.owned and not any(dex(p)==133 for p in held) and any(i in s.owned for i in (134,135,136)):
                 status,reason = 'unavailable','Requires another Eevee after the evolution choice'
-            if status != 'caught' and d in range(1,10):
+            if status != 'caught' and d == 26 and YELLOW:
+                status,reason = 'external','Pikachu refuses to evolve in Yellow. Raichu requires a link trade'
+            if status != 'caught' and d in range(1,10) and not YELLOW:
                 family = (d-1)//3
                 if not any(i in s.owned for i in range(family*3+1,family*3+4)):
                     status,reason = 'external','Requires another starter through trading'
@@ -674,7 +694,7 @@ class Collection:
             if held_count(s, sid) <= self.demand().get(dex(sid), 0):
                 continue
             for evo in EVOS.get(sid, []):
-                if evo['method'] == 'trade':
+                if evo['method'] == 'trade' or dex(sid) in REFUSES_EVOLUTION:
                     continue
                 registered = dex(evo['species']) in s.owned
                 evolved = dict(mon, species=evo['species'])
@@ -815,7 +835,7 @@ class Collection:
             points=tiles(p)
             purpose = ('a partner another adventure needs' if self.demand().get(dex(sid), 0)
                        else 'more chances to find high DV partners' if p.get('dv_hunt') else 'another partner for the collection' if p.get('repeat') else 'a missing Pokédex entry')
-            return Goal('collect_hunt','Find '+name(sid),f'Search {WORLD[p["map"]]["name"]} for {purpose}',
+            return Goal('collect_hunt','Find '+name(sid),f'Search {place(p["map"])} for {purpose}',
                         tuple(t[:3] for t in points), approaches=tuple(t for t in points if t[3]))
         if mode in ('gift','static','trade','fossil'):
             if mode == 'static' and dex(sid) == 144 and not all(event_set(s.event_flags, flag) for flag in
@@ -826,7 +846,7 @@ class Collection:
             room=WORLD[p['map']]['symbol']
             fragment = p['fragment']
             if mode=='trade':
-                fragment=TRADE_NPCS[room]
+                fragment=fragment or TRADE_NPCS[room]
             if mode=='gift' and dex(sid) in (106,107) and not event_set(s.event_flags,'EVENT_BEAT_KARATE_MASTER'):
                 fragment='KARATE_MASTER'
             if mode=='gift' and dex(sid)==133:
@@ -841,7 +861,7 @@ class Collection:
         if mode=='trainer':
             return object_goal('collect_trainer','Meet an unbeaten trainer','Explore and earn experience and supplies',WORLD[p['map']]['symbol'],p['fragment'])
         if mode=='explore':
-            return Goal('collect_explore','Explore '+WORLD[p['map']]['name'],'Visit an area that has not been explored',(tuple(p['target']),))
+            return Goal('collect_explore','Explore '+place(p['map']),'Visit an area that has not been explored',(tuple(p['target']),))
         if mode=='prize':
             if not dict(s.items).get(ITEMS['COIN_CASE']):
                 return object_goal('collect_coins','Get the Coin Case','Prepare to exchange coins for Porygon','CELADON_DINER','FISHER')
@@ -858,11 +878,36 @@ class Collection:
             return object_goal('collect_amber','Collect Old Amber','Revive Aerodactyl at the Cinnabar lab','MUSEUM_1F','SCIENTIST2')
         return None
 
+    _partner_cache = [None, ()]
+
     @staticmethod
     def partner_matches(s, project):
+        """Every held copy of the project's trainee.
+
+        Several planners ask on each step and the answer reads the whole PC, so it is kept until
+        the party, the PC or the trainee changes. Callers get their own rows.
+        """
+        scoped = bool(project.get('scoped_partner'))
+        key = (tuple(s.party), getattr(s, 'stored_details', None), getattr(s, 'stored_pokemon', None),
+               project.get('trainee_key'), scoped, tuple(project['family']) if scoped else None,
+               project.get('trainee_nick') if scoped else None)
+        try:
+            hash(key)
+        except TypeError:
+            return Collection._partner_matches(s, project)
+        cache = Collection._partner_cache
+        if cache[0] != key:
+            cache[:] = [key, tuple(Collection._partner_matches(s, project))]
+        return [dict(row) for row in cache[1]]
+
+    @staticmethod
+    def _partner_matches(s, project):
         from ..trade.preferences import identity
-        rows = [dict(asdict(mon), party_index=i) for i, mon in enumerate(s.party)] + s.storage_entries()
-        rows = [mon for mon in rows if identity(mon) == project.get('trainee_key')]
+        from pokesim_core.identity import pokemon_identity
+        key = project.get('trainee_key')
+        rows = [dict(asdict(mon), party_index=i) for i, mon in enumerate(s.party)
+                if pokemon_identity(mon.trainer_id, mon.dvs) == key]
+        rows += [mon for mon in s.storage_entries() if identity(mon) == key]
         if project.get('scoped_partner'):
             rows = [mon for mon in rows if mon['species'] in project['family']]
             nick = project.get('trainee_nick')
@@ -881,12 +926,12 @@ class Collection:
 
     def trade_deposit_target(self, s, project):
         """Keep battle strength, field moves, and reserved partners while making space."""
-        from .team import potential
+        from .team import STAYS_IN_PARTY, potential
         from ..trade.preferences import identity
         choices = self.trade_preferences()
         strongest = max(range(len(s.party)), key=lambda i: s.party[i].level, default=None)
         candidates = [i for i, mon in enumerate(s.party)
-                      if i != strongest and mon.species != project['give']
+                      if i != strongest and mon.species != project['give'] and mon.species not in STAYS_IN_PARTY
                       and choices.get(identity(asdict(mon)), {}).get('state') not in ('locked', 'offered')
                       and not any(move in (15, 19, 57, 70, 148)
                                   and not any(move in other.moves for j, other in enumerate(s.party) if j != i)

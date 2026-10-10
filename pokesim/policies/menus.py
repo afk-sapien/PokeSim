@@ -19,3 +19,5 @@ class MenuDecision:
     actions: list[Action]
     reason: str | None = None
     supplies_prepared: bool = False
+    # A mart or PC operation for a Core shortcut, like ('buy', item, quantity) or ('deposit', slot).
+    request: tuple | None = None

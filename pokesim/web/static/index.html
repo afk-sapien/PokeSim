@@ -35,11 +35,11 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <div class="who"><p class="micro">Trainer · <span id="trainer-rival"></span></p><h1 id="trainer-name">Getting ready</h1></div>
 <div class="stats">
 <div class="stat"><span class="micro">Badges <small id="badge-count">0 / 8</small></span><div class="badge-bank" id="badges"></div></div>
-<div class="stat"><span class="micro">Registered</span><strong class="readout" id="dex-count">0<span class="unit">/151</span></strong></div>
+<div class="stat"><span class="micro">Registered</span><strong class="readout" id="dex-count">0<span class="unit">/${dex_total}</span></strong></div>
 <div class="stat"><span class="micro">Areas</span><strong class="readout" id="areas">0</strong></div>
 <div class="stat"><span class="micro">League wins</span><strong class="readout" id="league-wins" title="Completed Elite Four and Champion runs">0</strong></div>
 <div class="stat"><span class="micro">Money</span><strong class="readout" id="money">₽0</strong></div>
-<div class="stat"><span class="micro">Play hours <small id="clock-note"></small></span><strong class="readout" id="playtime">00:00</strong></div>
+<div class="stat"><span class="micro">Play hours <small id="clock-note"></small></span><strong class="readout" id="playtime">00:00</strong><span class="note" id="game-clock" hidden></span></div>
 </div>
 </header>
 
@@ -48,12 +48,12 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <section class="game-card" aria-labelledby="live-heading">
 <div class="column-head"><p class="legend legend--ink">On screen</p><span class="micro screen-corner">POKÉMON · GAME BOY</span></div>
 <div class="bezel">
-<div class="bezel-head"><span class="on-air"><i class="lamp lamp--blink" data-on="crit" aria-hidden="true"></i>LIVE</span><h2 id="live-heading">Somewhere in Kanto</h2><span class="coords" id="coordinates">KANTO</span><button class="bezel-key" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">↗</button></div>
+<div class="bezel-head"><span class="on-air"><i class="lamp lamp--blink" data-on="crit" aria-hidden="true"></i><span class="on-air-label">LIVE</span></span><h2 id="live-heading">Somewhere in ${region}</h2><span class="coords" id="coordinates">KANTO</span><button class="bezel-key" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">↗</button></div>
 <div class="screen-well" id="screen"><img id="stream" alt="Live Pokémon game"></div>
-<div class="bezel-foot"><span class="activity" id="game-activity">The adventure is loading…</span></div>
+<div class="bezel-foot"><span class="activity" id="game-activity">The adventure is loading…</span><span class="mode"><i class="lamp" data-on="ok" aria-hidden="true"></i><span id="control-mode">AI is playing</span></span></div>
 </div>
-<div class="deck controls"><button id="take-control" class="key key--primary">Take control</button><button id="pause" class="key" title="Pause the game and AI">Pause</button><button id="save" class="key" title="Save a checkpoint now. Progress also saves automatically.">Save now</button><label class="live-speed"><select id="simulation-speed" aria-label="Simulation speed" title="Speed for this adventure. Manual play runs at 1×."><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="16">16×</option><option value="0">Max</option></select></label><button id="sound" class="key" aria-pressed="false" title="Toggle game audio at the current simulation speed">Sound: Off</button><span id="sound-status" class="micro" role="status" hidden></span>${save_export_control}<span class="mode"><i class="lamp" data-on="ok" aria-hidden="true"></i><span id="control-mode">AI is playing</span></span></div>
-<details class="gamepad manual-controls" id="manual-controls"><summary>Gamepad and keyboard</summary><div class="pad-body controller"><div class="dpad"><span></span><button data-b="up" aria-label="Move up">▲</button><span></span><button data-b="left" aria-label="Move left">◀</button><button data-b="down" aria-label="Move down">▼</button><button data-b="right" aria-label="Move right">▶</button></div><div class="abxy"><button data-b="b">B</button><button data-b="a">A</button><button data-b="start">Start</button><button data-b="select">Select</button></div><div class="pad-help"><p id="control-hint">Press any game control to pause the AI and take over.</p><p class="micro">Arrows · Z / A · X / B · Enter / Start · Shift / Select</p></div></div></details>
+<div class="deck controls"><button id="take-control" class="key key--primary">Take control</button><button id="pause" class="key" title="Pause the game and AI">Pause</button><button id="save" class="key" title="Save a checkpoint now. Progress also saves automatically.">Save now</button><label class="live-speed"><select id="simulation-speed" aria-label="Simulation speed" title="Speed for this adventure. Manual play runs at 1×."><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="16">16×</option><option value="0">Max</option></select></label><button id="sound" class="key" aria-pressed="false" title="Toggle game audio at the current simulation speed">Sound: Off</button><span id="sound-status" class="micro" role="status" hidden></span>${save_export_control}${view_link_control}</div>
+<details class="gamepad manual-controls" id="manual-controls"><summary>Gamepad and keyboard</summary><div class="pad-body controller"><div class="dpad"><span></span><button data-b="up" aria-label="Move up">▲</button><span></span><button data-b="left" aria-label="Move left">◀</button><button data-b="down" aria-label="Move down">▼</button><button data-b="right" aria-label="Move right">▶</button></div><div class="abxy"><button data-b="b">B</button><button data-b="a">A</button><button data-b="start">Start</button><button data-b="select">Select</button></div><div class="pad-help"><p class="keymap-title">Keyboard</p><dl class="keymap"><div><dt>Move</dt><dd><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd></dd></div><div><dt>A</dt><dd><kbd>Z</kbd></dd></div><div><dt>B</dt><dd><kbd>X</kbd></dd></div><div><dt>Start</dt><dd><kbd>Enter</kbd></dd></div><div><dt>Select</dt><dd><kbd>Shift</kbd></dd></div></dl></div></div></details>
 </section>
 </div>
 
@@ -83,7 +83,8 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <dialog id="partner-detail" class="partner-detail" aria-labelledby="partner-detail-heading"><form method="dialog"><button class="key partner-close" aria-label="Close Pokémon details">Close</button></form><div id="partner-detail-content"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script src="${game_base}/static/screen.js?v=1"></script>
-<script src="${game_base}/static/audio.js?v=2"></script>
+<script src="${game_base}/static/audio-buffer.js?v=1"></script>
+<script src="${game_base}/static/audio.js?v=3"></script>
 <script src="${game_base}/static/app.js?v=controls-1"></script>
 </body>
 </html>

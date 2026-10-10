@@ -5,10 +5,17 @@ Only map geometry and game constants are exported, never ROM images.
 """
 import re
 
+DEBUG_BLOCK = re.compile(r"^IF DEF\(_DEBUG\)\n.*?^(?:ELSE\n(.*?)^)?ENDC\n", re.M | re.S)
+
+
+def release_source(text):
+    """Drop debug build blocks, such as the pokeyellow warps out of the player's room."""
+    return DEBUG_BLOCK.sub(lambda match: match[1] or "", text)
+
 
 def generate(src, revision):
     def read(path):
-        return (src / path).read_text(encoding="utf-8")
+        return release_source((src / path).read_text(encoding="utf-8"))
 
     def constants(path):
         return {name: int(value, 16) for name, value in re.findall(

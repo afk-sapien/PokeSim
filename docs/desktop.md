@@ -35,7 +35,7 @@ pipx ensurepath
 Open a new terminal so it can find uv. Install the current public PokeSim release:
 
 ```sh
-uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.4.20/pokesim-0.4.20-py3-none-any.whl
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.5.0/pokesim-0.5.0-py3-none-any.whl
 uv tool update-shell
 ```
 
@@ -45,7 +45,8 @@ administrator terminal. No system Python, Git, Docker, or ROM is needed during
 this package installation.
 
 PokeSim's package comes from this project's [GitHub releases](https://github.com/afk-sapien/PokeSim/releases).
-Do not use `pip install pokesim` from PyPI, which is not this project's release channel.
+Do not use `pip install pokesim`: PyPI has an unrelated project with that name, and neither
+`pokesim-core` nor `pyboy-rs` is published there. Install only from the release files above.
 On Windows, the Python package installation creates the `pokesim-desktop.exe`
 launcher. There is no separate PokeSim EXE download in this installation flow.
 
@@ -54,7 +55,7 @@ launcher. There is no separate PokeSim EXE download in this installation flow.
 With pipx and Python 3.12 already installed, you can install PokeSim directly:
 
 ```sh
-pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.4.20/pokesim-0.4.20-py3-none-any.whl
+pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.5.0/pokesim-0.5.0-py3-none-any.whl
 pipx ensurepath
 ```
 
@@ -124,7 +125,7 @@ pokesim-desktop
 ```
 
 1. PokeSim opens your Adventure Library directly in the default browser. No sign-in or owner key is needed.
-2. Choose **New adventure**, enter a name, select your own clean Pokémon Red or Blue (USA, Europe) ROM, and choose a starter.
+2. Open **Settings → Game cartridges** and drop your own clean Pokémon Red, Blue, Yellow, Gold, Silver or Crystal ROM on any slot. PokeSim recognises the game and files it in the right slot. Then choose **New adventure**, pick the game from your installed cartridges, enter a name and choose a starter.
 3. Setup verifies the ROM and downloads a small pinned reference archive to prepare maps and Pokédex information. ROMs are never downloaded.
 4. Start the adventure. Create another game whenever you want, including another copy of the same version.
 
@@ -137,7 +138,7 @@ Prepared adventures run offline. Adding another adventure can reuse an installed
 - Opening PokeSim twice reopens the same application. The application and each adventure have exclusive process locks.
 - A stopped adventure uses no emulator process. Starting it resumes from its saved checkpoint.
 - Keep the computer awake to advance the games. Sleeping or powered-off computers do not accumulate simulated progress.
-- Desktop launch uses an available loopback port, accessible only from your computer. The Library has no account or owner-key step. For remote access, use an authenticated reverse proxy or a trusted private network as described in [self-hosting](self-hosting.md). Anyone who can reach the Library can manage its adventures.
+- Desktop launch uses an available loopback port, accessible only from your computer. The Library has no account or owner-key step. Never expose it directly to the internet. For remote access, put it behind something that adds authentication, such as Tailscale, Cloudflare Access, or your own reverse proxy with a login. See [self-hosting](self-hosting.md#configure-ports-and-remote-access). Anyone who can reach the Library can manage its adventures.
 
 ## Notifications
 
@@ -250,13 +251,17 @@ failing compiled backend falls back to Python. Set the environment variable
 `POKESIM_NAVIGATION_BACKEND=python` before launch to force the Python backend even
 when Numba is installed. Restart the application after changing this setting.
 
-The [Python install workflow](https://github.com/afk-sapien/PokeSim/actions/workflows/python-install.yml) builds and installs the wheel in a fresh environment on Windows x86-64, Intel macOS, Apple Silicon, and Linux x86-64 and ARM64. It checks the installed launcher and actual native worker processes using PyBoy's demonstration ROM. A successful run establishes validation for that platform. Other CPUs require compatible native dependencies and are not covered by this matrix.
+The [Python install workflow](https://github.com/afk-sapien/PokeSim/actions/workflows/python-install.yml) builds and installs the wheel in a fresh environment on Windows x86-64, Intel macOS, Apple Silicon, and Linux x86-64 and ARM64. It checks the installed launcher and actual native worker processes using the demonstration ROM bundled with PyBoy RS. A successful run establishes validation for that platform. Other CPUs require compatible native dependencies and are not covered by this matrix.
+
+### Unsupported platforms
+
+The emulator ships as one prebuilt wheel per platform: Linux x86-64 and ARM64 (glibc), macOS Intel and Apple Silicon, and Windows x64. Windows on ARM64, 32-bit ARM, FreeBSD and musl Linux (Alpine) have no wheel. PokeSim installs nothing for the emulator on them: `install.sh` and `install.ps1` stop with a clear message before downloading anything, and a manual install leaves the application unable to start with the same message. Do not work around this with `pip install pokesim`, which installs an unrelated PyPI project, or by installing `pyboy-rs` or `pokesim-core` from PyPI. Use the Docker image (linux/amd64) on such a machine if Docker is available.
 
 ## Troubleshooting
 
 - **`pokesim-desktop` or `uv` is not recognized:** Use the full path printed by the installer. Run its `uv tool update-shell` command and open a new terminal. For pipx, use `pipx ensurepath`.
 - **An executable already exists from another installer:** Keep using that installer, or uninstall its PokeSim package before switching between pipx and uv. Uninstalling the package keeps your library and saves.
-- **Python version, compiler, or PyBoy build error:** Use the automatic installer or the manual uv command above to select Python 3.12. A newer system Python may lack compatible dependency wheels on your platform. Include your OS, CPU, and the complete error in a [support request](../SUPPORT.md).
+- **Python version or dependency install error:** Use the automatic installer or the manual uv command above to select Python 3.12. A newer system Python may lack compatible dependency wheels on your platform. Include your OS, CPU, and the complete error in a [support request](../SUPPORT.md).
 - **`externally-managed-environment`:** Use the installer, uv, pipx, or a virtual environment. Do not use sudo pip or override your system's package protections.
 - **Download or certificate error:** Check your connection and any proxy configuration, then retry. Do not disable TLS verification.
 

@@ -1,0 +1,86 @@
+"""Verified cartridges and generation-specific settings."""
+from dataclasses import dataclass
+import hashlib
+import io
+from pathlib import PurePosixPath
+import zipfile
+
+
+@dataclass(frozen=True)
+class Cartridge:
+    version: str
+    generation: int
+    sha1: str
+    title: str
+    starters: tuple[str, ...]
+
+
+KANTO_STARTERS = ('bulbasaur', 'charmander', 'squirtle')
+JOHTO_STARTERS = ('chikorita', 'cyndaquil', 'totodile')
+# Professor Oak gives Pikachu in Yellow. The other Kanto starters arrive as gifts later.
+YELLOW_STARTERS = ('pikachu',)
+CARTRIDGES = (
+    Cartridge('red', 1, 'ea9bcae617fdf159b045185467ae58b2e4a48b9a', 'Pokémon Red', KANTO_STARTERS),
+    Cartridge('blue', 1, 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2', 'Pokémon Blue', KANTO_STARTERS),
+    Cartridge('yellow', 1, 'cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1', 'Pokémon Yellow', YELLOW_STARTERS),
+    Cartridge('gold', 2, 'd8b8a3600a465308c9953dfa04f0081c05bdcb94', 'Pokémon Gold', JOHTO_STARTERS),
+    Cartridge('silver', 2, '49b163f7e57702bc939d642a18f591de55d92dae', 'Pokémon Silver', JOHTO_STARTERS),
+    Cartridge('crystal', 2, 'f2f52230b536214ef7c9924f483392993e226cfb', 'Pokémon Crystal (Rev 1)', JOHTO_STARTERS),
+)
+
+
+# The shelf in Settings has one slot per game PokeSim plays or is about to play, in this order.
+SLOTS = ('red', 'blue', 'yellow', 'gold', 'silver', 'crystal')
+SLOT_TITLES = {version: f'Pokémon {version.capitalize()}' for version in SLOTS}
+SLOT_GENERATIONS = {'red': 1, 'blue': 1, 'yellow': 1, 'gold': 2, 'silver': 2, 'crystal': 2}
+
+
+def supported_versions():
+    """The versions this build can identify, in shelf order."""
+    known = {cartridge.version for cartridge in CARTRIDGES}
+    return [version for version in SLOTS if version in known] + sorted(known - set(SLOTS))
+
+
+def supported_names():
+    names = [version.capitalize() for version in supported_versions()]
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' or ' + names[-1]
+
+
+def unsupported_message():
+    return (f'This file is not a game PokeSim can play. Add a clean English Pokémon {supported_names()} ROM '
+            '(Crystal must be Rev 1), as a .gb or .gbc file or a ZIP holding one.')
+
+
+def identify(raw):
+    digest = hashlib.sha1(raw).hexdigest()
+    return next((cartridge for cartridge in CARTRIDGES if cartridge.sha1 == digest), None)
+
+
+def by_version(version):
+    cartridge = next((cartridge for cartridge in CARTRIDGES if cartridge.version == version), None)
+    if cartridge is None:
+        raise ValueError('Unknown cartridge version')
+    return cartridge
+
+
+def validate_starter(starter, version=None):
+    choices = by_version(version).starters if version else (*KANTO_STARTERS, *YELLOW_STARTERS, *JOHTO_STARTERS)
+    if starter != 'random' and starter not in choices:
+        raise ValueError('Choose a starter from this cartridge')
+
+
+def unpack(raw):
+    """Accept a verified cartridge or a ZIP containing exactly one cartridge."""
+    if raw[:4] == b'PK\x03\x04':
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                entries = [entry for entry in archive.infolist() if not entry.is_dir()
+                           and PurePosixPath(entry.filename).suffix.lower() in {'.gb', '.gbc'}]
+                if len(entries) != 1 or entries[0].file_size > 2 * 1024 * 1024:
+                    raise ValueError('Choose a ZIP containing exactly one supported cartridge')
+                raw = archive.read(entries[0])
+        except (zipfile.BadZipFile, RuntimeError, NotImplementedError) as error:
+            raise ValueError('Choose an intact, unencrypted ROM ZIP') from error
+    if identify(raw) is None:
+        raise ValueError(unsupported_message())
+    return raw

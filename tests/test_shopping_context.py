@@ -7,6 +7,7 @@ from pokesim.screen import Screen
 from pokesim.strategy_data import ITEMS, MAPS
 from test_events import snap
 from test_strategy import flags, mon, menu
+from shortcut_fakes import PRESS, Recorder
 
 
 def shopping_state():
@@ -15,19 +16,17 @@ def shopping_state():
                 event_flags=flags('EVENT_GOT_POKEDEX'))
 
 
-def test_active_shop_list_takes_priority_over_pending_pc_upgrade():
+def test_mart_counter_takes_priority_over_pending_pc_upgrade():
     p = StrategicPolicy(7)
+    recorder = Recorder.on(p)
     p.goal = Goal('party_upgrade', 'Upgrade the party', 'Visit the PC')
     p.pc.species = 17
     p.pc.destination = MAPS['LAVENDER_POKECENTER']
-    p.shop.buying = True
-    p.menu_context = 'shop'
     s = shopping_state()
-    memory = menu({4: 'GREAT BALL', 6: 'SUPER POTION', 8: 'CANCEL'}, (5, 4), top=(5, 4))
+    memory = menu({1: '  BUY', 3: '  SELL', 5: '  QUIT'}, (1, 1), top=(1, 1))
     p._pc_target = lambda _: (_ for _ in ()).throw(AssertionError('Shop must not read a PC slot'))
-    action = p._dispatch(s, Screen(memory), 'list', memory)[0]
-    assert p.shop.item == ITEMS['GREAT_BALL']
-    assert action.button == 'a'
+    assert p._dispatch(s, Screen(memory), 'shop', memory)[0] == PRESS
+    assert recorder.last.kind == 'buy_item' and recorder.last.item == ITEMS['GREAT_BALL']
 
 
 def test_finished_shop_list_exits_even_when_pc_upgrade_is_pending():
@@ -50,12 +49,12 @@ def test_pc_upgrade_destination_stays_at_center_during_shop_detour():
     assert p.menu_context == 'shop'
 
 
-def test_storage_list_still_withdraws_target_inside_pc_context():
+def test_storage_menu_still_withdraws_target_inside_pc_context():
     p = StrategicPolicy(7)
+    recorder = Recorder.on(p)
     p.goal = Goal('party_upgrade', 'Upgrade the party', 'Visit the PC')
-    p.menu_context = 'pc'
-    p.pc.operation = 'withdraw'
     p.pc.species = 17
     s = replace(shopping_state(), boxed_pokemon=((165, 3), (17, 22)))
-    memory = menu({4: 'RATTATA', 6: 'CUBONE', 8: 'CANCEL'}, (5, 4), top=(5, 4))
-    assert p._dispatch(s, Screen(memory), 'list', memory)[0].button == 'down'
+    memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
+    assert p._dispatch(s, Screen(memory), 'pc', memory)[0] == PRESS
+    assert recorder.last.kind == 'withdraw_pokemon' and recorder.last.position == 1

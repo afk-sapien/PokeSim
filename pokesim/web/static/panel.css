@@ -698,19 +698,21 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   border-top: 0;
   box-shadow: var(--key-inset);
 }
-.deck .mode {
+.bezel-foot .mode {
   display: flex;
+  flex: none;
   align-items: center;
   gap: var(--s2);
   margin-left: auto;
-  padding-right: var(--s1);
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
   text-transform: uppercase;
-  color: var(--ink-2);
+  color: #B9C29F;
 }
-.game-card.is-manual .deck .mode { color: var(--signal); }
-.game-card.is-manual .deck .mode .lamp { background: var(--signal-lamp); }
+.game-card.is-manual .bezel-foot .mode { color: var(--signal-lamp); }
+.game-card.is-manual .bezel-foot .mode .lamp { background: var(--signal-lamp); }
+
+
 
 .gamepad {
   background: var(--panel-2);
@@ -762,7 +764,12 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .dpad button:active,
 .abxy button:active { background: var(--well); box-shadow: var(--well-inset); }
 .pad-help { flex: 1 1 200px; display: grid; gap: var(--s2); }
-.pad-help p { font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.keymap-title { font: var(--f-label) / 1.3 var(--font-mono); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); }
+.keymap { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s2) var(--s4); margin: 0; }
+.keymap > div { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.keymap dt { font: var(--f-legend) / 1 var(--font-panel); text-transform: uppercase; color: var(--ink); }
+.keymap dd { display: flex; gap: 4px; margin: 0; }
+.keymap kbd { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; background: var(--panel); border: var(--hair) solid var(--rule); box-shadow: var(--key-inset); font: 12px / 1 var(--font-mono); color: var(--ink); }
 
 /* ---- the plan ----------------------------------------------------------
    The machine's statement of intent, directly under the picture it
@@ -803,6 +810,10 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   text-transform: uppercase;
 }
 .plan .note { font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+.stat .note { display: block; margin-top: var(--s1); font: var(--f-micro) / 1.3 var(--font-mono); letter-spacing: var(--track-micro); color: var(--ink-3); }
+.stat .note[hidden] { display: none; }
+.egg-plate { display: grid; place-items: center; width: 100%; height: 100%; color: var(--plate-ink); }
+.egg-plate svg { width: 60%; height: auto; max-width: 64px; image-rendering: pixelated; }
 
 /* ---- party ------------------------------------------------------------ */
 .column-head {
@@ -1044,11 +1055,13 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .mon-head .slotno, .mon-head .dv, .mon-id .dexno { display: none; }
   .mon-head .lv { font-size: var(--f-legend); }
 }
-/* A phone-width bay fits the longest Gen 1 names (Blastoise, Charmeleon)
-   once the name's tracking comes in and the level loses its prefix gap. */
+/* A phone-width bay fits ten-letter names (Charmeleon, Feraligatr, SHRIMPDESK)
+   once the name's tracking comes in, the type steps down and the level drops its prefix. */
 @container bay (max-width: 400px) {
-  .mon-head { gap: var(--s1); }
-  .mon-head .name { letter-spacing: 0.01em; }
+  .mon-head { gap: var(--s1); padding-left: var(--s2); }
+  .mon-head .name { font-size: 13px; letter-spacing: 0; }
+  .mon-head .lv { font-size: 13px; }
+  .mon-head .lv em { display: none; }
 }
 /* On the narrowest phones the name gets its own line rather than two letters. */
 @container bay (max-width: 300px) {
@@ -1148,9 +1161,6 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .bezel-head { padding-bottom: var(--s2); }
   .bezel-head h2 { font-size: var(--f-legend); }
   .bezel-foot { padding-top: var(--s2); }
-  .deck .key { flex: 1 1 auto; min-height: 44px; }
-  .deck .key--primary { flex-basis: 100%; }
-  .deck .mode { width: 100%; justify-content: center; margin-left: 0; }
 
   .plan { grid-template-columns: minmax(0, 1fr); }
   .plan .plan-next { border-left: 0; border-top: var(--hair) solid var(--rule-faint); }
@@ -1242,3 +1252,79 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 
 .shiny-badge { color: var(--signal) }
 .shiny-badge { border: 1px solid currentColor }
+
+/* ---- live controls: one even grid of identical keys --------------------
+   Every control is the same height and type. Wide enough for each key to
+   hold its label: one row of equal keys. Otherwise an even grid (3 columns,
+   then 2 on phones) with Take control spanning so no row is ragged. A label
+   that still does not fit wraps inside its key instead of clipping or
+   pushing the key wider. Status text gets its own full-width line. */
+.deck.controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--s2);
+}
+.deck.controls > * { min-width: 0; margin: 0; }
+.deck.controls .key--primary { grid-column: span 2; }
+.deck.controls:has(#export-save) .key--primary { grid-column: auto; }
+.deck.controls .key,
+.deck.controls .live-speed select {
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 6px;
+  font: var(--f-legend) / 1.15 var(--font-panel);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.deck.controls .live-speed { display: block; width: 100%; }
+.deck.controls .live-speed select {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  padding: 0 24px 0 6px;
+  text-align-last: center;
+  background: var(--panel-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23555'/%3E%3C/svg%3E") no-repeat right 9px center;
+  border: var(--hair) solid var(--rule);
+  border-radius: 0;
+  box-shadow: var(--key-inset);
+  color: var(--ink);
+  cursor: pointer;
+}
+.deck.controls #sound-status {
+  grid-column: 1 / -1;
+  text-align: center;
+  font: var(--f-micro) / 1.4 var(--font-mono);
+  color: var(--ink-2);
+}
+.deck.controls #sound-status[hidden] { display: none; }
+
+/* One row of five equal keys once each key is about 130px wide. */
+@media (min-width: 821px) {
+  .deck.controls:not(:has(#export-save)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .deck.controls:not(:has(#export-save)) .key--primary { grid-column: auto; }
+}
+@media (max-width: 560px) {
+  .deck.controls,
+  .deck.controls:has(#export-save) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .deck.controls .key--primary,
+  .deck.controls:has(#export-save) .key--primary,
+  .deck.controls #export-save { grid-column: 1 / -1; }
+}
+/* Long Gen 2 places (Azalea Pokémon Center 1F) need the smaller type to read on a phone. */
+@media (max-width: 560px) {
+  .bezel-head { gap: var(--s2); }
+  .bezel-head h2 { font-size: 12px; letter-spacing: 0; }
+  /* The blinking lamp still says live, and the place name gets the word's room. */
+  .bezel-head .on-air-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .bezel-head .coords { font-size: var(--f-micro); letter-spacing: 0; }
+}
+@media (max-width: 760px) {
+  .bezel-foot { flex-wrap: wrap; gap: var(--s1) var(--s3); }
+  .bezel-foot .mode { margin-left: 0; width: 100%; }
+}

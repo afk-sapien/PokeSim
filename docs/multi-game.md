@@ -25,12 +25,11 @@ Pokédex page. Nothing about a single run changes.
 
 | Instance | ROM | URL | Port | Data |
 | --- | --- | --- | --- | --- |
-| `pokesim` | Red | https://pokesim-red.tynet.app | 8930 | `/docker/pokesim/data` |
-| `pokesim-blue` | Blue | https://pokesim-blue.tynet.app | 8940 | `/docker/pokesim-blue/data` |
+| `pokesim` | Red | http://localhost:8930 | 8930 | `/opt/pokesim/data` |
+| `pokesim-second` | Blue | http://localhost:8940 | 8940 | `/opt/pokesim-second/data` |
 
-Both homeserver instances use the GUI update from September 13, 2026, including separate PC
-and Pokédex pages and locally installed sprites. The original `pokesim.tynet.app` URL remains
-an alias for Red. Deployment and rollback details are in [homeserver.md](homeserver.md).
+Both instances use the GUI update from September 13, 2026, including separate PC
+and Pokédex pages and locally installed sprites.
 
 Version selection already works: `config.KNOWN_ROM_SHA1` identifies the cartridge and
 `emulator.py` sets `collection.version` from it, so a Blue instance plans against Blue encounter
@@ -139,7 +138,7 @@ proposal needs it, which is what makes a premium price payable at all.
 
 ## Milestones
 
-1. **Blue instance — done.** `pokesim-blue` on servarr:8940, own data directory, available at https://pokesim-blue.tynet.app.
+1. **Blue instance — done.** `pokesim-second` on port 8940 with its own data directory.
 2. **Broker, read-only — built.** Poll both `/api/pokedex/status` endpoints and publish proposed trades —
    a trade board page showing what the two runs could exchange and at what price. No writes, so no
    risk, and it makes the negotiation rules visible before anything acts on them.

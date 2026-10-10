@@ -40,6 +40,14 @@ Run focused tests while editing, then the full suite for changes to shared behav
 See [the validation guide](docs/testing.md) for real Chromium tests, copied-save
 comparisons, and embedded build identity.
 
+Policies decide once per emulator step, so code that runs on every step must not redo work
+that grows with the dex, the party, the PC, a map or the navigation graph. Cache such a
+result on a cheap change key, such as the snapshot fields it reads or a version counter
+bumped on every mutation, and recompute only when the key changes. Callers that change a
+result must get their own copy. `tests/test_step_budget.py` runs the per-step decision on
+large synthetic Gen I and Gen II states and fails when a step goes over its budget, about
+5 ms median and 50 ms at most. Set `POKESIM_STEP_BUDGET_SCALE` to widen it on a slow machine.
+
 Optional ROM integration tests use your own supported ROM:
 
 ```sh
@@ -70,7 +78,7 @@ Do not treat them all as disposable caches.
 ## Compatibility and documentation
 
 Save-format changes need a format version, upgrade and rollback notes, and a recovery
-test. PyBoy is pinned deliberately. Test existing checkpoints before upgrading it.
+test. The emulator comes from `pokesim-core` and `pyboy-rs`, which are bounded to compatible ranges deliberately. Test existing checkpoints, including loading them with the previous release, before widening a range.
 Use `uv lock --upgrade-package PACKAGE` for an intentional dependency update, then rerun
 affected checks and the container build.
 

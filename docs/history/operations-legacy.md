@@ -72,7 +72,7 @@ For remote control, place authentication and TLS in front of the entire service.
 
 `VIEWER_ONLY=1` denies every request to `/api/control` and hides game controls. It also denies `/api/states`. Viewing remains unauthenticated unless protected by your proxy. Limit traffic and simultaneous streams in the proxy before exposing a viewing instance to a large audience.
 
-MJPEG streaming needs response buffering disabled and a long read timeout. The app sends `X-Accel-Buffering: no`. Configure the equivalent options in your proxy and test with an active browser stream. Use the [authenticated Caddy recipe](../proxy.md) for a complete deployment example.
+MJPEG streaming needs response buffering disabled and a long read timeout. The app sends `X-Accel-Buffering: no`. Configure the equivalent options in your proxy and test with an active browser stream. The authenticated Caddy recipe, since removed, was a complete deployment example.
 
 **Health and recovery**
 

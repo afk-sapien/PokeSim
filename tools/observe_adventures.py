@@ -38,7 +38,7 @@ def observe(root, output):
                     report['concerns'].append(f"{row['name']}: expected running, currently {row['state']}")
                 continue
             try:
-                state = app.request('GET', f'/games/{aid}/api/state')
+                state = app.request('GET', f'/games/{aid}/api/state', params={'storage': 1})
                 events = app.request('GET', f'/games/{aid}/api/events', params={'limit': 5, 'all': 1})
                 game = state.get('game') or {}
                 strategy = state.get('strategy') or {}

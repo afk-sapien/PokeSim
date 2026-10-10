@@ -48,7 +48,7 @@ def test_verified_cartridge_hook_attaches_without_changing_game_ram(tmp_path):
     rom = Path('roms/pokered.gb')
     if not rom.is_file():
         pytest.skip('Private ROM unavailable')
-    from pyboy import PyBoy
+    from pokesim_core.emulator import Emulator as PyBoy
     store = Store(tmp_path)
     pb = PyBoy(str(rom), window='null', ram_file=io.BytesIO(bytes(32768)))
     try:
@@ -84,7 +84,7 @@ def test_verified_encounter_receipts_ignore_trainers_transform_and_replays(tmp_p
         assert status(store)['seen'] == 2
 
 
-def test_shiny_capture_priority_and_pause_without_supplies():
+def test_shiny_capture_priority_and_no_pause_without_supplies():
     from dataclasses import replace
     from unittest.mock import Mock
     from test_events import snap
@@ -98,21 +98,67 @@ def test_shiny_capture_priority_and_pause_without_supplies():
                     owned=frozenset({1}), items=((ITEMS['POKE_BALL'], 4),))
     choice = choose_battle(snapshot, me, enemy, 0, capture_species=1, catch_attempts=99)
     assert choice.kind == 'item' and choice.index == 0 and 'shiny' in choice.reason
+    bare = replace(snapshot, items=())
+    assert choose_battle(bare, me, enemy, 0, capture_species=1).kind == 'run'
+    emu = _emulator()
+    assert not emu._report_uncatchable_shiny(snapshot)
+    assert emu._report_uncatchable_shiny(bare)
+    assert not emu.paused
+    emu._autosave.assert_not_called()
+
+
+def _emulator():
+    from unittest.mock import Mock
+    from pokesim.emulator import Emulator
     emu = Emulator.__new__(Emulator)
-    emu.manual_mode, emu.paused, emu._autosave = False, False, Mock()
-    assert not emu._protect_shiny(snapshot)
-    assert emu._protect_shiny(replace(snapshot, items=()))
-    assert emu.paused
-    emu._autosave.assert_called_once()
-    emu.manual_mode = True
-    assert not emu._protect_shiny(replace(snapshot, items=()))
+    emu.manual_mode, emu.paused, emu._autosave, emu._handle_events = False, False, Mock(), Mock()
+    return emu
+
+
+def test_uncatchable_shiny_is_reported_once_per_battle_with_the_reason():
+    from dataclasses import replace
+    from pokesim.events import LOW
+    from pokesim.ram import BOX_CAPACITY
+    from pokesim.strategy_data import ITEMS
+    from test_events import snap
+    from test_strategy import mon
+    me = mon(level=100, hp=300, max_hp=300, moves=(33,), pp=(35,))
+    shiny = snap(party=(me,) * 6, in_battle=1, enemy_species=84, enemy_shiny=True,
+                 items=((ITEMS['POKE_BALL'], 4),), boxed_pokemon=((1, 5),) * BOX_CAPACITY)
+    assert not shiny.can_catch
+    emu = _emulator()
+    for _ in range(3):
+        assert emu._report_uncatchable_shiny(shiny)
+    event, = emu._handle_events.call_args[0][0]
+    emu._handle_events.assert_called_once()
+    assert (event.type, event.priority) == ('shiny_missed', LOW)
+    assert event.title == 'Shiny Pikachu could not be caught: no storage space'
+    assert not emu.paused
+    # Battle over, then a new shiny without balls is a new report.
+    assert not emu._report_uncatchable_shiny(replace(shiny, in_battle=0, enemy_shiny=False))
+    assert emu._report_uncatchable_shiny(replace(shiny, party=(me,), boxed_pokemon=(), items=()))
+    assert emu._handle_events.call_args[0][0][0].title == 'Shiny Pikachu could not be caught: no balls'
+    assert emu._handle_events.call_count == 2
+
+
+def test_shiny_notification_is_low_priority_and_informational():
+    from pokesim.app.notifications import CATEGORIES
+    from pokesim.events import Event, LOW
+    from pokesim.notify import Ntfy
+    stall = next(row for row in CATEGORIES if row[0] == 'stall')
+    assert all(kind != 'shiny_missed' for kind, _ in stall[4])
+    assert not any(kind == 'shiny_missed' for row in CATEGORIES for kind, _ in row[4])  # falls into "other"
+    event = Event('shiny_missed', 'Shiny Pikachu could not be caught: no balls', priority=LOW)
+    assert Ntfy('https://ntfy.invalid/t', min_priority=2).wants(event)
+    assert not Ntfy('https://ntfy.invalid/t', min_priority=3).wants(event)
+    assert not Ntfy('https://ntfy.invalid/t', min_priority=2, mute={'shiny_missed'}).wants(event)
 
 
 @pytest.mark.parametrize('original,copied,expected', [
     (b'\x2a\xaa', b'\xff\xff', True),
     (b'\xff\xff', b'\x2a\xaa', False),
 ])
-def test_transform_uses_original_dvs_for_capture_and_pause(original, copied, expected):
+def test_transform_uses_original_dvs_for_capture_and_report(original, copied, expected):
     from dataclasses import replace
     from unittest.mock import Mock
     from pokesim.emulator import Emulator
@@ -135,10 +181,9 @@ def test_transform_uses_original_dvs_for_capture_and_pause(original, copied, exp
     s = snap(party=(me,), owned=frozenset(range(1, 152)), in_battle=1,
              enemy_shiny=shiny, items=((ITEMS['ULTRA_BALL'], 10),))
     assert choose_battle(s, me, enemy, 0).kind == ('item' if expected else 'fight')
-    emu = Emulator.__new__(Emulator)
-    emu.manual_mode, emu.paused, emu._autosave = False, False, Mock()
-    assert emu._protect_shiny(replace(s, items=())) is expected
-    assert emu.paused is expected
+    emu = _emulator()
+    assert emu._report_uncatchable_shiny(replace(s, items=())) is expected
+    assert not emu.paused
     # A successful catch also sets TRANSFORMED while restoring the original DVs.
     # It must finish its dialogue even when it fills the last available slot.
     memory[0xd11c] = 76

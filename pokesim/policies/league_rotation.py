@@ -10,10 +10,11 @@ FIELD_MOVES = {15, 19, 57, 70, 148}
 
 def deposit_target(snapshot, preferences, appearances):
     from ..trade.preferences import identity
+    from .team import STAYS_IN_PARTY
     party = [asdict(mon) for mon in snapshot.party]
     strongest = max(range(len(party)), key=lambda i: current_power(party[i]) or 0, default=None)
     candidates = [i for i, mon in enumerate(party)
-                  if i != strongest and identity(mon)
+                  if i != strongest and identity(mon) and mon['species'] not in STAYS_IN_PARTY
                   and preferences.get(identity(mon), {}).get('state') not in ('locked', 'offered')
                   and not any(move in FIELD_MOVES
                               and not any(move in other['moves'] for j, other in enumerate(party) if i != j)

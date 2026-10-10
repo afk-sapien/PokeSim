@@ -1,4 +1,4 @@
-"""Build version-specific collection sources from the pret/pokered checkout."""
+"""Build version-specific collection sources from a pret/pokered or pret/pokeyellow checkout."""
 import re
 
 
@@ -16,7 +16,36 @@ def version_text(text, version):
             yield line.split(chr(59))[0]
 
 
-def generate(src, strategy):
+# Yellow replaces the Red and Blue in-game trades and gives the Kanto starters as gifts.
+YELLOW_TRADES = (
+    ('CLEFAIRY', 'MR_MIME', 'ROUTE_2_TRADE_HOUSE', 'GAMEBOY_KID'),
+    ('LICKITUNG', 'DUGTRIO', 'ROUTE_11_GATE_2F', 'YOUNGSTER'),
+    ('TANGELA', 'PARASECT', 'ROUTE_18_GATE_2F', 'COOK'),
+    ('CUBONE', 'MACHOKE', 'UNDERGROUND_PATH_ROUTE_5', 'LITTLE_GIRL'),
+    ('KANGASKHAN', 'MUK', 'CINNABAR_LAB_FOSSIL_ROOM', 'SCIENTIST2'),
+    ('GOLDUCK', 'RHYDON', 'CINNABAR_LAB_TRADE_ROOM', 'GRAMPS'),
+    ('GROWLITHE', 'DEWGONG', 'CINNABAR_LAB_TRADE_ROOM', 'BEAUTY'),
+)
+YELLOW_GIFTS = (
+    ('BULBASAUR', 'CERULEAN_MELANIES_HOUSE', 'MELANIE', 'EVENT_GOT_BULBASAUR_IN_CERULEAN'),
+    ('CHARMANDER', 'ROUTE_24', 'COOLTRAINER_M4', 'EVENT_54F'),
+    ('SQUIRTLE', 'VERMILION_CITY', 'OFFICER_JENNY', 'EVENT_GOT_SQUIRTLE_FROM_OFFICER_JENNY'),
+)
+
+
+def yellow_super_rod(src, species, maps):
+    """Yield (map, level, species) from Yellow's flat SuperRodFishingSlots table."""
+    text = (src / 'data/wild/super_rod.asm').read_text(encoding='utf-8')
+    for line in text.splitlines():
+        parts = [part.strip() for part in line.split(chr(59))[0].removeprefix('\tdb').split(',')]
+        if not line.strip().startswith('db') or len(parts) != 9 or parts[0] not in maps:
+            continue
+        for name, level in zip(parts[1::2], parts[2::2]):
+            if name in species:
+                yield maps[parts[0]], int(level), species[name]
+
+
+def generate(src, strategy, variant='red'):
     species = {v['name']: int(k) for k, v in strategy['species'].items()}
     maps = {w['symbol']: int(k) for k, w in strategy['world'].items()}
     result = {'versions': {}, 'evolutions': {}}
@@ -34,7 +63,8 @@ def generate(src, strategy):
             evos.append({'method': method.lower(), 'requirement': int(parts[0]) if parts[0].isdigit() else parts[0],
                          'species': species[parts[-1]]})
         result['evolutions'][sid] = evos
-    for version in ('red', 'blue'):
+    yellow = variant == 'yellow'
+    for version in ('yellow',) if yellow else ('red', 'blue'):
         sources = {}
         def add(sid, **source):
             sources.setdefault(sid, []).append(source)
@@ -55,7 +85,13 @@ def generate(src, strategy):
                                   level=int(match[1]))
                     if source not in sources.get(species[match[2]], []):
                         add(species[match[2]], **source)
-        fishing = '\n'.join(version_text((src / 'data/wild/super_rod.asm').read_text(encoding="utf-8"), version))
+        if yellow:
+            for map_id, level, sid in yellow_super_rod(src, species, maps):
+                source = dict(map=map_id, method='fish', rod='SUPER_ROD', level=level)
+                if source not in sources.get(sid, []):
+                    add(sid, **source)
+        fishing = '' if yellow else '\n'.join(
+            version_text((src / 'data/wild/super_rod.asm').read_text(encoding="utf-8"), version))
         groups = {n: [(int(l), species[p]) for l, p in re.findall(r'db\s+(\d+),\s*(\w+)', block) if p in species]
                   for n, block in re.findall(r'\.(Group\d+):\n(.*?)(?=\.Group\d+:|\Z)', fishing, re.S)}
         for map_name, group in re.findall(r'dbw\s+(\w+),\s*\.(Group\d+)', fishing):
@@ -79,12 +115,15 @@ def generate(src, strategy):
                 fragment=fragment, flag=flag)
         for name, item in (('OMANYTE','HELIX_FOSSIL'),('KABUTO','DOME_FOSSIL'),('AERODACTYL','OLD_AMBER')):
             add(species[name], map=maps['CINNABAR_LAB_FOSSIL_ROOM'], method='fossil', item=item, fragment='SCIENTIST1')
-        for give, get, map_name, fragment in (
+        trades = YELLOW_TRADES if yellow else (
             ('ABRA','MR_MIME','ROUTE_2_TRADE_HOUSE',''),
             ('SPEAROW','FARFETCHD','VERMILION_TRADE_HOUSE',''),
             ('SLOWBRO','LICKITUNG','ROUTE_18_GATE_2F',''),
-            ('POLIWHIRL','JYNX','CERULEAN_TRADE_HOUSE','')):
+            ('POLIWHIRL','JYNX','CERULEAN_TRADE_HOUSE',''))
+        for give, get, map_name, fragment in trades:
             add(species[get], map=maps[map_name], method='trade', give=species[give], fragment=fragment)
+        for name, map_name, fragment, flag in YELLOW_GIFTS if yellow else ():
+            add(species[name], map=maps[map_name], method='gift', fragment=fragment, flag=flag)
         result['versions'][version] = sources
     result['trainers'] = []
     for key,w in strategy['world'].items():

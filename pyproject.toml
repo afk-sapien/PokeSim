@@ -4,15 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pokesim"
-version = "0.4.20"
-description = "One application for autonomous Pokémon Red and Blue adventures with live views and cable trading"
+version = "0.5.0"
+description = "One application for autonomous Pokémon Red, Blue, Gold, Silver and Crystal adventures with live views and cable trading"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11"
 dependencies = [
-  "pokesim-core @ https://github.com/afk-sapien/pokesim-core/releases/download/v0.1.4/pokesim_core-0.1.4-py3-none-any.whl#sha256=8984ad4f2ac5012ca6a2d1f0501866f3194cf182b42686122e3edbc7a09c10cb",
-  "pyboy==2.7.0",
+  # Not on PyPI: GitHub release wheels, so pip, pipx and uv all resolve them from the wheel metadata.
+  # Core 0.6.0 asks for pyboy-rs>=0.1.1,<0.2 and the matching wheel below satisfies it. Both carry markers for
+  # exactly the platforms that have a pyboy-rs wheel. Core must carry the marker too: its own requirement on
+  # pyboy-rs would otherwise send pip to look that name up on PyPI where the platform has no wheel (Windows ARM64,
+  # 32-bit ARM, FreeBSD). Neither name is a PyPI project of ours, so no install may ever depend on PyPI for them.
+  "pokesim-core[emulator] @ https://raw.githubusercontent.com/afk-sapien/PokeSim/release/0.5.0/tools/temp-wheels/pokesim_core-0.6.0-py3-none-any.whl#sha256=935660bcc135e2b91ca623f0aea5d52d662f7f62b4011e6dc9212eb825b8cb6e ; (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and (platform_machine == 'x86_64' or platform_machine == 'arm64')) or (sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64'))",
+  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=424ab5b2ba03e80ce0c13c776687fa51f2e217488200d30c6061df40fb3b2ceb ; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl#sha256=34bd154b4cd857bb133cb25ce2563b55c1276d12cced08ee207095c0113ff465 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
+  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl#sha256=3a2ed6798967bf0887565b2b79530608f94b44292ff8846a6c67eb26e920df9f ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl#sha256=ebf7ecded4238546c080ba968ee68756f409ddb68c63fb3f16cc73497f524adb ; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl#sha256=25b5c20d238851e1b4ce3206a28b2423787337c079cd7ba2f3ba1a73c2aff0bf ; sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",
   "fastapi>=0.110",
   "uvicorn[standard]>=0.53.0",
   "pillow>=10",
@@ -58,3 +67,17 @@ select = ["E9", "F"]
 [tool.ruff.lint.per-file-ignores]
 # pytest fixtures are imported and then named as test parameters.
 "tests/*" = ["F811", "F401"]
+
+# TEMP: lock Core from the copy in tools/temp-wheels until its v0.6.0 GitHub release exists.
+[tool.uv.sources]
+pokesim-core = { path = "tools/temp-wheels/pokesim_core-0.6.0-py3-none-any.whl" }
+
+[tool.uv]
+# pyboy-rs ships abi3 wheels for exactly these platforms, so the lock covers exactly these.
+environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "sys_platform == 'linux' and platform_machine == 'aarch64'",
+  "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",
+]

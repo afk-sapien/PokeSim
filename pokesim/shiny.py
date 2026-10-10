@@ -8,22 +8,11 @@ KEY = 'shiny-statistics-v1'
 # Scan only the verified English Red/Blue bank, then verify the complete instruction sequence.
 BANK = 15
 SIGNATURE = bytes.fromhex('21f1cf227011f3cffa27d112')
+YELLOW_SIGNATURE = bytes.fromhex('21f0cf227011f2cffa26d112')
 
 
 def shiny_bytes(raw):
     return len(raw) == 2 and raw[0] & 0x2f == 0x2a and raw[1] == 0xaa
-
-
-def wild_shiny(memory):
-    """Keep the wild individual's original DVs when Transform copies a battler."""
-    # wCapturedMonSpecies is set before the capture dialogue and storage update.
-    # That capture no longer needs protection, even if it filled the last slot.
-    # wBattleResult becomes 2 when the capture flag is cleared for battle exit.
-    if memory[0xd057] != 1 or memory[0xd11c] or memory[0xcf0b] == 2:
-        return False
-    # wEnemyBattleStatus3.TRANSFORMED and wTransformedEnemyMonOriginalDVs.
-    address = 0xcceb if memory[0xd069] & 8 else 0xcff1
-    return shiny_bytes(bytes(memory[address:address + 2]))
 
 
 def is_shiny(mon):
@@ -64,9 +53,10 @@ def record(db, kind, fingerprint, dex):
 
 class ShinyTracker:
     def __init__(self, store, rom_sha1):
-        from .catches import SUPPORTED
+        from .catches import TRACKED, YELLOW
         self.store = store
-        self.supported = rom_sha1 in SUPPORTED
+        self.signature = YELLOW_SIGNATURE if rom_sha1 == YELLOW else SIGNATURE
+        self.supported = rom_sha1 in TRACKED
         with store.lock, store.db:
             initialize(store.db)
             value = {**empty(), **json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])}
@@ -77,9 +67,10 @@ class ShinyTracker:
         if not self.supported:
             return
         bank = bytes(pb.memory[BANK, 0x4000:0x7fff])
-        if bank.count(SIGNATURE) != 1:
+        signature = getattr(self, 'signature', SIGNATURE)
+        if bank.count(signature) != 1:
             raise ValueError('Shiny encounter tracking does not match the verified cartridge')
-        pb.hook_register(BANK, 0x4000 + bank.index(SIGNATURE) + 5, self.encounter, pb)
+        pb.hook_register(BANK, 0x4000 + bank.index(signature) + 5, self.encounter, pb)
 
     def encounter(self, pb):
         from .strategy_data import SPECIES

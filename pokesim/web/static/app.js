@@ -35,6 +35,12 @@ let currentSpeed = 1
 let shownObjective = null
 let pendingObjective = null
 let pendingSightings = 0
+// Gold, Silver and Crystal name a goal by key and label, Red, Blue and Yellow by id and title.
+function objectiveOf(strategy) {
+  const objective = strategy?.objective
+  const title = objective?.title || objective?.label
+  return title ? {...objective, id: objective.id ?? objective.key, title} : null
+}
 function steadyObjective(objective) {
   if (!objective) return shownObjective
   if (!shownObjective) { shownObjective = objective; return shownObjective }
@@ -131,6 +137,7 @@ function renderParty(party) {
   }
   $('#party').innerHTML = party.map((mon, index) => {
     if (mon.pending) return pendingSlot(index)
+    mon = PokemonTypes.asEgg(mon)
     const hp = clamp(mon.max_hp ? mon.hp / mon.max_hp * 100 : 0)
     const health = hp < 20 ? 'crit' : hp < 50 ? 'warn' : 'ok'
     const xp = mon.experience
@@ -138,11 +145,11 @@ function renderParty(party) {
     const types = PokemonTypes.badges(mon.type_names)
     const dex = mon.dex ? `<span class="micro dexno">No.${String(mon.dex).padStart(3, '0')}</span>` : ''
     const status = mon.status_label || (mon.hp ? 'Healthy' : 'Fainted')
-    const statusTag = status !== 'Healthy' ? `<span class="tag ${mon.hp ? 'tag--warn' : 'tag--crit'}">${esc(status)}</span>` : ''
+    const statusTag = status !== 'Healthy' && !mon.egg ? `<span class="tag ${mon.hp ? 'tag--warn' : 'tag--crit'}">${esc(status)}</span>` : ''
     const moveRows = (mon.move_details || []).map((move) => `<div class="move" title="${esc(move.name)} · ${esc(move.type || '')} · ${move.pp}/${move.max_pp} PP"><span class="nm">${esc(move.name)}</span><span class="pp${move.pp ? '' : ' empty'}">${move.pp}</span></div>`).join('')
     const rating = dvStars(mon.dvs)
     const dvLamps = rating ? `<span class="dv" title="DV rating ${rating} of 4" role="img" aria-label="DV rating ${rating} of 4">${Array.from({length: 4}, (_, i) => `<i class="lamp"${i < rating ? ' data-on="signal"' : ''}></i>`).join('')}</span>` : ''
-    const sprite = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png?v=rom-portraits-1" alt="${esc(mon.name)} portrait">` : `<span class="plate-num">?</span>`
+    const sprite = mon.egg ? PokemonTypes.eggPlate : mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png?v=rom-portraits-1" alt="${esc(mon.name)} portrait">` : `<span class="plate-num">?</span>`
     const xpText = xp ? xp.max_level ? 'MAX' : `${Math.floor(clamp(xp.percent))}%` : '—'
     return `<li class="mon${mon.hp ? '' : ' mon--fainted'}"><div class="mon-plate"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${sprite}</div></div><div class="mon-body"><div class="mon-head"><span class="slotno">${slotNo(index)}</span><h3 class="name">${esc(name)}</h3><span class="spacer"></span>${dvLamps}<span class="lv"><em>LV</em>${mon.level}</span><button class="mon-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} battle stats"><span aria-hidden="true">↗</span></button></div><div class="mon-id">${dex}<span class="micro">${esc(mon.name)}</span>${types}${PokemonTypes.shinyBadge(mon)}${statusTag}</div><div class="mon-lower"><div class="mon-meters"><div class="meter-row"><span class="micro">HP</span>${meter(hp, health, `${esc(name)} health: ${mon.hp} of ${mon.max_hp}`)}<span class="value">${fmt(mon.hp)}/${fmt(mon.max_hp)}</span></div><div class="meter-row"><span class="micro">XP</span>${meter(clamp(xp?.percent), 'signal', `${esc(name)} progress to next level`)}<span class="value">${xpText}</span></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div></div></div></li>`
   }).join('') + emptySlots(party.length)
@@ -164,7 +171,7 @@ async function refreshState() {
     document.querySelectorAll('.controls > :not(#sound):not(#sound-status), .manual-controls, .controller, #restart').forEach((element) => {
       element.hidden = viewerOnly
     })
-    set('#app-version', 'textContent', `v${state.version || 'unknown'}`)
+    set('#app-version', 'textContent', `v${state.version || 'unknown'}${state.build?.revision ? ` · ${String(state.build.revision).slice(0, 7)}` : ''}`)
     const edition = state.strategy?.collection?.version
     if (edition) {
       set('.screen-corner', 'textContent', `POKÉMON ${edition.toUpperCase()} · GAME BOY`)
@@ -179,7 +186,6 @@ async function refreshState() {
     $('.game-card')?.classList.toggle('is-manual', manualMode)
     set('#take-control', 'textContent', manualMode ? 'Let AI play' : 'Take control')
     set('#control-mode', 'textContent', manualMode ? 'You’re playing · AI paused' : paused ? 'Game paused' : 'AI is playing')
-    set('#control-hint', 'textContent', manualMode ? 'Play at normal speed. Let AI play when you’re ready to hand it back.' : 'Press any game control to pause the AI and take over.')
     $('#connection').classList.toggle('is-paused', paused)
     $('#connection').classList.remove('is-offline')
     set('#status', 'textContent', manualMode ? 'In control' : paused ? 'Paused' : 'Running')
@@ -196,15 +202,16 @@ async function refreshState() {
     }
     const progress = state.progress
     const strategy = state.strategy
-    const planning = strategy?.objective?.id === PLANNING
-    set('#progress-state', 'textContent', paused ? 'Paused' : planning ? 'Choosing what is next' : ({exploring: 'Exploring', making_progress: 'Making progress', recovering: 'Recovering', stalled: 'Stuck?'}[progress?.state] || 'Exploring'))
+    const objective = objectiveOf(strategy)
+    const planning = objective?.id === PLANNING
+    set('#progress-state', 'textContent', paused ? 'Paused' : planning ? 'Choosing what is next' : ({exploring: 'Exploring', making_progress: 'Making progress', recovering: 'Recovering', waiting: 'Waiting', stalled: 'Stuck?'}[progress?.state] || 'Exploring'))
     const achievement = progress?.last_achievement
     const age = achievement?.age_seconds || 0
     const since = age < 60 ? 'just now' : age < 3600 ? `${Math.floor(age / 60)}m ago` : `${Math.floor(age / 3600)}h ago`
     set('#last-achievement', 'textContent', achievement ? `Last achievement: ${achievement.title} · ${since}` : 'Waiting for the first achievement.')
-    set('#strategy-panel', 'hidden', !strategy?.objective)
+    set('#strategy-panel', 'hidden', !objective)
     renderIntent(strategy || {})
-    const steady = steadyObjective(strategy?.objective)
+    const steady = steadyObjective(objective)
     if (steady) {
       set('#objective', 'textContent', steady.title)
       if (!planning) set('#decision', 'textContent', strategy.reason)
@@ -220,16 +227,25 @@ async function refreshState() {
     set('#playtime', 'textContent', time.split(':').slice(0, 2).map((v) => v.padStart(2, '0')).join(':') + (clock?.lower_bound ? '+' : ''))
     set('#playtime', 'title', clock?.lower_bound ? 'At least this much simulated playtime. The cartridge had already reached its limit when app tracking began.' : 'Simulated playtime tracked by the app. Pauses and server downtime are excluded.')
     set('#clock-note', 'textContent', clock?.lower_bound ? 'Earlier time hit the game limit' : '')
+    // Gold, Silver and Crystal keep a real-time clock that decides what appears and when.
+    const cartridge = state.game_clock
+    set('#game-clock', 'hidden', !cartridge)
+    if (cartridge) {
+      set('#game-clock', 'textContent', `${cartridge.weekday} ${String(cartridge.hours).padStart(2, '0')}:${String(cartridge.minutes).padStart(2, '0')}${cartridge.time_of_day ? ` · ${cartridge.time_of_day}` : ''}`)
+      set('#game-clock', 'title', 'The in-game clock')
+    }
     set('#trainer-name', 'textContent', game.player_name || 'A new trainer')
     set('#trainer-rival', 'textContent', game.rival_name ? `Rival: ${game.rival_name}` : 'A new story begins')
-    set('#dex-count', 'innerHTML', `${fmt(game.owned)}<span class="unit">/151</span>`)
+    set('#dex-count', 'innerHTML', `${fmt(game.owned)}<span class="unit">/${game.dex_total || 151}</span>`)
     set('#dex-count', 'title', `${game.seen} Pokémon seen`)
     set('#league-wins', 'textContent', fmt(state.league_rewards?.wins ?? game.hall_of_fame_count ?? 0))
     set('#money', 'textContent', `₽${fmt(game.money)}`)
     set('#areas', 'textContent', fmt(state.areas_discovered))
     const earned = game.badges || []
-    set('#badge-count', 'textContent', `${earned.length} / 8`)
-    set('#badges', 'innerHTML', BADGES.map((badge, i) => `<i class="lamp"${earned.includes(badge) ? ' data-on="signal"' : ''} role="img" aria-label="${badge} Badge, ${earned.includes(badge) ? 'earned' : 'still ahead'}" title="${badge} Badge · ${LEADERS[i]} · ${earned.includes(badge) ? 'Earned' : 'Still ahead'}"></i>`).join(''))
+    set('#badge-count', 'textContent', `${earned.length} / ${game.badge_total || 8}`)
+    const badgeNames = game.generation === 2 ? ['Zephyr', 'Hive', 'Plain', 'Fog', 'Mineral', 'Storm', 'Glacier', 'Rising', ...BADGES] : BADGES
+    const leaderNames = game.generation === 2 ? ['Falkner', 'Bugsy', 'Whitney', 'Morty', 'Jasmine', 'Chuck', 'Pryce', 'Clair', 'Brock', 'Misty', 'Lt. Surge', 'Erika', 'Janine', 'Sabrina', 'Blaine', 'Blue'] : LEADERS
+    set('#badges', 'innerHTML', badgeNames.map((badge, i) => `<i class="lamp"${earned.includes(badge) ? ' data-on="signal"' : ''} role="img" aria-label="${badge} Badge, ${earned.includes(badge) ? 'earned' : 'still ahead'}" title="${badge} Badge · ${leaderNames[i]} · ${earned.includes(badge) ? 'Earned' : 'Still ahead'}"></i>`).join(''))
     renderParty(game.party)
   } catch (_) {
     set('#status', 'textContent', 'Reconnecting…')
@@ -327,12 +343,21 @@ if ($('#export-save')) $('#export-save').onclick = async (event) => {
     link.click()
     link.remove()
     setTimeout(() => URL.revokeObjectURL(url), 60000)
-    toast('Save downloaded. Load it with the matching Red or Blue ROM in your emulator.')
+    toast('Save downloaded. Load it with the matching game ROM in your emulator.')
   } catch (error) {
     toast(error.message, true)
   } finally {
     button.disabled = false
     button.textContent = 'Download .sav'
+  }
+}
+if ($('#copy-view-link')) $('#copy-view-link').onclick = async (event) => {
+  const link = new URL(event.currentTarget.dataset.viewLink, location.origin).href
+  try {
+    await navigator.clipboard.writeText(link)
+    toast('View link copied. It shows this adventure without any controls.')
+  } catch (_) {
+    window.prompt('Copy this view link. It shows this adventure without any controls.', link)
   }
 }
 if ($('#restart')) $('#restart').onclick = (event) => {
@@ -423,7 +448,7 @@ async function manualPress(button) {
 let lastKeyPress = 0
 window.addEventListener('keydown', (event) => {
   if (viewerOnly || !$('#screen') || $('#partner-detail')?.open) return
-  const map = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', z: 'a', x: 'b', Enter: 'start', Shift: 'select'}
+  const map = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', z: 'a', x: 'b', Z: 'a', X: 'b', Enter: 'start', Shift: 'select'}
   if (map[event.key] && !event.target.closest('input, select, textarea, [contenteditable]') && !(event.key === 'Enter' && event.target.closest('button, summary, a'))) {
     event.preventDefault()
     if (!event.repeat || Date.now() - lastKeyPress > 140) {
@@ -444,6 +469,10 @@ function renderIntent(strategy) {
   set('#next-objective', 'textContent', repeated ? 'Still on this one' : next || 'Continue the journey')
 }
 
+function renderEggDetail(egg) {
+  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay">${PokemonTypes.eggPlate}</div><p class="micro">Partner ${selectedPartner.index + 1}</p><h2 id="partner-detail-heading">Egg</h2><p>It will hatch after more steps with the team.</p></div>`)
+}
+
 function renderPartnerDetail() {
   const dialog = $('#partner-detail')
   if (!dialog?.open || !selectedPartner) return
@@ -452,11 +481,13 @@ function renderPartnerDetail() {
     dialog.close()
     return
   }
+  const shown = PokemonTypes.asEgg(mon)
+  if (shown !== mon) return renderEggDetail(shown)
   const name = mon.nick || mon.name
   const xp = mon.experience
   const moves = (mon.move_details || []).map((move) => `<div class="move"><span class="nm">${esc(move.name)}</span><span class="pp${move.pp ? '' : ' empty'}">${move.pp}/${move.max_pp} PP</span></div>`).join('')
   const stats = Object.entries(mon.stats || {}).map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${fmt(value)}</dd></div>`).join('')
-  const portrait = mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png?v=rom-portraits-1" alt="">` : '<span class="plate-num">?</span>'
+  const portrait = mon.egg ? PokemonTypes.eggPlate : mon.dex ? `<img src="${PokeSim.base}/sprites/${Number(mon.dex)}.png?v=rom-portraits-1" alt="">` : '<span class="plate-num">?</span>'
   set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${portrait}</div><p class="micro">Partner ${selectedPartner.index + 1} · Level ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><div class="type-tags">${PokemonTypes.badges(mon.type_names)}${PokemonTypes.shinyBadge(mon)}</div><p>${esc(mon.name)} · ${mon.hp} / ${mon.max_hp} HP · ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><section><h3 class="micro">Moves</h3><div class="moves">${moves || '<p class="no-moves">No moves yet.</p>'}</div></section><section><h3 class="micro">Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience · ${xp.max_level ? 'MAX LEVEL' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}</section>`)
   fitSprites($('#partner-detail-content'))
 }

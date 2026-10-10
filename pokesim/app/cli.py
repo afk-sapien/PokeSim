@@ -29,7 +29,7 @@ def parser():
     source = create.add_mutually_exclusive_group(required=True)
     source.add_argument('--rom', type=Path, help='ROM to add to the application')
     source.add_argument('--rom-id', help='Previously installed ROM identifier')
-    create.add_argument('--starter', choices=['random', 'bulbasaur', 'charmander', 'squirtle'], default='random')
+    create.add_argument('--starter', choices=['random', 'bulbasaur', 'charmander', 'squirtle', 'pikachu', 'chikorita', 'cyndaquil', 'totodile'], default='random')
     create.add_argument('--start', action='store_true', help='Start the adventure after creating it')
     for action in ('start', 'stop'):
         command = _options(actions.add_parser(action, help=f'{action.capitalize()} one adventure'))

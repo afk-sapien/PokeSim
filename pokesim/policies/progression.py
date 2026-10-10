@@ -3,8 +3,10 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 
 from .battle import replacement_slot
+from .navigation import CINNABAR_GYM_GATES, cinnabar_gate_open
 from .team import readiness
 
+from ..game_data import current_variant
 from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, event_set, object_hidden
 
 
@@ -63,13 +65,21 @@ def milestones(snapshot):
 
 
 STARTERS = ("bulbasaur", "charmander", "squirtle")
+# Yellow hands every player Pikachu. The adventure never chooses a starter there.
+YELLOW = current_variant() == "yellow"
+GAME_STARTERS = ("pikachu",) if YELLOW else STARTERS
 
 
 def story_goal(snapshot, starter="bulbasaur", fossil="HELIX_FOSSIL"):
     flags = snapshot.event_flags
     has = lambda name: any(item == ITEMS[name] and qty for item, qty in snapshot.items)
     if not event_set(flags, "EVENT_FOLLOWED_OAK_INTO_LAB") and not snapshot.party:
-        return at("meet_oak", "Meet Professor Oak", "A starter is needed before leaving town", "PALLET_TOWN", 10, 1)
+        # Yellow's Oak stops the player one row further north, at the edge of the grass.
+        return at("meet_oak", "Meet Professor Oak", "A starter is needed before leaving town", "PALLET_TOWN", 10, 0 if YELLOW else 1)
+    if not snapshot.party and YELLOW:
+        # The rival snatches the only Poké Ball on the table and Oak hands over Pikachu instead.
+        return object_goal("starter", "Receive Pikachu", "Oak has one Pokémon left for this adventure",
+                           "OAKS_LAB", "EEVEE_POKE_BALL")
     if not snapshot.party:
         return object_goal("starter", "Choose " + starter.title(),
                            "Meet this adventure's first partner", "OAKS_LAB", starter.upper() + "_POKE_BALL")
@@ -100,6 +110,9 @@ GYMS = (
     (64, "volcano", "Blaine", "CINNABAR_GYM", "BLAINE", 44, "POKEMON_MANSION_1F"),
     (128, "earth", "Giovanni", "VIRIDIAN_GYM", "GIOVANNI", 47, "ROUTE_21"),
 )
+if YELLOW:
+    # Yellow's later leaders are several levels stronger than in Red and Blue.
+    GYMS = tuple(g[:5] + ({4: 26, 8: 31, 16: 44, 32: 47, 64: 51, 128: 52}.get(g[0], g[5]),) + g[6:] for g in GYMS)
 GYM_HELP = {
     "cascade": "Clear the gym trainers and approach Misty. Grass or Electric attacks help against her Water team.",
     "thunder": "Use Cut from a party Pokémon outside the gym. Inside, find the first trash-can switch, then an adjacent second switch. Hand back to the AI after opening the electric barriers.",
@@ -132,6 +145,13 @@ def gym_goal(s, bit):
     if assessment['score'] < 75 and max(p.level for p in s.party) < level + 10 and s.map != MAPS[gym]:
         return training_goal(key, f"Prepare for {trainer}",
                              f"Build usable damage and survival against {trainer}, then reassess the team", route)
+    if key == "volcano":
+        # Each locked door opens after beating the quiz trainer whose text follows the one before.
+        # Super Nerd 2 opens the first door, so the first locked door names the trainer to face.
+        locked = next((i for i in range(len(CINNABAR_GYM_GATES)) if not cinnabar_gate_open(s.event_flags, i)), None)
+        if locked is not None:
+            return replace(object_goal(key, "Open Blaine's gym doors", "Beat the quiz trainer guarding the next locked door",
+                                       gym, f"SUPER_NERD{locked + 2}"), help=GYM_HELP[key])
     return replace(object_goal(key, f"Challenge {trainer}", f"Use the team's best available matchup against {trainer}", gym, obj),
                    help=GYM_HELP.get(key, "Approach the gym leader and start the battle."))
 
@@ -217,12 +237,16 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
                     return replace(at("hideout", "Investigate the Game Corner", "Defeat the Rocket and inspect the poster behind him", "GAME_CORNER", 9, 5, "up"), help="Battle the Rocket in front of the poster, then inspect the poster to reveal the stairs.")
                 if not has("LIFT_KEY") and not done("EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI"):
                     if not done("EVENT_ROCKET_DROPPED_LIFT_KEY"):
-                        return obj("lift_rocket", "Find the Lift Key", "Defeat the B4F Rocket and speak to him again so he drops the key", "ROCKET_HIDEOUT_B4F", "ROCKET3", "Navigate the hideout’s spin tiles to B4F. Defeat the Rocket in the northwest room and speak to him again.")
+                        return obj("lift_rocket", "Find the Lift Key", "Defeat the B4F Rocket and speak to him again so he drops the key", "ROCKET_HIDEOUT_B4F", "B4F_ROCKET" if YELLOW else "ROCKET3", "Navigate the hideout’s spin tiles to B4F. Defeat the Rocket in the northwest room and speak to him again.")
                     return obj("lift_key", "Pick up the Lift Key", "Collect the key dropped by the Rocket", "ROCKET_HIDEOUT_B4F", "LIFT_KEY")
                 if not done("EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI"):
                     if s.map != MAPS["ROCKET_HIDEOUT_B4F"] or s.x < 22:
                         return at("hideout_elevator", "Take the lift to Giovanni’s floor", "Use the Lift Key and choose B4F", "ROCKET_HIDEOUT_ELEVATOR", 1, 2, "up")
-                    for index in range(2):
+                    if YELLOW and not done("EVENT_BEAT_ROCKET_HIDEOUT_4_JESSIE_JAMES"):
+                        # Jessie and James step out to guard the door when the player reaches this row.
+                        return at("boss_guard", "Open Giovanni’s door", "Defeat Jessie and James in front of the door",
+                                  "ROCKET_HIDEOUT_B4F", 24, 14)
+                    for index in range(0 if YELLOW else 2):
                         if not done(f"EVENT_BEAT_ROCKET_HIDEOUT_4_TRAINER_{index}"):
                             return obj("boss_guard", "Open Giovanni’s door", "Defeat both Rockets guarding the door", "ROCKET_HIDEOUT_B4F", f"ROCKET{index + 1}")
                     return obj("rocket_boss", "Confront Giovanni", "Take the hideout elevator to B4F and defeat Giovanni", "ROCKET_HIDEOUT_B4F", "GIOVANNI", "Use the Lift Key and elevator to reach B4F. Defeat both door guards, then approach Giovanni.")

@@ -23,7 +23,7 @@ jobs:
         with:
           version: '0.12.18'
       - name: Export the pinned runtime dependencies
-        run: uv export --locked --no-dev --no-emit-project --format requirements-txt --output-file runtime-requirements.txt
+        run: uv export --locked --no-dev --no-emit-project --no-emit-package pokesim-core --no-emit-package pyboy-rs --format requirements-txt --output-file runtime-requirements.txt
       - name: Check runtime dependency advisories
         run: uvx pip-audit==2.10.1 --require-hashes --disable-pip -r runtime-requirements.txt
   lint:
@@ -61,7 +61,22 @@ jobs:
           path: .reference/pokered
           persist-credentials: false
       - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
+      - name: Read Yellow user-content reference for tests only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: pret/pokeyellow
+          ref: e89ead154b9968aa50eed9328ff2b38b6c194382
+          path: .reference/pokeyellow
+          persist-credentials: false
+      - run: uv run --locked python -m pokesim.prepare_data .reference/pokeyellow --yellow
+      - name: Generate Gen II game data from pinned public sources
+        run: uv run --locked python tools/prepare_gen2_test_data.py "$RUNNER_TEMP/gen2-data"
       - run: uv run --locked pytest --ignore=tests/test_rom.py --ignore=tests/browser -q
+        env:
+          GEN2_DATA_DIR: ${{ runner.temp }}/gen2-data
+      - name: Rollback check, a Rust-written Gen 1 state loads into PyBoy 2.7.0
+        if: matrix.python == '3.12'
+        run: uv run --locked --with pyboy==2.7.0 pytest -q tests/test_pyboy_state_compat.py -rs
       - run: python tools/check_web.py
       - run: python tools/check_docs.py
       - run: uv build
@@ -113,7 +128,7 @@ jobs:
           if-no-files-found: ignore
   container:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - run: docker compose config --quiet
@@ -130,32 +145,25 @@ jobs:
         run: |
           docker run --rm -i -v pokesim-ci-data:/data --entrypoint python pokesim:ci <<'PYCODE'
           import os
-          import pyboy
+          import pyboy_rs
+          import pokesim_core.emulator
           import pokesim.strategy_data
           import pokesim.web.app
           import pokesim.healthcheck
           assert os.getuid() != 0
           from pathlib import Path
           assert not (Path(pokesim.__file__).parent / 'data/strategy.json').exists()
-          assert Path('/usr/share/pokesim/sources/pyboy-2.7.0.tar.gz').is_file()
+          assert list(Path('/usr/share/pokesim/sources').glob('pyboy-rs-*.tar.gz'))
+          pokesim_core.emulator.check_runtime()
+          from pokesim.policies.navigation_numba import kernel
+          assert kernel() is not None, 'the image should compile route searches'
+          assert os.listdir(os.environ['NUMBA_CACHE_DIR']), 'compiled searches should be cached'
           PYCODE
-  container-proxy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - run: docker build --pull -t pokesim:ci .
-      - name: Verify the authenticated HTTPS proxy
-        run: python tools/check_proxy_boundary.py pokesim:ci
       - name: Reject fixable high and critical image vulnerabilities
         run: |
           docker save pokesim:ci -o /tmp/pokesim-app.tar
-          docker save pokesim-proxy:2.11.4-hardened-20260919 -o /tmp/pokesim-proxy.tar
-          chmod 644 /tmp/pokesim-app.tar /tmp/pokesim-proxy.tar
-          for image in app proxy
-          do
-            docker run --rm --cap-drop ALL --security-opt no-new-privileges:true \
-              -v "/tmp/pokesim-$image.tar:/image.tar:ro" -v /tmp/trivy-cache:/root/.cache/trivy \
-              aquasec/trivy:0.74.0 image --input /image.tar --scanners vuln \
-              --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1
-          done
+          chmod 644 /tmp/pokesim-app.tar
+          docker run --rm --cap-drop ALL --security-opt no-new-privileges:true \
+            -v /tmp/pokesim-app.tar:/image.tar:ro -v /tmp/trivy-cache:/root/.cache/trivy \
+            aquasec/trivy:0.74.0 image --input /image.tar --scanners vuln \
+            --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1

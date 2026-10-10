@@ -145,3 +145,16 @@ test('older trades and invalid sprite identifiers render honest fallbacks withou
   assert.match(html, /Pokémon details unavailable/)
   assert.doesNotMatch(html, /<img|undefined|Lv. null|<script>/)
 })
+
+test('Gold and Silver species past 151 keep their portrait and Pokédex link', async () => {
+  const view = page('gold', () => ({
+    adventure: {id: 'gold', version: 'gold', state: 'running'}, active: [],
+    history: [{phase: 'completed', decision: 'COMMIT', peer_name: 'Silver', updated_at: 1000,
+      sent: {name: 'Totodile', level: 12, dex: 158}, received: {name: 'Larvitar', level: 20, dex: 246}}],
+  }))
+  await settle()
+  const html = view.element('#trade-history').innerHTML
+  assert.match(html, /\/sprites\/246\.png/)
+  assert.match(html, /pokedex#158/)
+  assert.match(html, /#246/)
+})

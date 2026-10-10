@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="pokesim-base" content="${game_base}">
 <meta name="pokesim-adventure" content="${adventure_id}">
-<script src="${game_base}/static/routes.js"></script>
+<script src="${game_base}/static/routes.js?v=offers-1"></script>
 <script src="${game_base}/static/types.js?v=glow-1"></script>
 <script src="${game_base}/static/panel.js?v=panel-4"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -16,7 +16,7 @@
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=glow-2">
-<link rel="stylesheet" href="${game_base}/static/panel-pc.css?v=panel-5">
+<link rel="stylesheet" href="${game_base}/static/panel-pc.css?v=offers-2">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 <link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
 </head>
@@ -41,6 +41,8 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </div>
 </header>
 
+<section id="pc-offer-banner" class="pc-offer-banner panel" aria-live="polite" hidden></section>
+
 <div class="pc-toolbar panel">
 <label class="field field--grow" for="pc-search"><span class="micro">Find Pokémon</span><input id="pc-search" type="search" placeholder="Name or Pokédex number" autocomplete="off"></label>
 <label class="field" for="pc-rating"><span class="micro">DV rating</span><span class="select"><select id="pc-rating"><option value="all">All ratings</option><option value="shiny">★ Shiny partners</option><option value="3plus">3★ and better</option><option value="4">4★ Perfect</option><option value="3">3★</option><option value="2">2★</option><option value="1">1★</option><option value="unknown">Unknown DVs</option></select></span></label>
@@ -64,6 +66,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </main>
 
 <dialog id="pc-detail" class="pc-detail" aria-labelledby="pc-detail-name"><button id="pc-close" class="key close-detail" aria-label="Close Pokémon details">Close</button><div id="pc-detail-body"></div><div id="pc-trade-action" class="pc-trade-action"></div></dialog>
+<dialog id="offer-dialog" class="offer-dialog" aria-labelledby="offer-dialog-title"><button type="button" id="offer-dialog-close" class="key close-detail" aria-label="Close trade offer">Close</button><h2 id="offer-dialog-title">Offer trade</h2><p class="detail-meta">Pick an adventure. Its PC opens so you can choose what to ask for.</p><ul id="offer-dialog-list" class="offer-targets"></ul></dialog>
 
 <footer class="plate-foot">
 <div class="shell">
@@ -75,6 +78,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="${game_base}/static/trade-ui.js?v=milestones-1"></script>
-<script src="${game_base}/static/pc.js?v=glow-1"></script>
+<script src="${game_base}/static/trade-offer.js?v=offers-2"></script>
+<script src="${game_base}/static/pc.js?v=offers-1"></script>
 </body>
 </html>

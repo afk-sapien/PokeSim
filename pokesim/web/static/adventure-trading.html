@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="pokesim-base" content="${game_base}">
 <meta name="pokesim-adventure" content="${adventure_id}">
-<script src="${game_base}/static/routes.js"></script>
+<script src="${game_base}/static/routes.js?v=offers-1"></script>
 <script src="${game_base}/static/panel.js?v=panel-4"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
@@ -15,7 +15,7 @@
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=glow-2">
-<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=panel-1">
+<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=offers-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
@@ -40,6 +40,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </section>
 <p id="trade-connection-note" class="trade-notice" role="status" hidden></p>
 
+<section id="trade-offers-section" class="trade-section offers-section" aria-labelledby="offers-heading" hidden><div class="section-head"><h2 class="legend legend--ink" id="offers-heading">Trade offers</h2><span class="micro">Accepted offers wait in line for the Cable Club</span></div><p id="offers-note" class="trade-notice" role="status" aria-live="polite"></p><h3 class="micro offers-subhead">Offers for this adventure</h3><div id="offers-incoming" class="deal-list" aria-live="polite"></div><h3 class="micro offers-subhead">Offers this adventure sent</h3><div id="offers-outgoing" class="deal-list" aria-live="polite"></div></section>
 <section id="current-exchange-section" class="trade-section" aria-labelledby="current-heading"><div class="section-head"><h2 class="legend legend--ink" id="current-heading">Current exchange</h2></div><div id="trade-active" class="deal-list" aria-live="polite">Checking for an exchange…</div></section>
 <section class="trade-section" aria-labelledby="history-heading"><div class="section-head"><h2 class="legend legend--ink" id="history-heading">Recent completed trades</h2><span class="micro" id="trade-history-count"></span></div><div id="trade-history" class="deal-list" aria-live="polite">Loading this adventure’s history…</div></section>
 <section id="trade-failures-section" class="trade-section" aria-labelledby="failures-heading" hidden><details class="attempts cable-attempts"><summary id="failures-heading">Recent attempts that did not complete</summary><div id="trade-failures" class="deal-list" aria-live="polite"></div></details></section>
@@ -54,6 +55,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="${game_base}/static/adventure-trading.js?v=panel-2"></script>
+<script src="${game_base}/static/trade-progress.js?v=offers-1"></script>
+<script src="${game_base}/static/adventure-trading.js?v=offers-1"></script>
 </body>
 </html>

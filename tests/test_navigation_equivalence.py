@@ -329,3 +329,104 @@ def test_live_memory_updates_invalidate_cached_npc_positions(terrain):
     nav.update_live(SimpleNamespace(map=FIELD), memory)
     assert ('down', (FIELD, 2, 1)) in nav._search_neighbors(0)((FIELD, 2, 0))
     assert_graph_parity(nav, terrain['WORLD'], 0)
+
+
+def test_every_edge_edit_advances_its_map_stamp(terrain):
+    import pickle
+    nav = navigation.Navigator()
+    edits = [
+        lambda: nav.edges.__setitem__((FIELD, 0, 0), {'right': (FIELD, 1, 0)}),
+        lambda: nav.edges[(FIELD, 0, 0)].__setitem__('down', (FIELD, 0, 1)),
+        lambda: nav.edges.setdefault((FIELD, 0, 0), {}).__setitem__('up', None),
+        lambda: nav.edges[(FIELD, 0, 0)].pop('up'),
+        lambda: nav.edges[(FIELD, 0, 0)].update({'left': (FIELD, 0, 0)}),
+        lambda: nav.edges[(FIELD, 0, 0)].clear(),
+        lambda: nav.edges.pop((FIELD, 0, 0)),
+        lambda: nav.edges.update({(FIELD, 1, 1): {'up': (FIELD, 1, 0)}}),
+        lambda: nav.edges.clear(),
+    ]
+    for edit in edits:
+        before = (nav.edges.version, nav.edges.map_versions.get(FIELD))
+        edit()
+        assert nav.edges.version != before[0] and nav.edges.map_versions[FIELD] != before[1]
+        assert ROOM not in nav.edges.map_versions
+    nav.edges[(ROOM, 0, 0)] = {'right': (ROOM, 1, 0)}
+    for copied in (deepcopy(nav.edges), pickle.loads(pickle.dumps(nav.edges))):
+        assert copied == nav.edges and isinstance(copied, navigation.EdgeMap)
+        copied[(ROOM, 0, 0)]['right'] = (ROOM, 0, 1)
+        assert nav.edges[(ROOM, 0, 0)] == {'right': (ROOM, 1, 0)}
+    nav.edges = {(ROOM, 0, 0): {'down': (ROOM, 0, 1)}}
+    assert isinstance(nav.edges, navigation.EdgeMap)
+    assert_graph_parity(nav, terrain['WORLD'], 0)
+
+
+def test_unchanged_edges_are_not_regrouped_between_searches(terrain):
+    nav = navigation.Navigator()
+    nav.edges.update({(FIELD, x, y): {'right': (FIELD, x + 1, y)} for x in range(6) for y in range(6)})
+    nav._search_neighbors(0)
+    rekeyed = []
+    signatures = nav._map_signatures
+    class Recording(dict):
+        def __setitem__(self, key, value):
+            rekeyed.append(key)
+            super().__setitem__(key, value)
+    nav._map_signatures = Recording(signatures)
+    nav._search_neighbors(0)
+    assert rekeyed == []
+    nav.edges[(FIELD, 0, 0)]['down'] = (FIELD, 0, 1)
+    nav._search_neighbors(0)
+    assert rekeyed == [FIELD]
+
+
+def test_rewriting_a_known_edge_keeps_its_stamp(terrain):
+    nav = navigation.Navigator()
+    nav.edges[(FIELD, 0, 0)] = {'right': (FIELD, 1, 0)}
+    before = (nav.edges.version, nav.edges.map_versions[FIELD])
+    nav.edges[(FIELD, 0, 0)]['right'] = (FIELD, 1, 0)
+    nav.edges[(FIELD, 0, 0)].setdefault('right', (FIELD, 0, 1))
+    assert (nav.edges.version, nav.edges.map_versions[FIELD]) == before
+    nav.edges[(FIELD, 0, 0)]['right'] = (FIELD, 0, 1)
+    assert nav.edges.map_versions[FIELD] != before[1]
+
+
+@pytest.mark.parametrize('compiled', [False, True])
+def test_unreachable_goal_is_searched_again_only_after_the_graph_changes(terrain, monkeypatch, compiled):
+    from pokesim.policies import navigation_numba
+    if not compiled:
+        monkeypatch.setattr(navigation_numba, 'kernel', lambda: None)
+    elif navigation_numba.kernel() is None:
+        pytest.skip('numba is not installed')
+    nav = navigation.Navigator()
+    expansions = []
+    if compiled:
+        # The compiled search keeps its own expansions, so its calls are counted instead.
+        route = navigation_numba.SearchGraph.route
+        def counting_route(graph, *args):
+            expansions.append(args[0])
+            return route(graph, *args)
+        monkeypatch.setattr(navigation_numba.SearchGraph, 'route', counting_route)
+    else:
+        search = nav._search_neighbors
+        def counting(frame):
+            neighbors = search(frame)
+            def count(pos):
+                expansions.append(pos)
+                return neighbors(pos)
+            return count
+        monkeypatch.setattr(nav, '_search_neighbors', counting)
+    source, goal = (ROOM, 0, 0), [(ROOM, 9, 9)]
+    assert nav.route(source, goal, 0) is None
+    searched = len(expansions)
+    assert searched and nav.route(source, goal, 10) is None
+    assert len(expansions) == searched
+    # A different start, a new block and a new edge each search again and agree with a fresh navigator.
+    cases = ((lambda: None, (ROOM, 1, 1)),
+             (lambda: nav.blocked.__setitem__(((ROOM, 1, 1), 'right'), 100), (ROOM, 1, 1)),
+             (lambda: nav.edges.__setitem__((ROOM, 4, 4), {'right': (ROOM, 9, 9)}), (ROOM, 1, 1)))
+    for change, start in cases:
+        change()
+        expansions.clear()
+        expected = clone(nav).route(start, goal, 20)
+        assert nav.route(start, goal, 20) == expected
+        assert expansions
+    assert expected is not None

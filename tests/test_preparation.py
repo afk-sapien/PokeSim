@@ -10,6 +10,7 @@ from pokesim.store import Store
 from pokesim.trade.preferences import identity
 from test_duplicates import snapshot, stored
 from test_strategy import mon
+from shortcut_fakes import PRESS, Recorder, Scripted
 
 
 @pytest.fixture
@@ -47,6 +48,34 @@ def test_restart_pauses_preparation_until_coordinator_recovery(participant):
     assert preparation.cancel(emu, 'transaction-1')['phase'] == 'cancelled'
     assert not emu.paused
     emu.policy.on_restore.assert_called_once()
+
+
+def test_withdrawn_hp_overflow_visits_nurse_before_trade(participant, monkeypatch):
+    emu, snap, candidate = participant
+    preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
+    controller = emu.preparation
+    invalid = replace(snap, frame=snap.frame + 240,
+                      party=(replace(snap.party[0], hp=snap.party[0].max_hp + 1),))
+    assert invalid.hp_overflow_only
+    monkeypatch.setattr(preparation.Screen, 'kind', lambda *args: 'overworld')
+    controller._walk = Mock(return_value=[Action('left', 8, 12)])
+    memory = bytes(emu.pb.memory)
+    assert controller.step(PolicyContext(invalid, 0, 0, emu.pb.memory)) == [Action('left', 8, 12)]
+    assert controller._walk.call_args.args[1] == ((89, 3, 3),)
+    assert bytes(emu.pb.memory) == memory
+    assert emu.store.get('trade_hold') is None
+
+
+def test_unrelated_invalid_party_does_not_get_healing_grace(participant):
+    emu, snap, candidate = participant
+    preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
+    controller = emu.preparation
+    invalid = replace(snap, frame=snap.frame + 1,
+                      party=(replace(snap.party[0], level=101),))
+    controller.step(PolicyContext(invalid, 0, 0, emu.pb.memory))
+    controller.step(PolicyContext(replace(invalid, frame=invalid.frame + 181), 0, 0, emu.pb.memory))
+    assert emu.store.get(preparation.KEY)['phase'] == 'failed'
+    assert emu.store.get('trade_hold') is None
 
 
 def test_protection_change_cancels_before_pc_input(participant):
@@ -227,6 +256,7 @@ def test_full_active_box_deposits_elsewhere_before_switching_to_offer(participan
     emu, snap, candidate = participant
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
+    recorder = Recorder(controller.shortcut)
     party = storage_party()
     full = replace(snap, party=party, boxed_pokemon=((153, 20),) * 20,
                    box_counts=(20, 20, 19) + (20,) * 9, textbox=True)
@@ -243,12 +273,11 @@ def test_full_active_box_deposits_elsewhere_before_switching_to_offer(participan
     assert storage_step(controller, full, memory) == 'a'
 
     available = replace(full, active_box=2, boxed_pokemon=((153, 20),) * 19)
-    assert storage_step(controller, available, storage_menu(1)) == 'a'
+    assert controller.step(PolicyContext(available, 0, 0, storage_menu(1)))[0] == PRESS
     assert controller.operation == 'deposit'
     assert controller.deposit_key == identity(asdict(party[1]))
-    memory = menu({1: '  PARTNER', 3: '  PARTNER', 7: '  CANCEL'}, (0, 3), index=1)
-    assert preparation.Screen(memory).kind(available) == 'party'
-    assert storage_step(controller, available, memory) == 'a'
+    assert recorder.last.kind == 'deposit_pokemon' and recorder.last.slot == 1
+    recorder.finish()
 
     deposited = replace(available, party=party[:1] + party[2:],
                         boxed_pokemon=((153, 20),) * 20, box_counts=(20,) * 12)
@@ -256,11 +285,9 @@ def test_full_active_box_deposits_elsewhere_before_switching_to_offer(participan
     assert controller.operation == 'change_box'
     assert controller.target_box == candidate.box
     opened = replace(deposited, active_box=candidate.box)
-    assert storage_step(controller, opened, storage_menu()) == 'a'
+    assert controller.step(PolicyContext(opened, 0, 0, storage_menu()))[0] == PRESS
     assert controller.operation == 'withdraw'
-    memory = menu({4: '     PARTNER', 6: '     CANCEL'}, (5, 4), top=(5, 4))
-    assert preparation.Screen(memory).kind(opened) == 'list'
-    assert storage_step(controller, opened, memory) == 'a'
+    assert recorder.last.kind == 'withdraw_pokemon' and recorder.last.position == candidate.position
     assert emu.store.get(preparation.KEY)['phase'] == 'storage'
 
 
@@ -280,9 +307,11 @@ def test_protected_preferred_reserve_uses_another_safe_partner(participant, stat
     emu.store.set_trade_preference(identity(asdict(party[1])), {'state': state})
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
+    recorder = Recorder(controller.shortcut)
     full = replace(snap, party=party, textbox=True)
     assert storage_step(controller, full, storage_menu(1)) == 'a'
     assert controller.deposit_key == identity(asdict(party[2]))
+    assert recorder.last.slot == 2
 
 
 def test_storage_reserve_never_drops_strongest_or_unique_field_move(participant):
@@ -294,12 +323,13 @@ def test_storage_reserve_never_drops_strongest_or_unique_field_move(participant)
     assert 'No safe unprotected reserve' in emu.store.get(preparation.KEY)['error']
 
 
-def test_storage_reserve_rechecks_identity_and_protection_in_party_menu(participant):
+def test_storage_reserve_rechecks_identity_and_protection_during_deposit(participant):
     from test_strategy import menu
 
     emu, snap, candidate = participant
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
+    Recorder(controller.shortcut)
     full = replace(snap, party=storage_party(), textbox=True)
     assert storage_step(controller, full, storage_menu(1)) == 'a'
     emu.store.set_trade_preference(controller.deposit_key, {'state': 'locked'})
@@ -309,30 +339,40 @@ def test_storage_reserve_rechecks_identity_and_protection_in_party_menu(particip
 
 
 def test_withdraw_uses_refreshed_identity_position_and_rejects_wrong_box(participant):
-    from test_strategy import menu
-
     emu, snap, candidate = participant
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
-    assert storage_step(controller, snap, storage_menu()) == 'a'
+    recorder = Recorder(controller.shortcut)
     candidate = replace(candidate, position=5)
     moved = replace(snapshot([candidate], party=snap.party), map=89, x=13, y=4, textbox=True)
-    memory = menu({4: '     PARTNER', 6: '     CANCEL'}, (5, 4), index=0, top=(5, 4))
-    memory[0xCC36] = 5
-    assert storage_step(controller, moved, memory) == 'a'
-    assert storage_step(controller, replace(moved, active_box=1), memory) == 'b'
+    assert controller.step(PolicyContext(moved, 0, 0, storage_menu()))[0] == PRESS
+    assert recorder.last.kind == 'withdraw_pokemon' and recorder.last.position == 5
+    controller.shortcut.cancel()
+    assert storage_step(controller, replace(moved, active_box=1), storage_menu()) == 'a'
+    assert controller.operation == 'change_box' and len(recorder.started) == 2
+    assert recorder.last.kind == 'change_box' and recorder.last.box == controller.target_box != 1
 
 
-def test_stale_deposit_list_closes_after_party_slot_is_free(participant):
-    from test_strategy import menu
-
+def test_box_change_falls_back_to_the_menu_when_core_refuses(participant):
     emu, snap, candidate = participant
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
+    Recorder(controller.shortcut, refuse={'change_box'})
+    moved = replace(snapshot([candidate], party=snap.party), map=89, x=13, y=4, textbox=True, active_box=1)
+    assert storage_step(controller, moved, storage_menu()) == 'down'
+    assert controller.operation == 'change_box'
+
+
+def test_finished_deposit_continues_with_the_withdraw(participant):
+    emu, snap, candidate = participant
+    preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
+    controller = emu.preparation
+    recorder = Recorder(controller.shortcut)
     full = replace(snap, party=storage_party(), textbox=True)
     assert storage_step(controller, full, storage_menu(1)) == 'a'
-    memory = menu({1: '  PARTNER', 3: '  PARTNER', 7: '  CANCEL'}, (0, 3), index=1)
-    assert storage_step(controller, replace(full, party=full.party[:5]), memory) == 'b'
+    recorder.finish()
+    assert storage_step(controller, replace(full, party=full.party[:5]), storage_menu()) == 'a'
+    assert recorder.kinds() == ['deposit_pokemon', 'withdraw_pokemon']
 
 
 def test_unexpected_pc_confirmation_is_not_accepted(participant):
@@ -349,16 +389,17 @@ def test_unexpected_pc_confirmation_is_not_accepted(participant):
 
 
 def test_selected_reserve_follows_identity_when_party_order_changes(participant):
-    from test_strategy import menu
-
     emu, snap, candidate = participant
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
+    recorder = Recorder(controller.shortcut)
     full = replace(snap, party=storage_party(), textbox=True)
     assert storage_step(controller, full, storage_menu(1)) == 'a'
     reordered = replace(full, party=full.party[:1] + full.party[2:] + full.party[1:2])
-    memory = menu({1: '  PARTNER', 3: '  PARTNER', 7: '  CANCEL'}, (0, 3), index=1)
-    assert storage_step(controller, reordered, memory) == 'down'
+    assert controller._storage_reserve(reordered) == 5
+    controller.shortcut.cancel()
+    assert storage_step(controller, reordered, storage_menu(1)) == 'a'
+    assert recorder.last.slot == 5
     assert controller.deposit_key == identity(asdict(full.party[1]))
 
 
@@ -415,8 +456,8 @@ def test_encounter_during_travel_uses_the_same_traveller(participant):
     assert emu.store.get('trade_hold') is None
 
 
-def test_field_move_menu_sequence_stays_with_traveller(participant):
-    from pokesim.policies.battle import Decision
+def test_field_move_shortcut_stays_with_traveller(participant):
+    from pokesim_core.shortcuts import Done
     from test_strategy import menu
 
     emu, snap, candidate = participant
@@ -426,9 +467,8 @@ def test_field_move_menu_sequence_stays_with_traveller(participant):
                          party=(replace(snap.party[0], moves=(57,)),), start_menu=True)
     traveller = controller.traveller
     traveller.observed_map = travelling.map
-    traveller.intent = Decision('field', 0, reason='Use Surf to cross the water')
-    traveller.intent_since = travelling.frame
-    traveller.field_move = 'SURF'
+    machine = Scripted('use_field_move', ['start', 'a', 'a', 'a', Done('Used SURF.', True)])
+    traveller.shortcut.start(machine, 'surf', travelling.frame, bytearray(65536))
     stages = [
         ('pause', menu({1: '  MON', 3: '  ITEM', 5: '  EXIT'}, (1, 1))),
         ('party', menu({1: '  PARTNER', 7: '  CANCEL'}, (0, 1), top=(0, 1))),
@@ -438,7 +478,7 @@ def test_field_move_menu_sequence_stays_with_traveller(participant):
         assert preparation.Screen(memory).kind(travelling) == kind
         assert storage_step(controller, travelling, memory) == 'a'
         assert controller.traveller is traveller
-        assert traveller.intent.kind == 'field'
+        assert traveller.shortcut.active
         travelling = replace(travelling, frame=travelling.frame + 60)
     emu.policy.step.assert_not_called()
     assert controller.state['phase'] == 'travelling'
@@ -605,3 +645,99 @@ def test_waiting_trade_status_explains_the_current_battle(participant):
     controller = emu.preparation
     controller.state.update(waiting_for='overworld', waiting_reason='Finish the current battle')
     assert controller.details({})['reason'] == 'Finish the current battle'
+
+
+def test_manual_trade_may_pick_party_and_locked_pokemon(participant):
+    emu, snap, candidate = participant
+    party_key = identity(asdict(snap.party[0]))
+    result = preparation.begin(emu, party_key, 'manual-party', manual=True)
+    assert result['phase'] == 'travelling'
+    assert result['manual'] is True
+    assert result['from_party'] is True
+    preparation.cancel(emu, 'manual-party')
+    key = identity(asdict(candidate))
+    emu.store.set_trade_preference(key, {'state': 'locked'})
+    with pytest.raises(ValueError):
+        preparation.begin(emu, key, 'automatic')
+    assert preparation.begin(emu, key, 'manual-box', manual=True)['from_party'] is False
+    emu.preparation.step(PolicyContext(snap, 0, 0, emu.pb.memory))
+    assert emu.store.get(preparation.KEY)['phase'] != 'failed'
+
+
+def test_manual_party_pick_travels_to_a_center_first(participant):
+    emu, snap, candidate = participant
+    preparation.begin(emu, identity(asdict(snap.party[0])), 'manual-party', manual=True)
+    controller = emu.preparation
+    controller.traveller = Mock()
+    controller.traveller.step.return_value = [Action('up', 8, 12)]
+    away = replace(snap, map=0, x=5, y=5)
+    assert controller.step(PolicyContext(away, 0, 0, emu.pb.memory)) == [Action('up', 8, 12)]
+    assert emu.store.get(preparation.KEY)['phase'] == 'travelling'
+
+
+def test_manual_storage_reserve_may_deposit_any_identifiable_member(participant):
+    emu, snap, candidate = participant
+    party = tuple(replace(p, moves=(move,)) for p, move in
+                  zip(storage_party(), (33, 15, 19, 57, 70, 148)))
+    for member in party:
+        emu.store.set_trade_preference(identity(asdict(member)), {'state': 'locked'})
+    preparation.begin(emu, identity(asdict(candidate)), 'manual-1', manual=True)
+    recorder = Recorder(emu.preparation.shortcut)
+    assert storage_step(emu.preparation, replace(snap, party=party, textbox=True), storage_menu(1)) == 'a'
+    assert emu.store.get(preparation.KEY)['phase'] != 'failed'
+    assert recorder.last.slot in range(6)
+
+
+def test_manual_inventory_lists_party_and_locked_pokemon(participant):
+    from pokesim.runtime.participant import Participant
+    emu, snap, candidate = participant
+    key = identity(asdict(candidate))
+    emu.store.set_trade_preference(key, {'state': 'locked'})
+    emu.status = lambda: {'game': snap.to_dict()}
+    owner = Participant(SimpleNamespace(store=emu.store, emulator=emu),
+                        SimpleNamespace(adventure_id='red', generation=1))
+    inventory = owner.manual_inventory()
+    assert inventory['reason'] == ''
+    assert inventory['cartridge_generation'] == 1
+    rows = {row['trade_key']: row for row in inventory['pokemon']}
+    assert rows[key]['location'] == 'box'
+    assert rows[key]['blocked'] == ''
+    party_key = identity(asdict(snap.party[0]))
+    assert rows[party_key]['location'] == 'party'
+    assert rows[party_key]['blocked'] == ''
+    assert owner.manual_choice(party_key)['trade_key'] == party_key
+    with pytest.raises(ValueError, match='no longer in this adventure'):
+        owner.manual_choice('f' * 24)
+    emu.paused = True
+    assert 'Resume autonomous play' in owner.manual_inventory()['reason']
+
+
+def test_manual_prepare_reserves_a_party_member(participant):
+    from pokesim.app.registry import identifier
+    from pokesim.runtime.participant import Participant
+    emu, snap, candidate = participant
+    emu.status = lambda: {'game': snap.to_dict()}
+    owner = Participant(SimpleNamespace(store=emu.store, emulator=emu),
+                        SimpleNamespace(adventure_id='red', generation=1))
+    party_key = identity(asdict(snap.party[0]))
+    request = {'id': identifier(), 'plan_digest': 'plan', 'selected_key': party_key}
+    with pytest.raises(ValueError, match='eligible boxed offer'):
+        owner.prepare(request)
+    response = owner.prepare({**request, 'manual': True})
+    assert response['phase'] == 'preparing'
+    assert emu.store.get(preparation.KEY)['manual'] is True
+
+
+def test_manual_rows_block_only_hard_limits():
+    from pokesim.runtime.participant import manual_rows
+    payload = {'party': [{'trade_key': 'a', 'name': 'Togepi', 'slot': 1},
+                         {'trade_key': 'b', 'egg': True, 'slot': 2}],
+               'storage': {'pokemon': [{'trade_key': 'c', 'name': 'Rattata', 'box': 3, 'position': 4},
+                                       {'trade_key': None, 'name': 'Rattata', 'box': 3, 'position': 5}]}}
+    rows = manual_rows(payload, 2, last_party_blocked=True)
+    assert [row['blocked'] for row in rows] == [
+        'The game refuses to trade away the only Pokémon that can battle', 'Eggs cannot be traded', '',
+        'Another Pokémon has the same trainer and stats, so this one cannot be picked out safely']
+    assert rows[2]['location'] == 'box'
+    assert (rows[2]['box'], rows[2]['slot']) == (3, 4)
+    assert manual_rows(payload, 1)[0]['blocked'] == ''

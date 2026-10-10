@@ -5,7 +5,6 @@ against the community RAM map and verified in-emulator (see tests/).
 """
 from __future__ import annotations
 
-from pokesim_core import gen1 as core_gen1
 from pokesim_core.gen1 import (
     W_TILEMAP as W_TILEMAP,
     W_ENEMY_SPECIES2 as W_ENEMY_SPECIES2,
@@ -47,13 +46,14 @@ from pokesim_core.gen1 import (
     individual_data as individual_data,
 )
 
+from .display_names import place_name
 from .game_data import load
 from dataclasses import dataclass, fields, replace
 from functools import lru_cache
 from pokesim_core.storage import decode_box, memory_bytes
 
 TABLES = load("tables.json")
-MAP_NAMES = {int(k): v for k, v in TABLES["maps"].items()}
+MAP_NAMES = {int(k): place_name(v) for k, v in TABLES["maps"].items()}   # display spelling
 SPECIES_NAMES = {int(k): v for k, v in TABLES["species"].items()}
 DEX_NAMES = {int(k): v for k, v in TABLES["dex"].items()}
 ITEM_NAMES = {int(k): v for k, v in TABLES["items"].items()}
@@ -116,6 +116,12 @@ class StoredMon:
     dvs: tuple[int, ...]
     stat_exp: tuple[int, ...]
     trainer_id: int | None = None
+    # Gen I box records keep current HP, status and PP. Maximum HP is not stored
+    # and is recalculated from the stats when the Pokémon is withdrawn.
+    hp: int | None = None
+    status: int = 0
+    pp: tuple[int, ...] = ()
+    max_pp: tuple[int, ...] = ()
 
 
 _STORED_FIELDS = tuple(field.name for field in fields(StoredMon))
@@ -154,6 +160,8 @@ class Snapshot:
     box_counts: tuple[int, ...] = ()
     stored_details: tuple[StoredMon, ...] = ()
     enemy_shiny: bool = False
+    # Yellow only. Melanie gives Bulbasaur once Pikachu is happy enough.
+    pikachu_happiness: int = 0
 
     def storage_entries(self):
         """Expose individual data while preserving legacy compact storage snapshots."""
@@ -286,10 +294,22 @@ def read_stored_pokemon(mem):
 @lru_cache(maxsize=128)
 def _decode_box(box, structs, names):
     """Cache immutable records by their bytes, never by emulator identity or time."""
+    from .strategy_data import MOVES as MOVE_DATA
     return tuple(StoredMon(box, mon.position, mon.species, mon.level, mon.nick,
-                           mon.moves, mon.experience, mon.dvs, mon.stat_exp, mon.trainer_id)
+                           mon.moves, mon.experience, mon.dvs, mon.stat_exp, mon.trainer_id,
+                           hp=mon.hp, status=mon.status, pp=mon.pp,
+                           max_pp=_max_pp(mon.moves, structs[mon.position * 33 + 29:mon.position * 33 + 33], MOVE_DATA))
                  for mon in decode_box(structs, names)
                  if mon.species in SPECIES_NAMES and 1 <= mon.level <= 100)
+
+
+def _max_pp(moves, raw_pp, move_data):
+    """Maximum PP with PP Ups (top two bits of each PP byte), as the party decoder computes it."""
+    out = []
+    for move, value in zip(moves, raw_pp):
+        base = move_data.get(move, {}).get('pp', 0)
+        out.append(base + min(7, base // 5) * (value >> 6))
+    return tuple(out)
 
 
 _box_bytes = memory_bytes
@@ -316,48 +336,16 @@ def read_stored_details(mem, *, counts=None):
 
 
 def read_snapshot(mem, frame: int) -> Snapshot:
-    """mem: anything supporting mem[addr] and mem[a:b] over the GB address space (pyboy.memory)."""
+    """Decode through Core while retaining application-specific storage filtering."""
     from .strategy_data import MOVES as MOVE_DATA
-    party = tuple(PartyMon(**mon) for mon in core_gen1.read_party(mem, move_data=MOVE_DATA))
-    items = core_gen1.read_bag(mem)
-    in_battle = mem[W_IS_IN_BATTLE]
+    from pokesim_core.snapshot import read_fields
+    decoded = read_fields(mem, move_data=MOVE_DATA)
+    decoded['party'] = tuple(PartyMon(**mon) for mon in decoded['party'])
     box_counts = read_box_counts(mem)
     stored = read_stored_details(mem, counts=box_counts)
-    # Every cartridge path that registers a species also marks it seen, so an owned flag
-    # without its seen flag is not Pokédex data at all. Oak's lab leaves other values in
-    # this region for a couple of seconds before the Pokédex exists, which otherwise reads
-    # as owning four starters at once.
-    seen_dex = flag_bits(bytes(mem[W_DEX_SEEN:W_DEX_SEEN + 19]))
-    owned_dex = flag_bits(bytes(mem[W_DEX_OWNED:W_DEX_OWNED + 19])) & seen_dex
-    from .shiny import wild_shiny
-    return Snapshot(
-        enemy_shiny=wild_shiny(mem),
-        frame=frame,
-        map=mem[W_CUR_MAP], x=mem[W_X], y=mem[W_Y],
-        badges=mem[W_BADGES],
-        saffron_open=bool(mem[W_STATUS_FLAGS1] & 64),
-        party=party,
-        owned=frozenset(owned_dex),
-        seen=frozenset(seen_dex),
-        money=bcd(bytes(mem[W_MONEY:W_MONEY + 3])),
-        items=items,
-        in_battle=in_battle,
-        battle_type=mem[W_BATTLE_TYPE],
-        enemy_species=mem[W_ENEMY_MON] if in_battle else 0,
-        enemy_level=mem[W_ENEMY_LEVEL] if in_battle else 0,
-        opponent=mem[W_CUR_OPPONENT],
-        player_name=decode_text(bytes(mem[W_PLAYER_NAME:W_PLAYER_NAME + 11])),
-        rival_name=decode_text(bytes(mem[W_RIVAL_NAME:W_RIVAL_NAME + 11])),
-        playtime=(mem[W_PLAYTIME_H], mem[W_PLAYTIME_H + 2], mem[W_PLAYTIME_H + 3]),
-        textbox=mem[W_TILEMAP + 12 * 20] == TILE_BOX_TL,
-        start_menu=mem[W_TILEMAP + 10] == TILE_BOX_TL and not in_battle,
-        boxed_pokemon=tuple((mem[0xDA96 + i * 33], mem[0xDA99 + i * 33]) for i in range(min(mem[0xDA80], 20))),
-        active_box=mem[W_CURRENT_BOX] & 0x7F,
-        hall_of_fame_count=mem[0xD5A2],
-        coins=bcd(bytes(mem[0xD5A4:0xD5A6])),
-        box_counts=box_counts,
-        stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
-        stored_details=stored,
-        hidden_objects=bytes(mem[W_TOGGLE_OBJECT_FLAGS:W_TOGGLE_OBJECT_FLAGS + 32]),
-        event_flags=bytes(mem[W_EVENT_FLAGS:W_EVENT_FLAGS + 0x140]),
-    )
+    from .yellow import PIKACHU_HAPPINESS, YellowMemory
+    if isinstance(mem, YellowMemory):
+        decoded['pikachu_happiness'] = mem.raw[PIKACHU_HAPPINESS]
+    return Snapshot(frame=frame, **decoded, box_counts=box_counts,
+                    stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
+                    stored_details=stored)

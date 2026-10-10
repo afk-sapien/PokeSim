@@ -15,9 +15,10 @@ def source_info(root=None):
     if (root / '.git').exists():
         try:
             revision = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'],
-                                               text=True, stderr=subprocess.DEVNULL).strip()
+                                               text=True, stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL).strip()
             dirty = bool(subprocess.check_output(
-                ['git', '-C', str(root), 'status', '--porcelain'], text=True, stderr=subprocess.DEVNULL))
+                ['git', '-C', str(root), 'status', '--porcelain'], text=True, stdin=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL))
             return dict(result, revision=revision, dirty=dirty)
         except (OSError, subprocess.CalledProcessError):
             pass
@@ -36,3 +37,10 @@ def source_info(root=None):
 @lru_cache(maxsize=1)
 def build_info():
     return source_info()
+
+
+def version_label(info=None):
+    """Name the running build as people see it: the release and its short commit."""
+    info = build_info() if info is None else info
+    revision = info.get('revision') or ''
+    return f"v{info.get('version') or __version__}" + (f' · {revision[:7]}' if revision else '')

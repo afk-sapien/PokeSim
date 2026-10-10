@@ -1,5 +1,8 @@
 """Directed navigation with observed actions, static geometry, and temporary obstacles."""
 from collections import deque
+from copy import deepcopy
+from itertools import count
+import os
 
 from ..strategy_data import DATA, ITEMS, MAPS, WORLD, event_set
 
@@ -22,6 +25,145 @@ SEAFOAM_HOLES = {(MAPS[name], x, y) for name, points in (
 
 # Row on Route 23 and the badge checked there, from Cascade in the south to Earth in the north.
 ROUTE_23_CHECKS = ((136, 2), (119, 4), (105, 8), (96, 16), (85, 32), (56, 64), (35, 128))
+
+# Cinnabar Gym doors from CinnabarGymGateCoords, as (block x, block y, vertical). The map file
+# draws them open and the game closes each one on entry until EVENT_CINNABAR_GYM_GATE<n>_UNLOCKED,
+# n counting from 1. A closed horizontal door walls its top row and a vertical door its right column.
+CINNABAR_GYM_GATES = ((9, 3, False), (6, 3, False), (6, 6, False), (3, 8, True), (2, 6, False), (2, 3, False))
+CLOSED_GATE_TILES = {False: (((0, 0), 24), ((1, 0), 24)), True: (((1, 0), 36), ((1, 1), 36))}
+
+
+def cinnabar_gate_open(flags, index):
+    return event_set(flags, f'EVENT_CINNABAR_GYM_GATE{index + 1}_UNLOCKED')
+
+
+_STAMPS = count(1)
+
+
+class _Directions(dict):
+    """Observed directions from one square that stamp their map on every edit."""
+    __slots__ = ('_owner', '_map')
+
+    def __init__(self, owner, m, values=()):
+        super().__init__(values)
+        self._owner, self._map = owner, m
+
+    def _touch(self):
+        self._owner._touch(self._map)
+
+    def __setitem__(self, key, value):
+        # Walking an edge again records what is already known, which leaves searches valid.
+        if key in self and self[key] == value:
+            return
+        super().__setitem__(key, value)
+        self._touch()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._touch()
+
+    def pop(self, *args):
+        self._touch()
+        return super().pop(*args)
+
+    def popitem(self):
+        self._touch()
+        return super().popitem()
+
+    def clear(self):
+        super().clear()
+        self._touch()
+
+    def update(self, *args, **kwargs):
+        super().update(*args, **kwargs)
+        self._touch()
+
+    def setdefault(self, key, default=None):
+        if key not in self:
+            self._touch()
+        return super().setdefault(key, default)
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+    def __copy__(self):
+        return dict(self)
+
+    def __deepcopy__(self, memo):
+        return deepcopy(dict(self), memo)
+
+    def __reduce__(self):
+        return dict, (dict(self),)
+
+
+class EdgeMap(dict):
+    """Observed edges by square with a stamp per map that changes on every edit.
+
+    Searches compare stamps instead of rereading every edge, so the cost of noticing an edit
+    does not grow with the number of squares the run has walked.
+    """
+
+    def __init__(self, values=()):
+        super().__init__()
+        self.version = 0
+        self.map_versions = {}
+        for key, directions in dict(values).items():
+            self[key] = directions
+
+    def _touch(self, m):
+        self.version = self.map_versions[m] = next(_STAMPS)
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, _Directions(self, key[0], value))
+        self._touch(key[0])
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._touch(key[0])
+
+    def pop(self, key, *default):
+        if key in self:
+            self._touch(key[0])
+        return super().pop(key, *default)
+
+    def popitem(self):
+        key, value = super().popitem()
+        self._touch(key[0])
+        return key, value
+
+    def clear(self):
+        maps = {key[0] for key in self}
+        super().clear()
+        for m in maps:
+            self._touch(m)
+
+    def update(self, *args, **kwargs):
+        for key, value in dict(*args, **kwargs).items():
+            self[key] = value
+
+    def setdefault(self, key, default=None):
+        if key not in self:
+            self[key] = {} if default is None else default
+        return self[key]
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+    def __copy__(self):
+        return EdgeMap(self)
+
+    def __deepcopy__(self, memo):
+        return EdgeMap({key: deepcopy(dict(value), memo) for key, value in self.items()})
+
+    def __reduce__(self):
+        return EdgeMap, ({key: dict(value) for key, value in self.items()},)
+
+
+# The packaged world tables are never edited, so a search signs them once by identity.
+# Substituted tables, as tests use, are still compared by content on every search.
+_PACKAGED_WORLD = WORLD
 
 
 class Navigator:
@@ -46,9 +188,25 @@ class Navigator:
         self._world_indices = {}
         self._graph_signature = None
         self._map_signatures = {}
+        self._edges_seen = None
+        # Counts changes to the searched graph, so a search that found nothing is not repeated
+        # until the graph it ran on changes.
+        self._graph_generation = 0
+        self._failed_route = None
         self._neighbor_cache = {}
         self._compiled_graph = None
         self._open_navigation = None
+        self._story_key = None
+        self._story_result = None
+        self._cache_story = os.environ.get('POKESIM_EXPERIMENT_STORY_CACHE', '1') != '0'
+
+    @property
+    def edges(self):
+        return self._edges
+
+    @edges.setter
+    def edges(self, value):
+        self._edges = value if isinstance(value, EdgeMap) else EdgeMap(value)
 
     def update_live(self, snapshot, memory):
         self.live_map = snapshot.map
@@ -56,10 +214,38 @@ class Navigator:
                                for i in range(min(15, len(WORLD.get(snapshot.map, {}).get("objects", []))))]
 
     def update_story(self, snapshot, *, allow_remote_puzzles=True):
+        # World tables are immutable for the lifetime of a navigator.
+        key = (snapshot.map, snapshot.badges, snapshot.saffron_open, tuple(snapshot.items),
+               tuple(tuple(mon.moves) for mon in snapshot.party), snapshot.event_flags if isinstance(snapshot.event_flags, bytes) else tuple(snapshot.event_flags),
+               bytes(snapshot.hidden_objects), allow_remote_puzzles)
+        if self._cache_story and key == self._story_key:
+            tiles, closed, blocks, cleared, surf, cut = self._story_result
+            # Restore fresh containers because travel and puzzle policies can override them.
+            self.tile_overrides = dict(tiles)
+            self.closed_passages = set(closed)
+            self.story_blocks = set(blocks)
+            self.can_surf, self.can_cut = surf, cut
+            if self.cleared_objects != cleared:
+                self.cleared_objects = set(cleared)
+                self.path.clear()
+            return
+        self._rebuild_story(snapshot, allow_remote_puzzles=allow_remote_puzzles)
+        self._story_key = key
+        self._story_result = (tuple(self.tile_overrides.items()), frozenset(self.closed_passages),
+                              frozenset(self.story_blocks), frozenset(self.cleared_objects),
+                              self.can_surf, self.can_cut)
+
+    def _rebuild_story(self, snapshot, *, allow_remote_puzzles=True):
         can_strength = any(70 in p.moves for p in snapshot.party)
         self.tile_overrides = {(m, x, y): tile for m, w in WORLD.items() for flag, x, y, tile in w.get("opened_tiles", [])
                                if event_set(snapshot.event_flags, flag)
                                or (allow_remote_puzzles and m != snapshot.map and can_strength)}
+        gym = MAPS.get('CINNABAR_GYM')
+        if gym in WORLD:
+            for index, (bx, by, vertical) in enumerate(CINNABAR_GYM_GATES):
+                if not cinnabar_gate_open(snapshot.event_flags, index):
+                    self.tile_overrides.update(((gym, bx * 2 + dx, by * 2 + dy), tile)
+                                               for (dx, dy), tile in CLOSED_GATE_TILES[vertical])
         # Puzzle switches reset on reentry. Old successful steps cannot reopen a gate.
         self.closed_passages = {(m, x, y) for m, w in WORLD.items()
                                 for _, x, y, _ in w.get("opened_tiles", [])
@@ -157,6 +343,7 @@ class Navigator:
         self.attempt = (pos, direction, frame)
 
     def restore(self):
+        self._story_key = None
         self.attempt = None
         self.last_pos = None
         self.path.clear()
@@ -285,7 +472,10 @@ class Navigator:
         # Custom graph providers retain their existing expansion semantics.
         if getattr(self.neighbors, '__func__', None) is not Navigator.neighbors:
             return lambda pos: self.neighbors(pos, frame)
-        worlds = tuple((m, self._world_signature(w)) for m, w in WORLD.items())
+        if WORLD is _PACKAGED_WORLD:
+            worlds = id(WORLD)
+        else:
+            worlds = tuple((m, self._world_signature(w)) for m, w in WORLD.items())
         signature = (worlds, self.use_world, self.can_surf, self.can_cut,
                      frozenset(self.cleared_objects), frozenset(self.tile_overrides.items()),
                      frozenset(self.story_blocks), frozenset(self.closed_passages),
@@ -293,24 +483,36 @@ class Navigator:
                      frozenset(PAIR_COLLISIONS), frozenset(LEDGES), frozenset(MAPS.items()),
                      frozenset(WATER_TILESETS), tuple(DIRS.items()))
         if signature != self._graph_signature:
+            self._graph_generation += 1
             self._graph_signature = signature
             self._map_signatures.clear()
             self._neighbor_cache.clear()
             self._world_indices.clear()
-        # Snapshots only detect edits, so they need no per-tile hash tables.
-        # A changed insertion order can conservatively invalidate the map too.
-        edges = {}
-        for pos, directions in self.edges.items():
-            edges.setdefault(pos[0], []).append((pos, tuple(directions.items())))
+            self._edges_seen = None
+        # Edge stamps change on every edit, so only maps with new stamps are compared.
+        edges = self._edges
+        seen = self._edges_seen
+        if seen is None or seen[0] is not edges:
+            changed = set(WORLD) | set(edges.map_versions) | set(self._map_signatures)
+        elif seen[1] != edges.version:
+            changed = {m for m, stamp in edges.map_versions.items() if seen[2].get(m) != stamp}
+        else:
+            changed = set()
+        self._edges_seen = (edges, edges.version, dict(edges.map_versions))
         blocked = {}
         for (pos, dr), until in self.blocked.items():
             if until > frame:
                 blocked.setdefault(pos[0], []).append((pos, dr))
-        maps = set(WORLD) | set(edges) | set(blocked) | set(self._map_signatures)
-        for m in maps:
-            key = (tuple(edges.get(m, ())), tuple(blocked.get(m, ())),
+        # Blocks expire with the frame and live objects move, so their maps are always compared.
+        changed.update(blocked)
+        changed.update(m for m, key in self._map_signatures.items() if key[1] or key[2])
+        if self.live_map is not None:
+            changed.add(self.live_map)
+        for m in changed:
+            key = (edges.map_versions.get(m), tuple(blocked.get(m, ())),
                    tuple(self.live_positions) if self.live_map == m else ())
             if key != self._map_signatures.get(m):
+                self._graph_generation += 1
                 self._map_signatures[m] = key
                 self._neighbor_cache.pop(m, None)
                 self._world_indices.pop(m, None)
@@ -472,7 +674,12 @@ class Navigator:
         self.target = goals
         self.path.clear()
         neighbors = self._search_neighbors(frame)
+        failure = None
         if getattr(self.neighbors, '__func__', None) is Navigator.neighbors:
+            # An unreachable goal would otherwise search the whole graph again on every step.
+            failure = (self._graph_generation, pos, goals, limit)
+            if failure == self._failed_route:
+                return None
             from .navigation_numba import SearchGraph, disable, kernel
             run = kernel()
             if run is not None:
@@ -480,6 +687,8 @@ class Navigator:
                     if self._compiled_graph is None or self._compiled_graph.signature is not self._graph_signature:
                         self._compiled_graph = SearchGraph(run, self._graph_signature, DIRS)
                     self.path.extend(self._compiled_graph.route(pos, goals, limit, neighbors, self._neighbor_cache))
+                    if not self.path:
+                        self._failed_route = failure
                     return self.path[0][1] if self.path else None
                 except Exception as error:
                     disable(error)
@@ -501,6 +710,8 @@ class Navigator:
             p, dr = prev[found]
             self.path.appendleft((p, dr, found))
             found = p
+        if not self.path and failure is not None:
+            self._failed_route = failure
         return self.path[0][1] if self.path else None
 
     def explore(self, pos, frame, rng):

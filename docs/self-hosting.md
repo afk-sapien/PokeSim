@@ -34,8 +34,8 @@ docker compose up -d --wait
 ```
 
 On Windows PowerShell, use `curl.exe` for that download. Open
-[localhost:8930](http://localhost:8930) **on the Docker host** and supply your ROM in the
-Library. Docker pulls the public, versioned image without a registry login or source build.
+[localhost:8930](http://localhost:8930) **on the Docker host** and add your ROM in
+Settings → Game cartridges. Docker pulls the public, versioned image without a registry login or source build.
 The first download can take several minutes. `--wait` reports startup or health failures.
 
 The quick-start file uses a Docker-managed `pokesim-data` volume. Docker initializes its
@@ -47,7 +47,7 @@ this volume if you want to keep your saves.**
 
 The latest-download URLs select the newest completed stable release. Its installers and
 Compose files pin that release's wheel and image. To pin a configuration yourself, replace
-`latest/download` with `download/v0.4.20` in the download URL. Draft releases stay hidden
+`latest/download` with `download/v0.5.0` in the download URL. Draft releases stay hidden
 until all their downloads are verified, so preparing the next version does not interrupt
 these install commands.
 
@@ -93,8 +93,10 @@ ssh -L 8930:127.0.0.1:8930 user@your-server
 
 Then open [localhost:8930](http://localhost:8930) on that computer. For a trusted LAN,
 set both `BIND_ADDRESS=0.0.0.0` and `PUBLIC_URL=http://YOUR_SERVER_IP:8930`, then recreate
-the container. Anyone who can reach that address can manage the library. Use authenticated
-HTTPS for broader access. Setting `PUBLIC_URL` alone does not expose the listening port.
+the container. Anyone who can reach that address can manage the library. PokeSim has no
+built-in login, so never expose it directly to the internet. For remote access, put it
+behind something that adds authentication, such as Tailscale, Cloudflare Access, or your
+own reverse proxy with a login. Setting `PUBLIC_URL` alone does not expose the listening port.
 
 ### Back up, update, and remove
 
@@ -126,7 +128,7 @@ docker compose -f compose.quickstart.yaml -f compose.build.yaml up -d --build --
 ```
 
 This builds locally and initializes a named volume. There is no separate `prepare-data`
-service for the current application. Add your ROM in the Library. For an existing
+service for the current application. Add your ROM in Settings → Game cartridges. For an existing
 bind-mount installation, use `compose.yaml` instead of `compose.quickstart.yaml` in both
 commands. Use the same file arguments for subsequent stop, logs, and update commands.
 
@@ -155,6 +157,7 @@ in a [support request](../SUPPORT.md). Remove private paths or tokens before sha
 - **An empty Library appears after an update:** Stop the service and check your Compose project name and `DATA_PATH`. Restore the original mount before creating any new adventures.
 - **ROM upload asks for prepare-data:** Update to 0.4.6 or newer and retry the upload. Earlier versions could try to generate portraits before automatic reference setup.
 - **First adventure setup fails:** Starting the first adventure downloads a pinned reference archive and generates portraits. Check connectivity and the error shown in the Library. Prepared adventures can run offline.
+- **A Gold, Silver or Crystal adventure shows "Couldn't download the Pokémon game data (no network)":** The first adventure of each of those games downloads its pinned, hash-verified pret source archive once, generates its map data in the data volume, and never needs the network again. The image does not bake that data in, because it is generated from third-party game sources on your machine, just like the Red and Blue reference data. The container needs outbound HTTPS to `codeload.github.com` and `raw.githubusercontent.com` for that first start. PokeSim retries a few seconds apart, and again after 30 seconds, 2 minutes and 5 minutes. Press **Retry** on the adventure once the network is back. A failed start never touches saves.
 
 ### Settings
 
@@ -164,13 +167,19 @@ in a [support request](../SUPPORT.md). Remove private paths or tokens before sha
 | `PUBLIC_URL=http://localhost:8930` | Exact browser address, including scheme and port |
 | `HTTP_PORT=8930` | Host port mapped to the manager |
 | `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
-| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.4.20` | Exact published image version, overridden by `compose.build.yaml` for source builds |
+| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.5.0` | Exact published image version, overridden by `compose.build.yaml` for source builds |
 
 Phone notifications need no setting here. Open the Library, choose **Notifications**, generate a topic, and subscribe to it in the [ntfy](https://ntfy.sh) app. See the [guide](guide.md#notifications). `NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY`, and `NTFY_MUTE` are still read from the environment as defaults until notifications are saved in the Library.
 
-The Library opens directly without a sign-in or owner key. Its default published port is local-only. Anyone who can reach the Library can manage adventures, so remote access belongs behind an authenticated HTTPS reverse proxy or on a trusted private network. Point an existing authenticated proxy at the manager and preserve the Host matching `PUBLIC_URL`, which must be the browser-facing address. The application checks Host and Origin and protects browser writes against cross-site requests. These protections do not authenticate remote users. Worker credentials and private ports remain internal.
+The Library opens directly without a sign-in or owner key. Its default published port is local-only. Anyone who can reach the Library can manage adventures, so remote access belongs behind something that adds authentication, such as Tailscale, Cloudflare Access, or your own reverse proxy with a login. Point a reverse proxy at the manager and preserve the Host matching `PUBLIC_URL`, which must be the browser-facing address. The application checks Host and Origin and protects browser writes against cross-site requests. These protections do not authenticate remote users. Worker credentials and private ports remain internal.
+
+#### Share a view link
+
+**Copy view link** on an adventure's live page copies `/view/<adventure id>/`. It opens the same pages without controls: the screen, team, journal, progress and statistics are shown, and the server refuses every change and every save. Each request under `/view/` may only read (`GET` or `HEAD`). Anything else returns 403, as do the save state list and save export. To share an adventure publicly, expose only `/view/*` through your reverse proxy and keep every other path behind your login. The public address must still be `PUBLIC_URL`, because the application checks Host. [Authentication and view links](authentication.md) has Authelia rules and a Traefik example.
 
 The Compose service uses an init process to reap children and allows 90 seconds for orderly shutdown. Keep a single manager process per application folder. Do not add Uvicorn workers or share one application volume between containers.
+
+The image includes the optional [navigation acceleration](desktop.md#optional-navigation-acceleration). Each Red or Blue adventure compiles its route search once at startup and keeps the compiled code in `/tmp/numba-cache`. The compiled search gives the same moves as the Python one. It makes repeated searches faster and uses about 115 MB more memory per adventure. Set `POKESIM_NAVIGATION_BACKEND=python` in the service environment to use the Python search instead.
 
 A native server uses the same application:
 
@@ -210,6 +219,6 @@ Restore a complete backup into an empty application directory. Recovery needs th
 
 ### Validation boundary
 
-Native source launch depends on the availability of Python, PyBoy, and its native dependencies for the host. Docker packages those dependencies for a Linux target. Neither the manager nor the simulation protocol requires x86-64. The Python install workflow covers multiple OS and CPU targets, with actual passing results required before claiming support for a release.
+Native source launch depends on the availability of Python and the PyBoy RS wheel for the host (published wheels cover Windows, macOS and Linux on x86-64 and ARM; other targets need a Rust toolchain). Docker packages those dependencies for a Linux target. Neither the manager nor the simulation protocol requires x86-64. The Python install workflow covers multiple OS and CPU targets, with actual passing results required before claiming support for a release.
 
 Historical instructions for retired v0.2.0rc6 installations are kept in the [archive](history/self-hosting-rc6.md).

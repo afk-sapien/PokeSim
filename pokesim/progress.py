@@ -38,8 +38,7 @@ def _last(db):
 
 def _goals(db):
     """Level 100 species and perfect finds, as the Pokédex counts them."""
-    from .milestones import KEY
-    row = db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
+    row = db.execute('SELECT v FROM kv WHERE k=?', ('pokedex-milestones-v1',)).fetchone()
     value = json.loads(row[0]) if row else {}
     return len(value.get('level_100', ())), sum(value.get('perfect_groups', {}).values())
 

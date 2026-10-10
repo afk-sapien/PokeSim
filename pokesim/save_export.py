@@ -2,7 +2,9 @@
 import hashlib
 import io
 
-from pyboy import PyBoy
+from pokesim_core.emulator import Emulator as CoreEmulator
+
+from .yellow import open_emulator
 
 from .interactions.cable_metadata import BUILDS
 from .interactions.verification import boxed_inventory, party
@@ -43,9 +45,9 @@ def export(rom, state):
     rom_bytes = rom.read_bytes()
     build = BUILDS.get(hashlib.sha1(rom_bytes).hexdigest())
     if build is None:
-        raise ValueError('Save export requires a supported English Red or Blue cartridge.')
+        raise ValueError('Save export requires a supported English Red, Blue, or Yellow cartridge.')
     symbols = build['symbols']
-    pb = PyBoy(io.BytesIO(rom_bytes), ram_file=io.BytesIO(bytes(32768)), window='null',
+    pb = open_emulator(io.BytesIO(rom_bytes), default=CoreEmulator, ram_file=io.BytesIO(bytes(32768)), window='null',
                sound_emulated=False, log_level='ERROR')
     pb.set_emulation_speed(0)
     try:
@@ -101,7 +103,7 @@ def export(rom, state):
 
 def verify(rom_bytes, save, symbols, expected):
     """Boot the exported SRAM from scratch and check that Continue restores this collection."""
-    pb = PyBoy(io.BytesIO(rom_bytes), ram_file=io.BytesIO(save), window='null',
+    pb = open_emulator(io.BytesIO(rom_bytes), default=CoreEmulator, ram_file=io.BytesIO(save), window='null',
                sound_emulated=False, log_level='ERROR')
     pb.set_emulation_speed(0)
     try:

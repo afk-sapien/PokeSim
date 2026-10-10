@@ -34,13 +34,17 @@ failure during the final upload before retrying. Never move a published tag.
 The workflow does not repeat the verification matrix. The CI and Python install
 workflows already run on every push to `main` and on every tag. The `gate` job runs
 `tools/check_release_gates.py` and requires push runs of both workflows for the exact
-release commit in which every job succeeded, the required jobs are present, and none was
-skipped or cancelled. Together they cover Python 3.11, 3.12, and 3.14 tests, lint, the
-dependency audit, the browser flows, container build and verification, vulnerability
-scanning, and fresh installs on Windows, macOS Intel and ARM, and Linux x86 and ARM. The
-gate waits for runs that are still in progress and fails for a missing or failed run, so wait
-for green checks on the release commit before starting the workflow. The script comes
-from the commit that dispatched the workflow, not from the release revision.
+release commit in which every job succeeded, every required job is present by its exact
+name, and none was skipped or cancelled. Required jobs are the whole CI workflow (lint, the
+dependency audit, tests on Python 3.11, 3.12 and 3.14, the four browser shards, and both
+container jobs) and the whole Python install workflow (the native test shards on Linux x86
+and ARM, macOS Intel and ARM and all four Windows shards, the fresh installs on the same
+platforms, and the acceleration job). The job list in `tools/check_release_gates.py` is
+compared with the workflow files by `tests/test_release_gates.py`, so adding, renaming or
+removing a job in a workflow fails the tests until the gate agrees. The gate waits for runs
+that are still in progress and fails for a missing or failed run, so wait for green checks
+on the release commit before starting the workflow. The script comes from the commit that
+dispatched the workflow, not from the release revision.
 
 The `build` job runs in parallel with the gate. It builds the wheel and source package,
 checks them, builds and tests the Linux amd64 image, assembles the downloads, and keeps
@@ -73,6 +77,54 @@ respective platforms, including repeat installation. The container checks exerci
 fresh named volume and verify that it survives container removal and recreation. The workflow uploads the
 downloads to the release and verifies every uploaded checksum. Versions containing
 `rc` are marked as prereleases. No floating `latest` tag is published.
+
+## Emulator dependencies are GitHub release wheels
+
+PokeSim 0.5 depends on `pokesim-core` and `pyboy-rs`, which are not on PyPI. `pyproject.toml` names
+their release wheels directly, each with a `#sha256=` fragment that pip and uv verify, so the PokeSim
+wheel's metadata resolves for uv, pip and pipx without a Rust toolchain, and `uv.lock` records the same
+hashes. pyboy-rs has one abi3 wheel per supported platform (Linux x86-64 and aarch64, macOS x86-64 and
+arm64, Windows x86-64), selected by markers. Core carries the union of those markers as well. Without
+that, Core's own requirement on `pyboy-rs` would make pip ask PyPI for the name on a platform with no
+wheel (Windows ARM64, 32-bit ARM, FreeBSD), which is a dependency confusion risk. On those platforms
+nothing is installed from either name, and the installers and the application say so. Musl Linux
+(Alpine) matches the Linux markers but has no compatible wheel, so pip stops with a wheel error, and
+`install.sh` refuses it up front. PyPI names must never be relied on: `pip install pokesim` installs an
+unrelated project, and the docs and installers never suggest it.
+
+Before tagging PokeSim, both upstream releases must exist with their wheels attached, and the pyboy-rs
+release must also carry its source archive, which the Dockerfile fetches with a required
+`EMULATOR_SOURCE_SHA256`. The upstream release workflows should refuse `--clobber` on a release that is
+already public, so a published asset can never change under a recorded hash. That belongs to the pyboy-rs
+and Core repositories. PokeSim's own check is that every asset hash in `uv.lock` equals the hash of the
+file the release serves.
+
+### Temporary pins and how they are finalized
+
+While the upstream releases do not exist, one commit marked TEMP points the pins at copies in
+`tools/temp-wheels/` (see `TEMP_REMOVE_BEFORE_RELEASE.md`). Those pins must not reach a tag.
+`tools/check_release_pins.py` fails if any of these remain: a URL containing `refs/heads/` or
+`temp-wheels`, the `tools/temp-wheels/` directory, `TEMP_REMOVE_BEFORE_RELEASE.md`, a TEMP comment in the
+Dockerfile, a pyproject URL without a `#sha256=` fragment equal to the locked hash, an empty or malformed
+`EMULATOR_SOURCE_SHA256`, or a source archive name that differs from the locked pyboy-rs version. The
+release workflow runs it in the `validate` job (with `--remote`, which also downloads every locked
+emulator asset and the source archive and compares their SHA-256 with `uv.lock` and the Dockerfile) and
+the `gate` job runs the local half against the release revision. A dry run fails the same way.
+
+To finalize, once both upstream releases are public:
+
+1. Write a manifest of the final asset URLs and hashes (see the docstring of
+   `tools/finalize_release_pins.py`). The asset names are the same wheels as the temporary copies.
+2. `python tools/finalize_release_pins.py manifest.json` rewrites `pyproject.toml` (final URLs with
+   `#sha256=` fragments), `uv.lock` (URLs and hashes), and the Dockerfile (source archive URL and
+   checksum), removes the TEMP comment, and deletes `tools/temp-wheels/` and
+   `TEMP_REMOVE_BEFORE_RELEASE.md`. It re-checks its own result and fails if anything is left over.
+3. `uv lock --check` confirms the lock still matches. Run `uv lock` if the upstream metadata changed.
+4. `python tools/check_release_pins.py --remote` downloads the published assets and compares hashes.
+5. Commit, let CI pass on the release commit, then tag.
+
+Reverting the TEMP commit and running `uv lock` is the equivalent manual route. After either route,
+`tests/test_release_pins.py` still passes because it builds its own trees.
 
 ## First publication: package visibility
 

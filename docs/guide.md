@@ -1,6 +1,6 @@
 # Gameplay and feature guide
 
-A Pokémon Red that plays itself. A headless Game Boy emulator (PyBoy) runs the game 24/7,
+A Pokémon Red that plays itself. A headless Game Boy emulator (PyBoy RS, through PokeSim Core) runs the game 24/7,
 driven by a policy that plans objectives and checks each action against the game state. A small web app shows the
 live screen, party and stats, and a timeline of things that happened. Notable events
 (caught a Pokémon, beat a gym, evolved, new area, blacked out, champion, ...) are detected by
@@ -11,13 +11,42 @@ pushed to [ntfy](https://ntfy.sh).
 
 Follow the current [installation instructions](../README.md) and [operations guide](operations.md). This page describes gameplay and advanced settings.
 
+## Game cartridges
+
+Settings → Game cartridges has one slot for each game: Red, Blue, Yellow, Gold,
+Silver and Crystal. A filled slot shows a check, the start of the ROM's SHA-1 hash,
+its size and the date it was added. Choose **Upload** on a slot or drop a `.gb`,
+`.gbc` or ZIP file onto it. PokeSim identifies the game from the file's hash, so a
+file dropped on the wrong slot goes into its own slot and the page says where it went.
+Files that are not a supported clean English ROM are refused with the list of games
+PokeSim can play. A slot for a game this build cannot play shows **Coming in this release**.
+
+**Remove** asks first. It refuses while any adventure, archived or not, uses that
+cartridge, and names those adventures. Delete or move them first.
+
+**New adventure** offers only installed cartridges. Missing games appear greyed out
+with an **Add cartridge** link to their slot. With one cartridge installed it is
+already selected. With none, the Library and the dialog both point you to Settings.
+
+The API is `GET /api/v1/cartridges`, `POST /api/v1/cartridges?slot=<game>` with the
+file as the request body, and `DELETE /api/v1/cartridges/<game>`. The older
+`POST /api/v1/assets/rom` still works.
+
 ## Optional community sprites
 
-Settings → Pokémon artwork → **Install community sprite pack** downloads the
-151 colored Red/Blue portraits directly from PokéAPI's sprite repository to your
-server. Nothing is downloaded until you choose this option. The pack applies to
-all adventures and stays installed across restarts. A failed download keeps your
-current artwork in place.
+Portraits normally come from your own ROM. Settings → Pokémon artwork →
+**Install community sprite pack** downloads, in one step, the pinned PokéAPI
+artwork for every supported game: Red/Blue and Yellow (Pokémon 1 to 151) and
+Gold, Silver and Crystal (1 to 251), 1,055 images in all. Each adventure then
+shows the artwork of its own version. Nothing is downloaded until you choose this
+option. The download runs four images at a time with a size limit per image and
+for the whole pack, and finished images are kept in the data folder, so a retry
+after a failure only fetches what is missing. The pack appears only once every
+game is complete and stays installed across restarts. A failed download keeps
+your current artwork in place. A pack installed by an earlier release (Red/Blue
+only) keeps working and offers **Download artwork for all games**, which reuses
+its images. An image you place in an adventure's own `sprites` folder still wins
+over the pack.
 
 **Restore default sprites** switches back to your existing local or ROM-extracted
 portraits. You can enable the installed community pack again without downloading
@@ -43,6 +72,11 @@ Click **Sound: Off** below the live screen to listen. Audio follows the observed
 Music and effects speed up with the game. Your adventure keeps its chosen speed. Audio starts off on every page
 and turns off when you hide or leave the tab.
 
+Sound keeps a short buffer so a slow connection does not cause crackling. Watching holds about 0.4 seconds of audio ahead.
+After a dropout the buffer grows up to 1.5 seconds and then shrinks slowly while the connection stays calm.
+If even that is not enough, the status line says "Audio connection is unstable".
+Take Control uses about 0.1 seconds so button presses sound immediate. Sound is off above 4.5x because the pitch is not useful, and it returns when the speed drops.
+
 Only adventures with a listener run sound emulation. Existing saves remain usable.
 A previously silent save may need the next music change before all channels play.
 
@@ -55,7 +89,9 @@ A previously silent save may need the next music change before all channels play
 | `/stream` | MJPEG stream of the screen (`/frame.jpg` for a single frame) |
 | `/feed.xml` | Atom feed of notable events; `?all=1` for everything, `?types=badge,catch` or `?min_priority=4` to filter |
 | `/events/{id}` | one event and screenshot, with rewind available when a saved state and access policy allow it |
-| `/api/state` | JSON: emulator status + parsed game state |
+| `/api/state` | JSON: emulator status + parsed game state. Boxed Pokémon are left out; `?storage=1` adds them |
+| `/api/summary` | JSON: playback, health, pace and the current map, without game data, for health checks |
+| `/api/pokedex/status` | JSON: Pokédex, party, boxes and collection plan in full. `?view=pc` leaves out the plan; `?view=dex` keeps only who holds each species |
 | `/api/events` | JSON event list (`limit`, `all`, `types`, `min_priority`, `before`) |
 | `/api/progress` | JSON history of badges, Pokédex owned and seen, League wins, level 100 species and perfect finds, one row per change |
 | `/api/control` | POST an `action` and optional `value`. Actions: `pause`, `resume`, `take_control`, `save`, `restart`, `speed`, `load_state`, `press` |
@@ -144,7 +180,7 @@ screenshot and open the journal entry when tapped.
 | Level milestones | off | `level` (every tenth level) |
 | New areas and key items | off | `map`, `item` |
 | Blackouts | off | `blackout` |
-| Everything else | on | `money`, `name`, `playtime`, and any type added later |
+| Everything else | on | `money`, `name`, `playtime`, `shiny_missed` (low priority), and any type added later |
 
 Only notable events (priority 2 and up) are ever pushed. **Least important notification**
 raises that threshold.
@@ -206,7 +242,7 @@ Defaults live in `pokesim/events.py`; change a priority there to reclassify an e
 
 ## How it works
 
-- `pokesim/emulator.py` runs PyBoy in a thread: ask the policy for an action, press the
+- `pokesim/emulator.py` runs the emulator in a thread: ask the policy for an action, press the
   button, tick frames, publish a JPEG frame for the stream, and every 30 frames read a RAM
   snapshot. Autosaves every minute; on start it resumes from the newest one.
 - `pokesim/ram.py` knows the Pokémon Red WRAM layout (from the pret/pokered disassembly) and
@@ -380,7 +416,7 @@ whole frame budget for a battle, shopping, or navigation scenario. `tools/replay
 the same command-line interface.
 
 Replays use emulated time for policy contexts and recovery guards, fixed input cadence, and
-seeded randomness. Keep the ROM, PyBoy version, starting state, frame budget, and battle
+seeded randomness. Keep the ROM, emulator version, starting state, frame budget, and battle
 animation setting the same when comparing runs. Recovery reloads retain learned navigation
 but clear in-flight actions, as in the application.
 
@@ -473,7 +509,7 @@ python -m pokesim.prepare_data /path/to/pokered
 ## Reproduce a stalled expedition
 
 Copy a live autosave and its matching JSON manifest into a scratch directory. Keep the
-original pair unchanged. Use the matching user-supplied ROM and PyBoy 2.7.0:
+original pair unchanged. Use the matching user-supplied ROM and the installed PyBoy RS:
 
 ```sh
 python tools/validate_progress.py --rom /path/to/pokered.gb --checkpoint /scratch/auto-v1-example.state --frames 432000 --output /scratch/progress.json

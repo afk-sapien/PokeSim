@@ -133,6 +133,10 @@ class CableDriver:
                     current = side.get('wCurrentMenuItem')
                     checked(current <= target, 'Trade selection cursor passed negotiated slot')
                     button = 'down' if current < target else 'a'
+                elif (side.counts['TradeCenter_SelectMon'] == 1 and not side.counts['TradeCenter_Trade']
+                      and not screen.cursor):
+                    # Yellow draws the party menu fast enough to take a held A as a choice of the first slot.
+                    button = None
                 elif self.snapshot(side).map == CLUB_MAP and not side.counts['CableClub_DoBattleOrTrade']:
                     if step % 3 == 0:
                         button = 'right' if side.get('hSerialConnectionStatus') == 2 else 'left'

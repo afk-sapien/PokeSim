@@ -23,6 +23,14 @@ class Peer:
         self.dex = 2
         self.offer = {}
         self.outgoing = {'struct': '00', 'nickname': '00', 'trainer': '00'}
+        self.generation = 1
+        self.capsule_ready = False
+        self.manual_reason = ''
+        self.pokemon = [{'trade_key': key, 'dex': 2, 'name': 'Ivysaur', 'location': 'box', 'box': 1, 'slot': 1,
+                         'cartridge_generation': 1, 'blocked': None},
+                        {'trade_key': 'party-' + key, 'dex': 25, 'name': 'Pikachu', 'location': 'party', 'slot': 1,
+                         'cartridge_generation': 1, 'blocked': None}]
+        self.prepared = []
 
     def request(self, method, path, data=None, timeout=None):
         operation = path.rsplit('/', 1)[-1]
@@ -33,11 +41,16 @@ class Peer:
         if operation == 'inventory':
             return {'offers': [{'trade_key': self.key, 'dex': self.dex, 'arrived_dex': self.dex,
                                 **self.offer}], 'owned': self.owned}
+        if operation == 'manual-inventory':
+            return {'adventure_id': self.aid, 'cartridge_generation': self.generation, 'holding': False,
+                    'time_capsule_ready': self.capsule_ready, 'reason': self.manual_reason,
+                    'pokemon': deepcopy(self.pokemon)}
         if operation == 'collection_demand':
             self.collection_requests = data['requests']
             return {'requests': data['requests']}
         tid = data['id']
         if operation == 'prepare':
+            self.prepared.append(dict(data))
             result = {'id': tid, 'phase': 'prepared', 'plan_digest': data['plan_digest'], 'selected_key': data['selected_key'],
                 'source': {'adventure_id': self.aid, 'rom_path': '/rom', 'checkpoint_path': '/state',
                            'checkpoint_sha256': 'original', 'party_slot': 0, 'selected_key': data['selected_key']},
@@ -648,3 +661,207 @@ def test_cable_uses_slower_participant_without_changing_individual_paces(setup, 
     row = {'id': identifier(), 'plan': {'attempt_id': identifier(), 'participants': ids}}
     assert setup.coordinator._session_plan(row, prepared)['speed'] == expected
     assert tuple(setup.registry.adventure(aid)['settings']['speed'] for aid in ids) == speeds
+
+
+def test_time_capsule_pair_requires_readiness_and_compatible_offer():
+    old = {'cartridge_generation': 1}
+    modern = {'cartridge_generation': 2, 'time_capsule_ready': True}
+    offer = {'time_capsule_compatible': True, 'cartridge_generation': 2, 'dex': 95, 'arrived_dex': 208}
+    assert Coordinator._compatible_pair(old, modern, {}, offer)
+    assert Coordinator._compatible_pair(modern, old, offer, {})
+    assert not Coordinator._compatible_pair(old, {**modern, 'time_capsule_ready': False}, {}, offer)
+    assert not Coordinator._compatible_pair(old, modern, {}, {**offer, 'time_capsule_compatible': False})
+    assert Coordinator._offer_for(offer, old)['arrived_dex'] == 95
+    assert Coordinator._offer_for(offer, modern)['arrived_dex'] == 208
+    assert Coordinator._offer_for({**offer, 'dex': 64}, old)['arrived_dex'] == 65
+
+
+def test_collection_requests_cross_generations_only_for_kanto_species(setup):
+    left, right = setup.data['left_id'], setup.data['right_id']
+    setup.coordinator._refresh_collection_demand([
+        (left, {'cartridge_generation': 1, 'owned': list(range(1, 152))}),
+        (right, {'cartridge_generation': 2, 'dex_total': 251,
+                 'owned': [dex for dex in range(1, 252) if dex not in {1, 251}]})])
+    assert setup.peers[left].collection_requests == {'1': 1}
+    assert setup.peers[right].collection_requests == {}
+
+
+def manual_request(setup, left_key='party-0', right_key='party-1'):
+    return {'left_id': setup.data['left_id'], 'right_id': setup.data['right_id'],
+            'left_key': left_key, 'right_key': right_key, 'request_id': identifier()}
+
+
+def test_manual_trade_ignores_offers_locks_and_last_copies(setup):
+    c = setup.coordinator
+    for peer in setup.peers.values():
+        peer.owned = []    # Every automatic last-copy rule would refuse this pair.
+        peer.offer = {'trade_key': 'something-else'}
+    entry = c.enqueue_manual(manual_request(setup))
+    assert c.manual_status(entry['id'])['state'] == 'queued'
+    assert c.manual_status(entry['id'])['position'] == 1
+    result = c.drain_manual()
+    assert result['phase'] == 'completed'
+    row = setup.registry.transaction(entry['id'])
+    assert row['plan']['manual'] is True
+    assert row['plan']['left_key'] == 'party-0'
+    assert setup.cable_calls == [entry['id']]
+    assert all(peer.prepared[-1]['manual'] is True for peer in setup.peers.values())
+    status = c.manual_status(entry['id'])
+    assert status['state'] == 'started'
+    assert status['phase'] == 'completed'
+    assert status['cancellable'] is False
+    assert not c.manual_waiting()
+
+
+def test_manual_trade_is_idempotent_and_rejects_hard_limits_with_a_reason(setup):
+    c = setup.coordinator
+    data = manual_request(setup)
+    entry = c.enqueue_manual(data)
+    assert c.enqueue_manual(data)['id'] == entry['id']
+    with pytest.raises(ValueError, match='another trade'):
+        c.enqueue_manual({**data, 'left_key': 'other'})
+    with pytest.raises(ValueError, match='different adventures'):
+        c.enqueue_manual({**manual_request(setup), 'right_id': data['left_id']})
+    setup.peers[data['left_id']].pokemon[1]['blocked'] = 'Eggs cannot be traded'
+    c.drain_manual()
+    status = c.manual_status(entry['id'])
+    assert status['state'] == 'rejected'
+    assert status['error'] == 'Eggs cannot be traded'
+    assert setup.cable_calls == []
+
+
+def test_manual_trade_explains_time_capsule_limits(setup):
+    c = setup.coordinator
+    modern = setup.peers[setup.data['right_id']]
+    modern.generation = 2
+    for mon in modern.pokemon:
+        mon.update(cartridge_generation=2, time_capsule_compatible=False, time_capsule_reason='Togepi did not exist in Gen I')
+    first = c.enqueue_manual(manual_request(setup))
+    c.drain_manual()
+    assert 'cannot use the Time Capsule yet' in c.manual_status(first['id'])['error']
+    modern.capsule_ready = True
+    second = c.enqueue_manual(manual_request(setup))
+    c.drain_manual()
+    assert 'Togepi did not exist in Gen I' in c.manual_status(second['id'])['error']
+    assert setup.registry.transactions() == []
+
+
+def test_manual_trades_run_in_order_ahead_of_the_scheduler(setup):
+    c = setup.coordinator
+    first = c.enqueue_manual(manual_request(setup))
+    second = c.enqueue_manual(manual_request(setup, '0', '1'))
+    assert c.manual_status(second['id'])['position'] == 2
+    result = c.schedule_once()
+    assert result['phase'] == 'completed'
+    assert setup.cable_calls == [first['id'], second['id']]
+    assert all(row['plan'].get('manual') for row in setup.registry.transactions())
+
+
+def test_manual_trade_waits_for_a_busy_cable_club_and_sets_aside_automatic_trades(setup):
+    c = setup.coordinator
+    automatic = c.propose(setup.data)
+    entry = c.enqueue_manual(manual_request(setup))
+    assert c.drain_manual() is None
+    row = setup.registry.transaction(automatic['id'])
+    assert row['decision'] == 'ABORT'
+    assert c._failure_reason({**row, 'phase': 'aborted'}) == 'This automatic trade made way for a trade you chose.'
+    assert c.manual_status(entry['id'])['state'] == 'queued'
+    assert c.recover_one(automatic['id'])['phase'] == 'aborted'
+    assert c.drain_manual()['phase'] == 'completed'
+    assert setup.cable_calls == [entry['id']]
+
+
+def test_manual_trade_waits_when_execution_is_already_running(setup):
+    c = setup.coordinator
+    entry = c.enqueue_manual(manual_request(setup))
+    assert c.execution.acquire(blocking=False)
+    try:
+        assert c.drain_manual() is None
+    finally:
+        c.execution.release()
+    assert c.manual_status(entry['id'])['state'] == 'queued'
+
+
+def test_cancelling_manual_trades_before_commit(setup):
+    c = setup.coordinator
+    queued = c.enqueue_manual(manual_request(setup))
+    status = c.cancel_manual(queued['id'])
+    assert status['state'] == 'cancelled'
+    assert status['cancellable'] is False
+    assert not c.manual_waiting()
+    starting = c.enqueue_manual(manual_request(setup))
+    c._manual_update(starting['id'], state='starting')
+    assert c.cancel_manual(starting['id'])['cancellable'] is False
+    c._manual_update(starting['id'], state='queued')    # A restart puts it back in line with the request kept.
+    result = c.drain_manual()
+    assert result['phase'] == 'aborted'
+    assert setup.registry.transaction(starting['id'])['error'] == 'Cancelled by the owner'
+    assert setup.cable_calls == []
+    started = c.enqueue_manual(manual_request(setup))
+    row = c.propose({**{name: started[name] for name in ('left_id', 'right_id', 'left_key', 'right_key')},
+                     'request_id': started['id'], 'manual': True})
+    c._manual_update(started['id'], state='started')
+    assert c.manual_status(started['id'])['cancellable'] is True
+    status = c.cancel_manual(row['id'])
+    assert status['phase'] == 'aborted'
+    assert status['failure_reason'] == 'This exchange was cancelled.'
+    with pytest.raises(KeyError):
+        c.cancel_manual(identifier())
+
+
+def test_a_trade_cut_off_while_starting_is_resumed_after_restart(setup):
+    c = setup.coordinator
+    entry = c.enqueue_manual(manual_request(setup))
+    c._manual_update(entry['id'], state='starting')
+    assert c.drain_manual()['phase'] == 'completed'
+    assert c.manual_status(entry['id'])['phase'] == 'completed'
+
+
+def test_manual_options_list_every_pokemon_and_unavailable_adventures(setup):
+    c = setup.coordinator
+    setup.registry.update(setup.data['right_id'], state='stopped', desired_state='stopped')
+    options = {game['id']: game for game in c.manual_options()['adventures']}
+    left = options[setup.data['left_id']]
+    assert left['available'] is True
+    assert [mon['trade_key'] for mon in left['pokemon']] == ['0', 'party-0']
+    assert left['pokemon'][1]['sprite_url'].startswith(f"/games/{setup.data['left_id']}/sprites/25.png")
+    right = options[setup.data['right_id']]
+    assert right['available'] is False
+    assert right['reason'] == 'Start this adventure to trade from it'
+    assert right['pokemon'] == []
+    with pytest.raises(ValueError, match='Start this adventure'):
+        c.enqueue_manual(manual_request(setup))
+
+
+def test_gen2_trade_displays_read_species_data_once(setup, monkeypatch):
+    """Loading a Gen II bundle parses and checksums about 3 MB; the trading page polls every few seconds."""
+    from pokesim.gen2.data import GameData
+    (setup.manager.root / 'gen2' / 'crystal').mkdir(parents=True)
+    loads = []
+    def load(root, game):
+        loads.append(game)
+        return SimpleNamespace(species={152: {'name': 'Chikorita'}})
+    monkeypatch.setattr(GameData, 'load', load)
+    c = setup.coordinator
+    for _ in range(50):
+        shown = c._mon_display({'species': 152, 'cartridge_generation': 2, 'level': 5})
+        assert shown['name'] == 'Chikorita' and shown['dex'] == 152 and shown['level'] == 5
+    assert loads == ['crystal']
+
+
+def test_trade_views_build_only_the_rows_they_return(setup):
+    registry, c = setup.registry, setup.coordinator
+    left, right = setup.data['left_id'], setup.data['right_id']
+    for phase, decision in [('completed', 'COMMIT')] * 300 + [('aborted', 'ABORT')] * 10:
+        row = registry.create_transaction(identifier(), {'participants': [left, right], 'left_id': left, 'right_id': right})
+        registry.update_transaction(row['id'], phase=phase, decision=decision)
+    built = []
+    original = c._trade_display
+    c._trade_display = lambda row, *args, **kwargs: built.append(row['id']) or original(row, *args, **kwargs)
+    status = c.status()
+    assert len(status['history']) == 100 and len(status['recent_failures']) == 5
+    assert len(built) <= 105
+    built.clear()
+    mine = c.adventure_status(left)
+    assert len(mine['history']) == 20 and len(mine['recent_failures']) == 5 and mine['active'] == []
+    assert len(built) <= 25

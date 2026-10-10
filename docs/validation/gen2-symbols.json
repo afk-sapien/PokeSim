@@ -1,0 +1,83 @@
+{
+  "pokegold.sym": {
+    "url": "https://raw.githubusercontent.com/pret/pokegold/521550d5d988faf9371bc51caed4cf696bfa07b4/pokegold.sym",
+    "revision": "521550d5d988faf9371bc51caed4cf696bfa07b4",
+    "sha256": "95ce3c7455cc5c1a42acdd52ef529df363b74d83f7f07b2af239607ec93908f9",
+    "addresses": {
+      "wBattleMode": "01:d116",
+      "wPlayerName": "01:d1a3",
+      "wJohtoBadges": "01:d57c",
+      "wKantoBadges": "01:d57d",
+      "wMapGroup": "01:da00",
+      "wMapNumber": "01:da01",
+      "wYCoord": "01:da02",
+      "wXCoord": "01:da03",
+      "wPartyCount": "01:da22",
+      "wPartyMon1": "01:da2a",
+      "wPartyMons": "01:da2a",
+      "wPartyMon1Level": "01:da49",
+      "wPartyMon1HP": "01:da4c",
+      "wPartyMon1MaxHP": "01:da4e",
+      "wPartyMon1SpclAtk": "01:da56",
+      "wPartyMon1SpclDef": "01:da58",
+      "wPartyMon2": "01:da5a",
+      "wPartyMonNicknames": "01:db8c",
+      "wPokedexCaught": "01:dbe4",
+      "wPokedexSeen": "01:dc04"
+    }
+  },
+  "pokesilver.sym": {
+    "url": "https://raw.githubusercontent.com/pret/pokegold/521550d5d988faf9371bc51caed4cf696bfa07b4/pokesilver.sym",
+    "revision": "521550d5d988faf9371bc51caed4cf696bfa07b4",
+    "sha256": "fdaa1a22e513db5103b1ebd459792f360720b866ded59866106c5fe21107d5a6",
+    "addresses": {
+      "wBattleMode": "01:d116",
+      "wPlayerName": "01:d1a3",
+      "wJohtoBadges": "01:d57c",
+      "wKantoBadges": "01:d57d",
+      "wMapGroup": "01:da00",
+      "wMapNumber": "01:da01",
+      "wYCoord": "01:da02",
+      "wXCoord": "01:da03",
+      "wPartyCount": "01:da22",
+      "wPartyMon1": "01:da2a",
+      "wPartyMons": "01:da2a",
+      "wPartyMon1Level": "01:da49",
+      "wPartyMon1HP": "01:da4c",
+      "wPartyMon1MaxHP": "01:da4e",
+      "wPartyMon1SpclAtk": "01:da56",
+      "wPartyMon1SpclDef": "01:da58",
+      "wPartyMon2": "01:da5a",
+      "wPartyMonNicknames": "01:db8c",
+      "wPokedexCaught": "01:dbe4",
+      "wPokedexSeen": "01:dc04"
+    }
+  },
+  "pokecrystal11.sym": {
+    "url": "https://raw.githubusercontent.com/pret/pokecrystal/87b0d7436e43c3717cfc416d38a99162191bb714/pokecrystal11.sym",
+    "revision": "87b0d7436e43c3717cfc416d38a99162191bb714",
+    "sha256": "915e46c9df40a016d530b70979a002b44b301b8c4fc548a30ed249042d7a11a5",
+    "addresses": {
+      "wBattleMode": "01:d22d",
+      "wPlayerName": "01:d47d",
+      "wJohtoBadges": "01:d857",
+      "wKantoBadges": "01:d858",
+      "wMapGroup": "01:dcb5",
+      "wMapNumber": "01:dcb6",
+      "wYCoord": "01:dcb7",
+      "wXCoord": "01:dcb8",
+      "wPartyCount": "01:dcd7",
+      "wPartyMon1": "01:dcdf",
+      "wPartyMons": "01:dcdf",
+      "wPartyMon1Level": "01:dcfe",
+      "wPartyMon1HP": "01:dd01",
+      "wPartyMon1MaxHP": "01:dd03",
+      "wPartyMon1SpclAtk": "01:dd0b",
+      "wPartyMon1SpclDef": "01:dd0d",
+      "wPartyMon2": "01:dd0f",
+      "wPartyMonNicknames": "01:de41",
+      "wPokedexCaught": "01:de99",
+      "wPokedexSeen": "01:deb9"
+    }
+  }
+}

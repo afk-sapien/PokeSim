@@ -23,7 +23,7 @@ itself. For a container deployment, run it where the Library address and data
 mount are accessible.
 
 `tools/sample_live.py` is retained for the [historical two-container
-installation](homeserver.md). Its fixed SSH host, ports, and filesystem paths
+installation. Its fixed ports and filesystem paths
 are not the managed Library monitoring procedure.
 
 Compare container start times and image revisions before comparing counters. A restart

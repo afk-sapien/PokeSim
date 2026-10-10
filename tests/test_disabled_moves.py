@@ -4,6 +4,7 @@ from pokesim.policies.strategic import StrategicPolicy
 from pokesim.screen import Screen
 from test_events import snap
 from test_strategy import menu, mon
+from shortcut_fakes import Recorder
 
 
 def battler(memory, base, pokemon):
@@ -42,26 +43,26 @@ def test_disabled_slot_is_unavailable_only_while_disable_is_active():
     assert choose_battle(state, player, enemy, 0).index == 3
 
 
-def test_move_menu_exits_the_disabled_choice_instead_of_retrying_it():
+def test_fight_skips_the_disabled_choice_instead_of_retrying_it():
+    memory = bytearray(65536)
+    state = battle(memory)
     policy = StrategicPolicy(1)
+    recorder = Recorder.on(policy)
     policy.intent = Decision('fight', 3)
-    buttons = []
-    for index in (4, 3, 2, 1):
-        memory = menu({13: '      TACKLE', 14: '      GROWL', 15: '      LEECH SEED',
-                       16: '      VINE WHIP'}, (5, 12 + index), index, (5, 12))
-        state = battle(memory)
-        buttons.append(policy._dispatch(state, Screen(memory), 'moves', memory)[0].button)
-    assert buttons == ['up', 'up', 'up', 'a']
+    policy._fight(state, read_battler(memory, W_BATTLE_MON), read_battler(memory, W_ENEMY_MON))
+    assert recorder.last.kind == 'choose_move' and recorder.last.slot == 0
 
 
 def test_battle_root_discards_stale_disabled_move_intent():
     memory = menu({14: '          FIGHT PKMN', 16: '          ITEM  RUN'}, (9, 14))
     state = battle(memory)
     policy = StrategicPolicy(1)
+    recorder = Recorder.on(policy)
     policy.intent = Decision('fight', 3)
     policy.last_kind = 'battle'
     policy._dispatch(state, Screen(memory), 'battle', memory)
     assert policy.intent.kind == 'fight' and policy.intent.index == 0
+    assert recorder.last.slot == 0
 
 
 def test_no_available_moves_returns_to_fight_for_struggle():

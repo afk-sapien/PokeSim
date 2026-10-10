@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import hmac
 import math
 import httpx
@@ -9,21 +10,88 @@ import re
 import threading
 
 from fastapi import FastAPI, HTTPException, Query, Header
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Literal
 
 from .. import config
-from ..policies.base import BUTTONS
+from ..capability import CAPABILITY_ERRORS
 from .event_page import render_event
 from .feed import render_feed
-from .pokedex import DEFAULT_VERSION, VERSIONS, live_status, reference_json
-from . import trading
-from .pages import render_game_page
+from .pages import GEN2_CONTEXT, render_game_page
+from .security import VIEWER_HEADER, viewer_allows
 from ..trade import preferences
 
 STATIC = Path(__file__).parent / "static"
+BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
+# Set for each request that arrived through a /view/ link.
+VIEWING = contextvars.ContextVar('pokesim_viewing', default=False)
+
+
+def view_only():
+    """True when this request may only watch: a view link, or the instance-wide VIEWER_ONLY."""
+    return config.VIEWER_ONLY or VIEWING.get()
+
+
+# Ownership barriers: a save from before one of these would undo a completed trade or custom reward.
+REWIND_BARRIERS = (('trade_barrier', 'trade_id', 'This save predates the latest completed trade'),
+                   ('custom-reward-barrier-v1', 'reward_id', 'This save predates the latest custom reward or purchase'))
+
+
+def rewind_refusal(store, state_name):
+    """Why this save cannot be loaded, or None. The emulator enforces the same barriers."""
+    metadata = None
+    for key, field, message in REWIND_BARRIERS:
+        barrier = store.get(key)
+        if barrier:
+            if metadata is None:
+                metadata = store.checkpoint_metadata(store.state_path(state_name)) or {}
+            if metadata.get(field) != barrier:
+                return message
+    return None
+
+
+# The page polls trading, state and the Pokédex every few seconds. Full Pokémon records
+# (moves, stats, experience) stay available to Python callers through emu.status(); the
+# routes below send each page only what it draws.
+OFFER_FIELDS = ('trade_key', 'dex', 'species', 'name', 'nick', 'level', 'box', 'position', 'slot', 'egg', 'shiny',
+                'perfect_dvs', 'listed', 'preference', 'editable', 'locked', 'source', 'reason', 'can_offer')
+HOLDER_FIELDS = ('dex', 'species', 'nick', 'name', 'level', 'dv_stars', 'shiny', 'egg', 'box', 'position', 'slot')
+
+
+def pick(mon, fields):
+    return {key: mon[key] for key in fields if key in mon} if isinstance(mon, dict) else mon
+
+
+def slim_offers(result):
+    """Trading pages draw an offer's name, place and controls, never its moves or stats."""
+    if isinstance(result, dict) and isinstance(result.get('offers'), list):
+        result = {**result, 'offers': [pick(mon, OFFER_FIELDS) for mon in result['offers']]}
+    return result
+
+
+def without_stored_pokemon(status):
+    """Live state without the boxed Pokémon list, the bulk of the payload. Box counts stay."""
+    game = status.get('game') if isinstance(status, dict) else None
+    storage = game.get('storage') if isinstance(game, dict) else None
+    if not isinstance(storage, dict) or 'pokemon' not in storage:
+        return status
+    return {**status, 'game': {**game, 'storage': {key: value for key, value in storage.items() if key != 'pokemon'}}}
+
+
+def status_summary(status):
+    """What the supervisor and backups read: playback, health and pace, with no game data."""
+    if not isinstance(status, dict):
+        return status
+    game = status.get('game') or {}
+    return {**{key: value for key, value in status.items() if key not in ('game', 'strategy')},
+            'game': {key: game[key] for key in ('map_name', 'playtime') if key in game}}
+
+
+def live_status(*args, **kwargs):
+    from .pokedex import live_status as implementation
+    return implementation(*args, **kwargs)
 
 
 class Control(BaseModel):
@@ -38,17 +106,45 @@ class TradePreference(BaseModel):
 
 def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adventure_name: str = '',
                browser_origin: str | None = None) -> FastAPI:
+    gen2 = getattr(emu, 'generation', 1) == 2
+    if gen2:
+        from functools import partial
+        from ..gen2.web import Reference, live_status as gen2_status
+        gen2_live_status = partial(gen2_status, data=emu.data)
+        reference_json = Reference(emu.data).json
+        DEFAULT_VERSION = emu.data.game
+        VERSIONS = (DEFAULT_VERSION,)
+    else:
+        from .pokedex import DEFAULT_VERSION, VERSIONS, reference_json
     if base_path and not re.fullmatch(r'/games/[A-Za-z0-9_-]+', base_path):
         raise ValueError('Invalid adventure base path')
+    view_path = base_path.replace('/games/', '/view/', 1)
+
+    def base():
+        return view_path if VIEWING.get() else base_path
+
     def page(name: str, **context):
-        return render_game_page(name, base_path=base_path, adventure_id=adventure_id,
-                                adventure_name=adventure_name, **context)
+        return render_game_page(name, base_path=base(), adventure_id=adventure_id, viewer=VIEWING.get(),
+                                adventure_name=adventure_name, **(GEN2_CONTEXT if gen2 else {}), **context)
 
     app = FastAPI(title="pokesim", docs_url=None, redoc_url=None, openapi_url=None)
     export_lock = threading.Lock()
     if browser_origin is not None:
         from .security import install_browser_boundary
         install_browser_boundary(app, browser_origin)
+
+    @app.middleware('http')
+    async def viewer_boundary(request, call_next):
+        # The one gate for view links: they only watch, and never read saves.
+        viewing = request.headers.get(VIEWER_HEADER) == '1'
+        if viewing and not viewer_allows(request.method, request.url.path):
+            return JSONResponse({'detail': 'This is a view-only link'}, status_code=403)
+        token = VIEWING.set(viewing)
+        try:
+            return await call_next(request)
+        finally:
+            VIEWING.reset(token)
+
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     app.mount("/shots", StaticFiles(directory=store.shots), name="shots")
 
@@ -62,11 +158,11 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get("/team", response_class=HTMLResponse)
     def team_page():
-        return RedirectResponse(f"{base_path}/#team", status_code=307)
+        return RedirectResponse(f"{base()}/#team", status_code=307)
 
     @app.get("/journey", response_class=HTMLResponse)
     def journey_page():
-        return RedirectResponse(f"{base_path}/#journey-progress", status_code=307)
+        return RedirectResponse(f"{base()}/#journey-progress", status_code=307)
 
     @app.get("/pc", response_class=HTMLResponse)
     def pc_page():
@@ -78,7 +174,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get('/journal/stats')
     def legacy_statistics_page():
-        return RedirectResponse(f'{base_path}/stats', status_code=308)
+        return RedirectResponse(f'{base()}/stats', status_code=308)
 
     @app.get('/stats', response_class=HTMLResponse)
     def statistics_page():
@@ -96,6 +192,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get('/api/statistics/activity')
     def activity_statistics():
+        if gen2:
+            from ..activity_ledger import gen2_status
+            return {**gen2_status(emu.data, (emu.status() or {}).get('game')), 'champion_shop': None}
         from ..activity_ledger import status
         from ..champion_shop import status as shop_status
         return {**status(store, emu.status().get('game')), 'champion_shop': shop_status(store)}
@@ -104,6 +203,33 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def statistics():
         from ..statistics import status, recent, overview, highlights
         from ..adventure_records import status as record_status
+        if gen2:
+            from ..gen2.steps import STEPS, status as mew_status
+            from ..gen2 import returns as gen2_returns
+            from ..gen2.battle_power import battle_power as gen2_power
+            from ..gen2.tracking import CAPTURES, apply as gen2_goals
+            current = emu.status() or {}
+            game = current.get('game') or {}
+            goals = gen2_goals({'party': game.get('party', []), 'storage': game.get('storage')}, store)['milestones']
+            walked = store.get(STEPS) or {}
+            held = [mon for mon in game.get('party', []) + (game.get('storage') or {}).get('pokemon', [])
+                    if not mon.get('egg')]
+            return {**status(store),
+                    'overview': overview(current, {'milestones': goals}, {
+                        'steps': walked.get('total'), 'available': bool(walked), 'started_at': walked.get('started_at')}),
+                    'milestone_records': record_status(store, 2), 'recent': recent(store),
+                    'legendary_returns': gen2_returns.status(store), 'event_returns': gen2_returns.event_status(store),
+                    'highlights': highlights(game, (lambda mon: gen2_power(mon, emu.data),
+                                                    lambda mon: None if mon.get('egg') else mon.get('dv_total')),
+                                             emu.data.species),
+                    'collection_records': {'catches': store.get(CAPTURES) or {'available': False},
+                                           'perfect_found': goals['perfect_found'],
+                                           'perfect_count_is_minimum': goals['perfect_count_is_minimum'],
+                                           # Gen II keeps no shiny encounter receipts, only what is held now.
+                                           'shiny': {'available': False, 'seen': None, 'acquired': None,
+                                                     'held': sum(bool(mon.get('shiny')) for mon in held)}},
+                    # The Kanto Marathon is a Red, Blue and Yellow race.
+                    'mew_returns': mew_status(store), 'marathon': None}
         from ..legendary_returns import status as returns_status
         current = emu.status()
         collection = (current.get('strategy') or {}).get('collection') or {}
@@ -137,11 +263,29 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return Response(reference_json(version), media_type="application/json")
 
     @app.get("/api/pokedex/status")
+    def pokedex_route(view: Literal['pc', 'dex'] | None = Query(None)):
+        payload = pokedex_status()
+        if view == 'pc':
+            # The PC draws party and boxes in full but never the collection plan.
+            return {key: value for key, value in payload.items() if key != 'plan'}
+        if view == 'dex':
+            # The Pokédex lists who holds each species, never their moves or stats.
+            storage = payload.get('storage')
+            if isinstance(storage, dict):
+                storage = {**storage, 'pokemon': [pick(mon, HOLDER_FIELDS) for mon in storage.get('pokemon') or []]}
+            return {**payload, 'party': [pick(mon, HOLDER_FIELDS) for mon in payload.get('party') or []],
+                    'storage': storage}
+        return payload
+
     def pokedex_status():
         status = emu.status()
-        payload = live_status(status.get("game"), (status.get("strategy") or {}).get("collection"),
+        payload = (gen2_live_status if gen2 else live_status)(status.get("game"), (status.get("strategy") or {}).get("collection"),
                               league_rewards=status.get('league_rewards', {})
                               if getattr(config, 'LEAGUE_REWARDS', False) else None)
+        if gen2:
+            from ..gen2.tracking import apply as achievements
+            from ..gen2.league import apply as league_partners
+            return preferences.apply(achievements(league_partners(payload, store, emu.data), store), store.trade_preferences())
         from ..catches import status as catch_status
         payload['catches'] = catch_status(store)
         from ..league_partners import apply as league_partners
@@ -152,14 +296,18 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     @app.get('/api/trading')
     def trading_status():
         payload = pokedex_status()
+        if gen2:
+            from ..gen2.trading import status
+            return slim_offers({**status(emu, payload, adventure_id), 'viewer_only': view_only()})
+        from . import trading
         if base_path:
             participant = getattr(app.state, 'participant', None)
             if participant is not None:
                 payload = participant.runtime.call(participant.inventory)
             result = trading.unavailable(payload, adventure_id, 'Useful exchanges happen automatically with eligible adventures in this library.')
             result.update(connected=True, managed=True, trading={'managed': True, 'enabled': True})
-            return {**result, 'viewer_only': config.VIEWER_ONLY,
-                    'holding': bool(store.get('trade_hold'))}
+            return slim_offers({**result, 'viewer_only': view_only(),
+                                'holding': bool(store.get('trade_hold'))})
         instance = config.TRADING_INSTANCE or payload['version']
         try:
             result = trading.perspective(payload, trading.board(), instance)
@@ -167,12 +315,12 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             message = ('Trading is not connected to this game yet.' if not config.TRADING_URL else
                        'Trading is reconnecting. Offers and history will refresh when the coordinator is available.')
             result = trading.unavailable(payload, instance, message)
-        return {**result, 'viewer_only': config.VIEWER_ONLY,
-                'holding': bool(store.get('trade_hold'))}
+        return slim_offers({**result, 'viewer_only': view_only(),
+                            'holding': bool(store.get('trade_hold'))})
 
     @app.post('/api/trading/preferences')
     def trading_preference(choice: TradePreference):
-        if config.VIEWER_ONLY:
+        if view_only():
             raise HTTPException(403, 'This instance is view-only')
         try:
             emu.set_trade_preference(choice.key, choice.state)
@@ -182,7 +330,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get("/sprites/{dex}.png")
     def sprite(dex: int):
-        if not 1 <= dex <= 151:
+        if not 1 <= dex <= (251 if gen2 else 151):
             raise HTTPException(404)
         path = (store.dir / "sprites" / f"{dex}.png").resolve()
         root = (store.dir / "sprites").resolve()
@@ -196,8 +344,18 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/state")
-    def state():
-        return emu.status()
+    def state(storage: bool = Query(False)):
+        """Live state. `?storage=1` adds the boxed Pokémon list, which the live page never draws."""
+        status = emu.status()
+        if not storage:
+            status = without_stored_pokemon(status)
+        return {**status, 'viewer_only': view_only()} if isinstance(status, dict) else status
+
+    @app.get("/api/summary")
+    def summary():
+        """A small health and playback view for the supervisor, which polls every few seconds."""
+        status = status_summary(emu.status())
+        return {**status, 'viewer_only': view_only()} if isinstance(status, dict) else status
 
     @app.get("/healthz")
     def health():
@@ -225,7 +383,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get("/api/states")
     def states():
-        if config.VIEWER_ONLY:
+        if view_only():
             raise HTTPException(403, "This instance is view-only")
         return [p.name for p in sorted(store.states.glob("*.state"), key=lambda p: p.stat().st_mtime, reverse=True)]
 
@@ -244,7 +402,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def control(c: Control):
         if store.get("trade_hold") and c.action != "speed":
             raise HTTPException(409, "An exchange is holding this adventure")
-        if config.VIEWER_ONLY:
+        if view_only():
             raise HTTPException(403, "This instance is view-only")
         if c.action == "press":
             if c.value not in BUTTONS:
@@ -265,11 +423,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         elif c.action == "load_state":
             if not isinstance(c.value, str) or not store.state_path(c.value):
                 raise HTTPException(400, "Save state does not exist")
-            barrier = store.get('trade_barrier')
-            if barrier:
-                metadata = store.checkpoint_metadata(store.state_path(c.value))
-                if (metadata or {}).get('trade_id') != barrier:
-                    raise HTTPException(409, 'This save predates the latest completed trade')
+            refusal = rewind_refusal(store, c.value)
+            if refusal:
+                raise HTTPException(409, refusal)
             emu.command("load_state", str(c.value))
         else:
             raise HTTPException(400, "unknown action")
@@ -277,39 +433,55 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.post('/api/export-save')
     def export_save():
-        if config.VIEWER_ONLY:
+        if view_only():
             raise HTTPException(403, 'This instance is view-only')
         if not export_lock.acquire(blocking=False):
             raise HTTPException(409, 'A save export is already being prepared.')
+        name = re.sub(r'[^A-Za-z0-9_-]+', '-', adventure_name).strip('-')[:64] or 'pokesim'
         try:
-            from ..save_export import capture, export
-            state = emu.call(lambda: capture(emu), timeout=5)
-            data = export(emu.rom, state)
+            if gen2:
+                from ..gen2.save import capture, clock_archive, export_with_clock
+                state = emu.call(lambda: capture(emu), timeout=5)
+                save, clock = export_with_clock(emu.rom, state, emu.data)
+                data = clock_archive(save, clock, name)
+            else:
+                from ..save_export import capture, export
+                state = emu.call(lambda: capture(emu), timeout=5)
+                data = export(emu.rom, state)
         except ValueError as error:
             raise HTTPException(409, str(error)) from error
+        except CAPABILITY_ERRORS as error:
+            raise HTTPException(501, str(error)) from error
         except (TimeoutError, RuntimeError) as error:
             raise HTTPException(503, 'The adventure is busy. Try exporting again in a moment.') from error
         finally:
             export_lock.release()
-        name = re.sub(r'[^A-Za-z0-9_-]+', '-', adventure_name).strip('-')[:64] or 'pokesim'
-        return Response(data, media_type='application/octet-stream', headers={
+        extension, media_type = ('zip', 'application/zip') if gen2 else ('sav', 'application/octet-stream')
+        return Response(data, media_type=media_type, headers={
             'Cache-Control': 'no-store',
-            'Content-Disposition': 'attachment' + chr(59) + f' filename="{name}.sav"',
+            'Content-Disposition': 'attachment' + chr(59) + f' filename="{name}.{extension}"',
         })
 
     @app.get('/api/audio')
     def audio(after: int = Query(-1, ge=-1)):
-        from ..audio import SAMPLE_RATE
-        state, sequence, pcm, speed = emu.audio_packet(after)
+        from ..audio import MAX_SPEED, SAMPLE_RATE
+        state, sequence, pcm, speed, dropped = emu.audio_packet(after)
+        if speed > MAX_SPEED:
+            pcm = b''  # Too fast to hear. The page mutes and the wire stays quiet.
         return Response(pcm, media_type='application/octet-stream', headers={
             'Cache-Control': 'no-store', 'X-Audio-State': state,
+            'X-Audio-Mode': 'manual' if getattr(emu, 'manual_mode', False) else 'watch',
+            'X-Audio-Dropped': str(dropped),
             'X-Audio-Sequence': str(sequence), 'X-Audio-Rate': str(SAMPLE_RATE),
             'X-Audio-Speed': str(speed),
         })
 
     @app.get("/frame.jpg")
     def frame():
-        return Response(emu.current_frame(), media_type="image/png", headers={"Cache-Control": "no-store"})
+        # The library thumbnail polls this, so skip blank transition frames where the game keeps them.
+        still = getattr(emu, 'still_frame', None)
+        return Response(still() if callable(still) else emu.current_frame(), media_type="image/png",
+                        headers={"Cache-Control": "no-store"})
 
     @app.get("/stream")
     async def stream():
@@ -334,8 +506,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         ev = store.event(eid)
         if not ev:
             raise HTTPException(404)
-        can_rewind = bool(ev["state"]) and not config.VIEWER_ONLY and not store.get("trade_barrier")
-        return render_event(ev, can_rewind=can_rewind, base_path=base_path,
+        can_rewind = bool(ev["state"]) and not view_only() and not any(
+            store.get(key) for key, _, _ in REWIND_BARRIERS)
+        return render_event(ev, can_rewind=can_rewind, base_path=base(), viewer=VIEWING.get(),
                             adventure_id=adventure_id, adventure_name=adventure_name)
 
     @app.get("/feed.xml")

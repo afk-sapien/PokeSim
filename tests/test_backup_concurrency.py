@@ -85,7 +85,7 @@ def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, state, ex
 
     class PlaybackChild(FakeChild):
         def request(self, method, path, body=None, **kwargs):
-            if path == '/api/state':
+            if path == '/api/summary':
                 return state
             if path == '/api/control':
                 controls.append(body['action'])

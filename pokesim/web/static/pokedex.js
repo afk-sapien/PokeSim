@@ -2,19 +2,19 @@ const $ = (selector) => document.querySelector(selector)
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]))
 const num = (dex) => String(dex).padStart(3, '0')
 const typeTags = (types) => PokemonTypes.badges(types)
-// Base stats count in cells of ten, so the tallest Gen 1 stat (190) fills the meter.
-const MAX_STAT = 190
+let maxStat = 190
 const STAT_CELLS = 19
 const BANK_CELLS = 20
 const RECORD_LABELS = {caught: 'In Pokédex', seen: 'Seen', unseen: 'Unseen'}
 const RECORD_LAMPS = {caught: 'ok', seen: 'signal', unseen: ''}
 const cells = (on, total) => Array.from({length: total}, (_, i) => i < on ? '<i class="on"></i>' : '<i></i>').join('')
-const outOf = (n) => `${n}<span class="unit">/151</span>`
+const outOf = (n) => `${n}<span class="unit">/${dexTotal}</span>`
 function paintBank(selector, value) {
-  $(selector).innerHTML = cells(value > 0 ? Math.max(1, Math.round(value / 151 * BANK_CELLS)) : 0, BANK_CELLS)
+  $(selector).innerHTML = cells(value > 0 ? Math.max(1, Math.round(value / dexTotal * BANK_CELLS)) : 0, BANK_CELLS)
 }
-const PLAN_LABELS = {available: 'Possible in this run', caught: 'Already registered', external: 'Needs another game', unavailable: 'Out of reach for now'}
+const PLAN_LABELS = {available: 'Possible in this run', caught: 'Already registered', external: 'Needs another game', planned: 'Planned for this run', unavailable: 'Out of reach for now'}
 
+let dexTotal = 151
 let entries = []
 let byDex = new Map()
 let owned = new Set()
@@ -55,6 +55,7 @@ function matches(entry) {
   if (query && !entry.name.toLowerCase().includes(query) && !num(entry.dex).includes(query.replace(/^#/, ''))) return false
   if (type !== 'all' && !entry.types.includes(type)) return false
   if (filter === 'available') return plan.get(entry.dex)?.status === 'available'
+  if (filter === 'planned') return plan.get(entry.dex)?.status === 'planned'
   if (filter === 'maxed') return maxed.has(entry.dex)
   if (filter === 'unmastered') return !maxed.has(entry.dex)
   if (filter === 'quality') return highQualitySpecies.has(entry.dex)
@@ -106,7 +107,7 @@ function renderGrid() {
 }
 
 function statRow(label, value) {
-  const on = Math.max(1, Math.min(STAT_CELLS, Math.round(value / MAX_STAT * STAT_CELLS)))
+  const on = Math.max(1, Math.min(STAT_CELLS, Math.round(value / maxStat * STAT_CELLS)))
   return `<div class="stat-row"><span class="micro">${esc(label)}</span><span class="meter" data-level="signal" aria-hidden="true">${cells(on, STAT_CELLS)}</span><b>${value}</b></div>`
 }
 
@@ -121,6 +122,12 @@ function placeLine(place) {
                  place.gives ? `Trade a ${place.gives}` : null, place.item ? `From the ${place.item}` : null]
   return `<li><span class="tag place-method ${esc(place.method)}">${esc(place.method_label)}</span>
     <strong>${esc(place.map_name)}</strong><small>${extra.filter(Boolean).map(esc).join(' · ')}</small></li>`
+}
+
+function sourceLine(source) {
+  const flag = source.planned ? '<span class="tag tag--signal">Planned</span>' : source.external ? '<span class="tag">Outside this cartridge</span>' : ''
+  return `<li><span class="tag place-method ${esc(source.kind)}">${esc(source.kind.replace(/_/g, ' '))}</span>
+    <strong>${esc(source.label)} ${flag}</strong><small>${esc(source.detail || '')}</small></li>`
 }
 
 function renderDetail(dex, refresh = false) {
@@ -154,28 +161,30 @@ function renderDetail(dex, refresh = false) {
       <div class="link-row"><a class="key" href="${PokeSim.base}/pc?scope=all&q=%23${num(dex)}&sort=power&order=desc">View in PC ↗</a></div>
     </section>
     ${project && state !== 'caught' ? `<p class="plan-note"><b>${esc(PLAN_LABELS[project.status] || 'Status')}</b> ${esc(project.reason || '')}</p>` : ''}
+    ${project?.sources?.length ? `<section class="detail-section" aria-label="How the sim gets it"><h3>How the sim gets it</h3>
+      <ul class="place-list source-list">${project.sources.map(sourceLine).join('')}</ul></section>` : ''}
     ${copies.length ? `<section class="detail-section"><h3>With you right now</h3><ul class="copy-list">${copies.map((copy) =>
       `<li><strong>${esc(copy.nick || entry.name)}</strong>${PokemonTypes.shinyBadge(copy)}<span>Lv. ${copy.level} · ${esc(copy.where)} · ${copy.stars ? `${copy.stars}★ DVs` : 'DVs unknown'}</span></li>`).join('')}</ul></section>` : ''}
     <section class="detail-section"><h3>Base stats</h3>
       ${Object.entries(entry.stats).map(([label, value]) => statRow(label, value)).join('')}
-      <p class="detail-meta">Total ${entry.total} · Generation I shares one Special stat</p>
+      <p class="detail-meta">Total ${entry.total} · ${dexTotal === 251 ? 'Separate Special Attack and Special Defense' : 'Generation I shares one Special stat'}</p>
       <p class="detail-meta">Catch rate ${entry.catch_rate} of 255 · ${esc(entry.growth)} level curve${entry.hms.length ? ` · Field moves: ${entry.hms.map(esc).join(', ')}` : ''}</p>
     </section>
     ${entry.evolves_from.length || entry.evolves_to.length ? `<section class="detail-section"><h3>Family</h3><div class="evo-row">
       ${entry.evolves_from.map((step) => chip(step, 'Evolves from')).join('')}
       ${entry.evolves_to.map((step) => chip(step, 'Evolves into')).join('')}</div></section>` : ''}
-    <section class="detail-section"><h3>Where to look in Kanto</h3>
+    <section class="detail-section"><h3>Where to look</h3>
       ${entry.locations.length ? `<ul class="place-list">${entry.locations.map(placeLine).join('')}</ul>`
         : '<p class="detail-meta">No encounters in this version. Evolution, a trade, or another cartridge is the way in.</p>'}
     </section>
     <section class="detail-section"><h3>Moves it learns on its own</h3>
       <div class="move-scroll"><table class="move-table"><thead><tr><th>When</th><th>Move</th><th>Type</th><th>Power</th><th>Acc.</th><th>PP</th></tr></thead><tbody>${moves}</tbody></table></div>
     </section>
-    <section class="detail-section"><h3>Read more</h3><div class="link-row">
+    ${Object.keys(entry.links).length ? `<section class="detail-section"><h3>Read more</h3><div class="link-row">
       <a class="key" href="${esc(entry.links.bulbapedia)}" target="_blank" rel="noreferrer">Bulbapedia ↗</a>
       <a class="key" href="${esc(entry.links.serebii)}" target="_blank" rel="noreferrer">Serebii ↗</a>
       <a class="key" href="${esc(entry.links.wikipedia)}" target="_blank" rel="noreferrer">Wikipedia ↗</a>
-    </div></section>`
+    </div></section>` : ''}`
   fitSprites($('#detail-body'))
   $('#detail').hidden = false
   $('#backdrop').hidden = false
@@ -197,7 +206,7 @@ function closeDetail() {
 
 function step(offset) {
   if (openDex === null) return
-  const next = Math.min(151, Math.max(1, openDex + offset))
+  const next = Math.min(dexTotal, Math.max(1, openDex + offset))
   renderDetail(next)
 }
 
@@ -221,13 +230,21 @@ async function loadReference() {
   if (!response.ok) throw new Error('The Pokédex could not be opened.')
   const data = await response.json()
   entries = data.entries
+  dexTotal = data.count || entries.length
+  const regions = data.generation === 2 ? 'Johto and Kanto' : 'Kanto'
+  document.title = `The ${regions} Pokédex. · pokesim`
+  $('.skip-link').textContent = 'Skip to the Pokédex.'
+  $('.who .micro').textContent = `Species register · ${regions} · ${dexTotal} entries`
+  $('.dex-lede').textContent = `Pick any species for its stats, family, where to find it in ${regions}, and the moves it learns.`
+  for (const id of ['#owned-meter', '#seen-meter', '#maxed-meter']) $(id).max = dexTotal
+  maxStat = data.generation === 2 ? 255 : 190
   byDex = new Map(entries.map((entry) => [entry.dex, entry]))
   const types = [...new Set(entries.flatMap((entry) => entry.types))].sort()
   $('#type-filter').innerHTML = '<option value="all">Every type</option>' + types.map((type) => `<option value="${esc(type)}">${esc(type)}</option>`).join('')
 }
 
 async function fetchStatus() {
-  const response = await PokeSim.fetch('/api/pokedex/status', {cache: 'no-store'})
+  const response = await PokeSim.fetch('/api/pokedex/status?view=dex', {cache: 'no-store'})
   if (!response.ok) throw new Error('Unavailable')
   return response.json()
 }
@@ -302,16 +319,17 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowRight') step(1)
 })
 
-// One status request serves both the first paint and the grid once the reference lands.
+// The status request starts at once, but counts paint only after the reference sets
+// dexTotal, so a Gen II Pokédex never flashes the Gen I total of 151.
 const firstStatus = fetchStatus()
 firstStatus.catch(() => {})
 loadReference().then(() => {
   renderGrid()
   refreshStatus(firstStatus)
   const requested = Number(location.hash.replace('#', ''))
-  if (requested >= 1 && requested <= 151) renderDetail(requested)
+  if (requested >= 1 && requested <= dexTotal) renderDetail(requested)
 }).catch(() => {
   $('#grid').innerHTML = '<p class="dex-empty">The Pokédex data could not be loaded. Refresh to try again.</p>'
+  refreshStatus(firstStatus)
 })
-refreshStatus(firstStatus)
 setInterval(() => { if (!document.hidden) refreshStatus() }, 12000)

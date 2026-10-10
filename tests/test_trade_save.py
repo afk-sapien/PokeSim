@@ -181,7 +181,7 @@ def test_the_inventory_names_every_stored_pokemon_by_box_and_position():
 
 def checkpoint(directory, rom, name, contents, active=1, manifest=True):
     """A save state whose boxes hold `contents`, built by writing into a freshly booted game."""
-    from pyboy import PyBoy
+    from pokesim_core.emulator import Emulator as PyBoy
     import io
     directory.mkdir(parents=True, exist_ok=True)
     pb = PyBoy(str(rom), window="null", sound_emulated=False)
@@ -199,13 +199,13 @@ def checkpoint(directory, rom, name, contents, active=1, manifest=True):
         path.with_suffix(".json").write_text(json.dumps({
             "format": 1, "sha256": hashlib.sha256(buf.getvalue()).hexdigest(),
             "rom_sha1": hashlib.sha1(rom.read_bytes()).hexdigest(),
-            "pyboy_version": version("pyboy"), "policy": "strategic",
+            "pyboy_version": "2.7.0", "policy": "strategic",
             "policy_state": {}, "run_memory": {}, "frame": 120}))
     return path
 
 
 def reread(rom, state):
-    from pyboy import PyBoy
+    from pokesim_core.emulator import Emulator as PyBoy
     pb = PyBoy(str(rom), window="null", sound_emulated=False)
     try:
         pb.set_emulation_speed(0)
@@ -292,7 +292,7 @@ def test_a_publish_that_fails_leaves_no_half_written_pair(tmp_path):
 @pytest.mark.skipif(not SAMPLE_STATE.exists(), reason="no populated save state")
 def test_a_real_campaign_state_keeps_its_boxes_consistent_after_a_write(tmp_path):
     """The layout has to hold against a save made by the game itself, not only ones we build."""
-    from pyboy import PyBoy
+    from pokesim_core.emulator import Emulator as PyBoy
     import io
     pb = PyBoy(str(ROM), window="null", sound_emulated=False)
     try:

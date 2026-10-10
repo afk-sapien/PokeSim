@@ -44,7 +44,7 @@ The task heartbeat checks every 30 minutes. It stays quiet when nothing actionab
 changes. Report material findings, verified improvements, deployments, problems needing
 attention, and completed 24-hour, 48-hour, and week-long endurance milestones.
 
-Run `.venv/bin/python tools/sample_live.py` from the repository. It uses SSH to `servarr`
+Run `.venv/bin/python tools/sample_live.py` from the repository. It uses SSH to the host named by `--host` or `POKESIM_SAMPLE_HOST`
 and appends to `data/operations/live-samples.json`, retaining at most 3360 samples. This
 private file includes current project details and resource measurements. Read previous
 samples when judging progress, rather than comparing only coordinates or HTTP health.
@@ -70,7 +70,7 @@ the live process. Preserve configuration and existing ROM, save, and game-data m
 Do not restore an old save merely to improve reported progress. Keep any failed run's
 evidence before rolling back a faulty application change.
 
-Use `docs/homeserver.md` and the release receipts for current images and backup paths.
+Use the release receipts for current images and backup paths.
 Keep runtime artifacts and game data out of Git. Update the roadmap and release status
 when observations materially change what is complete or what should happen next.
 
@@ -477,8 +477,7 @@ removed. The conversion manifest retains all hashes and old-to-new paths.
 Removed ten unused monitoring image tags from rc9 through rc19 after checking retained
 source archives, revision labels, aliases, and every container reference. Keep current
 rc22, rollback rc21 and rc20, the held rc11 image, and earlier legacy images. No global
-image, build-cache, or volume pruning was performed. See the ongoing retention policy
-in [homeserver.md](../homeserver.md#release-storage-retention).
+image, build-cache, or volume pruning was performed.
 
 Moved changing release metadata after stable Docker filesystem layers. Two disposable
 builds with different revision labels produced identical layers, passed import checks,

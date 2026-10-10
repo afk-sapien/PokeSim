@@ -31,7 +31,7 @@ def test_unsupported_rom_is_rejected_before_starting_an_emulator(tmp_path, monke
     rom = tmp_path / 'unsupported.gb'
     rom.write_bytes(b'unsupported')
     boot = Mock()
-    monkeypatch.setattr(save_export, 'PyBoy', boot)
+    monkeypatch.setattr(save_export, 'CoreEmulator', boot)
     with pytest.raises(ValueError, match='supported English'):
         save_export.export(rom, b'checkpoint')
     boot.assert_not_called()
@@ -90,3 +90,54 @@ def test_real_cartridge_export_restarts_with_current_collection():
         result = save_export.export(rom, stream.read())
     assert len(result) == 32768
     assert checkpoint.read_bytes() == before
+
+
+@pytest.mark.parametrize('origin', ['pokesim', 'core'])
+def test_missing_core_capability_is_not_reported_as_busy(tmp_path, monkeypatch, origin):
+    from pokesim.gen2 import save as gen2_save
+    if origin == 'core':
+        from pokesim_core.errors import CoreCapabilityError
+    else:
+        from pokesim.gen2.core import CoreCapabilityError
+    message = 'Core does not provide cartridge clock import or export.'
+
+    def unavailable(*_):
+        raise CoreCapabilityError(message)
+    monkeypatch.setattr(gen2_save, 'capture', lambda _: b'checkpoint')
+    monkeypatch.setattr(gen2_save, 'export_with_clock', unavailable)
+    monkeypatch.setattr(config, 'VIEWER_ONLY', False)
+    shots = tmp_path / 'shots'
+    shots.mkdir()
+    emu = SimpleNamespace(rom=tmp_path / 'g.gbc', data=SimpleNamespace(game="gold"), generation=2, call=lambda function, **_: function())
+    client = TestClient(create_app(emu, SimpleNamespace(shots=shots), adventure_name='Gold'))
+    response = client.post('/api/export-save')
+    assert response.status_code == 501
+    assert message in response.json()['detail']
+    assert 'busy' not in response.json()['detail']
+
+
+def test_core_capability_error_is_a_runtime_error_but_not_busy():
+    """Core 0.2 raises a RuntimeError subclass. It must not fall into the busy 503 branch."""
+    from pokesim.capability import CAPABILITY_ERRORS
+    from pokesim_core.errors import CoreCapabilityError as CoreError
+    assert issubclass(CoreError, RuntimeError) and not issubclass(CoreError, NotImplementedError)
+    assert CAPABILITY_ERRORS == (CoreError,)
+
+
+def test_gen2_export_downloads_save_and_clock_together(tmp_path, monkeypatch):
+    import io
+    import zipfile
+    from pokesim.gen2 import save as gen2_save
+    save, clock = bytes(32768), bytes(range(10))
+    monkeypatch.setattr(gen2_save, 'capture', lambda _: b'state')
+    monkeypatch.setattr(gen2_save, 'export_with_clock', lambda rom, state, data: (save, clock))
+    monkeypatch.setattr(config, 'VIEWER_ONLY', False)
+    emu = SimpleNamespace(generation=2, rom=tmp_path / 'gold.gbc', data=SimpleNamespace(game='gold'), call=lambda function, **_: function())
+    client = TestClient(create_app(emu, SimpleNamespace(shots=tmp_path), adventure_name='Gold / test'))
+    response = client.post('/api/export-save')
+    assert response.status_code == 200
+    assert response.headers['content-disposition'].endswith('filename="Gold-test.zip"')
+    with zipfile.ZipFile(io.BytesIO(response.content)) as bundle:
+        assert sorted(bundle.namelist()) == ['Gold-test.rtc', 'Gold-test.sav']
+        assert bundle.read('Gold-test.sav') == save
+        assert bundle.read('Gold-test.rtc') == clock

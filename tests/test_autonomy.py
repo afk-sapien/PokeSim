@@ -9,6 +9,7 @@ from pokesim.policies.strategic import StrategicPolicy
 from pokesim.strategy_data import ITEMS
 from test_events import snap
 from test_strategy import flags, mon
+from shortcut_fakes import PRESS, Recorder
 
 
 def test_policy_help_signal_cannot_take_over_the_emulator(monkeypatch):
@@ -54,12 +55,13 @@ def test_stalled_goal_recovers_without_waiting_for_a_person():
 
 def test_hm_goal_starts_using_item_on_a_compatible_partner():
     policy = StrategicPolicy(7)
+    shortcuts = Recorder.on(policy)
     s = snap(party=(mon(),), badges=3, items=((ITEMS['HM01'], 1),),
              event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_BEAT_CERULEAN_ROCKET_THIEF'))
     policy.goal = story_goal(s)
     assert policy.goal.key == 'teach_cut'
-    assert policy._overworld(s, bytearray(65536))[0].button == 'start'
-    assert policy.intent.kind == 'item' and policy.intent.index == 0 and policy.intent.target == 0
+    assert policy._overworld(s, bytearray(65536))[0] == PRESS
+    assert (shortcuts.last.kind, shortcuts.last.item, shortcuts.last.target) == ('use_item', ITEMS['HM01'], 0)
 
 
 def test_battles_refresh_navigation_stall_timer():
@@ -85,18 +87,27 @@ def test_hm_dialogue_advances_despite_bag_quantity_behind_it():
     assert policy._dispatch(s, screen, 'dialogue', memory)[0].button == 'a'
 
 
-def test_pending_field_action_survives_pause_menu_opening():
-    from pokesim.policies.battle import Decision
-    from pokesim.screen import Screen
-    from test_screen import fake_mem
+def test_active_shortcut_keeps_control_until_it_is_done():
+    from pokesim_core.shortcuts import Done
+
+    class Machine:
+        kind, inputs = 'use_field_move', 1
+
+        def __init__(self):
+            self.results = ['start', None, Done('Used CUT.', True)]
+
+        def step(self, memory, ui):
+            return self.results.pop(0)
+
     policy = StrategicPolicy(7)
-    policy.intent = Decision('field', 0, reason='Use Cut')
-    policy.intent_since = 100
-    memory = fake_mem({})
+    memory = bytearray(65536)
+    policy.mem = memory
     s = snap(frame=118, party=(mon(),))
-    action = policy._dispatch(s, Screen(memory), 'overworld', memory)[0]
-    assert action.button is None
-    assert policy.intent.kind == 'field'
+    assert policy.shortcut.start(Machine(), 'cut', s.frame, memory)[0].button == 'start'
+    assert policy.step(PolicyContext(s, 0, 0, memory))[0].button is None
+    assert policy.mode == 'shortcut: use_field_move'
+    policy.step(PolicyContext(s, 0, 0, memory))
+    assert not policy.shortcut.active and policy.shortcut.last.completed
 
 
 def test_move_replacement_recovers_after_trying_to_delete_an_hm():

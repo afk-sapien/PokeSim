@@ -12,6 +12,8 @@ import re
 import sys
 import threading
 
+from pokesim_core.emulator_state import checkpoint_metadata
+
 from .cable import CableError, CableSide, checked, sha256
 from .cable_driver import CableDriver
 from .cable_metadata import ADAPTER_ID
@@ -28,6 +30,7 @@ class CableParticipant:
     checkpoint_sha256: str | None = None
     cartridge_sha256: str | None = None
     selected_key: str | None = None
+    game_data_dir: str | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +77,18 @@ def run_session(plan: CableSessionPlan, output_dir, progress=None, cancelled=Non
     No participant database or authoritative checkpoint is written. The caller must
     fence this attempt and stage both verified outputs before deciding to commit.
     """
+    plan.validate()
+    if Path(output_dir).exists():
+        raise FileExistsError(output_dir)
+    from ..cartridges import identify
+    cartridge = identify(Path(plan.left.rom_path).read_bytes())
+    peer = identify(Path(plan.right.rom_path).read_bytes())
+    if cartridge and peer and cartridge.generation != peer.generation:
+        from ..gen2.timecapsule_worker import run_session as timecapsule_session
+        return timecapsule_session(plan, output_dir, progress, cancelled)
+    if cartridge is not None and cartridge.generation == 2:
+        from ..gen2.link_worker import run_session as gen2_session
+        return gen2_session(plan, output_dir, progress, cancelled)
     plan.validate()
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=False)
@@ -151,7 +166,7 @@ def run_session(plan: CableSessionPlan, output_dir, progress=None, cancelled=Non
                 'evidence': evidence,
             }
         canonical = json.dumps(asdict(plan), sort_keys=True, separators=(',', ':')).encode()
-        manifest = {'schema_version': 1, 'status': 'verified', 'adapter_id': ADAPTER_ID,
+        manifest = {**checkpoint_metadata(), 'schema_version': 1, 'status': 'verified', 'adapter_id': ADAPTER_ID,
                     'interaction_id': plan.interaction_id, 'attempt_id': plan.attempt_id,
                     'plan_sha256': sha256(canonical), 'participants': results,
                     'return_method': 'cartridge_soft_reset_continue'}

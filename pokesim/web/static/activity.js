@@ -103,7 +103,9 @@
       if (!response.ok) throw new Error('Statistics unavailable')
       const data = await response.json()
       rows = data[pokemon ? 'pokemon' : 'items']
-      if (!pokemon) {
+      // Community item art is drawn for Red, Blue and Yellow item numbers.
+      if (!pokemon && data.generation === 2) itemArtwork = null
+      else if (!pokemon) {
         try {
           const response = await fetch('/api/v1/item-artwork', {cache: 'no-store'})
           const artwork = response.ok ? await response.json() : null
@@ -121,10 +123,11 @@
       }
       const date = value => new Date(value * 1000).toLocaleString(undefined, {dateStyle: 'medium'})
       let coverage = data.started_at ? `Actions since ${date(data.started_at)}. Earlier activity is not estimated.`
-        : 'Action tracking begins when this adventure runs on a supported Red or Blue cartridge.'
+        : data.generation === 2 ? `Gold, Silver, and Crystal record only what is ${pokemon ? 'held in the party and PC' : 'in the bag'} right now. Encounter, catch, purchase, and use counts are kept for Red, Blue, and Yellow.`
+          : 'Action tracking begins when this adventure runs on a supported Red, Blue, or Yellow cartridge.'
       if (data.started_at && !data.available) coverage += ' Action tracking is currently unavailable for this cartridge.'
       if (pokemon && data.captures_available && data.captures_since) coverage += ` Catch records since ${date(data.captures_since)} are included.`
-      if (pokemon) {
+      if (pokemon && data.generation !== 2) {
         coverage += data.trade_records?.npc_since ? ` Trades include verified cable history and NPC exchanges since ${date(data.trade_records.npc_since)}.` : ' Verified cable trades are included. NPC tracking begins when this adventure runs.'
         if (data.trade_records?.missing_history) coverage += ' Older trades with missing species records are excluded.'
       }

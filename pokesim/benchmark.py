@@ -4,14 +4,14 @@ import hashlib
 import io
 import json
 import platform
-from importlib.metadata import version
+from pokesim_core.emulator_state import checkpoint_metadata
 from collections import Counter
 from pathlib import Path
 from statistics import mean
 
 from . import config, game_data
 from .policies import POLICIES, make_policy
-from .policies.base import PolicyContext
+from .policies.base import PolicyContext, stack_pointer
 from .policies.progression import milestones
 from .ram import read_snapshot
 from .screen import Screen, W_OPTIONS
@@ -58,13 +58,13 @@ class Metrics:
 
 
 def run(rom, policy_name, seed, frames, checkpoint=None, target=None, trace=None):
-    from pyboy import PyBoy
-    pb = PyBoy(str(rom), window="null", sound_emulated=False)
+    from .yellow import open_emulator
+    pb = open_emulator(str(rom), window="null", sound_emulated=False)
     pb.set_emulation_speed(0)
     policy = make_policy(policy_name, seed)
     rom_sha = hashlib.sha1(Path(rom).read_bytes()).hexdigest()
     if hasattr(policy, "nav"):
-        policy.nav.use_world = rom_sha in config.KNOWN_ROM_SHA1
+        policy.nav.use_world = rom_sha in config.GEN1_ROM_SHA1
     metrics = Metrics()
     frame = 0
     last_pos = None
@@ -113,7 +113,7 @@ def run(rom, policy_name, seed, frames, checkpoint=None, target=None, trace=None
                 last_pos = None
                 stuck_frame = battle_frame = invalid_frame = None
                 continue
-            ctx = PolicyContext(snapshot, (frame - (stuck_frame or 0)) / 60, frame / 60, pb.memory)
+            ctx = PolicyContext(snapshot, (frame - (stuck_frame or 0)) / 60, frame / 60, pb.memory, stack_pointer(pb))
             actions = policy.step(ctx)
             mode = getattr(policy, "mode", policy_name)
             signature = (pos, snapshot.in_battle, mode, tuple(p.level for p in snapshot.party), snapshot.items, Screen(pb.memory).text)
@@ -150,7 +150,7 @@ def run(rom, policy_name, seed, frames, checkpoint=None, target=None, trace=None
                 "policy_recoveries": policy.details().get("recoveries", 0), "areas": len(metrics.areas),
                 "mode_frames": dict(metrics.modes), "final": final.to_dict(), "final_screen": Screen(pb.memory).text,
                 "strategy": policy.details(), "rom_sha1": rom_sha, "python": platform.python_version(),
-                "pyboy": version("pyboy"), "battle_animations": config.BATTLE_ANIMATIONS,
+                **checkpoint_metadata(), "battle_animations": config.BATTLE_ANIMATIONS,
                 "policy_fingerprint": policy_fingerprint(),
                 "checkpoint_sha256": hashlib.sha256(Path(checkpoint).read_bytes()).hexdigest() if checkpoint else None}
     finally:

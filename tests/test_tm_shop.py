@@ -18,6 +18,7 @@ from pokesim.store import Store
 from pokesim.strategy_data import ITEMS, MAPS
 from test_battle_power import live, partner
 from test_collection import state
+from shortcut_fakes import PRESS, Recorder
 
 
 @pytest.fixture
@@ -153,6 +154,7 @@ def test_champion_tm_purchase_keeps_last_bag_slot_free(shop_data):
 
 def test_policy_routes_to_counter_then_uses_owned_tm(shop_data):
     policy = StrategicPolicy(1)
+    recorder = Recorder.on(policy)
     policy.tm_moves, policy.tm_compatible = shop_data
     goal = Goal('collect_plan', 'Plan', 'Choose a project')
     s = shopper(map=MAPS['CELADON_CITY'])
@@ -163,9 +165,10 @@ def test_policy_routes_to_counter_then_uses_owned_tm(shop_data):
     new_goal, _ = policy._tm_development(replace(s, frame=s.frame + 20), goal, False)
     assert new_goal.key == 'buy_tm'
     policy.on_restore()
+    recorder = Recorder.on(policy)
     goal, action = policy._tm_development(replace(s, items=((item, 1),)), goal, False)
-    assert goal.key == 'teach_tm' and action[0].button == 'start'
-    assert policy.intent.target == 0 and policy.intent.index == 0
+    assert goal.key == 'teach_tm' and action[0] == PRESS
+    assert recorder.last.kind == 'use_item' and recorder.last.item == item and recorder.last.target == 0
 
 
 def test_tm_trips_wait_for_healing_league_and_active_projects(shop_data):

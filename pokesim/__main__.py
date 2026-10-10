@@ -7,8 +7,9 @@ import threading
 
 import uvicorn
 
-
-from . import config
+from . import platform_support
+platform_support.require_emulator()
+from . import config  # noqa: E402
 from .notify import Ntfy
 from .runtime import Runtime
 
@@ -19,9 +20,17 @@ log = logging.getLogger("pokesim")
 def legacy_main():
     try:
         config.validate()
-        from .game_data import load, FILES
-        for name in FILES:
-            load(name)
+        from pathlib import Path
+        from .cartridges import identify
+        from .game_data import directory, load, FILES
+        rom = Path(config.ROM_PATH)
+        cartridge = identify(rom.read_bytes()) if rom.is_file() else None
+        if cartridge and cartridge.generation == 2:
+            from .gen2.data import GameData
+            GameData.load(directory(), cartridge.version)
+        else:
+            for name in FILES:
+                load(name)
     except (ValueError, OSError, RuntimeError) as error:
         raise SystemExit(f"Cannot start pokesim: {error}") from error
     from .web.app import create_app

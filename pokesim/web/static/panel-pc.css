@@ -293,16 +293,95 @@
 .pc-detail-head h2 { font: var(--f-read) / 1.1 var(--font-panel); letter-spacing: 0.04em; text-transform: uppercase; overflow-wrap: anywhere; }
 .pc-detail-head .dv-badge { justify-self: start; }
 .pc-detail-head p:last-child { font-size: 14px; color: var(--ink-2); }
-#pc-detail-body > .detail-meta,
-#pc-detail-body > .individual-stats,
-#pc-detail-body > .dex-open { margin: var(--s3) var(--s4) 0; }
+.pc-detail-head .pc-tags { margin-top: 0; }
 .detail-meta { font-size: 13px; line-height: 1.5; color: var(--ink-2); }
 .pc-detail-head .detail-meta { margin: 0; }
 .detail-meta strong { color: var(--ink); }
-#pc-detail-body > .dex-open { margin-bottom: var(--s4); }
+
+/* Each section is a labelled panel strip: a printed legend, then its readings. */
+.pc-detail-section { margin: var(--s4) var(--s4) 0; min-width: 0; }
+.pc-detail-section > h3 { margin-bottom: var(--s2); }
+.pc-detail-section > .detail-meta { margin-top: var(--s2); }
+.pc-detail-note { margin: var(--s3) var(--s4) var(--s4); }
+.pc-detail-links { display: flex; flex-wrap: wrap; gap: var(--s2); margin: var(--s4); }
+
+/* HP and XP share one grid so both meters start and end together. */
+.pc-gauges { padding: 0; }
+
+.pc-moves {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--hair);
+  margin: 0;
+  padding: var(--hair);
+  list-style: none;
+}
+/* Hairline frames drawn per cell, so a short last row leaves no grey block. */
+.pc-moves > li,
+.pc-facts > div { box-shadow: 0 0 0 var(--hair) var(--rule-faint); }
+.pc-move {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name pp" "specs specs";
+  align-items: baseline;
+  gap: 6px var(--s2);
+  min-width: 0;
+  padding: var(--s2) var(--s3);
+  background: var(--panel);
+}
+.pc-move-name {
+  grid-area: name;
+  font: var(--f-legend) / 1.1 var(--font-panel);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.pc-move-specs,
+.pc-move-pp {
+  font: var(--f-micro) / 1.3 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.pc-move-pp { grid-area: pp; justify-self: end; white-space: nowrap; }
+.pc-move-pp b { font-weight: 600; color: var(--ink); }
+.pc-move-pp.empty, .pc-move-pp.empty b { color: var(--crit); }
+.pc-move-specs { grid-area: specs; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.pc-move-specs > span:not(.tag) { white-space: nowrap; }
+.pc-move-specs > span:not(.tag) + span::before { content: "· "; }
+
+.pc-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: var(--hair);
+  margin: 0;
+  padding: var(--hair);
+}
+.pc-facts > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s2) var(--s3); background: var(--panel); }
+.pc-facts dt {
+  font: var(--f-micro) / 1.2 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.pc-facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  margin: 0;
+  font: 16px / 1.2 var(--font-panel);
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.pc-facts dd small { flex-basis: 100%; font: 12px / 1.3 var(--font-text); letter-spacing: 0; color: var(--ink-2); }
+.pc-facts dd .tag { font-size: var(--f-micro); }
 
 .individual-stats {
-  width: calc(100% - 2 * var(--s4));
+  width: 100%;
   border-collapse: collapse;
   border: var(--hair) solid var(--rule);
   font-variant-numeric: tabular-nums;
@@ -339,6 +418,67 @@
 .pc-trade-action:empty { display: none; }
 .pc-trade-action .trade-meta { display: block; margin-bottom: var(--s2); font-size: 13px; color: var(--ink-2); }
 .pc-trade-action .partner-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
+/* ---- trade offers ------------------------------------------------------ */
+.pc-trade-action .offer-trade-button { margin-top: var(--s2) }
+.pc-trade-action .offer-reason { margin: 0 }
+.pc-trade-action .offer-reason { font-size: 14px }
+.pc-trade-action .offer-reason { color: var(--ink-2) }
+.pc-trade-action .offer-error { margin-top: var(--s2) }
+.pc-trade-action .offer-error { color: var(--crit) }
+.offer-blocked-tag { color: var(--ink-3) }
+.offer-blocked-tag { border-style: dashed }
+.pc-offer-banner { display: flex }
+.pc-offer-banner { flex-wrap: wrap }
+.pc-offer-banner { align-items: center }
+.pc-offer-banner { gap: var(--s3) var(--s4) }
+.pc-offer-banner { margin-bottom: var(--s4) }
+.pc-offer-banner { padding: var(--s3) var(--s4) }
+.pc-offer-banner[hidden] { display: none }
+.pc-offer-banner .offer-banner-plate { width: 72px }
+.pc-offer-banner .offer-banner-plate { flex: 0 0 auto }
+.pc-offer-banner .offer-banner-read { flex: 1 1 220px }
+.pc-offer-banner .offer-banner-read { min-width: 0 }
+.pc-offer-banner h2 { font: var(--f-read) / 1.1 var(--font-panel) }
+.pc-offer-banner h2 { letter-spacing: 0.04em }
+.pc-offer-banner h2 { text-transform: uppercase }
+.pc-offer-banner h2 { overflow-wrap: anywhere }
+.pc-offer-banner p { margin: var(--s1) 0 0 }
+.pc-offer-banner .offer-reason { color: var(--crit) }
+.offer-dialog { width: min(480px, calc(100% - 2 * var(--s4))) }
+.offer-dialog { max-height: calc(100vh - 2 * var(--s6)) }
+.offer-dialog { padding: var(--s4) }
+.offer-dialog { background: var(--panel) }
+.offer-dialog { color: var(--ink) }
+.offer-dialog { border: var(--hair) solid var(--rule) }
+.offer-dialog { box-shadow: var(--key-inset), 6px 6px 0 var(--bevel-lo) }
+.offer-dialog::backdrop { background: rgba(10, 12, 10, 0.55) }
+.offer-dialog h2 { margin: 0 var(--s7) var(--s2) 0 }
+.offer-dialog h2 { font: var(--f-read) / 1.1 var(--font-panel) }
+.offer-dialog h2 { letter-spacing: 0.04em }
+.offer-dialog h2 { text-transform: uppercase }
+.offer-targets { display: grid }
+.offer-targets { gap: var(--s2) }
+.offer-targets { margin: var(--s3) 0 0 }
+.offer-targets { padding: 0 }
+.offer-targets { list-style: none }
+.offer-target { display: grid }
+.offer-target { gap: var(--s1) }
+.offer-target { width: 100% }
+.offer-target { padding: var(--s3) }
+.offer-target { text-align: left }
+.offer-target { color: var(--ink) }
+.offer-target { background: var(--panel-2) }
+.offer-target { border: var(--hair) solid var(--rule) }
+.offer-target { cursor: pointer }
+.offer-target:hover:not(:disabled), .offer-target:focus-visible { border-color: var(--signal) }
+.offer-target:disabled { cursor: not-allowed }
+.offer-target:disabled { color: var(--ink-3) }
+.offer-target:disabled { background: var(--panel) }
+.offer-target:disabled { opacity: 0.7 }
+.offer-target small { font-size: 13px }
+.offer-target small { color: var(--ink-2) }
+.offer-target .offer-reason { color: var(--warn) }
 .pc-trade-action .partner-actions button {
   min-height: 40px;
   padding: 0 var(--s4);
@@ -354,6 +494,11 @@
 .pc-trade-action .partner-actions button:hover { background: var(--panel-2); }
 .pc-trade-action .partner-actions button:active { background: var(--well); box-shadow: var(--well-inset); }
 .pc-trade-action .partner-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* A wide popup reads each move across one line: name, type and specs, then PP. */
+@media (min-width: 641px) {
+  .pc-move { grid-template-columns: minmax(120px, 1fr) auto auto; grid-template-areas: "name specs pp"; align-items: center; column-gap: var(--s4); }
+}
 
 /* ---- responsive -------------------------------------------------------- */
 @media (max-width: 1100px) {
@@ -383,6 +528,8 @@
   .pc-detail-head .plate { grid-row: auto; }
   .pc-detail-head > :not(.plate) { grid-column: 1; }
   .individual-stats th, .individual-stats td { padding: 6px var(--s2); font-size: 13px; }
+  .pc-detail-section { margin: var(--s3) var(--s3) 0; }
+  .pc-detail-links { margin: var(--s3); }
 }
 @media (max-width: 360px) {
   .stat { padding: 0 var(--s3); }

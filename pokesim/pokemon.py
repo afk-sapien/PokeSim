@@ -64,29 +64,60 @@ def experience_at_level(level, growth):
     return cube
 
 
+def experience_details(total, level, growth):
+    """Progress through the current level on the species' XP curve, or None without one."""
+    if not growth or type(total) is not int or type(level) is not int or not 1 <= level <= 100:
+        return None
+    floor = experience_at_level(level, growth)
+    ceiling = experience_at_level(level + 1, growth)
+    capped = level >= 100
+    span = max(1, ceiling - floor)
+    earned = max(0, min(span, total - floor))
+    return {"total": total, "earned": earned, "needed": span,
+            "remaining": 0 if capped else max(0, ceiling - total),
+            "percent": 100 if capped else round(100 * earned / span, 1), "max_level": capped}
+
+
+def move_details(moves, pp=None, max_pp=None):
+    """Name, type, power and accuracy for each known move, with PP where the source has it."""
+    rows = []
+    for i, mid in enumerate(moves or ()):
+        if not mid:
+            continue
+        move = MOVES.get(mid, {})
+        row = {"name": move.get("name", f"Move {mid}").replace("_", " ").title(),
+               "type": TYPES.get(move.get("type"), "Unknown"),
+               "power": move.get("power"), "accuracy": move.get("accuracy")}
+        if pp is not None and i < len(pp):
+            row["pp"] = pp[i]
+            row["max_pp"] = max_pp[i] if max_pp is not None and i < len(max_pp) else move.get("pp", 0)
+        rows.append(row)
+    return rows
+
+
+def status_label(hp, status):
+    return "Fainted" if hp <= 0 else "Asleep" if status & 7 else next(
+        (label for bit, label in ((8, "Poisoned"), (16, "Burned"), (32, "Frozen"), (64, "Paralyzed"))
+         if status & bit), "Healthy")
+
+
+def stored_condition(mon):
+    """HP, status and PP for a boxed Gen I record, which stores current HP and PP but not maximum HP."""
+    hp, pp = mon.get("hp"), mon.get("pp")
+    stats = stored_strength(mon)["calculated_stats"]
+    out = {"move_details": move_details(mon.get("moves"), pp or None, mon.get("max_pp") or None)}
+    if type(hp) is int and stats:
+        out.update(hp=min(hp, stats["HP"]), max_hp=stats["HP"], status_label=status_label(hp, mon.get("status") or 0))
+    return out
+
+
 def party_details(mon):
     from .shiny import is_shiny
     species = SPECIES.get(mon.species, {})
-    growth = species.get("growth")
-    xp = None
-    if growth and mon.level > 0:
-        floor = experience_at_level(mon.level, growth)
-        ceiling = experience_at_level(mon.level + 1, growth)
-        capped = mon.level >= 100
-        span = max(1, ceiling - floor)
-        earned = max(0, min(span, mon.experience - floor))
-        xp = {"total": mon.experience, "earned": earned, "needed": span,
-              "remaining": 0 if capped else max(0, ceiling - mon.experience),
-              "percent": 100 if capped else round(100 * earned / span, 1), "max_level": capped}
-    status = "Fainted" if mon.hp <= 0 else "Asleep" if mon.status & 7 else next(
-        (label for bit, label in ((8, "Poisoned"), (16, "Burned"), (32, "Frozen"), (64, "Paralyzed"))
-         if mon.status & bit), "Healthy")
-    return {"dex": species.get("dex"), "experience": xp, "status_label": status,
+    xp = experience_details(mon.experience, mon.level, species.get("growth")) if mon.level > 0 else None
+    return {"dex": species.get("dex"), "experience": xp, "status_label": status_label(mon.hp, mon.status),
             **({'trainer_id': mon.trainer_id} if mon.trainer_id is not None else {}),
             "dvs": mon.dvs, "stat_exp": mon.stat_exp, "shiny": is_shiny({"dvs": mon.dvs}),
             "type_names": list(dict.fromkeys(TYPES.get(t, "Unknown") for t in mon.types)),
             "stats": {"Attack": mon.attack, "Defense": mon.defense, "Speed": mon.speed, "Special": mon.special},
-            "move_details": [{"name": MOVES.get(mid, {}).get("name", f"Move {mid}").replace("_", " ").title(),
-                              "type": TYPES.get(MOVES.get(mid, {}).get("type"), "Unknown"),
-                              "pp": pp, "max_pp": mon.max_pp[i] if i < len(mon.max_pp) else MOVES.get(mid, {}).get("pp", 0)}
-                             for i, (mid, pp) in enumerate(zip(mon.moves, mon.pp)) if mid]}
+            "move_details": move_details(mon.moves, mon.pp, mon.max_pp)}

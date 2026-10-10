@@ -38,7 +38,7 @@ def test_dv_appraisals_across_pc_and_pokedex(page, game, width):
     expect(page.get_by_role('link', name='Stats guide')).to_be_visible()
     expect(page.locator('#pc-detail-body')).to_contain_text('DV quality (est.): top 0.417%')
     expect(page.locator('#pc-detail-body')).to_contain_text('Higher roll: 0.27%')
-    expect(page.locator('#pc-detail-body')).to_contain_text('Potential Stat Power:')
+    expect(page.locator('#pc-detail-body')).to_contain_text('Potential Stat Power')
     expect(page.locator('#pc-detail-body')).not_to_contain_text('Level and training do not affect this rating.')
     assert page.locator('#pc-detail').evaluate('(dialog) => dialog.scrollWidth <= dialog.clientWidth')
     page.screenshot(path=f'/tmp/pokesim-stats-detail-{width}.png', full_page=True)

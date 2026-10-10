@@ -2,7 +2,11 @@
 import random
 from dataclasses import asdict
 
+from pokesim_core.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositPokemon, FieldMove, LearnMove, ReleasePokemon,
+                                    ReorderParty, RunAway, SellItem, SwitchPokemon, UseItem, WithdrawPokemon, item_kind)
+
 from .base import Action, Policy
+from ..textmatch import ScreenText
 from .battle import (BALLS, CURES, HEALING, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
                      healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
@@ -10,7 +14,7 @@ from .naming import NamingController
 from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, boulder_task, seafoam_current_task
 from .move_development import hm_upgrade, move_name
-from .progression import STARTERS, Goal, healing_goal, journey, league_partner, milestones, story_goal
+from .progression import GAME_STARTERS, STARTERS, YELLOW, Goal, healing_goal, journey, league_partner, milestones, story_goal
 from . import training
 from .menus import select, tap
 from .shopping import ShoppingController
@@ -22,6 +26,7 @@ from .team import development_candidate, potential, readiness, reserve_to_deposi
 from ..screen import Screen, W_PLAYER_MON_NUMBER
 from ..ram import W_TILEMAP
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
+from ..shortcuts import ShortcutRunner, gen1_ui
 from .. import config
 
 EXPLORATION_CHANCE = 0.12
@@ -34,6 +39,7 @@ W_WHICH_POKEMON = 0xCF92
 W_MOVE_NUM = 0xD0E0
 W_REPEL_STEPS = W_MOVE_NUM - 5  # wRepelRemainingSteps precedes the four-byte wMoves array
 FACING = {"down": 0, "up": 4, "left": 8, "right": 12}
+HM_ITEM_MOVES = {ITEMS[f'HM0{number}']: move for number, move in zip(range(1, 6), (15, 19, 57, 70, 148))}
 
 
 def ready_to_climb(snapshot):
@@ -93,10 +99,12 @@ class StrategicPolicy(Policy):
         self.pickups = Pickups()
         self.personality = self.rng.choice(('Sociable', 'Collector', 'Explorer'))
         self.starter_setting = starter if starter is not None else config.STARTER
-        if self.starter_setting not in (*STARTERS, 'random'):
+        if self.starter_setting not in (*GAME_STARTERS, 'random'):
             raise ValueError('Unknown starter choice')
         # A separate draw preserves the existing naming and navigation sequences.
         self.starter = random.Random(seed).choice(STARTERS) if self.starter_setting == 'random' else self.starter_setting
+        if YELLOW:
+            self.starter = GAME_STARTERS[0]
         self.starter_confirmed = False
         self.history = []
         self.failures = {}
@@ -107,6 +115,7 @@ class StrategicPolicy(Policy):
         self.shop_offers = set()
         self.map_view = None
         self.escape_attempted = False
+        self.shortcut = ShortcutRunner()
         self.on_restore()
 
     def reset(self):
@@ -126,6 +135,9 @@ class StrategicPolicy(Policy):
         self.boulders = BoulderPlanner()
         self.intent = None
         self.intent_since = 0
+        self.shortcut.cancel()
+        self.mem = None
+        self.sp = None
         self.last_kind = None
         self.last_signature = None
         self.unchanged_since = None
@@ -146,12 +158,8 @@ class StrategicPolicy(Policy):
         self.progress_frame = None
         self.progress_goal = None
         self.goal_distance = None
-        self.order_stage = None
-        self.order_species = None
-        self.order_signature = None
         self.elevator_exit = False
         self.elevator_floor = "B1F"
-        self.field_move = None
         self.trash_checked = set()
         self.trash_pending = None
         self.trash_first = None
@@ -216,9 +224,9 @@ class StrategicPolicy(Policy):
         self.interaction_count = data.get("interaction_count", len(self.interactions))
         self.personality = data.get('personality', self.personality)
         # Earlier policies always chose Bulbasaur. Do not reroll an old lab checkpoint.
-        self.starter = data.get('starter', 'bulbasaur')
-        if self.starter not in STARTERS:
-            self.starter = 'bulbasaur'
+        self.starter = data.get('starter', GAME_STARTERS[0])
+        if self.starter not in GAME_STARTERS:
+            self.starter = GAME_STARTERS[0]
         self.starter_confirmed = bool(data.get('starter_confirmed', False))
         self.history = data.get('history', [])[-8:]
         self.failures = dict(list(data.get('failures', {}).items())[-128:])
@@ -232,12 +240,6 @@ class StrategicPolicy(Policy):
 
     def _select(self, scr, target, one_based=False, scroll=False):
         return select(scr, target, one_based, scroll)
-
-    def _root(self, scr, kind):
-        target_col, target_row = {"fight": (9, 0), "item": (9, 1), "switch": (15, 0), "run": (15, 1)}[kind]
-        if scr.top_x != target_col:
-            return tap("right" if target_col > scr.top_x else "left")
-        return self._select(scr, target_row)
 
     def step(self, ctx):
         s, mem = ctx.snapshot, ctx.mem
@@ -274,7 +276,20 @@ class StrategicPolicy(Policy):
             self.reason = f"Enter {self.naming.target}" if self.naming.target else "Choose a random name"
             self.confirming = None
             self.intent = None
+            self.shortcut.cancel()
             return [naming_action]
+        self.mem, self.sp = mem, ctx.sp
+        if self.release_changed(s):
+            return tap('b')
+        if self.shortcut.active:
+            actions = self.shortcut.step(mem, self._ui(), frame)
+            if actions:
+                self.mode = f'shortcut: {self.shortcut.machine.kind}'
+                self.reason = self.shortcut.purpose
+                self.confirming = None
+                self.last_kind = 'shortcut'
+                self.last_action = (pos, actions[0].button)
+                return actions
         if s.map != self.observed_map:
             self.observed_map = s.map
             self.settle_until = frame + 60
@@ -294,7 +309,7 @@ class StrategicPolicy(Policy):
         self.nav.update_story(s)
         if not s.in_battle and kind == "overworld":
             self.nav.update_live(s, mem)
-        if s.party and not self.starter_confirmed:
+        if s.party and not self.starter_confirmed and not YELLOW:
             families = {STARTERS[(d - 1) // 3] for d in s.owned if 1 <= d <= 9}
             if len(families) == 1:
                 self.starter = families.pop()
@@ -401,6 +416,10 @@ class StrategicPolicy(Policy):
                 return tap("b")
         actions = self._dispatch(s, scr, kind, mem)
         self.last_action = (pos, actions[0].button)
+        if self.shortcut.active:
+            # The shortcut verifies its own effect, so no menu watch or confirmation applies.
+            self.last_kind = 'shortcut'
+            return actions
         if not s.in_battle and self.watch.expected is None and actions[0].button == 'a' and kind not in ('dialogue', 'overworld', 'naming'):
             self.watch.begin('menu', 'Open the selected menu or advance its choice', s, kind)
         if actions[0].button == "a" and kind not in ("dialogue", "overworld", "naming"):
@@ -409,13 +428,13 @@ class StrategicPolicy(Policy):
         return actions
 
     def _dispatch(self, s, scr, kind, mem):
-        text = scr.text.upper()
+        text = ScreenText(scr.text.upper())
         active = min(mem[W_PLAYER_MON_NUMBER], max(0, len(s.party) - 1))
         if kind == "yes_no":
             decision = self.pc.confirmation(s, scr, text, self.goal.key, self.collection.project,
                                             self._preferences(), self.menu_context, self.collection)
             if decision is not None:
-                return self._menu_decision(decision)
+                return self._menu_decision(decision, s)
             if self.goal.key == 'collect_trade' and getattr(self, 'pending_trade_key', None):
                 choices = self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
                 if choices.get(self.pending_trade_key, {}).get('state') in ('locked', 'offered'):
@@ -427,7 +446,7 @@ class StrategicPolicy(Policy):
             if "DELETE" in text or "FORGET" in text or "LEARN" in text:
                 learner = min(mem[W_WHICH_POKEMON], max(0, len(s.party) - 1))
                 slot = replacement_slot(s.party[learner], mem[W_MOVE_NUM]) if s.party else None
-                return self._select(scr, 0 if slot is not None else 1)
+                return self._learn(s, slot) or self._select(scr, 0 if slot is not None else 1)
             return self._select(scr, 0)
         if kind == 'prize':
             return self._select(scr,2) if self.goal.key == 'collect_prize' else tap('b')
@@ -438,7 +457,7 @@ class StrategicPolicy(Policy):
             learner = min(mem[W_WHICH_POKEMON], max(0, len(s.party) - 1))
             slot = replacement_slot(s.party[learner], mem[W_MOVE_NUM]) if s.party else None
             self.reason = "Keep useful coverage and protect HM moves"
-            return tap("b") if slot is None else self._select(scr, slot)
+            return self._learn(s, slot) or (tap("b") if slot is None else self._select(scr, slot))
         if not s.in_battle:
             self.used_status.clear()
             self.battle_key = None
@@ -462,7 +481,7 @@ class StrategicPolicy(Policy):
             me, enemy = read_battler(mem, W_BATTLE_MON), read_battler(mem, W_ENEMY_MON)
             if s.in_battle == 1 and not s.enemy_shiny and SPECIES.get(enemy.species, {}).get('dex') in getattr(self.collection, 'closed_legendaries', ()):
                 self.reason = 'This legendary return was already caught. Wait for the next walking milestone'
-                return self._root(scr, 'run')
+                return self._run(s) or self._fight(s, me, enemy)
             key = (s.enemy_species, s.enemy_level, enemy.max_hp)
             if key != self.battle_key:
                 self.used_status.clear()
@@ -485,36 +504,10 @@ class StrategicPolicy(Policy):
                 self.intent_since = s.frame
             self.mode = f"battle: {self.intent.kind}"
             self.reason = self.intent.reason
-            return self._root(scr, self.intent.kind)
-        if kind == "item_moves":
-            from ..champion_shop import pp_slot
-            if self.intent and self.intent.kind == 'item' and self.intent.target < len(s.party):
-                item = s.items[self.intent.index][0] if self.intent.index < len(s.items) else None
-                slot = pp_slot(s.party[self.intent.target]) if item == ITEMS['PP_UP'] else None
-                if slot is not None:
-                    return self._select(scr, slot, one_based=True)
-            return tap('b')
-        if kind == "moves":
-            me, enemy = read_battler(mem, W_BATTLE_MON), read_battler(mem, W_ENEMY_MON)
-            if (s.in_battle == 1 and (s.enemy_shiny or SPECIES.get(enemy.species, {}).get('dex') in (144, 145, 146, 150)
-                    and SPECIES[enemy.species]['dex'] not in s.owned)
-                    and (not self.intent or self.intent.kind != 'fight' or MOVES.get(
-                        me.moves[self.intent.index], {}).get('effect') not in ('SLEEP_EFFECT', 'PARALYZE_EFFECT'))):
-                self.intent = None
-                self.reason = 'Return to capture controls without risking the legendary'
-                return tap('b')
-            available = ranked_moves(me, enemy, self.used_status)
-            slot = self.intent.index if self.intent and self.intent.kind == "fight" else available[0][1] if available else 0
-            if not any(k == slot for _, k in available):
-                slot = available[0][1] if available else 0
-            if not available:
-                self.intent = None
-                self.reason = "Return to the battle menu to switch, escape, or let the game use Struggle"
-                return tap("b")
-            self.reason = f"Use {MOVES.get(me.moves[slot], {}).get('name', 'an available move')}"
-            if scr.menu_index == slot + 1 and not MOVES.get(me.moves[slot], {}).get("power"):
-                self.used_status.add(me.moves[slot])
-            return self._select(scr, slot, one_based=True)
+            return self._battle_shortcut(s, me, enemy)
+        if kind in ("moves", "item_moves", "pause", "item_action", "quantity"):
+            # Core shortcuts open these menus themselves. One left open is closed before the next request.
+            return tap("b")
         if kind == "party":
             project = self.collection.project
             if (not s.in_battle and self.goal.key == 'collect_trade' and project
@@ -528,67 +521,30 @@ class StrategicPolicy(Policy):
                 if actions[0].button == 'a':
                     self.pending_trade_key = identity(asdict(s.party[target]))
                 return actions
-            if not s.in_battle and self.intent is None:
+            if not s.in_battle:
                 return tap("b")
-            if self.intent and self.intent.kind == "reorder":
-                from ..trade.preferences import identity
-                # Species alone cannot tell twins apart: with a weaker Haunter already leading, the
-                # stronger one looked promoted, and the reorder was cancelled and restarted forever.
-                ordered = (identity(asdict(s.party[0])) == self.intent.partner_key if self.intent.partner_key
-                           else individual(s.party[0]) == self.order_signature if self.order_signature
-                           else s.party[0].species == self.order_species)
-                if self.intent.partner_key and self.collection.project and self.collection.project.get('scoped_partner'):
-                    ordered = self.collection.trainee(s, self.collection.project) == 0
-                if ordered:
-                    if self.development_index is not None:
-                        self.development_index = 0
-                    self.intent = None
-                    return tap("b")
-                target = 0 if self.order_stage == "destination" else self.intent.index
-                return self._select(scr, target)
-            if (s.in_battle and self.intent and self.intent.kind == "switch"
-                    and (self.intent.index == active or not s.party[min(self.intent.index, len(s.party) - 1)].hp)):
-                self.intent = None      # The chosen partner fainted or is already out.
-            if self.intent and self.intent.kind in ("switch", "item", "field"):
-                target = self.intent.index if self.intent.kind in ("switch", "field") else self.intent.target
-            else:
-                alive = [(p.hp, i) for i, p in enumerate(s.party) if p.hp and i != active]
-                if not alive and s.in_battle and s.party and s.party[active].hp:
-                    # The last partner standing cannot switch to itself. The game answers
-                    # "is already out!" and reopens this menu, so close it and fight on.
-                    self.reason = "No other partner can battle, so keep fighting"
-                    return tap("b")
-                target = max(alive)[1] if alive else active
-                self.intent = Decision("switch", target, reason="Replace the fainted active Pokémon")
-                self.intent_since = s.frame
+            alive = [(p.hp, i) for i, p in enumerate(s.party) if p.hp and i != active]
+            if not alive and s.party and s.party[active].hp:
+                # The last partner standing cannot switch to itself. The game answers
+                # "is already out!" and reopens this menu, so close it and fight on.
+                self.reason = "No other partner can battle, so keep fighting"
+                self.intent = None
+                return tap("b")
+            target = max(alive)[1] if alive else active
+            actions = self._start_shortcut(s, SwitchPokemon(target), ('switch', target, self.battle_key, self.turns),
+                                           'Replace the fainted active Pokémon')
+            if actions:
+                self.last_switch_turn = self.turns
+                return actions
+            # The game cannot leave a forced switch with B, so pick the partner by hand when Core declines.
             return self._select(scr, target)
         if kind == "party_action":
-            if self.intent and self.intent.kind == "reorder":
-                row = next((i for i, line in enumerate(scr.rows)
-                            if scr.cursor and line[scr.cursor[0] + 1:].strip(' ?') == 'SWITCH'), None)
-                if row is not None and scr.cursor:
-                    cy = scr.cursor[1]
-                    if cy == row:
-                        self.order_stage = "destination"
-                    return tap("a" if cy == row else "down" if cy < row else "up")
-                return tap("b")
-            if self.intent and self.intent.kind == "field":
-                row = next((i for i, line in enumerate(scr.rows)
-                            if scr.cursor and line[scr.cursor[0] + 1:].strip(' ?') == self.field_move), None)
-                if row is not None and scr.cursor:
-                    cy = scr.cursor[1]
-                    return tap("a" if cy == row else "down" if cy < row else "up")
-                self.intent = None
-                return tap("b")
-            if self.intent and self.intent.kind == "switch":
-                self.last_switch_turn = self.turns
-                return self._select(scr, 0)
-            return tap("b")
-        if kind in ('shop', 'quantity'):
-            if kind == 'shop':
-                self.menu_context = 'shop'
-                self.intent = None
-            return self._menu_decision(self.shop.step(s, scr, kind, self.goal.key, self.collection.project))
+            # Only the forced-switch fallback above reaches this menu, where SWITCH is the first entry.
+            return self._select(scr, 0) if s.in_battle else tap("b")
+        if kind == 'shop':
+            self.menu_context = 'shop'
+            self.intent = None
+            return self._menu_decision(self.shop.step(s, self.goal.key, self.collection.project), s)
         if kind == "elevator":
             target = 2 if self.elevator_floor == "B4F" else 0
             if scr.menu_index + scr.scroll == target:
@@ -601,44 +557,12 @@ class StrategicPolicy(Policy):
                 fossils = [item for item in ('DOME_FOSSIL','HELIX_FOSSIL','OLD_AMBER') if dict(s.items).get(ITEMS[item])]
                 desired = self.collection.project.get('item') if self.collection.project else None
                 return self._select(scr,fossils.index(desired) if desired in fossils else 0,scroll=True)
-            if self.shop.selling or self.shop.buying or self.menu_context == 'shop':
-                return self._menu_decision(self.shop.step(s, scr, kind, self.goal.key, self.collection.project))
-            if self.menu_context == 'pc' and self.goal.key.startswith('party_'):
-                return self._menu_decision(self.pc.step(s, scr, kind, self.goal.key,
-                                                      self.collection.project, self._preferences(), self.collection))
-            if self.intent and self.intent.kind == "item" and self.intent.index < len(s.items):
-                if s.items[self.intent.index][0] in BALLS and not s.can_catch:
-                    self.intent = None
-                    self.reason = 'Stop the capture attempt because storage is full'
-                    return tap('b')
-                if scr.menu_index + scr.scroll == self.intent.index and s.items[self.intent.index][0] in BALLS:
-                    self.catch_attempts += 1
-                return self._select(scr, self.intent.index, scroll=True)
             return tap("b")
-        if kind == "pause":
-            self.menu_context = 'bag'
-            if self.intent and self.intent.kind in ("item", "field", "reorder"):
-                label = "ITEM" if self.intent.kind == "item" else "MON"
-                row = next((i for i, line in enumerate(scr.rows) if label in line), None)
-                if row is not None and scr.cursor:
-                    cy = scr.cursor[1]
-                    return tap("a" if cy == row else "down" if cy < row else "up")
-            return tap("b")
-        if kind == "item_action":
-            return self._select(scr, 0) if self.intent else tap("b")
         if kind in ('pc_root', 'change_box', 'pc'):
             self.menu_context = 'pc'
             return self._menu_decision(self.pc.step(s, scr, kind, self.goal.key,
-                                                  self.collection.project, self._preferences(), self.collection))
+                                                  self.collection.project, self._preferences(), self.collection), s)
         if kind == "dialogue":
-            if not s.in_battle and ("NO SURF" in text or "NO PLACE TO GET OFF" in text or 'CURRENT IS' in text):
-                self._remember_failure(s, 'Surf was rejected at this shoreline')
-                self.watch.expected = None
-                self.intent = None
-                self.field_move = None
-                self.nav.path.clear()
-                self.reason = "Leave the rejected Surf menu and find a reachable shoreline"
-                return tap("b", 6, 24)
             if self.intent and self.intent.kind == "fight" and ("DISABLED" in text or "NO PP" in text):
                 self.intent = None
             if self.goal.key.startswith('collect_') or self.collection.completed_champion and s.map in LEAGUE:
@@ -646,14 +570,11 @@ class StrategicPolicy(Policy):
                 return tap('a',6,24)
             self.reason = "Advance dialogue and wait for the next decision"
             accepting = scr.shop or any(row.strip("? ") == "HEAL" for row in scr.rows)
-            return tap("a" if accepting or self.shop.buying or self.shop.selling or self.intent or s.in_battle or s.playtime_seconds == 0 or "EVOLV" in text or "WHAT?" in text else "b", 6, 24)
+            return tap("a" if accepting or self.shop.selling or self.intent or s.in_battle or s.playtime_seconds == 0 or "EVOLV" in text or "WHAT?" in text else "b", 6, 24)
         if s.in_battle:
             return wait()
         if not s.started or (s.playtime_seconds == 0 and not s.party):
             return tap("a", 6, 24)
-        if self.intent and self.intent.kind in ("item", "field", "reorder") and (s.frame - self.intent_since < 60 or scr.pause_menu):
-            self.mode = "waiting for the menu"
-            return wait()
         return self._overworld(s, mem)
 
     def _overworld(self, s, mem):
@@ -688,19 +609,25 @@ class StrategicPolicy(Policy):
                     continue
                 for item, qty in s.items:
                     if qty and mon.hp == 0 and item in (ITEMS["REVIVE"], ITEMS["MAX_REVIVE"]):
-                        return self._use_item(s, item, target)
+                        actions = self._use_item(s, item, target)
+                        if actions:
+                            return actions
                 if mon.hp > 0:
                     depleted = any(move and not pp and MOVES.get(move, {}).get("power")
                                    for move, pp in zip(mon.moves, mon.pp))
                     if depleted:
                         for item, qty in s.items:
                             if qty and item in (ITEMS["ELIXER"], ITEMS["MAX_ELIXER"]):
-                                return self._use_item(s, item, target)
+                                actions = self._use_item(s, item, target)
+                                if actions:
+                                    return actions
                     choices = [(min(mon.max_hp - mon.hp, amount), item) for item, amount in HEALING.items()
                                if any(mid == item and qty for mid, qty in s.items)
                                and (mon.hp < mon.max_hp * 0.8 or mon.status & CURES.get(item, 0))]
                     if choices:
-                        return self._use_item(s, max(choices)[1], target)
+                        actions = self._use_item(s, max(choices)[1], target)
+                        if actions:
+                            return actions
         # A bag this full cannot take a new kind of item, Poké Balls included, so spend the vitamins and
         # Rare Candies that fill it, whether or not a collection project is under way.
         if len(s.items) >= 18:
@@ -715,7 +642,9 @@ class StrategicPolicy(Policy):
                 signature = (item,qty,s.party[target].species,s.party[target].level)
                 if signature not in self.supply_attempts:
                     self.supply_attempts.add(signature)
-                    return self._use_item(s,item,target)
+                    actions = self._use_item(s, item, target)
+                    if actions:
+                        return actions
         supplies = self.shop.plan(s, goal, self.collection.project, requested_goal=self.goal.key,
                                   healing=self.heal_latch, in_league=in_league,
                                   has_pokedex=self.completed.get('pokedex', False),
@@ -730,9 +659,9 @@ class StrategicPolicy(Policy):
             for target, mon in enumerate(s.party):
                 index = healing_item(s.items, mon)
                 if index is not None and (mon.status & 8 or mon.hp < mon.max_hp * 0.25):
-                    self.intent = Decision("item", index, target, "Treat the party before walking farther")
-                    self.intent_since = s.frame
-                    return tap("start")
+                    actions = self._use_item(s, s.items[index][0], target, "Treat the party before walking farther")
+                    if actions:
+                        return actions
         if (not self.heal_latch and not in_league and s.frame >= self.move_teaching_after
                 and not goal.key.startswith(('party_', 'teach_', 'restock'))):
             upgrade = hm_upgrade(s)
@@ -743,7 +672,9 @@ class StrategicPolicy(Policy):
                 self.goal = Goal('teach_battle', f'Teach {move_name(move)}',
                                  f'Improve {s.party[target].nick or s.party[target].name} using an owned HM')
                 self.reason = self.goal.reason
-                return self._use_item(s, item, target)
+                actions = self._use_item(s, item, target)
+                if actions:
+                    return actions
         goal, tm_action = self._tm_development(s, goal, in_league)
         if tm_action:
             return tm_action
@@ -829,13 +760,9 @@ class StrategicPolicy(Policy):
         if goal.key == 'collect_train' and project:
             target = self.collection.trainee(s, project)
             if target and s.party[target].hp:
-                self.order_species = s.party[target].species
-                self.order_signature = individual(s.party[target])
-                self.order_stage = 'source'
-                self.intent = Decision('reorder',target,reason='Train a partner toward level 100',
-                                       partner_key=project.get('trainee_key'))
-                self.intent_since = s.frame
-                return tap('start')
+                actions = self._reorder(s, target, 'Train a partner toward level 100')
+                if actions:
+                    return actions
         if goal.key == 'collect_hunt' and project and pos in goal.targets:
             if project['method']=='fish':
                 direction = goal.facing_at(pos)
@@ -857,23 +784,17 @@ class StrategicPolicy(Policy):
         if (WORLD.get(s.map, {}).get('name', '').endswith('Gym') or in_league) and not goal.key.startswith(('heal', 'restock', 'collect_', 'train_', 'catch_', 'party_', 'teach_')):
             target = self.readiness.get('lead', 0)
             if target and target < len(s.party) and s.party[target].hp:
-                self.order_species = s.party[target].species
-                self.order_signature = individual(s.party[target])
-                self.order_stage = 'source'
-                self.intent = Decision('reorder', target, reason='Lead with the best available matchup')
-                self.intent_since = s.frame
-                return tap('start')
+                actions = self._reorder(s, target, 'Lead with the best available matchup')
+                if actions:
+                    return actions
         if legendary_project(self.collection.project) and goal.key == 'collect_static':
             target = max((i for i, mon in enumerate(s.party) if mon.hp and any(
                 MOVES.get(mid, {}).get('power') and pp for mid, pp in zip(mon.moves, mon.pp))),
                 key=lambda i: s.party[i].level, default=0)
             if target != 0:
-                self.intent = Decision('reorder', target, reason='Lead the legendary expedition with a strong partner')
-                self.order_species = s.party[target].species
-                self.order_signature = individual(s.party[target])
-                self.order_stage = 'source'
-                self.intent_since = s.frame
-                return tap('start')
+                actions = self._reorder(s, target, 'Lead the legendary expedition with a strong partner')
+                if actions:
+                    return actions
         if (legendary_project(self.collection.project) and goal.key == 'collect_static'
                 and WORLD.get(s.map, {}).get('symbol', '').startswith('CERULEAN_CAVE')
                 and not mem[W_REPEL_STEPS]):
@@ -886,26 +807,18 @@ class StrategicPolicy(Policy):
         if not goal.key.startswith(("collect_", "party_collection", "party_league")) and (goal.key == "train_league_partner" or self.development_index is not None and s.frame < self.development_until):
             target = league_partner(s) if goal.key == 'train_league_partner' else self.development_index
             if target is not None and target != 0:
-                self.intent = Decision("reorder", target, reason="Give the partner the lead position while training")
-                self.order_species = s.party[target].species
-                self.order_signature = individual(s.party[target])
-                self.order_stage = "source"
-                self.intent_since = s.frame
-                return tap("start")
+                actions = self._reorder(s, target, "Give the partner the lead position while training")
+                if actions:
+                    return actions
         if goal.key == 'collect_seafoam_current' and s.map == MAPS['SEAFOAM_ISLANDS_B3F']:
             task = seafoam_current_task(s, self.nav)
             direction = self.boulders.route(s, self.nav, task) if task else None
             if direction:
                 if not mem[0xD728] & 1:
                     target = next((i for i, p in enumerate(s.party) if 70 in p.moves), None)
-                    if target is not None:
-                        self.field_move = 'STRENGTH'
-                        self.intent = Decision('field', target, reason='Use Strength to slow the Seafoam current')
-                        self.intent_since = s.frame
-                        self.mode = 'using Strength'
-                        self.watch.begin('field', 'Wait for Strength to take effect', s,
-                            ActionWatch.value('field', s, '', mem[0xD700] | ((mem[0xD728] & 1) << 2)))
-                        return tap('start')
+                    actions = self._field(s, 'STRENGTH', target, 'Use Strength to slow the Seafoam current')
+                    if actions:
+                        return actions
                 self.mode = 'moving a boulder to slow the current'
                 self.reason = 'Clear space and push the designated boulders into both holes'
                 self.progress_frame = s.frame
@@ -956,14 +869,9 @@ class StrategicPolicy(Policy):
             if task and direction:
                 if not mem[0xD728] & 1:
                     target = next((i for i, p in enumerate(s.party) if 70 in p.moves), None)
-                    if target is not None:
-                        self.field_move = "STRENGTH"
-                        self.intent = Decision("field", target, reason="Use Strength to move the boulder")
-                        self.intent_since = s.frame
-                        self.mode = "using Strength"
-                        self.watch.begin('field', 'Wait for Strength to take effect', s,
-                                         ActionWatch.value('field', s, '', mem[0xD700] | ((mem[0xD728] & 1) << 2)))
-                        return tap("start")
+                    actions = self._field(s, 'STRENGTH', target, 'Use Strength to move the boulder')
+                    if actions:
+                        return actions
                 if direction:
                     self.mode = "moving a boulder onto the switch"
                     self.reason = "Find legal pushes and keep room to walk around the boulder"
@@ -1098,13 +1006,9 @@ class StrategicPolicy(Policy):
             if mem[W_FACING] != FACING[direction]:
                 return tap(direction, 4, 12)
             target = next(i for i, p in enumerate(s.party) if 57 in p.moves)
-            self.field_move = "SURF"
-            self.intent = Decision("field", target, reason="Use Surf to cross the water")
-            self.intent_since = s.frame
-            self.mode = "using Surf"
-            self.watch.begin('field', 'Enter the water with Surf', s,
-                             ActionWatch.value('field', s, '', mem[0xD700] | ((mem[0xD728] & 1) << 2)))
-            return tap("start")
+            return (self._field(s, 'SURF', target, 'Use Surf to cross the water', direction,
+                                'Surf was rejected at this shoreline')
+                    or self._avoid(s, direction, 'Find another shoreline after Surf was refused'))
         if self.nav.can_cut and ((world.get("tileset") == "OVERWORLD" and tree == 0x3D)
                                  or (world.get("tileset") == "GYM" and tree == 0x50)):
             # Read the visible tile so a tree removed on this visit is not cut repeatedly.
@@ -1113,13 +1017,9 @@ class StrategicPolicy(Policy):
                 if mem[W_FACING] != FACING[direction]:
                     return tap(direction, 4, 12)
                 target = next(i for i, p in enumerate(s.party) if 15 in p.moves)
-                self.field_move = "CUT"
-                self.intent = Decision("field", target, reason="Use Cut to open the route")
-                self.intent_since = s.frame
-                self.mode = "using Cut"
-                self.watch.begin('field', 'Clear the tree and continue through the opening', s,
-                                 ActionWatch.value('field', s, '', mem[0xD700] | ((mem[0xD728] & 1) << 2)))
-                return tap("start")
+                return (self._field(s, 'CUT', target, 'Use Cut to open the route', direction,
+                                    'Cut did not clear the tree')
+                        or self._avoid(s, direction, 'Find another way around the tree after Cut was refused'))
         self.nav.issued(pos, direction, s.frame)
         self.watch.begin('move', f'Move {direction} or cross into the next area', s, pos)
         return tap(direction, 8, 12)
@@ -1153,12 +1053,33 @@ class StrategicPolicy(Policy):
                     "Search the trash cans, then try a neighboring can when the first switch opens",
                     tuple(p[:3] for p in approaches), "up", True, approaches=approaches)
 
-    def _menu_decision(self, decision):
+    def _menu_decision(self, decision, s):
         if decision.reason is not None:
             self.reason = decision.reason
         if decision.supplies_prepared and self.collection.project:
             self.collection.project['supplies_prepared'] = True
+        if decision.request:
+            return self._request(s, decision.request, decision.reason or self.reason) or decision.actions
         return decision.actions
+
+    def _request(self, s, request, purpose):
+        """Run a mart or PC request from a menu controller as a Core shortcut."""
+        operation, *args = request
+        if operation == 'buy':
+            machine, key = BuyItem(*args), ('buy', s.map, args[0])
+        elif operation == 'sell':
+            machine, key = SellItem(*args), ('sell', s.map, args[0])
+        elif operation == 'deposit':
+            machine, key = DepositPokemon(*args), ('deposit', individual(s.party[args[0]]))
+        elif operation == 'withdraw':
+            machine, key = WithdrawPokemon(*args), ('withdraw', s.active_box, *args, len(s.party))
+        elif operation == 'change_box':
+            machine, key = ChangeBox(*args), ('change_box', *args)
+        elif operation == 'release':
+            machine, key = ReleasePokemon(*args, allow_release=True), ('release', s.active_box, *args)
+        else:
+            raise ValueError(f'Unsupported menu request: {operation}')
+        return self._start_shortcut(s, machine, key, purpose)
 
     def _preferences(self):
         return self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
@@ -1228,16 +1149,147 @@ class StrategicPolicy(Policy):
                         (tm_shop.COUNTER,))
         return goal, None
 
-    def _use_item(self, snapshot, item, target=0):
-        index = next((i for i, (mid, qty) in enumerate(snapshot.items) if mid == item and qty), None)
-        if index is None:
+    def release_changed(self, s):
+        """Cancel a release whose spare moved or became protected. Core does not check who sits there."""
+        machine = self.shortcut.machine
+        if (machine is None or machine.kind != 'release_pokemon'
+                or self._release_target(s) == (s.active_box, machine.position)):
+            return False
+        self.shortcut.cancel()
+        self.reason = 'The spare changed or became protected, so keep every Pokémon'
+        return True
+
+    def _ui(self):
+        return gen1_ui(self.sp, YELLOW)
+
+    def _start_shortcut(self, s, machine, key, purpose, on_done=None):
+        """Begin a Core shortcut. None when it refuses, failed here recently, or memory is unavailable."""
+        if self.mem is None:
             return None
-        self.intent = Decision("item", index, target, self.goal.reason)
-        self.intent_since = snapshot.frame
-        self.mode = "using an item"
-        self.watch.begin('item', 'Verify the item changes the inventory or its recipient', snapshot,
-                         ActionWatch.value('item', snapshot, '', 0))
-        return tap("start")
+
+        def finished(result, finished_machine):
+            if not result.completed and finished_machine.inputs:
+                self.history.append({'time': ':'.join(f'{v:02d}' for v in s.playtime), 'place': s.map_name,
+                                     'message': f'{purpose}: {result.outcome}',
+                                     'response': 'Avoid this request for a while and replan'})
+                self.history = self.history[-8:]
+            if on_done is not None:
+                on_done(result, finished_machine)
+
+        actions = self.shortcut.start(machine, key, s.frame, self.mem, self._ui(), purpose, finished)
+        if actions:
+            self.mode = f'shortcut: {machine.kind}'
+            self.reason = purpose
+            self.watch.expected = None
+        return actions
+
+    def _learn(self, s, slot):
+        """Answer a learn-a-new-move prompt through Core: replace ``slot``, or keep the moves when None."""
+        forget = 'keep' if slot is None else slot
+        return self._start_shortcut(s, LearnMove(forget), ('learn', forget),
+                                    "Keep useful coverage and protect HM moves")
+
+    def _use_item(self, snapshot, item, target=0, purpose=None):
+        if not any(mid == item and qty for mid, qty in snapshot.items):
+            return None
+        kind = item_kind(item)
+        party_target = kind.target in ('party', 'move')
+        if party_target and target >= len(snapshot.party):
+            return None
+        move = forget = None
+        if kind.target == 'move':
+            from ..champion_shop import pp_slot
+            move = pp_slot(snapshot.party[target])
+            if move is None:
+                return None
+        if kind.kind in ('tm', 'hm'):
+            mon = snapshot.party[target]
+            learned = HM_ITEM_MOVES.get(item) or self.tm_moves.get(item)
+            if all(mon.moves):
+                forget = replacement_slot(mon, learned) if learned else None
+                if forget is None:
+                    return None
+        machine = UseItem(item, target if party_target else None, move, forget_move=forget)
+        return self._start_shortcut(snapshot, machine, ('item', item, target if party_target else None),
+                                    purpose or self.goal.reason)
+
+    def _reorder(self, s, target, purpose):
+        """Move party slot ``target`` to the lead outside battle."""
+        def done(result, machine):
+            if result.completed and self.development_index is not None:
+                self.development_index = 0
+        return self._start_shortcut(s, ReorderParty(target, 0), ('reorder', individual(s.party[target])),
+                                    purpose, done)
+
+    def _field(self, s, move, target, purpose, direction=None, failure=None):
+        """Use a field move. A refused Surf or Cut blocks that step for a while."""
+        pos = (s.map, s.x, s.y)
+
+        def done(result, machine):
+            if not result.completed and direction is not None:
+                self.nav.blocked[(pos, direction)] = s.frame + 1200
+                self.nav.path.clear()
+                if failure:
+                    self.reason = failure
+        return self._start_shortcut(s, FieldMove(move, target), ('field', move, pos, direction), purpose, done)
+
+    def _avoid(self, s, direction, reason):
+        self.nav.blocked[((s.map, s.x, s.y), direction)] = s.frame + 1200
+        self.nav.path.clear()
+        self.reason = reason
+        return wait()
+
+    def _run(self, s):
+        return self._start_shortcut(s, RunAway(), ('run', self.battle_key, self.turns), self.reason)
+
+    def _battle_shortcut(self, s, me, enemy):
+        """Carry out the battle decision with a Core shortcut, fighting when it cannot be done."""
+        intent = self.intent
+        if intent.kind == 'item' and intent.index < len(s.items):
+            item = s.items[intent.index][0]
+            if item not in BALLS or s.can_catch:
+                actions = self._use_item(s, item, intent.target, intent.reason)
+                if actions:
+                    if item in BALLS:
+                        self.catch_attempts += 1
+                    return actions
+        elif intent.kind == 'switch':
+            actions = self._start_shortcut(s, SwitchPokemon(intent.index),
+                                           ('switch', intent.index, self.battle_key, self.turns), intent.reason)
+            if actions:
+                self.last_switch_turn = self.turns
+                return actions
+        elif intent.kind == 'run':
+            actions = self._run(s)
+            if actions:
+                return actions
+        return self._fight(s, me, enemy)
+
+    def _fight(self, s, me, enemy):
+        intent = self.intent
+        protected = (s.in_battle == 1 and (s.enemy_shiny or SPECIES.get(enemy.species, {}).get('dex') in (144, 145, 146, 150)
+                     and SPECIES[enemy.species]['dex'] not in s.owned))
+        if protected and (not intent or intent.kind != 'fight' or MOVES.get(
+                me.moves[intent.index], {}).get('effect') not in ('SLEEP_EFFECT', 'PARALYZE_EFFECT')):
+            self.reason = 'Leave rather than risk knocking out the legendary'
+            actions = self._run(s)
+            if actions:
+                return actions
+        available = [k for _, k in ranked_moves(me, enemy, self.used_status)]
+        preferred = intent.index if intent and intent.kind == 'fight' else None
+        # With every move out of PP, the game uses Struggle from any choice.
+        slots = ([preferred] if preferred in available else []) + available or [0]
+        for slot in dict.fromkeys(slots):
+            reason = f"Use {MOVES.get(me.moves[slot], {}).get('name', 'an available move')}"
+            actions = self._start_shortcut(s, ChooseMove(slot), ('move', slot, self.battle_key, self.turns), reason)
+            if actions:
+                if not MOVES.get(me.moves[slot], {}).get('power'):
+                    self.used_status.add(me.moves[slot])
+                if intent is None or intent.kind == 'fight':
+                    self.intent = Decision('fight', slot, reason=reason)
+                return actions
+        self.intent = None
+        return self._run(s) or wait()
 
     def _recover(self, snapshot):
         if self.goal.key == 'collect_pickup':
@@ -1358,12 +1410,9 @@ class StrategicPolicy(Policy):
             self.development_index = trainee
             self.excursion = (goal, self.development_until, 'development')
             if trainee != 0:
-                self.order_species = s.party[trainee].species
-                self.order_signature = individual(s.party[trainee])
-                self.order_stage = 'source'
-                self.intent = Decision('reorder', trainee, reason=goal.reason)
-                self.intent_since = s.frame
-                return tap('start')
+                actions = self._reorder(s, trainee, goal.reason)
+                if actions:
+                    return actions
             return self._purposeful_detour(s, mem, main_goal)
         positions = self.nav.live_positions if self.nav.live_map == s.map else []
         candidates = []

@@ -34,18 +34,31 @@ def _advance(queue, head, tail, parents, steps, goals, counts, targets, directio
     return -1, head, tail, 2
 
 
+def _compile(cache):
+    from numba import njit
+    run = njit(cache=cache)(_advance)
+    # Compile before exposing the backend, so unsupported installs fall back.
+    values = np.zeros(1, dtype=np.int64)
+    run(values, 0, 0, values, values, np.zeros(1, dtype=np.bool_),
+        values, values.reshape(1, 1), values.reshape(1, 1), 1)
+    return run
+
+
 def kernel():
     global _kernel, _unavailable
     if _unavailable or os.environ.get('POKESIM_NAVIGATION_BACKEND') == 'python':
         return None
     if _kernel is None:
         try:
-            from numba import njit
-            _kernel = njit(cache=True)(_advance)
-            # Compile before exposing the backend, so unsupported installs fall back.
-            values = np.zeros(1, dtype=np.int64)
-            _kernel(values, 0, 0, values, values, np.zeros(1, dtype=np.bool_),
-                    values, values.reshape(1, 1), values.reshape(1, 1), 1)
+            try:
+                _kernel = _compile(cache=True)
+            except ImportError:
+                raise
+            except Exception as error:
+                # A read-only install with no writable cache folder cannot cache, so compile for
+                # this process only instead of falling back to Python. NUMBA_CACHE_DIR names one.
+                logger.info('Compiled navigation is not cached: %s', error)
+                _kernel = _compile(cache=False)
         except Exception as error:
             _unavailable = True
             _kernel = None

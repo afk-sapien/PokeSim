@@ -7,6 +7,7 @@ from pokesim.ram import read_snapshot, W_STATUS_FLAGS1
 from pokesim.strategy_data import ITEMS, MAPS
 from test_events import snap
 from test_strategy import flags, mon
+from shortcut_fakes import PRESS, Recorder
 
 
 def ready(**kwargs):
@@ -126,12 +127,13 @@ def test_league_supplies_use_remaining_bag_space_and_prioritize_revives():
 def test_league_restores_depleted_attacks_before_the_next_battle():
     from pokesim.policies.strategic import StrategicPolicy
     policy = StrategicPolicy(7)
+    recorder = Recorder.on(policy)
     s = replace(ready(badges=255), map=MAPS['LANCES_ROOM'],
                 party=(mon(level=60, moves=(15, 75, 76, 22), pp=(30, 0, 7, 0)),),
                 items=((ITEMS['ELIXER'], 1),))
     policy.goal = story_goal(s)
-    assert policy._overworld(s, bytearray(65536))[0].button == 'start'
-    assert policy.intent.kind == 'item' and policy.intent.index == 0
+    assert policy._overworld(s, bytearray(65536))[0] == PRESS
+    assert recorder.last.kind == 'use_item' and recorder.last.item == ITEMS['ELIXER']
 
 
 def test_hidden_guard_opens_robbed_house_after_bill():

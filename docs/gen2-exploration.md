@@ -1,0 +1,285 @@
+# Gold, Silver and Crystal support
+
+This branch implements Generation II adventures in the normal Library and
+adventure runtime. Gold, Silver and Crystal have each completed Johto, the
+Pokémon League, all eight Kanto gyms, and Red through ordinary cartridge input.
+The original boot experiment remains available in `tools/probe_gen2.py`.
+
+Gen II support ships in PokeSim 0.5.0 and runs on the Rust emulator (PyBoy RS through
+PokeSim Core 0.2) only. It was developed on PyBoy 2.7.0 in builds that were never released, then moved to the Rust
+backend. 0.4.x has no Gen II support. Where a section below says which backend gathered its evidence, that is stated.
+
+## Supported cartridges
+
+| Game | Retail revision | SHA-1 |
+| --- | --- | --- |
+| Gold | USA, Europe | `d8b8a3600a465308c9953dfa04f0081c05bdcb94` |
+| Silver | USA, Europe | `49b163f7e57702bc939d642a18f591de55d92dae` |
+| Crystal | USA, Europe, Rev 1 | `f2f52230b536214ef7c9924f483392993e226cfb` |
+
+ROM installation accepts these cartridges as raw files or a ZIP containing one
+supported cartridge. ROM assets remain read-only. Each adventure owns its own
+SRAM, checkpoints, policy memory and journal. On the Core backend the cartridge
+clock follows the host clock and is stored with each adventure's checkpoint states. Core 0.2
+imports, exports and locks it, which standard `.sav` export and the verification tools use.
+Other revisions,
+languages and ROM hacks are rejected instead of using incompatible addresses.
+No ROM, save, screenshot, reference checkout or full symbol file is committed.
+
+## Runtime and gameplay
+
+- Library creation, per-game starters, worker isolation, pause, manual controls,
+  speed, audio, health reporting, restart and standard `.sav` export.
+- Complete Johto and Kanto campaign goals, including the Radio Tower, Ice Path,
+  Strength puzzles, Dragon’s Den, S.S. Aqua, Power Plant, Snorlax and Mt. Silver.
+- Battle decisions, healing, safe capture weakening, status moves, party
+  switching, move learning, HM protection and recovery from depleted supplies.
+- Fishing, Surf, Fly, Cut, Strength, Whirlpool, Waterfall, Headbutt and Rock Smash.
+- All 251 species, all moves, version and time dependent encounter tables,
+  six battle stats, Dark and Steel types, gender, friendship, held items,
+  eggs, shiny DVs, all 14 PC boxes and cartridge portraits.
+- Postgame collection, gift quests, Day Care breeding and hatching, Exp. Share
+  projects, item and friendship evolution, and continued level 100 training.
+- Legendary quests, roaming beast tracking and delayed retries after failed
+  static legendary encounters. Retries preserve consumed supplies and progress.
+- Durable capture counts, Pokédex milestones, observed activity statistics,
+  cartridge walking counts, individual League records and notifications through
+  the existing integrations. Collection expeditions also catch spare copies
+  requested by compatible adventures in the Library.
+- Optional Johto starter gifts after League victories and the optional custom
+  Mew gift, with repeat Mew earned by walking and a later League victory.
+  Gift claims, checkpoint publication and recovery prevent duplicate
+  delivery or a rewind across the latest committed gift.
+
+Gold, Silver and Crystal can trade with each other through the managed Cable
+Club. Red and Blue can trade with each of them through the Time Capsule. Preparation uses the cartridge PC and held-item menus. The exchange runs
+both cartridges through their link routines, verifies the resulting party,
+checks unaffected Pokémon and story state, verifies a fresh cartridge Continue,
+and uses the existing durable two-adventure commit protocol. Held-item trade
+evolutions and individual League records travel with the exchanged Pokémon.
+
+Time Capsule preparation requires the native unlock after meeting Bill and
+waiting until the following day. It temporarily deposits incompatible party
+members, trades only Kanto species with Generation I moves and no Mail, then
+restores the adventure team. Verification accounts for the cartridge’s species
+number conversion, Special stat split, catch-rate items and trade evolution.
+Cross-generation collection requests let Red and Blue collect missing Kanto
+species for the Johto adventures.
+
+The postgame controller solves all four Ruins of Alph picture puzzles, including
+the Union Cave Strength passage. Crystal also prepares a legal three-Pokémon
+Battle Tower team, selects its level bracket, plays the challenge, records its
+wins and restores the original team. It compares usable attacks when choosing
+partners, trains them to their bracket cap and prepares the temporary party
+in Olivine so missing field moves cannot strand it. A failed challenge is a normal result and
+does not prevent the adventure from continuing.
+
+When Sun Stones are needed, the controller enters the Bug-Catching Contest on
+its native eligible days, compares catches using the cartridge scoring rules,
+uses Park Balls, collects the result and resumes with its original party.
+A loss allows another attempt on a later eligible day.
+
+Crystal’s stopped-adventure settings include an optional **Custom Crystal GS
+Ball event**, disabled by default. It enables the original Goldenrod delivery,
+Kurt’s overnight examination and Ilex Forest Celebi encounter after becoming
+Champion. Only the distribution unlock is custom. Travel, dialogue, item use
+and capture run through the cartridge. Its durable claim prevents repeated
+activation or a rewind across the committed unlock.
+
+## Validation
+
+The campaign, collection and trade evidence below was gathered on PyBoy 2.7.0 with
+owner-supplied cartridges, before the move to the Rust backend. The Rust backend loads those
+saved states byte for byte (state format 15 is identical), and the checks listed next were
+re-run on it for 0.5.0. They are not a replay of the campaigns.
+
+Re-run on the Rust backend with Python 3.12 and PyBoy RS 0.1.1: the runtime API and checkpoint
+restart for Gold, Silver and Crystal; `verify_gen2_save` (a fresh cartridge Continue with the
+saved clock) for each; `verify_gen2_trading --time-capsule` for each; `verify_timecapsule` for
+each Gen II game with both Red and Blue; and the Red and Blue Cable Club exchange in both
+directions with different party slots. The full test suite passed with the private cartridges
+available; the remaining skips need browser, cable-fixture or reference-checkout setups.
+
+Recorded cartridge scenarios include:
+
+| Scenario | Evidence |
+| --- | --- |
+| Gold, Silver and Crystal campaign | All 16 badges and Red defeated in each version |
+| Fresh Gold campaign | One uninterrupted process, 3,108,188 frames through Red |
+| Fresh Silver campaign | Chikorita, one uninterrupted process, 4,783,228 frames through Red |
+| Fresh Crystal campaign | Cyndaquil, one uninterrupted process, 3,415,124 frames through Red |
+| Low-cash Chikorita recovery | Sold a spare TM, bought balls, weakened and caught Krabby, continued through Red |
+| Full party before Togepi | Deposited a partner through the PC and received the egg |
+| Day Care | Deposited compatible parents, received and hatched Wooper, retrieved both parents |
+| Special encounters | Caught Heracross using Headbutt and Shuckle using Rock Smash |
+| Legendary quests | Caught Crystal Suicune and Lugia, Gold Lugia and Ho-Oh |
+| Missed legendary recovery | Retried the failed Gold Ho-Oh encounter and caught it |
+| Gift quests | Eevee, Crystal Odd Egg, Dratini, Kiyo’s Tyrogue and Bill’s grandfather’s first gift |
+| Cable Club | Gold/Silver, Gold/Crystal and Silver/Crystal exchanges |
+| Time Capsule | Red and Blue exchanged with Gold, Silver and Crystal, with independent participant and save restart checks |
+| Managed Time Capsule | Crystal prepared a boxed offer, committed and recovered the result, then restored its original six partners |
+| Ruins of Alph | All four puzzles solved in each of Gold, Silver and Crystal |
+| Crystal Battle Tower | Native six-win streak at level 70 with Lugia, Tyranitar and Espeon. Ordinary training and evolution, move teaching, Leftovers and PRZCureBerry preparation, correct win counting and original party restoration. Earlier level 30, 50 and 100 attempts also tested loss recovery |
+| Crystal Celebi | Optional GS Ball activation committed once, delivery and Kurt quest completed, Celebi caught at the shrine |
+| Bug-Catching Contest | Entry, judging and party restoration in all three games, Crystal won first place and received a Sun Stone |
+| Extended collection | Crystal completed another 5,000,028 frames without a stall, reaching 94 owned species including Espeon and Crobat, then another 750,032 frames reached 95. Gold recovered from insufficient Day Care funds, completed another 2,000,008 frames without a stall and reached 78, then Espeon and Nidoqueen raised it to 80, with subsequent collection reaching 83. Crystal reached 98 after Suicune, a native Lugia trade and Tyranitar |
+| Continuous collection with donors | One Crystal save reached all 251 registered entries through native catches, breeding, evolution, optional event features and verified Red, Blue, Gold and Silver exchanges. Imports include Articuno, Zapdos, Moltres, Mewtwo, Ho-Oh, Porygon2, Politoed, Slowking, Steelix, Kingdra, Scizor and Hitmontop. Gold caught both roaming beasts and transferred them to this Crystal save. Each exchange passed cartridge Continue, checkpoint restart and durable participant verification |
+| Game Corner | Native coin purchases, prize menus and League funding obtained Cubone, Wobbuffet, Pikachu and Porygon in Crystal. Gold obtained its 9,999-coin Porygon using native slot play for the balance above the coin purchase limit |
+| Moon Stone | Collected the native Tohjo Falls item in all three games. Gold then selected Nidorina in the stone menu and evolved it into Nidoqueen |
+| Trade evolution items | Collected Up-Grade, King’s Rock and Dragon Scale in Gold, Silver and Crystal through native dialogue, Strength and item pickups |
+| Held trade evolution | Prepared Metal Coat for Steelix and King’s Rock for a Gold/Crystal exchange that produced Politoed and Slowking. A further Gold/Crystal exchange used Dragon Scale and Metal Coat to produce Kingdra and Steelix. All four results passed checkpoint restart, cartridge restart and durable commit/recovery checks |
+| Runtime API | Pages, 251-entry Pokédex, PC, journal, statistics, manual input, audio, paused frame and restart |
+| Portable saves | Fresh Continue verified for all three games |
+| Optional rewards | Valid party and box preservation, fresh Continue, durable claim and replay protection |
+| Repeat Mew | First and repeat gifts on all three cartridges, later win requirement and duplicate prevention |
+| Library integration | Three installed games, three actual workers, automatic selection and committed Cable Club exchange |
+| Reference installation | Clean download and generation from pinned public sources for all three games |
+
+The [251-entry verification record](validation/gen2-251.json) includes the final
+checkpoint and portable-save hashes. A fresh cartridge Continue preserved all
+251 entries, party, storage and adventure progress. The run used optional Mew,
+GS Ball and earned League starter gifts, donor exchanges and recorded clock
+advances. Collection means registered Pokédex entries. The final party and PC
+held 116 distinct species after evolutions and outgoing trades. The final full
+suite passed 2,043 tests with 151 skipped, and both package formats passed their
+runtime-resource and private-artifact checks.
+
+Private evidence, traces and reproducible failure checkpoints are under
+`.release-local/`. The scenario runner reports its actual stopping reason and
+retains both the cartridge checkpoint and policy state.
+
+Further collection fixes preserve Day Care withdrawal fees during shopping,
+earn more money through the League when necessary, and avoid interrupting
+postgame collection when Red reappears after the weekly reset. Split-evolution
+breeding includes Slowking and requires viable Tyrogue stat combinations instead
+of counting arbitrary spare Tyrogue. Training waits through transient collision
+maps instead of indexing an empty encounter list.
+
+Further Tower preparation considers reachable evolutions and shared type
+weaknesses, equips native Leftovers, and teaches compatible attacks while
+preserving Recover. Combat uses Toxic against healthy bulky opponents and
+Recover when its healing can outpace incoming damage. Switching can protect a partner from a lethal attack. Battle estimates use the opponent’s actual defenses and account for burn, paralysis, Counter and Mirror Coat. Recovery cannot select a disabled move. Berry preparation respects the native daily fruit-tree reset and bag capacity. The expanded cartridge
+runs also found and fixed PC opening, Psychic TM selection, held-item transfer,
+evolution-stone selection and cave item routes that cross internal warps.
+Focused scenarios now wait for menus and scripts to finish before saving a
+completion checkpoint. Focused encounters also change full receiving boxes. Boxed partners taught field moves for the Tower remain eligible to breed missing baby species.
+
+## Reproduce
+
+Install this checkout in an isolated Python environment, then launch the normal
+Library with `pokesim-desktop`. Add an owner-supplied cartridge and choose the
+matching starter. The first installation prepares the generation-specific data.
+
+With local cartridge and generated data directories, run the regression suite:
+
+```sh
+GAME_DATA_DIR=.release-local/all-data \
+GEN2_DATA_DIR=.release-local/gen2-data \
+GEN2_CARTRIDGE_DIR=.release-local/gen2 \
+.venv/bin/pytest -q tests
+```
+
+Run a complete isolated campaign:
+
+```sh
+.venv/bin/python tools/play_gen2.py .release-local/gen2/crystal.gbc \
+  --game crystal --starter cyndaquil --frames 10000000 --until red \
+  --data .release-local/gen2-data --output .release-local/crystal-campaign
+```
+
+`--load PATH` resumes a cartridge checkpoint and its sibling `.policy.json`.
+Focused scenarios include ruins, tower, celebi, contest, gifts, legends, breeding, stones, trade_items, gamecorner, restore,
+Headbutt, Rock Smash and a specified encounter. Separate verification tools exercise runtime
+APIs, capture accounting, portable saves, trade preparation, durable exchange
+and custom reward delivery. `tools/verify_gen2_library.py` also exercises worker
+restart during trade preparation and reservation release before an automatic
+exchange. `tools/verify_gen2_trading.py --time-capsule` prepares a compatible
+boxed offer. `tools/verify_timecapsule.py` exchanges that receipt with a prepared
+Red or Blue checkpoint and runs both participant verifiers. Its `--data`
+directory must contain both the Generation I tables and generated `gen2` data.
+
+`tools/collect_gen2_imports.py` resumes verified Time Capsule imports from disposable
+Red or Blue donor copies. `tools/collect_gen2_donors.py` does the same for Gen II
+donors, including held-item evolutions. Their progress manifests record each
+adopted checkpoint and the continuous recipient lineage. `--offer-trained`
+explicitly offers trained boxed partners in those disposable copies.
+`tools/play_gen2.py --until all251` stops only after the observed owned count is 251.
+`tools/verify_gen2_collection.py` requires every owned entry, exports a portable
+cartridge save, verifies fresh Continue and records checkpoint and save hashes.
+Optional Mew, GS Ball and earned League starter gifts use the existing runtime
+settings, a persistent `--runtime-store` and a separate event ledger.
+
+Extended imports exposed clock loss during cartridge restart verification,
+native walking friendship gains, a Gen I withdrawal with HP above its recalculated
+maximum, and incorrect Gen II boxed nickname offsets. Verification now preserves
+the RTC, accounts for the cartridge's friendship step counter, and requires the
+nurse to repair the HP mismatch before preparing an exchange. Box names and
+optional gifts now use the native nickname layout, with a full-box preservation
+regression check. Level-100 evolution parents can breed a trainable replacement.
+Collection also replaces breeding and evolution parents that were traded away,
+including already registered intermediate evolutions. A planned contest cannot
+intercept an unrelated wild battle. Native roaming searches use the ruins gate
+to avoid the cartridge's last-map exclusion, then stay on the route when a beast
+is present. Capture does not spend the escape turn switching to a weaker partner.
+An explicit `tools/verify_gen2_trading.py --evolve` request can swap a held item
+for an available evolution item through the native Pack. The Scizor proof
+preserved the original Bitter Berry and consumed Metal Coat during evolution.
+Completed legendary collections skip wing errands, including imported Ho-Oh.
+Encounter searches can leave and reenter disconnected areas of the same map.
+Capture intent survives Ditto's Transform, using the species the cartridge
+actually stores after capture. An unavailable item closes its menu instead of
+scrolling indefinitely. Focused encounter tests also earn replacement supplies
+through the League and select a fishing rod that the adventure actually owns.
+Postgame supply trips can reach distant marts from Mt. Silver. Battle control
+recognizes Mean Look and binding effects before attempting a switch. Native
+Misdreavus acquisition verified recovery from the trapped battle, restocking and
+capture. Trade preparation heals status conditions before freezing its source,
+preserving strict party comparisons even when poison would tick on the walk to
+the link desk. Pending eggs hatch before recalculating breeding pairs, and
+level-100 partners remain eligible for stone evolutions.
+
+Note: the clock operations below (export, restart with a saved clock, fixture advance) need
+PyBoy RS with clock support (0.1.1 or later) through Core 0.2. On a build without it they raise
+`CoreCapabilityError`, which the web API reports as HTTP 501. The long campaign evidence in this
+section was gathered with the earlier PyBoy-based harness. The Rust backend runs the same clock
+file format, and keeps the saved clock across a restart.
+
+The Time Capsule, Celebi overnight and repeat contest tests advanced the real-time clock in
+private fixture copies before allowing the cartridge’s daily reset to run.
+Production adventures use the host clock, which the cartridge saves with its checkpoints. Clock
+fixtures change only the emulator RTC epoch, and a checkpoint made with a locked clock is refused
+by 0.4.x. The cartridge performs its daily reset, captures,
+breeding, evolutions and exchanges through native gameplay. Optional gifts and
+the GS Ball distribution are recorded separately in the runtime event ledger.
+
+## Boundaries
+
+The autonomous controller is not a proof that every seed will finish without a
+stall, or that every optional cartridge activity is automated. Game Corner
+prize acquisition is automated. The Battle Tower test proves
+entry, combat, a six-win streak and return. A seven-win streak has not yet been demonstrated. All 251 species have data and
+UI support, and Time Capsule and the optional Celebi quest add acquisition paths.
+The verified 251-entry run used managed checkpoint continuations, coordinated
+donor exchanges and simulated clock advances. Unattended fresh-start completion
+remains unproven. Sun Stones have an automated acquisition path through contest
+wins, with two further first-place wins supplying Bellossom and Sunflora in the
+completed collection. Contest wins are not guaranteed for every attempt.
+The Red/Blue Kanto Marathon and repeatable fossil, dojo and NPC-trade rewards
+have not been transplanted into the Generation II campaign. Generation II
+retries missed static legendary encounters, but does not schedule repeat
+encounters with already caught legends. Settings that apply only to Red and
+Blue are hidden for these adventures.
+
+## Reference provenance
+
+Game data comes from pinned primary disassemblies:
+
+- [pret/pokegold at 62388c7](https://github.com/pret/pokegold/tree/62388c7204e5d13aa05b4231e220b6760584d1b5)
+- [pret/pokecrystal at 5beda23](https://github.com/pret/pokecrystal/tree/5beda23ffa505f62e1dad7e3d7c214d1737b3358)
+
+`pokesim/gen2/data.py` pins the source and symbol revisions, verifies symbol
+hashes, generates version-specific data and validates cached bundle checksums.
+The original selected-address audit is in
+[gen2-symbols.json](validation/gen2-symbols.json).
+All banked memory access uses explicit banks. The capture hooks and link
+transport check cartridge instruction signatures before they attach.

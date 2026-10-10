@@ -308,3 +308,29 @@ main.shell { padding-bottom: var(--s7); }
   .trade-overview, .offer, .deal, .view-switch button, .offer-actions .partner-actions button { border: 1px solid CanvasText; }
   .view-switch button[aria-pressed="true"] { outline: 2px solid Highlight; }
 }
+
+/* ---- trade offers ------------------------------------------------------ */
+.offers-subhead { margin: var(--s4) 0 var(--s2) }
+#offers-note:empty { display: none }
+.offer-answer { display: flex }
+.offer-answer { flex-wrap: wrap }
+.offer-answer { gap: var(--s2) }
+.offer-answer { padding: 0 var(--s4) var(--s4) }
+.manual-progress-card { margin: 0 var(--s4) var(--s4) }
+.manual-progress-card { padding: var(--s3) var(--s4) }
+.manual-progress-card { background: var(--panel-2) }
+.manual-progress-card { border: var(--hair) solid var(--rule-faint) }
+.manual-steps { display: grid }
+.manual-steps { gap: var(--s2) }
+.manual-steps { margin: 0 }
+.manual-steps { padding-left: var(--s5) }
+.manual-step { color: var(--ink-3) }
+.manual-step.is-done { color: var(--ok) }
+.manual-step.is-now { color: var(--ink) }
+.manual-step.is-now { font-weight: 600 }
+.manual-text { margin-top: var(--s2) }
+.manual-text { color: var(--ink-2) }
+.manual-result { margin-top: var(--s2) }
+.manual-result { font-weight: 600 }
+.manual-result { color: var(--ink) }
+.manual-result.error { color: var(--crit) }

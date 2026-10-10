@@ -3,20 +3,29 @@ const fs = require('node:fs')
 const test = require('node:test')
 const vm = require('node:vm')
 const crypto = require('node:crypto').webcrypto
-const source = fs.readFileSync('pokesim/web/static/library.js', 'utf8')
+const source = fs.readFileSync('pokesim/web/static/trade-progress.js', 'utf8') + String.fromCharCode(59) + '\n' + fs.readFileSync('pokesim/web/static/library.js', 'utf8')
 const settle = async () => {
   for (const tick of [1, 2, 3, 4]) await new Promise(resolve => setImmediate(resolve))
 }
+
+function slot(version, romId = '', extra = {}) {
+  const johto = ['gold', 'silver', 'crystal'].includes(version)
+  return {version, title: `Pokémon ${version[0].toUpperCase()}${version.slice(1)}`, generation: johto ? 2 : 1, supported: true,
+    starters: johto ? ['chikorita', 'cyndaquil', 'totodile'] : version === 'yellow' ? ['pikachu'] : ['bulbasaur', 'charmander', 'squirtle'], installed: Boolean(romId),
+    adventures: [], rom: romId ? {id: romId, sha1: 'a'.repeat(40), short_hash: 'aaaaaaaa', size: 1048576, added_at: 1700000000, file_missing: false} : null, ...extra}
+}
+const SHELF = ['red', 'blue', 'yellow', 'gold', 'silver', 'crystal']
 
 function library(options = {}) {
   const elements = new Map()
   const calls = []
   let poll
   const listeners = {}
+  const clicks = []
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
       hidden: selector === '#workspace', value: '', checked: false, files: [], dataset: {}, textContent: '',
-      innerHTML: '', classList: {toggle() {}}, setAttribute() {}, hasAttribute: () => false,
+      innerHTML: '', classList: {toggle() {}}, setAttribute() {}, toggleAttribute() {}, hasAttribute: () => false, click() {},
       querySelectorAll: () => [], querySelector: () => null, insertAdjacentHTML() {},
       focus() {}, showModal() { this.open = true }, close() { this.open = false }, reset() {},
     })
@@ -24,8 +33,11 @@ function library(options = {}) {
   }
   const location = {hash: options.hash || '', pathname: '/', search: '', replace() {}}
   const context = vm.createContext({
-    document: {body: {dataset: {page: options.page || 'library', adventure: ''}}, querySelector: element,
-      querySelectorAll: () => [], addEventListener(name, callback) { listeners[name] = callback }, hidden: false},
+    document: {body: {dataset: {page: options.page || 'library', adventure: options.adventure || ''}}, querySelector: element,
+      querySelectorAll: () => [], addEventListener(name, callback) {
+      listeners[name] = callback
+      if (name === 'click') clicks.push(callback)
+    }, hidden: false},
     setTimeout: callback => setImmediate(callback),
     location, history: {replaceState(_, __, path) { calls.push({path: 'history', next: path})
       location.hash = '' }}, crypto, Uint8Array, URLSearchParams, setInterval(callback) { poll = callback },
@@ -37,13 +49,14 @@ function library(options = {}) {
       }
       const data = path === '/api/v1/session' ? {csrf_token: 'csrf', role: 'owner'}
         : path === '/api/v1/assets' ? {roms: [{id: 'rom', version: 'red'}]}
+        : path === '/api/v1/cartridges' ? {slots: options.slots || [slot('red', 'rom')], supported: 'Red, Blue, Yellow, Gold, Silver or Crystal'}
         : path === '/api/v1/adventures' && opts.method === 'POST' ? {id: 'a'.repeat(32)}
         : {adventures: []}
       return {ok: true, json: async () => data}
     },
   })
   vm.runInContext(source, context)
-  return {element, calls, context, poll, click(action, id) { listeners.click({target: {closest: () => ({dataset: {action, id}})}}) }}
+  return {element, calls, context, poll, clicks, click(action, id) { listeners.click({target: {closest: () => ({dataset: {action, id}})}}) }}
 }
 
 test('library opens automatically with a GET session and never submits fragment credentials', async () => {
@@ -61,7 +74,8 @@ test('create can reuse a ROM without starting and sends a stable-format idempote
   const view = library()
   await settle()
   view.element('#new-name').value = 'Second Red'
-  view.element('#rom-select').value = 'rom'
+  await view.element('#new-adventure').onclick()
+  await settle()
   view.element('#starter').value = 'charmander'
   view.element('#start-created').checked = false
   view.element('#create-form').onsubmit({preventDefault() {}})
@@ -100,6 +114,42 @@ test('a running adventure that reports a stall says so on its card', async () =>
   view.element('#adventure-list').insertAdjacentHTML = (_, html) => { cards.push(html) }
   await settle()
   assert.deepEqual(cards.map(html => /Stuck\?/.test(html)), [true, false, false])
+})
+
+test('stopped and failed cards say so and start in one click, translating raw network errors', async () => {
+  const games = [{id: 'a'.repeat(32), name: 'Cozy Escape', version: 'silver', state: 'failed', desired_state: 'running',
+    error: '<urlopen error [Errno -5] No address associated with hostname>'},
+    {id: 'b'.repeat(32), name: 'Quiet Cove', version: 'red', state: 'stopped', desired_state: 'stopped'}]
+  const view = library({respond(path) {
+    return path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: games})} : null
+  }})
+  const cards = []
+  view.element('#adventure-list').insertAdjacentHTML = (_, html) => { cards.push(html) }
+  await settle()
+  assert.match(cards[0], /state-pill"><i[^>]*><\/i>Failed</)
+  assert.match(cards[0], /data-action="start"[^>]*>Retry</)
+  assert.match(cards[0], /Couldn&#39;t download the Pokémon Silver game data \(no network\)\. Retry\./)
+  assert.doesNotMatch(cards[0], /urlopen/)
+  assert.match(cards[1], />Stopped</)
+  assert.match(cards[1], /key key--primary" data-action="start"[^>]*>Start</)
+  assert.doesNotMatch(cards[1], />View adventure</)
+})
+
+test('the page for a failed adventure explains the failure and is not a library', async () => {
+  const id = 'a'.repeat(32)
+  const view = library({page: 'stopped', adventure: id, respond(path) {
+    return path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: [{id, name: 'Cozy Escape', version: 'silver',
+      state: 'failed', error: '<urlopen error timed out>', summary: {next_retry: Date.now() / 1000 + 120}}]})} : null
+  }})
+  await settle()
+  const page = view.element('#stopped-card').innerHTML
+  assert.match(page, /Failed to start/)
+  assert.match(page, /\(no network\)\. Retry\./)
+  assert.match(page, /Technical details/)
+  assert.match(page, /try again by itself in about 2 minutes/)
+  assert.match(page, /data-action="start"[^>]*>Retry</)
+  assert.doesNotMatch(page, /No adventures yet|Create an adventure/)
+  assert.match(view.element('#stopped-lede').textContent, /could not start/)
 })
 
 test('settings mutations send only fields accepted by the manager', async () => {
@@ -152,7 +202,8 @@ test('failed creation retains idempotency key for an identical retry and exposes
   }})
   await settle()
   view.element('#new-name').value = 'Red'
-  view.element('#rom-select').value = 'rom'
+  await view.element('#new-adventure').onclick()
+  await settle()
   view.element('#starter').value = 'random'
   view.element('#create-form').onsubmit({preventDefault() {}})
   await settle()
@@ -175,7 +226,8 @@ test('expired CSRF renews the session and retries the exact creation once', asyn
   }})
   await settle()
   view.element('#new-name').value = 'Red'
-  view.element('#rom-select').value = 'rom'
+  await view.element('#new-adventure').onclick()
+  await settle()
   view.element('#starter').value = 'random'
   view.element('#create-form').onsubmit({preventDefault() {}})
   await settle()
@@ -488,7 +540,8 @@ test('running adventure settings allow palettes and explain deferred application
     if (options.method === 'PATCH') return {ok: true, json: async () => ({palette_pending: true})}
   }})
   await settle()
-  for (const name of ['league-rewards', 'mew-event']) view.element(`#settings-${name}`).toggleAttribute = () => {}
+  for (const name of ['league-rewards', 'mew-event', 'celebi-event']) view.element(`#settings-${name}`).toggleAttribute = () => {}
+  for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
   view.click('settings', game.id)
   assert.equal(view.element('#settings-palette').value, 'blue')
   assert.notEqual(view.element('#settings-palette').disabled, true)
@@ -501,6 +554,30 @@ test('running adventure settings allow palettes and explain deferred application
   assert.equal(view.element('#notice').textContent, 'Settings saved. The palette will apply when this adventure reconnects.')
 })
 
+test('Gold, Silver and Crystal adventures hide the palette and never send one', async () => {
+  const game = {id: 'c'.repeat(32), name: 'Johto', version: 'gold', state: 'stopped', settings: {}}
+  const view = library({respond(path, options) {
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+    if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
+  }})
+  await settle()
+  for (const name of ['league-rewards', 'mew-event', 'celebi-event']) view.element(`#settings-${name}`).toggleAttribute = () => {}
+  for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+  view.click('settings', game.id)
+  assert.equal(view.element('#settings-palette-label').hidden, true)
+  assert.equal(view.element('#settings-palette-note').hidden, true)
+  assert.equal(view.element('#settings-event-steps-label').textContent, 'Steps between Sudowoodo and Snorlax returns')
+  view.element('#settings-legendary-steps').value = '500'
+  view.element('#settings-event-steps').value = '200'
+  view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+  await settle()
+  const settings = JSON.parse(view.calls.find(call => call.options.method === 'PATCH').options.body).settings
+  assert.equal('palette' in settings, false)
+  assert.equal(settings.legendary_return_steps, 500)
+  assert.equal(settings.event_return_steps, 200)
+  assert.equal('fossil_preference' in settings, false)
+})
+
 test('settings render existing backups without an adventure variable', async () => {
   const view = library({page: 'settings', respond(path) {
     if (path === '/api/v1/backups') return {ok: true, json: async () => ({backups: [
@@ -510,4 +587,163 @@ test('settings render existing backups without an adventure variable', async () 
   await settle()
   assert.match(view.element('#backups').innerHTML, /data-delete-backup="b{32}" data-owner>Delete/)
   assert.match(view.element('#backup-summary').textContent, /1 backup/)
+})
+
+test('one installed cartridge is preselected and narrows the starters', async () => {
+  const view = library({slots: SHELF.map(version => slot(version, version === 'gold' ? 'gold-rom' : ''))})
+  await settle()
+  await view.element('#new-adventure').onclick()
+  await settle()
+  assert.equal(view.element('#rom-id').value, 'gold-rom')
+  const cards = view.element('#game-choices').innerHTML
+  assert.match(cards, /value="gold-rom" data-version="gold" checked/)
+  assert.match(cards, /href="\/settings#cartridge-red">Add cartridge/)
+  assert.match(cards, /href="\/settings#cartridge-yellow">Add cartridge/)
+  assert.doesNotMatch(cards, /Coming in this release/)
+  assert.ok(cards.indexOf('gold-rom') < cards.indexOf('cartridge-red'))
+  const html = view.element('#starter').innerHTML
+  assert.ok(html.includes('value="chikorita"') && !html.includes('value="squirtle"'))
+  assert.equal(view.element('#create-needs-cartridge').hidden, true)
+  assert.equal(view.element('#create-submit').hidden, false)
+})
+
+test('several cartridges need a choice and the choice sets the game and starters', async () => {
+  const view = library({slots: SHELF.map(version => slot(version, ['red', 'crystal'].includes(version) ? `${version}-rom` : ''))})
+  await settle()
+  await view.element('#new-adventure').onclick()
+  await settle()
+  assert.equal(view.element('#rom-id').value, '')
+  assert.doesNotMatch(view.element('#game-choices').innerHTML, /checked/)
+  view.element('#new-name').value = 'Undecided'
+  view.element('#create-form').onsubmit({preventDefault() {}})
+  await settle()
+  assert.equal(view.calls.some(call => call.path === '/api/v1/adventures' && call.options.method === 'POST'), false)
+  assert.match(view.element('dialog[open] .dialog-feedback').textContent, /Choose the game/)
+  view.element('#game-choices').onchange({target: {name: 'game', value: 'crystal-rom'}})
+  assert.equal(view.element('#rom-id').value, 'crystal-rom')
+  assert.ok(view.element('#starter').innerHTML.includes('value="totodile"'))
+  view.element('#starter').value = 'totodile'
+  view.element('#create-form').onsubmit({preventDefault() {}})
+  await settle()
+  const request = view.calls.find(call => call.path === '/api/v1/adventures' && call.options.method === 'POST')
+  assert.deepEqual([JSON.parse(request.options.body).rom_id, JSON.parse(request.options.body).starter], ['crystal-rom', 'totodile'])
+})
+
+test('with no cartridges the library and the dialog both point to Settings', async () => {
+  const view = library({slots: SHELF.map(version => slot(version))})
+  await settle()
+  assert.equal(view.element('#empty-needs-cartridge').hidden, false)
+  assert.equal(view.element('#empty-ready').hidden, true)
+  await view.element('#new-adventure').onclick()
+  await settle()
+  assert.equal(view.element('#create-needs-cartridge').hidden, false)
+  assert.equal(view.element('#create-submit').hidden, true)
+  assert.equal(view.element('#rom-id').value, '')
+  assert.equal(view.element('#create-supported').textContent, 'Red, Blue, Yellow, Gold, Silver or Crystal')
+})
+
+test('a starter from the wrong game is refused before the adventure is created', async () => {
+  const view = library()
+  await settle()
+  await view.element('#new-adventure').onclick()
+  await settle()
+  view.element('#new-name').value = 'Mismatch'
+  view.element('#starter').value = 'cyndaquil'
+  view.element('#create-form').onsubmit({preventDefault() {}})
+  await settle()
+  assert.equal(view.calls.some(call => call.path === '/api/v1/adventures' && call.options.method === 'POST'), false)
+  assert.match(view.element('dialog[open] .dialog-feedback').textContent, /different game/)
+})
+
+test('settings shows every slot and a wrong-slot upload reports where it went', async () => {
+  let shelf = SHELF.map(version => slot(version))
+  const view = library({page: 'settings', respond(path, opts) {
+    if (path === '/api/v1/cartridges') return {ok: true, json: async () => ({slots: shelf, supported: 'Red, Blue, Yellow, Gold, Silver or Crystal'})}
+    if (path.startsWith('/api/v1/cartridges?slot=')) shelf = SHELF.map(version => slot(version, version === 'blue' ? 'blue-rom' : ''))
+    if (path.startsWith('/api/v1/cartridges?slot=') && opts.method === 'POST') return {ok: true, json: async () => ({
+      version: 'blue', title: 'Pokémon Blue', moved: true, message: 'That file is Pokémon Blue, not Pokémon Red, so it went into the Blue slot.',
+      rom: {id: 'blue-rom'}, slots: shelf})}
+  }})
+  await settle()
+  const grid = view.element('#cartridge-grid')
+  for (const version of SHELF) assert.match(grid.innerHTML, new RegExp(`id="cartridge-${version}"`))
+  assert.match(grid.innerHTML, /data-slot="yellow" data-state="empty"/)
+  view.element('#cartridge-grid').onclick({target: {closest: selector => selector === '[data-cartridge-upload]' ? {dataset: {cartridgeUpload: 'red'}} : null}})
+  view.element('#cartridge-file').files = [{name: 'blue.gb', size: 1024}]
+  view.element('#cartridge-file').onchange()
+  await settle()
+  const upload = view.calls.find(call => call.path === '/api/v1/cartridges?slot=red')
+  assert.equal(upload.options.method, 'POST')
+  assert.match(grid.innerHTML, /data-slot="blue" data-state="installed"/)
+  assert.match(grid.innerHTML, /went into the Blue slot/)
+})
+
+test('a game paused for a trade shows Paused rather than a measured 0.0× speed', async () => {
+  const resources = {cpu_percent: 2.1, memory_bytes: 160 * 1048576, observed_speed: 0, speed_status: 'ready'}
+  const games = [
+    {id: 'a'.repeat(32), name: 'Trading', version: 'silver', state: 'running', resources, summary: {paused: true}},
+    {id: 'b'.repeat(32), name: 'Held', version: 'red', state: 'waiting_for_trade', resources, summary: {}},
+    {id: 'c'.repeat(32), name: 'Walking', version: 'gold', state: 'running', resources: {...resources, observed_speed: 2.3}, summary: {paused: false}},
+  ]
+  const view = library({respond: path => path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: games})} : null})
+  const labels = {}
+  view.element('#adventure-list').querySelector = selector => {
+    const id = selector.match(/data-adventure-id="(\w+)"/)?.[1]
+    return id && {querySelector: usage => {
+      const key = usage.match(/data-usage="(\w+)"/)[1]
+      return {set textContent(value) { labels[`${id[0]}-${key}`] = value }, get textContent() { return labels[`${id[0]}-${key}`] }, classList: {toggle() {}}}
+    }}
+  }
+  await settle()
+  view.poll()
+  await settle()
+  assert.equal(labels['a-speed'], 'Paused')
+  assert.equal(labels['b-speed'], 'Paused')
+  assert.equal(labels['c-speed'], '2.3×')
+  assert.equal(labels['a-cpu'], '2.1%')
+})
+
+test('the trade page lists any Pokémon on each side and sends exactly the chosen pair', async () => {
+  const options = {adventures: [
+    {id: 'one', name: 'Red Sprout', version: 'red', generation: 1, available: true, reason: '', pokemon: [
+      {trade_key: 'k1', name: 'Pikachu', nickname: 'SPARKY', level: 12, location: 'party', slot: 1},
+      {trade_key: 'k2', name: 'Rattata', level: 4, location: 'box', box: 1, slot: 3}]},
+    {id: 'two', name: 'Gold Leaf', version: 'gold', generation: 2, available: true, reason: '', time_capsule_ready: true, pokemon: [
+      {trade_key: 'g1', name: 'Togepi', level: 5, location: 'party', slot: 2, time_capsule_compatible: false, time_capsule_reason: 'Togepi did not exist in Gen I.'},
+      {trade_key: 'g2', name: 'Pidgey', level: 3, location: 'box', box: 2, slot: 1, time_capsule_compatible: true}]},
+    {id: 'three', name: 'Blue Paused', version: 'blue', generation: 1, available: false, reason: 'Paused by you', pokemon: []}
+  ]}
+  const view = library({page: 'trade', respond: (path, opts) => {
+    if (path === '/api/v1/interactions/manual-trades/options') return {ok: true, json: async () => options}
+    const queued = {id: 'm1', state: 'queued', position: 1, left_id: 'one', right_id: 'two', cancellable: true}
+    if (path === '/api/v1/interactions/manual-trades' && opts.method === 'POST') return {ok: true, json: async () => queued}
+    if (path === '/api/v1/interactions/manual-trades/m1') return {ok: true, json: async () => queued}
+    if (path === '/api/v1/interactions/manual-trades') return {ok: true, json: async () => ({trades: []})}
+  }})
+  await settle()
+  assert.ok(view.calls.some(call => call.path === '/api/v1/interactions/manual-trades/options'))
+  view.element('#manual-left-game').value = 'one'
+  view.element('#manual-left-game').onchange()
+  view.element('#manual-right-game').value = 'two'
+  view.element('#manual-right-game').onchange()
+  assert.match(view.element('#manual-left-list').innerHTML, /SPARKY/)
+  assert.match(view.element('#manual-left-list').innerHTML, /Party slot 1/)
+  assert.match(view.element('#manual-left-list').innerHTML, /Box 1, slot 3/)
+  assert.match(view.element('#manual-right-list').innerHTML, /Togepi did not exist in Gen I/)
+  assert.match(view.element('#manual-left-game').innerHTML, /Blue Paused · .*unavailable/)
+  const pick = (side, key) => {
+    for (const callback of view.clicks) callback({target: {closest: selector => selector === '[data-manual-key]' ? {disabled: false, dataset: {manualSide: side, manualKey: key}} : null}})
+  }
+  pick('left', 'k1')
+  pick('right', 'g2')
+  assert.match(view.element('#trade-summary').textContent, /Red Sprout sends SPARKY \(Pikachu\)\. Gold Leaf sends Pidgey\./)
+  view.element('#trade-submit').onclick()
+  await settle()
+  const post = view.calls.find(call => call.path === '/api/v1/interactions/manual-trades' && call.options.method === 'POST')
+  const {request_id: requestId, ...body} = JSON.parse(post.options.body)
+  assert.deepEqual(body, {left_id: 'one', left_key: 'k1', right_id: 'two', right_key: 'g2'})
+  assert.match(requestId, /^[0-9a-f]{32}$/)
+  assert.equal(view.element('#trade-progress').hidden, false)
+  assert.match(view.element('#trade-progress-text').textContent, /Waiting for the Cable Club/)
+  assert.equal(view.element('#trade-cancel').hidden, false)
 })

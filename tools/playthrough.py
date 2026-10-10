@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pyboy import PyBoy
-from pokesim.policies.base import PolicyContext
+from pokesim_core.emulator import Emulator as PyBoy
+from pokesim.policies.base import PolicyContext, stack_pointer
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.policies.progression import milestones
 from pokesim.ram import read_snapshot
@@ -63,7 +63,7 @@ def main():
             if milestones(s)['champion'] and not args.stop_position and not args.stop_event:
                 print('CHAMPION', frame, flush=True)
                 break
-            actions = policy.step(PolicyContext(s, 0, time.monotonic(), pb.memory))
+            actions = policy.step(PolicyContext(s, 0, time.monotonic(), pb.memory, stack_pointer(pb)))
             marker = (policy.goal.key, s.badges, s.items)
             if marker != last:
                 checkpoint(f'{frame:08d}-{policy.goal.key}')

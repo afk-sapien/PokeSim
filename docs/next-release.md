@@ -79,4 +79,14 @@ Adventure Settings offers the background colors of the 12 GBC startup choices as
 
 Authentic GBC coloring uses separate background and sprite palettes. That is deferred because the current renderer's public DMG API exposes one whole-screen palette, and existing DMG checkpoints cannot simply be loaded as CGB checkpoints. The labels describe this implementation as GBC-inspired. Color data is cross-checked against [SameBoy's startup palette table](https://github.com/LIJI32/SameBoy/blob/master/BootROMs/cgb_boot.asm).
 
-Manual trade initiation, accounts and OIDC, other generations, Yellow, and ROM hacks remain deferred.
+Manual trade initiation, accounts and OIDC, other generations, Yellow, and ROM hacks remained deferred in 0.4.18. Generation II and Yellow arrive in 0.5.0, see the [0.5.0 release notes](release-notes.md).
+
+## Live audio buffering
+
+Issue 38 reported stuttering and drifting live sound. The Rust backend publishes one 1,600 byte packet per frame at a steady 60 Hz (16.7 ms apart, 28 ms at worst), so the gaps came from the client. The old page kept about 40 ms of audio ahead, set the playback rate from the measured frames per second, and abandoned the session after one 3 second request. Any delay above 40 ms became silence, truncated responses lost media, and the rate took dozens of distinct values at 1x.
+
+The page now schedules through `pokesim/web/static/audio-buffer.js`, a pure module with Node tests. It waits until the target lead is buffered before starting. The target is 0.4 seconds for watching and 0.1 seconds for Take Control. After an underrun it grows by the gap plus 50 ms up to 1.5 seconds (0.3 seconds in manual mode) and gives 50 ms back for every 10 calm seconds. A smoothed trim of at most 2% holds the lead, and a larger excess is skipped forward with a 6 ms fade instead of clearing the queue. The server ring holds 2 seconds and serves every frame after the `after` cursor. Responses report `X-Audio-Dropped` when the cursor fell behind the ring and `X-Audio-Mode` for the control mode. Playback rates snap to 0.25, 0.5, 0.75, 1, 1.5, 2, 3 and 4 inside a 2% band and sound is muted above 4.5x, where the server also stops sending PCM.
+
+HTTP polling stayed. It works through the manager proxy and needs no fallback logic, and the measured gaps come from delay, not from request overhead. Failed polls are retried for 6 seconds before the page reports a disconnect.
+
+Run `uv run python tools/audio_jitter_harness.py --rom <rom> --game-data <dir>` to measure silence in Chromium through a delaying proxy. In a 30 second run with 30 to 150 ms of jitter and occasional stalls, silence fell from 2.2 s (21 gaps) to 0 s and dropped media from 2.4 s to 0.1 s. A harsh profile with multi second stalls fell from 9.8 s to 7.3 s and now reports an unstable connection. Manual mode under the same jitter still had 3.2 s of silence, the cost of its small buffer, and also reports the problem. Steady playback has no gaps and the mean lead is 0.4 seconds. Listening on real devices was not tested.

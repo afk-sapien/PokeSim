@@ -70,7 +70,7 @@ def create_backup(manager):
         playback = {}
         try:
             for aid in running:
-                status = manager.supervisor.child(aid).request('GET', '/api/state', timeout=5)
+                status = manager.supervisor.child(aid).request('GET', '/api/summary', timeout=5)
                 playback[aid] = 'take_control' if status.get('manual_mode') else 'pause' if status.get('paused') else None
             for aid in running:
                 manager.supervisor.stop(aid, preserve_desired=True)

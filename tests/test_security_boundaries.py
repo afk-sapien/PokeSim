@@ -73,6 +73,20 @@ def test_public_worker_routes_preserve_query_and_private_credentials(managed, me
     assert 'private-worker-token' not in response.text
 
 
+@pytest.mark.parametrize('path', ['', 'pc', 'pokedex', 'journal', 'journal/stats', 'stats', 'stats/pokemon',
+                                  'stats/items', 'journey', 'team'])
+def test_stopped_adventure_pages_render_the_status_page(tmp_path, monkeypatch, path):
+    manager = Manager(tmp_path, 'http://testserver')
+    monkeypatch.setattr(manager, 'start', lambda: None)
+    manager.registry.add_rom('fixture', 'sha1', 'gold')
+    adventure = manager.registry.create('Quiet Cove', 'fixture', {}, identifier())
+    with TestClient(create_app(manager)) as client:
+        response = client.get(f"/games/{adventure['id']}/{path}")
+    assert response.status_code == 200
+    assert response.headers['content-type'].startswith('text/html')
+    assert 'stopped or starting' not in response.text
+
+
 def test_manager_sends_browser_protections(managed):
     client, base, forwarded = managed
     response = client.get('/')

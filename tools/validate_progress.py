@@ -2,7 +2,7 @@
 import argparse
 from collections import Counter
 import hashlib
-from importlib.metadata import version
+from pokesim_core.emulator_state import runtime_provenance, validate_runtime
 import json
 from pathlib import Path
 import sys
@@ -10,11 +10,11 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pyboy import PyBoy
+from pokesim_core.emulator import Emulator as PyBoy
 from pokesim.benchmark import policy_fingerprint
 from pokesim.checkpoints import CheckpointStore
 from pokesim.events import RunMemory, diff
-from pokesim.policies.base import PolicyContext
+from pokesim.policies.base import PolicyContext, stack_pointer
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.ram import read_snapshot
 
@@ -24,7 +24,8 @@ def run(rom, checkpoint, frames):
     if not metadata:
         raise ValueError('A checkpoint manifest is required for a faithful replay')
     rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
-    if metadata['rom_sha1'] != rom_sha1 or metadata['pyboy_version'] != version('pyboy'):
+    validate_runtime(metadata)
+    if metadata['rom_sha1'] != rom_sha1:
         raise ValueError('ROM or emulator version does not match the checkpoint')
     if metadata['policy'] != 'strategic':
         raise ValueError('This replay requires a strategic checkpoint')
@@ -60,7 +61,7 @@ def run(rom, checkpoint, frames):
             achievements.extend({'frame': frame - start, 'type': event.type, 'title': event.title}
                                 for event in events if event.type not in ('playtime', 'release', 'blackout', 'seen'))
             previous = snapshot
-            for action in policy.step(PolicyContext(snapshot, 0, 0, pb.memory)):
+            for action in policy.step(PolicyContext(snapshot, 0, 0, pb.memory, stack_pointer(pb))):
                 if action.button:
                     pb.button_press(action.button)
                 if action.hold:
@@ -99,7 +100,7 @@ def run(rom, checkpoint, frames):
                 'pickups': policy.pickups.state_dict(),
                 'policy_recoveries': policy.recoveries - metadata['policy_state'].get('recoveries', 0),
                 'checkpoint_sha256': hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
-                'policy_fingerprint': fingerprint, 'pyboy': version('pyboy'),
+                'policy_fingerprint': fingerprint, 'emulator': runtime_provenance(),
                 'final_goal': policy.goal.title, 'final_map': final.map_name}
     finally:
         pb.stop(save=False)

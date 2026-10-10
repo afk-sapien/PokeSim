@@ -3,8 +3,6 @@ from dataclasses import asdict
 import json
 import time
 
-from .pokemon import dv_rating, stored_strength
-from .screen import W_ENEMY_HP, W_ENEMY_MAX_HP, W_PLAYER_MON_NUMBER
 
 KEY = 'adventure-statistics-v1'
 INTERVAL = 30
@@ -22,6 +20,7 @@ def initialize(db):
 
 
 def collection(snapshot):
+    from .pokemon import dv_rating, stored_strength
     rows = [asdict(mon) for mon in snapshot.party] + snapshot.storage_entries()
     powers = [stored_strength(mon)['power'] for mon in rows]
     dvs = [dv_rating(mon)['dv_percent'] for mon in rows]
@@ -80,6 +79,7 @@ class StatisticsTracker:
         self.last_collection = 0
 
     def observe(self, snapshot, memory=None, *, now=None, clock=None):
+        from .screen import W_ENEMY_HP, W_ENEMY_MAX_HP, W_PLAYER_MON_NUMBER
         now = time.time() if now is None else now
         if not snapshot.valid or not snapshot.started or self.store.get('trade_hold'):
             self.reset_baseline()
@@ -201,7 +201,8 @@ def recent(store, *, now=None):
 
 def overview(state, records, steps):
     game = state.get('game') or {}
-    rows = game.get('party', []) + (game.get('storage') or {}).get('pokemon', [])
+    # An Egg is not a Pokémon held yet.
+    rows = [mon for mon in game.get('party', []) + (game.get('storage') or {}).get('pokemon', []) if not mon.get('egg')]
     return {'play_clock': state.get('play_clock'),
             'league_wins': (state.get('league_rewards') or {}).get('wins', game.get('hall_of_fame_count')),
             'held': len(rows) if game else None, 'areas': state.get('areas_discovered'),
@@ -209,21 +210,28 @@ def overview(state, records, steps):
             'steps_since': steps.get('started_at'), 'perfect_held': records['milestones']['perfect_held']}
 
 
-def highlights(game):
+def highlights(game, scores=None, species=None):
+    """Strongest Battle Power and best DVs, scored with the adventure generation's own data.
+
+    Gen I defaults read the shared tables; Gen II passes its own scorers and species.
+    """
     from urllib.parse import urlencode
-    from .battle_power import battle_power
-    from .strategy_data import SPECIES
+    if scores is None:
+        from .battle_power import battle_power
+        from .pokemon import dv_rating
+        scores = (battle_power, lambda mon: dv_rating(mon)['dv_total'])
+    if species is None:
+        from .strategy_data import SPECIES as species
     rows = (game or {}).get('party', []) + ((game or {}).get('storage') or {}).get('pokemon', [])
     result = {}
-    for key, score, sort in [('battle', battle_power, 'battle_power'),
-                              ('dvs', lambda mon: dv_rating(mon)['dv_total'], 'dvs')]:
-        known = [(score(mon), mon) for mon in rows if mon.get('species') in SPECIES]
+    for (key, sort), score in zip([('battle', 'battle_power'), ('dvs', 'dvs')], scores):
+        known = [(score(mon), mon) for mon in rows if mon.get('species') in species]
         eligible = [(value, mon) for value, mon in known if value is not None]
         if not eligible:
             result[key] = None
             continue
         value, mon = max(eligible, key=lambda row: row[0])
-        dex = SPECIES[mon['species']]['dex']
+        dex = species[mon['species']]['dex']
         result[key] = {'name': mon.get('nick') or mon.get('name') or f'#{dex}', 'dex': dex,
                        'level': mon.get('level'), 'value': value, 'partial': len(eligible) < len(rows),
                        'url': 'pc?' + urlencode({'scope': 'all', 'q': f'#{dex}', 'sort': sort, 'order': 'desc'})}

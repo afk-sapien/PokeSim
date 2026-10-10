@@ -263,6 +263,7 @@ def test_strength_is_only_used_when_a_boulder_push_is_actually_planned():
     from pokesim.policies.base import PolicyContext
     from pokesim.policies.strategic import StrategicPolicy
     from pokesim.strategy_data import MAPS
+    from shortcut_fakes import Recorder
     from test_events import snap
 
     memory = bytearray(65536)
@@ -270,17 +271,20 @@ def test_strength_is_only_used_when_a_boulder_push_is_actually_planned():
              party=(mon(species=0x6E, level=40, hp=100, max_hp=100, moves=(70, 0, 0, 0), pp=(15, 0, 0, 0)),),
              event_flags=flags('EVENT_GOT_POKEDEX'))
     p = StrategicPolicy(7)
+    recorder = Recorder.on(p)
     p.observed_map = s.map
 
-    # No push available: the run must not sit in the Strength menu.
+    # No push available: the run must not use Strength.
     with patch.object(type(p.boulders), 'route', return_value=None):
         p.step(PolicyContext(s, 0, 0, memory))
-    assert p.mode != 'using Strength'
+    assert not recorder.started
 
     # A push is available: Strength is activated so the boulder can be moved.
     with patch.object(type(p.boulders), 'route', return_value='left'):
         p.step(PolicyContext(s, 0, 0, memory))
-    assert p.mode == 'using Strength'
+    assert recorder.last.kind == 'use_field_move' and recorder.last.move == 'STRENGTH'
+    assert p.mode == 'shortcut: use_field_move'
+
 
 def test_victory_road_climbs_only_after_this_floor_is_done():
     # The ascent used to fire on every visit to 2F, replacing whatever the run came for with
@@ -347,3 +351,97 @@ def test_returning_through_victory_road_can_solve_the_second_switch_first():
     assert planner.route(s, nav, ('BOULDER3', (9, 16))) is not None
     assert planner.path[-1][0][2:] == (10, 16)
     assert planner.path[-1][1] == 'left'
+
+
+def test_boulder_search_reads_each_square_once_per_plan():
+    from collections import Counter
+    from pokesim.policies.puzzles import BoulderPlanner
+    from pokesim.strategy_data import WORLD
+    s = snap(map=MAPS['VICTORY_ROAD_2F'], x=22, y=16,
+             party=(mon(moves=(70, 0, 0, 0)),),
+             event_flags=flags('EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'))
+    nav = Navigator()
+    nav.update_story(s)
+    nav.live_map = s.map
+    nav.live_positions = [(o[0], o[1]) for o in WORLD[s.map]['objects']]
+    reads = Counter()
+    active_tile = nav.active_tile
+    def counted(world, x, y):
+        reads[x, y] += 1
+        return active_tile(world, x, y)
+    nav.active_tile = counted
+    planner = BoulderPlanner()
+    assert planner.route(s, nav, ('BOULDER3', (9, 16))) is not None
+    assert planner.path[-1][0][2:] == (10, 16)
+    assert reads and max(reads.values()) == 1
+
+
+def test_boulder_search_that_failed_is_not_repeated_until_its_inputs_change():
+    from dataclasses import replace
+    from pokesim.policies.puzzles import BoulderPlanner, boulder_task
+    from pokesim.strategy_data import WORLD
+    s = snap(map=MAPS['VICTORY_ROAD_3F'], x=27, y=15, party=(mon(moves=(70, 0, 0, 0)),))
+    nav = Navigator()
+    nav.update_story(s)
+    nav.live_map = s.map
+    nav.live_positions = [(o[0], o[1]) for o in WORLD[s.map]['objects']]
+    reads = []
+    active_tile = nav.active_tile
+    def counted(world, x, y):
+        reads.append((x, y))
+        return active_tile(world, x, y)
+    nav.active_tile = counted
+    planner = BoulderPlanner()
+    task = boulder_task(s)
+    assert planner.route(s, nav, task) is None and reads
+    # Another square of the area the search walked fails the same way without a search.
+    moved = next(replace(s, x=x, y=y) for x, y in sorted(set(reads)) if (x, y) != (27, 15)
+                 and planner.failed[(s.map, task)][1] and (x, y) in planner.failed[(s.map, task)][1])
+    reads.clear()
+    assert planner.route(moved, nav, task) is None and not reads
+    # A changed tile searches again and still agrees with a fresh planner.
+    nav.tile_overrides[(s.map, 0, 0)] = 0
+    assert planner.route(moved, nav, task) == BoulderPlanner().route(moved, nav, task)
+    assert reads
+
+
+def test_boulder_searches_after_each_push_reuse_walks_and_match_a_fresh_planner():
+    from pokesim.policies.puzzles import BoulderPlanner
+    from pokesim.strategy_data import WORLD
+    s = snap(map=MAPS['VICTORY_ROAD_2F'], x=22, y=16,
+             party=(mon(moves=(70, 0, 0, 0)),),
+             event_flags=flags('EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'))
+    nav = Navigator()
+    nav.update_story(s)
+    nav.live_map = s.map
+    nav.live_positions = [(o[0], o[1]) for o in WORLD[s.map]['objects']]
+    task = ('BOULDER3', (9, 16))
+    index = next(i for i, obj in enumerate(WORLD[s.map]['objects']) if obj[4].endswith(task[0]))
+    planner = BoulderPlanner()
+    assert planner.route(s, nav, task) is not None
+    plan = list(planner.path)
+    walked = len(planner._walks)
+    # The cartridge moves the boulder before the player, so a push leaves a state the plan never
+    # named and the next step searches again. Every such search agrees with a fresh planner.
+    for (x, y, rx, ry), _ in plan[1::3]:
+        nav.live_positions[index] = (rx, ry)
+        here = snap(map=s.map, x=x, y=y, party=s.party, event_flags=s.event_flags)
+        planner.path.clear()
+        fresh = BoulderPlanner()
+        assert planner.route(here, nav, task) == fresh.route(here, nav, task)
+        assert list(planner.path) == list(fresh.path)
+    assert len(planner._walks) < walked * len(plan[1::3])
+
+
+def test_learn_prompt_runs_the_core_shortcut_and_falls_back_to_the_menu():
+    from shortcut_fakes import PRESS, Recorder
+    s = snap(in_battle=1, party=(mon(moves=(33, 22, 45, 15)),))
+    mem = menu({8: '      TACKLE', 14: 'Which move to forget'}, (5, 8), 0, (5, 8))
+    pol = StrategicPolicy(1)
+    recorder = Recorder.on(pol)
+    actions = pol._dispatch(s, Screen(mem), 'learn_move', mem)
+    assert actions[0] == PRESS and recorder.last.kind == 'learn_move'
+    assert recorder.last.forget == 'keep' or 0 <= recorder.last.forget < 3
+    pol = StrategicPolicy(1)
+    Recorder.on(pol, refuse={'learn_move'})
+    assert pol._dispatch(s, Screen(mem), 'learn_move', mem)[0].button in ('a', 'b', 'up', 'down')

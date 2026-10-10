@@ -1,5 +1,6 @@
 import hashlib
 import json
+import time
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -143,7 +144,21 @@ def test_shared_portraits_work_for_new_adventures_and_allow_local_overrides(clie
     assert client.get(f'/games/{first["id"]}/sprites/25.png').content == b'custom portrait'
     assert client.get(f'/games/{second["id"]}/sprites/25.png').content == b'shared portrait'
     assert client.get(f'/games/{second["id"]}/sprites/0.png').status_code == 404
-    assert client.get(f'/games/{second["id"]}/sprites/152.png').status_code == 404
+    assert client.get(f'/games/{second["id"]}/sprites/252.png').status_code == 404
+
+
+def test_gen2_portraits_cover_all_251_species(client):
+    client, manager = client
+    manager.registry.add_rom('fixture-silver', 'sha1', 'silver')
+    folder = manager.assets.root / 'sprites' / 'silver'
+    folder.mkdir(parents=True)
+    (folder / '25.png').write_bytes(b'silver 25')
+    (folder / '251.png').write_bytes(b'silver 251')
+    row = manager.registry.create('Gen Two', 'fixture-silver', {'starter': 'random'}, identifier())
+    for dex, body in ((25, b'silver 25'), (251, b'silver 251')):
+        response = client.get(f'/games/{row["id"]}/sprites/{dex}.png')
+        assert response.status_code == 200 and response.content == body
+    assert client.get(f'/games/{row["id"]}/sprites/252.png').status_code == 404
 
 
 def test_game_trading_stays_scoped_and_available_when_stopped(client):
@@ -169,7 +184,7 @@ def test_game_trading_stays_scoped_and_available_when_stopped(client):
     assert f'href="{base}/trading"' in response.text
     assert f'href="{base}/pc?scope=all"' in response.text
     assert 'href="/trading"' not in response.text
-    for asset in ('adventure-trading.js', 'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css'):
+    for asset in ('adventure-trading.js', 'trade-progress.js', 'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css'):
         assert client.get(base + '/static/' + asset).status_code == 200
     data = client.get(base + '/api/interactions').json()
     assert data['adventure']['id'] == a['id']
@@ -332,7 +347,7 @@ def test_audio_proxy_preserves_pcm_metadata_and_adventure_boundary(client, monke
         return httpx.Response(200, content=b'\x01\x02' * 800, headers={
             'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store',
             'X-Audio-State': 'playing', 'X-Audio-Rate': '48000', 'X-Audio-Sequence': '8',
-            'X-Audio-Speed': '16',
+            'X-Audio-Speed': '16', 'X-Audio-Mode': 'manual', 'X-Audio-Dropped': '3',
             'X-Private-Worker': 'must-not-leak',
         })
     client.app.state.children = httpx.AsyncClient(transport=httpx.MockTransport(worker))
@@ -344,6 +359,7 @@ def test_audio_proxy_preserves_pcm_metadata_and_adventure_boundary(client, monke
     assert response.headers['X-Audio-Rate'] == '48000'
     assert response.headers['X-Audio-Sequence'] == '8'
     assert response.headers['X-Audio-Speed'] == '16'
+    assert response.headers['X-Audio-Mode'] == 'manual' and response.headers['X-Audio-Dropped'] == '3'
     assert 'X-Private-Worker' not in response.headers
     assert client.get(path, headers={'Origin': 'https://elsewhere.invalid'}).status_code == 403
     manager.registry.update(adventure['id'], state='stopped')
@@ -372,3 +388,71 @@ def test_palette_changes_live_and_requires_valid_authorized_settings(client, mon
     assert client.patch(route, json={'settings': {'palette': 'red'}}).status_code == 403
     assert manager.registry.adventure(row['id'])['settings']['palette'] == 'blue'
     assert len(calls) == 1
+
+
+def test_manual_trade_endpoints_queue_report_and_cancel(client, monkeypatch):
+    client, manager = client
+    headers = login(client, manager)
+    manager.registry.add_rom('rom', 'sha', 'red')
+    games = [manager.registry.create(name, 'rom', {}, identifier()) for name in ('Red A', 'Red B')]
+    for game in games:
+        manager.registry.update(game['id'], state='running', desired_state='running')
+    drains = []
+    monkeypatch.setattr(manager.coordinator, 'drain_manual', lambda: drains.append(True))
+    monkeypatch.setattr(manager.coordinator, 'manual_options', lambda: {'adventures': [{'id': games[0]['id'], 'pokemon': []}]})
+    assert client.get('/trade').status_code == 200
+    assert client.get('/api/v1/interactions/manual-trades/options').json()['adventures'][0]['id'] == games[0]['id']
+    payload = {'left_id': games[0]['id'], 'right_id': games[1]['id'], 'left_key': 'a', 'right_key': 'b',
+               'request_id': identifier()}
+    assert client.post('/api/v1/interactions/manual-trades', json=payload).status_code == 403
+    assert client.post('/api/v1/interactions/manual-trades', json={**payload, 'protect': False},
+                       headers=headers).status_code == 409
+    response = client.post('/api/v1/interactions/manual-trades', json=payload, headers=headers)
+    assert response.status_code == 200, response.text
+    status = response.json()
+    assert status['id'] == payload['request_id']
+    assert status['state'] == 'queued'
+    assert status['position'] == 1
+    # The drain is a background task on a worker thread; it can start just after the response.
+    deadline = time.monotonic() + 5
+    while not drains and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert drains
+    assert client.get('/api/v1/interactions/manual-trades').json()['trades'][0]['id'] == status['id']
+    assert client.get('/api/v1/interactions/manual-trades/' + status['id']).json()['state'] == 'queued'
+    assert client.get('/api/v1/interactions/manual-trades/' + identifier()).status_code == 404
+    cancelled = client.post(f'/api/v1/interactions/manual-trades/{status["id"]}/cancel', headers=headers).json()
+    assert cancelled['state'] == 'cancelled'
+    assert client.post(f'/api/v1/interactions/manual-trades/{identifier()}/cancel', headers=headers).status_code == 404
+
+
+def test_a_slow_game_trade_history_does_not_stall_the_library(client, monkeypatch):
+    """The game proxy shares one event loop with every page of every adventure."""
+    import asyncio
+    import threading
+    import httpx
+    client, manager = client
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    row = manager.registry.create('Red', 'fixture-rom', {}, identifier())
+    release = threading.Event()
+    def slow_status(aid):
+        release.wait(10)
+        return {'adventure': {'id': aid}, 'active': [], 'history': [], 'recent_failures': [], 'attention': None}
+    monkeypatch.setattr(manager.coordinator, 'adventure_status', slow_status)
+
+    async def run():
+        transport = httpx.ASGITransport(app=client.app)
+        async with httpx.AsyncClient(transport=transport, base_url='http://testserver') as browser:
+            timer = threading.Timer(3, release.set)
+            timer.start()
+            started = time.monotonic()
+            slow = asyncio.create_task(browser.get(f'/games/{row["id"]}/api/interactions'))
+            await asyncio.sleep(0.05)
+            other = await browser.get(f'/games/{row["id"]}/trading')
+            elapsed = time.monotonic() - started
+            result = await slow
+            timer.cancel()
+            return other, elapsed, result
+    other, elapsed, slow = asyncio.run(run())
+    assert other.status_code == 200 and elapsed < 2
+    assert slow.status_code == 200 and slow.json()['adventure']['id'] == row['id']

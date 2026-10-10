@@ -10,7 +10,7 @@ Milestone 4 of `docs/multi-game.md`. One question:
 Everything below was measured, not reasoned about. `tools/link_spike.py` reproduces all of it:
 
 ```
-/home/ty/Repos/pokesim/.venv/bin/python tools/link_spike.py all --rom roms/pokered.gb
+python tools/link_spike.py all --rom roms/pokered.gb
 ```
 
 Four stages, all PASS. No PyBoy modification, no fork, no thread, no serial emulation.

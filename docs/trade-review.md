@@ -40,7 +40,7 @@ See [automatic trading](automatic-trading.md) for current behavior.
 
 September 14, 2026. No live exchange has been executed.
 
-The [read-only board](http://192.168.2.147:8950) polls both live games. Its first proposal
+The read-only board (port 8950) polls both live games. Its first proposal
 was tested against copied checkpoints:
 
 | Run | Sends | Receives | Copied-save Pokédex change |

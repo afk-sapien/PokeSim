@@ -6,6 +6,26 @@ import tomllib
 import json
 
 required = {
+    'pokesim/cartridges.py',
+    'pokesim/gen2/data.py',
+    'pokesim/gen2/emulator.py',
+    'pokesim/gen2/policy.py',
+    'pokesim/gen2/ram.py',
+    'pokesim/gen2/save.py',
+    'pokesim/gen2/steps.py',
+    'pokesim/gen2/rewards.py',
+    'pokesim/gen2/link_worker.py',
+    'pokesim/gen2/trading.py',
+    'pokesim/gen2/timecapsule.py',
+    'pokesim/gen2/timecapsule_conversion.py',
+    'pokesim/gen2/timecapsule_worker.py',
+    'pokesim/gen2/timecapsule_records.py',
+    'pokesim/gen2/ruins.py',
+    'pokesim/gen2/tower.py',
+    'pokesim/gen2/teams.py',
+    'pokesim/gen2/celebi.py',
+    'pokesim/gen2/contest.py',
+    'pokesim/gen2/gamecorner.py',
     'pokesim/_build.json',
     'pokesim/build_info.py',
     'pokesim/runtime/legacy.py',
@@ -77,6 +97,7 @@ required = {
     'pokesim/web/static/panel.js',
     'pokesim/web/static/app.js',
     'pokesim/web/static/screen.js',
+    'pokesim/web/static/audio-buffer.js',
     'pokesim/web/static/pokedex.html',
     'pokesim/web/static/pokedex.js',
     'pokesim/web/static/panel-pokedex.css',
@@ -102,15 +123,15 @@ for artifact in artifacts:
             identity = json.load(archive.extractfile(f'pokesim-{release_version}/pokesim/_build.json'))
         assert {'uv.lock', 'setup.py', 'THIRD_PARTY_NOTICES.md', 'RELEASE_STATUS.md',
                 'Dockerfile', '.dockerignore', '.env.example', 'compose.yaml',
-                'compose.build.yaml', 'compose.proxy.yaml', 'compose.quickstart.yaml',
-                'install.sh', 'install.ps1', 'deploy/Caddyfile',
+                'compose.build.yaml', 'compose.quickstart.yaml',
+                'install.sh', 'install.ps1',
                 'docs/README.md', 'docs/images/live-adventure.jpg',
                 'docs/images/live-adventure.gif',
                 'docs/images/pc-panel.jpg', 'docs/images/pokedex-panel.jpg',
                 'docs/images/journal-panel.jpg', 'docs/images/stats-panel.jpg',
                 'docs/images/library.jpg',
                 'tools/check_web.py', 'tools/check_docs.py',
-                'deploy/proxy.env.example', 'docs/validation/README.md'} <= names
+                'docs/validation/README.md'} <= names
     missing = required - names
     assert identity['version'] == release_version, f'{artifact}: build version mismatch'
     assert not missing, f'{artifact}: missing runtime files {missing}'

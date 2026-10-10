@@ -16,7 +16,14 @@ class Runtime:
         self.emu = None
 
     def __enter__(self):
-        from ..emulator import Emulator
+        from .. import config
+        from ..cartridges import identify
+        rom = Path(config.ROM_PATH)
+        cartridge = identify(rom.read_bytes()) if rom.is_file() else None
+        if cartridge and cartridge.generation == 2:
+            from ..gen2.emulator import Emulator
+        else:
+            from ..emulator import Emulator
         from ..store import Store
 
         self.directory.mkdir(parents=True, exist_ok=True)

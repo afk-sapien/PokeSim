@@ -19,7 +19,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       # GitHub exposes draft releases only to identities with push access.
       contents: write
@@ -36,6 +36,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
+      - name: Refuse unfinished release pins and compare the locked assets with the published ones
+        # No temporary wheel URL, branch ref, temp-wheels directory or TEMP marker may remain, the pyproject URLs must
+        # carry the locked #sha256 fragments, the Dockerfile checksum must match the source archive, and every locked
+        # emulator asset must download with exactly the hash recorded in uv.lock.
+        run: python tools/check_release_pins.py --remote
       - name: Validate public release destination
         id: release
         env:
@@ -101,11 +106,16 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
-      - name: Require passing CI and Python install runs for this exact commit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.validate.outputs.revision }}
+          path: release-source
+          persist-credentials: false
+      - name: Require final pins, then passing CI and Python install runs for this exact commit
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVISION: ${{ needs.validate.outputs.revision }}
-        run: python tools/check_release_gates.py --sha "$REVISION" --timeout 2100
+        run: python tools/check_release_gates.py --sha "$REVISION" --tree release-source --timeout 2100
   build:
     # Runs in parallel with the gate. It holds no credentials that can publish and uploads nothing public.
     needs: validate

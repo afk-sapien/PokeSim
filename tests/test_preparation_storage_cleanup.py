@@ -6,6 +6,7 @@ from pokesim.trade.preferences import identity
 from test_duplicates import snapshot, stored
 from test_preparation import participant, storage_menu, storage_party, storage_step
 from test_strategy import menu
+from shortcut_fakes import record_all
 
 
 def full_storage(snap, candidate):
@@ -15,18 +16,21 @@ def full_storage(snap, candidate):
                    textbox=True, box_counts=(20,) * 12, boxed_pokemon=((153, 20),) * 20)
 
 
-def begin_cleanup(emu, snap, candidate):
+def begin_cleanup(emu, snap, candidate, monkeypatch):
+    recorders = record_all(monkeypatch)
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     full = full_storage(snap, candidate)
     emu.store.set_trade_preference(identity(asdict(full.stored_details[1])), {'state': 'locked'})
     controller = emu.preparation
     assert storage_step(controller, full, storage_menu(2)) == 'a'
-    return controller, full
+    recorder = recorders(controller.storage_cleanup.shortcut)
+    assert recorder.last.kind == 'release_pokemon' and recorder.last.position == 2
+    return controller, full, recorder
 
 
-def test_cleanup_reserves_offer_and_existing_lock_before_selecting_spare(participant):
+def test_cleanup_reserves_offer_and_existing_lock_before_selecting_spare(participant, monkeypatch):
     emu, snap, candidate = participant
-    controller, full = begin_cleanup(emu, snap, candidate)
+    controller, full, _ = begin_cleanup(emu, snap, candidate, monkeypatch)
     assert controller.storage_cleanup._release_target(full) == (0, 2)
     preferences = controller.storage_cleanup.trade_preferences()
     assert preferences[controller.state['trade_key']]['state'] == 'offered'
@@ -34,23 +38,21 @@ def test_cleanup_reserves_offer_and_existing_lock_before_selecting_spare(partici
     assert emu.store.trade_preferences().get(controller.state['trade_key']) is None
 
 
-def test_release_confirmation_rechecks_exact_safe_individual(participant):
+def test_release_in_progress_rechecks_exact_safe_individual(participant, monkeypatch):
     emu, snap, candidate = participant
-    controller, full = begin_cleanup(emu, snap, candidate)
-    listing = menu({4: '     PARTNER', 6: '     CANCEL'}, (5, 4), index=2, top=(5, 4))
-    assert storage_step(controller, full, listing) == 'a'
-    assert controller.storage_cleanup.pc.pending_release[:2] == (0, 2)
-    confirmation = menu({1: '  YES', 3: '  NO', 15: 'GONE FOREVER'}, (1, 1), top=(1, 1))
-    assert preparation.Screen(confirmation).kind(full) == 'yes_no'
-    assert storage_step(controller, full, confirmation) == 'a'
+    controller, full, _ = begin_cleanup(emu, snap, candidate, monkeypatch)
+    runner = controller.storage_cleanup.shortcut
     emu.store.set_trade_preference(identity(asdict(full.stored_details[2])), {'state': 'locked'})
-    assert storage_step(controller, full, confirmation) is None
+    assert storage_step(controller, full, storage_menu(2)) == 'b'
+    assert not runner.active
+    assert storage_step(controller, full, storage_menu(2)) is None
     assert 'no unprotected spare duplicate' in emu.store.get(preparation.KEY)['error']
 
 
-def test_one_freed_slot_closes_cleanup_before_normal_deposit(participant):
+def test_one_freed_slot_closes_cleanup_before_normal_deposit(participant, monkeypatch):
     emu, snap, candidate = participant
-    controller, full = begin_cleanup(emu, snap, candidate)
+    controller, full, recorder = begin_cleanup(emu, snap, candidate, monkeypatch)
+    recorder.finish()
     freed = replace(full, box_counts=(19,) + (20,) * 11,
                     boxed_pokemon=full.boxed_pokemon[:19])
     assert storage_step(controller, freed, storage_menu(2)) == 'b'

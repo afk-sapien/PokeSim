@@ -51,7 +51,7 @@ def peak_rss_mib():
 
 def dependency_versions():
     result = {}
-    for name in ('pyboy', 'numpy', 'numba', 'llvmlite'):
+    for name in ('pokesim-core', 'numpy', 'numba', 'llvmlite'):
         try:
             result[name] = version(name)
         except PackageNotFoundError:
@@ -134,7 +134,7 @@ def policy_start(fixture, metadata):
     policy = make_policy(config.POLICY, config.SEED)
     preferences = fixture.get('trade_preferences', {})
     policy.trade_preferences = lambda: preferences
-    known = config.KNOWN_ROM_SHA1.get(metadata['rom_sha1'], '')
+    known = config.GEN1_ROM_SHA1.get(metadata['rom_sha1'], '')
     if hasattr(policy, 'nav'):
         policy.nav.use_world = bool(known)
     if hasattr(policy, 'collection'):
@@ -243,15 +243,14 @@ def simulate(fixture_path, frames, capture):
     timings = Timings()
     with tempfile.TemporaryDirectory(prefix='pokesim-decisions-') as temporary:
         settings = configure(fixture, Path(temporary))
-        from importlib.metadata import version
-        from pyboy import PyBoy
-        from pokesim.policies.base import Action, PolicyContext
+        from pokesim_core.emulator_state import validate_runtime
+        from pokesim_core.emulator import Emulator as PyBoy
+        from pokesim.policies.base import Action, PolicyContext, stack_pointer
         from pokesim.ram import read_snapshot
         from pokesim.screen import W_OPTIONS
         if hashlib.sha1(Path(settings.rom_path).read_bytes()).hexdigest() != metadata['rom_sha1']:
             raise ValueError('Fixture ROM does not match its checkpoint')
-        if metadata['pyboy_version'] != version('pyboy'):
-            raise ValueError('Fixture checkpoint needs a different PyBoy version')
+        validate_runtime(metadata)
         policy = policy_start(fixture, metadata)
         pb = PyBoy(settings.rom_path, window='null', sound_emulated=False, ram_file=io.BytesIO(bytes(32768)))
         pb.set_emulation_speed(0)
@@ -272,7 +271,7 @@ def simulate(fixture_path, frames, capture):
                         stuck_frame = frame
                         last_pos = pos
                     # Decision time comes only from emulated frames, never CPU speed.
-                    ctx = PolicyContext(snap, (frame - stuck_frame) / 60, frame / 60, pb.memory)
+                    ctx = PolicyContext(snap, (frame - stuck_frame) / 60, frame / 60, pb.memory, stack_pointer(pb))
                     memory = bytes(pb.memory[0:65536]) if capture else None
                     routes_before = len(timings.route_wall)
                     actions = timings.step(policy, ctx)

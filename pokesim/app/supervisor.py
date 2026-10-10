@@ -17,10 +17,15 @@ import time
 import httpx
 import psutil
 
+from ..downloads import DataDownloadError
 from .registry import digest, identifier
 from .resources import ObservedSpeed, ProcessUsage, recent_activity
 
 log = logging.getLogger(__name__)
+
+GEN2_VERSIONS = {'gold', 'silver', 'crystal'}
+SETUP_RETRIES = 3
+SETUP_DELAYS = (30, 120, 300)
 
 
 class Child:
@@ -54,7 +59,14 @@ class Child:
         try:
             self.process.stdin.write(json.dumps(self.bootstrap) + '\n')
             self.process.stdin.flush()
-            message = self.ready.get(timeout=timeout)
+            try:
+                message = self.ready.get(timeout=timeout)
+            except queue.Empty:
+                last = next((line for line in reversed(self.logs) if line.strip()), '')
+                cause = last if len(last) <= 200 else last[:197] + '...'
+                alive = 'still running' if self.process.poll() is None else f'exited with {self.process.returncode}'
+                raise RuntimeError(f'Worker was not ready after {timeout} seconds ({alive}). '
+                                   f'Last output: {cause or "none"}. Full log: {self.log_path}') from None
             if (message.get('event') != 'ready' or message.get('protocol') != 1
                     or message.get('adventure_id') != self.bootstrap['adventure_id']
                     or message.get('generation') != self.generation
@@ -156,6 +168,7 @@ class Supervisor:
         self.admission = threading.RLock()
         self.locks = {}
         self.retries = {}
+        self.setup_retries = {}   # aid -> (due time, automatic attempts made) after a failed data download
         self.unhealthy_since = {}
         self.notifications = None   # installed by the manager: adventure row -> worker notification settings
         self.closed = threading.Event()
@@ -210,7 +223,13 @@ class Supervisor:
                 self.children[aid] = child
                 self.registry.update(aid, state='starting', generation=generation, error=None)
             try:
-                self.assets.prepare(lambda message: self.registry.update(aid, summary={'setup': message}))
+                report = lambda message: self.registry.update(aid, summary={'setup': message})
+                if adventure['version'] in GEN2_VERSIONS:
+                    self.assets.prepare_gen2(adventure['version'], report)
+                elif adventure['version'] == 'yellow':
+                    self.assets.prepare(report, 'yellow')
+                else:
+                    self.assets.prepare(report)
                 self.assets.install_portraits(Path(settings['rom_path']).read_bytes())
                 child.start()
                 try:
@@ -218,12 +237,56 @@ class Supervisor:
                     self.sync_nicknames(child)
                 except Exception:
                     log.warning('Adventure %s will receive notification settings when it reconnects', aid)
+                self.setup_retries.pop(aid, None)
                 return self.registry.update(aid, state='recovering' if recovery else 'running', error=None)
             except Exception as error:
                 with self.guard:
                     self.children.pop(aid, None)
                 self.registry.update(aid, state='failed', error=str(error))
+                self.schedule_setup_retry(aid, error)
                 raise
+
+    def schedule_setup_retry(self, aid, error, manual=False):
+        """After a failed download, try again later a few times so a brief outage heals itself."""
+        if manual:
+            self.setup_retries.pop(aid, None)
+        if not isinstance(error, DataDownloadError):
+            self.setup_retries.pop(aid, None)
+            return
+        attempts = self.setup_retries.get(aid, (0, 0))[1]
+        if attempts < SETUP_RETRIES:
+            delay = SETUP_DELAYS[attempts]
+            self.setup_retries[aid] = (time.monotonic() + delay, attempts + 1)
+            try:
+                summary = {**(self.registry.adventure(aid).get('summary') or {}), 'next_retry': time.time() + delay}
+                self.registry.update(aid, summary=summary)
+            except KeyError:
+                pass
+        else:
+            self.setup_retries.pop(aid, None)
+
+    def run_setup_retries(self):
+        if not self.setup_retries:
+            return
+        now = time.monotonic()
+        for aid, (due, _) in list(self.setup_retries.items()):
+            if due > now or self.closed.is_set():
+                continue
+            try:
+                row = self.registry.adventure(aid)
+            except KeyError:
+                self.setup_retries.pop(aid, None)
+                continue
+            if row['state'] != 'failed' or row['desired_state'] != 'running' or row['archived']:
+                self.setup_retries.pop(aid, None)
+                continue
+            self.setup_retries[aid] = (float('inf'), self.setup_retries[aid][1])
+            try:
+                self.start(aid)
+            except Exception:
+                log.warning('Automatic retry of adventure %s data preparation did not succeed', aid)
+                if aid in self.setup_retries and self.setup_retries[aid][0] == float('inf'):
+                    self.setup_retries.pop(aid)
 
     def stop(self, aid, preserve_desired=False):
         with (nullcontext() if self.closed.is_set() else self.admission), self._lock(aid):
@@ -277,7 +340,7 @@ class Supervisor:
         with self.admission:
             with self.guard:
                 child = self.children.get(aid)
-            if child is None:
+            if child is None or self.registry.adventure(aid)['version'] in GEN2_VERSIONS:
                 return False
             try:
                 value = self.registry.adventure(aid)['settings'].get('palette', 'original')
@@ -297,9 +360,26 @@ class Supervisor:
         with self.admission:
             if self.closed.is_set() or self.children.get(aid) is not child:
                 return
+            if actual is None:
+                return   # This worker reports no palette (Generation II), so there is nothing to apply.
             value = self.registry.adventure(aid)['settings'].get('palette', 'original')
             if actual != value:
                 self._apply_palette(child, value)
+
+    def sync_optional(self, aid, child, status):
+        """Apply settings that may lag behind. A refusal is reported on the setting and never judges health."""
+        errors = {}
+        for name, sync, actual in (('speed', self.sync_speed, status.get('speed')),
+                                   ('palette', self.sync_palette, status.get('palette'))):
+            try:
+                sync(aid, child, actual)
+            except (RuntimeError, OSError, KeyError, httpx.HTTPError) as error:
+                errors[name] = str(error) or error.__class__.__name__
+        if errors != getattr(child, 'sync_errors', {}):
+            for name, message in errors.items():
+                log.warning('Adventure %s has not accepted its %s setting: %s', aid, name, message)
+            child.sync_errors = errors
+        return errors
 
     def push_notifications(self):
         """Apply the Library notification settings to running adventures without restarting them."""
@@ -351,6 +431,7 @@ class Supervisor:
 
     def _monitor(self):
         while not self.closed.wait(3):
+            self.run_setup_retries()
             with self.guard:
                 children = list(self.children.items())
             for aid, child in children:
@@ -377,17 +458,17 @@ class Supervisor:
                     continue
                 try:
                     child.request('GET', '/healthz', timeout=3)
-                    status = child.request('GET', '/api/state', timeout=3)
+                    status = child.request('GET', '/api/summary', timeout=3)
                     child.pace.observe(status.get('performance'))
-                    self.sync_speed(aid, child, status.get('speed'))
-                    self.sync_palette(aid, child, status.get('palette'))
+                    settings_errors = self.sync_optional(aid, child, status)
                     self.unhealthy_since.pop(aid, None)
                     game = status.get('game') or {}
                     summary = {'activity': game.get('map_name') or 'Adventure in progress',
                                'paused': status.get('paused', False),
                                'frame': status.get('frame'), 'playtime': game.get('playtime'),
                                'last_response': time.time(), 'league_rewards': status.get('league_rewards'),
-                               'stalled': (status.get('progress') or {}).get('state') == 'stalled'}
+                               'stalled': (status.get('progress') or {}).get('state') == 'stalled',
+                               'settings_errors': settings_errors}
                     current = self.registry.adventure(aid)
                     summary['recent_activity'] = recent_activity(
                         current.get('summary') or {}, summary['activity'], summary['last_response'])

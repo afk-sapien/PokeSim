@@ -13,6 +13,7 @@ from pokesim.strategy_data import MAPS, ITEMS, SPECIES
 from pokesim.screen import Screen
 from test_events import snap
 from test_strategy import mon, flags, menu
+from shortcut_fakes import PRESS, Recorder
 
 
 def sid(d):
@@ -180,12 +181,13 @@ def test_stone_project_buys_then_uses_the_correct_stone():
 
 def test_pc_deposits_before_switching_to_a_full_source_box():
     p=StrategicPolicy(1)
+    recorder=Recorder.on(p)
     p.collection.project={'method':'evolve','parent':sid(10),'box':2}
     p.goal=Goal('party_collection','Withdraw','Evolution')
     s=state(party=(mon(),)*6,active_box=1,boxed_pokemon=())
     mem=menu({1:'  WITHDRAW',3:'  DEPOSIT',5:'  RELEASE',7:'  CHANGE BOX'},(1,1),top=(1,1))
-    assert p._dispatch(s,Screen(mem),'pc',mem)[0].button=='down'
-    assert p.pc.operation=='deposit'
+    assert p._dispatch(s,Screen(mem),'pc',mem)[0]==PRESS
+    assert p.pc.operation=='deposit' and recorder.last.kind=='deposit_pokemon'
 
 
 def test_fossil_quest_walks_outside_while_lab_works():
@@ -274,6 +276,7 @@ def test_stone_vendor_goal_is_reachable_from_the_shop_floor():
 def test_evolution_training_leaves_gym_without_competing_lead_swaps():
     from unittest.mock import Mock
     p=StrategicPolicy(7)
+    recorder=Recorder.on(p)
     parent=sid(17)
     p.collection.project={'method':'evolve','parent':parent,'species':sid(18),'evolution':EVOS[parent][0]}
     p.goal=Goal('collect_train','Train Pidgeotto','Evolution',((MAPS['ROUTE_1'],10,10),))
@@ -287,11 +290,12 @@ def test_evolution_training_leaves_gym_without_competing_lead_swaps():
     p.nav.update_story(s)
     p._social_interaction=Mock(return_value=None)
     action=p._overworld(s,bytearray(65536))
-    assert p.intent is None
+    assert not recorder.started
     assert action[0].button in ('up','down','left','right')
     s=replace(s,party=s.party[::-1])
-    p._overworld(s,bytearray(65536))
-    assert p.intent.kind=='reorder' and p.intent.index==1
+    assert p._overworld(s,bytearray(65536))[0]==PRESS
+    assert recorder.last.kind=='reorder_party' and recorder.last.first==1
+
 
 def test_grass_targets_use_the_tilesets_own_grass_tile():
     # Route 23 is PLATEAU, whose grass tile is 0x45. Treating every walkable tile as grass sent the

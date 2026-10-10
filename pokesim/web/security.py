@@ -11,6 +11,18 @@ CONTENT_POLICY = chr(59).join((
 ))
 
 
+# The library marks a request that arrived through a /view/ link with this header. Only the
+# library can reach a worker, and the header can only take permissions away.
+VIEWER_HEADER = 'X-PokeSim-Viewer'
+# Game routes that list or hand out saves. A view link never reads these.
+VIEWER_PRIVATE = frozenset({'api/states', 'api/export-save'})
+
+
+def viewer_allows(method, path):
+    """Whether a view-only request may reach this game route, given relative to the game root."""
+    return method in {'GET', 'HEAD'} and path.strip('/') not in VIEWER_PRIVATE
+
+
 def public_origin(value):
     """Require one unambiguous browser origin before opening application data."""
     if not isinstance(value, str) or any(ord(character) <= 32 for character in value):
