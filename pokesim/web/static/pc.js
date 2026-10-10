@@ -8,8 +8,6 @@ let party = []
 let busy = false
 let signature = ''
 let residents = []
-let detailKey = null
-let detailMon = null
 $('#pc-rating').value = ['1', '2', '3', '4', '3plus', 'unknown', 'shiny'].includes(params.get('rating')) ? params.get('rating') : 'all'
 let viewQueries = {box: '', all: ''}
 $('#pc-search').value = params.get('q') || ''
@@ -54,10 +52,6 @@ function formatTotal(mon, field) {
   return total === null ? 'Unavailable' : total.toLocaleString()
 }
 
-function isLocked(mon) {
-  return globalThis.TradeUI?.find(mon.trade_key)?.locked ?? mon.trade_locked
-}
-
 function ratingLabel(mon) {
   return Number.isInteger(mon.dv_stars) && mon.dv_stars >= 1 && mon.dv_stars <= 4
     ? `${mon.dv_stars}-star DVs` : 'DV rating unavailable'
@@ -68,10 +62,6 @@ function ratingBadge(mon) {
   if (!Number.isInteger(mon.dv_stars) || mon.dv_stars < 1 || mon.dv_stars > 4) return '<span class="dv-badge dv-unknown">DVs unknown</span>'
   const lamps = Array.from({length: 4}, (_, i) => `<i class="lamp"${i < mon.dv_stars ? ' data-on="signal"' : ''}></i>`).join('')
   return `<span class="dv-badge dv-stars-${mon.dv_stars}" aria-label="${ratingLabel(mon)}" title="${mon.dv_total} / 75 DVs · ${mon.dv_percent}%"><span class="dv" aria-hidden="true">${lamps}</span><span class="vh">${'★'.repeat(mon.dv_stars)}${'☆'.repeat(4 - mon.dv_stars)}</span> ${mon.dv_stars === 4 ? 'Perfect DV' : 'DV'}</span>`
-}
-
-function lockBadge(mon) {
-  return isLocked(mon) ? '<span class="pc-lock-badge">Locked</span>' : ''
 }
 
 // A slot's fill as discrete cells, one per slot.
@@ -106,7 +96,6 @@ function render() {
   if (rating !== 'all') url.set('rating', rating)
   url.set('sort', sort)
   url.set('order', order)
-  globalThis.TradeOffer?.keep(url)
   history.replaceState(null, '', `${PokeSim.base}/pc?${url}`)
   $('#pc-total').textContent = `${counts.reduce((sum, count) => sum + count, 0)} / ${counts.length * 20}`
   $('#pc-active').textContent = `Box ${storage?.active_box || 1}`
@@ -120,7 +109,7 @@ function render() {
   $('#pc-grid').classList.toggle('pc-all-grid', all)
   $('#pc-boxes-view').setAttribute('aria-pressed', String(!all))
   $('#pc-all-view').setAttribute('aria-pressed', String(all))
-  const key = JSON.stringify([storage, party, selectedBox, query, all, sort, order, rating, globalThis.TradeUI?.status(), globalThis.TradeOffer?.state()])
+  const key = JSON.stringify([storage, party, selectedBox, query, all, sort, order, rating])
   if (key === signature) return
   signature = key
   $('#mobile-box').innerHTML = `<option value="0">Party · ${party.length} / 6</option>` + counts.map((count, index) => `<option value="${index + 1}">Box ${index + 1} · ${count} / 20${index + 1 === storage?.active_box ? ' · Receiving catches' : ''}</option>`).join('')
@@ -129,7 +118,7 @@ function render() {
   $('#box-picker').innerHTML = `<button data-box="0" aria-pressed="${selectedBox === 0}" class="${selectedBox === 0 ? 'selected' : ''}"><span class="bp-name">Party</span><small>${party.length} / 6</small>${fillMeter(party.length, 6)}</button>` + counts.map((count, index) => `<button data-box="${index + 1}" aria-pressed="${index + 1 === selectedBox}" class="${index + 1 === selectedBox ? 'selected' : ''}"><span class="bp-name">Box ${index + 1}${index + 1 === storage?.active_box ? '<i class="lamp" data-on="ok" title="Receiving new catches"></i><span class="vh"> · receiving catches</span>' : ''}</span><small>${count} / 20</small>${fillMeter(count, 20)}</button>`).join('')
   if (focusedBox) $(`[data-box="${focusedBox}"]`)?.focus()
   const focusedMon = document.activeElement?.dataset.mon
-  const card = (mon, index) => `<button class="pc-mon${mon.perfect_dvs ? ' perfect-entry' : ''}" data-mon="${index}" aria-label="${esc(mon.nick || mon.name)}, level ${mon.level}${mon.type_names?.length ? ", " + esc(mon.type_names.join(" / ")) : ""}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${', ' + ratingLabel(mon)}${isLocked(mon) ? ', locked' : ''}${mon.shiny ? ', shiny, protected from release and trading' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}"><span class="pc-slot">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || index + 1}</span><span class="plate pc-plate ${PokemonTypes.portraitClass(mon.type_names)}">${mon.egg ? PokemonTypes.eggPlate : `<img loading="lazy" src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png?v=rom-portraits-1" alt="">`}</span><span class="pc-mon-body"><strong class="pc-name">${esc(mon.nick || mon.name)}</strong><small class="pc-sub">${esc(mon.name)} · Lv. ${mon.level}</small><span class="type-tags">${PokemonTypes.badges(mon.type_names)}</span><span class="pc-tags">${PokemonTypes.shinyBadge(mon)}${ratingBadge(mon)}${lockBadge(mon)}${globalThis.TradeOffer?.tag(mon) || ''}</span></span>${all ? `<span class="pc-metrics"><span class="pc-power">Battle Power <b>${Number.isFinite(mon.battle_power) ? mon.battle_power.toLocaleString() : 'Unavailable'}</b></span><span>Stat Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span>` : ''}</button>`
+  const card = (mon, index) => `<button class="pc-mon${mon.perfect_dvs ? ' perfect-entry' : ''}" data-mon="${index}" aria-label="${esc(mon.nick || mon.name)}, level ${mon.level}${mon.type_names?.length ? ", " + esc(mon.type_names.join(" / ")) : ""}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${', ' + ratingLabel(mon)}${mon.shiny ? ', shiny, protected from release and trading' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}"><span class="pc-slot">${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || index + 1}</span><span class="plate pc-plate ${PokemonTypes.portraitClass(mon.type_names)}">${mon.egg ? PokemonTypes.eggPlate : `<img loading="lazy" src="${PokeSim.base}/sprites/${Number(mon.dex) || 0}.png?v=rom-portraits-1" alt="">`}</span><span class="pc-mon-body"><strong class="pc-name">${esc(mon.nick || mon.name)}</strong><small class="pc-sub">${esc(mon.name)} · Lv. ${mon.level}</small><span class="type-tags">${PokemonTypes.badges(mon.type_names)}</span><span class="pc-tags">${PokemonTypes.shinyBadge(mon)}${ratingBadge(mon)}</span></span>${all ? `<span class="pc-metrics"><span class="pc-power">Battle Power <b>${Number.isFinite(mon.battle_power) ? mon.battle_power.toLocaleString() : 'Unavailable'}</b></span><span>Stat Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span>` : ''}</button>`
   if (all) {
     $('#pc-grid').innerHTML = residents.map(card).join('') || '<p class="dex-empty">No Pokémon match these filters.</p>'
   } else {
@@ -161,13 +150,12 @@ function experienceProgress(mon) {
   return mon.experience && typeof mon.experience === 'object' ? mon.experience : null
 }
 
-// Mirrors the trade control below the popup: its state, and why when it is not offered.
+// The trade setting, read only here. It is changed on the Trading page.
+const tradeSettings = {offered: 'Trade first', locked: 'Keep', withdrawn: 'Keep'}
 function tradeState(mon) {
-  if (mon.shiny || mon.perfect_dvs) return {state: 'Protected', note: 'Kept from release and trading'}
-  const offer = globalThis.TradeUI?.find(mon.trade_key)
-  if (offer?.locked || offer?.preference === 'locked' || (!offer && (mon.trade_locked || mon.trade_preference === 'locked'))) return {state: 'Locked', note: ''}
-  if (offer?.listed || offer?.preference === 'offered' || (!offer && mon.trade_preference === 'offered')) return {state: 'Offered', note: offer?.source || ''}
-  return offer ? {state: 'Not offered', note: offer.reason || ''} : null
+  if (!mon.trade_key) return null
+  if (mon.shiny || mon.perfect_dvs) return {state: 'Protected', note: 'Never traded automatically'}
+  return {state: tradeSettings[mon.trade_preference] || 'Auto decides', note: 'Change it on the Trading page'}
 }
 
 function moveList(mon) {
@@ -226,16 +214,13 @@ function eggFacts(mon) {
   return `<dl class="pc-facts">${rows.join('')}</dl>`
 }
 
-// In offer mode the detail sends the offer. Otherwise it keeps the trade controls and adds Offer trade.
-function tradeActions() {
-  const offer = globalThis.TradeOffer
-  if (offer?.mode) return offer.control(detailMon)
-  return (globalThis.TradeUI?.control(detailKey) || '') + (offer?.control(detailMon) || '')
+// Everything about trading lives on the Trading page. The detail only links there.
+function tradeLink(mon) {
+  if (!mon?.trade_key || mon.egg) return ''
+  return `<a class="key pc-trade-link" href="${PokeSim.base}/trading?tab=trade&mon=${encodeURIComponent(mon.trade_key)}">Trade…</a>`
 }
 
 function detail(mon) {
-  detailKey = mon.trade_key
-  detailMon = mon
   const labels = Object.keys(mon.calculated_stats || {})
   const known = mon.dvs?.length === 5 && mon.stat_exp?.length === 5
   const status = mon.status_label || (Number.isFinite(mon.hp) ? mon.hp ? 'Healthy' : 'Fainted' : '')
@@ -257,7 +242,7 @@ function detail(mon) {
       + `<section class="pc-detail-section">${stats}${quality}</section>`
       + links
   }
-  $('#pc-trade-action').innerHTML = tradeActions()
+  $('#pc-trade-action').innerHTML = tradeLink(mon)
   $('#pc-detail').showModal()
   fitSprites($('#pc-detail-body'))
 }
@@ -308,9 +293,6 @@ $('#mobile-box').onchange = (event) => {
   render()
 }
 $('#pc-grid').onclick = (event) => {
-  const offer = event.target.closest('[data-trade-key]')
-  if (offer?.dataset.tradeKey) { globalThis.TradeUI?.change(offer)
-    return }
   const button = event.target.closest('[data-mon]')
   if (button) detail(residents[Number(button.dataset.mon)])
 }
@@ -332,11 +314,6 @@ function switchView(view) {
 }
 $('#pc-boxes-view').onclick = () => switchView('box')
 $('#pc-all-view').onclick = () => switchView('all')
-$('#pc-trade-action').onclick = event => {
-  if (globalThis.TradeOffer?.click(event)) return
-  const button = event.target.closest('[data-trade-key]')
-  if (button) globalThis.TradeUI?.change(button)
-}
 $('#pc-sort').onchange = () => {
   $('#pc-order').value = sortDefaults[$('#pc-sort').value]
   render()
@@ -352,16 +329,4 @@ $('#pc-detail').onclick = (event) => {
   if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) event.target.close()
 }
 refresh()
-if (globalThis.TradeUI) {
-  TradeUI.subscribe(() => {
-    render()
-    if (detailKey) $('#pc-trade-action').innerHTML = tradeActions()
-  })
-  TradeUI.refresh()
-  setInterval(() => { if (!document.hidden) TradeUI.refresh() }, 15000)
-}
-if (globalThis.TradeOffer) TradeOffer.subscribe(() => {
-  render()
-  if (detailKey) $('#pc-trade-action').innerHTML = tradeActions()
-})
 setInterval(() => { if (!document.hidden) refresh() }, 5000)

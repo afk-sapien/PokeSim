@@ -1,5 +1,6 @@
 """Exercise browser behavior against the real HTTP routes and persisted preferences."""
 import hashlib
+import re
 
 import pytest
 
@@ -14,41 +15,48 @@ def expect(value):
 
 
 @pytest.mark.parametrize('width', [1280, 390])
-def test_pc_lock_persists_after_refresh_even_when_trading_is_offline(page, game, width):
+def test_pc_links_to_trading_where_the_setting_persists_even_when_trading_is_offline(page, game, width):
     url, store, emu, _ = game
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(url + '/pc?scope=all')
-    # All Pokemon is a compact grid; Lock lives in each partner's details.
-    row = page.locator('#pc-trade-action')
+    # The PC only links to trading. Everything about trading lives on the Trading page.
     page.locator('#pc-grid .pc-mon').filter(has_text='BUD').click()
-    expect(row.get_by_role('button', name='Lock Pokémon', exact=True)).to_be_enabled()
-    row.get_by_role('button', name='Lock Pokémon', exact=True).click()
-    expect(row.get_by_role('button', name='Unlock Pokémon', exact=True)).to_be_visible()
+    link = page.locator('#pc-trade-action').get_by_role('link', name='Trade…')
+    expect(link).to_have_attribute('href', re.compile(r'/trading\?tab=trade&mon=.+'))
+    expect(page.locator('#pc-trade-action button')).to_have_count(0)
+    link.click()
+    setting = page.get_by_label('Trade setting for BUD')
+    expect(setting).to_be_enabled()
+    setting.select_option('keep')
+    expect(page.locator('#toast')).to_contain_text('never trades it')
     assert any(value['state'] == 'locked' for value in store.trade_preferences().values())
     page.reload()
-    page.locator('#pc-grid .pc-mon').filter(has_text='BUD').click()
-    expect(row.get_by_role('button', name='Unlock Pokémon', exact=True)).to_be_visible()
-    row.get_by_role('button', name='Unlock Pokémon', exact=True).click()
-    expect(row.get_by_role('button', name='Lock Pokémon', exact=True)).to_be_visible()
+    expect(setting).to_have_value('keep')
+    setting.select_option('auto')
+    expect(setting).to_have_value('auto')
+    expect(page.locator('#toast')).to_contain_text('Auto decides')
     assert all(value['state'] != 'locked' for value in store.trade_preferences().values())
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
 def test_trading_availability_and_viewer_mode_reach_real_controls(page, game, monkeypatch):
     url, store, emu, _ = game
-    page.goto(url + '/trading')
+    page.goto(url + '/trading?view=block')
     expect(page.locator('#trade-connection-note')).to_contain_text('not connected')
-    expect(page.get_by_role('button', name='Withdraw offer').first).to_be_disabled()
+    # The old Trading block address opens the Auto tab.
+    expect(page.get_by_role('tab', name='Auto')).to_have_attribute('aria-selected', 'true')
     emu.connected = True
     page.reload()
-    offer = page.get_by_role('button', name='Withdraw offer').first
-    expect(offer).to_be_enabled()
-    offer.click()
-    expect(page.locator('#toast')).to_contain_text('Offer withdrawn')
-    assert any(value['state'] == 'withdrawn' for value in store.trade_preferences().values())
+    setting = page.get_by_label('Trade setting for FERN')
+    setting.select_option('first')
+    expect(page.locator('#toast')).to_contain_text('Trade first')
+    assert any(value['state'] == 'offered' for value in store.trade_preferences().values())
+    page.get_by_role('tab', name='Auto').press('ArrowRight')
+    expect(page.get_by_role('tab', name='Opportunities')).to_be_focused()
+    expect(page.get_by_role('tab', name='Opportunities')).to_have_attribute('aria-selected', 'true')
     monkeypatch.setattr(config, 'VIEWER_ONLY', True)
-    page.goto(url + '/pc?scope=all')
-    page.locator('#pc-grid .pc-mon').first.click()
-    expect(page.locator('#pc-trade-action').get_by_role('button', name='Lock Pokémon', exact=True)).to_be_disabled()
+    page.goto(url + '/trading')
+    expect(page.get_by_label('Trade setting for FERN')).to_be_disabled()
     assert emu.commands == []
 
 
