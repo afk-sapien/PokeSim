@@ -667,6 +667,10 @@ def create_app(manager, shutdown=lambda: None):
             manager.coordinator.sessions.start(status['id'])
         return status
 
+    @app.get('/api/v1/interactions/cable-sessions/partners')
+    async def cable_session_partners(adventure_id: str):
+        return await asyncio.to_thread(manager.coordinator.sessions.partners, validate_id(adventure_id))
+
     @app.get('/api/v1/interactions/cable-sessions/{sid}')
     async def cable_session(sid: str):
         return await asyncio.to_thread(manager.coordinator.sessions.status, validate_id(sid))

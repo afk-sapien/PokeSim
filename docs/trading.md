@@ -15,7 +15,9 @@ Everything about trading lives on each adventure's Trading page at
 3. **Auto** holds the automatic trading switch, the wish list and each Pokémon's
    trade setting.
 4. **History** shows hand-picked and automatic trades together, newest first.
-5. **Cable Club** is shown but not available yet.
+5. **Cable Club** lists the adventures this one can hold a
+   [Cable Club session](#cable-club-sessions) with, and opens the session page.
+   A pair that cannot link is greyed out with the reason.
 
 The page remembers the last tab in the browser. A link can open a tab with
 `?tab=trade`, `?tab=offers`, `?tab=auto` or `?tab=history`, and `&mon=` with a
@@ -119,8 +121,9 @@ and `POST /api/v1/interactions/manual-trades/{id}/cancel`. A request sends
 A Cable Club session lets you hold both controllers and trade by hand, the way
 two people trade with a link cable. Open `/games/<id>/cable?with=<other id>` and
 press Start session. Sessions work between two Gold, Silver or Crystal
-adventures for now. Red, Blue and Yellow adventures and Time Capsule pairs show
-a reason instead.
+adventures for now. Red, Blue and Yellow pairs and Time Capsule pairs show that
+they are not yet supported. The Cable Club tab on the Trading page links to the
+session page for each adventure that can link with this one.
 
 Both adventures walk to the Cable Club and save there, as for any trade. The page
 then shows both screens side by side, or stacked on a phone, with a d-pad, A, B,
@@ -140,7 +143,9 @@ a trade, or if PokeSim stops during the session. One session runs at a time, and
 both adventures count as busy until it ends. A view link shows the screens and
 the status without controls.
 
-The API is `POST /api/v1/interactions/cable-sessions` with `left_id`, `right_id`
+`GET /api/v1/interactions/cable-sessions/partners?adventure_id=` lists every
+other adventure with the reason it cannot link, or an empty reason. The API is
+`POST /api/v1/interactions/cable-sessions` with `left_id`, `right_id`
 and an optional `request_id`, `GET /api/v1/interactions/cable-sessions/{id}`, and
 `POST /api/v1/interactions/cable-sessions/{id}/input` with `side` (`left` or
 `right`) and `button`, `.../finish` and `.../cancel`.

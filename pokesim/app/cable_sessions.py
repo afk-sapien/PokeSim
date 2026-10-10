@@ -29,6 +29,8 @@ GEN2 = {'gold', 'silver', 'crystal'}
 IDLE_SECONDS = 300
 BUTTONS = {'a', 'b', 'start', 'select', 'up', 'down', 'left', 'right'}
 UNSUPPORTED = 'Manual Cable Club sessions support two Gold, Silver or Crystal adventures for now.'
+GEN1_UNSUPPORTED = 'Red, Blue and Yellow Cable Club sessions are not yet supported.'
+CAPSULE_UNSUPPORTED = 'Time Capsule sessions between Gen I and Gen II are not yet supported.'
 NO_TRADE = 'Finished without a trade'
 IDLE = 'No buttons were pressed for five minutes'
 REASONS = {
@@ -107,6 +109,27 @@ class CableSessions:
         thread = threading.Thread(target=run, daemon=True, name='cable-session')
         thread.start()
         return thread
+
+    def pair_reason(self, game, other):
+        """Why two adventures cannot hold a session together, or an empty string."""
+        gen2 = [entry['version'] in GEN2 for entry in (game, other)]
+        if not any(gen2):
+            return GEN1_UNSUPPORTED
+        if not all(gen2):
+            return CAPSULE_UNSUPPORTED
+        for entry in (game, other):
+            reason = self.coordinator.manual_game_reason(entry)
+            if reason:
+                return f'{entry["name"]}: {reason}'
+        return ''
+
+    def partners(self, aid):
+        """Every other adventure, with the reason it cannot hold a session with this one."""
+        game = self.registry.adventure(aid)
+        others = [entry for entry in self.registry.adventures() if entry['id'] != aid and not entry['archived']]
+        return {'adventure_id': aid, 'partners': [
+            {'id': entry['id'], 'name': entry['name'], 'version': entry['version'],
+             'reason': self.pair_reason(game, entry)} for entry in others]}
 
     def for_adventure(self, aid):
         """The open or latest session of one adventure, for its Cable Club page."""

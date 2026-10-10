@@ -370,9 +370,6 @@ main.shell { padding-bottom: var(--s7); }
 .tab-count { font: var(--f-micro) / 1.2 var(--font-mono) }
 .tab-count { text-align: center }
 .tab-count[hidden] { display: none }
-.tab-soon { font: var(--f-micro) / 1 var(--font-mono) }
-.tab-soon { text-transform: none }
-.tab-soon { letter-spacing: 0 }
 .trade-panel { padding: var(--s4) 0 var(--s6) }
 .trade-panel[hidden] { display: none }
 .trade-panel:focus-visible { outline: 2px solid var(--signal) }
@@ -420,6 +417,12 @@ main.shell { padding-bottom: var(--s7); }
 .pick-item:disabled { color: var(--ink-3) }
 .pick-item:disabled { background: var(--panel) }
 .pick-item:disabled { border-style: dashed }
+a.pick-item { text-decoration: none }
+.pick-item.is-unavailable { cursor: not-allowed }
+.pick-item.is-unavailable { color: var(--ink-3) }
+.pick-item.is-unavailable { background: var(--panel) }
+.pick-item.is-unavailable { border-style: dashed }
+#cable-open { margin: var(--s3) 0 }
 .pick-plate { width: 48px }
 .pick-plate { height: 48px }
 .pick-plate { flex: 0 0 auto }

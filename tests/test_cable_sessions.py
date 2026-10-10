@@ -270,6 +270,37 @@ def test_other_generations_get_a_clear_reason(club):
         club.sessions.create({'left_id': club.gold, 'right_id': club.gold})
 
 
+def test_partners_list_every_pair_with_the_reason_it_cannot_link(club):
+    rows = {row['id']: row['reason'] for row in club.sessions.partners(club.gold)['partners']}
+    assert rows == {club.silver: '', club.red: cable_sessions.CAPSULE_UNSUPPORTED}
+    rows = {row['id']: row['reason'] for row in club.sessions.partners(club.red)['partners']}
+    assert set(rows.values()) == {cable_sessions.CAPSULE_UNSUPPORTED}
+    red = club.registry.adventure(club.red)
+    assert club.sessions.pair_reason(red, {**red, 'id': 'x' * 32}) == cable_sessions.GEN1_UNSUPPORTED
+    assert 'not yet supported' in cable_sessions.GEN1_UNSUPPORTED
+    assert 'not yet supported' in cable_sessions.CAPSULE_UNSUPPORTED
+    club.registry.update(club.silver, state='stopped', desired_state='stopped')
+    rows = {row['id']: row['reason'] for row in club.sessions.partners(club.gold)['partners']}
+    assert rows[club.silver].startswith('Silver: ')
+
+
+def test_the_partners_route_answers_before_the_session_route(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from pokesim.app.manager import Manager, create_app
+    manager = Manager(tmp_path, 'http://testserver')
+    monkeypatch.setattr(manager, 'start', lambda: None)
+    manager.registry.add_rom('gold', 'sha-gold', 'gold')
+    manager.registry.add_rom('red', 'sha-red', 'red')
+    one = manager.registry.create('One', 'gold', {}, identifier())
+    red = manager.registry.create('Red', 'red', {}, identifier())
+    with TestClient(create_app(manager)) as client:
+        response = client.get(f'/api/v1/interactions/cable-sessions/partners?adventure_id={one["id"]}')
+        assert response.status_code == 200
+        assert response.json()['partners'] == [{'id': red['id'], 'name': 'Red', 'version': 'red',
+                                                'reason': cable_sessions.CAPSULE_UNSUPPORTED}]
+    manager.close()
+
+
 def test_view_only_links_cannot_drive_a_session(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from pokesim.app.manager import Manager, create_app

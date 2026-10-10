@@ -16,6 +16,8 @@ BLUE = 'c' * 32
 REASON = 'Busy Blue is busy finishing another trade'
 # The reason Busy Blue gives for the shiny Meganium, which is not a Gen I species.
 MEGANIUM = 'Meganium cannot go to a Red, Blue or Yellow game. Meganium did not exist in Gen I'
+CABLE = 'Time Capsule sessions between Gen I and Gen II are not yet supported.'
+CRYSTAL = 'd' * 32
 JSON = 'application/json'
 
 
@@ -57,6 +59,12 @@ class Library:
         page.route(re.compile(r'/api/v1/interactions/trade-offers/targets(\?|$)'), self.targets)
         page.route(re.compile(r'/api/v1/interactions/trade-offers/limits(\?|$)'), self.limits)
         page.route(re.compile(r'/api/v1/interactions/auto-settings(\?|$)'), self.auto_settings)
+        page.route(re.compile(rf'/games/{FROM}/api/cable(\?|$)'), lambda route: self.json(route, {
+            'adventure': {'id': FROM, 'name': 'Crystal', 'version': 'crystal', 'state': 'running'}, 'reason': '', 'session': None}))
+        page.route(re.compile(r'/api/v1/interactions/cable-sessions/partners(\?|$)'), lambda route: self.json(route, {
+            'adventure_id': FROM, 'partners': [
+                {'id': CRYSTAL, 'name': 'Second Crystal', 'version': 'crystal', 'reason': ''},
+                {'id': RED, 'name': 'Second Red', 'version': 'red', 'reason': CABLE}]}))
 
     @staticmethod
     def json(route, data, status=200):
@@ -132,16 +140,14 @@ def selected(page, name):
 
 
 @pytest.mark.parametrize('width', [1280, 390])
-def test_tabs_move_with_the_keyboard_skip_cable_club_and_remember_the_last_one(page, game, width):
+def test_tabs_move_with_the_keyboard_and_remember_the_last_one(page, game, width):
     url = game[0]
     library = Library(page, url)
     page.set_viewport_size({'width': width, 'height': 844})
     library.open()
     selected(page, 'Trade')
     expect(page.locator('#panel-trade')).to_be_visible()
-    cable = page.locator('#tab-cable')
-    expect(cable).to_be_disabled()
-    expect(cable).to_contain_text('coming soon')
+    expect(page.locator('#tab-cable')).to_be_enabled()
     tab = page.get_by_role('tab', name='Trade')
     tab.focus()
     tab.press('ArrowRight')
@@ -150,15 +156,19 @@ def test_tabs_move_with_the_keyboard_skip_cable_club_and_remember_the_last_one(p
     expect(page.locator('#panel-offers')).to_be_visible()
     expect(page.locator('#panel-trade')).to_be_hidden()
     page.keyboard.press('End')
+    selected(page, 'Cable Club')
+    page.keyboard.press('ArrowLeft')
     selected(page, 'History')
     expect(page.locator('#trade-history')).to_contain_text('Busy Blue could not reach the Cable Club')
     # History lists failed attempts and completed trades together, newest first.
     text = page.locator('#trade-history').inner_text()
     assert text.index('Busy Blue') < text.index('Second Red')
     page.keyboard.press('ArrowRight')
+    selected(page, 'Cable Club')
+    page.keyboard.press('ArrowRight')
     selected(page, 'Trade')
     page.keyboard.press('ArrowLeft')
-    selected(page, 'History')
+    selected(page, 'Cable Club')
     page.get_by_role('tab', name='Auto').click()
     page.reload()
     selected(page, 'Auto')
@@ -284,3 +294,20 @@ def test_a_late_answer_for_an_earlier_pokemon_does_not_replace_the_current_one(p
     expect(page.locator('#pick-games')).not_to_contain_text('Meganium')
     expect(page.locator(f'[data-game="{RED}"]')).to_be_enabled()
 
+
+@pytest.mark.parametrize('width', [1280, 390])
+def test_cable_club_tab_links_supported_games_and_greys_out_the_rest(page, game, width):
+    url = game[0]
+    library = Library(page, url)
+    page.set_viewport_size({'width': width, 'height': 844})
+    library.open('?tab=cable')
+    selected(page, 'Cable Club')
+    games = page.locator('#cable-games')
+    link = games.get_by_role('link', name=re.compile('Second Crystal'))
+    expect(link).to_have_attribute('href', f'/games/{FROM}/cable?with={CRYSTAL}')
+    red = games.locator(f'[data-cable="{RED}"]')
+    expect(red).to_have_attribute('aria-disabled', 'true')
+    expect(red).to_contain_text('not yet supported')
+    expect(games.get_by_role('link', name=re.compile('Second Red'))).to_have_count(0)
+    shoot(page, f'cable-{width}')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

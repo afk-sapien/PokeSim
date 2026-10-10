@@ -3,6 +3,7 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
   const OFFERS = '/api/v1/interactions/trade-offers'
   const SETTINGS = '/api/v1/interactions/auto-settings'
+  const CABLE = '/api/v1/interactions/cable-sessions'
   const STORE = 'pokesim-trading-tab'
   const aid = PokeSim.adventureId
   const owner = String(PokeSim.base || '').startsWith('/games/') && typeof PokeSim.api === 'function'
@@ -26,6 +27,7 @@
     try { localStorage.setItem(STORE, current) } catch (_) {}
     if (current === 'auto') loadAuto()
     if (current === 'offers') globalThis.AdventureTrading?.refreshOffers?.(true)
+    if (current === 'cable') loadCable()
   }
   for (const tab of tabs) {
     tab.addEventListener('click', () => { if (!tab.disabled) select(tab.id.slice(4)) })
@@ -292,6 +294,39 @@
       if (event.target.matches?.('select[data-trade-key]')) TradeUI.change(event.target)
     })
     $('#auto-search')?.addEventListener('input', () => renderSettings(TradeUI.status()))
+  }
+
+  // Cable Club: link with another adventure and hold both controllers on the Cable Club page.
+  let cableLoaded = false
+  const cableHref = id => `${PokeSim.base}/cable?with=${encodeURIComponent(id)}`
+  async function loadCable() {
+    if (cableLoaded) return
+    cableLoaded = true
+    const list = $('#cable-games')
+    try {
+      const mine = await json(await PokeSim.fetch(`/api/cable`, {cache: 'no-store'}), 'Could not read the Cable Club.')
+      const open = mine.session && !['done', 'rolled_back'].includes(mine.session.phase)
+      const partner = open && (mine.session.left_id === aid ? mine.session.right_id : mine.session.left_id)
+      const link = $('#cable-open')
+      link.innerHTML = open ? `<a class="key key--primary" href="${esc(cableHref(partner))}">Open the session in progress</a>` : ''
+      link.hidden = !open
+      if (!owner) {
+        note('#cable-note', 'Cable Club sessions are started from the owner’s page, not from a view link.')
+        list.innerHTML = ''
+        return
+      }
+      note('#cable-note', mine.reason || '')
+      const data = await json(await PokeSim.api(`${CABLE}/partners?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not check the other games.')
+      list.innerHTML = (data.partners || []).map(game => {
+        const read = `<span class="pick-read"><b>${esc(game.name)}</b><span class="micro">${esc(game.version)}</span>${game.reason ? `<span class="pick-reason">${esc(game.reason)}</span>` : ''}</span>`
+        return game.reason
+          ? `<span class="pick-item pick-game is-unavailable" data-cable="${esc(game.id)}" aria-disabled="true">${read}</span>`
+          : `<a class="pick-item pick-game" data-cable="${esc(game.id)}" href="${esc(cableHref(game.id))}">${read}</a>`
+      }).join('') || '<p class="empty-note">There is no other adventure to link with yet.</p>'
+    } catch (error) {
+      cableLoaded = false
+      list.innerHTML = `<p class="empty-note">${esc(error.message)}</p>`
+    }
   }
 
   // Deep links (?tab=trade&mon=key) win over the remembered tab.

@@ -46,7 +46,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <button type="button" role="tab" id="tab-offers" aria-controls="panel-offers" aria-selected="false" tabindex="-1">Offers <span class="tab-count" id="offers-count" hidden></span></button>
 <button type="button" role="tab" id="tab-auto" aria-controls="panel-auto" aria-selected="false" tabindex="-1">Auto</button>
 <button type="button" role="tab" id="tab-history" aria-controls="panel-history" aria-selected="false" tabindex="-1">History</button>
-<button type="button" role="tab" id="tab-cable" aria-disabled="true" aria-selected="false" tabindex="-1" disabled title="Cable Club is coming soon">Cable Club <span class="tab-soon">coming soon</span></button>
+<button type="button" role="tab" id="tab-cable" aria-controls="panel-cable" aria-selected="false" tabindex="-1">Cable Club</button>
 </div>
 
 <section id="panel-trade" class="trade-panel" role="tabpanel" aria-labelledby="tab-trade" tabindex="0">
@@ -82,6 +82,14 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <label class="pick-search"><span class="micro">Search</span><input type="search" id="auto-search" placeholder="Name, nickname or No." autocomplete="off"></label>
 <p id="trade-setting-status" class="vh" role="status" aria-live="polite" data-trade-status></p>
 <div id="auto-list" class="auto-list"><p class="empty-note">Loading trade settings…</p></div>
+</section>
+
+<section id="panel-cable" class="trade-panel" role="tabpanel" aria-labelledby="tab-cable" tabindex="0" hidden>
+<p id="cable-note" class="trade-notice" role="status" aria-live="polite" hidden></p>
+<div class="section-head"><h2 class="legend legend--ink" id="cable-heading">Hold both controllers</h2></div>
+<p class="trade-help">A Cable Club session walks both adventures to the Cable Club and hands you both controllers, so you trade by hand as two people would. Choose the adventure to link with.</p>
+<p id="cable-open" hidden></p>
+<div id="cable-games" class="pick-list pick-games" aria-labelledby="cable-heading"><p class="empty-note">Opening the Cable Club tab loads the games you can link with.</p></div>
 </section>
 
 <section id="panel-history" class="trade-panel" role="tabpanel" aria-labelledby="tab-history" tabindex="0" hidden>
