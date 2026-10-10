@@ -654,8 +654,8 @@ def create_app(manager, shutdown=lambda: None):
         return await asyncio.to_thread(manager.offers.for_adventure, validate_id(adventure_id))
 
     @app.get('/api/v1/interactions/trade-offers/targets')
-    def trade_offer_targets(from_id: str):
-        return manager.offers.targets(validate_id(from_id))
+    async def trade_offer_targets(from_id: str, from_key: str | None = None):
+        return await asyncio.to_thread(manager.offers.targets, validate_id(from_id), from_key)
 
     @app.get('/api/v1/interactions/trade-offers/limits')
     async def trade_offer_limits(from_id: str, from_key: str, to_id: str):

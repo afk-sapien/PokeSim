@@ -10,7 +10,7 @@ from .core import boot
 from .. import config
 from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
-from ..runtime.participant import Participant as BaseParticipant, PREFIX, _records, _save, _artifact, manual_rows
+from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, manual_rows
 from ..trade.preferences import apply
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin
@@ -162,12 +162,13 @@ class Participant(BaseParticipant):
         state = self.emu.status()
         payload = apply(live_status(state.get('game'), (state.get('strategy') or {}).get('collection')), {})
         snapshot = self.emu.snapshot
-        holding = bool(self.store.get('trade_hold'))
+        hold = self.store.get('trade_hold')
+        holding = bool(hold)
         paused = _paused(self.emu, snapshot)
         if paused == 'Trading pauses during the Pokémon League':
             # Preparation finishes the League run first, so it only delays a manual trade.
             paused = ''
-        reason = ('This adventure is already held for another exchange' if holding else
+        reason = (BUSY if holding else
                   'Resume autonomous play in this adventure before trading' if self.emu.paused or self.emu.manual_mode else
                   paused)
         rows = manual_rows(payload, 2, last_party_blocked=True)
@@ -181,6 +182,7 @@ class Participant(BaseParticipant):
                 row['time_capsule_compatible'] = bool(member is not None and not row['egg'] and compatible(member, self.emu.data))
                 row['time_capsule_reason'] = '' if row['time_capsule_compatible'] else capsule_reason(member, self.emu.data)
         return {'adventure_id': self.bootstrap.adventure_id, 'cartridge_generation': 2, 'holding': holding,
+                'hold_id': hold.get('id') if isinstance(hold, dict) else None,
                 'time_capsule_ready': bool(snapshot is not None and unlocked(snapshot, Memory(self.emu.pb.memory, self.emu.data))),
                 'reason': reason, 'pokemon': rows}
 

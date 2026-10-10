@@ -42,8 +42,8 @@ Only limits the cable itself cannot get past stop a pair, and the page says why:
 2. In Gold, Silver and Crystal, the only party member that can still battle.
 3. Through the Time Capsule, a Gen II adventure that has not unlocked it yet, and
    Pokémon past number 151, Pokémon with Gen II moves or Pokémon holding Mail.
-4. Adventures that are stopped, archived, held for another exchange, under your
-   control, or busy with an event such as the Battle Tower.
+4. Adventures that are stopped, archived, busy finishing another trade, under
+   your control, or busy with an event such as the Battle Tower.
 
 Each adventure walks to a Pokémon Center, uses the PC if the chosen Pokémon is
 boxed (sending any party member to the PC if the party is full), and meets the
@@ -66,8 +66,11 @@ Library's Trade page stays the admin trade, which runs at once. An offer waits
 until the other adventure's Trading page accepts it.
 
 1. In an adventure's PC, open a Pokémon and press **Offer trade**.
-2. Pick another adventure. Stopped, archived and busy adventures are listed with
-   the reason they cannot trade now.
+2. Pick another adventure. Each one is checked against the Pokémon you chose.
+   An adventure that cannot take it is greyed out with the reason and cannot be
+   opened: stopped, archived or busy finishing another trade, a Red, Blue or
+   Yellow game for a Pokémon that cannot go through the Time Capsule, or a game
+   with nothing that can be traded for it.
 3. That adventure's PC opens in offer mode, with the same views, filters and
    sorting, sorted by Battle Power. A banner shows the Pokémon you are offering.
    Pokémon the cable cannot take are tagged Cannot trade, and their detail says why.

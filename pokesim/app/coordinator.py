@@ -863,7 +863,26 @@ class Coordinator:
     # Manual trades: the owner picks both Pokémon and only hard cable limits can refuse them.
 
     def manual_inventory(self, aid):
-        return self._request(aid, 'manual-inventory')
+        inventory = self._request(aid, 'manual-inventory')
+        if inventory.get('holding'):
+            partner = self._hold_partner(aid, inventory.get('hold_id'))
+            if partner:
+                inventory = {**inventory, 'reason': f'Busy finishing a trade with {partner} — available again once it finishes'}
+        return inventory
+
+    def _hold_partner(self, aid, tid):
+        """The name of the other adventure in the trade that holds this one, when it is known."""
+        try:
+            plan = self.registry.transaction(validate_id(tid))['plan']
+        except (KeyError, ValueError, TypeError):
+            return ''
+        for other in plan.get('participants') or []:
+            if other != aid:
+                try:
+                    return self.registry.adventure(other)['name']
+                except KeyError:
+                    return ''
+        return ''
 
     @staticmethod
     def _manual_offer(inventory, key):

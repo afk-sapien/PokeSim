@@ -19,6 +19,8 @@ PREFIX = 'managed_interaction:'
 FINAL = ('released', 'aborted')
 KEEP_FINISHED = 20
 RECLAIM_BYTES = 32 * 2 ** 20
+# A trade hold lasts while the adventure walks to a Pokémon Center, trades and saves.
+BUSY = 'Busy finishing a trade — available again in a few minutes'
 log = logging.getLogger(__name__)
 
 
@@ -303,11 +305,13 @@ class Participant:
         from ..trade.preferences import apply
         status = self.emu.status()
         payload = apply(live_status(status.get('game'), (status.get('strategy') or {}).get('collection')), {})
-        holding = bool(self.store.get('trade_hold'))
-        reason = ('This adventure is already held for another exchange' if holding else
+        hold = self.store.get('trade_hold')
+        holding = bool(hold)
+        reason = (BUSY if holding else
                   'Resume autonomous play in this adventure before trading' if self.emu.paused or self.emu.manual_mode else
                   'Waiting for the game to start' if not payload.get('started', True) else '')
         return {'adventure_id': self.bootstrap.adventure_id, 'cartridge_generation': 1, 'holding': holding,
+                'hold_id': hold.get('id') if isinstance(hold, dict) else None,
                 'time_capsule_ready': False, 'reason': reason, 'pokemon': manual_rows(payload, 1)}
 
     def manual_choice(self, selected):

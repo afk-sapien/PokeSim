@@ -474,6 +474,8 @@
 .offer-target:hover:not(:disabled), .offer-target:focus-visible { border-color: var(--signal) }
 .offer-target:disabled { cursor: not-allowed }
 .offer-target:disabled { color: var(--ink-3) }
+.offer-target:disabled { background: var(--panel) }
+.offer-target:disabled { opacity: 0.7 }
 .offer-target small { font-size: 13px }
 .offer-target small { color: var(--ink-2) }
 .offer-target .offer-reason { color: var(--warn) }

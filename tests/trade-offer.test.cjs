@@ -66,6 +66,9 @@ test('the owner sees Offer trade, picks a running adventure and opens its PC in 
   assert.match(view.element('#pc-trade-action').innerHTML, /data-offer-trade="box-1"[^>]*>Offer trade</)
   view.element('#pc-trade-action').onclick(clickOn('data-offer-trade', {offerTrade: 'box-1'}))
   assert.equal(view.element('#offer-dialog').open, true)
+  assert.match(view.element('#offer-dialog-list').innerHTML, /Checking which games can take this Pokémon/)
+  await settle()
+  assert.ok(view.calls.some(call => call.path === `/api/v1/interactions/trade-offers/targets?from_id=${FROM}&from_key=box-1`))
   const list = view.element('#offer-dialog-list').innerHTML
   assert.match(list, /data-offer-target="b{32}"><strong>Second Red/)
   assert.match(list, /Stopped Blue.*disabled|disabled.*Stopped Blue/)

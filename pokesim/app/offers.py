@@ -130,22 +130,81 @@ class TradeOffers:
 
     # Picker
 
-    def targets(self, from_id):
-        """Every other adventure, with the reason it cannot take an offer right now."""
-        validate_id(from_id)
-        self.registry.adventure(from_id)
-        rows = []
-        for game in self.registry.adventures():
-            if game['id'] == from_id or game['archived']:
+    def _give_reason(self, give_inventory, take_inventory, give):
+        """Why the offered Pokémon itself cannot go to the other adventure, whatever it is asked for."""
+        if give.get('blocked'):
+            return give['blocked']
+        old = give_inventory.get('cartridge_generation', 1)
+        if old == take_inventory.get('cartridge_generation', 1):
+            return ''
+        modern = give_inventory if old == 2 else take_inventory
+        if modern.get('time_capsule_ready') and (old != 2 or give.get('time_capsule_compatible')):
+            return ''
+        return self.coordinator._capsule_reason(give_inventory, take_inventory, give, give)
+
+    def _target_reason(self, give_inventory, give, game):
+        """Why one adventure cannot take this Pokémon, read from its PC now, or an empty string."""
+        try:
+            take_inventory = self.coordinator.manual_inventory(game['id'])
+        except (RuntimeError, OSError, KeyError, ValueError) as error:
+            return f'This adventure did not answer: {error}'
+        if take_inventory.get('reason'):
+            return take_inventory['reason']
+        reason = self._give_reason(give_inventory, take_inventory, give)
+        if reason:
+            return reason
+        reasons = []
+        for take in take_inventory.get('pokemon') or []:
+            if not take.get('trade_key'):
                 continue
-            reason = self.coordinator.manual_game_reason(game)
-            rows.append({'id': game['id'], 'name': game['name'], 'version': game['version'],
-                         'generation': 2 if game['version'] in {'gold', 'silver', 'crystal'} else 1,
-                         'available': not reason, 'reason': reason})
+            reason = take.get('blocked') or self._pair_reason(give_inventory, take_inventory, give, take)
+            if not reason:
+                return ''
+            reasons.append(reason)
+        if len(set(reasons)) == 1:
+            return reasons[0]
+        return f'Nothing in {game["name"]} can be traded for {_name(give)}'
+
+    def targets(self, from_id, from_key=None):
+        """Every other adventure, with the reason it cannot take an offer right now.
+
+        With from_key, each adventure is also checked against that Pokémon, so one that
+        cannot take it is greyed out before the owner opens its PC.
+        """
+        validate_id(from_id)
+        sender = self.registry.adventure(from_id)
+        games = [game for game in self.registry.adventures() if game['id'] != from_id and not game['archived']]
+        reasons = {game['id']: self.coordinator.manual_game_reason(game) for game in games}
+        if from_key is not None:
+            if not isinstance(from_key, str) or not 1 <= len(from_key) <= 256:
+                raise ValueError('Choose a Pokémon to offer')
+            try:
+                give_inventory = self.coordinator.manual_inventory(from_id)
+            except (RuntimeError, OSError, KeyError) as error:
+                raise ValueError(f'{sender["name"]} did not answer: {error}') from error
+            sender_reason = give_inventory.get('reason') or ''
+            give = next((mon for mon in give_inventory.get('pokemon') or [] if mon.get('trade_key') == from_key), None)
+            if give is None and not sender_reason:
+                raise ValueError(f'That Pokémon is no longer in {sender["name"]}')
+            open_games = [game for game in games if not reasons[game['id']]]
+            if sender_reason or give.get('blocked'):
+                for game in open_games:
+                    reasons[game['id']] = sender_reason or give['blocked']
+            elif open_games:
+                with ThreadPoolExecutor(max_workers=min(8, len(open_games))) as pool:
+                    found = pool.map(lambda game: self._target_reason(give_inventory, give, game), open_games)
+                    reasons.update(zip([game['id'] for game in open_games], found))
+        rows = [{'id': game['id'], 'name': game['name'], 'version': game['version'],
+                 'generation': 2 if game['version'] in {'gold', 'silver', 'crystal'} else 1,
+                 'available': not reasons[game['id']], 'reason': reasons[game['id']]} for game in games]
         return {'adventures': rows, 'viewer_only': self.viewer_only(from_id)}
 
     def limits(self, from_id, from_key, to_id):
-        """Hard limits for offering one Pokémon to each Pokémon in another adventure."""
+        """Hard limits for offering one Pokémon to each Pokémon in another adventure.
+
+        A limit of the offered Pokémon itself is reported once, as from.blocked, and not
+        repeated for every Pokémon it could be traded for.
+        """
         for aid in (from_id, to_id):
             validate_id(aid)
         if from_id == to_id:
@@ -155,15 +214,17 @@ class TradeOffers:
         give = next((mon for mon in give_inventory.get('pokemon') or [] if mon.get('trade_key') == from_key), None)
         if give is None:
             raise ValueError(f'That Pokémon is no longer in {sender["name"]}')
+        give_reason = self._give_reason(give_inventory, take_inventory, give)
         blocked = {}
-        for take in take_inventory.get('pokemon') or []:
+        takes = [] if give_reason else take_inventory.get('pokemon') or []
+        for take in takes:
             if not take.get('trade_key'):
                 continue
-            reason = take.get('blocked') or give.get('blocked') or self._pair_reason(give_inventory, take_inventory, give, take)
+            reason = take.get('blocked') or self._pair_reason(give_inventory, take_inventory, give, take)
             if reason:
                 blocked[take['trade_key']] = reason
         return {'from': {**self._side(from_id, sender['name'], sender['version'], self._snapshot(give)),
-                         'key': from_key, 'blocked': give.get('blocked') or ''},
+                         'key': from_key, 'blocked': give_reason},
                 'to': {'adventure_id': to_id, 'adventure_name': receiver['name'], 'version': receiver['version']},
                 'blocked': blocked, 'viewer_only': self.viewer_only(from_id)}
 

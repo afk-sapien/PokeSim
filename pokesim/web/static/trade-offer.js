@@ -78,13 +78,27 @@
     globalThis.Panel?.fitSprites?.(box)
   }
 
-  function openPicker(key) {
+  const targetList = games => games.map(game => `<li><button type="button" class="offer-target" data-offer-target="${esc(game.id)}"${game.available ? '' : ' disabled aria-disabled="true"'}><strong>${esc(game.name)}</strong><small>Pokémon ${esc(game.version ? game.version[0].toUpperCase() + game.version.slice(1) : '')}</small>${game.available ? '' : `<small class="offer-reason">${esc(game.reason)}</small>`}</button></li>`).join('')
+
+  // Each game is checked against the chosen Pokémon, so one that cannot take it is greyed out here.
+  async function openPicker(key) {
     state.offering = key
     const dialog = $('#offer-dialog')
-    const games = state.targets?.adventures || []
-    const list = games.map(game => `<li><button type="button" class="offer-target" data-offer-target="${esc(game.id)}"${game.available ? '' : ' disabled'}><strong>${esc(game.name)}</strong><small>Pokémon ${esc(game.version ? game.version[0].toUpperCase() + game.version.slice(1) : '')}</small>${game.available ? '' : `<small class="offer-reason">${esc(game.reason)}</small>`}</button></li>`).join('')
-    $('#offer-dialog-list').innerHTML = list || '<li class="empty-note">Start another adventure to trade with it.</li>'
+    const box = $('#offer-dialog-list')
+    box.innerHTML = '<li class="empty-note" role="status">Checking which games can take this Pokémon…</li>'
     dialog.showModal()
+    let games = []
+    try {
+      const query = new URLSearchParams({from_id: PokeSim.adventureId, from_key: key})
+      const response = await PokeSim.api(`${OFFERS}/targets?${query}`, {cache: 'no-store'})
+      if (!response.ok) throw new Error(await detail(response) || 'Could not check the other games. Try again in a moment.')
+      games = (await response.json()).adventures || []
+    } catch (error) {
+      if (state.offering === key) box.innerHTML = `<li class="empty-note offer-reason" role="alert">${esc(error.message)}</li>`
+      return
+    }
+    if (state.offering !== key) return
+    box.innerHTML = targetList(games) || '<li class="empty-note">Start another adventure to trade with it.</li>'
   }
 
   function targetUrl(aid) {

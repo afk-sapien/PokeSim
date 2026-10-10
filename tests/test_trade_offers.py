@@ -6,6 +6,7 @@ import pytest
 from pokesim import config
 from pokesim.app.offers import EXPIRE_SECONDS, TradeOffers, ViewOnlyError
 from pokesim.app.registry import identifier
+from pokesim.runtime.participant import BUSY
 
 from test_managed_coordinator import setup  # noqa: F401  (fixture)
 from test_view_links import instance_controls, managed, writes  # noqa: F401  (fixtures)
@@ -156,6 +157,77 @@ def test_picker_lists_targets_and_hard_limits(offers):
     assert service.targets(left)['adventures'][0]['reason'] == 'Start this adventure to trade from it'
 
 
+def make_crystal(peer, *, ready=True, compatible=True):
+    peer.generation, peer.capsule_ready = 2, ready
+    for mon in peer.pokemon:
+        mon.update(cartridge_generation=2, time_capsule_compatible=compatible,
+                   time_capsule_reason='' if compatible else 'Togepi did not exist in Gen I')
+
+
+def test_targets_grey_out_games_that_cannot_take_the_chosen_pokemon(offers):
+    service, left, right = offers.manager.offers, offers.data['left_id'], offers.data['right_id']
+    # An ordinary pair stays open.
+    row = service.targets(left, '0')['adventures'][0]
+    assert row['id'] == right and row['available'] is True and row['reason'] == ''
+    # A Gen II-only Pokémon cannot go to a Red game, so Red is greyed out before its PC opens.
+    make_crystal(offers.peers[left], compatible=False)
+    row = service.targets(left, '0')['adventures'][0]
+    assert row['available'] is False
+    assert 'cannot go to a Red, Blue or Yellow game' in row['reason'] and 'Togepi did not exist in Gen I' in row['reason']
+    # Without a chosen Pokémon only the game itself is checked, as before.
+    assert service.targets(left)['adventures'][0]['available'] is True
+    # Without the Time Capsule nothing crosses.
+    make_crystal(offers.peers[left], ready=False)
+    assert 'Time Capsule yet' in service.targets(left, '0')['adventures'][0]['reason']
+    make_crystal(offers.peers[left])
+    assert service.targets(left, '0')['adventures'][0]['available'] is True
+    # An egg or other blocked Pokémon cannot go anywhere.
+    offers.peers[left].pokemon[0]['blocked'] = 'Eggs cannot be traded'
+    assert service.targets(left, '0')['adventures'][0]['reason'] == 'Eggs cannot be traded'
+    with pytest.raises(ValueError, match='no longer in First Red'):
+        service.targets(left, 'missing')
+
+
+def test_targets_grey_out_a_game_when_every_pair_is_blocked(offers):
+    service, left, right = offers.manager.offers, offers.data['left_id'], offers.data['right_id']
+    for mon in offers.peers[right].pokemon:
+        mon['blocked'] = 'Eggs cannot be traded'
+    row = service.targets(left, '0')['adventures'][0]
+    assert row['available'] is False and row['reason'] == 'Eggs cannot be traded'
+    offers.peers[right].pokemon[1]['blocked'] = 'This is the last party member that can battle'
+    assert service.targets(left, '0')['adventures'][0]['reason'] == 'Nothing in Second Red can be traded for Ivysaur'
+
+
+def test_a_game_busy_with_a_trade_is_greyed_out_and_names_its_partner(offers, monkeypatch):
+    service, left, right = offers.manager.offers, offers.data['left_id'], offers.data['right_id']
+    tid = identifier()
+    offers.registry.create_transaction(tid, {'participants': [right, left]})
+    peer = offers.peers[right]
+    plain = peer.request
+
+    def busy(method, path, data=None, timeout=None):
+        result = plain(method, path, data, timeout)
+        if path.endswith('/manual-inventory'):
+            result.update(holding=True, hold_id=tid, reason=BUSY)
+        return result
+    monkeypatch.setattr(peer, 'request', busy)
+    row = service.targets(left, '0')['adventures'][0]
+    assert row['available'] is False
+    assert row['reason'] == 'Busy finishing a trade with First Red — available again once it finishes'
+    assert 'held for another exchange' not in row['reason']
+    # When the trade record is gone the reason stays honest without a name.
+    offers.registry.db.execute('DELETE FROM interactions WHERE id=?', (tid,))
+    assert service.targets(left, '0')['adventures'][0]['reason'] == BUSY
+
+
+def test_limits_report_a_limit_of_the_offered_pokemon_once(offers):
+    service, left, right = offers.manager.offers, offers.data['left_id'], offers.data['right_id']
+    make_crystal(offers.peers[left], compatible=False)
+    limits = service.limits(left, '0', right)
+    assert 'cannot go to a Red, Blue or Yellow game' in limits['from']['blocked']
+    assert limits['blocked'] == {}
+
+
 @pytest.mark.parametrize('instance', [False, True])
 def test_view_only_adventures_cannot_write_offers(offers, monkeypatch, instance):
     service, left, right = offers.manager.offers, offers.data['left_id'], offers.data['right_id']
@@ -194,3 +266,12 @@ def test_offer_routes_refuse_view_links_and_view_only_adventures(managed, monkey
     assert client.post(f'/api/v1/interactions/trade-offers/{offer["id"]}/withdraw').status_code == 403
     listed = client.get(f'/api/v1/interactions/trade-offers?adventure_id={aid}').json()
     assert listed['viewer_only'] is True and [row['status'] for row in listed['incoming']] == ['pending']
+
+
+def test_targets_route_passes_the_chosen_pokemon_through(managed, monkeypatch):  # noqa: F811
+    manager, client, aid = managed.app.state.manager, managed.client, managed.aid
+    seen = []
+    monkeypatch.setattr(manager.offers, 'targets', lambda from_id, from_key=None: seen.append((from_id, from_key)) or {})
+    assert client.get(f'/api/v1/interactions/trade-offers/targets?from_id={aid}&from_key=box-3').status_code == 200
+    assert client.get(f'/api/v1/interactions/trade-offers/targets?from_id={aid}').status_code == 200
+    assert seen == [(aid, 'box-3'), (aid, None)]
