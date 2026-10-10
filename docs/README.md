@@ -15,7 +15,7 @@ This index separates current instructions, future plans, and historical evidence
 | Postgame races, checkpoints, and finish reports | [Kanto Marathon](marathon.md) |
 | Gameplay, settings, and APIs | [Feature guide](guide.md) |
 | Power, stats, DVs, training, and individual victory counts | [Pokémon stats and Power](pokemon-stats.md) |
-| Collection browsing, sorting, and Pokémon locks | [PC storage](pc-storage.md) |
+| Collection browsing, sorting, and Keep settings | [PC storage](pc-storage.md) |
 | Trading screen, offers, and broker connections | [Trading](trading.md) |
 | Automatic library exchanges | [Automatic trading](automatic-trading.md) |
 | Backups, upgrades, recovery, and storage | [Operations](operations.md) |

@@ -212,8 +212,8 @@ of each species. A veteran becomes expendable only after another copy catches
 up in current Power. Every top-0.5% find remains protected from automatic release.
 Automatic peer and NPC trading also protect these rare finds, the strongest
 known partner at level 80 or above, and a meaningful replacement for that partner.
-An explicit peer offer can override investment protection, while existing locks
-and perfect-Pokémon protections still apply. Unknown data never earns a rarity
+An explicit peer offer can override investment protection, while Pokémon set to
+Keep and perfect-Pokémon protections still apply. Unknown data never earns a rarity
 classification, and legacy inventories retain their conservative fallback.
 
 These cutoffs are PokeSim policy choices, not mechanics of the original game.
