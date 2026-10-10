@@ -1104,6 +1104,10 @@ class Policy:
             return self.stranded_action(snapshot, memory, surf)
         self.stranded = 0
         if path == []:
+            if self.goal.key == 'return_from_cable':
+                action = self.step_off(snapshot, memory, surf)
+                if action:
+                    return action
             if self.goal.key.startswith('collection_'):
                 from .collection import arrive
                 if self.goal.face and mem.byte('wPlayerDirection') & 12 != {'down': 0, 'up': 4, 'left': 8, 'right': 12}[self.goal.face]:
@@ -1182,6 +1186,15 @@ class Policy:
         if self.unreachable_waits >= STUCK_WAITS:
             self.mode = f'Stuck: cannot reach {self.goal.label}'
         return Action(None, 0, 24)
+
+    def step_off(self, snapshot, memory, surf):
+        """Step off the tile the player stands on, or None when every side is blocked."""
+        # Standing on stairs does not take them. A cancelled trade can leave the player on the
+        # Pokémon Center 2F stairs, and pressing A there changes nothing. The next step walks back on.
+        step = next((direction for direction, (dx, dy) in DIRS.items()
+                     if self.nav.local(snapshot, [(snapshot.x + dx, snapshot.y + dy)], memory, surf=surf) == [direction]),
+                    None)
+        return self.walk(snapshot, memory, [step]) if step else None
 
     def walk(self, snapshot, memory, path):
         mem = Memory(memory, self.data)

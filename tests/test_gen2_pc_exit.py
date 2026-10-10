@@ -100,3 +100,22 @@ def test_no_autosave_while_backing_out_of_an_ownerless_screen():
                           policy=SimpleNamespace(backing_out=True, menu=None))
     assert Emulator._autosave(emu) is None
     assert writes == []
+
+
+def test_return_from_cable_steps_off_the_stairs_instead_of_pressing_a(crystal):
+    # Live Crystal: a trade cancelled on the Pokémon Center 2F stairs left the player standing on
+    # them, and "Return downstairs after the Cable Club" pressed A there until the watchdog fired.
+    from pokesim.gen2.navigation import DIRS
+    from pokesim.gen2.policy import Policy
+    policy = Policy(crystal, seed=1, starter='cyndaquil')
+    upstairs = crystal.map_ids['POKECENTER_2F']
+    snapshot = SimpleNamespace(map=upstairs, x=0, y=7, frame=0, badges=0, party=(), objects=(),
+                               event=lambda name: False)
+    assert policy.nav.toward(snapshot, upstairs, [(0, 7)]) == []
+    action = policy.step_off(snapshot, None, False)
+    assert action.button in DIRS
+    # One tile over, the way back onto the stairs is an ordinary step, which takes them.
+    dx, dy = DIRS[action.button]
+    beside = SimpleNamespace(**{**vars(snapshot), 'x': dx, 'y': 7 + dy})
+    back = {'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'}[action.button]
+    assert policy.nav.toward(beside, upstairs, [(0, 7)]) == [back]
