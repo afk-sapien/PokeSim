@@ -54,15 +54,14 @@ def test_automatic_trade_protects_rare_candidate_and_trained_veteran():
     payload = json.loads(json.dumps(live_status(s.to_dict(), None)))
     inv = normalise('red', 'http://red', payload)
     assert inv.tradeable == inv.spares == ()
-    assert all(row['can_offer'] and not row['listed'] for row in listings(inv))
+    assert all(row['setting'] == 'auto' for row in listings(inv))
     payload['storage']['pokemon'][0]['trade_preference'] = 'offered'
     inv = normalise('red', 'http://red', payload)
     assert len(inv.tradeable) == 1 and inv.tradeable[0].position == 1
     payload['storage']['pokemon'][0]['trade_preference'] = 'locked'
     locked = normalise('red', 'http://red', payload)
     assert not locked.tradeable
-    assert not listings(locked)[0]['can_offer']
-    assert not listings(normalise('red', 'http://red', payload, protected=(0x99,)))[1]['can_offer']
+    assert listings(locked)[0]['setting'] == 'keep'
 
 
 def test_hunting_budget_then_training_and_no_delay_for_unavailable_species():
@@ -155,7 +154,7 @@ def test_registered_evolution_does_not_bypass_small_upgrade_threshold():
 
 
 def test_last_legendary_is_not_automatically_offered_even_with_unknown_dvs():
-    from pokesim.broker.routine import offers, listings
+    from pokesim.broker.routine import offers
     from pokesim.strategy_data import SPECIES
     for dex in (144, 145, 146, 150, 151):
         species = next(sid for sid, row in SPECIES.items() if row['dex'] == dex)
@@ -163,7 +162,6 @@ def test_last_legendary_is_not_automatically_offered_even_with_unknown_dvs():
         payload = {'started': True, 'owned': [dex], 'storage': {'pokemon': [mon]}}
         inv = normalise('red', '', payload)
         assert offers(inv, True) == ()
-        assert listings(inv, True)[0]['can_offer']
         mon['trade_preference'] = 'offered'
         assert len(offers(normalise('red', '', payload), True)) == 1
         mon['trade_preference'] = 'auto'

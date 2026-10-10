@@ -56,8 +56,7 @@ def rewind_refusal(store, state_name):
 # (moves, stats, experience) stay available to Python callers through emu.status(); the
 # routes below send each page only what it draws.
 OFFER_FIELDS = ('trade_key', 'dex', 'species', 'name', 'nick', 'level', 'box', 'position', 'slot', 'egg', 'shiny',
-                'perfect_dvs', 'listed', 'preference', 'editable', 'locked', 'source', 'reason', 'can_offer',
-                'setting')
+                'perfect_dvs', 'preference', 'editable', 'setting')
 HOLDER_FIELDS = ('dex', 'species', 'nick', 'name', 'level', 'dv_stars', 'shiny', 'egg', 'box', 'position', 'slot')
 
 

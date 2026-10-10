@@ -47,38 +47,17 @@ def offers(inv, allow_last_copies):
 
 
 def listings(inv, allow_last_copies=False):
-    eligible = {(mon.box, mon.position) for mon in offers(inv, allow_last_copies)}
-    tradeable = {(mon.box, mon.position) for mon in inv.tradeable}
+    """Every party and boxed Pokémon with its trade setting, for the Trading page's per-Pokémon list."""
     rows = []
     for mon in inv.stored:
-        slot = (mon.box, mon.position)
-        perfect = is_perfect(mon.as_side())
-        shiny = is_shiny(mon.as_side())
-        reason = ('Shiny partner preserved for the collection' if shiny else 'Perfect DV partner preserved for the collection' if perfect else
-                  'Locked against trading and automatic release' if mon.trade_preference == 'locked' else
-                  'Withdrawn by you' if mon.trade_preference == 'withdrawn' else
-                  'Individual identity is ambiguous' if mon.trade_ambiguous else
-                  'Protected by the current project or trade policy' if slot not in tradeable else
-                  'Last copy is protected' if inv.held[mon.species] == 1 and not allow_last_copies else
-                  'Kept by automatic selection' if slot not in eligible else '')
-        rows.append({**mon.as_side(), 'shiny': shiny, 'perfect_dvs': perfect, 'preference': mon.trade_preference,
-                     'setting': setting_name(mon.trade_preference),
-                     'locked': mon.trade_preference == 'locked',
-                     'listed': slot in eligible, 'reason': reason,
-                     'can_offer': (slot in tradeable or mon.investment_protected
-                                   and not perfect and not shiny and not mon.trade_ambiguous and mon.trade_preference != 'locked')
-                     and (inv.held[mon.species] > 1 or allow_last_copies)
-                     or mon.trade_preference == 'withdrawn' and not shiny and not perfect,
-                     'editable': bool(mon.trade_key) and not mon.trade_ambiguous,
-                     'source': 'Selected by you' if mon.trade_preference == 'offered' else 'Automatic'})
+        rows.append({**mon.as_side(), 'shiny': is_shiny(mon.as_side()), 'perfect_dvs': is_perfect(mon.as_side()),
+                     'preference': mon.trade_preference, 'setting': setting_name(mon.trade_preference),
+                     'editable': bool(mon.trade_key) and not mon.trade_ambiguous})
     for mon in inv.party:
-        rows.append({**mon, 'box': 0, 'position': mon.get('slot'), 'listed': False,
-                     'locked': mon.get('trade_preference') == 'locked',
-                     'preference': mon.get('trade_preference', 'auto'),
-                     'setting': setting_name(mon.get('trade_preference', 'auto')), 'source': 'Selected by you',
-                     'reason': 'Locked against trading and automatic release' if mon.get('trade_preference') == 'locked' else 'Active party is protected',
-                     'editable': bool(mon.get('trade_key'))
-                     and not mon.get('trade_ambiguous')})
+        preference = mon.get('trade_preference', 'auto')
+        rows.append({**mon, 'box': 0, 'position': mon.get('slot'), 'preference': preference,
+                     'setting': setting_name(preference),
+                     'editable': bool(mon.get('trade_key')) and not mon.get('trade_ambiguous')})
     return rows
 
 

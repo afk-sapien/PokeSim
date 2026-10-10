@@ -233,8 +233,7 @@ def test_shiny_cannot_be_offered_even_with_an_old_explicit_preference(tmp_path):
         assert not inv.tradeable
         listed = routine.listings(inv, allow_last_copies=True)
         shiny = next(mon for mon in listed if mon['shiny'])
-        assert not shiny['listed'] and not shiny['can_offer'] and not shiny['perfect_dvs']
-        assert 'Shiny' in shiny['reason']
+        assert shiny['setting'] == 'first' and not shiny['perfect_dvs']
 
 
 def test_npc_trader_cannot_take_shiny_partner():

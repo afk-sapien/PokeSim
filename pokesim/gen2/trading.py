@@ -51,7 +51,7 @@ def _kept(mon, stock):
     if not mon.get('trade_key') or mon.get('trade_ambiguous'):
         return 'Individual identity is ambiguous'
     if preference == 'locked':
-        return 'Locked against trading and automatic release'
+        return 'Set to Keep by you'
     if preference == 'withdrawn':
         return 'Withdrawn by you'
     if tuple(mon.get('dvs', ())) == (15,) * 5:
@@ -95,37 +95,21 @@ def offers(emu, payload):
 
 
 def listings(emu, payload):
-    """Every party and boxed Pokémon with its trade state, so the PC can explain any of them.
+    """Every party and boxed Pokémon with its trade setting, for the Trading page's per-Pokémon list.
 
-    offers() stays the eligibility list the coordinator trades from; this view adds the
-    Pokémon it leaves out, each with the reason, in the shape the Gen I listings use.
+    offers() stays the eligibility list the coordinator trades from. A boxed Pokémon it lists
+    carries that offer's details too.
     """
     party = payload.get('party') or []
     stored = (payload.get('storage') or {}).get('pokemon') or []
     eligible = {mon['trade_key']: mon for mon in offers(emu, payload)}
-    paused = _paused(emu, emu.snapshot)
-    stock = _stock(emu, party + stored)
     rows = []
-    for mon in stored:
+    places = [(mon, {}) for mon in stored] + [(mon, {'box': 0, 'position': mon.get('slot')}) for mon in party]
+    for mon, place in places:
         preference = mon.get('trade_preference', 'auto')
-        shiny, perfect = bool(mon.get('shiny')), tuple(mon.get('dvs', ())) == (15,) * 5
-        editable = bool(mon.get('trade_key')) and not mon.get('trade_ambiguous') and not mon.get('egg')
-        listed = mon.get('trade_key') in eligible
-        rows.append({**eligible.get(mon.get('trade_key'), mon), 'shiny': shiny, 'perfect_dvs': perfect,
-                     'preference': preference, 'setting': setting_name(preference),
-                     'locked': preference == 'locked', 'listed': listed,
-                     'reason': '' if listed else paused or _kept(mon, stock) or 'Kept by automatic selection',
-                     'can_offer': editable and not shiny and not perfect and preference != 'locked',
-                     'editable': editable,
-                     'source': 'Selected by you' if preference == 'offered' else 'Automatic'})
-    for mon in party:
-        preference = mon.get('trade_preference', 'auto')
-        rows.append({**mon, 'box': 0, 'position': mon.get('slot'), 'listed': False,
-                     'shiny': bool(mon.get('shiny')), 'perfect_dvs': tuple(mon.get('dvs', ())) == (15,) * 5,
-                     'locked': preference == 'locked', 'preference': preference,
-                     'setting': setting_name(preference), 'source': 'Selected by you',
-                     'reason': 'Locked against trading and automatic release' if preference == 'locked' else 'Active party is protected',
-                     'can_offer': False,
+        rows.append({**eligible.get(mon.get('trade_key'), mon), **place, 'shiny': bool(mon.get('shiny')),
+                     'perfect_dvs': tuple(mon.get('dvs', ())) == (15,) * 5, 'preference': preference,
+                     'setting': setting_name(preference),
                      'editable': bool(mon.get('trade_key')) and not mon.get('trade_ambiguous') and not mon.get('egg')})
     return rows
 

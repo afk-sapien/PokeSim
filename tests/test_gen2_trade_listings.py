@@ -33,21 +33,19 @@ def payload():
 def test_every_party_and_boxed_pokemon_has_a_trade_state(emu):
     rows = {row['trade_key']: row for row in trading.listings(emu, payload())}
     assert len(rows) == 9
-    assert [key for key, row in rows.items() if row['listed']] == ['k1', 'k8']
-    assert rows['k2']['reason'].startswith('Kept as a Day Care parent') and rows['k2']['can_offer']
-    assert rows['k3']['reason'] == 'Shiny partner preserved for the collection' and not rows['k3']['can_offer']
-    assert rows['k4']['perfect_dvs'] and not rows['k4']['can_offer']
-    assert rows['k5']['locked'] and rows['k5']['editable'] and not rows['k5']['can_offer']
-    assert rows['k6']['reason'] == 'Trained partner kept by automatic selection'
+    assert rows['k3']['shiny'] and rows['k4']['perfect_dvs']
+    assert rows['k5']['setting'] == 'keep' and rows['k5']['editable']
+    assert rows['k8']['setting'] == 'first' and rows['k1']['setting'] == 'auto'
     assert not rows['k7']['editable']
-    assert rows['k8']['source'] == 'Selected by you'
-    assert rows['p1']['box'] == 0 and rows['p1']['reason'] == 'Active party is protected'
+    assert rows['p1']['box'] == 0 and rows['p1']['editable']
+    # Only the fields the Trading page draws, no per-row lock or listing state.
+    assert not {'listed', 'locked', 'reason', 'can_offer', 'source'} & set().union(*rows.values())
     # The coordinator's eligibility list is unchanged.
     assert [row['trade_key'] for row in trading.offers(emu, payload())] == ['k1', 'k8']
 
 
 @pytest.mark.parametrize('pause', ['snapshot', 'league', 'contest'])
-def test_paused_trading_still_lists_everyone_with_the_reason(emu, pause):
+def test_paused_trading_still_lists_everyone_with_their_setting(emu, pause):
     if pause == 'snapshot':
         emu.snapshot = None
     elif pause == 'league':
@@ -56,8 +54,7 @@ def test_paused_trading_still_lists_everyone_with_the_reason(emu, pause):
         emu.policy.collection['contest'] = True
     assert trading.offers(emu, payload()) == []
     rows = trading.listings(emu, payload())
-    assert len(rows) == 9 and not any(row['listed'] for row in rows)
-    assert all(row['reason'] for row in rows)
+    assert len(rows) == 9 and all(row['setting'] for row in rows)
 
 
 def test_manual_inventory_offers_everyone_and_explains_time_capsule_limits(tmp_path, monkeypatch):

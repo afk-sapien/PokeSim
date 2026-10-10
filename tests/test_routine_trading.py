@@ -85,14 +85,12 @@ def test_last_copy_cannot_be_spent_for_a_quality_upgrade_alone():
     assert routine.proposals([red, blue], allow_last_copies=True) == []
 
 
-def test_listings_explain_last_copy_policy():
+def test_last_copy_policy_decides_offers_and_listings_show_the_setting():
     red = inv('red', {MAGIKARP}, stored=[(MAGIKARP, 5)])
-    blocked, = routine.listings(red)
-    assert not blocked['listed']
-    assert blocked['reason'] == 'Last copy is protected'
-    available, = routine.listings(red, allow_last_copies=True)
-    assert available['listed']
-    assert available['source'] == 'Automatic'
+    assert not routine.offers(red, False)
+    assert routine.offers(red, True)
+    row, = routine.listings(red)
+    assert row['setting'] == 'auto' and not {'listed', 'reason', 'source', 'can_offer', 'locked'} & set(row)
 
 
 def test_a_trade_evolution_is_worth_taking_even_once_the_evolution_is_registered():

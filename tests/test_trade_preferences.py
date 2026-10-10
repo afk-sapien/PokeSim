@@ -54,8 +54,7 @@ def test_withdrawal_excludes_automatic_and_last_copy_offers():
     red = normal(data, {key: {'state': 'withdrawn'}})
     blue = normal(payload('blue', ZUBAT))
     assert not routine.proposals([red, blue], allow_last_copies=True)
-    row = routine.listings(red)[0]
-    assert not row['listed'] and row['setting'] == 'keep'
+    assert routine.listings(red)[0]['setting'] == 'keep'
     data['storage']['pokemon'] = data['storage']['pokemon'][:1]
     assert not routine.offers(normal(data, {key: {'state': 'withdrawn'}}), True)
 
@@ -231,7 +230,7 @@ def test_one_setting_switches_freely_between_auto_first_and_keep(game):
         assert store.trade_preferences()[key]['state'] == stored
     assert change('keep').status_code == 200
     row = next(mon for mon in client.get('/api/trading').json()['offers'] if mon['trade_key'] == key)
-    assert row['setting'] == 'keep' and not row['listed']
+    assert row['setting'] == 'keep' and 'listed' not in row
     # Older clients still send the earlier names.
     assert change('unlocked').status_code == 200
     assert store.trade_preferences()[key]['state'] == 'auto'
