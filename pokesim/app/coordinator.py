@@ -27,6 +27,12 @@ COOLDOWN_SECONDS = 300
 KEEP_INTERACTIONS = 20
 RECOVERY_BACKOFF_SECONDS = 30
 RECOVERY_BACKOFF_MAX = 600
+LINKABLE = {'red', 'blue', 'yellow', 'gold', 'silver', 'crystal'}
+# Trades the owner picked by hand wait here, oldest first, ahead of automatic trades.
+MANUAL_KEY = 'manual_trades'
+MANUAL_WAITING = {'queued', 'starting'}
+KEEP_MANUAL = 50
+SET_ASIDE = 'Set aside for a trade you chose'
 
 
 def _display_number(value, maximum):
@@ -81,6 +87,9 @@ class Coordinator:
         self.session_timeout = 960
         self.display_species = None
         self.display_cache = {}
+        self.manual_guard = threading.Lock()
+        self.manual_drain = threading.Lock()
+        self.manual_progress = {}
 
     def _species(self, species):
         if self.display_species is None:
@@ -232,6 +241,8 @@ class Coordinator:
             return 'An adventure did not reach a safe stopping point in time.'
         if 'Cancelled by the owner' in error:
             return 'This exchange was cancelled.'
+        if SET_ASIDE in error:
+            return 'This automatic trade made way for a trade you chose.'
         return 'The exchange could not finish safely. Both adventures kept their Pokémon.'
 
     def _attention(self, rows):
@@ -318,8 +329,9 @@ class Coordinator:
 
     def propose(self, data):
         required = {'left_id', 'right_id', 'left_key', 'right_key'}
-        if not isinstance(data, dict) or not required <= set(data) or set(data) - required - {'request_id'}:
+        if not isinstance(data, dict) or not required <= set(data) or set(data) - required - {'request_id', 'manual'}:
             raise ValueError('Choose two adventures and their Pokémon')
+        manual = data.get('manual') is True
         tid = validate_id(data.get('request_id') or identifier())
         selection = {name: data[name] for name in required}
         for name in ('left_id', 'right_id'):
@@ -341,9 +353,17 @@ class Coordinator:
         selected_inventories = []
         selected_offers = []
         for side, aid in zip(('left', 'right'), participants):
-            inventory = self.inventory(aid)
+            inventory = self.manual_inventory(aid) if manual else self.inventory(aid)
             if inventory.get('holding'):
                 raise ValueError('An adventure is already held for an exchange')
+            if manual:
+                # The owner's choice skips every protection and eligibility rule. Only limits
+                # the cable itself cannot get past still stop the trade.
+                selected_offer = self._manual_offer(inventory, selection[side + '_key'])
+                selected_inventories.append(inventory)
+                selected_offers.append(selected_offer)
+                display_offers[aid] = self._mon_display(selected_offer)
+                continue
             eligible = {mon.get('trade_key') for mon in inventory.get('offers', [])}
             if selection[side + '_key'] not in eligible:
                 raise ValueError('This Pokémon is no longer eligible. Check its locks and trade preferences.')
@@ -354,8 +374,10 @@ class Coordinator:
         left, right = selected_inventories
         give, take = (self._offer_for(selected_offers[0], right), self._offer_for(selected_offers[1], left))
         if not self._compatible_pair(left, right, give, take):
+            if manual:
+                raise ValueError(self._capsule_reason(left, right, give, take))
             raise ValueError('The Time Capsule needs an unlocked Gen II adventure and compatible Kanto Pokémon')
-        if not self._last_copies_useful(give, take, self._benefit(left, take), self._benefit(right, give)):
+        if not manual and not self._last_copies_useful(give, take, self._benefit(left, take), self._benefit(right, give)):
             raise ValueError('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
         with self.manager.maintenance, self.guard:
             existing = self._admit(tid, selection)
@@ -364,6 +386,8 @@ class Coordinator:
             campaigns = {aid: self.registry.adventure(aid)['campaign_id'] for aid in participants}
             plan = {**selection, 'participants': participants, 'campaign_ids': campaigns,
                     'attempt_id': identifier(), 'kind': 'cable_trade', 'display_offers': display_offers}
+            if manual:
+                plan['manual'] = True
             plan['plan_digest'] = digest(plan)
             return self.registry.create_transaction(tid, plan)
 
@@ -387,7 +411,7 @@ class Coordinator:
                 raise ValueError('Both adventures must be running before an exchange')
             if (game.get('provenance') or {}).get('trading_blocked'):
                 raise ValueError(game['provenance'].get('reason') or 'This imported adventure needs its legacy peers reconciled before trading')
-            if game['version'] not in {'red', 'blue', 'yellow', 'gold', 'silver', 'crystal'}:
+            if game['version'] not in LINKABLE:
                 raise ValueError('This cartridge has no compatible Cable Club adapter')
         return None
 
@@ -401,10 +425,17 @@ class Coordinator:
             for side, aid in zip(('left', 'right'), plan['participants']):
                 if aid in prepared:
                     continue
-                receipt = self._request(aid, 'prepare', {'id': row['id'], 'plan_digest': plan['plan_digest'],
-                                                        'selected_key': plan[side + '_key'],
-                                                        'time_capsule': len({self.registry.adventure(p)['version'] in {'red', 'blue', 'yellow'}
-                                                                             for p in plan['participants']}) == 2})
+                request = {'id': row['id'], 'plan_digest': plan['plan_digest'], 'selected_key': plan[side + '_key'],
+                           'time_capsule': len({self.registry.adventure(p)['version'] in {'red', 'blue', 'yellow'}
+                                                for p in plan['participants']}) == 2}
+                if plan.get('manual'):
+                    request['manual'] = True
+                receipt = self._request(aid, 'prepare', request)
+                if plan.get('manual'):
+                    with self.view_guard:
+                        progress = self.manual_progress.setdefault(row['id'], {})
+                        progress[aid] = ('ready' if receipt.get('phase') == 'prepared' else
+                                         (receipt.get('preparation') or {}).get('phase') or 'travelling')
                 if receipt.get('phase') == 'prepared':
                     if receipt.get('plan_digest') != plan['plan_digest'] or receipt.get('selected_key') != plan[side + '_key']:
                         raise ValueError('Preparation receipt does not match the selected exchange')
@@ -555,6 +586,8 @@ class Coordinator:
                 row = self.registry.transaction(tid)
                 if row['decision'] is None:
                     row = self.registry.update_transaction(tid, decision='ABORT', phase='aborting', error=str(error))
+                elif row['decision'] == 'ABORT' and row.get('error'):
+                    pass    # Keep the reason the exchange was stopped for, such as an owner cancel.
                 else:
                     self.registry.update_transaction(tid, error=str(error))
                 try:
@@ -563,6 +596,7 @@ class Coordinator:
                     return self.registry.update_transaction(tid, phase='recovering', error=str(recovery_error))
         finally:
             self.execution.release()
+            self._kick_manual()
 
     def _recover(self, row):
         tid, plan = row['id'], row['plan']
@@ -596,6 +630,8 @@ class Coordinator:
             except Exception:
                 log.exception('Could not announce trade %s', tid)
         self._prune_interactions()
+        with self.view_guard:
+            self.manual_progress.pop(tid, None)
         for aid in plan['participants']:
             self.previews.pop(aid, None)
             if self.registry.adventure(aid)['desired_state'] == 'stopped':
@@ -731,6 +767,8 @@ class Coordinator:
                                      'and it will keep trying more slowly. Check the logs.')
                 return self.recover_one(tid)
             return None
+        if self.manual_waiting():
+            return self.drain_manual()
         history = self.registry.transactions()
         last = {}
         for row in history:
@@ -761,7 +799,7 @@ class Coordinator:
         for game in games:
             aid = game['id']
             if (game['state'] != 'running' or game['desired_state'] != 'running' or game['archived']
-                    or game['version'] not in {'red', 'blue', 'yellow', 'gold', 'silver', 'crystal'} or (game.get('provenance') or {}).get('trading_blocked')):
+                    or game['version'] not in LINKABLE or (game.get('provenance') or {}).get('trading_blocked')):
                 continue
             try:
                 inventory = self.inventory(aid)
@@ -800,6 +838,9 @@ class Coordinator:
                                 -(give.get('level', 0) + take.get('level', 0)),
                                 give.get('trade_key') or '', take.get('trade_key') or '')
                         candidates.append((rank, left_id, right_id, give['trade_key'], take['trade_key']))
+        if candidates and self.manual_waiting():
+            # A trade the owner chose arrived while automatic candidates were scored.
+            return self.drain_manual()
         if candidates:
             _, left_id, right_id, left_key, right_key = max(candidates, key=lambda item: item[0])
             row = self.propose({'left_id': left_id, 'right_id': right_id,
@@ -808,6 +849,239 @@ class Coordinator:
             return self.execute(row['id'])
         self.last_message = 'Your adventures are playing. They will trade when a useful exchange is ready.'
         return None
+
+    # Manual trades: the owner picks both Pokémon and only hard cable limits can refuse them.
+
+    def manual_inventory(self, aid):
+        return self._request(aid, 'manual-inventory')
+
+    @staticmethod
+    def _manual_offer(inventory, key):
+        if inventory.get('reason'):
+            raise ValueError(inventory['reason'])
+        row = next((mon for mon in inventory.get('pokemon') or [] if mon.get('trade_key') == key), None)
+        if row is None:
+            raise ValueError('The selected Pokémon is no longer in that adventure')
+        if row.get('blocked'):
+            raise ValueError(row['blocked'])
+        return dict(row)
+
+    @staticmethod
+    def _capsule_reason(left, right, give, take):
+        modern, offer = (left, give) if left.get('cartridge_generation') == 2 else (right, take)
+        if not modern.get('time_capsule_ready'):
+            return 'The Gold, Silver or Crystal adventure cannot use the Time Capsule yet. It opens the day after meeting Bill'
+        name = offer.get('nickname') or offer.get('name') or 'This Pokémon'
+        return f'{name} cannot go to a Red, Blue or Yellow game. ' + (offer.get('time_capsule_reason') or 'It cannot go through the Time Capsule')
+
+    def manual_game_reason(self, game):
+        """Why an adventure cannot take part in a manual trade right now, or an empty string."""
+        if game['archived']:
+            return 'This adventure is archived'
+        if game['version'] not in LINKABLE:
+            return 'This cartridge has no compatible Cable Club adapter'
+        if (game.get('provenance') or {}).get('trading_blocked'):
+            return game['provenance'].get('reason') or 'This imported adventure needs its legacy peers reconciled before trading'
+        if game['state'] != 'running' or game['desired_state'] != 'running':
+            return 'Start this adventure to trade from it'
+        return ''
+
+    def manual_options(self):
+        """Every adventure with the Pokémon it can trade by hand, or the reason it cannot."""
+        from concurrent.futures import ThreadPoolExecutor
+        games = [game for game in self.registry.adventures() if not game['archived']]
+        reasons = {game['id']: self.manual_game_reason(game) for game in games}
+
+        def load(game):
+            if reasons[game['id']]:
+                return None
+            try:
+                return self.manual_inventory(game['id'])
+            except (RuntimeError, OSError, KeyError, ValueError) as error:
+                return {'reason': f'This adventure did not answer: {error}'}
+        running = [game for game in games if not reasons[game['id']]]
+        with ThreadPoolExecutor(max_workers=max(1, min(8, len(running)))) as pool:
+            inventories = dict(zip([game['id'] for game in running], pool.map(load, running)))
+        rows = []
+        for game in games:
+            aid = game['id']
+            inventory = inventories.get(aid) or {}
+            reason = reasons[aid] or inventory.get('reason') or ''
+            pokemon = [{**mon, 'sprite_url': f'/games/{aid}/sprites/{mon["dex"]}.png?v=rom-portraits-1'
+                        if type(mon.get('dex')) is int else None} for mon in inventory.get('pokemon') or []]
+            rows.append({'id': aid, 'name': game['name'], 'version': game['version'],
+                         'generation': 2 if game['version'] in {'gold', 'silver', 'crystal'} else 1,
+                         'state': game['state'], 'available': not reason, 'reason': reason,
+                         'time_capsule_ready': bool(inventory.get('time_capsule_ready')), 'pokemon': pokemon})
+        return {'adventures': rows}
+
+    def _manual_entries(self):
+        return list(self.registry.setting(MANUAL_KEY, []))
+
+    def _manual_save(self, entries):
+        finished = [entry['id'] for entry in entries if entry['state'] not in MANUAL_WAITING]
+        dropped = set(finished[:-KEEP_MANUAL]) if len(finished) > KEEP_MANUAL else set()
+        self.registry.set_setting(MANUAL_KEY, [entry for entry in entries if entry['id'] not in dropped])
+
+    def _manual_update(self, mid, **fields):
+        with self.manual_guard:
+            entries = self._manual_entries()
+            found = None
+            for entry in entries:
+                if entry['id'] == mid:
+                    entry.update(fields, updated_at=time.time())
+                    found = entry
+            self._manual_save(entries)
+        return found
+
+    def manual_waiting(self):
+        return any(entry['state'] in MANUAL_WAITING for entry in self._manual_entries())
+
+    def _kick_manual(self):
+        if not self.closed.is_set() and not self.manual_drain.locked() and self.manual_waiting():
+            threading.Thread(target=self.drain_manual, daemon=True, name='manual-trade').start()
+
+    def enqueue_manual(self, data):
+        """Queue a trade the owner chose. It starts as soon as the Cable Club is free."""
+        names = ('left_id', 'right_id', 'left_key', 'right_key')
+        if not isinstance(data, dict) or not set(names) <= set(data) or set(data) - set(names) - {'request_id'}:
+            raise ValueError('Choose two adventures and a Pokémon from each')
+        mid = validate_id(data.get('request_id') or identifier())
+        selection = {name: data[name] for name in names}
+        for name in ('left_id', 'right_id'):
+            validate_id(selection[name])
+        for name in ('left_key', 'right_key'):
+            if not isinstance(selection[name], str) or not 1 <= len(selection[name]) <= 256:
+                raise ValueError('Choose a Pokémon on each side')
+        if selection['left_id'] == selection['right_id']:
+            raise ValueError('Choose two different adventures')
+        for aid in (selection['left_id'], selection['right_id']):
+            game = self.registry.adventure(aid)
+            reason = self.manual_game_reason(game)
+            if reason:
+                raise ValueError(f'{game["name"]}: {reason}')
+        if self.closed.is_set() or self.manager.suspended:
+            raise ValueError('Trading is paused for application maintenance')
+        with self.manual_guard:
+            entries = self._manual_entries()
+            existing = next((entry for entry in entries if entry['id'] == mid), None)
+            if existing:
+                if any(existing[name] != value for name, value in selection.items()):
+                    raise ValueError('This request ID already belongs to another trade')
+                return existing
+            try:
+                self.registry.transaction(mid)
+                raise ValueError('This request ID already belongs to another trade')
+            except KeyError:
+                pass
+            now = time.time()
+            entry = {'id': mid, **selection, 'state': 'queued', 'error': None,
+                     'cancel_requested': False, 'created_at': now, 'updated_at': now}
+            entries.append(entry)
+            self._manual_save(entries)
+        return entry
+
+    def _set_aside_automatic(self):
+        """Stop an automatic trade that is still only travelling, so a chosen trade goes next."""
+        with self.guard:
+            for row in self.registry.transactions(unresolved=True):
+                if row['decision'] is None and row['phase'] == 'preparing' and not row['plan'].get('manual'):
+                    self.registry.update_transaction(row['id'], decision='ABORT', phase='aborting', error=SET_ASIDE)
+
+    def drain_manual(self):
+        """Run queued manual trades in order until the queue is empty or the Cable Club is busy."""
+        if not self.manual_drain.acquire(blocking=False):
+            return None
+        last = None
+        try:
+            # Only this loop moves an entry to starting, so one seen now was cut off by a restart.
+            for entry in self._manual_entries():
+                if entry['state'] == 'starting':
+                    try:
+                        self.registry.transaction(entry['id'])
+                        self._manual_update(entry['id'], state='started')
+                    except KeyError:
+                        self._manual_update(entry['id'], state='queued')
+            while not self.closed.is_set() and not self.manager.suspended:
+                head = next((entry for entry in self._manual_entries() if entry['state'] == 'queued'), None)
+                if head is None:
+                    break
+                if self.execution.locked() or self.registry.transactions(unresolved=True):
+                    self._set_aside_automatic()
+                    break
+                self._manual_update(head['id'], state='starting')
+                try:
+                    row = self.propose({name: head[name] for name in ('left_id', 'right_id', 'left_key', 'right_key')}
+                                       | {'request_id': head['id'], 'manual': True})
+                except ValueError as error:
+                    if 'Resolve the current Cable Club exchange' in str(error) or 'application maintenance' in str(error):
+                        self._manual_update(head['id'], state='queued')
+                        break
+                    self._manual_update(head['id'], state='rejected', error=str(error))
+                    continue
+                except (RuntimeError, OSError, KeyError) as error:
+                    self._manual_update(head['id'], state='rejected',
+                                        error=f'An adventure could not answer: {error}')
+                    continue
+                entry = self._manual_update(head['id'], state='started')
+                if entry and entry.get('cancel_requested'):
+                    last = self.cancel(row['id'])
+                    continue
+                self.last_message = 'A trade you chose is preparing at the Cable Club.'
+                last = self.execute(row['id'])
+        finally:
+            self.manual_drain.release()
+        return last
+
+    def manual_status(self, mid):
+        entry = next((entry for entry in self._manual_entries() if entry['id'] == mid), None)
+        if entry is None:
+            raise KeyError('Manual trade not found')
+        return self._manual_public(entry)
+
+    def manual_statuses(self):
+        return {'trades': [self._manual_public(entry) for entry in reversed(self._manual_entries())]}
+
+    def _manual_public(self, entry):
+        result = {key: entry[key] for key in ('id', 'left_id', 'right_id', 'left_key', 'right_key',
+                                              'state', 'error', 'created_at', 'updated_at')}
+        result.update(position=None, phase=None, decision=None, failure_reason=None, display=None,
+                      preparation={}, cancellable=False)
+        if entry['state'] == 'queued':
+            waiting = [item['id'] for item in self._manual_entries() if item['state'] == 'queued']
+            result.update(position=waiting.index(entry['id']) + 1, cancellable=True)
+        elif entry['state'] == 'starting':
+            result.update(phase='checking', cancellable=not entry.get('cancel_requested'))
+        elif entry['state'] == 'started':
+            try:
+                row = self.registry.transaction(entry['id'])
+            except KeyError:
+                return result
+            with self.view_guard:
+                progress = dict(self.manual_progress.get(row['id'], {}))
+            result.update(phase=row['phase'], decision=row['decision'], display=self._trade_display(row),
+                          preparation=progress if row['phase'] == 'preparing' else {},
+                          cancellable=row['decision'] is None and row['phase'] not in TERMINAL,
+                          error=row['error'] if row['phase'] == 'aborted' else None,
+                          failure_reason=self._failure_reason(row) if row['phase'] == 'aborted' else None)
+        return result
+
+    def cancel_manual(self, mid):
+        """Cancel a chosen trade before it commits. A committed trade always finishes."""
+        with self.manual_guard:
+            entries = self._manual_entries()
+            entry = next((item for item in entries if item['id'] == mid), None)
+            if entry is None:
+                raise KeyError('Manual trade not found')
+            state = entry['state']
+            if state == 'queued':
+                entry.update(state='cancelled', error='Cancelled by the owner', updated_at=time.time())
+            elif state == 'starting':
+                entry.update(cancel_requested=True, updated_at=time.time())
+            self._manual_save(entries)
+        if state == 'started':
+            self.cancel(mid)
+        return self.manual_status(mid)
 
     def start_scheduler(self):
         if self.scheduler and self.scheduler.is_alive():

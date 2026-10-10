@@ -320,6 +320,182 @@
     $('#trade-failures-section').hidden = !failures.length
     $('#trade-failures').innerHTML = failures.map(trade => describeTrade(trade)).join('')
   }
+  // Manual trades: the owner picks any Pokémon on each side. Only hard cable limits can block one.
+  const manual = {options: [], choice: {left: {game: '', key: ''}, right: {game: '', key: ''}}, current: '', loaded: false, status: null}
+  const manualSteps = [
+    ['queued', 'Waiting for the Cable Club'], ['preparing', 'Heading to the Cable Club'],
+    ['connecting', 'Connecting the games'], ['trading', 'Exchanging Pokémon'],
+    ['verifying', 'Checking both saves'], ['committed', 'Saving the trade'], ['completed', 'Trade complete']]
+  const manualStepOf = {queued: 0, checking: 0, preparing: 1, connecting: 2, trading: 3, saving: 3, leaving: 3, resuming: 3,
+    returning: 3, verifying: 4, staging: 4, committed: 5, releasing: 5, completed: 6}
+  const preparationLabels = {travelling: 'travelling to a Pokémon Center', storage: 'at the PC', rendezvous: 'at the Cable Club counter',
+    ready: 'ready at the Cable Club'}
+  const manualGame = side => manual.options.find(game => game.id === manual.choice[side].game)
+  const manualMon = side => manualGame(side)?.pokemon.find(mon => mon.trade_key === manual.choice[side].key)
+  const otherSide = side => side === 'left' ? 'right' : 'left'
+  function manualLocation(mon) {
+    return mon.location === 'party' ? `Party slot ${mon.slot}` : `Box ${mon.box}, slot ${mon.slot}`
+  }
+  function manualMonName(mon) {
+    if (!mon) return 'a Pokémon'
+    return mon.nickname && mon.nickname.toLowerCase() !== String(mon.name || '').toLowerCase() ? `${mon.nickname} (${mon.name})` : mon.name || 'a Pokémon'
+  }
+  // A Gen II Pokémon going to a Gen I game must fit through the Time Capsule.
+  function manualBlocked(side, mon) {
+    if (mon.blocked) return mon.blocked
+    const game = manualGame(side)
+    const other = manualGame(otherSide(side))
+    if (!game || !other || game.generation === other.generation || game.generation !== 2) return ''
+    if (!game.time_capsule_ready) return 'This adventure cannot use the Time Capsule yet. It opens the day after meeting Bill.'
+    if (!mon.time_capsule_compatible) return `Cannot go to ${gameName(other)}. ${mon.time_capsule_reason || 'It cannot go through the Time Capsule.'}`
+    return ''
+  }
+  function renderManualSide(side) {
+    const select = $(`#manual-${side}-game`)
+    const chosen = manual.choice[side]
+    const taken = manual.choice[otherSide(side)].game
+    select.innerHTML = '<option value="">Choose an adventure</option>' + manual.options.map(game => {
+      const note = game.id === taken ? ' (chosen on the other side)' : game.available ? '' : ' (unavailable)'
+      return `<option value="${esc(game.id)}"${game.id === chosen.game ? ' selected' : ''}${game.id === taken ? ' disabled' : ''}>${esc(game.name)} · ${esc(gameName(game))}${esc(note)}</option>`
+    }).join('')
+    select.value = chosen.game
+    const game = manualGame(side)
+    $(`#manual-${side}-reason`).textContent = !game ? '' : game.available ? `${game.pokemon.length} Pokémon in the party and PC` : game.reason
+    const filter = String($(`#manual-${side}-filter`).value || '').trim().toLowerCase()
+    const rows = game?.available ? game.pokemon.filter(mon => !filter || [mon.name, mon.nickname, manualLocation(mon)]
+      .some(text => String(text || '').toLowerCase().includes(filter))) : []
+    $(`#manual-${side}-list`).innerHTML = !game ? '<p class="note">Choose an adventure to see its Pokémon.</p>'
+      : !game.available ? '' : rows.length ? rows.map(mon => {
+        const blocked = manualBlocked(side, mon)
+        const picked = mon.trade_key && mon.trade_key === chosen.key
+        const sprite = mon.sprite_url ? `<div class="plate plate--mini"><img src="${esc(mon.sprite_url)}" alt="" loading="lazy"></div>`
+          : '<div class="plate plate--mini exchange-placeholder" aria-hidden="true"><span class="plate-num">?</span></div>'
+        const nickname = mon.nickname && mon.nickname.toLowerCase() !== String(mon.name || '').toLowerCase() ? `<span class="manual-nick">“${esc(mon.nickname)}”</span>` : ''
+        const level = Number.isInteger(mon.level) ? ` · Lv. ${mon.level}` : ''
+        return `<button type="button" class="manual-mon${picked ? ' is-picked' : ''}" data-manual-side="${side}" data-manual-key="${esc(mon.trade_key || '')}" aria-pressed="${picked}"${blocked ? ' disabled' : ''}>${sprite}<span class="manual-text"><strong>${esc(mon.name || 'Unknown')}${mon.shiny ? ' ✦' : ''}</strong>${nickname}<span class="micro">${esc(manualLocation(mon))}${level}</span>${blocked ? `<span class="manual-why">${esc(blocked)}</span>` : ''}</span></button>`
+      }).join('') : '<p class="note">No Pokémon match this search.</p>'
+  }
+  function manualProblem() {
+    for (const side of ['left', 'right']) {
+      const game = manualGame(side)
+      if (!game) return 'Choose an adventure on each side.'
+      if (!game.available) return `${game.name}: ${game.reason}`
+    }
+    for (const side of ['left', 'right']) {
+      const mon = manualMon(side)
+      if (!mon) return 'Choose a Pokémon on each side.'
+      const blocked = manualBlocked(side, mon)
+      if (blocked) return `${manualMonName(mon)}: ${blocked}`
+    }
+    return ''
+  }
+  function renderManual() {
+    for (const side of ['left', 'right']) {
+      const mon = manualMon(side)
+      if (manual.choice[side].key && (!mon || manualBlocked(side, mon))) manual.choice[side].key = ''
+      renderManualSide(side)
+    }
+    const problem = manualProblem()
+    const left = manualGame('left')
+    const right = manualGame('right')
+    $('#trade-summary').textContent = problem ? 'Choose an adventure and a Pokémon on each side.'
+      : `${left.name} sends ${manualMonName(manualMon('left'))}. ${right.name} sends ${manualMonName(manualMon('right'))}.`
+    $('#trade-limit').textContent = problem && !/^Choose/.test(problem) ? problem : ''
+    $('#trade-submit').toggleAttribute('data-blocked', Boolean(problem))
+    permissions()
+  }
+  async function loadManualOptions() {
+    $('#trade-summary').textContent = 'Checking your adventures…'
+    const data = await api('/api/v1/interactions/manual-trades/options')
+    manual.options = data.adventures || []
+    for (const side of ['left', 'right']) {
+      if (!manualGame(side)) manual.choice[side] = {game: '', key: ''}
+    }
+    manual.loaded = true
+    renderManual()
+  }
+  function manualOutcome(status) {
+    if (status.state === 'rejected') return {done: true, failed: true, text: status.error || 'This trade could not start.'}
+    if (status.state === 'cancelled') return {done: true, failed: true, text: 'Trade cancelled. Both adventures kept their Pokémon.'}
+    if (status.phase === 'aborted') {
+      const detail = status.error && status.error !== status.failure_reason ? ` ${status.error}` : ''
+      return {done: true, failed: true, text: `${status.failure_reason || 'The trade did not complete.'}${detail}`}
+    }
+    if (status.phase === 'completed') {
+      const display = status.display || {}
+      const got = id => display[id]?.received?.name
+      const name = id => manual.options.find(game => game.id === id)?.name || adventures.find(game => game.id === id)?.name || 'An adventure'
+      const parts = [status.left_id, status.right_id].filter(got).map(id => `${name(id)} received ${got(id)}.`)
+      return {done: true, failed: false, text: `Trade complete. ${parts.join(' ')}`.trim()}
+    }
+    return {done: false}
+  }
+  function renderManualStatus(status) {
+    manual.status = status
+    $('#trade-progress').hidden = !status
+    if (!status) return
+    const name = id => manual.options.find(game => game.id === id)?.name || adventures.find(game => game.id === id)?.name || 'An adventure'
+    $('#trade-progress-title').textContent = `${name(status.left_id)} ⇄ ${name(status.right_id)}`
+    const outcome = manualOutcome(status)
+    const step = status.state === 'queued' ? 0 : manualStepOf[status.phase] ?? 0
+    const stopping = ['aborting', 'aborted', 'recovering'].includes(status.phase) || ['rejected', 'cancelled'].includes(status.state)
+    $('#trade-steps').innerHTML = manualSteps.map(([, label], index) => {
+      const state = outcome.done && !outcome.failed ? 'done' : index < step ? 'done' : index === step && !stopping ? 'now' : 'todo'
+      return `<li class="manual-step is-${state}"${state === 'now' ? ' aria-current="step"' : ''}>${esc(label)}</li>`
+    }).join('')
+    let text = ''
+    if (status.state === 'queued') text = status.position > 1 ? `Waiting in line. ${status.position - 1} chosen ${status.position === 2 ? 'trade goes' : 'trades go'} first.` : 'Waiting for the Cable Club to be free.'
+    else if (status.state === 'starting') text = 'Checking both Pokémon with their adventures.'
+    else if (status.phase === 'preparing') {
+      const sides = Object.entries(status.preparation || {}).map(([id, phase]) => `${name(id)} is ${preparationLabels[phase] || 'getting ready'}`)
+      text = sides.length ? `${sides.join('. ')}.` : 'Both adventures are heading to the Cable Club.'
+    } else if (['aborting', 'recovering'].includes(status.phase)) text = 'Stopping the trade safely. Both adventures keep their Pokémon.'
+    else if (!outcome.done) text = tradePhase(status)
+    $('#trade-progress-text').textContent = text
+    $('#trade-result').textContent = outcome.done ? outcome.text : ''
+    $('#trade-result').classList.toggle('error', Boolean(outcome.failed))
+    $('#trade-cancel').hidden = !status.cancellable
+  }
+  async function refreshManualTrade() {
+    if (!manual.loaded) await loadManualOptions()
+    if (!manual.current) {
+      const data = await api('/api/v1/interactions/manual-trades')
+      const open = (data.trades || []).find(trade => !manualOutcome(trade).done)
+      if (open) manual.current = open.id
+    }
+    if (!manual.current) return renderManualStatus(null)
+    const status = await api(`/api/v1/interactions/manual-trades/${encodeURIComponent(manual.current)}`)
+    const finished = manualOutcome(status).done && !manualOutcome(manual.status || {}).done && manual.status?.id === status.id
+    renderManualStatus(status)
+    if (finished) await loadManualOptions()
+  }
+  document.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-manual-key]')
+    if (!button || button.disabled || page !== 'trade') return
+    const side = button.dataset.manualSide
+    manual.choice[side].key = manual.choice[side].key === button.dataset.manualKey ? '' : button.dataset.manualKey
+    renderManual()
+  })
+  for (const side of ['left', 'right']) {
+    $(`#manual-${side}-game`).onchange = () => {
+      manual.choice[side] = {game: $(`#manual-${side}-game`).value, key: ''}
+      renderManual()
+    }
+    $(`#manual-${side}-filter`).oninput = () => renderManualSide(side)
+  }
+  $('#trade-reload').onclick = () => act(loadManualOptions)
+  $('#trade-submit').onclick = () => act(async () => {
+    const problem = manualProblem()
+    if (problem) throw new Error(problem)
+    const status = await write('/api/v1/interactions/manual-trades', {left_id: manual.choice.left.game, left_key: manual.choice.left.key,
+      right_id: manual.choice.right.game, right_key: manual.choice.right.key})
+    manual.current = status.id
+    renderManualStatus(status)
+  })
+  $('#trade-cancel').onclick = () => act(async () => {
+    if (!manual.current) return
+    renderManualStatus(await write(`/api/v1/interactions/manual-trades/${encodeURIComponent(manual.current)}/cancel`))
+  })
   let savedBackups = []
   let backupPage = 0
   let backupToDelete = null
@@ -472,6 +648,7 @@
       renderAdventures()
       if (page === 'notifications') renderNotifyAdventures()
       if (page === 'trading') await refreshTrades()
+      if (page === 'trade') await refreshManualTrade()
       connection('Connected', false)
     } catch (error) { connection('Reconnecting…', true)
       notice(error.message, true) }
@@ -1103,7 +1280,7 @@
     await initializeSession()
     $('#workspace').hidden = false
     document.querySelectorAll('[data-view]').forEach(section => { section.hidden = section.dataset.view !== page })
-    document.querySelector(`[data-nav="${page === 'stopped' ? 'library' : page}"]`)?.setAttribute('aria-current', 'page')
+    document.querySelector(`[data-nav="${page === 'stopped' ? 'library' : page === 'trade' ? 'trading' : page}"]`)?.setAttribute('aria-current', 'page')
     if (page === 'settings' && owner) {
       renderNicknameSettings(await api('/api/v1/settings'))
       await refreshBackups()

@@ -25,8 +25,39 @@ last-copy rule still apply. A last copy can only travel for a new registration.
 Selected partners are reserved against automatic PC release until withdrawn or
 traded. If a selected partner becomes part of the party or a project, its offer
 is suspended with a reason. Withdrawals override automatic offers and remain in
-effect until the user offers that partner again. No action approves or executes
-an individual trade. The existing coordinator continues automatically.
+effect until the user offers that partner again. Offers only steer automatic
+trading. To run one particular trade, use [Make a trade](#make-a-trade).
+
+## Make a trade
+
+The Trade page at `/trade`, linked from Cable Club trading as Make a trade, runs
+one exchange you choose. Pick an adventure and any Pokémon in its party or PC on
+each side, then press Trade. Locks, offers, withdrawals, party protection, the
+last-copy rule and automatic ranking do not apply. The trade is yours to make.
+
+Only limits the cable itself cannot get past stop a pair, and the page says why:
+
+1. Eggs, and a Pokémon that shares its trainer and stats with another one so it
+   cannot be picked out safely.
+2. In Gold, Silver and Crystal, the only party member that can still battle.
+3. Through the Time Capsule, a Gen II adventure that has not unlocked it yet, and
+   Pokémon past number 151, Pokémon with Gen II moves or Pokémon holding Mail.
+4. Adventures that are stopped, archived, held for another exchange, under your
+   control, or busy with an event such as the Battle Tower.
+
+Each adventure walks to a Pokémon Center, uses the PC if the chosen Pokémon is
+boxed (sending any party member to the PC if the party is full), and meets the
+other at the Cable Club. The trade then goes through the same checked cable
+exchange as automatic trades. A trade you choose goes before any automatic one.
+An automatic trade that is still travelling is set aside for it, and chosen
+trades wait in line, oldest first, while the Cable Club is busy. You can cancel
+while the trade is waiting or preparing. Once both saves are being committed the
+trade always finishes.
+
+The API is `GET /api/v1/interactions/manual-trades/options`, `POST` and `GET
+/api/v1/interactions/manual-trades`, `GET /api/v1/interactions/manual-trades/{id}`
+and `POST /api/v1/interactions/manual-trades/{id}/cancel`. A request sends
+`left_id`, `left_key`, `right_id`, `right_key` and an optional `request_id`.
 
 Preferences are saved per game in SQLite, separately from cartridge checkpoints.
 Trainer ID and DVs identify a partner across box moves, renaming, evolution, and

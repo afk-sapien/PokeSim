@@ -58,3 +58,49 @@ def test_paused_trading_still_lists_everyone_with_the_reason(emu, pause):
     rows = trading.listings(emu, payload())
     assert len(rows) == 9 and not any(row['listed'] for row in rows)
     assert all(row['reason'] for row in rows)
+
+
+def test_manual_inventory_offers_everyone_and_explains_time_capsule_limits(tmp_path, monkeypatch):
+    from pokesim.store import Store
+
+    party = (SimpleNamespace(species=9, egg=False, moves=(33,), held_item=0),
+             SimpleNamespace(species=175, egg=False, moves=(33,), held_item=0))
+    stored = (SimpleNamespace(species=1, egg=False, moves=(33, 200), held_item=0, box=0, position=0),
+              SimpleNamespace(species=2, egg=False, moves=(33,), held_item=9, box=0, position=1),
+              SimpleNamespace(species=3, egg=True, moves=(), held_item=0, box=0, position=2))
+    snapshot = SimpleNamespace(party=party, stored=stored, items=())
+    monkeypatch.setattr(trading, 'live_status', lambda *args: {
+        'party': [{'species': 9, 'slot': 1, 'trainer_id': 1, 'dvs': (1,) * 5},
+                  {'species': 175, 'slot': 2, 'trainer_id': 2, 'dvs': (2,) * 5}],
+        'storage': {'pokemon': [boxed(1, 1, trainer_id=3), boxed(2, 2, trainer_id=4), boxed(3, 3, egg=True, trainer_id=5)]}})
+    monkeypatch.setattr(trading, 'unlocked', lambda *args: True)
+    monkeypatch.setattr(trading, 'Memory', lambda *args: None)
+    monkeypatch.setattr(trading, 'compatible', lambda mon, data: mon.species <= 151 and max(mon.moves) <= 165 and not mon.held_item)
+    data = SimpleNamespace(item_names={9: 'FLOWER MAIL'})
+    league = {'value': True}
+    policy = SimpleNamespace(collection={}, in_league=lambda snap: league['value'])
+    store = Store(tmp_path)
+    try:
+        emu = SimpleNamespace(snapshot=snapshot, policy=policy, data=data, paused=False, manual_mode=False,
+                              pb=SimpleNamespace(memory=b''), status=lambda: {'game': {}})
+        owner = trading.Participant(SimpleNamespace(store=store, emulator=emu),
+                                    SimpleNamespace(adventure_id='gold', generation=2))
+        inventory = owner.manual_inventory()
+        assert inventory['reason'] == ''    # The League only delays a chosen trade.
+        assert inventory['time_capsule_ready'] is True
+        assert inventory['cartridge_generation'] == 2
+        assert all(row['trade_key'] for row in inventory['pokemon'])
+        names = {('party', 1): 'p1', ('party', 2): 'p2', ('box', 1): 'k1', ('box', 2): 'k2', ('box', 3): 'k3'}
+        rows = {names[row['location'], row['slot']]: row for row in inventory['pokemon']}
+        assert len(rows) == 5
+        assert rows['p1']['blocked'] == '' and rows['p1']['time_capsule_compatible'] is True
+        assert rows['p2']['time_capsule_reason'] == 'Red, Blue and Yellow only know the first 151 species'
+        assert 'move that does not exist' in rows['k1']['time_capsule_reason']
+        assert rows['k2']['blocked'] == ''
+        assert 'Mail' in rows['k2']['time_capsule_reason']
+        assert rows['k3']['blocked'] == 'Eggs cannot be traded'
+        league['value'] = False
+        policy.collection['contest'] = True
+        assert owner.manual_inventory()['reason'] == 'Trading pauses during the current event'
+    finally:
+        store.close()

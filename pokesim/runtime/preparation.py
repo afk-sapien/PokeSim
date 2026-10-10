@@ -38,7 +38,7 @@ def selection(snapshot, preferences, key):
     return matches[0]
 
 
-def begin(emu, trade_key, transaction_id, max_frames=108000):
+def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False):
     previous = emu.store.get(KEY)
     if previous and previous.get('id') == transaction_id:
         if previous.get('trade_key') != trade_key:
@@ -53,14 +53,17 @@ def begin(emu, trade_key, transaction_id, max_frames=108000):
         raise ValueError('Wait for a valid started adventure')
     if not isinstance(trade_key, str) or len(trade_key) != 24:
         raise ValueError('Choose an identifiable Pokémon')
-    location, _, _ = selection(snapshot, emu.store.trade_preferences(), trade_key)
-    if location != 'box':
+    # A manual trade is the owner's own choice, so trade preferences and party protection do not apply.
+    location, _, _ = selection(snapshot, {} if manual else emu.store.trade_preferences(), trade_key)
+    if location != 'box' and not manual:
         raise ValueError('Choose a boxed spare. Active party members are protected')
     if type(max_frames) is not int or not 60 <= max_frames <= 216000:
         raise ValueError('Invalid preparation frame budget')
     state = {'id': transaction_id, 'trade_key': trade_key, 'phase': 'travelling',
              'started_at': time.time(), 'deadline': time.time() + 1800,
              'elapsed_frames': 0, 'max_frames': max_frames, 'party_slot': None, 'selected_key': trade_key}
+    if manual:
+        state.update(manual=True, from_party=location == 'party')
     if not overworld_ready(snapshot, Screen(emu.pb.memory).kind(snapshot)):
         state.update(waiting_for='overworld',
                      waiting_reason=('Finishing the League run before travelling to the Cable Club'
@@ -122,6 +125,9 @@ class Preparation:
         self.walk_wait_since = None
         self.storage_cleanup = None
         self.shortcut = ShortcutRunner()
+
+    def _preferences(self):
+        return {} if self.state.get('manual') else self.emu.store.trade_preferences()
 
     def _save(self):
         self.emu.store.set(KEY, self.state)
@@ -228,8 +234,8 @@ class Preparation:
             return [Action(None, 0, 12)]
         self.invalid_since = None
         if self.state.get('waiting_for'):
-            location, _, _ = selection(snap, self.emu.store.trade_preferences(), self.state['trade_key'])
-            if location != 'box':
+            location, _, _ = selection(snap, self._preferences(), self.state['trade_key'])
+            if location != 'box' and not self.state.get('manual'):
                 raise ValueError('The selected boxed spare moved before Cable Club preparation began')
             if not overworld_ready(snap, kind):
                 return list(self.emu.policy.step(ctx))
@@ -250,7 +256,7 @@ class Preparation:
                 if actions:
                     return actions
         try:
-            location, index, mon = selection(snap, self.emu.store.trade_preferences(), self.state['trade_key'])
+            location, index, mon = selection(snap, self._preferences(), self.state['trade_key'])
         except ValueError as error:
             # Cartridge PC transfers update party and box records on different frames.
             # Let an in-flight operation settle without sending another menu input.
@@ -265,6 +271,10 @@ class Preparation:
             return [Action(None, 0, 12)]
         self.selection_wait_since = None
         pos = (snap.map, snap.x, snap.y)
+        if location == 'party' and self.state.get('manual') and pos[0] not in CENTERS:
+            # A party member picked for a manual trade travels with the party to the nearest Center.
+            self._phase('travelling')
+            return list(self.traveller.step(ctx))
         if location == 'party':
             self._phase('rendezvous')
             if kind != 'overworld' or snap.textbox or snap.start_menu:
@@ -341,7 +351,7 @@ class Preparation:
         """Deposit the reserve or withdraw the offered partner with a Core shortcut."""
         operation = self.operation
         machine = (DepositPokemon(self._storage_reserve(snap)) if operation == 'deposit'
-                   else WithdrawPokemon(selection(snap, self.emu.store.trade_preferences(), self.state['trade_key'])[1]))
+                   else WithdrawPokemon(selection(snap, self._preferences(), self.state['trade_key'])[1]))
 
         def done(result, finished):
             if not result.completed:
@@ -397,7 +407,7 @@ class Preparation:
     def _storage_reserve(self, snap):
         party = live_status(snap.to_dict())['party']
         keys = [identity(mon) for mon in party]
-        preferences = self.emu.store.trade_preferences()
+        preferences = self._preferences()
         protected = {'locked', 'offered', 'withdrawn'}
         strongest = max(range(len(snap.party)), key=lambda i: snap.party[i].level)
         safe = [i for i, mon in enumerate(snap.party)
@@ -407,6 +417,9 @@ class Preparation:
                 and not any(move in (15, 19, 57, 70, 148)
                             and not any(move in other.moves for j, other in enumerate(snap.party) if j != i)
                             for move in mon.moves)]
+        if not safe and self.state.get('manual'):
+            # A manual trade may send any reserve to the PC. It only has to be identifiable.
+            safe = [i for i in range(len(snap.party)) if keys[i] and keys.count(keys[i]) == 1]
         if self.deposit_key is not None:
             slots = [i for i in safe if keys[i] == self.deposit_key]
             if len(slots) != 1:

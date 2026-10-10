@@ -841,3 +841,57 @@ a.game-card-add { color: var(--link); text-decoration: underline; }
 .create-needs-cartridge[hidden] { display: none; }
 #create-form.needs-cartridge .game-picker { display: none; }
 #create-form.needs-cartridge .sheet-body > :not(.create-needs-cartridge):not(.game-picker) { display: none; }
+
+/* Manual trades: two adventure columns, a confirm bar and a live progress card. */
+.manual-trade { display: grid }
+.manual-trade { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)) }
+.manual-trade { gap: var(--s4) }
+.manual-side { min-width: 0 }
+.manual-list { display: grid }
+.manual-list { gap: var(--s2) }
+.manual-list { width: 100% }
+.manual-list { max-height: 480px }
+.manual-list { overflow-y: auto }
+.manual-mon { display: flex }
+.manual-mon { align-items: center }
+.manual-mon { gap: var(--s3) }
+.manual-mon { width: 100% }
+.manual-mon { padding: var(--s2) var(--s3) }
+.manual-mon { text-align: left }
+.manual-mon { background: var(--panel) }
+.manual-mon { border: var(--hair) solid var(--rule) }
+.manual-mon { cursor: pointer }
+.manual-mon:hover:not(:disabled) { border-color: var(--ink-3) }
+.manual-mon.is-picked { border-color: var(--signal) }
+.manual-mon.is-picked { box-shadow: inset 0 0 0 1px var(--signal) }
+.manual-mon:disabled { cursor: not-allowed }
+.manual-mon:disabled { opacity: 0.6 }
+.manual-mon:focus-visible { outline: 2px solid var(--signal) }
+.manual-mon:focus-visible { outline-offset: 2px }
+.plate--mini { flex: none }
+.plate--mini { width: 58px }
+.plate--mini { height: 58px }
+.manual-text { display: grid }
+.manual-text { gap: 2px }
+.manual-text { min-width: 0 }
+.manual-text strong { font-weight: 600 }
+.manual-text strong { color: var(--ink) }
+.manual-text strong { overflow-wrap: anywhere }
+.manual-nick { font-size: 13px }
+.manual-nick { color: var(--ink-2) }
+.manual-why { font-size: 13px }
+.manual-why { color: var(--ink-2) }
+.manual-steps { display: grid }
+.manual-steps { gap: var(--s2) }
+.manual-steps { padding-left: var(--s5) }
+.manual-step { color: var(--ink-3) }
+.manual-step.is-done { color: var(--ok) }
+.manual-step.is-now { color: var(--ink) }
+.manual-step.is-now { font-weight: 600 }
+.manual-result { font-weight: 600 }
+.manual-result { color: var(--ink) }
+.manual-result.error { color: var(--crit) }
+@media (max-width: 640px) {
+  .manual-list { max-height: 360px }
+  .manual-mon { min-height: 44px }
+}

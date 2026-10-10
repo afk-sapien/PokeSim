@@ -212,6 +212,34 @@ def _reclaim(store, threshold=RECLAIM_BYTES):
     return free * size
 
 
+def manual_rows(payload, generation, last_party_blocked=False):
+    """Every party and boxed Pokémon the owner may pick for a manual trade.
+
+    No trade preference or protection rule hides a Pokémon here. A row is only blocked
+    when the cable itself cannot carry it, and the reason says why.
+    """
+    party = payload.get('party') or []
+    stored = (payload.get('storage') or {}).get('pokemon') or []
+    battlers = [mon for mon in party if not mon.get('egg')]
+    rows = []
+    for location, mon in [('party', mon) for mon in party] + [('box', mon) for mon in stored]:
+        if mon.get('egg'):
+            blocked = 'Eggs cannot be traded'
+        elif not mon.get('trade_key') or mon.get('trade_ambiguous'):
+            blocked = 'Another Pokémon has the same trainer and stats, so this one cannot be picked out safely'
+        elif location == 'party' and last_party_blocked and len(battlers) <= 1:
+            blocked = 'The game refuses to trade away the only Pokémon that can battle'
+        else:
+            blocked = ''
+        rows.append({'trade_key': mon.get('trade_key'), 'species': mon.get('species'), 'dex': mon.get('dex'),
+                     'name': mon.get('name'), 'nickname': mon.get('nick'), 'level': mon.get('level'),
+                     'location': location, 'box': mon.get('box') if location == 'box' else None,
+                     'slot': mon.get('position') if location == 'box' else mon.get('slot'),
+                     'egg': bool(mon.get('egg')), 'shiny': bool(mon.get('shiny')),
+                     'cartridge_generation': generation, 'blocked': blocked})
+    return rows
+
+
 def recover_storage(store):
     """Reconcile committed files before the emulator chooses its startup checkpoint."""
     with store.lock:
@@ -268,6 +296,30 @@ class Participant:
                 'generation': self.bootstrap.generation, 'offers': candidates,
                 'revision': digest(payload), 'holding': bool(self.store.get('trade_hold'))}
 
+    def manual_inventory(self):
+        """The whole party and PC for a manual trade, with only hard limits marked."""
+        from ..web.pokedex import live_status
+        from ..trade.preferences import apply
+        status = self.emu.status()
+        payload = apply(live_status(status.get('game'), (status.get('strategy') or {}).get('collection')), {})
+        holding = bool(self.store.get('trade_hold'))
+        reason = ('This adventure is already held for another exchange' if holding else
+                  'Resume autonomous play in this adventure before trading' if self.emu.paused or self.emu.manual_mode else
+                  'Waiting for the game to start' if not payload.get('started', True) else '')
+        return {'adventure_id': self.bootstrap.adventure_id, 'cartridge_generation': 1, 'holding': holding,
+                'time_capsule_ready': False, 'reason': reason, 'pokemon': manual_rows(payload, 1)}
+
+    def manual_choice(self, selected):
+        inventory = self.manual_inventory()
+        if inventory['reason']:
+            raise ValueError(inventory['reason'])
+        row = next((row for row in inventory['pokemon'] if row['trade_key'] == selected), None)
+        if row is None:
+            raise ValueError('The selected Pokémon is no longer in this adventure')
+        if row['blocked']:
+            raise ValueError(row['blocked'])
+        return row
+
     def collection_demand(self, data):
         requests = data.get('requests', {})
         if not isinstance(requests, dict) or len(requests) > 151:
@@ -293,16 +345,18 @@ class Participant:
             if record['phase'] != 'preparing':
                 return record
         else:
-            if selected not in {row.get('trade_key') for row in self.inventory()['offers']}:
+            if data.get('manual'):
+                self.manual_choice(selected)
+            elif selected not in {row.get('trade_key') for row in self.inventory()['offers']}:
                 raise ValueError('The selected Pokémon is not an eligible boxed offer')
             if any(row['phase'] not in {'aborted', 'released'} for row in _records(self.store)):
                 raise ValueError('Another interaction already reserves this adventure')
             record = _save(self.store, {'id': tid, 'phase': 'preparing', 'decision': None,
                 'plan_digest': plan_digest, 'selected_key': selected,
                 'was_paused': self.emu.paused, 'was_manual': self.emu.manual_mode,
-                'time_capsule': bool(data.get('time_capsule'))})
+                'time_capsule': bool(data.get('time_capsule')), 'manual': bool(data.get('manual'))})
         from .preparation import begin
-        prepared = begin(self.emu, selected, tid)
+        prepared = begin(self.emu, selected, tid, manual=record.get('manual', False))
         if prepared.get('phase') == 'failed':
             raise ValueError(prepared.get('error', 'Trade preparation failed'))
         if prepared.get('phase') != 'ready':
@@ -520,6 +574,10 @@ def install(app, runtime, participant_type=Participant):
     @app.get('/internal/participant/inventory')
     def inventory():
         return runtime.call(participant.inventory)
+
+    @app.get('/internal/participant/manual-inventory')
+    def manual_inventory():
+        return runtime.call(participant.manual_inventory)
 
     @app.get('/internal/participant/status/{tid}')
     def status(tid: str):

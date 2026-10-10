@@ -645,3 +645,99 @@ def test_waiting_trade_status_explains_the_current_battle(participant):
     controller = emu.preparation
     controller.state.update(waiting_for='overworld', waiting_reason='Finish the current battle')
     assert controller.details({})['reason'] == 'Finish the current battle'
+
+
+def test_manual_trade_may_pick_party_and_locked_pokemon(participant):
+    emu, snap, candidate = participant
+    party_key = identity(asdict(snap.party[0]))
+    result = preparation.begin(emu, party_key, 'manual-party', manual=True)
+    assert result['phase'] == 'travelling'
+    assert result['manual'] is True
+    assert result['from_party'] is True
+    preparation.cancel(emu, 'manual-party')
+    key = identity(asdict(candidate))
+    emu.store.set_trade_preference(key, {'state': 'locked'})
+    with pytest.raises(ValueError):
+        preparation.begin(emu, key, 'automatic')
+    assert preparation.begin(emu, key, 'manual-box', manual=True)['from_party'] is False
+    emu.preparation.step(PolicyContext(snap, 0, 0, emu.pb.memory))
+    assert emu.store.get(preparation.KEY)['phase'] != 'failed'
+
+
+def test_manual_party_pick_travels_to_a_center_first(participant):
+    emu, snap, candidate = participant
+    preparation.begin(emu, identity(asdict(snap.party[0])), 'manual-party', manual=True)
+    controller = emu.preparation
+    controller.traveller = Mock()
+    controller.traveller.step.return_value = [Action('up', 8, 12)]
+    away = replace(snap, map=0, x=5, y=5)
+    assert controller.step(PolicyContext(away, 0, 0, emu.pb.memory)) == [Action('up', 8, 12)]
+    assert emu.store.get(preparation.KEY)['phase'] == 'travelling'
+
+
+def test_manual_storage_reserve_may_deposit_any_identifiable_member(participant):
+    emu, snap, candidate = participant
+    party = tuple(replace(p, moves=(move,)) for p, move in
+                  zip(storage_party(), (33, 15, 19, 57, 70, 148)))
+    for member in party:
+        emu.store.set_trade_preference(identity(asdict(member)), {'state': 'locked'})
+    preparation.begin(emu, identity(asdict(candidate)), 'manual-1', manual=True)
+    recorder = Recorder(emu.preparation.shortcut)
+    assert storage_step(emu.preparation, replace(snap, party=party, textbox=True), storage_menu(1)) == 'a'
+    assert emu.store.get(preparation.KEY)['phase'] != 'failed'
+    assert recorder.last.slot in range(6)
+
+
+def test_manual_inventory_lists_party_and_locked_pokemon(participant):
+    from pokesim.runtime.participant import Participant
+    emu, snap, candidate = participant
+    key = identity(asdict(candidate))
+    emu.store.set_trade_preference(key, {'state': 'locked'})
+    emu.status = lambda: {'game': snap.to_dict()}
+    owner = Participant(SimpleNamespace(store=emu.store, emulator=emu),
+                        SimpleNamespace(adventure_id='red', generation=1))
+    inventory = owner.manual_inventory()
+    assert inventory['reason'] == ''
+    assert inventory['cartridge_generation'] == 1
+    rows = {row['trade_key']: row for row in inventory['pokemon']}
+    assert rows[key]['location'] == 'box'
+    assert rows[key]['blocked'] == ''
+    party_key = identity(asdict(snap.party[0]))
+    assert rows[party_key]['location'] == 'party'
+    assert rows[party_key]['blocked'] == ''
+    assert owner.manual_choice(party_key)['trade_key'] == party_key
+    with pytest.raises(ValueError, match='no longer in this adventure'):
+        owner.manual_choice('f' * 24)
+    emu.paused = True
+    assert 'Resume autonomous play' in owner.manual_inventory()['reason']
+
+
+def test_manual_prepare_reserves_a_party_member(participant):
+    from pokesim.app.registry import identifier
+    from pokesim.runtime.participant import Participant
+    emu, snap, candidate = participant
+    emu.status = lambda: {'game': snap.to_dict()}
+    owner = Participant(SimpleNamespace(store=emu.store, emulator=emu),
+                        SimpleNamespace(adventure_id='red', generation=1))
+    party_key = identity(asdict(snap.party[0]))
+    request = {'id': identifier(), 'plan_digest': 'plan', 'selected_key': party_key}
+    with pytest.raises(ValueError, match='eligible boxed offer'):
+        owner.prepare(request)
+    response = owner.prepare({**request, 'manual': True})
+    assert response['phase'] == 'preparing'
+    assert emu.store.get(preparation.KEY)['manual'] is True
+
+
+def test_manual_rows_block_only_hard_limits():
+    from pokesim.runtime.participant import manual_rows
+    payload = {'party': [{'trade_key': 'a', 'name': 'Togepi', 'slot': 1},
+                         {'trade_key': 'b', 'egg': True, 'slot': 2}],
+               'storage': {'pokemon': [{'trade_key': 'c', 'name': 'Rattata', 'box': 3, 'position': 4},
+                                       {'trade_key': None, 'name': 'Rattata', 'box': 3, 'position': 5}]}}
+    rows = manual_rows(payload, 2, last_party_blocked=True)
+    assert [row['blocked'] for row in rows] == [
+        'The game refuses to trade away the only Pokémon that can battle', 'Eggs cannot be traded', '',
+        'Another Pokémon has the same trainer and stats, so this one cannot be picked out safely']
+    assert rows[2]['location'] == 'box'
+    assert (rows[2]['box'], rows[2]['slot']) == (3, 4)
+    assert manual_rows(payload, 1)[0]['blocked'] == ''

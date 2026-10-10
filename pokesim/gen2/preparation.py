@@ -21,7 +21,7 @@ def selected(snapshot, preferences, key):
     return matches[0]
 
 
-def begin(emu, key, tid, *, time_capsule=False):
+def begin(emu, key, tid, *, time_capsule=False, manual=False):
     saved = emu.store.get(KEY)
     if saved and saved['id'] == tid:
         if saved.get('trade_key') != key:
@@ -34,16 +34,20 @@ def begin(emu, key, tid, *, time_capsule=False):
     if emu.paused or emu.manual_mode:
         raise ValueError('Resume autonomous play before preparing a trade')
     snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
-    if selected(snapshot, emu.store.trade_preferences(), key)[0] != 'box':
+    # A manual trade is the owner's own choice, so trade preferences and party protection do not apply.
+    preferences = {} if manual else emu.store.trade_preferences()
+    if selected(snapshot, preferences, key)[0] != 'box' and not manual:
         raise ValueError('Choose a boxed offer. Active party members are protected')
     if time_capsule:
         from .timecapsule import compatible, unlocked
         if not unlocked(snapshot, Memory(emu.pb.memory, emu.data)):
             raise ValueError('The Time Capsule opens the day after meeting Bill')
-        if not compatible(selected(snapshot, emu.store.trade_preferences(), key)[2], emu.data):
+        if not compatible(selected(snapshot, preferences, key)[2], emu.data):
             raise ValueError('The selected Pokémon cannot enter the Time Capsule')
     state = {'id': tid, 'trade_key': key, 'phase': 'travelling', 'started_frame': emu.frame,
              'deadline': time.time() + 1800, 'party_slot': None, 'time_capsule': time_capsule}
+    if manual:
+        state['manual'] = True
     if time_capsule:
         state['original_party'] = [identity(mon.to_dict()) for mon in snapshot.party]
     emu.store.set(KEY, state)
@@ -120,7 +124,7 @@ class Preparation:
             if path is None:
                 return Action(None, 0, 24)
             return Action('up' if mem.byte('wPlayerDirection') & 12 != 4 else 'a', 8, 32)
-        location, slot, mon = selected(snapshot, emu.store.trade_preferences(), state['trade_key'])
+        location, slot, mon = selected(snapshot, {} if state.get('manual') else emu.store.trade_preferences(), state['trade_key'])
         from .timecapsule import compatible
         incompatible = next((i for i, member in enumerate(snapshot.party) if not compatible(member, data)), None)
         needs_storage = location != 'party' or state.get('time_capsule') and incompatible is not None
@@ -187,6 +191,9 @@ class Preparation:
             else:
                 protected = {15, 19, 57, 70, 148, 250, 127}
                 candidates = [i for i, member in enumerate(snapshot.party) if i and not protected.intersection(member.moves)]
+                if not candidates and state.get('manual'):
+                    # A manual trade may send any reserve except the lead to the PC.
+                    candidates = list(range(1, len(snapshot.party)))
                 if not candidates:
                     raise ValueError('The party has no safe reserve to deposit for this exchange')
                 self.menu = Storage('DEPOSIT', min(candidates, key=lambda i: snapshot.party[i].level), 6)

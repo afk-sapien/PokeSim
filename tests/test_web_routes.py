@@ -75,7 +75,7 @@ def test_base_path_validation_rejects_escape(tmp_path):
 
 
 def test_manager_templates_render_without_game_setup():
-    for page in ('library', 'trading', 'settings', 'stopped'):
+    for page in ('library', 'trading', 'trade', 'settings', 'stopped'):
         output = render_library(page, {'id': 'red-one'})
         assert f'data-page="{page}"' in output
         assert '${' not in output

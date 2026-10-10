@@ -11,8 +11,8 @@
 <link rel="preload" href="/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="/static/panel.css?v=glow-2">
-<link rel="stylesheet" href="/static/panel-library.css?v=cartridge-shelf-2">
-<script src="/static/library.js?v=cartridge-shelf-2" defer></script>
+<link rel="stylesheet" href="/static/panel-library.css?v=manual-trade-1">
+<script src="/static/library.js?v=manual-trade-1" defer></script>
 </head>
 <body class="library" data-trainer-names="${trainer_names}" data-page="${page}" data-adventure="${adventure_id}">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -42,11 +42,18 @@
 </section>
 
 <section data-view="trading" hidden>
-<header class="page-head"><div class="page-title"><p class="micro">The Cable Club</p><h1>Trading</h1><p class="lede">Party and locked Pokémon stay protected.</p></div></header>
+<header class="page-head"><div class="page-title"><p class="micro">The Cable Club</p><h1>Trading</h1><p class="lede">Automatic trades keep party and locked Pokémon protected.</p></div><a class="key key--primary" href="/trade" id="make-trade">Make a trade</a></header>
 <section class="panel status-strip" aria-label="Automatic trading"><span class="micro"><i class="lamp" data-on="ok" aria-hidden="true"></i>Automatic trading</span><p id="trading-status" role="status">Checking your adventures…</p></section>
 <section class="block" id="trade-active-section" hidden><div class="column-head"><h2 class="legend legend--ink">Current exchange</h2><span class="micro">Other adventures keep playing</span></div><div id="trade-active" class="exchanges" aria-live="polite">Checking the Cable Club…</div></section>
 <section class="block"><div class="column-head"><h2 class="legend legend--ink">Recent trades</h2><span class="micro" id="trade-history-count"></span></div><div id="trade-history" class="exchanges">No completed trades yet.</div></section>
 <section class="panel block disclosure" id="trade-failures-section" hidden><details><summary>Recent attempts that did not complete</summary><div id="trade-failures" class="exchanges"></div></details></section>
+</section>
+
+<section data-view="trade" hidden>
+<header class="page-head"><div class="page-title"><p class="micro">The Cable Club</p><h1>Make a trade</h1><p class="lede">Pick any Pokémon from two adventures, party or PC. Your choice overrides every lock and protection.</p></div><a class="key" href="/trading">Back to trading</a></header>
+<div class="manual-trade"><section class="panel manual-side" aria-labelledby="manual-left-heading"><h2 class="panel-head legend legend--ink" id="manual-left-heading">First adventure</h2><div class="panel-body stack"><label class="field"><span class="micro">Adventure</span><select id="manual-left-game" data-owner></select></label><p class="note" id="manual-left-reason" role="status"></p><label class="field"><span class="micro">Find a Pokémon</span><input id="manual-left-filter" type="search" autocomplete="off" placeholder="Name, nickname or box"></label><div id="manual-left-list" class="manual-list" role="group" aria-label="First adventure Pokémon"></div></div></section><section class="panel manual-side" aria-labelledby="manual-right-heading"><h2 class="panel-head legend legend--ink" id="manual-right-heading">Second adventure</h2><div class="panel-body stack"><label class="field"><span class="micro">Adventure</span><select id="manual-right-game" data-owner></select></label><p class="note" id="manual-right-reason" role="status"></p><label class="field"><span class="micro">Find a Pokémon</span><input id="manual-right-filter" type="search" autocomplete="off" placeholder="Name, nickname or box"></label><div id="manual-right-list" class="manual-list" role="group" aria-label="Second adventure Pokémon"></div></div></section></div>
+<section class="panel manual-confirm"><div class="panel-body stack"><p id="trade-summary">Choose an adventure and a Pokémon on each side.</p><p class="note" id="trade-limit" role="status"></p><div class="settings-actions"><button type="button" class="key key--primary" id="trade-submit" data-owner>Trade</button><button type="button" class="key" id="trade-reload">Refresh lists</button></div></div></section>
+<section class="panel manual-progress" id="trade-progress" hidden aria-labelledby="trade-progress-heading"><h2 class="panel-head legend legend--ink" id="trade-progress-heading">Your trade</h2><div class="panel-body stack"><p id="trade-progress-title"></p><ol id="trade-steps" class="manual-steps"></ol><p id="trade-progress-text" role="status" aria-live="polite"></p><p id="trade-result" class="manual-result" role="status" aria-live="polite"></p><button type="button" class="key key--danger" id="trade-cancel" data-owner hidden>Cancel trade</button></div></section>
 </section>
 
 <section data-view="notifications" hidden>

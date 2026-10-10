@@ -10,7 +10,7 @@ from .core import boot
 from .. import config
 from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
-from ..runtime.participant import Participant as BaseParticipant, PREFIX, _records, _save, _artifact
+from ..runtime.participant import Participant as BaseParticipant, PREFIX, _records, _save, _artifact, manual_rows
 from ..trade.preferences import apply
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin
@@ -127,6 +127,19 @@ def listings(emu, payload):
     return rows
 
 
+def capsule_reason(mon, data):
+    """Why one Gen II Pokémon cannot go through the Time Capsule to a Gen I game."""
+    if mon is None or mon.egg:
+        return 'Eggs cannot go through the Time Capsule'
+    if not 1 <= mon.species <= 151:
+        return 'Red, Blue and Yellow only know the first 151 species'
+    if any(move > 165 for move in mon.moves):
+        return 'It knows a move that does not exist in Red, Blue and Yellow'
+    if 'MAIL' in data.item_names.get(mon.held_item, '').upper():
+        return 'It holds Mail, which the Time Capsule cannot carry'
+    return 'It cannot go through the Time Capsule'
+
+
 def display(row, data):
     raw = row['struct']
     return {'species': raw[0], 'dex': raw[0], 'name': data.species[raw[0]]['name'],
@@ -143,6 +156,33 @@ class Participant(BaseParticipant):
                 'offers': offers(self.emu, payload), 'revision': digest(payload),
                 'time_capsule_ready': unlocked(self.emu.snapshot, Memory(self.emu.pb.memory, self.emu.data)),
                 'holding': bool(self.store.get('trade_hold'))}
+
+    def manual_inventory(self):
+        """The whole party and PC for a manual trade, with only hard limits marked."""
+        state = self.emu.status()
+        payload = apply(live_status(state.get('game'), (state.get('strategy') or {}).get('collection')), {})
+        snapshot = self.emu.snapshot
+        holding = bool(self.store.get('trade_hold'))
+        paused = _paused(self.emu, snapshot)
+        if paused == 'Trading pauses during the Pokémon League':
+            # Preparation finishes the League run first, so it only delays a manual trade.
+            paused = ''
+        reason = ('This adventure is already held for another exchange' if holding else
+                  'Resume autonomous play in this adventure before trading' if self.emu.paused or self.emu.manual_mode else
+                  paused)
+        rows = manual_rows(payload, 2, last_party_blocked=True)
+        if snapshot is not None:
+            members = list(snapshot.party) + list(snapshot.stored)
+            located = [('party', index + 1, None) for index in range(len(snapshot.party))]
+            located += [('box', member.position + 1, member.box + 1) for member in snapshot.stored]
+            actual = {place: member for place, member in zip(located, members)}
+            for row in rows:
+                member = actual.get((row['location'], row['slot'], row['box']))
+                row['time_capsule_compatible'] = bool(member is not None and not row['egg'] and compatible(member, self.emu.data))
+                row['time_capsule_reason'] = '' if row['time_capsule_compatible'] else capsule_reason(member, self.emu.data)
+        return {'adventure_id': self.bootstrap.adventure_id, 'cartridge_generation': 2, 'holding': holding,
+                'time_capsule_ready': bool(snapshot is not None and unlocked(snapshot, Memory(self.emu.pb.memory, self.emu.data))),
+                'reason': reason, 'pokemon': rows}
 
     def collection_demand(self, data):
         requests = data.get('requests', {})
@@ -164,15 +204,18 @@ class Participant(BaseParticipant):
             if record['phase'] != 'preparing':
                 return record
         else:
-            if selected not in {row.get('trade_key') for row in self.inventory()['offers']}:
+            if data.get('manual'):
+                self.manual_choice(selected)
+            elif selected not in {row.get('trade_key') for row in self.inventory()['offers']}:
                 raise ValueError('The selected Pokémon is not an eligible boxed offer')
             if any(row['phase'] not in {'aborted', 'released'} for row in _records(self.store)):
                 raise ValueError('Another interaction already reserves this adventure')
             record = _save(self.store, {'id': tid, 'phase': 'preparing', 'decision': None,
                 'plan_digest': plan_digest, 'selected_key': selected, 'cartridge_generation': 2,
                 'was_paused': self.emu.paused, 'was_manual': self.emu.manual_mode,
-                'time_capsule': bool(data.get('time_capsule'))})
-        prepared = begin(self.emu, selected, tid, time_capsule=record.get('time_capsule', False))
+                'time_capsule': bool(data.get('time_capsule')), 'manual': bool(data.get('manual'))})
+        prepared = begin(self.emu, selected, tid, time_capsule=record.get('time_capsule', False),
+                         manual=record.get('manual', False))
         if prepared['phase'] == 'failed':
             raise ValueError(prepared.get('error', 'Trade preparation failed'))
         if prepared['phase'] != 'ready':
