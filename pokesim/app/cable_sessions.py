@@ -351,6 +351,11 @@ class CableSessions:
                     process.kill()
                     process.wait(timeout=3)
             reader.join(timeout=2)
+            if process.stdout:
+                try:
+                    process.stdout.close()
+                except (OSError, ValueError):
+                    pass
             live['process'] = None
             CheckpointStore.atomic_write(directory / 'diagnostics.json', json.dumps(list(messages)).encode())
             with coordinator.process_guard:
@@ -385,7 +390,3 @@ class CableSessions:
             return GameData.load(self.coordinator.manager.assets.game_data_dir, version)
         except (OSError, ValueError) as error:
             raise ValueError(f'Cable session result could not be checked without game data: {error}') from error
-
-    def forget(self, tid):
-        with self.guard:
-            self.live.pop(tid, None)

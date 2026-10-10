@@ -165,10 +165,13 @@ def club(tmp_path, monkeypatch):
                            hexed([[GYARADOS, ODDISH], [PIDGEOT, DODRIO]])]}
     real_popen = subprocess.Popen
 
+    processes = []
+
     def popen(command, **kwargs):
         arguments = command[command.index('--plan'):]
         payload = json.dumps([*parties['parties'], ADAPTER_ID])
-        return real_popen([sys.executable, str(worker), *arguments, payload], **kwargs)
+        processes.append(real_popen([sys.executable, str(worker), *arguments, payload], **kwargs))
+        return processes[-1]
     monkeypatch.setattr(cable_sessions.subprocess, 'Popen', popen)
     loaded = []
 
@@ -178,7 +181,7 @@ def club(tmp_path, monkeypatch):
     monkeypatch.setattr(GameData, 'load', staticmethod(load))
     yield SimpleNamespace(coordinator=coordinator, sessions=coordinator.sessions, registry=registry, peers=peers,
                           gold=games[0]['id'], silver=games[1]['id'], red=games[2]['id'], parties=parties,
-                          loaded=loaded)
+                          loaded=loaded, processes=processes)
     coordinator.close()
     registry.close()
 
@@ -219,6 +222,7 @@ def test_a_session_runs_from_preparation_to_a_committed_trade(club):
         assert peer.operations() == ['prepare', 'stage', 'apply', 'release']
         assert peer.calls[0][1]['session'] is True
     assert club.sessions.busy(club.gold) is None
+    assert [process.stdout.closed for process in club.processes] == [True]
     with pytest.raises(ValueError, match='already ended'):
         club.sessions.press(sid, {'side': 'left', 'button': 'a'})
 
