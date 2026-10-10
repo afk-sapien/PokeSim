@@ -35,7 +35,6 @@ main.shell { padding-bottom: var(--s7); }
   overflow-wrap: anywhere;
 }
 .trade-overview .body { margin-top: var(--s2); color: var(--ink-2); }
-.trade-pc-link { flex: none; }
 
 .trade-notice {
   margin-top: var(--s3);
@@ -124,64 +123,13 @@ main.shell { padding-bottom: var(--s7); }
 .plate--bay { flex: none; }
 .plate--empty { background: transparent; border-style: dashed; box-shadow: none; }
 
-/* ---- trading block offers ---------------------------------------------- */
-.offer-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
-  gap: var(--s3);
-}
-.offer {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--s3) var(--s4);
-  padding: var(--s4);
-  background: var(--panel);
-  border: var(--hair) solid var(--rule);
-  box-shadow: var(--key-inset);
-}
-.offer-read { min-width: 0; align-self: center; }
-.offer-read h3,
+/* ---- one side of a swap ------------------------------------------------ */
 .swap-read h4 {
   margin: 0;
   font: 600 var(--f-body) / 1.3 var(--font-text);
   overflow-wrap: anywhere;
 }
-.offer-read .micro { margin-top: var(--s1); }
 .swap-sub { color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
-.offer-actions {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s3);
-  padding-top: var(--s3);
-  border-top: var(--hair) solid var(--rule-faint);
-}
-/* trade-ui.js markup, shared with the PC page. */
-.offer-actions .trade-meta {
-  flex: 1 1 180px;
-  min-width: 0;
-  font-size: 13px;
-  color: var(--ink-3);
-}
-.offer-actions .partner-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.offer-actions .partner-actions button {
-  min-height: 40px;
-  padding: 0 var(--s3);
-  background: var(--panel-2);
-  border: var(--hair) solid var(--rule);
-  box-shadow: var(--key-inset);
-  font: var(--f-legend) / 1 var(--font-panel);
-  letter-spacing: var(--track-legend);
-  text-transform: uppercase;
-  color: var(--ink);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background var(--t);
-}
-.offer-actions .partner-actions button:hover { background: var(--panel); }
-.offer-actions .partner-actions button:active { background: var(--well); box-shadow: var(--well-inset); }
-.offer-actions .partner-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ---- deals: one exchange, sender to receiver ---------------------------- */
 .deal-list { display: grid; gap: var(--s3); }
