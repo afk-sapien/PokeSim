@@ -1,5 +1,7 @@
 """The Pokédex on the Bench Instrument panel: no sideways scroll, whole-pixel
 portraits, discrete stat meters, and a detail sheet that fits the screen."""
+import re
+
 from PIL import Image
 import pytest
 
@@ -90,7 +92,7 @@ def test_pokedex_detail_lists_how_the_sim_gets_a_species(page, game):
                          'state': 'missing', 'sources': sources}]
         route.fulfill(json=body)
 
-    page.route('**/api/pokedex/status', with_plan)
+    page.route(re.compile(r'/api/pokedex/status(\?|$)'), with_plan)
     page.goto(url + '/pokedex')
     expect(page.locator('.dex-card')).to_have_count(151)
     page.locator('#status-filter').select_option('planned')

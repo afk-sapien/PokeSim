@@ -1,6 +1,7 @@
 """The PC detail popup shows everything known about a partner, at desktop and phone widths."""
 from dataclasses import replace
 import os
+import re
 
 import pytest
 
@@ -100,7 +101,7 @@ def test_gen1_detail_shows_moves_condition_and_record(page, game, width, height,
 @pytest.mark.parametrize('width,height', SIZES)
 def test_gen2_detail_shows_hidden_power_friendship_and_eggs(page, game, width, height, theme):
     url, _, _, _ = game
-    page.route('**/api/pokedex/status', lambda route: route.fulfill(json=gen2_payload()))
+    page.route(re.compile(r'/api/pokedex/status(\?|$)'), lambda route: route.fulfill(json=gen2_payload()))
     page.emulate_media(color_scheme=theme)
     page.set_viewport_size({'width': width, 'height': height})
     page.goto(url + '/pc?box=party')

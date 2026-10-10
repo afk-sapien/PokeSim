@@ -160,3 +160,37 @@ def test_pages_ask_for_their_pokedex_view_and_holder_fields_cover_the_pokedex():
     assert "'/api/pokedex/status?view=dex'" in script
     read = set(re.findall(r'\bmon\.(\w+)', script))
     assert read and read <= set(HOLDER_FIELDS), read - set(HOLDER_FIELDS)
+
+
+def reads(script, *names):
+    """Fields a page script reads from objects it names, such as mon.level or status.plan."""
+    text = (STATIC / script).read_text()
+    return {name: set(re.findall(rf'\b{name}\.([a-z_]+)', text)) for name in names}
+
+
+def test_each_page_view_keeps_every_field_its_page_reads(tmp_path, monkeypatch):
+    pc, dex = reads('pc.js', 'status', 'mon'), reads('pokedex.js', 'status', 'mon', 'row', 'project')
+    assert {'move_details', 'hidden_power', 'experience'} <= pc['mon'] and {'plan', 'owned'} <= dex['status']
+    record = {field: 1 for field in pc['mon'] | dex['mon']}
+    plan = [{**{field: 1 for field in dex['row'] | dex['project']}, 'dex': 1}]
+    payload = {**{field: 1 for field in pc['status'] | dex['status']}, 'party': [dict(record)],
+               'storage': {'active_box': 1, 'box_counts': [1], 'pokemon': [dict(record)]}, 'plan': plan}
+    monkeypatch.setattr('pokesim.web.app.live_status', lambda *args, **kwargs: json.loads(json.dumps(payload)))
+    monkeypatch.setattr('pokesim.web.app.preferences.apply', lambda data, _: data)
+    monkeypatch.setattr('pokesim.league_partners.apply', lambda data, _: data)
+    monkeypatch.setattr('pokesim.milestones.apply', lambda data, _: data)
+    monkeypatch.setattr('pokesim.catches.status', lambda _: 1)
+    api = client(tmp_path, monkeypatch)
+    for view, script, fields in (('pc', 'pc.js', pc), ('dex', 'pokedex.js', dex)):
+        data = api.get('/api/pokedex/status', params={'view': view}).json()
+        assert fields['status'] <= set(data), (script, fields['status'] - set(data))
+        for mon in (data['party'][0], data['storage']['pokemon'][0]):
+            assert fields['mon'] <= set(mon), (script, fields['mon'] - set(mon))
+        if 'plan' in fields['status']:
+            assert fields['row'] | fields['project'] <= set(data['plan'][0])
+
+
+def test_browser_mocks_of_pokedex_status_also_match_its_views():
+    """A route glob without the query string silently stops mocking once a page asks for a view."""
+    for test in (Path(__file__).parent / 'browser').glob('test_*.py'):
+        assert "route('**/api/pokedex/status'" not in test.read_text(), test.name
