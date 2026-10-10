@@ -25,9 +25,14 @@ trade key preselects a Pokémon on the Trade tab. The PC shows each Pokémon's
 trade setting read only, with a **Trade…** link that opens the Trade tab with that
 Pokémon chosen.
 
-Every game also serves `/trading` with Auto, Opportunities, and History tabs. Its
-Auto tab lists the same trade settings. The shared broker remains an internal
-read API. Its old root page redirects to the configured game or directs visitors
+The library's Trading page lists every adventure under **Make a trade**, each
+linking to that adventure's Trade tab. The old library-wide picker at `/trade`
+now redirects there.
+
+A game run on its own, outside the library, serves its own `/trading` page with
+Auto, Opportunities and History tabs. Its Auto tab is the only place such a game
+sets trade settings, and Opportunities shows the shared broker's matches, which
+library adventures do not use. The shared broker remains an internal read API. Its old root page redirects to the configured game or directs visitors
 to their game navigation.
 
 ## Trade settings
@@ -87,10 +92,9 @@ The Trade tab runs one exchange you choose:
 4. Press **Trade now**. When the other adventure is view only, the button reads
    **Send offer** and the offer waits for an answer instead.
 
-The Offers tab then opens with the trade listed. The admin Trade page at `/trade`,
-linked from Cable Club trading as Make a trade, can still pick both sides from any
-two adventures. Trade settings, party protection, the last-copy rule and automatic
-ranking do not apply. The trade is yours to make.
+The Offers tab then opens with the trade listed. Trade settings, party
+protection, the last-copy rule and automatic ranking do not apply. The trade is
+yours to make.
 
 Only limits the cable itself cannot get past stop a pair, and the page says why:
 
@@ -111,10 +115,9 @@ trades wait in line, oldest first, while the Cable Club is busy. You can cancel
 while the trade is waiting or preparing. Once both saves are being committed the
 trade always finishes.
 
-The admin API is `GET /api/v1/interactions/manual-trades/options`, `POST` and `GET
-/api/v1/interactions/manual-trades`, `GET /api/v1/interactions/manual-trades/{id}`
-and `POST /api/v1/interactions/manual-trades/{id}/cancel`. A request sends
-`left_id`, `left_key`, `right_id`, `right_key` and an optional `request_id`.
+The Trade tab uses `POST /api/v1/interactions/trade-offers` with `from_id`,
+`from_key`, `to_id`, `to_key` and an optional `request_id`. The older
+`/api/v1/interactions/manual-trades` admin API is gone.
 
 ## Cable Club sessions
 

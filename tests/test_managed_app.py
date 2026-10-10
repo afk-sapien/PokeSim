@@ -392,40 +392,16 @@ def test_palette_changes_live_and_requires_valid_authorized_settings(client, mon
     assert len(calls) == 1
 
 
-def test_manual_trade_endpoints_queue_report_and_cancel(client, monkeypatch):
+def test_the_retired_trade_picker_redirects_and_its_admin_api_is_gone(client):
     client, manager = client
     headers = login(client, manager)
-    manager.registry.add_rom('rom', 'sha', 'red')
-    games = [manager.registry.create(name, 'rom', {}, identifier()) for name in ('Red A', 'Red B')]
-    for game in games:
-        manager.registry.update(game['id'], state='running', desired_state='running')
-    drains = []
-    monkeypatch.setattr(manager.coordinator, 'drain_manual', lambda: drains.append(True))
-    monkeypatch.setattr(manager.coordinator, 'manual_options', lambda: {'adventures': [{'id': games[0]['id'], 'pokemon': []}]})
-    assert client.get('/trade').status_code == 200
-    assert client.get('/api/v1/interactions/manual-trades/options').json()['adventures'][0]['id'] == games[0]['id']
-    payload = {'left_id': games[0]['id'], 'right_id': games[1]['id'], 'left_key': 'a', 'right_key': 'b',
-               'request_id': identifier()}
-    assert client.post('/api/v1/interactions/manual-trades', json=payload).status_code == 403
-    assert client.post('/api/v1/interactions/manual-trades', json={**payload, 'protect': False},
-                       headers=headers).status_code == 409
-    response = client.post('/api/v1/interactions/manual-trades', json=payload, headers=headers)
-    assert response.status_code == 200, response.text
-    status = response.json()
-    assert status['id'] == payload['request_id']
-    assert status['state'] == 'queued'
-    assert status['position'] == 1
-    # The drain is a background task on a worker thread; it can start just after the response.
-    deadline = time.monotonic() + 5
-    while not drains and time.monotonic() < deadline:
-        time.sleep(0.01)
-    assert drains
-    assert client.get('/api/v1/interactions/manual-trades').json()['trades'][0]['id'] == status['id']
-    assert client.get('/api/v1/interactions/manual-trades/' + status['id']).json()['state'] == 'queued'
-    assert client.get('/api/v1/interactions/manual-trades/' + identifier()).status_code == 404
-    cancelled = client.post(f'/api/v1/interactions/manual-trades/{status["id"]}/cancel', headers=headers).json()
-    assert cancelled['state'] == 'cancelled'
-    assert client.post(f'/api/v1/interactions/manual-trades/{identifier()}/cancel', headers=headers).status_code == 404
+    moved = client.get('/trade', follow_redirects=False)
+    assert moved.status_code == 308 and moved.headers['location'] == '/trading'
+    page = client.get('/trading').text
+    assert 'id="make-trade"' in page and 'data-view="trade"' not in page and 'manual-left-game' not in page
+    assert client.get('/api/v1/interactions/manual-trades/options').status_code == 404
+    assert client.post('/api/v1/interactions/manual-trades', json={}, headers=headers).status_code in {404, 405}
+    assert client.get(f'/api/v1/adventures/{identifier()}/trade-inventory').status_code == 404
 
 
 def test_a_slow_game_trade_history_does_not_stall_the_library(client, monkeypatch):

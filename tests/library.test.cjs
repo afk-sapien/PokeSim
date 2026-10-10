@@ -309,6 +309,12 @@ test('automatic trading shows friendly progress and only completed history witho
   const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
   assert.doesNotMatch(html, /participants-form|trading-enabled|trade-form|trade-left|trade-right|Trading group|Choose an exchange/)
   assert.doesNotMatch(source, /data-trade-action|trade-inventory|participants-form|trading-enabled/)
+  // Trades are picked on each adventure's own Trading page, never in a library-wide picker.
+  assert.match(view.element('#make-trade').innerHTML, /href="\/games\/one\/trading\?tab=trade">Red Sprout</)
+  assert.match(view.element('#make-trade').innerHTML, /href="\/games\/two\/trading\?tab=trade">Blue Ripple</)
+  assert.equal(view.element('#make-trade-section').hidden, false)
+  assert.doesNotMatch(html, /data-view="trade"|manual-left-game|href="\/trade"/)
+  assert.doesNotMatch(source, /manual-trades/)
 })
 
 test('automatic trade recovery never shows an aborted exchange as successful or exposes worker errors', async () => {
@@ -703,47 +709,3 @@ test('a game paused for a trade shows Paused rather than a measured 0.0× speed'
   assert.equal(labels['a-cpu'], '2.1%')
 })
 
-test('the trade page lists any Pokémon on each side and sends exactly the chosen pair', async () => {
-  const options = {adventures: [
-    {id: 'one', name: 'Red Sprout', version: 'red', generation: 1, available: true, reason: '', pokemon: [
-      {trade_key: 'k1', name: 'Pikachu', nickname: 'SPARKY', level: 12, location: 'party', slot: 1},
-      {trade_key: 'k2', name: 'Rattata', level: 4, location: 'box', box: 1, slot: 3}]},
-    {id: 'two', name: 'Gold Leaf', version: 'gold', generation: 2, available: true, reason: '', time_capsule_ready: true, pokemon: [
-      {trade_key: 'g1', name: 'Togepi', level: 5, location: 'party', slot: 2, time_capsule_compatible: false, time_capsule_reason: 'Togepi did not exist in Gen I.'},
-      {trade_key: 'g2', name: 'Pidgey', level: 3, location: 'box', box: 2, slot: 1, time_capsule_compatible: true}]},
-    {id: 'three', name: 'Blue Paused', version: 'blue', generation: 1, available: false, reason: 'Paused by you', pokemon: []}
-  ]}
-  const view = library({page: 'trade', respond: (path, opts) => {
-    if (path === '/api/v1/interactions/manual-trades/options') return {ok: true, json: async () => options}
-    const queued = {id: 'm1', state: 'queued', position: 1, left_id: 'one', right_id: 'two', cancellable: true}
-    if (path === '/api/v1/interactions/manual-trades' && opts.method === 'POST') return {ok: true, json: async () => queued}
-    if (path === '/api/v1/interactions/manual-trades/m1') return {ok: true, json: async () => queued}
-    if (path === '/api/v1/interactions/manual-trades') return {ok: true, json: async () => ({trades: []})}
-  }})
-  await settle()
-  assert.ok(view.calls.some(call => call.path === '/api/v1/interactions/manual-trades/options'))
-  view.element('#manual-left-game').value = 'one'
-  view.element('#manual-left-game').onchange()
-  view.element('#manual-right-game').value = 'two'
-  view.element('#manual-right-game').onchange()
-  assert.match(view.element('#manual-left-list').innerHTML, /SPARKY/)
-  assert.match(view.element('#manual-left-list').innerHTML, /Party slot 1/)
-  assert.match(view.element('#manual-left-list').innerHTML, /Box 1, slot 3/)
-  assert.match(view.element('#manual-right-list').innerHTML, /Togepi did not exist in Gen I/)
-  assert.match(view.element('#manual-left-game').innerHTML, /Blue Paused · .*unavailable/)
-  const pick = (side, key) => {
-    for (const callback of view.clicks) callback({target: {closest: selector => selector === '[data-manual-key]' ? {disabled: false, dataset: {manualSide: side, manualKey: key}} : null}})
-  }
-  pick('left', 'k1')
-  pick('right', 'g2')
-  assert.match(view.element('#trade-summary').textContent, /Red Sprout sends SPARKY \(Pikachu\)\. Gold Leaf sends Pidgey\./)
-  view.element('#trade-submit').onclick()
-  await settle()
-  const post = view.calls.find(call => call.path === '/api/v1/interactions/manual-trades' && call.options.method === 'POST')
-  const {request_id: requestId, ...body} = JSON.parse(post.options.body)
-  assert.deepEqual(body, {left_id: 'one', left_key: 'k1', right_id: 'two', right_key: 'g2'})
-  assert.match(requestId, /^[0-9a-f]{32}$/)
-  assert.equal(view.element('#trade-progress').hidden, false)
-  assert.match(view.element('#trade-progress-text').textContent, /Waiting for the Cable Club/)
-  assert.equal(view.element('#trade-cancel').hidden, false)
-})

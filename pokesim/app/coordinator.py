@@ -978,35 +978,6 @@ class Coordinator:
             return 'Start this adventure to trade from it'
         return ''
 
-    def manual_options(self):
-        """Every adventure with the Pokémon it can trade by hand, or the reason it cannot."""
-        from concurrent.futures import ThreadPoolExecutor
-        games = [game for game in self.registry.adventures() if not game['archived']]
-        reasons = {game['id']: self.manual_game_reason(game) for game in games}
-
-        def load(game):
-            if reasons[game['id']]:
-                return None
-            try:
-                return self.manual_inventory(game['id'])
-            except (RuntimeError, OSError, KeyError, ValueError) as error:
-                return {'reason': f'This adventure did not answer: {error}'}
-        running = [game for game in games if not reasons[game['id']]]
-        with ThreadPoolExecutor(max_workers=max(1, min(8, len(running)))) as pool:
-            inventories = dict(zip([game['id'] for game in running], pool.map(load, running)))
-        rows = []
-        for game in games:
-            aid = game['id']
-            inventory = inventories.get(aid) or {}
-            reason = reasons[aid] or inventory.get('reason') or ''
-            pokemon = [{**mon, 'sprite_url': f'/games/{aid}/sprites/{mon["dex"]}.png?v=rom-portraits-1'
-                        if type(mon.get('dex')) is int else None} for mon in inventory.get('pokemon') or []]
-            rows.append({'id': aid, 'name': game['name'], 'version': game['version'],
-                         'generation': 2 if game['version'] in {'gold', 'silver', 'crystal'} else 1,
-                         'state': game['state'], 'available': not reason, 'reason': reason,
-                         'time_capsule_ready': bool(inventory.get('time_capsule_ready')), 'pokemon': pokemon})
-        return {'adventures': rows}
-
     def _manual_entries(self):
         return list(self.registry.setting(MANUAL_KEY, []))
 

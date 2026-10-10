@@ -21,7 +21,7 @@ import webbrowser
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.background import BackgroundTask
@@ -327,12 +327,16 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.get('/', response_class=HTMLResponse)
     @app.get('/trading', response_class=HTMLResponse)
-    @app.get('/trade', response_class=HTMLResponse)
     @app.get('/notifications', response_class=HTMLResponse)
     @app.get('/settings', response_class=HTMLResponse)
     def home(request: Request):
         from ..web.library import render_library
         return render_library(request.url.path.strip('/') or 'library')
+
+    @app.get('/trade')
+    def retired_trade_page():
+        # Trades are picked on each adventure's Trading page now. Old links land on the library's list of them.
+        return RedirectResponse('/trading', status_code=308)
 
     @app.get('/health/live')
     def live():
@@ -367,11 +371,6 @@ def create_app(manager, shutdown=lambda: None):
     @app.get('/api/v1/adventures/{aid}')
     def adventure(aid: str):
         return {**manager.registry.adventure(aid), 'resources': manager.supervisor.resources(aid)}
-
-    @app.get('/api/v1/adventures/{aid}/trade-inventory')
-    def trade_inventory(aid: str):
-        manager.registry.adventure(aid)
-        return manager.coordinator.inventory(aid)
 
     @app.get('/api/v1/assets')
     def assets():
@@ -625,30 +624,6 @@ def create_app(manager, shutdown=lambda: None):
         row = await asyncio.to_thread(manager.coordinator.propose, data)
         manager.background(manager.coordinator.execute, row['id'])
         return row
-
-    @app.get('/api/v1/interactions/manual-trades/options')
-    async def manual_trade_options():
-        return await asyncio.to_thread(manager.coordinator.manual_options)
-
-    @app.get('/api/v1/interactions/manual-trades')
-    def manual_trades():
-        return manager.coordinator.manual_statuses()
-
-    @app.post('/api/v1/interactions/manual-trades')
-    async def manual_trade(request: Request):
-        manager.check_available()
-        data = await json_body(request)
-        entry = await asyncio.to_thread(manager.coordinator.enqueue_manual, data)
-        manager.background(manager.coordinator.drain_manual)
-        return manager.coordinator.manual_status(entry['id'])
-
-    @app.get('/api/v1/interactions/manual-trades/{mid}')
-    def manual_trade_status(mid: str):
-        return manager.coordinator.manual_status(validate_id(mid))
-
-    @app.post('/api/v1/interactions/manual-trades/{mid}/cancel')
-    async def cancel_manual_trade(mid: str):
-        return await asyncio.to_thread(manager.coordinator.cancel_manual, validate_id(mid))
 
     # Cable Club sessions: the owner drives two linked Gen II adventures by hand.
     def session_writer(*aids):

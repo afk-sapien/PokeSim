@@ -817,20 +817,11 @@ def test_a_trade_cut_off_while_starting_is_resumed_after_restart(setup):
     assert c.manual_status(entry['id'])['phase'] == 'completed'
 
 
-def test_manual_options_list_every_pokemon_and_unavailable_adventures(setup):
-    c = setup.coordinator
+def test_a_hand_picked_trade_needs_both_adventures_running(setup):
     setup.registry.update(setup.data['right_id'], state='stopped', desired_state='stopped')
-    options = {game['id']: game for game in c.manual_options()['adventures']}
-    left = options[setup.data['left_id']]
-    assert left['available'] is True
-    assert [mon['trade_key'] for mon in left['pokemon']] == ['0', 'party-0']
-    assert left['pokemon'][1]['sprite_url'].startswith(f"/games/{setup.data['left_id']}/sprites/25.png")
-    right = options[setup.data['right_id']]
-    assert right['available'] is False
-    assert right['reason'] == 'Start this adventure to trade from it'
-    assert right['pokemon'] == []
+    assert setup.coordinator.manual_game_reason(setup.registry.adventure(setup.data['right_id'])) == 'Start this adventure to trade from it'
     with pytest.raises(ValueError, match='Start this adventure'):
-        c.enqueue_manual(manual_request(setup))
+        setup.coordinator.enqueue_manual(manual_request(setup))
 
 
 def test_gen2_trade_displays_read_species_data_once(setup, monkeypatch):
