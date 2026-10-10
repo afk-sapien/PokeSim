@@ -365,3 +365,12 @@ test('egg details show only hatching progress', async () => {
   assert.match(detail, /Not yet hatched/)
   assert.doesNotMatch(detail, /Sneasel|Scratch|Friendship|Hidden Power|individual-stats|role="meter"|Dark/)
 })
+
+test('details show the trade setting the server names', async () => {
+  for (const [setting, label] of [['first', 'Trade first'], ['keep', 'Keep'], ['auto', 'Auto decides']]) {
+    const view = pc([], '?box=party', [mon(undefined, undefined, 20, {slot: 1, trade_key: 'k', trade_preference: 'offered', trade_setting: setting})])
+    await view.ready()
+    view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+    assert.match(view.element('#pc-detail-body').innerHTML, new RegExp(label))
+  }
+})

@@ -2,7 +2,6 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
   // One trade setting per Pokémon. Automatic trades follow it, trades you pick yourself ignore it.
   const SETTINGS = [['auto', 'Auto decides'], ['first', 'Trade first'], ['keep', 'Keep']]
-  const LEGACY = {offered: 'first', locked: 'keep', withdrawn: 'keep'}
   let status = null
   let loading = false
   let writing = false
@@ -12,7 +11,7 @@
   let saved = null
   const listeners = []
   const find = key => status?.offers?.find(mon => mon.trade_key === key)
-  const setting = mon => mon?.setting || LEGACY[mon?.preference] || 'auto'
+  const setting = mon => mon?.setting || 'auto'
   function control(key, label) {
     const mon = find(key)
     if (!mon) return '<span class="trade-meta">Trade setting unavailable</span>'

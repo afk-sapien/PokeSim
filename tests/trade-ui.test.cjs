@@ -55,9 +55,9 @@ test('a refused change shows why and puts the old value back', async () => {
   assert.match(view.toast.textContent, /left the collection/)
 })
 
-test('older stored names read as the new settings', async () => {
-  for (const [preference, expected] of [['offered', 'first'], ['locked', 'keep'], ['withdrawn', 'keep']]) {
-    const view = ui({}, {preference, setting:undefined})
+test('the setting is the one the server names', async () => {
+  for (const [setting, expected] of [['first', 'first'], ['keep', 'keep'], [undefined, 'auto']]) {
+    const view = ui({}, {preference:'offered', setting})
     await view.api.refresh()
     assert.match(view.api.control('partner'), new RegExp(`value="${expected}" selected`))
   }

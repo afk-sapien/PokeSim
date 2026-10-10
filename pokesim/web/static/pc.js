@@ -151,11 +151,11 @@ function experienceProgress(mon) {
 }
 
 // The trade setting, read only here. It is changed on the Trading page.
-const tradeSettings = {offered: 'Trade first', locked: 'Keep', withdrawn: 'Keep'}
+const tradeSettings = {auto: 'Auto decides', first: 'Trade first', keep: 'Keep'}
 function tradeState(mon) {
   if (!mon.trade_key) return null
   if (mon.shiny || mon.perfect_dvs) return {state: 'Protected', note: 'Never traded automatically'}
-  return {state: tradeSettings[mon.trade_preference] || 'Auto decides', note: 'Change it on the Trading page'}
+  return {state: tradeSettings[mon.trade_setting] || tradeSettings.auto, note: 'Change it on the Trading page'}
 }
 
 function moveList(mon) {

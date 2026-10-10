@@ -9,11 +9,10 @@
   const owner = String(PokeSim.base || '').startsWith('/games/') && typeof PokeSim.api === 'function'
   const query = new URLSearchParams(location.search)
 
-  // Tabs: one selected at a time, arrow keys move between the enabled ones.
+  // Tabs: one selected at a time, arrow keys move between them.
   const tabs = [...document.querySelectorAll('.trade-tabs [role="tab"]')]
-  const enabled = () => tabs.filter(tab => !tab.disabled && tab.getAttribute('aria-disabled') !== 'true')
   function select(name, focus = false) {
-    const target = enabled().find(tab => tab.id === `tab-${name}`) || enabled()[0]
+    const target = tabs.find(tab => tab.id === `tab-${name}`) || tabs[0]
     if (!target) return
     for (const tab of tabs) {
       const on = tab === target
@@ -30,14 +29,13 @@
     if (current === 'cable') loadCable()
   }
   for (const tab of tabs) {
-    tab.addEventListener('click', () => { if (!tab.disabled) select(tab.id.slice(4)) })
+    tab.addEventListener('click', () => select(tab.id.slice(4)))
     tab.addEventListener('keydown', event => {
-      const list = enabled()
-      const index = list.indexOf(tab)
-      const moves = {ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: list.length - 1}
+      const index = tabs.indexOf(tab)
+      const moves = {ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: tabs.length - 1}
       if (!(event.key in moves)) return
       event.preventDefault()
-      const next = list[(moves[event.key] + list.length) % list.length]
+      const next = tabs[(moves[event.key] + tabs.length) % tabs.length]
       select(next.id.slice(4), true)
     })
   }
