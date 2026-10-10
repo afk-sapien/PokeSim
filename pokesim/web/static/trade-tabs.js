@@ -206,7 +206,7 @@
   // Auto: the on or off switch, the wish list and one setting per Pokémon.
   let auto = null
   let autoBusy = false
-  let autoLoaded = false
+  let autoLoading = false
   function renderAuto() {
     if (!auto) return
     const locked = auto.viewer_only || autoBusy
@@ -236,23 +236,23 @@
       renderAuto()
     }
   }
+  // Every visit to the tab reads fresh settings. Only an overlapping read is skipped.
   async function loadAuto() {
-    if (autoLoaded) return
-    autoLoaded = true
     globalThis.TradeUI?.refresh?.()
     if (!owner) {
       note('#auto-note', 'Automatic trading is set from the owner’s page, not from a view link.')
       for (const el of document.querySelectorAll('#auto-switch, #wish-input, #wish-add')) el.disabled = true
       return
     }
+    if (autoLoading || autoBusy) return
+    autoLoading = true
     try {
       auto = await json(await PokeSim.api(`${SETTINGS}?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not read the automatic trading settings.')
       if (auto.viewer_only) note('#auto-note', 'This adventure is view-only. Its trading settings cannot be changed here.')
       renderAuto()
     } catch (error) {
-      autoLoaded = false
       note('#auto-note', error.message)
-    }
+    } finally { autoLoading = false }
   }
   $('#auto-switch')?.addEventListener('click', () => {
     if (!auto) return
@@ -304,11 +304,11 @@
   }
 
   // Cable Club: link with another adventure and hold both controllers on the Cable Club page.
-  let cableLoaded = false
+  let cableLoading = false
   const cableHref = id => `${PokeSim.base}/cable?with=${encodeURIComponent(id)}`
   async function loadCable() {
-    if (cableLoaded) return
-    cableLoaded = true
+    if (cableLoading) return
+    cableLoading = true
     const list = $('#cable-games')
     try {
       const mine = await json(await PokeSim.fetch(`/api/cable`, {cache: 'no-store'}), 'Could not read the Cable Club.')
@@ -331,9 +331,8 @@
           : `<a class="pick-item pick-game" data-cable="${esc(game.id)}" href="${esc(cableHref(game.id))}">${read}</a>`
       }).join('') || '<p class="empty-note">There is no other adventure to link with yet.</p>'
     } catch (error) {
-      cableLoaded = false
       list.innerHTML = `<p class="empty-note">${esc(error.message)}</p>`
-    }
+    } finally { cableLoading = false }
   }
 
   // Deep links (?tab=trade&mon=key) win over the remembered tab.

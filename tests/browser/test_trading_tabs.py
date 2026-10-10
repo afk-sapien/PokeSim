@@ -38,6 +38,7 @@ class Library:
         self.page, self.url = page, url
         self.viewer_only = viewer_only
         self.limits_held = None
+        self.reads = {'auto': 0, 'cable': 0}
         self.starts_now = starts_now
         self.mine_key = mine_key
         self.posted = []
@@ -63,10 +64,14 @@ class Library:
         page.route(re.compile(r'/api/v1/interactions/auto-settings(\?|$)'), self.auto_settings)
         page.route(re.compile(rf'/games/{FROM}/api/cable(\?|$)'), lambda route: self.json(route, {
             'adventure': {'id': FROM, 'name': 'Crystal', 'version': 'crystal', 'state': 'running'}, 'reason': '', 'session': None}))
-        page.route(re.compile(r'/api/v1/interactions/cable-sessions/partners(\?|$)'), lambda route: self.json(route, {
+        page.route(re.compile(r'/api/v1/interactions/cable-sessions/partners(\?|$)'), self.partners)
+
+    def partners(self, route):
+        self.reads['cable'] += 1
+        self.json(route, {
             'adventure_id': FROM, 'partners': [
                 {'id': CRYSTAL, 'name': 'Second Crystal', 'version': 'crystal', 'reason': ''},
-                {'id': RED, 'name': 'Second Red', 'version': 'red', 'reason': CABLE}]}))
+                {'id': RED, 'name': 'Second Red', 'version': 'red', 'reason': CABLE}]})
 
     @staticmethod
     def json(route, data, status=200):
@@ -132,6 +137,8 @@ class Library:
                           'starts_now': self.starts_now, 'viewer_only': False, 'blocked': {}})
 
     def auto_settings(self, route):
+        if route.request.method == 'GET':
+            self.reads['auto'] += 1
         if route.request.method == 'PUT':
             change = json.loads(route.request.post_data)
             self.saved.append(change)
@@ -339,6 +346,22 @@ def test_a_late_limits_answer_does_not_replace_the_newer_list(page, game, late):
     expect(page.locator('#pick-theirs')).to_contain_text('Pidgey')
     expect(page.locator('#pick-theirs')).not_to_contain_text('Rattata')
     expect(page.locator('#pick-theirs')).not_to_contain_text('old answer')
+
+
+def test_auto_and_cable_tabs_read_again_on_every_visit(page, game):
+    library = Library(page, game[0])
+    library.open('?tab=auto')
+    expect(page.locator('#auto-switch')).to_be_enabled()
+    page.get_by_role('tab', name='Cable Club').click()
+    expect(page.locator('#cable-games')).to_contain_text('Second Crystal')
+    library.auto['enabled'] = False
+    page.get_by_role('tab', name='Auto').click()
+    expect(page.locator('#auto-switch-state')).to_have_text('Off')
+    page.get_by_role('tab', name='Cable Club').click()
+    expect(page.locator('#cable-games')).to_contain_text('Second Crystal')
+    assert library.reads['auto'] >= 2
+    page.wait_for_timeout(100)
+    assert library.reads['cable'] >= 2
 
 
 @pytest.mark.parametrize('width', [1280, 390])
