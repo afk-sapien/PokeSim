@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
@@ -760,13 +761,18 @@ def create_app(manager, shutdown=lambda: None):
     async def game(aid, path, request, viewer=False):
         if not public_game_path(request.method, path):
             raise HTTPException(404)
-        adventure = manager.registry.adventure(aid)
+        # Everything below that reads the registry, the coordinator or the disk runs in a worker
+        # thread. This handler shares one event loop with every page of every adventure, so a
+        # blocking call here (a registry lock held across a commit, a slow trade history) would
+        # stall the whole library, not just this request. Starlette's request pool, not the
+        # default executor: background trades hold default-executor threads for minutes.
+        adventure = await run_in_threadpool(manager.registry.adventure, aid)
         if path == 'trading' and request.method in {'GET', 'HEAD'}:
             from ..web.pages import render_game_page
             return HTMLResponse(render_game_page('adventure-trading.html', base_path=f"/{'view' if viewer else 'games'}/{aid}",
                 adventure_id=aid, adventure_name=adventure['name'], viewer=viewer))
         if path == 'api/interactions' and request.method in {'GET', 'HEAD'}:
-            return JSONResponse(manager.coordinator.adventure_status(aid))
+            return JSONResponse(await run_in_threadpool(manager.coordinator.adventure_status, aid))
         if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
             asset = path.removeprefix('static/')
             if asset in {'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css',
@@ -777,7 +783,7 @@ def create_app(manager, shutdown=lambda: None):
             dex = int(sprite[1])
             if not 1 <= dex <= 251:
                 raise HTTPException(404)
-            image = manager.assets.sprite_path(aid, dex)
+            image = await run_in_threadpool(manager.assets.sprite_path, aid, dex)
             if image is not None:
                 return FileResponse(image, media_type='image/png')
         if adventure['state'] not in {'running', 'recovering'}:
@@ -788,22 +794,22 @@ def create_app(manager, shutdown=lambda: None):
                 return HTMLResponse(render_library('stopped', adventure))
             raise HTTPException(409, 'This adventure is stopped or starting')
         if path in {'frame.jpg', 'stream'}:
-            active = next((row for row in manager.registry.transactions(True)
+            active = next((row for row in await run_in_threadpool(manager.registry.transactions, True)
                            if aid in row['plan']['participants'] and row['decision'] is None), None)
             if active:
                 side = 'left' if active['plan']['participants'][0] == aid else 'right'
                 preview_path = (manager.root / 'interactions' / active['id'] / 'attempts'
                                 / active['plan']['attempt_id'] / 'outputs' / (side + '.jpg'))
-                if preview_path.is_file():
+                if await run_in_threadpool(preview_path.is_file):
                     if path == 'frame.jpg':
                         return FileResponse(preview_path, media_type='image/jpeg')
                     async def provisional_frames():
                         try:
                             while not manager.closing:
-                                current = manager.registry.transaction(active['id'])
+                                current = await run_in_threadpool(manager.registry.transaction, active['id'])
                                 if current['decision'] is not None:
                                     break
-                                raw = preview_path.read_bytes()
+                                raw = await run_in_threadpool(preview_path.read_bytes)
                                 yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + raw + b'\r\n'
                                 await asyncio.sleep(0.1)
                         except (OSError, asyncio.CancelledError):
@@ -817,7 +823,7 @@ def create_app(manager, shutdown=lambda: None):
             if len(body) > 65536:
                 raise HTTPException(413, 'Game request is too large')
         body = bytes(body)
-        if request.method == 'POST' and manager.coordinator.reserved(aid):
+        if request.method == 'POST' and await run_in_threadpool(manager.coordinator.reserved, aid):
             raise HTTPException(409, 'A trade holds this adventure')
         if app.state.children is None:
             app.state.children = httpx.AsyncClient(

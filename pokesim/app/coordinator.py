@@ -86,6 +86,7 @@ class Coordinator:
         self.prepare_poll = 1
         self.session_timeout = 960
         self.display_species = None
+        self.gen2_species = None
         self.display_cache = {}
         self.manual_guard = threading.Lock()
         self.manual_drain = threading.Lock()
@@ -103,17 +104,25 @@ class Coordinator:
                 return {}
         return self.display_species.get(str(species), {})
 
+    def _gen2_species(self):
+        """Gen II species rows, read once. Loading a bundle parses and checksums about 3 MB, and
+        every Gen II Pokémon on the trading pages is displayed through here."""
+        if self.gen2_species is None:
+            from ..gen2.data import GameData
+            root = self.manager.assets.game_data_dir
+            game = next((game for game in ('gold', 'silver', 'crystal') if (root / 'gen2' / game).exists()), None)
+            if game is None:
+                return {}
+            self.gen2_species = GameData.load(root, game).species
+        return self.gen2_species
+
     def _mon_display(self, offer):
         if not isinstance(offer, dict):
             return None
         species = _display_number(offer.get('species'), 255)
         gen2 = offer.get('cartridge_generation') == 2
         if gen2 and species:
-            from ..gen2.data import GameData
-            data = next((bundle.species.get(species, {}) for game in ('gold', 'silver', 'crystal')
-                         if (self.manager.assets.game_data_dir / 'gen2' / game).exists()
-                         for bundle in [GameData.load(self.manager.assets.game_data_dir, game)]), {})
-            data = {**data, 'dex': species}
+            data = {**self._gen2_species().get(species, {}), 'dex': species}
         else:
             data = self._species(species) if species else {}
         result = {'species': species, 'dex': _display_number(data.get('dex', offer.get('dex')), 251 if gen2 else 151),
@@ -210,7 +219,7 @@ class Coordinator:
             display[aid] = {'sent': sent[aid], 'received': received}
         if row['phase'] in TERMINAL:
             with self.view_guard:
-                if len(self.display_cache) >= 128:
+                if len(self.display_cache) >= 2048:
                     self.display_cache.pop(next(iter(self.display_cache)))
                 self.display_cache[row['id']] = (row['updated_at'], display)
         return display
@@ -270,10 +279,11 @@ class Coordinator:
                     'failure_reason': self._failure_reason(row) if row['phase'] == 'aborted' else None,
                     'cancellable': row['decision'] is None and row['phase'] not in TERMINAL}
         attention = self._attention(rows)
+        # Slice before building each display: a long history has up to a thousand rows.
         return {'enabled': True, 'participants': [game['id'] for game in games],
                 'active': [public(row) for row in rows if row['phase'] not in TERMINAL],
-                'history': [public(row) for row in rows if row['phase'] in TERMINAL][:100],
-                'recent_failures': [public(row) for row in rows if row['phase'] == 'aborted'][:5],
+                'history': [public(row) for row in [row for row in rows if row['phase'] in TERMINAL][:100]],
+                'recent_failures': [public(row) for row in [row for row in rows if row['phase'] == 'aborted'][:5]],
                 'attention': attention,
                 'message': attention['message'] if attention else self.last_message}
 

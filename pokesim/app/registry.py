@@ -194,19 +194,23 @@ class Registry:
         root.mkdir(parents=True, exist_ok=True)
         CheckpointStore.atomic_write(root / 'adventure.json', json.dumps(adventure, indent=2).encode())
 
-    def transaction(self, tid):
-        with self.lock:
-            row = self.db.execute('SELECT * FROM interactions WHERE id=?', (tid,)).fetchone()
-        if not row:
-            raise KeyError('Interaction not found')
+    @staticmethod
+    def _interaction(row):
         item = dict(row)
         item['plan'] = json.loads(item['plan'])
         item['result'] = json.loads(item['result']) if item['result'] else None
         return item
 
+    def transaction(self, tid):
+        with self.lock:
+            row = self.db.execute('SELECT * FROM interactions WHERE id=?', (tid,)).fetchone()
+        if not row:
+            raise KeyError('Interaction not found')
+        return self._interaction(row)
+
     def transactions(self, unresolved=False, *, adventure_id=None):
         with self.lock:
-            query = 'SELECT id FROM interactions'
+            query = 'SELECT * FROM interactions'
             conditions = []
             parameters = []
             if unresolved:
@@ -217,8 +221,9 @@ class Registry:
                 parameters.append(adventure_id)
             if conditions:
                 query += ' WHERE ' + ' AND '.join(conditions)
-            ids = [row[0] for row in self.db.execute(query + ' ORDER BY created_at DESC LIMIT 1000', parameters)]
-        return [self.transaction(tid) for tid in ids]
+            # One query, decoded outside the lock: the trading pages read this on every refresh.
+            rows = self.db.execute(query + ' ORDER BY created_at DESC LIMIT 1000', parameters).fetchall()
+        return [self._interaction(row) for row in rows]
 
     def completed_trade_visits(self):
         """Individuals previously held by each campaign, including both trade sides."""

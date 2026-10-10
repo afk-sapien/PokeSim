@@ -1,5 +1,6 @@
 import hashlib
 import json
+import time
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -412,6 +413,10 @@ def test_manual_trade_endpoints_queue_report_and_cancel(client, monkeypatch):
     assert status['id'] == payload['request_id']
     assert status['state'] == 'queued'
     assert status['position'] == 1
+    # The drain is a background task on a worker thread; it can start just after the response.
+    deadline = time.monotonic() + 5
+    while not drains and time.monotonic() < deadline:
+        time.sleep(0.01)
     assert drains
     assert client.get('/api/v1/interactions/manual-trades').json()['trades'][0]['id'] == status['id']
     assert client.get('/api/v1/interactions/manual-trades/' + status['id']).json()['state'] == 'queued'
@@ -419,3 +424,35 @@ def test_manual_trade_endpoints_queue_report_and_cancel(client, monkeypatch):
     cancelled = client.post(f'/api/v1/interactions/manual-trades/{status["id"]}/cancel', headers=headers).json()
     assert cancelled['state'] == 'cancelled'
     assert client.post(f'/api/v1/interactions/manual-trades/{identifier()}/cancel', headers=headers).status_code == 404
+
+
+def test_a_slow_game_trade_history_does_not_stall_the_library(client, monkeypatch):
+    """The game proxy shares one event loop with every page of every adventure."""
+    import asyncio
+    import threading
+    import httpx
+    client, manager = client
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    row = manager.registry.create('Red', 'fixture-rom', {}, identifier())
+    release = threading.Event()
+    def slow_status(aid):
+        release.wait(10)
+        return {'adventure': {'id': aid}, 'active': [], 'history': [], 'recent_failures': [], 'attention': None}
+    monkeypatch.setattr(manager.coordinator, 'adventure_status', slow_status)
+
+    async def run():
+        transport = httpx.ASGITransport(app=client.app)
+        async with httpx.AsyncClient(transport=transport, base_url='http://testserver') as browser:
+            timer = threading.Timer(3, release.set)
+            timer.start()
+            started = time.monotonic()
+            slow = asyncio.create_task(browser.get(f'/games/{row["id"]}/api/interactions'))
+            await asyncio.sleep(0.05)
+            other = await browser.get(f'/games/{row["id"]}/trading')
+            elapsed = time.monotonic() - started
+            result = await slow
+            timer.cancel()
+            return other, elapsed, result
+    other, elapsed, slow = asyncio.run(run())
+    assert other.status_code == 200 and elapsed < 2
+    assert slow.status_code == 200 and slow.json()['adventure']['id'] == row['id']

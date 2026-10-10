@@ -831,3 +831,37 @@ def test_manual_options_list_every_pokemon_and_unavailable_adventures(setup):
     assert right['pokemon'] == []
     with pytest.raises(ValueError, match='Start this adventure'):
         c.enqueue_manual(manual_request(setup))
+
+
+def test_gen2_trade_displays_read_species_data_once(setup, monkeypatch):
+    """Loading a Gen II bundle parses and checksums about 3 MB; the trading page polls every few seconds."""
+    from pokesim.gen2.data import GameData
+    (setup.manager.root / 'gen2' / 'crystal').mkdir(parents=True)
+    loads = []
+    def load(root, game):
+        loads.append(game)
+        return SimpleNamespace(species={152: {'name': 'Chikorita'}})
+    monkeypatch.setattr(GameData, 'load', load)
+    c = setup.coordinator
+    for _ in range(50):
+        shown = c._mon_display({'species': 152, 'cartridge_generation': 2, 'level': 5})
+        assert shown['name'] == 'Chikorita' and shown['dex'] == 152 and shown['level'] == 5
+    assert loads == ['crystal']
+
+
+def test_trade_views_build_only_the_rows_they_return(setup):
+    registry, c = setup.registry, setup.coordinator
+    left, right = setup.data['left_id'], setup.data['right_id']
+    for phase, decision in [('completed', 'COMMIT')] * 300 + [('aborted', 'ABORT')] * 10:
+        row = registry.create_transaction(identifier(), {'participants': [left, right], 'left_id': left, 'right_id': right})
+        registry.update_transaction(row['id'], phase=phase, decision=decision)
+    built = []
+    original = c._trade_display
+    c._trade_display = lambda row, *args, **kwargs: built.append(row['id']) or original(row, *args, **kwargs)
+    status = c.status()
+    assert len(status['history']) == 100 and len(status['recent_failures']) == 5
+    assert len(built) <= 105
+    built.clear()
+    mine = c.adventure_status(left)
+    assert len(mine['history']) == 20 and len(mine['recent_failures']) == 5 and mine['active'] == []
+    assert len(built) <= 25
