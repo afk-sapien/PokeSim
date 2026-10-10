@@ -173,6 +173,10 @@ Phone notifications need no setting here. Open the Library, choose **Notificatio
 
 The Library opens directly without a sign-in or owner key. Its default published port is local-only. Anyone who can reach the Library can manage adventures, so remote access belongs behind something that adds authentication, such as Tailscale, Cloudflare Access, or your own reverse proxy with a login. Point a reverse proxy at the manager and preserve the Host matching `PUBLIC_URL`, which must be the browser-facing address. The application checks Host and Origin and protects browser writes against cross-site requests. These protections do not authenticate remote users. Worker credentials and private ports remain internal.
 
+#### Share a view link
+
+**Copy view link** on an adventure's live page copies `/view/<adventure id>/`. It opens the same pages without controls: the screen, team, journal, progress and statistics are shown, and the server refuses every change and every save. Each request under `/view/` may only read (`GET` or `HEAD`). Anything else returns 403, as do the save state list and save export. To share an adventure publicly, expose only `/view/*` through your reverse proxy and keep every other path behind your login. The public address must still be `PUBLIC_URL`, because the application checks Host. [Authentication and view links](authentication.md) has Authelia rules and a Traefik example.
+
 The Compose service uses an init process to reap children and allows 90 seconds for orderly shutdown. Keep a single manager process per application folder. Do not add Uvicorn workers or share one application volume between containers.
 
 The image includes the optional [navigation acceleration](desktop.md#optional-navigation-acceleration). Each Red or Blue adventure compiles its route search once at startup and keeps the compiled code in `/tmp/numba-cache`. The compiled search gives the same moves as the Python one. It makes repeated searches faster and uses about 115 MB more memory per adventure. Set `POKESIM_NAVIGATION_BACKEND=python` in the service environment to use the Python search instead.

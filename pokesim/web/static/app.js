@@ -351,6 +351,15 @@ if ($('#export-save')) $('#export-save').onclick = async (event) => {
     button.textContent = 'Download .sav'
   }
 }
+if ($('#copy-view-link')) $('#copy-view-link').onclick = async (event) => {
+  const link = new URL(event.currentTarget.dataset.viewLink, location.origin).href
+  try {
+    await navigator.clipboard.writeText(link)
+    toast('View link copied. It shows this adventure without any controls.')
+  } catch (_) {
+    window.prompt('Copy this view link. It shows this adventure without any controls.', link)
+  }
+}
 if ($('#restart')) $('#restart').onclick = (event) => {
   if (confirm('Start a fresh adventure from the beginning? Your event journal will be kept.')) control(event.currentTarget, 'restart', undefined, 'A new adventure is starting.')
 }

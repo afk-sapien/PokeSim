@@ -180,6 +180,7 @@ automatic player can still get stuck. See [release status and known limits](RELE
 - [Gameplay and notifications](docs/guide.md)
 - [Statistics and counting rules](docs/adventure-statistics.md)
 - [Backups and troubleshooting](docs/operations.md)
+- [Authentication and view links](docs/authentication.md)
 - [Report a bug or request a feature](https://github.com/afk-sapien/PokeSim/issues)
 - [Discussions](https://github.com/afk-sapien/PokeSim/discussions) and [contributing](CONTRIBUTING.md)
 - [Security](SECURITY.md) and [community guidelines](CODE_OF_CONDUCT.md)

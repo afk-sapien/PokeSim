@@ -46,9 +46,12 @@ GAME_CONTEXT = {'dex_total': '151', 'region': 'Kanto', 'badge_total': '8', 'mara
 GEN2_CONTEXT = {'dex_total': '251', 'region': 'Johto and Kanto', 'badge_total': '16', 'marathon_hidden': ' hidden'}
 
 
-def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', **context):
-    navigation = ''
-    if base_path:
+def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', viewer=False, **context):
+    """A viewer (a /view/ link) gets the same page without library navigation or a view link."""
+    navigation = view_link = ''
+    if base_path and not viewer:
+        view_link = ('<button id="copy-view-link" class="key" title="Copy a link that shows this adventure without controls" '
+                     f'data-view-link="/view/{html.escape(adventure_id, quote=True)}/">Copy view link</button>')
         navigation = ('<nav class="breadcrumb" aria-label="Breadcrumb">'
                       '<span class="adventure-switch">'
                       '<select id="adventure-switcher" aria-label="Switch adventure">'
@@ -66,4 +69,4 @@ def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', 
         save_export_control='' if base_path else (
             '<button id="export-save" class="key" title="Download your current progress for another emulator">'
             'Download .sav</button>'),
-        library_nav=navigation, **{**GAME_CONTEXT, **context})
+        view_link_control=view_link, library_nav=navigation, **{**GAME_CONTEXT, **context})

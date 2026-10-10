@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import hmac
 import math
 import httpx
@@ -9,7 +10,7 @@ import re
 import threading
 
 from fastapi import FastAPI, HTTPException, Query, Header
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Literal
@@ -19,10 +20,18 @@ from ..capability import CAPABILITY_ERRORS
 from .event_page import render_event
 from .feed import render_feed
 from .pages import GEN2_CONTEXT, render_game_page
+from .security import VIEWER_HEADER, viewer_allows
 from ..trade import preferences
 
 STATIC = Path(__file__).parent / "static"
 BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
+# Set for each request that arrived through a /view/ link.
+VIEWING = contextvars.ContextVar('pokesim_viewing', default=False)
+
+
+def view_only():
+    """True when this request may only watch: a view link, or the instance-wide VIEWER_ONLY."""
+    return config.VIEWER_ONLY or VIEWING.get()
 
 
 # Ownership barriers: a save from before one of these would undo a completed trade or custom reward.
@@ -72,8 +81,13 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         from .pokedex import DEFAULT_VERSION, VERSIONS, reference_json
     if base_path and not re.fullmatch(r'/games/[A-Za-z0-9_-]+', base_path):
         raise ValueError('Invalid adventure base path')
+    view_path = base_path.replace('/games/', '/view/', 1)
+
+    def base():
+        return view_path if VIEWING.get() else base_path
+
     def page(name: str, **context):
-        return render_game_page(name, base_path=base_path, adventure_id=adventure_id,
+        return render_game_page(name, base_path=base(), adventure_id=adventure_id, viewer=VIEWING.get(),
                                 adventure_name=adventure_name, **(GEN2_CONTEXT if gen2 else {}), **context)
 
     app = FastAPI(title="pokesim", docs_url=None, redoc_url=None, openapi_url=None)
@@ -81,6 +95,19 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     if browser_origin is not None:
         from .security import install_browser_boundary
         install_browser_boundary(app, browser_origin)
+
+    @app.middleware('http')
+    async def viewer_boundary(request, call_next):
+        # The one gate for view links: they only watch, and never read saves.
+        viewing = request.headers.get(VIEWER_HEADER) == '1'
+        if viewing and not viewer_allows(request.method, request.url.path):
+            return JSONResponse({'detail': 'This is a view-only link'}, status_code=403)
+        token = VIEWING.set(viewing)
+        try:
+            return await call_next(request)
+        finally:
+            VIEWING.reset(token)
+
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     app.mount("/shots", StaticFiles(directory=store.shots), name="shots")
 
@@ -94,11 +121,11 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get("/team", response_class=HTMLResponse)
     def team_page():
-        return RedirectResponse(f"{base_path}/#team", status_code=307)
+        return RedirectResponse(f"{base()}/#team", status_code=307)
 
     @app.get("/journey", response_class=HTMLResponse)
     def journey_page():
-        return RedirectResponse(f"{base_path}/#journey-progress", status_code=307)
+        return RedirectResponse(f"{base()}/#journey-progress", status_code=307)
 
     @app.get("/pc", response_class=HTMLResponse)
     def pc_page():
@@ -110,7 +137,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get('/journal/stats')
     def legacy_statistics_page():
-        return RedirectResponse(f'{base_path}/stats', status_code=308)
+        return RedirectResponse(f'{base()}/stats', status_code=308)
 
     @app.get('/stats', response_class=HTMLResponse)
     def statistics_page():
@@ -220,7 +247,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         payload = pokedex_status()
         if gen2:
             from ..gen2.trading import status
-            return status(emu, payload, adventure_id)
+            return {**status(emu, payload, adventure_id), 'viewer_only': view_only()}
         from . import trading
         if base_path:
             participant = getattr(app.state, 'participant', None)
@@ -228,7 +255,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                 payload = participant.runtime.call(participant.inventory)
             result = trading.unavailable(payload, adventure_id, 'Useful exchanges happen automatically with eligible adventures in this library.')
             result.update(connected=True, managed=True, trading={'managed': True, 'enabled': True})
-            return {**result, 'viewer_only': config.VIEWER_ONLY,
+            return {**result, 'viewer_only': view_only(),
                     'holding': bool(store.get('trade_hold'))}
         instance = config.TRADING_INSTANCE or payload['version']
         try:
@@ -237,12 +264,12 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             message = ('Trading is not connected to this game yet.' if not config.TRADING_URL else
                        'Trading is reconnecting. Offers and history will refresh when the coordinator is available.')
             result = trading.unavailable(payload, instance, message)
-        return {**result, 'viewer_only': config.VIEWER_ONLY,
+        return {**result, 'viewer_only': view_only(),
                 'holding': bool(store.get('trade_hold'))}
 
     @app.post('/api/trading/preferences')
     def trading_preference(choice: TradePreference):
-        if config.VIEWER_ONLY:
+        if view_only():
             raise HTTPException(403, 'This instance is view-only')
         try:
             emu.set_trade_preference(choice.key, choice.state)
@@ -267,7 +294,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get("/api/state")
     def state():
-        return emu.status()
+        status = emu.status()
+        return {**status, 'viewer_only': view_only()} if isinstance(status, dict) else status
 
     @app.get("/healthz")
     def health():
@@ -295,7 +323,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get("/api/states")
     def states():
-        if config.VIEWER_ONLY:
+        if view_only():
             raise HTTPException(403, "This instance is view-only")
         return [p.name for p in sorted(store.states.glob("*.state"), key=lambda p: p.stat().st_mtime, reverse=True)]
 
@@ -314,7 +342,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def control(c: Control):
         if store.get("trade_hold") and c.action != "speed":
             raise HTTPException(409, "An exchange is holding this adventure")
-        if config.VIEWER_ONLY:
+        if view_only():
             raise HTTPException(403, "This instance is view-only")
         if c.action == "press":
             if c.value not in BUTTONS:
@@ -345,7 +373,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.post('/api/export-save')
     def export_save():
-        if config.VIEWER_ONLY:
+        if view_only():
             raise HTTPException(403, 'This instance is view-only')
         if not export_lock.acquire(blocking=False):
             raise HTTPException(409, 'A save export is already being prepared.')
@@ -418,9 +446,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         ev = store.event(eid)
         if not ev:
             raise HTTPException(404)
-        can_rewind = bool(ev["state"]) and not config.VIEWER_ONLY and not any(
+        can_rewind = bool(ev["state"]) and not view_only() and not any(
             store.get(key) for key, _, _ in REWIND_BARRIERS)
-        return render_event(ev, can_rewind=can_rewind, base_path=base_path,
+        return render_event(ev, can_rewind=can_rewind, base_path=base(), viewer=VIEWING.get(),
                             adventure_id=adventure_id, adventure_name=adventure_name)
 
     @app.get("/feed.xml")

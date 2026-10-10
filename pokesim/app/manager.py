@@ -30,7 +30,7 @@ from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, user_directory
 from ..platform_io import lock_file
-from ..web.security import protect_response, public_origin
+from ..web.security import VIEWER_HEADER, protect_response, public_origin, viewer_allows
 from .assets import Assets
 from .registry import Registry, identifier, validate_id
 from .supervisor import Supervisor
@@ -291,6 +291,8 @@ def create_app(manager, shutdown=lambda: None):
         origin = request.headers.get('origin')
         if origin and origin != f'{expected.scheme}://{expected.netloc}':
             return JSONResponse({'detail': 'Requests must come from this PokeSim application'}, status_code=403)
+        if request.url.path.startswith('/view/') and request.method not in {'GET', 'HEAD'}:
+            return JSONResponse({'detail': 'This is a view-only link'}, status_code=403)
         changing = request.method not in {'GET', 'HEAD', 'OPTIONS'}
         if request.headers.get('sec-fetch-site') == 'cross-site' and (changing or request.url.path == '/api/v1/session'):
             return JSONResponse({'detail': 'Requests must come from this PokeSim application'}, status_code=403)
@@ -744,15 +746,25 @@ def create_app(manager, shutdown=lambda: None):
     def quit_app():
         return JSONResponse({'ok': True}, background=BackgroundTask(shutdown))
 
+    # A view link: the same game pages, watched without controls. Expose only /view/ to share.
+    @app.api_route('/view/{aid}/{path:path}', methods=['GET', 'HEAD'])
+    async def view(aid: str, path: str, request: Request):
+        if not viewer_allows(request.method, path):
+            raise HTTPException(403, 'This is a view-only link')
+        return await game(aid, path, request, viewer=True)
+
     @app.api_route('/games/{aid}/{path:path}', methods=['GET', 'POST', 'HEAD'])
-    async def game(aid: str, path: str, request: Request):
+    async def games(aid: str, path: str, request: Request):
+        return await game(aid, path, request)
+
+    async def game(aid, path, request, viewer=False):
         if not public_game_path(request.method, path):
             raise HTTPException(404)
         adventure = manager.registry.adventure(aid)
         if path == 'trading' and request.method in {'GET', 'HEAD'}:
             from ..web.pages import render_game_page
-            return HTMLResponse(render_game_page('adventure-trading.html', base_path=f'/games/{aid}',
-                adventure_id=aid, adventure_name=adventure['name']))
+            return HTMLResponse(render_game_page('adventure-trading.html', base_path=f"/{'view' if viewer else 'games'}/{aid}",
+                adventure_id=aid, adventure_name=adventure['name'], viewer=viewer))
         if path == 'api/interactions' and request.method in {'GET', 'HEAD'}:
             return JSONResponse(manager.coordinator.adventure_status(aid))
         if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
@@ -769,6 +781,8 @@ def create_app(manager, shutdown=lambda: None):
             if image is not None:
                 return FileResponse(image, media_type='image/png')
         if adventure['state'] not in {'running', 'recovering'}:
+            if path in GAME_PAGES and viewer:
+                return HTMLResponse('<!doctype html><title>PokeSim</title><p>This adventure is not running right now.</p>', status_code=409)
             if path in GAME_PAGES:
                 from ..web.library import render_library
                 return HTMLResponse(render_library('stopped', adventure))
@@ -811,7 +825,7 @@ def create_app(manager, shutdown=lambda: None):
                 limits=httpx.Limits(max_connections=None, max_keepalive_connections=32))
         client = app.state.children
         target = httpx.URL(child.url).copy_with(path='/' + path, query=request.scope['query_string'])
-        headers = {'Authorization': 'Bearer ' + child.token}
+        headers = {'Authorization': 'Bearer ' + child.token, **({VIEWER_HEADER: '1'} if viewer else {})}
         if request.headers.get('content-type'):
             headers['Content-Type'] = request.headers['content-type']
         try:
