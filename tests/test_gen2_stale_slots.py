@@ -87,3 +87,29 @@ def test_trade_preparation_drops_a_half_finished_policy_menu(monkeypatch):
     policy.menu = 'battle menu'
     prep.step(None)
     assert seen[-1] == 'battle menu'
+
+
+def test_trade_preparation_drops_the_battle_shortcut_once_the_battle_ends(monkeypatch):
+    # Live Crystal: a preparation began mid-battle and the policy started Attack. The battle
+    # ended, the coordinator aborted at the PC and the stale Attack waited on the PC text box
+    # until the screen watchdog fired.
+    from pokesim.gen2 import preparation
+    from pokesim.gen2.menus import Attack
+
+    class Stop(Exception):
+        pass
+
+    def stop(regions, snapshot):
+        raise Stop
+
+    policy = SimpleNamespace(menu=Attack(2), nav=SimpleNamespace(regions=None), in_league=lambda snapshot: False,
+                             step=lambda snapshot, memory: 'battle step')
+    emu = SimpleNamespace(policy=policy, frame=10, data=None, pb=SimpleNamespace(memory=None))
+    prep = preparation.Preparation(emu, {'deadline': float('inf'), 'started_frame': 0})
+    monkeypatch.setattr(preparation, 'Memory', lambda memory, data: None)
+    monkeypatch.setattr(preparation, 'update_world', stop)
+    assert prep.advance(SimpleNamespace(in_battle=True)) == 'battle step'
+    assert isinstance(policy.menu, Attack)
+    with pytest.raises(Stop):
+        prep.advance(SimpleNamespace(in_battle=False))
+    assert policy.menu is None

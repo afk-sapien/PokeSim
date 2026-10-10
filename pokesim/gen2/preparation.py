@@ -91,6 +91,9 @@ class Preparation:
         mem = Memory(emu.pb.memory, data)
         if snapshot.in_battle or policy.in_league(snapshot):
             return policy.step(snapshot, emu.pb.memory)
+        # A battle shortcut the policy started during that battle is never stepped again here.
+        # Left in place, it would resume after an abort, wait on the open PC and freeze the screen.
+        policy.menu = None
         update_world(policy.nav.regions, snapshot)
         policy.nav.regions.observe(snapshot.map, policy.nav.collision(snapshot, emu.pb.memory))
         policy.nav.observe(snapshot)
