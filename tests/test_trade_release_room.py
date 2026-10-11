@@ -85,7 +85,7 @@ def test_trade_spare_protects_keep_hand_picked_and_wished_pokemon(gold):
     assert policy.release_target(snapshot) is None
     assert policy.trade_spare(snapshot) is weakest
     key = lambda m: identity({'trainer_id': m.trainer_id, 'dvs': m.dvs, 'dex': m.species})  # noqa: E731
-    # A Pokémon set to Keep, one hand-picked for a trade (even by an older trainer-and-DV key) and a wished species stay.
+    # A Pokémon set to Never trade, one hand-picked for a trade (even by an older trainer-and-DV key) and a wished species stay.
     policy.trade_preferences = lambda: {key(weakest): {'state': 'locked'}}
     assert policy.trade_spare(snapshot) is middle
     assert policy.trade_spare(snapshot, protect=[key(middle).split('-')[0]]) is best

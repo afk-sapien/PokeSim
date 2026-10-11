@@ -121,7 +121,7 @@ def test_gen2_detail_shows_hidden_power_power_and_eggs(page, game, width, height
     expect(body.locator('.pc-readouts')).to_contain_text('3,120')
     for text in ('Friendship', 'ID 04321', 'Olivine City', 'Elite Four', 'Potential Stat Power', 'Higher roll'):
         expect(body).not_to_contain_text(text)
-    expect(body.locator('.pc-detail-head .trade-tag')).to_have_text('Auto decides')
+    expect(body.locator('.pc-detail-head .trade-tag')).to_have_text('Can trade')
     expect(body.locator('.pc-detail-head')).to_contain_text('Pokérus cured')
     expect(body.locator('.individual-stats caption')).to_contain_text('DVs top 2.5%')
     expect(body.locator('.pc-gauges .value[title="7,230 to Lv. 51"]')).to_have_count(1)

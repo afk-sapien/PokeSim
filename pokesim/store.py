@@ -248,7 +248,7 @@ class Store:
 
     def set_trade_preference(self, key, value):
         from .trade.preferences import LEGACY, PREFIX
-        # One setting per Pokémon and no lock order: Auto decides, Trade first or Keep.
+        # One setting per Pokémon and no lock order: Can trade, Prefer to trade or Never trade.
         value = {**value, 'state': LEGACY.get(value['state'], value['state'])}
         with self.lock, self.db:
             hold = self.db.execute("SELECT v FROM kv WHERE k='trade_hold'").fetchone()

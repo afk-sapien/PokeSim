@@ -1,4 +1,4 @@
-"""Automatic trading settings: on or off, a wish list, Trade first, and hand-picked trades first."""
+"""Automatic trading settings: on or off, a wish list, Prefer to trade, and hand-picked trades first."""
 import asyncio
 import threading
 import time

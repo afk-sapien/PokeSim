@@ -621,7 +621,7 @@ class Policy:
 
         The usual release target comes first. Failing that, a trade may also let go of a spare
         duplicate that holds an item or has been trained. Neither ever takes an egg, a party member,
-        a shiny, perfect or rare-DV Pokémon, one set to Keep or Trade first, the ``protect`` trade keys
+        a shiny, perfect or rare-DV Pokémon, one set to Never trade or Prefer to trade, the ``protect`` trade keys
         (hand-picked for a trade), a ``wished`` species, a species' last or best copy or a plan partner.
         """
         from .breeding import breeding_stock

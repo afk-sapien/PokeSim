@@ -13,8 +13,8 @@
   const RATINGS = [['all', 'All ratings'], ['shiny', '★ Shiny partners'], ['3plus', '3★ and better'], ['4', '4★ Perfect'],
     ['3', '3★'], ['2', '2★'], ['1', '1★'], ['unknown', 'Unknown DVs']]
   // One trade setting per Pokémon. Protected means shiny or perfect, never traded automatically.
-  const SETTINGS = [['all', 'All trade settings'], ['auto', 'Auto decides'], ['first', 'Trade first'], ['keep', 'Keep'], ['protected', 'Protected']]
-  const SETTING_LABELS = {auto: 'Auto decides', first: 'Trade first', keep: 'Keep', protected: 'Protected'}
+  const SETTINGS = [['all', 'All trade settings'], ['auto', 'Can trade'], ['first', 'Prefer to trade'], ['keep', 'Never trade'], ['protected', 'Protected']]
+  const SETTING_LABELS = {auto: 'Can trade', first: 'Prefer to trade', keep: 'Never trade', protected: 'Protected'}
   const sortDefaults = {box: 'asc', battle_power: 'desc', power: 'desc', stat_total: 'desc', level: 'desc', HP: 'desc', Attack: 'desc', Defense: 'desc', Speed: 'desc', Special: 'desc', 'Special Attack': 'desc', 'Special Defense': 'desc', dv_stars: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
 
   function statTotal(mon, field) {

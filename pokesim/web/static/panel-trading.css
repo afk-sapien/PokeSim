@@ -323,13 +323,7 @@ main.shell { padding-bottom: var(--s7); }
 .trade-panel:focus-visible { outline: 2px solid var(--signal) }
 .trade-panel .section-head { margin-top: var(--s4) }
 
-/* ---- picking a trade ---------------------------------------------------- */
-.pick-steps { display: grid }
-.pick-steps { gap: var(--s4) }
-.pick-steps { margin: 0 }
-.pick-steps { padding: 0 }
-.pick-steps { list-style: none }
-.pick-step[hidden] { display: none }
+/* ---- game and Cable Club lists ------------------------------------------ */
 .pick-search { display: grid }
 .pick-search[hidden] { display: none }
 .pick-search { gap: var(--s1) }
@@ -347,7 +341,6 @@ main.shell { padding-bottom: var(--s7); }
 .pick-list { max-height: 420px }
 .pick-list { overflow-y: auto }
 .pick-list { padding: 2px }
-.pick-games { max-height: none }
 .pick-item { display: flex }
 .pick-item { align-items: center }
 .pick-item { gap: var(--s3) }
@@ -377,9 +370,6 @@ a.pick-item { text-decoration: none }
 .pick-read b { overflow-wrap: anywhere }
 .pick-reason { font-size: 13px }
 .pick-reason { color: var(--warn) }
-.pick-actions { padding: var(--s3) 0 0 }
-#pick-summary .trade-help { margin: 0 }
-#pick-summary .trade-help { padding: 0 var(--s4) var(--s4) }
 
 /* ---- automatic trading -------------------------------------------------- */
 .auto-switch-row { display: flex }
@@ -465,18 +455,7 @@ a.pick-item { text-decoration: none }
 /* ---- Pokémon cards on the Trading page (the PC page's cards, mon-grid.css) ---- */
 .mon-toolbar { margin: var(--s3) 0; }
 .trade-search-row[hidden] { display: none; }
-.pick-browse[hidden], .pick-chosen[hidden] { display: none; }
 .pick-grid, .auto-list, .auto-grid { margin-top: var(--s2); }
-.pick-chosen {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s3);
-  margin-top: var(--s2);
-}
-.pick-chosen-grid { flex: 1 1 280px; max-width: 420px; }
-.pick-change { min-height: 44px; }
-#pick-theirs-game { margin-left: var(--s2); color: var(--ink-2); }
 
 /* The chosen card: a signal edge, like a pressed key. */
 .pc-mon.is-chosen {
@@ -505,16 +484,16 @@ a.pick-item { text-decoration: none }
   overflow-wrap: anywhere;
 }
 
-/* The trade setting stamp. Auto decides is the quiet default. */
+/* The trade setting stamp. Can trade is the quiet default. */
 .trade-tag { white-space: nowrap; }
 .trade-tag--auto { color: var(--ink-3); border-color: var(--rule-faint); }
 .trade-tag--first { color: var(--signal); border-color: var(--signal); }
 .trade-tag--keep { color: var(--ok); border-color: var(--ok); }
 .trade-tag--protected { color: var(--ink-2); border-style: dashed; }
 
-/* The popup's pick button and setting sit under its head. */
+/* The popup's reason, setting and Choose another key sit under its head. */
 .trade-detail-action { display: flex; flex-wrap: wrap; align-items: end; gap: var(--s3) var(--s4); }
-.trade-detail-action .key--primary { min-height: 44px; }
+.trade-detail-action .key { min-height: 44px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .trade-detail-setting { display: grid; gap: var(--s1); }
 .trade-detail-setting .trade-setting select { min-height: 44px; min-width: 180px; }
 .pick-blocked-reason {
@@ -541,12 +520,98 @@ a.pick-item { text-decoration: none }
 .pick-game .lamp { flex: none; margin-top: 4px; }
 
 @media (max-width: 640px) {
-  .pick-chosen-grid { max-width: none; }
-  .pick-change { width: 100%; }
   .trade-detail-action > * { flex: 1 1 100%; }
   .trade-detail-setting .trade-setting select { width: 100%; }
 }
 @media (forced-colors: active) {
   .pc-mon.is-chosen { outline: 2px solid Highlight; }
   .pc-mon.is-blocked { border: 1px dashed GrayText; color: GrayText; }
+}
+
+/* ---- trade builder: a game, then one slot each side ------------------- */
+.builder { display: grid; gap: var(--s4); }
+.builder-partner { display: flex; flex-wrap: wrap; align-items: end; gap: var(--s2) var(--s4); }
+.builder-game { display: grid; gap: var(--s1); flex: 1 1 280px; max-width: 460px; }
+.builder-game select { width: 100%; min-height: 44px; }
+.builder-from { margin: 0 0 var(--s2); color: var(--ink-2); }
+.builder-reason { margin: 0; }
+.builder-reason[hidden] { display: none; }
+.builder-slots {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s3);
+}
+.builder-slot { display: grid; gap: var(--s2); min-width: 0; }
+.builder-slot .section-head { margin: 0; }
+.builder-arrow { align-self: center; padding-top: var(--s5); }
+.slot-body { display: grid; gap: var(--s2); }
+.slot-body .pick-chosen-grid { grid-template-columns: minmax(0, 1fr); max-width: 380px; }
+.slot-empty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--s1);
+  min-height: 132px;
+  padding: var(--s4);
+  color: var(--ink-2);
+  background: var(--well);
+  border: 2px dashed var(--rule);
+  cursor: pointer;
+  text-align: center;
+  font: inherit;
+}
+.slot-empty b { font: var(--f-read) / 1.2 var(--font-panel); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); }
+.slot-empty:hover:not(:disabled), .slot-empty:focus-visible { border-color: var(--signal); color: var(--ink); }
+.slot-empty:disabled { cursor: not-allowed; opacity: 0.6; }
+.slot-plus { font: 28px / 1 var(--font-mono); color: var(--signal); }
+.pick-change { min-height: 44px; justify-self: start; }
+.builder-summary { margin: 0; }
+.builder-summary.is-reason { color: var(--warn); }
+.builder-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.builder-actions .key { min-height: 44px; }
+
+/* The picker: a modal that fills a phone, keeps its toolbar and scrolls its grid. */
+.pick-dialog {
+  width: min(1100px, calc(100% - 2 * var(--s4)));
+  max-width: none;
+  height: min(860px, calc(100dvh - 2 * var(--s5)));
+  max-height: none;
+  padding: 0;
+  background: var(--panel);
+  color: var(--ink);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--key-inset), 6px 6px 0 var(--bevel-lo);
+}
+.pick-dialog[open] { display: flex; flex-direction: column; }
+.pick-dialog::backdrop { background: rgba(10, 12, 10, 0.55); }
+.pick-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: var(--hair) solid var(--rule);
+  background: var(--panel-2);
+}
+.pick-dialog-head .legend { margin: 0; overflow-wrap: anywhere; }
+.pick-dialog-head .close-detail { position: static; flex: none; min-height: 44px; }
+.pick-dialog > .trade-notice { margin: var(--s3) var(--s4) 0; }
+.pick-pane { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; padding: 0 var(--s4) var(--s4); }
+.pick-pane[hidden] { display: none; }
+.pick-pane .pick-grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px; align-content: start; }
+
+/* Suggested trades wait above the tabs. */
+.requests-section[hidden] { display: none; }
+.request-why { margin: var(--s3) var(--s4) var(--s1); }
+.request-reasons { margin: 0 var(--s4) var(--s3); padding-left: var(--s4); color: var(--ink-2); }
+
+@media (max-width: 640px) {
+  .builder-slots { grid-template-columns: minmax(0, 1fr); }
+  .builder-arrow { justify-self: center; padding-top: 0; transform: rotate(90deg); }
+  .builder-actions .key { flex: 1 1 auto; }
+  .pick-change { justify-self: stretch; }
+  .pick-dialog { width: 100%; height: 100dvh; margin: 0; border: 0; box-shadow: none; }
+  .pick-dialog-head { padding: var(--s2) var(--s3); }
+  .pick-pane { padding: 0 var(--s3) var(--s3); }
 }

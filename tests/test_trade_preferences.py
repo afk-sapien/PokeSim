@@ -266,7 +266,7 @@ def test_trade_first_is_refused_for_shiny_and_perfect(tmp_path):
     data = payload()
     mon = data['storage']['pokemon'][0]
     mon['dvs'] = [15] * 5
-    with pytest.raises(ValueError, match='Trade first'):
+    with pytest.raises(ValueError, match='Prefer to trade'):
         preferences.update(store, data, preferences.identity(mon), 'first')
     preferences.update(store, data, preferences.identity(mon), 'keep')
     assert store.trade_preferences()[preferences.identity(mon)]['state'] == 'locked'

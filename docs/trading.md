@@ -9,8 +9,8 @@ exchange rules, and recovery.
 Everything about trading lives on each adventure's Trading page at
 `/games/{id}/trading`. It has five tabs:
 
-1. **Trade** picks a trade by hand: one of this adventure's Pokémon, another
-   adventure, and the Pokémon you want back.
+1. **Trade** picks a trade by hand: another adventure, the Pokémon you send and
+   the Pokémon you get.
 2. **Offers** lists offers for this adventure and offers it sent.
 3. **Auto** holds the automatic trading switch, the wish list and each Pokémon's
    trade setting.
@@ -39,22 +39,24 @@ to their game navigation.
 
 Each Pokémon has one trade setting. It only steers automatic trading:
 
-- **Auto decides**, the default. Automatic trading may use it when it is a spare.
-- **Trade first**. Automatic trading prefers it over other spares.
-- **Keep**. Automatic trading never uses it, and automatic PC release never
-  releases it.
+- **Can trade**, the default. Automatic trading may use it when it is a spare.
+- **Prefer to trade**. Automatic trading uses it before other spares.
+- **Never trade**. Never suggested automatically, and automatic PC release never
+  releases it. You can still pick it by hand.
 
-Settings set to Keep also protect a Pokémon in the party from the in-game trader.
-Shiny and perfect Pokémon cannot be set to Trade first, and the PC shows them as
-Protected. Upgrading converts older choices once: a lock becomes Keep, a withdrawn
-offer becomes Keep, and an offer becomes Trade first. The stored values are
-unchanged, so an older release still reads them.
+Never trade also protects a Pokémon in the party from the in-game trader.
+Shiny and perfect DV Pokémon are always protected. They cannot be set to Prefer
+to trade, and the PC shows them as Protected. Upgrading converts older choices
+once: a lock becomes Never trade, a withdrawn offer becomes Never trade, and an
+offer becomes Prefer to trade. The stored values are still `auto`, `offered` and
+`locked`, so an older release reads them. Releases before 0.5.0 called these
+settings Auto decides, Trade first and Keep.
 
 Settings persist across box moves, renaming, evolution, ordinary restores, and
 server restarts. Starting a new adventure clears them. The emulator saves a change
 between input actions and discards pending inputs before resuming. Release
 confirmations and trade checkpoint staging recheck the setting, so a Pokémon set
-to Keep after it was selected is not released or traded.
+to Never trade after it was selected is not released or traded.
 
 ## Automatic trading
 
@@ -65,7 +67,31 @@ adventure with automatic trading switched off.
 
 The wish list names species this adventure wants. A wished species it holds none of
 makes an exchange worth doing even when the Pokédex does not need it, and such an
-exchange is ranked ahead of every other. Pokémon set to Trade first come next.
+exchange is ranked ahead of every other. Pokémon set to Prefer to trade come next.
+
+### Ask me first
+
+**Ask me first** is one switch for the whole library, on the Auto tab, and it
+starts on. While it is on, automatic trading does not start a trade by itself. It
+suggests its best exchanges instead, at most three at a time, and never two that
+share a Pokémon. Each suggestion shows at the top of the Trading page of both
+adventures as a card with the two Pokémon, why it was suggested, and **Accept**
+and **Dismiss**.
+
+Accept queues the trade like one you picked by hand, after checking both Pokémon
+again. Dismiss hides it, and the same pair is not suggested again for seven
+days. A suggestion expires by itself when either Pokémon stops being available
+for automatic trading: it moved to the party, evolved, was traded, or was set to
+Never trade. It also expires when its adventure turns automatic trading off, is
+archived or is deleted. A stopped adventure keeps its suggestions until it runs
+again. Switching Ask me first off drops waiting suggestions, and automatic trades
+then start on their own as before.
+
+The page reads suggestions from
+`GET /api/v1/interactions/trade-requests?adventure_id=` and answers them with
+`POST /api/v1/interactions/trade-requests/{id}/accept` or `/dismiss`.
+`PUT /api/v1/interactions/trade-requests/settings` with `{"ask_first": false}`
+switches it off.
 
 Automatic trading also follows fixed rules that no setting changes:
 
@@ -82,15 +108,19 @@ Trades you pick by hand ignore trade settings and these rules. Only the limits i
 
 The Trade tab runs one exchange you choose:
 
-1. Pick one of this adventure's Pokémon, from the party or the PC.
-2. Pick another adventure. One that cannot take the Pokémon is greyed out with
-   the reason: stopped, archived or busy finishing another trade, a Red, Blue or
-   Yellow game for a Pokémon that cannot go through the Time Capsule, or a game
-   with nothing that can be traded for it.
-3. Pick the Pokémon you want back. Pokémon the cable cannot take are greyed out
-   with the reason.
-4. Press **Trade now**. When the other adventure is view only, the button reads
-   **Send offer** and the offer waits for an answer instead.
+1. Choose the adventure to trade with from **Trade with**. One that cannot trade
+   right now says why: stopped, archived or busy finishing another trade.
+2. Press **You send** and pick one of this adventure's Pokémon, from the party or
+   the PC. The picker opens over the page with search, filters and sorting.
+   Escape or the close button shuts it.
+3. Press **You get** and pick the Pokémon you want back. Pokémon the cable cannot
+   take are greyed out with the reason, and so is the whole list when the Pokémon
+   you send cannot go to that adventure.
+4. Press **Trade**. It is enabled once both slots are filled. When the other
+   adventure is view only, the button reads **Send offer** and the offer waits for
+   an answer instead.
+
+Press a chosen Pokémon to see its details, or **Change** to pick another one.
 
 The Offers tab then opens with the trade listed. Trade settings, party
 protection, the last-copy rule and automatic ranking do not apply. The trade is
@@ -253,5 +283,5 @@ and preserves saved choices. `VIEWER_ONLY` blocks preference writes on the serve
 
 Automatic trades preserve the last held Articuno, Zapdos, Moltres, Mewtwo, or
 Mew in each adventure, even when another adventure needs its Pokédex entry.
-Setting a boxed partner to Trade first can override this protection. Party,
-shiny, perfect DV, and Keep protections still apply.
+Setting a boxed partner to Prefer to trade can override this protection. Party,
+shiny, perfect DV, and Never trade protections still apply.

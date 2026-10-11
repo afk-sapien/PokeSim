@@ -27,6 +27,7 @@ from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddle
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
+from .. import config
 from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, user_directory
@@ -721,6 +722,50 @@ def create_app(manager, shutdown=lambda: None):
                 'wishes': [{'dex': dex, 'name': names.get(dex) or f'No. {dex}'} for dex in settings['wishlist']],
                 'species': [{'dex': dex, 'name': name} for dex, name in sorted(names.items())],
                 'viewer_only': manager.offers.viewer_only(aid)}
+
+    # Trade requests: with Ask me first on, automatic trades wait here for the owner to approve them.
+    @app.get('/api/v1/interactions/trade-requests')
+    async def trade_requests(adventure_id: str | None = None):
+        aid = validate_id(adventure_id) if adventure_id else None
+
+        def read():
+            result = manager.coordinator.requests.for_adventure(aid)
+            return {**result, 'viewer_only': bool(config.VIEWER_ONLY) or bool(aid and manager.offers.viewer_only(aid))}
+        return await asyncio.to_thread(read)
+
+    @app.put('/api/v1/interactions/trade-requests/settings')
+    async def set_trade_request_settings(request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        if not isinstance(data, dict) or set(data) != {'ask_first'} or not isinstance(data['ask_first'], bool):
+            raise HTTPException(400, 'Send ask_first as true or false')
+        if config.VIEWER_ONLY:
+            raise HTTPException(403, 'This library is view-only')
+
+        def write():
+            trade_settings.set_ask_first(manager.registry, data['ask_first'])
+            if not data['ask_first']:
+                # Automatic trades no longer wait, so the suggestions waiting now are dropped.
+                manager.coordinator.requests.clear()
+            return {'ask_first': data['ask_first']}
+        return await asyncio.to_thread(write)
+
+    @app.post('/api/v1/interactions/trade-requests/{rid}/{action}')
+    async def answer_trade_request(rid: str, action: str):
+        if action not in {'accept', 'dismiss'}:
+            raise HTTPException(404)
+        manager.check_available()
+        requests = manager.coordinator.requests
+
+        def answer():
+            row = next((row for row in requests.for_adventure()['requests'] if row['id'] == rid), None)
+            if row and any(manager.offers.viewer_only(row[side]['adventure_id']) for side in ('left', 'right')):
+                raise HTTPException(403, 'This adventure is view-only')
+            return getattr(requests, action)(rid)
+        result = await asyncio.to_thread(answer)
+        if result['status'] == 'accepted':
+            manager.background(manager.coordinator.drain_manual)
+        return result
 
     @app.get('/api/v1/interactions/trade-offers/{oid}')
     async def trade_offer(oid: str):

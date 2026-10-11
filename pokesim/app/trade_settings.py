@@ -1,4 +1,5 @@
-"""Library-wide automatic trading settings: one on/off switch and one wish list per adventure.
+"""Library-wide automatic trading settings: one on/off switch and one wish list per adventure,
+and one library switch that asks the owner before any automatic trade starts.
 
 They live in the library registry, not in each adventure's settings, so an older release
 that validates adventure settings still opens the library after a downgrade.
@@ -10,6 +11,9 @@ import threading
 from .registry import validate_id
 
 KEY = 'trade_auto'
+# Settings that cover every adventure at once. Ask me first starts on, so automatic trading
+# suggests exchanges and waits for the owner instead of starting them.
+LIBRARY_KEY = 'trade_auto_library'
 MAX_WISHES = 50
 # Every adventure's settings share one registry value, so each change reads and writes it whole.
 _write = threading.Lock()
@@ -70,3 +74,20 @@ def wanted(settings, inventory):
     held = {mon.get('dex') for mon in list(inventory.get('party') or [])
             + list((inventory.get('storage') or {}).get('pokemon') or [])}
     return set(settings['wishlist']) - held
+
+
+def ask_first(registry):
+    """Whether automatic trading suggests exchanges for the owner to approve. On by default."""
+    value = registry.setting(LIBRARY_KEY, {})
+    return not isinstance(value, dict) or value.get('ask_first', True) is not False
+
+
+def set_ask_first(registry, value):
+    if not isinstance(value, bool):
+        raise ValueError('Ask me first is either on or off')
+    with _write:
+        current = registry.setting(LIBRARY_KEY, {})
+        current = dict(current) if isinstance(current, dict) else {}
+        current['ask_first'] = value
+        registry.set_setting(LIBRARY_KEY, current)
+    return value

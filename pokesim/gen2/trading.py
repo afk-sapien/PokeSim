@@ -70,13 +70,13 @@ def _kept(mon, stock):
         from ..trade.preferences import blocked
         return blocked(mon)
     if preference == 'locked':
-        return 'Set to Keep by you'
+        return 'Set to Never trade by you'
     if preference == 'withdrawn':
         return 'Withdrawn by you'
     if tuple(mon.get('dvs', ())) == (15,) * 5:
         return 'Perfect DV partner preserved for the collection'
     if mon.get('shiny'):
-        # Built-in automatic rule: shinies never travel automatically, even when set to Trade first.
+        # Built-in automatic rule: shinies never travel automatically, even when set to Prefer to trade.
         return 'Shiny partner preserved for the collection'
     if preference == 'offered':
         return ''

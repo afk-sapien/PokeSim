@@ -1,4 +1,4 @@
-"""The Trading page tabs: pick a trade, answer offers, set automatic trading and read history."""
+"""The Trading page tabs: build a trade, answer offers and suggestions, set automatic trading and read history."""
 import json
 import os
 from pathlib import Path
@@ -21,14 +21,14 @@ CRYSTAL = 'd' * 32
 JSON = 'application/json'
 
 
-def shoot(page, name):
-    """Screenshots for review, only when POKESIM_SHOTS names a folder."""
+def shoot(page, name, full_page=True):
+    """Screenshots for review, only when POKESIM_SHOTS names a folder. A modal is shot as the viewport shows it."""
     folder = os.environ.get('POKESIM_SHOTS')
     if folder:
         Path(folder).mkdir(parents=True, exist_ok=True)
         # A sticky rail repeats down a full-page capture. Pin it to the top for the picture.
         page.add_style_tag(content='.rail { position: static }')
-        page.screenshot(path=str(Path(folder) / f'{name}.png'), full_page=True)
+        page.screenshot(path=str(Path(folder) / f'{name}.png'), full_page=full_page)
 
 
 class Library:
@@ -45,6 +45,9 @@ class Library:
         self.saved = []
         self.offers = []
         self.held = {}
+        self.ask_first = True
+        self.answered = []
+        self.requests = []
         self.auto = {'adventure_id': FROM, 'enabled': True, 'wishlist': [], 'wishes': [], 'viewer_only': False,
                      'species': [{'dex': 1, 'name': 'Bulbasaur'}, {'dex': 16, 'name': 'Pidgey'}, {'dex': 25, 'name': 'Pikachu'}]}
         trading = render_game_page('adventure-trading.html', base_path=f'/games/{FROM}', adventure_id=FROM,
@@ -65,6 +68,28 @@ class Library:
         page.route(re.compile(rf'/games/{FROM}/api/cable(\?|$)'), lambda route: self.json(route, {
             'adventure': {'id': FROM, 'name': 'Crystal', 'version': 'crystal', 'state': 'running'}, 'reason': '', 'session': None}))
         page.route(re.compile(r'/api/v1/interactions/cable-sessions/partners(\?|$)'), self.partners)
+        page.route(re.compile(r'/api/v1/interactions/trade-requests(/|\?|$)'), self.trade_requests)
+
+    def trade_requests(self, route):
+        path = urlparse(route.request.url).path
+        if path.endswith('/settings'):
+            self.ask_first = json.loads(route.request.post_data)['ask_first']
+            if not self.ask_first:
+                self.requests = []
+            return self.json(route, {'ask_first': self.ask_first})
+        if route.request.method == 'POST':
+            rid, action = path.rsplit('/', 2)[-2:]
+            self.answered.append((rid, action))
+            row = next(row for row in self.requests if row['id'] == rid)
+            self.requests.remove(row)
+            return self.json(route, {**row, 'status': 'accepted' if action == 'accept' else 'dismissed'})
+        self.json(route, {'ask_first': self.ask_first, 'requests': self.requests, 'viewer_only': False})
+
+    def request(self, rid='e' * 32):
+        return {'id': rid, 'status': 'pending', 'reason': None, 'created_at': 1000, 'updated_at': 1000, 'manual_id': None,
+                'reasons': ['New Pokédex entry for Second Red: Bulbasaur', 'Crystal has no Pidgey right now'],
+                'left': self.side(FROM, 'Crystal', {'key': 'box-1', 'name': 'Bulbasaur', 'nickname': 'BUD', 'dex': 1, 'level': 5}),
+                'right': self.side(RED, 'Second Red', {'key': '1', 'name': 'Pidgey', 'dex': 16, 'level': 9})}
 
     def partners(self, route):
         self.reads['cable'] += 1
@@ -82,7 +107,7 @@ class Library:
 
     def interactions(self, route):
         self.json(route, {'adventure': {'id': FROM, 'version': 'crystal', 'state': 'running', 'archived': False},
-                          'active': [], 'auto_enabled': self.auto['enabled'], 'recent_failures': [
+                          'active': [], 'auto_enabled': self.auto['enabled'], 'ask_first': self.ask_first, 'recent_failures': [
                               {'phase': 'aborted', 'decision': 'ABORT', 'peer_name': 'Busy Blue', 'updated_at': 2000,
                                'failure_reason': 'Busy Blue could not reach the Cable Club.'}],
                           'history': [{'phase': 'completed', 'decision': 'COMMIT', 'peer_name': 'Second Red',
@@ -105,6 +130,11 @@ class Library:
         self.json(route, {'adventure_id': FROM, 'incoming': [], 'outgoing': self.offers, 'viewer_only': False})
 
     def pokemon(self, route):
+        if parse_qs(urlparse(route.request.url).query)['adventure_id'][0] == RED:
+            rows = [{'key': '1', 'name': 'Pidgey', 'dex': 16, 'level': 9, 'box': 1, 'blocked': ''},
+                    {'key': '2', 'name': 'Mew', 'dex': 151, 'level': 5, 'box': 1, 'blocked': 'Mew stays in this game'}]
+            return self.json(route, {'adventure_id': RED, 'reason': '', 'pokemon': [self.side(RED, 'Second Red', row) for row in rows],
+                                     'viewer_only': False})
         rows = [{'key': self.mine_key, 'name': 'Bulbasaur', 'nickname': 'BUD', 'dex': 1, 'level': 5, 'box': 1, 'blocked': ''},
                 {'key': 'party-0', 'name': 'Meganium', 'dex': 154, 'level': 30, 'location': 'party', 'shiny': True, 'blocked': ''},
                 {'key': 'egg', 'name': 'Egg', 'location': 'party', 'blocked': 'Eggs cannot be traded'}]
@@ -112,14 +142,14 @@ class Library:
                           'viewer_only': self.viewer_only})
 
     def targets(self, route):
-        key = parse_qs(urlparse(route.request.url).query)['from_key'][0]
+        key = parse_qs(urlparse(route.request.url).query).get('from_key', [None])[0]
         reason = MEGANIUM if key == 'party-0' else REASON
         body = {'adventures': [
             {'id': RED, 'name': 'Second Red', 'version': 'red', 'generation': 1, 'available': key != 'party-0',
              'reason': MEGANIUM if key == 'party-0' else ''},
             {'id': BLUE, 'name': 'Busy Blue', 'version': 'blue', 'generation': 1, 'available': False, 'reason': reason}],
             'from_key': key, 'viewer_only': False}
-        if key in self.held:
+        if key is not None and key in self.held:
             # Held back so a test can answer it late, after another Pokémon was picked.
             self.held[key] = (route, body)
             return
@@ -133,6 +163,7 @@ class Library:
         self.json(route, {'pokemon': [self.side(RED, 'Second Red', {'key': '1', 'name': 'Pidgey', 'dex': 16, 'level': 9, 'blocked': ''}),
                                       self.side(RED, 'Second Red', {'key': '2', 'name': 'Mew', 'dex': 151, 'level': 5,
                                                                     'blocked': 'Mew stays in this game'})],
+                          'from': {'key': parse_qs(urlparse(route.request.url).query)['from_key'][0], 'blocked': ''},
                           'to': {'adventure_id': RED, 'adventure_name': 'Second Red', 'viewer_only': not self.starts_now},
                           'starts_now': self.starts_now, 'viewer_only': False, 'blocked': {}})
 
@@ -190,83 +221,104 @@ def test_tabs_move_with_the_keyboard_and_remember_the_last_one(page, game, width
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
+SLOTS = {'mine': '#slot-send', 'theirs': '#slot-get'}
+
+
+def open_picker(page, side):
+    page.locator(f'{SLOTS[side]} [data-slot]').click()
+    picker = page.locator('#pick-dialog')
+    expect(picker).to_be_visible()
+    expect(page.locator(f'#pick-{side}-pane')).to_be_visible()
+    return picker
+
+
 def choose(page, side, key):
-    """Pick one card the way a player does: open its details, then press the pick button."""
-    if page.locator(f'#pick-{side}-browse').is_hidden():
-        page.locator(f'#pick-{side}-chosen [data-change]').click()
-    page.locator(f'#pick-{side} [data-key="{key}"]').click()
-    dialog = page.locator('#trade-detail')
-    expect(dialog).to_be_visible()
-    dialog.locator('[data-detail-pick]').click()
-    expect(dialog).to_be_hidden()
+    """Pick one card the way a player does: open the slot's picker, then press the card."""
+    picker = open_picker(page, side)
+    picker.locator(f'#pick-{side} [data-key="{key}"]').click()
+    expect(picker).to_be_hidden()
+
+
+def option(page, aid):
+    return page.locator(f'#pick-game option[value="{aid}"]')
 
 
 @pytest.mark.parametrize('width', [1280, 390])
-def test_trade_tab_filters_cards_greys_out_blocked_ones_and_starts_an_owned_trade(page, game, width):
+def test_trade_builder_picks_both_slots_in_a_modal_and_starts_an_owned_trade(page, game, width):
     url = game[0]
     library = Library(page, url)
     page.set_viewport_size({'width': width, 'height': 844})
     library.open()
+    confirm = page.locator('#pick-confirm')
+    expect(page.locator('#slot-send')).to_contain_text('Choose a Pokémon')
+    expect(page.locator('#slot-get .slot-empty')).to_be_disabled()
+    expect(confirm).to_be_disabled()
+    expect(page.locator('#pick-summary')).to_contain_text('Choose a game to trade with')
+    # Before a Pokémon is chosen, only the game's own limits grey a game out.
+    expect(option(page, BLUE)).to_have_attribute('disabled', '')
+    expect(option(page, BLUE)).to_contain_text(REASON)
+    shoot(page, f'trade-{width}')
+    picker = open_picker(page, 'mine')
     mine = page.locator('#pick-mine')
-    # The PC page's cards and filters.
+    # The PC page's cards and filters, inside the modal.
     expect(mine.locator('.pc-mon')).to_have_count(3)
     expect(page.locator('#pick-mine-count')).to_have_text('3 Pokémon')
+    expect(page.locator('#pick-mine-search')).to_be_focused()
+    box = picker.bounding_box()
+    assert box['width'] <= width and box['height'] <= 844
     egg = mine.locator('[data-key="egg"]')
     expect(egg).to_have_attribute('aria-disabled', 'true')
-    expect(egg).to_have_attribute('title', 'Eggs cannot be traded')
     expect(egg).to_contain_text('Eggs cannot be traded')
-    shoot(page, f'trade-{width}')
+    shoot(page, f'modal-{width}', full_page=False)
     page.locator('#pick-mine-search').fill('bud')
     expect(mine.locator('.pc-mon')).to_have_count(1)
     expect(page.locator('#pick-mine-count')).to_have_text('1 of 3 Pokémon')
     page.locator('#pick-mine-search').fill('')
     page.locator('#pick-mine-rating').select_option('shiny')
-    expect(mine.locator('.pc-mon')).to_have_count(1)
     expect(mine.locator('.pc-mon')).to_contain_text('Meganium')
     page.locator('#pick-mine-rating').select_option('all')
     page.locator('#pick-mine-sort').select_option('level')
     expect(mine.locator('.pc-mon').first).to_contain_text('Meganium')
     page.locator('#pick-mine-order').select_option('asc')
     expect(mine.locator('.pc-mon').first).to_contain_text('BUD')
-    # A blocked card still opens, and says why it cannot be picked.
+    # A blocked card stays in the modal and says why.
     egg.click(force=True)
-    dialog = page.locator('#trade-detail')
-    expect(dialog).to_be_visible()
-    expect(dialog).to_contain_text('Eggs cannot be traded')
-    expect(dialog.locator('[data-detail-pick]')).to_have_count(0)
-    page.locator('#trade-detail-close').click()
-    expect(dialog).to_be_hidden()
-    mine.locator('[data-key="box-1"]').click()
-    expect(dialog.get_by_role('button', name='Choose BUD to send')).to_be_visible()
-    shoot(page, f'trade-detail-{width}')
-    dialog.get_by_role('button', name='Choose BUD to send').click()
-    chosen = page.locator('#pick-mine-chosen [aria-pressed="true"]')
-    expect(chosen).to_contain_text('BUD')
-    expect(page.locator('#pick-mine-browse')).to_be_hidden()
-    blue = page.locator(f'[data-game="{BLUE}"]')
-    expect(blue).to_be_disabled()
-    expect(blue).to_contain_text(REASON)
-    blue.click(force=True)
-    expect(page.locator('#pick-theirs-step')).to_be_hidden()
-    page.locator(f'[data-game="{RED}"]').click()
+    expect(picker).to_be_visible()
+    expect(page.locator('#pick-dialog-note')).to_contain_text('Eggs cannot be traded')
+    page.keyboard.press('Escape')
+    expect(picker).to_be_hidden()
+    choose(page, 'mine', 'box-1')
+    expect(page.locator('#slot-send .pc-mon')).to_contain_text('BUD')
+    expect(page.locator('#pick-summary')).to_contain_text('Choose a game to trade with')
+    # With a Pokémon chosen, every game is checked against it.
+    expect(option(page, BLUE)).to_contain_text(REASON)
+    expect(option(page, RED)).not_to_have_attribute('disabled', '')
+    page.locator('#pick-game').select_option(RED)
+    expect(page.locator('#slot-get-game')).to_have_text('In Second Red')
+    expect(page.locator('#pick-summary')).to_contain_text('Choose a Pokémon to get')
+    picker = open_picker(page, 'theirs')
     mew = page.locator('#pick-theirs [data-key="2"]')
     expect(mew).to_have_attribute('aria-disabled', 'true')
     expect(mew).to_contain_text('Mew stays in this game')
     mew.click(force=True)
-    expect(dialog).to_contain_text('Mew stays in this game')
-    expect(dialog.locator('[data-detail-pick]')).to_have_count(0)
-    page.locator('#trade-detail-close').click()
+    expect(page.locator('#pick-dialog-note')).to_contain_text('Mew stays in this game')
     expect(page.locator('#pick-theirs-count')).to_have_text('2 Pokémon')
-    page.locator('#pick-theirs-search').fill('mew')
-    expect(page.locator('#pick-theirs .pc-mon')).to_have_count(1)
-    page.locator('#pick-theirs-search').fill('')
-    shoot(page, f'trade-theirs-{width}')
+    shoot(page, f'modal-theirs-{width}', full_page=False)
+    page.locator('#pick-dialog-close').click()
     choose(page, 'theirs', '1')
-    expect(page.locator('#pick-theirs-chosen [aria-pressed="true"]')).to_contain_text('Pidgey')
-    confirm = page.locator('#pick-confirm')
-    expect(confirm).to_have_text('Trade now')
-    expect(page.locator('#pick-summary')).to_contain_text('Pidgey')
+    expect(page.locator('#slot-get .pc-mon')).to_contain_text('Pidgey')
+    expect(confirm).to_be_enabled()
+    expect(confirm).to_have_text('Trade')
+    expect(page.locator('#pick-summary')).to_contain_text('starts as soon as both games are ready')
     shoot(page, f'trade-confirm-{width}')
+    # A chosen card opens the shared detail panel.
+    page.locator('#slot-send .pc-mon').click()
+    dialog = page.locator('#trade-detail')
+    expect(dialog).to_be_visible()
+    expect(dialog).to_contain_text('Bulbasaur')
+    shoot(page, f'trade-detail-{width}', full_page=False)
+    page.locator('#trade-detail-close').click()
+    expect(dialog).to_be_hidden()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     confirm.click()
     selected(page, 'Offers')
@@ -280,17 +332,24 @@ def test_trade_tab_filters_cards_greys_out_blocked_ones_and_starts_an_owned_trad
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
-def test_a_blocked_card_cannot_be_picked_and_change_brings_the_grid_back(page, game):
+def test_their_pokemon_can_be_chosen_first_and_clear_empties_both_slots(page, game):
     library = Library(page, game[0])
     library.open()
-    page.locator('#pick-mine [data-key="egg"]').click(force=True)
-    page.locator('#trade-detail-close').click()
-    expect(page.locator('#pick-game-step')).to_be_hidden()
+    page.locator('#pick-game').select_option(RED)
+    choose(page, 'theirs', '1')
+    expect(page.locator('#pick-summary')).to_contain_text('Choose a Pokémon to send')
+    expect(page.locator('#pick-confirm')).to_be_disabled()
     choose(page, 'mine', 'box-1')
-    page.locator('#pick-mine-chosen').get_by_role('button', name='Change').click()
-    expect(page.locator('#pick-mine-browse')).to_be_visible()
-    expect(page.locator('#pick-game-step')).to_be_hidden()
-    expect(page.locator('#pick-mine [aria-pressed="true"]')).to_have_count(0)
+    expect(page.locator('#pick-confirm')).to_be_enabled()
+    # The detail panel offers another pick.
+    page.locator('#slot-get .pc-mon').click()
+    page.locator('#trade-detail').get_by_role('button', name='Choose another Pokémon').click()
+    expect(page.locator('#pick-theirs-pane')).to_be_visible()
+    page.keyboard.press('Escape')
+    page.locator('#pick-reset').click()
+    expect(page.locator('#slot-send')).to_contain_text('Choose a Pokémon')
+    expect(page.locator('#slot-get')).to_contain_text('Choose a Pokémon')
+    expect(page.locator('#pick-confirm')).to_be_disabled()
 
 
 def test_a_trade_with_a_view_only_adventure_becomes_an_offer(page, game):
@@ -298,7 +357,7 @@ def test_a_trade_with_a_view_only_adventure_becomes_an_offer(page, game):
     library = Library(page, url, starts_now=False)
     library.open()
     choose(page, 'mine', 'box-1')
-    page.locator(f'[data-game="{RED}"]').click()
+    page.locator('#pick-game').select_option(RED)
     choose(page, 'theirs', '1')
     expect(page.locator('#pick-confirm')).to_have_text('Send offer')
     expect(page.locator('#pick-summary')).to_contain_text('view-only')
@@ -317,9 +376,98 @@ def test_trade_link_in_the_pc_opens_the_trade_tab_with_that_pokemon_chosen(page,
     library.mine_key = href.split('mon=', 1)[1]
     link.click()
     selected(page, 'Trade')
-    expect(page.locator('#pick-mine-chosen [aria-pressed="true"]')).to_contain_text('BUD')
-    expect(page.locator(f'[data-game="{BLUE}"]')).to_be_disabled()
-    expect(page.locator(f'[data-game="{RED}"]')).to_be_enabled()
+    expect(page.locator('#slot-send .pc-mon')).to_contain_text('BUD')
+    expect(option(page, BLUE)).to_have_attribute('disabled', '')
+    expect(option(page, RED)).not_to_have_attribute('disabled', '')
+
+
+def test_a_late_answer_for_an_earlier_pokemon_does_not_replace_the_current_one(page, game):
+    url = game[0]
+    library = Library(page, url)
+    library.held['party-0'] = None
+    library.open()
+    choose(page, 'mine', 'party-0')
+    page.wait_for_function('document.querySelector("#slot-send").textContent.includes("Meganium")')
+    choose(page, 'mine', 'box-1')
+    expect(option(page, BLUE)).to_contain_text(REASON)
+    route, body = library.held['party-0']
+    library.json(route, body)
+    page.wait_for_timeout(200)
+    expect(page.locator('#slot-send .pc-mon')).to_contain_text('BUD')
+    expect(option(page, BLUE)).to_contain_text(REASON)
+    expect(page.locator('#pick-game')).not_to_contain_text('Meganium')
+    expect(option(page, RED)).not_to_have_attribute('disabled', '')
+
+
+def test_a_view_only_adventure_cannot_fill_the_send_slot(page, game):
+    library = Library(page, game[0], viewer_only=True)
+    library.open()
+    expect(page.locator('#pick-note')).to_contain_text('view-only')
+    expect(page.locator('#slot-send .slot-empty')).to_be_disabled()
+    expect(page.locator('#pick-confirm')).to_be_disabled()
+
+
+@pytest.mark.parametrize('late', ['answer', 'error'])
+def test_a_late_limits_answer_does_not_replace_the_newer_list(page, game, late):
+    library = Library(page, game[0])
+    library.limits_held = []
+    library.open()
+    choose(page, 'mine', 'box-1')
+    page.locator('#pick-game').select_option(RED)
+    page.wait_for_function('document.querySelector("#pick-theirs").textContent.includes("Reading")')
+    # Pick again, so the first answer now belongs to an earlier pick.
+    choose(page, 'mine', 'box-1')
+    expect(page.locator('#pick-theirs')).to_contain_text('Pidgey')
+    old = library.limits_held[0]
+    if late == 'error':
+        library.json(old, {'detail': 'An old answer failed'}, 500)
+    else:
+        library.json(old, {'pokemon': [library.side(RED, 'Second Red', {'key': '9', 'name': 'Rattata', 'dex': 19, 'blocked': ''})],
+                           'to': {'adventure_id': RED, 'adventure_name': 'Second Red'}, 'starts_now': True})
+    page.wait_for_timeout(200)
+    expect(page.locator('#pick-theirs')).to_contain_text('Pidgey')
+    expect(page.locator('#pick-theirs')).not_to_contain_text('Rattata')
+    expect(page.locator('#pick-theirs')).not_to_contain_text('old answer')
+
+
+@pytest.mark.parametrize('width', [1280, 390])
+def test_suggested_trades_wait_at_the_top_until_accepted_or_dismissed(page, game, width):
+    library = Library(page, game[0])
+    library.requests = [library.request(), library.request('f' * 32)]
+    page.set_viewport_size({'width': width, 'height': 844})
+    library.open()
+    section = page.locator('#trade-requests-section')
+    expect(section).to_be_visible()
+    expect(page.locator('#trade-status')).to_have_text('On · Asks before trading')
+    cards = section.locator('.request-card')
+    expect(cards).to_have_count(2)
+    first = cards.first
+    expect(first).to_contain_text('Bulbasaur')
+    expect(first).to_contain_text('Pidgey')
+    expect(first).to_contain_text('New Pokédex entry for Second Red: Bulbasaur')
+    shoot(page, f'requests-{width}')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    first.get_by_role('button', name='Accept').click()
+    expect(page.locator('#requests-note')).to_contain_text('Trade started')
+    expect(cards).to_have_count(1)
+    cards.first.get_by_role('button', name='Dismiss').click()
+    expect(page.locator('#requests-note')).to_contain_text('will not be suggested again')
+    expect(section).to_be_hidden()
+    assert library.answered == [('e' * 32, 'accept'), ('f' * 32, 'dismiss')]
+
+
+def test_ask_me_first_switch_in_the_auto_tab(page, game):
+    library = Library(page, game[0])
+    library.requests = [library.request()]
+    library.open('?tab=auto')
+    switch = page.get_by_role('switch', name=re.compile('Ask me first'))
+    expect(switch).to_have_attribute('aria-checked', 'true')
+    switch.click()
+    expect(switch).to_have_attribute('aria-checked', 'false')
+    expect(page.locator('#auto-note')).to_contain_text('Ask me first is off')
+    expect(page.locator('#trade-requests-section')).to_be_hidden()
+    expect(page.locator('#trade-status')).to_have_text('On · No approvals needed')
+    assert library.ask_first is False
 
 
 @pytest.mark.parametrize('width', [1280, 390])
@@ -341,19 +489,19 @@ def test_auto_tab_switch_wish_list_and_settings(page, game, width):
     assert library.saved[-1] == {'wishlist': [25]}
     # Each Pokémon is a PC card with its setting stamp. The popup changes the setting.
     bud = page.locator('#auto-list .pc-mon').filter(has_text='BUD')
-    expect(bud.locator('.trade-tag')).to_have_text('Auto decides')
+    expect(bud.locator('.trade-tag')).to_have_text('Can trade')
     bud.click()
     dialog = page.locator('#trade-detail')
     setting = dialog.get_by_label('Trade setting for BUD')
     setting.select_option('keep')
     # The saved setting shows in the popup, not in a toast over the list.
-    expect(dialog.locator('.trade-saved')).to_contain_text('never trades it')
-    expect(page.locator('#trade-setting-status')).to_contain_text('never trades it')
+    expect(dialog.locator('.trade-saved')).to_contain_text('Never trade')
+    expect(page.locator('#trade-setting-status')).to_contain_text('Never trade')
     expect(page.locator('#toast')).to_be_hidden()
     assert any(value['state'] == 'locked' for value in store.trade_preferences().values())
     shoot(page, f'auto-detail-{width}')
     page.locator('#trade-detail-close').click()
-    expect(bud.locator('.trade-tag')).to_have_text('Keep')
+    expect(bud.locator('.trade-tag')).to_have_text('Never trade')
     page.locator('#auto-setting').select_option('keep')
     expect(page.locator('#auto-list .pc-mon')).to_have_count(1)
     expect(page.locator('#auto-list .pc-mon')).to_contain_text('BUD')
@@ -363,69 +511,6 @@ def test_auto_tab_switch_wish_list_and_settings(page, game, width):
     page.get_by_role('button', name='Remove Pikachu from the wish list').click()
     expect(page.locator('#wish-list')).not_to_contain_text('Pikachu')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-
-
-def test_a_late_answer_for_an_earlier_pokemon_does_not_replace_the_current_one(page, game):
-    url = game[0]
-    library = Library(page, url)
-    library.held['party-0'] = None
-    library.open()
-    choose(page, 'mine', 'party-0')
-    page.wait_for_function('document.querySelector("#pick-games").textContent.includes("Checking")')
-    choose(page, 'mine', 'box-1')
-    blue = page.locator(f'[data-game="{BLUE}"]')
-    expect(blue).to_contain_text(REASON)
-    route, body = library.held['party-0']
-    library.json(route, body)
-    page.wait_for_timeout(200)
-    expect(page.locator('#pick-mine-chosen [aria-pressed="true"]')).to_contain_text('BUD')
-    expect(blue).to_contain_text(REASON)
-    expect(page.locator('#pick-games')).not_to_contain_text('Meganium')
-    expect(page.locator(f'[data-game="{RED}"]')).to_be_enabled()
-
-
-def test_a_view_only_adventure_keeps_its_pokemon_blocked_after_a_search(page, game):
-    library = Library(page, game[0], viewer_only=True)
-    library.open()
-    expect(page.locator('#pick-note')).to_contain_text('view-only')
-    bud = page.locator('#pick-mine [data-key="box-1"]')
-    expect(bud).to_have_attribute('aria-disabled', 'true')
-    page.locator('#pick-mine-search').fill('bud')
-    expect(page.locator('#pick-mine .pc-mon')).to_have_count(1)
-    expect(bud).to_have_attribute('aria-disabled', 'true')
-    page.locator('#pick-mine-search').fill('')
-    expect(page.locator('#pick-mine .pc-mon')).to_have_count(3)
-    for button in page.locator('#pick-mine .pc-mon').all():
-        expect(button).to_have_attribute('aria-disabled', 'true')
-    bud.click(force=True)
-    expect(page.locator('#trade-detail')).to_contain_text('view-only')
-    expect(page.locator('#trade-detail [data-detail-pick]')).to_have_count(0)
-    page.locator('#trade-detail-close').click()
-    expect(page.locator('#pick-game-step')).to_be_hidden()
-
-
-@pytest.mark.parametrize('late', ['answer', 'error'])
-def test_a_late_limits_answer_does_not_replace_the_newer_list(page, game, late):
-    library = Library(page, game[0])
-    library.limits_held = []
-    library.open()
-    choose(page, 'mine', 'box-1')
-    page.locator(f'[data-game="{RED}"]').click()
-    page.wait_for_function('document.querySelector("#pick-theirs").textContent.includes("Reading")')
-    # Pick again, so the first answer now belongs to an earlier pick.
-    choose(page, 'mine', 'box-1')
-    page.locator(f'[data-game="{RED}"]').click()
-    expect(page.locator('#pick-theirs')).to_contain_text('Pidgey')
-    old = library.limits_held[0]
-    if late == 'error':
-        library.json(old, {'detail': 'An old answer failed'}, 500)
-    else:
-        library.json(old, {'pokemon': [library.side(RED, 'Second Red', {'key': '9', 'name': 'Rattata', 'dex': 19, 'blocked': ''})],
-                           'to': {'adventure_id': RED, 'adventure_name': 'Second Red'}, 'starts_now': True})
-    page.wait_for_timeout(200)
-    expect(page.locator('#pick-theirs')).to_contain_text('Pidgey')
-    expect(page.locator('#pick-theirs')).not_to_contain_text('Rattata')
-    expect(page.locator('#pick-theirs')).not_to_contain_text('old answer')
 
 
 def test_auto_and_cable_tabs_read_again_on_every_visit(page, game):

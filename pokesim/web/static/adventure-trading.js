@@ -66,13 +66,15 @@
       $('#trade-connection-note').hidden = true
       const running = data.adventure.state === 'running' && !data.adventure.archived
       const off = data.auto_enabled === false
+      const asking = data.ask_first !== false
       setLamp(data.active.length ? 'signal' : !running || off ? 'warn' : data.attention ? 'warn' : 'ok')
       $('#trade-status').textContent = data.active.length ? 'Exchange in progress' : !running ? 'Waiting for this adventure'
-        : off ? 'Off' : data.attention ? 'Trades have not been completing' : 'On · No approvals needed'
+        : off ? 'Off' : data.attention ? 'Trades have not been completing' : asking ? 'On · Asks before trading' : 'On · No approvals needed'
       $('#trade-activity').textContent = data.active.length ? 'This adventure is trading. Other adventures keep playing.'
         : !running ? 'Trades resume when this adventure is running. Its history stays here.'
         : off ? 'Automatic trading is off. Trades you pick on the Trade tab still happen.'
-        : data.attention?.message || 'This adventure will trade when a useful exchange is ready.'
+        : data.attention?.message || (asking ? 'Suggested trades wait at the top of this page until you accept them.'
+          : 'This adventure will trade when a useful exchange is ready.')
       $('#current-exchange-section').hidden = !data.active.length
       $('#trade-active').innerHTML = data.active.length ? data.active.map(trade => exchange(trade)).join('')
         : '<p class="empty-note">No exchange in progress for this adventure.</p>'
@@ -190,9 +192,68 @@
     const button = event.target.closest?.('[data-offer-action]')
     if (button && !button.disabled) answerOffer(button)
   }
+  // Suggested trades: with Ask me first on, automatic trading waits here for an answer.
+  const REQUESTS = '/api/v1/interactions/trade-requests'
+  let requestSignature = ''
+  let requestBusy = false
+  function requestCard(row, viewerOnly) {
+    const peer = `<a href="/games/${esc(row.right.adventure_id)}/trading">${esc(row.right.adventure_name)} <span aria-hidden="true">↗</span></a>`
+    const reasons = row.reasons.length ? `<ul class="request-reasons">${row.reasons.map(reason => `<li>${esc(reason)}</li>`).join('')}</ul>` : ''
+    const actions = viewerOnly ? '' : `<div class="offer-answer"><button type="button" class="key key--primary" data-request-action="accept" data-request-id="${esc(row.id)}">Accept</button><button type="button" class="key" data-request-action="dismiss" data-request-id="${esc(row.id)}">Dismiss</button></div>`
+    return `<article class="deal trade-deal offer-card request-card" data-request="${esc(row.id)}"><header class="deal-head"><h3>With ${peer}</h3><span class="tag tag--signal offer-status">Suggested</span></header><div class="swap">${offerSide(row.left, 'You send')}<span class="swap-arrow" aria-hidden="true">⇄</span>${offerSide(row.right, 'You receive')}</div><p class="micro request-why">Why it was suggested</p>${reasons}${actions}</article>`
+  }
+  function renderRequests(data) {
+    const key = JSON.stringify(data)
+    if (key === requestSignature) return
+    requestSignature = key
+    const section = $('#trade-requests-section')
+    if (!section) return
+    section.hidden = !data.requests.length
+    $('#trade-requests').innerHTML = data.requests.map(row => requestCard(row, data.viewer_only)).join('')
+    globalThis.Panel?.fitSprites?.(section)
+  }
+  async function refreshRequests(force = false) {
+    if (force) requestSignature = ''
+    if (!offerOwner || !$('#trade-requests-section')) return
+    try {
+      const response = await PokeSim.api(`${REQUESTS}?adventure_id=${encodeURIComponent(PokeSim.adventureId)}`, {cache: 'no-store'})
+      if (!response.ok) throw new Error('Unavailable')
+      renderRequests(await response.json())
+    } catch (_) {}
+  }
+  async function answerRequest(button) {
+    if (requestBusy) return
+    requestBusy = true
+    button.disabled = true
+    const note = $('#requests-note')
+    const say = text => { note.textContent = text
+      note.hidden = !text }
+    say('')
+    try {
+      const response = await PokeSim.api(`${REQUESTS}/${encodeURIComponent(button.dataset.requestId)}/${button.dataset.requestAction}`, {method: 'POST'})
+      let data = {}
+      try { data = await response.json() } catch (_) {}
+      if (!response.ok) throw new Error(data.detail || 'That did not work. Try again in a moment.')
+      say(data.status === 'accepted' ? 'Trade started. Follow it on the Offers tab and under Current exchange.'
+        : data.status === 'dismissed' ? 'Dismissed. This pair will not be suggested again for a week.'
+          : data.reason || 'This suggested trade can no longer happen.')
+    } catch (error) {
+      say(error.message)
+    } finally {
+      requestBusy = false
+      await refreshRequests(true)
+      refresh()
+    }
+  }
+  const requestsSection = $('#trade-requests-section')
+  if (requestsSection && offerOwner) requestsSection.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-request-action]')
+    if (button && !button.disabled) answerRequest(button)
+  })
   const poll = () => { refresh()
-    refreshOffers() }
+    refreshOffers()
+    refreshRequests() }
   poll()
   setInterval(() => { if (!document.hidden) poll() }, 5000)
-  globalThis.AdventureTrading = {refresh, refreshOffers, offerOwner, exchange, offerSide}
+  globalThis.AdventureTrading = {refresh, refreshOffers, refreshRequests, offerOwner, exchange, offerSide}
 })()

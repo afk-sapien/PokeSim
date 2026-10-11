@@ -27,7 +27,7 @@ def stored(setting):
         return SETTINGS[setting]
     if setting in LEGACY:
         return LEGACY[setting]
-    raise ValueError('Choose Auto decides, Trade first or Keep.')
+    raise ValueError('Choose Can trade, Prefer to trade or Never trade.')
 
 
 def name(state):
@@ -35,7 +35,7 @@ def name(state):
 
 
 def migrate(db):
-    """Fold the older lock and withdraw states into Keep, once.
+    """Fold the older lock and withdraw states into Never trade (stored as locked), once.
 
     Idempotent: a marker row records the run, and a second run changes nothing
     even without the marker because only 'withdrawn' rows are rewritten.
@@ -164,8 +164,8 @@ def update(store, payload, key, state):
         raise ValueError('This Pokémon left the collection or cannot be identified uniquely. Refresh and try again.')
     mon = matches[0]
     if state == FIRST and is_shiny(mon):
-        raise ValueError('Shiny Pokémon are never traded automatically, so they cannot be set to Trade first.')
+        raise ValueError('Shiny Pokémon are never traded automatically, so they cannot be set to Prefer to trade.')
     if state == FIRST and is_perfect(mon):
-        raise ValueError('Perfect DV Pokémon are never traded automatically, so they cannot be set to Trade first.')
+        raise ValueError('Perfect DV Pokémon are never traded automatically, so they cannot be set to Prefer to trade.')
     store.set_trade_preference(key, {'state': state, 'name': mon['name'],
                                     'nick': mon['nick'], 'dex': mon['dex']})

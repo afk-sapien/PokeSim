@@ -1,7 +1,12 @@
 (() => {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
   // One trade setting per Pokémon. Automatic trades follow it, trades you pick yourself ignore it.
-  const SETTINGS = [['auto', 'Auto decides'], ['first', 'Trade first'], ['keep', 'Keep']]
+  const SETTINGS = [['auto', 'Can trade'], ['first', 'Prefer to trade'], ['keep', 'Never trade']]
+  // One line each, shown beside the choices.
+  const HINTS = {auto: 'Automatic trading may use it when it is a spare.',
+    first: 'Automatic trading uses it before other spares.',
+    keep: 'Never suggested automatically. You can still pick it by hand.'}
+  const PROTECTED_HINT = 'Shiny and perfect DV Pokémon are always protected.'
   let status = null
   let loading = false
   let writing = false
@@ -17,9 +22,9 @@
     if (!mon) return '<span class="trade-meta">Trade setting unavailable</span>'
     const current = setting(mon)
     const disabled = writing || !status || status.viewer_only || status.holding || !mon.editable
-    // Shiny and perfect Pokémon never trade automatically, so Trade first means nothing for them.
+    // Shiny and perfect Pokémon never trade automatically, so Prefer to trade means nothing for them.
     const noFirst = mon.shiny || mon.perfect_dvs
-    const options = SETTINGS.map(([value, text]) => `<option value="${value}"${value === current ? ' selected' : ''}${value === 'first' && noFirst && current !== 'first' ? ' disabled' : ''}>${text}</option>`).join('')
+    const options = SETTINGS.map(([value, text]) => `<option value="${value}"${value === current ? ' selected' : ''}${value === 'first' && noFirst && current !== 'first' ? ' disabled' : ''} title="${esc(HINTS[value])}">${text}</option>`).join('')
     const name = label || mon.nick || mon.name || 'this Pokémon'
     const note = saved?.key === key ? `<span class="trade-saved${saved.error ? ' is-error' : ''}">${esc(saved.text)}</span>` : ''
     return `<label class="trade-setting"><span class="vh">Trade setting for ${esc(name)}</span><select data-trade-key="${esc(key)}" data-trade-setting="${esc(current)}"${disabled ? ' disabled' : ''}>${options}</select></label>${note}`
@@ -39,9 +44,7 @@
       notify() } })()
     return pending
   }
-  const messages = {auto: 'Auto decides. Automatic trading may use it when it is a spare.',
-    first: 'Trade first. Automatic trading uses it before anything else.',
-    keep: 'Keep. Automatic trading never trades it.'}
+  const messages = {auto: 'Can trade. ' + HINTS.auto, first: 'Prefer to trade. ' + HINTS.first, keep: 'Never trade. ' + HINTS.keep}
   async function change(control) {
     if (writing || control.disabled) return
     const state = control.value || control.dataset?.tradeState
@@ -74,5 +77,5 @@
     await pending
     await refresh()
   }
-  globalThis.TradeUI = {esc, control, find, change, refresh, setting, SETTINGS, subscribe: fn => listeners.push(fn), status: () => status}
+  globalThis.TradeUI = {esc, control, find, change, refresh, setting, SETTINGS, HINTS, PROTECTED_HINT, subscribe: fn => listeners.push(fn), status: () => status}
 })()
