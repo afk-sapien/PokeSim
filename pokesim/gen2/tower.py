@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from .menus import Give, Lead, Take, Teach, choose
 from .ram import Memory, calculated_stats
-from .teams import assemble, assembled, key
+from .teams import assemble, assembled, key, no_room
 
 MACHINES = ((70, 'HM04'), (57, 'HM03'), (19, 'HM02'), (94, 'TM29'), (89, 'TM26'), (188, 'TM36'), (247, 'TM30'))
 
@@ -153,6 +153,11 @@ def journey(policy, snapshot, Goal, *, force=False):
         if not selected:
             return None
         cap, team = selected
+        if no_room(policy, snapshot, [key(mon) for mon in team]):
+            # The team cannot be put together until a box slot frees up, so travelling to Olivine
+            # would only end in standing down again. The other activities keep the time instead.
+            policy.collection['tower_after'] = policy.decisions + RETRY_AFTER
+            return None
         state = policy.collection['tower'] = {'team': [key(mon) for mon in team],
             'original': [key(mon) for mon in snapshot.party], 'cap': cap, 'entered': False, 'returning': False,
             'previous_training': policy.collection.get('training')}
@@ -167,6 +172,10 @@ def journey(policy, snapshot, Goal, *, force=False):
         state['wins'] = max(0, min(7, mem.byte('sNrOfBeatenBattleTowerTrainers'))
                             - int(mem.byte('wBattleResult') != 0))
         state['returning'] = True
+    if not state['entered'] and not state['returning'] and not state.get('preparation_center') and no_room(
+            policy, snapshot, state['team']):
+        # Storage filled up before the team was assembled, so the challenge stands down now.
+        state['abandoned'] = state['returning'] = True
     if state['returning']:
         goal = assemble(policy, snapshot, state['original'], Goal, 'Restore the adventure team after the Battle Tower')
         if goal:

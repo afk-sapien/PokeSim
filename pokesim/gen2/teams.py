@@ -30,6 +30,14 @@ def reachable(snapshot, wanted):
     return not Counter(wanted) - Counter(key(mon) for mon in [*snapshot.party, *snapshot.stored])
 
 
+def no_room(policy, snapshot, wanted):
+    """Whether the party must deposit a Pokémon for the wanted team while every box is full and
+    nothing spare can be released, so the team cannot be assembled until a box slot frees up."""
+    extra, _ = changes(snapshot, wanted)
+    return (extra is not None and all(count >= 20 for count in snapshot.box_counts)
+            and policy.release_target(snapshot) is None)
+
+
 def changes(snapshot, wanted):
     """The last party slot to deposit and the first stored Pokémon to withdraw, either may be None."""
     need = Counter(wanted)

@@ -1085,7 +1085,7 @@ class Policy:
             prize_errand = self.goal.key in {'collection_coin_case', 'collection_coins', 'collection_prize', 'collection_slots'}
             self.goal = self.healing(snapshot) or (None if prize_errand else self.shop(snapshot)) or self.goal
         target = self.data.map_ids[self.goal.map_name]
-        from .flight import shortcut
+        from .flight import outside, shortcut
         flight = shortcut(self, snapshot, mem, target)
         if flight:
             self.menu = flight
@@ -1099,6 +1099,11 @@ class Policy:
                                        [(journey_goal.x, journey_goal.y)], memory, surf=surf)
             if fallback is not None:
                 self.goal, path = journey_goal, fallback
+        if path is None:
+            # Fly only works outside, so a goal with no walking route is reached by walking out first.
+            exit_point = outside(self, snapshot, mem, target)
+            if exit_point is not None:
+                path = self.nav.toward(snapshot, exit_point[0], [exit_point[1]], memory, surf=surf)
         self.mode = self.goal.label
         if path is not None:
             self.unreachable_waits = 0

@@ -115,3 +115,33 @@ def test_tower_challenge_stands_down_when_its_team_cannot_be_assembled(real_data
     assert 'tower' not in policy.completed
     assert policy.collection['training'] == previous
     assert policy.collection['tower_after'] > policy.decisions
+
+
+def test_tower_trip_stays_home_while_a_full_party_has_nowhere_to_deposit(real_data):
+    """With six in the party and every box full, the Tower team cannot be put together. The trip to
+    Olivine stands down at once and is not started again until a box slot frees up."""
+    from pokesim.gen2.policy import Goal as RealGoal, Policy as RealPolicy
+    from pokesim.gen2.teams import no_room
+    from pokesim.gen2.tower import journey
+    policy = RealPolicy(real_data, seed=1, starter='cyndaquil')
+    policy.memory = None
+    policy.release_target = lambda _: None
+    party = tuple(mon(name) for name in 'abcdef')
+    previous = {'identity': [1, [1, 2, 3, 4]]}
+    policy.collection['training'] = None
+    policy.collection['tower'] = {'team': [key(m) for m in party[:3]], 'original': [key(m) for m in party],
+                                  'cap': 30, 'entered': False, 'returning': False, 'trained': True,
+                                  'previous_training': previous}
+    full = SimpleNamespace(map=real_data.map_ids['CHERRYGROVE_POKECENTER_1F'], party=party, stored=(), frame=1,
+                           active_box=0, box_counts=(20,) * 14)
+    assert no_room(policy, full, policy.collection['tower']['team'])
+    assert journey(policy, full, RealGoal) is None
+    assert 'tower' not in policy.collection
+    assert policy.collection['training'] == previous
+    assert policy.collection['tower_after'] > policy.decisions
+    # A freed slot lets the team be assembled again.
+    roomy = SimpleNamespace(**{**vars(full), 'box_counts': (20,) * 13 + (19,)})
+    assert not no_room(policy, roomy, [key(m) for m in party[:3]])
+    # So does a spare that can be released.
+    policy.release_target = lambda _: mon('spare', box=3, position=7)
+    assert not no_room(policy, full, [key(m) for m in party[:3]])
