@@ -139,9 +139,34 @@ def test_tower_trip_stays_home_while_a_full_party_has_nowhere_to_deposit(real_da
     assert 'tower' not in policy.collection
     assert policy.collection['training'] == previous
     assert policy.collection['tower_after'] > policy.decisions
-    # A freed slot lets the team be assembled again.
-    roomy = SimpleNamespace(**{**vars(full), 'box_counts': (20,) * 13 + (19,)})
+    # Three freed slots let the three spare party members be deposited again.
+    roomy = SimpleNamespace(**{**vars(full), 'box_counts': (20,) * 13 + (17,)})
     assert not no_room(policy, roomy, [key(m) for m in party[:3]])
     # So does a spare that can be released.
     policy.release_target = lambda _: mon('spare', box=3, position=7)
     assert not no_room(policy, full, [key(m) for m in party[:3]])
+
+
+def test_tower_trip_counts_the_slots_its_swaps_need(real_data):
+    """One free slot let a Crystal Tower trip travel to Olivine, where the party of six still had four
+    Pokémon to deposit for one withdrawal. The boxes filled up, the challenge stood down and the trip
+    was planned again after the wait, only to stand down at the same PC."""
+    from pokesim.gen2.teams import no_room
+    policy = Policy()
+    party = [mon(name) for name in 'abcdef']
+    partner = mon('partner', box=4, position=3)
+    wanted = [key(party[0]), key(party[1]), key(partner)]
+    for free, blocked in [(0, True), (1, True), (2, True), (3, False)]:
+        boxes = (20,) * 13 + (20 - free,)
+        assert no_room(policy, snapshot(party, [partner], boxes=boxes), wanted) is blocked, free
+    # A releasable spare still makes room as it is needed.
+    policy.spare = mon('spare', box=3, position=7)
+    assert not no_room(policy, snapshot(party, [partner], boxes=(20,) * 14), wanted)
+    # A full party deposits before it withdraws, so it needs a free slot even when the swaps even out.
+    policy.spare = None
+    trio = [mon('x', box=1), mon('y', box=1), mon('z', box=2)]
+    wanted = [key(m) for m in party[:3]]
+    assert not no_room(policy, snapshot(party[:3], trio, boxes=(20,) * 14), wanted)
+    swap = [key(m) for m in party[:5]] + [key(trio[0])]
+    assert no_room(policy, snapshot(party, trio, boxes=(20,) * 14), swap)
+    assert not no_room(policy, snapshot(party, trio, boxes=(20,) * 13 + (19,)), swap)

@@ -31,6 +31,10 @@ def shortcut(policy, snapshot, mem, destination):
     surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
     nav.regions.observe(snapshot.map, nav.collision(snapshot, mem.memory))
     region = tuple(sorted(nav.regions.memberships(snapshot.map, (snapshot.x, snapshot.y), cut, surf)))
+    if not region:
+        # Halfway over a ledge the player is reported on the blocked tile it hops across. No region
+        # holds that tile, so no walking route would show and Fly would be chosen for no reason.
+        return None
     token = (snapshot.map, region, destination, tuple(targets), visited, hash(snapshot.event_flags), cut, surf)
     cache = getattr(nav, 'flight_cache', None)
     if cache and cache[0] == token:

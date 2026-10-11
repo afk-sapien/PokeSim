@@ -129,3 +129,28 @@ def test_walking_out_is_left_alone_when_walking_works_or_fly_cannot(crystal):
     assert outside(policy, Spot(center.map, 3, 4, 0xFFFF & ~32, flying), mem, ids['OLIVINE_POKECENTER_1F']) is None
     assert outside(policy, Spot(center.map, 3, 4, 0xFFFF, (SimpleNamespace(egg=False, moves=(57, 0, 0, 0)),)),
                    mem, ids['OLIVINE_POKECENTER_1F']) is None
+
+
+@pytest.mark.parametrize('route, before, during, after', [
+    ('ROUTE_22', (21, 6), (21, 7), (21, 8)),
+    ('ROUTE_26', (7, 10), (7, 11), (7, 12)),
+])
+def test_hopping_down_a_ledge_does_not_fly_back(crystal, route, before, during, after):
+    """Halfway over a ledge the player is reported on the blocked tile it hops across, which no region
+    holds. A Crystal Tower trip from Kanto read that as "no walking route", flew back to Viridian City,
+    walked to the same ledge and flew again, reloading every few minutes on Route 22."""
+    from pokesim.gen2.flight import shortcut
+    from pokesim.gen2.navigation import Navigator
+
+    data = crystal
+    ids = data.map_ids
+    nav = Navigator(data)
+    party = (SimpleNamespace(egg=False, moves=(19, 57, 15, 0)),)
+    target = ids['OLIVINE_POKECENTER_1F']
+    policy = SimpleNamespace(data=data, nav=nav, goal=SimpleNamespace(x=5, y=6))
+    mem = SimpleNamespace(read=lambda name, size: (2 ** 32 - 1).to_bytes(4, 'little'), memory=None)
+    for point in (before, during, after):
+        here = Spot(ids[route], *point, 0xFFFF, party)
+        assert shortcut(policy, here, mem, target) is None, point
+    for point in (before, after):
+        assert nav.regions.route(Spot(ids[route], *point, 0xFFFF, party), target, [(5, 6)], cut=True, surf=True)

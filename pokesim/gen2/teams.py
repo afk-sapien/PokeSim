@@ -31,11 +31,27 @@ def reachable(snapshot, wanted):
 
 
 def no_room(policy, snapshot, wanted):
-    """Whether the party must deposit a Pokémon for the wanted team while every box is full and
-    nothing spare can be released, so the team cannot be assembled until a box slot frees up."""
-    extra, _ = changes(snapshot, wanted)
-    return (extra is not None and all(count >= 20 for count in snapshot.box_counts)
-            and policy.release_target(snapshot) is None)
+    """Whether the boxes lack the free slots the wanted team needs and nothing spare can be released,
+    so the team cannot be assembled until slots free up.
+
+    Each Pokémon the party gives up takes a slot and each one withdrawn frees one. A full party must
+    deposit before it can withdraw, so it needs one free slot even when the swaps would even out.
+    """
+    need = Counter(wanted)
+    deposits = 0
+    for mon in snapshot.party:
+        if need[key(mon)] > 0:
+            need[key(mon)] -= 1
+        else:
+            deposits += 1
+    if not deposits:
+        return False
+    withdrawals = sum((need & Counter(key(mon) for mon in snapshot.stored)).values())
+    slots = deposits - withdrawals
+    if withdrawals and len(snapshot.party) >= 6:
+        slots = max(slots, 1)
+    free = sum(max(0, 20 - count) for count in snapshot.box_counts)
+    return slots > free and policy.release_target(snapshot) is None
 
 
 def changes(snapshot, wanted):
