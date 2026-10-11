@@ -10,7 +10,8 @@ import pytest
 from pokesim import config
 from pokesim.app import trade_requests, trade_settings
 from pokesim.app.registry import identifier
-from pokesim.app.trade_builder import TradeBuilder, ViewOnlyError
+from pokesim.app.coordinator import BUSY_NOTE, MANUAL_KEY
+from pokesim.app.trade_builder import HardLimit, TradeBuilder, ViewOnlyError
 from pokesim.runtime.participant import BUSY
 from pokesim.web.pages import render_game_page
 
@@ -77,24 +78,139 @@ def test_targets_grey_out_a_game_when_every_pair_is_blocked(built):
     assert service.targets(left, '0')['adventures'][0]['reason'] == 'Nothing in Second Red can be traded for Ivysaur'
 
 
-def test_a_game_busy_with_a_trade_is_greyed_out_and_names_its_partner(built, monkeypatch):
-    service, left, right = built.manager.builder, built.data['left_id'], built.data['right_id']
-    tid = identifier()
-    built.registry.create_transaction(tid, {'participants': [right, left]})
-    peer = built.peers[right]
+def hold(built, monkeypatch, aid, tid, *, empty=False):
+    """Hold one adventure for the exchange tid, as its worker does while it trades."""
+    peer = built.peers[aid]
     plain = peer.request
+    state = {'holding': True}
 
     def busy(method, path, data=None, timeout=None):
         result = plain(method, path, data, timeout)
-        if path.endswith('/manual-inventory'):
-            result.update(holding=True, hold_id=tid, reason=BUSY)
+        if path.endswith('/manual-inventory') and state['holding']:
+            result.update(holding=True, hold_id=tid, reason=BUSY, **({'pokemon': []} if empty else {}))
         return result
     monkeypatch.setattr(peer, 'request', busy)
+    return state
+
+
+def test_a_game_busy_with_a_trade_can_be_picked_and_shows_its_last_known_pokemon(built, monkeypatch):
+    service, c, left, right = built.manager.builder, built.coordinator, built.data['left_id'], built.data['right_id']
+    assert service.pokemon(right)['busy'] == ''    # Seen free once, so its Pokémon are known.
+    tid = identifier()
+    built.registry.create_transaction(tid, {'participants': [right, left]})
+    hold(built, monkeypatch, right, tid, empty=True)
     row = service.targets(left, '0')['adventures'][0]
-    assert row['available'] is False
-    assert row['reason'] == 'Busy finishing a trade with First Red — available again once it finishes'
-    built.registry.db.execute('DELETE FROM interactions WHERE id=?', (tid,))
-    assert service.targets(left, '0')['adventures'][0]['reason'] == BUSY
+    assert row['available'] is True and row['reason'] == ''
+    assert row['busy'] == BUSY_NOTE == 'Busy with a trade. Your trade will wait in line.'
+    assert service.targets(left)['adventures'][0]['busy'] == BUSY_NOTE
+    theirs = service.pokemon(right)
+    assert theirs['reason'] == '' and theirs['busy'] == BUSY_NOTE
+    assert [mon['key'] for mon in theirs['pokemon']] == ['1', 'party-1']
+    assert service.limits(left, '0', right)['busy'] == BUSY_NOTE
+    # A worker that cannot answer while it trades still shows what it had.
+    built.peers[right].failures['manual-inventory'] = 1
+    assert [mon['key'] for mon in service.pokemon(right)['pokemon']] == ['1', 'party-1']
+    assert c.manual_inventory(right)['busy_with'] == 'First Red'
+
+
+def test_a_trade_with_a_busy_game_is_queued_and_runs_once_the_hold_clears(built, monkeypatch):
+    service, c, left, right = built.manager.builder, built.coordinator, built.data['left_id'], built.data['right_id']
+    tid = identifier()
+    built.registry.create_transaction(tid, {'participants': [right, left]})
+    held = hold(built, monkeypatch, right, tid)
+    trade = service.create({'from_id': left, 'from_key': '0', 'to_id': right, 'to_key': '1'})
+    assert trade['state'] == 'queued' and trade['position'] == 1 and trade['cancellable'] is True
+    card = c.adventure_status(left)['queued'][0]
+    assert card['busy'] is True and card['cancellable'] is True and card['peer_name'] == 'Second Red'
+    # It waits while the other exchange runs, and nothing is prepared for it yet.
+    assert c.drain_manual() is None and c.schedule_once() is None
+    assert c.manual_status(trade['id'])['state'] == 'queued'
+    assert built.cable_calls == [] and all(peer.prepared == [] for peer in built.peers.values())
+    # The exchange finished but the worker still holds the game: still in line, not refused.
+    built.registry.update_transaction(tid, phase='aborted', decision='ABORT')
+    assert c.drain_manual() is None
+    assert c.manual_status(trade['id'])['state'] == 'queued'
+    held['holding'] = False
+    assert c.drain_manual()['phase'] == 'completed'
+    assert c.manual_status(trade['id'])['phase'] == 'completed'
+    assert built.cable_calls == [trade['id']]
+
+
+def test_a_queued_trade_whose_pokemon_left_is_cancelled_at_its_turn(built, monkeypatch):
+    service, c, left, right = built.manager.builder, built.coordinator, built.data['left_id'], built.data['right_id']
+    tid = identifier()
+    built.registry.create_transaction(tid, {'participants': [right, left]})
+    held = hold(built, monkeypatch, right, tid)
+    trade = service.create({'from_id': left, 'from_key': 'party-0', 'to_id': right, 'to_key': '1'})
+    assert c.manual_status(trade['id'])['state'] == 'queued'
+    built.registry.update_transaction(tid, phase='completed', decision='COMMIT')
+    held['holding'] = False
+    built.peers[left].pokemon = [mon for mon in built.peers[left].pokemon if mon['trade_key'] != 'party-0']
+    assert c.drain_manual() is None
+    status = c.manual_status(trade['id'])
+    assert status['state'] == 'rejected'
+    assert status['error'] == 'Cancelled: Pikachu is no longer in First Red’s party or boxes'
+    # Neither save was touched: no exchange was recorded and no worker prepared anything.
+    assert [row['id'] for row in built.registry.transactions()] == [tid]
+    assert built.cable_calls == [] and all(peer.prepared == [] for peer in built.peers.values())
+
+
+def test_hard_limits_still_refuse_a_trade_with_a_busy_game(built, monkeypatch):
+    service, left, right = built.manager.builder, built.data['left_id'], built.data['right_id']
+    tid = identifier()
+    built.registry.create_transaction(tid, {'participants': [right, left]})
+    hold(built, monkeypatch, right, tid)
+    built.peers[right].pokemon[0]['blocked'] = 'Eggs cannot be traded'
+    with pytest.raises(HardLimit, match='Eggs cannot be traded'):
+        service.create({'from_id': left, 'from_key': '0', 'to_id': right, 'to_key': '1'})
+    built.registry.update(right, state='stopped', desired_state='stopped')
+    with pytest.raises(ValueError, match='Start this adventure'):
+        service.create({'from_id': left, 'from_key': '0', 'to_id': right, 'to_key': 'party-1'})
+    assert built.coordinator.manual_statuses()['trades'] == []
+
+
+def test_only_a_trade_still_in_line_can_be_cancelled(built):
+    service, c = built.manager.builder, built.coordinator
+    left, right = built.data['left_id'], built.data['right_id']
+    first = service.create({'from_id': left, 'from_key': '0', 'to_id': right, 'to_key': '1'})
+    second = service.create({'from_id': left, 'from_key': 'party-0', 'to_id': right, 'to_key': 'party-1'})
+    assert c.manual_status(second['id'])['position'] == 2
+    status = service.cancel(second['id'])
+    assert status['state'] == 'cancelled' and status['cancellable'] is False
+    assert c.adventure_status(left)['queued'] == [c.adventure_status(left)['queued'][0]]
+    c._manual_update(first['id'], state='starting')
+    with pytest.raises(ValueError, match='already started'):
+        service.cancel(first['id'])
+    c._manual_update(first['id'], state='queued')
+    assert c.drain_manual()['phase'] == 'completed'
+    with pytest.raises(ValueError, match='already started'):
+        service.cancel(first['id'])
+    assert built.cable_calls == [first['id']]
+    with pytest.raises(KeyError):
+        service.cancel(identifier())
+    game = built.registry.adventure(left)
+    third = service.create({'from_id': left, 'from_key': '0', 'to_id': right, 'to_key': '1'})
+    built.registry.update(left, settings={**game['settings'], 'viewer_only': True})
+    with pytest.raises(ViewOnlyError):
+        service.cancel(third['id'])
+    assert c.manual_status(third['id'])['state'] == 'queued'
+
+
+def test_the_cancel_route_takes_a_waiting_trade_out_of_line(managed):  # noqa: F811
+    manager, client, aid = managed.app.state.manager, managed.client, managed.aid
+    assert ('POST', f'/api/v1/interactions/trade-builder/{aid}/cancel') in writes(managed.app, aid)
+    other = manager.registry.create('Other', 'fixture', {}, identifier())
+    waiting, started = identifier(), identifier()
+    base = {'left_id': aid, 'right_id': other['id'], 'left_key': 'a', 'right_key': 'b', 'error': None,
+            'cancel_requested': False, 'created_at': 1, 'updated_at': 1}
+    manager.registry.set_setting(MANUAL_KEY, [{**base, 'id': waiting, 'state': 'queued'},
+                                              {**base, 'id': started, 'state': 'starting'}])
+    response = client.post(f'/api/v1/interactions/trade-builder/{waiting}/cancel')
+    assert response.status_code == 200 and response.json()['state'] == 'cancelled'
+    response = client.post(f'/api/v1/interactions/trade-builder/{started}/cancel')
+    assert response.status_code == 409 and 'already started' in response.json()['detail']
+    assert client.post(f'/api/v1/interactions/trade-builder/{identifier()}/cancel').status_code == 404
+    assert client.post(f'/view/{aid}/api/v1/interactions/trade-builder/{waiting}/cancel').status_code in {403, 404}
 
 
 def test_limits_report_a_limit_of_the_chosen_pokemon_once(built):

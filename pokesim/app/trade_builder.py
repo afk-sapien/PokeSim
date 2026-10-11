@@ -1,7 +1,9 @@
 """The trade builder: the owner picks a Pokémon in two of their adventures and trades them.
 
 Both Pokémon are read from their adventures again before the trade is queued, so only
-hard cable limits can stop it. A view-only adventure cannot trade by hand.
+hard cable limits can stop it. A game busy with another trade is no limit: the trade waits
+in line and both Pokémon are checked again when its turn comes. A view-only adventure
+cannot trade by hand.
 """
 from __future__ import annotations
 
@@ -9,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .. import config
 from ..individual import find
-from .coordinator import LINKABLE
+from .coordinator import BUSY_NOTE, LINKABLE
 from .registry import identifier, validate_id
 
 FIELDS = ('from_id', 'from_key', 'to_id', 'to_key')
@@ -174,6 +176,7 @@ class TradeBuilder:
         games = [game for game in self.registry.adventures() if game['id'] != from_id and not game['archived']]
         reasons = {game['id']: (VIEW_ONLY if self.viewer_only(game['id']) else '')
                    or self.coordinator.manual_game_reason(game) for game in games}
+        busy = self.coordinator.busy_adventures()
         if from_key is not None:
             if not isinstance(from_key, str) or not 1 <= len(from_key) <= 256:
                 raise ValueError('Choose a Pokémon to trade')
@@ -195,7 +198,8 @@ class TradeBuilder:
                     reasons.update(zip([game['id'] for game in open_games], found))
         rows = [{'id': game['id'], 'name': game['name'], 'version': game['version'],
                  'generation': 2 if game['version'] in {'gold', 'silver', 'crystal'} else 1,
-                 'available': not reasons[game['id']], 'reason': reasons[game['id']]} for game in games]
+                 'available': not reasons[game['id']], 'reason': reasons[game['id']],
+                 'busy': BUSY_NOTE if game['id'] in busy and not reasons[game['id']] else ''} for game in games]
         return {'adventures': rows, 'from_key': from_key, 'viewer_only': self.viewer_only(from_id)}
 
     def limits(self, from_id, from_key, to_id):
@@ -230,6 +234,7 @@ class TradeBuilder:
                 'to': {'adventure_id': to_id, 'adventure_name': receiver['name'], 'version': receiver['version'],
                        'viewer_only': self.viewer_only(to_id)},
                 'blocked': blocked, 'pokemon': pokemon, 'viewer_only': self.viewer_only(from_id),
+                'busy': give_inventory.get('busy') or take_inventory.get('busy') or '',
                 'starts_now': not self.viewer_only(from_id) and not self.viewer_only(to_id)}
 
     def pokemon(self, aid):
@@ -248,12 +253,13 @@ class TradeBuilder:
                  'key': mon['trade_key'], 'blocked': mon.get('blocked') or ''}
                 for mon in inventory.get('pokemon') or [] if mon.get('trade_key')]
         return {'adventure_id': aid, 'adventure_name': game['name'], 'version': game['version'],
-                'reason': reason, 'pokemon': rows, 'viewer_only': self.viewer_only(aid)}
+                'reason': reason, 'busy': '' if reason else inventory.get('busy') or '', 'pokemon': rows,
+                'viewer_only': self.viewer_only(aid)}
 
     # Trade
 
     def create(self, data):
-        """Check both Pokémon now and queue the trade. It starts when the Cable Club is free."""
+        """Check both Pokémon now and queue the trade. It starts when the Cable Club and both games are free."""
         if not isinstance(data, dict) or not set(FIELDS) <= set(data) or set(data) - set(FIELDS) - {'request_id'}:
             raise ValueError('Choose a Pokémon to trade and one to receive')
         selection = {name: data[name] for name in FIELDS}
@@ -273,8 +279,15 @@ class TradeBuilder:
         for name in ('from_id', 'to_id'):
             self.registry.adventure(selection[name])
             self._writer(selection[name])
-        self._check(selection)
+        give, take = self._check(selection)
         entry = self.coordinator.enqueue_manual({'left_id': selection['from_id'], 'left_key': selection['from_key'],
                                                  'right_id': selection['to_id'], 'right_key': selection['to_key'],
-                                                 'request_id': request_id})
+                                                 'request_id': request_id, 'names': {'left': _name(give), 'right': _name(take)}})
         return self.coordinator.manual_status(entry['id'])
+
+    def cancel(self, mid):
+        """Take a trade that still waits for the Cable Club out of line. A started trade cannot be cancelled here."""
+        trade = self.coordinator.manual_status(validate_id(mid))
+        for aid in (trade['left_id'], trade['right_id']):
+            self._writer(aid)
+        return self.coordinator.cancel_queued(mid)

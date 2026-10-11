@@ -103,7 +103,7 @@
 
   // Trade: a game to trade with, then a Pokémon in each slot, picked in a modal grid.
   const pick = {mine: [], cards: [], mon: null, games: [], game: null, theirs: [], theirCards: [], their: null, limits: null,
-    busy: false, viewerOnly: false, asked: null, gamesAsked: null, theirRecords: null, theirReason: '', side: null}
+    busy: false, mineBusy: '', viewerOnly: false, asked: null, gamesAsked: null, theirRecords: null, theirReason: '', side: null}
   const note = (selector, text) => { const el = $(selector)
     if (!el) return
     el.textContent = text || ''
@@ -161,7 +161,9 @@
     else if (!pick.limits || pick.limits.from?.key !== pick.mon.key || pick.limits.to?.adventure_id !== pick.game) reason = 'Checking this trade…'
     else if (!pick.limits.starts_now) reason = VIEW_ONLY
     const ready = !reason && !pick.busy
-    $('#pick-summary').textContent = reason || 'The trade starts as soon as both games are ready.'
+    // A game busy with another trade can still be picked. The trade waits in line for it.
+    const waits = (game?.busy || pick.limits?.busy || pick.mineBusy) && 'Busy with a trade. Your trade will wait in line.'
+    $('#pick-summary').textContent = reason || waits || 'The trade starts as soon as both games are ready.'
     $('#pick-summary').classList.toggle('is-reason', Boolean(reason))
     button.disabled = !ready
     if ($('#slot-get-game')) $('#slot-get-game').textContent = pick.game ? `In ${gameName(pick.game)}` : ''
@@ -198,8 +200,9 @@
       if (found?.generation && Grid) Grid.generation('pick-mine', found.generation)
       pick.mine = data.pokemon || []
       pick.viewerOnly = Boolean(data.viewer_only)
+      pick.mineBusy = data.busy || ''
       if (data.viewer_only) note('#pick-note', 'This adventure is view-only, so it cannot trade.')
-      else note('#pick-note', data.reason || '')
+      else note('#pick-note', data.reason || data.busy || '')
       renderMine()
       const wanted = query.get('mon')
       const first = wanted && pick.mine.find(mon => mon.key === wanted)
@@ -223,9 +226,9 @@
       pick.games = data.adventures || []
       const select = $('#pick-game')
       select.innerHTML = `<option value="">${pick.games.length ? 'Choose a game' : 'No other adventure yet'}</option>` + pick.games.map(game =>
-        `<option value="${esc(game.id)}"${game.available ? '' : ' disabled'}${game.id === pick.game ? ' selected' : ''}>${esc(game.name)} · ${esc(game.version)}${game.available ? '' : `: ${esc(game.reason)}`}</option>`).join('')
+        `<option value="${esc(game.id)}"${game.available ? '' : ' disabled'}${game.id === pick.game ? ' selected' : ''}>${esc(game.name)} · ${esc(game.version)}${game.available ? game.busy ? ' · Busy with a trade' : '' : `: ${esc(game.reason)}`}</option>`).join('')
       const current = pick.games.find(game => game.id === pick.game)
-      note('#pick-game-reason', current && !current.available ? `${current.name}: ${current.reason}` : '')
+      note('#pick-game-reason', gameNote(current))
       summary()
     } catch (error) {
       if (pick.gamesAsked === ask) note('#pick-game-reason', error.message)
@@ -243,6 +246,7 @@
     if (pick.game) loadTheirs()
     summary()
   }
+  const gameNote = game => !game ? '' : !game.available ? `${game.name}: ${game.reason}` : game.busy ? `${game.name}: ${game.busy}` : ''
   function chooseGame(id) {
     if (id === pick.game) return
     pick.game = id || null
@@ -250,8 +254,7 @@
     pick.limits = null
     pick.theirs = []
     pick.theirRecords = null
-    const game = pick.games.find(row => row.id === id)
-    note('#pick-game-reason', game && !game.available ? `${game.name}: ${game.reason}` : '')
+    note('#pick-game-reason', gameNote(pick.games.find(row => row.id === id)))
     if (pick.game) loadTheirs()
     else renderTheirs()
     summary()
@@ -316,9 +319,11 @@
       await json(await PokeSim.api(BUILDER, {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({from_id: aid, from_key: pick.mon.key, to_id: pick.game, to_key: pick.their.key, ...(request ? {request_id: request} : {})})}),
       'That trade could not be set up.')
+      const waits = pick.games.find(row => row.id === pick.game)?.busy || pick.limits?.busy || pick.mineBusy
       pick.busy = false
       reset()
-      note('#pick-note', 'Trade started. Follow it under Current exchange and on the History tab.')
+      note('#pick-note', waits ? 'Trade queued. It waits in line under Current exchange on the History tab.'
+        : 'Trade started. Follow it under Current exchange and on the History tab.')
       await globalThis.AdventureTrading?.refresh?.()
       select('history')
     } catch (error) {

@@ -653,6 +653,10 @@ def create_app(manager, shutdown=lambda: None):
         manager.background(manager.coordinator.drain_manual)
         return trade
 
+    @app.post('/api/v1/interactions/trade-builder/{mid}/cancel')
+    async def cancel_built_trade(mid: str):
+        return await asyncio.to_thread(manager.builder.cancel, validate_id(mid))
+
     # Automatic trading settings: on or off and a wish list, per adventure.
     @app.get('/api/v1/interactions/auto-settings')
     async def auto_settings(adventure_id: str):

@@ -854,6 +854,34 @@ def test_cancelling_manual_trades_before_commit(setup):
         c.cancel_manual(identifier())
 
 
+def test_a_waiting_chosen_trade_comes_before_automatic_trades_for_its_adventures(setup, monkeypatch):
+    c, registry = setup.coordinator, setup.registry
+    for name in ('Third Red', 'Fourth Red'):
+        game = registry.create(name, 'rom', {}, identifier())
+        registry.update(game['id'], state='running', desired_state='running')
+        setup.peers[game['id']] = Peer(game['id'], str(len(setup.peers)))
+    others = [aid for aid in setup.peers if aid not in (setup.data['left_id'], setup.data['right_id'])]
+    # Second Red's worker still holds it after its last exchange, so the chosen trade must wait.
+    peer = setup.peers[setup.data['right_id']]
+    plain, held = peer.request, {'on': True}
+    def holding(method, path, data=None, timeout=None):
+        result = plain(method, path, data, timeout)
+        return {**result, 'holding': True} if held['on'] and path.endswith('inventory') else result
+    monkeypatch.setattr(peer, 'request', holding)
+    monkeypatch.setattr(c, '_kick_manual', lambda: None)    # Only the scheduler drives the queue here.
+    entry = c.enqueue_manual(manual_request(setup))
+    # The two other games still trade with each other. Neither game in the chosen trade is used.
+    row = c.schedule_once()
+    assert row['phase'] == 'completed' and row['plan'].get('manual') is None
+    assert set(row['plan']['participants']) == set(others)
+    assert c.manual_status(entry['id'])['state'] == 'queued'
+    assert c.schedule_once() is None    # The other two cool down. Nothing takes the chosen games.
+    held['on'] = False
+    assert c.schedule_once()['id'] == entry['id']
+    assert c.manual_status(entry['id'])['phase'] == 'completed'
+    assert setup.cable_calls == [row['id'], entry['id']]
+
+
 def test_a_trade_cut_off_while_starting_is_resumed_after_restart(setup):
     c = setup.coordinator
     entry = c.enqueue_manual(manual_request(setup))

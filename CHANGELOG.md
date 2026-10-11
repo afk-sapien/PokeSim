@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Queue hand-built trades with a game that is busy trading instead of refusing them. Under Trade with, a busy game stays pickable and shows its Pokémon, from the last known PC when needed, with "Busy with a trade. Your trade will wait in line." Queued trades run in order once the game is free, and a waiting hand-built trade goes before new automatic trades for its two adventures. When its turn comes both Pokémon are checked again, and a trade whose Pokémon has gone ends with a reason such as "Cancelled: Pikachu is no longer in Red’s party or boxes" without touching either save. A waiting trade has a Cancel trade key on its adventure's Trading page, through `POST /api/v1/interactions/trade-builder/<id>/cancel`. A trade that has started can no longer be cancelled.
+
 - Lay out every Settings panel in one full-width column. Nicknames, Backups, Import and Close PokeSim no longer sit two to a row; each shows its explanation on the left and its keys on the right, stacked on a phone, and every Settings key is the same height and size.
 
 - Draw the first 40 cards of the PC's All Pokémon view and the Pokédex at once and the rest over the next frames, so a full PC of about 280 cards no longer holds up the first paint.

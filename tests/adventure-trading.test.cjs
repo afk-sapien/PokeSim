@@ -6,20 +6,21 @@ const source = fs.readFileSync('pokesim/web/static/adventure-trading.js', 'utf8'
 const settle = async () => {
   for (const tick of [1, 2, 3]) await new Promise(resolve => setImmediate(resolve))
 }
-function page(id, response) {
+function page(id, response, {api, base = `/games/${id}`} = {}) {
   const elements = new Map()
   const calls = []
   let poll
   const element = selector => {
-    if (!elements.has(selector)) elements.set(selector, {innerHTML: '', textContent: '', hidden: false, classList: {toggle() {}}})
+    if (!elements.has(selector)) elements.set(selector, {innerHTML: '', textContent: '', hidden: false, classList: {toggle() {}},
+      listeners: {}, addEventListener(type, fn) { this.listeners[type] = fn }})
     return elements.get(selector)
   }
   vm.runInNewContext(source, {
     document: {querySelector: element, hidden: false},
-    PokeSim: {adventureId: id, base: `/games/${id}`, sprite: dex => `/games/${id}/sprites/${dex}.png?v=rom-portraits-1`, fetch: async path => {
+    PokeSim: {adventureId: id, base, sprite: dex => `/games/${id}/sprites/${dex}.png?v=rom-portraits-1`, fetch: async path => {
       calls.push(`/games/${id}${path}`)
       return {ok: true, json: async () => response()}
-    }}, setInterval(fn) { poll = fn },
+    }, ...(api ? {api} : {})}, setInterval(fn) { poll = fn },
   })
   return {element, calls, poll}
 }
@@ -169,4 +170,39 @@ test('Gold and Silver species past 151 keep their portrait and Pokédex link', a
   assert.match(html, /\/sprites\/246\.png/)
   assert.match(html, /pokedex#158/)
   assert.match(html, /#246/)
+})
+
+test('a trade waiting for a busy game says so and its Cancel key takes it out of line', async () => {
+  const tid = 'd'.repeat(32)
+  let queued = [{id: tid, state: 'queued', position: 1, peer_id: 'b'.repeat(32), peer_name: 'Blue', busy: true, cancellable: true}]
+  const posted = []
+  const api = async (path, options) => {
+    posted.push([path, options.method])
+    queued = []
+    return {ok: true, json: async () => ({state: 'cancelled'})}
+  }
+  const view = page('red', () => ({adventure: {id: 'red', version: 'red', state: 'running'}, active: [], history: [], queued}), {api})
+  await settle()
+  const html = view.element('#trade-active').innerHTML
+  assert.match(html, /Waiting for the Cable Club/)
+  assert.match(html, /Next for the Cable Club\. Busy with a trade\. Your trade will wait in line\./)
+  assert.match(html, new RegExp(`<button type="button" class="key queued-cancel" data-cancel="${tid}">Cancel trade</button>`))
+  const button = {dataset: {cancel: tid}, disabled: false}
+  view.element('#trade-active').listeners.click({target: {closest: () => button}})
+  await settle()
+  assert.deepEqual(posted, [[`/api/v1/interactions/trade-builder/${tid}/cancel`, 'POST']])
+  assert.equal(button.disabled, true)
+  assert.match(view.element('#trade-active').innerHTML, /No exchange in progress/)
+})
+
+test('a trade that has started, or a view link, offers no Cancel key', async () => {
+  const entry = {id: 'd'.repeat(32), position: 1, peer_name: 'Blue', busy: false}
+  const owner = page('red', () => ({adventure: {id: 'red', state: 'running'}, active: [], history: [],
+    queued: [{...entry, state: 'starting', cancellable: false}]}), {api: async () => ({ok: true})})
+  const viewer = page('red', () => ({adventure: {id: 'red', state: 'running'}, active: [], history: [],
+    queued: [{...entry, state: 'queued', cancellable: true}]}), {base: '/view/red'})
+  await settle()
+  assert.match(owner.element('#trade-active').innerHTML, /Checking both Pokémon\. It starts when the Cable Club is free\./)
+  for (const view of [owner, viewer]) assert.doesNotMatch(view.element('#trade-active').innerHTML, /data-cancel|Cancel trade/)
+  assert.match(viewer.element('#trade-active').innerHTML, /Next for the Cable Club/)
 })

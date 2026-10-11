@@ -50,13 +50,39 @@
     const lamp = completed || failed ? '' : '<i class="lamp lamp--blink" data-on="signal" aria-hidden="true"></i>'
     return `<article class="deal trade-deal cable-card${failed ? ' cable-failed' : ''}${completed ? ' cable-completed' : ''}"><header class="deal-head"><h3>With ${peer}</h3><span class="tag ${tone} cable-status">${lamp}${esc(label)}</span></header>${pair}${reason}${foot}</article>`
   }
+  // Only the owner's page can take a trade out of line. A view link only watches.
+  const owner = () => String(PokeSim.base || '').startsWith('/games/') && typeof PokeSim.api === 'function'
   // A trade the owner chose that waits for the Cable Club. Its Pokémon show once it starts.
   function queuedCard(entry) {
     const peer = /^[a-f0-9]{32}$/.test(entry.peer_id || '')
       ? `<a href="/games/${entry.peer_id}/trading">${esc(entry.peer_name)} <span aria-hidden="true">↗</span></a>` : esc(entry.peer_name)
     const place = entry.state === 'starting' ? 'Checking both Pokémon' : entry.position > 1 ? `Number ${entry.position} in line for the Cable Club` : 'Next for the Cable Club'
-    return `<article class="deal trade-deal cable-card queued-card"><header class="deal-head"><h3>With ${peer}</h3><span class="tag tag--signal cable-status"><i class="lamp lamp--blink" data-on="signal" aria-hidden="true"></i>Waiting for the Cable Club</span></header><p class="trade-help">${esc(place)}. It starts when the Cable Club is free.</p></article>`
+    const wait = entry.state !== 'starting' && entry.busy ? 'Busy with a trade. Your trade will wait in line.' : 'It starts when the Cable Club is free.'
+    const cancel = entry.cancellable && entry.state === 'queued' && owner() && /^[a-f0-9]{32}$/.test(entry.id || '')
+      ? `<footer class="deal-foot"><button type="button" class="key queued-cancel" data-cancel="${entry.id}">Cancel trade</button></footer>` : ''
+    return `<article class="deal trade-deal cable-card queued-card"><header class="deal-head"><h3>With ${peer}</h3><span class="tag tag--signal cable-status"><i class="lamp lamp--blink" data-on="signal" aria-hidden="true"></i>Waiting for the Cable Club</span></header><p class="trade-help">${esc(place)}. ${esc(wait)}</p>${cancel}</article>`
   }
+  // Cancel takes a waiting trade out of line. Once it has started, the server refuses and says why.
+  async function cancelQueued(button) {
+    button.disabled = true
+    try {
+      const response = await PokeSim.api(`/api/v1/interactions/trade-builder/${button.dataset.cancel}/cancel`, {method: 'POST'})
+      if (!response.ok) {
+        let detail = ''
+        try { detail = (await response.json()).detail } catch (_) {}
+        throw new Error(typeof detail === 'string' && detail ? detail : 'This trade could not be cancelled.')
+      }
+      $('#trade-connection-note').hidden = true
+    } catch (error) {
+      $('#trade-connection-note').textContent = error.message
+      $('#trade-connection-note').hidden = false
+    }
+    await refresh()
+  }
+  $('#trade-active')?.addEventListener?.('click', event => {
+    const button = event.target?.closest?.('[data-cancel]')
+    if (button && !button.disabled) cancelQueued(button)
+  })
   const setLamp = state => { const lamp = $('#trade-lamp'); if (lamp?.dataset) lamp.dataset.on = state }
   let loading = false
   async function refresh() {

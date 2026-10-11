@@ -32,8 +32,10 @@ def shoot(page, name, full_page=True):
 class Library:
     """The library API the managed Trading page talks to, with the real game worker behind it."""
 
-    def __init__(self, page, url, *, starts_now=True, mine_key='box-1', viewer_only=False):
+    def __init__(self, page, url, *, starts_now=True, mine_key='box-1', viewer_only=False, busy=''):
         self.page, self.url = page, url
+        self.busy = busy
+        self.cancelled = []
         self.viewer_only = viewer_only
         self.limits_held = None
         self.reads = {'auto': 0}
@@ -61,6 +63,7 @@ class Library:
         page.route(re.compile(r'/api/v1/interactions/trade-builder/targets(\?|$)'), self.targets)
         page.route(re.compile(r'/api/v1/interactions/trade-builder/limits(\?|$)'), self.limits)
         page.route(re.compile(r'/api/v1/interactions/auto-settings(\?|$)'), self.auto_settings)
+        page.route(re.compile(r'/api/v1/interactions/trade-builder/[0-9a-f]{32}/cancel$'), self.cancel)
         # Ask me first is gone. Any call to its old API is recorded and answered as the library does.
         page.route(re.compile(r'/api/v1/interactions/trade-requests(/|\?|$)'),
                    lambda route: self.request_reads.append(route.request.url) or self.json(route, {'detail': 'Not Found'}, 404))
@@ -91,8 +94,14 @@ class Library:
         trade = {'id': body.get('request_id') or 'd' * 32, 'state': 'queued', 'left_id': FROM, 'right_id': body['to_id'],
                  'left_key': body['from_key'], 'right_key': body['to_key'], 'position': 1}
         self.queued.append({'id': trade['id'], 'state': 'queued', 'position': 1, 'peer_id': RED,
-                            'peer_name': 'Second Red', 'created_at': 3000})
+                            'peer_name': 'Second Red', 'created_at': 3000, 'cancellable': True, 'busy': bool(self.busy)})
         self.json(route, trade)
+
+    def cancel(self, route):
+        mid = route.request.url.rsplit('/', 2)[-2]
+        self.cancelled.append((route.request.method, mid))
+        self.queued = [entry for entry in self.queued if entry['id'] != mid]
+        self.json(route, {'id': mid, 'state': 'cancelled', 'cancellable': False})
 
     def pokemon(self, route):
         if parse_qs(urlparse(route.request.url).query)['adventure_id'][0] == RED:
@@ -111,7 +120,7 @@ class Library:
         reason = MEGANIUM if key == 'party-0' else REASON
         body = {'adventures': [
             {'id': RED, 'name': 'Second Red', 'version': 'red', 'generation': 1, 'available': key != 'party-0',
-             'reason': MEGANIUM if key == 'party-0' else ''},
+             'reason': MEGANIUM if key == 'party-0' else '', 'busy': self.busy},
             {'id': BLUE, 'name': 'Busy Blue', 'version': 'blue', 'generation': 1, 'available': False, 'reason': reason}],
             'from_key': key, 'viewer_only': False}
         if key is not None and key in self.held:
@@ -130,7 +139,7 @@ class Library:
                                                                     'blocked': 'Mew stays in this game'})],
                           'from': {'key': parse_qs(urlparse(route.request.url).query)['from_key'][0], 'blocked': ''},
                           'to': {'adventure_id': RED, 'adventure_name': 'Second Red', 'viewer_only': not self.starts_now},
-                          'starts_now': self.starts_now, 'viewer_only': False, 'blocked': {}})
+                          'starts_now': self.starts_now, 'viewer_only': False, 'blocked': {}, 'busy': self.busy})
 
     def auto_settings(self, route):
         if route.request.method == 'GET':
@@ -293,6 +302,37 @@ def test_trade_builder_picks_both_slots_in_a_modal_and_starts_an_owned_trade(pag
     expect(current).to_contain_text('Second Red')
     shoot(page, f'history-{width}')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1280, 390])
+def test_a_game_busy_with_a_trade_can_be_picked_and_its_queued_trade_cancelled(page, game, width):
+    busy = 'Busy with a trade. Your trade will wait in line.'
+    library = Library(page, game[0], busy=busy)
+    page.set_viewport_size({'width': width, 'height': 844})
+    library.open()
+    # Busy is not a limit: the game can be chosen, and says its trade will wait.
+    expect(option(page, RED)).not_to_have_attribute('disabled', '')
+    expect(option(page, RED)).to_have_text('Second Red · red · Busy with a trade')
+    choose(page, 'mine', 'box-1')
+    page.locator('#pick-game').select_option(RED)
+    expect(page.locator('#pick-game-reason')).to_have_text(f'Second Red: {busy}')
+    choose(page, 'theirs', '1')
+    confirm = page.locator('#pick-confirm')
+    expect(confirm).to_be_enabled()
+    expect(page.locator('#pick-summary')).to_have_text(busy)
+    shoot(page, f'trade-busy-{width}')
+    confirm.click()
+    selected(page, 'History')
+    card = page.locator('#current-exchange-section .queued-card')
+    expect(card).to_contain_text('Waiting for the Cable Club')
+    expect(card).to_contain_text(busy)
+    cancel = card.get_by_role('button', name='Cancel trade')
+    expect(cancel).to_be_visible()
+    shoot(page, f'history-busy-{width}')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    cancel.click()
+    expect(page.locator('#current-exchange-section')).to_be_hidden()
+    assert library.cancelled == [('POST', library.posted[0]['request_id'])]
 
 
 def test_their_pokemon_can_be_chosen_first_and_clear_empties_both_slots(page, game):
