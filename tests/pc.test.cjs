@@ -328,10 +328,15 @@ test('details list moves and condition without the old record for Gen I partners
   await view.ready()
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
   const detail = view.element('#pc-detail-body').innerHTML
-  assert.match(detail, /pc-move-pp empty"><b>0<\/b>\/10<span class="vh"> PP/)
-  assert.match(detail, /type-grass">Grass<\/span><\/span><span class="pc-move-kind">Special<\/span><span class="pc-move-pow"[^>]*>35<\/span><span class="pc-move-acc"[^>]*>100%/)
-  assert.match(detail, /pc-move-kind">Status<\/span><span class="pc-move-pow"[^>]*>—<\/span>/)
-  assert.match(detail, /Tackle<\/span><span class="pc-move-specs">.*Physical/)
+  assert.match(detail, /PP<\/span> <span class="pc-move-pp empty"><b>0<\/b>\/10<\/span>/)
+  assert.match(detail, /Vine Whip<\/span><span class="pc-move-type"><span class="tag type-badge type-grass">Grass<\/span><\/span><span class="pc-move-specs"><span class="pc-move-kind">Special<\/span>.*?pc-move-pow">35<\/b>.*?pc-move-acc">100%/)
+  assert.match(detail, /pc-move-kind">Status<\/span>.*?pc-move-pow">—<\/b>/)
+  assert.match(detail, /Tackle<\/span><span class="pc-move-type">.*?Physical/)
+  // A Pokémon knows up to four moves: one blank slot keeps the card's height, and no header row.
+  assert.equal((detail.match(/class="pc-move-blank"/g) || []).length, 1)
+  assert.doesNotMatch(detail, /pc-move-head/)
+  // Healthy is never stamped; a real condition is.
+  assert.doesNotMatch(detail, />Healthy</)
   assert.equal((detail.match(/class="pc-move-pp(?: empty)?"><b>/g) || []).length, 2)
   assert.match(detail, /pc-move-pp pc-move-none">—/)
   assert.match(detail, /aria-label="Health: 4 of 30"/)
@@ -350,7 +355,7 @@ test('Gen II details resolve Hidden Power and tag Pokérus', async () => {
   await view.ready()
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
   const detail = view.element('#pc-detail-body').innerHTML
-  assert.match(detail, /type-fire">Fire<\/span><\/span><span class="pc-move-kind">Special<\/span><span class="pc-move-pow"[^>]*>70/)
+  assert.match(detail, /type-fire">Fire<\/span><\/span><span class="pc-move-specs"><span class="pc-move-kind">Special<\/span>.*?pc-move-pow">70</)
   assert.match(detail, /tag--warn">Pokérus</)
   assert.doesNotMatch(detail, /Friendship|Caught|Route 29|Elite Four|Hidden Power<\/dt>/)
   assert.match(detail, /Max level/)

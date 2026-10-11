@@ -131,36 +131,43 @@
     return `<span class="tag trade-tag trade-tag--${key}" title="Trade setting: ${esc(trade.state)}${trade.note ? `. ${esc(trade.note)}` : ''}">${esc(trade.state)}</span>`
   }
 
-  // One row per move, in aligned columns: name, type, kind, power, accuracy and PP.
+  // One entry per move on two lines: the name and its type, then kind, power, accuracy and PP.
+  // A Pokémon knows up to four moves, so unused slots show as blank lines and the card keeps its height.
   function moveList(mon) {
     const moves = mon.move_details || []
-    if (!moves.length) return '<p class="detail-meta">No moves recorded.</p>'
+    if (!moves.length) return '<p class="detail-meta pc-card-empty">No moves recorded.</p>'
+    const stat = (label, value, cls) => `<span class="pc-move-stat"><span class="pc-k">${label}</span> <b class="${cls}">${value}</b></span>`
     const rows = moves.map(original => {
       // Hidden Power takes its type and power from the DVs, not from the move table.
       const move = original.name === 'Hidden Power' && mon.hidden_power ? {...original, ...mon.hidden_power} : original
       const known = Number.isFinite(move.pp) && Number.isFinite(move.max_pp)
-      const pp = known ? `<span class="pc-move-pp${move.pp ? '' : ' empty'}"><b>${move.pp}</b>/${move.max_pp}<span class="vh"> PP</span></span>` : '<span class="pc-move-pp pc-move-none">—</span>'
+      const pp = known ? `<span class="pc-move-pp${move.pp ? '' : ' empty'}"><b>${move.pp}</b>/${move.max_pp}</span>` : '<span class="pc-move-pp pc-move-none">—</span>'
       const rated = Number.isFinite(move.power)
       const power = rated && move.power ? move.power : '—'
       const accuracy = rated && Number.isFinite(move.accuracy) && move.accuracy ? `${move.accuracy}%` : '—'
-      const specs = `<span class="pc-move-type">${types().badges([move.type])}</span><span class="pc-move-kind">${rated ? moveCategory(move) : ''}</span>`
-        + `<span class="pc-move-pow" aria-label="Power ${power}">${power}</span><span class="pc-move-acc" aria-label="Accuracy ${accuracy}">${accuracy}</span>`
-      return `<li class="pc-move"><span class="pc-move-name">${esc(move.name)}</span><span class="pc-move-specs">${specs}</span>${pp}</li>`
+      return `<li class="pc-move"><span class="pc-move-name">${esc(move.name)}</span><span class="pc-move-type">${types().badges([move.type])}</span>`
+        + `<span class="pc-move-specs"><span class="pc-move-kind">${rated ? moveCategory(move) : ''}</span>${stat('Pow', power, 'pc-move-pow')}${stat('Acc', accuracy, 'pc-move-acc')}</span>`
+        + `<span class="pc-move-stat pc-move-ppcell"><span class="pc-k">PP</span> ${pp}</span></li>`
     }).join('')
-    const head = '<li class="pc-move pc-move-head" aria-hidden="true"><span class="pc-move-name">Move</span><span class="pc-move-specs"><span class="pc-move-type">Type</span><span class="pc-move-kind">Kind</span><span class="pc-move-pow">Pow</span><span class="pc-move-acc">Acc</span></span><span class="pc-move-pp">PP</span></li>'
-    return `<ul class="pc-moves">${head}${rows}</ul>`
+    const blanks = '<li class="pc-move-blank" aria-hidden="true">—</li>'.repeat(Math.max(0, 4 - moves.length))
+    return `<ol class="pc-moves">${rows}${blanks}</ol>`
+  }
+
+  // The summary strip: HP and XP meters, then the two power readings, as equal cells.
+  function meterCell(label, percent, level, aria, value, title = '') {
+    return `<div class="pc-sum pc-sum-meter"><div class="pc-sum-top"><span class="micro">${label}</span><span class="value"${title ? ` title="${title}"` : ''}>${value}</span></div>${gauge(percent, level, aria)}</div>`
   }
 
   function conditionRows(mon) {
     const rows = []
     if (Number.isFinite(mon.hp) && Number.isFinite(mon.max_hp) && mon.max_hp > 0) {
       const percent = mon.hp / mon.max_hp * 100
-      rows.push(`<div class="meter-row"><span class="micro">HP</span>${gauge(percent, percent < 20 ? 'crit' : percent < 50 ? 'warn' : 'ok', `Health: ${mon.hp} of ${mon.max_hp}`)}<span class="value">${fmt(mon.hp)}/${fmt(mon.max_hp)}</span></div>`)
+      rows.push(meterCell('HP', percent, percent < 20 ? 'crit' : percent < 50 ? 'warn' : 'ok', `Health: ${mon.hp} of ${mon.max_hp}`, `${fmt(mon.hp)}<span class="unit">/${fmt(mon.max_hp)}</span>`))
     }
     const xp = experienceProgress(mon)
     if (xp && Number.isFinite(xp.percent)) {
       const next = xp.max_level ? 'Max level' : Number.isFinite(xp.remaining) ? `${fmt(xp.remaining)} to Lv. ${mon.level + 1}` : ''
-      rows.push(`<div class="meter-row"><span class="micro">XP</span>${gauge(xp.percent, 'signal', `Progress to level ${mon.level + 1}`)}<span class="value"${next ? ` title="${next}"` : ''}>${xp.max_level ? 'MAX' : `${Math.round(xp.percent)}%`}</span></div>`)
+      rows.push(meterCell('XP', xp.percent, 'signal', `Progress to level ${mon.level + 1}`, xp.max_level ? 'MAX' : `${Math.round(xp.percent)}%`, next))
     }
     return rows.join('')
   }
@@ -175,8 +182,8 @@
   }
 
   function readouts(mon) {
-    const cells = [`<div class="pc-readout" title="Stat Power now / at level 100 with full training"><dt>Stat Power</dt><dd>${statPower(mon)}</dd></div>`]
-    if (mon.battle_power !== undefined) cells.push(`<div class="pc-readout" title="Rates known moves at full health and PP. Matchups can change the result."><dt>Battle Power</dt><dd>${Number.isFinite(mon.battle_power) ? fmt(mon.battle_power) : 'Unavailable'}</dd></div>`)
+    const cells = [`<div class="pc-sum pc-readout" title="Stat Power now / at level 100 with full training"><dt class="micro">Stat Power</dt><dd>${statPower(mon)}</dd></div>`]
+    if (mon.battle_power !== undefined) cells.push(`<div class="pc-sum pc-readout" title="Rates known moves at full health and PP. Matchups can change the result."><dt class="micro">Battle Power</dt><dd>${Number.isFinite(mon.battle_power) ? fmt(mon.battle_power) : 'Unavailable'}</dd></div>`)
     return `<dl class="pc-readouts">${cells.join('')}</dl>`
   }
 
@@ -186,19 +193,23 @@
   }
 
   // The stats guide and Pokédex keys, on their own so a page can put them in its footer.
+  // A phone shows short labels without the arrows, so every footer key fits one row.
   function detailLinks(mon) {
     if (mon.egg) return ''
-    return `<a class="dex-open key" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer">Stats guide ↗</a>${mon.dex ? `<a class="dex-open key" href="${base()}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex ↗</a>` : ''}`
+    return `<a class="dex-open key" aria-label="Stats guide" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer"><span class="key-long">Stats guide ↗</span><span class="key-short">Guide</span></a>${mon.dex ? `<a class="dex-open key" href="${base()}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex<span class="key-long"> ↗</span></a>` : ''}`
   }
 
   // The popup body. Options: sprite (a portrait address from another game), trade (replaces the
   // trade stamp, or false to leave it out), top (HTML shown under the head, such as a pick button)
   // and links (false hides the guide and Pokédex links).
+  // Layout: a head (portrait, name, one line of facts, one row of stamps), a summary strip of four
+  // equal cells, then Moves and Stats as two cards side by side, stacked on a phone.
   function detail(mon, options = {}) {
     const labels = Object.keys(mon.calculated_stats || {})
     const known = mon.dvs?.length === 5 && mon.stat_exp?.length === 5
-    const status = mon.status_label || (Number.isFinite(mon.hp) ? mon.hp ? 'Healthy' : 'Fainted' : '')
-    const statusTag = !mon.egg && status ? `<span class="tag pc-status${status === 'Healthy' ? '' : mon.hp ? ' tag--warn' : ' tag--crit'}">${esc(status)}</span>` : ''
+    // Healthy is the usual state, so only a condition worth noticing gets a stamp.
+    const status = mon.status_label || (Number.isFinite(mon.hp) && !mon.hp ? 'Fainted' : '')
+    const statusTag = !mon.egg && status && status !== 'Healthy' ? `<span class="tag pc-status ${mon.hp ? 'tag--warn' : 'tag--crit'}">${esc(status)}</span>` : ''
     const trade = options.trade === false ? null : options.trade || tradeState(mon)
     const pokerus = mon.pokerus === 'infected' ? '<span class="tag tag--warn">Pokérus</span>' : mon.pokerus === 'cured' ? '<span class="tag" title="Pokérus, cured">Pokérus cured</span>' : ''
     const tags = mon.egg ? tradeBadge(trade, mon) : `${types().shinyBadge(mon)}${ratingBadge(mon)}${statusTag}${pokerus}${tradeBadge(trade, mon)}`
@@ -206,19 +217,19 @@
     const where = options.slot ? esc(options.slot) : `${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}`
     const head = `<div class="pc-detail-head"><div class="plate plate--bay ${types().portraitClass(mon.type_names)}">${sprite(mon, options.sprite).replace(' loading="lazy"', '')}</div>`
       + `<div class="pc-detail-id"><p class="micro">${where}${mon.dex ? ` · No.${String(mon.dex).padStart(3, '0')}` : ''}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>`
-      + `<p class="pc-detail-line">${line}</p><div class="pc-tags pc-detail-tags"><span class="type-tags">${types().badges(mon.type_names)}</span>${tags}</div></div></div>`
+      + `<p class="pc-detail-line">${line}</p></div><div class="pc-tags pc-detail-tags"><span class="type-tags">${types().badges(mon.type_names)}</span>${tags}</div></div>`
     const section = (title, body, extra = '') => `<section class="pc-detail-section${extra}"><h3 class="micro">${title}</h3>${body}</section>`
+    const card = (name, title, note, body) => `<section class="pc-card pc-card-${name}"><header class="pc-card-head"><h3 class="micro">${title}</h3>${note}</header>${body}</section>`
     const links = options.links === false ? '' : `<div class="pc-detail-links">${detailLinks(mon)}</div>`
     const top = options.top || ''
     if (mon.egg) return head + top + section('Egg', eggFacts(mon)) + '<p class="detail-meta pc-detail-note">Its species, moves and stats appear once it hatches.</p>'
     const condition = conditionRows(mon)
-    const quality = Number.isFinite(mon.dv_top_percent) ? `<span title="Chance a random roll is at least this good">DVs top ${mon.dv_top_percent.toLocaleString(undefined, {maximumSignificantDigits: 3})}%</span>` : ''
-    const stats = known ? `<table class="individual-stats"><caption>Stats${quality}</caption><thead><tr><th>Stat</th><th>Value</th><th>DV</th><th>Stat exp.</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[Math.min(i, 4)]}</td><td>${mon.stat_exp[Math.min(i, 4)].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.stat_total) ? mon.stat_total.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')}</td><td>${formatTotal(mon, 'stat_exp')}</td></tr></tfoot></table>` : '<p class="detail-meta">Individual stats are unavailable in this snapshot.</p>'
+    const quality = Number.isFinite(mon.dv_top_percent) ? `<span class="pc-card-note" title="Chance a random roll is at least this good">DVs top ${mon.dv_top_percent.toLocaleString(undefined, {maximumSignificantDigits: 3})}%</span>` : ''
+    const count = mon.move_details?.length ? `<span class="pc-card-note">${mon.move_details.length} of 4</span>` : ''
+    const stats = known ? `<table class="individual-stats"><caption class="vh">Stats</caption><thead><tr><th scope="col">Stat</th><th scope="col">Value</th><th scope="col">DV</th><th scope="col">Stat exp.</th></tr></thead><tbody>${labels.map((label, i) => `<tr><th scope="row">${label}</th><td>${mon.calculated_stats?.[label] ?? 'Unavailable'}</td><td>${mon.dvs[Math.min(i, 4)]}</td><td>${mon.stat_exp[Math.min(i, 4)].toLocaleString()}</td></tr>`).join('')}</tbody><tfoot><tr><th scope="row">Total</th><td>${Number.isFinite(mon.stat_total) ? mon.stat_total.toLocaleString() : 'Unavailable'}</td><td>${formatTotal(mon, 'dvs')}</td><td>${formatTotal(mon, 'stat_exp')}</td></tr></tfoot></table>` : '<p class="detail-meta pc-card-empty">Individual stats are unavailable in this snapshot.</p>'
     return head + top
-      + `<div class="pc-detail-grid"><div class="pc-detail-col">`
-      + `<section class="pc-detail-section pc-detail-power">${readouts(mon)}${condition ? `<div class="mon-meters pc-gauges">${condition}</div>` : ''}</section>`
-      + section('Moves', moveList(mon))
-      + `</div><div class="pc-detail-col"><section class="pc-detail-section">${stats}</section></div></div>`
+      + `<div class="pc-detail-summary">${condition ? `<div class="pc-gauges">${condition}</div>` : ''}${readouts(mon)}</div>`
+      + `<div class="pc-detail-grid">${card('moves', 'Moves', count, moveList(mon))}${card('stats', 'Stats', quality, stats)}</div>`
       + links
   }
 

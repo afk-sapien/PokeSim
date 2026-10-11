@@ -36,12 +36,36 @@ def gen2_payload():
             'party': [partner, egg], 'storage': {'active_box': 1, 'box_counts': [0] * 14, 'pokemon': []}, 'plan': []}
 
 
-def check_fits(page):
-    dialog = page.locator('#pc-detail')
+def check_fits(page, dialog='#pc-detail', footer='#pc-trade-action'):
+    dialog = page.locator(dialog)
     assert dialog.evaluate('(node) => node.scrollWidth <= node.clientWidth')
-    assert dialog.locator('.pc-move, .pc-facts > div').evaluate_all(
+    assert dialog.locator('.pc-move, .pc-facts > div, .pc-sum, .pc-card').evaluate_all(
         'nodes => nodes.every(node => node.scrollWidth <= node.clientWidth + 1)')
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    # Each move reads as two clean lines: name beside its type, then kind, power and accuracy beside PP.
+    # No printed header row can split across lines.
+    assert dialog.locator('.pc-move-head').count() == 0
+    assert dialog.locator('.pc-move').evaluate_all('''nodes => nodes.every(node => {
+      const top = selector => Math.round(node.querySelector(selector).getBoundingClientRect().top)
+      const mid = selector => { const r = node.querySelector(selector).getBoundingClientRect(); return r.top + r.height / 2 }
+      const specs = [...node.querySelectorAll('.pc-move-specs > *')].filter(child => child.offsetParent).map(child => Math.round(child.getBoundingClientRect().top))
+      return Math.abs(mid('.pc-move-name') - mid('.pc-move-type')) <= 4 && new Set(specs).size === 1
+        && Math.abs(mid('.pc-move-specs') - mid('.pc-move-ppcell')) <= 4 && top('.pc-move-specs') > top('.pc-move-name')
+    })''')
+    # The footer keys sit on one row and every label fits its key.
+    keys = dialog.locator(f'{footer} .key')
+    if keys.count():
+        # The smallest phones (under 360 pixels) may wrap them.
+        if page.viewport_size['width'] > 360:
+            assert len(set(keys.evaluate_all('nodes => nodes.map(node => Math.round(node.getBoundingClientRect().top))'))) == 1
+        assert keys.evaluate_all('nodes => nodes.every(node => node.scrollWidth <= node.clientWidth + 1)')
+    # The summary cells line up: every meter starts and ends with its neighbours in the same row.
+    cells = dialog.locator('.pc-sum').evaluate_all(
+        'nodes => nodes.map(node => { const r = node.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height)] })')
+    rows = {}
+    for top, height in cells:
+        rows.setdefault(top, set()).add(height)
+    assert all(len(heights) == 1 for heights in rows.values())
 
 
 def shoot(page, name):
@@ -72,7 +96,7 @@ def test_gen1_detail_shows_moves_condition_and_power(page, game, width, height, 
     moves = body.locator('.pc-move:not(.pc-move-head)')
     expect(moves).to_have_count(4)
     expect(moves.first).to_contain_text('Vine Whip')
-    expect(moves.first).to_contain_text('10/10 PP')
+    expect(moves.first).to_contain_text('PP 10/10')
     expect(body.locator('.pc-move:not(.pc-move-head)').first.locator('.pc-move-pow')).to_have_text('35')
     expect(moves.first).to_contain_text('Special')
     expect(moves.nth(1).locator('.pc-move-pp.empty')).to_have_count(1)
@@ -113,7 +137,7 @@ def test_gen2_detail_shows_hidden_power_power_and_eggs(page, game, width, height
     body = page.locator('#pc-detail-body')
     moves = body.locator('.pc-move:not(.pc-move-head)')
     expect(moves).to_have_count(4)
-    expect(moves.nth(1)).to_contain_text('0/10 PP')
+    expect(moves.nth(1)).to_contain_text('PP 0/10')
     expect(moves.nth(2)).to_contain_text('Fire')
     expect(moves.nth(2).locator('.pc-move-pow')).to_have_text('64')
     # One Stat Power reading, current against max, and no record block.
@@ -123,7 +147,7 @@ def test_gen2_detail_shows_hidden_power_power_and_eggs(page, game, width, height
         expect(body).not_to_contain_text(text)
     expect(body.locator('.pc-detail-head .trade-tag')).to_have_text('Can trade')
     expect(body.locator('.pc-detail-head')).to_contain_text('Pokérus cured')
-    expect(body.locator('.individual-stats caption')).to_contain_text('DVs top 2.5%')
+    expect(body.locator('.pc-card-stats .pc-card-head')).to_contain_text('DVs top 2.5%')
     expect(body.locator('.pc-gauges .value[title="7,230 to Lv. 51"]')).to_have_count(1)
     assert page.evaluate('MonGrid.statPower({power: 480, potential_power: 480})') == '480 <span class="unit">(max)</span>'
     expect(body).to_contain_text('Paralyzed')
@@ -165,3 +189,59 @@ def test_view_switch_sits_in_the_filter_bar_without_wrapping(page, game, width):
     expect(page.locator('#pc-boxes-view')).to_have_attribute('aria-pressed', 'true')
     expect(page.locator('#pc-sidebar')).to_be_visible() if width > 860 else None
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+def variant_payload():
+    """A shiny level 100 with one move and the widest ten-letter nickname, beside a fainted Gen II partner
+    with no gender, held item or Battle Power."""
+    payload = gen2_payload()
+    star = dict(payload['party'][0], nick='MMMMMMMMMM', level=100, shiny=True, dv_stars=4, perfect_dvs=False,
+                status_label='', hp=151, gender=None, held_item_name=None, pokerus=None, potential_power=742,
+                experience={'total': 1_250_000, 'remaining': 0, 'percent': 100, 'max_level': True},
+                move_details=[{'id': 57, 'name': 'Surf', 'type': 'Water', 'pp': 15, 'max_pp': 15, 'power': 95,
+                               'accuracy': 100}])
+    plain = dict(payload['party'][0], nick='', slot=2, hp=0, status_label='', gender=None, held_item_name=None,
+                 pokerus=None, dv_top_percent=None, trade_key=None)
+    plain.pop('battle_power')
+    payload['party'] = [star, plain]
+    return payload
+
+
+@pytest.mark.parametrize('width,height', SIZES + [(320, 640)])
+def test_detail_variants_keep_their_shape(page, game, width, height):
+    url, _, _, _ = game
+    page.route(re.compile(r'/api/pokedex/status(\?|$)'), lambda route: route.fulfill(json=variant_payload()))
+    page.set_viewport_size({'width': width, 'height': height})
+    page.goto(url + '/pc?box=party')
+    page.locator('.pc-mon').first.click()
+    body = page.locator('#pc-detail-body')
+    # One move fills one line and three blank slots keep the card's height.
+    expect(body.locator('.pc-move')).to_have_count(1)
+    expect(body.locator('.pc-move-blank')).to_have_count(3)
+    expect(body.locator('.pc-card-moves .pc-card-head')).to_contain_text('1 of 4')
+    expect(body.locator('.pc-detail-head .shiny-badge')).to_be_visible()
+    expect(body.locator('.pc-detail-line')).to_have_text('Starmie · Level 100')
+    expect(body.locator('.pc-gauges .value[title="Max level"]')).to_have_text('MAX')
+    expect(body.locator('.pc-readouts')).to_contain_text('742 (max)')
+    # Healthy is not stamped; only a condition worth noticing is.
+    expect(body.locator('.pc-status')).to_have_count(0)
+    # The ten-letter name stays on one line.
+    name = body.locator('#pc-detail-name')
+    assert name.evaluate('(node) => node.getBoundingClientRect().height < 40')
+    # Every stamp in the head is the same height.
+    assert len(set(body.locator('.pc-detail-tags .tag, .pc-detail-tags .dv-badge').evaluate_all(
+        'nodes => nodes.map(node => Math.round(node.getBoundingClientRect().height))'))) == 1
+    if width >= 1280:
+        # Moves and Stats stand side by side at the same height.
+        boxes = body.locator('.pc-card').evaluate_all(
+            'nodes => nodes.map(node => { const r = node.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height)] })')
+        assert len(boxes) == 2 and boxes[0] == boxes[1]
+    check_fits(page)
+    shoot(page, f'variant-shiny-{width}.png')
+    page.locator('#pc-close').click()
+    page.locator('.pc-mon').nth(1).click()
+    expect(body.locator('.pc-status')).to_have_text('Fainted')
+    expect(body.locator('.pc-readout')).to_have_count(1)
+    expect(body.locator('#pc-detail-name')).to_have_text('Starmie')
+    check_fits(page)
+    shoot(page, f'variant-fainted-{width}.png')
