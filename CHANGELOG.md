@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show the PC and Pokédex as last seen the moment they reload, then swap in fresh data as soon as it arrives. Each adventure keeps the last PC and Pokédex it drew in the browser's IndexedDB, the connection label reads Updating… until the server answers, and the PC's Trade… key waits for fresh data. A browser that blocks or fills its storage simply waits as before.
+
 - Keep Pokémon portraits in the browser for a year instead of downloading about 280 of them again on every PC or Pokédex reload. Each adventure's pages stamp portrait addresses with a fingerprint of the artwork it shows, which changes when the community pack is installed or restored, cartridge portraits are extracted, or a hand-installed portrait is added or replaced, so new artwork still shows at once.
 
 - Speed up the PC, Pokédex and Trading pages. Their live status is written with the standard JSON encoder instead of FastAPI's per-value one, which took about ten times as long on a full PC, and the PC and Trading pages no longer build the Gen II Pokédex plan they never show. The species reference behind the Pokédex is built once per adventure and carries an ETag, so a browser that already has it gets a 304 instead of 650 KB of JSON. A Gen II adventure answers it without first reading the game's status.

@@ -15,7 +15,7 @@ function pc(pokemon, search = '?scope=all', party = [], base = '') {
   }
   let url
   const context = vm.createContext({
-    document: {querySelector: selector => selector.startsWith('meta[') ? {content: selector.includes('pokesim-base') ? base : ''} : element(selector), activeElement: null, hidden: false},
+    document: {querySelector: selector => selector.startsWith('meta[') ? {content: selector.includes('pokesim-base') ? base : ''} : element(selector), activeElement: null, hidden: false, addEventListener() {}},
     location: {search}, URLSearchParams,
     history: {replaceState: (_, __, next) => { url = next }},
     fetch: async () => ({ok: true, json: async () => ({started: true, version: 'blue', party,

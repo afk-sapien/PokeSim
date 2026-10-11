@@ -106,6 +106,7 @@ function renderGrid() {
   fitSprites($('#grid'))
 }
 
+
 function statRow(label, value) {
   const on = Math.max(1, Math.min(STAT_CELLS, Math.round(value / maxStat * STAT_CELLS)))
   return `<div class="stat-row"><span class="micro">${esc(label)}</span><span class="meter" data-level="signal" aria-hidden="true">${cells(on, STAT_CELLS)}</span><b>${value}</b></div>`
@@ -229,6 +230,14 @@ async function loadReference() {
   const response = await PokeSim.fetch('/api/pokedex')
   if (!response.ok) throw new Error('The Pokédex could not be opened.')
   const data = await response.json()
+  fresh = true
+  showReference(data)
+  // The reference only changes with the cartridge; its ETag says whether the saved copy is current.
+  const etag = response.headers?.get?.('etag') || ''
+  if (!etag || etag !== savedReference) PokeSim.remember?.('dex-reference', {etag, data})
+}
+
+function showReference(data) {
   entries = data.entries
   dexTotal = data.count || entries.length
   const regions = data.generation === 2 ? 'Johto and Kanto' : 'Kanto'
@@ -249,9 +258,11 @@ async function fetchStatus() {
   return response.json()
 }
 
-async function refreshStatus(pending = fetchStatus()) {
+async function refreshStatus(pending = fetchStatus(), saved = false) {
   try {
     const status = await pending
+    if (saved && fresh) return
+    if (!saved) latest = status
     const shiny = status.shiny || {}
     shinySpecies = new Set(shiny.collection_species || [])
     catches = status.catches || null
@@ -273,8 +284,9 @@ async function refreshStatus(pending = fetchStatus()) {
     plan = new Map((status.plan || []).map((row) => [row.dex, row]))
     hunting = (status.plan || []).find((row) => row.species === status.hunting)?.dex ?? null
     $('#connection').classList.remove('is-offline')
-    $('#status').textContent = status.started ? 'Running' : 'Waiting'
-    $('#connection').title = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
+    $('#status').textContent = saved ? 'Updating…' : status.started ? 'Running' : 'Waiting'
+    $('#connection').title = saved ? 'Showing the Pokédex as last seen while it updates'
+      : status.started ? 'Adventure in progress' : 'Waiting for the adventure'
     $('#sum-owned').innerHTML = outOf(owned.size)
     $('#sum-seen').innerHTML = outOf(seen.size)
     $('#catch-tracking-note').textContent = trackingNote()
@@ -286,6 +298,7 @@ async function refreshStatus(pending = fetchStatus()) {
     renderGrid()
     if (openDex !== null) renderDetail(openDex, true)
   } catch (_) {
+    if (saved) return
     $('#connection').classList.add('is-offline')
     $('#status').textContent = 'Reconnecting…'
     $('#connection').title = ''
@@ -319,15 +332,37 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowRight') step(1)
 })
 
+// Paint the Pokédex as it was last seen while the fresh one loads. It is only looked at:
+// the page offers nothing that acts.
+let fresh = false
+let latest = null
+let savedReference = ''
+async function showSaved() {
+  const [reference, status] = await Promise.all([PokeSim.recall?.('dex-reference'), PokeSim.recall?.('dex-status')])
+  if (reference?.etag) savedReference = reference.etag
+  if (!reference?.data || !status || fresh) return
+  try {
+    showReference(reference.data)
+    await refreshStatus(Promise.resolve(status), true)
+    const requested = Number(location.hash.replace('#', ''))
+    if (openDex === null && requested >= 1 && requested <= dexTotal) renderDetail(requested)
+  } catch (_) {}
+}
+showSaved()
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && latest) PokeSim.remember?.('dex-status', latest)
+})
+
 // The status request starts at once, but counts paint only after the reference sets
 // dexTotal, so a Gen II Pokédex never flashes the Gen I total of 151.
 const firstStatus = fetchStatus()
 firstStatus.catch(() => {})
-loadReference().then(() => {
+loadReference().then(async () => {
   renderGrid()
-  refreshStatus(firstStatus)
+  await refreshStatus(firstStatus)
+  if (latest) PokeSim.remember?.('dex-status', latest)
   const requested = Number(location.hash.replace('#', ''))
-  if (requested >= 1 && requested <= dexTotal) renderDetail(requested)
+  if (openDex === null && requested >= 1 && requested <= dexTotal) renderDetail(requested)
 }).catch(() => {
   $('#grid').innerHTML = '<p class="dex-empty">The Pokédex data could not be loaded. Refresh to try again.</p>'
   refreshStatus(firstStatus)

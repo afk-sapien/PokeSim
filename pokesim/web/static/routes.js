@@ -48,7 +48,43 @@
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({action: 'speed', value: speed}),
     })
-  globalThis.PokeSim = {base, adventureId, spriteVersion, sprite, url, fetch: gameFetch, api: request, session, setSpeed}
+  // The last data a page drew, kept per adventure in IndexedDB so a reload can paint it at
+  // once while fresh data loads. Only for display: anything that acts waits for the server.
+  // Storage can be missing, blocked or full, and then pages simply wait as before.
+  const SAVED = 'pokesim-saved'
+  const SAVED_SHAPE = 1
+  let savedStore = null
+  function saved() {
+    if (!savedStore) savedStore = new Promise((resolve, reject) => {
+      const open = globalThis.indexedDB.open(SAVED, 1)
+      open.onupgradeneeded = () => open.result.createObjectStore('pages')
+      open.onsuccess = () => resolve(open.result)
+      open.onerror = () => reject(open.error)
+      open.onblocked = () => reject(new Error('blocked'))
+    })
+    return savedStore
+  }
+  const savedKey = name => `${adventureId || base || 'local'}:${name}`
+  async function recall(name) {
+    try {
+      const db = await saved()
+      const row = await new Promise((resolve, reject) => {
+        const read = db.transaction('pages').objectStore('pages').get(savedKey(name))
+        read.onsuccess = () => resolve(read.result)
+        read.onerror = () => reject(read.error)
+      })
+      return row?.shape === SAVED_SHAPE ? row.data : null
+    } catch (_) { return null }
+  }
+  async function remember(name, data) {
+    try {
+      const db = await saved()
+      const write = db.transaction('pages', 'readwrite')
+      write.objectStore('pages').put({shape: SAVED_SHAPE, saved: Date.now(), data}, savedKey(name))
+      await new Promise(resolve => { write.oncomplete = write.onerror = write.onabort = resolve })
+    } catch (_) {}
+  }
+  globalThis.PokeSim = {base, adventureId, spriteVersion, sprite, recall, remember, url, fetch: gameFetch, api: request, session, setSpeed}
   if (!base || !adventureId) return
   document.addEventListener('DOMContentLoaded', async () => {
     const switcher = document.querySelector('#adventure-switcher')

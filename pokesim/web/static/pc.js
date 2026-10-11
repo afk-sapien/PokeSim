@@ -7,6 +7,10 @@ let party = []
 let busy = false
 let signature = ''
 let residents = []
+// True once the server has answered. Until then the page may show the last saved PC,
+// which is for looking only: nothing that acts is offered from it.
+let fresh = false
+let latest = null
 $('#pc-rating').value = ['1', '2', '3', '4', '3plus', 'unknown', 'shiny'].includes(params.get('rating')) ? params.get('rating') : 'all'
 let viewQueries = {box: '', all: ''}
 $('#pc-search').value = params.get('q') || ''
@@ -90,10 +94,30 @@ function detail(mon) {
 
 // Everything about trading lives on the Trading page. The detail only links there.
 function tradeLink(mon) {
-  if (!mon?.trade_key || mon.egg) return ''
+  if (!fresh || !mon?.trade_key || mon.egg) return ''
   return `<a class="key pc-trade-link" href="${PokeSim.base}/trading?tab=trade&mon=${encodeURIComponent(mon.trade_key)}">Trade…</a>`
 }
 
+
+function show(status) {
+  storage = status.storage
+  MonGrid.generation('pc', status.generation)
+  party = (status.party || []).map((mon) => ({...mon, box: 0, position: mon.slot}))
+}
+
+// Paint the PC as it was last seen while the fresh one loads.
+async function showSaved() {
+  const status = await PokeSim.recall?.('pc')
+  if (!status || fresh) return
+  try {
+    show(status)
+    if (followActive && storage) selectedBox = storage.active_box
+    $('#status').textContent = 'Updating…'
+    $('#connection').title = 'Showing the PC as last seen while it updates'
+    render()
+  } catch (_) { storage = null
+    party = [] }
+}
 
 async function refresh() {
   if (busy) return
@@ -102,11 +126,13 @@ async function refresh() {
     const response = await PokeSim.fetch('/api/pokedex/status?view=pc', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
     const status = await response.json()
-    storage = status.storage
-    MonGrid.generation('pc', status.generation)
-    party = (status.party || []).map((mon) => ({...mon, box: 0, position: mon.slot}))
+    const first = !fresh
+    fresh = true
+    latest = status
+    show(status)
     if (followActive && storage) { selectedBox = storage.active_box
       followActive = false }
+    if (first) PokeSim.remember?.('pc', status)
     $('#status').textContent = status.started ? 'Running' : 'Waiting'
     $('#connection').title = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
     $('#connection').classList.remove('is-offline')
@@ -168,5 +194,10 @@ $('#pc-detail').onclick = (event) => {
   const rect = event.target.getBoundingClientRect()
   if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) event.target.close()
 }
+showSaved()
 refresh()
 setInterval(() => { if (!document.hidden) refresh() }, 5000)
+// Keep the newest PC for the next visit, written once as the page is left.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && latest) PokeSim.remember?.('pc', latest)
+})
