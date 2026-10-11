@@ -1,4 +1,4 @@
-"""Use visited Fly destinations when they shorten a reachable walking route."""
+"""Use visited Fly destinations when they shorten the walking route, or when no walking route exists."""
 from dataclasses import replace
 
 from .menus import Fly
@@ -25,14 +25,15 @@ def shortcut(policy, snapshot, mem, destination):
     else:
         route = nav.regions.route(snapshot, destination, targets, cut=cut, surf=surf)
         choices = []
-        if route is not None and len(route) >= 6:
+        # No walking route (a returned Sudowoodo blocking Route 36, say) still leaves the Fly points.
+        if route is None or len(route) >= 6:
             for index, point in enumerate(data.fly_points):
                 mid = point['map']
                 if mid == snapshot.map or data.maps[mid]['region'] != current['region'] or not visited & 1 << point['spawn']:
                     continue
                 landing = replace(snapshot, map=mid, x=point['x'], y=point['y'])
                 remainder = nav.regions.route(landing, destination, targets, cut=cut, surf=surf)
-                if remainder is not None and len(remainder) + 4 < len(route):
+                if remainder is not None and (route is None or len(remainder) + 4 < len(route)):
                     choices.append((len(remainder), index, mid))
         selected = min(choices)[1:] if choices else None
         nav.flight_cache = token, selected
