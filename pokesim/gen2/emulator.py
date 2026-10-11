@@ -18,7 +18,7 @@ from ..events import HIGH
 from ..experimental.gen2 import identify
 from ..play_clock import PlayClock
 from ..stalls import StallWatch
-from .core import boot
+from .core import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
 from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
 from .policy import Action, Policy
@@ -26,24 +26,35 @@ from .ram import BADGES, read_snapshot
 
 log = logging.getLogger('pokesim.gen2')
 
+# The furthest the cartridge clock has counted, in seconds since its zero point (see core.clock_elapsed).
+CLOCK_KEY = 'gen2-clock-v1'
+
 
 WEEKDAYS = ('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
-TIME_OF_DAY = ('Morning', 'Day', 'Night')
+# pret engine/overworld/time.asm GetTimeOfDay: MORN_HOUR 4, DAY_HOUR 10, NITE_HOUR 18.
+MORNING_HOUR, DAY_HOUR, NIGHT_HOUR = 4, 10, 18
+
+
+def period(hour):
+    """The Gen II part of the day: Morning 4:00-9:59, Day 10:00-17:59, Night 18:00-3:59."""
+    return 'Morning' if MORNING_HOUR <= hour < DAY_HOUR else 'Day' if DAY_HOUR <= hour < NIGHT_HOUR else 'Night'
 
 
 def game_clock(memory, data):
-    """The cartridge clock as the game last showed it: weekday, time and part of the day."""
+    """The in-game clock as the game last worked it out: weekday, hour, minute and part of the day.
+
+    The game copies the cartridge clock plus its own saved offsets into these bytes as it runs,
+    so this is a few memory reads with no emulator stepping.
+    """
     from .ram import Memory
     try:
         mem = Memory(memory, data)
-        day, period = mem.byte('wCurDay'), mem.byte('wTimeOfDay')
-        hours, minutes = mem.byte('hHours'), mem.byte('hMinutes')
+        day, hour, minute = mem.byte('wCurDay'), mem.byte('hHours'), mem.byte('hMinutes')
     except (KeyError, IndexError, TypeError):
         return None
-    if hours > 23 or minutes > 59:
+    if hour > 23 or minute > 59:
         return None
-    return {'weekday': WEEKDAYS[day % 7], 'hours': hours, 'minutes': minutes,
-            'time_of_day': TIME_OF_DAY[period] if period < len(TIME_OF_DAY) else None}
+    return {'weekday': WEEKDAYS[day % 7], 'hour': hour, 'minute': minute, 'period': period(hour)}
 
 
 def solid(image):
@@ -184,9 +195,42 @@ class Emulator:
     def _boot(self):
         # Save states own both SRAM and RTC. Shared ROM assets never own save files.
         pb = boot(str(self.rom), sound=True)
+        # Game time from the first frame. The reading belongs to no adventure yet: a loaded state
+        # or _sync_clock sets it before the policy plays.
+        follow_game_time(pb)
+        self._clock_live = False
         self.tracker.attach(pb)
         self.steps.attach(pb)
         return pb
+
+    def _remember_clock(self, elapsed):
+        """Keep the furthest clock reading, so no restart, reload or trade can go back before it."""
+        latest = (self.store.get(CLOCK_KEY) or {}).get('elapsed')
+        if latest is None or elapsed > latest:
+            self.store.set(CLOCK_KEY, {'elapsed': elapsed})
+
+    def _clock_reading(self):
+        """Seconds the running cartridge clock shows, or None before it belongs to an adventure."""
+        return clock_elapsed(self.pb) if getattr(self, '_clock_live', False) else None
+
+    def _sync_clock(self, metadata=None, running=None, fresh=False):
+        """Lock the cartridge clock to game time at the furthest reading this adventure has seen.
+
+        Gen II reads a clock earlier than its saved time as a reset, so the clock resumes from the
+        largest of the stored reading, the checkpoint's own reading and the reading just before a
+        reload. ``fresh`` adds what the state shows on the host clock, for a trade result made a
+        moment ago on unlocked copies. A save from before game time existed has none of these and
+        keeps the reading it had on the host clock, which then moves on with frames.
+        """
+        stored = (self.store.get(CLOCK_KEY) or {}).get('elapsed')
+        candidates = [value for value in (stored, (metadata or {}).get('rtc_elapsed'), running)
+                      if isinstance(value, (int, float))]
+        if fresh or not candidates:
+            candidates.append(host_elapsed(self.pb))
+        elapsed = follow_game_time(self.pb, max(candidates))
+        self._clock_live = True
+        self._remember_clock(elapsed)
+        return elapsed
 
     def start(self):
         errors = []
@@ -201,6 +245,7 @@ class Emulator:
             if errors:
                 self.pb.stop(save=False)
                 raise ValueError('No compatible Gen II autosave could be restored') from errors[-1]
+            self._sync_clock()
         from .. import rewards
         rewards.initialize(self.store, self.snapshot.hall_of_fame_count if self.snapshot else 0)
         self._clear_stale_hold()
@@ -284,6 +329,9 @@ class Emulator:
             self.frame_cond.notify_all()
 
     def _state_bytes(self):
+        # The raw state keeps only the clock's zero point. Rebasing it on the host clock first means
+        # an unlocked copy (a cable session or a save export) reads this game time or later.
+        rebase_to_host(self.pb)
         output = io.BytesIO()
         self.pb.save_state(output)
         return output.getvalue()
@@ -295,11 +343,15 @@ class Emulator:
                 'gen2_history': self.history, 'legendary_recovery': self.legendary_recovery.state_dict(),
                 'trade_id': self.store.get('trade_barrier'),
                 'reward_id': self.store.get('custom-reward-barrier-v1'),
+                'rtc_elapsed': clock_elapsed(self.pb),
                 'settled': self.policy.menu is None and not getattr(self.policy, 'backing_out', False)}
 
     def _autosave(self, trade_prepare=False):
         if self.store.get('trade_hold') and not trade_prepare:
             return
+        # Remember the clock even when no checkpoint follows, so a crash never resumes before it.
+        if getattr(self, '_clock_live', False):
+            self._remember_clock(clock_elapsed(self.pb))
         if self.snapshot is not None and not self.snapshot.valid:
             return
         # A save taken while backing out of a screen no plan owns would only bring the run back there.
@@ -340,8 +392,17 @@ class Emulator:
         if metadata is None:
             raise ValueError('Gen II checkpoints require cartridge identity metadata')
         validate_runtime(metadata)
+        running = self._clock_reading()
+        if running is not None:
+            self._remember_clock(running)
+        hold = self.store.get('trade_hold') or {}
+        # A committed trade result is loaded once while its hold is still 'prepared'.
+        fresh = (Path(path).name.startswith('auto-v1-link-') and hold.get('phase') == 'prepared'
+                 and metadata.get('trade_id') == hold.get('id'))
         with open_state(path) as source:
             self.pb.load_state(source)
+        # A raw state restores the clock's zero point but not the lock, so lock again at the furthest reading.
+        self._sync_clock(metadata, running, fresh=fresh)
         for button in BUTTONS:
             self.pb.button_release(button)
         self.frame = metadata.get('frame', 0)
@@ -573,6 +634,7 @@ class Emulator:
             log.warning('%s and no save state to go back to, power-cycling', why)
             self.pb.stop(save=False)
             self.pb = self._boot()
+            self._sync_clock()
             self.options_applied = False
             self.previous = self.snapshot = None
             self.audio.clear()
@@ -729,7 +791,10 @@ class Emulator:
             self.statistics.records.reset()
             from .legendary import Recovery
             self.legendary_recovery = Recovery()
+            # A new run starts a new cartridge clock.
+            self.store.set(CLOCK_KEY, None)
             self.pb = self._boot()
+            self._sync_clock()
             self.options_applied = False
             self.frame = 0
             self.previous = self.snapshot = None
@@ -822,7 +887,7 @@ class Emulator:
                 'health': self.health(), 'paused': self.paused, 'manual_mode': self.manual_mode, 'speed': self.speed,
                 'policy': self.policy.describe(), 'strategy': self.policy.details(), 'frame': self.frame,
                 'game': self.snapshot.to_dict() if self.snapshot else None, 'rom': self.rom_note,
-                'play_clock': self.play_clock.status(), 'game_clock': getattr(self, 'game_clock', None), 'performance': {'frames': self.executed_frames, 'sampled_at': time.monotonic()},
+                'play_clock': self.play_clock.status(), 'clock': getattr(self, 'game_clock', None), 'performance': {'frames': self.executed_frames, 'sampled_at': time.monotonic()},
                 'uptime': int(time.time() - self.started_at), 'stuck_seconds': int(time.time() - self.stuck_since),
                 'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,
                 'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,

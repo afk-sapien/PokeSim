@@ -116,7 +116,11 @@ def test_gen2_game_clock_reads_weekday_time_and_period():
             return memory[key]
 
     clock = game_clock(Banked(), SimpleNamespace(symbols=symbols))
-    assert clock == {'weekday': 'Tuesday', 'hours': 8, 'minutes': 5, 'time_of_day': 'Morning'}
+    assert clock == {'weekday': 'Tuesday', 'hour': 8, 'minute': 5, 'period': 'Morning'}
+    # pret GetTimeOfDay boundaries: Morning from 4:00, Day from 10:00, Night from 18:00.
+    for hour, name in [(3, 'Night'), (4, 'Morning'), (9, 'Morning'), (10, 'Day'), (17, 'Day'), (18, 'Night'), (23, 'Night')]:
+        memory[0xFF90] = hour
+        assert game_clock(Banked(), SimpleNamespace(symbols=symbols))['period'] == name
     memory[0xFF90] = 30
     assert game_clock(Banked(), SimpleNamespace(symbols=symbols)) is None
 

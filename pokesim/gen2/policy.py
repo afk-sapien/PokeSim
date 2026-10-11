@@ -647,7 +647,8 @@ class Policy:
     def idle(self, snapshot):
         """Whether the run stands on its clock-wait tile, the moment between two patrol steps.
 
-        The emulator does not treat this pause as a stuck run, since the wall-clock day cannot be hurried.
+        The emulator does not treat this pause as a stuck run, since the clock-wait only ends when enough
+        game time has passed.
         """
         goal = self.goal
         return (self.waiting(snapshot) and not snapshot.in_battle

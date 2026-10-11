@@ -39,11 +39,12 @@ the 251-species Pokédex, with breeding and held items. Generation II runs on th
 emulator (PyBoy RS through PokeSim Core) only. There is no PyBoy fallback: 0.5.0 does not
 depend on PyBoy, and 0.4.x, which does, has no Generation II support.
 
-The cartridges contain a real-time clock. In the app, a Generation II adventure uses the host
-clock and keeps the cartridge's clock with its saves, so day and night, daily events and
-Day Care behave as they would on a console left switched on. The clock is locked to a fixed
-instant only by the verification tools and by checkpoints made for them, so that runs are
-reproducible. Exporting a Generation II adventure downloads a `.zip` holding the 32 KiB `.sav` and its ten-byte
+The cartridges contain a real-time clock. In the app, a Generation II adventure runs that clock
+on game time: it advances with emulated frames, so at 1x it keeps pace with a console and at
+Max the day, night and weekday arrive as fast as the run plays. It never runs backward, even
+after a restart, a save reload, a trade or a crash. The Live page shows the in-game weekday,
+time and period. The verification tools and the checkpoints made for them lock the clock to a
+fixed instant so that runs are reproducible. Exporting a Generation II adventure downloads a `.zip` holding the 32 KiB `.sav` and its ten-byte
 `.rtc` clock file with the same base name. Put both next to the ROM, since a save without its clock
 is read as having lost the time. Generation I exports remain a single `.sav`. A checkpoint saved with a
 locked clock is refused by 0.4.x.

@@ -227,12 +227,20 @@ async function refreshState() {
     set('#playtime', 'textContent', time.split(':').slice(0, 2).map((v) => v.padStart(2, '0')).join(':') + (clock?.lower_bound ? '+' : ''))
     set('#playtime', 'title', clock?.lower_bound ? 'At least this much simulated playtime. The cartridge had already reached its limit when app tracking began.' : 'Simulated playtime tracked by the app. Pauses and server downtime are excluded.')
     set('#clock-note', 'textContent', clock?.lower_bound ? 'Earlier time hit the game limit' : '')
-    // Gold, Silver and Crystal keep a real-time clock that decides what appears and when.
-    const cartridge = state.game_clock
+    // Gold, Silver and Crystal keep a cartridge clock that decides what appears and when. It runs on
+    // game time, so it moves at the simulation's speed. Gen I has none and the slot stays hidden.
+    const cartridge = state.clock
     set('#game-clock', 'hidden', !cartridge)
     if (cartridge) {
-      set('#game-clock', 'textContent', `${cartridge.weekday} ${String(cartridge.hours).padStart(2, '0')}:${String(cartridge.minutes).padStart(2, '0')}${cartridge.time_of_day ? ` · ${cartridge.time_of_day}` : ''}`)
-      set('#game-clock', 'title', 'The in-game clock')
+      const day = cartridge.weekday.slice(0, 3)
+      const shown = `${String(cartridge.hour).padStart(2, '0')}:${String(cartridge.minute).padStart(2, '0')}`
+      set('#game-clock-day', 'textContent', day)
+      set('#game-clock-time', 'textContent', shown)
+      set('#game-clock-period', 'textContent', cartridge.period || '')
+      // A phone shows the game's own short words (MORN, DAY, NITE) so the place name keeps its room.
+      const period = $('#game-clock-period')
+      if (period) period.dataset.short = ({ Morning: 'Morn', Night: 'Nite' })[cartridge.period] || cartridge.period || ''
+      set('#game-clock', 'title', `In-game clock: ${cartridge.weekday} ${shown}, ${cartridge.period}. It runs on game time, so it moves at the simulation's speed.`)
     }
     set('#trainer-name', 'textContent', game.player_name || 'A new trainer')
     set('#trainer-rival', 'textContent', game.rival_name ? `Rival: ${game.rival_name}` : 'A new story begins')

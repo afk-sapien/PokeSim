@@ -640,6 +640,24 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   color: var(--bezel-ink);
   font-variant-numeric: tabular-nums;
 }
+/* The Gen II in-game clock stacks inside the place line, so it never adds a row and the place name
+   keeps its room: day and time over the period on a wide screen, one per line on a phone. */
+.bezel-head .game-clock {
+  flex: none;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 0.5em;
+  row-gap: 3px;
+  justify-items: end;
+  font: var(--f-micro) / 1 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bezel-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bezel-head .game-clock[hidden] { display: none; }
+.bezel-head #game-clock-period { grid-column: 1 / -1; }
 .bezel-key {
   display: grid;
   place-items: center;
@@ -1375,6 +1393,11 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   /* The blinking lamp still says live, and the place name gets the word's room. */
   .bezel-head .on-air-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .bezel-head .coords { font-size: var(--f-micro); letter-spacing: 0; }
+  /* On a phone the clock uses the game's short period words and takes the coordinates' place. */
+  .bezel-head .game-clock { grid-template-columns: auto; row-gap: 0; line-height: 10px; letter-spacing: 0; }
+  .bezel-head #game-clock-period { font-size: 0; }
+  .bezel-head #game-clock-period:not(:empty)::before { content: attr(data-short); font-size: var(--f-micro); }
+  .bezel-head:has(.game-clock:not([hidden])) .coords { display: none; }
 }
 @media (max-width: 760px) {
   .bezel-foot { flex-wrap: wrap; gap: var(--s1) var(--s3); }

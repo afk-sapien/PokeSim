@@ -494,6 +494,17 @@ the clock shows a `+` and a note because the earlier total is a lower bound. The
 new time from that point. The cartridge display and older journal times stay unchanged.
 The state API exposes the app clock separately as `play_clock`.
 
+Gold, Silver and Crystal also have the cartridge clock that decides day and night, weekdays
+and daily events. It runs on game time: each emulated frame advances it by one Game Boy
+frame (about 1/59.7 s), so one in-game day is about 5.16 million frames. That is 24 hours
+at 1x and much less at faster speeds, and a wait for a weekday or night ends as fast as the
+run plays. The clock never goes backward: the app keeps the latest reading and resumes from
+it after a restart of the app, a crash, a save reload, a Cable Club or Time Capsule trade and
+a backup import. Each side of a trade keeps its own clock. Existing saves start from the
+reading they had when they were first opened this way. The Live page shows the in-game
+weekday, time and period (Morning 4:00 to 9:59, Day 10:00 to 17:59, Night 18:00 to 3:59) on
+the place line above the screen, and the state API exposes it as `clock`.
+
 The searchable Pokédex separates link-trade and event requirements from available
 sources. “Possible here” includes future evolutions and choices, rather than claiming
 that every listed entry is immediately reachable or that all mutually exclusive

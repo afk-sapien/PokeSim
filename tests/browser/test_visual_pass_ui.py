@@ -1,4 +1,6 @@
 """Gold, Silver and Crystal details on the live and stats pages, at phone width."""
+import os
+
 from test_flows import expect
 
 
@@ -11,7 +13,7 @@ def gen2_state(status):
                'type_names': [], 'status_label': 'Egg'}
         return {**state, 'build': {'revision': '95f4a11' + '0' * 33},
                 'game': {**game, 'party': [partner, egg], 'map_name': 'Azalea Pokémon Center 1F', 'dex_total': 251},
-                'game_clock': {'weekday': 'Tuesday', 'hours': 8, 'minutes': 14, 'time_of_day': 'Morning'},
+                'clock': {'weekday': 'Tuesday', 'hour': 8, 'minute': 14, 'period': 'Morning'},
                 'strategy': {**state['strategy'], 'objective': {'key': 'daycare', 'label': 'Visit the Day Care',
                                                                 'reason': 'Visit the Day Care'}}}
     return patched
@@ -23,7 +25,9 @@ def test_gen2_live_page_at_phone_width(page, game, monkeypatch):
     page.set_viewport_size({'width': 390, 'height': 844})
     page.goto(url + '/')
     expect(page.locator('#objective')).to_have_text('Visit the Day Care')
-    expect(page.locator('#game-clock')).to_have_text('Tuesday 08:14 · Morning')
+    expect(page.locator('#game-clock-day')).to_have_text('Tue')
+    expect(page.locator('#game-clock-time')).to_have_text('08:14')
+    expect(page.locator('#game-clock-period')).to_have_text('Morning')
     expect(page.locator('#app-version')).to_have_text('vbrowser-test · 95f4a11')
     party = page.locator('#party')
     expect(party).to_contain_text('SHRIMPDESK')
@@ -35,6 +39,34 @@ def test_gen2_live_page_at_phone_width(page, game, monkeypatch):
     expect(heading).to_have_text('Azalea Pokémon Center 1F')
     assert heading.evaluate('node => node.scrollWidth <= node.clientWidth')
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+
+
+def test_game_clock_shares_the_live_heading_row(page, game, monkeypatch):
+    url, _, emu, _ = game
+    heights = {}
+    for width, height in ((1280, 900), (390, 844)):
+        page.set_viewport_size({'width': width, 'height': height})
+        page.goto(url + '/')
+        expect(page.locator('#live-heading')).not_to_be_empty()
+        expect(page.locator('#game-clock')).to_be_hidden()
+        heights[width] = page.locator('.bezel-head').evaluate('node => node.getBoundingClientRect().height')
+    plain = emu.status
+    monkeypatch.setattr(emu, 'status', gen2_state(plain))
+    for width, height in ((1280, 900), (390, 844)):
+        page.set_viewport_size({'width': width, 'height': height})
+        page.goto(url + '/')
+        clock = page.locator('#game-clock')
+        expect(clock).to_be_visible()
+        expect(page.locator('#game-clock-day')).to_have_text('Tue')
+        expect(page.locator('#game-clock-time')).to_have_text('08:14')
+        head = page.locator('.bezel-head')
+        assert head.evaluate('node => node.getBoundingClientRect().height') <= heights[width] + 1
+        box, heading = clock.bounding_box(), page.locator('#live-heading').bounding_box()
+        assert box['y'] < heading['y'] + heading['height'] and heading['y'] < box['y'] + box['height']
+        assert page.locator('#live-heading').evaluate('node => node.scrollWidth <= node.clientWidth')
+        assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+        if os.environ.get('SHOT_DIR'):
+            page.screenshot(path=f"{os.environ['SHOT_DIR']}/live-{width}.png")
 
 
 def test_stats_page_hides_the_marathon_without_one(page, game):

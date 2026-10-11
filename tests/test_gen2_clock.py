@@ -180,3 +180,168 @@ def test_source_info_never_lets_git_read_the_terminal(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, 'check_output', fake)
     assert build_info.source_info(tmp_path)['revision'] == 'a' * 40
     assert len(seen) == 2 and all(options['stdin'] is subprocess.DEVNULL for options in seen)
+
+
+# Game time: live adventures lock the cartridge clock to emulated frames and never let it go back.
+
+class FakeRtc(FakeClock):
+    def __init__(self, zero=1000.0, clock=1500.0):
+        super().__init__()
+        self.state = {'timezero': zero, 'clock': clock, 'locked': False, 'follow_frames': False}
+
+    def rtc_state(self):
+        return dict(self.state)
+
+    def lock_clock(self, at, follow_frames=False):
+        super().lock_clock(at, follow_frames)
+        self.state.update(clock=at, locked=True, follow_frames=follow_frames)
+
+
+def test_follow_game_time_locks_at_the_current_reading_with_frames():
+    emulator = FakeRtc()
+    assert core.follow_game_time(emulator) == 500.0
+    assert emulator.calls == [('lock', 1500.0, True)]
+    assert core.clock_elapsed(emulator) == 500.0
+
+
+def test_follow_game_time_never_rounds_below_the_target():
+    emulator = FakeRtc(zero=1_791_759_621.6996284)
+    for target in (0.1, 1234.5678, 86_400 * 3 + 0.3):
+        core.follow_game_time(emulator, target)
+        assert core.clock_elapsed(emulator) >= target
+
+
+class Store:
+    def __init__(self, values=None):
+        self.values = dict(values or {})
+
+    def get(self, key, default=None):
+        return self.values.get(key, default)
+
+    def set(self, key, value):
+        self.values[key] = value
+
+
+def _adventure(cartridge, store=None):
+    """The clock half of a Gen II adventure: a booted cartridge, its store and the emulator's methods."""
+    from pokesim.gen2.emulator import Emulator
+    adventure = Emulator.__new__(Emulator)
+    adventure.store = store or Store()
+    adventure.rom = None
+    adventure.pb = core.boot(io.BytesIO(cartridge), sound=False)
+    core.follow_game_time(adventure.pb)
+    adventure._clock_live = False
+    return adventure
+
+
+def _run(emulator, frames):
+    for _ in range(frames):
+        emulator.tick()
+
+
+def test_real_boot_locks_at_the_current_reading_and_follows_frames(cartridge):
+    emulator = core.boot(io.BytesIO(cartridge), sound=False)
+    try:
+        before = core.host_elapsed(emulator)
+        locked_at = core.follow_game_time(emulator)
+        state = emulator.rtc_state()
+        assert state['locked'] and state['follow_frames']
+        assert before <= locked_at <= before + 1
+        time.sleep(0.2)
+        assert core.clock_elapsed(emulator) == pytest.approx(locked_at)  # wall time does not move it
+        # Core counts emulated cycles, so a tick with the screen off (the boot logo) can count more
+        # than one frame, as a console would. With the screen on, one tick is one frame.
+        _run(emulator, 300)
+        warm = core.clock_elapsed(emulator)
+        assert warm >= locked_at + 300 * core.SECONDS_PER_FRAME
+        _run(emulator, 600)
+        assert core.clock_elapsed(emulator) == pytest.approx(warm + 600 * core.SECONDS_PER_FRAME, abs=1e-6)
+    finally:
+        emulator.stop(save=False)
+
+
+def test_real_restart_resumes_from_the_stored_reading_not_wall_time(cartridge):
+    from pokesim.gen2.emulator import CLOCK_KEY
+    store = Store({CLOCK_KEY: {'elapsed': 3 * 86_400 + 7_200.0}})
+    adventure = _adventure(cartridge, store)
+    try:
+        assert adventure._sync_clock() == 3 * 86_400 + 7_200.0
+        registers = adventure.pb.rtc_registers()
+        assert (registers['days'], registers['hours']) == (3, 2)
+        _run(adventure.pb, 60)
+        adventure._remember_clock(core.clock_elapsed(adventure.pb))
+        assert store.get(CLOCK_KEY)['elapsed'] > 3 * 86_400 + 7_200.0
+    finally:
+        adventure.pb.stop(save=False)
+
+
+def test_real_reload_of_an_older_state_never_goes_back(cartridge):
+    from pokesim.gen2.emulator import CLOCK_KEY
+    adventure = _adventure(cartridge)
+    try:
+        adventure._sync_clock(running=86_400.0)
+        old = adventure._state_bytes()
+        old_reading = core.clock_elapsed(adventure.pb)
+        _run(adventure.pb, 3_000)
+        running = adventure._clock_reading()
+        assert running > old_reading
+        adventure._remember_clock(running)
+        adventure.pb.load_state(io.BytesIO(old))
+        adventure._sync_clock({'rtc_elapsed': old_reading}, running)
+        assert core.clock_elapsed(adventure.pb) >= running
+        assert adventure.store.get(CLOCK_KEY)['elapsed'] >= running
+    finally:
+        adventure.pb.stop(save=False)
+
+
+def test_real_cable_copy_of_a_saved_state_reads_at_least_game_time(cartridge):
+    # Cable sides, exports and verifiers open a raw state with an unlocked clock. Game time can be
+    # far ahead of the host clock after a fast run, and the copy must still not read less.
+    adventure = _adventure(cartridge)
+    try:
+        ahead = 9 * 86_400 + 1_234.5
+        adventure._sync_clock(running=ahead)
+        state = adventure._state_bytes()
+        assert core.clock_elapsed(adventure.pb) == pytest.approx(ahead)  # saving keeps the reading
+        side = core.boot(io.BytesIO(cartridge), sound=False)
+        try:
+            side.load_state(io.BytesIO(state))
+            assert not side.clock_locked
+            assert ahead <= core.host_elapsed(side) <= ahead + 5
+            registers = side.rtc_registers()
+            assert registers['days'] == 9
+        finally:
+            side.stop(save=False)
+    finally:
+        adventure.pb.stop(save=False)
+
+
+def test_real_trade_result_keeps_its_own_later_reading(cartridge):
+    # A trade result was made on unlocked copies, so its host reading is the game time at the start
+    # of the session plus the session's length. Both sides keep their own clocks this way.
+    adventure = _adventure(cartridge)
+    try:
+        adventure._sync_clock(running=50_000.0)
+        state = adventure._state_bytes()
+        adventure.pb.load_state(io.BytesIO(state))
+        time.sleep(0.3)
+        assert adventure._sync_clock({'rtc_elapsed': 50_000.0}, 50_000.0, fresh=True) >= 50_000.3
+    finally:
+        adventure.pb.stop(save=False)
+
+
+def test_real_existing_save_migrates_from_its_current_reading(cartridge):
+    # A save from before game time has no stored reading and no rtc_elapsed in its manifest. It
+    # starts from what it shows on the host clock, and from then on moves only with frames.
+    from pokesim.gen2.emulator import CLOCK_KEY
+    adventure = _adventure(cartridge)
+    try:
+        adventure.pb.set_rtc_timezero(time.time() - 40 * 86_400)
+        adventure._sync_clock({'frame': 10})
+        reading = core.clock_elapsed(adventure.pb)
+        assert 40 * 86_400 <= reading <= 40 * 86_400 + 5
+        assert adventure.store.get(CLOCK_KEY)['elapsed'] == pytest.approx(reading)
+        time.sleep(0.2)
+        assert core.clock_elapsed(adventure.pb) == pytest.approx(reading)
+    finally:
+        adventure.pb.stop(save=False)

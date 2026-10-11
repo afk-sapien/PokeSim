@@ -14,7 +14,7 @@ def score(mem, prefix):
 
 
 # The contest runs on Tuesday, Thursday and Saturday by the cartridge clock (wCurDay counts from Sunday).
-# That clock follows wall time, not simulation speed, so a skipped day can be days of real time away.
+# That clock follows game time, so a skipped day comes as fast as the run plays (about 5.2 million frames a day).
 CONTEST_DAYS = (2, 4, 6)
 
 

@@ -15,7 +15,8 @@ This release changes the emulator under every adventure and adds Yellow, Gold, S
   trade with Red and Blue over the Cable Club and with Gold, Silver and Crystal through the
   Time Capsule. A new Yellow game was played to the Champion on the Rust backend, and both
   kinds of trade were completed in the Library.
-- **Real-time clock.** Each Gen II adventure keeps its cartridge clock. See the
+- **Cartridge clock on game time.** Each Gen II adventure keeps its cartridge clock, which runs at
+  the simulation's speed and never goes backward. The Live page shows the in-game day and time. See the
   [Gen II notes](gen2-exploration.md) for what is verified and what is not.
 - **Fixes carried over.** The 0.4.20 PP menu fix, a Game Corner prize-menu detection fix, and shiny protection
   after Transform (the wild Pokémon's original DVs are now read by Core).

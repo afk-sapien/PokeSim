@@ -12,8 +12,9 @@ def matching_time(value, current):
 
 
 def waiting_label(policy, snapshot, mem, current_time):
-    """Say what the idle collection is waiting for. The cartridge clock follows wall time, so a
-    weekday or time of day that is not here yet can be hours or days of real time away."""
+    """Say what the idle collection is waiting for. The cartridge clock follows game time, so a
+    weekday or time of day that is not here yet comes as fast as the run plays: one in-game day is
+    about 5.2 million frames, 24 hours at 1x and well under an hour at Max."""
     from .contest import waiting_for_day
     label = waiting_for_day(policy, snapshot, mem)
     if label:
@@ -413,7 +414,7 @@ def patrol_label(label):
 def patrol(policy, snapshot, Goal, label):
     """Walk between the Route 29 grass tiles while waiting for a weekday or time of day.
 
-    The cartridge clock follows wall time, so a wait can last days of real time. Standing still
+    The cartridge clock follows game time, so a wait lasts up to a few million frames. Standing still
     for that long looks like a frozen run and does nothing, while walking the grass keeps the
     screen moving and battles wild Pokémon until the plan finds real work again.
     """

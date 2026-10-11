@@ -4,6 +4,8 @@ Gold, Silver and Crystal cartridges set the CGB flag in their header, so the
 Core backend enables Color hardware from the ROM itself. Their MBC3 chip has a
 real-time clock. Core 0.2.0 exposes it (``rtc_file``, ``export_rtc``,
 ``lock_clock``), and this module is the only place that talks to those calls.
+Live adventures run the clock on game time: it is locked to emulated frames, so a fast run
+reaches the next hour, day and weekday as fast as it plays (see ``follow_game_time``).
 If an older Core is installed anyway, the first clock call raises
 CoreCapabilityError instead of silently restarting the cartridge clock,
 because Gen II treats a clock earlier than its saved time as a reset.
@@ -11,6 +13,8 @@ because Gen II treats a clock earlier than its saved time as a reset.
 from __future__ import annotations
 
 import io
+import math
+import time
 
 from pokesim_core.emulator import Emulator as CoreEmulator
 
@@ -96,3 +100,59 @@ def stop_with_clock(emulator, save_stream, clock_stream):
 def export_clock(emulator):
     """The ten-byte clock file of a running emulator, leaving it open."""
     return _clock_call(_method(emulator, 'export_rtc'))
+
+
+# Core counts 4389/262144 seconds per completed frame, the Game Boy's real frame length.
+SECONDS_PER_FRAME = 4389 / 262144
+
+
+def clock_elapsed(emulator):
+    """Seconds the cartridge clock has counted: its current reading minus its zero point.
+
+    This is what the game sees (the RTC days, hours, minutes and seconds). Gen II adds its own
+    saved offsets to it, so this number going down is a clock going backward.
+    """
+    state = _clock_call(_method(emulator, 'rtc_state'))
+    return float(state['clock']) - float(state['timezero'])
+
+
+def host_elapsed(emulator):
+    """Seconds the clock would show on the host clock now, as an unlocked cartridge reads it."""
+    state = _clock_call(_method(emulator, 'rtc_state'))
+    return time.time() - float(state['timezero'])
+
+
+def follow_game_time(emulator, elapsed=None):
+    """Lock the cartridge clock to emulated frames at ``elapsed`` seconds, by default its reading now.
+
+    From then on the clock moves only as frames run, so a run at 8x speed passes in-game hours
+    eight times as fast and a paused run stops the clock. Returns the elapsed seconds it locked at.
+    """
+    state = _clock_call(_method(emulator, 'rtc_state'))
+    zero = float(state['timezero'])
+    target = float(state['clock']) - zero if elapsed is None else float(elapsed)
+    _clock_call(_method(emulator, 'lock_clock'), at=_instant(zero, target), follow_frames=True)
+    return target
+
+
+def _instant(zero, elapsed):
+    """The instant that reads at least ``elapsed`` against ``zero``, never a rounding step less."""
+    instant = zero + elapsed
+    while instant - zero < elapsed:
+        instant = math.nextafter(instant, math.inf)
+    return instant
+
+
+def rebase_to_host(emulator):
+    """Keep the reading but move the zero point so the host clock now shows the same time.
+
+    A raw save state carries only the zero point. Anything that later opens it with an unlocked
+    clock (a cable session, a save export, a check of a trade result) reads host time against that
+    zero point. After this call that reading is the game time at the save plus the real time since,
+    never less, so no copy of the cartridge ever sees its clock run backward.
+    """
+    elapsed = clock_elapsed(emulator)
+    zero = time.time() - elapsed
+    _clock_call(_method(emulator, 'set_rtc_timezero'), zero)
+    _clock_call(_method(emulator, 'lock_clock'), at=_instant(zero, elapsed), follow_frames=True)
+    return elapsed
