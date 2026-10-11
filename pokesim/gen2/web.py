@@ -90,7 +90,8 @@ def dex_plan(game, collection, data):
                     collection.get('npc_trades', ()))
 
 
-def live_status(game, collection=None, *, data=None, **kwargs):
+def live_status(game, collection=None, *, data=None, plan=True, **kwargs):
+    """The Pokédex, PC and Trading payload. ``plan=False`` skips the per-species Pokédex plan."""
     collection = collection or {}
     game = game or {}
 
@@ -107,8 +108,8 @@ def live_status(game, collection=None, *, data=None, **kwargs):
     storage = game.get('storage')
     if storage:
         storage = {**storage, 'pokemon': [rated(mon) for mon in storage.get('pokemon', [])]}
-    plan = collection.get('plan') or []
-    if not plan and data is not None and getattr(data, 'game', None) in ('gold', 'silver', 'crystal'):
+    wanted, plan = plan, collection.get('plan') or []
+    if wanted and not plan and data is not None and getattr(data, 'game', None) in ('gold', 'silver', 'crystal'):
         plan = dex_plan(game, collection, data)
     return {'started': bool(game), 'version': collection.get('version', DEFAULT_VERSION),
             'generation': 2, 'dex_total': 251, 'owned': game.get('dex_owned', []),

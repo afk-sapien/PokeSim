@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+from functools import lru_cache
+import hashlib
 import hmac
+import json
 import math
 import httpx
 from pathlib import Path
@@ -87,6 +90,20 @@ def status_summary(status):
     game = status.get('game') or {}
     return {**{key: value for key, value in status.items() if key not in ('game', 'strategy')},
             'game': {key: game[key] for key in ('map_name', 'playtime') if key in game}}
+
+
+def fast_json(payload):
+    """The same JSON FastAPI would send, without its per-value encoder walk.
+
+    The PC and Pokédex payloads hold hundreds of Pokémon, and FastAPI's generic
+    encoder takes about ten times as long as the standard library on them. Anything
+    the standard library cannot write still goes through FastAPI's encoder.
+    """
+    try:
+        body = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(',', ':'))
+    except (TypeError, ValueError):
+        return payload
+    return Response(body.encode(), media_type='application/json')
 
 
 def live_status(*args, **kwargs):
@@ -253,35 +270,54 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def trading_page():
         return page('adventure-trading.html' if base_path else 'trading.html')
 
+    @lru_cache(maxsize=8)
+    def reference(version):
+        # Species reference data never changes while the adventure runs, so it is built,
+        # and given a validator, once per version.
+        body = reference_json(version)
+        return body, '"' + hashlib.sha256(body).hexdigest()[:32] + '"'
+
     @app.get("/api/pokedex")
-    def pokedex_reference(version: str | None = Query(None)):
+    def pokedex_reference(version: str | None = Query(None), if_none_match: str | None = Header(None)):
+        if version is None and len(VERSIONS) == 1:
+            # A Gen II adventure only ever has its own cartridge's Pokédex.
+            version = DEFAULT_VERSION
         if version is None:
             collection = (emu.status().get("strategy") or {}).get("collection") or {}
             version = collection.get("version") or DEFAULT_VERSION
         if version not in VERSIONS:
             raise HTTPException(400, "Unknown game version")
-        return Response(reference_json(version), media_type="application/json")
+        body, etag = reference(version)
+        headers = {'ETag': etag, 'Cache-Control': 'private, no-cache'}
+        if if_none_match and etag in (tag.strip().removeprefix('W/') for tag in if_none_match.split(',')):
+            return Response(status_code=304, headers=headers)
+        return Response(body, media_type="application/json", headers=headers)
 
     @app.get("/api/pokedex/status")
     def pokedex_route(view: Literal['pc', 'dex'] | None = Query(None)):
-        payload = pokedex_status()
+        payload = pokedex_status(plan=view != 'pc')
         if view == 'pc':
             # The PC draws party and boxes in full but never the collection plan.
-            return {key: value for key, value in payload.items() if key != 'plan'}
+            return fast_json({key: value for key, value in payload.items() if key != 'plan'})
         if view == 'dex':
             # The Pokédex lists who holds each species, never their moves or stats.
             storage = payload.get('storage')
             if isinstance(storage, dict):
                 storage = {**storage, 'pokemon': [pick(mon, HOLDER_FIELDS) for mon in storage.get('pokemon') or []]}
-            return {**payload, 'party': [pick(mon, HOLDER_FIELDS) for mon in payload.get('party') or []],
-                    'storage': storage}
-        return payload
+            return fast_json({**payload, 'party': [pick(mon, HOLDER_FIELDS) for mon in payload.get('party') or []],
+                              'storage': storage})
+        return fast_json(payload)
 
-    def pokedex_status():
+    def pokedex_status(plan=True):
         status = emu.status()
-        payload = (gen2_live_status if gen2 else live_status)(status.get("game"), (status.get("strategy") or {}).get("collection"),
-                              league_rewards=status.get('league_rewards', {})
-                              if getattr(config, 'LEAGUE_REWARDS', False) else None)
+        league_rewards = status.get('league_rewards', {}) if getattr(config, 'LEAGUE_REWARDS', False) else None
+        if gen2:
+            # The PC and Trading pages never draw the Pokédex plan, the costliest part to build.
+            payload = gen2_live_status(status.get("game"), (status.get("strategy") or {}).get("collection"),
+                                       league_rewards=league_rewards, plan=plan)
+        else:
+            payload = live_status(status.get("game"), (status.get("strategy") or {}).get("collection"),
+                                  league_rewards=league_rewards)
         if gen2:
             from ..gen2.tracking import apply as achievements
             from ..gen2.league import apply as league_partners
@@ -295,10 +331,10 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get('/api/trading')
     def trading_status():
-        payload = pokedex_status()
+        payload = pokedex_status(plan=not gen2)
         if gen2:
             from ..gen2.trading import status
-            return slim_offers({**status(emu, payload, adventure_id), 'viewer_only': view_only()})
+            return fast_json(slim_offers({**status(emu, payload, adventure_id), 'viewer_only': view_only()}))
         from . import trading
         if base_path:
             participant = getattr(app.state, 'participant', None)

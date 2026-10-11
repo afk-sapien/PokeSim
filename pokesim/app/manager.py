@@ -242,6 +242,9 @@ def cache_policy(path, query, content_type):
     if kind == 'sprites' and content_type.startswith('image/png'):
         # Portraits may be replaced when a ROM is installed or an old pack is migrated.
         return 'private, no-cache'
+    if re.fullmatch(r'/(games|view)/[A-Za-z0-9_-]+/api/pokedex', path):
+        # Species reference data: reused only after an ETag check, which costs no rebuild.
+        return 'private, no-cache'
     if kind == 'shots':
         # Event numbers can be reused after a rollback, so ask before reusing a shot.
         return 'private, no-cache'
@@ -875,6 +878,9 @@ def create_app(manager, shutdown=lambda: None):
         headers = {'Authorization': 'Bearer ' + child.token, **({VIEWER_HEADER: '1'} if viewer else {})}
         if request.headers.get('content-type'):
             headers['Content-Type'] = request.headers['content-type']
+        if path == 'api/pokedex' and request.headers.get('if-none-match'):
+            # The species reference only changes with the cartridge, so browsers revalidate it.
+            headers['If-None-Match'] = request.headers['if-none-match']
         try:
             response = await client.send(client.build_request(request.method, target, content=body, headers=headers), stream=True)
         except httpx.HTTPError as error:
@@ -889,7 +895,7 @@ def create_app(manager, shutdown=lambda: None):
             finally:
                 await response.aclose()
         safe_headers = {key: value for key, value in response.headers.items()
-                        if key.lower() in {'content-type', 'cache-control', 'location', 'content-disposition',
+                        if key.lower() in {'content-type', 'cache-control', 'location', 'content-disposition', 'etag',
                                            'x-audio-state', 'x-audio-sequence', 'x-audio-rate', 'x-audio-speed',
                                            'x-audio-mode', 'x-audio-dropped'}}
         return StreamingResponse(stream(), status_code=response.status_code, headers=safe_headers)
