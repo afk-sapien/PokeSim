@@ -81,7 +81,7 @@
   }
 
   const sprite = (mon, url) => mon.egg ? types().eggPlate
-    : `<img loading="lazy" src="${esc(url || `${base()}/sprites/${Number(mon.dex) || 0}.png?v=rom-portraits-1`)}" alt="">`
+    : `<img loading="lazy" src="${esc(url || (globalThis.PokeSim?.sprite ? globalThis.PokeSim.sprite(mon.dex) : `${base()}/sprites/${Number(mon.dex) || 0}.png?v=rom-portraits-1`))}" alt="">`
   const place = (mon, index) => `${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || index + 1}`
 
   // One card. Options: all (show the four metrics), sprite (a portrait address from another game),

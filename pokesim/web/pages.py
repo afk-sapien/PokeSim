@@ -42,11 +42,17 @@ def template(name):
 
 
 # Red, Blue and Yellow register 151 species across eight badges. Gold and Silver override these.
+# The portrait stamp a page starts with. The library swaps in a stamp of the portraits an
+# adventure actually shows (see Assets.sprite_version); this one is always revalidated.
+SPRITE_VERSION = 'rom-portraits-1'
+SPRITE_META = '<meta name="pokesim-sprites" content="%s">'
+
 GAME_CONTEXT = {'dex_total': '151', 'region': 'Kanto', 'badge_total': '8', 'marathon_hidden': ''}
 GEN2_CONTEXT = {'dex_total': '251', 'region': 'Johto and Kanto', 'badge_total': '16', 'marathon_hidden': ' hidden'}
 
 
-def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', viewer=False, **context):
+def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', viewer=False,
+                     sprite_version=SPRITE_VERSION, **context):
     """A viewer (a /view/ link) gets the same page without library navigation or a view link."""
     navigation = view_link = ''
     if base_path and not viewer:
@@ -69,6 +75,7 @@ def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', 
         game_base=html.escape(base_path, quote=True),
         adventure_id=html.escape(adventure_id, quote=True),
         adventure_name=html.escape(adventure_name or 'This adventure', quote=True),
+        sprite_version=html.escape(sprite_version, quote=True),
         # Printed into the page, so the brandplate is its full width at first paint
         # instead of growing when app.js reads the version from the status.
         app_version=html.escape(version_label()),

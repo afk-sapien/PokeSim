@@ -281,6 +281,40 @@ def test_switch_updates_managed_image_response_and_restores_fallback(manager, mo
         assert client.get(url).content == before.content
 
 
+def test_sprite_stamp_changes_with_every_source_and_is_cached_for_a_year(manager, monkeypatch):
+    import os
+    upstream(monkeypatch)
+    manager.registry.add_rom('rom', 'sha1', 'red')
+    row = manager.registry.create('Red', 'rom', {}, identifier())
+    defaults = manager.root / 'assets' / 'sprites'
+    defaults.mkdir(parents=True)
+    (defaults / '25.png').write_bytes(b'cartridge portrait')
+    stamps = [manager.assets.sprite_version(row['id'])]
+    assert stamps[0] == manager.assets.sprite_version(row['id'])
+    packs = manager.assets.portraits
+    packs.begin()
+    packs.install()
+    stamps.append(manager.assets.sprite_version(row['id']))
+    packs.restore()
+    stamps.append(manager.assets.sprite_version(row['id']))
+    # A hand-installed portrait, then the same file replaced in place.
+    override = manager.registry.root / 'adventures' / row['id'] / 'sprites'
+    override.mkdir(parents=True, exist_ok=True)
+    (override / '25.png').write_bytes(b'mine')
+    stamps.append(manager.assets.sprite_version(row['id']))
+    (override / '25.png').write_bytes(b'mine, redrawn')
+    os.utime(override / '25.png', ns=(1, 1))
+    stamps.append(manager.assets.sprite_version(row['id']))
+    # Restoring the defaults serves the cartridge portrait again, under its old stamp.
+    assert stamps[2] == stamps[0]
+    del stamps[2]
+    assert len(set(stamps)) == len(stamps)
+    with TestClient(create_app(manager)) as client:
+        image = client.get(f'/games/{row["id"]}/sprites/25.png?v={stamps[-1]}')
+        assert image.content == b'mine, redrawn'
+        assert image.headers['cache-control'] == 'public, max-age=31536000, immutable'
+
+
 def test_shutdown_cancellation_keeps_defaults_and_activates_nothing(manager, monkeypatch):
     upstream(monkeypatch)
     packs = manager.assets.portraits

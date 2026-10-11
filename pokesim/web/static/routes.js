@@ -2,6 +2,9 @@
   const meta = name => typeof document === 'undefined' ? '' : document.querySelector?.(`meta[name="${name}"]`)?.content || ''
   const base = meta('pokesim-base')
   const adventureId = meta('pokesim-adventure')
+  // The library stamps the portraits this adventure shows, so a stamped portrait is kept for a year.
+  const spriteVersion = meta('pokesim-sprites') || 'rom-portraits-1'
+  const sprite = dex => `${base}/sprites/${Number(dex) || 0}.png?v=${encodeURIComponent(spriteVersion)}`
   let csrf = ''
   let sessionRequest = null
   const url = path => {
@@ -45,7 +48,7 @@
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({action: 'speed', value: speed}),
     })
-  globalThis.PokeSim = {base, adventureId, url, fetch: gameFetch, api: request, session, setSpeed}
+  globalThis.PokeSim = {base, adventureId, spriteVersion, sprite, url, fetch: gameFetch, api: request, session, setSpeed}
   if (!base || !adventureId) return
   document.addEventListener('DOMContentLoaded', async () => {
     const switcher = document.querySelector('#adventure-switcher')

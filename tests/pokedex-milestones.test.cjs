@@ -16,7 +16,7 @@ function view() {
   let payload = {started:true, owned:[1, 2, 3], party:[]}
   const fetch = async () => ({ok:true, json:async () => payload})
   const context = vm.createContext({document:{querySelector:element}, fetch,
-    PokeSim:{base:'', fetch}})
+    PokeSim:{base:'', sprite: dex => `/sprites/${dex}.png?v=rom-portraits-1`, fetch}})
   vm.runInContext(source.slice(0, source.indexOf("document.addEventListener('click'")), context)
   vm.runInContext("entries = [1, 2, 3].map(dex => ({dex, name:'Species ' + dex, types:['Grass']}))", context)
   return {element,

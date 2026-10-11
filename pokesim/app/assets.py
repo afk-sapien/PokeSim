@@ -1,6 +1,7 @@
 """Verified shared ROMs and reference data, independent of adventure state."""
 import hashlib
 import logging
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -12,6 +13,8 @@ from ..desktop_setup import MAX_ROM, ROM_NAMES, ensure_game_data
 from .. import game_data
 
 log = logging.getLogger(__name__)
+# Bump when extraction changes the portraits it writes for the same cartridge.
+ROM_PORTRAITS = 'rom-portraits-1'
 
 
 class Assets:
@@ -219,6 +222,35 @@ class Assets:
         if version in {'yellow', 'gold', 'silver', 'crystal'}:
             return None
         return self._contained(self.root / 'sprites', dex)
+
+    def sprite_version(self, adventure_id):
+        """A stamp for the portraits an adventure shows, used as their `?v=`.
+
+        Browsers keep a stamped portrait for a year without asking, so anything that can
+        change which image `sprite_path` answers changes the stamp: the community pack being
+        installed, switched or restored, the cartridge portraits being extracted, and
+        hand-installed images, which can be replaced in place, so their own times count.
+        """
+        version = self.registry.adventure(adventure_id)['version']
+        override = self.registry.root / 'adventures' / adventure_id / 'sprites'
+        parts = [ROM_PORTRAITS, version]
+        community = None
+        if self.registry.setting(self.portraits.setting, False) is True:
+            from .portrait_packs import VERSION_SETS
+            community = self.portraits._present().get(VERSION_SETS.get(version, version))
+        for folder in (override, self.root / 'sprites' / version, self.root / 'sprites', community):
+            try:
+                parts.append(f'{folder}:{folder.stat().st_mtime_ns}' if folder else '-')
+            except OSError:
+                parts.append('-')
+        try:
+            with os.scandir(override) as entries:
+                for entry in sorted(entries, key=lambda item: item.name):
+                    stat = entry.stat()
+                    parts.append(f'{entry.name}:{stat.st_mtime_ns}:{stat.st_size}')
+        except OSError:
+            pass
+        return 'p' + hashlib.sha256('|'.join(map(str, parts)).encode()).hexdigest()[:12]
 
     @staticmethod
     def _contained(directory, dex):

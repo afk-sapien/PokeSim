@@ -26,7 +26,7 @@ function page(status) {
     document: {querySelector: element, activeElement: element('#search'), hidden: false, addEventListener() {}},
     window: {addEventListener() {}}, location: {hash: '', pathname: '/games/red/pokedex'},
     history: {replaceState() {}}, setInterval() {},
-    PokeSim: {base: '/games/red', fetch: async path => ({ok: true,
+    PokeSim: {base: '/games/red', sprite: dex => `/games/red/sprites/${dex}.png?v=rom-portraits-1`, fetch: async path => ({ok: true,
       json: async () => path === '/api/pokedex' ? {entries: reference} : status()})},
   })
   vm.runInContext(source, context)
@@ -144,7 +144,7 @@ test('a Gen II Pokédex never paints counts against the Gen I total while its re
     document: {querySelector: element, activeElement: element('#search'), hidden: false, addEventListener() {}},
     window: {addEventListener() {}}, location: {hash: '', pathname: '/games/gold/pokedex'},
     history: {replaceState() {}}, setInterval() {},
-    PokeSim: {base: '/games/gold', fetch: async path => {
+    PokeSim: {base: '/games/gold', sprite: dex => `/games/gold/sprites/${dex}.png?v=rom-portraits-1`, fetch: async path => {
       if (path === '/api/pokedex') await gate
       return {ok: true, json: async () => path === '/api/pokedex'
         ? {entries: reference, count: 251, generation: 2} : status()}

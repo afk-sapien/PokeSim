@@ -78,6 +78,32 @@ def test_managed_pokedex_reference_is_revalidated_not_stored(tmp_path, monkeypat
     assert seen == [None, '"abc"', None]
 
 
+def test_managed_pages_carry_the_portrait_stamp(tmp_path, monkeypatch):
+    from pokesim.web.pages import render_game_page
+    monkeypatch.setattr(config, 'VIEWER_ONLY', False)
+    manager = Manager(tmp_path, 'http://testserver')
+    monkeypatch.setattr(manager, 'start', lambda: None)
+    manager.registry.add_rom('fixture', 'sha1', 'red')
+    adventure = manager.registry.create('Stamp test', 'fixture', {}, identifier())
+    manager.registry.update(adventure['id'], state='running')
+    page = render_game_page('pc.html', base_path=f'/games/{adventure["id"]}', adventure_id=adventure['id'])
+    assert '<meta name="pokesim-sprites" content="rom-portraits-1">' in page
+
+    async def child(request):
+        return httpx.Response(200, headers={'Content-Type': 'text/html; charset=utf-8'}, content=page.encode())
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr('pokesim.app.manager.httpx.AsyncClient',
+                        lambda **kwargs: original(transport=httpx.MockTransport(child), **kwargs))
+    monkeypatch.setattr(manager.supervisor, 'child', lambda aid: SimpleNamespace(url='http://127.0.0.1:1', token='t'))
+    stamp = manager.assets.sprite_version(adventure['id'])
+    with TestClient(manager_app(manager)) as client:
+        for path in ('pc', 'trading'):
+            served = client.get(f'/games/{adventure["id"]}/{path}')
+            assert served.status_code == 200 and served.headers['cache-control'] == 'no-store'
+            assert f'<meta name="pokesim-sprites" content="{stamp}">' in served.text
+
+
 def test_fast_json_matches_fastapi_and_falls_back_for_other_values():
     payload = {'party': [{'dvs': (15, 15), 'name': 'Pokémon', 'level': 5.5, 'counts': {25: 2}}], 'plan': None}
     response = fast_json(payload)

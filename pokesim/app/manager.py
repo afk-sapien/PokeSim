@@ -16,12 +16,12 @@ import socket
 import sys
 import threading
 import time
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 import webbrowser
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.background import BackgroundTask
@@ -31,6 +31,7 @@ from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, user_directory
 from ..platform_io import lock_file
+from ..web.pages import SPRITE_META, SPRITE_VERSION
 from ..web.security import VIEWER_HEADER, protect_response, public_origin, viewer_allows
 from .assets import Assets
 from . import trade_settings
@@ -219,7 +220,7 @@ async def json_body(request, limit=65536):
     return value
 
 
-GAME_ASSET = re.compile(r'/games/[A-Za-z0-9_-]+/(static|sprites|shots)/')
+GAME_ASSET = re.compile(r'/(?:games|view)/[A-Za-z0-9_-]+/(static|sprites|shots)/')
 
 
 def cache_policy(path, query, content_type):
@@ -240,7 +241,11 @@ def cache_policy(path, query, content_type):
             return 'public, max-age=604800'
         return 'no-cache'
     if kind == 'sprites' and content_type.startswith('image/png'):
-        # Portraits may be replaced when a ROM is installed or an old pack is migrated.
+        # Pages stamp portraits with Assets.sprite_version, which changes whenever the image
+        # behind an address could. The old fixed stamp says nothing, so it is revalidated.
+        stamp = parse_qs(query).get('v', [''])[0]
+        if stamp and stamp != SPRITE_VERSION:
+            return 'public, max-age=31536000, immutable'
         return 'private, no-cache'
     if re.fullmatch(r'/(games|view)/[A-Za-z0-9_-]+/api/pokedex', path):
         # Species reference data: reused only after an ETag check, which costs no rebuild.
@@ -812,7 +817,8 @@ def create_app(manager, shutdown=lambda: None):
         if path == 'trading' and request.method in {'GET', 'HEAD'}:
             from ..web.pages import render_game_page
             return HTMLResponse(render_game_page('adventure-trading.html', base_path=f"/{'view' if viewer else 'games'}/{aid}",
-                adventure_id=aid, adventure_name=adventure['name'], viewer=viewer))
+                adventure_id=aid, adventure_name=adventure['name'], viewer=viewer,
+                sprite_version=await run_in_threadpool(manager.assets.sprite_version, aid)))
         if path == 'api/interactions' and request.method in {'GET', 'HEAD'}:
             return JSONResponse(await run_in_threadpool(manager.coordinator.adventure_status, aid))
         if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
@@ -885,6 +891,17 @@ def create_app(manager, shutdown=lambda: None):
             response = await client.send(client.build_request(request.method, target, content=body, headers=headers), stream=True)
         except httpx.HTTPError as error:
             raise HTTPException(503, 'The adventure is reconnecting') from error
+        if (path in GAME_PAGES and request.method == 'GET' and response.status_code == 200
+                and response.headers.get('content-type', '').startswith('text/html')):
+            # The adventure renders its pages without knowing which portraits the library
+            # serves for it, so the library stamps them here. Pages are a few kilobytes.
+            try:
+                page = await response.aread()
+            finally:
+                await response.aclose()
+            stamp = await run_in_threadpool(manager.assets.sprite_version, aid)
+            page = page.replace((SPRITE_META % SPRITE_VERSION).encode(), (SPRITE_META % stamp).encode(), 1)
+            return Response(page, status_code=200, media_type=response.headers['content-type'])
         async def stream():
             # Decode here rather than forwarding raw bytes: `content-encoding` is not one of
             # the headers that survive below, so a compressed child response would otherwise

@@ -16,7 +16,7 @@ function page(id, response) {
   }
   vm.runInNewContext(source, {
     document: {querySelector: element, hidden: false},
-    PokeSim: {adventureId: id, base: `/games/${id}`, fetch: async path => {
+    PokeSim: {adventureId: id, base: `/games/${id}`, sprite: dex => `/games/${id}/sprites/${dex}.png?v=rom-portraits-1`, fetch: async path => {
       calls.push(`/games/${id}${path}`)
       return {ok: true, json: async () => response()}
     }}, setInterval(fn) { poll = fn },

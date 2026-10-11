@@ -57,7 +57,7 @@
       identity.className = 'ledger-identity'
       if (pokemon || itemArtwork) {
         const sprite = add(identity, 'img')
-        sprite.src = pokemon ? PokeSim.url(`/sprites/${row.id}.png`)
+        sprite.src = pokemon ? PokeSim.sprite(row.id)
           : `/api/v1/item-artwork/images/${row.id}.png?v=${encodeURIComponent(itemArtwork)}`
         sprite.addEventListener('error', () => { sprite.hidden = true }, {once: true})
         sprite.alt = ''
