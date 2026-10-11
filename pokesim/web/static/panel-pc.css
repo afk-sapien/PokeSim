@@ -4,7 +4,13 @@
 
 /* Cards, filters and the detail popup live in mon-grid.css. */
 
-.pc-summary .stat:last-child { justify-content: flex-end; }
+/* The view switch leads the filter bar, at the height of the fields beside it. */
+.pc-view-field { flex: 0 0 auto; }
+.pc-view-field .segmented { align-self: flex-start; }
+.pc-view-field .segmented button { min-height: 38px; }
+/* Narrower selects keep the switch, search, filters and count on one line at desktop widths. */
+body[data-page="pc"] .pc-toolbar .field:not(.field--grow):not(.pc-view-field) { flex-basis: 168px; }
+body[data-page="pc"] .pc-toolbar .field--grow { flex-basis: 200px; }
 
 /* ---- workspace: box bank beside the box -------------------------------- */
 .pc-workspace {
@@ -97,13 +103,14 @@
   .pc-sidebar { position: static; max-height: none; overflow: visible; }
   .pc-sidebar-head, .box-picker { display: none; }
   .mobile-box-control { display: flex; }
-  .pc-summary .stats { margin-left: 0; flex-wrap: wrap; row-gap: var(--s3); width: 100%; }
-  .pc-summary .stat:last-child { flex-basis: 100%; grid-column: 1 / -1; padding-left: 0; border-left: 0; }
+  .pc-summary .stats { margin-left: 0; width: 100%; }
 }
 @media (max-width: 640px) {
-  /* Stored and new catches share the first row; the view switch takes the second. */
+  /* Stored and new catches share one row. */
   .pc-summary .stat:first-child { grid-column: auto; }
   .pc-summary .stat:nth-child(2) { border-top: 0; }
+  .pc-view-field { flex: 1 1 100%; }
+  .pc-view-field .segmented { align-self: stretch; }
 }
 @media (max-width: 360px) {
   .stat { padding: 0 var(--s3); }

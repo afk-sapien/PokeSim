@@ -294,9 +294,9 @@ test('DV probability labels stay compact and retain very rare nonzero tails', as
   await view.ready()
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
   const detail = view.element('#pc-detail-body').innerHTML
-  assert.match(detail, /Potential Stat Power<\/dt><dd>3,200/)
-  assert.match(detail, /DV quality \(est\.\): top 0\.00153%/)
-  assert.match(detail, /Higher roll: 0%/)
+  assert.match(detail, /Stat Power<\/dt><dd>20 <span class="unit">\/ 3,200<\/span>/)
+  assert.match(detail, /DVs top 0\.00153%/)
+  assert.doesNotMatch(detail, /Potential Stat Power|Higher roll/)
   assert.doesNotMatch(detail, /65,536|uniform|independent fifth/)
 })
 
@@ -310,7 +310,7 @@ test('eggs show as Eggs without their species, types or sprite', async () => {
   assert.doesNotMatch(html, /Sneasel|sprites\/|Dark/)
 })
 
-test('details list moves, condition and the full record for Gen I partners', async () => {
+test('details list moves and condition without the old record for Gen I partners', async () => {
   const party = [mon(undefined, undefined, 15, {slot: 1, hp: 4, max_hp: 30, status_label: 'Poisoned', trainer_id: 42,
     experience: 2300, experience_progress: {total: 2300, remaining: 235, percent: 53, max_level: false},
     elite_four_wins: 2, elite_four_wins_incomplete: false,
@@ -321,21 +321,20 @@ test('details list moves, condition and the full record for Gen I partners', asy
   await view.ready()
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
   const detail = view.element('#pc-detail-body').innerHTML
-  assert.match(detail, /pc-move-pp empty"><b>0<\/b>\/10 PP/)
-  assert.match(detail, /type-grass">Grass<\/span><span>Special<\/span><span>Pow 35<\/span><span>Acc 100%/)
-  assert.match(detail, /<span>Status<\/span><span>Pow —<\/span>/)
+  assert.match(detail, /pc-move-pp empty"><b>0<\/b>\/10<span class="vh"> PP/)
+  assert.match(detail, /type-grass">Grass<\/span><\/span><span class="pc-move-kind">Special<\/span><span class="pc-move-pow"[^>]*>35<\/span><span class="pc-move-acc"[^>]*>100%/)
+  assert.match(detail, /pc-move-kind">Status<\/span><span class="pc-move-pow"[^>]*>—<\/span>/)
   assert.match(detail, /Tackle<\/span><span class="pc-move-specs">.*Physical/)
-  assert.equal((detail.match(/class="pc-move-pp/g) || []).length, 2)
+  assert.equal((detail.match(/class="pc-move-pp(?: empty)?"><b>/g) || []).length, 2)
+  assert.match(detail, /pc-move-pp pc-move-none">—/)
   assert.match(detail, /aria-label="Health: 4 of 30"/)
   assert.match(detail, /data-level="crit"/)
   assert.match(detail, /tag--warn">Poisoned/)
-  assert.match(detail, /Experience<\/dt><dd>2,300<small>235 to Lv\. 16/)
-  assert.match(detail, /Original trainer<\/dt><dd>ID 00042/)
-  assert.match(detail, /Elite Four wins<\/dt><dd>2</)
-  assert.doesNotMatch(detail, /Friendship|Hidden Power|Pokérus|Caught/)
+  assert.match(detail, /title="235 to Lv\. 16">53%/)
+  assert.doesNotMatch(detail, /Original trainer|Elite Four|Friendship|Hidden Power|Pokérus|Caught|Experience<\/dt>/)
 })
 
-test('Gen II details add Hidden Power, friendship, caught data and Pokérus', async () => {
+test('Gen II details resolve Hidden Power and tag Pokérus', async () => {
   const party = [mon(undefined, undefined, 50, {slot: 1, hp: 151, max_hp: 151, friendship: 255, trainer_id: 7,
     experience: {total: 125000, remaining: 0, percent: 100, max_level: true}, pokerus: 'infected',
     hidden_power: {type: 'Fire', power: 70}, caught: {level: 3, location: 'Route 29', time: 'Morning'},
@@ -344,12 +343,9 @@ test('Gen II details add Hidden Power, friendship, caught data and Pokérus', as
   await view.ready()
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
   const detail = view.element('#pc-detail-body').innerHTML
-  assert.match(detail, /type-fire">Fire<\/span><span>Special<\/span><span>Pow 70/)
-  assert.match(detail, /Hidden Power<\/dt><dd><span class="tag type-badge type-fire">Fire<\/span> 70/)
-  assert.match(detail, /Friendship<\/dt><dd>255/)
-  assert.match(detail, /Caught<\/dt><dd>Route 29<small>Lv\. 3 · Morning/)
-  assert.match(detail, /Pokérus<\/dt><dd><span class="tag tag--warn">Infected/)
-  assert.match(detail, /Elite Four wins<\/dt><dd>Unknown/)
+  assert.match(detail, /type-fire">Fire<\/span><\/span><span class="pc-move-kind">Special<\/span><span class="pc-move-pow"[^>]*>70/)
+  assert.match(detail, /tag--warn">Pokérus</)
+  assert.doesNotMatch(detail, /Friendship|Caught|Route 29|Elite Four|Hidden Power<\/dt>/)
   assert.match(detail, /Max level/)
   assert.match(detail, />MAX</)
 })

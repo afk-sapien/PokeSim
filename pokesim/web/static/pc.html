@@ -16,8 +16,8 @@
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=glow-2">
-<link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=grid-1">
-<link rel="stylesheet" href="${game_base}/static/panel-pc.css?v=grid-1">
+<link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=detail-1">
+<link rel="stylesheet" href="${game_base}/static/panel-pc.css?v=detail-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 <link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
 </head>
@@ -38,12 +38,12 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="stats">
 <div class="stat"><span class="micro">Stored</span><strong class="readout" id="pc-total">0 / 240</strong></div>
 <div class="stat"><span class="micro">New catches</span><strong class="readout" id="pc-active">Box 1</strong></div>
-<div class="stat"><span class="micro">View</span><div class="segmented view-switch" role="group" aria-label="PC view"><button id="pc-boxes-view" aria-pressed="true">Boxes</button><button id="pc-all-view" aria-pressed="false">All Pokémon</button></div></div>
 </div>
 </header>
 
 
 <div class="pc-toolbar panel">
+<div class="field pc-view-field"><span class="micro" id="pc-view-label">View</span><div class="segmented view-switch" role="group" aria-labelledby="pc-view-label"><button type="button" id="pc-boxes-view" aria-pressed="true">Boxes</button><button type="button" id="pc-all-view" aria-pressed="false">All Pokémon</button></div></div>
 <label class="field field--grow" for="pc-search"><span class="micro">Find Pokémon</span><input id="pc-search" type="search" placeholder="Name or Pokédex number" autocomplete="off"></label>
 <label class="field" for="pc-rating"><span class="micro">DV rating</span><span class="select"><select id="pc-rating"><option value="all">All ratings</option><option value="shiny">★ Shiny partners</option><option value="3plus">3★ and better</option><option value="4">4★ Perfect</option><option value="3">3★</option><option value="2">2★</option><option value="1">1★</option><option value="unknown">Unknown DVs</option></select></span></label>
 <input id="pc-scope" type="hidden" value="box">
@@ -76,7 +76,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="${game_base}/static/mon-grid.js?v=grid-1"></script>
+<script src="${game_base}/static/mon-grid.js?v=detail-1"></script>
 <script src="${game_base}/static/pc.js?v=grid-1"></script>
 </body>
 </html>

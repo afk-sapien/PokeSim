@@ -57,7 +57,7 @@ def shoot(page, name):
 
 @pytest.mark.parametrize('theme', ['light', 'dark'])
 @pytest.mark.parametrize('width,height', SIZES)
-def test_gen1_detail_shows_moves_condition_and_record(page, game, width, height, theme):
+def test_gen1_detail_shows_moves_condition_and_power(page, game, width, height, theme):
     url, _, emu, _ = game
     s = emu.snapshot
     lead = replace(s.party[0], hp=12, max_hp=30, status=8, moves=(22, 73, 33, 45), pp=(10, 0, 35, 40),
@@ -69,37 +69,41 @@ def test_gen1_detail_shows_moves_condition_and_record(page, game, width, height,
     page.goto(url + '/pc?box=party')
     page.locator('.pc-mon').first.click()
     body = page.locator('#pc-detail-body')
-    expect(body.locator('.pc-move')).to_have_count(4)
-    expect(body.locator('.pc-move').first).to_contain_text('Vine Whip')
-    expect(body.locator('.pc-move').first).to_contain_text('10/10 PP')
-    expect(body.locator('.pc-move').first).to_contain_text('Pow 35')
-    expect(body.locator('.pc-move').first).to_contain_text('Special')
-    expect(body.locator('.pc-move').nth(1).locator('.pc-move-pp.empty')).to_have_count(1)
-    expect(body.locator('.pc-move').nth(3)).to_contain_text('Status')
+    moves = body.locator('.pc-move:not(.pc-move-head)')
+    expect(moves).to_have_count(4)
+    expect(moves.first).to_contain_text('Vine Whip')
+    expect(moves.first).to_contain_text('10/10 PP')
+    expect(body.locator('.pc-move:not(.pc-move-head)').first.locator('.pc-move-pow')).to_have_text('35')
+    expect(moves.first).to_contain_text('Special')
+    expect(moves.nth(1).locator('.pc-move-pp.empty')).to_have_count(1)
+    expect(moves.nth(3)).to_contain_text('Status')
+    expect(moves.nth(3).locator('.pc-move-pow')).to_have_text('—')
     expect(body.locator('.pc-gauges [role="meter"]')).to_have_count(2)
     expect(body.locator('.pc-gauges')).to_contain_text('12/30')
     expect(body).to_contain_text('Poisoned')
-    expect(body.locator('.pc-facts')).to_contain_text('Original trainer')
-    expect(body.locator('.pc-facts')).to_contain_text('ID 00100')
-    expect(body.locator('.pc-facts')).to_contain_text('2,300')
-    expect(body.locator('.pc-facts')).to_contain_text('235 to Lv. 16')
-    expect(body.locator('.pc-facts')).not_to_contain_text('Friendship')
-    expect(body.locator('.pc-facts')).not_to_contain_text('Hidden Power')
+    # Record and history clutter is gone; Stat Power reads current against its ceiling.
+    expect(body.locator('.pc-facts')).to_have_count(0)
+    for text in ('Original trainer', 'ID 00100', 'Friendship', 'Potential Stat Power', 'Record'):
+        expect(body).not_to_contain_text(text)
+    expect(body.locator('.pc-readouts')).to_contain_text('Stat Power')
+    expect(body.locator('.pc-readouts')).to_contain_text(re.compile(r'\d / [\d,]+|\(max\)'))
+    expect(body.locator('.pc-gauges .value[title="235 to Lv. 16"]')).to_have_count(1)
     expect(body.locator('.individual-stats')).to_be_visible()
     check_fits(page)
     shoot(page, f'gen1-{"phone" if width < 600 else "desktop"}-{theme}.png')
     page.locator('#pc-close').click()
     page.goto(url + '/pc?box=1')
     page.locator('.pc-mon').first.click()
-    expect(body.locator('.pc-move')).to_have_count(2)
-    expect(body.locator('.pc-move').first).to_contain_text('Tackle')
-    expect(body.locator('.pc-move-pp')).to_have_count(0)
+    expect(body.locator('.pc-move:not(.pc-move-head)')).to_have_count(2)
+    expect(body.locator('.pc-move:not(.pc-move-head)').first).to_contain_text('Tackle')
+    # Stored Gen I moves carry no PP: the column keeps its place with a dash.
+    expect(body.locator('.pc-move:not(.pc-move-head) .pc-move-pp')).to_have_text(['—', '—'])
     check_fits(page)
 
 
 @pytest.mark.parametrize('theme', ['light', 'dark'])
 @pytest.mark.parametrize('width,height', SIZES)
-def test_gen2_detail_shows_hidden_power_friendship_and_eggs(page, game, width, height, theme):
+def test_gen2_detail_shows_hidden_power_power_and_eggs(page, game, width, height, theme):
     url, _, _, _ = game
     page.route(re.compile(r'/api/pokedex/status(\?|$)'), lambda route: route.fulfill(json=gen2_payload()))
     page.emulate_media(color_scheme=theme)
@@ -107,16 +111,26 @@ def test_gen2_detail_shows_hidden_power_friendship_and_eggs(page, game, width, h
     page.goto(url + '/pc?box=party')
     page.locator('.pc-mon').first.click()
     body = page.locator('#pc-detail-body')
-    expect(body.locator('.pc-move')).to_have_count(4)
-    expect(body.locator('.pc-move').nth(1)).to_contain_text('0/10 PP')
-    expect(body.locator('.pc-move').nth(2)).to_contain_text('Fire')
-    expect(body.locator('.pc-move').nth(2)).to_contain_text('Pow 64')
-    facts = body.locator('.pc-facts')
-    for text in ('Hidden Power', 'Fire', '64', 'Friendship', '212', 'ID 04321', 'Olivine City', 'Lv. 14 · Night',
-                 'Pokérus', 'Cured', 'Elite Four wins', '7+', '7,230 to Lv. 51', 'Potential Stat Power'):
-        expect(facts).to_contain_text(text)
+    moves = body.locator('.pc-move:not(.pc-move-head)')
+    expect(moves).to_have_count(4)
+    expect(moves.nth(1)).to_contain_text('0/10 PP')
+    expect(moves.nth(2)).to_contain_text('Fire')
+    expect(moves.nth(2).locator('.pc-move-pow')).to_have_text('64')
+    # One Stat Power reading, current against max, and no record block.
+    expect(body.locator('.pc-readouts')).to_contain_text('742 / 1,640')
+    expect(body.locator('.pc-readouts')).to_contain_text('3,120')
+    for text in ('Friendship', 'ID 04321', 'Olivine City', 'Elite Four', 'Potential Stat Power', 'Higher roll'):
+        expect(body).not_to_contain_text(text)
+    expect(body.locator('.pc-detail-head .trade-tag')).to_have_text('Auto decides')
+    expect(body.locator('.pc-detail-head')).to_contain_text('Pokérus cured')
+    expect(body.locator('.individual-stats caption')).to_contain_text('DVs top 2.5%')
+    expect(body.locator('.pc-gauges .value[title="7,230 to Lv. 51"]')).to_have_count(1)
+    assert page.evaluate('MonGrid.statPower({power: 480, potential_power: 480})') == '480 <span class="unit">(max)</span>'
     expect(body).to_contain_text('Paralyzed')
     expect(body).to_contain_text('Holding Leftovers')
+    if width >= 1280:
+        # The whole popup fits one desktop screen.
+        assert page.locator('#pc-detail').evaluate('(node) => node.scrollHeight <= node.clientHeight')
     expect(body.locator('.individual-stats tbody tr')).to_have_count(6)
     check_fits(page)
     shoot(page, f'gen2-{"phone" if width < 600 else "desktop"}-{theme}.png')
@@ -129,3 +143,25 @@ def test_gen2_detail_shows_hidden_power_friendship_and_eggs(page, game, width, h
     check_fits(page)
     if theme == 'light':
         shoot(page, f'gen2-egg-{"phone" if width < 600 else "desktop"}.png')
+
+
+@pytest.mark.parametrize('width', [390, 1280, 1440, 1920])
+def test_view_switch_sits_in_the_filter_bar_without_wrapping(page, game, width):
+    url, _, _, _ = game
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(url + '/pc?scope=all')
+    expect(page.locator('.pc-toolbar #pc-all-view')).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('.pc-summary .view-switch')).to_have_count(0)
+    tops = lambda selector: page.locator(selector).evaluate_all(
+        'nodes => nodes.map(node => Math.round(node.getBoundingClientRect().top))')
+    # Stored and new catches share one row, and both view keys share one line.
+    assert len(set(tops('.pc-summary .stat'))) == 1
+    assert len(set(tops('.view-switch button'))) == 1
+    if width >= 1280:
+        # Desktop keeps the switch, search, filters and count on one line.
+        labels = tops('.pc-toolbar > .field:not([hidden]) .micro')
+        assert max(labels) - min(labels) <= 2
+    page.locator('#pc-boxes-view').click()
+    expect(page.locator('#pc-boxes-view')).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#pc-sidebar')).to_be_visible() if width > 860 else None
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
