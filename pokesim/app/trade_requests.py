@@ -4,6 +4,14 @@ With Ask me first on, automatic trading suggests its best exchanges here instead
 starting them. Accepting one queues it like a trade picked by hand. Dismissing one keeps
 that pair from being suggested again for a while. A request expires as soon as either
 Pokémon stops being available for automatic trading.
+
+Not wired into the app in 0.5.0: automatic trades always start on their own. No route reads
+or answers requests, the coordinator never builds TradeRequests, and the stored
+'trade_requests' value and the Ask me first switch in 'trade_auto_library' are ignored.
+To bring it back, build TradeRequests as coordinator.requests, call review() from
+Coordinator.schedule_once where it picks the best candidate, return ask_first from adventure_status,
+and restore the trade-requests routes, the Ask me first switch and the suggested-trade
+cards from the commit that removed them (git log -S trade-requests -- pokesim/app/manager.py).
 """
 from __future__ import annotations
 

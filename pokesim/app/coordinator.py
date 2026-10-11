@@ -108,8 +108,6 @@ class Coordinator:
         self.trade_blocked = {}
         from .cable_sessions import CableSessions
         self.sessions = CableSessions(self)
-        from .trade_requests import TradeRequests
-        self.requests = TradeRequests(self)
 
     def _species(self, species):
         if self.display_species is None:
@@ -381,7 +379,6 @@ class Coordinator:
                 'queued': self._queued_for(aid, names),
                 'attention': self._attention(rows),
                 'auto_enabled': trade_settings.get(self.registry, aid)['enabled'],
-                'ask_first': trade_settings.ask_first(self.registry),
                 'recent_failures': [public(row) for row in [r for r in rows if r['phase'] == 'aborted'][:5]],
                 'history': [public(row) for row in [r for r in rows
                             if r['phase'] == 'completed' and r['decision'] == 'COMMIT'][:20]]}
@@ -931,7 +928,6 @@ class Coordinator:
         # what the others are asked to collect, and hand-picked trades still reach it.
         settings = {aid: trade_settings.get(self.registry, aid) for aid, _ in inventories}
         reserved = self.hand_picked_keys()
-        readable = dict(inventories)
         inventories = [self._auto_offers(aid, inv, reserved) for aid, inv in inventories
                        if settings[aid]['enabled'] and time.time() - last.get(aid, 0) >= COOLDOWN_SECONDS]
         wishes = {aid: trade_settings.wanted(settings[aid], inv) for aid, inv in inventories}
@@ -970,9 +966,6 @@ class Coordinator:
         if candidates and self.manual_waiting():
             # A trade the owner chose arrived while automatic candidates were scored.
             return self.drain_manual()
-        if self.requests.ask_first():
-            # Ask me first: suggest the best exchanges and wait for the owner to accept one.
-            return self.requests.review(candidates, readable, dict(inventories), settings, reserved, wishes)
         if candidates:
             _, left_id, right_id, left_key, right_key = max(candidates, key=lambda item: item[0])
             row = self.propose({'left_id': left_id, 'right_id': right_id,

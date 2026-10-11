@@ -1,5 +1,7 @@
-"""Library-wide automatic trading settings: one on/off switch and one wish list per adventure,
-and one library switch that asks the owner before any automatic trade starts.
+"""Library-wide automatic trading settings: one on/off switch and one wish list per adventure.
+
+The library-wide Ask me first switch below is kept for the unwired trade_requests module.
+Nothing in 0.5.0 reads it, so automatic trades always start on their own.
 
 They live in the library registry, not in each adventure's settings, so an older release
 that validates adventure settings still opens the library after a downgrade.
@@ -11,8 +13,7 @@ import threading
 from .registry import validate_id
 
 KEY = 'trade_auto'
-# Settings that cover every adventure at once. Ask me first starts on, so automatic trading
-# suggests exchanges and waits for the owner instead of starting them.
+# Settings that cover every adventure at once. Only the unwired Ask me first switch lives here.
 LIBRARY_KEY = 'trade_auto_library'
 MAX_WISHES = 50
 # Every adventure's settings share one registry value, so each change reads and writes it whole.
@@ -77,7 +78,7 @@ def wanted(settings, inventory):
 
 
 def ask_first(registry):
-    """Whether automatic trading suggests exchanges for the owner to approve. On by default."""
+    """Whether automatic trading would suggest exchanges for the owner to approve. Unused in 0.5.0."""
     value = registry.setting(LIBRARY_KEY, {})
     return not isinstance(value, dict) or value.get('ask_first', True) is not False
 

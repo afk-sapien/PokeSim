@@ -1,13 +1,14 @@
 """The trade builder: the owner picks a Pokémon in two adventures, and only hard limits stop the trade.
 
-In 0.5.0 trading is automatic or built by hand, so trade offers and manual Cable Club
-sessions have no routes and no tab.
+In 0.5.0 trading is automatic or built by hand, so trade offers, manual Cable Club
+sessions and Ask me first suggestions have no routes and no tab.
 """
 import re
 
 import pytest
 
 from pokesim import config
+from pokesim.app import trade_requests, trade_settings
 from pokesim.app.registry import identifier
 from pokesim.app.trade_builder import TradeBuilder, ViewOnlyError
 from pokesim.runtime.participant import BUSY
@@ -168,5 +169,31 @@ def test_trading_page_has_no_offers_or_cable_club_tab(viewer):
                             adventure_id='a' * 32, adventure_name='Gold', viewer=viewer)
     tabs = re.findall(r'role="tab" id="tab-([a-z]+)"', html)
     assert tabs == ['trade', 'auto', 'history']
-    for gone in ('tab-offers', 'panel-offers', 'offers-count', 'tab-cable', 'panel-cable', 'cable-games', 'Send offer'):
+    for gone in ('tab-offers', 'panel-offers', 'offers-count', 'tab-cable', 'panel-cable', 'cable-games', 'Send offer',
+                 'ask-switch', 'trade-requests', 'Ask me first', 'Suggested trades'):
         assert gone not in html
+
+
+def test_automatic_trades_start_on_their_own_whatever_ask_me_first_said(setup):  # noqa: F811
+    # A library from rc44 may have Ask me first on and suggestions waiting. Both are ignored.
+    trade_settings.set_ask_first(setup.registry, True)
+    setup.registry.set_setting(trade_requests.KEY, {'requests': [
+        {'id': identifier(), 'status': 'pending', 'left_id': setup.data['left_id'], 'left_key': '0',
+         'right_id': setup.data['right_id'], 'right_key': '1', 'created_at': 1, 'updated_at': 1}], 'dismissed': {}})
+    c = setup.coordinator
+    assert not hasattr(c, 'requests')
+    assert 'ask_first' not in c.adventure_status(setup.data['left_id'])
+    assert c.schedule_once()['phase'] == 'completed'
+    assert len(setup.cable_calls) == 1
+
+
+def test_trade_request_routes_are_gone(managed):  # noqa: F811
+    client, rid = managed.client, identifier()
+    assert not any('trade-requests' in path for _, path in writes(managed.app, managed.aid))
+    for method, path in [
+            ('GET', f'/api/v1/interactions/trade-requests?adventure_id={managed.aid}'),
+            ('PUT', '/api/v1/interactions/trade-requests/settings'),
+            ('POST', f'/api/v1/interactions/trade-requests/{rid}/accept'),
+            ('POST', f'/api/v1/interactions/trade-requests/{rid}/dismiss')]:
+        response = client.request(method, path, json={'ask_first': False} if method == 'PUT' else None)
+        assert response.status_code == 404, (method, path, response.status_code)

@@ -23,8 +23,7 @@
     if (focus) target.focus()
     const current = target.id.slice(4)
     try { localStorage.setItem(STORE, current) } catch (_) {}
-    if (current === 'auto') { loadAuto()
-      loadAsk() }
+    if (current === 'auto') loadAuto()
   }
   for (const tab of tabs) {
     tab.addEventListener('click', () => select(tab.id.slice(4)))
@@ -481,7 +480,7 @@
     globalThis.TradeUI?.refresh?.()
     if (!owner) {
       note('#auto-note', 'Automatic trading is set from the owner’s page, not from a view link.')
-      for (const el of document.querySelectorAll('#auto-switch, #ask-switch, #wish-input, #wish-add')) el.disabled = true
+      for (const el of document.querySelectorAll('#auto-switch, #wish-input, #wish-add')) el.disabled = true
       return
     }
     if (autoLoading || autoBusy) return
@@ -498,44 +497,6 @@
     if (!auto) return
     const enabled = !auto.enabled
     saveAuto({enabled}, data => data.enabled ? 'Auto trading is on.' : 'Auto trading is off. Trades you pick yourself still happen.')
-  })
-  // Ask me first: one switch for every adventure, read from the suggested trades.
-  const REQUESTS = '/api/v1/interactions/trade-requests'
-  let ask = null
-  let askBusy = false
-  function renderAsk() {
-    const switcher = $('#ask-switch')
-    if (!switcher || !ask) return
-    switcher.setAttribute('aria-checked', String(ask.ask_first))
-    switcher.disabled = askBusy || ask.viewer_only
-    $('#ask-switch-state').textContent = ask.ask_first ? 'On' : 'Off'
-  }
-  async function loadAsk() {
-    if (!owner || askBusy) return
-    try {
-      ask = await json(await PokeSim.api(`${REQUESTS}?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not read Ask me first.')
-      renderAsk()
-    } catch (error) { note('#auto-note', error.message) }
-  }
-  $('#ask-switch')?.addEventListener('click', async () => {
-    if (!ask || askBusy) return
-    const value = !ask.ask_first
-    askBusy = true
-    renderAsk()
-    try {
-      const data = await json(await PokeSim.api(`${REQUESTS}/settings`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ask_first: value})}),
-        'Could not save Ask me first.')
-      ask.ask_first = data.ask_first
-      note('#auto-note', data.ask_first ? 'Ask me first is on. Automatic trades wait for you to accept them.'
-        : 'Ask me first is off. Automatic trades start on their own, and waiting suggestions were cleared.')
-      globalThis.AdventureTrading?.refresh?.()
-      globalThis.AdventureTrading?.refreshRequests?.(true)
-    } catch (error) {
-      note('#auto-note', error.message)
-    } finally {
-      askBusy = false
-      renderAsk()
-    }
   })
   $('#wish-form')?.addEventListener('submit', event => {
     event.preventDefault()

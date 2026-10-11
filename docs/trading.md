@@ -8,9 +8,8 @@ exchange rules, and recovery.
 
 Everything about trading lives on each adventure's Trading page at
 `/games/{id}/trading`. Trading in 0.5.0 is one of two things: automatic trades,
-which become suggestions to accept or dismiss while [Ask me first](#ask-me-first)
-is on, and trades you build by hand between your own adventures. The page has
-three tabs:
+which start on their own, and trades you build by hand between your own
+adventures. The page has three tabs:
 
 1. **Trade** builds a trade by hand: another adventure, the Pokémon you send and
    the Pokémon you get.
@@ -43,7 +42,7 @@ Each Pokémon has one trade setting. It only steers automatic trading:
 
 - **Can trade**, the default. Automatic trading may use it when it is a spare.
 - **Prefer to trade**. Automatic trading uses it before other spares.
-- **Never trade**. Never suggested automatically, and automatic PC release never
+- **Never trade**. Never traded automatically, and automatic PC release never
   releases it. You can still pick it by hand.
 
 Never trade also protects a Pokémon in the party from the in-game trader.
@@ -71,29 +70,8 @@ The wish list names species this adventure wants. A wished species it holds none
 makes an exchange worth doing even when the Pokédex does not need it, and such an
 exchange is ranked ahead of every other. Pokémon set to Prefer to trade come next.
 
-### Ask me first
-
-**Ask me first** is one switch for the whole library, on the Auto tab, and it
-starts on. While it is on, automatic trading does not start a trade by itself. It
-suggests its best exchanges instead, at most three at a time, and never two that
-share a Pokémon. Each suggestion shows at the top of the Trading page of both
-adventures as a card with the two Pokémon, why it was suggested, and **Accept**
-and **Dismiss**.
-
-Accept queues the trade like one you picked by hand, after checking both Pokémon
-again. Dismiss hides it, and the same pair is not suggested again for seven
-days. A suggestion expires by itself when either Pokémon stops being available
-for automatic trading: it moved to the party, evolved, was traded, or was set to
-Never trade. It also expires when its adventure turns automatic trading off, is
-archived or is deleted. A stopped adventure keeps its suggestions until it runs
-again. Switching Ask me first off drops waiting suggestions, and automatic trades
-then start on their own as before.
-
-The page reads suggestions from
-`GET /api/v1/interactions/trade-requests?adventure_id=` and answers them with
-`POST /api/v1/interactions/trade-requests/{id}/accept` or `/dismiss`.
-`PUT /api/v1/interactions/trade-requests/settings` with `{"ask_first": false}`
-switches it off.
+Automatic trades start by themselves when a useful exchange is ready, with no
+approval step. The status above the tabs reads **On · Trades automatically**.
 
 Automatic trading also follows fixed rules that no setting changes:
 
@@ -156,6 +134,11 @@ gone. Offers and sessions saved by an earlier build stay in the Library database
 but are ignored: they do not hold back automatic trades and are never answered or
 resumed. A session that was running when an earlier build stopped is still rolled
 back to both Pokémon Center saves at startup.
+
+The **Ask me first** switch and its Accept and Dismiss suggestions, from 0.5.0
+release candidates, are gone too, and automatic trades start on their own as
+before. The `/api/v1/interactions/trade-requests` routes return 404. A stored
+Ask me first setting and any waiting suggestions are ignored.
 
 ## Trading API
 

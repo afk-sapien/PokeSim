@@ -43,7 +43,7 @@ test('changing the setting saves it and only it', async () => {
   assert.equal(mutations[0].url, '/api/trading/preferences')
   assert.deepEqual(JSON.parse(mutations[0].options.body), {key:'partner', state:'keep'})
   assert.match(view.api.control('partner'), /value="keep" selected/)
-  assert.match(view.toast.textContent, /Never suggested automatically/)
+  assert.match(view.toast.textContent, /Never traded automatically/)
 })
 
 test('a refused change shows why and puts the old value back', async () => {
@@ -83,7 +83,7 @@ test('the saved setting shows under its own row only', async () => {
   const view = ui()
   await view.api.refresh()
   await view.api.change({value:'keep', dataset:{tradeKey:'partner', tradeSetting:'auto'}})
-  assert.match(view.api.control('partner'), /<span class="trade-saved">Never trade\. Never suggested automatically\. You can still pick it by hand\.<\/span>$/)
+  assert.match(view.api.control('partner'), /<span class="trade-saved">Never trade\. Never traded automatically\. You can still pick it by hand\.<\/span>$/)
   await view.api.change({value:'broken', dataset:{tradeKey:'partner', tradeSetting:'keep'}})
   assert.match(view.api.control('partner'), /class="trade-saved is-error">This Pokémon left the collection/)
 })

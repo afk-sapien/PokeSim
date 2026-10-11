@@ -5,7 +5,7 @@
   // One line each, shown beside the choices.
   const HINTS = {auto: 'Automatic trading may use it when it is a spare.',
     first: 'Automatic trading uses it before other spares.',
-    keep: 'Never suggested automatically. You can still pick it by hand.'}
+    keep: 'Never traded automatically. You can still pick it by hand.'}
   const PROTECTED_HINT = 'Shiny and perfect DV Pokémon are always protected.'
   let status = null
   let loading = false

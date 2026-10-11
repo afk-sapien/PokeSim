@@ -43,9 +43,7 @@ class Library:
         self.saved = []
         self.queued = []
         self.held = {}
-        self.ask_first = True
-        self.answered = []
-        self.requests = []
+        self.request_reads = []
         self.auto = {'adventure_id': FROM, 'enabled': True, 'wishlist': [], 'wishes': [], 'viewer_only': False,
                      'species': [{'dex': 1, 'name': 'Bulbasaur'}, {'dex': 16, 'name': 'Pidgey'}, {'dex': 25, 'name': 'Pikachu'}]}
         trading = render_game_page('adventure-trading.html', base_path=f'/games/{FROM}', adventure_id=FROM,
@@ -63,28 +61,9 @@ class Library:
         page.route(re.compile(r'/api/v1/interactions/trade-builder/targets(\?|$)'), self.targets)
         page.route(re.compile(r'/api/v1/interactions/trade-builder/limits(\?|$)'), self.limits)
         page.route(re.compile(r'/api/v1/interactions/auto-settings(\?|$)'), self.auto_settings)
-        page.route(re.compile(r'/api/v1/interactions/trade-requests(/|\?|$)'), self.trade_requests)
-
-    def trade_requests(self, route):
-        path = urlparse(route.request.url).path
-        if path.endswith('/settings'):
-            self.ask_first = json.loads(route.request.post_data)['ask_first']
-            if not self.ask_first:
-                self.requests = []
-            return self.json(route, {'ask_first': self.ask_first})
-        if route.request.method == 'POST':
-            rid, action = path.rsplit('/', 2)[-2:]
-            self.answered.append((rid, action))
-            row = next(row for row in self.requests if row['id'] == rid)
-            self.requests.remove(row)
-            return self.json(route, {**row, 'status': 'accepted' if action == 'accept' else 'dismissed'})
-        self.json(route, {'ask_first': self.ask_first, 'requests': self.requests, 'viewer_only': False})
-
-    def request(self, rid='e' * 32):
-        return {'id': rid, 'status': 'pending', 'reason': None, 'created_at': 1000, 'updated_at': 1000, 'manual_id': None,
-                'reasons': ['New Pokédex entry for Second Red: Bulbasaur', 'Crystal has no Pidgey right now'],
-                'left': self.side(FROM, 'Crystal', {'key': 'box-1', 'name': 'Bulbasaur', 'nickname': 'BUD', 'dex': 1, 'level': 5}),
-                'right': self.side(RED, 'Second Red', {'key': '1', 'name': 'Pidgey', 'dex': 16, 'level': 9})}
+        # Ask me first is gone. Any call to its old API is recorded and answered as the library does.
+        page.route(re.compile(r'/api/v1/interactions/trade-requests(/|\?|$)'),
+                   lambda route: self.request_reads.append(route.request.url) or self.json(route, {'detail': 'Not Found'}, 404))
 
     @staticmethod
     def json(route, data, status=200):
@@ -95,7 +74,7 @@ class Library:
 
     def interactions(self, route):
         self.json(route, {'adventure': {'id': FROM, 'version': 'crystal', 'state': 'running', 'archived': False},
-                          'active': [], 'queued': self.queued, 'auto_enabled': self.auto['enabled'], 'ask_first': self.ask_first, 'recent_failures': [
+                          'active': [], 'queued': self.queued, 'auto_enabled': self.auto['enabled'], 'recent_failures': [
                               {'phase': 'aborted', 'decision': 'ABORT', 'peer_name': 'Busy Blue', 'updated_at': 2000,
                                'failure_reason': 'Busy Blue could not reach the Cable Club.'}],
                           'history': [{'phase': 'completed', 'decision': 'COMMIT', 'peer_name': 'Second Red',
@@ -427,43 +406,23 @@ def test_a_late_limits_answer_does_not_replace_the_newer_list(page, game, late):
 
 
 @pytest.mark.parametrize('width', [1280, 390])
-def test_suggested_trades_wait_at_the_top_until_accepted_or_dismissed(page, game, width):
+def test_automatic_trades_run_without_asking(page, game, width):
     library = Library(page, game[0])
-    library.requests = [library.request(), library.request('f' * 32)]
     page.set_viewport_size({'width': width, 'height': 844})
-    library.open()
-    section = page.locator('#trade-requests-section')
-    expect(section).to_be_visible()
-    expect(page.locator('#trade-status')).to_have_text('On · Asks before trading')
-    cards = section.locator('.request-card')
-    expect(cards).to_have_count(2)
-    first = cards.first
-    expect(first).to_contain_text('Bulbasaur')
-    expect(first).to_contain_text('Pidgey')
-    expect(first).to_contain_text('New Pokédex entry for Second Red: Bulbasaur')
-    shoot(page, f'requests-{width}')
-    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-    first.get_by_role('button', name='Accept').click()
-    expect(page.locator('#requests-note')).to_contain_text('Trade started')
-    expect(cards).to_have_count(1)
-    cards.first.get_by_role('button', name='Dismiss').click()
-    expect(page.locator('#requests-note')).to_contain_text('will not be suggested again')
-    expect(section).to_be_hidden()
-    assert library.answered == [('e' * 32, 'accept'), ('f' * 32, 'dismiss')]
-
-
-def test_ask_me_first_switch_in_the_auto_tab(page, game):
-    library = Library(page, game[0])
-    library.requests = [library.request()]
     library.open('?tab=auto')
-    switch = page.get_by_role('switch', name=re.compile('Ask me first'))
-    expect(switch).to_have_attribute('aria-checked', 'true')
-    switch.click()
-    expect(switch).to_have_attribute('aria-checked', 'false')
-    expect(page.locator('#auto-note')).to_contain_text('Ask me first is off')
-    expect(page.locator('#trade-requests-section')).to_be_hidden()
-    expect(page.locator('#trade-status')).to_have_text('On · No approvals needed')
-    assert library.ask_first is False
+    expect(page.locator('#trade-status')).to_have_text('On · Trades automatically')
+    expect(page.locator('#trade-activity')).to_have_text('This adventure will trade when a useful exchange is ready.')
+    expect(page.locator('#auto-switch')).to_be_enabled()
+    # There is no Ask me first switch and no suggested trades to accept or dismiss.
+    expect(page.get_by_role('switch')).to_have_count(1)
+    expect(page.get_by_text('Ask me first')).to_have_count(0)
+    expect(page.locator('#trade-requests-section, .request-card, [data-request-action]')).to_have_count(0)
+    shoot(page, f'auto-on-{width}')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.get_by_role('tab', name='Trade').click()
+    expect(page.get_by_role('button', name=re.compile('Accept|Dismiss'))).to_have_count(0)
+    page.wait_for_timeout(300)
+    assert library.request_reads == []
 
 
 @pytest.mark.parametrize('width', [1280, 390])

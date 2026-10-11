@@ -10,7 +10,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#20241F" media="(prefers-color-scheme: dark)">
-<meta name="description" content="Trade Pokémon between your adventures, answer suggested trades, set automatic trading and see the history of this adventure.">
+<meta name="description" content="Trade Pokémon between your adventures, set automatic trading and see the history of this adventure.">
 <title>${adventure_name} trading · pokesim</title>
 <link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=glow-2">
 <link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
 <link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=builder-1">
-<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=simple-1">
+<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=simple-2">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
@@ -34,7 +34,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <main id="main" class="shell">
 <header class="identity page-head">
-<div class="who"><p class="micro">${adventure_name}</p><h1>Trading</h1><p class="page-lede">Pick a trade between your adventures, answer suggested trades, or let this adventure trade automatically. Everything about trading lives on this page.</p></div>
+<div class="who"><p class="micro">${adventure_name}</p><h1>Trading</h1><p class="page-lede">Pick a trade between your adventures, or let this adventure trade automatically. Everything about trading lives on this page.</p></div>
 </header>
 
 <section class="trade-overview" aria-label="Automatic trading status">
@@ -43,8 +43,6 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <p id="trade-connection-note" class="trade-notice" role="status" hidden></p>
 
 <section id="current-exchange-section" class="trade-section" aria-labelledby="current-heading"><div class="section-head"><h2 class="legend legend--ink" id="current-heading">Current exchange</h2></div><div id="trade-active" class="deal-list" aria-live="polite">Checking for an exchange…</div></section>
-
-<section id="trade-requests-section" class="trade-section requests-section" aria-labelledby="requests-heading" hidden><div class="section-head"><h2 class="legend legend--ink" id="requests-heading">Suggested trades</h2><span class="micro">Ask me first is on. Nothing trades until you accept.</span></div><p id="requests-note" class="trade-notice" role="status" aria-live="polite" hidden></p><div id="trade-requests" class="deal-list" aria-live="polite"></div></section>
 
 <div class="trade-tabs" role="tablist" aria-label="Trading">
 <button type="button" role="tab" id="tab-trade" aria-controls="panel-trade" aria-selected="true" tabindex="0">Trade</button>
@@ -70,13 +68,12 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <section id="panel-auto" class="trade-panel" role="tabpanel" aria-labelledby="tab-auto" tabindex="0" hidden>
 <p id="auto-note" class="trade-notice" role="status" aria-live="polite" hidden></p>
 <div class="auto-switch-row"><button type="button" role="switch" id="auto-switch" class="auto-switch" aria-checked="true" aria-describedby="auto-switch-help"><span class="auto-switch-track" aria-hidden="true"></span><span>Auto trading</span> <b id="auto-switch-state">On</b></button><p class="trade-help" id="auto-switch-help">Off stops only automatic trades. Trades you pick on the Trade tab still happen.</p></div>
-<div class="auto-switch-row"><button type="button" role="switch" id="ask-switch" class="auto-switch" aria-checked="true" aria-describedby="ask-switch-help"><span class="auto-switch-track" aria-hidden="true"></span><span>Ask me first</span> <b id="ask-switch-state">On</b></button><p class="trade-help" id="ask-switch-help">For every adventure. Automatic trading suggests trades at the top of this page and waits for you to accept. Off lets them start on their own.</p></div>
 <div class="section-head"><h2 class="legend legend--ink" id="wish-heading">Wish list</h2><span class="micro">Species this adventure wants</span></div>
 <p class="trade-help">Automatic trading looks for another game that has a wished species and gives a Prefer to trade or spare Pokémon in return.</p>
 <form id="wish-form" class="wish-form" aria-labelledby="wish-heading"><label class="pick-search"><span class="micro">Add a species</span><input id="wish-input" list="wish-species" autocomplete="off" placeholder="Species name or No."></label><button type="submit" class="key" id="wish-add">Add</button><datalist id="wish-species"></datalist></form>
 <ul id="wish-list" class="wish-list" aria-live="polite"></ul>
 <div class="section-head"><h2 class="legend legend--ink">Trade settings</h2><span class="micro">Open a card to change its setting</span></div>
-<p class="trade-help"><b>Can trade</b>: automatic trading may use it when it is a spare. <b>Prefer to trade</b>: automatic trading uses it before other spares. <b>Never trade</b>: never suggested automatically, and you can still pick it by hand. Shiny and perfect DV Pokémon are always protected, and automatic trades never take a last copy or your active party. Trades you pick yourself ignore all of this.</p>
+<p class="trade-help"><b>Can trade</b>: automatic trading may use it when it is a spare. <b>Prefer to trade</b>: automatic trading uses it before other spares. <b>Never trade</b>: never traded automatically, and you can still pick it by hand. Shiny and perfect DV Pokémon are always protected, and automatic trades never take a last copy or your active party. Trades you pick yourself ignore all of this.</p>
 <div data-mon-toolbar="auto" data-settings="true"></div>
 <p id="trade-setting-status" class="vh" role="status" aria-live="polite" data-trade-status></p>
 <div id="auto-list" class="pc-grid pc-all-grid auto-list" role="group" aria-label="Trade settings"><p class="dex-empty">Loading trade settings…</p></div>
@@ -103,8 +100,8 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="${game_base}/static/mon-grid.js?v=builder-1"></script>
-<script src="${game_base}/static/trade-ui.js?v=builder-1"></script>
-<script src="${game_base}/static/adventure-trading.js?v=simple-1"></script>
-<script src="${game_base}/static/trade-tabs.js?v=simple-1"></script>
+<script src="${game_base}/static/trade-ui.js?v=simple-2"></script>
+<script src="${game_base}/static/adventure-trading.js?v=simple-2"></script>
+<script src="${game_base}/static/trade-tabs.js?v=simple-2"></script>
 </body>
 </html>

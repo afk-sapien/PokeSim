@@ -7,7 +7,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from pokesim.app import trade_settings
 from pokesim.app.coordinator import Coordinator
 from pokesim.app.registry import Registry, identifier
 from pokesim.interactions.cable_metadata import ADAPTER_ID
@@ -104,8 +103,6 @@ def test_collection_requests_work_for_one_or_multiple_adventures(setup):
 @pytest.fixture
 def setup(tmp_path):
     registry = Registry(tmp_path)
-    # These tests cover trades that start on their own. Ask me first has its own tests.
-    trade_settings.set_ask_first(registry, False)
     registry.add_rom('rom', 'sha', 'red')
     games = [registry.create(name, 'rom', {}, identifier()) for name in ['First Red', 'Second Red']]
     for game in games:
