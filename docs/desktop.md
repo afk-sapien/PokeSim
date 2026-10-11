@@ -155,19 +155,18 @@ Start and stop whichever games you want.
 Choices range from 0.5× to 16×, plus Max. Max runs as fast as the computer can
 handle. The Library's actual-speed reading shows the achieved rate, which can be
 lower than the requested speed when resources are busy. Manual control temporarily
-runs that game at 1×. Settings are frozen during a reserved trade. Cable Club
-sessions use the slower participant's selected speed, with Max treated as
-unlimited. Both games retain their own settings afterward.
+runs that game at 1×. Settings are frozen during a reserved trade, and both
+games retain their own settings afterward.
 
 ## Trading
 
-Trading is automatic across all eligible running adventures in the same library. New adventures join automatically. There are no groups to configure or exchanges to choose. Each adventure’s Trading page shows only its own current exchange and recent completed trades, with the adventure navigation kept in place. Its history remains available while stopped. The Library’s Trading page provides an overview across all adventures. Participation requires a compatible game and an eligible boxed Pokémon. Active party members and Pokémon set to Never trade are protected. With Ask me first on, the default, automatic trades wait on the Trading page for you to accept them.
+Trading is automatic across all eligible running adventures in the same library. New adventures join automatically. There are no groups to configure or exchanges to choose. Each adventure’s Trading page shows only its own current exchange and recent completed trades, with the adventure navigation kept in place. Its history remains available while stopped. The Library’s Trading page provides an overview across all adventures. Participation requires a compatible game and an eligible boxed Pokémon. Active party members and Pokémon set to Never trade are protected. With Ask me first on, the default, automatic trades wait on the Trading page for you to accept or dismiss them. The Trade tab also builds a trade by hand between two of your adventures, and it starts as soon as both games are ready. There are no trade offers or manual Cable Club sessions in 0.5.0.
 
 Games finish battles or menus before preparing for an exchange. Interrupted exchanges recover automatically from their recorded decisions.
 
 Preparation routes each adventure to a reachable Pokémon Center, using normal movement, battles, field moves, and PC input to retrieve the chosen individual. Games can use different centers. When the active box is full, preparation uses another box with space for a safe party reserve. Both games then enter a temporary paired Cable Club session. The games execute the exchange, evolution, and save. Both verified results must commit before ordinary play resumes. No direct Pokémon record swap is used as a fallback.
 
-If every box and the party are full, preparation uses the existing duplicate cleanup rules to release one unprotected spare through the PC. The selected trade offer and Pokémon set to Never trade are protected. If there is no safe duplicate to release, the attempt stops and reports the storage problem.
+If every box and the party are full, preparation uses the existing duplicate cleanup rules to release one unprotected spare through the PC. The Pokémon chosen for the trade and Pokémon set to Never trade are protected. If there is no safe duplicate to release, the attempt stops and reports the storage problem.
 
 The current adapter supports clean English Red and Blue at all twelve Cable Club centers, including the Indigo Plateau lobby. Each cartridge returns to its own original center after trading. An adventure without a supported route waits or reports a preparation failure. Trading pages show recent failed attempts and their reasons alongside completed exchanges. Link battles and trading with another application installation are not implemented.
 

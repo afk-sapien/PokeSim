@@ -1,26 +1,28 @@
 # Trading
 
-Use this guide for the Trading page, trade settings, offers, and broker connection
+Use this guide for the Trading page, trade settings, and broker connection
 settings. See [automatic trading](automatic-trading.md) for coordinator setup,
 exchange rules, and recovery.
 
 ## Trading page
 
 Everything about trading lives on each adventure's Trading page at
-`/games/{id}/trading`. It has five tabs:
+`/games/{id}/trading`. Trading in 0.5.0 is one of two things: automatic trades,
+which become suggestions to accept or dismiss while [Ask me first](#ask-me-first)
+is on, and trades you build by hand between your own adventures. The page has
+three tabs:
 
-1. **Trade** picks a trade by hand: another adventure, the Pokémon you send and
+1. **Trade** builds a trade by hand: another adventure, the Pokémon you send and
    the Pokémon you get.
-2. **Offers** lists offers for this adventure and offers it sent.
-3. **Auto** holds the automatic trading switch, the wish list and each Pokémon's
+2. **Auto** holds the automatic trading switch, the wish list and each Pokémon's
    trade setting.
-4. **History** shows hand-picked and automatic trades together, newest first.
-5. **Cable Club** lists the adventures this one can hold a
-   [Cable Club session](#cable-club-sessions) with, and opens the session page.
-   A pair that cannot link is greyed out with the reason.
+3. **History** shows hand-picked and automatic trades together, newest first.
+
+Trades that are waiting or running show under **Current exchange** above the
+tabs, on the pages of both adventures.
 
 The page remembers the last tab in the browser. A link can open a tab with
-`?tab=trade`, `?tab=offers`, `?tab=auto` or `?tab=history`, and `&mon=` with a
+`?tab=trade`, `?tab=auto` or `?tab=history`, and `&mon=` with a
 trade key preselects a Pokémon on the Trade tab. The PC shows each Pokémon's
 trade setting read only, with a **Trade…** link that opens the Trade tab with that
 Pokémon chosen.
@@ -99,7 +101,7 @@ Automatic trading also follows fixed rules that no setting changes:
 2. The last copy of a species stays home, unless the trade evolves it or registers
    a new Pokédex entry for the other adventure.
 3. Active party members and Pokémon in a project stay home.
-4. A Pokémon in a hand-picked trade or an open offer is left for that trade.
+4. A Pokémon in a hand-picked trade is left for that trade.
 
 Trades you pick by hand ignore trade settings and these rules. Only the limits in
 [Make a trade](#make-a-trade) apply to them.
@@ -109,20 +111,19 @@ Trades you pick by hand ignore trade settings and these rules. Only the limits i
 The Trade tab runs one exchange you choose:
 
 1. Choose the adventure to trade with from **Trade with**. One that cannot trade
-   right now says why: stopped, archived or busy finishing another trade.
+   says why: view only, stopped, archived or busy finishing another trade.
 2. Press **You send** and pick one of this adventure's Pokémon, from the party or
    the PC. The picker opens over the page with search, filters and sorting.
    Escape or the close button shuts it.
 3. Press **You get** and pick the Pokémon you want back. Pokémon the cable cannot
    take are greyed out with the reason, and so is the whole list when the Pokémon
    you send cannot go to that adventure.
-4. Press **Trade**. It is enabled once both slots are filled. When the other
-   adventure is view only, the button reads **Send offer** and the offer waits for
-   an answer instead.
+4. Press **Trade**. It is enabled once both slots are filled.
 
 Press a chosen Pokémon to see its details, or **Change** to pick another one.
 
-The Offers tab then opens with the trade listed. Trade settings, party
+The trade is queued at once and the History tab opens. The trade shows under
+Current exchange until it finishes, then in History. Trade settings, party
 protection, the last-copy rule and automatic ranking do not apply. The trade is
 yours to make.
 
@@ -141,90 +142,37 @@ boxed (sending any party member to the PC if the party is full), and meets the
 other at the Cable Club. The trade then goes through the same checked cable
 exchange as automatic trades. A trade you choose goes before any automatic one.
 An automatic trade that is still travelling is set aside for it, and chosen
-trades wait in line, oldest first, while the Cable Club is busy. You can cancel
-while the trade is waiting or preparing. Once both saves are being committed the
-trade always finishes.
+trades wait in line, oldest first, while the Cable Club is busy. Once both saves
+are being committed the trade always finishes.
 
-The Trade tab uses `POST /api/v1/interactions/trade-offers` with `from_id`,
-`from_key`, `to_id`, `to_key` and an optional `request_id`. The older
-`/api/v1/interactions/manual-trades` admin API is gone.
+View links, `VIEWER_ONLY` instances and adventures whose settings make them view
+only cannot build a trade, and the server refuses it.
 
-## Cable Club sessions
+## Removed in 0.5.0
 
-A Cable Club session lets you hold both controllers and trade by hand, the way
-two people trade with a link cable. Open `/games/<id>/cable?with=<other id>` and
-press Start session. Sessions work between two Gold, Silver or Crystal
-adventures for now. Red, Blue and Yellow pairs and Time Capsule pairs show that
-they are not yet supported. The Cable Club tab on the Trading page links to the
-session page for each adventure that can link with this one.
-
-Both adventures walk to the Cable Club and save there, as for any trade. The page
-then shows both screens side by side, or stacked on a phone, with a d-pad, A, B,
-Start and Select under each. The keyboard drives the game you last clicked or
-focused: arrows move, X or Z is A, C or Backspace is B, Enter is Start and Shift
-is Select. The status line reads preparing, travelling, ready, in session,
-checking, done or rolled back, with the reason.
-
-Trade as many Pokémon as you like, then press Finish. Both trainers leave the
-Trade Center and save through the cartridge. PokeSim then checks that the two
-adventures still hold the same Pokémon between them, that each side received
-exactly what the other sent (or its trade evolution), that nothing was copied or
-lost, and that nothing but the parties changed. Only then are both saves kept.
-Otherwise both adventures go back to their Pokémon Center saves, and so do they
-after Cancel, after five minutes without a button press, after finishing without
-a trade, or if PokeSim stops during the session. One session runs at a time, and
-both adventures count as busy until it ends. A view link shows the screens and
-the status without controls.
-
-`GET /api/v1/interactions/cable-sessions/partners?adventure_id=` lists every
-other adventure with the reason it cannot link, or an empty reason. The API is
-`POST /api/v1/interactions/cable-sessions` with `left_id`, `right_id`
-and an optional `request_id`, `GET /api/v1/interactions/cable-sessions/{id}`, and
-`POST /api/v1/interactions/cable-sessions/{id}/input` with `side` (`left` or
-`right`) and `button`, `.../finish` and `.../cancel`.
-
-## Offers
-
-An offer from the Trade tab to an adventure you control starts at once, because
-there is nobody else to ask. An offer to a view-only adventure waits until that
-adventure answers it.
-
-The Offers tab lists **Offers for this adventure** with Accept and Decline, and
-**Offers this adventure sent** with Withdraw. Each card shows both Pokémon with their
-portrait, level, Battle Power and Stat Power, the offer's status and its reason.
-Accepting checks both Pokémon again and then puts the trade in the same queue as
-Make a trade, so the card shows the same steps from waiting for the Cable Club to
-the saved trade.
-
-Only the limits from [Make a trade](#make-a-trade) apply. Trade settings, party
-protection and the last-copy rule do not. An offer is
-`pending` until it is answered. It becomes `declined` or `withdrawn` when answered,
-`accepted` while its trade runs, and then `completed` or `failed`. It is `expired`
-after 7 days without an answer, when either adventure is archived or deleted, or
-when a Pokémon in it has left its adventure by the time it is accepted. A Pokémon
-that is still there but can no longer be traded, such as one that became the only
-party member able to battle, makes the offer `failed` with that reason. If the
-other adventure is only stopped, Accept says so and the offer keeps waiting.
-An adventure can have 25 offers waiting at once.
-
-Offers are saved in the Library database, so they survive restarts. View links and
-`VIEWER_ONLY` instances show no offer controls, and the server refuses every offer
-write from them. An adventure whose settings make it view only cannot send, accept,
-decline or withdraw offers either.
+Trade offers and manual Cable Club sessions, where you held both controllers, are
+switched off in 0.5.0 to keep trading simple. Their tabs, pages and API routes are
+gone. Offers and sessions saved by an earlier build stay in the Library database
+but are ignored: they do not hold back automatic trades and are never answered or
+resumed. A session that was running when an earlier build stopped is still rolled
+back to both Pokémon Center saves at startup.
 
 ## Trading API
 
-Offers are under `/api/v1/interactions/trade-offers`:
+The trade builder is under `/api/v1/interactions/trade-builder`:
 
-- `GET ?adventure_id=` lists an adventure's incoming and outgoing offers.
 - `GET /pokemon?adventure_id=` lists every Pokémon an adventure could trade by
   hand, with the hard limits marked.
 - `GET /targets?from_id=` and `GET /limits?from_id=&from_key=&to_id=` feed the
-  Trade tab. Limits include the other side's Pokémon and `starts_now`.
-- `POST` creates an offer from `from_id`, `from_key`, `to_id`, `to_key` and an
-  optional `request_id`.
-- `GET /{id}` reads one offer, and `POST /{id}/accept`, `/{id}/decline` and
-  `/{id}/withdraw` answer it.
+  Trade tab. Targets mark a view-only adventure unavailable with its reason.
+  Limits include the other side's Pokémon and `starts_now`.
+- `POST` queues a trade from `from_id`, `from_key`, `to_id`, `to_key` and an
+  optional `request_id`, and returns its place in the queue. Sending the same
+  `request_id` again returns the trade it already queued.
+
+`GET /games/{id}/api/interactions` lists waiting trades under `queued`, beside
+`active` and `history`. The older `/api/v1/interactions/manual-trades` admin API
+is gone.
 
 `GET /api/v1/interactions/auto-settings?adventure_id=` reads the switch and wish
 list, and `PUT` with `enabled` and `wishlist` (a list of Pokédex numbers, up to 50)
@@ -250,7 +198,7 @@ Releases before 0.5.0 keyed partners by trainer ID and DVs alone. The first
 time an adventure reads its whole collection, a setting saved under an old key
 moves to the new key when exactly one held Pokémon has that trainer and those
 DVs. When several species share them, the setting stays under the old key and
-applies to none of them, so set it again on the one you meant. Offers, trades
+applies to none of them, so set it again on the one you meant. Trades
 in progress and League rotation counts saved with an old key still find their
 Pokémon by the same rule: exactly one match, or the trade stops.
 

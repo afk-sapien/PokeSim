@@ -10,7 +10,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#20241F" media="(prefers-color-scheme: dark)">
-<meta name="description" content="Trade Pokémon, answer offers, set automatic trading and see the history of this adventure.">
+<meta name="description" content="Trade Pokémon between your adventures, answer suggested trades, set automatic trading and see the history of this adventure.">
 <title>${adventure_name} trading · pokesim</title>
 <link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=glow-2">
 <link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
 <link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=builder-1">
-<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=builder-1">
+<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=simple-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
@@ -34,7 +34,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <main id="main" class="shell">
 <header class="identity page-head">
-<div class="who"><p class="micro">${adventure_name}</p><h1>Trading</h1><p class="page-lede">Pick a trade yourself, answer offers and suggestions, or let this adventure trade automatically. Everything about trading lives on this page.</p></div>
+<div class="who"><p class="micro">${adventure_name}</p><h1>Trading</h1><p class="page-lede">Pick a trade between your adventures, answer suggested trades, or let this adventure trade automatically. Everything about trading lives on this page.</p></div>
 </header>
 
 <section class="trade-overview" aria-label="Automatic trading status">
@@ -48,10 +48,8 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <div class="trade-tabs" role="tablist" aria-label="Trading">
 <button type="button" role="tab" id="tab-trade" aria-controls="panel-trade" aria-selected="true" tabindex="0">Trade</button>
-<button type="button" role="tab" id="tab-offers" aria-controls="panel-offers" aria-selected="false" tabindex="-1">Offers <span class="tab-count" id="offers-count" hidden></span></button>
 <button type="button" role="tab" id="tab-auto" aria-controls="panel-auto" aria-selected="false" tabindex="-1">Auto</button>
 <button type="button" role="tab" id="tab-history" aria-controls="panel-history" aria-selected="false" tabindex="-1">History</button>
-<button type="button" role="tab" id="tab-cable" aria-controls="panel-cable" aria-selected="false" tabindex="-1">Cable Club</button>
 </div>
 
 <section id="panel-trade" class="trade-panel" role="tabpanel" aria-labelledby="tab-trade" tabindex="0">
@@ -69,10 +67,6 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </div>
 </section>
 
-<section id="panel-offers" class="trade-panel" role="tabpanel" aria-labelledby="tab-offers" tabindex="0" hidden>
-<div id="trade-offers-section" class="offers-section"><p id="offers-note" class="trade-notice" role="status" aria-live="polite"></p><div class="section-head"><h2 class="legend legend--ink" id="offers-heading">Offers for this adventure</h2><span class="micro">Accepted offers wait in line for the Cable Club</span></div><div id="offers-incoming" class="deal-list" aria-live="polite"></div><div class="section-head offers-subhead"><h2 class="legend legend--ink">Offers this adventure sent</h2></div><div id="offers-outgoing" class="deal-list" aria-live="polite"></div></div>
-</section>
-
 <section id="panel-auto" class="trade-panel" role="tabpanel" aria-labelledby="tab-auto" tabindex="0" hidden>
 <p id="auto-note" class="trade-notice" role="status" aria-live="polite" hidden></p>
 <div class="auto-switch-row"><button type="button" role="switch" id="auto-switch" class="auto-switch" aria-checked="true" aria-describedby="auto-switch-help"><span class="auto-switch-track" aria-hidden="true"></span><span>Auto trading</span> <b id="auto-switch-state">On</b></button><p class="trade-help" id="auto-switch-help">Off stops only automatic trades. Trades you pick on the Trade tab still happen.</p></div>
@@ -86,14 +80,6 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div data-mon-toolbar="auto" data-settings="true"></div>
 <p id="trade-setting-status" class="vh" role="status" aria-live="polite" data-trade-status></p>
 <div id="auto-list" class="pc-grid pc-all-grid auto-list" role="group" aria-label="Trade settings"><p class="dex-empty">Loading trade settings…</p></div>
-</section>
-
-<section id="panel-cable" class="trade-panel" role="tabpanel" aria-labelledby="tab-cable" tabindex="0" hidden>
-<p id="cable-note" class="trade-notice" role="status" aria-live="polite" hidden></p>
-<div class="section-head"><h2 class="legend legend--ink" id="cable-heading">Hold both controllers</h2></div>
-<p class="trade-help">A Cable Club session walks both adventures to the Cable Club and hands you both controllers, so you trade by hand as two people would. Choose the adventure to link with.</p>
-<p id="cable-open" hidden></p>
-<div id="cable-games" class="pick-list pick-games" aria-labelledby="cable-heading"><p class="empty-note">Opening the Cable Club tab loads the games you can link with.</p></div>
 </section>
 
 <section id="panel-history" class="trade-panel" role="tabpanel" aria-labelledby="tab-history" tabindex="0" hidden>
@@ -117,9 +103,8 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="${game_base}/static/mon-grid.js?v=builder-1"></script>
-<script src="${game_base}/static/trade-progress.js?v=offers-1"></script>
 <script src="${game_base}/static/trade-ui.js?v=builder-1"></script>
-<script src="${game_base}/static/adventure-trading.js?v=builder-1"></script>
-<script src="${game_base}/static/trade-tabs.js?v=builder-1"></script>
+<script src="${game_base}/static/adventure-trading.js?v=simple-1"></script>
+<script src="${game_base}/static/trade-tabs.js?v=simple-1"></script>
 </body>
 </html>

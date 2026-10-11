@@ -1,9 +1,8 @@
 (() => {
   const $ = selector => document.querySelector(selector)
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
-  const OFFERS = '/api/v1/interactions/trade-offers'
+  const BUILDER = '/api/v1/interactions/trade-builder'
   const SETTINGS = '/api/v1/interactions/auto-settings'
-  const CABLE = '/api/v1/interactions/cable-sessions'
   const STORE = 'pokesim-trading-tab'
   const aid = PokeSim.adventureId
   const owner = String(PokeSim.base || '').startsWith('/games/') && typeof PokeSim.api === 'function'
@@ -26,8 +25,6 @@
     try { localStorage.setItem(STORE, current) } catch (_) {}
     if (current === 'auto') { loadAuto()
       loadAsk() }
-    if (current === 'offers') globalThis.AdventureTrading?.refreshOffers?.(true)
-    if (current === 'cable') loadCable()
   }
   for (const tab of tabs) {
     tab.addEventListener('click', () => select(tab.id.slice(4)))
@@ -112,7 +109,7 @@
     if (!el) return
     el.textContent = text || ''
     el.hidden = !text }
-  const VIEW_ONLY = 'This adventure is view-only, so it can receive offers but cannot send Pokémon'
+  const VIEW_ONLY = 'This adventure is view-only, so it cannot trade'
   const mineBlocked = mon => mon.row?.blocked || (pick.viewerOnly ? VIEW_ONLY : '')
   const theirsBlocked = mon => mon.row?.blocked || ''
   const gameName = id => pick.games.find(game => game.id === id)?.name || ''
@@ -163,13 +160,10 @@
     else if (!pick.their) reason = 'Choose a Pokémon to get.'
     else if (blocked) reason = blocked
     else if (!pick.limits || pick.limits.from?.key !== pick.mon.key || pick.limits.to?.adventure_id !== pick.game) reason = 'Checking this trade…'
+    else if (!pick.limits.starts_now) reason = VIEW_ONLY
     const ready = !reason && !pick.busy
-    const now = Boolean(pick.limits?.starts_now)
-    $('#pick-summary').textContent = reason || (now
-      ? 'You control both adventures, so the trade starts as soon as both games are ready.'
-      : `${pick.limits?.to?.adventure_name || 'The other adventure'} is view-only, so this becomes an offer its owner answers.`)
+    $('#pick-summary').textContent = reason || 'The trade starts as soon as both games are ready.'
     $('#pick-summary').classList.toggle('is-reason', Boolean(reason))
-    button.textContent = ready && !now ? 'Send offer' : 'Trade'
     button.disabled = !ready
     if ($('#slot-get-game')) $('#slot-get-game').textContent = pick.game ? `In ${gameName(pick.game)}` : ''
   }
@@ -200,12 +194,12 @@
     loadGames()
     try {
       const [data, found] = await Promise.all([
-        json(await PokeSim.api(`${OFFERS}/pokemon?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not read this adventure’s Pokémon.'),
+        json(await PokeSim.api(`${BUILDER}/pokemon?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not read this adventure’s Pokémon.'),
         readOwn()])
       if (found?.generation && Grid) Grid.generation('pick-mine', found.generation)
       pick.mine = data.pokemon || []
       pick.viewerOnly = Boolean(data.viewer_only)
-      if (data.viewer_only) note('#pick-note', 'This adventure is view-only. It can receive offers but cannot send them.')
+      if (data.viewer_only) note('#pick-note', 'This adventure is view-only, so it cannot trade.')
       else note('#pick-note', data.reason || '')
       renderMine()
       const wanted = query.get('mon')
@@ -224,7 +218,7 @@
     const key = pick.mon?.key
     const ask = pick.gamesAsked = {}
     try {
-      const data = await json(await PokeSim.api(`${OFFERS}/targets?from_id=${encodeURIComponent(aid)}${key ? `&from_key=${encodeURIComponent(key)}` : ''}`, {cache: 'no-store'}), 'Could not check the other games.')
+      const data = await json(await PokeSim.api(`${BUILDER}/targets?from_id=${encodeURIComponent(aid)}${key ? `&from_key=${encodeURIComponent(key)}` : ''}`, {cache: 'no-store'}), 'Could not check the other games.')
       // A slower answer for a Pokémon picked earlier must not show its reasons for this one.
       if (pick.gamesAsked !== ask || pick.mon?.key !== key) return
       pick.games = data.adventures || []
@@ -281,8 +275,8 @@
     })
     try {
       const path = key
-        ? `${OFFERS}/limits?from_id=${encodeURIComponent(aid)}&from_key=${encodeURIComponent(key)}&to_id=${encodeURIComponent(id)}`
-        : `${OFFERS}/pokemon?adventure_id=${encodeURIComponent(id)}`
+        ? `${BUILDER}/limits?from_id=${encodeURIComponent(aid)}&from_key=${encodeURIComponent(key)}&to_id=${encodeURIComponent(id)}`
+        : `${BUILDER}/pokemon?adventure_id=${encodeURIComponent(id)}`
       const data = await json(await PokeSim.api(path, {cache: 'no-store'}), 'Could not read their Pokémon.')
       if (stale()) return
       pick.limits = key ? data : null
@@ -320,15 +314,14 @@
     $('#pick-confirm').disabled = true
     const request = globalThis.crypto?.randomUUID ? crypto.randomUUID().replace(/-/g, '') : undefined
     try {
-      const offer = await json(await PokeSim.api(OFFERS, {method: 'POST', headers: {'Content-Type': 'application/json'},
+      await json(await PokeSim.api(BUILDER, {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({from_id: aid, from_key: pick.mon.key, to_id: pick.game, to_key: pick.their.key, ...(request ? {request_id: request} : {})})}),
       'That trade could not be set up.')
-      note('#pick-note', offer.status === 'accepted' ? 'Trade started. Follow it on the Offers tab.'
-        : 'Offer sent. It waits on the Offers tab until it is answered.')
       pick.busy = false
       reset()
-      await globalThis.AdventureTrading?.refreshOffers?.(true)
-      select('offers')
+      note('#pick-note', 'Trade started. Follow it under Current exchange and on the History tab.')
+      await globalThis.AdventureTrading?.refresh?.()
+      select('history')
     } catch (error) {
       note('#pick-note', error.message)
     } finally {
@@ -597,38 +590,6 @@
     if (pick.mon) slot('mine')
     if (open?.side === 'mine') renderDetail()
   })
-
-  // Cable Club: link with another adventure and hold both controllers on the Cable Club page.
-  let cableLoading = false
-  const cableHref = id => `${PokeSim.base}/cable?with=${encodeURIComponent(id)}`
-  async function loadCable() {
-    if (cableLoading) return
-    cableLoading = true
-    const list = $('#cable-games')
-    try {
-      const mine = await json(await PokeSim.fetch(`/api/cable`, {cache: 'no-store'}), 'Could not read the Cable Club.')
-      const open = mine.session && !['done', 'rolled_back'].includes(mine.session.phase)
-      const partner = open && (mine.session.left_id === aid ? mine.session.right_id : mine.session.left_id)
-      const link = $('#cable-open')
-      link.innerHTML = open ? `<a class="key key--primary" href="${esc(cableHref(partner))}">Open the session in progress</a>` : ''
-      link.hidden = !open
-      if (!owner) {
-        note('#cable-note', 'Cable Club sessions are started from the owner’s page, not from a view link.')
-        list.innerHTML = ''
-        return
-      }
-      note('#cable-note', mine.reason || '')
-      const data = await json(await PokeSim.api(`${CABLE}/partners?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not check the other games.')
-      list.innerHTML = (data.partners || []).map(game => {
-        const read = `<i class="lamp" data-on="${game.reason ? 'warn' : 'ok'}" aria-hidden="true"></i><span class="pick-read"><b>${esc(game.name)}</b><span class="micro">${esc(game.version)}</span>${game.reason ? `<span class="pick-reason">${esc(game.reason)}</span>` : ''}</span>`
-        return game.reason
-          ? `<span class="pick-item pick-game is-unavailable" data-cable="${esc(game.id)}" aria-disabled="true">${read}</span>`
-          : `<a class="pick-item pick-game" data-cable="${esc(game.id)}" href="${esc(cableHref(game.id))}">${read}</a>`
-      }).join('') || '<p class="empty-note">There is no other adventure to link with yet.</p>'
-    } catch (error) {
-      list.innerHTML = `<p class="empty-note">${esc(error.message)}</p>`
-    } finally { cableLoading = false }
-  }
 
   // Deep links (?tab=trade&mon=key) win over the remembered tab.
   let saved = null

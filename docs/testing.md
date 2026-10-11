@@ -54,7 +54,7 @@ state replaces the emulator boundary, so CI needs no Pokémon ROM. Coverage incl
 
 - Desktop file validation, starter selection, setup failure, retry, and quit.
 - PC locks persisted across refresh at desktop and mobile widths.
-- Disconnected trading, offer withdrawal, and view-only controls.
+- Disconnected trading, the trade builder, and view-only controls.
 - A trade hold beginning after an event page loads, rejected rewind feedback, and retry.
 
 CI splits the browser tests into four parallel jobs. Set `POKESIM_TEST_SHARD=2/4` to run one

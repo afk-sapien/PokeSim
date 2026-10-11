@@ -16,7 +16,7 @@ This index separates current instructions, future plans, and historical evidence
 | Gameplay, settings, and APIs | [Feature guide](guide.md) |
 | Power, stats, DVs, training, and individual victory counts | [Pokémon stats and Power](pokemon-stats.md) |
 | Collection browsing, sorting, and Keep settings | [PC storage](pc-storage.md) |
-| Trading screen, offers, and broker connections | [Trading](trading.md) |
+| Trading screen, trade builder, and broker connections | [Trading](trading.md) |
 | Automatic library exchanges | [Automatic trading](automatic-trading.md) |
 | Backups, upgrades, recovery, and storage | [Operations](operations.md) |
 | Remote access | [Self-hosting](self-hosting.md#configure-ports-and-remote-access) |

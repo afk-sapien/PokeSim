@@ -1,4 +1,4 @@
-// Progress of a chosen (manual) trade, shared by the library's trade page and each game's offers.
+// Progress of a chosen (manual) trade, for the library's trade page.
 (() => {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
   const steps = [

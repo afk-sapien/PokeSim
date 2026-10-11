@@ -1,4 +1,4 @@
-"""The Trading page tabs: build a trade, answer offers and suggestions, set automatic trading and read history."""
+"""The Trading page tabs: build a trade, answer suggestions, set automatic trading and read history."""
 import json
 import os
 from pathlib import Path
@@ -16,8 +16,6 @@ BLUE = 'c' * 32
 REASON = 'Busy Blue is busy finishing another trade'
 # The reason Busy Blue gives for the shiny Meganium, which is not a Gen I species.
 MEGANIUM = 'Meganium cannot go to a Red, Blue or Yellow game. Meganium did not exist in Gen I'
-CABLE = 'Time Capsule sessions between Gen I and Gen II are not yet supported.'
-CRYSTAL = 'd' * 32
 JSON = 'application/json'
 
 
@@ -38,12 +36,12 @@ class Library:
         self.page, self.url = page, url
         self.viewer_only = viewer_only
         self.limits_held = None
-        self.reads = {'auto': 0, 'cable': 0}
+        self.reads = {'auto': 0}
         self.starts_now = starts_now
         self.mine_key = mine_key
         self.posted = []
         self.saved = []
-        self.offers = []
+        self.queued = []
         self.held = {}
         self.ask_first = True
         self.answered = []
@@ -60,14 +58,11 @@ class Library:
         page.route(re.compile(r'/api/v1/session(\?|$)'), lambda route: self.json(route, {'csrf_token': 'test'}))
         page.route(re.compile(r'/api/v1/adventures(\?|$)'), lambda route: self.json(route, {'adventures': [
             {'id': FROM, 'name': 'Crystal', 'version': 'crystal', 'archived': False}]}))
-        page.route(re.compile(r'/api/v1/interactions/trade-offers(\?|$)'), self.trade_offers)
-        page.route(re.compile(r'/api/v1/interactions/trade-offers/pokemon(\?|$)'), self.pokemon)
-        page.route(re.compile(r'/api/v1/interactions/trade-offers/targets(\?|$)'), self.targets)
-        page.route(re.compile(r'/api/v1/interactions/trade-offers/limits(\?|$)'), self.limits)
+        page.route(re.compile(r'/api/v1/interactions/trade-builder(\?|$)'), self.build)
+        page.route(re.compile(r'/api/v1/interactions/trade-builder/pokemon(\?|$)'), self.pokemon)
+        page.route(re.compile(r'/api/v1/interactions/trade-builder/targets(\?|$)'), self.targets)
+        page.route(re.compile(r'/api/v1/interactions/trade-builder/limits(\?|$)'), self.limits)
         page.route(re.compile(r'/api/v1/interactions/auto-settings(\?|$)'), self.auto_settings)
-        page.route(re.compile(rf'/games/{FROM}/api/cable(\?|$)'), lambda route: self.json(route, {
-            'adventure': {'id': FROM, 'name': 'Crystal', 'version': 'crystal', 'state': 'running'}, 'reason': '', 'session': None}))
-        page.route(re.compile(r'/api/v1/interactions/cable-sessions/partners(\?|$)'), self.partners)
         page.route(re.compile(r'/api/v1/interactions/trade-requests(/|\?|$)'), self.trade_requests)
 
     def trade_requests(self, route):
@@ -91,13 +86,6 @@ class Library:
                 'left': self.side(FROM, 'Crystal', {'key': 'box-1', 'name': 'Bulbasaur', 'nickname': 'BUD', 'dex': 1, 'level': 5}),
                 'right': self.side(RED, 'Second Red', {'key': '1', 'name': 'Pidgey', 'dex': 16, 'level': 9})}
 
-    def partners(self, route):
-        self.reads['cable'] += 1
-        self.json(route, {
-            'adventure_id': FROM, 'partners': [
-                {'id': CRYSTAL, 'name': 'Second Crystal', 'version': 'crystal', 'reason': ''},
-                {'id': RED, 'name': 'Second Red', 'version': 'red', 'reason': CABLE}]})
-
     @staticmethod
     def json(route, data, status=200):
         route.fulfill(status=status, body=json.dumps(data), content_type=JSON)
@@ -107,7 +95,7 @@ class Library:
 
     def interactions(self, route):
         self.json(route, {'adventure': {'id': FROM, 'version': 'crystal', 'state': 'running', 'archived': False},
-                          'active': [], 'auto_enabled': self.auto['enabled'], 'ask_first': self.ask_first, 'recent_failures': [
+                          'active': [], 'queued': self.queued, 'auto_enabled': self.auto['enabled'], 'ask_first': self.ask_first, 'recent_failures': [
                               {'phase': 'aborted', 'decision': 'ABORT', 'peer_name': 'Busy Blue', 'updated_at': 2000,
                                'failure_reason': 'Busy Blue could not reach the Cable Club.'}],
                           'history': [{'phase': 'completed', 'decision': 'COMMIT', 'peer_name': 'Second Red',
@@ -118,16 +106,14 @@ class Library:
     def side(self, aid, name, mon):
         return {'adventure_id': aid, 'adventure_name': name, 'sprite_url': None, **mon}
 
-    def trade_offers(self, route):
-        if route.request.method == 'POST':
-            body = json.loads(route.request.post_data)
-            self.posted.append(body)
-            offer = {'id': 'd' * 32, 'status': 'accepted' if self.starts_now else 'pending', 'reason': None,
-                     'from': self.side(FROM, 'Crystal', {'name': 'Bulbasaur', 'level': 5}),
-                     'to': self.side(RED, 'Second Red', {'name': 'Pidgey', 'level': 9}), 'updated_at': 3000}
-            self.offers.append(offer)
-            return self.json(route, offer)
-        self.json(route, {'adventure_id': FROM, 'incoming': [], 'outgoing': self.offers, 'viewer_only': False})
+    def build(self, route):
+        body = json.loads(route.request.post_data)
+        self.posted.append(body)
+        trade = {'id': body.get('request_id') or 'd' * 32, 'state': 'queued', 'left_id': FROM, 'right_id': body['to_id'],
+                 'left_key': body['from_key'], 'right_key': body['to_key'], 'position': 1}
+        self.queued.append({'id': trade['id'], 'state': 'queued', 'position': 1, 'peer_id': RED,
+                            'peer_name': 'Second Red', 'created_at': 3000})
+        self.json(route, trade)
 
     def pokemon(self, route):
         if parse_qs(urlparse(route.request.url).query)['adventure_id'][0] == RED:
@@ -191,28 +177,25 @@ def test_tabs_move_with_the_keyboard_and_remember_the_last_one(page, game, width
     library.open()
     selected(page, 'Trade')
     expect(page.locator('#panel-trade')).to_be_visible()
-    expect(page.locator('#tab-cable')).to_be_enabled()
+    # Trading is automatic or built by hand: there is no Offers or Cable Club tab.
+    expect(page.get_by_role('tab')).to_have_text(['Trade', 'Auto', 'History'])
     tab = page.get_by_role('tab', name='Trade')
     tab.focus()
     tab.press('ArrowRight')
-    selected(page, 'Offers')
-    expect(page.get_by_role('tab', name=re.compile('Offers'))).to_be_focused()
-    expect(page.locator('#panel-offers')).to_be_visible()
+    selected(page, 'Auto')
+    expect(page.get_by_role('tab', name='Auto')).to_be_focused()
+    expect(page.locator('#panel-auto')).to_be_visible()
     expect(page.locator('#panel-trade')).to_be_hidden()
     page.keyboard.press('End')
-    selected(page, 'Cable Club')
-    page.keyboard.press('ArrowLeft')
     selected(page, 'History')
     expect(page.locator('#trade-history')).to_contain_text('Busy Blue could not reach the Cable Club')
     # History lists failed attempts and completed trades together, newest first.
     text = page.locator('#trade-history').inner_text()
     assert text.index('Busy Blue') < text.index('Second Red')
     page.keyboard.press('ArrowRight')
-    selected(page, 'Cable Club')
-    page.keyboard.press('ArrowRight')
     selected(page, 'Trade')
     page.keyboard.press('ArrowLeft')
-    selected(page, 'Cable Club')
+    selected(page, 'History')
     page.get_by_role('tab', name='Auto').click()
     page.reload()
     selected(page, 'Auto')
@@ -321,13 +304,14 @@ def test_trade_builder_picks_both_slots_in_a_modal_and_starts_an_owned_trade(pag
     expect(dialog).to_be_hidden()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     confirm.click()
-    selected(page, 'Offers')
+    # The trade is queued at once and the page moves to History. It waits under Current exchange.
+    selected(page, 'History')
     assert library.posted[0] | {'request_id': None} == {'from_id': FROM, 'from_key': 'box-1', 'to_id': RED, 'to_key': '1',
                                                          'request_id': None}
-    expect(page.locator('#offers-outgoing')).to_contain_text('Accepted')
-    expect(page.locator('#offers-count')).to_have_text('1')
-    shoot(page, f'offers-{width}')
-    page.get_by_role('tab', name='History').click()
+    current = page.locator('#current-exchange-section')
+    expect(current).to_be_visible()
+    expect(current).to_contain_text('Waiting for the Cable Club')
+    expect(current).to_contain_text('Second Red')
     shoot(page, f'history-{width}')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
@@ -352,17 +336,29 @@ def test_their_pokemon_can_be_chosen_first_and_clear_empties_both_slots(page, ga
     expect(page.locator('#pick-confirm')).to_be_disabled()
 
 
-def test_a_trade_with_a_view_only_adventure_becomes_an_offer(page, game):
-    url = game[0]
-    library = Library(page, url, starts_now=False)
+def test_a_view_only_adventure_is_a_disabled_choice_with_its_reason(page, game):
+    library = Library(page, game[0], starts_now=False)
+    view_only = 'This adventure is view-only, so it cannot trade'
+
+    def targets(route):
+        # The library marks a view-only adventure unavailable. Its reason shows in the list.
+        library.json(route, {'adventures': [
+            {'id': RED, 'name': 'Second Red', 'version': 'red', 'generation': 1, 'available': True, 'reason': ''},
+            {'id': BLUE, 'name': 'Watched Blue', 'version': 'blue', 'generation': 1, 'available': False, 'reason': view_only}],
+            'from_key': None, 'viewer_only': False})
+    page.unroute(re.compile(r'/api/v1/interactions/trade-builder/targets(\?|$)'))
+    page.route(re.compile(r'/api/v1/interactions/trade-builder/targets(\?|$)'), targets)
     library.open()
+    expect(option(page, BLUE)).to_have_attribute('disabled', '')
+    expect(option(page, BLUE)).to_contain_text(view_only)
+    # Should a partner turn view-only after it was chosen, the Trade key stays off and says why.
     choose(page, 'mine', 'box-1')
     page.locator('#pick-game').select_option(RED)
     choose(page, 'theirs', '1')
-    expect(page.locator('#pick-confirm')).to_have_text('Send offer')
+    expect(page.locator('#pick-confirm')).to_be_disabled()
+    expect(page.locator('#pick-confirm')).to_have_text('Trade')
     expect(page.locator('#pick-summary')).to_contain_text('view-only')
-    page.locator('#pick-confirm').click()
-    expect(page.locator('#offers-outgoing')).to_contain_text('Waiting for an answer')
+    assert library.posted == []
 
 
 def test_trade_link_in_the_pc_opens_the_trade_tab_with_that_pokemon_chosen(page, game):
@@ -513,35 +509,24 @@ def test_auto_tab_switch_wish_list_and_settings(page, game, width):
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
-def test_auto_and_cable_tabs_read_again_on_every_visit(page, game):
+def test_auto_tab_reads_again_on_every_visit(page, game):
     library = Library(page, game[0])
     library.open('?tab=auto')
     expect(page.locator('#auto-switch')).to_be_enabled()
-    page.get_by_role('tab', name='Cable Club').click()
-    expect(page.locator('#cable-games')).to_contain_text('Second Crystal')
+    page.get_by_role('tab', name='History').click()
     library.auto['enabled'] = False
     page.get_by_role('tab', name='Auto').click()
     expect(page.locator('#auto-switch-state')).to_have_text('Off')
-    page.get_by_role('tab', name='Cable Club').click()
-    expect(page.locator('#cable-games')).to_contain_text('Second Crystal')
     assert library.reads['auto'] >= 2
-    page.wait_for_timeout(100)
-    assert library.reads['cable'] >= 2
 
 
-@pytest.mark.parametrize('width', [1280, 390])
-def test_cable_club_tab_links_supported_games_and_greys_out_the_rest(page, game, width):
-    url = game[0]
-    library = Library(page, url)
-    page.set_viewport_size({'width': width, 'height': 844})
-    library.open('?tab=cable')
-    selected(page, 'Cable Club')
-    games = page.locator('#cable-games')
-    link = games.get_by_role('link', name=re.compile('Second Crystal'))
-    expect(link).to_have_attribute('href', f'/games/{FROM}/cable?with={CRYSTAL}')
-    red = games.locator(f'[data-cable="{RED}"]')
-    expect(red).to_have_attribute('aria-disabled', 'true')
-    expect(red).to_contain_text('not yet supported')
-    expect(games.get_by_role('link', name=re.compile('Second Red'))).to_have_count(0)
-    shoot(page, f'cable-{width}')
-    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+@pytest.mark.parametrize('tab', ['offers', 'cable'])
+def test_a_remembered_or_linked_offers_or_cable_tab_opens_the_trade_tab(page, game, tab):
+    library = Library(page, game[0])
+    page.goto(f'{game[0]}/games/{FROM}/trading')
+    page.evaluate(f'localStorage.setItem("pokesim-trading-tab", "{tab}")')
+    page.reload()
+    selected(page, 'Trade')
+    library.open(f'?tab={tab}')
+    selected(page, 'Trade')
+    expect(page.locator('#panel-trade')).to_be_visible()

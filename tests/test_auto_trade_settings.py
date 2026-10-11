@@ -7,13 +7,20 @@ import pytest
 
 from pokesim import config
 from pokesim.app import trade_settings
-from pokesim.app.offers import TradeOffers
+from pokesim.app.trade_builder import TradeBuilder, ViewOnlyError
 from pokesim.app.registry import identifier
 from pokesim.gen2 import trading as gen2_trading
 
 from test_managed_coordinator import Peer, setup  # noqa: F401  (fixture)
 from test_view_links import managed  # noqa: F401  (fixture)
-from test_cable_sessions import running_loop
+
+
+def running_loop():
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
 
 
 class Chosen(Exception):
@@ -141,13 +148,11 @@ def test_wish_list_hits_rank_before_trade_first(setup, monkeypatch):  # noqa: F8
     assert chosen(c) == {ids[1], ids[2]}
 
 
-def test_auto_never_takes_a_pokemon_in_a_pending_hand_picked_trade(setup):  # noqa: F811
+def test_stored_trade_offers_are_ignored(setup):  # noqa: F811
+    """Offers left from before 0.5.0 stay in the registry but no longer hold any Pokémon back."""
     c, left, right = setup.coordinator, setup.data['left_id'], setup.data['right_id']
-    offer = setup.registry.create_trade_offer({'id': identifier(), 'from_id': left, 'from_key': '0',
-                                               'to_id': right, 'to_key': 'party-1', 'display': {'from': {}, 'to': {}}})
-    assert (left, '0') in c.hand_picked_keys()
-    assert c.schedule_once() is None
-    setup.registry.update_trade_offer(offer['id'], status='declined', reason=None)
+    setup.registry.create_trade_offer({'id': identifier(), 'from_id': left, 'from_key': '0',
+                                       'to_id': right, 'to_key': 'party-1', 'display': {'from': {}, 'to': {}}})
     assert (left, '0') not in c.hand_picked_keys()
     assert c.schedule_once()['phase'] == 'completed'
 
@@ -171,7 +176,7 @@ def test_shinies_never_trade_automatically_even_when_set_to_trade_first(setup): 
 @pytest.fixture
 def owned(setup):  # noqa: F811
     setup.manager.coordinator = setup.coordinator
-    setup.manager.offers = TradeOffers(setup.manager)
+    setup.manager.builder = TradeBuilder(setup.manager)
     return setup
 
 
@@ -179,33 +184,45 @@ def request(setup):  # noqa: F811
     return {'from_id': setup.data['left_id'], 'from_key': '0', 'to_id': setup.data['right_id'], 'to_key': '1'}
 
 
-def test_an_offer_to_an_owned_adventure_starts_at_once(owned):
-    service, c = owned.manager.offers, owned.coordinator
-    offer = service.create(request(owned))
-    assert offer['status'] == 'accepted' and offer['manual_id']
-    assert c.manual_status(offer['manual_id'])['state'] == 'queued'
+def test_a_built_trade_queues_at_once_and_shows_on_both_adventures(owned):
+    service, c, left, right = owned.manager.builder, owned.coordinator, owned.data['left_id'], owned.data['right_id']
+    body = {**request(owned), 'request_id': identifier()}
+    trade = service.create(body)
+    assert trade['state'] == 'queued' and trade['left_id'] == left and trade['right_id'] == right
+    # Sending the same request again returns the same trade instead of queueing a second one.
+    assert service.create(body)['id'] == trade['id'] and len(c.manual_statuses()['trades']) == 1
+    for aid in (left, right):
+        queued = c.adventure_status(aid)['queued']
+        assert [row['id'] for row in queued] == [trade['id']] and queued[0]['position'] == 1
     assert c.drain_manual()['phase'] == 'completed'
-    assert service.status(offer['id'])['status'] == 'completed'
+    assert c.manual_status(trade['id'])['phase'] == 'completed'
+    assert c.adventure_status(left)['queued'] == []
 
 
-def test_an_offer_to_a_view_only_adventure_waits_for_an_answer(owned):
-    service, right = owned.manager.offers, owned.data['right_id']
+def test_a_view_only_adventure_cannot_take_a_built_trade(owned):
+    service, left, right = owned.manager.builder, owned.data['left_id'], owned.data['right_id']
     game = owned.registry.adventure(right)
     owned.registry.update(right, settings={**game['settings'], 'viewer_only': True})
-    offer = service.create(request(owned))
-    assert offer['status'] == 'pending' and offer['manual_id'] is None
+    row = service.targets(left)['adventures'][0]
+    assert row['available'] is False and 'view-only' in row['reason']
+    assert service.limits(left, '0', right)['starts_now'] is False
+    with pytest.raises(ViewOnlyError):
+        service.create(request(owned))
     assert owned.coordinator.manual_statuses()['trades'] == []
 
 
-def test_an_offer_that_cannot_start_yet_stays_pending(owned, monkeypatch):
-    service = owned.manager.offers
-    monkeypatch.setattr(owned.coordinator, 'enqueue_manual',
-                        lambda data: (_ for _ in ()).throw(ValueError('Trading is paused for application maintenance')))
-    assert service.create(request(owned))['status'] == 'pending'
+def test_a_built_trade_checks_hard_limits_first(owned):
+    service, right = owned.manager.builder, owned.data['right_id']
+    owned.peers[right].pokemon[1]['blocked'] = 'Eggs cannot be traded'
+    with pytest.raises(ValueError, match='Eggs cannot be traded'):
+        service.create({**request(owned), 'to_key': 'party-1'})
+    with pytest.raises(ValueError, match='Choose a Pokémon'):
+        service.create({**request(owned), 'extra': 1})
+    assert owned.coordinator.manual_statuses()['trades'] == []
 
 
 def test_trade_tab_lists_their_pokemon_with_hard_limits(owned):
-    service, left, right = owned.manager.offers, owned.data['left_id'], owned.data['right_id']
+    service, left, right = owned.manager.builder, owned.data['left_id'], owned.data['right_id']
     owned.peers[right].pokemon[1]['blocked'] = 'Eggs cannot be traded'
     limits = service.limits(left, '0', right)
     rows = {row['key']: row for row in limits['pokemon']}

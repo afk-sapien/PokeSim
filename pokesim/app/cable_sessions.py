@@ -7,6 +7,12 @@ walks both trainers out, saves through the cartridges and checks that the cable 
 Pokémon between the two parties. The coordinator checks that again from the manifest, stages
 both results and commits. Anything else (Cancel, five idle minutes, a lost worker, a failed
 check) aborts the transaction, which puts both adventures back on their Center saves.
+
+Not reachable in 0.5.0: no route or page starts a session, so the Cable Club is automatic
+only. The coordinator still recognises a stored session row, so one left from an earlier
+version recovers and reports its reason like any other exchange. To bring the mode back,
+restore the cable-sessions routes, the /cable page and its static files from the commit that removed them
+(git log -- pokesim/web/static/cable-club.html).
 """
 from __future__ import annotations
 

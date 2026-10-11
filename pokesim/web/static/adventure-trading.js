@@ -50,6 +50,13 @@
     const lamp = completed || failed ? '' : '<i class="lamp lamp--blink" data-on="signal" aria-hidden="true"></i>'
     return `<article class="deal trade-deal cable-card${failed ? ' cable-failed' : ''}${completed ? ' cable-completed' : ''}"><header class="deal-head"><h3>With ${peer}</h3><span class="tag ${tone} cable-status">${lamp}${esc(label)}</span></header>${pair}${reason}${foot}</article>`
   }
+  // A trade the owner chose that waits for the Cable Club. Its Pokémon show once it starts.
+  function queuedCard(entry) {
+    const peer = /^[a-f0-9]{32}$/.test(entry.peer_id || '')
+      ? `<a href="/games/${entry.peer_id}/trading">${esc(entry.peer_name)} <span aria-hidden="true">↗</span></a>` : esc(entry.peer_name)
+    const place = entry.state === 'starting' ? 'Checking both Pokémon' : entry.position > 1 ? `Number ${entry.position} in line for the Cable Club` : 'Next for the Cable Club'
+    return `<article class="deal trade-deal cable-card queued-card"><header class="deal-head"><h3>With ${peer}</h3><span class="tag tag--signal cable-status"><i class="lamp lamp--blink" data-on="signal" aria-hidden="true"></i>Waiting for the Cable Club</span></header><p class="trade-help">${esc(place)}. It starts when the Cable Club is free.</p></article>`
+  }
   const setLamp = state => { const lamp = $('#trade-lamp'); if (lamp?.dataset) lamp.dataset.on = state }
   let loading = false
   async function refresh() {
@@ -75,8 +82,10 @@
         : off ? 'Automatic trading is off. Trades you pick on the Trade tab still happen.'
         : data.attention?.message || (asking ? 'Suggested trades wait at the top of this page until you accept them.'
           : 'This adventure will trade when a useful exchange is ready.')
-      $('#current-exchange-section').hidden = !data.active.length
-      $('#trade-active').innerHTML = data.active.length ? data.active.map(trade => exchange(trade)).join('')
+      const queued = data.queued || []
+      $('#current-exchange-section').hidden = !data.active.length && !queued.length
+      $('#trade-active').innerHTML = data.active.length || queued.length
+        ? data.active.map(trade => exchange(trade)).join('') + queued.map(queuedCard).join('')
         : '<p class="empty-note">No exchange in progress for this adventure.</p>'
       // Completed trades and attempts that did not complete, in one list, newest first.
       const completed = data.history.filter(trade => trade.phase === 'completed' && trade.decision === 'COMMIT')
@@ -97,14 +106,8 @@
       $('#trade-connection-note').hidden = false
     } finally { loading = false }
   }
-  // Trade offers between adventures. Only the owner's /games/ page reaches the library API, never a view link.
-  const OFFERS = '/api/v1/interactions/trade-offers'
+  // Only the owner's /games/ page reaches the library API, never a view link.
   const offerOwner = String(PokeSim.base || '').startsWith('/games/') && typeof PokeSim.api === 'function'
-  const offerLabels = {pending: 'Waiting for an answer', accepted: 'Accepted · Trading', declined: 'Declined', withdrawn: 'Withdrawn',
-    expired: 'Expired', failed: 'Did not complete', completed: 'Trade completed'}
-  const offerTones = {pending: 'tag--signal', accepted: 'tag--signal', completed: 'tag--ok', failed: 'tag--crit', expired: 'tag--crit'}
-  let offerSignature = ''
-  let offerBusy = false
   function offerSide(mon, label) {
     const dex = dexNumber(mon)
     const sprite = mon.egg ? globalThis.PokemonTypes?.eggPlate || '<span class="plate-num" aria-hidden="true">?</span>'
@@ -116,81 +119,6 @@
     const power = [Number.isFinite(mon.battle_power) ? `Battle Power ${mon.battle_power.toLocaleString()}` : '',
       Number.isFinite(mon.power) ? `Stat Power ${mon.power.toLocaleString()}` : ''].filter(Boolean).join(' · ')
     return `<div class="swap-side offer-mon"><div class="plate plate--bay${plateClass(mon)}">${sprite}</div><div class="swap-read"><p class="micro">${label}${dex ? ` · #${String(dex).padStart(3, '0')}` : ''}${level}</p><h4>${esc(mon.name || 'Unknown Pokémon')}</h4>${nickname}${stamps(mon)}<p class="swap-note">${esc(mon.adventure_name)}${power ? ` · ${esc(power)}` : ''}</p></div></div>`
-  }
-  function offerCard(offer, incoming, viewerOnly) {
-    const mine = incoming ? offer.to : offer.from
-    const theirs = incoming ? offer.from : offer.to
-    const peer = `<a href="/games/${esc(theirs.adventure_id)}/trading">${esc(theirs.adventure_name)} <span aria-hidden="true">↗</span></a>`
-    const lamp = ['pending', 'accepted'].includes(offer.status) ? '<i class="lamp lamp--blink" data-on="signal" aria-hidden="true"></i>' : ''
-    const reason = offer.reason ? `<p class="deal-reason${['failed', 'expired'].includes(offer.status) ? ' deal-reason--crit' : ''}">${esc(offer.reason)}</p>` : ''
-    const name = id => [offer.from, offer.to].find(side => side.adventure_id === id)?.adventure_name || 'An adventure'
-    const progress = offer.trade && offer.status !== 'pending' ? globalThis.TradeProgress?.card(offer.trade, name) || '' : ''
-    const actions = offer.status !== 'pending' || viewerOnly ? ''
-      : incoming ? `<div class="offer-answer"><button type="button" class="key key--primary" data-offer-action="accept" data-offer-id="${esc(offer.id)}">Accept</button><button type="button" class="key" data-offer-action="decline" data-offer-id="${esc(offer.id)}">Decline</button></div>`
-        : `<div class="offer-answer"><button type="button" class="key" data-offer-action="withdraw" data-offer-id="${esc(offer.id)}">Withdraw</button></div>`
-    const date = new Date((offer.expires_at || offer.updated_at) * 1000)
-    const when = Number.isFinite(date.getTime()) ? `<footer class="deal-foot"><time datetime="${date.toISOString()}">${offer.expires_at ? 'Expires ' : ''}${esc(date.toLocaleString())}</time></footer>` : ''
-    return `<article class="deal trade-deal offer-card" data-offer="${esc(offer.id)}"><header class="deal-head"><h3>${incoming ? 'From' : 'To'} ${peer}</h3><span class="tag ${offerTones[offer.status] || ''} offer-status">${lamp}${esc(offerLabels[offer.status] || offer.status)}</span></header><div class="swap">${offerSide(mine, 'You send')}<span class="swap-arrow" aria-hidden="true">⇄</span>${offerSide(theirs, 'You receive')}</div>${reason}${progress}${actions}${when}</article>`
-  }
-  function renderOffers(data) {
-    const key = JSON.stringify(data)
-    if (key === offerSignature) return
-    offerSignature = key
-    const viewerOnly = Boolean(data.viewer_only)
-    $('#trade-offers-section').hidden = false
-    $('#offers-incoming').innerHTML = data.incoming.map(offer => offerCard(offer, true, viewerOnly)).join('')
-      || '<p class="empty-note">No offers from other adventures yet.</p>'
-    $('#offers-outgoing').innerHTML = data.outgoing.map(offer => offerCard(offer, false, viewerOnly)).join('')
-      || '<p class="empty-note">Pick a trade on the Trade tab. Offers to view-only adventures wait here for an answer.</p>'
-    // The tab badge counts offers still open: waiting for an answer or for the Cable Club.
-    const open = [...data.incoming, ...data.outgoing].filter(offer => ['pending', 'accepted'].includes(offer.status)).length
-    const count = $('#offers-count')
-    if (count) {
-      count.textContent = open ? String(open) : ''
-      count.hidden = !open
-      count.setAttribute?.('aria-label', `${open} open ${open === 1 ? 'offer' : 'offers'}`)
-    }
-    globalThis.Panel?.fitSprites?.($('#trade-offers-section'))
-  }
-  async function refreshOffers(force = false) {
-    if (force) offerSignature = ''
-    if (!offerOwner) {
-      if ($('#offers-incoming')) $('#offers-incoming').innerHTML = '<p class="empty-note">Offers are answered from the owner’s page, not from a view link.</p>'
-      return
-    }
-    try {
-      const response = await PokeSim.api(`${OFFERS}?adventure_id=${encodeURIComponent(PokeSim.adventureId)}`, {cache: 'no-store'})
-      if (!response.ok) throw new Error('Unavailable')
-      const data = await response.json()
-      if (data.adventure_id !== PokeSim.adventureId) throw new Error('Wrong adventure')
-      renderOffers(data)
-    } catch (_) {
-      if ($('#offers-note') && !offerBusy) $('#offers-note').textContent = offerSignature ? 'Offers are reconnecting.' : ''
-    }
-  }
-  async function answerOffer(button) {
-    if (offerBusy) return
-    offerBusy = true
-    button.disabled = true
-    $('#offers-note').textContent = ''
-    try {
-      const response = await PokeSim.api(`${OFFERS}/${encodeURIComponent(button.dataset.offerId)}/${button.dataset.offerAction}`, {method: 'POST'})
-      let data = {}
-      try { data = await response.json() } catch (_) {}
-      if (!response.ok) throw new Error(data.detail || 'That did not work. Try again in a moment.')
-      if (data.status === 'expired' || data.status === 'failed') $('#offers-note').textContent = data.reason || 'This offer can no longer happen.'
-    } catch (error) {
-      $('#offers-note').textContent = error.message
-    } finally {
-      offerBusy = false
-      offerSignature = ''
-      await refreshOffers()
-    }
-  }
-  const offersSection = $('#trade-offers-section')
-  if (offersSection && offerOwner) offersSection.onclick = event => {
-    const button = event.target.closest?.('[data-offer-action]')
-    if (button && !button.disabled) answerOffer(button)
   }
   // Suggested trades: with Ask me first on, automatic trading waits here for an answer.
   const REQUESTS = '/api/v1/interactions/trade-requests'
@@ -234,7 +162,7 @@
       let data = {}
       try { data = await response.json() } catch (_) {}
       if (!response.ok) throw new Error(data.detail || 'That did not work. Try again in a moment.')
-      say(data.status === 'accepted' ? 'Trade started. Follow it on the Offers tab and under Current exchange.'
+      say(data.status === 'accepted' ? 'Trade started. Follow it under Current exchange and on the History tab.'
         : data.status === 'dismissed' ? 'Dismissed. This pair will not be suggested again for a week.'
           : data.reason || 'This suggested trade can no longer happen.')
     } catch (error) {
@@ -251,9 +179,8 @@
     if (button && !button.disabled) answerRequest(button)
   })
   const poll = () => { refresh()
-    refreshOffers()
     refreshRequests() }
   poll()
   setInterval(() => { if (!document.hidden) poll() }, 5000)
-  globalThis.AdventureTrading = {refresh, refreshOffers, refreshRequests, offerOwner, exchange, offerSide}
+  globalThis.AdventureTrading = {refresh, refreshRequests, offerOwner, exchange, offerSide}
 })()

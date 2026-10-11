@@ -378,12 +378,26 @@ class Coordinator:
                     'recovering': bool(row['error']) or row['phase'] == 'recovering'}
         return {'adventure': {key: game[key] for key in ('id', 'name', 'version', 'state', 'archived')},
                 'active': [public(row) for row in self.registry.transactions(unresolved=True, adventure_id=aid)],
+                'queued': self._queued_for(aid, names),
                 'attention': self._attention(rows),
                 'auto_enabled': trade_settings.get(self.registry, aid)['enabled'],
                 'ask_first': trade_settings.ask_first(self.registry),
                 'recent_failures': [public(row) for row in [r for r in rows if r['phase'] == 'aborted'][:5]],
                 'history': [public(row) for row in [r for r in rows
                             if r['phase'] == 'completed' and r['decision'] == 'COMMIT'][:20]]}
+
+    def _queued_for(self, aid, names):
+        """Trades the owner chose for this adventure that wait for the Cable Club, oldest first."""
+        waiting = [entry for entry in self._manual_entries() if entry['state'] in MANUAL_WAITING]
+        rows = []
+        for position, entry in enumerate(waiting, 1):
+            if aid not in (entry['left_id'], entry['right_id']):
+                continue
+            peer = entry['right_id'] if entry['left_id'] == aid else entry['left_id']
+            rows.append({'id': entry['id'], 'state': entry['state'], 'position': position,
+                         'peer_id': peer, 'peer_name': names.get(peer, 'Another adventure'),
+                         'created_at': entry['created_at']})
+        return rows
 
     def _request(self, aid, operation, data=None, recovery=False):
         if self.closed.is_set():
@@ -971,19 +985,14 @@ class Coordinator:
     def hand_picked_keys(self):
         """Pokémon in a hand-picked trade that has not finished, as (adventure, trade key) pairs.
 
-        Automatic trading never selects them, so an offer or a queued trade the owner chose
-        does not lose its Pokémon to an automatic exchange first.
+        Automatic trading never selects them, so a queued trade the owner chose does not lose
+        its Pokémon to an automatic exchange first. Trade offers stored before 0.5.0 are
+        ignored: nothing can answer them any more.
         """
         keys = set()
         for entry in self._manual_entries():
             if entry['state'] in MANUAL_WAITING:
                 keys |= {(entry['left_id'], entry['left_key']), (entry['right_id'], entry['right_key'])}
-        try:
-            offers = self.registry.trade_offers(statuses=['pending', 'accepted'])
-        except (AttributeError, KeyError):
-            offers = []
-        for offer in offers:
-            keys |= {(offer['from_id'], offer['from_key']), (offer['to_id'], offer['to_key'])}
         return keys
 
     @staticmethod

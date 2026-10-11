@@ -42,8 +42,7 @@ log = logging.getLogger(__name__)
 STATIC = Path(__file__).parents[1] / 'web' / 'static'
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon', 'stats/items', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
-                   'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml',
-                   'cable', 'api/cable'}
+                   'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml'}
 
 # Pages a person opens. A stopped adventure answers these with its status page, not raw JSON.
 GAME_PAGES = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon',
@@ -92,8 +91,8 @@ class Manager:
         self.session_lock = threading.Lock()
         from .coordinator import Coordinator
         self.coordinator = Coordinator(self)
-        from .offers import TradeOffers
-        self.offers = TradeOffers(self)
+        from .trade_builder import TradeBuilder
+        self.builder = TradeBuilder(self)
 
     @staticmethod
     def validate_adventure_settings(values):
@@ -285,7 +284,7 @@ def create_app(manager, shutdown=lambda: None):
     async def unsupported(request, error):
         return JSONResponse({'detail': str(error)}, status_code=501)
 
-    from .offers import ViewOnlyError
+    from .trade_builder import ViewOnlyError
 
     @app.exception_handler(ViewOnlyError)
     async def view_only(request, error):
@@ -626,68 +625,26 @@ def create_app(manager, shutdown=lambda: None):
         manager.background(manager.coordinator.execute, row['id'])
         return row
 
-    # Cable Club sessions: the owner drives two linked Gen II adventures by hand.
-    def session_writer(*aids):
-        from .offers import ViewOnlyError
-        if any(isinstance(aid, str) and manager.offers.viewer_only(aid) for aid in aids):
-            raise ViewOnlyError('This adventure is view-only')
+    # Trade builder: the owner picks a Pokémon in two of their adventures and trades them.
+    @app.get('/api/v1/interactions/trade-builder/targets')
+    async def trade_builder_targets(from_id: str, from_key: str | None = None):
+        return await asyncio.to_thread(manager.builder.targets, validate_id(from_id), from_key)
 
-    @app.post('/api/v1/interactions/cable-sessions')
-    async def create_cable_session(request: Request):
+    @app.get('/api/v1/interactions/trade-builder/limits')
+    async def trade_builder_limits(from_id: str, from_key: str, to_id: str):
+        return await asyncio.to_thread(manager.builder.limits, validate_id(from_id), from_key, validate_id(to_id))
+
+    @app.get('/api/v1/interactions/trade-builder/pokemon')
+    async def trade_builder_pokemon(adventure_id: str):
+        return await asyncio.to_thread(manager.builder.pokemon, validate_id(adventure_id))
+
+    @app.post('/api/v1/interactions/trade-builder')
+    async def create_built_trade(request: Request):
         manager.check_available()
         data = await json_body(request)
-        if isinstance(data, dict):
-            await asyncio.to_thread(session_writer, data.get('left_id'), data.get('right_id'))
-        status = await asyncio.to_thread(manager.coordinator.sessions.create, data)
-        if status['transaction_phase'] == 'preparing' and status['decision'] is None:
-            manager.coordinator.sessions.start(status['id'])
-        return status
-
-    @app.get('/api/v1/interactions/cable-sessions/partners')
-    async def cable_session_partners(adventure_id: str):
-        return await asyncio.to_thread(manager.coordinator.sessions.partners, validate_id(adventure_id))
-
-    @app.get('/api/v1/interactions/cable-sessions/{sid}')
-    async def cable_session(sid: str):
-        return await asyncio.to_thread(manager.coordinator.sessions.status, validate_id(sid))
-
-    @app.post('/api/v1/interactions/cable-sessions/{sid}/{action}')
-    async def cable_session_action(sid: str, action: str, request: Request):
-        sessions = manager.coordinator.sessions
-        if action not in {'input', 'finish', 'cancel'}:
-            raise HTTPException(404)
-        status = await asyncio.to_thread(sessions.status, validate_id(sid))
-        await asyncio.to_thread(session_writer, status['left_id'], status['right_id'])
-        if action == 'input':
-            data = await json_body(request)
-            return await asyncio.to_thread(sessions.press, sid, data)
-        return await asyncio.to_thread(getattr(sessions, action), sid)
-
-    # Trade offers: one adventure asks another for a Pokémon. Accepting queues a manual trade.
-    @app.get('/api/v1/interactions/trade-offers')
-    async def trade_offers(adventure_id: str):
-        return await asyncio.to_thread(manager.offers.for_adventure, validate_id(adventure_id))
-
-    @app.get('/api/v1/interactions/trade-offers/targets')
-    async def trade_offer_targets(from_id: str, from_key: str | None = None):
-        return await asyncio.to_thread(manager.offers.targets, validate_id(from_id), from_key)
-
-    @app.get('/api/v1/interactions/trade-offers/limits')
-    async def trade_offer_limits(from_id: str, from_key: str, to_id: str):
-        return await asyncio.to_thread(manager.offers.limits, validate_id(from_id), from_key, validate_id(to_id))
-
-    @app.get('/api/v1/interactions/trade-offers/pokemon')
-    async def trade_offer_pokemon(adventure_id: str):
-        return await asyncio.to_thread(manager.offers.pokemon, validate_id(adventure_id))
-
-    @app.post('/api/v1/interactions/trade-offers')
-    async def create_trade_offer(request: Request):
-        manager.check_available()
-        data = await json_body(request)
-        offer = await asyncio.to_thread(manager.offers.create, data)
-        if offer['status'] == 'accepted':
-            manager.background(manager.coordinator.drain_manual)
-        return offer
+        trade = await asyncio.to_thread(manager.builder.create, data)
+        manager.background(manager.coordinator.drain_manual)
+        return trade
 
     # Automatic trading settings: on or off and a wish list, per adventure.
     @app.get('/api/v1/interactions/auto-settings')
@@ -703,7 +660,7 @@ def create_app(manager, shutdown=lambda: None):
             raise HTTPException(400, 'Send enabled and wishlist only')
 
         def write():
-            if manager.offers.viewer_only(aid):
+            if manager.builder.viewer_only(aid):
                 raise HTTPException(403, 'This adventure is view-only')
             game = manager.registry.adventure(aid)
             try:
@@ -721,7 +678,7 @@ def create_app(manager, shutdown=lambda: None):
         return {'adventure_id': aid, **settings,
                 'wishes': [{'dex': dex, 'name': names.get(dex) or f'No. {dex}'} for dex in settings['wishlist']],
                 'species': [{'dex': dex, 'name': name} for dex, name in sorted(names.items())],
-                'viewer_only': manager.offers.viewer_only(aid)}
+                'viewer_only': manager.builder.viewer_only(aid)}
 
     # Trade requests: with Ask me first on, automatic trades wait here for the owner to approve them.
     @app.get('/api/v1/interactions/trade-requests')
@@ -730,7 +687,7 @@ def create_app(manager, shutdown=lambda: None):
 
         def read():
             result = manager.coordinator.requests.for_adventure(aid)
-            return {**result, 'viewer_only': bool(config.VIEWER_ONLY) or bool(aid and manager.offers.viewer_only(aid))}
+            return {**result, 'viewer_only': bool(config.VIEWER_ONLY) or bool(aid and manager.builder.viewer_only(aid))}
         return await asyncio.to_thread(read)
 
     @app.put('/api/v1/interactions/trade-requests/settings')
@@ -759,33 +716,13 @@ def create_app(manager, shutdown=lambda: None):
 
         def answer():
             row = next((row for row in requests.for_adventure()['requests'] if row['id'] == rid), None)
-            if row and any(manager.offers.viewer_only(row[side]['adventure_id']) for side in ('left', 'right')):
+            if row and any(manager.builder.viewer_only(row[side]['adventure_id']) for side in ('left', 'right')):
                 raise HTTPException(403, 'This adventure is view-only')
             return getattr(requests, action)(rid)
         result = await asyncio.to_thread(answer)
         if result['status'] == 'accepted':
             manager.background(manager.coordinator.drain_manual)
         return result
-
-    @app.get('/api/v1/interactions/trade-offers/{oid}')
-    async def trade_offer(oid: str):
-        return await asyncio.to_thread(manager.offers.status, validate_id(oid))
-
-    @app.post('/api/v1/interactions/trade-offers/{oid}/accept')
-    async def accept_trade_offer(oid: str):
-        manager.check_available()
-        offer = await asyncio.to_thread(manager.offers.accept, validate_id(oid))
-        if offer['status'] == 'accepted':
-            manager.background(manager.coordinator.drain_manual)
-        return offer
-
-    @app.post('/api/v1/interactions/trade-offers/{oid}/decline')
-    async def decline_trade_offer(oid: str):
-        return await asyncio.to_thread(manager.offers.decline, validate_id(oid))
-
-    @app.post('/api/v1/interactions/trade-offers/{oid}/withdraw')
-    async def withdraw_trade_offer(oid: str):
-        return await asyncio.to_thread(manager.offers.withdraw, validate_id(oid))
 
     @app.post('/api/v1/interactions/{tid}/cancel')
     async def cancel(tid: str):
@@ -918,20 +855,13 @@ def create_app(manager, shutdown=lambda: None):
             from ..web.pages import render_game_page
             return HTMLResponse(render_game_page('adventure-trading.html', base_path=f"/{'view' if viewer else 'games'}/{aid}",
                 adventure_id=aid, adventure_name=adventure['name'], viewer=viewer))
-        if path == 'cable' and request.method in {'GET', 'HEAD'}:
-            from ..web.pages import render_game_page
-            return HTMLResponse(render_game_page('cable-club.html', base_path=f"/{'view' if viewer else 'games'}/{aid}",
-                adventure_id=aid, adventure_name=adventure['name'], viewer=viewer,
-                viewer_flag='true' if viewer else 'false'))
-        if path == 'api/cable' and request.method in {'GET', 'HEAD'}:
-            return JSONResponse(await run_in_threadpool(manager.coordinator.sessions.for_adventure, aid))
         if path == 'api/interactions' and request.method in {'GET', 'HEAD'}:
             return JSONResponse(await run_in_threadpool(manager.coordinator.adventure_status, aid))
         if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
             asset = path.removeprefix('static/')
             if asset in {'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css',
                          'adventure-trading.js', 'trade-progress.js', 'trade-ui.js', 'trade-tabs.js',
-                         'fonts/pokesim-panel.woff2', 'cable-club.js', 'cable-club.css', 'mon-grid.js',
+                         'fonts/pokesim-panel.woff2', 'mon-grid.js',
                          'mon-grid.css', 'types.js', 'types.css'}:
                 return FileResponse(STATIC / asset)
         sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)

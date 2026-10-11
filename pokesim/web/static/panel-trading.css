@@ -149,6 +149,7 @@ main.shell { padding-bottom: var(--s7); }
   border-bottom: var(--hair) solid var(--rule-faint);
 }
 .deal-head h3 { font: 600 var(--f-body) / 1.3 var(--font-text); overflow-wrap: anywhere; }
+.queued-card .trade-help { margin: 0; padding: var(--s3) var(--s4); }
 .swap {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -257,9 +258,7 @@ main.shell { padding-bottom: var(--s7); }
   .view-switch button[aria-pressed="true"] { outline: 2px solid Highlight; }
 }
 
-/* ---- trade offers ------------------------------------------------------ */
-.offers-subhead { margin: var(--s4) 0 var(--s2) }
-#offers-note:empty { display: none }
+/* ---- suggested trade answers ----------------------------------------- */
 .offer-answer { display: flex }
 .offer-answer { flex-wrap: wrap }
 .offer-answer { gap: var(--s2) }
@@ -311,13 +310,6 @@ main.shell { padding-bottom: var(--s7); }
 .trade-tabs [role="tab"]:disabled { cursor: not-allowed }
 .trade-tabs [role="tab"]:disabled { color: var(--ink-3) }
 .trade-tabs [role="tab"]:disabled { border-style: dashed }
-.tab-count { min-width: 20px }
-.tab-count { padding: 2px 6px }
-.tab-count { background: var(--signal) }
-.tab-count { color: var(--panel) }
-.tab-count { font: var(--f-micro) / 1.2 var(--font-mono) }
-.tab-count { text-align: center }
-.tab-count[hidden] { display: none }
 .trade-panel { padding: var(--s4) 0 var(--s6) }
 .trade-panel[hidden] { display: none }
 .trade-panel:focus-visible { outline: 2px solid var(--signal) }
@@ -363,7 +355,6 @@ a.pick-item { text-decoration: none }
 .pick-item.is-unavailable { color: var(--ink-3) }
 .pick-item.is-unavailable { background: var(--panel) }
 .pick-item.is-unavailable { border-style: dashed }
-#cable-open { margin: var(--s3) 0 }
 .pick-read { display: grid }
 .pick-read { gap: 2px }
 .pick-read { min-width: 0 }
