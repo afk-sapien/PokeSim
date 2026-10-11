@@ -101,3 +101,42 @@ def test_manual_inventory_offers_everyone_and_explains_time_capsule_limits(tmp_p
         assert owner.manual_inventory()['reason'] == 'Trading pauses during the current event'
     finally:
         store.close()
+
+
+def test_a_full_party_and_full_pc_offer_nothing_and_block_boxed_manual_picks(emu):
+    """Regression: Gold and Silver held six in the party and 280 in the PC, so preparation could not
+    deposit anyone to withdraw the offer. Each trade still got proposed and failed, over 100 times."""
+    emu.snapshot.party = tuple(SimpleNamespace(species=9) for _ in range(6))
+    emu.snapshot.box_counts = (20,) * 13 + (19,)
+    assert [row['trade_key'] for row in trading.offers(emu, payload())] == ['k1', 'k8']
+    emu.snapshot.box_counts = (20,) * 14
+    assert trading.sealed(emu.snapshot)
+    assert trading.offers(emu, payload()) == []
+    emu.snapshot.party = emu.snapshot.party[:5]
+    assert not trading.sealed(emu.snapshot)
+    assert [row['trade_key'] for row in trading.offers(emu, payload())] == ['k1', 'k8']
+
+
+def test_a_sealed_pc_blocks_boxed_manual_picks_but_not_the_party(tmp_path, monkeypatch):
+    from pokesim.store import Store
+    party = tuple(SimpleNamespace(species=9, egg=False, moves=(33,), held_item=0) for _ in range(6))
+    stored = (SimpleNamespace(species=1, egg=False, moves=(33,), held_item=0, box=0, position=0),)
+    snapshot = SimpleNamespace(party=party, stored=stored, items=(), box_counts=(20,) * 14)
+    monkeypatch.setattr(trading, 'live_status', lambda *args: {
+        'party': [{'species': 9, 'dex': 9, 'slot': slot, 'trainer_id': slot, 'dvs': (slot,) * 5} for slot in range(1, 7)],
+        'storage': {'pokemon': [boxed(1, 1, dex=1, trainer_id=9)]}})
+    monkeypatch.setattr(trading, 'unlocked', lambda *args: False)
+    monkeypatch.setattr(trading, 'Memory', lambda *args: None)
+    monkeypatch.setattr(trading, 'compatible', lambda *args: True)
+    store = Store(tmp_path)
+    try:
+        emu = SimpleNamespace(snapshot=snapshot, policy=SimpleNamespace(collection={}, in_league=lambda snap: False),
+                              data=SimpleNamespace(item_names={}), paused=False, manual_mode=False,
+                              pb=SimpleNamespace(memory=b''), status=lambda: {'game': {}})
+        owner = trading.Participant(SimpleNamespace(store=store, emulator=emu),
+                                    SimpleNamespace(adventure_id='gold', generation=2))
+        rows = owner.manual_inventory()['pokemon']
+        assert [row['blocked'] for row in rows if row['location'] == 'box'] == [trading.SEALED]
+        assert all(row['blocked'] == '' for row in rows if row['location'] == 'party')
+    finally:
+        store.close()

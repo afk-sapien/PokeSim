@@ -73,3 +73,14 @@ def test_only_offered_spare_and_unique_pokemon_are_never_released(participant):
                    box_counts=(20,) * 12, boxed_pokemon=((153, 20),) * 20)
     assert storage_step(emu.preparation, full, storage_menu(2)) is None
     assert 'no unprotected spare duplicate' in emu.store.get(preparation.KEY)['error']
+
+
+def test_a_pc_nothing_can_be_released_from_is_sealed_for_offers(participant):
+    """A full party and PC with no spare to release would only fail preparation, so offers stop."""
+    _, snap, candidate = participant
+    full = full_storage(snap, candidate)
+    assert not preparation.sealed(full, {})
+    locked = {identity(asdict(mon)): {'state': 'locked'} for mon in full.stored_details}
+    assert preparation.sealed(full, locked)
+    assert not preparation.sealed(replace(full, box_counts=(19,) + (20,) * 11,
+                                          boxed_pokemon=full.boxed_pokemon[:19]), locked)

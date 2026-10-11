@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -36,6 +37,9 @@ MANUAL_KEY = 'manual_trades'
 MANUAL_WAITING = {'queued', 'starting'}
 KEEP_MANUAL = 50
 SET_ASIDE = 'Set aside for a trade you chose'
+# A preparation error carries the adventure that raised it, so the Trading page can name that game.
+FAILED_TAG = re.compile(r'\(adventure ([0-9a-f]{32})\)')
+PC_FULL = 'Every PC box is full'
 
 
 def _display_number(value, maximum):
@@ -100,6 +104,8 @@ class Coordinator:
         self.manual_guard = threading.Lock()
         self.manual_drain = threading.Lock()
         self.manual_progress = {}
+        # Adventures whose last inventory said they cannot take part in a trade, and why.
+        self.trade_blocked = {}
         from .cable_sessions import CableSessions
         self.sessions = CableSessions(self)
 
@@ -252,8 +258,36 @@ class Coordinator:
     def reserved(self, aid):
         return any(aid in row['plan']['participants'] for row in self.registry.transactions(unresolved=True))
 
+    def _failed_adventure(self, row):
+        """The adventure a failed preparation belongs to, or None when the record cannot tell."""
+        error = row.get('error') or ''
+        participants = row['plan'].get('participants') or []
+        tagged = FAILED_TAG.search(error)
+        if tagged and tagged.group(1) in participants:
+            return tagged.group(1)
+        if PC_FULL in error:
+            # Records from before the tag: the game that still reports a full PC is the one.
+            blocked = [aid for aid in participants if self.trade_blocked.get(aid)]
+            if len(blocked) == 1:
+                return blocked[0]
+        return None
+
+    def _game_label(self, aid):
+        try:
+            game = self.registry.adventure(aid)
+        except KeyError:
+            return None
+        version = (game.get('version') or '').title()
+        return f"{game['name']} ({version})" if version and version != game['name'] else game['name']
+
+    def _failure_reason(self, row):
+        reason = self._generic_failure_reason(row)
+        aid = self._failed_adventure(row) if reason.startswith('An adventure') else None
+        label = aid and self._game_label(aid)
+        return label + reason[len('An adventure'):] if label else reason
+
     @staticmethod
-    def _failure_reason(row):
+    def _generic_failure_reason(row):
         error = row.get('error') or ''
         if row['plan'].get('kind') == 'cable_session':
             from .cable_sessions import REASONS
@@ -266,7 +300,7 @@ class Coordinator:
             return 'An obstacle still blocks an adventure’s route to the Cable Club.'
         if 'Cable Club preparation exceeded its travel deadline' in error:
             return 'An adventure took too long to reach the Cable Club and prepare its Pokémon.'
-        if 'Every PC box is full' in error:
+        if PC_FULL in error:
             return 'An adventure needs a free PC slot to prepare its Pokémon for this trade.'
         if 'route to the Cable Club needs a partner with Strength' in error:
             return 'An adventure needs a partner with Strength to reach the Cable Club.'
@@ -297,8 +331,14 @@ class Coordinator:
         count = len(failures)
         lead = 'The last trade attempt did not complete.' if count == 1 else f'{count} recent trade attempts did not complete.'
         reason = self._failure_reason(latest)
+        aid = self._failed_adventure(latest)
+        if aid and self.trade_blocked.get(aid):
+            # The game is left out of automatic trades until it has room, so it is not retried.
+            after = 'It is left out of automatic trades until its PC has room.'
+        else:
+            after = 'Automatic trading will try again.'
         return {'recent_failure_count': count, 'updated_at': latest['updated_at'], 'reason': reason,
-                'message': f'{lead} {reason} Automatic trading will try again.'}
+                'message': f'{lead} {reason} {after}'}
 
     def status(self):
         games = [game for game in self.registry.adventures() if not game['archived']]
@@ -472,7 +512,10 @@ class Coordinator:
                     request['manual'] = True
                 if plan.get('session'):
                     request['session'] = True
-                receipt = self._request(aid, 'prepare', request)
+                try:
+                    receipt = self._request(aid, 'prepare', request)
+                except (RuntimeError, ValueError) as error:
+                    raise type(error)(f'{error} (adventure {aid})') from error
                 if plan.get('manual'):
                     with self.view_guard:
                         progress = self.manual_progress.setdefault(row['id'], {})
@@ -827,6 +870,7 @@ class Coordinator:
             for aid in row['plan']['participants']:
                 last[aid] = max(last.get(aid, 0), row['updated_at'])
         inventories = []
+        blocked = {}
         games = sorted(self.registry.adventures(), key=lambda game: (last.get(game['id'], 0), game['id']))
         campaigns = {game['id']: game['campaign_id'] for game in games}
         visits = self.registry.completed_trade_visits()
@@ -855,10 +899,12 @@ class Coordinator:
                 continue
             try:
                 inventory = self.inventory(aid)
+                blocked[aid] = inventory.get('trade_blocked') or ''
                 if not inventory.get('holding'):
                     inventories.append((aid, inventory))
             except (RuntimeError, OSError):
                 continue
+        self.trade_blocked = blocked
         self._refresh_collection_demand(inventories)
         # Auto trading switched off stops only automatic trades. The game still counts towards
         # what the others are asked to collect, and hand-picked trades still reach it.

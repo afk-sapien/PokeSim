@@ -26,6 +26,7 @@ class Peer:
         self.generation = 1
         self.capsule_ready = False
         self.manual_reason = ''
+        self.trade_blocked = ''
         self.pokemon = [{'trade_key': key, 'dex': 2, 'name': 'Ivysaur', 'location': 'box', 'box': 1, 'slot': 1,
                          'cartridge_generation': 1, 'blocked': None},
                         {'trade_key': 'party-' + key, 'dex': 25, 'name': 'Pikachu', 'location': 'party', 'slot': 1,
@@ -39,6 +40,8 @@ class Peer:
             self.failures[operation] -= 1
             raise RuntimeError('Injected ' + operation + ' failure')
         if operation == 'inventory':
+            if self.trade_blocked:
+                return {'offers': [], 'owned': self.owned, 'trade_blocked': self.trade_blocked}
             return {'offers': [{'trade_key': self.key, 'dex': self.dex, 'arrived_dex': self.dex,
                                 **self.offer}], 'owned': self.owned}
         if operation == 'manual-inventory':
@@ -295,6 +298,48 @@ def test_preparation_failure_has_a_specific_explanation_in_both_views(setup, err
     for status in (c.status(), c.adventure_status(setup.data['left_id'])):
         assert reason in status['attention']['reason']
         assert status['recent_failures'][0]['failure_reason'] == status['attention']['reason']
+
+
+def test_a_full_pc_names_its_game_and_stops_automatic_retries(setup, monkeypatch):
+    """Regression: Gold's party and PC were full, so each trade Crystal was offered with it failed
+    while the banner only said that "an adventure" needed a free PC slot and would try again."""
+    import pokesim.app.coordinator as coordinator
+    monkeypatch.setattr(coordinator, 'COOLDOWN_SECONDS', 0)
+    c, left, right = setup.coordinator, setup.data['left_id'], setup.data['right_id']
+    setup.registry.update(right, name='Chaotic Escape')
+    error = 'Every PC box is full. Release or move some Pokémon, then prepare the trade again'
+    setup.peers[right].failures['prepare'] = 1
+    original = setup.peers[right].request
+
+    def full(method, path, data=None, timeout=None):
+        if path.endswith('/prepare') and setup.peers[right].failures.get('prepare'):
+            setup.peers[right].failures['prepare'] -= 1
+            raise RuntimeError(error)
+        return original(method, path, data, timeout)
+    setup.peers[right].request = full
+    row = c.execute(c.propose(setup.data)['id'])
+    assert row['phase'] == 'aborted' and f'(adventure {right})' in row['error']
+    reason = 'Chaotic Escape (Red) needs a free PC slot to prepare its Pokémon for this trade.'
+    for status in (c.status(), c.adventure_status(left)):
+        assert status['attention']['reason'] == reason
+        assert status['attention']['message'].endswith('Automatic trading will try again.')
+    # A record from before the tag cannot name its game on its own.
+    old = c.propose({**setup.data, 'request_id': identifier()})
+    setup.registry.update_transaction(old['id'], phase='aborted', decision='ABORT', error=error)
+    assert c.status()['attention']['reason'].startswith('An adventure needs a free PC slot')
+    # The full game reports it has no room, so it is left out, and that names it in the banner too.
+    setup.peers[right].trade_blocked = 'The party and every PC box are full'
+    calls = len(setup.peers[right].calls)
+    assert c.schedule_once() is None
+    assert 'prepare' not in setup.peers[right].calls[calls:]
+    assert c.status()['attention']['reason'] == reason
+    assert c.status()['attention']['message'].endswith(
+        'Chaotic Escape (Red) needs a free PC slot to prepare its Pokémon for this trade. '
+        'It is left out of automatic trades until its PC has room.')
+    # Once it has room again, the next automatic trade goes ahead.
+    setup.peers[right].trade_blocked = ''
+    assert c.schedule_once()['phase'] == 'completed'
+    assert c.status()['attention'] is None
 
 
 def test_new_games_join_automatically_despite_obsolete_group_settings(setup):

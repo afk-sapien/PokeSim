@@ -44,6 +44,19 @@ def _paused(emu, snapshot):
     return ''
 
 
+SEALED = 'The party and every PC box are full, so no boxed Pokémon can join the party for a trade'
+
+
+def sealed(snapshot):
+    """Whether a full party and full PC leave a boxed Pokémon no way to reach the party.
+
+    Preparation must deposit a party member before it withdraws the offer, and Gen II has no PC swap.
+    The policy releases a spare duplicate on its own whenever it has one, so the offers come back then.
+    """
+    counts = getattr(snapshot, 'box_counts', ())
+    return len(getattr(snapshot, 'party', ())) >= 6 and bool(counts) and all(count >= 20 for count in counts)
+
+
 def _kept(mon, stock):
     """Why one boxed Pokémon stays out of automatic offers, or '' when it is eligible."""
     preference = mon.get('trade_preference', 'auto')
@@ -78,7 +91,7 @@ def _stock(emu, rows):
 
 def offers(emu, payload):
     snapshot = emu.snapshot
-    if _paused(emu, snapshot):
+    if _paused(emu, snapshot) or sealed(snapshot):
         return []
     party = payload.get('party') or []
     stored = (payload.get('storage') or {}).get('pokemon') or []
@@ -144,6 +157,7 @@ class Participant(BaseParticipant):
                 'generation': self.bootstrap.generation, 'cartridge_generation': 2,
                 'offers': offers(self.emu, payload), 'revision': digest(payload),
                 'time_capsule_ready': unlocked(self.emu.snapshot, Memory(self.emu.pb.memory, self.emu.data)),
+                'trade_blocked': SEALED if sealed(self.emu.snapshot) else '',
                 'holding': bool(self.store.get('trade_hold'))}
 
     def manual_inventory(self):
@@ -161,6 +175,10 @@ class Participant(BaseParticipant):
                   'Resume autonomous play in this adventure before trading' if self.emu.paused or self.emu.manual_mode else
                   paused)
         rows = manual_rows(payload, 2, last_party_blocked=True)
+        if sealed(snapshot):
+            for row in rows:
+                if row['location'] == 'box' and not row['blocked']:
+                    row['blocked'] = SEALED
         if snapshot is not None:
             members = list(snapshot.party) + list(snapshot.stored)
             located = [('party', index + 1, None) for index in range(len(snapshot.party))]

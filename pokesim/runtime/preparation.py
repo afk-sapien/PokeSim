@@ -26,6 +26,20 @@ RENDEZVOUS = (CENTER, 11, 3)
 PC = (CENTER, 13, 4)
 
 
+SEALED = 'The party and every PC box are full and no spare duplicate can be released, so no boxed Pokémon can join the party for a trade'
+
+
+def sealed(snapshot, preferences):
+    """Whether preparation could not make room for a boxed offer, as _storage_make_room would decide."""
+    if (len(getattr(snapshot, 'party', ())) < 6 or not getattr(snapshot, 'box_full', False)
+            or getattr(snapshot, 'next_free_box', 0) is not None):
+        return False
+    from ..policies.strategic import StrategicPolicy
+    policy = StrategicPolicy()
+    policy.trade_preferences = lambda: preferences
+    return policy._release_target(snapshot) is None
+
+
 def selection(snapshot, preferences, key):
     payload = live_status(snapshot.to_dict())
     party = payload['party']

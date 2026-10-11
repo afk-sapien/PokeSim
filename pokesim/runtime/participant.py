@@ -293,8 +293,10 @@ class Participant:
         payload = league_partners(payload, self.store)
         inv = normalise(self.bootstrap.adventure_id, '', payload)
         # Only the owning runtime imports game-specific data to derive offers.
+        from .preparation import SEALED, sealed
         candidates = []
-        available = (status.get('game') or {}).get('map') not in LEAGUE
+        blocked = SEALED if sealed(getattr(self.emu, 'snapshot', None), self.store.trade_preferences()) else ''
+        available = (status.get('game') or {}).get('map') not in LEAGUE and not blocked
         for mon in offers(inv, True) if available else ():
             from ..broker.routine import EVOLVES
             from ..strategy_data import SPECIES
@@ -303,7 +305,7 @@ class Participant:
                                'arrived_dex': SPECIES[EVOLVES.get(mon.species, mon.species)]['dex']})
         return {**payload, 'adventure_id': self.bootstrap.adventure_id,
                 'generation': self.bootstrap.generation, 'offers': candidates,
-                'revision': digest(payload), 'holding': bool(self.store.get('trade_hold'))}
+                'revision': digest(payload), 'trade_blocked': blocked, 'holding': bool(self.store.get('trade_hold'))}
 
     def manual_inventory(self):
         """The whole party and PC for a manual trade, with only hard limits marked."""
