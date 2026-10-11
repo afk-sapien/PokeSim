@@ -10,6 +10,7 @@ function pc(pokemon, search = '?scope=all', party = [], base = '') {
     if (!elements.has(selector)) elements.set(selector, {
       value: '', innerHTML: '', textContent: '', options: [{}, {}],
       classList: {add() {}, remove() {}, toggle() {}}, setAttribute() {}, removeAttribute() {}, showModal() {}, focus() {},
+      insertAdjacentHTML(_, html) { this.innerHTML += html },
     })
     return elements.get(selector)
   }
@@ -20,11 +21,13 @@ function pc(pokemon, search = '?scope=all', party = [], base = '') {
     history: {replaceState: (_, __, next) => { url = next }},
     fetch: async () => ({ok: true, json: async () => ({started: true, version: 'blue', party,
       storage: {active_box: 1, box_counts: Array(12).fill(20), pokemon}})}),
-    setInterval() {},
+    setInterval() {}, setTimeout, requestAnimationFrame: callback => setTimeout(callback, 0),
   })
   vm.runInContext(source, context)
   return {
     async ready() { await new Promise(resolve => setImmediate(resolve)) },
+    // Cards past the first screen are drawn over the next frames.
+    settle: () => new Promise(resolve => setTimeout(resolve, 20)),
     rows: () => JSON.parse(vm.runInContext('JSON.stringify(residents)', context)),
     element, url: () => url,
     sort(key, order) {
@@ -212,6 +215,10 @@ test('all 246 partners remain searchable, sortable, and openable on one page', a
   const view = pc(boxed, '?scope=all', party)
   await view.ready()
   assert.equal(view.rows().length, 246)
+  // The first screen of cards paints at once and the rest follow on later frames.
+  const painted = (view.element('#pc-grid').innerHTML.match(/data-mon=/g) || []).length
+  assert.ok(painted >= 40 && painted < 246, `painted ${painted}`)
+  await view.settle()
   assert.equal((view.element('#pc-grid').innerHTML.match(/data-mon=/g) || []).length, 246)
   assert.doesNotMatch(source, /pc-pagination|pc-next|pc-prev/)
   view.sort('level')

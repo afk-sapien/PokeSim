@@ -87,8 +87,7 @@ function renderGrid() {
   const signature = JSON.stringify([rows, [...owned], [...seen], [...held], [...plan], hunting, catches, [...maxed], [...perfectSpecies], [...highQualitySpecies], [...shinySpecies]])
   if (signature === gridSignature) return
   gridSignature = signature
-  $('#grid').removeAttribute?.('aria-busy')
-  $('#grid').innerHTML = rows.map((entry) => {
+  paintCards($('#grid'), rows.map((entry) => {
     const state = record(entry.dex)
     const copies = held.get(entry.dex)
     const note = RECORD_LABELS[state]
@@ -103,10 +102,28 @@ function renderGrid() {
       <span class="dex-body"><strong class="dex-name">${esc(entry.name)}</strong><span class="card-types">${typeTags(entry.types)}</span>${milestoneBadges(entry.dex)}</span>
       <span class="card-counts">${counts}</span>
     </button>`
-  }).join('') || '<p class="dex-empty">Nobody matches that search. Try another name, type, or filter.</p>'
+  }), '<p class="dex-empty">Nobody matches that search. Try another name, type, or filter.</p>')
   fitSprites($('#grid'))
 }
 
+// Draw the first cards now and the rest over the next frames, so 251 cards do not hold up
+// the first paint. A newer render cancels the rest of an older one.
+const FIRST_CARDS = 40
+const LATER_CARDS = 80
+const nextFrame = globalThis.requestAnimationFrame || (callback => setTimeout(callback, 0))
+let painting = 0
+function paintCards(grid, cards, empty) {
+  const run = ++painting
+  grid.innerHTML = cards.slice(0, FIRST_CARDS).join('') || empty
+  grid.removeAttribute?.('aria-busy')
+  const more = start => {
+    if (run !== painting || start >= cards.length) return
+    grid.insertAdjacentHTML('beforeend', cards.slice(start, start + LATER_CARDS).join(''))
+    fitSprites(grid)
+    nextFrame(() => more(start + LATER_CARDS))
+  }
+  if (cards.length > FIRST_CARDS) nextFrame(() => more(FIRST_CARDS))
+}
 
 function statRow(label, value) {
   const on = Math.max(1, Math.min(STAT_CELLS, Math.round(value / maxStat * STAT_CELLS)))

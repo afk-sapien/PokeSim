@@ -29,6 +29,25 @@ function fillMeter(count, size) {
 // Portrait scaling is shared; see panel.js.
 const fitSprites = (root) => globalThis.Panel?.fitSprites?.(root)
 
+// Draw the first cards now and the rest over the next frames, so a full PC of about 280
+// cards does not hold up the first paint. A newer render cancels the rest of an older one.
+const FIRST_CARDS = 40
+const LATER_CARDS = 80
+const nextFrame = globalThis.requestAnimationFrame || (callback => setTimeout(callback, 0))
+let painting = 0
+function paintCards(grid, cards, empty) {
+  const run = ++painting
+  grid.innerHTML = cards.slice(0, FIRST_CARDS).join('') || empty
+  grid.removeAttribute?.('aria-busy')
+  const more = start => {
+    if (run !== painting || start >= cards.length) return
+    grid.insertAdjacentHTML('beforeend', cards.slice(start, start + LATER_CARDS).join(''))
+    fitSprites(grid)
+    nextFrame(() => more(start + LATER_CARDS))
+  }
+  if (cards.length > FIRST_CARDS) nextFrame(() => more(FIRST_CARDS))
+}
+
 function render() {
   const counts = storage?.box_counts || Array(12).fill(0)
   const pokemon = [...party, ...(storage?.pokemon || [])].map(PokemonTypes.asEgg)
@@ -71,10 +90,11 @@ function render() {
   if (focusedBox) $(`[data-box="${focusedBox}"]`)?.focus()
   const focusedMon = document.activeElement?.dataset.mon
   const card = (mon, index) => monCard(mon, index, {all})
-  $('#pc-grid').removeAttribute?.('aria-busy')
   if (all) {
-    $('#pc-grid').innerHTML = residents.map(card).join('') || '<p class="dex-empty">No Pokémon match these filters.</p>'
+    paintCards($('#pc-grid'), residents.map(card), '<p class="dex-empty">No Pokémon match these filters.</p>')
   } else {
+    painting++
+    $('#pc-grid').removeAttribute?.('aria-busy')
     $('#pc-grid').innerHTML = Array.from({length: selectedBox === 0 ? 6 : 20}, (_, slot) => {
       const index = residents.findIndex(mon => mon.position === slot + 1)
       return index >= 0 ? card(residents[index], index) : `<div class="pc-empty-slot"><span class="pc-slot">SLOT ${slot + 1}</span></div>`

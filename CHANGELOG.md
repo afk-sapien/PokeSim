@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Draw the first 40 cards of the PC's All Pokémon view and the Pokédex at once and the rest over the next frames, so a full PC of about 280 cards no longer holds up the first paint.
+
 - Show grey placeholder cards on the PC and Pokédex while their first data loads, instead of a blank area under the page frame.
 
 - Show the PC and Pokédex as last seen the moment they reload, then swap in fresh data as soon as it arrives. Each adventure keeps the last PC and Pokédex it drew in the browser's IndexedDB, the connection label reads Updating… until the server answers, and the PC's Trade… key waits for fresh data. A browser that blocks or fills its storage simply waits as before.

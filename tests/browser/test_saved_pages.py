@@ -88,6 +88,8 @@ def test_reloaded_pokedex_paints_the_saved_copy_then_refreshes(page, game):
     page.goto(url + '/pokedex')
     expect(page.locator('#status')).to_have_text('Updating…')
     expect(page.locator('.dex-card[data-dex="1"]')).to_have_count(1)
+    # Later cards follow on the next frames.
+    expect(page.locator('.dex-card[data-dex="151"]')).to_have_count(1)
     for route in held:
         route.continue_()
     page.unroute(STATUS)
