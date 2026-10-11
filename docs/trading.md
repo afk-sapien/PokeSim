@@ -202,11 +202,27 @@ saves them. A game's own `POST /api/trading/preferences` sets one Pokémon with
 `key` and `state`, which is `auto`, `first` or `keep`.
 
 Trade settings are saved per game in SQLite, separately from cartridge checkpoints.
-Trainer ID and DVs identify a partner across box moves, renaming, evolution, and
-training. Generation I has no unique individual identifier. When multiple held
-partners have the same signature, their settings are suspended and their
-controls are disabled. Older snapshots without identity data retain
-read-only automatic offers.
+Neither generation stores a unique ID for each Pokémon, so a partner is known by
+its trainer ID, its DVs and its evolution family. The family is every species
+linked by evolution in Red, Blue, Yellow, Gold, Silver or Crystal, named by its
+lowest Pokédex number. That keeps a partner's key through box moves, renaming,
+training, evolution and the Time Capsule: Pichu, Pikachu and Raichu share one
+family, and Tyrogue shares one with Hitmonlee, Hitmonchan and Hitmontop because
+it can become any of them. Two different species that share a trainer and DVs,
+which emulator reloads and Day Care breeding both produce, have different keys
+and trade normally. Only two Pokémon of the same family with the same trainer
+and DVs remain impossible to tell apart. Their settings are suspended, their
+controls are disabled and the reason reads "Another Rattata from the same
+trainer has identical stats, so the game can't tell them apart". Older
+snapshots without identity data retain read-only automatic offers.
+
+Releases before 0.5.0 keyed partners by trainer ID and DVs alone. The first
+time an adventure reads its whole collection, a setting saved under an old key
+moves to the new key when exactly one held Pokémon has that trainer and those
+DVs. When several species share them, the setting stays under the old key and
+applies to none of them, so set it again on the one you meant. Offers, trades
+in progress and League rotation counts saved with an old key still find their
+Pokémon by the same rule: exactly one match, or the trade stops.
 
 The staged checkpoint calculation reads the same saved settings as the broker.
 Writes are blocked while an exchange holds the game. A completed exchange clears

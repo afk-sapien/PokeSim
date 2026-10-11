@@ -2,7 +2,7 @@
 import hashlib
 import json
 
-from ..trade.preferences import identity
+from ..trade.preferences import signature as identity
 from . import league
 from .ram import decode_mon
 from .timecapsule_conversion import convert

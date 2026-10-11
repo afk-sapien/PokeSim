@@ -1,8 +1,9 @@
 """Persistent per-partner offers, independent of box positions and training."""
 from pokesim_core.identity import pokemon_identity
 import json
-from collections import Counter
+from collections import defaultdict
 
+from .. import individual
 from ..shiny import is_shiny
 from ..dvs import is_perfect
 
@@ -57,7 +58,69 @@ def migrate(db):
 
 
 def identity(mon):
+    """The trade key: trainer ID, DVs and evolution family (see pokesim.individual)."""
+    return individual.key(mon.get('trainer_id'), mon.get('dvs', ()), individual.dex_of(mon))
+
+
+def signature(mon):
+    """The trainer and DV signature alone, as League records and older trade keys store it."""
     return pokemon_identity(mon.get('trainer_id'), mon.get('dvs', ()))
+
+
+def matching(rows, key):
+    """Rows answering to a stored key. A key from an older release matches on trainer and DVs."""
+    return [mon for mon in rows if individual.same(identity(mon), key)]
+
+
+def upgrade(db, mons):
+    """Move trade settings stored under an older trainer and DV key to the family key, once.
+
+    A setting moves only when exactly one held Pokémon answers to its old key. One that now fits
+    two different species stays where it is and applies to neither. Returns False when the
+    collection is not fully readable yet, so the caller tries again later.
+    """
+    rows = db.execute("SELECT k,v FROM kv WHERE k LIKE ? AND k NOT LIKE ?", (PREFIX + '%', PREFIX + '%-%')).fetchall()
+    if not rows:
+        return True
+    if not mons or any(signature(mon) is None for mon in mons):
+        return False
+    keys = defaultdict(set)
+    for mon in mons:
+        # A glitch species has no family and adds None, so its old key stays unresolved.
+        keys[signature(mon)].add(identity(mon))
+    for stored_key, raw in rows:
+        old = stored_key[len(PREFIX):]
+        new = keys.get(old, set())
+        if len(new) != 1 or None in new:
+            continue
+        target = PREFIX + next(iter(new))
+        if not db.execute('SELECT 1 FROM kv WHERE k=?', (target,)).fetchone():
+            db.execute('INSERT INTO kv(k,v) VALUES (?,?)', (target, raw))
+        db.execute('DELETE FROM kv WHERE k=?', (stored_key,))
+    return True
+
+
+UNREADABLE = "This Pokémon's trainer and stats could not be read, so it cannot be picked out safely"
+
+
+def blocked(mon):
+    """Why a listed Pokémon cannot be picked for a trade by its key, or '' when it can."""
+    if not mon.get('trade_key'):
+        return UNREADABLE
+    if mon.get('trade_ambiguous'):
+        return mon.get('trade_ambiguous_reason') or ambiguity(mon, [mon, dict(mon)])
+    return ''
+
+
+def ambiguity(mon, twins):
+    """Why one of several Pokémon with the same key cannot be picked out, in plain words."""
+    name = mon.get('name') or 'Pokémon'
+    others = [other.get('name') or 'Pokémon' for other in twins if other is not mon]
+    if all(other == name for other in others):
+        return f"Another {name} from the same trainer has identical stats, so the game can't tell them apart"
+    other = next(other for other in others if other != name)
+    return (f"{other} is from the same trainer, has identical stats and the same evolution family, "
+            "so the game can't tell them apart")
 
 
 def read(db):
@@ -68,17 +131,22 @@ def read(db):
 def apply(payload, preferences):
     """Copy a snapshot and attach preferences only to identifiable partners.
 
-    Generation I has no unique individual ID. Identical trainer/DV signatures
-    suspend offers instead of letting a selection drift to another partner.
+    Neither generation has a unique individual ID. Pokémon that share a trainer,
+    DVs and evolution family suspend offers instead of letting a selection drift
+    to another partner.
     """
     party = [dict(mon) for mon in payload.get('party', ())]
     storage = payload.get('storage')
     boxed = [dict(mon) for mon in (storage or {}).get('pokemon', ())]
-    counts = Counter(identity(mon) for mon in party + boxed)
+    groups = defaultdict(list)
     for mon in party + boxed:
-        key = identity(mon)
-        mon['trade_key'] = key
-        mon['trade_ambiguous'] = bool(key and counts[key] > 1)
+        mon['trade_key'] = key = identity(mon)
+        groups[key].append(mon)
+    for mon in party + boxed:
+        key = mon['trade_key']
+        mon['trade_ambiguous'] = bool(key and len(groups[key]) > 1)
+        if mon['trade_ambiguous']:
+            mon['trade_ambiguous_reason'] = ambiguity(mon, groups[key])
         raw = preferences.get(key, {}).get('state', AUTO)
         state = LEGACY.get(raw, raw)
         mon['trade_preference'] = state if state in NAMES else AUTO

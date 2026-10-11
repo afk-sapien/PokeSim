@@ -234,6 +234,18 @@ class Store:
         with self.lock:
             return read(self.db)
 
+    def upgrade_trade_preferences(self, collection):
+        """Move trade settings saved under older trainer and DV keys, once per process.
+
+        ``collection`` returns every held Pokémon record. It is only called until the move
+        has run, so the emulators can offer it on every observed frame.
+        """
+        if getattr(self, '_trade_keys_current', False):
+            return
+        from .trade.preferences import upgrade
+        with self.lock, self.db:
+            self._trade_keys_current = upgrade(self.db, collection())
+
     def set_trade_preference(self, key, value):
         from .trade.preferences import LEGACY, PREFIX
         # One setting per Pokémon and no lock order: Auto decides, Trade first or Keep.

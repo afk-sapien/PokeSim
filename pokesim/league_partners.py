@@ -7,7 +7,7 @@ import json
 import re
 import uuid
 
-from .trade.preferences import identity
+from .trade.preferences import signature as identity
 from .ram import HALL_OF_FAME_MAP
 from .milestones import ancestors
 from .strategy_data import SPECIES

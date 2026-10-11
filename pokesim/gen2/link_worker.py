@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 
+from ..individual import same
 from ..interactions.cable import checked, sha256
 from ..interactions.link_worker import _write
 from .cable import CableSide
@@ -36,7 +37,7 @@ def run_session(plan, output_dir, progress=None, cancelled=None):
             checked(side.spec.party_slot < len(before[index]), 'Negotiated party slot no longer exists')
             selected = before[index][side.spec.party_slot]
             checked(not snapshots[index].party[side.spec.party_slot].egg, 'Eggs cannot be offered by this coordinator')
-            checked(side.spec.selected_key is None or individual_key(selected) == side.spec.selected_key,
+            checked(side.spec.selected_key is None or same(individual_key(selected), side.spec.selected_key),
                     'Negotiated individual no longer occupies selected slot')
             snapshot = snapshots[index]
             checked(snapshot.started and not snapshot.in_battle

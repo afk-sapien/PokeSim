@@ -3,6 +3,7 @@ import time
 from collections import Counter
 from dataclasses import asdict
 from ..duplicates import quality
+from ..individual import same
 from .move_development import evolution_wait, move_name
 from ..investment import automatic_trade_protected, training_investment, potential_power, assessment, GOOD_TAIL, SEARCH_BUDGET
 from functools import lru_cache
@@ -903,11 +904,10 @@ class Collection:
     @staticmethod
     def _partner_matches(s, project):
         from ..trade.preferences import identity
-        from pokesim_core.identity import pokemon_identity
         key = project.get('trainee_key')
         rows = [dict(asdict(mon), party_index=i) for i, mon in enumerate(s.party)
-                if pokemon_identity(mon.trainer_id, mon.dvs) == key]
-        rows += [mon for mon in s.storage_entries() if identity(mon) == key]
+                if same(identity(asdict(mon)), key)]
+        rows += [mon for mon in s.storage_entries() if same(identity(mon), key)]
         if project.get('scoped_partner'):
             rows = [mon for mon in rows if mon['species'] in project['family']]
             nick = project.get('trainee_nick')
@@ -951,7 +951,7 @@ class Collection:
             if (mon['species'] != project['give'] or is_perfect(mon) or is_shiny(mon)
                     or automatic_trade_protected(mon, rows)):
                 continue
-            if project.get('give_key') and key != project['give_key']:
+            if project.get('give_key') and not same(key, project['give_key']):
                 continue
             if preferences.get(key, {}).get('state') in ('locked', 'offered'):
                 continue
@@ -974,7 +974,16 @@ class Collection:
         from ..trade.preferences import identity
         held = [asdict(mon) for mon in s.party] + s.storage_entries()
         keys = {identity(mon) for mon in held} - {None}
-        self.league_appearances = {key: count for key, count in self.league_appearances.items() if key in keys}
+        appearances = {}
+        for key, count in self.league_appearances.items():
+            if key not in keys:
+                # A count saved before trade keys named the evolution family follows its Pokémon
+                # when exactly one held Pokémon has that trainer and those stats.
+                matches = [held_key for held_key in keys if same(held_key, key)]
+                key = matches[0] if len(matches) == 1 else None
+            if key:
+                appearances[key] = max(count, appearances.get(key, 0))
+        self.league_appearances = appearances
         for mon in s.party:
             key = identity(asdict(mon))
             if key:

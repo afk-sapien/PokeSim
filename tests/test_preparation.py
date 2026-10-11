@@ -733,11 +733,14 @@ def test_manual_rows_block_only_hard_limits():
     payload = {'party': [{'trade_key': 'a', 'name': 'Togepi', 'slot': 1},
                          {'trade_key': 'b', 'egg': True, 'slot': 2}],
                'storage': {'pokemon': [{'trade_key': 'c', 'name': 'Rattata', 'box': 3, 'position': 4},
-                                       {'trade_key': None, 'name': 'Rattata', 'box': 3, 'position': 5}]}}
+                                       {'trade_key': None, 'name': 'Rattata', 'box': 3, 'position': 5},
+                                       {'trade_key': 'd', 'trade_ambiguous': True, 'name': 'Rattata',
+                                        'box': 3, 'position': 6}]}}
     rows = manual_rows(payload, 2, last_party_blocked=True)
     assert [row['blocked'] for row in rows] == [
         'The game refuses to trade away the only Pokémon that can battle', 'Eggs cannot be traded', '',
-        'Another Pokémon has the same trainer and stats, so this one cannot be picked out safely']
+        "This Pokémon's trainer and stats could not be read, so it cannot be picked out safely",
+        "Another Rattata from the same trainer has identical stats, so the game can't tell them apart"]
     assert rows[2]['location'] == 'box'
     assert (rows[2]['box'], rows[2]['slot']) == (3, 4)
     assert manual_rows(payload, 1)[0]['blocked'] == ''

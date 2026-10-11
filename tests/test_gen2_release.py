@@ -55,7 +55,7 @@ def test_rare_trained_held_and_partner_pokemon_are_protected():
     plain = mon(16, position=7, dvs=(4, 4, 4, 4, 4))
     collection = {'breeding': {'parents': [[777, [5, 5, 5, 5, 5]]]}}
     from pokesim.trade.preferences import identity
-    preferences = {identity({'trainer_id': 888, 'dvs': (6, 6, 6, 6, 6)}): {'state': 'locked'}}
+    preferences = {identity({'trainer_id': 888, 'dvs': (6, 6, 6, 6, 6), 'dex': 16}): {'state': 'locked'}}
     result = spares(snapshot([best, *protected, plain]), preferences=preferences, partners=plan_partners(collection))
     assert result == [plain]
 

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from ..cartridges import identify
+from ..individual import same
 from ..interactions import verification as gen1
 from ..interactions.cable import CableSide, checked, sha256
 from ..interactions.cable_driver import CableDriver
@@ -47,7 +48,7 @@ def run_session(plan, output_dir, progress=None, cancelled=None):
             checked(side.spec.party_slot < len(before[i]), 'Negotiated party slot no longer exists')
             key = gen2.individual_key if i == second else gen1.individual_key
             selected = key(before[i][side.spec.party_slot])
-            checked(side.spec.selected_key is None or side.spec.selected_key == selected,
+            checked(side.spec.selected_key is None or same(selected, side.spec.selected_key),
                     'Negotiated individual no longer occupies the selected slot')
             checked(sum(key(row) == selected for row in before[i]) == 1, 'The selected individual is ambiguous')
         driver = CableDriver([classic], plan, cancelled=cancelled)

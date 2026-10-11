@@ -11,6 +11,7 @@ import threading
 import time
 
 from .. import config
+from ..individual import find
 from .coordinator import LINKABLE
 from .registry import identifier, validate_id
 
@@ -99,7 +100,7 @@ class TradeOffers:
 
     @staticmethod
     def _find(inventory, key, game, display=None):
-        row = next((mon for mon in inventory.get('pokemon') or [] if mon.get('trade_key') == key), None)
+        row = find(inventory.get('pokemon') or [], key)
         if row is None:
             raise Gone(f'{_name(display)} is no longer in {game["name"]}')
         if row.get('blocked'):
@@ -187,7 +188,7 @@ class TradeOffers:
             except (RuntimeError, OSError, KeyError) as error:
                 raise ValueError(f'{sender["name"]} did not answer: {error}') from error
             sender_reason = give_inventory.get('reason') or ''
-            give = next((mon for mon in give_inventory.get('pokemon') or [] if mon.get('trade_key') == from_key), None)
+            give = find(give_inventory.get('pokemon') or [], from_key)
             if give is None and not sender_reason:
                 raise ValueError(f'That Pokémon is no longer in {sender["name"]}')
             open_games = [game for game in games if not reasons[game['id']]]
@@ -215,7 +216,7 @@ class TradeOffers:
             raise ValueError('Choose another adventure')
         sender, receiver = self._adventure(from_id), self._adventure(to_id)
         give_inventory, take_inventory = self._inventories(from_id, to_id)
-        give = next((mon for mon in give_inventory.get('pokemon') or [] if mon.get('trade_key') == from_key), None)
+        give = find(give_inventory.get('pokemon') or [], from_key)
         if give is None:
             raise ValueError(f'That Pokémon is no longer in {sender["name"]}')
         give_reason = self._give_reason(give_inventory, take_inventory, give)

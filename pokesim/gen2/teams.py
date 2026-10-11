@@ -7,7 +7,7 @@ instead of pressing B at the PC forever.
 """
 from collections import Counter
 
-from ..trade.preferences import identity
+from ..trade.preferences import signature as identity
 from .menus import ChangeBox, Release, Storage
 
 # Consecutive PC visits with nothing left to do before an assembly stands down.

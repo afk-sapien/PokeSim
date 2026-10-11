@@ -52,13 +52,18 @@ def test_outputs_never_overwrite(tmp_path):
 
 def test_identity_matches_existing_preference_contract():
     raw = bytearray(44)
+    raw[0] = 84  # Pikachu's species index
     raw[12:14] = bytes([12, 34])
     raw[27:29] = bytes([0xab, 0xcd])
     row = {'struct': bytes(raw), 'nickname': b'TEST', 'trainer': b'OWNER'}
-    assert individual_key(row) == sha256(json.dumps([0x0c22, [5, 10, 11, 12, 13]]).encode())[:24]
-    raw[0] = 149
+    signature = sha256(json.dumps([0x0c22, [5, 10, 11, 12, 13]]).encode())[:24]
+    assert individual_key(row) == f'{signature}-25'
+    # Level and evolution keep the key, and another family does not.
+    raw[0] = 85  # Raichu
     raw[33] = 50
     assert individual_key({**row, 'struct': bytes(raw)}) == individual_key(row)
+    raw[0] = 149  # Alakazam
+    assert individual_key({**row, 'struct': bytes(raw)}) == f'{signature}-63'
 
 
 def test_transport_refuses_queue_overflow():

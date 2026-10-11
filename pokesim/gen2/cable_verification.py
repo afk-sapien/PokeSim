@@ -1,10 +1,10 @@
 """Read-only verification of Gen II cartridge trade results and save restarts."""
 import io
-import json
 
 from .core import boot, export_clock
 
-from ..interactions.cable import checked, sha256
+from ..individual import key as trade_key
+from ..interactions.cable import checked
 from .ram import Memory, read_snapshot
 from .save import press
 
@@ -22,7 +22,7 @@ def individual_key(row):
     from .ram import individual
     raw = row['struct']
     dvs, _ = individual(raw)
-    return sha256(json.dumps([int.from_bytes(raw[6:8], 'big'), list(dvs)]).encode())[:24]
+    return trade_key(int.from_bytes(raw[6:8], 'big'), tuple(dvs), raw[0])
 
 
 def evolved_species(raw, data):

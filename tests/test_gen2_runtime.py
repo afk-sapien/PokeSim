@@ -1056,7 +1056,7 @@ def test_time_capsule_preserves_league_counts_across_return_trade(real_data):
     from pokesim.gen2.ram import decode_mon
     from pokesim.gen2.timecapsule_conversion import to_gen1
     from pokesim.gen2.timecapsule_records import to_gen1 as old_record, to_gen2 as new_record
-    from pokesim.trade.preferences import identity
+    from pokesim.trade.preferences import signature as identity
     raw = bytes.fromhex('5f0014586a630d3b008c6100000000000000000000804f140f1e144600a158210000004200420027006e00350022002c')
     row = {'struct': raw, 'nickname': b'\x8e\x8d\x88\x97' + b'\x50' * 7, 'trainer': b'\x50' * 11}
     mon = decode_mon(raw, row['nickname'], real_data).to_dict()

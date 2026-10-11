@@ -10,6 +10,7 @@ from .core import boot
 from .. import config
 from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
+from ..individual import find, same
 from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, manual_rows
 from ..trade.preferences import apply, name as setting_name
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
@@ -49,7 +50,8 @@ def _kept(mon, stock):
     if mon.get('egg'):
         return 'Eggs are not traded'
     if not mon.get('trade_key') or mon.get('trade_ambiguous'):
-        return 'Individual identity is ambiguous'
+        from ..trade.preferences import blocked
+        return blocked(mon)
     if preference == 'locked':
         return 'Set to Keep by you'
     if preference == 'withdrawn':
@@ -197,7 +199,7 @@ class Participant(BaseParticipant):
         else:
             if data.get('manual'):
                 self.manual_choice(selected)
-            elif selected not in {row.get('trade_key') for row in self.inventory()['offers']}:
+            elif find(self.inventory()['offers'], selected) is None:
                 raise ValueError('The selected Pokémon is not an eligible boxed offer')
             if any(row['phase'] not in {'aborted', 'released'} for row in _records(self.store)):
                 raise ValueError('Another interaction already reserves this adventure')
@@ -221,7 +223,7 @@ class Participant(BaseParticipant):
         path = directory / 'source.state'
         CheckpointStore.atomic_write(path, raw)
         row = party(self.emu.pb, self.emu.data)[prepared['party_slot']]
-        if individual_key(row) != selected:
+        if not same(individual_key(row), selected):
             raise ValueError('Prepared party member does not match the selected individual')
         snapshot = read_snapshot(self.emu.pb.memory, self.emu.data, self.emu.frame)
         if snapshot.map != self.emu.data.map_ids['POKECENTER_2F'] or snapshot.in_battle:

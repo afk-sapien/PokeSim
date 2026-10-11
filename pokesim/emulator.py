@@ -1,6 +1,7 @@
 """Headless CoreEmulator loop: policy-driven input, save states, RAM diff -> events, frame publishing."""
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import io
 import logging
@@ -556,6 +557,9 @@ class Emulator:
             self.statistics.observe(snap, self.pb.memory, clock=self.play_clock.status())
         with self.lock:
             self.snapshot = snap
+        if snap.valid and snap.started:
+            self.store.upgrade_trade_preferences(
+                lambda: [dataclasses.asdict(mon) for mon in snap.party] + snap.storage_entries())
         now = time.time()
         pos = (snap.map, snap.x, snap.y)
         if pos != self.last_pos or snap.in_battle or not snap.started:

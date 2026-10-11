@@ -13,6 +13,7 @@ import time
 from fastapi import HTTPException, Request
 
 from ..checkpoints import CheckpointStore
+from ..individual import find, legacy, same
 from ..app.registry import digest, validate_id
 
 PREFIX = 'managed_interaction:'
@@ -228,7 +229,8 @@ def manual_rows(payload, generation, last_party_blocked=False):
         if mon.get('egg'):
             blocked = 'Eggs cannot be traded'
         elif not mon.get('trade_key') or mon.get('trade_ambiguous'):
-            blocked = 'Another Pokémon has the same trainer and stats, so this one cannot be picked out safely'
+            from ..trade.preferences import blocked as unidentified
+            blocked = unidentified(mon)
         elif location == 'party' and last_party_blocked and len(battlers) <= 1:
             blocked = 'The game refuses to trade away the only Pokémon that can battle'
         else:
@@ -319,7 +321,7 @@ class Participant:
         inventory = self.manual_inventory()
         if inventory['reason']:
             raise ValueError(inventory['reason'])
-        row = next((row for row in inventory['pokemon'] if row['trade_key'] == selected), None)
+        row = find(inventory['pokemon'], selected)
         if row is None:
             raise ValueError('The selected Pokémon is no longer in this adventure')
         if row['blocked']:
@@ -353,7 +355,7 @@ class Participant:
         else:
             if data.get('manual'):
                 self.manual_choice(selected)
-            elif selected not in {row.get('trade_key') for row in self.inventory()['offers']}:
+            elif find(self.inventory()['offers'], selected) is None:
                 raise ValueError('The selected Pokémon is not an eligible boxed offer')
             if any(row['phase'] not in {'aborted', 'released'} for row in _records(self.store)):
                 raise ValueError('Another interaction already reserves this adventure')
@@ -386,7 +388,8 @@ class Participant:
         rows = party(self.emu.pb, symbols)
         slot = prepared['party_slot']
         row = rows[slot]
-        if identity(individual_data(row['struct'])) != selected:
+        chosen = {**individual_data(row['struct']), 'species': row['struct'][0]}
+        if not same(identity(chosen), selected):
             raise ValueError('Prepared party member does not match the selected individual')
         from ..interactions.centers import safe_center
         from ..ram import read_snapshot
@@ -402,7 +405,8 @@ class Participant:
                               'party_slot': slot, 'selected_key': selected},
                       outgoing={key: value.hex() for key, value in row.items()})
         from ..league_partners import export
-        record['outgoing_league_record'] = export(self.store, selected, asdict(snapshot.party[slot]))
+        # League records keep the trainer and DV signature that older releases exchange.
+        record['outgoing_league_record'] = export(self.store, legacy(selected), asdict(snapshot.party[slot]))
         return _save(self.store, record)
 
     def stage(self, data):
@@ -420,7 +424,7 @@ class Participant:
         result = data['result']
         if (result['adventure_id'] != self.bootstrap.adventure_id
                 or result['source']['checkpoint_sha256'] != record['source']['checkpoint_sha256']
-                or result['selected_key'] != record['selected_key']):
+                or not same(result['selected_key'], record['selected_key'])):
             raise ValueError('Cable result does not match the held adventure')
         hold = self.store.get('trade_hold')
         if not hold or hold['id'] != record['id']:
@@ -446,7 +450,7 @@ class Participant:
 
     def incoming_record(self, record, data):
         from ..league_partners import validate
-        from ..trade.preferences import identity
+        from ..trade.preferences import signature as identity
         from ..ram import individual_data
         if record.get('time_capsule'):
             from ..gen2.timecapsule_conversion import convert

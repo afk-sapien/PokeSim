@@ -1,6 +1,7 @@
 """Incremental travel and PC work using game inputs before a Cable Club session."""
 from __future__ import annotations
 
+from dataclasses import asdict
 import time
 
 from pokesim_core.shortcuts import ChangeBox, DepositPokemon, WithdrawPokemon
@@ -14,6 +15,7 @@ from ..policies.team import STAYS_IN_PARTY, reserve_to_deposit
 from ..ram import read_snapshot
 from ..screen import Screen
 from ..shortcuts import ShortcutRunner, gen1_ui
+from ..individual import is_legacy, legacy, same
 from ..trade.preferences import identity
 from ..web.pokedex import live_status
 
@@ -28,12 +30,12 @@ def selection(snapshot, preferences, key):
     payload = live_status(snapshot.to_dict())
     party = payload['party']
     stored = (payload.get('storage') or {}).get('pokemon', [])
-    matches = [('party', i, mon) for i, mon in enumerate(party) if identity(mon) == key]
+    matches = [('party', i, mon) for i, mon in enumerate(party) if same(identity(mon), key)]
     matches += [('box', mon['position'] - 1, {**mon, 'box': mon['box'] - 1})
-                for mon in stored if identity(mon) == key]
+                for mon in stored if same(identity(mon), key)]
     if len(matches) != 1:
         raise ValueError('The selected Pokémon cannot be identified uniquely')
-    if preferences.get(key, {}).get('state') in {'locked', 'withdrawn'}:
+    if (preferences.get(identity(matches[0][2])) or preferences.get(key) or {}).get('state') in {'locked', 'withdrawn'}:
         raise ValueError('The selected Pokémon is protected or withdrawn')
     return matches[0]
 
@@ -51,7 +53,7 @@ def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False):
     snapshot = read_snapshot(emu.pb.memory, emu.frame)
     if not snapshot.valid or not snapshot.started:
         raise ValueError('Wait for a valid started adventure')
-    if not isinstance(trade_key, str) or len(trade_key) != 24:
+    if not isinstance(trade_key, str) or len(legacy(trade_key)) != 24:
         raise ValueError('Choose an identifiable Pokémon')
     # A manual trade is the owner's own choice, so trade preferences and party protection do not apply.
     location, _, _ = selection(snapshot, {} if manual else emu.store.trade_preferences(), trade_key)
@@ -394,7 +396,14 @@ class Preparation:
 
     def _storage_preferences(self):
         preferences = dict(self.emu.store.trade_preferences())
-        preferences[self.state['trade_key']] = {'state': 'offered'}
+        key = self.state['trade_key']
+        preferences[key] = {'state': 'offered'}
+        snapshot = getattr(self.emu, 'snapshot', None)
+        if is_legacy(key) and snapshot is not None:
+            # A preparation begun by an older release names its Pokémon by trainer and DVs only.
+            for mon in [asdict(mon) for mon in snapshot.party] + snapshot.storage_entries():
+                if same(identity(mon), key):
+                    preferences[identity(mon)] = {'state': 'offered'}
         return preferences
 
     def _storage_operation_ready(self, snap, offered):

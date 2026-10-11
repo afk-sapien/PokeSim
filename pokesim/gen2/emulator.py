@@ -387,6 +387,7 @@ class Emulator:
             self.pb.memory[bank, address] = value
             self.options_applied = True
         self.play_clock.seed(snapshot.playtime_seconds)
+        self.store.upgrade_trade_preferences(lambda: [mon.to_dict() for mon in (*snapshot.party, *snapshot.stored)])
         self.game_clock = game_clock(self.pb.memory, self.data)
         self.tracker.observe(snapshot)
         from .steps import observe_mew

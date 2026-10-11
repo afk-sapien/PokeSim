@@ -13,7 +13,7 @@ from math import isqrt
 from pokesim_core.dvs import is_perfect, is_shiny
 
 from ..investment import rare_find
-from ..trade.preferences import identity
+from ..trade.preferences import identity, signature
 
 BOX_CAPACITY = 20
 # Free slots kept available across all boxes, so catching never stalls.
@@ -45,8 +45,10 @@ def quality(mon):
 
 
 def _keys(mon):
-    """Both identity forms the plans record: the trade key and the training pair."""
-    return identity({'trainer_id': mon.trainer_id, 'dvs': mon.dvs}), (mon.trainer_id, tuple(mon.dvs))
+    """Every identity form the plans record: the trade key, the trainer and DV signature that teams
+    and older trade settings use, and the training pair."""
+    record = {'trainer_id': mon.trainer_id, 'dvs': mon.dvs, 'dex': mon.species}
+    return identity(record), signature(record), (mon.trainer_id, tuple(mon.dvs))
 
 
 def _pair(value):

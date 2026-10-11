@@ -19,6 +19,7 @@ import time
 from ..checkpoints import CheckpointStore
 from . import trade_settings
 from .registry import digest, identifier, validate_id
+from ..individual import find, legacy
 from ..trade.preferences import FIRST
 
 log = logging.getLogger(__name__)
@@ -65,6 +66,12 @@ def _nickname(raw):
         elif value >= 0x60:
             result.append('?')
     return ''.join(result).strip() or None
+
+
+def visited(visits, aid, campaign, key):
+    """Whether this Pokémon already came through a finished trade, under its key or the trainer
+    and stats signature that older releases recorded as its key."""
+    return bool(key) and ((aid, campaign, key) in visits or (aid, campaign, legacy(key)) in visits)
 
 
 class Coordinator:
@@ -398,10 +405,9 @@ class Coordinator:
                 selected_offers.append(selected_offer)
                 display_offers[aid] = self._mon_display(selected_offer)
                 continue
-            eligible = {mon.get('trade_key') for mon in inventory.get('offers', [])}
-            if selection[side + '_key'] not in eligible:
+            selected_offer = find(inventory.get('offers', []), selection[side + '_key'])
+            if selected_offer is None:
                 raise ValueError('This Pokémon is no longer eligible. Check its locks and trade preferences.')
-            selected_offer = next(mon for mon in inventory['offers'] if mon.get('trade_key') == selection[side + '_key'])
             selected_inventories.append(inventory)
             selected_offers.append(selected_offer)
             display_offers[aid] = self._mon_display(selected_offer)
@@ -880,8 +886,8 @@ class Coordinator:
                             continue
                         # Do not circulate the same individual for repeat quality gains.
                         # A newly available Pokédex entry still justifies its return.
-                        if ((left_id, campaigns[left_id], take.get('trade_key')) in visits and mine < 100
-                                or (right_id, campaigns[right_id], give.get('trade_key')) in visits and theirs < 100):
+                        if (visited(visits, left_id, campaigns[left_id], take.get('trade_key')) and mine < 100
+                                or visited(visits, right_id, campaigns[right_id], give.get('trade_key')) and theirs < 100):
                             continue
                         repetition = sum(recent_species[aid, dex] for aid, dex in {
                             (left_id, give.get('dex')), (left_id, take.get('arrived_dex', take.get('dex'))),
@@ -927,7 +933,8 @@ class Coordinator:
     def _auto_offers(aid, inventory, reserved):
         """The offers automatic trading may use: never a shiny and never a hand-picked Pokémon."""
         offers = [offer for offer in inventory.get('offers') or []
-                  if not offer.get('shiny') and (aid, offer.get('trade_key')) not in reserved]
+                  if not offer.get('shiny') and (aid, offer.get('trade_key')) not in reserved
+                  and (aid, legacy(offer.get('trade_key'))) not in reserved]
         return aid, {**inventory, 'offers': offers}
 
     # Manual trades: the owner picks both Pokémon and only hard cable limits can refuse them.
@@ -958,7 +965,7 @@ class Coordinator:
     def _manual_offer(inventory, key):
         if inventory.get('reason'):
             raise ValueError(inventory['reason'])
-        row = next((mon for mon in inventory.get('pokemon') or [] if mon.get('trade_key') == key), None)
+        row = find(inventory.get('pokemon') or [], key)
         if row is None:
             raise ValueError('The selected Pokémon is no longer in that adventure')
         if row.get('blocked'):

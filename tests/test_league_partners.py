@@ -7,7 +7,7 @@ from pokesim import league_partners as league
 from pokesim.events import Event
 from pokesim.ram import PartyMon, StoredMon
 from pokesim.store import Store
-from pokesim.trade.preferences import identity
+from pokesim.trade.preferences import signature as identity
 from test_events import snap
 
 

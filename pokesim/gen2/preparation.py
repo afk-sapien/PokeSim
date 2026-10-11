@@ -1,7 +1,9 @@
 """Prepare a boxed Gen II offer with ordinary travel and PC controls."""
 import time
 
+from ..individual import same
 from ..trade.preferences import identity
+from .teams import key as team_key
 from .menus import ChangeBox, Give, Storage
 from .policy import Action
 from .ram import Memory, read_snapshot
@@ -12,11 +14,11 @@ KEY = 'interaction_preparation'
 
 def selected(snapshot, preferences, key):
     matches = [('party', index, mon) for index, mon in enumerate(snapshot.party)
-               if identity(mon.to_dict()) == key]
-    matches += [('box', mon.position, mon) for mon in snapshot.stored if identity(mon.to_dict()) == key]
+               if same(identity(mon.to_dict()), key)]
+    matches += [('box', mon.position, mon) for mon in snapshot.stored if same(identity(mon.to_dict()), key)]
     if len(matches) != 1 or matches[0][2].egg:
         raise ValueError('The selected individual is missing or ambiguous')
-    if preferences.get(key, {}).get('state') in {'locked', 'withdrawn'}:
+    if (preferences.get(identity(matches[0][2].to_dict())) or preferences.get(key) or {}).get('state') in {'locked', 'withdrawn'}:
         raise ValueError('The selected Pokémon is protected or withdrawn')
     return matches[0]
 
@@ -55,7 +57,7 @@ def begin(emu, key, tid, *, time_capsule=False, manual=False, session=False):
     if session:
         state['session'] = True
     if time_capsule:
-        state['original_party'] = [identity(mon.to_dict()) for mon in snapshot.party]
+        state['original_party'] = [team_key(mon) for mon in snapshot.party]
     emu.store.set(KEY, state)
     emu.preparation = Preparation(emu, state)
     return state

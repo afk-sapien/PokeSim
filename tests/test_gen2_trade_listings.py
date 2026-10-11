@@ -67,9 +67,9 @@ def test_manual_inventory_offers_everyone_and_explains_time_capsule_limits(tmp_p
               SimpleNamespace(species=3, egg=True, moves=(), held_item=0, box=0, position=2))
     snapshot = SimpleNamespace(party=party, stored=stored, items=())
     monkeypatch.setattr(trading, 'live_status', lambda *args: {
-        'party': [{'species': 9, 'slot': 1, 'trainer_id': 1, 'dvs': (1,) * 5},
-                  {'species': 175, 'slot': 2, 'trainer_id': 2, 'dvs': (2,) * 5}],
-        'storage': {'pokemon': [boxed(1, 1, trainer_id=3), boxed(2, 2, trainer_id=4), boxed(3, 3, egg=True, trainer_id=5)]}})
+        'party': [{'species': 9, 'dex': 9, 'slot': 1, 'trainer_id': 1, 'dvs': (1,) * 5},
+                  {'species': 175, 'dex': 175, 'slot': 2, 'trainer_id': 2, 'dvs': (2,) * 5}],
+        'storage': {'pokemon': [boxed(1, 1, dex=1, trainer_id=3), boxed(2, 2, dex=2, trainer_id=4), boxed(3, 3, dex=3, egg=True, trainer_id=5)]}})
     monkeypatch.setattr(trading, 'unlocked', lambda *args: True)
     monkeypatch.setattr(trading, 'Memory', lambda *args: None)
     monkeypatch.setattr(trading, 'compatible', lambda mon, data: mon.species <= 151 and max(mon.moves) <= 165 and not mon.held_item)

@@ -6,7 +6,7 @@ import json
 import re
 import uuid
 
-from ..trade.preferences import identity
+from ..trade.preferences import signature as identity
 from .tracking import ancestors
 
 KEY = 'gen2-league-partners-v1'
