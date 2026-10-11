@@ -351,11 +351,21 @@ if ($('#export-save')) $('#export-save').onclick = async (event) => {
     button.textContent = 'Download .sav'
   }
 }
+let viewLinkTimer = 0
 if ($('#copy-view-link')) $('#copy-view-link').onclick = async (event) => {
-  const link = new URL(event.currentTarget.dataset.viewLink, location.origin).href
+  const button = event.currentTarget
+  const link = new URL(button.dataset.viewLink, location.origin).href
   try {
     await navigator.clipboard.writeText(link)
-    toast('View link copied. It shows this adventure without any controls.')
+    // A small "Copied" note under the rail key, also read out as a status.
+    const note = button.querySelector('.rail-key-note')
+    button.dataset.copied = ''
+    if (note) note.textContent = 'Copied'
+    clearTimeout(viewLinkTimer)
+    viewLinkTimer = setTimeout(() => {
+      delete button.dataset.copied
+      if (note) note.textContent = ''
+    }, 1800)
   } catch (_) {
     window.prompt('Copy this view link. It shows this adventure without any controls.', link)
   }

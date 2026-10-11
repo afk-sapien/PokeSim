@@ -531,7 +531,9 @@ a.pick-item { text-decoration: none }
 }
 .builder-slot { display: grid; gap: var(--s2); min-width: 0; }
 .builder-slot .section-head { margin: 0; }
-.builder-arrow { align-self: center; padding-top: var(--s5); }
+/* Centred on the slots, not on the slots plus their headings: the top margin
+   matches the heading row, so the chip and its glyph sit level with the slot middle. */
+.builder-arrow { align-self: center; margin-top: calc(var(--s6) + var(--s2)); }
 .slot-body { display: grid; gap: var(--s2); }
 .slot-body .pick-chosen-grid { grid-template-columns: minmax(0, 1fr); max-width: 380px; }
 .slot-empty {
@@ -592,7 +594,7 @@ a.pick-item { text-decoration: none }
 
 @media (max-width: 640px) {
   .builder-slots { grid-template-columns: minmax(0, 1fr); }
-  .builder-arrow { justify-self: center; padding-top: 0; transform: rotate(90deg); }
+  .builder-arrow { justify-self: center; margin-top: 0; transform: rotate(90deg); }
   .builder-actions .key { flex: 1 1 auto; }
   .pick-change { justify-self: stretch; }
   .pick-dialog { width: 100%; height: 100dvh; margin: 0; border: 0; box-shadow: none; }

@@ -392,7 +392,7 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  padding: 0 var(--s4);
+  padding: 0 var(--s3);
   border-left: var(--hair) solid var(--rule-faint);
   font: var(--f-legend) / 1 var(--font-panel);
   letter-spacing: 0.06em;
@@ -430,6 +430,51 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
 .connection .lamp { background: var(--ok-lamp); box-shadow: inset 0 0 0 1px var(--rule), 0 0 6px -1px var(--ok-lamp); }
 .connection.is-paused .lamp { background: var(--warn-lamp); box-shadow: inset 0 0 0 1px var(--rule), 0 0 6px -1px var(--warn-lamp); animation: none; }
 .connection.is-offline .lamp { background: var(--crit-lamp); box-shadow: inset 0 0 0 1px var(--rule), 0 0 6px -1px var(--crit-lamp); }
+
+/* Copy view link: a small square key at the end of the rail, kept close to
+   the status it sits beside. A "Copied" note hangs under it for a moment. */
+.rail-key {
+  position: relative;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin-left: calc(var(--s2) - var(--s5));
+  padding: 0;
+  background: var(--panel-2);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--key-inset);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+.rail-key:hover { background: var(--panel); color: var(--ink); }
+.rail-key:active { box-shadow: var(--well-inset); background: var(--well); }
+.rail-key-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: square; }
+.rail-key .glyph-done { display: none; }
+.rail-key[data-copied] { color: var(--ok); }
+.rail-key[data-copied] .glyph-link { display: none; }
+.rail-key[data-copied] .glyph-done { display: inline; }
+.rail-key-note {
+  position: absolute;
+  top: calc(100% + var(--s2));
+  right: 0;
+  padding: var(--s1) var(--s2);
+  background: var(--panel);
+  border: var(--hair) solid var(--rule);
+  border-left: 3px solid var(--ok-lamp);
+  box-shadow: var(--key-inset), 2px 2px 0 var(--bevel-lo);
+  font: var(--f-micro) / 1.4 var(--font-mono);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.rail-key-note:empty { display: none; }
 
 /* ---- identity strip ---------------------------------------------------
    Who, then the run's totals. Every stat is label over reading with the same
@@ -1069,9 +1114,10 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .mon-head .name { flex: 1 0 100%; }
 }
 
-@media (max-width: 1100px) {
-  .shell { padding-inline: var(--s5); }
-
+/* The tabs share one line with the brand, the switcher and the status only
+   from 1280px; narrower, they take their own full-width row instead of being
+   clipped. */
+@media (max-width: 1279px) {
   .rail-inner { flex-wrap: wrap; column-gap: var(--s4); }
   .rail nav:not(.breadcrumb) {
     order: 3;
@@ -1083,8 +1129,14 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .rail nav:not(.breadcrumb) a:first-child { border-left: 0; }
   .rail nav:not(.breadcrumb) a:last-child { border-right: 0; }
   .connection { margin-left: auto; }
+  .rail-key { margin-left: calc(var(--s2) - var(--s4)); }
 
   .brandplate { min-height: 56px; }
+}
+
+@media (max-width: 1100px) {
+  .shell { padding-inline: var(--s5); }
+
   .identity .stats { margin-left: 0; width: 100%; }
 }
 

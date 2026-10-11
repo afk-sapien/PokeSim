@@ -192,14 +192,18 @@
   box-shadow: var(--key-inset), 6px 6px 0 var(--bevel-lo);
 }
 .pc-detail::backdrop { background: rgba(10, 12, 10, 0.55); }
-.close-detail { position: absolute; top: var(--s3); right: var(--s3); z-index: 1; min-height: 32px; padding: 0 var(--s3); }
+.close-detail { position: absolute; top: var(--s3); right: var(--s3); z-index: 1; }
+/* Every key in the popup is the same small size: Close, the links and Trade…. */
+.pc-detail .close-detail,
+.pc-detail-links .key,
+#pc-trade-action .key { min-height: 32px; padding: 0 var(--s3); font-size: 14px; }
 .pc-detail-head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--s5);
+  gap: var(--s4);
   align-items: center;
-  padding: var(--s5);
-  padding-right: 112px;
+  padding: var(--s4);
+  padding-right: 104px;
   border-bottom: var(--hair) solid var(--rule);
   background: var(--panel-2);
 }
@@ -207,7 +211,11 @@
 .pc-detail-id > * { margin: 0; }
 .pc-detail-head h2 { font: var(--f-read) / 1.1 var(--font-panel); letter-spacing: 0.04em; text-transform: uppercase; overflow-wrap: anywhere; }
 .pc-detail-line { font-size: 14px; color: var(--ink-2); }
-.pc-detail-head .pc-tags { margin-top: 0; }
+.pc-detail-head .pc-tags { margin-top: var(--s1); }
+/* Types and the other stamps share one wrapping row, so a lone type tag
+   never sits on a line of its own. */
+.pc-detail-tags { align-items: center; }
+.pc-detail-tags .type-tags:empty { display: none; }
 .detail-meta { font-size: 13px; line-height: 1.5; color: var(--ink-2); }
 .detail-meta strong { color: var(--ink); }
 .pc-detail .trade-tag { white-space: nowrap; }
@@ -216,18 +224,17 @@
 .pc-detail .trade-tag--keep { color: var(--ok); border-color: var(--ok); }
 .pc-detail .trade-tag--protected { color: var(--ink-2); border-style: dashed; }
 
-.pc-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr); padding: 0 var(--s4) var(--s3); gap: 0 var(--s5); }
+.pc-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr); padding: 0 var(--s4) var(--s4); gap: 0 var(--s5); }
 .pc-detail-col { min-width: 0; }
 /* Each section is a labelled panel strip: a printed legend, then its readings. */
-.pc-detail-section { margin-top: var(--s3); min-width: 0; }
-.pc-detail-section > h3 { margin-bottom: var(--s1); }
+.pc-detail-section { margin-top: var(--s4); min-width: 0; }
+.pc-detail-section > h3 { margin-bottom: var(--s2); }
 .pc-detail-note { margin: var(--s3) var(--s4) var(--s4); }
-.pc-detail-links { display: flex; flex-wrap: wrap; gap: var(--s2); padding: 0 var(--s4) var(--s3); }
-.pc-detail-links .key { min-height: 32px; }
+.pc-detail-links { display: flex; flex-wrap: wrap; gap: var(--s2); padding: 0 var(--s4) var(--s4); }
 
 /* Two headline numbers, then HP and XP on one grid so both meters line up. */
-.pc-readouts { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s5); margin: 0 0 var(--s2); }
-.pc-readout { display: grid; gap: 2px; }
+.pc-readouts { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin: 0 0 var(--s3); }
+.pc-readout { display: grid; gap: var(--s1); }
 .pc-readout dt { font: var(--f-micro) / 1.2 var(--font-mono); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-3); }
 .pc-readout dd { margin: 0; font: var(--f-read) / 1 var(--font-panel); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pc-readout dd .unit { font-size: var(--f-legend); }
@@ -253,7 +260,7 @@
   border-top: var(--hair) solid var(--rule-faint);
   background: var(--panel);
 }
-.pc-move-head { border-top: 0; background: var(--panel-2); padding-block: 3px; }
+.pc-move-head { border-top: 0; background: var(--panel-2); padding-block: var(--s1); }
 .pc-move-head > *, .pc-move-head .pc-move-specs > * { font: var(--f-micro) / 1.2 var(--font-mono); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-3); }
 .pc-move-head .pc-move-name { font: var(--f-micro) / 1.2 var(--font-mono); letter-spacing: var(--track-micro); }
 .pc-move-name {
@@ -275,7 +282,7 @@
 .pc-move-pp b { font-weight: 600; color: var(--ink); }
 .pc-move-pp.empty, .pc-move-pp.empty b { color: var(--crit); }
 /* Narrow screens put type, kind, power and accuracy on a second line in fixed columns. */
-.pc-move-specs { grid-area: specs; display: grid; grid-template-columns: 74px 64px 28px 38px; align-items: center; gap: 6px; }
+.pc-move-specs { grid-area: specs; display: grid; grid-template-columns: 84px 64px 28px 38px; align-items: center; gap: 6px; }
 .pc-move-specs > span { white-space: nowrap; }
 .pc-move-pow, .pc-move-acc { text-align: right; }
 .pc-move-head .pc-move-pp { text-align: right; }
@@ -315,7 +322,7 @@
   font-variant-numeric: tabular-nums;
 }
 .individual-stats caption {
-  padding-bottom: var(--s1);
+  padding-bottom: var(--s2);
   text-align: left;
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
@@ -325,7 +332,8 @@
 .individual-stats caption span { float: right; color: var(--ink-2); text-transform: none; letter-spacing: 0; font-size: 12px; }
 .individual-stats th,
 .individual-stats td {
-  padding: 4px var(--s2);
+  padding: 5px var(--s2);
+  white-space: nowrap;
   border-bottom: var(--hair) solid var(--rule-faint);
   text-align: right;
   font: 13px / 1.3 var(--font-mono);
@@ -345,6 +353,9 @@
 .individual-stats tfoot td { border-top: var(--hair) solid var(--rule); border-bottom: 0; background: var(--well); color: var(--ink); font-weight: 600; }
 
 .pc-trade-action { padding: var(--s3) var(--s4); border-top: var(--hair) solid var(--rule); background: var(--panel-2); }
+/* The PC footer is one row of keys: the guide and Pokédex links, then Trade… at the far end. */
+#pc-trade-action { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+#pc-trade-action .pc-trade-link { margin-left: auto; }
 .pc-trade-action:empty { display: none; }
 
 /* A wide popup reads each move across one line: name, type, kind, power, accuracy, PP. */
@@ -353,7 +364,6 @@
 }
 @media (min-width: 900px) {
   .pc-detail-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
-  .individual-stats th, .individual-stats td { white-space: nowrap; }
 }
 
 /* ---- responsive -------------------------------------------------------- */
@@ -367,14 +377,21 @@
   .pc-toolbar .field:not(.field--grow) { flex: 1 1 140px; }
   .pc-count { margin-left: 0; padding-bottom: 0; flex-basis: 100%; }
   .pc-empty-slot { min-height: 120px; }
-  .pc-detail-head { gap: var(--s3); padding: var(--s7) var(--s3) var(--s4); }
+  .pc-detail-head { gap: var(--s3); padding: var(--s3) 96px var(--s4) var(--s3); }
   .pc-detail-head .plate { align-self: start; }
-  .pc-detail-grid { padding: 0 var(--s3) var(--s3); }
-  .pc-detail-links { padding: 0 var(--s3) var(--s3); }
+  .pc-detail-grid { padding: 0 var(--s3) var(--s4); }
+  .pc-detail-links { padding: 0 var(--s3) var(--s4); }
+  .pc-trade-action { padding: var(--s3); }
+  #pc-trade-action .key { flex: 1 1 auto; }
   .pc-readout dd { font-size: 20px; }
+  .individual-stats th, .individual-stats td { padding-inline: 6px; }
+  .individual-stats th:first-child { padding-left: var(--s2); }
+  .individual-stats tr > :last-child { padding-right: var(--s2); }
 }
+/* A phone stacks the head: the portrait shares the top row with Close, then
+   the name and tags take the full width. */
 @media (max-width: 420px) {
-  .pc-detail-head { grid-template-columns: minmax(0, 1fr); }
+  .pc-detail-head { grid-template-columns: minmax(0, 1fr); padding-right: var(--s3); }
 }
 @media (forced-colors: active) {
   .segmented button[aria-pressed="true"] { outline: 2px solid Highlight; }

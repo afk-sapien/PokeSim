@@ -81,8 +81,9 @@ function render() {
 }
 
 function detail(mon) {
-  $('#pc-detail-body').innerHTML = MonGrid.detail(mon)
-  $('#pc-trade-action').innerHTML = tradeLink(mon)
+  // The guide and Pokédex links share the footer with Trade…, one row of keys.
+  $('#pc-detail-body').innerHTML = MonGrid.detail(mon, {links: false})
+  $('#pc-trade-action').innerHTML = `${MonGrid.detailLinks(mon)}${tradeLink(mon)}`
   $('#pc-detail').showModal()
   fitSprites($('#pc-detail-body'))
 }

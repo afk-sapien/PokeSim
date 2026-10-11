@@ -122,7 +122,7 @@ test('power bookmarks survive refresh and details show the five stat breakdown',
   assert.match(detail, /HP<\/th><td>110/)
   assert.match(detail, /Attack<\/th><td>75/)
   assert.match(detail, /Special<\/th><td>70/)
-  assert.match(detail, /pokemon-stats\.md/)
+  assert.match(view.element('#pc-trade-action').innerHTML, /pokemon-stats\.md/)
   assert.doesNotMatch(detail, /Power =|Total DVs include|Missing historical records|DV stars measure/)
 })
 
@@ -243,7 +243,7 @@ test('DV ratings filter, sort, bookmark, and explain partners in every view', as
   assert.match(view.element('#pc-grid').innerHTML, /★★★★/)
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '1'}})}})
   assert.match(view.element('#pc-detail-body').innerHTML, /70 \/ 75 DVs · 93.3%/)
-  assert.match(view.element('#pc-detail-body').innerHTML, /Stats guide/)
+  assert.match(view.element('#pc-trade-action').innerHTML, /Stats guide/)
   view.element('#pc-rating').value = '3'
   view.element('#pc-rating').oninput()
   await view.refresh()

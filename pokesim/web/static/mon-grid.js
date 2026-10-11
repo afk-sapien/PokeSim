@@ -185,6 +185,12 @@
     return `<dl class="pc-facts"><div><dt>Hatches in</dt><dd>${Number.isFinite(cycles) ? `${fmt(cycles)} egg cycle${cycles === 1 ? '' : 's'}<small>About ${fmt(cycles * 256)} steps in the party</small>` : 'Unknown'}</dd></div></dl>`
   }
 
+  // The stats guide and Pokédex keys, on their own so a page can put them in its footer.
+  function detailLinks(mon) {
+    if (mon.egg) return ''
+    return `<a class="dex-open key" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer">Stats guide ↗</a>${mon.dex ? `<a class="dex-open key" href="${base()}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex ↗</a>` : ''}`
+  }
+
   // The popup body. Options: sprite (a portrait address from another game), trade (replaces the
   // trade stamp, or false to leave it out), top (HTML shown under the head, such as a pick button)
   // and links (false hides the guide and Pokédex links).
@@ -200,9 +206,9 @@
     const where = options.slot ? esc(options.slot) : `${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}`
     const head = `<div class="pc-detail-head"><div class="plate plate--bay ${types().portraitClass(mon.type_names)}">${sprite(mon, options.sprite).replace(' loading="lazy"', '')}</div>`
       + `<div class="pc-detail-id"><p class="micro">${where}${mon.dex ? ` · No.${String(mon.dex).padStart(3, '0')}` : ''}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>`
-      + `<p class="pc-detail-line">${line}</p><div class="type-tags">${types().badges(mon.type_names)}</div>${tags ? `<div class="pc-tags">${tags}</div>` : ''}</div></div>`
+      + `<p class="pc-detail-line">${line}</p><div class="pc-tags pc-detail-tags"><span class="type-tags">${types().badges(mon.type_names)}</span>${tags}</div></div></div>`
     const section = (title, body, extra = '') => `<section class="pc-detail-section${extra}"><h3 class="micro">${title}</h3>${body}</section>`
-    const links = options.links === false ? '' : `<div class="pc-detail-links"><a class="dex-open key" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer">Stats guide ↗</a>${mon.dex ? `<a class="dex-open key" href="${base()}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex ↗</a>` : ''}</div>`
+    const links = options.links === false ? '' : `<div class="pc-detail-links">${detailLinks(mon)}</div>`
     const top = options.top || ''
     if (mon.egg) return head + top + section('Egg', eggFacts(mon)) + '<p class="detail-meta pc-detail-note">Its species, moves and stats appear once it hatches.</p>'
     const condition = conditionRows(mon)
@@ -275,6 +281,6 @@
   })
 
   globalThis.MonGrid = {esc, SORTS, RATINGS, SETTINGS, SETTING_LABELS, sortDefaults, statTotal, sortValue, compare,
-    formatTotal, ratingLabel, ratingBadge, settingBadge, matches, card, detail, tradeState, statPower, toolbar, generation,
+    formatTotal, ratingLabel, ratingBadge, settingBadge, matches, card, detail, detailLinks, tradeState, statPower, toolbar, generation,
     orderLabels, bind, apply, filtered}
 })()

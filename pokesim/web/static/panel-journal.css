@@ -471,6 +471,9 @@
   .journal-pages a[aria-current="page"] { outline-offset: -4px }
 }
 .statistics-section { margin-block: var(--s5) }
+/* A footnote under a panel gets a little air instead of touching its border. */
+.statistics-section > .note { margin-top: var(--s2) }
+.statistics-section > .note:empty { display: none }
 .progress-label { min-width: 0 }
 .progress-label .readout { overflow-wrap: anywhere }
 @media (max-width: 520px) {
