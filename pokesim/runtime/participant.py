@@ -215,6 +215,17 @@ def _reclaim(store, threshold=RECLAIM_BYTES):
     return free * size
 
 
+def keeps(data):
+    """What a PC must keep if preparing this trade has to release a spare to make room.
+
+    ``protect`` names this adventure's Pokémon hand-picked for a trade or open offer, and
+    ``wished`` the species any adventure wishes for. Malformed entries are dropped.
+    """
+    protect = [key for key in data.get('protect') or () if isinstance(key, str) and 1 <= len(key) <= 256]
+    wished = [dex for dex in data.get('wished') or () if type(dex) is int and 1 <= dex <= 251]
+    return {'protect': protect[:256], 'wished': wished[:256]}
+
+
 def manual_rows(payload, generation, last_party_blocked=False):
     """Every party and boxed Pokémon the owner may pick for a manual trade.
 
@@ -369,7 +380,7 @@ class Participant:
                 'was_paused': self.emu.paused, 'was_manual': self.emu.manual_mode,
                 'time_capsule': bool(data.get('time_capsule')), 'manual': bool(data.get('manual'))})
         from .preparation import begin
-        prepared = begin(self.emu, selected, tid, manual=record.get('manual', False))
+        prepared = begin(self.emu, selected, tid, manual=record.get('manual', False), **keeps(data))
         if prepared.get('phase') == 'failed':
             raise ValueError(prepared.get('error', 'Trade preparation failed'))
         if prepared.get('phase') != 'ready':

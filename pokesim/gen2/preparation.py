@@ -4,12 +4,13 @@ import time
 from ..individual import same
 from ..trade.preferences import identity
 from .teams import key as team_key
-from .menus import ChangeBox, Give, Storage
+from .menus import ChangeBox, Give, Release, Storage
 from .policy import Action
 from .ram import Memory, read_snapshot
 from .world import update as update_world
 
 KEY = 'interaction_preparation'
+FULL = 'Every PC box is full and no spare duplicate can be safely released to make room for this trade'
 
 
 def selected(snapshot, preferences, key):
@@ -23,7 +24,7 @@ def selected(snapshot, preferences, key):
     return matches[0]
 
 
-def begin(emu, key, tid, *, time_capsule=False, manual=False, session=False):
+def begin(emu, key, tid, *, time_capsule=False, manual=False, session=False, protect=(), wished=()):
     """Start walking to the Cable Club. A session (key None) brings the party as it is."""
     saved = emu.store.get(KEY)
     if saved and saved['id'] == tid:
@@ -56,6 +57,9 @@ def begin(emu, key, tid, *, time_capsule=False, manual=False, session=False):
         state['manual'] = True
     if session:
         state['session'] = True
+    # Hand-picked Pokémon and wished species the PC must keep if it has to release one to make room.
+    state['protect'] = sorted({key, *protect} - {None})
+    state['wished'] = sorted(set(wished))
     if time_capsule:
         state['original_party'] = [team_key(mon) for mon in snapshot.party]
     emu.store.set(KEY, state)
@@ -69,6 +73,7 @@ class Preparation:
         self.menu = None
         self.center = None
         self.claimed = False
+        self.released = None
 
     def step(self, snapshot):
         if not self.claimed:
@@ -88,12 +93,37 @@ class Preparation:
             self.emu.policy.on_restore()
             return Action(None, 0, 1)
 
-    @staticmethod
-    def open_box(snapshot):
+    def make_room(self, snapshot):
+        """A menu that opens a box with a free slot, or releases one safe spare when every box is full."""
         box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)
-        if box is None:
-            raise ValueError('Every PC box is full. Release or move some Pokémon, then prepare the trade again')
-        return box
+        if box is not None:
+            return ChangeBox(box)
+        spare = self.emu.policy.trade_spare(snapshot, self.state.get('protect', ()), self.state.get('wished', ()))
+        if spare is None:
+            raise ValueError(FULL)
+        if spare.box != snapshot.active_box:
+            return ChangeBox(spare.box)
+        self.released = spare
+        return Release(spare.box, spare.position, [spare.species, spare.trainer_id, list(spare.dvs)])
+
+    def announce(self, snapshot):
+        """Log the spare the PC let go once it has left its box."""
+        spare, self.released = self.released, None
+        if spare is None or any(mon.box == spare.box and mon.position == spare.position
+                                and [mon.species, mon.trainer_id, mon.dvs] == [spare.species, spare.trainer_id, spare.dvs]
+                                for mon in snapshot.stored):
+            return
+        name = self.emu.data.species.get(spare.species, {}).get('name', f'#{spare.species}')
+        title = f'Released {spare.nick or name} ({name} Lv {spare.level}) to make room for a trade'
+        body = f'Every PC box was full, so a spare {name} was let go to make room for a trade.'
+        released = self.state.setdefault('released', [])
+        released.append({'species': spare.species, 'level': spare.level, 'nick': spare.nick, 'box': spare.box,
+                         'position': spare.position, 'trainer_id': spare.trainer_id, 'dvs': list(spare.dvs)})
+        self.emu.store.set(KEY, self.state)
+        log = getattr(self.emu, '_event', None)
+        if log is not None:
+            from .emulator import Event
+            log(Event('release', title, body, priority=3), snapshot)
 
     def advance(self, snapshot):
         emu, state = self.emu, self.state
@@ -114,6 +144,7 @@ class Preparation:
             if button:
                 return Action(None, 0, 24) if button == 'wait' else Action(button, 8, 28)
             self.menu = None
+            self.announce(snapshot)
         if 'TURN OFF' in snapshot.text:
             return Action('b', 8, 32)
         if 'CHANGE BOX' in snapshot.text or 'Choose a' in snapshot.text or 'CANCEL' in snapshot.text:
@@ -191,14 +222,12 @@ class Preparation:
             return Action('up', 8, 16)
         if state.get('time_capsule') and incompatible is not None and len(snapshot.party) > 1:
             if snapshot.box_counts[snapshot.active_box] >= 20:
-                box = self.open_box(snapshot)
-                self.menu = ChangeBox(box)
+                self.menu = self.make_room(snapshot)
             else:
                 self.menu = Storage('DEPOSIT', incompatible, len(snapshot.party))
         elif len(snapshot.party) == 6:
             if snapshot.box_counts[snapshot.active_box] >= 20:
-                box = self.open_box(snapshot)
-                self.menu = ChangeBox(box)
+                self.menu = self.make_room(snapshot)
             else:
                 protected = {15, 19, 57, 70, 148, 250, 127}
                 candidates = [i for i, member in enumerate(snapshot.party) if i and not protected.intersection(member.moves)]

@@ -11,7 +11,7 @@ from .. import config
 from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
 from ..individual import find, same
-from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, manual_rows
+from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, keeps, manual_rows
 from ..trade.preferences import apply, name as setting_name
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin
@@ -44,17 +44,21 @@ def _paused(emu, snapshot):
     return ''
 
 
-SEALED = 'The party and every PC box are full, so no boxed Pokémon can join the party for a trade'
+SEALED = 'The party and every PC box are full and no spare duplicate can be released, so no boxed Pokémon can join the party for a trade'
 
 
-def sealed(snapshot):
+def sealed(snapshot, policy=None):
     """Whether a full party and full PC leave a boxed Pokémon no way to reach the party.
 
     Preparation must deposit a party member before it withdraws the offer, and Gen II has no PC swap.
-    The policy releases a spare duplicate on its own whenever it has one, so the offers come back then.
+    When every box is full, preparation releases one safe spare duplicate first (see Policy.trade_spare),
+    so the PC only counts as sealed when there is none.
     """
     counts = getattr(snapshot, 'box_counts', ())
-    return len(getattr(snapshot, 'party', ())) >= 6 and bool(counts) and all(count >= 20 for count in counts)
+    if not (len(getattr(snapshot, 'party', ())) >= 6 and bool(counts) and all(count >= 20 for count in counts)):
+        return False
+    spare = getattr(policy, 'trade_spare', None)
+    return spare is None or spare(snapshot) is None
 
 
 def _kept(mon, stock):
@@ -91,7 +95,7 @@ def _stock(emu, rows):
 
 def offers(emu, payload):
     snapshot = emu.snapshot
-    if _paused(emu, snapshot) or sealed(snapshot):
+    if _paused(emu, snapshot) or sealed(snapshot, emu.policy):
         return []
     party = payload.get('party') or []
     stored = (payload.get('storage') or {}).get('pokemon') or []
@@ -157,7 +161,7 @@ class Participant(BaseParticipant):
                 'generation': self.bootstrap.generation, 'cartridge_generation': 2,
                 'offers': offers(self.emu, payload), 'revision': digest(payload),
                 'time_capsule_ready': unlocked(self.emu.snapshot, Memory(self.emu.pb.memory, self.emu.data)),
-                'trade_blocked': SEALED if sealed(self.emu.snapshot) else '',
+                'trade_blocked': SEALED if sealed(self.emu.snapshot, self.emu.policy) else '',
                 'holding': bool(self.store.get('trade_hold'))}
 
     def manual_inventory(self):
@@ -175,7 +179,7 @@ class Participant(BaseParticipant):
                   'Resume autonomous play in this adventure before trading' if self.emu.paused or self.emu.manual_mode else
                   paused)
         rows = manual_rows(payload, 2, last_party_blocked=True)
-        if sealed(snapshot):
+        if sealed(snapshot, self.emu.policy):
             for row in rows:
                 if row['location'] == 'box' and not row['blocked']:
                     row['blocked'] = SEALED
@@ -226,7 +230,7 @@ class Participant(BaseParticipant):
                 'was_paused': self.emu.paused, 'was_manual': self.emu.manual_mode,
                 'time_capsule': bool(data.get('time_capsule')), 'manual': bool(data.get('manual'))})
         prepared = begin(self.emu, selected, tid, time_capsule=record.get('time_capsule', False),
-                         manual=record.get('manual', False))
+                         manual=record.get('manual', False), **keeps(data))
         if prepared['phase'] == 'failed':
             raise ValueError(prepared.get('error', 'Trade preparation failed'))
         if prepared['phase'] != 'ready':

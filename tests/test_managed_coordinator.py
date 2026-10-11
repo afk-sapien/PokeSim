@@ -286,7 +286,7 @@ def test_failure_warning_is_scoped_and_clears_after_success(setup):
 @pytest.mark.parametrize(('error', 'reason'), [
     ('The route to the Cable Club is blocked by an unresolved obstacle', 'obstacle still blocks'),
     ('Cable Club preparation exceeded its travel deadline', 'took too long'),
-    ('Every PC box is full. A free slot is needed to prepare this trade', 'free PC slot'),
+    ('Every PC box is full and no spare duplicate can be safely released to make room for this trade', 'safely release'),
     ('The route to the Cable Club needs a partner with Strength', 'partner with Strength'),
     ('Cable Club preparation stopped making progress', 'stopped making progress'),
     ('No safe unprotected reserve can leave the party for this trade', 'safely make room'),
@@ -319,14 +319,14 @@ def test_a_full_pc_names_its_game_and_stops_automatic_retries(setup, monkeypatch
     setup.peers[right].request = full
     row = c.execute(c.propose(setup.data)['id'])
     assert row['phase'] == 'aborted' and f'(adventure {right})' in row['error']
-    reason = 'Chaotic Escape (Red) needs a free PC slot to prepare its Pokémon for this trade.'
+    reason = 'Chaotic Escape (Red) has a full PC and no spare duplicate it can safely release to make room for this trade.'
     for status in (c.status(), c.adventure_status(left)):
         assert status['attention']['reason'] == reason
         assert status['attention']['message'].endswith('Automatic trading will try again.')
     # A record from before the tag cannot name its game on its own.
     old = c.propose({**setup.data, 'request_id': identifier()})
     setup.registry.update_transaction(old['id'], phase='aborted', decision='ABORT', error=error)
-    assert c.status()['attention']['reason'].startswith('An adventure needs a free PC slot')
+    assert c.status()['attention']['reason'].startswith('An adventure has a full PC')
     # The full game reports it has no room, so it is left out, and that names it in the banner too.
     setup.peers[right].trade_blocked = 'The party and every PC box are full'
     calls = len(setup.peers[right].calls)
@@ -334,7 +334,7 @@ def test_a_full_pc_names_its_game_and_stops_automatic_retries(setup, monkeypatch
     assert 'prepare' not in setup.peers[right].calls[calls:]
     assert c.status()['attention']['reason'] == reason
     assert c.status()['attention']['message'].endswith(
-        'Chaotic Escape (Red) needs a free PC slot to prepare its Pokémon for this trade. '
+        'Chaotic Escape (Red) has a full PC and no spare duplicate it can safely release to make room for this trade. '
         'It is left out of automatic trades until its PC has room.')
     # Once it has room again, the next automatic trade goes ahead.
     setup.peers[right].trade_blocked = ''

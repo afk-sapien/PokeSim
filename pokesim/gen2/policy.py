@@ -616,6 +616,34 @@ class Policy:
             self.release_cache = (key, mon)
         return self.release_cache[1]
 
+    def trade_spare(self, snapshot, protect=(), wished=()):
+        """The spare to release so a trade can be prepared with every box full, or None.
+
+        The usual release target comes first. Failing that, a trade may also let go of a spare
+        duplicate that holds an item or has been trained. Neither ever takes an egg, a party member,
+        a shiny, perfect or rare-DV Pokémon, one set to Keep or Trade first, the ``protect`` trade keys
+        (hand-picked for a trade), a ``wished`` species, a species' last or best copy or a plan partner.
+        """
+        from .breeding import breeding_stock
+        from .release import _keys, plan_partners, target
+        from ..individual import same
+        preferences = dict(self.trade_preferences())
+        if protect:
+            # A key from an older release names its Pokémon by trainer and DVs only.
+            for mon in snapshot.stored:
+                own = _keys(mon)[0]
+                if any(same(own, key) for key in protect):
+                    preferences[own] = {'state': 'locked'}
+        keep = set(breeding_stock(self.data, [mon.species for mon in snapshot.party + snapshot.stored if not mon.egg]))
+        keep.update(wished)
+        partners = plan_partners(self.collection)
+        allowed = lambda mon: self.allowed(Release(mon.box, mon.position), snapshot)  # noqa: E731
+        for lenient in (False, True):
+            mon = target(snapshot, self.demand, keep, preferences, partners, allowed, lenient)
+            if mon is not None:
+                return mon
+        return None
+
     def idle(self, snapshot):
         """Whether the run stands on its clock-wait tile, the moment between two patrol steps.
 

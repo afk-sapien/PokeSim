@@ -6,6 +6,10 @@ is let go at a PC before storage runs out. Releasing is permanent, so the rules 
 party members, eggs, shiny, perfect and rare-DV Pokémon, held items, trained partners, locked or
 offered trade partners and every copy a plan still needs are always kept. Each species (each
 Unown letter) keeps its best copy, or as many copies as a plan demands.
+
+A trade that needs a free slot uses a lenient tier only when nothing else is spare: a duplicate
+holding an item or trained may then go, weakest first, but eggs, shiny, perfect and rare-DV
+Pokémon, Keep, hand-picked and wished Pokémon and the last copy of a species are still kept.
 """
 from collections import defaultdict
 from math import isqrt
@@ -74,13 +78,15 @@ def plan_partners(collection):
     return keys
 
 
-def _protected(mon, reserved):
+def _protected(mon, reserved, lenient=False):
+    """Whether a copy must stay. ``lenient`` lets a held item or training go, for a trade that needs room."""
     record = {'dvs': list(mon.dvs)}
-    return bool(mon.egg or mon.held_item or is_shiny(record) or is_perfect(record) or rare_find(record)
-                or sum(mon.stat_exp) >= TRAINED_STAT_EXP or reserved.intersection(_keys(mon)))
+    return bool(mon.egg or is_shiny(record) or is_perfect(record) or rare_find(record)
+                or not lenient and (mon.held_item or sum(mon.stat_exp) >= TRAINED_STAT_EXP)
+                or reserved.intersection(_keys(mon)))
 
 
-def spares(snapshot, demand=None, keep=(), preferences=None, partners=()):
+def spares(snapshot, demand=None, keep=(), preferences=None, partners=(), lenient=False):
     """Boxed Pokémon that can be released, the most numerous species and its weakest copy first.
 
     ``demand`` maps species to the copies a plan needs. Species in ``keep`` are never offered.
@@ -103,12 +109,15 @@ def spares(snapshot, demand=None, keep=(), preferences=None, partners=()):
         stored = sorted((mon for mon in copies if mon.box is not None), key=quality, reverse=True)
         kept = max(1, demand.get(species, 0))
         candidates = stored[max(0, kept - len(party)):]
-        result.extend((len(copies), mon) for mon in candidates if not _protected(mon, reserved))
-    # Among equally numerous species the open box goes first, which saves a box change.
-    result.sort(key=lambda row: (-row[0], row[1].box != snapshot.active_box, quality(row[1]), row[1].box, row[1].position))
+        result.extend((len(copies), mon) for mon in candidates if not _protected(mon, reserved, lenient))
+    # A copy without a held item or training goes first. Among equally numerous species the open
+    # box goes first, which saves a box change.
+    result.sort(key=lambda row: (bool(row[1].held_item), sum(row[1].stat_exp) >= TRAINED_STAT_EXP, -row[0],
+                                 row[1].box != snapshot.active_box, quality(row[1]), row[1].box, row[1].position))
     return [mon for _, mon in result]
 
 
-def target(snapshot, demand=None, keep=(), preferences=None, partners=(), allowed=None):
+def target(snapshot, demand=None, keep=(), preferences=None, partners=(), allowed=None, lenient=False):
     """The next spare to release, or None."""
-    return next((mon for mon in spares(snapshot, demand, keep, preferences, partners) if allowed is None or allowed(mon)), None)
+    return next((mon for mon in spares(snapshot, demand, keep, preferences, partners, lenient)
+                 if allowed is None or allowed(mon)), None)

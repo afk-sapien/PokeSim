@@ -35,6 +35,11 @@ def get(registry, aid):
     return _clean(_all(registry).get(aid))
 
 
+def wished(registry):
+    """Every species on any adventure's wish list."""
+    return sorted({dex for entry in _all(registry).values() for dex in _clean(entry)['wishlist']})
+
+
 def update(registry, aid, *, enabled=None, wishlist=None, dex_total=251):
     validate_id(aid)
     if enabled is not None and not isinstance(enabled, bool):

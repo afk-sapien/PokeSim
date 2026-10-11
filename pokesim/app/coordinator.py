@@ -301,7 +301,7 @@ class Coordinator:
         if 'Cable Club preparation exceeded its travel deadline' in error:
             return 'An adventure took too long to reach the Cable Club and prepare its Pokémon.'
         if PC_FULL in error:
-            return 'An adventure needs a free PC slot to prepare its Pokémon for this trade.'
+            return 'An adventure has a full PC and no spare duplicate it can safely release to make room for this trade.'
         if 'route to the Cable Club needs a partner with Strength' in error:
             return 'An adventure needs a partner with Strength to reach the Cable Club.'
         if 'Cable Club preparation stopped making progress' in error:
@@ -499,6 +499,9 @@ class Coordinator:
         deadline = time.monotonic() + self.prepare_timeout
         prepared = {}
         plan = row['plan']
+        # A full PC releases one spare to make room, never a hand-picked Pokémon or a wished species.
+        hand_picked = self.hand_picked_keys()
+        wished = trade_settings.wished(self.registry)
         while len(prepared) != 2:
             if self.closed.is_set() or self.registry.transaction(row['id'])['decision'] == 'ABORT':
                 raise RuntimeError('Cable Club preparation was cancelled')
@@ -507,7 +510,8 @@ class Coordinator:
                     continue
                 request = {'id': row['id'], 'plan_digest': plan['plan_digest'], 'selected_key': plan[side + '_key'],
                            'time_capsule': len({self.registry.adventure(p)['version'] in {'red', 'blue', 'yellow'}
-                                                for p in plan['participants']}) == 2}
+                                                for p in plan['participants']}) == 2,
+                           'protect': sorted(key for owner, key in hand_picked if owner == aid), 'wished': wished}
                 if plan.get('manual'):
                     request['manual'] = True
                 if plan.get('session'):

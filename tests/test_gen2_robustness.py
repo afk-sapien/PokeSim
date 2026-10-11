@@ -428,11 +428,13 @@ def test_unknown_yes_no_refuses_three_times_then_lets_the_story_continue(real_da
 
 
 def test_full_pc_aborts_gen2_preparation_with_a_clear_error():
+    from pokesim.gen2.menus import ChangeBox
     from pokesim.gen2.preparation import Preparation
-    full = SimpleNamespace(box_counts=(20,) * 14)
+    emu = SimpleNamespace(policy=SimpleNamespace(trade_spare=lambda snapshot, protect, wished: None))
+    prep = Preparation(emu, {'protect': [], 'wished': []})
     with pytest.raises(ValueError, match='Every PC box is full'):
-        Preparation.open_box(full)
-    assert Preparation.open_box(SimpleNamespace(box_counts=(20, 20, 7, 20))) == 2
+        prep.make_room(SimpleNamespace(box_counts=(20,) * 14, active_box=0))
+    assert prep.make_room(SimpleNamespace(box_counts=(20, 20, 7, 20), active_box=0)) == ChangeBox(2)
 
 
 def test_stale_trade_hold_is_cleared_when_the_exchange_is_gone(monkeypatch):

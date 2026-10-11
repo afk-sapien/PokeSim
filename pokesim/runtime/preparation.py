@@ -15,7 +15,7 @@ from ..policies.team import STAYS_IN_PARTY, reserve_to_deposit
 from ..ram import read_snapshot
 from ..screen import Screen
 from ..shortcuts import ShortcutRunner, gen1_ui
-from ..individual import is_legacy, legacy, same
+from ..individual import dex_of, is_legacy, legacy, same
 from ..trade.preferences import identity
 from ..web.pokedex import live_status
 
@@ -54,7 +54,7 @@ def selection(snapshot, preferences, key):
     return matches[0]
 
 
-def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False):
+def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False, protect=(), wished=()):
     previous = emu.store.get(KEY)
     if previous and previous.get('id') == transaction_id:
         if previous.get('trade_key') != trade_key:
@@ -77,7 +77,9 @@ def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False):
         raise ValueError('Invalid preparation frame budget')
     state = {'id': transaction_id, 'trade_key': trade_key, 'phase': 'travelling',
              'started_at': time.time(), 'deadline': time.time() + 1800,
-             'elapsed_frames': 0, 'max_frames': max_frames, 'party_slot': None, 'selected_key': trade_key}
+             'elapsed_frames': 0, 'max_frames': max_frames, 'party_slot': None, 'selected_key': trade_key,
+             # Hand-picked Pokémon and wished species the PC must keep if it has to release one to make room.
+             'protect': sorted(set(protect)), 'wished': sorted(set(wished))}
     if manual:
         state.update(manual=True, from_party=location == 'party')
     if not overworld_ready(snapshot, Screen(emu.pb.memory).kind(snapshot)):
@@ -412,12 +414,15 @@ class Preparation:
         preferences = dict(self.emu.store.trade_preferences())
         key = self.state['trade_key']
         preferences[key] = {'state': 'offered'}
+        protect = self.state.get('protect') or ()
+        wished = set(self.state.get('wished') or ())
         snapshot = getattr(self.emu, 'snapshot', None)
-        if is_legacy(key) and snapshot is not None:
+        if (is_legacy(key) or protect or wished) and snapshot is not None:
             # A preparation begun by an older release names its Pokémon by trainer and DVs only.
             for mon in [asdict(mon) for mon in snapshot.party] + snapshot.storage_entries():
-                if same(identity(mon), key):
-                    preferences[identity(mon)] = {'state': 'offered'}
+                own = identity(mon)
+                if own and (same(own, key) or any(same(own, other) for other in protect) or dex_of(mon) in wished):
+                    preferences[own] = {'state': 'offered'}
         return preferences
 
     def _storage_operation_ready(self, snap, offered):
