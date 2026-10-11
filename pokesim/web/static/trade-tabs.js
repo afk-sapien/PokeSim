@@ -40,31 +40,99 @@
     })
   }
 
+  // Pokémon cards: the same grid, filters and detail popup as the PC page (mon-grid.js).
+  const Grid = globalThis.MonGrid
+  for (const holder of document.querySelectorAll('[data-mon-toolbar]')) {
+    if (Grid) holder.outerHTML = Grid.toolbar(holder.dataset.monToolbar, {settings: holder.dataset.settings === 'true'})
+  }
+  const fit = root => globalThis.Panel?.fitSprites?.(root)
+  // Full PC records, by trade key, so cards show types, DVs, moves and stats.
+  async function records(path, viaApi) {
+    try {
+      const response = viaApi ? await PokeSim.api(path, {cache: 'no-store'}) : await PokeSim.fetch(path, {cache: 'no-store'})
+      if (!response.ok) return null
+      const status = await response.json()
+      const map = new Map()
+      for (const record of [...(status.party || []), ...(status.storage?.pokemon || [])]) {
+        if (record.trade_key) map.set(record.trade_key, record)
+      }
+      return {map, generation: status.generation}
+    } catch (_) { return null }
+  }
+  let ownRecords = null
+  let ownRecordsRead = null
+  function readOwn(force = false) {
+    if (!ownRecordsRead || force) ownRecordsRead = records('/api/pokedex/status?view=pc', false).then(found => {
+      if (found) ownRecords = found
+      return ownRecords
+    })
+    return ownRecordsRead
+  }
+  // One card's data: the PC record when there is one, else the row the trade API sent.
+  function entry(row, found) {
+    const record = found?.map?.get(row.key)
+    const party = row.location === 'party' || !row.box
+    const plain = {nick: row.nickname || row.name, name: row.name || 'Unknown Pokémon', dex: row.dex, level: row.level,
+      shiny: Boolean(row.shiny), egg: Boolean(row.egg) || row.name === 'Egg', type_names: row.type_names || [],
+      dv_stars: row.dv_stars ?? null, dv_total: row.dv_total, dv_percent: row.dv_percent, perfect_dvs: Boolean(row.perfect_dvs),
+      power: row.power, battle_power: row.battle_power, trade_key: row.key}
+    const mon = globalThis.PokemonTypes?.asEgg ? PokemonTypes.asEgg({...plain, ...(record || {})}) : {...plain, ...(record || {})}
+    const box = party ? 0 : row.box
+    const position = row.slot ?? record?.position ?? record?.slot
+    return {...mon, box, position, key: row.key, row,
+      slot: `${box === 0 ? 'PARTY' : `BOX ${box}`}${position ? ` · SLOT ${position}` : ''}`}
+  }
+  // The trade setting of one of this adventure's Pokémon, as automatic trading reads it.
+  function ownSetting(mon) {
+    const offer = globalThis.TradeUI?.find?.(mon.key || mon.trade_key)
+    if (offer) return offer.shiny || offer.perfect_dvs ? 'protected' : offer.setting || 'auto'
+    if (mon.egg) return ''
+    if (mon.shiny || mon.perfect_dvs) return 'protected'
+    return mon.trade_setting || (mon.trade_key ? 'auto' : '')
+  }
+  const theirSetting = mon => mon.shiny || mon.perfect_dvs ? 'protected' : mon.trade_setting || ''
+  function grid(target, cards, options) {
+    const el = $(target)
+    if (!el) return
+    const prefix = options.prefix
+    const shown = Grid ? Grid.apply(prefix, cards, options.settingOf) : cards
+    el.innerHTML = shown.map(mon => {
+      const setting = options.settingOf?.(mon)
+      return Grid.card(mon, mon.key, {attr: 'key', all: true, slot: mon.slot, sprite: mon.row?.sprite_url,
+        blocked: options.blocked(mon), pressed: mon.key === options.chosen, tags: Grid.settingBadge(setting)})
+    }).join('') || `<p class="dex-empty">${cards.length ? 'No Pokémon match these filters.' : options.empty}</p>`
+    fit(el)
+  }
+
   // Trade: your Pokémon, then a game, then their Pokémon, then confirm.
-  const pick = {mine: [], mon: null, game: null, theirs: [], their: null, limits: null, busy: false, viewerOnly: false, asked: null}
+  const pick = {mine: [], cards: [], mon: null, game: null, theirs: [], theirCards: [], their: null, limits: null,
+    busy: false, viewerOnly: false, asked: null, theirRecords: null}
   const note = (selector, text) => { const el = $(selector)
     if (!el) return
     el.textContent = text || ''
     el.hidden = !text }
-  const matches = (mon, text) => !text || [mon.name, mon.nickname, mon.dex && String(mon.dex), mon.dex && `#${String(mon.dex).padStart(3, '0')}`]
-    .some(value => value && String(value).toLowerCase().includes(text))
-  const place = mon => mon.box ? `Box ${mon.box}` : 'Party'
-  function monButton(mon, chosen, mine) {
-    const sprite = mon.sprite_url ? `<img src="${esc(mon.sprite_url)}" alt="" loading="lazy">` : '<span class="plate-num" aria-hidden="true">?</span>'
-    const nickname = mon.nickname && mon.nickname.toLowerCase() !== String(mon.name || '').toLowerCase() ? ` “${esc(mon.nickname)}”` : ''
-    const level = Number.isInteger(mon.level) ? `Lv. ${mon.level}` : ''
-    const meta = [level, place(mon), mon.shiny ? 'Shiny' : ''].filter(Boolean).join(' · ')
-    const blocked = mon.blocked ? `<span class="pick-reason">${esc(mon.blocked)}</span>` : ''
-    const off = mon.blocked || (mine && pick.viewerOnly)
-    return `<button type="button" class="pick-item" role="radio" aria-checked="${chosen ? 'true' : 'false'}" data-key="${esc(mon.key)}"${off ? ' aria-disabled="true" disabled' : ''}><span class="plate pick-plate">${sprite}</span><span class="pick-read"><b>${esc(mon.name || 'Unknown Pokémon')}${nickname}</b><span class="micro">${esc(meta)}</span>${blocked}</span></button>`
+  const VIEW_ONLY = 'This adventure is view-only, so it can receive offers but cannot send Pokémon'
+  const mineBlocked = mon => mon.row?.blocked || (pick.viewerOnly ? VIEW_ONLY : '')
+  const theirsBlocked = mon => mon.row?.blocked || ''
+  function renderMine() {
+    pick.cards = pick.mine.map(row => entry(row, ownRecords))
+    grid('#pick-mine', pick.cards, {prefix: 'pick-mine', settingOf: ownSetting, blocked: mineBlocked, chosen: pick.mon?.key, empty: 'No Pokémon to trade here.'})
   }
-  function renderList(selector, rows, chosen, search) {
-    const text = String($(search)?.value || '').trim().toLowerCase()
-    const shown = rows.filter(mon => matches(mon, text))
-    // A view-only adventure lists its own Pokémon but cannot send them, on every render.
-    $(selector).innerHTML = shown.map(mon => monButton(mon, mon.key === chosen, selector === '#pick-mine')).join('')
-      || `<p class="empty-note">${rows.length ? 'No Pokémon match this search.' : 'No Pokémon to trade here.'}</p>`
-    globalThis.Panel?.fitSprites?.($(selector))
+  function renderTheirs() {
+    pick.theirCards = pick.theirs.map(row => entry(row, pick.theirRecords))
+    grid('#pick-theirs', pick.theirCards, {prefix: 'pick-theirs', settingOf: theirSetting, blocked: theirsBlocked, chosen: pick.their?.key, empty: 'They have no Pokémon to trade.'})
+  }
+  // A chosen Pokémon folds its grid away into one card with a Change key.
+  function chosen(side, card, label) {
+    const holder = $(`#pick-${side}-chosen`)
+    const browse = $(`#pick-${side}-browse`)
+    if (holder) {
+      holder.hidden = !card
+      holder.innerHTML = card ? `<div class="pc-grid pc-all-grid pick-chosen-grid">${Grid.card(card, card.key, {attr: 'key', all: true, slot: card.slot,
+        sprite: card.row?.sprite_url, pressed: true, label, tags: Grid.settingBadge(side === 'mine' ? ownSetting(card) : theirSetting(card))})}</div><button type="button" class="key pick-change" data-change="${side}">Change</button>` : ''
+      fit(holder)
+    }
+    if (browse) browse.hidden = Boolean(card)
   }
   function show(step, on) { const el = $(step)
     if (el) el.hidden = !on }
@@ -77,7 +145,9 @@
     show('#pick-game-step', Boolean(pick.mon))
     show('#pick-theirs-step', false)
     show('#pick-confirm-step', false)
-    renderList('#pick-mine', pick.mine, pick.mon?.key, '#pick-mine-search')
+    chosen('mine', pick.mon && pick.cards.find(card => card.key === pick.mon.key), 'chosen to send')
+    chosen('theirs', null)
+    renderMine()
   }
   async function json(response, fallback) {
     let data = {}
@@ -87,25 +157,29 @@
   }
   async function loadMine() {
     if (!owner) {
-      $('#pick-mine').innerHTML = '<p class="empty-note">Trades are picked from the owner’s page, not from a view link.</p>'
-      $('#pick-mine-search').disabled = true
+      $('#pick-mine').innerHTML = '<p class="dex-empty">Trades are picked from the owner’s page, not from a view link.</p>'
+      for (const el of document.querySelectorAll('#pick-mine-browse input, #pick-mine-browse select')) el.disabled = true
       return
     }
+    // The trade settings fill in each card's stamp when they arrive.
+    if (!globalThis.TradeUI?.status?.()) globalThis.TradeUI?.refresh?.()
     try {
-      const data = await json(await PokeSim.api(`${OFFERS}/pokemon?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not read this adventure’s Pokémon.')
+      const [data, found] = await Promise.all([
+        json(await PokeSim.api(`${OFFERS}/pokemon?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not read this adventure’s Pokémon.'),
+        readOwn()])
+      if (found?.generation && Grid) Grid.generation('pick-mine', found.generation)
       pick.mine = data.pokemon || []
       pick.viewerOnly = Boolean(data.viewer_only)
-      $('#pick-mine-count').textContent = pick.mine.length ? `${pick.mine.length} Pokémon` : ''
       if (data.viewer_only) note('#pick-note', 'This adventure is view-only. It can receive offers but cannot send them.')
       else note('#pick-note', data.reason || '')
       const wanted = query.get('mon')
       const first = wanted && pick.mine.find(mon => mon.key === wanted)
       if (first && !first.blocked && !data.viewer_only) {
-        renderList('#pick-mine', pick.mine, null, '#pick-mine-search')
+        renderMine()
         await chooseMine(first.key)
       } else reset()
     } catch (error) {
-      $('#pick-mine').innerHTML = `<p class="empty-note">${esc(error.message)}</p>`
+      $('#pick-mine').innerHTML = `<p class="dex-empty">${esc(error.message)}</p>`
     }
   }
   async function chooseMine(key) {
@@ -120,7 +194,7 @@
       // A slower answer for a Pokémon picked earlier must not show its reasons for this one.
       if (pick.mon?.key !== key || (data.from_key !== undefined && data.from_key !== key)) return
       const games = data.adventures || []
-      $('#pick-games').innerHTML = games.map(game => `<button type="button" class="pick-item pick-game" role="radio" aria-checked="false" data-game="${esc(game.id)}"${game.available ? '' : ' aria-disabled="true" disabled'}><span class="pick-read"><b>${esc(game.name)}</b><span class="micro">${esc(game.version)}</span>${game.available ? '' : `<span class="pick-reason">${esc(game.reason)}</span>`}</span></button>`).join('')
+      $('#pick-games').innerHTML = games.map(game => `<button type="button" class="pick-item pick-game" role="radio" aria-checked="false" data-game="${esc(game.id)}"${game.available ? '' : ' aria-disabled="true" disabled'}><i class="lamp" data-on="${game.available ? 'ok' : 'warn'}" aria-hidden="true"></i><span class="pick-read"><b>${esc(game.name)}</b><span class="micro">${esc(game.version)}</span>${game.available ? '' : `<span class="pick-reason">${esc(game.reason)}</span>`}</span></button>`).join('')
         || '<p class="empty-note">There is no other adventure to trade with yet.</p>'
       $('#pick-game-step').scrollIntoView?.({block: 'nearest'})
     } catch (error) {
@@ -131,41 +205,54 @@
   async function chooseGame(id) {
     pick.game = id
     pick.their = null
+    pick.theirRecords = null
     for (const button of document.querySelectorAll('#pick-games [data-game]')) button.setAttribute('aria-checked', String(button.dataset.game === id))
     show('#pick-confirm-step', false)
     show('#pick-theirs-step', true)
-    $('#pick-theirs').innerHTML = '<p class="empty-note">Reading their Pokémon…</p>'
+    chosen('theirs', null)
+    const name = $(`#pick-games [data-game="${id}"] b`)?.textContent || ''
+    if ($('#pick-theirs-game')) $('#pick-theirs-game').textContent = name ? `In ${name}` : ''
+    $('#pick-theirs').innerHTML = '<p class="dex-empty">Reading their Pokémon…</p>'
     const key = pick.mon.key
     // Only the latest request may fill the list. An answer for an earlier Pokémon or game, or its error, is dropped.
     const ask = pick.asked = {}
     const stale = () => pick.asked !== ask || pick.game !== id || pick.mon?.key !== key
+    // Their full PC records arrive on their own. The cards fill in when they do.
+    records(`/games/${encodeURIComponent(id)}/api/pokedex/status?view=pc`, true).then(found => {
+      if (stale() || !found) return
+      pick.theirRecords = found
+      if (Grid) Grid.generation('pick-theirs', found.generation)
+      if (pick.theirs.length) renderTheirs()
+    })
     try {
       const data = await json(await PokeSim.api(`${OFFERS}/limits?from_id=${encodeURIComponent(aid)}&from_key=${encodeURIComponent(key)}&to_id=${encodeURIComponent(id)}`, {cache: 'no-store'}), 'Could not read their Pokémon.')
       if (stale()) return
       pick.limits = data
       pick.theirs = data.pokemon || []
-      $('#pick-theirs-count').textContent = pick.theirs.length ? `${pick.theirs.length} Pokémon` : ''
-      renderList('#pick-theirs', pick.theirs, null, '#pick-theirs-search')
+      renderTheirs()
     } catch (error) {
       if (stale()) return
-      $('#pick-theirs').innerHTML = `<p class="empty-note">${esc(error.message)}</p>`
+      $('#pick-theirs').innerHTML = `<p class="dex-empty">${esc(error.message)}</p>`
     }
   }
   function chooseTheirs(key) {
     const mon = pick.theirs.find(row => row.key === key)
     if (!mon || mon.blocked) return
     pick.their = mon
-    renderList('#pick-theirs', pick.theirs, key, '#pick-theirs-search')
+    chosen('theirs', pick.theirCards.find(card => card.key === key), 'chosen to receive')
     const offer = globalThis.AdventureTrading?.offerSide
     const side = (row, label) => offer ? offer(row, label) : `<p>${esc(label)}: ${esc(row.name)}</p>`
     const now = Boolean(pick.limits?.starts_now)
-    $('#pick-summary').innerHTML = `<div class="swap">${side(pick.mon, 'You send')}<span class="swap-arrow" aria-hidden="true">⇄</span>${side(mon, 'You receive')}</div><p class="trade-help">${now
+    // The summary takes types and DVs from the cards, which may come from the full PC records.
+    const fuller = (row, cards) => { const card = cards.find(item => item.key === row.key) || {}
+      return {...row, type_names: card.type_names || row.type_names, dv_stars: card.dv_stars ?? row.dv_stars, dv_total: card.dv_total, dv_percent: card.dv_percent, shiny: card.shiny ?? row.shiny} }
+    $('#pick-summary').innerHTML = `<div class="swap">${side(fuller(pick.mon, pick.cards), 'You send')}<span class="swap-arrow" aria-hidden="true">⇄</span>${side(fuller(mon, pick.theirCards), 'You receive')}</div><p class="trade-help">${now
       ? 'You control both adventures, so the trade starts as soon as both games are ready.'
       : `${esc(pick.limits?.to?.adventure_name || 'The other adventure')} is view-only, so this becomes an offer its owner answers.`}</p>`
     $('#pick-confirm').textContent = now ? 'Trade now' : 'Send offer'
     $('#pick-confirm').disabled = false
     show('#pick-confirm-step', true)
-    globalThis.Panel?.fitSprites?.($('#pick-summary'))
+    fit($('#pick-summary'))
     $('#pick-confirm-step').scrollIntoView?.({block: 'nearest'})
   }
   async function confirm() {
@@ -187,16 +274,87 @@
       $('#pick-confirm').disabled = false
     } finally { pick.busy = false }
   }
-  const radio = (selector, handler) => { const el = $(selector)
+
+  // The detail popup: the PC page's detail, with the trade choice and setting on top.
+  const dialog = $('#trade-detail')
+  let open = null
+  function detailTop(card, side) {
+    const name = esc(card.nick || card.name)
+    const blocked = side === 'mine' ? mineBlocked(card) : side === 'theirs' ? theirsBlocked(card) : ''
+    const parts = []
+    if (blocked) parts.push(`<p class="pick-blocked-reason" role="note"><span class="micro">Cannot be picked</span>${esc(blocked)}</p>`)
+    else if (side === 'mine' && pick.mon?.key !== card.key) parts.push(`<button type="button" class="key key--primary" data-detail-pick="mine" data-key="${esc(card.key)}">Choose ${name} to send</button>`)
+    else if (side === 'theirs' && pick.their?.key !== card.key) parts.push(`<button type="button" class="key key--primary" data-detail-pick="theirs" data-key="${esc(card.key)}">Ask for ${name}</button>`)
+    if (side !== 'theirs' && card.trade_key && globalThis.TradeUI) parts.push(`<div class="trade-detail-setting"><span class="micro">Trade setting</span>${TradeUI.control(card.trade_key, card.nick || card.name)}</div>`)
+    return parts.length ? `<div class="pc-trade-action trade-detail-action">${parts.join('')}</div>` : ''
+  }
+  function trade(card, side) {
+    if (side === 'theirs') return false
+    const state = ownSetting(card)
+    return state ? {state: Grid.SETTING_LABELS[state], note: state === 'protected' ? 'Never traded automatically' : 'Change it here'} : false
+  }
+  function renderDetail() {
+    if (!open || !Grid) return
+    const {card, side} = open
+    $('#trade-detail-body').innerHTML = Grid.detail(card, {sprite: card.row?.sprite_url, slot: card.slot, top: detailTop(card, side), trade: trade(card, side), links: side !== 'theirs'})
+    fit($('#trade-detail-body'))
+  }
+  function openDetail(card, side) {
+    if (!card || !dialog) return
+    open = {card, side}
+    renderDetail()
+    if (!dialog.open) dialog.showModal?.()
+  }
+  if (dialog) {
+    $('#trade-detail-close')?.addEventListener('click', () => dialog.close())
+    dialog.addEventListener('click', event => {
+      const choose = event.target.closest?.('[data-detail-pick]')
+      if (choose) {
+        dialog.close()
+        if (choose.dataset.detailPick === 'mine') chooseMine(choose.dataset.key)
+        else chooseTheirs(choose.dataset.key)
+        return
+      }
+      if (event.target !== dialog) return
+      const rect = dialog.getBoundingClientRect()
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close()
+    })
+    dialog.addEventListener('change', event => {
+      if (event.target.matches?.('select[data-trade-key]')) TradeUI.change(event.target)
+    })
+    dialog.addEventListener('close', () => { open = null })
+  }
+
+  const cardsIn = (selector, handler) => { const el = $(selector)
     if (el) el.addEventListener('click', event => {
-      const button = event.target.closest?.('.pick-item')
-      if (button && !button.disabled) handler(button)
+      const button = event.target.closest?.('[data-key]')
+      if (button) handler(button.dataset.key)
     }) }
-  radio('#pick-mine', button => chooseMine(button.dataset.key))
-  radio('#pick-games', button => chooseGame(button.dataset.game))
-  radio('#pick-theirs', button => chooseTheirs(button.dataset.key))
-  $('#pick-mine-search')?.addEventListener('input', () => renderList('#pick-mine', pick.mine, pick.mon?.key, '#pick-mine-search'))
-  $('#pick-theirs-search')?.addEventListener('input', () => renderList('#pick-theirs', pick.theirs, pick.their?.key, '#pick-theirs-search'))
+  cardsIn('#pick-mine', key => openDetail(pick.cards.find(card => card.key === key), 'mine'))
+  cardsIn('#pick-theirs', key => openDetail(pick.theirCards.find(card => card.key === key), 'theirs'))
+  cardsIn('#pick-mine-chosen', key => openDetail(pick.cards.find(card => card.key === key), 'mine'))
+  cardsIn('#pick-theirs-chosen', key => openDetail(pick.theirCards.find(card => card.key === key), 'theirs'))
+  for (const side of ['mine', 'theirs']) {
+    $(`#pick-${side}-chosen`)?.addEventListener('click', event => {
+      if (!event.target.closest?.('[data-change]')) return
+      note('#pick-note', '')
+      if (side === 'mine') reset()
+      else {
+        pick.their = null
+        show('#pick-confirm-step', false)
+        chosen('theirs', null)
+        renderTheirs()
+      }
+    })
+  }
+  $('#pick-games')?.addEventListener('click', event => {
+    const button = event.target.closest?.('.pick-item')
+    if (button && !button.disabled) chooseGame(button.dataset.game)
+  })
+  if (Grid) {
+    Grid.bind('pick-mine', renderMine)
+    Grid.bind('pick-theirs', renderTheirs)
+  }
   $('#pick-confirm')?.addEventListener('click', confirm)
   $('#pick-reset')?.addEventListener('click', () => { note('#pick-note', '')
     reset() })
@@ -273,33 +431,42 @@
     const dex = Number(button.dataset.dex)
     saveAuto({wishlist: auto.wishlist.filter(value => value !== dex)}, () => 'Removed from the wish list.')
   })
+  // One setting per Pokémon, shown as the same cards. A card opens the popup that changes it.
+  let autoCards = []
   function renderSettings(status) {
     const list = $('#auto-list')
     if (!list) return
     // Settings save in the adventure itself, so they work while trading is offline, not while it is stopped.
     if (!status || status.unreachable || !Array.isArray(status.offers)) {
-      list.innerHTML = '<p class="empty-note">Start this adventure to change its trade settings.</p>'
-      $('#auto-count').textContent = ''
+      list.innerHTML = '<p class="dex-empty">Start this adventure to change its trade settings.</p>'
+      if ($('#auto-count')) $('#auto-count').textContent = ''
       return
     }
-    const rows = status.offers || []
-    const text = String($('#auto-search')?.value || '').trim().toLowerCase()
-    const shown = rows.filter(mon => matches({name: mon.name, nickname: mon.nick, dex: mon.dex}, text))
-    $('#auto-count').textContent = rows.length ? `${rows.length} Pokémon` : ''
-    list.innerHTML = shown.map(mon => {
-      const name = mon.nick && mon.nick.toLowerCase() !== String(mon.name || '').toLowerCase() ? `${mon.name} “${mon.nick}”` : mon.name
-      const meta = [Number.isInteger(mon.level) ? `Lv. ${mon.level}` : '', mon.box ? `Box ${mon.box}` : 'Party',
-        mon.shiny ? 'Shiny' : '', mon.perfect_dvs ? 'Perfect' : ''].filter(Boolean).join(' · ')
-      return `<div class="auto-row"><span class="pick-read"><b>${esc(name || 'Unknown Pokémon')}</b><span class="micro">${esc(meta)}</span></span>${TradeUI.control(mon.trade_key, mon.nick || mon.name)}</div>`
-    }).join('') || `<p class="empty-note">${rows.length ? 'No Pokémon match this search.' : 'No Pokémon to set yet.'}</p>`
+    autoCards = status.offers.map(mon => entry({...mon, key: mon.trade_key, nickname: mon.nick, slot: mon.position, location: mon.box ? 'box' : 'party'}, ownRecords))
+    grid('#auto-list', autoCards, {prefix: 'auto', settingOf: ownSetting, blocked: () => '', empty: 'No Pokémon to set yet.'})
+    if (open?.side === 'auto') {
+      const card = autoCards.find(row => row.key === open.card.key)
+      if (card) {
+        open.card = card
+        renderDetail()
+      }
+    }
   }
   if (globalThis.TradeUI) {
     TradeUI.subscribe(renderSettings)
-    $('#auto-list')?.addEventListener('change', event => {
-      if (event.target.matches?.('select[data-trade-key]')) TradeUI.change(event.target)
+    cardsIn('#auto-list', key => openDetail(autoCards.find(card => card.key === key), 'auto'))
+    if (Grid) Grid.bind('auto', () => renderSettings(TradeUI.status()))
+    // My PC records add types, DVs and moves to the cards once they arrive.
+    if (owner) readOwn().then(found => {
+      if (found?.generation && Grid) Grid.generation('auto', found.generation)
+      if (autoCards.length) renderSettings(TradeUI.status())
     })
-    $('#auto-search')?.addEventListener('input', () => renderSettings(TradeUI.status()))
   }
+  // A setting changed in the popup also updates the trade picker's badges.
+  globalThis.TradeUI?.subscribe?.(() => {
+    if (pick.cards.length) renderMine()
+    if (open?.side === 'mine') renderDetail()
+  })
 
   // Cable Club: link with another adventure and hold both controllers on the Cable Club page.
   let cableLoading = false
@@ -323,7 +490,7 @@
       note('#cable-note', mine.reason || '')
       const data = await json(await PokeSim.api(`${CABLE}/partners?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not check the other games.')
       list.innerHTML = (data.partners || []).map(game => {
-        const read = `<span class="pick-read"><b>${esc(game.name)}</b><span class="micro">${esc(game.version)}</span>${game.reason ? `<span class="pick-reason">${esc(game.reason)}</span>` : ''}</span>`
+        const read = `<i class="lamp" data-on="${game.reason ? 'warn' : 'ok'}" aria-hidden="true"></i><span class="pick-read"><b>${esc(game.name)}</b><span class="micro">${esc(game.version)}</span>${game.reason ? `<span class="pick-reason">${esc(game.reason)}</span>` : ''}</span>`
         return game.reason
           ? `<span class="pick-item pick-game is-unavailable" data-cable="${esc(game.id)}" aria-disabled="true">${read}</span>`
           : `<a class="pick-item pick-game" data-cable="${esc(game.id)}" href="${esc(cableHref(game.id))}">${read}</a>`

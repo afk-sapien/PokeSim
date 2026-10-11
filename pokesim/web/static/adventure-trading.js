@@ -8,6 +8,14 @@
     verifying: 'Checking both saves', staging: 'Checking both saves',
     committed: 'Saving the exchange', applying: 'Saving the exchange', releasing: 'Returning to the adventure'
   }
+  // Type colours and stamps from the PC page, when the shared scripts are on the page.
+  const plateClass = mon => mon?.type_names?.length && globalThis.PokemonTypes ? ` ${PokemonTypes.portraitClass(mon.type_names)}` : ''
+  function stamps(mon) {
+    const types = globalThis.PokemonTypes
+    const tags = [types?.badges?.(mon?.type_names) || '', types?.shinyBadge?.(mon) || '',
+      Number.isInteger(mon?.dv_stars) ? globalThis.MonGrid?.ratingBadge?.(mon) || '' : ''].join('')
+    return tags ? `<div class="pc-tags swap-tags">${tags}</div>` : ''
+  }
   const dexNumber = mon => Number.isInteger(mon?.dex) && mon.dex >= 1 && mon.dex <= 251 ? mon.dex : null
   function pokemon(mon, direction, completed, failed) {
     const receiving = direction === 'received'
@@ -22,7 +30,7 @@
     const name = dex ? `<a href="${esc(PokeSim.base || '')}/pokedex#${dex}">${esc(mon.name)} <span aria-hidden="true">↗</span></a>` : esc(mon.name)
     const evolution = completed && receiving && mon.evolved_from?.name
       ? `<p class="swap-note cable-evolution"><span class="micro">Trade evolution</span> ${esc(mon.evolved_from.name)} → ${esc(mon.name)}</p>` : ''
-    return `<div class="swap-side cable-mon cable-${direction}"><div class="plate plate--bay">${sprite}</div><div class="swap-read"><p class="micro">${label}${dex ? ` · #${String(dex).padStart(3, '0')}` : ''}${level}</p><h4>${name}</h4>${nickname}${evolution}</div></div>`
+    return `<div class="swap-side cable-mon cable-${direction}"><div class="plate plate--bay${plateClass(mon)}">${sprite}</div><div class="swap-read"><p class="micro">${label}${dex ? ` · #${String(dex).padStart(3, '0')}` : ''}${level}</p><h4>${name}</h4>${nickname}${stamps(mon)}${evolution}</div></div>`
   }
   function exchange(trade, completed = false) {
     const failed = trade.phase === 'aborted'
@@ -96,13 +104,16 @@
   let offerSignature = ''
   let offerBusy = false
   function offerSide(mon, label) {
-    const sprite = mon.sprite_url ? `<img src="${esc(mon.sprite_url)}" alt="" loading="lazy">` : '<span class="plate-num" aria-hidden="true">?</span>'
+    const dex = dexNumber(mon)
+    const sprite = mon.egg ? globalThis.PokemonTypes?.eggPlate || '<span class="plate-num" aria-hidden="true">?</span>'
+      : mon.sprite_url ? `<img src="${esc(mon.sprite_url)}" alt="" loading="lazy">`
+        : dex ? `<img src="${esc(PokeSim.base || '')}/sprites/${dex}.png?v=rom-portraits-1" alt="" loading="lazy">` : '<span class="plate-num" aria-hidden="true">?</span>'
     const nickname = mon.nickname && mon.nickname.toLowerCase() !== String(mon.name || '').toLowerCase()
       ? `<p class="swap-sub cable-nickname">“${esc(mon.nickname)}”</p>` : ''
     const level = Number.isInteger(mon.level) ? ` · Lv. ${mon.level}` : ''
     const power = [Number.isFinite(mon.battle_power) ? `Battle Power ${mon.battle_power.toLocaleString()}` : '',
       Number.isFinite(mon.power) ? `Stat Power ${mon.power.toLocaleString()}` : ''].filter(Boolean).join(' · ')
-    return `<div class="swap-side offer-mon"><div class="plate plate--bay">${sprite}</div><div class="swap-read"><p class="micro">${label}${level}</p><h4>${esc(mon.name || 'Unknown Pokémon')}</h4>${nickname}<p class="swap-note">${esc(mon.adventure_name)}${power ? ` · ${esc(power)}` : ''}</p></div></div>`
+    return `<div class="swap-side offer-mon"><div class="plate plate--bay${plateClass(mon)}">${sprite}</div><div class="swap-read"><p class="micro">${label}${dex ? ` · #${String(dex).padStart(3, '0')}` : ''}${level}</p><h4>${esc(mon.name || 'Unknown Pokémon')}</h4>${nickname}${stamps(mon)}<p class="swap-note">${esc(mon.adventure_name)}${power ? ` · ${esc(power)}` : ''}</p></div></div>`
   }
   function offerCard(offer, incoming, viewerOnly) {
     const mine = incoming ? offer.to : offer.from

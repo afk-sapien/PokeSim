@@ -241,6 +241,9 @@ def manual_rows(payload, generation, last_party_blocked=False):
                      'slot': mon.get('position') if location == 'box' else mon.get('slot'),
                      'egg': bool(mon.get('egg')), 'shiny': bool(mon.get('shiny')),
                      'power': mon.get('power'), 'battle_power': mon.get('battle_power'),
+                     'type_names': mon.get('type_names') or [], 'dv_stars': mon.get('dv_stars'),
+                     'dv_total': mon.get('dv_total'), 'dv_percent': mon.get('dv_percent'),
+                     'perfect_dvs': bool(mon.get('perfect_dvs')),
                      'cartridge_generation': generation, 'blocked': blocked})
     return rows
 

@@ -5,6 +5,7 @@
 <meta name="pokesim-base" content="${game_base}">
 <meta name="pokesim-adventure" content="${adventure_id}">
 <script src="${game_base}/static/routes.js?v=offers-1"></script>
+<script src="${game_base}/static/types.js?v=glow-1"></script>
 <script src="${game_base}/static/panel.js?v=panel-4"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
@@ -15,7 +16,9 @@
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=glow-2">
-<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=tabs-2">
+<link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
+<link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=grid-1">
+<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=grid-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
@@ -52,14 +55,16 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <section id="panel-trade" class="trade-panel" role="tabpanel" aria-labelledby="tab-trade" tabindex="0">
 <p id="pick-note" class="trade-notice" role="status" aria-live="polite" hidden></p>
 <ol class="pick-steps">
-<li class="pick-step" id="pick-mine-step"><div class="section-head"><h2 class="legend legend--ink">1. Your Pokémon</h2><span class="micro" id="pick-mine-count"></span></div>
-<label class="pick-search"><span class="micro">Search</span><input type="search" id="pick-mine-search" placeholder="Name, nickname or No." autocomplete="off"></label>
-<div id="pick-mine" class="pick-list" role="radiogroup" aria-label="Your Pokémon"><p class="empty-note">Loading this adventure’s Pokémon…</p></div></li>
+<li class="pick-step" id="pick-mine-step"><div class="section-head"><h2 class="legend legend--ink">1. Your Pokémon</h2><span class="micro">Open a card to see it in full, then choose it</span></div>
+<div id="pick-mine-chosen" class="pick-chosen" hidden></div>
+<div id="pick-mine-browse" class="pick-browse"><div data-mon-toolbar="pick-mine" data-settings="true"></div>
+<div id="pick-mine" class="pc-grid pc-all-grid pick-grid" role="group" aria-label="Your Pokémon"><p class="dex-empty">Loading this adventure’s Pokémon…</p></div></div></li>
 <li class="pick-step" id="pick-game-step" hidden><div class="section-head"><h2 class="legend legend--ink">2. Trade with</h2></div>
 <div id="pick-games" class="pick-list pick-games" role="radiogroup" aria-label="Game to trade with"></div></li>
-<li class="pick-step" id="pick-theirs-step" hidden><div class="section-head"><h2 class="legend legend--ink">3. Their Pokémon</h2><span class="micro" id="pick-theirs-count"></span></div>
-<label class="pick-search"><span class="micro">Search</span><input type="search" id="pick-theirs-search" placeholder="Name, nickname or No." autocomplete="off"></label>
-<div id="pick-theirs" class="pick-list" role="radiogroup" aria-label="Their Pokémon"></div></li>
+<li class="pick-step" id="pick-theirs-step" hidden><div class="section-head"><h2 class="legend legend--ink">3. Their Pokémon</h2><span class="micro" id="pick-theirs-game"></span></div>
+<div id="pick-theirs-chosen" class="pick-chosen" hidden></div>
+<div id="pick-theirs-browse" class="pick-browse"><div data-mon-toolbar="pick-theirs" data-settings="true"></div>
+<div id="pick-theirs" class="pc-grid pc-all-grid pick-grid" role="group" aria-label="Their Pokémon"></div></div></li>
 <li class="pick-step" id="pick-confirm-step" hidden><div class="section-head"><h2 class="legend legend--ink">4. Confirm</h2></div>
 <div id="pick-summary" class="deal trade-deal"></div>
 <div class="offer-answer pick-actions"><button type="button" class="key key--primary" id="pick-confirm">Trade now</button><button type="button" class="key" id="pick-reset">Start over</button></div></li>
@@ -77,11 +82,11 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <p class="trade-help">Automatic trading looks for another game that has a wished species and gives a Trade first or spare Pokémon in return.</p>
 <form id="wish-form" class="wish-form" aria-labelledby="wish-heading"><label class="pick-search"><span class="micro">Add a species</span><input id="wish-input" list="wish-species" autocomplete="off" placeholder="Species name or No."></label><button type="submit" class="key" id="wish-add">Add</button><datalist id="wish-species"></datalist></form>
 <ul id="wish-list" class="wish-list" aria-live="polite"></ul>
-<div class="section-head"><h2 class="legend legend--ink">Trade settings</h2><span class="micro" id="auto-count"></span></div>
+<div class="section-head"><h2 class="legend legend--ink">Trade settings</h2><span class="micro">Open a card to change its setting</span></div>
 <p class="trade-help"><b>Auto decides</b> may trade spare duplicates. <b>Trade first</b> goes before anything else. <b>Keep</b> is never traded automatically. Automatic trades also never take a shiny, a last copy or your active party. Trades you pick yourself ignore all of this.</p>
-<label class="pick-search"><span class="micro">Search</span><input type="search" id="auto-search" placeholder="Name, nickname or No." autocomplete="off"></label>
+<div data-mon-toolbar="auto" data-settings="true"></div>
 <p id="trade-setting-status" class="vh" role="status" aria-live="polite" data-trade-status></p>
-<div id="auto-list" class="auto-list"><p class="empty-note">Loading trade settings…</p></div>
+<div id="auto-list" class="pc-grid pc-all-grid auto-list" role="group" aria-label="Trade settings"><p class="dex-empty">Loading trade settings…</p></div>
 </section>
 
 <section id="panel-cable" class="trade-panel" role="tabpanel" aria-labelledby="tab-cable" tabindex="0" hidden>
@@ -97,6 +102,8 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </section>
 </main>
 
+<dialog id="trade-detail" class="pc-detail trade-detail" aria-labelledby="pc-detail-name"><button type="button" id="trade-detail-close" class="key close-detail" aria-label="Close Pokémon details">Close</button><div id="trade-detail-body"></div></dialog>
+
 <footer class="plate-foot">
 <div class="shell">
 <p>A small window into a very big adventure.</p>
@@ -106,9 +113,10 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+<script src="${game_base}/static/mon-grid.js?v=grid-1"></script>
 <script src="${game_base}/static/trade-progress.js?v=offers-1"></script>
-<script src="${game_base}/static/trade-ui.js?v=tabs-3"></script>
-<script src="${game_base}/static/adventure-trading.js?v=tabs-2"></script>
-<script src="${game_base}/static/trade-tabs.js?v=tabs-3"></script>
+<script src="${game_base}/static/trade-ui.js?v=grid-1"></script>
+<script src="${game_base}/static/adventure-trading.js?v=grid-1"></script>
+<script src="${game_base}/static/trade-tabs.js?v=grid-1"></script>
 </body>
 </html>

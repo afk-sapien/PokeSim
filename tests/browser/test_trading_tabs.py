@@ -190,28 +190,79 @@ def test_tabs_move_with_the_keyboard_and_remember_the_last_one(page, game, width
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
+def choose(page, side, key):
+    """Pick one card the way a player does: open its details, then press the pick button."""
+    if page.locator(f'#pick-{side}-browse').is_hidden():
+        page.locator(f'#pick-{side}-chosen [data-change]').click()
+    page.locator(f'#pick-{side} [data-key="{key}"]').click()
+    dialog = page.locator('#trade-detail')
+    expect(dialog).to_be_visible()
+    dialog.locator('[data-detail-pick]').click()
+    expect(dialog).to_be_hidden()
+
+
 @pytest.mark.parametrize('width', [1280, 390])
-def test_trade_tab_greys_out_games_that_cannot_take_it_and_starts_an_owned_trade(page, game, width):
+def test_trade_tab_filters_cards_greys_out_blocked_ones_and_starts_an_owned_trade(page, game, width):
     url = game[0]
     library = Library(page, url)
     page.set_viewport_size({'width': width, 'height': 844})
     library.open()
     mine = page.locator('#pick-mine')
-    expect(mine.locator('[data-key="egg"]')).to_be_disabled()
-    expect(mine.locator('[data-key="egg"]')).to_contain_text('Eggs cannot be traded')
+    # The PC page's cards and filters.
+    expect(mine.locator('.pc-mon')).to_have_count(3)
+    expect(page.locator('#pick-mine-count')).to_have_text('3 Pokémon')
+    egg = mine.locator('[data-key="egg"]')
+    expect(egg).to_have_attribute('aria-disabled', 'true')
+    expect(egg).to_have_attribute('title', 'Eggs cannot be traded')
+    expect(egg).to_contain_text('Eggs cannot be traded')
+    shoot(page, f'trade-{width}')
     page.locator('#pick-mine-search').fill('bud')
-    expect(mine.locator('.pick-item')).to_have_count(1)
+    expect(mine.locator('.pc-mon')).to_have_count(1)
+    expect(page.locator('#pick-mine-count')).to_have_text('1 of 3 Pokémon')
+    page.locator('#pick-mine-search').fill('')
+    page.locator('#pick-mine-rating').select_option('shiny')
+    expect(mine.locator('.pc-mon')).to_have_count(1)
+    expect(mine.locator('.pc-mon')).to_contain_text('Meganium')
+    page.locator('#pick-mine-rating').select_option('all')
+    page.locator('#pick-mine-sort').select_option('level')
+    expect(mine.locator('.pc-mon').first).to_contain_text('Meganium')
+    page.locator('#pick-mine-order').select_option('asc')
+    expect(mine.locator('.pc-mon').first).to_contain_text('BUD')
+    # A blocked card still opens, and says why it cannot be picked.
+    egg.click(force=True)
+    dialog = page.locator('#trade-detail')
+    expect(dialog).to_be_visible()
+    expect(dialog).to_contain_text('Eggs cannot be traded')
+    expect(dialog.locator('[data-detail-pick]')).to_have_count(0)
+    page.locator('#trade-detail-close').click()
+    expect(dialog).to_be_hidden()
     mine.locator('[data-key="box-1"]').click()
-    expect(mine.locator('[data-key="box-1"]')).to_have_attribute('aria-checked', 'true')
+    expect(dialog.get_by_role('button', name='Choose BUD to send')).to_be_visible()
+    shoot(page, f'trade-detail-{width}')
+    dialog.get_by_role('button', name='Choose BUD to send').click()
+    chosen = page.locator('#pick-mine-chosen [aria-pressed="true"]')
+    expect(chosen).to_contain_text('BUD')
+    expect(page.locator('#pick-mine-browse')).to_be_hidden()
     blue = page.locator(f'[data-game="{BLUE}"]')
     expect(blue).to_be_disabled()
     expect(blue).to_contain_text(REASON)
-    shoot(page, f'trade-{width}')
     blue.click(force=True)
     expect(page.locator('#pick-theirs-step')).to_be_hidden()
     page.locator(f'[data-game="{RED}"]').click()
-    expect(page.locator('#pick-theirs [data-key="2"]')).to_be_disabled()
-    page.locator('#pick-theirs [data-key="1"]').click()
+    mew = page.locator('#pick-theirs [data-key="2"]')
+    expect(mew).to_have_attribute('aria-disabled', 'true')
+    expect(mew).to_contain_text('Mew stays in this game')
+    mew.click(force=True)
+    expect(dialog).to_contain_text('Mew stays in this game')
+    expect(dialog.locator('[data-detail-pick]')).to_have_count(0)
+    page.locator('#trade-detail-close').click()
+    expect(page.locator('#pick-theirs-count')).to_have_text('2 Pokémon')
+    page.locator('#pick-theirs-search').fill('mew')
+    expect(page.locator('#pick-theirs .pc-mon')).to_have_count(1)
+    page.locator('#pick-theirs-search').fill('')
+    shoot(page, f'trade-theirs-{width}')
+    choose(page, 'theirs', '1')
+    expect(page.locator('#pick-theirs-chosen [aria-pressed="true"]')).to_contain_text('Pidgey')
     confirm = page.locator('#pick-confirm')
     expect(confirm).to_have_text('Trade now')
     expect(page.locator('#pick-summary')).to_contain_text('Pidgey')
@@ -229,13 +280,26 @@ def test_trade_tab_greys_out_games_that_cannot_take_it_and_starts_an_owned_trade
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
+def test_a_blocked_card_cannot_be_picked_and_change_brings_the_grid_back(page, game):
+    library = Library(page, game[0])
+    library.open()
+    page.locator('#pick-mine [data-key="egg"]').click(force=True)
+    page.locator('#trade-detail-close').click()
+    expect(page.locator('#pick-game-step')).to_be_hidden()
+    choose(page, 'mine', 'box-1')
+    page.locator('#pick-mine-chosen').get_by_role('button', name='Change').click()
+    expect(page.locator('#pick-mine-browse')).to_be_visible()
+    expect(page.locator('#pick-game-step')).to_be_hidden()
+    expect(page.locator('#pick-mine [aria-pressed="true"]')).to_have_count(0)
+
+
 def test_a_trade_with_a_view_only_adventure_becomes_an_offer(page, game):
     url = game[0]
     library = Library(page, url, starts_now=False)
     library.open()
-    page.locator('#pick-mine [data-key="box-1"]').click()
+    choose(page, 'mine', 'box-1')
     page.locator(f'[data-game="{RED}"]').click()
-    page.locator('#pick-theirs [data-key="1"]').click()
+    choose(page, 'theirs', '1')
     expect(page.locator('#pick-confirm')).to_have_text('Send offer')
     expect(page.locator('#pick-summary')).to_contain_text('view-only')
     page.locator('#pick-confirm').click()
@@ -253,7 +317,7 @@ def test_trade_link_in_the_pc_opens_the_trade_tab_with_that_pokemon_chosen(page,
     library.mine_key = href.split('mon=', 1)[1]
     link.click()
     selected(page, 'Trade')
-    expect(page.locator('#pick-mine [aria-checked="true"]')).to_contain_text('BUD')
+    expect(page.locator('#pick-mine-chosen [aria-pressed="true"]')).to_contain_text('BUD')
     expect(page.locator(f'[data-game="{BLUE}"]')).to_be_disabled()
     expect(page.locator(f'[data-game="{RED}"]')).to_be_enabled()
 
@@ -275,15 +339,27 @@ def test_auto_tab_switch_wish_list_and_settings(page, game, width):
     page.locator('#wish-add').click()
     expect(page.locator('#wish-list')).to_contain_text('Pikachu')
     assert library.saved[-1] == {'wishlist': [25]}
-    setting = page.get_by_label('Trade setting for BUD')
+    # Each Pokémon is a PC card with its setting stamp. The popup changes the setting.
+    bud = page.locator('#auto-list .pc-mon').filter(has_text='BUD')
+    expect(bud.locator('.trade-tag')).to_have_text('Auto decides')
+    bud.click()
+    dialog = page.locator('#trade-detail')
+    setting = dialog.get_by_label('Trade setting for BUD')
     setting.select_option('keep')
-    # The saved setting shows under its own row, not in a toast over the list.
-    expect(page.locator('#auto-list .trade-saved')).to_contain_text('never trades it')
+    # The saved setting shows in the popup, not in a toast over the list.
+    expect(dialog.locator('.trade-saved')).to_contain_text('never trades it')
     expect(page.locator('#trade-setting-status')).to_contain_text('never trades it')
     expect(page.locator('#toast')).to_be_hidden()
     assert any(value['state'] == 'locked' for value in store.trade_preferences().values())
+    shoot(page, f'auto-detail-{width}')
+    page.locator('#trade-detail-close').click()
+    expect(bud.locator('.trade-tag')).to_have_text('Keep')
+    page.locator('#auto-setting').select_option('keep')
+    expect(page.locator('#auto-list .pc-mon')).to_have_count(1)
+    expect(page.locator('#auto-list .pc-mon')).to_contain_text('BUD')
     expect(page.locator('#auto-list')).not_to_contain_text('Kept by')
     shoot(page, f'auto-{width}')
+    page.locator('#auto-setting').select_option('all')
     page.get_by_role('button', name='Remove Pikachu from the wish list').click()
     expect(page.locator('#wish-list')).not_to_contain_text('Pikachu')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -294,33 +370,37 @@ def test_a_late_answer_for_an_earlier_pokemon_does_not_replace_the_current_one(p
     library = Library(page, url)
     library.held['party-0'] = None
     library.open()
-    page.locator('#pick-mine [data-key="party-0"]').click()
+    choose(page, 'mine', 'party-0')
     page.wait_for_function('document.querySelector("#pick-games").textContent.includes("Checking")')
-    page.locator('#pick-mine [data-key="box-1"]').click()
+    choose(page, 'mine', 'box-1')
     blue = page.locator(f'[data-game="{BLUE}"]')
     expect(blue).to_contain_text(REASON)
     route, body = library.held['party-0']
     library.json(route, body)
     page.wait_for_timeout(200)
-    expect(page.locator('#pick-mine [aria-checked="true"]')).to_contain_text('BUD')
+    expect(page.locator('#pick-mine-chosen [aria-pressed="true"]')).to_contain_text('BUD')
     expect(blue).to_contain_text(REASON)
     expect(page.locator('#pick-games')).not_to_contain_text('Meganium')
     expect(page.locator(f'[data-game="{RED}"]')).to_be_enabled()
 
 
-def test_a_view_only_adventure_keeps_its_pokemon_disabled_after_a_search(page, game):
+def test_a_view_only_adventure_keeps_its_pokemon_blocked_after_a_search(page, game):
     library = Library(page, game[0], viewer_only=True)
     library.open()
     expect(page.locator('#pick-note')).to_contain_text('view-only')
     bud = page.locator('#pick-mine [data-key="box-1"]')
-    expect(bud).to_be_disabled()
+    expect(bud).to_have_attribute('aria-disabled', 'true')
     page.locator('#pick-mine-search').fill('bud')
-    expect(page.locator('#pick-mine .pick-item')).to_have_count(1)
-    expect(bud).to_be_disabled()
+    expect(page.locator('#pick-mine .pc-mon')).to_have_count(1)
+    expect(bud).to_have_attribute('aria-disabled', 'true')
     page.locator('#pick-mine-search').fill('')
-    expect(page.locator('#pick-mine .pick-item')).to_have_count(3)
-    for button in page.locator('#pick-mine .pick-item').all():
-        expect(button).to_be_disabled()
+    expect(page.locator('#pick-mine .pc-mon')).to_have_count(3)
+    for button in page.locator('#pick-mine .pc-mon').all():
+        expect(button).to_have_attribute('aria-disabled', 'true')
+    bud.click(force=True)
+    expect(page.locator('#trade-detail')).to_contain_text('view-only')
+    expect(page.locator('#trade-detail [data-detail-pick]')).to_have_count(0)
+    page.locator('#trade-detail-close').click()
     expect(page.locator('#pick-game-step')).to_be_hidden()
 
 
@@ -329,11 +409,11 @@ def test_a_late_limits_answer_does_not_replace_the_newer_list(page, game, late):
     library = Library(page, game[0])
     library.limits_held = []
     library.open()
-    page.locator('#pick-mine [data-key="box-1"]').click()
+    choose(page, 'mine', 'box-1')
     page.locator(f'[data-game="{RED}"]').click()
     page.wait_for_function('document.querySelector("#pick-theirs").textContent.includes("Reading")')
     # Pick again, so the first answer now belongs to an earlier pick.
-    page.locator('#pick-mine [data-key="box-1"]').click()
+    choose(page, 'mine', 'box-1')
     page.locator(f'[data-game="{RED}"]').click()
     expect(page.locator('#pick-theirs')).to_contain_text('Pidgey')
     old = library.limits_held[0]

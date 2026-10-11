@@ -164,12 +164,12 @@ def test_pages_ask_for_their_pokedex_view_and_holder_fields_cover_the_pokedex():
 
 def reads(script, *names):
     """Fields a page script reads from objects it names, such as mon.level or status.plan."""
-    text = (STATIC / script).read_text()
+    text = ''.join((STATIC / name).read_text() for name in script.split('+'))
     return {name: set(re.findall(rf'\b{name}\.([a-z_]+)', text)) for name in names}
 
 
 def test_each_page_view_keeps_every_field_its_page_reads(tmp_path, monkeypatch):
-    pc, dex = reads('pc.js', 'status', 'mon'), reads('pokedex.js', 'status', 'mon', 'row', 'project')
+    pc, dex = reads('pc.js+mon-grid.js', 'status', 'mon'), reads('pokedex.js', 'status', 'mon', 'row', 'project')
     assert {'move_details', 'hidden_power', 'experience'} <= pc['mon'] and {'plan', 'owned'} <= dex['status']
     record = {field: 1 for field in pc['mon'] | dex['mon']}
     plan = [{**{field: 1 for field in dex['row'] | dex['project']}, 'dex': 1}]

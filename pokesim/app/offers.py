@@ -130,7 +130,8 @@ class TradeOffers:
     @staticmethod
     def _snapshot(row):
         keys = ('name', 'nickname', 'dex', 'species', 'level', 'power', 'battle_power', 'shiny',
-                'location', 'box', 'slot', 'cartridge_generation')
+                'location', 'box', 'slot', 'cartridge_generation', 'type_names', 'dv_stars',
+                'dv_total', 'dv_percent', 'perfect_dvs')
         return {key: row.get(key) for key in keys}
 
     # Picker
