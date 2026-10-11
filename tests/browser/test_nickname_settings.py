@@ -64,3 +64,28 @@ def test_nickname_settings_save_reload_reset_and_validate(page, tmp_path, monkey
         edit.click()
         expect(prefixes).to_have_value('')
         expect(full_names).to_have_value('')
+
+
+@pytest.mark.parametrize('width', [390, 1280])
+def test_settings_panels_are_one_full_width_column(page, tmp_path, monkeypatch, width):
+    def factory(url):
+        manager = Manager(tmp_path / 'library', url)
+        monkeypatch.setattr(manager, 'start', lambda: None)
+        return create_app(manager)
+    with serve(factory) as url:
+        page.set_viewport_size({'width': width, 'height': 900})
+        page.goto(url + '/settings')
+        page.get_by_role('button', name='Edit nickname pool').wait_for()
+        layout = page.evaluate('''() => {
+            const view = document.querySelector('[data-view="settings"]')
+            const box = view.getBoundingClientRect()
+            const panels = [...view.querySelectorAll('section.panel')].map(panel => panel.getBoundingClientRect())
+            return {container: box.width, left: box.left, widths: panels.map(rect => rect.width),
+                    lefts: panels.map(rect => rect.left), tops: panels.map(rect => rect.top),
+                    overflow: document.documentElement.scrollWidth > innerWidth}
+        }''')
+        assert len(layout['widths']) >= 7
+        assert all(abs(w - layout['container']) <= 3 for w in layout['widths']), layout
+        assert all(abs(x - layout['left']) <= 3 for x in layout['lefts']), layout
+        assert layout['tops'] == sorted(set(layout['tops'])), layout
+        assert not layout['overflow']

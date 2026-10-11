@@ -297,19 +297,30 @@
    4  FORMS AND SETTINGS PANELS
    ========================================================================== */
 
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
-  align-items: stretch;
-  gap: var(--s5);
+/* Every Settings panel spans the page, one per row. Inside, the explanation
+   reads on the left and its controls sit on the right; on a phone they stack. */
+.settings-panel { min-width: 0; }
+.settings-row {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  align-items: center;
+  column-gap: var(--s6);
 }
-/* Four panels would leave one alone on a second row of three, so they
-   pair up two by two instead. */
-.settings-grid:has(> .panel:nth-child(4):last-child) {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+.settings-copy { display: grid; gap: var(--s2); min-width: 0; max-width: 72ch; }
+.settings-copy p { overflow-wrap: break-word; hyphens: manual; }
+.settings-copy > p:not(.note) { color: var(--ink-2); }
+.settings-copy > p:empty { display: none; }
+.settings-controls { display: grid; gap: var(--s2); width: 100%; min-width: 0; }
+.settings-controls .field { gap: var(--s1); }
+.settings-controls input[type="file"] { width: 100%; min-width: 0; }
+.settings-wide { grid-column: 1 / -1; display: grid; gap: var(--s3); width: 100%; min-width: 0; }
+.settings-wide:not(:has(> :not(:empty):not([hidden]))) { display: none; }
+@media (max-width: 720px) {
+  .settings-row { grid-template-columns: minmax(0, 1fr); row-gap: var(--s4); }
 }
-/* Panels in a row share a height; the body takes the extra. */
-.settings-grid > .panel { display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+/* One key size for every Settings action. */
+.settings-actions .key,
+.settings-controls .key { min-height: 44px; padding-inline: var(--s4); font-size: 14px; line-height: 1.25; white-space: normal; text-align: center; }
+.settings-controls .key { width: 100%; }
 .panel-head {
   display: flex;
   align-items: center;
@@ -487,7 +498,7 @@
   .page-head > .key { width: 100%; min-height: 44px; }
   .page-title h1 { font-size: var(--f-read); }
   .lede { font-size: 14px; }
-  .adventure-grid, .settings-grid { gap: var(--s4); }
+  .adventure-grid { gap: var(--s4); }
   .adventure-grid--single { grid-template-columns: minmax(0, 1fr); }
   .status-wrap { grid-template-columns: minmax(0, 1fr); }
   .status-body { padding: var(--s4); gap: var(--s3); }

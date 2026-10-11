@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Lay out every Settings panel in one full-width column. Nicknames, Backups, Import and Close PokeSim no longer sit two to a row; each shows its explanation on the left and its keys on the right, stacked on a phone, and every Settings key is the same height and size.
+
 - Draw the first 40 cards of the PC's All Pokémon view and the Pokédex at once and the rest over the next frames, so a full PC of about 280 cards no longer holds up the first paint.
 
 - Show grey placeholder cards on the PC and Pokédex while their first data loads, instead of a blank area under the page frame.
