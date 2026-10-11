@@ -9,7 +9,7 @@ function pc(pokemon, search = '?scope=all', party = [], base = '') {
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
       value: '', innerHTML: '', textContent: '', options: [{}, {}],
-      classList: {add() {}, remove() {}, toggle() {}}, setAttribute() {}, showModal() {}, focus() {},
+      classList: {add() {}, remove() {}, toggle() {}}, setAttribute() {}, removeAttribute() {}, showModal() {}, focus() {},
     })
     return elements.get(selector)
   }

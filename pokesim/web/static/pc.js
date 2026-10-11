@@ -71,6 +71,7 @@ function render() {
   if (focusedBox) $(`[data-box="${focusedBox}"]`)?.focus()
   const focusedMon = document.activeElement?.dataset.mon
   const card = (mon, index) => monCard(mon, index, {all})
+  $('#pc-grid').removeAttribute?.('aria-busy')
   if (all) {
     $('#pc-grid').innerHTML = residents.map(card).join('') || '<p class="dex-empty">No Pokémon match these filters.</p>'
   } else {

@@ -1380,3 +1380,13 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .bezel-foot { flex-wrap: wrap; gap: var(--s1) var(--s3); }
   .bezel-foot .mode { margin-left: 0; width: 100%; }
 }
+
+/* Grey stand-ins for cards while a page's first data loads, so the frame paints at once. */
+.skeleton-card {
+  min-height: 180px;
+  background: var(--panel-2);
+  border: var(--hair) solid var(--rule-faint);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+.dex-grid .skeleton-card { min-height: 236px; }
+@keyframes skeleton-pulse { 50% { opacity: .55; } }

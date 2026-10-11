@@ -87,6 +87,7 @@ function renderGrid() {
   const signature = JSON.stringify([rows, [...owned], [...seen], [...held], [...plan], hunting, catches, [...maxed], [...perfectSpecies], [...highQualitySpecies], [...shinySpecies]])
   if (signature === gridSignature) return
   gridSignature = signature
+  $('#grid').removeAttribute?.('aria-busy')
   $('#grid').innerHTML = rows.map((entry) => {
     const state = record(entry.dex)
     const copies = held.get(entry.dex)

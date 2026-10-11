@@ -18,6 +18,21 @@ def hold(page, pattern):
     return held
 
 
+def test_first_visit_shows_placeholder_cards_until_the_pc_arrives(page, game):
+    url, _, _, _ = game
+    held = hold(page, STATUS)
+    page.goto(url + '/pc?box=party')
+    expect(page.locator('#pc-grid .skeleton-card')).to_have_count(20)
+    expect(page.locator('#pc-grid')).to_have_attribute('aria-busy', 'true')
+    page.wait_for_function('document.querySelector("#pc-grid .skeleton-card")')
+    assert held
+    for route in held:
+        route.continue_()
+    page.unroute(STATUS)
+    expect(page.locator('#pc-grid .pc-mon').first).to_be_visible()
+    expect(page.locator('#pc-grid .skeleton-card')).to_have_count(0)
+
+
 def test_reloaded_pc_paints_the_saved_copy_then_refreshes(page, game):
     url, _, _, _ = game
     page.goto(url + '/pc?box=party')

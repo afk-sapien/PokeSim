@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show grey placeholder cards on the PC and Pokédex while their first data loads, instead of a blank area under the page frame.
+
 - Show the PC and Pokédex as last seen the moment they reload, then swap in fresh data as soon as it arrives. Each adventure keeps the last PC and Pokédex it drew in the browser's IndexedDB, the connection label reads Updating… until the server answers, and the PC's Trade… key waits for fresh data. A browser that blocks or fills its storage simply waits as before.
 
 - Keep Pokémon portraits in the browser for a year instead of downloading about 280 of them again on every PC or Pokédex reload. Each adventure's pages stamp portrait addresses with a fingerprint of the artwork it shows, which changes when the community pack is installed or restored, cartridge portraits are extracted, or a hand-installed portrait is added or replaced, so new artwork still shows at once.
