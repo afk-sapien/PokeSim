@@ -6,6 +6,7 @@ memory with no cartridge or save: a full dex, a full PC, a navigation graph the 
 run and no breeding project. Each step after the first must stay inside the budget, the first
 being the one that builds the caches.
 """
+import gc
 import os
 import random
 import statistics
@@ -26,6 +27,18 @@ STEPS = 60
 SCALE = float(os.environ.get('POKESIM_STEP_BUDGET_SCALE', '1'))
 # CPU time of this thread, so a runner that deschedules the test mid-step does not count as a slow step.
 clock = time.thread_time
+
+
+def settle():
+    """Collect the garbage that setup and earlier tests left behind before the clock starts.
+
+    A full collection walks every live object in the process, and in a full pytest run that is
+    the whole suite's heap (about 1.8 million objects, 270 ms locally and close to 500 ms on a
+    CI runner). Left pending, it lands in whichever step happens to cross the collector's
+    threshold, which measures the test suite and not the policy. The policy's own garbage is
+    still collected, and timed, inside the steps that make it.
+    """
+    gc.collect()
 
 
 def budget(times):
@@ -112,6 +125,7 @@ def test_gen1_step_stays_within_budget_on_a_large_state():
     policy.nav.edges = walked_graph()
     policy.observed_map = snapshot.map
     memory = bytearray(65536)
+    settle()
     times = []
     for step in range(STEPS):
         snapshot = replace(snapshot, frame=100 + step * 16)
@@ -205,6 +219,7 @@ def test_gen2_step_stays_within_budget_on_a_large_state(game):
         playtime=(100, 0, 0), hall_of_fame_count=0, event_flags=bytes([255] * 256), tiles=(' ' * 20,) * 18,
         objects=(), valid=True, data=data)
     policy = Policy(data, starter='totodile', seed=7)
+    settle()
     times, maps = [], {mid}
     for step in range(120):
         snapshot = replace(snapshot, frame=100 + step * 16)
