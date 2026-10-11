@@ -863,7 +863,5 @@ a.game-card-add { color: var(--link); text-decoration: underline; }
 #create-form.needs-cartridge .sheet-body > :not(.create-needs-cartridge):not(.game-picker) { display: none; }
 
 
-/* Make a trade: one link per adventure to its Trading page. */
-.make-trade { display: flex }
-.make-trade { flex-wrap: wrap }
-.make-trade { gap: var(--s2) }
+/* A failed cancel says why above the line of waiting trades. */
+.exchange-note { font-size: 14px; color: var(--crit); }

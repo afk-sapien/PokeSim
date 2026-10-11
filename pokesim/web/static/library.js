@@ -305,10 +305,36 @@
     const failures = data.recent_failures || []
     $('#trade-failures-section').hidden = !failures.length
     $('#trade-failures').innerHTML = failures.map(trade => describeTrade(trade)).join('')
-    // Trades are picked on each adventure's own Trading page.
-    const open = adventures.filter(game => !game.archived)
-    $('#make-trade-section').hidden = !open.length
-    $('#make-trade').innerHTML = open.map(game => `<a class="key" href="/games/${encodeURIComponent(game.id)}/trading?tab=trade">${esc(game.name)}</a>`).join('')
+    // Trades are made on each adventure's own Trade tab. The library only shows the line and can take a trade out of it.
+    const queued = Array.isArray(data.queued) ? data.queued : []
+    $('#trade-queued-section').hidden = !queued.length
+    $('#trade-queued').innerHTML = queued.map(queuedTrade).join('')
+    permissions()
+  }
+  function queuedSide(id, mon) {
+    const game = adventures.find(item => item.id === id)
+    const title = game ? `<a href="${gameUrl(id)}trading?tab=trade">${esc(game.name)} ↗</a>` : 'Adventure unavailable'
+    return `<section class="exchange-partner"><h3>${title}</h3><div class="exchange-text"><p class="micro">Sends</p><strong>${esc(mon || 'Chosen Pokémon')}</strong></div></section>`
+  }
+  function queuedTrade(entry) {
+    const names = entry.names || {}
+    const label = entry.state === 'starting' ? 'Checking both Pokémon' : entry.position > 1 ? `Number ${entry.position} in line` : 'Next for the Cable Club'
+    const wait = entry.state !== 'starting' && entry.busy ? '<p class="exchange-reason">Busy with a trade. This trade will wait in line.</p>' : ''
+    const cancel = entry.cancellable && entry.state === 'queued' && /^[a-f0-9]{32}$/.test(entry.id || '')
+      ? `<button type="button" class="key" data-cancel-trade="${entry.id}" data-owner>Cancel trade</button>` : ''
+    return `<article class="exchange exchange-queued"><header class="exchange-heading"><span class="tag state-pill">${esc(label)}</span>${cancel}</header><div class="exchange-pair">${queuedSide(entry.left_id, names.left)}<span class="exchange-arrow" aria-hidden="true">⇄</span>${queuedSide(entry.right_id, names.right)}</div>${wait}</article>`
+  }
+  async function cancelQueuedTrade(button) {
+    button.disabled = true
+    const note = $('#trade-queued-note')
+    try {
+      await api(`/api/v1/interactions/trade-builder/${button.dataset.cancelTrade}/cancel`, {method: 'POST'})
+      note.hidden = true
+    } catch (error) {
+      note.textContent = error.message
+      note.hidden = false
+    }
+    await refreshTrades().catch(() => {})
   }
   let savedBackups = []
   let backupPage = 0
@@ -721,6 +747,8 @@
 
   document.querySelectorAll('[data-close]').forEach(button => { button.onclick = () => $(`#${button.dataset.close}`).close() })
   document.addEventListener('click', event => {
+    const cancel = event.target.closest('[data-cancel-trade]')
+    if (cancel?.dataset?.cancelTrade && !cancel.disabled && owner) return void cancelQueuedTrade(cancel)
     const button = event.target.closest('[data-action]')
     if (!button || button.disabled) return
     const game = adventures.find(item => item.id === button.dataset.id)

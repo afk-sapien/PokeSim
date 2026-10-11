@@ -399,7 +399,10 @@ def test_the_retired_trade_picker_redirects_and_its_admin_api_is_gone(client):
     moved = client.get('/trade', follow_redirects=False)
     assert moved.status_code == 308 and moved.headers['location'] == '/trading'
     page = client.get('/trading').text
-    assert 'id="make-trade"' in page and 'data-view="trade"' not in page and 'manual-left-game' not in page
+    # The library only shows trades. They are made on each game's own Trade tab.
+    assert 'id="make-trade"' not in page and 'data-view="trade"' not in page and 'manual-left-game' not in page
+    assert 'trade-tabs.js' not in page and 'trade-builder' not in page and 'go to its Trade tab' in page
+    assert 'id="trade-queued"' in page
     assert client.get('/api/v1/interactions/manual-trades/options').status_code == 404
     assert client.post('/api/v1/interactions/manual-trades', json={}, headers=headers).status_code in {404, 405}
     assert client.get(f'/api/v1/adventures/{identifier()}/trade-inventory').status_code == 404

@@ -367,6 +367,7 @@ class Coordinator:
                 'active': [public(row) for row in rows if row['phase'] not in TERMINAL],
                 'history': [public(row) for row in [row for row in rows if row['phase'] in TERMINAL][:100]],
                 'recent_failures': [public(row) for row in [row for row in rows if row['phase'] == 'aborted'][:5]],
+                'queued': self._queued_all(),
                 'attention': attention,
                 'message': attention['message'] if attention else self.last_message}
 
@@ -410,6 +411,18 @@ class Coordinator:
                          'created_at': entry['created_at'], 'cancellable': entry['state'] == 'queued',
                          'busy': bool(busy & {entry['left_id'], entry['right_id']})})
         return rows
+
+    def _queued_all(self):
+        """Every trade the owner chose that waits for the Cable Club, oldest first, for the library."""
+        waiting = [entry for entry in self._manual_entries() if entry['state'] in MANUAL_WAITING]
+        if not waiting:
+            return []
+        busy = self.busy_adventures()
+        return [{'id': entry['id'], 'state': entry['state'], 'position': position,
+                 'left_id': entry['left_id'], 'right_id': entry['right_id'], 'names': entry.get('names') or {},
+                 'created_at': entry['created_at'], 'cancellable': entry['state'] == 'queued',
+                 'busy': bool(busy & {entry['left_id'], entry['right_id']})}
+                for position, entry in enumerate(waiting, 1)]
 
     def busy_adventures(self):
         """Adventures taking part in an exchange that has not finished."""

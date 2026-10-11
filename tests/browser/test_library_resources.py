@@ -224,3 +224,46 @@ def test_running_adventure_removal_saves_and_stops_first(page, tmp_path, monkeyp
             assert row['archived'] and row['state'] == 'stopped'
         else:
             assert not captured['path'].exists()
+
+
+@pytest.mark.parametrize('width', [390, 1280])
+def test_library_trading_only_shows_trades_and_can_cancel_one_waiting_in_line(page, tmp_path, monkeypatch, width):
+    from pokesim.app.coordinator import MANUAL_KEY
+    held = {}
+
+    def factory(url):
+        manager = Manager(tmp_path / 'library', url)
+        monkeypatch.setattr(manager, 'start', lambda: None)
+        manager.registry.add_rom('fixture', 'sha1', 'blue')
+        red = manager.registry.create('Red Sprout', 'fixture', {}, identifier())
+        blue = manager.registry.create('Blue Ripple', 'fixture', {}, identifier())
+        base = {'left_id': red['id'], 'right_id': blue['id'], 'left_key': 'a', 'right_key': 'b', 'error': None,
+                'cancel_requested': False, 'created_at': 1, 'updated_at': 1}
+        held.update(manager=manager, red=red['id'], blue=blue['id'], waiting=identifier())
+        manager.registry.set_setting(MANUAL_KEY, [
+            {**base, 'id': identifier(), 'state': 'starting', 'names': {'left': 'Pikachu', 'right': 'Eevee'}},
+            {**base, 'id': held['waiting'], 'state': 'queued', 'names': {'left': 'Onix', 'right': 'Abra'}}])
+        return create_app(manager)
+    with serve(factory) as url:
+        page.set_viewport_size({'width': width, 'height': 1000})
+        page.goto(url + '/trading')
+        # No way to make a trade here: the page points to each game's own Trade tab.
+        expect(page.locator('#trade-howto')).to_have_text('To make a trade, open a game and go to its Trade tab.')
+        for name in ('Make a trade', 'New trade', 'Trade…', 'Trade'):
+            expect(page.get_by_role('button', name=name, exact=True)).to_have_count(0)
+        expect(page.locator('#make-trade, #trade-picker, .trade-builder, #trade-tabs')).to_have_count(0)
+        line = page.locator('#trade-queued')
+        expect(page.locator('#trade-queued-section')).to_be_visible()
+        expect(line.locator('.exchange')).to_have_count(2)
+        expect(line.get_by_role('link', name='Red Sprout').first).to_have_attribute('href', f'/games/{held["red"]}/trading?tab=trade')
+        expect(line.get_by_role('link', name='Blue Ripple').first).to_have_attribute('href', f'/games/{held["blue"]}/trading?tab=trade')
+        expect(line).to_contain_text('Checking both Pokémon')
+        cancel = line.get_by_role('button', name='Cancel trade')
+        expect(cancel).to_have_count(1)
+        expect(cancel).to_be_enabled()
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        cancel.click()
+        expect(line.locator('.exchange')).to_have_count(1)
+        expect(line).not_to_contain_text('Onix')
+        states = {entry['id']: entry['state'] for entry in held['manager'].registry.setting(MANUAL_KEY)}
+        assert states[held['waiting']] == 'cancelled'

@@ -309,12 +309,46 @@ test('automatic trading shows friendly progress and only completed history witho
   const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
   assert.doesNotMatch(html, /participants-form|trading-enabled|trade-form|trade-left|trade-right|Trading group|Choose an exchange/)
   assert.doesNotMatch(source, /data-trade-action|trade-inventory|participants-form|trading-enabled/)
-  // Trades are picked on each adventure's own Trading page, never in a library-wide picker.
-  assert.match(view.element('#make-trade').innerHTML, /href="\/games\/one\/trading\?tab=trade">Red Sprout</)
-  assert.match(view.element('#make-trade').innerHTML, /href="\/games\/two\/trading\?tab=trade">Blue Ripple</)
-  assert.equal(view.element('#make-trade-section').hidden, false)
+  // Trades are made on each adventure's own Trade tab, never from the library.
+  assert.match(html, /To make a trade, open a game and go to its Trade tab\./)
+  assert.doesNotMatch(html, /make-trade|trade-tabs\.js|trade-ui\.js|mon-grid\.js|Make a trade|New trade|Trade…/)
+  assert.doesNotMatch(source, /make-trade|TradeTabs|trade-builder\/(targets|limits|pokemon)|trade-builder'|trade-builder`, \{method: 'POST', body/)
+  assert.equal(view.element('#trade-queued-section').hidden, true)
   assert.doesNotMatch(html, /data-view="trade"|manual-left-game|href="\/trade"/)
   assert.doesNotMatch(source, /manual-trades/)
+})
+
+test('the library shows trades waiting in line, links each game and can only cancel them', async () => {
+  const one = 'a'.repeat(32)
+  const two = 'b'.repeat(32)
+  const waiting = 'c'.repeat(32)
+  const view = library({page: 'trading', respond: (path, opts) => {
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [
+      {id: one, name: 'Red Sprout', state: 'running'}, {id: two, name: 'Blue Ripple', state: 'running'}]})}
+    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({enabled: true, participants: [one, two], active: [], history: [],
+      queued: [
+        {id: 'd'.repeat(32), state: 'starting', position: 1, left_id: one, right_id: two, names: {left: 'Pikachu', right: 'Eevee'}, cancellable: false},
+        {id: waiting, state: 'queued', position: 2, left_id: one, right_id: two, names: {left: 'Onix', right: 'Abra'}, cancellable: true, busy: true}]})}
+    if (path.endsWith('/cancel')) return {ok: true, json: async () => ({id: waiting, state: 'cancelled'})}
+  }})
+  await settle()
+  const html = view.element('#trade-queued').innerHTML
+  assert.equal(view.element('#trade-queued-section').hidden, false)
+  assert.match(html, new RegExp(`href="/games/${one}/trading\\?tab=trade">Red Sprout`))
+  assert.match(html, new RegExp(`href="/games/${two}/trading\\?tab=trade">Blue Ripple`))
+  assert.match(html, /Pikachu[\s\S]*Eevee[\s\S]*Onix[\s\S]*Abra/)
+  assert.match(html, /Checking both Pokémon/)
+  assert.match(html, /Number 2 in line/)
+  assert.match(html, /Busy with a trade\. This trade will wait in line\./)
+  // Only the trade still in line has a Cancel key.
+  assert.equal((html.match(/data-cancel-trade=/g) || []).length, 1)
+  assert.match(html, new RegExp(`data-cancel-trade="${waiting}"`))
+  const button = {disabled: false, dataset: {cancelTrade: waiting}}
+  view.clicks.forEach(click => click({target: {closest: selector => selector === '[data-cancel-trade]' ? button : null}}))
+  await settle()
+  const post = view.calls.filter(call => call.options.method === 'POST')
+  assert.deepEqual(post.map(call => call.path), [`/api/v1/interactions/trade-builder/${waiting}/cancel`])
+  assert.equal(post[0].options.headers['X-PokeSim-CSRF'], 'csrf')
 })
 
 test('automatic trade recovery never shows an aborted exchange as successful or exposes worker errors', async () => {

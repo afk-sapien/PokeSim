@@ -196,6 +196,22 @@ def test_only_a_trade_still_in_line_can_be_cancelled(built):
     assert c.manual_status(third['id'])['state'] == 'queued'
 
 
+def test_the_library_lists_every_trade_waiting_in_line(built):
+    service, c = built.manager.builder, built.coordinator
+    left, right = built.data['left_id'], built.data['right_id']
+    assert c.status()['queued'] == []
+    first = service.create({'from_id': left, 'from_key': '0', 'to_id': right, 'to_key': '1'})
+    second = service.create({'from_id': left, 'from_key': 'party-0', 'to_id': right, 'to_key': 'party-1'})
+    c._manual_update(first['id'], state='starting')
+    queued = c.status()['queued']
+    assert [(row['id'], row['position'], row['state'], row['cancellable']) for row in queued] == [
+        (first['id'], 1, 'starting', False), (second['id'], 2, 'queued', True)]
+    assert {row['left_id'] for row in queued} == {left} and {row['right_id'] for row in queued} == {right}
+    assert all(set(row['names']) == {'left', 'right'} for row in queued)
+    service.cancel(second['id'])
+    assert [row['id'] for row in c.status()['queued']] == [first['id']]
+
+
 def test_the_cancel_route_takes_a_waiting_trade_out_of_line(managed):  # noqa: F811
     manager, client, aid = managed.app.state.manager, managed.client, managed.aid
     assert ('POST', f'/api/v1/interactions/trade-builder/{aid}/cancel') in writes(managed.app, aid)
