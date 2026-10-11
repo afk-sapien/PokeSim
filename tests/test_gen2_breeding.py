@@ -311,3 +311,34 @@ def test_a_carried_egg_hatches_before_the_next_trainee_swaps_in(real_data, monke
     # Once the egg hatches, the new partner is a spare and the trainee swaps in.
     state.party = (*party[:5], mon(215, box=None, level=5))
     assert journey(policy, state, clock, Goal).key == 'collection_train_pc'
+
+
+def test_a_full_party_hatches_its_eggs_before_fetching_a_boxed_parent(real_data):
+    """Gold stood at a Cherrygrove PC pressing B: four field move holders and two carried eggs left no slot."""
+    from pokesim.gen2.breeding import egg_key, journey
+    from pokesim.gen2.policy import Goal
+    ditto, porygon2 = mon(132, 'Genderless', box=0, position=19, dvs=(1, 2, 6, 4, 1)), mon(233, 'Genderless', box=3, dvs=(2, 2, 0, 1, 14))
+    carried = [egg(133, box=None, dvs=(9, 15, 6, 2, 1)), egg(204, box=None, dvs=(0, 4, 2, 6, 0))]
+    holders = [mon(72, box=None, moves=(148, 0, 0, 0)), mon(18, box=None, moves=(19, 0, 0, 0)), mon(40, box=None, moves=(70, 0, 0, 0))]
+    policy, state = hatcher(real_data, [lead(), *holders, *carried], [ditto, porygon2])
+    policy.collection['hatching'] = [egg_key(mon) for mon in carried]
+    policy.collection['breeding'] = {'target': 137, 'parents': [[4321, [1, 2, 6, 4, 1]], [4321, [2, 2, 0, 1, 14]]],
+                                     'species': [132, 233], 'duplicate': True, 'existing': []}
+    assert journey(policy, state, Goal).key == 'collection_hatch'
+    # Once an egg hatches the new partner is a spare, so the PC can trade it for the parent.
+    state.party = (lead(), *holders, mon(133, box=None, level=5), carried[1])
+    assert journey(policy, state, Goal).key == 'collection_breed_pc'
+
+
+def test_the_day_care_man_returns_his_partner_after_the_waiting_egg(real_data):
+    """Gold then talked to the Day Care man's empty spot: with an egg waiting he stands outside on Route 34."""
+    from pokesim.gen2.breeding import journey
+    from pokesim.gen2.policy import Goal
+    ditto, porygon2 = mon(132, 'Genderless', box=None, dvs=(1, 2, 6, 4, 1)), mon(233, 'Genderless', box=None, dvs=(2, 2, 0, 1, 14))
+    policy, state = hatcher(real_data, [lead(), egg(137, box=None)], [], daycare=(ditto, porygon2))
+    policy.collection['breeding'] = {'target': 137, 'parents': [[4321, [1, 2, 6, 4, 1]], [4321, [2, 2, 0, 1, 14]]],
+                                     'species': [132, 233], 'duplicate': True, 'existing': []}
+    state.egg_ready = True
+    assert journey(policy, state, Goal).key == 'collection_breed_egg'
+    state.egg_ready = False
+    assert journey(policy, state, Goal).key == 'collection_breed_take_0'

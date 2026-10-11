@@ -307,11 +307,14 @@ def journey(policy, snapshot, Goal):
         return nursery(policy, snapshot, Goal) if walk else None
     state['phase'] = 'breeding'
     unhatched = project['target'] in egg_lines(data, snapshot)
-    if snapshot.egg_ready and not unhatched:
+    complete = finished(project, snapshot) or unhatched
+    # While an egg waits the Day Care man stands outside on Route 34, so his partner comes back only
+    # after the egg. Talking to his empty spot inside would loop forever.
+    man_partner = parents[0] and (complete or not member(parents[0], project, 0))
+    if snapshot.egg_ready and (not unhatched or man_partner):
         if len(snapshot.party) == 6:
             return make_room(policy, snapshot, Goal, 'Make room for the Day Care egg', project)
         return policy.person(snapshot, 'collection_breed_egg', 'Receive the Day Care egg', 'ROUTE_34', 'DayCareManScript_Outside')
-    complete = finished(project, snapshot) or unhatched
     if (not complete and all(parents) and all(member(mon, project, index) for index, mon in enumerate(parents))
             and project['target'] not in offspring(data, *parents)):
         # These two can never produce the target, so walking with them would wait forever.
@@ -336,6 +339,10 @@ def journey(policy, snapshot, Goal):
         if mon.box is not None:
             state['breed_withdraw'] = identity(mon)
             state['breed_withdraw_species'] = mon.species
+            if len(snapshot.party) == 6:
+                # A full party of eggs and sole field-move holders has nothing the PC can take, so the
+                # errand would stand at the PC forever. The eggs hatch first and free a slot.
+                return make_room(policy, snapshot, Goal, 'Bring the breeding partner from storage', project)
             return pc_goal(policy, snapshot, Goal, 'Bring the breeding partner from storage')
         return policy.person(snapshot, 'collection_breed_leave_' + str(index), 'Leave a partner at the Day Care',
                              'DAY_CARE', 'DayCareManScript_Inside' if index == 0 else 'DayCareLadyScript')
