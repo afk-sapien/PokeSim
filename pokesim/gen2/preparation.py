@@ -236,7 +236,11 @@ class Preparation:
                     candidates = list(range(1, len(snapshot.party)))
                 if not candidates:
                     raise ValueError('The party has no safe reserve to deposit for this exchange')
-                self.menu = Storage('DEPOSIT', min(candidates, key=lambda i: snapshot.party[i].level), 6)
+                # An egg only hatches in the party, so it goes to the PC last, after any other egg if it was
+                # brought out to hatch.
+                from .breeding import carried
+                self.menu = Storage('DEPOSIT', min(candidates, key=lambda i: (
+                    carried(self.emu.policy, snapshot, snapshot.party[i]), snapshot.party[i].egg, snapshot.party[i].level)), 6)
         elif mon.box != snapshot.active_box:
             self.menu = ChangeBox(mon.box)
         else:

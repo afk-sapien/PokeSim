@@ -11,6 +11,12 @@ from .ram import calculated_stats, experience_at
 
 DITTO = 132
 HAPPINESS_TO_EVOLVE = 220
+# Eggs carried at once while hatching the ones stored in the PC. The rest of the party stays free for
+# field moves, trainees and partners.
+HATCH_BATCH = 3
+# PC operations a hatching trip may take before it stands down instead of looping at the PC.
+HATCH_OPS = 30
+HATCH_KEY = 'hatch'
 
 
 @lru_cache(maxsize=8)
@@ -63,6 +69,17 @@ def breeding_stock(data, species):
         if count == 1 and sid in single and sum(held[member] for member in single[sid]) == 1:
             keep.add(sid)
     return keep
+
+
+def egg_lines(data, snapshot):
+    """Every species in the family of an egg held in the party or the PC.
+
+    An egg only hatches while it travels in the party. One left in a box keeps its line unhatched, so
+    breeding that line again would only collect another egg for the PC.
+    """
+    family = families(data)
+    return frozenset(species for mon in snapshot.party + snapshot.stored if mon.egg
+                     for species in family.get(mon.species, {mon.species}))
 
 
 def free_slots(snapshot):
@@ -177,6 +194,12 @@ def finished(project, snapshot):
                    for mon in snapshot.party))
 
 
+def sole_field_move(party, slot):
+    """Whether party ``slot`` is the only member that knows one of its field moves."""
+    others = {move for i, mon in enumerate(party) if i != slot and not mon.egg for move in mon.moves}
+    return bool(FIELD_MOVES.intersection(party[slot].moves) - others)
+
+
 def spare_slots(snapshot, project):
     """Party slots the breeding errands may send to the PC, best choice first.
 
@@ -184,10 +207,7 @@ def spare_slots(snapshot, project):
     move. Storing that one would make the policy fetch it straight back for the next HM obstacle.
     """
     party, complete = snapshot.party, finished(project, snapshot)
-    def sole_field_move(slot):
-        others = {move for i, mon in enumerate(party) if i != slot and not mon.egg for move in mon.moves}
-        return bool(FIELD_MOVES.intersection(party[slot].moves) - others)
-    slots = [i for i, mon in enumerate(party) if i and not mon.egg and not sole_field_move(i)
+    slots = [i for i, mon in enumerate(party) if i and not mon.egg and not sole_field_move(party, i)
              and (complete or not parent(mon, project))]
     return sorted(slots, key=lambda i: (bool(FIELD_MOVES.intersection(party[i].moves)), party[i].level))
 
@@ -217,6 +237,7 @@ def pairings(policy, snapshot):
     """
     data, parents = policy.data, snapshot.daycare
     room = free_slots(snapshot) >= 3
+    unhatched = egg_lines(data, snapshot)
     key = (snapshot.party, snapshot.stored, parents, frozenset(snapshot.owned), tuple(sorted(policy.demand.items())), room)
     cached = getattr(policy, '_breeding_pairings', None)
     if cached is not None and cached[0] == key:
@@ -252,6 +273,9 @@ def pairings(policy, snapshot):
             if not ready:
                 missing.add(baby)
         for target in missing:
+            if target in unhatched:
+                # An egg of this line is still waiting to hatch, so hatch it before breeding another.
+                continue
             if target in snapshot.owned and not room:
                 # A spare copy needs a box slot for each egg and parent shuffle, or the PC errand loops.
                 continue
@@ -267,7 +291,10 @@ def journey(policy, snapshot, Goal):
     project = state.get('breeding')
     if project is not None and 'species' not in project:
         project = state['breeding'] = recorded_species(data, snapshot, project)
-    if project is None and any(mon.egg for mon in snapshot.party):
+    # Eggs brought from the PC hatch on the walks of other errands, so they do not hold the run here.
+    brought = brought_eggs(state, snapshot)
+    walk = any(mon.egg and (not brought or egg_key(mon) not in brought) for mon in snapshot.party)
+    if project is None and walk:
         return nursery(policy, snapshot, Goal)
     if project is None:
         choices = pairings(policy, snapshot)
@@ -277,13 +304,14 @@ def journey(policy, snapshot, Goal):
                 'duplicate': target in snapshot.owned,
                 'existing': [identity(mon) for mon in snapshot.party + snapshot.stored if mon.species == target]}
     if project is None:
-        return nursery(policy, snapshot, Goal) if any(mon.egg for mon in snapshot.party) else None
+        return nursery(policy, snapshot, Goal) if walk else None
     state['phase'] = 'breeding'
-    if snapshot.egg_ready:
+    unhatched = project['target'] in egg_lines(data, snapshot)
+    if snapshot.egg_ready and not unhatched:
         if len(snapshot.party) == 6:
             return make_room(policy, snapshot, Goal, 'Make room for the Day Care egg', project)
         return policy.person(snapshot, 'collection_breed_egg', 'Receive the Day Care egg', 'ROUTE_34', 'DayCareManScript_Outside')
-    complete = finished(project, snapshot)
+    complete = finished(project, snapshot) or unhatched
     if (not complete and all(parents) and all(member(mon, project, index) for index, mon in enumerate(parents))
             and project['target'] not in offspring(data, *parents)):
         # These two can never produce the target, so walking with them would wait forever.
@@ -297,7 +325,7 @@ def journey(policy, snapshot, Goal):
                                  'DAY_CARE', 'DayCareManScript_Inside' if index == 0 else 'DayCareLadyScript')
     if complete:
         state['breeding'] = None
-        return nursery(policy, snapshot, Goal) if any(mon.egg for mon in snapshot.party) else None
+        return nursery(policy, snapshot, Goal) if walk else None
     for index, current in enumerate(parents):
         if current:
             continue
@@ -314,6 +342,130 @@ def journey(policy, snapshot, Goal):
     return nursery(policy, snapshot, Goal)
 
 
+def egg_key(mon):
+    return [mon.trainer_id, list(mon.dvs), mon.species]
+
+
+def brought_eggs(state, snapshot):
+    """The eggs a hatching trip took from the PC that are still eggs, as egg keys."""
+    if not state.get('hatching'):
+        return []
+    held = [egg_key(mon) for mon in snapshot.party + snapshot.stored if mon.egg]
+    brought = [key for key in state.get('hatching') or () if key in held]
+    if brought:
+        state['hatching'] = brought
+    else:
+        state.pop('hatching', None)
+    return brought
+
+
+def carried(policy, snapshot, mon):
+    """Whether a party member is an egg a hatching trip brought from the PC.
+
+    Every PC deposit ranks such an egg last of all, so an egg taken out to hatch never goes back.
+    """
+    return bool(getattr(mon, 'egg', False)) and egg_key(mon) in brought_eggs(getattr(policy, 'collection', {}), snapshot)
+
+
+def hatch_spares(policy, snapshot):
+    """Party slots a hatching trip may send to the PC to carry an egg, best choice first.
+
+    The lead, the eggs, the only holder of a field move, the breeding parents, the trainees, the Exp.
+    Share holder and the legendary sleeper stay, or the next errand would fetch them straight back. An
+    activity team is left out, because its errands run ahead of this one and a finished activity can
+    leave its last team on record.
+    """
+    from .release import _keys, _pair, plan_partners
+    state, party = policy.collection, snapshot.party
+    partners = {key for key in plan_partners(state) if not isinstance(key, str)}
+    partners.update(pair for pair in map(_pair, (state.get('share_holder'), state.get('roam_lead'))) if pair)
+    share = policy.data.items.get('EXP_SHARE')
+    slots = [i for i, mon in enumerate(party) if i and not mon.egg and not sole_field_move(party, i)
+             and mon.held_item != share and not partners.intersection(_keys(mon))]
+    return sorted(slots, key=lambda i: (bool(FIELD_MOVES.intersection(party[i].moves)),
+                                        bool(party[i].held_item), party[i].level))
+
+
+def hatching(policy, snapshot, Goal):
+    """Bring a few eggs from the PC into the party so the walks of other errands hatch them.
+
+    Eggs only hatch in the party, and an egg boxed to make room would otherwise wait forever. The trip
+    fills the party up to HATCH_BATCH eggs once it carries none, then leaves the walking to training,
+    hunts and the patrol. Every training plan asks here first, so the trip also fits in the training
+    that prepares a legendary or roamer lead. With every box and the party full the eggs wait for the
+    release errand to free a slot.
+    """
+    from .standdown import standing_down
+    state = policy.collection
+    carried = sum(getattr(mon, 'egg', False) for mon in snapshot.party)
+    boxed = any(getattr(mon, 'egg', False) for mon in getattr(snapshot, 'stored', ()))
+    # A Battle Tower run or a Time Capsule restore needs an exact party, so the eggs wait for it.
+    if (not boxed or carried >= HATCH_BATCH or state.get('breeding') or state.get('tower')
+            or state.get('time_capsule_restore') or standing_down(policy, HATCH_KEY) or carried and not state.get('hatch_fill')):
+        state.pop('hatch_fill', None)
+        state.pop('hatch_ops', None)
+        return None
+    # A trainee or the Exp. Share holder waiting in the PC needs the party slot, so the eggs wait for it.
+    project = state.get('training') or {}
+    waiting = [key for key in (project.get('identity'), state.get('share_holder')) if key]
+    if waiting and any(identity(mon) in waiting for mon in getattr(snapshot, 'stored', ())):
+        return None
+    if len(snapshot.party) >= 6 and (not hatch_spares(policy, snapshot) or free_slots(snapshot) < 1):
+        return None
+    state['hatch_fill'] = True
+    goal = policy.storage_goal(snapshot)
+    return Goal('collection_hatch_pc', 'Bring eggs from storage to hatch', goal.map_name, goal.x, goal.y, goal.face)
+
+
+def hatch_walk(policy, snapshot):
+    """Whether a PC swap should wait while the party walks an egg to hatching.
+
+    An egg brought out to hatch never goes back, so with a full party and no spare beside it the swap
+    could only store the sole holder of a field move, which the next route fetches straight back. The
+    walk is bounded, since every step counts the egg down and the hatched partner becomes a spare.
+    """
+    party = snapshot.party
+    return (len(party) >= 6 and any(carried(policy, snapshot, mon) for mon in party)
+            and not hatch_spares(policy, snapshot))
+
+
+def hatch_arrive(policy, snapshot):
+    """Withdraw a stored egg, or deposit a spare partner first when the party is full."""
+    from .standdown import stand_down
+    state = policy.collection
+    state['hatch_ops'] = state.get('hatch_ops', 0) + 1
+    eggs = sorted((mon for mon in snapshot.stored if mon.egg), key=lambda mon: (mon.box != snapshot.active_box, mon.box))
+    if not eggs or state['hatch_ops'] > HATCH_OPS:
+        # Nothing left to bring, or the trip keeps failing. Leave the PC and let other work go on.
+        stand_down(policy, HATCH_KEY)
+        state.pop('hatch_fill', None)
+        state.pop('hatch_ops', None)
+        return 'b'
+    if len(snapshot.party) < 6:
+        egg = eggs[0]
+        if egg.box != snapshot.active_box:
+            policy.menu = ChangeBox(egg.box)
+        else:
+            brought = state.setdefault('hatching', [])
+            if egg_key(egg) not in brought:
+                brought.append(egg_key(egg))
+            policy.menu = Storage('WITHDRAW', egg.position, len(snapshot.party))
+        return 'a'
+    spares = hatch_spares(policy, snapshot)
+    if snapshot.box_counts[snapshot.active_box] >= 20:
+        box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)
+        if box is None or not spares:
+            stand_down(policy, HATCH_KEY)
+            return 'b'
+        policy.menu = ChangeBox(box)
+        return 'a'
+    if not spares:
+        stand_down(policy, HATCH_KEY)
+        return 'b'
+    policy.menu = Storage('DEPOSIT', spares[0], len(snapshot.party))
+    return 'a'
+
+
 def pc_goal(policy, snapshot, Goal, label):
     goal = policy.storage_goal(snapshot)
     return Goal('collection_breed_pc', label, goal.map_name, goal.x, goal.y, goal.face)
@@ -324,6 +476,8 @@ def arrive(policy, snapshot):
     project = state.get('breeding')
     if key == 'collection_hatch':
         return 'wait'
+    if key == 'collection_hatch_pc':
+        return hatch_arrive(policy, snapshot)
     if not project:
         return None
     if key.startswith('collection_breed_leave_'):

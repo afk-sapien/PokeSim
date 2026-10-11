@@ -314,6 +314,10 @@ def journey(policy, snapshot, mem, Goal):
     goal = stones(policy, snapshot, Goal)
     if goal:
         return goal
+    from .breeding import hatching
+    goal = hatching(policy, snapshot, Goal)
+    if goal:
+        return goal
     from .training import journey as training
     goal = training(policy, snapshot, mem, Goal)
     if goal:

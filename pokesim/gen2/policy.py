@@ -1172,8 +1172,11 @@ class Policy:
                     self.menu = ChangeBox(box)
                 elif len(snapshot.party) == 6:
                     protected = {15, 19, 57, 70, 148, 250, 127}
+                    from .breeding import carried
                     slot = min(range(1, len(snapshot.party)), key=lambda i:
-                               (bool(protected.intersection(snapshot.party[i].moves)), snapshot.party[i].level))
+                               (carried(self, snapshot, snapshot.party[i]),
+                                bool(protected.intersection(snapshot.party[i].moves)), snapshot.party[i].egg,
+                                snapshot.party[i].level))
                     self.menu = Storage('DEPOSIT', slot, len(snapshot.party))
                 else:
                     mon = next((mon for mon in snapshot.stored if not mon.egg and mon.box == snapshot.active_box

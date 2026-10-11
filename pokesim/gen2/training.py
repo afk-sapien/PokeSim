@@ -75,6 +75,11 @@ def projects(data, snapshot, current_time, demand=None):
 
 def journey(policy, snapshot, mem, Goal, *, terminal=False):
     data, state = policy.data, policy.collection
+    from .breeding import hatching
+    # Training is the walking time that hatches eggs, so stored eggs join the party first.
+    goal = hatching(policy, snapshot, Goal)
+    if goal:
+        return goal
     project = state.get('training')
     if project and project.get('terminal') and not project.get('level_goal') and not terminal:
         state['training'] = None
@@ -139,7 +144,12 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     if mon.box is not None and sealed:
         state['training'] = None
         return None
+    # A carried egg with no spare beside it hatches first, so the swap never stores a field move holder.
+    from .breeding import hatch_walk
+    walk = hatch_walk(policy, snapshot)
     if mon.box is not None:
+        if walk:
+            return walk_goal(policy, snapshot, Goal, lambda: f'Walk to hatch the egg before {mon.name} joins')
         goal = policy.storage_goal(snapshot)
         return Goal('collection_train_pc', f'Prepare {mon.name} for training', goal.map_name, goal.x, goal.y, goal.face)
     if project['item']:
@@ -153,6 +163,8 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
             holder = next((row for row in snapshot.stored if row.held_item == share), None)
             if holder and sealed:
                 return None
+            if holder and walk:
+                return walk_goal(policy, snapshot, Goal, lambda: 'Walk to hatch the egg before fetching Exp. Share')
             if holder:
                 state['share_holder'] = identity(holder)
                 goal = policy.storage_goal(snapshot)
@@ -160,6 +172,16 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
             return None
         return Goal('collection_equip', f'Give Exp. Share to {mon.name}', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     state.pop('share_holder', None)
+    target = 'level ' + str(project.get('level_goal', 100)) if project.get('terminal') else data.species[project['target']]['name']
+    return walk_goal(policy, snapshot, Goal, lambda: f'Train {mon.name} toward {target}')
+
+
+def walk_goal(policy, snapshot, Goal, label):
+    """Walk the Mt. Silver grass, which trains the party and counts carried eggs down.
+
+    ``label`` names the walk once the grass is known.
+    """
+    data = policy.data
     # Mt. Silver provides renewable experience for the trained champion and its partner.
     mid = data.map_ids['SILVER_CAVE_ROOM_1']
     from .collection import encounter_points
@@ -178,9 +200,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
             x, y, _ = points[0]
     else:
         x, y = 9, 31
-    target_name = 'level ' + str(project.get('level_goal', 100)) if project.get('terminal') else data.species[project['target']]['name']
-    return Goal('collection_train', f'Train {mon.name} toward {target_name}',
-                'SILVER_CAVE_ROOM_1', x, y)
+    return Goal('collection_train', label(), 'SILVER_CAVE_ROOM_1', x, y)
 
 
 def arrive(policy, snapshot):
@@ -212,8 +232,14 @@ def arrive(policy, snapshot):
                     state.pop('share_holder', None)
                     return 'b'
                 return 'a'
+            from .breeding import carried
             counts = {move: sum(move in row.moves for row in snapshot.party) for move in FIELD_MOVES}
-            slot = min(range(1, 6), key=lambda i: (sum(counts[move] == 1 for move in snapshot.party[i].moves if move in FIELD_MOVES),
+            # An egg only hatches in the party, so only the sole holder of a field move stays ahead of it,
+            # and an egg brought out to hatch never goes back. The trainee stays too, or fetching its Exp.
+            # Share would send it to the PC.
+            keep = (project['identity'], wanted)
+            slot = min(range(1, 6), key=lambda i: (carried(policy, snapshot, snapshot.party[i]), identity(snapshot.party[i]) in keep,
+                                                   sum(counts[move] == 1 for move in snapshot.party[i].moves if move in FIELD_MOVES), snapshot.party[i].egg,
                                                    snapshot.party[i].held_item == data.items['EXP_SHARE'], snapshot.party[i].level))
             policy.menu = Storage('DEPOSIT', slot, 6)
         elif snapshot.active_box != mon.box:

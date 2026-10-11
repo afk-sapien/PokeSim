@@ -131,3 +131,183 @@ def test_eevee_waits_without_exp_share_for_the_time_of_day(real_data):
     # At night the same Eevee is chosen again, and Umbreon is its project.
     journey(policy, state, SimpleNamespace(byte=lambda name: 2), Goal)
     assert policy.collection['training']['target'] == 197
+
+
+def egg(species, **extra):
+    return mon(species, egg=True, level=5, friendship=20, **extra)
+
+
+def hatcher(data, party, stored, *, boxes=(5,) * 14, daycare=(None, None), release=None):
+    state = snapshot(stored, boxes=boxes)
+    state.party, state.daycare = tuple(party), daycare
+    policy = planner(data, {})
+    policy.decisions = 1000
+    policy.release_target = lambda snapshot: release
+    policy.person = lambda snapshot, key, label, map_name, script: SimpleNamespace(key=key, map_name=map_name)
+    return policy, state
+
+
+def test_a_boxed_egg_stops_its_line_from_breeding_again(real_data):
+    """Gold boxed 54 Sneasel eggs: each training deposit stored the new egg and the project bred another."""
+    from pokesim.gen2.breeding import journey, pairings
+    from pokesim.gen2.policy import Goal
+    eevee, ditto = mon(196, dvs=(10, 9, 8, 7, 6)), mon(132, 'Genderless', dvs=(3, 4, 5, 6, 7))
+    policy = planner(real_data, {196: 1})
+    assert any(row[0] == 133 for row in pairings(policy, snapshot((eevee, ditto))))
+    policy = planner(real_data, {196: 1})
+    boxed = snapshot((eevee, ditto, egg(133, box=1, dvs=(2, 2, 2, 2, 2))))
+    assert not any(row[0] == 133 for row in pairings(policy, boxed))
+    assert journey(policy, boxed, Goal) is None and policy.collection.get('breeding') is None
+    # A project already running does not collect the ready egg while one of its line sits in a box.
+    policy = planner(real_data, {196: 1})
+    policy.collection['breeding'] = {'target': 133, 'parents': [[4321, [10, 9, 8, 7, 6]], [4321, [3, 4, 5, 6, 7]]],
+                                     'species': [196, 132], 'duplicate': True, 'existing': []}
+    boxed.egg_ready = True
+    policy.person = lambda *args: pytest.fail('collected another egg while one was boxed')
+    assert journey(policy, boxed, Goal) is None and policy.collection['breeding'] is None
+
+
+def test_hatching_withdraws_boxed_eggs_into_a_free_party_slot(real_data):
+    from pokesim.gen2.breeding import HATCH_BATCH, arrive, hatching, journey
+    from pokesim.gen2.menus import ChangeBox, Storage
+    from pokesim.gen2.policy import Goal
+    eggs = [egg(215, box=2, position=i, dvs=(i,) * 5) for i in range(5)]
+    policy, state = hatcher(real_data, [lead()], eggs)
+    # Training is walking time, so it asks for the eggs before it plans anything.
+    from pokesim.gen2.training import journey as train
+    assert train(policy, state, None, Goal).key == 'collection_hatch_pc'
+    goal = hatching(policy, state, Goal)
+    assert goal.key == 'collection_hatch_pc'
+    policy.goal = goal
+    assert arrive(policy, state) == 'a' and policy.menu == ChangeBox(2)
+    state.active_box = 2
+    assert arrive(policy, state) == 'a' and policy.menu == Storage('WITHDRAW', 0, 1)
+    # A decision taken while the PC menu still moves the egg does not forget where it came from.
+    assert journey(policy, state, Goal) is None
+    # The carried egg walks with the other errands instead of the Goldenrod nursery.
+    state.party, state.stored = (lead(), eggs[0]), tuple(eggs[1:])
+    assert journey(policy, state, Goal) is None
+    assert hatching(policy, state, Goal).key == 'collection_hatch_pc'
+    state.party = (lead(),) + tuple(eggs[:HATCH_BATCH])
+    state.stored = tuple(eggs[HATCH_BATCH:])
+    assert hatching(policy, state, Goal) is None
+    # Once the batch is out, carrying one egg does not start another trip until all have hatched.
+    state.party = (lead(), eggs[0], mon(215, box=None, level=5))
+    assert hatching(policy, state, Goal) is None
+
+
+def test_hatching_swaps_a_spare_for_an_egg_and_never_stores_an_egg(real_data):
+    from pokesim.gen2.breeding import arrive, hatching
+    from pokesim.gen2.menus import Storage
+    from pokesim.gen2.policy import Goal
+    surf = mon(72, box=None, moves=(57, 0, 0, 0), level=40)
+    trainee = mon(169, box=None, dvs=(2, 10, 8, 13, 8), level=66)
+    spare = mon(143, box=None, level=50)
+    party = [lead(), egg(215, box=None), surf, trainee, spare, mon(218, box=None, level=5)]
+    policy, state = hatcher(real_data, party, [egg(215, box=0, dvs=(3,) * 5)])
+    policy.collection['training'] = {'identity': [4321, [2, 10, 8, 13, 8]]}
+    # A finished activity can leave its whole team on record. It does not pin the party.
+    policy.collection['activity_team'] = ['2d3b3da9cc2c33ad8262fa21', '89b357461d992da1f414fbc0']
+    policy.collection['hatch_fill'] = True
+    policy.goal = hatching(policy, state, Goal)
+    assert policy.goal.key == 'collection_hatch_pc'
+    assert arrive(policy, state) == 'a' and policy.menu == Storage('DEPOSIT', 5, 6)
+    # With only the egg, a sole Surf user and the trainee left besides the lead, nothing is stored.
+    state.party = (lead(), egg(215, box=None), surf, trainee)
+    state.party += (egg(215, box=None, dvs=(4,) * 5), egg(215, box=None, dvs=(5,) * 5))
+    policy.collection['hatch_fill'] = True
+    assert hatching(policy, state, Goal) is None
+    policy.menu = None
+    policy.collection['hatch_fill'], policy.collection['hatch_ops'] = True, 0
+    state.party = (lead(), egg(215, box=None), surf, trainee, egg(215, box=None, dvs=(4,) * 5), spare)
+    assert arrive(policy, state) == 'a' and policy.menu == Storage('DEPOSIT', 5, 6)
+
+
+def test_hatching_waits_for_a_free_box_slot(real_data):
+    from pokesim.gen2.breeding import hatching
+    from pokesim.gen2.policy import Goal
+    party = [lead(), mon(72, box=None, moves=(57, 0, 0, 0)), mon(218, box=None, level=5), mon(143, box=None, level=50)]
+    party += [mon(16, box=None, dvs=(1, 2, 3, 4, 5)), mon(17, box=None, dvs=(5, 4, 3, 2, 1))]
+    policy, state = hatcher(real_data, party, [egg(215)], boxes=(20,) * 14)
+    assert hatching(policy, state, Goal) is None
+    policy, state = hatcher(real_data, party, [egg(215)])
+    assert hatching(policy, state, Goal).key == 'collection_hatch_pc'
+
+
+def test_training_sends_an_egg_to_the_pc_last(real_data):
+    from pokesim.gen2.menus import Storage
+    from pokesim.gen2.training import arrive
+    trainee = mon(169, box=3, position=4, dvs=(2, 10, 8, 13, 8), level=66)
+    party = (lead(), mon(72, box=None, moves=(57, 0, 0, 0), level=40), egg(215, box=None),
+             mon(18, box=None, moves=(19, 0, 0, 0), level=51), mon(143, box=None, level=50), mon(218, box=None, level=12))
+    state = snapshot((trainee,))
+    state.party = party
+    policy = planner(real_data, {})
+    policy.collection['training'] = {'identity': [4321, [2, 10, 8, 13, 8]]}
+    policy.goal = SimpleNamespace(key='collection_train_pc')
+    assert arrive(policy, state) == 'a' and policy.menu == Storage('DEPOSIT', 5, 6)
+
+
+def test_an_egg_brought_out_to_hatch_never_goes_back_to_the_pc(real_data):
+    """Gold traded one Sneasel egg between hatching and training at the PC for the whole replay."""
+    from pokesim.gen2.breeding import egg_key, hatching
+    from pokesim.gen2.menus import Storage
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.training import arrive
+    trainee = mon(124, box=3, position=4, dvs=(2, 10, 8, 13, 8), level=48)
+    carried = egg(215, box=None, dvs=(13, 5, 7, 10, 3))
+    # Besides the lead and the egg, every member is the only holder of a field move.
+    party = (lead(), carried, mon(72, box=None, moves=(148, 0, 0, 0), level=40), mon(18, box=None, moves=(19, 0, 0, 0), level=51),
+             mon(40, box=None, moves=(70, 0, 0, 0), level=45), mon(54, box=None, moves=(127, 0, 0, 0), level=30))
+    policy, state = hatcher(real_data, party, [trainee, egg(215, box=0, dvs=(3,) * 5)])
+    policy.collection['training'] = {'identity': [4321, [2, 10, 8, 13, 8]]}
+    policy.collection['hatching'] = [egg_key(carried)]
+    policy.goal = SimpleNamespace(key='collection_train_pc')
+    assert arrive(policy, state) == 'a' and policy.menu == Storage('DEPOSIT', 5, 6)
+    # The trainee waiting in the PC keeps the freed slot, so no egg trip fills it first.
+    state.party = party[:5]
+    policy.collection['hatch_fill'] = True
+    assert hatching(policy, state, Goal) is None
+
+
+def test_fetching_the_exp_share_keeps_the_trainee_beside_a_carried_egg(real_data):
+    """Gold then swapped Haunter and the Exp. Share holder Butterfree at the PC for the rest of the replay."""
+    from pokesim.gen2.breeding import egg_key
+    from pokesim.gen2.menus import Storage
+    from pokesim.gen2.training import arrive
+    holder = mon(12, box=3, position=4, dvs=(7, 7, 7, 7, 7), level=30)
+    trainee = mon(93, box=None, dvs=(2, 10, 8, 13, 8), level=26)
+    carried = egg(32, box=None, dvs=(9, 1, 6, 4, 9))
+    party = (lead(), carried, trainee, mon(18, box=None, moves=(19, 0, 0, 0), level=51),
+             mon(40, box=None, moves=(70, 0, 0, 0), level=45), mon(54, box=None, moves=(127, 0, 0, 0), level=30))
+    policy, state = hatcher(real_data, party, [holder])
+    policy.collection['training'] = {'identity': [4321, [2, 10, 8, 13, 8]]}
+    policy.collection['share_holder'] = [4321, [7, 7, 7, 7, 7]]
+    policy.collection['hatching'] = [egg_key(carried)]
+    policy.goal = SimpleNamespace(key='collection_train_pc')
+    assert arrive(policy, state) == 'a' and policy.menu == Storage('DEPOSIT', 5, 6)
+
+
+def test_a_carried_egg_hatches_before_the_next_trainee_swaps_in(real_data, monkeypatch):
+    """Gold has one spare beside its field move holders, so the egg takes it and the swap waits."""
+    from pokesim.gen2.breeding import egg_key, hatching
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.training import journey
+    party = [lead(), mon(72, box=None, moves=(250, 0, 0, 0)), mon(18, box=None, moves=(19, 0, 0, 0)),
+             mon(40, box=None, moves=(70, 0, 0, 0)), mon(54, box=None, moves=(127, 0, 0, 0)), mon(143, box=None, level=50)]
+    policy, state = hatcher(real_data, party, [egg(215)])
+    assert hatching(policy, state, Goal).key == 'collection_hatch_pc'
+    carried = egg(215, box=None)
+    trainee = mon(93, box=3, position=4, dvs=(2, 10, 8, 13, 8), level=26)
+    policy, state = hatcher(real_data, [*party[:5], carried], [trainee, egg(215, box=0, dvs=(3,) * 5)])
+    policy.collection['training'] = {'identity': [4321, [2, 10, 8, 13, 8]], 'target': 93, 'item': None,
+                                     'species': 93, 'terminal': True, 'level_goal': 54}
+    policy.collection['hatching'] = [egg_key(carried)]
+    state.items = ((real_data.items['EXP_SHARE'], 1),)
+    clock = SimpleNamespace(byte=lambda name: 1)
+    monkeypatch.setattr('pokesim.gen2.collection.encounter_points', lambda *args: [(9, 31, 0)])
+    goal = journey(policy, state, clock, Goal)
+    assert goal.key == 'collection_train' and goal.label.startswith('Walk to hatch the egg')
+    # Once the egg hatches, the new partner is a spare and the trainee swaps in.
+    state.party = (*party[:5], mon(215, box=None, level=5))
+    assert journey(policy, state, clock, Goal).key == 'collection_train_pc'

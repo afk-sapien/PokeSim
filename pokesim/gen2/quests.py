@@ -185,10 +185,13 @@ def prepare_lead(policy, snapshot, wanted, Goal):
         return train(policy, snapshot, Memory(policy.memory, data), Goal)
     state['roam_lead'] = identity(mon)
     if mon.box is not None:
-        team = [row for row in snapshot.party if not row.egg]
+        # Carried eggs stay in the team when they can, since an egg only hatches in the party. Only the
+        # sole holder of a field move outranks one, and none outranks an egg brought out to hatch.
+        from .breeding import carried
+        team = list(snapshot.party)
         if len(team) >= 6:
             counts = {move: sum(move in row.moves for row in team) for move in FIELD_MOVES}
-            team.remove(min(team[1:], key=lambda row: (sum(counts[move] == 1 for move in row.moves if move in FIELD_MOVES),
+            team.remove(min(team[1:], key=lambda row: (carried(policy, snapshot, row), sum(counts[move] == 1 for move in row.moves if move in FIELD_MOVES), row.egg,
                                                        row.held_item == data.items['EXP_SHARE'], row.level)))
         return assemble(policy, snapshot, [key(row) for row in team] + [key(mon)], Goal,
                         f'Bring {mon.name} to lead against the roaming beasts')
@@ -292,11 +295,14 @@ def static_lead(policy, snapshot, species, Goal):
     swiper = None if any(row.box is None for row in swipers) else max(swipers, key=lambda row: row.level, default=None)
     joining = [row for row in (mon, swiper) if row is not None and row.box is not None]
     if joining:
-        team = [row for row in snapshot.party if not row.egg]
+        # Carried eggs stay in the team when they can, since an egg only hatches in the party. Only the
+        # sole holder of a field move outranks one, and none outranks an egg brought out to hatch.
+        from .breeding import carried
+        team = list(snapshot.party)
         counts = {move: sum(move in row.moves for row in team) for move in FIELD_MOVES}
         while len(team) + len(joining) > 6:
             team.remove(min((row for row in team[1:] if row is not mon), key=lambda row: (
-                sum(counts[move] == 1 for move in row.moves if move in FIELD_MOVES),
+                carried(policy, snapshot, row), sum(counts[move] == 1 for move in row.moves if move in FIELD_MOVES), row.egg,
                 row.held_item == data.items['EXP_SHARE'], row.level)))
         return assemble(policy, snapshot, [key(row) for row in team + joining], Goal,
                         f'Bring {mon.name} to put {data.species[species]["name"]} to sleep')
@@ -412,10 +418,11 @@ def arrive(policy, snapshot):
     else:
         if len(snapshot.party) < 2:
             return 'b'
+        from .breeding import carried
         counts = {move: sum(move in mon.moves for mon in snapshot.party) for move in FIELD_MOVES}
         slot = min(range(1, len(snapshot.party)), key=lambda i: (
-            sum(counts[move] == 1 for move in snapshot.party[i].moves if move in FIELD_MOVES),
-            snapshot.party[i].held_item == policy.data.items['EXP_SHARE'], snapshot.party[i].egg, snapshot.party[i].level))
+            carried(policy, snapshot, snapshot.party[i]), sum(counts[move] == 1 for move in snapshot.party[i].moves if move in FIELD_MOVES), snapshot.party[i].egg,
+            snapshot.party[i].held_item == policy.data.items['EXP_SHARE'], snapshot.party[i].level))
         policy.menu = Storage('DEPOSIT', slot, len(snapshot.party))
     return 'a'
 

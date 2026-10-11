@@ -189,10 +189,11 @@ def arrive(policy, snapshot):
     if mon.box is None:
         return 'b'
     if len(snapshot.party) == 6:
+        from .breeding import carried
         counts = {move: sum(move in row.moves for row in snapshot.party) for move in FIELD_MOVES}
         slot = min(range(1, 6), key=lambda i: (
-            sum(counts[move] == 1 for move in snapshot.party[i].moves if move in FIELD_MOVES),
-            snapshot.party[i].held_item == policy.data.items['EXP_SHARE'], snapshot.party[i].egg,
+            carried(policy, snapshot, snapshot.party[i]), sum(counts[move] == 1 for move in snapshot.party[i].moves if move in FIELD_MOVES), snapshot.party[i].egg,
+            snapshot.party[i].held_item == policy.data.items['EXP_SHARE'],
             snapshot.party[i].level))
         if snapshot.box_counts[snapshot.active_box] >= 20:
             box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)
