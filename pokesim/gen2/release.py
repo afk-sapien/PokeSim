@@ -9,7 +9,8 @@ Unown letter) keeps its best copy, or as many copies as a plan demands.
 
 A trade that needs a free slot uses a lenient tier only when nothing else is spare: a duplicate
 holding an item or trained may then go, weakest first, but eggs, shiny, perfect and rare-DV
-Pokémon, Keep, hand-picked and wished Pokémon and the last copy of a species are still kept.
+Pokémon, Keep, hand-picked and wished Pokémon and the last copy of a species are still kept. So is a
+Pokémon holding the Exp. Share: a cartridge has only the one, and every later training plan needs it.
 """
 from collections import defaultdict
 from math import isqrt
@@ -25,6 +26,9 @@ RELEASE_BUFFER = 5
 # Stat experience at which a boxed partner counts as trained, as the trade broker keeps it.
 TRAINED_STAT_EXP = 20000
 UNOWN = 201
+# The Exp. Share item number in all three games (pret constants/item_constants.asm). Mr. Pokémon gives the
+# only one, so its holder never goes, even in the lenient tier.
+EXP_SHARE = 0x39
 
 
 def headroom(snapshot):
@@ -81,7 +85,7 @@ def plan_partners(collection):
 def _protected(mon, reserved, lenient=False):
     """Whether a copy must stay. ``lenient`` lets a held item or training go, for a trade that needs room."""
     record = {'dvs': list(mon.dvs)}
-    return bool(mon.egg or is_shiny(record) or is_perfect(record) or rare_find(record)
+    return bool(mon.egg or is_shiny(record) or is_perfect(record) or rare_find(record) or mon.held_item == EXP_SHARE
                 or not lenient and (mon.held_item or sum(mon.stat_exp) >= TRAINED_STAT_EXP)
                 or reserved.intersection(_keys(mon)))
 

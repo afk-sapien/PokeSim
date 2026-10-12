@@ -11,21 +11,49 @@ def matching_time(value, current):
     return value in {'any', 'rare trees'} or current in value.split('/')
 
 
-def waiting_label(policy, snapshot, mem, current_time):
-    """Say what the idle collection is waiting for. The cartridge clock follows game time, so a
-    weekday or time of day that is not here yet comes as fast as the run plays: one in-game day is
-    about 5.2 million frames, 24 hours at 1x and well under an hour at Max."""
+def clock_wait(policy, snapshot, mem, current_time):
+    """What wanted work waits for on the cartridge clock, as in "Lapras waits for Friday", or None.
+
+    The clock follows game time, so a weekday or time of day that is not here yet comes as fast as the
+    run plays: one in-game day is about 5.2 million frames, 24 hours at 1x and well under an hour at Max.
+    Every other activity goes first, so this only names the wait in the label of the filler work.
+    """
     from .contest import waiting_for_day
-    label = waiting_for_day(policy, snapshot, mem)
-    if label:
-        return label
+    wait = waiting_for_day(policy, snapshot, mem)
+    if wait:
+        return wait
     if wanted(policy, snapshot, LAPRAS) and mem.byte('wCurDay') % 7 != FRIDAY:
-        return 'Waiting for Friday: Lapras surfaces in Union Cave'
-    later = sorted({row['time'] for row in policy.data.encounters
-                    if wanted(policy, snapshot, row['species']) and not matching_time(row['time'], current_time)})
+        return 'Lapras waits for Friday'
+    later = {}
+    for row in policy.data.encounters:
+        if wanted(policy, snapshot, row['species']) and not matching_time(row['time'], current_time):
+            later.setdefault(row['time'], set()).add(row['species'])
     if later:
-        return f'Waiting for {" or ".join(later[:2])} to find new Pokémon'
-    return 'Explore while waiting for new collection opportunities'
+        time = min(later, key=lambda name: (-len(later[name]), name))
+        names = sorted(policy.data.species[species]['name'] for species in later[time])
+        who = names[0] + (f' and {len(names) - 1} more' if len(names) > 1 else '')
+        return f'{who} {"wait" if len(names) > 1 else "waits"} for {time.replace("/", " or ")}'
+    return None
+
+
+def waiting_label(policy, snapshot, mem, current_time):
+    """Say what the idle walk does and what it waits for."""
+    doing = 'Walk the eggs to hatching' if any(mon.egg for mon in snapshot.party) else 'Walk the grass'
+    wait = clock_wait(policy, snapshot, mem, current_time)
+    if wait:
+        return f'{doing} while {wait}'
+    return f'{doing} until a trade or a return brings new collection work'
+
+
+def while_waiting(policy, snapshot, mem, goal, Goal):
+    """Name the clock wait in the label of filler work such as breeding, hatching and training."""
+    if goal is None or mem is None or not hasattr(mem, 'byte'):
+        return goal
+    current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
+    wait = clock_wait(policy, snapshot, mem, current_time)
+    if not wait:
+        return goal
+    return Goal(goal.key, f'{goal.label} while {wait}', goal.map_name, goal.x, goal.y, goal.face)
 
 
 def tree_score(x, y, trainer_id):
@@ -250,14 +278,17 @@ def journey(policy, snapshot, mem, Goal):
     if funding is not None and snapshot.hall_of_fame_count >= funding:
         state.pop('funding', None)
         funding = None
-    from .breeding import retrieval_cost
+    from .breeding import pairings, retrieval_cost
     fees = retrieval_cost(data, snapshot)
     from .. import config
     starter_gifts = getattr(config, 'LEAGUE_REWARDS', False) and not {152, 155, 158} <= snapshot.owned
     from .quests import static_wanted, ultra_shortfall
     if funding is None and (snapshot.money < 5000 and sum(count for _, count in snapshot.pockets['balls']) < 4
                             or fees and snapshot.money < fees + 1000 or starter_gifts
-                            or snapshot.can_catch and ultra_shortfall(policy, snapshot) and static_wanted(policy, snapshot)):
+                            or snapshot.can_catch and ultra_shortfall(policy, snapshot) and static_wanted(policy, snapshot)
+                            # A wanted Day Care pair waits for 3000 to start, and nothing else earns it.
+                            or snapshot.money < 3000 and not state.get('breeding')
+                            and getattr(snapshot, 'daycare', None) is not None and pairings(policy, snapshot)):
         state['funding'] = funding = snapshot.hall_of_fame_count + 1
     if funding is not None:
         state['phase'] = 'league'
@@ -301,7 +332,7 @@ def journey(policy, snapshot, mem, Goal):
     from .breeding import journey as breed
     goal = breed(policy, snapshot, Goal)
     if goal:
-        return goal
+        return while_waiting(policy, snapshot, mem, goal, Goal)
     from .gamecorner import journey as prizes
     goal = prizes(policy, snapshot, Goal)
     if goal:
@@ -318,11 +349,11 @@ def journey(policy, snapshot, mem, Goal):
     from .breeding import hatching
     goal = hatching(policy, snapshot, Goal)
     if goal:
-        return goal
+        return while_waiting(policy, snapshot, mem, goal, Goal)
     from .training import journey as training
     goal = training(policy, snapshot, mem, Goal)
     if goal:
-        return goal
+        return while_waiting(policy, snapshot, mem, goal, Goal)
     current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
     target = state.get('target')
     # With every box full and nothing to release, a hunt could never keep a catch.
@@ -391,28 +422,21 @@ def journey(policy, snapshot, mem, Goal):
                 return goal
             goal = training(policy, snapshot, mem, Goal, terminal=True)
             if goal:
-                return goal
-            state['phase'] = 'waiting'
-            # Nothing else is useful until the cartridge clock reaches another day or time of day.
-            # The plan is rebuilt every step, so the clock-gated work starts as soon as its window opens.
+                return while_waiting(policy, snapshot, mem, goal, Goal)
+            # Carried eggs hatch on this walk, so only a walk without them is idle.
+            state['phase'] = 'hatching' if any(mon.egg for mon in snapshot.party) else 'waiting'
+            # Nothing else is useful until the cartridge clock opens a window or a trade brings new work.
+            # The plan is rebuilt every step, so clock-gated work starts as soon as its window opens.
             return patrol(policy, snapshot, Goal, waiting_label(policy, snapshot, mem, current_time))
     return hunt(policy, snapshot, Goal)
 
 
-# Where the run passes time when nothing but the cartridge clock can unlock more work.
+# Where the run passes time when nothing else is useful, the last resort of the plan.
 PATROL_MAP, PATROL_HOME = 'ROUTE_29', (12, 8)
 
 
-def patrol_label(label):
-    """Say the run keeps busy in the grass while it waits for the clock."""
-    for prefix in ('Waiting for ', 'Explore while waiting for '):
-        if label.startswith(prefix):
-            return 'Train in the grass while waiting for ' + label[len(prefix):]
-    return label
-
-
 def patrol(policy, snapshot, Goal, label):
-    """Walk between the Route 29 grass tiles while waiting for a weekday or time of day.
+    """Walk between the Route 29 grass tiles when nothing else is useful, the last resort of the plan.
 
     The cartridge clock follows game time, so a wait lasts up to a few million frames. Standing still
     for that long looks like a frozen run and does nothing, while walking the grass keeps the
@@ -420,7 +444,6 @@ def patrol(policy, snapshot, Goal, label):
     """
     data = policy.data
     mid = data.map_ids[PATROL_MAP]
-    label = patrol_label(label)
     if snapshot.map != mid:
         return Goal('collection_idle', label, PATROL_MAP, *PATROL_HOME)
     here = (snapshot.x, snapshot.y)

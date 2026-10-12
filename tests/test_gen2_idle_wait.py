@@ -69,14 +69,6 @@ def test_a_rewinding_reload_keeps_the_guards_watching_the_clock_wait():
     assert emu.waiting and emu.progress_frame == emu.frame and not reloads
 
 
-def test_patrol_labels_say_the_run_keeps_training():
-    from pokesim.gen2.collection import patrol_label
-    assert (patrol_label('Waiting for Tuesday, Thursday or Saturday: the Bug-Catching Contest')
-            == 'Train in the grass while waiting for Tuesday, Thursday or Saturday: the Bug-Catching Contest')
-    assert (patrol_label('Explore while waiting for new collection opportunities')
-            == 'Train in the grass while waiting for new collection opportunities')
-
-
 def patrol_policy(gold, visits=None, reachable=lambda point: True):
     return SimpleNamespace(data=gold, memory=None,
                            nav=SimpleNamespace(visits=visits or {},
@@ -90,9 +82,9 @@ def test_clock_patrol_walks_the_grass_instead_of_standing_still(gold, monkeypatc
     grass = [(10, 8, None), (11, 8, None), (13, 8, None), (40, 8, None)]
     monkeypatch.setattr(collection, 'encounter_points', lambda policy, snapshot, mid, method: grass)
     away = SimpleNamespace(map=gold.map_ids['NEW_BARK_TOWN'], x=3, y=3)
-    goal = collection.patrol(patrol_policy(gold), away, Goal, 'Waiting for Friday: Lapras surfaces in Union Cave')
+    goal = collection.patrol(patrol_policy(gold), away, Goal, 'Walk the grass while Lapras waits for Friday')
     assert (goal.key, goal.map_name, (goal.x, goal.y)) == ('collection_idle', 'ROUTE_29', collection.PATROL_HOME)
-    assert goal.label == 'Train in the grass while waiting for Friday: Lapras surfaces in Union Cave'
+    assert goal.label == 'Walk the grass while Lapras waits for Friday'
     here = SimpleNamespace(map=route, x=11, y=8)
     goal = collection.patrol(patrol_policy(gold, {(route, 10, 8): 3}), here, Goal, 'Waiting for night')
     assert (goal.x, goal.y) == (13, 8)
@@ -104,7 +96,7 @@ def test_the_patrol_counts_as_waiting_but_only_the_wait_tile_as_idle(gold):
     from pokesim.gen2.policy import Goal, Policy
     policy = Policy(gold, seed=1, starter='cyndaquil')
     route = gold.map_ids['ROUTE_29']
-    policy.goal = Goal('collection_idle', 'Train in the grass while waiting for night', 'ROUTE_29', 20, 9)
+    policy.goal = Goal('collection_idle', 'Walk the grass while Hoothoot waits for night', 'ROUTE_29', 20, 9)
     walking = SimpleNamespace(map=route, x=19, y=9, in_battle=0)
     assert policy.waiting(walking) and not policy.idle(walking)
     assert policy.waiting(SimpleNamespace(map=route, x=19, y=9, in_battle=1))

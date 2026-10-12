@@ -505,6 +505,12 @@ reading they had when they were first opened this way. The Live page shows the i
 weekday, time and period (Morning 4:00 to 9:59, Day 10:00 to 17:59, Night 18:00 to 3:59) on
 the place line above the screen, and the state API exposes it as `clock`.
 
+A run never sits still for the clock. It uses a weekday or time-of-day window while it is
+open and otherwise does every other job first: breeding, hatching, evolving and training.
+Only when nothing else is left does it walk the grass, and the label then names what it
+waits for, as in "Walk the grass while Lapras waits for Friday". The Pokémon holding the
+Exp. Share is never released or traded, since every later training plan needs it.
+
 The searchable Pokédex separates link-trade and event requirements from available
 sources. “Possible here” includes future evolutions and choices, rather than claiming
 that every listed entry is immediately reachable or that all mutually exclusive

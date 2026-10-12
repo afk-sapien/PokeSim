@@ -16,6 +16,8 @@ from ..trade.preferences import apply, name as setting_name
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin
 from .ram import Memory, read_snapshot
+# The Exp. Share item number, as release.EXP_SHARE (kept local so this module imports without Gen I data).
+EXP_SHARE = 0x39
 from .web import live_status
 from .timecapsule import compatible, unlocked
 from .timecapsule_conversion import convert
@@ -78,6 +80,9 @@ def _kept(mon, stock):
     if mon.get('shiny'):
         # Built-in automatic rule: shinies never travel automatically, even when set to Prefer to trade.
         return 'Shiny partner preserved for the collection'
+    if mon.get('held_item') == EXP_SHARE:
+        # The cartridge's only Exp. Share would leave with the trade, and training needs it.
+        return 'Holds the Exp. Share'
     if preference == 'offered':
         return ''
     if mon['species'] in stock:

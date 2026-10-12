@@ -85,11 +85,15 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         state['training'] = None
     share = data.items['EXP_SHARE']
     inventory = dict(snapshot.items)
-    if not inventory.get(share) and not any(mon.held_item == share for mon in snapshot.party + snapshot.stored):
-        if inventory.get(data.items['RED_SCALE']):
-            return policy.person(snapshot, 'exp_share', 'Exchange the Red Scale for Exp. Share',
-                                 'MR_POKEMONS_HOUSE', 'MrPokemonsHouse_MrPokemonScript')
-        return None
+    shareless = not inventory.get(share) and not any(mon.held_item == share for mon in snapshot.party + snapshot.stored)
+    if shareless and inventory.get(data.items['RED_SCALE']):
+        return policy.person(snapshot, 'exp_share', 'Exchange the Red Scale for Exp. Share',
+                             'MR_POKEMONS_HOUSE', 'MrPokemonsHouse_MrPokemonScript')
+    if shareless and project and not project.get('item'):
+        # Without the Exp. Share a boxed partner earns no experience, so a levelling plan could never
+        # finish. Dropping it lets the eggs waiting for its party slot hatch instead. Evolution stones
+        # still work, so those plans go on.
+        state['training'] = project = None
     current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
     project = state.get('training')
     from .collection import prerequisites
@@ -106,8 +110,10 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     sealed = len(snapshot.party) >= 6 and bool(getattr(policy, 'no_room', lambda snapshot: False)(snapshot))
     if project is None:
         choices = projects(data, snapshot, current_time, demand)
+        if shareless:
+            choices = [row for row in choices if row[5] is not None]
         terminal_project = False
-        if not choices and terminal:
+        if not choices and terminal and not shareless:
             terminal_project = True
             choices = [(experience_at(100, data.species[mon.species]['growth']) - mon.experience,
                         mon.box is not None, mon.species, identity(mon), mon.species, None)

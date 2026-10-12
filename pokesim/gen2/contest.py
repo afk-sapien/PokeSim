@@ -35,7 +35,8 @@ def targets(policy, snapshot):
 
 
 def waiting_for_day(policy, snapshot, mem):
-    """Why the contest work is idle, in words for the status line, or None when it is not waiting."""
+    """What the contest work waits for, as in "the Bug-Catching Contest waits for Tuesday", or None
+    when it is not waiting."""
     if (not needs_sun_stone(policy, snapshot) and not targets(policy, snapshot)
             or policy.collection.get('contest') or policy.collection.get('tower')):
         return None
@@ -43,8 +44,8 @@ def waiting_for_day(policy, snapshot, mem):
     if day in CONTEST_DAYS:
         if not mem.byte('wDailyFlags1') & 2:
             return None
-        return f'Waiting for {next_contest_day(day)}: the Bug-Catching Contest was already entered today'
-    return f'Waiting for {next_contest_day(day)}: the Bug-Catching Contest'
+        return f'the Bug-Catching Contest waits for {next_contest_day(day)}, as today\'s was entered'
+    return f'the Bug-Catching Contest waits for {next_contest_day(day)}'
 
 
 WEEKDAYS = ('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')

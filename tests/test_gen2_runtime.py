@@ -1890,16 +1890,16 @@ def _clock_policy(real_data, day, daily=0):
 def test_idle_collection_says_it_is_waiting_for_a_contest_day(real_data):
     from pokesim.gen2.contest import CONTEST_SPECIES, targets, waiting_for_day
     policy, snapshot, mem = _clock_policy(real_data, day=1)
-    assert waiting_for_day(policy, snapshot, mem) == 'Waiting for Tuesday: the Bug-Catching Contest'
+    assert waiting_for_day(policy, snapshot, mem) == 'the Bug-Catching Contest waits for Tuesday'
     policy, snapshot, mem = _clock_policy(real_data, day=5)
-    assert waiting_for_day(policy, snapshot, mem) == 'Waiting for Saturday: the Bug-Catching Contest'
+    assert waiting_for_day(policy, snapshot, mem) == 'the Bug-Catching Contest waits for Saturday'
     policy, snapshot, mem = _clock_policy(real_data, day=2)
     assert waiting_for_day(policy, snapshot, mem) is None
     # Entered already: the next contest is two days away, or three from Saturday, never tomorrow.
     for day, after in ((2, 'Thursday'), (4, 'Saturday'), (6, 'Tuesday')):
         policy, snapshot, mem = _clock_policy(real_data, day=day, daily=2)
         assert waiting_for_day(policy, snapshot, mem) == (
-            f'Waiting for {after}: the Bug-Catching Contest was already entered today')
+            f"the Bug-Catching Contest waits for {after}, as today's was entered")
     # Sun Stones already in the bag and every contest-only species owned mean there is nothing to wait for.
     policy, snapshot, mem = _clock_policy(real_data, day=1)
     snapshot.owned = {182, 192}
@@ -1917,8 +1917,8 @@ def test_idle_collection_says_which_time_of_day_it_needs(real_data):
     original = collection.wanted
     collection.wanted = lambda policy, snapshot, species: species != collection.LAPRAS
     try:
-        assert collection.waiting_label(policy, snapshot, mem, 'day') == 'Waiting for night to find new Pokémon'
-        assert collection.waiting_label(policy, snapshot, mem, 'night') == 'Explore while waiting for new collection opportunities'
+        assert collection.waiting_label(policy, snapshot, mem, 'day') == 'Walk the grass while Zubat waits for night'
+        assert collection.waiting_label(policy, snapshot, mem, 'night') == 'Walk the grass until a trade or a return brings new collection work'
     finally:
         collection.wanted = original
 
