@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Stop Gold, Silver and Crystal adventures reporting "Stuck? 6 game hours without progress" while walking eggs from the PC to hatching. A level 100 party earns no experience and a hatchling of a registered species adds nothing new, so a box of slow eggs such as Sneasel tripped the stall alert and asked for help every few eggs. Every egg cycle walked off and every hatching now counts as progress, once each, so a reload back to an older save does not.
+
 - Fix Gold, Silver and Crystal adventures stalling on "Train … toward level 100 in the lead" with the Pokémon in training never leaving the back of the party. A roaming-beast search that was put off for later still kept its sleeper in the lead, so the trainee joined no battles, earned nothing, and the adventure reloaded every half hour. The training walk now leads with the trainee, and the sleeper leads again when the search resumes.
 
 - Fix a Red, Blue or Yellow Pokémon being sent to Gold, Silver or Crystal every few minutes when the Time Capsule always refuses it. A Pokémon whose saved types do not match its species (the game says it "appears to be abnormal" and cancels the trade) is now left out of Time Capsule trades with that reason, a session stops as soon as the game shows the message instead of pressing on for half a minute, and automatic trading leaves out any Pokémon whose last two trades failed the same way for 30 minutes, doubling up to a day.

@@ -116,3 +116,32 @@ def test_training_a_new_trainee_counts_as_progress_after_a_swap():
     trainee.experience = 110_000  # a reload back to an older save is not progress
     emu._note_progress(party(trainee), 3.0)
     assert emu.unstick_streak == 3
+
+
+def test_walking_an_egg_to_hatching_counts_as_progress():
+    # A level 100 party walking a box of stored eggs earns no experience and registers nothing new,
+    # so the stall alert fired every few eggs. Each lost cycle and each hatching is progress once.
+    emu, _ = emulator(3)
+    veteran = SimpleNamespace(trainer_id=1, dvs=(15, 15), species=184, experience=1_000_000)
+    egg = SimpleNamespace(trainer_id=1, dvs=(6, 14), species=215, experience=135, egg=True, friendship=12)
+    party = lambda *mons: SimpleNamespace(badges=0, event_flags=b'\x00', owned=(), party=list(mons))
+    emu._note_progress(party(veteran, egg), 0.0)
+    emu.unstick_streak = 3
+    egg.friendship = 12
+    emu._note_progress(party(veteran, egg), 1.0)  # still on the same cycle
+    assert emu.unstick_streak == 3
+    egg.friendship = 11
+    emu._note_progress(party(veteran, egg), 2.0)
+    assert emu.unstick_streak == 0
+    emu.unstick_streak = 3
+    egg.friendship = 12  # a reload back to a fuller egg replays steps that already counted
+    emu._note_progress(party(veteran, egg), 3.0)
+    egg.friendship = 11
+    emu._note_progress(party(veteran, egg), 4.0)
+    assert emu.unstick_streak == 3
+    egg.friendship, egg.egg = 70, False  # hatched: the friendship byte is a hatchling's again
+    emu._note_progress(party(veteran, egg), 5.0)
+    assert emu.unstick_streak == 0
+    emu.unstick_streak = 3
+    emu._note_progress(party(veteran, egg), 6.0)
+    assert emu.unstick_streak == 3

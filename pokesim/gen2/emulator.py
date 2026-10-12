@@ -89,6 +89,28 @@ def settled(metadata):
     return not (metadata.get('policy_state') or {}).get('menu')
 
 
+def hatch_progress(best, snapshot):
+    """Whether a carried egg lost a cycle or hatched since the best seen, updating ``best``.
+
+    A level 100 party walking stored eggs to hatching earns no experience, and a hatchling of a
+    registered species adds nothing either, yet each egg can take hours of game time and a box of
+    them days. Each egg counts once per cycle below its lowest seen and once on hatching, so a
+    reload back to a fuller egg replays steps that already counted.
+    """
+    walked = False
+    for mon in snapshot.party:
+        key = (getattr(mon, 'trainer_id', None), tuple(getattr(mon, 'dvs', ()) or ()), getattr(mon, 'species', None))
+        # A hatched egg stays on record below any cycle count, so its hatching counts only once.
+        cycles = mon.friendship if getattr(mon, 'egg', False) else -1
+        if key not in best:
+            if cycles >= 0:
+                best[key] = cycles
+        elif cycles < best[key]:
+            best[key] = cycles
+            walked = True
+    return walked
+
+
 def progress_key(tiles, maps, snapshot):
     """What must change within the no-progress limit for a run to count as getting somewhere.
 
@@ -565,6 +587,7 @@ class Emulator:
             if experience > best_experience.get(key, experience):
                 trained = True
             best_experience[key] = max(experience, best_experience.get(key, 0))
+        trained = hatch_progress(self.__dict__.setdefault('best_egg_cycles', {}), snapshot) or trained
         if trained or any(new > old for new, old in zip(score, self.best_progress)):
             self.best_progress = tuple(max(new, old) for new, old in zip(score, self.best_progress))
             self.stall.progress(self.frame, now)
