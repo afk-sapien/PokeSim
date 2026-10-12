@@ -196,7 +196,7 @@ function renderDetail(dex, refresh = false) {
         : '<p class="detail-meta">No encounters in this version. Evolution, a trade, or another cartridge is the way in.</p>'}
     </section>
     <section class="detail-section"><h3>Moves it learns on its own</h3>
-      <div class="move-scroll"><table class="move-table"><thead><tr><th>When</th><th>Move</th><th>Type</th><th>Power</th><th>Acc.</th><th>PP</th></tr></thead><tbody>${moves}</tbody></table></div>
+      <div class="move-scroll" tabindex="0" role="region" aria-label="Moves it learns on its own"><table class="move-table"><thead><tr><th>When</th><th>Move</th><th>Type</th><th>Power</th><th>Acc.</th><th>PP</th></tr></thead><tbody>${moves}</tbody></table></div>
     </section>
     ${Object.keys(entry.links).length ? `<section class="detail-section"><h3>Read more</h3><div class="link-row">
       <a class="key" href="${esc(entry.links.bulbapedia)}" target="_blank" rel="noreferrer">Bulbapedia ↗</a>

@@ -111,8 +111,17 @@
     document.querySelector('#stats-perfect-note').textContent = records.perfect_count_is_minimum
       ? 'Verified minimum of individual finds' : 'Individual finds'
     document.querySelector('#stats-shiny-seen').textContent = shiny?.available ? number(shiny.seen) : 'Not tracked'
-    document.querySelector('#stats-shiny-acquired').textContent = shiny ? display(shiny.acquired) : 'Not tracked'
+    // Older adventures never counted shinies as they arrived, but the ones held now are always
+    // known. Show one honest figure rather than "Not tracked" beside a shiny in the PC.
+    const acquiredKnown = Number.isFinite(shiny?.acquired)
+    const heldKnown = Number.isFinite(shiny?.held)
+    const useHeld = !acquiredKnown && heldKnown
+    document.querySelector('#stats-shiny-label').textContent = useHeld ? 'Shinies held' : 'Shinies acquired'
+    document.querySelector('#stats-shiny-note').textContent = useHeld
+      ? 'In the party and PC now. Arrivals were not counted on this adventure' : 'Tracked catches and custom gifts'
+    document.querySelector('#stats-shiny-acquired').textContent = shiny ? display(useHeld ? shiny.held : shiny.acquired) : 'Not tracked'
     document.querySelector('#stats-shiny-held').textContent = shiny ? display(shiny.held) : 'Not tracked'
+    document.querySelector('#stats-shiny-held-cell').hidden = useHeld
 
     document.querySelectorAll('.stats-overview .readout, #collection-details .readout').forEach(node => {
       node.classList.toggle('readout--missing', node.textContent === 'Not tracked')

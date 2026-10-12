@@ -84,6 +84,7 @@ def test_adventure_palette_and_permanent_deletion(page, tmp_path, monkeypatch):
         page.get_by_role('button', name='Save adventure settings', exact=True).click()
         expect(page.locator('#adventure-settings')).not_to_be_visible()
         assert captured['manager'].registry.adventure(captured['row']['id'])['settings']['palette'] == 'blue'
+        page.locator('.card-more-toggle').click()
         page.locator('[data-action="delete"]').click()
         dialog = page.locator('#adventure-delete-dialog')
         expect(dialog).to_be_visible()

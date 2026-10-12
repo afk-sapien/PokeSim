@@ -190,6 +190,7 @@
   width: min(880px, calc(100% - 2 * var(--s4)));
   max-height: calc(100vh - 2 * var(--s5));
   padding: 0;
+  overscroll-behavior: contain;
   background: var(--panel);
   color: var(--ink);
   border: var(--hair) solid var(--rule);

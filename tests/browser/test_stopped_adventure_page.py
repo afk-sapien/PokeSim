@@ -102,7 +102,10 @@ def test_library_cards_show_state_and_start_without_a_detour(page, tmp_path, mon
                 "Couldn't download the Pokémon Silver game data (no network). Retry.")
             expect(failed.get_by_role('button', name='Retry', exact=True)).to_be_enabled()
             expect(stopped.get_by_role('button', name='Start', exact=True)).to_be_enabled()
-            expect(stopped.get_by_role('link', name='Details')).to_have_attribute('href', f'/games/{ids["Quiet Cove"]}/')
+            stopped.get_by_role('button', name='More actions for Quiet Cove').click()
+            expect(stopped.get_by_role('menuitem', name='Details for Quiet Cove')).to_have_attribute(
+                'href', f'/games/{ids["Quiet Cove"]}/')
+            page.keyboard.press('Escape')
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             SHOTS.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(SHOTS / f'library-{width}.png'), full_page=True, animations='disabled')

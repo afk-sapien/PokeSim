@@ -76,11 +76,26 @@ def test_rewind_rejection_keeps_event_page_and_retry_navigates(page, game):
     expect(button).to_be_visible()
     # A hold can begin after the page was rendered. Exercise the server rejection.
     store.set('trade_hold', {'id': '123'})
+    dialog = page.get_by_role('dialog', name='Rewind to this moment?')
+    # The question comes first, and keeping play sends nothing.
     button.click()
+    expect(dialog).to_be_visible()
+    expect(dialog).to_contain_text('Everything it did after that is lost')
+    expect(dialog.get_by_role('button', name='Keep playing')).to_be_focused()
+    page.keyboard.press('Escape')
+    expect(dialog).to_be_hidden()
+    expect(button).to_be_focused()
+    button.click()
+    dialog.get_by_role('button', name='Keep playing').click()
+    expect(dialog).to_be_hidden()
+    assert emu.commands == []
+    button.click()
+    dialog.get_by_role('button', name='Rewind and lose progress').click()
     expect(page.get_by_role('alert')).to_contain_text('holding this adventure')
     assert page.url == f'{url}/events/{eid}' and emu.commands == []
     store.set('trade_hold', None)
     button.click()
+    dialog.get_by_role('button', name='Rewind and lose progress').click()
     page.wait_for_url(url + '/')
     assert emu.commands == [('load_state', f'event-{eid}.state')]
 

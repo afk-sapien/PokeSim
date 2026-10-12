@@ -7,6 +7,17 @@
 - Stop Gold, Silver and Crystal adventures putting duplicate eggs ahead of training. Gold kept 28 Sneasel eggs in the PC from an old breeding loop and fetched them one at a time, so Crobat waited in the PC for days of game time. A trip to the PC now brings only eggs that would add something: a species not yet registered, or a copy another adventure asks for by cable. Other eggs stay safe in the PC, and one already in the party may go back to make room for the next Pokémon in training.
 
 - Stop Gold, Silver and Crystal adventures reporting "Stuck? 6 game hours without progress" while walking eggs from the PC to hatching. A level 100 party earns no experience and a hatchling of a registered species adds nothing new, so a box of slow eggs such as Sneasel tripped the stall alert and asked for help every few eggs. Every egg cycle walked off and every hatching now counts as progress, once each, so a reload back to an older save does not.
+- Ask before rewinding the live game. The rewind key on a journal entry now opens a question that names the play time it goes back to and how much play would be lost, with Keep playing as the default. Nothing is sent until Rewind and lose progress is chosen.
+
+- Give each library card one main key and a settings key. Stop, Details, Download save, Archive and Delete now sit in a More menu that works from the keyboard (arrow keys move, Esc closes). The status chip says Trading, Manual control or Paused instead of Running when the game is held, and every card key and backup key names its adventure or date for screen readers.
+
+- Fit every page on a 390 pixel phone without sideways scrolling. The adventure tabs scroll inside their own strip and keep full names, the Stats figures no longer overlap, and the toast and Pokédex detail respect the notch and home bar. Popups no longer scroll the page behind them.
+
+- Show the Pokémon on journal entries for catches, gifts, hatches, evolutions and level-ups, using its sprite instead of a cutscene screenshot. Journal and live page labels are plain words ("Caught", "Party", "Plan", "Now", "Next"), and the live page no longer repeats the plan title under it.
+
+- Fix the Stats page saying shinies are "Not tracked" next to a shiny in the PC. When arrivals were not counted it now shows the shinies held, with a note saying why.
+
+- Keep keyboard focus clear of the sticky header, label the Pokédex move list for keyboard and screen reader users, show text while the fonts load, and lay out Pokédex and PC sprites in one pass.
 
 - Fix Gold, Silver and Crystal adventures stalling on "Train … toward level 100 in the lead" with the Pokémon in training never leaving the back of the party. A roaming-beast search that was put off for later still kept its sleeper in the lead, so the trainee joined no battles, earned nothing, and the adventure reloaded every half hour. The training walk now leads with the trainee, and the sleeper leads again when the search resumes.
 

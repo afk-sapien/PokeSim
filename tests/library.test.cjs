@@ -625,7 +625,7 @@ test('settings render existing backups without an adventure variable', async () 
     ]})}
   }})
   await settle()
-  assert.match(view.element('#backups').innerHTML, /data-delete-backup="b{32}" data-owner>Delete/)
+  assert.match(view.element('#backups').innerHTML, /data-delete-backup="b{32}" data-owner aria-label="Delete the backup from [^"]+">Delete/)
   assert.match(view.element('#backup-summary').textContent, /1 backup/)
 })
 
@@ -738,7 +738,8 @@ test('a game paused for a trade shows Paused rather than a measured 0.0× speed'
   view.poll()
   await settle()
   assert.equal(labels['a-speed'], 'Paused')
-  assert.equal(labels['b-speed'], 'Paused')
+  // A game held for a trade says so rather than a bare Paused.
+  assert.equal(labels['b-speed'], 'Trading')
   assert.equal(labels['c-speed'], '2.3×')
   assert.equal(labels['a-cpu'], '2.1%')
 })

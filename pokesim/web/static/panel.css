@@ -30,7 +30,9 @@
 /* Reserve the scrollbar's track on every page, so a page that grows past the
    window once its data arrives, or a short page next to a long one, keeps the
    same width and nothing slides sideways. */
-html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; }
+/* panel.js keeps --rail-h equal to the part of the rail that stays on screen,
+   so a focused field or an anchor never lands under it. */
+html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; scroll-padding-top: calc(var(--rail-h, 57px) + var(--s3)); }
 
 body {
   margin: 0;
@@ -195,6 +197,7 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
 }
 .key--primary:hover { background: var(--signal); filter: brightness(1.12); }
 .key:disabled { opacity: 0.45; cursor: not-allowed; }
+.key--danger { color: var(--crit); border-color: var(--crit); }
 
 /* ---- tag: a type or state, stamped rather than pilled ------------------- */
 .tag {
@@ -1048,6 +1051,7 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   border: var(--hair) solid var(--rule);
   box-shadow: var(--key-inset), 6px 6px 0 var(--bevel-lo);
 }
+.partner-detail, .confirm-sheet { overscroll-behavior: contain; }
 .partner-detail::backdrop { background: rgba(10, 12, 10, 0.55); }
 .partner-detail form { position: absolute; top: var(--s3); right: var(--s3); }
 .partner-close { min-height: 32px; padding: 0 var(--s3); }
@@ -1081,16 +1085,37 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .toast {
   position: fixed;
   left: 50%;
-  bottom: var(--s5);
+  bottom: calc(var(--s5) + env(safe-area-inset-bottom, 0px));
   z-index: 50;
   transform: translateX(-50%);
-  max-width: calc(100% - 2 * var(--s4));
+  max-width: calc(100% - 2 * var(--s4) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
   padding: var(--s3) var(--s4);
   background: var(--panel);
   border: var(--hair) solid var(--rule);
   border-left: 3px solid var(--ok-lamp);
   box-shadow: var(--key-inset), 4px 4px 0 var(--bevel-lo);
   font-size: 14px;
+}
+/* A question that guards something hard to undo, such as a rewind. Cancel is
+   the first key and takes focus, so Enter never confirms by accident. */
+.confirm-sheet {
+  width: min(480px, calc(100% - 2 * var(--s4)));
+  max-height: calc(100dvh - 2 * var(--s5));
+  padding: 0;
+  background: var(--panel);
+  color: var(--ink);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--key-inset), 6px 6px 0 var(--bevel-lo);
+}
+.confirm-sheet::backdrop { background: rgba(10, 12, 10, 0.55); }
+.confirm-sheet form { display: grid; gap: var(--s3); padding: var(--s5); }
+.confirm-sheet h2 { font: var(--f-read) / 1.2 var(--font-panel); }
+.confirm-sheet p { color: var(--ink-2); }
+.confirm-sheet strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); margin-top: var(--s3); }
+.confirm-actions .key { min-height: 44px; }
+@media (max-width: 480px) {
+  .confirm-actions .key { flex: 1 1 100%; white-space: normal; }
 }
 .toast.error { border-left-color: var(--crit-lamp); color: var(--crit); }
 
@@ -1194,18 +1219,29 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .breadcrumb { order: 2; flex-direction: row; align-items: center; gap: var(--s3); width: 100%; padding: 0 0 var(--s2); border-left: 0; }
   .breadcrumb > a { align-self: center; padding: var(--s3) 0; }
   .adventure-switch { flex: 1; }
-  .adventure-switch select { width: 100%; height: 40px; margin-left: 0; background: var(--well); border-color: var(--rule); box-shadow: var(--well-inset); }
+  /* The adventure's name is read in the text face, so a long one fits
+     instead of being cut down to a few capitals and an ellipsis. */
+  .adventure-switch select { width: 100%; height: 44px; margin-left: 0; font: 600 15px / 1.2 var(--font-text); letter-spacing: 0; text-transform: none; background: var(--well); border-color: var(--rule); box-shadow: var(--well-inset); }
+  /* The tabs are a strip that scrolls sideways, inset by the page gutter, so
+     each keeps its own width and none of them touch the screen edge. */
   .rail nav:not(.breadcrumb) {
     margin-inline: calc(-1 * var(--s4));
     width: calc(100% + 2 * var(--s4));
+    padding-inline: var(--s4);
+    gap: var(--s1);
+    scroll-padding-inline: var(--s4);
+    overscroll-behavior-x: contain;
   }
-  /* Five tabs in the display face need 380px; in the mono voice they fit a
-     320px phone with room to spare, still as a full-height key each. */
-  .rail nav:not(.breadcrumb) a {
-    flex: 1 1 0;
-    padding: 0 var(--s1);
-    font: var(--f-label) / 1 var(--font-mono);
-    letter-spacing: 0.06em;
+  .rail nav:not(.breadcrumb) a,
+  .rail nav:not(.breadcrumb) a:first-child,
+  .rail nav:not(.breadcrumb) a:last-child {
+    flex: 0 0 auto;
+    padding: 0 var(--s3);
+    border: var(--hair) solid var(--rule-faint);
+    border-bottom: 0;
+    font: 500 14px / 1 var(--font-text);
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   .identity { padding: var(--s5) 0 var(--s4); gap: var(--s4); }
@@ -1285,10 +1321,6 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .rail nav:not(.breadcrumb) a[aria-current] { box-shadow: none; outline: 2px solid Highlight; outline-offset: -2px; }
 }
 
-/* A 320px phone: tighten the tab type so "Journal" is not cut off. */
-@media (max-width: 360px) {
-  .rail nav:not(.breadcrumb) a { padding: 0 2px; letter-spacing: 0.01em; }
-}
 
 /* The live speed selector shares the compact control row. */
 .live-speed { display: inline-flex }

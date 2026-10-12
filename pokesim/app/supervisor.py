@@ -463,8 +463,12 @@ class Supervisor:
                     settings_errors = self.sync_optional(aid, child, status)
                     self.unhealthy_since.pop(aid, None)
                     game = status.get('game') or {}
+                    # A worker pauses itself for a cable trade or for manual play, so the library
+                    # says which rather than showing Running beside a speed that reads Paused.
+                    trading = bool(self.registry.transactions(True, adventure_id=aid))
                     summary = {'activity': game.get('map_name') or 'Adventure in progress',
                                'paused': status.get('paused', False),
+                               'manual_mode': bool(status.get('manual_mode')), 'trading': trading,
                                'frame': status.get('frame'), 'playtime': game.get('playtime'),
                                'last_response': time.time(), 'league_rewards': status.get('league_rewards'),
                                'stalled': (status.get('progress') or {}).get('state') == 'stalled',

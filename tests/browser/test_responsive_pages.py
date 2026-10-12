@@ -71,6 +71,30 @@ def test_game_pages_fit_intermediate_windows(page, game, width):
         page.screenshot(path=str(folder / f'{path.strip("/").replace("/", "-")}-{width}.png'))
 
 
+def test_no_page_scrolls_sideways_on_a_phone(page, game):
+    url, store, emu, eid = game
+    portraits(store)
+    tracker = StatisticsTracker(store)
+    tracker.observe(emu.snapshot, now=time.time())
+    tracker.flush(now=time.time())
+    page.set_viewport_size({'width': 390, 'height': 844})
+    for path, ready in [('/', '#take-control'), ('/journal', '#events'), ('/journal/stats', '#statistics-charts'),
+                        ('/pokedex', '.dex-card'), ('/pc', '#pc-grid'), ('/trading', '#trade-connection-note'),
+                        (f'/events/{eid}', '#rewind')]:
+        page.goto(url + path)
+        expect(page.locator(ready).first).to_be_attached()
+        page.wait_for_timeout(400)
+        wide = page.evaluate('''() => [...document.querySelectorAll('body *')]
+          .filter(el => el.getBoundingClientRect().right > innerWidth + 1 && el.offsetParent
+                  && !el.closest('[class*="scroll"], .rail-nav, nav'))
+          .slice(0, 3).map(el => el.tagName + '.' + el.className)''')
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), (path, wide)
+    # The adventure tabs scroll inside their strip and the current one is in view.
+    page.goto(url + '/pokedex')
+    current = page.locator('[aria-current="page"]').first
+    expect(current).to_be_in_viewport()
+
+
 def _live_keys(page):
     return page.evaluate('''() => {
       const deck = document.querySelector('.deck.controls')

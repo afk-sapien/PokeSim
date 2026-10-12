@@ -39,7 +39,10 @@ def test_event_content_is_text_and_state_is_data():
         {'class': 'shot', 'src': '/shots/' + event['shot'], 'alt': ''}]
     assert [attrs for tag, attrs in page.tags
             if tag == 'button' and 'data-theme-choice' not in attrs] == [
-        {'id': 'rewind', 'data-state': event['state']}]
+        {'id': 'rewind', 'type': 'button', 'aria-haspopup': 'dialog', 'data-state': event['state'],
+         'data-playtime': event['playtime']},
+        {'class': 'key', 'value': 'cancel', 'autofocus': None},
+        {'class': 'key key--danger', 'value': 'rewind', 'id': 'rewind-confirm'}]
     scripts = [attrs for tag, attrs in page.tags if tag == 'script']
     assert [{**attrs, 'src': attrs['src'].partition('?')[0]} for attrs in scripts] == [
         {'src': '/static/routes.js'}, {'src': '/static/panel.js'},

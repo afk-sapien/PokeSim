@@ -22,6 +22,7 @@ from .. import config
 from ..capability import CAPABILITY_ERRORS
 from .event_page import render_event
 from .feed import render_feed
+from .journal_art import annotate as species_art, species_index
 from .pages import GEN2_CONTEXT, render_game_page
 from .security import VIEWER_HEADER, viewer_allows
 from ..trade import preferences
@@ -133,6 +134,14 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         VERSIONS = (DEFAULT_VERSION,)
     else:
         from .pokedex import DEFAULT_VERSION, VERSIONS, reference_json
+    try:
+        if gen2:
+            journal_species = species_index({dex: row.get('name') for dex, row in emu.data.species.items()})
+        else:
+            from ..ram import DEX_NAMES
+            journal_species = species_index(DEX_NAMES)
+    except Exception:
+        journal_species = {}
     if base_path and not re.fullmatch(r'/games/[A-Za-z0-9_-]+', base_path):
         raise ValueError('Invalid adventure base path')
     view_path = base_path.replace('/games/', '/view/', 1)
@@ -403,8 +412,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     @app.get("/api/events")
     def events(limit: int = Query(50, ge=1, le=500), all: int = 0, types: str | None = None, before: int | None = None,
                min_priority: int | None = None):
-        return store.events(limit=min(limit, 500), notable_only=not all and not min_priority,
+        rows = store.events(limit=min(limit, 500), notable_only=not all and not min_priority,
                             types=types.split(",") if types else None, before=before, min_priority=min_priority)
+        return [species_art(row, journal_species) for row in rows]
 
     @app.get("/api/progress")
     def progress():
@@ -415,7 +425,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         ev = store.event(eid)
         if not ev:
             raise HTTPException(404)
-        return ev
+        return species_art(ev, journal_species)
 
     @app.get("/api/states")
     def states():

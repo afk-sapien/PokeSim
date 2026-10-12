@@ -214,7 +214,15 @@ async function refreshState() {
     const steady = steadyObjective(objective)
     if (steady) {
       set('#objective', 'textContent', steady.title)
-      if (!planning) set('#decision', 'textContent', strategy.reason)
+      // The reason often repeats the objective word for word, which read as a
+      // second copy of the heading. Show it only when it adds something.
+      if (!planning) {
+        const reason = String(strategy.reason || '').trim()
+        const plain = (text) => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+        const repeats = !reason || plain(reason) === plain(steady.title) || plain(reason).startsWith(plain(steady.title)) && plain(reason).length < plain(steady.title).length + 12
+        set('#decision', 'textContent', repeats ? '' : reason)
+        set('#decision', 'hidden', repeats)
+      }
       set('#action-tag', 'textContent', (strategy.action || '').replace(/^./, (letter) => letter.toUpperCase()))
       set('#progress', 'textContent', `${fmt(strategy.visited_tiles)} tiles explored`)
     }
@@ -264,7 +272,7 @@ async function refreshState() {
   }
 }
 
-const EVENT_LABELS = {trade: 'A PARTNER FROM AFAR', badge: 'A BADGE TO REMEMBER', catch: 'A NEW FRIEND', evolve: 'GROWING TOGETHER', obtain: 'A NEW COMPANION', map: 'SOMEWHERE NEW', level: 'A LITTLE STRONGER', blackout: 'A FRESH START', champion: 'HALL OF FAME', item: 'A GOOD FIND', trainer: 'CHALLENGE ACCEPTED', seen: 'FIRST SIGHTING', playtime: 'TIME WELL SPENT'}
+const EVENT_LABELS = {trade: 'Trade', badge: 'Badge', catch: 'Caught', evolve: 'Evolved', obtain: 'New Pokémon', hatch: 'Hatched', map: 'New place', level: 'Level up', blackout: 'Blacked out', champion: 'Hall of Fame', item: 'Item', trainer: 'Trainer battle', seen: 'First sighting', playtime: 'Playtime'}
 // Each entry's lamp says what kind of moment it was, so the log can be skimmed by colour
 // as well as read: milestones in signal, the team in green, a blackout in red.
 const EVENT_LAMPS = {badge: 'signal', champion: 'signal', catch: 'ok', obtain: 'ok', trade: 'ok', evolve: 'ok', level: 'ok', blackout: 'crit', trainer: 'warn'}
@@ -272,10 +280,16 @@ function renderEvents() {
   $('#events').innerHTML = eventRows.map((event) => {
     const date = new Date(event.ts * 1000)
     const lamp = EVENT_LAMPS[event.type] ? ` data-on="${EVENT_LAMPS[event.type]}"` : ''
-    const picture = event.shot
+    // A catch, hatch or evolution is usually logged mid-cutscene, while the screen is black or
+    // showing a dialog, so the Pokemon it is about says more than its screenshot does.
+    const species = event.species_dex
+      ? `<span class="species-art"><img loading="lazy" src="${PokeSim.sprite(event.species_dex)}" alt="" width="56" height="56"></span>`
+      : ''
+    const art = species || tradeArt(event)
+    const picture = art || (event.shot
       ? `<img loading="lazy" src="${PokeSim.base}/shots/${encodeURIComponent(event.shot)}" alt="Game screen at ${esc(event.title)}" width="160" height="144">`
-      : tradeArt(event) || '<span class="no-frame">No screen kept</span>'
-    return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-time"><i class="lamp"${lamp} aria-hidden="true"></i><time datetime="${date.toISOString()}"><span class="day">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</span><span class="clock">${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</span></time></div><div class="event-picture${event.shot ? '' : ' is-art'}">${picture}</div><div class="event-copy"><span class="event-label">${EVENT_LABELS[event.type] || 'FROM THE JOURNAL'}</span><h3>${esc(event.title)}</h3>${event.map && !String(event.title).toLowerCase().includes(String(event.map).toLowerCase()) ? `<span class="event-where">${esc(event.map)}</span>` : ''}</div><span class="event-go" aria-hidden="true">↗</span></a>`
+      : '<span class="no-frame">No screen kept</span>')
+    return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-time"><i class="lamp"${lamp} aria-hidden="true"></i><time datetime="${date.toISOString()}"><span class="day">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</span><span class="clock">${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</span></time></div><div class="event-picture${art || !event.shot ? ' is-art' : ''}">${picture}</div><div class="event-copy"><span class="event-label">${EVENT_LABELS[event.type] || 'Journal'}</span><h3>${esc(event.title)}</h3>${event.map && !String(event.title).toLowerCase().includes(String(event.map).toLowerCase()) ? `<span class="event-where">${esc(event.map)}</span>` : ''}</div></a>`
   }).join('') || '<div class="journal-empty"><p class="micro">Nothing logged yet</p><h3>The best pages are still unwritten.</h3><p>New moments will find their way here as the adventure unfolds.</p></div>'
   set('#load-more', 'hidden', !moreAvailable || !eventRows.length)
 }

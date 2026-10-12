@@ -223,6 +223,7 @@
   width: min(600px, 100%);
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) 0;
   background: var(--panel);
   border-left: var(--hair) solid var(--rule);
   box-shadow: -3px 0 0 var(--chassis), -4px 0 0 var(--rule);

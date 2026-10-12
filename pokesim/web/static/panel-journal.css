@@ -96,12 +96,12 @@
   box-shadow: var(--key-inset);
 }
 
-/* One line of the log: when, what it looked like, what happened, and a mark
-   that says the whole line opens the entry. */
+/* One line of the log: when, what it looked like and what happened. The
+   whole line opens the entry. */
 .event-card {
   display: grid;
-  grid-template-columns: 128px auto minmax(0, 1fr) 48px;
-  grid-template-areas: "time frame copy go";
+  grid-template-columns: 128px auto minmax(0, 1fr);
+  grid-template-areas: "time frame copy";
   align-items: stretch;
   color: var(--ink);
   text-decoration: none;
@@ -166,6 +166,8 @@
   background-size: 4px 4px;
   box-shadow: var(--well-inset);
 }
+.species-art { display: grid; place-items: center; }
+.species-art img { width: 112px; height: 112px; object-fit: contain; image-rendering: pixelated; }
 .trade-art { display: flex; align-items: center; gap: var(--s1); }
 .trade-side { display: grid; justify-items: center; gap: 2px; min-width: 0; }
 .trade-side img { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; }
@@ -225,16 +227,6 @@
   overflow-wrap: anywhere;
 }
 .event-where { font-size: 14px; line-height: 1.45; color: var(--ink-2); }
-
-.event-go {
-  grid-area: go;
-  display: grid;
-  place-items: center;
-  border-left: var(--hair) solid var(--rule-faint);
-  font: var(--f-legend) / 1 var(--font-panel);
-  color: var(--ink-3);
-}
-.event-card:hover .event-go { color: var(--signal); background: var(--panel); }
 
 /* Empty, loading and error states sit inside the same panel as the log. */
 .journal-empty { padding: var(--s6) var(--s5); color: var(--ink-2); }
@@ -373,8 +365,8 @@
   .filters button { flex: 1 1 0; min-height: 44px; padding: 0 var(--s2); }
 
   .event-card {
-    grid-template-columns: auto minmax(0, 1fr) 40px;
-    grid-template-areas: "frame time go" "frame copy go";
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "frame time" "frame copy";
     grid-template-rows: auto 1fr;
   }
   .event-time {
@@ -398,12 +390,11 @@
 
 @media (max-width: 560px) {
   .event-card {
-    grid-template-columns: minmax(0, 1fr) 40px;
-    grid-template-areas: "time go" "frame frame" "copy copy";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "time" "frame" "copy";
     grid-template-rows: auto;
   }
   .event-time { padding: var(--s3) var(--s3) 0; }
-  .event-go { border-left: 0; }
   .event-picture {
     grid-row: auto;
     justify-self: center;
@@ -625,4 +616,12 @@
 @media (max-width: 640px) {
   [aria-label="Stats pages"] a { padding: var(--s3) var(--s2) }
   [aria-label="Stats pages"] a { font-size: 12px }
+}
+
+/* A wrapped figure such as "2,963h 22m" stacked its lines on top of each
+   other. Figures stay on one line and step down a size on a phone instead. */
+.stats-overview .readout, .stats-recent .readout, .stats-activity .readout, #collection-details .readout { line-height: 1.15 }
+.stats-overview .readout:not(.readout--missing), .stats-recent .readout:not(.readout--missing), .stats-activity .readout:not(.readout--missing) { white-space: nowrap }
+@media (max-width: 480px) {
+  .stats-overview .readout:not(.readout--missing), .stats-recent .readout:not(.readout--missing), .stats-activity .readout:not(.readout--missing), #collection-details .readout:not(.readout--missing) { font-size: 16px }
 }

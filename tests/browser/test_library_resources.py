@@ -42,20 +42,39 @@ def test_library_usage_updates_without_replacing_cards(page, tmp_path, monkeypat
         expect(page.locator('[data-usage="speed"]')).to_have_text('2.3×')
         expect(page.locator('.card-log li')).to_have_count(3)
         page.evaluate('window.originalCard = document.querySelector(".adventure-card")')
-        page.get_by_role('button', name='Stop', exact=True).focus()
-        for label in ('Stop', 'Download', 'Archive', 'Delete', 'Settings'):
-            expect(page.get_by_role('button', name=label, exact=True)).to_be_enabled()
+        # One main key, then settings and More. Everything else waits in the More menu.
+        expect(page.locator('.card-actions .key--primary')).to_have_count(1)
+        more = page.get_by_role('button', name='More actions for Blue', exact=True)
+        expect(more).to_have_attribute('aria-expanded', 'false')
+        expect(page.get_by_role('menuitem')).to_have_count(0)
+        more.click()
+        expect(more).to_have_attribute('aria-expanded', 'true')
+        for label in ('Stop Blue', 'Download save for Blue', 'Archive Blue', 'Delete Blue'):
+            expect(page.get_by_role('menuitem', name=label, exact=True)).to_be_enabled()
+        for item in page.get_by_role('menuitem').all():
+            assert item.bounding_box()['height'] >= 44
+        page.get_by_role('menuitem', name='Stop Blue', exact=True).focus()
+        expect(page.get_by_role('button', name='Settings for Blue', exact=True)).to_be_enabled()
         opening = page.get_by_role('link', name='Open adventure').bounding_box()
-        settings = page.get_by_role('button', name='Settings', exact=True).bounding_box()
+        settings = page.get_by_role('button', name='Settings for Blue', exact=True).bounding_box()
         assert settings['x'] >= opening['x'] + opening['width']
         assert abs(settings['y'] - opening['y']) < 1
-        for button in page.locator('.card-operations button').all():
+        for button in page.locator('.card-actions .key').all():
             assert button.bounding_box()['height'] >= 44
         usage.update(cpu_percent=47.1, memory_bytes=251 * 1048576, observed_speed=18.7)
         expect(page.locator('[data-usage="cpu"]')).to_have_text('47.1%', timeout=10000)
         expect(page.locator('[data-usage="speed"]')).to_have_text('18.7×')
         assert page.evaluate('window.originalCard === document.querySelector(".adventure-card")')
-        expect(page.get_by_role('button', name='Stop', exact=True)).to_be_focused()
+        expect(page.get_by_role('menuitem', name='Stop Blue', exact=True)).to_be_focused()
+        page.keyboard.press('ArrowDown')
+        expect(page.get_by_role('menuitem', name='Download save for Blue', exact=True)).to_be_focused()
+        page.keyboard.press('Escape')
+        expect(page.get_by_role('menuitem')).to_have_count(0)
+        expect(more).to_have_attribute('aria-expanded', 'false')
+        expect(more).to_be_focused()
+        page.keyboard.press('ArrowDown')
+        expect(page.get_by_role('menuitem', name='Stop Blue', exact=True)).to_be_focused()
+        page.keyboard.press('Escape')
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         assert page.locator('.card-screen').bounding_box()['width'] <= page.locator('.adventure-card').bounding_box()['width']
         folder = Path('/tmp/pokesim-library-ui')
@@ -65,7 +84,7 @@ def test_library_usage_updates_without_replacing_cards(page, tmp_path, monkeypat
         page.get_by_role('button', name='Dark', exact=True).click()
         page.evaluate('window.scrollTo(0, 0)')
         page.screenshot(path=str(folder / f'library-dark-{width}.png'), full_page=True, animations='disabled')
-        page.get_by_role('button', name='Settings', exact=True).click()
+        page.get_by_role('button', name='Settings for Blue', exact=True).click()
         dialog = page.get_by_role('dialog', name='Adventure settings')
         expect(dialog).to_be_visible()
         expect(dialog.get_by_label('Custom Mew event', exact=True)).to_be_disabled()
@@ -125,9 +144,12 @@ def test_library_downloads_selected_save_and_reports_busy_game(page, tmp_path, m
         page.goto(url)
         blue = page.locator(f'[data-adventure-id="{games["Blue"]}"]')
         red = page.locator(f'[data-adventure-id="{games["Red"]}"]')
-        expect(red.get_by_role('button', name='Download')).to_be_disabled()
+        red.get_by_role('button', name='More actions for Red').click()
+        expect(red.get_by_role('menuitem', name='Download save for Red')).to_be_disabled()
+        page.keyboard.press('Escape')
+        blue.get_by_role('button', name='More actions for Blue').click()
         with page.expect_download() as downloaded:
-            blue.get_by_role('button', name='Download').click()
+            blue.get_by_role('menuitem', name='Download save for Blue').click()
         result = downloaded.value
         assert result.suggested_filename == 'Blue.sav'
         result.save_as(tmp_path / 'Blue.sav')
@@ -142,9 +164,11 @@ def test_library_downloads_selected_save_and_reports_busy_game(page, tmp_path, m
         page.unroute('**/api/export-save')
         page.route('**/api/export-save', lambda route: route.fulfill(
             status=409, json={'detail': 'Wait for the battle to finish.'}))
-        blue.get_by_role('button', name='Download').click()
+        blue.get_by_role('button', name='More actions for Blue').click()
+        blue.get_by_role('menuitem', name='Download save for Blue').click()
         expect(page.locator('#notice')).to_have_text('Wait for the battle to finish.')
-        expect(blue.get_by_role('button', name='Download')).to_be_enabled()
+        blue.get_by_role('button', name='More actions for Blue').click()
+        expect(blue.get_by_role('menuitem', name='Download save for Blue')).to_be_enabled()
 
 
 @pytest.mark.parametrize('width', [320, 1280])
@@ -166,7 +190,7 @@ def test_adventure_speed_changes_independently_and_global_controls_are_removed(p
         page.goto(url)
         cards = page.locator('.adventure-card')
         expect(cards).to_have_count(2)
-        cards.first.get_by_role('button', name='Settings', exact=True).click()
+        cards.first.locator('.card-settings').click()
         dialog = page.get_by_role('dialog', name='Adventure settings')
         speed = dialog.get_by_role('combobox', name='Simulation speed', exact=True)
         expect(speed).to_be_enabled()
@@ -179,7 +203,7 @@ def test_adventure_speed_changes_independently_and_global_controls_are_removed(p
         assert managers[0].registry.adventure(games[0]['id'])['settings']['speed'] == 0
         assert managers[0].registry.adventure(games[1]['id'])['settings']['speed'] == 16
         page.reload()
-        cards.first.get_by_role('button', name='Settings', exact=True).click()
+        cards.first.locator('.card-settings').click()
         expect(speed).to_have_value('0')
         page.keyboard.press('Escape')
         page.goto(url + '/settings')
@@ -212,7 +236,8 @@ def test_running_adventure_removal_saves_and_stops_first(page, tmp_path, monkeyp
         return create_app(manager)
     with serve(factory) as url:
         page.goto(url)
-        page.get_by_role('button', name=action.title(), exact=True).click()
+        page.get_by_role('button', name='More actions for Disposable', exact=True).click()
+        page.get_by_role('menuitem', name=f'{action.title()} Disposable', exact=True).click()
         if action == 'delete':
             page.locator('#delete-confirmation').fill('Disposable')
             page.get_by_role('button', name='Delete adventure', exact=True).click()

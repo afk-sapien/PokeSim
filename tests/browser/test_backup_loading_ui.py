@@ -2,6 +2,7 @@
 from contextlib import closing
 import hashlib
 from pathlib import Path
+import re
 
 import pytest
 
@@ -32,7 +33,7 @@ def test_load_backup_file_and_open_copy(page, tmp_path, monkeypatch, width):
     with serve(factory) as url:
         page.set_viewport_size({'width': width, 'height': 1000})
         page.goto(url + '/settings')
-        page.locator('#backups').get_by_role('button', name='Load', exact=True).click()
+        page.locator('#backups').get_by_role('button', name=re.compile(r'^Load the backup from ')).click()
         dialog = page.locator('#backup-dialog')
         expect(dialog).to_be_visible()
         expect(page.get_by_label('Name for restored copy')).to_have_value('Red adventure (restored)')

@@ -40,7 +40,17 @@
   const gameUrl = id => `/games/${encodeURIComponent(id)}/`
   const running = game => ['running', 'paused', 'held', 'waiting_for_trade'].includes(game.state)
   const capital = text => text ? text[0].toUpperCase() + text.slice(1) : ''
-  const stateLabel = game => game.archived ? 'Archived' : capital((game.state || 'stopped').replaceAll('_', ' '))
+  // A running worker can be held for a cable trade, driven by hand or paused, and its card says so,
+  // so the chip never reads Running beside a speed that reads Paused.
+  function liveState(game) {
+    if (game.archived || !running(game)) return ''
+    const summary = game.summary || {}
+    if (summary.trading || ['held', 'waiting_for_trade'].includes(game.state)) return 'Trading'
+    if (summary.manual_mode) return 'Manual control'
+    if (summary.paused || game.state === 'paused') return 'Paused'
+    return ''
+  }
+  const stateLabel = game => game.archived ? 'Archived' : liveState(game) || capital((game.state || 'stopped').replaceAll('_', ' '))
   const gameName = game => `Pokémon ${capital(game.version)}`
   const transitionalStates = ['starting', 'stopping', 'preparing', 'setting_up', 'recovering', 'deleting']
   const offline = /urlopen error|No address associated|Name or service not known|Temporary failure in name resolution|Network is unreachable|timed out|Connection (refused|reset|aborted)|getaddrinfo/i
@@ -151,10 +161,10 @@
     const usage = game.resources
     const off = !running(game) && ['stopped', 'archived', 'failed'].includes(game.state)
     // A worker held for a trade or a pause runs no frames, so its measured speed is a true 0.0×; say why instead.
-    const paused = Boolean(game.summary?.paused) || ['paused', 'held', 'waiting_for_trade'].includes(game.state)
+    const paused = liveState(game)
     return {
       cpu: Number.isFinite(usage?.cpu_percent) ? `${usage.cpu_percent.toFixed(1)}%` : off ? 'Not running' : usage?.cpu_percent === null ? 'Measuring…' : 'Unavailable',
-      speed: off ? 'Not running' : paused ? 'Paused' : Number.isFinite(usage?.observed_speed) ? `${usage.observed_speed.toFixed(1)}×` : usage?.speed_status === 'measuring' ? 'Measuring…' : 'Unavailable',
+      speed: off ? 'Not running' : paused ? (paused === 'Manual control' ? 'Manual' : paused) : Number.isFinite(usage?.observed_speed) ? `${usage.observed_speed.toFixed(1)}×` : usage?.speed_status === 'measuring' ? 'Measuring…' : 'Unavailable',
       memory: Number.isFinite(usage?.memory_bytes) ? `${Math.round(usage.memory_bytes / 1048576).toLocaleString()} MiB` : off ? 'Not running' : 'Unavailable'
     }
   }
@@ -164,10 +174,71 @@
       const node = container.querySelector(`[data-usage="${key}"]`)
       if (node) {
         if (node.textContent !== value) node.textContent = value
-        node.classList.toggle('is-pending', ['Measuring…', 'Unavailable', 'Not running', 'Paused'].includes(value))
+        node.classList.toggle('is-pending', ['Measuring…', 'Unavailable', 'Not running', 'Paused', 'Trading', 'Manual'].includes(value))
       }
     }
   }
+  // The More menu on each card: a button that opens a short list of actions. Arrow keys move
+  // between them, Escape or a click elsewhere closes the list and focus goes back to the button.
+  let openMenu = null
+  function closeMenu(focus = false) {
+    if (!openMenu) return
+    const toggle = document.querySelector(`[aria-controls="${openMenu}"]`)
+    const menu = document.getElementById(openMenu)
+    if (menu) menu.hidden = true
+    toggle?.setAttribute('aria-expanded', 'false')
+    openMenu = null
+    if (focus) toggle?.focus()
+  }
+  function showMenu(toggle, focusFirst = false) {
+    closeMenu()
+    const menu = document.getElementById(toggle.getAttribute('aria-controls'))
+    if (!menu) return
+    menu.hidden = false
+    toggle.setAttribute('aria-expanded', 'true')
+    openMenu = menu.id
+    if (focusFirst) menuItems(menu)[0]?.focus()
+  }
+  const menuItems = menu => [...menu.querySelectorAll('[role="menuitem"]')].filter(item => !item.disabled)
+  document.addEventListener('click', event => {
+    const toggle = event.target.closest('.card-more-toggle')
+    if (toggle) {
+      if (toggle.getAttribute('aria-expanded') === 'true') closeMenu()
+      else showMenu(toggle, event.detail === 0)
+      return
+    }
+    if (openMenu && !event.target.closest('.card-menu')) closeMenu()
+  })
+  document.addEventListener('keydown', event => {
+    const toggle = event.target.closest?.('.card-more-toggle')
+    if (toggle && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+      event.preventDefault()
+      showMenu(toggle)
+      const items = menuItems(document.getElementById(openMenu))
+      const target = event.key === 'ArrowUp' ? items.at(-1) : items[0]
+      target?.focus()
+      return
+    }
+    if (!openMenu) return
+    const menu = document.getElementById(openMenu)
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeMenu(true)
+      return
+    }
+    if (!menu?.contains(event.target)) return
+    const items = menuItems(menu)
+    const index = items.indexOf(event.target)
+    const step = {ArrowDown: 1, ArrowUp: -1}[event.key]
+    if (step) {
+      event.preventDefault()
+      items[(index + step + items.length) % items.length]?.focus()
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault()
+      const target = event.key === 'Home' ? items[0] : items.at(-1)
+      target?.focus()
+    } else if (event.key === 'Tab') closeMenu()
+  })
   function card(game) {
     const active = running(game)
     const transitional = transitionalStates.includes(game.state)
@@ -181,25 +252,33 @@
     const provenance = game.provenance?.trading_blocked ? `<p class="card-error">${esc(game.provenance.reason || 'Legacy trade history needs reconciliation before trading.')}</p>` : ''
     const stalled = active && summary.stalled ? '<p class="card-error">Stuck? No progress for a while. Open the adventure to see its objective.</p>' : ''
     const failure = game.error ? `<p class="card-error">${esc(explainError(game))}</p>` : ''
-    const lamp = game.archived ? '' : failure || game.state === 'error' ? 'crit' : transitional || (active && summary.stalled) ? 'warn' : active ? 'ok' : ''
-    const download = `<button class="key" data-action="download-save" data-id="${esc(game.id)}" data-owner ${!active ? 'disabled data-blocked title="Start this adventure to download its save"' : 'title="Download a .sav file for another emulator"'}>Download</button>`
+    const lamp = game.archived ? '' : failure || game.state === 'error' ? 'crit' : transitional || (active && summary.stalled) || liveState(game) ? 'warn' : active ? 'ok' : ''
+    const name = esc(game.name)
+    const id = esc(game.id)
     const screen = active
-      ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${esc(game.name)} game screen" loading="lazy" width="160" height="144"></div>`
-      : `<div class="card-screen card-screen--off"><span class="micro">${game.archived ? 'Archived' : game.state === 'failed' ? 'Failed to start · saves kept' : transitional ? esc(stateLabel(game)) + '…' : 'Stopped · saves kept'}</span></div>`
+      ? `<div class="card-screen"><img src="${gameUrl(game.id)}frame.jpg" alt="${name} game screen" loading="lazy" width="160" height="144"></div>`
+      : `<div class="card-screen card-screen--off"><span class="micro">${game.archived ? 'Archived' : game.state === 'failed' ? 'Failed to start. Saves kept' : transitional ? esc(stateLabel(game)) + '…' : 'Stopped. Saves kept'}</span></div>`
     const blocked = transitional ? 'disabled data-blocked' : ''
-    const settings = `<button class="key card-settings" data-action="settings" data-id="${esc(game.id)}" data-owner ${blocked} aria-label="Settings" title="Adventure settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3h6l1 3 3-1 3 5-2 2 2 2-3 5-3-1-1 3H9l-1-3-3 1-3-5 2-2-2-2 3-5 3 1Z"/><circle cx="12" cy="12" r="3"/></svg></button>`
-    // A stopped or failed adventure has no live view, so its main key starts it right here.
+    const settings = `<button class="key card-settings" data-action="settings" data-id="${id}" data-owner ${blocked} aria-label="Settings for ${name}" title="Adventure settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3h6l1 3 3-1 3 5-2 2 2 2-3 5-3-1-1 3H9l-1-3-3 1-3-5 2-2-2-2 3-5 3 1Z"/><circle cx="12" cy="12" r="3"/></svg></button>`
+    // One main key per card. A stopped adventure has no live view, so its key starts it right here.
     const startable = !active && !transitional && !game.archived
-    const primary = startable
-      ? `<div class="card-open"><button class="key key--primary" data-action="start" data-id="${esc(game.id)}" data-owner>${game.state === 'failed' ? 'Retry' : 'Start'}</button>${settings}</div>`
-      : `<div class="card-open"><a class="key key--primary" href="${gameUrl(game.id)}">${active ? 'Open adventure' : 'View adventure'}</a>${settings}</div>`
-    const details = `<a class="key" href="${gameUrl(game.id)}">Details</a>`
-    const lifecycle = startable ? details : game.archived
-      ? `<button class="key" data-action="restore" data-id="${esc(game.id)}" data-owner ${blocked}>Restore</button>`
-      : `<button class="key" data-action="${active ? 'stop' : 'start'}" data-id="${esc(game.id)}" data-owner ${blocked} ${active ? 'title="Save progress and stop this adventure"' : ''}>${transitional ? esc(game.state) : active ? 'Stop' : 'Start'}</button>`
-    const archive = game.archived ? '' : `<button class="key" data-action="archive" data-id="${esc(game.id)}" data-owner ${blocked} title="Save, stop, and archive this adventure">Archive</button>`
-    const deletion = `<button class="key key--danger" data-action="delete" data-id="${esc(game.id)}" data-owner ${transitional && game.state !== 'deleting' ? blocked : ''}>${game.state === 'deleting' ? 'Retry deletion' : 'Delete'}</button>`
-    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">POKÉMON ${esc(game.version).toUpperCase()}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(stateLabel(game))}</span></header>${screen}<div class="card-body"><h2>${esc(game.name)}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.state === 'deleting' ? '<p class="card-note">Deletion is incomplete. Retry to finish removing this adventure.</p>' : game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions">${primary}<div class="card-operations">${lifecycle}${download}${archive}${deletion}</div></div></article>`
+    const main = game.archived
+      ? `<button class="key key--primary" data-action="restore" data-id="${id}" data-owner ${blocked} aria-describedby="card-name-${id}">Restore</button>`
+      : startable
+        ? `<button class="key key--primary" data-action="start" data-id="${id}" data-owner aria-describedby="card-name-${id}">${game.state === 'failed' ? 'Retry' : 'Start'}</button>`
+        : `<a class="key key--primary" href="${gameUrl(game.id)}" aria-describedby="card-name-${id}">${active ? 'Open adventure' : 'View adventure'}</a>`
+    // Everything else, including the two that cannot be undone, waits behind More.
+    const item = (action, label, extra = '') => `<button type="button" role="menuitem" class="menu-item${action === 'delete' ? ' menu-item--danger' : ''}" data-action="${action}" data-id="${id}" data-owner aria-label="${label} ${action === 'download-save' ? 'for ' : ''}${name}" ${extra}>${label}</button>`
+    const items = [
+      startable ? '' : active ? item('stop', 'Stop', `${blocked} title="Save progress and stop this adventure"`) : '',
+      startable ? `<a role="menuitem" class="menu-item" href="${gameUrl(game.id)}" aria-label="Details for ${name}">Details</a>` : '',
+      item('download-save', 'Download save', !active ? 'disabled data-blocked title="Start this adventure to download its save"' : 'title="Download a .sav file for another emulator"'),
+      game.archived ? '' : item('archive', 'Archive', `${blocked} title="Save, stop, and archive this adventure"`),
+      item('delete', game.state === 'deleting' ? 'Retry deletion' : 'Delete', transitional && game.state !== 'deleting' ? blocked : ''),
+    ].join('')
+    const menuId = `card-menu-${id}`
+    const more = `<div class="card-more"><button type="button" class="key card-more-toggle" aria-haspopup="menu" aria-expanded="false" aria-controls="${menuId}" aria-label="More actions for ${name}">More</button><div class="card-menu" id="${menuId}" role="menu" aria-label="More actions for ${name}" hidden>${items}</div></div>`
+    return `<article class="adventure-card ${esc(game.version)}" data-adventure-id="${id}"><header class="card-banner"><span class="micro">${esc(gameName(game))}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(stateLabel(game))}</span></header>${screen}<div class="card-body"><h2 id="card-name-${id}">${name}</h2><p class="card-activity">${esc(activity)}</p>${league}${resources}${log}${stalled}${failure}${provenance}${game.state === 'deleting' ? '<p class="card-note">Deletion is incomplete. Retry to finish removing this adventure.</p>' : game.archived ? '<p class="card-note">Archived adventures keep all their saves.</p>' : ''}</div><div class="card-actions"><div class="card-open">${main}${settings}${more}</div></div></article>`
   }
   function stoppedLede(game) {
     if (game.archived) return 'Archived adventures keep all their saves. Restore it from the library to play again.'
@@ -239,8 +318,20 @@
         continue
       }
       const previous = container.querySelector(`[data-adventure-id="${game.id}"]`)
+      // A refresh redraws a card whose summary changed. Keep its More menu open through that.
+      const reopen = openMenu && previous?.querySelector(`#${CSS.escape(openMenu)}`) ? openMenu : null
+      const focused = reopen && previous.contains(document.activeElement) ? document.activeElement.dataset.action || 'toggle' : null
       if (previous) previous.outerHTML = markup
       else container.insertAdjacentHTML('beforeend', markup)
+      if (reopen) {
+        openMenu = null
+        const toggle = container.querySelector(`[aria-controls="${CSS.escape(reopen)}"]`)
+        if (toggle) {
+          showMenu(toggle)
+          const target = focused === 'toggle' ? toggle : document.getElementById(reopen)?.querySelector(`[data-action="${focused}"]`)
+          target?.focus()
+        }
+      }
       cardSignatures.set(game.id, markup)
       updateResources(container.querySelector(`[data-adventure-id="${game.id}"]`), game)
     }
@@ -344,7 +435,7 @@
     backupPage = Math.max(0, Math.min(backupPage, Math.ceil(savedBackups.length / backupPageSize) - 1))
     const start = backupPage * backupPageSize
     const visible = savedBackups.slice(start, start + backupPageSize)
-    $('#backups').innerHTML = visible.length ? visible.map(backup => `<div class="backup-row"><div><strong>${esc(dateLabel(backup.created_at))}</strong><p class="note">${(backup.size_bytes / 1048576).toFixed(1)} MiB</p></div><div class="backup-row-actions"><a class="key" href="/api/v1/backups/${encodeURIComponent(backup.id)}/download" download>Download</a><button type="button" class="key" data-load-backup="${esc(backup.id)}" data-owner>Load</button><button type="button" class="key key--danger" data-delete-backup="${esc(backup.id)}" data-owner>Delete</button></div></div>`).join('') : '<p class="section-note">No backups yet. Create one here or load a backup ZIP.</p>'
+    $('#backups').innerHTML = visible.length ? visible.map(backup => `<div class="backup-row"><div><strong>${esc(dateLabel(backup.created_at))}</strong><p class="note">${(backup.size_bytes / 1048576).toFixed(1)} MiB</p></div><div class="backup-row-actions"><a class="key" href="/api/v1/backups/${encodeURIComponent(backup.id)}/download" download aria-label="Download the backup from ${esc(dateLabel(backup.created_at))}">Download</a><button type="button" class="key" data-load-backup="${esc(backup.id)}" data-owner aria-label="Load the backup from ${esc(dateLabel(backup.created_at))}">Load</button><button type="button" class="key key--danger" data-delete-backup="${esc(backup.id)}" data-owner aria-label="Delete the backup from ${esc(dateLabel(backup.created_at))}">Delete</button></div></div>`).join('') : '<p class="section-note">No backups yet. Create one here or load a backup ZIP.</p>'
     $('#backup-summary').textContent = savedBackups.length ? `${savedBackups.length} ${savedBackups.length === 1 ? 'backup' : 'backups'} · ${(savedBackups.reduce((total, backup) => total + backup.size_bytes, 0) / 1048576).toFixed(1)} MiB stored` : ''
     $('#backup-pagination').hidden = savedBackups.length <= backupPageSize
     $('#backup-page-label').textContent = `${start + 1}–${start + visible.length} of ${savedBackups.length}`
@@ -753,6 +844,7 @@
     if (!button || button.disabled) return
     const game = adventures.find(item => item.id === button.dataset.id)
     if (!game) return
+    if (button.closest?.('.card-menu')) closeMenu(true)
     if (button.dataset.action === 'delete') {
       $('#delete-id').value = game.id
       $('#delete-name').textContent = game.name

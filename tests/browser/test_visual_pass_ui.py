@@ -75,6 +75,8 @@ def test_stats_page_hides_the_marathon_without_one(page, game):
         'started_at': None, 'updated_at': None, 'current': {}, 'history': [], 'marathon': None,
         'collection_records': {'shiny': {'available': False, 'seen': None, 'acquired': None, 'held': 2}}}))
     page.goto(url + '/stats')
-    expect(page.locator('#stats-shiny-held')).to_have_text('2')
-    expect(page.locator('#stats-shiny-acquired')).to_have_text('Not tracked')
+    # Arrivals were not counted, so the overview shows the two shinies held rather than "Not tracked".
+    expect(page.locator('#stats-shiny-label')).to_have_text('Shinies held')
+    expect(page.locator('#stats-shiny-acquired')).to_have_text('2')
+    expect(page.locator('#stats-shiny-held-cell')).to_be_hidden()
     expect(page.locator('#marathon-records')).to_be_hidden()

@@ -38,6 +38,13 @@
     new ResizeObserver(measure).observe(rail)
     addEventListener('resize', measure)
     measure()
+    // On a phone the tabs scroll sideways, so bring the current one into view.
+    const current = nav.querySelector('[aria-current]')
+    if (current && nav.scrollWidth > nav.clientWidth) {
+      const tab = current.getBoundingClientRect()
+      const strip = nav.getBoundingClientRect()
+      nav.scrollLeft += tab.left - strip.left - (strip.width - tab.width) / 2
+    }
   }
 
   // Portraits come in two sizes: 56px art read from the owner's cartridge, and
@@ -76,23 +83,31 @@
   }
   // A plate can be hidden or still settling its size when its image loads, so
   // each plate is watched and its portrait refitted whenever the plate resizes.
-  const plates = new ResizeObserver((entries) => entries.forEach(({target}) => {
-    target.querySelectorAll('img').forEach((img) => { if (img.complete) fitSprite(img) })
-  }))
+  const plates = new ResizeObserver((entries) => fitAll(entries.flatMap(({target}) => [...target.querySelectorAll('img')])))
   const watched = new WeakSet()
-  function fitSprite(img) {
+  // Measure every plate first and only then resize the portraits, so a grid
+  // of hundreds lays out once rather than once per sprite.
+  function measure(img) {
     const frame = img.closest('.plate')
-    if (!frame || !img.naturalWidth) return
+    if (!frame || !img.complete || !img.naturalWidth) return null
     if (!watched.has(frame)) { watched.add(frame); plates.observe(frame) }
-    if (!frame.clientWidth) return
-    const scale = Math.max(1, Math.floor(Math.min(frame.clientWidth, frame.clientHeight) / spriteCell(img)))
+    const width = frame.clientWidth
+    if (!width) return null
+    const scale = Math.max(1, Math.floor(Math.min(width, frame.clientHeight) / spriteCell(img)))
+    return {img, width: img.naturalWidth * scale, height: img.naturalHeight * scale}
+  }
+  function applyFit({img, width, height}) {
     img.style.maxWidth = 'none'
     img.style.maxHeight = 'none'
-    img.style.width = `${img.naturalWidth * scale}px`
-    img.style.height = `${img.naturalHeight * scale}px`
+    img.style.width = `${width}px`
+    img.style.height = `${height}px`
   }
+  function fitAll(images) {
+    images.map(measure).filter(Boolean).forEach(applyFit)
+  }
+  function fitSprite(img) { fitAll([img]) }
   function fitSprites(root) {
-    root?.querySelectorAll?.('.plate img').forEach((img) => { if (img.complete) fitSprite(img) })
+    if (root?.querySelectorAll) fitAll([...root.querySelectorAll('.plate img')])
   }
   document.addEventListener('load', (event) => {
     if (event.target instanceof HTMLImageElement) fitSprite(event.target)

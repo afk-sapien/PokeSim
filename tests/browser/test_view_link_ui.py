@@ -32,8 +32,10 @@ def test_view_link_sits_in_the_rail(page, game, width):
     assert rail['y'] <= box['y'] and box['y'] + box['height'] <= rail['y'] + rail['height']
     assert box['width'] <= 40 and box['height'] <= 40
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
-    # Every tab is fully visible: the rail never clips the nav.
-    assert page.locator('.rail nav:not(.breadcrumb)').evaluate('nav => nav.scrollWidth <= nav.clientWidth')
+    # No tab label is clipped. On a phone the tabs scroll sideways inside their own strip instead.
+    nav = page.locator('.rail nav:not(.breadcrumb)')
+    assert nav.evaluate('nav => [...nav.querySelectorAll("a")].every(tab => tab.scrollWidth <= tab.clientWidth + 1)')
+    assert nav.evaluate('nav => nav.scrollWidth <= nav.clientWidth || getComputedStyle(nav).overflowX === "auto"')
 
     key.click()
     expect(key.locator('.rail-key-note')).to_have_text('Copied')
