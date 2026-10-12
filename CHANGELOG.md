@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix Crystal adventures stuck in Battle Tower 1F with "A conversation in Battle Tower 1F made no progress" logged every two seconds. The Tower team was chosen for level 20 at levels 16 to 18, and Silver Cave training toward level 20 took two partners to 21 in one battle, so the receptionist answered "A party POKéMON tops this level." and asked for the level again, forever. A partner that outgrows the chosen level now cancels the challenge at the level question, the adventure team is restored, and that level backs off like a lost challenge. The next challenge is chosen from the partners' current levels.
+
 - Fix Red, Blue and Yellow adventures standing at a Pokémon Center PC on "Make room in storage" until the stall alert. A Pokémon received in a cable trade had a text command in its nickname, so the PC box list stopped drawing at that name and the release menu could never reach the spare chosen behind it. The same release failed every minute for hours. Spares stored after such a name are no longer chosen, and a release that fails lets the next spare go first. Releasing about once per new catch, League reward or trade is expected while every box is nearly full.
 
 - Stop Gold, Silver and Crystal adventures putting duplicate eggs ahead of training. Gold kept 28 Sneasel eggs in the PC from an old breeding loop and fetched them one at a time, so Crobat waited in the PC for days of game time. A trip to the PC now brings only eggs that would add something: a species not yet registered, or a copy another adventure asks for by cable. Other eggs stay safe in the PC, and one already in the party may go back to make room for the next Pokémon in training.

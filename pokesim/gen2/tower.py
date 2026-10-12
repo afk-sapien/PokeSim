@@ -70,6 +70,15 @@ def record_result(policy, cap, wins):
     failed[str(cap)] = {'streak': streak, 'until': policy.decisions + RETRY_AFTER * 2 ** min(streak, 5)}
 
 
+def over_cap(snapshot, state):
+    """Whether a chosen partner has grown past the challenge level since the team was chosen.
+
+    Silver Cave training toward the level can overshoot it in one battle. The receptionist then
+    answers "A party POKéMON tops this level." and returns to the same level question forever.
+    """
+    return any(mon.level > state['cap'] for mon in snapshot.party if key(mon) in state['team'])
+
+
 def holds_lead(policy):
     """Whether the prepared Tower team's lead is chosen by the Tower, not by level.
 
@@ -218,6 +227,12 @@ def journey(policy, snapshot, Goal, *, force=False):
         # A partner is gone or storage has no room left, so this challenge stands down.
         state['abandoned'] = state['returning'] = True
         return journey(policy, snapshot, Goal)
+    if over_cap(snapshot, state):
+        # The Tower refuses this level now, so the challenge stands down and the level backs off
+        # like a lost challenge. The next one is chosen from the partners' current levels.
+        state['abandoned'] = state['returning'] = True
+        record_result(policy, state['cap'], 0)
+        return journey(policy, snapshot, Goal)
     options = []
     protected = {15, 19, 57, 70, 148, 250, 127, 105, 92}
     for slot, mon in enumerate(snapshot.party):
@@ -281,6 +296,13 @@ def control(policy, snapshot, mem):
     if not state or policy.data.maps[snapshot.map]['constant'] != 'BATTLE_TOWER_1F':
         return None
     text = snapshot.text.upper()
+    if state.get('abandoned') or not state['entered'] and over_cap(snapshot, state):
+        # A challenge that stood down at the level question cancels it instead of choosing a level.
+        if 'CANCEL YOUR' in text and 'YES' in text:
+            return choose(snapshot.tiles, 'YES', exact=True) or 'a'
+        if 'LEVEL' in text and mem.byte('wBattleTowerRoomMenuJumptableIndex') == 2:
+            return 'b'
+        return None
     if 'LEVEL' in text and mem.byte('wBattleTowerRoomMenuJumptableIndex') == 2:
         current = mem.byte('wcd4f')
         target = state['cap'] // 10
