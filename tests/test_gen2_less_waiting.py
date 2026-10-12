@@ -142,23 +142,81 @@ def test_a_time_of_day_encounter_names_the_species_and_the_time(data):
     assert clock_wait(expedition(data), snapshot([lead()], owned=owned), clock(), 'night') is None
 
 
-def test_without_exp_share_a_stuck_levelling_plan_lets_boxed_eggs_hatch(data):
+def walk_anywhere(monkeypatch):
+    from pokesim.gen2 import training
+    from pokesim.gen2.policy import Goal
+    monkeypatch.setattr(training, 'walk_goal', lambda policy, snapshot, Goal_, label: Goal(
+        'collection_train', label(), 'SILVER_CAVE_ROOM_1', 9, 31))
+
+
+def test_without_exp_share_a_levelling_plan_trains_the_partner_in_the_lead(data, monkeypatch):
     from pokesim.gen2.breeding import hatching
     from pokesim.gen2.policy import Goal
     from pokesim.gen2.training import identity, journey
+    walk_anywhere(monkeypatch)
     trainee = mon(94, box=3, level=30)
     eggs = [mon(175, box=2, position=i, egg=True, level=5, dvs=(i,) * 5) for i in range(3)]
     state = snapshot([lead()], [trainee, *eggs])
     storage = SimpleNamespace(map_name='GOLDENROD_POKECENTER_1F', x=1, y=1, face='up')
     policy = SimpleNamespace(data=data, collection={}, demand={}, decisions=1000, storage_goal=lambda snapshot: storage,
                              release_target=lambda snapshot: None, no_room=lambda snapshot: False)
-    # A roamer lead plan set this levelling project, but the Exp. Share is gone, so it can never finish.
+    # A roamer lead plan set this levelling project after the cartridge's only Exp. Share was traded away.
     policy.collection['training'] = {'identity': identity(trainee), 'target': 94, 'item': None, 'species': 94,
                                      'terminal': True, 'level_goal': 37}
-    assert hatching(policy, state, Goal) is None
-    assert journey(policy, state, clock(), Goal, terminal=True) is None
-    assert policy.collection['training'] is None
-    assert hatching(policy, state, Goal).key == 'collection_hatch_pc'
+    assert journey(policy, state, clock(), Goal, terminal=True).key == 'collection_train_pc'
+    # Once it joins, the boxed eggs come out too, and the walk trains it in front.
+    joined = snapshot([lead(), mon(94, box=None, position=1, level=30)], eggs)
+    assert hatching(policy, joined, Goal).key == 'collection_hatch_pc'
+    state = snapshot([lead(), mon(94, box=None, position=1, level=30)])
+    goal = journey(policy, state, clock(), Goal, terminal=True)
+    assert goal.key == 'collection_train' and goal.label.endswith('toward level 37 in the lead')
+
+
+def test_without_exp_share_the_terminal_walk_still_trains_someone(data, monkeypatch):
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.training import journey
+    walk_anywhere(monkeypatch)
+    state = snapshot([lead(), mon(94, box=None, position=1, level=99, experience=1050000)])
+    policy = SimpleNamespace(data=data, collection={}, demand={}, decisions=1000, no_room=lambda snapshot: False)
+    goal = journey(policy, state, clock(), Goal, terminal=True)
+    assert goal.key == 'collection_train' and goal.label == 'Train 94 toward level 100 in the lead'
+    assert policy.collection['training']['terminal']
+
+
+def shareless_policy(data, party, project):
+    from pokesim.gen2.policy import Policy
+    from pokesim.gen2.training import identity
+    policy = Policy.__new__(Policy)
+    policy.data, policy.goal = data, None
+    policy.collection = {'training': {'identity': identity(project), 'target': project.species, 'item': None,
+                                      'species': project.species, 'terminal': True}}
+    return policy, snapshot(party)
+
+
+def test_without_exp_share_the_trainee_keeps_the_lead(data):
+    trainee = mon(94, box=None, position=1, level=20, hp=60, max_hp=60)
+    policy, state = shareless_policy(data, [lead(), trainee], trainee)
+    reorder = policy.level_lead(state)
+    assert reorder.slot == 1 and tuple(reorder.identity[1]) == trainee.dvs
+    policy, state = shareless_policy(data, [trainee, lead()], trainee)
+    assert policy.level_lead(state) is None
+    # With an Exp. Share the strongest leads again.
+    held = snapshot([trainee, lead()])
+    held.items = ((data.items['EXP_SHARE'], 1),)
+    assert policy.level_lead(held).slot == 1
+
+
+def test_a_leading_trainee_switches_out_once_when_outmatched(data):
+    trainee = mon(94, box=None, position=0, level=20, hp=60, max_hp=60)
+    strong = lead()
+    strong.hp, strong.max_hp, strong.position = 300, 300, 1
+    policy, state = shareless_policy(data, [trainee, strong], trainee)
+    state.enemy_level = 40
+    assert policy.trainee_switch(state, 0) == 1
+    # Once the partner is out the switch never repeats, and a trainee well above the opponent fights on.
+    assert policy.trainee_switch(state, 1) is None
+    state.enemy_level = 10
+    assert policy.trainee_switch(state, 0) is None
 
 
 def test_without_exp_share_a_stone_evolution_still_runs(data):

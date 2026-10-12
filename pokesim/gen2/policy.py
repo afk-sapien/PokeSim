@@ -1368,6 +1368,8 @@ class Policy:
             if (switch is None and not catch and not trapped and scores
                     and scores[min(active, len(scores) - 1)] == 0 and max(scores) > 0):
                 switch = max(range(len(scores)), key=scores.__getitem__)
+            if switch is None and not catch and not trapped and not self.collection.get('tower'):
+                switch = self.trainee_switch(snapshot, active)
             action = switch is not None and self.battle_task(Send(switch), snapshot, mem)
             if action:
                 return action
@@ -1620,17 +1622,39 @@ class Policy:
     def level_lead(self, snapshot):
         """Move the highest-level Pokémon to the front when the lead lags well behind it."""
         from .tower import holds_lead
-        strongest = max((i for i, mon in enumerate(snapshot.party) if not mon.egg),
-                        key=lambda i: snapshot.party[i].level, default=0)
-        if not strongest or snapshot.party[strongest].level <= snapshot.party[0].level + 5:
-            return None
+        from .training import trainee_slot
         # A roaming-beast or static-legendary sleeper leads on purpose even when it is far below the rest of the
         # party, and so does the Tower team's chosen lead, which the Tower preparation would otherwise swap back.
         if (self.collection.get('roam_lead') or holds_lead(self)
                 or self.goal and self.goal.key in {'legend_lugia', 'legend_ho_oh', 'legend_suicune', 'collection_static_lead'}):
             return None
+        # Without an Exp. Share the partner in training leads instead, so it joins every battle.
+        trainee = trainee_slot(self, snapshot)
+        if trainee is not None:
+            mon = snapshot.party[trainee]
+            return Lead(trainee, (mon.trainer_id, mon.dvs)) if trainee else None
+        strongest = max((i for i, mon in enumerate(snapshot.party) if not mon.egg),
+                        key=lambda i: snapshot.party[i].level, default=0)
+        if not strongest or snapshot.party[strongest].level <= snapshot.party[0].level + 5:
+            return None
         mon = snapshot.party[strongest]
         return Lead(strongest, (mon.trainer_id, mon.dvs))
+
+    def trainee_switch(self, snapshot, active):
+        """Swap a leading trainee for the strongest healthy partner when it would lose the battle.
+
+        A switch comes before the opponent's move, and every Pokémon sent out shares the experience, so the
+        trainee still levels without an Exp. Share. It only happens while the trainee is out, so it never repeats.
+        """
+        from .training import trainee_slot
+        if active != trainee_slot(self, snapshot) or active >= len(snapshot.party):
+            return None
+        mon = snapshot.party[active]
+        if mon.level >= snapshot.enemy_level + 5 and mon.hp * 2 > mon.max_hp:
+            return None
+        healthy = [i for i, row in enumerate(snapshot.party) if i != active and not row.egg and row.hp * 4 > row.max_hp]
+        best = max(healthy, key=lambda i: snapshot.party[i].level, default=None)
+        return best if best is not None and snapshot.party[best].level > mon.level else None
 
     def tower_switch(self, snapshot, mem, active):
         if active >= len(snapshot.party):

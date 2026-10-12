@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep training Gold, Silver and Crystal Pokémon after the Exp. Share is gone. Each cartridge has only one, and Crystal and Silver lost theirs to earlier automatic trades, so Silver spent almost all its time walking the grass with nothing to do. The Pokémon in training now leads the party and switches out on the first turn of a battle it would lose, which still shares the experience with it.
+
 - Open any Pokémon listed under "With you right now" on a Pokédex entry. Each one is now a key that shows its full record in the same popup the PC uses, on top of the Pokédex, and Esc or Close returns to the entry where it was. The popup has a Show in PC key that opens its box, or the party, with the Pokémon marked and its popup open. The PC also opens one slot from its address, such as `/pc?box=12&slot=4`.
 
 - Make Gold, Silver and Crystal adventures wait for the cartridge clock less. Breeding, hatching and evolving now go ahead of a weekday or time-of-day wait, and labels name what is waited for ("Bring eggs from storage to hatch while Lapras waits for Friday"). A levelling plan left without the Exp. Share no longer keeps stored eggs from hatching, stone and trade evolutions run without it, breeding raises its Day Care money first, and the Exp. Share holder is never released or traded.

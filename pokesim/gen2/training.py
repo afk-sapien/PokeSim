@@ -10,6 +10,20 @@ def identity(mon):
     return [mon.trainer_id, list(mon.dvs)]
 
 
+def shareless(data, snapshot):
+    """Whether the cartridge has lost its only Exp. Share, which no shop or person hands out again."""
+    share = data.items['EXP_SHARE']
+    return not dict(snapshot.items).get(share) and not any(mon.held_item == share for mon in snapshot.party + snapshot.stored)
+
+
+def trainee_slot(policy, snapshot):
+    """The party slot of a partner levelling without an Exp. Share, which leads so it joins every battle."""
+    project = policy.collection.get('training')
+    if not project or project.get('item') or not shareless(policy.data, snapshot):
+        return None
+    return next((i for i, mon in enumerate(snapshot.party) if not mon.egg and identity(mon) == project['identity']), None)
+
+
 def happiness_levels(friendship):
     """Level ups needed to reach evolution friendship, using the cartridge's +5, +3 and +2 tiers."""
     levels = 0
@@ -85,15 +99,10 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         state['training'] = None
     share = data.items['EXP_SHARE']
     inventory = dict(snapshot.items)
-    shareless = not inventory.get(share) and not any(mon.held_item == share for mon in snapshot.party + snapshot.stored)
-    if shareless and inventory.get(data.items['RED_SCALE']):
+    missing = shareless(data, snapshot)
+    if missing and inventory.get(data.items['RED_SCALE']):
         return policy.person(snapshot, 'exp_share', 'Exchange the Red Scale for Exp. Share',
                              'MR_POKEMONS_HOUSE', 'MrPokemonsHouse_MrPokemonScript')
-    if shareless and project and not project.get('item'):
-        # Without the Exp. Share a boxed partner earns no experience, so a levelling plan could never
-        # finish. Dropping it lets the eggs waiting for its party slot hatch instead. Evolution stones
-        # still work, so those plans go on.
-        state['training'] = project = None
     current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
     project = state.get('training')
     from .collection import prerequisites
@@ -110,10 +119,8 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     sealed = len(snapshot.party) >= 6 and bool(getattr(policy, 'no_room', lambda snapshot: False)(snapshot))
     if project is None:
         choices = projects(data, snapshot, current_time, demand)
-        if shareless:
-            choices = [row for row in choices if row[5] is not None]
         terminal_project = False
-        if not choices and terminal and not shareless:
+        if not choices and terminal:
             terminal_project = True
             choices = [(experience_at(100, data.species[mon.species]['growth']) - mon.experience,
                         mon.box is not None, mon.species, identity(mon), mon.species, None)
@@ -160,6 +167,12 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         return Goal('collection_train_pc', f'Prepare {mon.name} for training', goal.map_name, goal.x, goal.y, goal.face)
     if project['item']:
         return Goal('collection_evolve_item', f'Evolve {mon.name}', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
+    if missing:
+        # The cartridge's only Exp. Share is gone for good, so the partner leads instead: the policy keeps it
+        # in front and switches it out on the first turn of a battle it cannot win, which still splits the
+        # experience with it.
+        target = 'level ' + str(project.get('level_goal', 100)) if project.get('terminal') else data.species[project['target']]['name']
+        return walk_goal(policy, snapshot, Goal, lambda: f'Train {mon.name} toward {target} in the lead')
     if mon.held_item != share:
         other = next((i for i, row in enumerate(snapshot.party) if row.held_item == share), None)
         if other is not None:

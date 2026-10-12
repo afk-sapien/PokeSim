@@ -509,7 +509,10 @@ A run never sits still for the clock. It uses a weekday or time-of-day window wh
 open and otherwise does every other job first: breeding, hatching, evolving and training.
 Only when nothing else is left does it walk the grass, and the label then names what it
 waits for, as in "Walk the grass while Lapras waits for Friday". The Pokémon holding the
-Exp. Share is never released or traded, since every later training plan needs it.
+Exp. Share is never released or traded, since every later training plan needs it. A
+cartridge has only one Exp. Share, and once it is gone the Pokémon in training leads the
+party instead. It switches out on the first turn of a battle it would lose and still shares
+the experience.
 
 The searchable Pokédex separates link-trade and event requirements from available
 sources. “Possible here” includes future evolutions and choices, rather than claiming
