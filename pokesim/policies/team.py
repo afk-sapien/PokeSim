@@ -60,10 +60,12 @@ def release_target(s, protected=(), reserved=()):
     """Reduce the most numerous species first, keeping its best copy and all protections.
 
     This ranks every stored copy and is asked on every step while storage is tight, so the
-    answer is kept until the party, the PC or the protections change.
+    answer is kept until the party, the PC or the protections change. A copy the PC list
+    cannot reach is never offered, since the release menu would stop short of it every time.
     """
+    reserved = frozenset(reserved) | frozenset(getattr(s, 'unlisted', ()))
     key = (tuple(s.party), getattr(s, 'stored_details', None), getattr(s, 'stored_pokemon', None),
-           frozenset(protected), frozenset(reserved))
+           frozenset(protected), reserved)
     try:
         hash(key)
     except TypeError:

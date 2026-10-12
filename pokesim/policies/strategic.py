@@ -1088,7 +1088,12 @@ class StrategicPolicy(Policy):
         return self.shop.item_for(snapshot, stock, self.goal.key, self.collection.project)
 
     def _release_target(self, snapshot):
-        return self.pc.release_target(snapshot, self.collection.project, self._preferences(), self.collection)
+        # A release that just failed is skipped until its retry time, so another spare goes first
+        # instead of the same menu failing again and again.
+        self.pc.avoid = frozenset(key[1:] for key, until in self.shortcut.failures.items()
+                                  if key[0] == 'release' and until > snapshot.frame)
+        return self.pc.release_target(snapshot, self.collection.project, self._preferences(), self.collection,
+                                      self.pc.avoid)
 
     def _pc_target(self, snapshot):
         return self.pc.target(snapshot, self.goal.key, self.collection.project, self._preferences(), self.collection)

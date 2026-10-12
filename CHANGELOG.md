@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix Red, Blue and Yellow adventures standing at a Pokémon Center PC on "Make room in storage" until the stall alert. A Pokémon received in a cable trade had a text command in its nickname, so the PC box list stopped drawing at that name and the release menu could never reach the spare chosen behind it. The same release failed every minute for hours. Spares stored after such a name are no longer chosen, and a release that fails lets the next spare go first. Releasing about once per new catch, League reward or trade is expected while every box is nearly full.
+
 - Stop Gold, Silver and Crystal adventures putting duplicate eggs ahead of training. Gold kept 28 Sneasel eggs in the PC from an old breeding loop and fetched them one at a time, so Crobat waited in the PC for days of game time. A trip to the PC now brings only eggs that would add something: a species not yet registered, or a copy another adventure asks for by cable. Other eggs stay safe in the PC, and one already in the party may go back to make room for the next Pokémon in training.
 
 - Stop Gold, Silver and Crystal adventures reporting "Stuck? 6 game hours without progress" while walking eggs from the PC to hatching. A level 100 party earns no experience and a hatchling of a registered species adds nothing new, so a box of slow eggs such as Sneasel tripped the stall alert and asked for help every few eggs. Every egg cycle walked off and every hatching now counts as progress, once each, so a reload back to an older save does not.

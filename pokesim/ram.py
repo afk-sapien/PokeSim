@@ -162,6 +162,8 @@ class Snapshot:
     stored_pokemon: tuple[tuple[int, int, int, str], ...] = ()
     box_counts: tuple[int, ...] = ()
     stored_details: tuple[StoredMon, ...] = ()
+    # (box, position) of stored Pokémon the PC list cannot reach. See list_breaks.
+    unlisted: tuple[tuple[int, int], ...] = ()
     enemy_shiny: bool = False
     # Yellow only. Melanie gives Bulbasaur once Pikachu is happy enough.
     pikachu_happiness: int = 0
@@ -319,9 +321,32 @@ _box_bytes = memory_bytes
 
 
 def read_stored_details(mem, *, counts=None):
+    return _read_storage(mem, counts)[0]
+
+
+# Text commands that end or pause printing when the game reaches them inside a name, from
+# pret/pokered home/text.asm. A nickname received in a trade can carry one, and the PC box
+# list then stops drawing at that name: its cursor never reaches the Pokémon stored after it.
+LIST_BREAKS = frozenset({0x00, 0x49, 0x4B, 0x4C, 0x51, 0x55, 0x57, 0x58, 0x5F})
+
+
+@lru_cache(maxsize=128)
+def list_breaks(names):
+    """Index of the first nickname in a box whose text stops the PC list, or None."""
+    for index in range(len(names) // 11):
+        for value in names[index * 11:(index + 1) * 11]:
+            if value == 0x50:
+                break
+            if value in LIST_BREAKS:
+                return index
+    return None
+
+
+def _read_storage(mem, counts=None):
+    """Stored Pokémon, and the (box, position) pairs the in-game PC list cannot reach."""
     counts = read_box_counts(mem) if counts is None else counts
     active = mem[W_CURRENT_BOX] & 0x7F
-    out = []
+    out, unlisted = [], []
     for box, count in enumerate(counts):
         count = min(count, BOX_CAPACITY)
         if not count:
@@ -335,7 +360,10 @@ def read_stored_details(mem, *, counts=None):
             # Flat memory has no inactive cartridge banks.
             continue
         out.extend(_decode_box(box, structs, names))
-    return tuple(out)
+        stop = list_breaks(names)
+        if stop is not None:
+            unlisted.extend((box, position) for position in range(stop + 1, count))
+    return tuple(out), tuple(unlisted)
 
 
 def read_snapshot(mem, frame: int) -> Snapshot:
@@ -345,10 +373,10 @@ def read_snapshot(mem, frame: int) -> Snapshot:
     decoded = read_fields(mem, move_data=MOVE_DATA)
     decoded['party'] = tuple(PartyMon(**mon) for mon in decoded['party'])
     box_counts = read_box_counts(mem)
-    stored = read_stored_details(mem, counts=box_counts)
+    stored, unlisted = _read_storage(mem, box_counts)
     from .yellow import PIKACHU_HAPPINESS, YellowMemory
     if isinstance(mem, YellowMemory):
         decoded['pikachu_happiness'] = mem.raw[PIKACHU_HAPPINESS]
     return Snapshot(frame=frame, **decoded, box_counts=box_counts,
                     stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
-                    stored_details=stored)
+                    stored_details=stored, unlisted=unlisted)
