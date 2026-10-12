@@ -33,7 +33,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 
 <main id="main" class="shell">
 <header class="identity" id="journey-progress" aria-label="Trainer and adventure summary">
-<div class="who"><p class="micro">Trainer · <span id="trainer-rival"></span></p><h1 id="trainer-name">Getting ready</h1></div>
+<div class="who"><p class="micro" id="trainer-rival">Trainer</p><h1 id="trainer-name">Getting ready</h1></div>
 <div class="stats">
 <div class="stat"><span class="micro">Badges <small id="badge-count">0 / 8</small></span><div class="badge-bank" id="badges"></div></div>
 <div class="stat"><span class="micro">Registered</span><strong class="readout" id="dex-count">0<span class="unit">/${dex_total}</span></strong></div>
@@ -47,9 +47,9 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <div class="live-grid">
 <div class="watch-stage">
 <section class="game-card" aria-labelledby="live-heading">
-<div class="column-head"><p class="legend legend--ink">On screen</p><span class="micro screen-corner">POKÉMON · GAME BOY</span></div>
+<div class="column-head"><p class="legend legend--ink">On screen</p><span class="micro screen-corner">Pokémon</span></div>
 <div class="bezel">
-<div class="bezel-head"><span class="on-air"><i class="lamp lamp--blink" data-on="crit" aria-hidden="true"></i><span class="on-air-label">LIVE</span></span><h2 id="live-heading">Somewhere in ${region}</h2><span class="game-clock" id="game-clock" hidden><span id="game-clock-day"></span><span id="game-clock-time"></span><span id="game-clock-period"></span></span><span class="coords" id="coordinates">KANTO</span><button class="bezel-key" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen">↗</button></div>
+<div class="bezel-head"><span class="on-air"><i class="lamp lamp--blink" data-on="crit" aria-hidden="true"></i><span class="on-air-label" id="on-air-label">Live</span></span><h2 id="live-heading">Somewhere in ${region}</h2><span class="game-clock" id="game-clock" hidden><span id="game-clock-day"></span><span id="game-clock-time"></span><span id="game-clock-period"></span></span><span class="coords" id="coordinates">Kanto</span><button class="bezel-key" id="fullscreen" aria-label="View the game fullscreen" title="Fullscreen"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M1 6V1h5M10 1h5v5M15 10v5h-5M6 15H1v-5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div>
 <div class="screen-well" id="screen"><img id="stream" alt="Live Pokémon game"></div>
 <div class="bezel-foot"><span class="activity" id="game-activity">The adventure is loading…</span><span class="mode"><i class="lamp" data-on="ok" aria-hidden="true"></i><span id="control-mode">AI is playing</span></span></div>
 </div>
@@ -69,7 +69,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <section class="plan" id="strategy-panel" aria-labelledby="objective-heading" hidden>
 <div class="plan-now"><p class="micro" id="objective-heading">Plan</p><h2 class="headline" id="objective">Finding the way forward</h2><p class="body" id="decision" hidden></p></div>
 <div class="plan-state"><p class="micro">Now</p><p class="value"><i class="lamp" data-on="ok" aria-hidden="true"></i><span id="progress-state">Exploring</span></p><p class="note" id="last-achievement">Waiting for the first achievement.</p></div>
-<div class="plan-next"><p class="micro">Next</p><p class="value" id="next-objective">Finding the next milestone</p><p class="note"><span id="action-tag"></span> · <span id="progress"></span></p></div>
+<div class="plan-next"><p class="micro">Next</p><p class="value" id="next-objective">Finding the next milestone</p><p class="note plan-meta"><span id="action-tag"></span><span id="progress"></span></p></div>
 </section>
 </main>
 
@@ -77,7 +77,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <div class="shell">
 <p>A small window into a very big adventure.</p>
 <div class="theme" role="group" aria-label="Colour theme"><button data-theme-choice="light" aria-pressed="false">Light</button><button data-theme-choice="auto" aria-pressed="false">Auto</button><button data-theme-choice="dark" aria-pressed="false">Dark</button></div>
-<div class="links"><button id="restart" class="restart-link">Restart run</button><a href="${game_base}/feed.xml">Atom feed ↗</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">GitHub ↗</a></div>
+<div class="links"><button id="restart" class="restart-link">Restart run</button><a href="${game_base}/feed.xml">Atom feed</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">GitHub</a></div>
 </div>
 </footer>
 

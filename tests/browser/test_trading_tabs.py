@@ -312,7 +312,7 @@ def test_a_game_busy_with_a_trade_can_be_picked_and_its_queued_trade_cancelled(p
     library.open()
     # Busy is not a limit: the game can be chosen, and says its trade will wait.
     expect(option(page, RED)).not_to_have_attribute('disabled', '')
-    expect(option(page, RED)).to_have_text('Second Red · red · Busy with a trade')
+    expect(option(page, RED)).to_have_text('Second Red, red, busy with a trade')
     choose(page, 'mine', 'box-1')
     page.locator('#pick-game').select_option(RED)
     expect(page.locator('#pick-game-reason')).to_have_text(f'Second Red: {busy}')
@@ -450,7 +450,7 @@ def test_automatic_trades_run_without_asking(page, game, width):
     library = Library(page, game[0])
     page.set_viewport_size({'width': width, 'height': 844})
     library.open('?tab=auto')
-    expect(page.locator('#trade-status')).to_have_text('On · Trades automatically')
+    expect(page.locator('#trade-status')).to_have_text('On, trades automatically')
     expect(page.locator('#trade-activity')).to_have_text('This adventure will trade when a useful exchange is ready.')
     expect(page.locator('#auto-switch')).to_be_enabled()
     # There is no Ask me first switch and no suggested trades to accept or dismiss.

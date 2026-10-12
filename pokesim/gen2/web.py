@@ -65,7 +65,7 @@ class Reference:
             for place in locations.values():
                 levels = place.pop('levels')
                 low, high = min(levels), max(levels)
-                place['level_range'] = (f'Lv. {low}' if low == high else f'Lv. {low} to {high}') + f" · {place['time']} · {place['chance']}%"
+                place['level_range'] = (f'Lv. {low}' if low == high else f'Lv. {low} to {high}') + f", {place['time']}, {place['chance']}%"
             hm_names = {'CUT', 'FLY', 'SURF', 'STRENGTH', 'FLASH', 'WHIRLPOOL', 'WATERFALL'}
             entries.append({'dex': sid, 'species': sid, 'name': mon['name'],
                             'types': list(dict.fromkeys(data.type_names[t] for t in mon['types'])),

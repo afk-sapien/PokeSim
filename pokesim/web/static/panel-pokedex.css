@@ -35,13 +35,12 @@
 .bank .readout { font-size: var(--f-hero); }
 .bank .readout .unit { font-size: var(--f-legend); margin-left: 2px; }
 /* A word in place of a number drops out of the display face so it still fits. */
-.bank .readout.is-word { font: var(--f-body) / 32px var(--font-mono); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); }
+.bank .readout.is-word { font: var(--f-body) / 32px var(--font-mono); letter-spacing: var(--track-micro); color: var(--ink-2); }
 .bank .meter { height: 12px; margin-top: var(--s1); }
 .bank-note {
   margin-top: var(--s1);
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 
@@ -101,9 +100,8 @@
   align-items: center;
   justify-content: center;
   padding: 0 var(--s5);
-  font: var(--f-legend) / 1 var(--font-panel);
-  letter-spacing: var(--track-legend);
-  text-transform: uppercase;
+  font: 600 var(--f-legend) / 1 var(--font-text);
+  letter-spacing: 0;
   color: var(--ink);
   white-space: nowrap;
 }
@@ -165,7 +163,6 @@
   margin-left: auto;
   font: var(--f-micro) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-2);
   white-space: nowrap;
 }
@@ -178,7 +175,6 @@
 .dex-name {
   font: var(--f-legend) / 1.2 var(--font-panel);
   letter-spacing: 0.05em;
-  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .card-types { display: flex; flex-wrap: wrap; gap: var(--s1); }
@@ -189,7 +185,6 @@
   background: var(--panel-2);
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
@@ -260,7 +255,6 @@
 .detail-id h2 {
   font: var(--f-hero) / 1 var(--font-panel);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .detail-types { display: flex; flex-wrap: wrap; gap: var(--s1); }
@@ -270,7 +264,6 @@
   gap: var(--s2);
   font: var(--f-micro) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-2);
 }
 
@@ -279,9 +272,8 @@
   margin-bottom: var(--s3);
   padding-bottom: var(--s2);
   border-bottom: var(--hair) solid var(--rule-faint);
-  font: var(--f-legend) / 1 var(--font-panel);
-  letter-spacing: var(--track-legend);
-  text-transform: uppercase;
+  font: 600 var(--f-legend) / 1 var(--font-text);
+  letter-spacing: 0;
   color: var(--ink);
 }
 .detail-meta { margin-top: var(--s2); color: var(--ink-2); font-size: var(--f-label); line-height: 1.5; }
@@ -298,7 +290,6 @@
 .collection-counts dt {
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 .collection-counts dd { font: var(--f-read) / 1 var(--font-panel); font-variant-numeric: tabular-nums; }
@@ -314,7 +305,7 @@
   border-left: 3px solid var(--signal);
   line-height: 1.5;
 }
-.plan-note b { display: block; margin-bottom: var(--s1); font: var(--f-micro) / 1.4 var(--font-mono); letter-spacing: var(--track-micro); text-transform: uppercase; }
+.plan-note b { display: block; margin-bottom: var(--s1); font: var(--f-micro) / 1.4 var(--font-mono); letter-spacing: var(--track-micro); }
 
 .copy-list, .place-list { display: grid; list-style: none; border: var(--hair) solid var(--rule-faint); }
 .copy-list li, .place-list li {
@@ -382,7 +373,7 @@
 .evo-chip:active { box-shadow: var(--well-inset); }
 .plate--chip { width: 60px; height: 60px; }
 .evo-chip > span:last-child { display: grid; gap: 2px; min-width: 0; }
-.evo-chip strong { font: var(--f-legend) / 1.2 var(--font-panel); letter-spacing: 0.05em; text-transform: uppercase; overflow-wrap: anywhere; }
+.evo-chip strong { font: var(--f-legend) / 1.2 var(--font-panel); letter-spacing: 0.05em; overflow-wrap: anywhere; }
 .evo-chip small { color: var(--ink-2); font-size: var(--f-label); }
 
 .move-scroll { overflow-x: auto; border: var(--hair) solid var(--rule-faint); }
@@ -395,7 +386,6 @@
   border-bottom: var(--hair) solid var(--rule);
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-3);
   text-align: left;
 }

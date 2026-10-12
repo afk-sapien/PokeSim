@@ -50,7 +50,7 @@ test('the section stays hidden until there is history, then describes each line'
   assert.equal(element('#road').hidden, true)
   Progress.render([{ts: 0, owned: 1, badges: 0, league: 0}, {ts: 86400 * 3, owned: 40, badges: 3, league: 0, level100: 2, perfect: 1}], 86400 * 3)
   assert.equal(element('#road').hidden, false)
-  assert.match(element('#road-span').textContent, /· 3 days$/)
+  assert.match(element('#road-span').textContent, /, 3 days$/)
   const html = element('#road-charts').innerHTML
   assert.match(html, /aria-label="Pokédex registered: from 1 to 40"/)
   assert.match(html, /aria-label="League wins: 0 throughout"/)

@@ -422,7 +422,7 @@ test('shared trade history shows both arrivals, sprites and verified evolutions 
   assert.match(html, new RegExp(`/games/${right}/sprites/94.png`))
   assert.match(html, new RegExp(`/games/${right}/trading`))
   assert.match(html, /Haunter → Gengar/)
-  assert.match(html, /Received · Lv. 33/)
+  assert.match(html, /Received, Lv. 33/)
   assert.match(html, /&lt.*SPROUT.*&gt/)
   assert.doesNotMatch(html, /<SPROUT>/)
   assert.equal(view.element('#trade-history-count').textContent, '1 recent exchange')

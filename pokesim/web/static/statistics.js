@@ -70,7 +70,7 @@
       row.dataset.milestone = milestone.key
       add(row, 'span', '', milestone.label)
       add(row, 'strong', '', milestone.achieved ? duration(milestone.seconds) + (milestone.seconds != null && milestone.lower_bound ? '+' : '') : 'Not reached')
-      add(row, 'span', 'note', milestone.achieved ? `${milestone.source === 'first_recorded' ? 'First recorded ' : ''}${date(milestone.at)}${milestone.clock_source === 'cartridge' ? ' · Recorded cartridge time' : ''}` : '')
+      add(row, 'span', 'note', milestone.achieved ? `${milestone.source === 'first_recorded' ? 'First recorded ' : ''}${date(milestone.at)}${milestone.clock_source === 'cartridge' ? ', cartridge time' : ''}` : '')
     }
     if (!milestones.length) add(list, 'p', 'note', 'Milestone tracking begins when this adventure runs.')
     const activity = document.querySelector('#activity-list')
@@ -91,7 +91,7 @@
         continue }
       const link = add(card, 'a', 'highlight-name', mon.name)
       link.href = `${document.querySelector('meta[name="pokesim-base"]').content}/${mon.url}`
-      add(card, 'p', 'note', `Lv. ${mon.level} · ${number(mon.value)}${key === 'dvs' ? '/75 DVs' : ' Battle Power'}${mon.partial ? ' · Among known ratings' : ''}`)
+      add(card, 'p', 'note', `Lv. ${mon.level}, ${number(mon.value)}${key === 'dvs' ? '/75 DVs' : ' Battle Power'}${mon.partial ? ', among known ratings' : ''}`)
     }
     renderRecent()
   }
@@ -140,7 +140,7 @@
     document.querySelector('#marathon-last').textContent = marathon.last
       ? raceTime(marathon.last.frames) : 'No attempts yet'
     document.querySelector('#marathon-result').textContent = marathon.last
-      ? (marathon.last.finished ? (marathon.last.personal_best ? 'Finished · Personal best' : 'Finished') : 'Did not finish') : ''
+      ? (marathon.last.finished ? (marathon.last.personal_best ? 'Finished, personal best' : 'Finished') : 'Did not finish') : ''
 
     const returns = data.legendary_returns
     const legendaryAvailable = returns?.enabled && returns.available

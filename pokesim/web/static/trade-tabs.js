@@ -77,7 +77,7 @@
     const box = party ? 0 : row.box
     const position = row.slot ?? record?.position ?? record?.slot
     return {...mon, box, position, key: row.key, row,
-      slot: `${box === 0 ? 'PARTY' : `BOX ${box}`}${position ? ` · SLOT ${position}` : ''}`}
+      slot: `${box === 0 ? 'Party' : `Box ${box}`}${position ? `, slot ${position}` : ''}`}
   }
   // The trade setting of one of this adventure's Pokémon, as automatic trading reads it.
   function ownSetting(mon) {
@@ -226,7 +226,7 @@
       pick.games = data.adventures || []
       const select = $('#pick-game')
       select.innerHTML = `<option value="">${pick.games.length ? 'Choose a game' : 'No other adventure yet'}</option>` + pick.games.map(game =>
-        `<option value="${esc(game.id)}"${game.available ? '' : ' disabled'}${game.id === pick.game ? ' selected' : ''}>${esc(game.name)} · ${esc(game.version)}${game.available ? game.busy ? ' · Busy with a trade' : '' : `: ${esc(game.reason)}`}</option>`).join('')
+        `<option value="${esc(game.id)}"${game.available ? '' : ' disabled'}${game.id === pick.game ? ' selected' : ''}>${esc(game.name)}, ${esc(game.version)}${game.available ? game.busy ? ', busy with a trade' : '' : `: ${esc(game.reason)}`}</option>`).join('')
       const current = pick.games.find(game => game.id === pick.game)
       note('#pick-game-reason', gameNote(current))
       summary()

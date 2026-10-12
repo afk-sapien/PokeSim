@@ -337,7 +337,7 @@
     }
     $('#empty').hidden = Boolean(visible.length)
     const kept = adventures.filter(game => !game.archived).length
-    $('#running-summary').textContent = `${adventures.filter(running).length} running · ${kept} ${kept === 1 ? 'adventure' : 'adventures'}`
+    $('#running-summary').textContent = `${adventures.filter(running).length} running, ${kept} ${kept === 1 ? 'adventure' : 'adventures'}`
     if (page === 'stopped') {
       const game = adventures.find(item => item.id === currentId)
       $('#stopped-title').textContent = game?.name || 'Adventure unavailable'
@@ -352,7 +352,7 @@
   const tradePhase = trade => TradeProgress.phase(trade)
   function tradePartner(id, mon, completed, failed) {
     const game = adventures.find(item => item.id === id)
-    const title = game ? `<a href="${gameUrl(id)}trading">${esc(game.name)} ↗</a>` : 'Adventure unavailable'
+    const title = game ? `<a href="${gameUrl(id)}trading">${esc(game.name)}</a>` : 'Adventure unavailable'
     const label = completed ? 'Received' : failed ? 'Planned to receive' : 'Receiving'
     const dex = Number.isInteger(mon?.dex) && mon.dex >= 1 && mon.dex <= 251 ? mon.dex : null
     const sprite = dex && game ? `<div class="plate plate--trade"><img src="${gameUrl(id)}sprites/${dex}.png?v=rom-portraits-1" alt="" loading="lazy"></div>`
@@ -360,7 +360,7 @@
     const name = mon?.name ? esc(mon.name) : 'Pokémon details unavailable'
     const nickname = mon?.nickname && mon.nickname.toLowerCase() !== mon.name?.toLowerCase()
       ? `<p class="exchange-nickname">“${esc(mon.nickname)}”</p>` : ''
-    const level = Number.isInteger(mon?.level) && mon.level >= 1 && mon.level <= 100 ? ` · Lv. ${mon.level}` : ''
+    const level = Number.isInteger(mon?.level) && mon.level >= 1 && mon.level <= 100 ? `, Lv. ${mon.level}` : ''
     const evolution = completed && mon?.evolved_from?.name
       ? `<p class="exchange-evolution">✦ ${esc(mon.evolved_from.name)} → ${name}</p>` : ''
     return `<section class="exchange-partner"><h3>${title}</h3><div class="exchange-pokemon">${sprite}<div class="exchange-text"><p class="micro">${label}${level}</p><strong>${name}</strong>${nickname}${evolution}</div></div></section>`
@@ -404,7 +404,7 @@
   }
   function queuedSide(id, mon) {
     const game = adventures.find(item => item.id === id)
-    const title = game ? `<a href="${gameUrl(id)}trading?tab=trade">${esc(game.name)} ↗</a>` : 'Adventure unavailable'
+    const title = game ? `<a href="${gameUrl(id)}trading?tab=trade">${esc(game.name)}</a>` : 'Adventure unavailable'
     return `<section class="exchange-partner"><h3>${title}</h3><div class="exchange-text"><p class="micro">Sends</p><strong>${esc(mon || 'Chosen Pokémon')}</strong></div></section>`
   }
   function queuedTrade(entry) {
@@ -436,7 +436,7 @@
     const start = backupPage * backupPageSize
     const visible = savedBackups.slice(start, start + backupPageSize)
     $('#backups').innerHTML = visible.length ? visible.map(backup => `<div class="backup-row"><div><strong>${esc(dateLabel(backup.created_at))}</strong><p class="note">${(backup.size_bytes / 1048576).toFixed(1)} MiB</p></div><div class="backup-row-actions"><a class="key" href="/api/v1/backups/${encodeURIComponent(backup.id)}/download" download aria-label="Download the backup from ${esc(dateLabel(backup.created_at))}">Download</a><button type="button" class="key" data-load-backup="${esc(backup.id)}" data-owner aria-label="Load the backup from ${esc(dateLabel(backup.created_at))}">Load</button><button type="button" class="key key--danger" data-delete-backup="${esc(backup.id)}" data-owner aria-label="Delete the backup from ${esc(dateLabel(backup.created_at))}">Delete</button></div></div>`).join('') : '<p class="section-note">No backups yet. Create one here or load a backup ZIP.</p>'
-    $('#backup-summary').textContent = savedBackups.length ? `${savedBackups.length} ${savedBackups.length === 1 ? 'backup' : 'backups'} · ${(savedBackups.reduce((total, backup) => total + backup.size_bytes, 0) / 1048576).toFixed(1)} MiB stored` : ''
+    $('#backup-summary').textContent = savedBackups.length ? `${savedBackups.length} ${savedBackups.length === 1 ? 'backup' : 'backups'}, ${(savedBackups.reduce((total, backup) => total + backup.size_bytes, 0) / 1048576).toFixed(1)} MiB stored` : ''
     $('#backup-pagination').hidden = savedBackups.length <= backupPageSize
     $('#backup-page-label').textContent = `${start + 1}–${start + visible.length} of ${savedBackups.length}`
     $('#backup-previous').disabled = backupPage === 0
@@ -482,7 +482,7 @@
     const server = $('#notify-server').value.trim().replace(/\/+$/, '')
     const topic = $('#notify-topic').value.trim()
     const valid = /^https?:\/\/[^\s/]+/.test(server) && /^[A-Za-z0-9_-]{1,64}$/.test(topic)
-    $('#notify-subscribe').innerHTML = valid ? `<a class="text-link" href="${esc(`${server}/${topic}`)}" target="_blank" rel="noreferrer">${esc(`${server}/${topic}`)} ↗</a>`
+    $('#notify-subscribe').innerHTML = valid ? `<a class="text-link" href="${esc(`${server}/${topic}`)}" target="_blank" rel="noreferrer">${esc(`${server}/${topic}`)}</a>`
       : 'Choose a topic to see its address.'
   }
   function renderNotifyAdventures() {
@@ -505,7 +505,7 @@
       const categories = Object.values(row.categories || {}).filter(Boolean).length
       const games = Object.values(row.adventures || {}).filter(Boolean).length
       const scope = row.include_new_adventures ? `${games} adventure${games === 1 ? '' : 's'}, plus new adventures` : `${games} selected adventure${games === 1 ? '' : 's'}`
-      return `<article class="panel integration-card"><div><p class="micro">${esc(providerLabel(row.provider))} · ${row.enabled ? 'Enabled' : 'Disabled'}</p><h2 class="legend legend--ink">${esc(row.name)}</h2><p class="note">${categories} event type${categories === 1 ? '' : 's'} · ${esc(scope)}</p></div><div class="integration-card-actions"><button type="button" class="key" data-integration-action="edit" data-id="${esc(row.id)}" data-owner>Edit</button><button type="button" class="key" data-integration-action="test" data-id="${esc(row.id)}" data-owner>Test</button><button type="button" class="key" data-integration-action="toggle" data-id="${esc(row.id)}" data-owner>${row.enabled ? 'Disable' : 'Enable'}</button></div><p class="form-result" data-integration-result="${esc(row.id)}" role="status"></p></article>`
+      return `<article class="panel integration-card"><div><p class="micro">${esc(providerLabel(row.provider))}, ${row.enabled ? 'Enabled' : 'Disabled'}</p><h2 class="legend legend--ink">${esc(row.name)}</h2><p class="note">${categories} event type${categories === 1 ? '' : 's'}, ${esc(scope)}</p></div><div class="integration-card-actions"><button type="button" class="key" data-integration-action="edit" data-id="${esc(row.id)}" data-owner>Edit</button><button type="button" class="key" data-integration-action="test" data-id="${esc(row.id)}" data-owner>Test</button><button type="button" class="key" data-integration-action="toggle" data-id="${esc(row.id)}" data-owner>${row.enabled ? 'Disable' : 'Enable'}</button></div><p class="form-result" data-integration-result="${esc(row.id)}" role="status"></p></article>`
     }).join('') || '<div class="panel empty-state"><h2 class="legend legend--ink">No integrations yet</h2><p>Add a Discord channel, Telegram chat or ntfy topic. You can add several of each.</p></div>'
     permissions()
   }
@@ -1111,7 +1111,7 @@
     backupSelection = {id, adventures: data.adventures}
     $('#backup-date').textContent = `Backup from ${dateLabel(data.created_at)}`
     const usable = data.adventures.filter(game => game.restorable)
-    $('#backup-adventure').innerHTML = usable.map(game => `<option value="${esc(game.id)}">${esc(game.name)} · ${esc(game.version)}</option>`).join('')
+    $('#backup-adventure').innerHTML = usable.map(game => `<option value="${esc(game.id)}">${esc(game.name)}, ${esc(game.version)}</option>`).join('')
     $('#backup-load').toggleAttribute('data-blocked', !usable.length)
     $('#backup-adventure').onchange()
     $('#backup-dialog .dialog-feedback').textContent = usable.length ? '' : 'This backup has no saved adventures to load.'

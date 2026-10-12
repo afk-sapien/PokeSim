@@ -39,7 +39,7 @@ def test_copy_opens_the_pc_popup_and_closes_back_to_the_entry(page, game, width,
     expect(popup).to_be_visible()
     expect(popup.locator('#pc-detail-name')).to_have_text('FERN')
     expect(popup.locator('.pc-detail-line')).to_contain_text('Level 20')
-    expect(popup.locator('.pc-detail-id .micro')).to_contain_text('BOX 1 · SLOT 2')
+    expect(popup.locator('.pc-detail-id .micro')).to_contain_text('Box 1, slot 2')
     # The full record, drawn by the shared popup: moves and individual stats.
     expect(popup.locator('.pc-move')).to_have_count(2)
     expect(popup.locator('.individual-stats')).to_be_visible()
@@ -83,7 +83,7 @@ def test_keyboard_enter_opens_a_party_copy_and_its_link_opens_the_party(page, ga
     page.keyboard.press('Enter')
     popup = page.locator('#mon-detail')
     expect(popup.locator('#pc-detail-name')).to_have_text('LEAF')
-    expect(popup.locator('.pc-detail-id .micro')).to_contain_text('PARTY · SLOT 1')
+    expect(popup.locator('.pc-detail-id .micro')).to_contain_text('Party, slot 1')
     expect(popup.locator('.pc-show-link')).to_have_attribute('href', re.compile(r'/pc\?box=party&slot=1$'))
     # Arrow keys belong to the popup now and do not step the Pokédex entry behind it.
     page.keyboard.press('ArrowRight')
@@ -114,7 +114,7 @@ def test_gen2_copies_open_their_own_records(page, game, width, height):
     expect(popup.locator('#pc-detail-name')).to_have_text('TIDEPOOL')
     expect(popup.locator('.pc-detail-line')).to_contain_text('Level 33')
     expect(popup.locator('.pc-detail-line')).to_contain_text('Holding Leftovers')
-    expect(popup.locator('.pc-detail-id .micro')).to_contain_text('BOX 3 · SLOT 7')
+    expect(popup.locator('.pc-detail-id .micro')).to_contain_text('Box 3, slot 7')
     expect(popup.locator('.individual-stats tbody tr')).to_have_count(6)
     expect(popup.locator('.pc-show-link')).to_have_attribute('href', re.compile(r'/pc\?box=3&slot=7$'))
     check_fits(page, '#mon-detail', '#mon-detail-action')

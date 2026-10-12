@@ -12,6 +12,8 @@ This public repository starts from a reviewed current-source snapshot. It contai
 
 PokeSim 0.5.0 runs games on PyBoy RS, a Rust port of PyBoy 2.7.0, installed through PokeSim Core, which is MIT licensed. PokeSim Core and PyBoy RS are installed from GitHub release files, not from PyPI. PyBoy RS is distributed under GNU LGPL version 3 and retains upstream attribution to PyBoy. The original LGPL text and the incorporated GPL text are retained under `licenses/`. The image includes the exact PyBoy RS source archive at `/usr/share/pokesim/sources/pyboy-rs-<version>.tar.gz`, a source manifest, all discovered installed Python dependency notices, and the original application source under `/usr/share/pokesim/source`. The Python extension module is dynamically imported and can be replaced with a compatible modified build. See the dependency modification instructions in `docs/licensing.md`. PokeSim 0.4.x releases used PyBoy 2.7.0 itself and shipped its source archive instead.
 
+The web pages bundle the Latin subset of the [Inter](https://github.com/rsms/inter) typeface, version 4, as `pokesim/web/static/fonts/inter-latin-wght.woff2`. Inter is licensed under the SIL Open Font License 1.1, and its notice ships beside it as `fonts/LICENSE-Inter.txt`. Pages load it from PokeSim itself and never from a font service.
+
 Other Python dependencies retain their own licenses. The image records their installed names, versions, license metadata, and notice paths in `/usr/share/pokesim/python-dependencies.json`. Native components and Debian packages retain their installed notices under `/usr/share/doc`. The OCI license label summarizes the application and emulator licenses. It is not an exhaustive license expression for every OS and transitive dependency.
 
 Sources:

@@ -61,7 +61,7 @@
   function ratingBadge(mon) {
     if (!Number.isInteger(mon.dv_stars) || mon.dv_stars < 1 || mon.dv_stars > 4) return '<span class="dv-badge dv-unknown">DVs unknown</span>'
     const lamps = Array.from({length: 4}, (_, i) => `<i class="lamp"${i < mon.dv_stars ? ' data-on="signal"' : ''}></i>`).join('')
-    const title = Number.isFinite(mon.dv_total) ? ` title="${mon.dv_total} / 75 DVs · ${mon.dv_percent}%"` : ''
+    const title = Number.isFinite(mon.dv_total) ? ` title="${mon.dv_total} / 75 DVs, ${mon.dv_percent}%"` : ''
     return `<span class="dv-badge dv-stars-${mon.dv_stars}" aria-label="${ratingLabel(mon)}"${title}><span class="dv" aria-hidden="true">${lamps}</span><span class="vh">${'★'.repeat(mon.dv_stars)}${'☆'.repeat(4 - mon.dv_stars)}</span> ${mon.dv_stars === 4 ? 'Perfect DV' : 'DV'}</span>`
   }
 
@@ -82,7 +82,7 @@
 
   const sprite = (mon, url) => mon.egg ? types().eggPlate
     : `<img loading="lazy" src="${esc(url || (globalThis.PokeSim?.sprite ? globalThis.PokeSim.sprite(mon.dex) : `${base()}/sprites/${Number(mon.dex) || 0}.png?v=rom-portraits-1`))}" alt="">`
-  const place = (mon, index) => `${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || index + 1}`
+  const place = (mon, index) => `${mon.box === 0 ? 'Party' : `Box ${mon.box}`}, slot ${mon.position || index + 1}`
 
   // One card. Options: all (show the four metrics), sprite (a portrait address from another game),
   // attr (the data attribute naming the card), tags (extra stamps), blocked (why it cannot be picked),
@@ -96,7 +96,7 @@
     const state = [options.pressed !== undefined ? ` aria-pressed="${options.pressed ? 'true' : 'false'}"` : '', blocked ? ` aria-disabled="true" title="${esc(blocked)}"` : ''].join('')
     const metrics = options.all ? `<span class="pc-metrics"><span class="pc-power">Battle Power <b>${Number.isFinite(mon.battle_power) ? mon.battle_power.toLocaleString() : 'Unavailable'}</b></span><span>Stat Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span>` : ''
     const reason = blocked ? `<span class="pc-blocked">${esc(blocked)}</span>` : ''
-    return `<button type="button" class="${classes}" data-${attr}="${esc(id)}"${state} aria-label="${label}"><span class="pc-slot">${esc(options.slot || place(mon, Number(id) || 0))}</span><span class="plate pc-plate ${types().portraitClass(mon.type_names)}">${sprite(mon, options.sprite)}</span><span class="pc-mon-body"><strong class="pc-name">${esc(mon.nick || mon.name)}</strong><small class="pc-sub">${esc(mon.name)}${level === null ? '' : ` · Lv. ${level}`}</small><span class="type-tags">${types().badges(mon.type_names)}</span><span class="pc-tags">${types().shinyBadge(mon)}${ratingBadge(mon)}${options.tags || ''}</span>${reason}</span>${metrics}</button>`
+    return `<button type="button" class="${classes}" data-${attr}="${esc(id)}"${state} aria-label="${label}"><span class="pc-slot">${esc(options.slot || place(mon, Number(id) || 0))}</span><span class="plate pc-plate ${types().portraitClass(mon.type_names)}">${sprite(mon, options.sprite)}</span><span class="pc-mon-body"><strong class="pc-name">${esc(mon.nick || mon.name)}</strong><small class="pc-sub">${esc(mon.name)}${level === null ? '' : `, Lv. ${level}`}</small><span class="type-tags">${types().badges(mon.type_names)}</span><span class="pc-tags">${types().shinyBadge(mon)}${ratingBadge(mon)}${options.tags || ''}</span>${reason}</span>${metrics}</button>`
   }
 
   // Gen I and II split physical and special by type. A move with no power is a status move.
@@ -197,7 +197,7 @@
   // Options: dex (false leaves out the Pokédex key, for a popup already on the Pokédex).
   function detailLinks(mon, options = {}) {
     if (mon.egg) return ''
-    return `<a class="dex-open key" aria-label="Stats guide" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer"><span class="key-long">Stats guide ↗</span><span class="key-short">Guide</span></a>${mon.dex && options.dex !== false ? `<a class="dex-open key" href="${base()}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex<span class="key-long"> ↗</span></a>` : ''}`
+    return `<a class="dex-open key" aria-label="Stats guide" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer"><span class="key-long">Stats guide</span><span class="key-short">Guide</span></a>${mon.dex && options.dex !== false ? `<a class="dex-open key" href="${base()}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex</a>` : ''}`
   }
 
   // The popup body. Options: sprite (a portrait address from another game), trade (replaces the
@@ -214,10 +214,10 @@
     const trade = options.trade === false ? null : options.trade || tradeState(mon)
     const pokerus = mon.pokerus === 'infected' ? '<span class="tag tag--warn">Pokérus</span>' : mon.pokerus === 'cured' ? '<span class="tag" title="Pokérus, cured">Pokérus cured</span>' : ''
     const tags = mon.egg ? tradeBadge(trade, mon) : `${types().shinyBadge(mon)}${ratingBadge(mon)}${statusTag}${pokerus}${tradeBadge(trade, mon)}`
-    const line = mon.egg ? 'Not yet hatched' : [esc(mon.name), `Level ${mon.level}`, mon.gender ? esc(mon.gender) : '', mon.held_item_name ? `Holding ${esc(mon.held_item_name)}` : ''].filter(Boolean).join(' · ')
-    const where = options.slot ? esc(options.slot) : `${mon.box === 0 ? 'PARTY' : `BOX ${mon.box}`} · SLOT ${mon.position || '?'}`
+    const line = mon.egg ? 'Not yet hatched' : [esc(mon.name), `Level ${mon.level}`, mon.gender ? esc(mon.gender) : '', mon.held_item_name ? `Holding ${esc(mon.held_item_name)}` : ''].filter(Boolean).join(', ')
+    const where = options.slot ? esc(options.slot) : `${mon.box === 0 ? 'Party' : `Box ${mon.box}`}, slot ${mon.position || '?'}`
     const head = `<div class="pc-detail-head"><div class="plate plate--bay ${types().portraitClass(mon.type_names)}">${sprite(mon, options.sprite).replace(' loading="lazy"', '')}</div>`
-      + `<div class="pc-detail-id"><p class="micro">${where}${mon.dex ? ` · No.${String(mon.dex).padStart(3, '0')}` : ''}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>`
+      + `<div class="pc-detail-id"><p class="micro">${where}${mon.dex ? `, No.${String(mon.dex).padStart(3, '0')}` : ''}</p><h2 id="pc-detail-name">${esc(mon.nick || mon.name)}</h2>`
       + `<p class="pc-detail-line">${line}</p></div><div class="pc-tags pc-detail-tags"><span class="type-tags">${types().badges(mon.type_names)}</span>${tags}</div></div>`
     const section = (title, body, extra = '') => `<section class="pc-detail-section${extra}"><h3 class="micro">${title}</h3>${body}</section>`
     const card = (name, title, note, body) => `<section class="pc-card pc-card-${name}"><header class="pc-card-head"><h3 class="micro">${title}</h3>${note}</header>${body}</section>`

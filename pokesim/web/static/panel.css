@@ -106,9 +106,8 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
 
 /* Silkscreen: the display face, letterspaced, in caps. */
 .legend {
-  font: var(--f-legend) / 1 var(--font-panel);
-  letter-spacing: var(--track-legend);
-  text-transform: uppercase;
+  font: 600 var(--f-legend) / 1 var(--font-text);
+  letter-spacing: 0;
   color: var(--ink-3);
 }
 .legend--ink { color: var(--ink); }
@@ -117,7 +116,6 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
 .micro {
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 
@@ -178,9 +176,8 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   background: var(--panel-2);
   border: var(--hair) solid var(--rule);
   box-shadow: var(--key-inset);
-  font: var(--f-legend) / 1 var(--font-panel);
-  letter-spacing: var(--track-legend);
-  text-transform: uppercase;
+  font: 600 var(--f-legend) / 1 var(--font-text);
+  letter-spacing: 0;
   color: var(--ink);
   white-space: nowrap;
   cursor: pointer;
@@ -206,7 +203,6 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   border: var(--hair) solid var(--rule-faint);
   font: var(--f-micro) / 1.3 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-2);
   white-space: nowrap;
 }
@@ -311,7 +307,6 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   display: block;
   font: var(--f-legend) / 1 var(--font-panel);
   letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 .brandplate .model {
   display: block;
@@ -338,7 +333,6 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   align-self: flex-start;
   font: var(--f-micro) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-3);
   text-decoration: none;
 }
@@ -362,9 +356,8 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   padding: 0 var(--s5) 0 var(--s2);
   background: none;
   border: var(--hair) solid transparent;
-  font: var(--f-legend) / 1 var(--font-panel);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font: 600 var(--f-legend) / 1 var(--font-text);
+  letter-spacing: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink);
@@ -397,9 +390,8 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   align-items: center;
   padding: 0 var(--s3);
   border-left: var(--hair) solid var(--rule-faint);
-  font: var(--f-legend) / 1 var(--font-panel);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font: 600 var(--f-legend) / 1 var(--font-text);
+  letter-spacing: 0;
   color: var(--ink-2);
   text-decoration: none;
   transition: background var(--t), color var(--t);
@@ -421,7 +413,6 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   flex: none;
   font: var(--f-micro) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-2);
   white-space: nowrap;
   /* One slot for every state, from Live to Reconnecting…, so the tabs beside it
@@ -472,7 +463,6 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   box-shadow: var(--key-inset), 2px 2px 0 var(--bevel-lo);
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink);
   white-space: nowrap;
   pointer-events: none;
@@ -495,7 +485,6 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   /* A touch of leading, so a title that wraps on a phone does not touch itself. */
   font: var(--f-title) / 1.1 var(--font-panel);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .identity .stats {
@@ -540,7 +529,6 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
 .plate-foot .restart-link {
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
 }
 .restart-link {
   padding: 0;
@@ -568,7 +556,6 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   border-left: var(--hair) solid var(--rule-faint);
   font: var(--f-micro) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-2);
   cursor: pointer;
 }
@@ -603,11 +590,15 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
 .game-card { display: flex; flex-direction: column; min-width: 0; }
 .game-card > .bezel { flex: 1; display: flex; flex-direction: column; }
 
+/* The Game Boy Color's screen surround: slate, with the one rounded corner
+   the real bezel has at its lower right. It is the only radius in the
+   system, because it is the one curve everyone recognises. */
 .bezel {
   background: var(--bezel);
-  border: var(--hair) solid var(--rule);
-  padding: var(--s3);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  border: var(--hair) solid var(--bezel-edge);
+  border-bottom-right-radius: 28px;
+  padding: var(--s3) var(--s3) var(--s4);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 .bezel-head {
   display: flex;
@@ -621,17 +612,25 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   align-items: center;
   gap: var(--s2);
   flex: none;
-  font: var(--f-micro) / 1 var(--font-mono);
-  letter-spacing: var(--track-micro);
+  font: 600 var(--f-label) / 1 var(--font-text);
   color: var(--bezel-ink);
 }
+/* The power LED is the running lamp: lit red with a glow while the game runs,
+   dark while it is paused. The word beside it says the same thing. */
+.bezel .on-air .lamp {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--led);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 0 8px 1px var(--led);
+}
+.game-card.is-paused .on-air .lamp { background: var(--led-off); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45); animation: none; }
 .bezel-head h2 {
   flex: 1;
   min-width: 0;
   font: var(--f-read) / 1 var(--font-panel);
   letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: #D6DCC6;
+  color: var(--screen-light);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -654,7 +653,6 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   justify-items: end;
   font: var(--f-micro) / 1 var(--font-mono);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--bezel-ink);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -669,12 +667,12 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   flex: none;
   padding: 0;
   background: none;
-  border: var(--hair) solid #2B3222;
+  border: var(--hair) solid var(--bezel-edge);
   color: var(--bezel-ink);
   font: var(--f-legend) / 1 var(--font-panel);
   cursor: pointer;
 }
-.bezel-key:hover { color: #D6DCC6; border-color: var(--bezel-ink); }
+.bezel-key:hover { color: var(--screen-light); border-color: var(--bezel-ink); }
 
 /* 160x144 is 10:9. The well holds that ratio at every width, so the
    connecting state and the live picture occupy the same rectangle. */
@@ -685,8 +683,8 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   aspect-ratio: 10 / 9;
   flex: none;
   width: 100%;
-  background: #0A0C07;
-  box-shadow: inset 0 0 0 2px #2B3222;
+  background: var(--screen-dark);
+  box-shadow: inset 0 0 0 2px #000;
   overflow: hidden;
 }
 .screen-well::before {
@@ -694,8 +692,8 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   position: absolute;
   inset: 0;
   background-image:
-    repeating-linear-gradient(to right, rgba(142, 154, 107, 0.08) 0 1px, transparent 1px 4px),
-    repeating-linear-gradient(to bottom, rgba(142, 154, 107, 0.08) 0 1px, transparent 1px 4px);
+    repeating-linear-gradient(to right, rgba(196, 207, 161, 0.07) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(to bottom, rgba(196, 207, 161, 0.07) 0 1px, transparent 1px 4px);
   pointer-events: none;
 }
 .screen-well img {
@@ -725,9 +723,8 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   inset: auto 0 50%;
   transform: translateY(50%);
   text-align: center;
-  font: var(--f-legend) / 1.6 var(--font-panel);
-  letter-spacing: var(--track-legend);
-  text-transform: uppercase;
+  font: 600 var(--f-legend) / 1.6 var(--font-text);
+  letter-spacing: 0;
   color: var(--bezel-ink);
 }
 
@@ -742,15 +739,14 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   padding: var(--s3) var(--s1) 0;
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--bezel-ink);
 }
-.bezel-foot .activity { color: #B9C29F; }
+.bezel-foot .activity { color: var(--screen-light); }
 
 /* In manual play the housing carries a signal ring, so there is no doubt at
    a glance about who is holding the controls. */
 .game-card.is-manual .bezel { outline: 2px solid var(--signal-lamp); outline-offset: -1px; }
-.game-card.is-manual .on-air .lamp { background: var(--signal-lamp); }
+.game-card.is-manual .on-air .lamp { background: var(--signal-lamp); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 0 8px 1px var(--signal-lamp); }
 
 /* ---- the deck: operator controls below the housing -------------------- */
 .deck {
@@ -772,8 +768,7 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   margin-left: auto;
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
-  color: #B9C29F;
+  color: var(--screen-light);
 }
 .game-card.is-manual .bezel-foot .mode { color: var(--signal-lamp); }
 .game-card.is-manual .bezel-foot .mode .lamp { background: var(--signal-lamp); }
@@ -793,7 +788,6 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   padding: 0 var(--s3);
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-2);
   cursor: pointer;
   list-style: none;
@@ -823,17 +817,16 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   border: var(--hair) solid var(--rule);
   box-shadow: var(--key-inset);
   font: var(--f-legend) / 1 var(--font-panel);
-  text-transform: uppercase;
   color: var(--ink);
   cursor: pointer;
 }
 .dpad button:active,
 .abxy button:active { background: var(--well); box-shadow: var(--well-inset); }
 .pad-help { flex: 1 1 200px; display: grid; gap: var(--s2); }
-.keymap-title { font: var(--f-label) / 1.3 var(--font-mono); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); }
+.keymap-title { font: var(--f-label) / 1.3 var(--font-mono); letter-spacing: var(--track-micro); color: var(--ink-2); }
 .keymap { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s2) var(--s4); margin: 0; }
 .keymap > div { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
-.keymap dt { font: var(--f-legend) / 1 var(--font-panel); text-transform: uppercase; color: var(--ink); }
+.keymap dt { font: var(--f-legend) / 1 var(--font-panel); color: var(--ink); }
 .keymap dd { display: flex; gap: 4px; margin: 0; }
 .keymap kbd { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; background: var(--panel); border: var(--hair) solid var(--rule); box-shadow: var(--key-inset); font: 12px / 1 var(--font-mono); color: var(--ink); }
 
@@ -852,9 +845,8 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .plan > div { display: grid; align-content: start; gap: var(--s2); padding: var(--s4); min-width: 0; }
 .plan .plan-state, .plan .plan-next { border-left: var(--hair) solid var(--rule-faint); }
 .plan .headline {
-  font: var(--f-read) / 1.2 var(--font-panel);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font: 600 var(--f-read) / 1.2 var(--font-text);
+  letter-spacing: 0;
 }
 .plan .body {
   display: -webkit-box;
@@ -871,9 +863,8 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   display: flex;
   align-items: center;
   gap: var(--s2);
-  font: var(--f-legend) / 1.25 var(--font-panel);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font: 600 var(--f-legend) / 1.25 var(--font-text);
+  letter-spacing: 0;
 }
 .plan .note { font-size: 13px; line-height: 1.45; color: var(--ink-3); }
 .stat .note { display: block; margin-top: var(--s1); font: var(--f-micro) / 1.3 var(--font-mono); letter-spacing: var(--track-micro); color: var(--ink-3); }
@@ -902,7 +893,14 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .game-card > .column-head { position: static; }
 .column-head h2 { font-size: var(--f-legend); }
 
-.party { flex: 1; display: grid; grid-auto-rows: 1fr; gap: var(--s2); }
+.party { flex: 1; display: grid; align-content: start; gap: var(--s2); }
+/* Side by side, the party ends level with the stage. Bays grow to a cap,
+   and open slots stay slim. A full party fills the column. */
+@media (min-width: 1280px) {
+  .party { display: flex; flex-direction: column; }
+  .party > .mon { flex: 1 1 auto; max-height: 180px; }
+  .party > .mon--empty { flex: 0 0 auto; }
+}
 
 /* ---- a bay -------------------------------------------------------------
    Portrait, then a body of three rows: who, what, how they are doing.
@@ -934,7 +932,6 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   min-width: 0;
   font: var(--f-legend) / 1 var(--font-panel);
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1017,7 +1014,6 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   padding: 3px var(--s3);
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--ink-2);
 }
 .move .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1031,10 +1027,13 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .mon--fainted .plate img { filter: grayscale(1) opacity(0.6); }
 
 /* An open slot is a recess with a dashed tray, not a card. */
-.mon--empty { background: var(--panel-2); box-shadow: var(--well-inset); border-color: var(--rule-faint); }
-.mon--empty .plate { background: transparent; border-style: dashed; box-shadow: none; }
-.mon--empty .plate-num { color: var(--ink-3); }
-.mon--empty .mon-body { display: flex; flex-direction: column; justify-content: center; gap: var(--s1); padding: 0 var(--s4); }
+/* An open slot is a dashed outline on the page, not another panel, so the
+   filled bays read first. */
+.mon--empty { align-items: center; background: transparent; box-shadow: none; border: var(--hair) dashed var(--rule); }
+.mon--empty .mon-plate { padding: var(--s1) var(--s2); border-right: 0; }
+.mon--empty .plate--bay { width: 40px; height: 40px; background: transparent; border: 0; box-shadow: none; }
+.mon--empty .plate-num { color: var(--ink-3); font-size: 16px; }
+.mon--empty .mon-body { display: flex; flex-direction: row; align-items: baseline; flex-wrap: wrap; column-gap: var(--s2); row-gap: 2px; padding-block: var(--s1); padding-inline: var(--s3); align-self: center; }
 .mon--empty .mon-body p:last-child { font-size: 14px; color: var(--ink-2); }
 
 
@@ -1066,7 +1065,7 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   background: var(--panel-2);
 }
 .partner-detail-head .plate { grid-row: span 3; }
-.partner-detail-head h2 { font: var(--f-read) / 1.1 var(--font-panel); letter-spacing: 0.04em; text-transform: uppercase; }
+.partner-detail-head h2 { font: var(--f-read) / 1.1 var(--font-panel); letter-spacing: 0.04em; }
 .partner-detail-head p:last-child { font-size: 14px; color: var(--ink-2); }
 .partner-detail section { padding: var(--s4); border-bottom: var(--hair) solid var(--rule-faint); }
 .partner-detail section:last-child { border-bottom: 0; }
@@ -1078,7 +1077,7 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .partner-detail .moves .move:last-child { border-bottom: 0; }
 .battle-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: var(--s2); }
 .battle-stats > div { display: grid; gap: var(--s2); padding: var(--s3); background: var(--panel-2); border: var(--hair) solid var(--rule-faint); }
-.battle-stats dt { font: var(--f-micro) / 1 var(--font-mono); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-3); }
+.battle-stats dt { font: var(--f-micro) / 1 var(--font-mono); letter-spacing: var(--track-micro); color: var(--ink-3); }
 .battle-stats dd { font: var(--f-read) / 1 var(--font-panel); font-variant-numeric: tabular-nums; }
 .total-xp { margin-top: var(--s3); font-size: 13px; color: var(--ink-3); }
 
@@ -1109,7 +1108,7 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 }
 .confirm-sheet::backdrop { background: rgba(10, 12, 10, 0.55); }
 .confirm-sheet form { display: grid; gap: var(--s3); padding: var(--s5); }
-.confirm-sheet h2 { font: var(--f-read) / 1.2 var(--font-panel); }
+.confirm-sheet h2 { font: 600 var(--f-read) / 1.2 var(--font-text); }
 .confirm-sheet p { color: var(--ink-2); }
 .confirm-sheet strong { color: var(--ink); font-variant-numeric: tabular-nums; }
 .confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); margin-top: var(--s3); }
@@ -1338,7 +1337,7 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .live-speed select { color: var(--ink) }
 .live-speed select { border: var(--hair) solid var(--rule) }
 .live-speed select { border-radius: 0 }
-.live-speed select { font: var(--f-legend) / 1 var(--font-panel) }
+.live-speed select { font: 600 var(--f-legend) / 1 var(--font-text) }
 
 /* Game controls own touch gestures and remain usable while held. */
 .controller [data-b] { touch-action: none }
@@ -1376,10 +1375,9 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   height: 44px;
   min-height: 44px;
   padding: 0 6px;
-  font: var(--f-legend) / 1.15 var(--font-panel);
+  font: 600 var(--f-legend) / 1.15 var(--font-text);
   font-size: 12px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   text-align: center;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -1445,3 +1443,7 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 }
 .dex-grid .skeleton-card { min-height: 236px; }
 @keyframes skeleton-pulse { 50% { opacity: .55; } }
+
+/* The next-step note carries two facts. Space them instead of printing a separator. */
+.plan-meta { display: flex; flex-wrap: wrap; column-gap: var(--s3) }
+.plan-meta span:empty { display: none }

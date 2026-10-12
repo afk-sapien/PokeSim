@@ -142,7 +142,7 @@ test('party joins every combined sort without changing source data', async () =>
     assert.equal(view.rows()[0].nick, 'Ace', field)
   }
   assert.equal(view.element('#pc-count').textContent, '21 Pokémon')
-  assert.match(view.element('#pc-grid').innerHTML, /PARTY · SLOT 1/)
+  assert.match(view.element('#pc-grid').innerHTML, /Party, slot 1/)
   view.sort('level', 'asc')
   assert.equal(view.rows().at(-1).nick, 'Ace')
   view.element('#pc-strongest').onclick()
@@ -160,7 +160,7 @@ test('party selection bookmarks, details, refresh, and box selection remain dist
   assert.match(view.url(), /box=party/)
   assert.match(view.element('#box-picker').innerHTML, /data-box="0" aria-pressed="true"/)
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
-  assert.match(view.element('#pc-detail-body').innerHTML, /PARTY · SLOT 1/)
+  assert.match(view.element('#pc-detail-body').innerHTML, /Party, slot 1/)
   party[0].level = 81
   await view.refresh()
   assert.match(view.element('#pc-grid').innerHTML, /Lv. 81/)
@@ -249,7 +249,7 @@ test('DV ratings filter, sort, bookmark, and explain partners in every view', as
   assert.match(view.element('#pc-grid').innerHTML, /3-star DVs/)
   assert.match(view.element('#pc-grid').innerHTML, /★★★★/)
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '1'}})}})
-  assert.match(view.element('#pc-detail-body').innerHTML, /70 \/ 75 DVs · 93.3%/)
+  assert.match(view.element('#pc-detail-body').innerHTML, /70 \/ 75 DVs, 93.3%/)
   assert.match(view.element('#pc-trade-action').innerHTML, /Stats guide/)
   view.element('#pc-rating').value = '3'
   view.element('#pc-rating').oninput()
@@ -313,7 +313,7 @@ test('eggs show as Eggs without their species, types or sprite', async () => {
   await view.ready()
   const html = view.element('#pc-grid').innerHTML
   assert.match(html, /class="egg-plate" role="img" aria-label="Egg"/)
-  assert.match(html, /Egg · Lv\. 5/)
+  assert.match(html, /Egg, Lv\. 5/)
   assert.doesNotMatch(html, /Sneasel|sprites\/|Dark/)
 })
 
@@ -387,7 +387,7 @@ test('a slot in the address opens that Pokémon once the fresh PC has loaded', a
   const view = pc([mon(3, 2, 10, {nick: 'FIRST'}), mon(3, 7, 30, {nick: 'WANTED'})], '?box=3&slot=7')
   await view.ready()
   assert.match(view.element('#pc-detail-body').innerHTML, /<h2 id="pc-detail-name">WANTED<\/h2>/)
-  assert.match(view.element('#pc-detail-body').innerHTML, /BOX 3 · SLOT 7/)
+  assert.match(view.element('#pc-detail-body').innerHTML, /Box 3, slot 7/)
   // The address keeps the box but not the slot, so a reload does not reopen it.
   assert.doesNotMatch(view.url(), /slot=/)
   const party = pc([], '?box=party&slot=2', [mon(undefined, undefined, 20, {slot: 1, nick: 'LEAD'}), mon(undefined, undefined, 20, {slot: 2, nick: 'SECOND'})])

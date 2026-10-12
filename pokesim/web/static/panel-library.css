@@ -40,7 +40,6 @@
 .page-title h1 {
   font: var(--f-title) / 1.1 var(--font-panel);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .lede { max-width: 62ch; color: var(--ink-2); }
@@ -67,11 +66,10 @@
 .back-link a {
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
 }
 
 .empty-state { display: grid; justify-items: start; gap: var(--s3); padding: var(--s6); }
-.empty-state h2 { font: var(--f-read) / 1.2 var(--font-panel); letter-spacing: 0.04em; text-transform: uppercase; }
+.empty-state h2 { font: 600 var(--f-read) / 1.2 var(--font-text); letter-spacing: 0; }
 .empty-state p:not(.legend) { max-width: 60ch; color: var(--ink-2); }
 .empty-state .key { margin-top: var(--s2); }
 
@@ -125,7 +123,7 @@
   height: 144px;
   max-width: none;
   image-rendering: pixelated;
-  background: #0E100C;
+  background: var(--screen-dark);
 }
 /* A stopped adventure keeps the same screen box, so titles and buttons
    line up across a row whatever each adventure is doing. */
@@ -140,7 +138,6 @@
 .card-body h2 {
   font: var(--f-read) / 1.1 var(--font-panel);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .card-activity { color: var(--ink-2); font-size: 14px; line-height: 1.5; }
@@ -170,7 +167,6 @@
 .status-headline {
   font: var(--f-title) / 1.1 var(--font-panel);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .status-detail { color: var(--ink-2); font-size: 14px; }
@@ -290,9 +286,8 @@
 .exchange-placeholder .plate-num { color: var(--ink-3); }
 .exchange-text { display: grid; flex: 1 1 140px; gap: var(--s1); min-width: 0; }
 .exchange-text strong {
-  font: var(--f-legend) / 1.2 var(--font-panel);
-  letter-spacing: var(--track-legend);
-  text-transform: uppercase;
+  font: 600 var(--f-legend) / 1.2 var(--font-text);
+  letter-spacing: 0;
   color: var(--ink);
   overflow-wrap: anywhere;
 }
@@ -311,7 +306,6 @@
   list-style: none;
   font: var(--f-label) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-2);
 }
 .disclosure details > summary::-webkit-details-marker { display: none; }
@@ -390,7 +384,6 @@
   box-shadow: var(--key-inset);
   font: var(--f-label) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink);
   cursor: pointer;
 }
@@ -545,7 +538,7 @@
 }
 
 @media (min-width: 401px) and (max-width: 640px) {
-  .library .rail nav a { font: var(--f-legend) / 1 var(--font-panel); letter-spacing: 0.04em; }
+  .library .rail nav a { font: 600 var(--f-legend) / 1 var(--font-text); letter-spacing: 0; }
 }
 
 @media (forced-colors: active) {
@@ -831,7 +824,7 @@
 .cartridge-slot[data-state="empty"] .cartridge-face span,
 .cartridge-slot[data-state="coming"] .cartridge-face span { background: repeating-linear-gradient(135deg, var(--cell-off) 0 4px, transparent 4px 8px); }
 .cartridge-info { display: grid; align-content: start; gap: var(--s1); min-width: 0; }
-.cartridge-name { font: var(--f-legend) / 1.25 var(--font-panel); letter-spacing: 0.04em; text-transform: uppercase; overflow-wrap: anywhere; }
+.cartridge-name { font: var(--f-legend) / 1.25 var(--font-panel); letter-spacing: 0.04em; overflow-wrap: anywhere; }
 /* Six across, some names take two lines; every name gets two so the facts
    below line up from slot to slot. */
 @media (min-width: 1000px) {

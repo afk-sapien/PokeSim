@@ -45,9 +45,9 @@ test('cards show caught and current counts even when a species has zero or no re
   const view = page(status)
   await settle()
   const grid = view.element('#grid').innerHTML
-  assert.match(grid, /Caught 12 · Have 3/)
-  assert.equal((grid.match(/class="card-counts">Caught 0 · Have 0/g) || []).length, 2)
-  assert.match(grid, /aria-label="Pikachu, number 025, In Pokédex, Caught 12 · Have 3"/)
+  assert.match(grid, /Caught 12, Have 3/)
+  assert.equal((grid.match(/class="card-counts">Caught 0, Have 0/g) || []).length, 2)
+  assert.match(grid, /aria-label="Pikachu, number 025, In Pokédex, Caught 12, Have 3"/)
   assert.match(grid, /aria-describedby="catch-tracking-note"/)
   assert.match(view.element('#catch-tracking-note').textContent, /^Catches tracked since .*2026/)
 })
@@ -59,7 +59,7 @@ test('details show counts, party and PC split, locations, and the same partial-h
   const detail = view.element('#detail-body').innerHTML
   assert.match(detail, /<dt>Caught<\/dt><dd>12<\/dd>/)
   assert.match(detail, /<dt>Have<\/dt><dd>3<\/dd>/)
-  assert.match(detail, /Party 1 · PC 2/)
+  assert.match(detail, /Party 1, PC 2/)
   assert.ok(detail.includes(view.element('#catch-tracking-note').textContent))
   assert.match(detail, /Party slot 1/)
   assert.match(detail, /Box 1/)
@@ -67,7 +67,7 @@ test('details show counts, party and PC split, locations, and the same partial-h
   view.context.renderDetail(150)
   assert.match(view.element('#detail-body').innerHTML, /<dt>Caught<\/dt><dd>0<\/dd>/)
   assert.match(view.element('#detail-body').innerHTML, /<dt>Have<\/dt><dd>0<\/dd>/)
-  assert.match(view.element('#detail-body').innerHTML, /Party 0 · PC 0/)
+  assert.match(view.element('#detail-body').innerHTML, /Party 0, PC 0/)
 })
 
 test('catch-only updates refresh open details and cards without losing scroll position', async () => {
@@ -78,13 +78,13 @@ test('catch-only updates refresh open details and cards without losing scroll po
   view.element('#detail').scrollTop = 480
   current.catches = {...current.catches, counts: {'25': 13}, total: 43}
   await view.context.refreshStatus()
-  assert.match(view.element('#grid').innerHTML, /Caught 13 · Have 3/)
+  assert.match(view.element('#grid').innerHTML, /Caught 13, Have 3/)
   assert.match(view.element('#detail-body').innerHTML, /<dt>Caught<\/dt><dd>13<\/dd>/)
   assert.equal(view.element('#detail').scrollTop, 480)
   current.storage.pokemon.pop()
   await view.context.refreshStatus()
-  assert.match(view.element('#grid').innerHTML, /Caught 13 · Have 2/)
-  assert.match(view.element('#detail-body').innerHTML, /Party 1 · PC 1/)
+  assert.match(view.element('#grid').innerHTML, /Caught 13, Have 2/)
+  assert.match(view.element('#detail-body').innerHTML, /Party 1, PC 1/)
 })
 
 test('new adventures with complete history identify the total as tracked from the start', async () => {
@@ -103,7 +103,7 @@ test('missing catch history is not inferred from the registered species or held 
   delete current.catches
   const view = page(() => current)
   await settle()
-  assert.match(view.element('#grid').innerHTML, /Catch count unavailable · Have 3/)
+  assert.match(view.element('#grid').innerHTML, /Catch count unavailable, Have 3/)
   assert.equal(view.element('#catch-tracking-note').textContent, 'Catch tracking has not started yet.')
 })
 
@@ -112,13 +112,13 @@ test('unsupported games display unavailable catch counts while retaining current
   current.catches = {...current.catches, counts: {}, total: 0, available: false}
   const view = page(() => current)
   await settle()
-  assert.match(view.element('#grid').innerHTML, /Catch count unavailable · Have 3/)
+  assert.match(view.element('#grid').innerHTML, /Catch count unavailable, Have 3/)
   assert.doesNotMatch(view.element('#grid').innerHTML, /Caught 0/)
   assert.equal(view.element('#catch-tracking-note').textContent, 'Catch tracking is unavailable for this game.')
   view.context.renderDetail(25)
   assert.match(view.element('#detail-body').innerHTML, /<dt>Caught<\/dt><dd class="count-unavailable">Unavailable<\/dd>/)
   assert.match(view.element('#detail-body').innerHTML, /<dt>Have<\/dt><dd>3<\/dd>/)
-  assert.match(view.element('#detail-body').innerHTML, /Party 1 · PC 2/)
+  assert.match(view.element('#detail-body').innerHTML, /Party 1, PC 2/)
 })
 
 test('a Gen II Pokédex never paints counts against the Gen I total while its reference loads', async () => {

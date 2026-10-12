@@ -29,9 +29,8 @@ main.shell { padding-bottom: var(--s7); }
 .trade-overview-read .micro { display: flex; align-items: center; gap: var(--s2); }
 .trade-overview .headline {
   margin-top: var(--s2);
-  font: var(--f-read) / 1.1 var(--font-panel);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font: 600 var(--f-read) / 1.1 var(--font-text);
+  letter-spacing: 0;
   overflow-wrap: anywhere;
 }
 .trade-overview .body { margin-top: var(--s2); color: var(--ink-2); }
@@ -62,9 +61,8 @@ main.shell { padding-bottom: var(--s7); }
   background: var(--panel-2);
   border: 0;
   box-shadow: var(--key-inset);
-  font: var(--f-legend) / 1 var(--font-panel);
-  letter-spacing: var(--track-legend);
-  text-transform: uppercase;
+  font: 600 var(--f-legend) / 1 var(--font-text);
+  letter-spacing: 0;
   color: var(--ink-2);
   white-space: nowrap;
   cursor: pointer;
@@ -202,7 +200,6 @@ main.shell { padding-bottom: var(--s7); }
   border-top: var(--hair) solid var(--rule-faint);
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 
@@ -225,7 +222,6 @@ main.shell { padding-bottom: var(--s7); }
   padding: 0 var(--s3);
   font: var(--f-micro) / 1.4 var(--font-mono);
   letter-spacing: var(--track-micro);
-  text-transform: uppercase;
   color: var(--ink-2);
   cursor: pointer;
   list-style: none;
@@ -293,9 +289,9 @@ main.shell { padding-bottom: var(--s7); }
 .trade-tabs [role="tab"] { background: var(--panel-2) }
 .trade-tabs [role="tab"] { color: var(--ink-2) }
 .trade-tabs [role="tab"] { border: var(--hair) solid var(--rule-faint) }
-.trade-tabs [role="tab"] { font: var(--f-legend) / 1 var(--font-panel) }
+.trade-tabs [role="tab"] { font: 600 var(--f-legend) / 1 var(--font-text) }
 .trade-tabs [role="tab"] { letter-spacing: var(--track-legend) }
-.trade-tabs [role="tab"] { text-transform: uppercase }
+.trade-tabs [role="tab"] { }
 .trade-tabs [role="tab"] { cursor: pointer }
 .trade-tabs [role="tab"]:hover:not(:disabled) { color: var(--ink) }
 .trade-tabs [role="tab"][aria-selected="true"] { background: var(--panel) }
@@ -371,8 +367,8 @@ a.pick-item { text-decoration: none }
 .auto-switch { background: var(--panel-2) }
 .auto-switch { color: var(--ink) }
 .auto-switch { border: var(--hair) solid var(--rule) }
-.auto-switch { font: var(--f-legend) / 1 var(--font-panel) }
-.auto-switch { text-transform: uppercase }
+.auto-switch { font: 600 var(--f-legend) / 1 var(--font-text) }
+.auto-switch { }
 .auto-switch { cursor: pointer }
 .auto-switch:disabled { cursor: not-allowed }
 .auto-switch:disabled { opacity: 0.6 }
@@ -417,7 +413,7 @@ a.pick-item { text-decoration: none }
 .trade-setting select { background: var(--panel) }
 .trade-setting select { color: var(--ink) }
 .trade-setting select { border: var(--hair) solid var(--rule) }
-.trade-setting select { font: 15px / 1.2 var(--font-mono) }
+.trade-setting select { font: 500 15px / 1.2 var(--font-text) }
 .trade-setting select:disabled { opacity: 0.6 }
 
 @media (max-width: 640px) {
@@ -550,7 +546,7 @@ a.pick-item { text-decoration: none }
   text-align: center;
   font: inherit;
 }
-.slot-empty b { font: var(--f-read) / 1.2 var(--font-panel); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); }
+.slot-empty b { font: var(--f-read) / 1.2 var(--font-panel); letter-spacing: 0.04em; color: var(--ink); }
 .slot-empty:hover:not(:disabled), .slot-empty:focus-visible { border-color: var(--signal); color: var(--ink); }
 .slot-empty:disabled { cursor: not-allowed; opacity: 0.6; }
 .slot-plus { font: 28px / 1 var(--font-mono); color: var(--signal); }

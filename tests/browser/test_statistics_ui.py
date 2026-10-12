@@ -97,7 +97,7 @@ def test_marathon_records_and_current_clock(page, game, monkeypatch, width):
     expect(page.locator('#marathon-current')).to_have_text('1:01')
     expect(page.locator('#marathon-checkpoints')).to_have_text('4 of 11 checkpoints')
     expect(page.locator('#marathon-last')).to_have_text('20:56')
-    expect(page.locator('#marathon-result')).to_have_text('Finished · Personal best')
+    expect(page.locator('#marathon-result')).to_have_text('Finished, personal best')
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
     page.screenshot(path=f'/tmp/pokesim-marathon-records-{width}.png', full_page=True)
     collection.marathon_records['last'] = {'frames': 3600, 'finished': False}

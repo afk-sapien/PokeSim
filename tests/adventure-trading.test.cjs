@@ -78,7 +78,7 @@ test('failed attempts explain missing trades and remain distinct from completed 
   assert.match(html, /Trade did not complete/)
   assert.match(html, /could not reach the Cable Club/)
   assert.doesNotMatch(html, /private|Trade completed/)
-  assert.equal(view.element('#trade-history-count').textContent, '0 completed · 1 did not complete')
+  assert.equal(view.element('#trade-history-count').textContent, '0 completed, 1 did not complete')
 })
 
 test('history lists completed trades and failed attempts together, newest first', async () => {

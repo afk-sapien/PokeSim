@@ -26,11 +26,11 @@
     const sprite = dex ? `<img src="${esc(PokeSim.sprite(dex))}" alt="" loading="lazy">` : '<span class="plate-num" aria-hidden="true">?</span>'
     const nickname = mon.nickname && mon.nickname.toLowerCase() !== mon.name.toLowerCase()
       ? `<p class="swap-sub cable-nickname">“${esc(mon.nickname)}”</p>` : ''
-    const level = Number.isInteger(mon.level) && mon.level > 0 && mon.level <= 100 ? ` · Lv. ${mon.level}` : ''
-    const name = dex ? `<a href="${esc(PokeSim.base || '')}/pokedex#${dex}">${esc(mon.name)} <span aria-hidden="true">↗</span></a>` : esc(mon.name)
+    const level = Number.isInteger(mon.level) && mon.level > 0 && mon.level <= 100 ? `, Lv. ${mon.level}` : ''
+    const name = dex ? `<a href="${esc(PokeSim.base || '')}/pokedex#${dex}">${esc(mon.name)}</a>` : esc(mon.name)
     const evolution = completed && receiving && mon.evolved_from?.name
       ? `<p class="swap-note cable-evolution"><span class="micro">Trade evolution</span> ${esc(mon.evolved_from.name)} → ${esc(mon.name)}</p>` : ''
-    return `<div class="swap-side cable-mon cable-${direction}"><div class="plate plate--bay${plateClass(mon)}">${sprite}</div><div class="swap-read"><p class="micro">${label}${dex ? ` · #${String(dex).padStart(3, '0')}` : ''}${level}</p><h4>${name}</h4>${nickname}${stamps(mon)}${evolution}</div></div>`
+    return `<div class="swap-side cable-mon cable-${direction}"><div class="plate plate--bay${plateClass(mon)}">${sprite}</div><div class="swap-read"><p class="micro">${label}${dex ? `, #${String(dex).padStart(3, '0')}` : ''}${level}</p><h4>${name}</h4>${nickname}${stamps(mon)}${evolution}</div></div>`
   }
   function exchange(trade, completed = false) {
     const failed = trade.phase === 'aborted'
@@ -43,7 +43,7 @@
       ? `<time datetime="${date.toISOString()}">${esc(date.toLocaleString())}</time>` : ''
     const reason = failed ? `<p class="deal-reason deal-reason--crit cable-failure">${esc(trade.failure_reason || 'The exchange could not finish safely.')}</p>` : ''
     const peer = /^[a-f0-9]{32}$/.test(trade.peer_id || '')
-      ? `<a href="/games/${trade.peer_id}/trading">${esc(trade.peer_name)} <span aria-hidden="true">↗</span></a>` : esc(trade.peer_name)
+      ? `<a href="/games/${trade.peer_id}/trading">${esc(trade.peer_name)}</a>` : esc(trade.peer_name)
     const pair = failed && !trade.sent && !trade.received ? ''
       : `<div class="swap cable-exchange">${pokemon(trade.sent, 'sent', completed, failed)}<span class="swap-arrow" aria-hidden="true">→</span>${pokemon(trade.received, 'received', completed, failed)}</div>`
     const foot = time || completed ? `<footer class="deal-foot">${time}${completed ? '<span>Saved in both adventures</span>' : ''}</footer>` : ''
@@ -55,7 +55,7 @@
   // A trade the owner chose that waits for the Cable Club. Its Pokémon show once it starts.
   function queuedCard(entry) {
     const peer = /^[a-f0-9]{32}$/.test(entry.peer_id || '')
-      ? `<a href="/games/${entry.peer_id}/trading">${esc(entry.peer_name)} <span aria-hidden="true">↗</span></a>` : esc(entry.peer_name)
+      ? `<a href="/games/${entry.peer_id}/trading">${esc(entry.peer_name)}</a>` : esc(entry.peer_name)
     const place = entry.state === 'starting' ? 'Checking both Pokémon' : entry.position > 1 ? `Number ${entry.position} in line for the Cable Club` : 'Next for the Cable Club'
     const wait = entry.state !== 'starting' && entry.busy ? 'Busy with a trade. Your trade will wait in line.' : 'It starts when the Cable Club is free.'
     const cancel = entry.cancellable && entry.state === 'queued' && owner() && /^[a-f0-9]{32}$/.test(entry.id || '')
@@ -101,7 +101,7 @@
       const off = data.auto_enabled === false
       setLamp(data.active.length ? 'signal' : !running || off ? 'warn' : data.attention ? 'warn' : 'ok')
       $('#trade-status').textContent = data.active.length ? 'Exchange in progress' : !running ? 'Waiting for this adventure'
-        : off ? 'Off' : data.attention ? 'Trades have not been completing' : 'On · Trades automatically'
+        : off ? 'Off' : data.attention ? 'Trades have not been completing' : 'On, trades automatically'
       $('#trade-activity').textContent = data.active.length ? 'This adventure is trading. Other adventures keep playing.'
         : !running ? 'Trades resume when this adventure is running. Its history stays here.'
         : off ? 'Automatic trading is off. Trades you pick on the Trade tab still happen.'
@@ -117,7 +117,7 @@
       const rows = [...completed.map(trade => [trade, true]), ...failures.map(trade => [trade, false])]
         .sort((a, b) => (b[0].updated_at || 0) - (a[0].updated_at || 0))
       $('#trade-history-count').textContent = `${completed.length}${completed.length === 20 ? '+' : ''} completed`
-        + (failures.length ? ` · ${failures.length} did not complete` : '')
+        + (failures.length ? `, ${failures.length} did not complete` : '')
       $('#trade-history').innerHTML = rows.length ? rows.map(([trade, done]) => exchange(trade, done)).join('')
         : '<p class="empty-note">This adventure’s trades will appear here.</p>'
       globalThis.Panel?.fitSprites?.(document)

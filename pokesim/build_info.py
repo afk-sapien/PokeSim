@@ -43,4 +43,4 @@ def version_label(info=None):
     """Name the running build as people see it: the release and its short commit."""
     info = build_info() if info is None else info
     revision = info.get('revision') or ''
-    return f"v{info.get('version') or __version__}" + (f' · {revision[:7]}' if revision else '')
+    return f"v{info.get('version') or __version__}" + (f' ({revision[:7]})' if revision else '')

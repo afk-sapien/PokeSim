@@ -92,7 +92,7 @@ function renderGrid() {
     const copies = held.get(entry.dex)
     const note = RECORD_LABELS[state]
     const caught = caughtCount(entry.dex)
-    const counts = `${caught === null ? 'Catch count unavailable' : `Caught ${caught}`} · Have ${copies?.length || 0}`
+    const counts = `${caught === null ? 'Catch count unavailable' : `Caught ${caught}`}, Have ${copies?.length || 0}`
     return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${shinySpecies.has(entry.dex) ? ', shiny species found' : ''}${maxed.has(entry.dex) ? ', level 100 reached' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}, ${counts}" aria-describedby="catch-tracking-note">
       <span class="dex-top"><span class="dex-num">${num(entry.dex)}</span>${entry.dex === hunting
         // The hunt flag takes the note's place, so the head stays one line.
@@ -140,7 +140,7 @@ function placeLine(place) {
   const extra = [place.level_range, place.rod ? `${place.rod}` : null,
                  place.gives ? `Trade a ${place.gives}` : null, place.item ? `From the ${place.item}` : null]
   return `<li><span class="tag place-method ${esc(place.method)}">${esc(place.method_label)}</span>
-    <strong>${esc(place.map_name)}</strong><small>${extra.filter(Boolean).map(esc).join(' · ')}</small></li>`
+    <strong>${esc(place.map_name)}</strong><small>${extra.filter(Boolean).map(esc).join(', ')}</small></li>`
 }
 
 function sourceLine(source) {
@@ -168,16 +168,16 @@ function renderDetail(dex, refresh = false) {
   $('#detail-body').innerHTML = `
     <header class="detail-head">
       <span class="plate plate--hero ${PokemonTypes.portraitClass(entry.types)}"><img src="${PokeSim.sprite(dex)}" alt="${esc(entry.name)}" width="56" height="56"></span>
-      <div class="detail-id"><span class="micro eyebrow">No. ${num(dex)}${entry.dex === hunting ? ' · Current expedition' : ''}</span>
+      <div class="detail-id"><span class="micro eyebrow">No. ${num(dex)}${entry.dex === hunting ? ', current expedition' : ''}</span>
         <h2 id="detail-name">${esc(entry.name)}</h2>
         <div class="detail-types">${typeTags(entry.types)}</div>
         <span class="record-pill ${state}"><i class="lamp"${RECORD_LAMPS[state] ? ` data-on="${RECORD_LAMPS[state]}"` : ''} aria-hidden="true"></i>${RECORD_LABELS[state]}</span>${milestoneBadges(entry.dex)}</div>
     </header>
     <section class="detail-section" aria-label="Collection counts">
       <dl class="collection-counts"><div><dt>Caught</dt><dd${catchesAvailable() ? '' : ' class="count-unavailable"'}>${caughtCount(dex) ?? 'Unavailable'}</dd></div><div><dt>Have</dt><dd>${copies.length}</dd></div></dl>
-      <p class="detail-meta">Party ${partyCount} · PC ${pcCount}</p>
+      <p class="detail-meta">Party ${partyCount}, PC ${pcCount}</p>
       <p class="detail-meta">${esc(trackingNote())}</p>
-      <div class="link-row"><a class="key" href="${PokeSim.base}/pc?scope=all&q=%23${num(dex)}&sort=power&order=desc">View in PC ↗</a></div>
+      <div class="link-row"><a class="key" href="${PokeSim.base}/pc?scope=all&q=%23${num(dex)}&sort=power&order=desc">View in PC</a></div>
     </section>
     ${project && state !== 'caught' ? `<p class="plan-note"><b>${esc(PLAN_LABELS[project.status] || 'Status')}</b> ${esc(project.reason || '')}</p>` : ''}
     ${project?.sources?.length ? `<section class="detail-section" aria-label="How the sim gets it"><h3>How the sim gets it</h3>
@@ -185,8 +185,8 @@ function renderDetail(dex, refresh = false) {
     ${copies.length ? `<section class="detail-section"><h3>With you right now</h3><ul class="copy-list">${copies.map((copy, index) => copyRow(copy, index, entry)).join('')}</ul></section>` : ''}
     <section class="detail-section"><h3>Base stats</h3>
       ${Object.entries(entry.stats).map(([label, value]) => statRow(label, value)).join('')}
-      <p class="detail-meta">Total ${entry.total} · ${dexTotal === 251 ? 'Separate Special Attack and Special Defense' : 'Generation I shares one Special stat'}</p>
-      <p class="detail-meta">Catch rate ${entry.catch_rate} of 255 · ${esc(entry.growth)} level curve${entry.hms.length ? ` · Field moves: ${entry.hms.map(esc).join(', ')}` : ''}</p>
+      <p class="detail-meta">Total ${entry.total}, ${dexTotal === 251 ? 'Separate Special Attack and Special Defense' : 'Generation I shares one Special stat'}</p>
+      <p class="detail-meta">Catch rate ${entry.catch_rate} of 255, ${esc(entry.growth)} level curve${entry.hms.length ? `, Field moves: ${entry.hms.map(esc).join(', ')}` : ''}</p>
     </section>
     ${entry.evolves_from.length || entry.evolves_to.length ? `<section class="detail-section"><h3>Family</h3><div class="evo-row">
       ${entry.evolves_from.map((step) => chip(step, 'Evolves from')).join('')}
@@ -199,9 +199,9 @@ function renderDetail(dex, refresh = false) {
       <div class="move-scroll" tabindex="0" role="region" aria-label="Moves it learns on its own"><table class="move-table"><thead><tr><th>When</th><th>Move</th><th>Type</th><th>Power</th><th>Acc.</th><th>PP</th></tr></thead><tbody>${moves}</tbody></table></div>
     </section>
     ${Object.keys(entry.links).length ? `<section class="detail-section"><h3>Read more</h3><div class="link-row">
-      <a class="key" href="${esc(entry.links.bulbapedia)}" target="_blank" rel="noreferrer">Bulbapedia ↗</a>
-      <a class="key" href="${esc(entry.links.serebii)}" target="_blank" rel="noreferrer">Serebii ↗</a>
-      <a class="key" href="${esc(entry.links.wikipedia)}" target="_blank" rel="noreferrer">Wikipedia ↗</a>
+      <a class="key" href="${esc(entry.links.bulbapedia)}" target="_blank" rel="noreferrer">Bulbapedia</a>
+      <a class="key" href="${esc(entry.links.serebii)}" target="_blank" rel="noreferrer">Serebii</a>
+      <a class="key" href="${esc(entry.links.wikipedia)}" target="_blank" rel="noreferrer">Wikipedia</a>
     </div></section>` : ''}`
   fitSprites($('#detail-body'))
   $('#detail').hidden = false
@@ -216,7 +216,7 @@ function copyRow(copy, index, entry) {
   const name = copy.nick || entry.name
   const rating = copy.stars ? `${copy.stars}★ DVs` : 'DVs unknown'
   const label = `Open ${name}, level ${copy.level}, ${copy.where}, ${copy.stars ? `${copy.stars}-star DVs` : 'DVs unknown'}${copy.shiny ? ', shiny' : ''}`
-  return `<li><button type="button" class="copy-open" data-copy="${index}" aria-label="${esc(label)}"><span class="copy-text"><strong>${esc(name)}</strong>${PokemonTypes.shinyBadge(copy)}<span>Lv. ${copy.level} · ${esc(copy.where)} · ${rating}</span></span><span class="copy-go" aria-hidden="true">›</span></button></li>`
+  return `<li><button type="button" class="copy-open" data-copy="${index}" aria-label="${esc(label)}"><span class="copy-text"><strong>${esc(name)}</strong>${PokemonTypes.shinyBadge(copy)}<span>Lv. ${copy.level}, ${esc(copy.where)}, ${rating}</span></span><span class="copy-go" aria-hidden="true">›</span></button></li>`
 }
 
 // The Pokédex only knows who holds a species. The full record comes from the PC's own data:
@@ -233,10 +233,10 @@ function findPartner(full, copy, dex) {
 }
 
 function showPartner(partner, copy, note = '') {
-  const where = copy.box === 0 ? `PARTY · SLOT ${copy.slot}` : `BOX ${copy.box} · SLOT ${copy.slot}`
+  const where = copy.box === 0 ? `Party, slot ${copy.slot}` : `Box ${copy.box}, slot ${copy.slot}`
   $('#mon-detail-body').innerHTML = partner ? MonGrid.detail(partner, {links: false})
     : `<div class="pc-detail-head"><div class="pc-detail-id"><p class="micro">${where}</p><h2 id="pc-detail-name">${esc(copy.nick || byDex.get(openDex)?.name || '')}</h2><p class="pc-detail-line">${esc(note)}</p></div></div>`
-  $('#mon-detail-action').innerHTML = `${partner ? MonGrid.detailLinks(partner, {dex: false}) : ''}<a class="key pc-show-link" href="${pcLink(copy)}">Show in PC<span class="key-long"> ↗</span></a>`
+  $('#mon-detail-action').innerHTML = `${partner ? MonGrid.detailLinks(partner, {dex: false}) : ''}<a class="key pc-show-link" href="${pcLink(copy)}">Show in PC</a>`
   fitSprites($('#mon-detail-body'))
 }
 
@@ -329,7 +329,7 @@ function showReference(data) {
   const regions = data.generation === 2 ? 'Johto and Kanto' : 'Kanto'
   document.title = `The ${regions} Pokédex. · pokesim`
   $('.skip-link').textContent = 'Skip to the Pokédex.'
-  $('.who .micro').textContent = `Species register · ${regions} · ${dexTotal} entries`
+  $('.who .micro').textContent = `${regions}, ${dexTotal} entries`
   $('.dex-lede').textContent = `Pick any species for its stats, family, where to find it in ${regions}, and the moves it learns.`
   for (const id of ['#owned-meter', '#seen-meter', '#maxed-meter']) $(id).max = dexTotal
   maxStat = data.generation === 2 ? 255 : 190

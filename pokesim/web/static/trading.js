@@ -12,7 +12,7 @@ function sprite(mon, size = 'bay') {
   return `<div class="plate plate--${size}">${img}</div>`
 }
 function side(mon, label) {
-  return `<div class="swap-side">${sprite(mon)}<div class="swap-read"><p class="micro">${label}</p><h4>${esc(mon.nick || mon.name)}</h4><p class="swap-sub">${esc(mon.name)} · Lv. ${Number(mon.level) || '?'}</p>${mon.evolved_from ? `<p class="swap-note">Evolved from ${esc(mon.evolved_from)}</p>` : ''}</div></div>`
+  return `<div class="swap-side">${sprite(mon)}<div class="swap-read"><p class="micro">${label}</p><h4>${esc(mon.nick || mon.name)}</h4><p class="swap-sub">${esc(mon.name)}, Lv. ${Number(mon.level) || '?'}</p>${mon.evolved_from ? `<p class="swap-note">Evolved from ${esc(mon.evolved_from)}</p>` : ''}</div></div>`
 }
 function deal(peer, state, send, receive, reason, foot = '') {
   return `<article class="deal trade-deal"><header class="deal-head"><h3>${peer}</h3>${state}</header><div class="swap">${send}<span class="swap-arrow" aria-hidden="true">→</span>${receive}</div><p class="deal-reason trade-reason">${esc(reason)}</p>${foot ? `<footer class="deal-foot">${foot}</footer>` : ''}</article>`
@@ -52,7 +52,7 @@ function render(status) {
   const trading = status.trading || {}
   const lamp = $('#trade-lamp')
   if (lamp) lamp.dataset.on = !status.connected ? 'crit' : status.holding ? 'signal' : trading.enabled ? 'ok' : 'warn'
-  $('#trade-status').textContent = !status.connected ? 'Connection unavailable' : trading.enabled ? 'On · Trades automatically' : 'Off'
+  $('#trade-status').textContent = !status.connected ? 'Connection unavailable' : trading.enabled ? 'On, trades automatically' : 'Off'
   const states = {ready: 'Watching for the next useful exchange.', waiting_for_overworld: 'Waiting for the adventures to finish their current activity.', waiting_for_opportunity: 'Waiting for a useful match.', retrying: 'Retrying after a trading interruption.'}
   $('#trade-activity').textContent = !status.connected ? 'Saved offers stay in place while we reconnect.' : !trading.enabled ? 'Offers are saved. Automatic trading is currently off.' : status.holding ? 'An exchange is in progress.' : states[trading.state] || 'Watching for the next useful exchange.'
   const peers = (status.peers || []).filter(peer => peer.error || !peer.started)
@@ -73,7 +73,7 @@ function render(status) {
   if (view === 'auto') {
     const all = (status.offers || []).map(full)
     cards = Grid ? Grid.apply('trade', all, settingOf) : all
-    const grid = cards.map(mon => `<div class="auto-card">${Grid ? Grid.card(mon, mon.trade_key, {attr: 'key', all: true, slot: mon.box ? `BOX ${Number(mon.box)} · SLOT ${Number(mon.position)}` : 'PARTY', tags: Grid.settingBadge(settingOf(mon))}) : `<b>${esc(mon.nick || mon.name)}</b>`}${TradeUI.control(mon.trade_key, mon.nick || mon.name)}</div>`).join('')
+    const grid = cards.map(mon => `<div class="auto-card">${Grid ? Grid.card(mon, mon.trade_key, {attr: 'key', all: true, slot: mon.box ? `Box ${Number(mon.box)}, slot ${Number(mon.position)}` : 'Party', tags: Grid.settingBadge(settingOf(mon))}) : `<b>${esc(mon.nick || mon.name)}</b>`}${TradeUI.control(mon.trade_key, mon.nick || mon.name)}</div>`).join('')
     $('#trade-content').innerHTML = head('Trade settings', '') + '<p class="trade-help"><b>Can trade</b>: automatic trading may use it when it is a spare. <b>Prefer to trade</b>: automatic trading uses it before other spares. <b>Never trade</b>: never traded automatically, and you can still pick it by hand. Shiny and perfect DV Pokémon are always protected, and automatic trades never take a last copy or your active party.</p>' + (cards.length ? `<div class="pc-grid pc-all-grid auto-grid">${grid}</div>` : `<p class="empty-note">${all.length ? 'No Pokémon match these filters.' : 'No Pokémon to set yet.'}</p>`)
   } else if (view === 'opportunities') {
     const rows = status.opportunities || []
@@ -110,7 +110,7 @@ $('#trade-content').addEventListener('click', event => {
   const button = event.target.closest('.pc-mon[data-key]')
   const card = button && cards.find(row => row.trade_key === button.dataset.key)
   if (!card || !dialog || !Grid) return
-  $('#trade-detail-body').innerHTML = Grid.detail(card, {slot: card.box ? `BOX ${card.box} · SLOT ${card.position}` : 'PARTY'})
+  $('#trade-detail-body').innerHTML = Grid.detail(card, {slot: card.box ? `Box ${card.box}, slot ${card.position}` : 'Party'})
   fitSprites($('#trade-detail-body'))
   dialog.showModal?.()
 })

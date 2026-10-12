@@ -74,7 +74,7 @@ function render() {
   $('#pc-total').textContent = `${counts.reduce((sum, count) => sum + count, 0)} / ${counts.length * 20}`
   $('#pc-active').textContent = `Box ${storage?.active_box || 1}`
   $('#pc-heading').textContent = all ? 'Party and all boxes' : selectedBox === 0 ? 'Party' : `Box ${selectedBox}`
-  $('#pc-note').textContent = all ? 'ALL PARTNERS' : selectedBox === 0 ? 'TRAVELING TEAM' : selectedBox === storage?.active_box ? 'TAKING NEW ARRIVALS' : 'STORED PARTNERS'
+  $('#pc-note').textContent = all ? 'All partners' : selectedBox === 0 ? 'Traveling team' : selectedBox === storage?.active_box ? 'Taking new arrivals' : 'Stored partners'
   $('#pc-count').textContent = `${rows.length} Pokémon`
   $('#pc-sidebar').hidden = all
   $('#pc-sort-control').hidden = !all
@@ -86,10 +86,10 @@ function render() {
   const key = JSON.stringify([storage, party, selectedBox, query, all, sort, order, rating])
   if (key === signature) return
   signature = key
-  $('#mobile-box').innerHTML = `<option value="0">Party · ${party.length} / 6</option>` + counts.map((count, index) => `<option value="${index + 1}">Box ${index + 1} · ${count} / 20${index + 1 === storage?.active_box ? ' · Receiving catches' : ''}</option>`).join('')
+  $('#mobile-box').innerHTML = `<option value="0">Party, ${party.length} / 6</option>` + counts.map((count, index) => `<option value="${index + 1}">Box ${index + 1}, ${count} / 20${index + 1 === storage?.active_box ? ', Receiving catches' : ''}</option>`).join('')
   $('#mobile-box').value = String(selectedBox)
   const focusedBox = document.activeElement?.dataset.box
-  $('#box-picker').innerHTML = `<button data-box="0" aria-pressed="${selectedBox === 0}" class="${selectedBox === 0 ? 'selected' : ''}"><span class="bp-name">Party</span><small>${party.length} / 6</small>${fillMeter(party.length, 6)}</button>` + counts.map((count, index) => `<button data-box="${index + 1}" aria-pressed="${index + 1 === selectedBox}" class="${index + 1 === selectedBox ? 'selected' : ''}"><span class="bp-name">Box ${index + 1}${index + 1 === storage?.active_box ? '<i class="lamp" data-on="ok" title="Receiving new catches"></i><span class="vh"> · receiving catches</span>' : ''}</span><small>${count} / 20</small>${fillMeter(count, 20)}</button>`).join('')
+  $('#box-picker').innerHTML = `<button data-box="0" aria-pressed="${selectedBox === 0}" class="${selectedBox === 0 ? 'selected' : ''}"><span class="bp-name">Party</span><small>${party.length} / 6</small>${fillMeter(party.length, 6)}</button>` + counts.map((count, index) => `<button data-box="${index + 1}" aria-pressed="${index + 1 === selectedBox}" class="${index + 1 === selectedBox ? 'selected' : ''}"><span class="bp-name">Box ${index + 1}${index + 1 === storage?.active_box ? '<i class="lamp" data-on="ok" title="Receiving new catches"></i><span class="vh">, receiving catches</span>' : ''}</span><small>${count} / 20</small>${fillMeter(count, 20)}</button>`).join('')
   if (focusedBox) $(`[data-box="${focusedBox}"]`)?.focus()
   const focusedMon = document.activeElement?.dataset.mon
   const card = (mon, index) => monCard(mon, index, {all})
@@ -100,7 +100,7 @@ function render() {
     $('#pc-grid').removeAttribute?.('aria-busy')
     $('#pc-grid').innerHTML = Array.from({length: selectedBox === 0 ? 6 : 20}, (_, slot) => {
       const index = residents.findIndex(mon => mon.position === slot + 1)
-      return index >= 0 ? card(residents[index], index) : `<div class="pc-empty-slot"><span class="pc-slot">SLOT ${slot + 1}</span></div>`
+      return index >= 0 ? card(residents[index], index) : `<div class="pc-empty-slot"><span class="pc-slot">Slot ${slot + 1}</span></div>`
     }).join('')
     if ((query || rating !== 'all') && !residents.length) $('#pc-grid').innerHTML = '<p class="dex-empty">No partners match these filters here.</p>'
   }

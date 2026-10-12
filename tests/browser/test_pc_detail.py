@@ -220,7 +220,7 @@ def test_detail_variants_keep_their_shape(page, game, width, height):
     expect(body.locator('.pc-move-blank')).to_have_count(3)
     expect(body.locator('.pc-card-moves .pc-card-head')).to_contain_text('1 of 4')
     expect(body.locator('.pc-detail-head .shiny-badge')).to_be_visible()
-    expect(body.locator('.pc-detail-line')).to_have_text('Starmie · Level 100')
+    expect(body.locator('.pc-detail-line')).to_have_text('Starmie, Level 100')
     expect(body.locator('.pc-gauges .value[title="Max level"]')).to_have_text('MAX')
     expect(body.locator('.pc-readouts')).to_contain_text('742 (max)')
     # Healthy is not stamped; only a condition worth noticing is.

@@ -50,7 +50,7 @@ def test_pages_print_the_cartridge_dex_size_region_and_marathon(tmp_path):
     gold = TestClient(create_app(gen2_emulator(), Store(tmp_path / 'gold')))
     red = TestClient(create_app(SimpleNamespace(status=lambda: {}), Store(tmp_path / 'red')))
     assert '/251</span>' in gold.get('/').text and 'Somewhere in Johto and Kanto' in gold.get('/').text
-    assert 'Species register · Johto and Kanto · 251 entries' in gold.get('/pokedex').text
+    assert 'Johto and Kanto, 251 entries' in gold.get('/pokedex').text
     stats = gold.get('/stats').text
     assert '<meta name="pokesim-dex-total" content="251">' in stats
     assert 'aria-labelledby="marathon-heading" hidden>' in stats
@@ -59,10 +59,10 @@ def test_pages_print_the_cartridge_dex_size_region_and_marathon(tmp_path):
 
 
 def test_version_label_names_the_short_commit(monkeypatch):
-    assert build_info.version_label({'version': '0.5.0', 'revision': '95f4a11' + '0' * 33}) == 'v0.5.0 · 95f4a11'
+    assert build_info.version_label({'version': '0.5.0', 'revision': '95f4a11' + '0' * 33}) == 'v0.5.0 (95f4a11)'
     assert build_info.version_label({'version': '0.5.0', 'revision': None}) == 'v0.5.0'
-    monkeypatch.setattr(pages, 'version_label', lambda: 'v9.9.9 · abcdef1')
-    assert 'v9.9.9 · abcdef1' in pages.render_game_page('index.html')
+    monkeypatch.setattr(pages, 'version_label', lambda: 'v9.9.9 (abcdef1)')
+    assert 'v9.9.9 (abcdef1)' in pages.render_game_page('index.html')
 
 
 def test_gen2_activity_lists_all_251_species_and_skips_eggs():

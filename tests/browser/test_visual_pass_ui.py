@@ -28,7 +28,7 @@ def test_gen2_live_page_at_phone_width(page, game, monkeypatch):
     expect(page.locator('#game-clock-day')).to_have_text('Tue')
     expect(page.locator('#game-clock-time')).to_have_text('08:14')
     expect(page.locator('#game-clock-period')).to_have_text('Morning')
-    expect(page.locator('#app-version')).to_have_text('vbrowser-test · 95f4a11')
+    expect(page.locator('#app-version')).to_have_text('vbrowser-test (95f4a11)')
     party = page.locator('#party')
     expect(party).to_contain_text('SHRIMPDESK')
     expect(party.locator('.egg-plate')).to_have_count(1)

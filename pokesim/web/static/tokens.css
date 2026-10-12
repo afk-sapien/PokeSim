@@ -11,6 +11,10 @@
      - every text pair clears 4.5:1 and every non-text pair 3:1, in both themes
 
    Themes: [data-theme="light"|"dark"|"auto"] on <html>, auto following the system.
+
+   The palette is a Game Boy Color in Berry's grey housing: a warm shell, a
+   slate screen bezel, the DMG green screen, a berry accent and the red power
+   LED. Light is the shell under a lamp. Dark is the slate bezel itself.
 */
 /* --------------------------------------------------------------------------
    0  THE DISPLAY FACE
@@ -31,6 +35,15 @@
   font-family: "PokeSim Panel";
   src: url("fonts/pokesim-panel.woff2?v=2") format("woff2");
   font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+/* Inter 4, Latin subset with the variable weight axis, OFL 1.1. Bundled in
+   fonts/ with its licence. Nothing loads from a font service. */
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/inter-latin-wght.woff2") format("woff2");
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
@@ -63,8 +76,10 @@
   --f-hero: 32px;      /* panel. Page-level readouts.                        */
   --f-title: 40px;     /* panel. Page identity. Drops to 24px under 640px.   */
 
-  --track-legend: 0.10em;   /* silkscreen is always letterspaced */
-  --track-micro: 0.12em;
+  /* Labels are sentence case and set solid. The pixel face only needs a hair
+     of tracking so its 5x7 cells do not touch. */
+  --track-legend: 0.02em;
+  --track-micro: 0;
 
   /* -- space --------------------------------------------------------------
      4px base, because the display face's pixel is 2px at 16px and 4px at 32px.
@@ -101,156 +116,171 @@
   --t: 80ms linear;
 }
 
-/* ---- light: the panel under lab light ------------------------------------
+/* ---- light: the shell under a lamp ---------------------------------------
    Every text pair below is >= 4.5:1 and every graphical pair >= 3:1.
-   Verified by scratchpad/contrast.py, not estimated.
+   Verified by scratchpad/contrast_gbc.py (WCAG 2 relative luminance), not
+   estimated.
 
-   ink       #191C1A  chassis 10.69  panel 13.51  panel-2 12.28  well  9.33
-   ink-2     #3B3F39  chassis  6.68  panel  8.44  panel-2  7.68  well  5.83
-   ink-3     #4B4F48  chassis  5.20  panel  6.58  panel-2  5.98  well  4.54
-   signal    #8A3110  chassis  5.17  panel  6.54  panel-2  5.94  well  4.51
-   ok        #24572F  chassis  5.27  panel  6.66  panel-2  6.06  well  4.60
-   warn      #634707  chassis  5.37  panel  6.78  panel-2  6.17  well  4.68
-   crit      #93201A  chassis  5.31  panel  6.71  panel-2  6.10  well  4.63
-   link      #184A63  chassis  5.94  panel  7.51  panel-2  6.83  well  5.19
-   bezel-ink #8E9A6B  on bezel 6.03
-   rule vs panel 4.19, rule vs chassis 3.31, focus vs panel 6.54,
-   focus vs chassis 5.17, focus vs well 4.51, focus halo vs bezel 16.32,
-   lit vs unlit meter cell 4.33 - 4.54                                       */
+   ink       #1B1C24  chassis 11.03  panel 14.00  panel-2 12.50  well  9.75
+   ink-2     #383A48  chassis  7.31  panel  9.28  panel-2  8.29  well  6.46
+   ink-3     #4A4C59  chassis  5.53  panel  7.02  panel-2  6.27  well  4.89
+   signal    #8E2450  chassis  5.42  panel  6.88  panel-2  6.15  well  4.79
+   ok        #24572F  chassis  5.51  panel  6.99  panel-2  6.24  well  4.87
+   warn      #634707  chassis  5.61  panel  7.12  panel-2  6.36  well  4.96
+   crit      #93201A  chassis  5.55  panel  7.04  panel-2  6.29  well  4.90
+   link      #26407A  chassis  6.51  panel  8.27  panel-2  7.38  well  5.76
+   bezel-ink #C4CFA1  on bezel 6.50
+   rule vs panel 4.34, rule vs chassis 3.42, focus vs panel 6.88,
+   focus vs chassis 5.42, focus vs well 4.79, lit vs unlit meter cell 4.23.
+   The power LED is 2.18 against the slate, so it is never the only signal:
+   the word beside it says Live or Paused.                                   */
 :root,
 [data-theme="light"] {
   color-scheme: light;
 
-  --chassis: #CFCCC2;
-  --panel: #E7E4DB;
-  --panel-2: #DDDAD0;
-  --well: #C2BFB4;
-  --bezel: #14170F;
-  --bezel-ink: #8E9A6B;
+  --chassis: #D4D0C8;
+  --panel: #ECE9E3;
+  --panel-2: #E0DDD6;
+  --well: #C8C4BB;
+  --bezel: #3B3D4F;
+  --bezel-edge: #4A4D63;
+  --bezel-ink: #C4CFA1;
+  --screen-dark: #0F380F;
+  --screen-light: #C4CFA1;
+  --led: #D82A2A;
+  --led-off: #5A2A2E;
 
-  --ink: #191C1A;
-  --ink-2: #3B3F39;
-  --ink-3: #4B4F48;
+  --ink: #1B1C24;
+  --ink-2: #383A48;
+  --ink-3: #4A4C59;
 
-  --signal: #8A3110;
-  --signal-lamp: #C2521E;
+  --signal: #8E2450;
+  --signal-lamp: #A12A5E;
   --ok: #24572F;
   --ok-lamp: #2E7A3D;
   --warn: #634707;
   --warn-lamp: #A67B10;
   --crit: #93201A;
-  --crit-lamp: #C22C22;
-  --link: #184A63;
+  --crit-lamp: #D82A2A;
+  --link: #26407A;
 
-  --rule: #6E6B63;
-  --rule-faint: #B6B3A9;
-  --cell-off: #BFBCB1;
+  --rule: #6C6B74;
+  --rule-faint: #BAB6AE;
+  --cell-off: #CDC9C1;
 
-  --bevel-hi: rgba(255, 255, 255, 0.60);
-  --bevel-lo: rgba(28, 26, 20, 0.16);
-  --wash: rgba(138, 49, 16, 0.10);
-  --focus: #8A3110;
-  --focus-halo: #F5F3EC;
-  --stipple: rgba(28, 26, 20, 0.14);
+  --bevel-hi: rgba(255, 255, 255, 0.65);
+  --bevel-lo: rgba(27, 28, 36, 0.16);
+  --wash: rgba(142, 36, 80, 0.09);
+  --focus: #8E2450;
+  --focus-halo: #F7F5F0;
+  --stipple: rgba(27, 28, 36, 0.12);
 
   /* The portrait well is a backlit slide, not a hole. A ripped 2bpp sprite has
      its lightest shade as the background and its darkest as the outline, so it
      needs a pale ground in BOTH themes or the outline disappears at night. */
-  --plate: #D4D1C6;
-  --plate-ink: #3B3F39;
-  --plate-grid: rgba(28, 26, 20, 0.16);
+  --plate: #DCD8D0;
+  --plate-ink: #383A48;
+  --plate-grid: rgba(27, 28, 36, 0.14);
 }
 
-/* ---- dark: the same instrument at 3am -------------------------------------
-   Not an inversion. The chassis stops reflecting, the silkscreen goes dim,
-   and the lamps and readouts carry the panel. Nothing is pure white and no
-   large field is bright, because this runs on a monitor all night.
+/* ---- dark: the slate bezel -------------------------------------------------
+   Not near-black. The page takes the bezel's slate, panels are the bezel
+   colour itself, and the screen housing goes one step darker so it still
+   reads as the frame around the picture.
 
-   ink       #DEE1D8  chassis 14.83  panel 13.25  panel-2 11.90  well 15.34
-   ink-2     #AEB2A9  chassis  9.10  panel  8.14  panel-2  7.30  well  9.41
-   ink-3     #8D9289  chassis  6.17  panel  5.52  panel-2  4.95  well  6.38
-   signal    #F0913F  chassis  8.25  panel  7.37  panel-2  6.62  well  8.53
-   ok        #72C983  chassis  9.72  panel  8.68  panel-2  7.80  well 10.05
-   warn      #DDB350  chassis  9.94  panel  8.88  panel-2  7.98  well 10.28
-   crit      #F0776A  chassis  7.06  panel  6.31  panel-2  5.66  well  7.30
-   link      #7DBFDE  chassis  9.70  panel  8.67  panel-2  7.78  well 10.03
-   bezel-ink #8E9A6B  on bezel 6.98
-   rule vs panel 3.51, rule vs chassis 3.93, focus vs panel 7.37,
-   focus vs chassis 8.25, focus vs well 8.53, focus vs bezel 8.83,
-   lit vs unlit meter cell 4.90 - 6.90                                       */
+   ink       #EEECE6  chassis 11.02  panel  9.04  panel-2  8.36  well 12.72
+   ink-2     #CFCED6  chassis  8.34  panel  6.84  panel-2  6.33  well  9.63
+   ink-3     #B3B3C0  chassis  6.28  panel  5.15  panel-2  4.76  well  7.25
+   signal    #F29BC0  chassis  6.34  panel  5.20  panel-2  4.81  well  7.32
+   ok        #93D9A2  chassis  7.87  panel  6.45  panel-2  5.97  well  9.08
+   warn      #E6C76C  chassis  7.90  panel  6.48  panel-2  6.00  well  9.13
+   crit      #FF9A90  chassis  6.37  panel  5.23  panel-2  4.84  well  7.36
+   link      #AFC6FF  chassis  7.65  panel  6.28  panel-2  5.81  well  8.84
+   bezel-ink #C4CFA1  on bezel 9.50
+   rule vs panel 3.21, rule vs chassis 3.91, focus vs panel 5.20,
+   focus vs chassis 6.34, focus vs well 7.32, lit vs unlit meter cell 4.21,
+   power LED vs bezel 4.70                                                   */
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --chassis: #0A0C0A;
-  --panel: #171A18;
-  --panel-2: #20241F;
-  --well: #050605;
-  --bezel: #000000;
-  --bezel-ink: #8E9A6B;
+  --chassis: #2E3040;
+  --panel: #3B3D4F;
+  --panel-2: #404254;
+  --well: #25262F;
+  --bezel: #22232D;
+  --bezel-edge: #34364A;
+  --bezel-ink: #C4CFA1;
+  --screen-dark: #0F380F;
+  --screen-light: #C4CFA1;
+  --led: #FF4A4A;
+  --led-off: #4A2A30;
 
-  --ink: #DEE1D8;
-  --ink-2: #AEB2A9;
-  --ink-3: #8D9289;
+  --ink: #EEECE6;
+  --ink-2: #CFCED6;
+  --ink-3: #B3B3C0;
 
-  --signal: #F0913F;
-  --signal-lamp: #F0913F;
-  --ok: #72C983;
-  --ok-lamp: #72C983;
-  --warn: #DDB350;
-  --warn-lamp: #DDB350;
-  --crit: #F0776A;
-  --crit-lamp: #F0776A;
-  --link: #7DBFDE;
+  --signal: #F29BC0;
+  --signal-lamp: #E0629A;
+  --ok: #93D9A2;
+  --ok-lamp: #6CC47F;
+  --warn: #E6C76C;
+  --warn-lamp: #E6C76C;
+  --crit: #FF9A90;
+  --crit-lamp: #FF4A4A;
+  --link: #AFC6FF;
 
-  --rule: #6C7169;
-  --rule-faint: #31352F;
-  --cell-off: #2B2F2A;
+  --rule: #8A8C9C;
+  --rule-faint: #4C4F63;
+  --cell-off: #2A2C38;
 
-  --bevel-hi: rgba(224, 232, 216, 0.07);
-  --bevel-lo: rgba(0, 0, 0, 0.75);
-  --wash: rgba(240, 145, 63, 0.14);
-  --focus: #F0913F;
-  --focus-halo: #0A0C0A;
-  --stipple: rgba(224, 232, 216, 0.10);
+  --bevel-hi: rgba(238, 236, 230, 0.08);
+  --bevel-lo: rgba(10, 10, 16, 0.45);
+  --wash: rgba(242, 155, 192, 0.12);
+  --focus: #F29BC0;
+  --focus-halo: #2E3040;
+  --stipple: rgba(238, 236, 230, 0.08);
 
   /* Dimmed rather than inverted: mid grey, so a dark sprite outline still
-     reads and thirty of them do not glare at 3am. */
-  --plate: #8F8C84;
-  --plate-ink: #191C1A;
-  --plate-grid: rgba(0, 0, 0, 0.22);
+     reads and thirty of them do not glare. */
+  --plate: #A3A1A8;
+  --plate-ink: #1B1C24;
+  --plate-grid: rgba(0, 0, 0, 0.20);
 }
 
 @media (prefers-color-scheme: dark) {
   [data-theme="auto"] {
     color-scheme: dark;
-    --chassis: #0A0C0A;
-    --panel: #171A18;
-    --panel-2: #20241F;
-    --well: #050605;
-    --bezel: #000000;
-    --ink: #DEE1D8;
-    --ink-2: #AEB2A9;
-    --ink-3: #8D9289;
-    --signal: #F0913F;
-    --signal-lamp: #F0913F;
-    --ok: #72C983;
-    --ok-lamp: #72C983;
-    --warn: #DDB350;
-    --warn-lamp: #DDB350;
-    --crit: #F0776A;
-    --crit-lamp: #F0776A;
-    --link: #7DBFDE;
-    --rule: #6C7169;
-    --rule-faint: #31352F;
-    --cell-off: #2B2F2A;
-    --bevel-hi: rgba(224, 232, 216, 0.07);
-    --bevel-lo: rgba(0, 0, 0, 0.75);
-    --wash: rgba(240, 145, 63, 0.14);
-    --focus: #F0913F;
-    --focus-halo: #0A0C0A;
-    --stipple: rgba(224, 232, 216, 0.10);
-    --plate: #8F8C84;
-    --plate-ink: #191C1A;
-    --plate-grid: rgba(0, 0, 0, 0.22);
+    --chassis: #2E3040;
+    --panel: #3B3D4F;
+    --panel-2: #404254;
+    --well: #25262F;
+    --bezel: #22232D;
+    --bezel-edge: #34364A;
+    --led: #FF4A4A;
+    --led-off: #4A2A30;
+    --ink: #EEECE6;
+    --ink-2: #CFCED6;
+    --ink-3: #B3B3C0;
+    --signal: #F29BC0;
+    --signal-lamp: #E0629A;
+    --ok: #93D9A2;
+    --ok-lamp: #6CC47F;
+    --warn: #E6C76C;
+    --warn-lamp: #E6C76C;
+    --crit: #FF9A90;
+    --crit-lamp: #FF4A4A;
+    --link: #AFC6FF;
+    --rule: #8A8C9C;
+    --rule-faint: #4C4F63;
+    --cell-off: #2A2C38;
+    --bevel-hi: rgba(238, 236, 230, 0.08);
+    --bevel-lo: rgba(10, 10, 16, 0.45);
+    --wash: rgba(242, 155, 192, 0.12);
+    --focus: #F29BC0;
+    --focus-halo: #2E3040;
+    --stipple: rgba(238, 236, 230, 0.08);
+    --plate: #A3A1A8;
+    --plate-ink: #1B1C24;
+    --plate-grid: rgba(0, 0, 0, 0.20);
   }
 }
