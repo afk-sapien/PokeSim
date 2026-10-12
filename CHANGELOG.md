@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Stop Gold, Silver and Crystal adventures putting duplicate eggs ahead of training. Gold kept 28 Sneasel eggs in the PC from an old breeding loop and fetched them one at a time, so Crobat waited in the PC for days of game time. A trip to the PC now brings only eggs that would add something: a species not yet registered, or a copy another adventure asks for by cable. Other eggs stay safe in the PC, and one already in the party may go back to make room for the next Pokémon in training.
+
 - Stop Gold, Silver and Crystal adventures reporting "Stuck? 6 game hours without progress" while walking eggs from the PC to hatching. A level 100 party earns no experience and a hatchling of a registered species adds nothing new, so a box of slow eggs such as Sneasel tripped the stall alert and asked for help every few eggs. Every egg cycle walked off and every hatching now counts as progress, once each, so a reload back to an older save does not.
 
 - Fix Gold, Silver and Crystal adventures stalling on "Train … toward level 100 in the lead" with the Pokémon in training never leaving the back of the party. A roaming-beast search that was put off for later still kept its sleeper in the lead, so the trainee joined no battles, earned nothing, and the adventure reloaded every half hour. The training walk now leads with the trainee, and the sleeper leads again when the search resumes.

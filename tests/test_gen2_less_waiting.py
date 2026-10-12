@@ -165,7 +165,8 @@ def test_without_exp_share_a_levelling_plan_trains_the_partner_in_the_lead(data,
                                      'terminal': True, 'level_goal': 37}
     assert journey(policy, state, clock(), Goal, terminal=True).key == 'collection_train_pc'
     # Once it joins, the boxed eggs come out too, and the walk trains it in front.
-    joined = snapshot([lead(), mon(94, box=None, position=1, level=30)], eggs)
+    # The Togepi line is still unregistered, so its eggs are worth the trip.
+    joined = snapshot([lead(), mon(94, box=None, position=1, level=30)], eggs, owned=set(range(1, 252)) - {175, 176})
     assert hatching(policy, joined, Goal).key == 'collection_hatch_pc'
     state = snapshot([lead(), mon(94, box=None, position=1, level=30)])
     goal = journey(policy, state, clock(), Goal, terminal=True)

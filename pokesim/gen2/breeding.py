@@ -366,12 +366,31 @@ def brought_eggs(state, snapshot):
     return brought
 
 
-def carried(policy, snapshot, mon):
-    """Whether a party member is an egg a hatching trip brought from the PC.
+def worth_hatching(policy, snapshot, mon):
+    """Whether an egg would add something once hatched.
 
-    Every PC deposit ranks such an egg last of all, so an egg taken out to hatch never goes back.
+    An egg whose whole family is already registered gives only another copy, so it is worth a trip
+    only while cable demand or a later stage of a single source family still asks for that copy. Gold
+    once boxed dozens of Sneasel eggs, and fetching them one by one held a trainee in the PC for days.
     """
-    return bool(getattr(mon, 'egg', False)) and egg_key(mon) in brought_eggs(getattr(policy, 'collection', {}), snapshot)
+    data, demand = policy.data, getattr(policy, 'demand', None) or {}
+    owned = getattr(snapshot, 'owned', None)
+    species = mon.species
+    if owned is None or not families(data).get(species, {species}) <= owned:
+        return True
+    held = sum(not other.egg and other.species == species for other in snapshot.party + snapshot.stored)
+    # Like the breeding search, demand keeps one copy beyond what the cable asks for as a parent.
+    return bool(demand.get(species)) and held <= demand[species] or descendants_wanted(data, snapshot, demand, species)
+
+
+def carried(policy, snapshot, mon):
+    """Whether a party member is an egg a hatching trip brought from the PC that is worth hatching.
+
+    Every PC deposit ranks such an egg last of all, so an egg taken out to hatch never goes back. An
+    egg that adds nothing may go back to make room for a trainee.
+    """
+    return (bool(getattr(mon, 'egg', False)) and egg_key(mon) in brought_eggs(getattr(policy, 'collection', {}), snapshot)
+            and worth_hatching(policy, snapshot, mon))
 
 
 def hatch_spares(policy, snapshot):
@@ -405,7 +424,9 @@ def hatching(policy, snapshot, Goal):
     from .standdown import standing_down
     state = policy.collection
     carried = sum(getattr(mon, 'egg', False) for mon in snapshot.party)
-    boxed = any(getattr(mon, 'egg', False) for mon in getattr(snapshot, 'stored', ()))
+    # Only eggs that add something get a trip. The rest stay boxed rather than hold up training.
+    boxed = any(getattr(mon, 'egg', False) and worth_hatching(policy, snapshot, mon)
+                for mon in getattr(snapshot, 'stored', ()))
     # A Battle Tower run or a Time Capsule restore needs an exact party, so the eggs wait for it.
     if (not boxed or carried >= HATCH_BATCH or state.get('breeding') or state.get('tower')
             or state.get('time_capsule_restore') or standing_down(policy, HATCH_KEY) or carried and not state.get('hatch_fill')):
@@ -441,7 +462,7 @@ def hatch_arrive(policy, snapshot):
     from .standdown import stand_down
     state = policy.collection
     state['hatch_ops'] = state.get('hatch_ops', 0) + 1
-    eggs = sorted((mon for mon in snapshot.stored if mon.egg), key=lambda mon: (mon.box != snapshot.active_box, mon.box))
+    eggs = sorted((mon for mon in snapshot.stored if mon.egg and worth_hatching(policy, snapshot, mon)), key=lambda mon: (mon.box != snapshot.active_box, mon.box))
     if not eggs or state['hatch_ops'] > HATCH_OPS:
         # Nothing left to bring, or the trip keeps failing. Leave the PC and let other work go on.
         stand_down(policy, HATCH_KEY)

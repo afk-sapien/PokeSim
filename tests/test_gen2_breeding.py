@@ -137,8 +137,10 @@ def egg(species, **extra):
     return mon(species, egg=True, level=5, friendship=20, **extra)
 
 
-def hatcher(data, party, stored, *, boxes=(5,) * 14, daycare=(None, None), release=None):
-    state = snapshot(stored, boxes=boxes)
+def hatcher(data, party, stored, *, boxes=(5,) * 14, daycare=(None, None), release=None, owned=None):
+    # The eggs belong to unregistered species unless a test says otherwise, so each one is worth a trip.
+    eggs = {mon.species for mon in tuple(party) + tuple(stored) if mon.egg}
+    state = snapshot(stored, boxes=boxes, owned=set(range(1, 252)) - eggs if owned is None else owned)
     state.party, state.daycare = tuple(party), daycare
     policy = planner(data, {})
     policy.decisions = 1000
@@ -310,6 +312,42 @@ def test_a_carried_egg_hatches_before_the_next_trainee_swaps_in(real_data, monke
     assert goal.key == 'collection_train' and goal.label.startswith('Walk to hatch the egg')
     # Once the egg hatches, the new partner is a spare and the trainee swaps in.
     state.party = (*party[:5], mon(215, box=None, level=5))
+    assert journey(policy, state, clock, Goal).key == 'collection_train_pc'
+
+
+def test_eggs_of_a_registered_species_never_hold_up_training(real_data, monkeypatch):
+    """Gold boxed 28 Sneasel eggs, and fetching them one by one kept Crobat in the PC for about 110 game hours."""
+    from pokesim.gen2.breeding import arrive, egg_key, hatching
+    from pokesim.gen2.menus import ChangeBox, Storage
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.training import journey
+    party = [lead(), mon(72, box=None, moves=(250, 0, 0, 0)), mon(18, box=None, moves=(19, 0, 0, 0)),
+             mon(40, box=None, moves=(70, 0, 0, 0)), mon(54, box=None, moves=(127, 0, 0, 0)), mon(143, box=None, level=50)]
+    sneasel = [egg(215, box=0, position=i, dvs=(i,) * 5) for i in range(5)]
+    owned = set(range(1, 252))
+    policy, state = hatcher(real_data, party[:5], [mon(215, box=1), *sneasel], owned=owned)
+    # Every Sneasel egg would only add another copy of a registered species, so no trip fetches one.
+    assert hatching(policy, state, Goal) is None
+    # Cable demand for a Sneasel the PC lacks makes one worth hatching again.
+    policy.demand = {215: 1}
+    assert hatching(policy, state, Goal).key == 'collection_hatch_pc'
+    # An egg of an unregistered species is brought ahead of the duplicates, whatever box it is in.
+    policy, state = hatcher(real_data, party[:5], [*sneasel, egg(204, box=3, position=0)], owned=owned - {204, 205})
+    policy.goal = hatching(policy, state, Goal)
+    assert policy.goal.key == 'collection_hatch_pc'
+    assert arrive(policy, state) == 'a' and policy.menu == ChangeBox(3)
+    state.active_box = 3
+    assert arrive(policy, state) == 'a' and policy.menu == Storage('WITHDRAW', 0, 5)
+    # A duplicate egg already in a full party walks with no one waiting, but never blocks the trainee swap.
+    carried = egg(215, box=None, dvs=(9,) * 5)
+    trainee = mon(169, box=3, position=4, dvs=(2, 10, 8, 13, 8), level=40)
+    policy, state = hatcher(real_data, [*party[:5], carried], [trainee, *sneasel], owned=owned)
+    policy.collection['training'] = {'identity': [4321, [2, 10, 8, 13, 8]], 'target': 169, 'item': None,
+                                     'species': 169, 'terminal': True, 'level_goal': 54}
+    policy.collection['hatching'] = [egg_key(carried)]
+    state.items = ((real_data.items['EXP_SHARE'], 1),)
+    clock = SimpleNamespace(byte=lambda name: 1)
+    monkeypatch.setattr('pokesim.gen2.collection.encounter_points', lambda *args: [(9, 31, 0)])
     assert journey(policy, state, clock, Goal).key == 'collection_train_pc'
 
 
