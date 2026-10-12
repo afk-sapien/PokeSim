@@ -8,6 +8,7 @@ choices in bookmarked links are preserved. Each view remembers its search while
 switching. Sorting never writes to game storage.
 
 For Power, DVs, training, and victory counts, see [Pokémon stats and Power](pokemon-stats.md).
-Each partner shows its trade setting read only, or Protected for shiny and perfect
-Pokémon, with a **Trade…** link to the Trading page. Settings, offers and trades
-are all on the Trading page. See [Trading](trading.md#trade-settings).
+A locked partner has a lock icon on its card. Press a Pokémon and press
+**Locked: never traded** in its popup to lock or unlock it. Shiny and perfect
+Pokémon show Protected instead. The popup's **Trade…** link opens the Trading page
+with that Pokémon chosen. See [Locks](trading.md#locks).

@@ -12,9 +12,9 @@
     ['name', 'Species name'], ['nick', 'Nickname']]
   const RATINGS = [['all', 'All ratings'], ['shiny', '★ Shiny partners'], ['3plus', '3★ and better'], ['4', '4★ Perfect'],
     ['3', '3★'], ['2', '2★'], ['1', '1★'], ['unknown', 'Unknown DVs']]
-  // One trade setting per Pokémon. Protected means shiny or perfect, never traded automatically.
-  const SETTINGS = [['all', 'All trade settings'], ['auto', 'Can trade'], ['first', 'Prefer to trade'], ['keep', 'Never trade'], ['protected', 'Protected']]
-  const SETTING_LABELS = {auto: 'Can trade', first: 'Prefer to trade', keep: 'Never trade', protected: 'Protected'}
+  // Every Pokémon can be traded unless it is locked. Protected means shiny or perfect DVs.
+  const SETTINGS = [['all', 'All Pokémon'], ['auto', 'Can trade'], ['keep', 'Locked'], ['protected', 'Protected']]
+  const SETTING_LABELS = {auto: 'Can trade', first: 'Can trade', keep: 'Locked', protected: 'Protected'}
   const sortDefaults = {box: 'asc', battle_power: 'desc', power: 'desc', stat_total: 'desc', level: 'desc', HP: 'desc', Attack: 'desc', Defense: 'desc', Speed: 'desc', Special: 'desc', 'Special Attack': 'desc', 'Special Defense': 'desc', dv_stars: 'desc', dvs: 'desc', stat_exp: 'desc', experience: 'desc', dex: 'asc', name: 'asc', nick: 'asc'}
 
   function statTotal(mon, field) {
@@ -65,10 +65,40 @@
     return `<span class="dv-badge dv-stars-${mon.dv_stars}" aria-label="${ratingLabel(mon)}"${title}><span class="dv" aria-hidden="true">${lamps}</span><span class="vh">${'★'.repeat(mon.dv_stars)}${'☆'.repeat(4 - mon.dv_stars)}</span> ${mon.dv_stars === 4 ? 'Perfect DV' : 'DV'}</span>`
   }
 
-  // The small trade setting stamp on a card.
+  // The small trade setting stamp on a card. Only a lock is worth a stamp: every other
+  // Pokémon may be traded automatically within the built-in rules.
   function settingBadge(state) {
     const label = SETTING_LABELS[state]
-    return label ? `<span class="tag trade-tag trade-tag--${state}" title="Trade setting: ${label}">${label}</span>` : ''
+    return state === 'keep' || state === 'protected' ? `<span class="tag trade-tag trade-tag--${state}" title="${state === 'keep' ? 'Locked: never traded automatically' : 'Protected from automatic trading'}">${label}</span>` : ''
+  }
+
+  // ---- locks: a locked Pokémon is never traded automatically. Set on the PC page. ----
+  const LOCK_LABEL = 'Locked: never traded'
+  const isLocked = mon => Boolean(mon && (mon.trade_setting === 'keep' || mon.trade_locked))
+  const isProtected = mon => Boolean(mon && (mon.shiny || mon.perfect_dvs))
+  // A pixel padlock drawn on a 12 by 12 grid, shut or open.
+  function lockIcon(locked = true, extra = '') {
+    const shackle = locked ? 'M3 1h6v1H3zM2 2h1v3H2zM9 2h1v3H9z' : 'M3 0h6v1H3zM2 1h1v4H2zM9 1h1v2H9z'
+    return `<svg class="lock-icon${extra ? ' ' + extra : ''}" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false" shape-rendering="crispEdges"><path fill="currentColor" fill-rule="evenodd" d="${shackle}M1 5h10v6H1zM5 7v2h2V7z"/></svg>`
+  }
+  // Why a Pokémon cannot be locked or unlocked from here, or '' when it can.
+  function lockBlocked(mon, options = {}) {
+    if (mon.egg) return 'Eggs are never traded automatically.'
+    if (!mon.trade_key) return 'This Pokémon cannot be traded.'
+    if (mon.trade_ambiguous) return 'An identical copy shares this Pokémon’s record, so it cannot be locked on its own.'
+    if (options.viewer) return 'Only the owner can lock Pokémon.'
+    if (options.stale) return 'Waiting for the PC to update.'
+    return ''
+  }
+  // The lock toggle for the popup. Options: busy (a change is saving), viewer, stale and note
+  // (a message to show under it, such as a refused change).
+  function lockControl(mon, options = {}) {
+    if (!mon || mon.egg) return ''
+    if (isProtected(mon)) return `<div class="pc-lock-row"><span class="tag trade-tag trade-tag--protected lock-stamp">${lockIcon(true)}Protected</span><p class="lock-note">${mon.shiny ? 'Shiny' : 'Perfect DV'} Pokémon are never traded automatically.</p></div>`
+    const locked = isLocked(mon)
+    const blocked = lockBlocked(mon, options)
+    const note = options.note || blocked || (locked ? 'Never offered in automatic trades.' : 'Can be traded automatically. Tap to lock.')
+    return `<div class="pc-lock-row"><button type="button" class="lock-toggle" data-lock-key="${esc(mon.trade_key || '')}" aria-pressed="${locked ? 'true' : 'false'}"${blocked || options.busy ? ' disabled' : ''}${options.busy ? ' aria-busy="true"' : ''} title="${esc(blocked || (locked ? 'Unlock so it can be traded automatically' : 'Lock so it is never traded automatically'))}">${lockIcon(locked)}<span>${LOCK_LABEL}</span></button><p class="lock-note" role="status">${esc(note)}</p></div>`
   }
 
   // Search by name, nickname or Pokédex number, and by DV rating.
@@ -90,13 +120,14 @@
   function card(mon, id, options = {}) {
     const attr = options.attr || 'mon'
     const blocked = options.blocked ? String(options.blocked) : ''
+    const locked = options.locked ?? isLocked(mon)
     const level = Number.isFinite(mon.level) ? mon.level : null
-    const label = `${esc(mon.nick || mon.name)}${level === null ? '' : `, level ${level}`}${mon.type_names?.length ? ', ' + esc(mon.type_names.join(' / ')) : ''}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${', ' + ratingLabel(mon)}${mon.shiny ? ', shiny, protected from release and trading' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}${options.label ? ', ' + esc(options.label) : ''}${blocked ? `, cannot be picked: ${esc(blocked)}` : ''}`
+    const label = `${esc(mon.nick || mon.name)}${level === null ? '' : `, level ${level}`}${mon.type_names?.length ? ', ' + esc(mon.type_names.join(' / ')) : ''}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${', ' + ratingLabel(mon)}${mon.shiny ? ', shiny, protected from release and trading' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}${locked ? ', locked, never traded automatically' : ''}${options.label ? ', ' + esc(options.label) : ''}${blocked ? `, cannot be picked: ${esc(blocked)}` : ''}`
     const classes = ['pc-mon', mon.perfect_dvs ? 'perfect-entry' : '', blocked ? 'is-blocked' : '', options.pressed ? 'is-chosen' : ''].filter(Boolean).join(' ')
     const state = [options.pressed !== undefined ? ` aria-pressed="${options.pressed ? 'true' : 'false'}"` : '', blocked ? ` aria-disabled="true" title="${esc(blocked)}"` : ''].join('')
     const metrics = options.all ? `<span class="pc-metrics"><span class="pc-power">Battle Power <b>${Number.isFinite(mon.battle_power) ? mon.battle_power.toLocaleString() : 'Unavailable'}</b></span><span>Stat Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span>` : ''
     const reason = blocked ? `<span class="pc-blocked">${esc(blocked)}</span>` : ''
-    return `<button type="button" class="${classes}" data-${attr}="${esc(id)}"${state} aria-label="${label}"><span class="pc-slot">${esc(options.slot || place(mon, Number(id) || 0))}</span><span class="plate pc-plate ${types().portraitClass(mon.type_names)}">${sprite(mon, options.sprite)}</span><span class="pc-mon-body"><strong class="pc-name">${esc(mon.nick || mon.name)}</strong><small class="pc-sub">${esc(mon.name)}${level === null ? '' : `, Lv. ${level}`}</small><span class="type-tags">${types().badges(mon.type_names)}</span><span class="pc-tags">${types().shinyBadge(mon)}${ratingBadge(mon)}${options.tags || ''}</span>${reason}</span>${metrics}</button>`
+    return `<button type="button" class="${classes}" data-${attr}="${esc(id)}"${state} aria-label="${label}"><span class="pc-slot">${esc(options.slot || place(mon, Number(id) || 0))}</span>${locked ? `<span class="pc-lock" title="Locked: never traded automatically">${lockIcon(true)}</span>` : ''}<span class="plate pc-plate ${types().portraitClass(mon.type_names)}">${sprite(mon, options.sprite)}</span><span class="pc-mon-body"><strong class="pc-name">${esc(mon.nick || mon.name)}</strong><small class="pc-sub">${esc(mon.name)}${level === null ? '' : `, Lv. ${level}`}</small><span class="type-tags">${types().badges(mon.type_names)}</span><span class="pc-tags">${types().shinyBadge(mon)}${ratingBadge(mon)}${options.tags || ''}</span>${reason}</span>${metrics}</button>`
   }
 
   // Gen I and II split physical and special by type. A move with no power is a status move.
@@ -117,18 +148,17 @@
     return mon.experience && typeof mon.experience === 'object' ? mon.experience : null
   }
 
-  // The trade setting, as the server names it.
+  // The trade stamp in the popup head: Protected or Locked, or nothing when it may trade.
   function tradeState(mon) {
     if (!mon.trade_key) return null
-    if (mon.shiny || mon.perfect_dvs) return {state: 'Protected', note: 'Never traded automatically'}
-    return {state: SETTING_LABELS[mon.trade_setting] || SETTING_LABELS.auto, note: 'Change it on the Trading page'}
+    if (isProtected(mon)) return {state: 'Protected', note: 'Never traded automatically'}
+    return isLocked(mon) ? {state: 'Locked', note: 'Never traded automatically. Change it on the PC page'} : null
   }
 
-  // The trade setting as one small stamp in the head. The Trading page is where it changes.
   function tradeBadge(trade, mon) {
-    if (!trade) return mon.shiny || mon.perfect_dvs ? '<span class="tag trade-tag trade-tag--protected" title="Protected from automatic release and trading">Protected</span>' : ''
-    const key = Object.keys(SETTING_LABELS).find(name => SETTING_LABELS[name] === trade.state) || 'auto'
-    return `<span class="tag trade-tag trade-tag--${key}" title="Trade setting: ${esc(trade.state)}${trade.note ? `. ${esc(trade.note)}` : ''}">${esc(trade.state)}</span>`
+    if (!trade) return isProtected(mon) ? '<span class="tag trade-tag trade-tag--protected" title="Protected from automatic release and trading">Protected</span>' : ''
+    const key = trade.state === 'Protected' ? 'protected' : 'keep'
+    return `<span class="tag trade-tag trade-tag--${key}" title="${esc(trade.state)}${trade.note ? `. ${esc(trade.note)}` : ''}">${key === 'keep' ? lockIcon(true) : ''}${esc(trade.state)}</span>`
   }
 
   // One entry per move on two lines: the name and its type, then kind, power, accuracy and PP.
@@ -242,7 +272,7 @@
     return `<div class="pc-toolbar panel mon-toolbar">`
       + `<label class="field field--grow" for="${prefix}-search"><span class="micro">${esc(options.searchLabel || 'Find Pokémon')}</span><input id="${prefix}-search" type="search" placeholder="Name or Pokédex number" autocomplete="off"></label>`
       + field('rating', 'DV rating', RATINGS, 'all')
-      + (options.settings ? field('setting', 'Trade setting', SETTINGS, 'all') : '')
+      + (options.settings ? field('setting', 'Lock', SETTINGS, 'all') : '')
       + field('sort', 'Sort by', SORTS, sort)
       + field('order', 'Order', [['asc', 'Lowest first'], ['desc', 'Highest first']], sortDefaults[sort])
       + `<span class="pc-count micro" id="${prefix}-count">0 Pokémon</span></div>`
@@ -293,6 +323,6 @@
   })
 
   globalThis.MonGrid = {esc, SORTS, RATINGS, SETTINGS, SETTING_LABELS, sortDefaults, statTotal, sortValue, compare,
-    formatTotal, ratingLabel, ratingBadge, settingBadge, matches, card, detail, detailLinks, tradeState, statPower, toolbar, generation,
+    formatTotal, ratingLabel, ratingBadge, settingBadge, isLocked, lockIcon, lockControl, LOCK_LABEL, matches, card, detail, detailLinks, tradeState, statPower, toolbar, generation,
     orderLabels, bind, apply, filtered}
 })()

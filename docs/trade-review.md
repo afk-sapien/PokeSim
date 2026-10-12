@@ -1,7 +1,7 @@
 # First-trade review history
 
 Historical proposals and approvals from September 14 and 15, 2026. For current
-installation and eligibility rules, see [automatic trading](automatic-trading.md), [making a trade](trading.md#make-a-trade), and [trade settings](trading.md#trade-settings).
+installation and eligibility rules, see [automatic trading](automatic-trading.md), [making a trade](trading.md#make-a-trade), and [locks](trading.md#locks).
 Version and live-status statements below
 describe the original review, not a fresh observation.
 

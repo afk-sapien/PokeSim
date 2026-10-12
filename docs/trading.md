@@ -1,6 +1,6 @@
 # Trading
 
-Use this guide for the Trading page, trade settings, and broker connection
+Use this guide for the Trading page, locks, and broker connection
 settings. See [automatic trading](automatic-trading.md) for coordinator setup,
 exchange rules, and recovery.
 
@@ -9,69 +9,65 @@ exchange rules, and recovery.
 Everything about trading lives on each adventure's Trading page at
 `/games/{id}/trading`. Trading in 0.5.0 is one of two things: automatic trades,
 which start on their own, and trades you build by hand between your own
-adventures. The page has three tabs:
+adventures. The page is one page, top to bottom:
 
-1. **Trade** builds a trade by hand: another adventure, the Pokémon you send and
-   the Pokémon you get.
-2. **Auto** holds the automatic trading switch, the wish list and each Pokémon's
-   trade setting.
-3. **History** shows hand-picked and automatic trades together, newest first.
+1. The **Automatic trading** status box, with the on/off switch, a note on the
+   rules and the wish list, folded away under the switch.
+2. **Current exchange**, for trades that are waiting or running, on the pages of
+   both adventures. It is hidden when there is none.
+3. **Make a trade** builds a trade by hand: another adventure, the Pokémon you
+   send and the Pokémon you get.
+4. **History** shows hand-picked and automatic trades together, newest first.
 
-Trades that are waiting or running show under **Current exchange** above the
-tabs, on the pages of both adventures.
+Older links with `?tab=trade`, `?tab=auto` or `?tab=history` scroll to the
+matching section, and `&mon=` with a trade key preselects a Pokémon to send. The
+PC's **Trade…** link opens Make a trade with that Pokémon chosen.
 
-The page remembers the last tab in the browser. A link can open a tab with
-`?tab=trade`, `?tab=auto` or `?tab=history`, and `&mon=` with a
-trade key preselects a Pokémon on the Trade tab. The PC shows each Pokémon's
-trade setting read only, with a **Trade…** link that opens the Trade tab with that
-Pokémon chosen.
-
-The library's Trading page lists every adventure under **Make a trade**, each
-linking to that adventure's Trade tab. The old library-wide picker at `/trade`
-now redirects there.
+The library has no trading page. It has Library, Notifications and Settings, and
+the old `/trading` and `/trade` addresses redirect to the library.
 
 A game run on its own, outside the library, serves its own `/trading` page with
-Auto, Opportunities and History tabs. Its Auto tab is the only place such a game
-sets trade settings, and Opportunities shows the shared broker's matches, which
+Possible exchanges and History. Opportunities come from the shared broker, which
 library adventures do not use. The shared broker remains an internal read API. Its old root page redirects to the configured game or directs visitors
 to their game navigation.
 
-## Trade settings
+## Locks
 
-Each Pokémon has one trade setting. It only steers automatic trading:
+Every Pokémon can be traded automatically unless it is locked. Lock one on the PC
+page: press the Pokémon, then press **Locked: never traded** in its popup. The
+same key unlocks it. A locked Pokémon has a lock icon on its card in the PC grid
+and the party. A view link shows the lock but cannot change it.
 
-- **Can trade**, the default. Automatic trading may use it when it is a spare.
-- **Prefer to trade**. Automatic trading uses it before other spares.
-- **Never trade**. Never traded automatically, and automatic PC release never
-  releases it. You can still pick it by hand.
+A locked Pokémon is never traded automatically, and automatic PC release never
+releases it. You can still pick it by hand in Make a trade. A lock also protects a
+Pokémon in the party from the in-game trader. Shiny and perfect DV Pokémon are
+always protected, and the popup shows them as Protected instead of a lock key.
 
-Never trade also protects a Pokémon in the party from the in-game trader.
-Shiny and perfect DV Pokémon are always protected. They cannot be set to Prefer
-to trade, and the PC shows them as Protected. Upgrading converts older choices
-once: a lock becomes Never trade, a withdrawn offer becomes Never trade, and an
-offer becomes Prefer to trade. The stored values are still `auto`, `offered` and
-`locked`, so an older release reads them. Releases before 0.5.0 called these
-settings Auto decides, Trade first and Keep.
+Locks use the stored trade setting, so locks and Never trade choices from earlier
+releases carry over unchanged. The stored values are `auto`, `offered` and
+`locked`. An older Prefer to trade choice still ranks that Pokémon first in
+automatic trading, and the PC shows it as unlocked.
 
-Settings persist across box moves, renaming, evolution, ordinary restores, and
+Locks persist across box moves, renaming, evolution, ordinary restores, and
 server restarts. Starting a new adventure clears them. The emulator saves a change
 between input actions and discards pending inputs before resuming. Release
-confirmations and trade checkpoint staging recheck the setting, so a Pokémon set
-to Never trade after it was selected is not released or traded.
+confirmations and trade checkpoint staging recheck the lock, so a Pokémon locked
+after it was selected is not released or traded.
 
 ## Automatic trading
 
-The Auto tab has a switch that turns automatic trading on or off for this adventure.
+The status box at the top of the Trading page has a switch that turns automatic
+trading on or off for this adventure.
 Switching it off stops only automatic trades. Other adventures still collect for
 it, and trades you pick by hand still reach it. The overview shows Off for an
 adventure with automatic trading switched off.
 
 The wish list names species this adventure wants. A wished species it holds none of
 makes an exchange worth doing even when the Pokédex does not need it, and such an
-exchange is ranked ahead of every other. Pokémon set to Prefer to trade come next.
+exchange is ranked ahead of every other.
 
 Automatic trades start by themselves when a useful exchange is ready, with no
-approval step. The status above the tabs reads **On · Trades automatically**.
+approval step. The status box reads **On, trades automatically**.
 
 Automatic trading also follows fixed rules that no setting changes:
 
@@ -81,12 +77,12 @@ Automatic trading also follows fixed rules that no setting changes:
 3. Active party members and Pokémon in a project stay home.
 4. A Pokémon in a hand-picked trade is left for that trade.
 
-Trades you pick by hand ignore trade settings and these rules. Only the limits in
+Trades you pick by hand ignore locks and these rules. Only the limits in
 [Make a trade](#make-a-trade) apply to them.
 
 ## Make a trade
 
-The Trade tab runs one exchange you choose:
+Make a trade runs one exchange you choose:
 
 1. Choose the adventure to trade with from **Trade with**. One that cannot trade
    says why: view only, stopped, archived or busy finishing another trade.
@@ -100,8 +96,8 @@ The Trade tab runs one exchange you choose:
 
 Press a chosen Pokémon to see its details, or **Change** to pick another one.
 
-The trade is queued at once and the History tab opens. The trade shows under
-Current exchange until it finishes, then in History. Trade settings, party
+The trade is queued at once and the page scrolls to it under Current exchange,
+where it stays until it finishes, then moves to History. Locks, party
 protection, the last-copy rule and automatic ranking do not apply. The trade is
 yours to make.
 
@@ -147,7 +143,7 @@ The trade builder is under `/api/v1/interactions/trade-builder`:
 - `GET /pokemon?adventure_id=` lists every Pokémon an adventure could trade by
   hand, with the hard limits marked.
 - `GET /targets?from_id=` and `GET /limits?from_id=&from_key=&to_id=` feed the
-  Trade tab. Targets mark a view-only adventure unavailable with its reason.
+  Make a trade section. Targets mark a view-only adventure unavailable with its reason.
   Limits include the other side's Pokémon and `starts_now`.
 - `POST` queues a trade from `from_id`, `from_key`, `to_id`, `to_key` and an
   optional `request_id`, and returns its place in the queue. Sending the same
@@ -160,9 +156,10 @@ is gone.
 `GET /api/v1/interactions/auto-settings?adventure_id=` reads the switch and wish
 list, and `PUT` with `enabled` and `wishlist` (a list of Pokédex numbers, up to 50)
 saves them. A game's own `POST /api/trading/preferences` sets one Pokémon with
-`key` and `state`, which is `auto`, `first` or `keep`.
+`key` and `state`: `keep` locks it and `auto` unlocks it. `first` (Prefer to
+trade) is still accepted.
 
-Trade settings are saved per game in SQLite, separately from cartridge checkpoints.
+Locks are saved per game in SQLite, separately from cartridge checkpoints.
 Neither generation stores a unique ID for each Pokémon, so a partner is known by
 its trainer ID, its DVs and its evolution family. The family is every species
 linked by evolution in Red, Blue, Yellow, Gold, Silver or Crystal, named by its
@@ -188,7 +185,7 @@ Pokémon by the same rule: exactly one match, or the trade stops.
 The staged checkpoint calculation reads the same saved settings as the broker.
 Writes are blocked while an exchange holds the game. A completed exchange clears
 the sender's setting in the same database transaction as its journal entry.
-A deliberate new-adventure restart clears all trade settings.
+A deliberate new-adventure restart clears all locks.
 
 ## Connecting an installation
 
@@ -209,10 +206,10 @@ its old webpage to that game's `/trading` page. The broker's `/api/proposals` ro
 remains available to the coordinator. Deploy the games, broker, and coordinator
 from the same revision so displayed offers and checkpoint validation agree.
 
-When disconnected, the UI disables trade setting controls, shows a reconnecting message,
+When disconnected, the PC disables the lock key, shows a reconnecting message,
 and preserves saved choices. `VIEWER_ONLY` blocks preference writes on the server.
 
 Automatic trades preserve the last held Articuno, Zapdos, Moltres, Mewtwo, or
 Mew in each adventure, even when another adventure needs its Pokédex entry.
-Setting a boxed partner to Prefer to trade can override this protection. Party,
-shiny, perfect DV, and Never trade protections still apply.
+An older Prefer to trade choice on a boxed partner can override this protection.
+Party, shiny, perfect DV, and lock protections still apply.

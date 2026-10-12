@@ -349,84 +349,6 @@
     }
     permissions()
   }
-  const tradePhase = trade => TradeProgress.phase(trade)
-  function tradePartner(id, mon, completed, failed) {
-    const game = adventures.find(item => item.id === id)
-    const title = game ? `<a href="${gameUrl(id)}trading">${esc(game.name)}</a>` : 'Adventure unavailable'
-    const label = completed ? 'Received' : failed ? 'Planned to receive' : 'Receiving'
-    const dex = Number.isInteger(mon?.dex) && mon.dex >= 1 && mon.dex <= 251 ? mon.dex : null
-    const sprite = dex && game ? `<div class="plate plate--trade"><img src="${gameUrl(id)}sprites/${dex}.png?v=rom-portraits-1" alt="" loading="lazy"></div>`
-      : '<div class="plate plate--trade exchange-placeholder" aria-hidden="true"><span class="plate-num">?</span></div>'
-    const name = mon?.name ? esc(mon.name) : 'Pokémon details unavailable'
-    const nickname = mon?.nickname && mon.nickname.toLowerCase() !== mon.name?.toLowerCase()
-      ? `<p class="exchange-nickname">“${esc(mon.nickname)}”</p>` : ''
-    const level = Number.isInteger(mon?.level) && mon.level >= 1 && mon.level <= 100 ? `, Lv. ${mon.level}` : ''
-    const evolution = completed && mon?.evolved_from?.name
-      ? `<p class="exchange-evolution">✦ ${esc(mon.evolved_from.name)} → ${name}</p>` : ''
-    return `<section class="exchange-partner"><h3>${title}</h3><div class="exchange-pokemon">${sprite}<div class="exchange-text"><p class="micro">${label}${level}</p><strong>${name}</strong>${nickname}${evolution}</div></div></section>`
-  }
-  function describeTrade(trade, completed = false) {
-    const leftId = trade.left_id || trade.participants?.[0] || trade.plan?.left_id
-    const rightId = trade.right_id || trade.participants?.[1] || trade.plan?.right_id
-    const left = adventures.find(game => game.id === leftId)?.name || 'First adventure'
-    const right = adventures.find(game => game.id === rightId)?.name || 'Second adventure'
-    const failed = trade.phase === 'aborted'
-    const time = (completed || failed) && trade.updated_at ? `<p class="micro">${esc(dateLabel(trade.updated_at))}</p>` : ''
-    const reason = failed ? `<p class="exchange-reason">${esc(trade.failure_reason || 'The exchange could not finish safely.')}</p>` : ''
-    const label = failed ? 'Trade did not complete' : completed ? 'Trade completed' : tradePhase(trade)
-    const display = trade.display || {}
-    const pair = failed ? `<strong class="exchange-failed">${esc(left)} ↔ ${esc(right)}</strong>`
-      : `<div class="exchange-pair">${tradePartner(leftId, display[leftId]?.received, completed, failed)}<span class="exchange-arrow" aria-hidden="true">⇄</span>${tradePartner(rightId, display[rightId]?.received, completed, failed)}</div>`
-    return `<article class="exchange${completed ? ' exchange-completed' : ''}"><header class="exchange-heading"><span class="tag state-pill${failed ? ' tag--crit' : ''}">${esc(label)}</span>${time}</header>${pair}${reason}</article>`
-  }
-  async function refreshTrades() {
-    const data = await api('/api/v1/interactions')
-    const count = new Set((data.participants || []).map(item => typeof item === 'string' ? item : item.id)).size
-    $('#trading-status').textContent = data.attention?.message || (count >= 2 ? `${count} adventures can trade automatically.`
-      : 'Trades begin when two eligible adventures are running and have a useful exchange.')
-    const active = (Array.isArray(data.active) ? data.active : data.active ? [data.active] : [])
-      .filter(trade => !['completed', 'aborted'].includes(trade.phase))
-    $('#trade-active-section').hidden = !active.length
-    const retrying = /retry|attention|recover/i.test(data.message || '')
-    $('#trade-active').innerHTML = active.length ? active.map(trade => describeTrade(trade)).join('')
-      : `<p>${data.attention ? 'No exchange is in progress. Automatic trading will try again.' : retrying ? 'Trading is waiting to try again. Your adventures will reconnect automatically.' : 'Waiting for a useful exchange. Your adventures keep playing in the meantime.'}</p>`
-    const completed = (data.history || []).filter(trade => trade.phase === 'completed' && trade.decision !== 'ABORT').slice(0, 20)
-    $('#trade-history-count').textContent = `${completed.length}${completed.length === 20 ? '+' : ''} recent ${completed.length === 1 ? 'exchange' : 'exchanges'}`
-    $('#trade-history').innerHTML = completed.length ? completed.map(trade => describeTrade(trade, true)).join('') : '<p>No completed trades yet.</p>'
-    const failures = data.recent_failures || []
-    $('#trade-failures-section').hidden = !failures.length
-    $('#trade-failures').innerHTML = failures.map(trade => describeTrade(trade)).join('')
-    // Trades are made on each adventure's own Trade tab. The library only shows the line and can take a trade out of it.
-    const queued = Array.isArray(data.queued) ? data.queued : []
-    $('#trade-queued-section').hidden = !queued.length
-    $('#trade-queued').innerHTML = queued.map(queuedTrade).join('')
-    permissions()
-  }
-  function queuedSide(id, mon) {
-    const game = adventures.find(item => item.id === id)
-    const title = game ? `<a href="${gameUrl(id)}trading?tab=trade">${esc(game.name)}</a>` : 'Adventure unavailable'
-    return `<section class="exchange-partner"><h3>${title}</h3><div class="exchange-text"><p class="micro">Sends</p><strong>${esc(mon || 'Chosen Pokémon')}</strong></div></section>`
-  }
-  function queuedTrade(entry) {
-    const names = entry.names || {}
-    const label = entry.state === 'starting' ? 'Checking both Pokémon' : entry.position > 1 ? `Number ${entry.position} in line` : 'Next for the Cable Club'
-    const wait = entry.state !== 'starting' && entry.busy ? '<p class="exchange-reason">Busy with a trade. This trade will wait in line.</p>' : ''
-    const cancel = entry.cancellable && entry.state === 'queued' && /^[a-f0-9]{32}$/.test(entry.id || '')
-      ? `<button type="button" class="key" data-cancel-trade="${entry.id}" data-owner>Cancel trade</button>` : ''
-    return `<article class="exchange exchange-queued"><header class="exchange-heading"><span class="tag state-pill">${esc(label)}</span>${cancel}</header><div class="exchange-pair">${queuedSide(entry.left_id, names.left)}<span class="exchange-arrow" aria-hidden="true">⇄</span>${queuedSide(entry.right_id, names.right)}</div>${wait}</article>`
-  }
-  async function cancelQueuedTrade(button) {
-    button.disabled = true
-    const note = $('#trade-queued-note')
-    try {
-      await api(`/api/v1/interactions/trade-builder/${button.dataset.cancelTrade}/cancel`, {method: 'POST'})
-      note.hidden = true
-    } catch (error) {
-      note.textContent = error.message
-      note.hidden = false
-    }
-    await refreshTrades().catch(() => {})
-  }
   let savedBackups = []
   let backupPage = 0
   let backupToDelete = null
@@ -578,7 +500,6 @@
       if (page === 'library' || page === 'settings') await refreshCartridges()
       renderAdventures()
       if (page === 'notifications') renderNotifyAdventures()
-      if (page === 'trading') await refreshTrades()
       connection('Connected', false)
     } catch (error) { connection('Reconnecting…', true)
       notice(error.message, true) }
@@ -838,8 +759,6 @@
 
   document.querySelectorAll('[data-close]').forEach(button => { button.onclick = () => $(`#${button.dataset.close}`).close() })
   document.addEventListener('click', event => {
-    const cancel = event.target.closest('[data-cancel-trade]')
-    if (cancel?.dataset?.cancelTrade && !cancel.disabled && owner) return void cancelQueuedTrade(cancel)
     const button = event.target.closest('[data-action]')
     if (!button || button.disabled) return
     const game = adventures.find(item => item.id === button.dataset.id)

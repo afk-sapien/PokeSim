@@ -3,7 +3,7 @@ const fs = require('node:fs')
 const test = require('node:test')
 const vm = require('node:vm')
 const crypto = require('node:crypto').webcrypto
-const source = fs.readFileSync('pokesim/web/static/trade-progress.js', 'utf8') + String.fromCharCode(59) + '\n' + fs.readFileSync('pokesim/web/static/library.js', 'utf8')
+const source = fs.readFileSync('pokesim/web/static/library.js', 'utf8')
 const settle = async () => {
   for (const tick of [1, 2, 3, 4]) await new Promise(resolve => setImmediate(resolve))
 }
@@ -276,171 +276,12 @@ test('startup connection failure recovers automatically but shutdown stays close
   assert.equal(view.element('#workspace').hidden, true)
 })
 
-test('automatic trading shows friendly progress and only completed history without mutations or inventory requests', async () => {
-  const view = library({page: 'trading', respond: path => {
-    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [
-      {id: 'one', name: 'Red Sprout', state: 'running'},
-      {id: 'two', name: 'Blue Ripple', state: 'running'}
-    ]})}
-    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
-      enabled: true, participants: ['one', 'two'],
-      active: [{left_id: 'one', right_id: 'two', phase: 'staging', message: 'manifest technical detail', cancellable: true}],
-      history: [
-        {left_id: 'one', right_id: 'two', phase: 'completed', decision: 'COMMIT', updated_at: 100},
-        {left_id: 'one', right_id: 'two', phase: 'aborted', decision: 'ABORT', error: 'secret worker failure'},
-        {left_id: 'one', right_id: 'two', phase: 'completed', decision: 'ABORT'},
-        {left_id: 'one', right_id: 'two', phase: 'recovering', decision: 'COMMIT'}
-      ]
-    })}
-  }})
-  await settle()
-  assert.equal(view.element('#trading-status').textContent, '2 adventures can trade automatically.')
-  assert.match(view.element('#trade-active').innerHTML, /Red Sprout/)
-  assert.match(view.element('#trade-active').innerHTML, /Blue Ripple/)
-  assert.equal(view.element('#trade-active-section').hidden, false)
-  assert.match(view.element('#trade-active').innerHTML, /Checking both saves/)
-  assert.doesNotMatch(view.element('#trade-active').innerHTML, /staging|manifest|button/)
-  assert.equal((view.element('#trade-history').innerHTML.match(/Trade completed/g) || []).length, 1)
-  assert.doesNotMatch(view.element('#trade-history').innerHTML, /ABORT|recovering|secret worker/)
-  view.poll()
-  await settle()
-  assert.equal(view.calls.some(call => call.options.method && call.options.method !== 'GET'), false)
-  assert.equal(view.calls.some(call => call.path.includes('inventory')), false)
+test('the library has three tabs and no trading view of its own', () => {
   const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
-  assert.doesNotMatch(html, /participants-form|trading-enabled|trade-form|trade-left|trade-right|Trading group|Choose an exchange/)
-  assert.doesNotMatch(source, /data-trade-action|trade-inventory|participants-form|trading-enabled/)
-  // Trades are made on each adventure's own Trade tab, never from the library.
-  assert.match(html, /To make a trade, open a game and go to its Trade tab\./)
-  assert.doesNotMatch(html, /make-trade|trade-tabs\.js|trade-ui\.js|mon-grid\.js|Make a trade|New trade|Trade…/)
-  assert.doesNotMatch(source, /make-trade|TradeTabs|trade-builder\/(targets|limits|pokemon)|trade-builder'|trade-builder`, \{method: 'POST', body/)
-  assert.equal(view.element('#trade-queued-section').hidden, true)
-  assert.doesNotMatch(html, /data-view="trade"|manual-left-game|href="\/trade"/)
-  assert.doesNotMatch(source, /manual-trades/)
-})
-
-test('the library shows trades waiting in line, links each game and can only cancel them', async () => {
-  const one = 'a'.repeat(32)
-  const two = 'b'.repeat(32)
-  const waiting = 'c'.repeat(32)
-  const view = library({page: 'trading', respond: (path, opts) => {
-    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [
-      {id: one, name: 'Red Sprout', state: 'running'}, {id: two, name: 'Blue Ripple', state: 'running'}]})}
-    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({enabled: true, participants: [one, two], active: [], history: [],
-      queued: [
-        {id: 'd'.repeat(32), state: 'starting', position: 1, left_id: one, right_id: two, names: {left: 'Pikachu', right: 'Eevee'}, cancellable: false},
-        {id: waiting, state: 'queued', position: 2, left_id: one, right_id: two, names: {left: 'Onix', right: 'Abra'}, cancellable: true, busy: true}]})}
-    if (path.endsWith('/cancel')) return {ok: true, json: async () => ({id: waiting, state: 'cancelled'})}
-  }})
-  await settle()
-  const html = view.element('#trade-queued').innerHTML
-  assert.equal(view.element('#trade-queued-section').hidden, false)
-  assert.match(html, new RegExp(`href="/games/${one}/trading\\?tab=trade">Red Sprout`))
-  assert.match(html, new RegExp(`href="/games/${two}/trading\\?tab=trade">Blue Ripple`))
-  assert.match(html, /Pikachu[\s\S]*Eevee[\s\S]*Onix[\s\S]*Abra/)
-  assert.match(html, /Checking both Pokémon/)
-  assert.match(html, /Number 2 in line/)
-  assert.match(html, /Busy with a trade\. This trade will wait in line\./)
-  // Only the trade still in line has a Cancel key.
-  assert.equal((html.match(/data-cancel-trade=/g) || []).length, 1)
-  assert.match(html, new RegExp(`data-cancel-trade="${waiting}"`))
-  const button = {disabled: false, dataset: {cancelTrade: waiting}}
-  view.clicks.forEach(click => click({target: {closest: selector => selector === '[data-cancel-trade]' ? button : null}}))
-  await settle()
-  const post = view.calls.filter(call => call.options.method === 'POST')
-  assert.deepEqual(post.map(call => call.path), [`/api/v1/interactions/trade-builder/${waiting}/cancel`])
-  assert.equal(post[0].options.headers['X-PokeSim-CSRF'], 'csrf')
-})
-
-test('automatic trade recovery never shows an aborted exchange as successful or exposes worker errors', async () => {
-  for (const decision of ['ABORT', 'COMMIT']) {
-    const view = library({page: 'trading', respond: path => {
-      if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
-        participants: [], active: [{phase: 'recovering', decision, error: 'checkpoint_sha256 wrong /private/path'}],
-        history: [{phase: 'aborted', decision: 'ABORT'}]
-      })}
-    }})
-    await settle()
-    assert.match(view.element('#trade-active').innerHTML, decision === 'ABORT' ? /Getting ready to try again/ : /Finishing the exchange safely/)
-    assert.doesNotMatch(view.element('#trade-active').innerHTML, /checkpoint|private|recovering|Trade completed|button/)
-    assert.match(view.element('#trade-history').innerHTML, /No completed trades yet/)
-  }
-})
-
-test('automatic trade issues show a retry explanation without technical messages', async () => {
-  const view = library({page: 'trading', respond: path => {
-    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
-      participants: ['one'], active: [], history: [], message: 'Trading needs attention: private exception'
-    })}
-  }})
-  await settle()
-  assert.match(view.element('#trade-active').innerHTML, /try again/)
-  assert.doesNotMatch(view.element('#trade-active').innerHTML, /private exception/)
-  assert.match(view.element('#trading-status').textContent, /two eligible adventures/)
-})
-
-test('global trading shows persistent travel failures instead of saying adventures are ready', async () => {
-  const view = library({page: 'trading', respond: path => {
-    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
-      participants: ['one', 'two'], active: [], history: [],
-      attention: {message: '12 recent trade attempts did not complete. An adventure could not reach the Cable Club.'},
-      recent_failures: [{phase: 'aborted', decision: 'ABORT', updated_at: 1000,
-        failure_reason: 'An adventure could not reach the Cable Club.', error: '/private/path'}],
-    })}
-  }})
-  await settle()
-  assert.match(view.element('#trading-status').textContent, /12 recent.*Cable Club/)
-  assert.doesNotMatch(view.element('#trading-status').textContent, /can trade automatically/)
-  assert.match(view.element('#trade-active').innerHTML, /try again/)
-  assert.equal(view.element('#trade-failures-section').hidden, false)
-  assert.match(view.element('#trade-failures').innerHTML, /Trade did not complete/)
-  assert.match(view.element('#trade-failures').innerHTML, /could not reach the Cable Club/)
-  assert.doesNotMatch(view.element('#trade-failures').innerHTML, /private/)
-  assert.match(view.element('#trade-history').innerHTML, /No completed trades yet/)
-})
-
-test('shared trade history shows both arrivals, sprites and verified evolutions while hiding idle exchanges', async () => {
-  const left = 'a'.repeat(32)
-  const right = 'b'.repeat(32)
-  const view = library({page: 'trading', respond: path => {
-    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [
-      {id: left, name: 'Red <Sprout>', state: 'running'},
-      {id: right, name: 'Blue Ripple', state: 'stopped'}
-    ]})}
-    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
-      participants: [left, right], active: [], history: [{
-        left_id: left, right_id: right, phase: 'completed', decision: 'COMMIT', display: {
-          [left]: {received: {name: 'Oddish', nickname: '<SPROUT>', dex: 43, level: 12}},
-          [right]: {received: {name: 'Gengar', dex: 94, level: 33, evolved_from: {name: 'Haunter'}}}
-        }
-      }]
-    })}
-  }})
-  await settle()
-  const html = view.element('#trade-history').innerHTML
-  assert.equal(view.element('#trade-active-section').hidden, true)
-  assert.match(html, new RegExp(`/games/${left}/sprites/43.png`))
-  assert.match(html, new RegExp(`/games/${right}/sprites/94.png`))
-  assert.match(html, new RegExp(`/games/${right}/trading`))
-  assert.match(html, /Haunter → Gengar/)
-  assert.match(html, /Received, Lv. 33/)
-  assert.match(html, /&lt.*SPROUT.*&gt/)
-  assert.doesNotMatch(html, /<SPROUT>/)
-  assert.equal(view.element('#trade-history-count').textContent, '1 recent exchange')
-})
-
-test('missing historical Pokémon remain unknown and active offers do not claim an evolution', async () => {
-  const view = library({page: 'trading', respond: path => {
-    if (path === '/api/v1/interactions') return {ok: true, json: async () => ({
-      participants: [], active: [{left_id: 'one', right_id: 'two', phase: 'preparing', display: {
-        one: {received: {name: 'Haunter', dex: -1, level: 999, evolved_from: {name: 'Gastly'}}}
-      }}], history: [{phase: 'completed', decision: 'COMMIT'}]
-    })}
-  }})
-  await settle()
-  assert.match(view.element('#trade-history').innerHTML, /Pokémon details unavailable/)
-  assert.doesNotMatch(view.element('#trade-history').innerHTML, /<img/)
-  assert.match(view.element('#trade-active').innerHTML, /Receiving/)
-  assert.doesNotMatch(view.element('#trade-active').innerHTML, /Gastly|Lv. 999|sprites\/-1/)
+  const nav = html.match(/<nav aria-label="Application">(.*?)<\/nav>/)[1]
+  assert.deepEqual([...nav.matchAll(/data-nav="([a-z]+)"/g)].map(match => match[1]), ['library', 'notifications', 'settings'])
+  assert.doesNotMatch(html, /data-view="trading"|trade-progress\.js|href="\/trading"/)
+  assert.doesNotMatch(fs.readFileSync('pokesim/web/static/library.js', 'utf8'), /\/api\/v1\/interactions['`?]|refreshTrades|data-cancel-trade/)
 })
 
 function notificationsView(overrides = {}, extra = () => null) {

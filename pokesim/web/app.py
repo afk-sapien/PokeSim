@@ -306,8 +306,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def pokedex_route(view: Literal['pc', 'dex'] | None = Query(None)):
         payload = pokedex_status(plan=view != 'pc')
         if view == 'pc':
-            # The PC draws party and boxes in full but never the collection plan.
-            return fast_json({key: value for key, value in payload.items() if key != 'plan'})
+            # The PC draws party and boxes in full but never the collection plan. It hides the lock for watchers.
+            return fast_json({**{key: value for key, value in payload.items() if key != 'plan'}, 'viewer_only': view_only()})
         if view == 'dex':
             # The Pokédex lists who holds each species, never their moves or stats.
             storage = payload.get('storage')

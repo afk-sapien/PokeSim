@@ -324,7 +324,7 @@ def test_completed_trades_are_announced_once_for_both_adventures(client, monkeyp
     client.patch('/api/v1/notifications', json={'categories': {'trades': True}, 'adventures': {red: False}})
     manager.notifications.trade_completed(row, display).join(5)
     assert sent == [('https://ntfy.sh/topic', 'Red ⇄ Blue · Trade completed',
-                     'Red received Gengar. Blue received Alakazam.', 'http://testserver/trading')]
+                     'Red received Gengar. Blue received Alakazam.', f'http://testserver/games/{red}/trading')]
     client.patch('/api/v1/notifications', json={'adventures': {blue: False}})
     assert manager.notifications.trade_completed(row, display) is None
 

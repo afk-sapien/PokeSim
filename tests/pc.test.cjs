@@ -4,23 +4,26 @@ const test = require('node:test')
 const vm = require('node:vm')
 const source = fs.readFileSync('pokesim/web/static/types.js', 'utf8') + '\n{}\n' + fs.readFileSync('pokesim/web/static/routes.js', 'utf8') + '\n{}\n' + fs.readFileSync('pokesim/web/static/mon-grid.js', 'utf8') + '\n{}\n' + fs.readFileSync('pokesim/web/static/pc.js', 'utf8')
 
-function pc(pokemon, search = '?scope=all', party = [], base = '') {
+function pc(pokemon, search = '?scope=all', party = [], base = '', refuse = '') {
   const elements = new Map()
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
       value: '', innerHTML: '', textContent: '', options: [{}, {}],
-      classList: {add() {}, remove() {}, toggle() {}}, setAttribute() {}, removeAttribute() {}, showModal() {}, focus() {},
+      classList: {add() {}, remove() {}, toggle() {}}, setAttribute() {}, removeAttribute() {}, showModal() { this.open = true }, focus() {},
       insertAdjacentHTML(_, html) { this.innerHTML += html },
     })
     return elements.get(selector)
   }
   let url
+  const calls = []
   const context = vm.createContext({
     document: {querySelector: selector => selector.startsWith('meta[') ? {content: selector.includes('pokesim-base') ? base : ''} : element(selector), activeElement: null, hidden: false, addEventListener() {}},
     location: {search}, URLSearchParams,
     history: {replaceState: (_, __, next) => { url = next }},
-    fetch: async () => ({ok: true, json: async () => ({started: true, version: 'blue', party,
-      storage: {active_box: 1, box_counts: Array(12).fill(20), pokemon}})}),
+    fetch: async (path, options) => { calls.push({path, options})
+      if (options?.method === 'POST') return refuse ? {ok: false, json: async () => ({detail: refuse})} : {ok: true, json: async () => ({ok: true})}
+      return {ok: true, json: async () => ({started: true, version: 'blue', party,
+      storage: {active_box: 1, box_counts: Array(12).fill(20), pokemon}})} },
     setInterval() {}, setTimeout, requestAnimationFrame: callback => setTimeout(callback, 0),
   })
   vm.runInContext(source, context)
@@ -29,7 +32,7 @@ function pc(pokemon, search = '?scope=all', party = [], base = '') {
     // Cards past the first screen are drawn over the next frames.
     settle: () => new Promise(resolve => setTimeout(resolve, 20)),
     rows: () => JSON.parse(vm.runInContext('JSON.stringify(residents)', context)),
-    element, url: () => url,
+    element, url: () => url, calls,
     sort(key, order) {
       element('#pc-sort').value = key
       element('#pc-sort').onchange()
@@ -374,13 +377,53 @@ test('egg details show only hatching progress', async () => {
   assert.doesNotMatch(detail, /Sneasel|Scratch|Friendship|Hidden Power|individual-stats|role="meter"|Dark/)
 })
 
-test('details show the trade setting the server names', async () => {
-  for (const [setting, label] of [['first', 'Prefer to trade'], ['keep', 'Never trade'], ['auto', 'Can trade']]) {
-    const view = pc([], '?box=party', [mon(undefined, undefined, 20, {slot: 1, trade_key: 'k', trade_preference: 'offered', trade_setting: setting})])
+test('the popup has one lock toggle that reflects the saved setting', async () => {
+  for (const [setting, pressed] of [['keep', 'true'], ['auto', 'false'], ['first', 'false']]) {
+    const view = pc([], '?box=party', [mon(undefined, undefined, 20, {slot: 1, trade_key: 'k', trade_setting: setting})])
     await view.ready()
+    assert.equal(/class="pc-lock"/.test(view.element('#pc-grid').innerHTML), setting === 'keep')
     view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
-    assert.match(view.element('#pc-detail-body').innerHTML, new RegExp(label))
+    const html = view.element('#pc-detail-body').innerHTML
+    assert.match(html, new RegExp(`<button type="button" class="lock-toggle" data-lock-key="k" aria-pressed="${pressed}"`))
+    assert.match(html, /Locked: never traded/)
+    assert.doesNotMatch(html, /Prefer to trade|<select/)
   }
+})
+
+test('shiny Pokémon are protected and eggs have no lock', async () => {
+  const view = pc([], '?box=party', [mon(undefined, undefined, 20, {slot: 1, trade_key: 'k', shiny: true}), mon(undefined, undefined, 1, {slot: 2, trade_key: 'e', egg: true})])
+  await view.ready()
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  assert.match(view.element('#pc-detail-body').innerHTML, /Protected/)
+  assert.doesNotMatch(view.element('#pc-detail-body').innerHTML, /lock-toggle/)
+})
+
+test('the lock saves through the trade setting and a refused change goes back', async () => {
+  const toggle = {dataset: {lockKey: 'k'}, disabled: false}
+  const click = view => view.element('#pc-detail-body').onclick({target: {closest: () => toggle}})
+  const view = pc([], '?box=party', [mon(undefined, undefined, 20, {slot: 1, trade_key: 'k', trade_setting: 'auto'})])
+  await view.ready()
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  await click(view)
+  const posts = view.calls.filter(call => call.options?.method === 'POST')
+  assert.equal(posts.length, 1)
+  assert.match(posts[0].path, /\/api\/trading\/preferences$/)
+  assert.deepEqual(JSON.parse(posts[0].options.body), {key: 'k', state: 'keep'})
+  const refused = pc([], '?box=party', [mon(undefined, undefined, 20, {slot: 1, trade_key: 'k', trade_setting: 'keep'})], '', 'An exchange is in progress.')
+  await refused.ready()
+  refused.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  await click(refused)
+  assert.deepEqual(JSON.parse(refused.calls.find(call => call.options?.method === 'POST').options.body), {key: 'k', state: 'auto'})
+  assert.match(refused.element('#pc-detail-body').innerHTML, /aria-pressed="true"/)
+  assert.match(refused.element('#pc-detail-body').innerHTML, /An exchange is in progress\./)
+})
+
+test('a view link shows the lock but cannot change it', async () => {
+  const view = pc([], '?box=party', [mon(undefined, undefined, 20, {slot: 1, trade_key: 'k', trade_setting: 'keep'})], '/view/abc')
+  await view.ready()
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  assert.match(view.element('#pc-detail-body').innerHTML, /aria-pressed="true" disabled/)
+  assert.match(view.element('#pc-detail-body').innerHTML, /Only the owner can lock Pokémon/)
 })
 
 test('a slot in the address opens that Pokémon once the fresh PC has loaded', async () => {

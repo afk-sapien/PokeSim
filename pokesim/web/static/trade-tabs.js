@@ -3,44 +3,22 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
   const BUILDER = '/api/v1/interactions/trade-builder'
   const SETTINGS = '/api/v1/interactions/auto-settings'
-  const STORE = 'pokesim-trading-tab'
   const aid = PokeSim.adventureId
   const owner = String(PokeSim.base || '').startsWith('/games/') && typeof PokeSim.api === 'function'
   const query = new URLSearchParams(location.search)
 
-  // Tabs: one selected at a time, arrow keys move between them.
-  const tabs = [...document.querySelectorAll('.trade-tabs [role="tab"]')]
-  function select(name, focus = false) {
-    const target = tabs.find(tab => tab.id === `tab-${name}`) || tabs[0]
-    if (!target) return
-    for (const tab of tabs) {
-      const on = tab === target
-      tab.setAttribute('aria-selected', String(on))
-      tab.tabIndex = on ? 0 : -1
-      const panel = tab.getAttribute('aria-controls') && document.getElementById(tab.getAttribute('aria-controls'))
-      if (panel) panel.hidden = !on
-    }
-    if (focus) target.focus()
-    const current = target.id.slice(4)
-    try { localStorage.setItem(STORE, current) } catch (_) {}
-    if (current === 'auto') loadAuto()
-  }
-  for (const tab of tabs) {
-    tab.addEventListener('click', () => select(tab.id.slice(4)))
-    tab.addEventListener('keydown', event => {
-      const index = tabs.indexOf(tab)
-      const moves = {ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: tabs.length - 1}
-      if (!(event.key in moves)) return
-      event.preventDefault()
-      const next = tabs[(moves[event.key] + tabs.length) % tabs.length]
-      select(next.id.slice(4), true)
-    })
+  // One page, no tabs. An old ?tab= link scrolls to the matching section instead.
+  const SECTIONS = {trade: '#make-trade', history: '#trade-history-section', auto: '.trade-overview', current: '#current-exchange-section'}
+  function select(name) {
+    const target = SECTIONS[name] ? $(SECTIONS[name]) : null
+    if (!target || target.hidden) return
+    target.scrollIntoView?.({block: 'start'})
   }
 
   // Pokémon cards: the same grid, filters and detail popup as the PC page (mon-grid.js).
   const Grid = globalThis.MonGrid
   for (const holder of document.querySelectorAll('[data-mon-toolbar]')) {
-    if (Grid) holder.outerHTML = Grid.toolbar(holder.dataset.monToolbar, {settings: holder.dataset.settings === 'true'})
+    if (Grid) holder.outerHTML = Grid.toolbar(holder.dataset.monToolbar)
   }
   const fit = root => globalThis.Panel?.fitSprites?.(root)
   // Full PC records, by trade key, so cards show types, DVs, moves and stats.
@@ -92,12 +70,9 @@
     const el = $(target)
     if (!el) return
     const prefix = options.prefix
-    const shown = Grid ? Grid.apply(prefix, cards, options.settingOf) : cards
-    el.innerHTML = shown.map(mon => {
-      const setting = options.settingOf?.(mon)
-      return Grid.card(mon, mon.key, {attr: 'key', all: true, slot: mon.slot, sprite: mon.row?.sprite_url,
-        blocked: options.blocked(mon), pressed: mon.key === options.chosen, tags: Grid.settingBadge(setting)})
-    }).join('') || `<p class="dex-empty">${cards.length ? 'No Pokémon match these filters.' : options.empty}</p>`
+    const shown = Grid ? Grid.apply(prefix, cards) : cards
+    el.innerHTML = shown.map(mon => Grid.card(mon, mon.key, {attr: 'key', all: true, slot: mon.slot, sprite: mon.row?.sprite_url,
+      blocked: options.blocked(mon), pressed: mon.key === options.chosen, locked: options.settingOf?.(mon) === 'keep'})).join('') || `<p class="dex-empty">${cards.length ? 'No Pokémon match these filters.' : options.empty}</p>`
     fit(el)
   }
 
@@ -140,7 +115,7 @@
     }
     const setting = side === 'mine' ? ownSetting(card) : theirSetting(card)
     el.innerHTML = `<div class="pc-grid pick-chosen-grid">${Grid.card(card, card.key, {attr: 'key', slot: card.slot, sprite: card.row?.sprite_url,
-      label: `chosen ${what}. Opens its details`, blocked: side === 'mine' ? mineBlocked(card) : theirsBlocked(card), tags: Grid.settingBadge(setting)})}</div><button type="button" class="key pick-change" data-slot="${side}">Change</button>`
+      label: `chosen ${what}. Opens its details`, blocked: side === 'mine' ? mineBlocked(card) : theirsBlocked(card), locked: setting === 'keep'})}</div><button type="button" class="key pick-change" data-slot="${side}">Change</button>`
     fit(el)
   }
   // The Trade key works only with both slots filled and a pair that is allowed. Otherwise it says why.
@@ -322,10 +297,10 @@
       const waits = pick.games.find(row => row.id === pick.game)?.busy || pick.limits?.busy || pick.mineBusy
       pick.busy = false
       reset()
-      note('#pick-note', waits ? 'Trade queued. It waits in line under Current exchange on the History tab.'
-        : 'Trade started. Follow it under Current exchange and on the History tab.')
+      note('#pick-note', waits ? 'Trade queued. It waits in line under Current exchange.'
+        : 'Trade started. Follow it under Current exchange.')
       await globalThis.AdventureTrading?.refresh?.()
-      select('history')
+      select('current')
     } catch (error) {
       note('#pick-note', error.message)
     } finally {
@@ -379,21 +354,22 @@
     picker.addEventListener('close', () => { pick.side = null })
   }
 
-  // The detail popup: the PC page's detail, with the trade setting on top.
+  // The detail popup: the PC page's detail. A lock shows as a stamp; it changes on the PC page.
   const dialog = $('#trade-detail')
   let open = null
   function detailTop(card, side) {
     const blocked = side === 'mine' ? mineBlocked(card) : side === 'theirs' ? theirsBlocked(card) : ''
     const parts = []
     if (blocked) parts.push(`<p class="pick-blocked-reason" role="note"><span class="micro">Cannot be traded</span>${esc(blocked)}</p>`)
-    if (side !== 'theirs' && card.trade_key && globalThis.TradeUI) parts.push(`<div class="trade-detail-setting"><span class="micro">Trade setting</span>${TradeUI.control(card.trade_key, card.nick || card.name)}</div>`)
+    if (side === 'mine' && ownSetting(card) === 'keep') parts.push(`<p class="trade-help trade-detail-lock">${Grid.lockIcon(true)} Locked on the <a href="${PokeSim.base}/pc">PC page</a>, so automatic trading never uses it. You can still pick it here.</p>`)
     if (side === 'mine' || side === 'theirs') parts.push(`<button type="button" class="key" data-detail-change="${side}">Choose another Pokémon</button>`)
     return parts.length ? `<div class="pc-trade-action trade-detail-action">${parts.join('')}</div>` : ''
   }
   function trade(card, side) {
     if (side === 'theirs') return false
     const state = ownSetting(card)
-    return state ? {state: Grid.SETTING_LABELS[state], note: state === 'protected' ? 'Never traded automatically' : 'Change it here'} : false
+    return state === 'protected' ? {state: 'Protected', note: 'Never traded automatically'}
+      : state === 'keep' ? {state: 'Locked', note: 'Never traded automatically. Change it on the PC page'} : false
   }
   function renderDetail() {
     if (!open || !Grid) return
@@ -420,17 +396,9 @@
       const rect = dialog.getBoundingClientRect()
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close()
     })
-    dialog.addEventListener('change', event => {
-      if (event.target.matches?.('select[data-trade-key]')) TradeUI.change(event.target)
-    })
     dialog.addEventListener('close', () => { open = null })
   }
 
-  const cardsIn = (selector, handler) => { const el = $(selector)
-    if (el) el.addEventListener('click', event => {
-      const button = event.target.closest?.('[data-key]')
-      if (button) handler(button.dataset.key)
-    }) }
   for (const [selector, side] of [['#slot-send', 'mine'], ['#slot-get', 'theirs']]) {
     $(selector)?.addEventListener('click', event => {
       const opener = event.target.closest?.('[data-slot]')
@@ -447,7 +415,7 @@
   $('#pick-reset')?.addEventListener('click', () => { note('#pick-note', '')
     reset() })
 
-  // Auto: the on or off switch, the wish list and one setting per Pokémon.
+  // Automatic trading: the on or off switch and the wish list, in the status box.
   let auto = null
   let autoBusy = false
   let autoLoading = false
@@ -461,6 +429,7 @@
     $('#wish-input').disabled = locked
     $('#wish-add').disabled = locked
     $('#wish-species').innerHTML = auto.species.map(row => `<option value="${esc(row.name)}">No. ${row.dex}</option>`).join('')
+    if ($('#wish-count')) $('#wish-count').textContent = auto.wishes.length ? String(auto.wishes.length) : 'Empty'
     $('#wish-list').innerHTML = auto.wishes.map(row => `<li class="wish"><span>${esc(row.name)} <span class="micro">No. ${row.dex}</span></span><button type="button" class="key wish-remove" data-dex="${row.dex}" aria-label="Remove ${esc(row.name)} from the wish list"${locked ? ' disabled' : ''}>Remove</button></li>`).join('')
       || '<li class="empty-note">No wishes yet. Automatic trading picks useful trades on its own.</li>'
   }
@@ -480,11 +449,11 @@
       renderAuto()
     }
   }
-  // Every visit to the tab reads fresh settings. Only an overlapping read is skipped.
+  // The settings are read when the page opens. Only an overlapping read is skipped.
   async function loadAuto() {
     globalThis.TradeUI?.refresh?.()
     if (!owner) {
-      note('#auto-note', 'Automatic trading is set from the owner’s page, not from a view link.')
+      if (String(PokeSim.base || '').startsWith('/view/')) note('#auto-note', 'Automatic trading is set from the owner’s page, not from a view link.')
       for (const el of document.querySelectorAll('#auto-switch, #wish-input, #wish-add')) el.disabled = true
       return
     }
@@ -501,7 +470,7 @@
   $('#auto-switch')?.addEventListener('click', () => {
     if (!auto) return
     const enabled = !auto.enabled
-    saveAuto({enabled}, data => data.enabled ? 'Auto trading is on.' : 'Auto trading is off. Trades you pick yourself still happen.')
+    saveAuto({enabled}, data => data.enabled ? 'Auto trading is on.' : 'Auto trading is off. Trades you make below still happen.')
   })
   $('#wish-form')?.addEventListener('submit', event => {
     event.preventDefault()
@@ -519,48 +488,17 @@
     const dex = Number(button.dataset.dex)
     saveAuto({wishlist: auto.wishlist.filter(value => value !== dex)}, () => 'Removed from the wish list.')
   })
-  // One setting per Pokémon, shown as the same cards. A card opens the popup that changes it.
-  let autoCards = []
-  function renderSettings(status) {
-    const list = $('#auto-list')
-    if (!list) return
-    // Settings save in the adventure itself, so they work while trading is offline, not while it is stopped.
-    if (!status || status.unreachable || !Array.isArray(status.offers)) {
-      list.innerHTML = '<p class="dex-empty">Start this adventure to change its trade settings.</p>'
-      if ($('#auto-count')) $('#auto-count').textContent = ''
-      return
-    }
-    autoCards = status.offers.map(mon => entry({...mon, key: mon.trade_key, nickname: mon.nick, slot: mon.position, location: mon.box ? 'box' : 'party'}, ownRecords))
-    grid('#auto-list', autoCards, {prefix: 'auto', settingOf: ownSetting, blocked: () => '', empty: 'No Pokémon to set yet.'})
-    if (open?.side === 'auto') {
-      const card = autoCards.find(row => row.key === open.card.key)
-      if (card) {
-        open.card = card
-        renderDetail()
-      }
-    }
-  }
-  if (globalThis.TradeUI) {
-    TradeUI.subscribe(renderSettings)
-    cardsIn('#auto-list', key => openDetail(autoCards.find(card => card.key === key), 'auto'))
-    if (Grid) Grid.bind('auto', () => renderSettings(TradeUI.status()))
-    // My PC records add types, DVs and moves to the cards once they arrive.
-    if (owner) readOwn().then(found => {
-      if (found?.generation && Grid) Grid.generation('auto', found.generation)
-      if (autoCards.length) renderSettings(TradeUI.status())
-    })
-  }
-  // A setting changed in the popup also updates the trade picker's badges.
+  // Fresh trade settings update the picker's lock icons.
   globalThis.TradeUI?.subscribe?.(() => {
     if (pick.cards.length) renderMine()
     if (pick.mon) slot('mine')
     if (open?.side === 'mine') renderDetail()
   })
 
-  // Deep links (?tab=trade&mon=key) win over the remembered tab.
-  let saved = null
-  try { saved = localStorage.getItem(STORE) } catch (_) {}
-  select(query.get('tab') || (query.get('mon') ? 'trade' : saved) || 'trade')
+  // Deep links: ?mon=key preselects a Pokémon to send, ?tab= scrolls to its section.
+  loadAuto()
   loadMine()
+  const asked = query.get('tab') || (query.get('mon') ? 'trade' : '')
+  if (asked) (globalThis.requestAnimationFrame || setTimeout)(() => select(asked))
   globalThis.TradeTabs = {select}
 })()

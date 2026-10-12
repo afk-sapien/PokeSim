@@ -296,12 +296,14 @@ def test_offer_and_cable_session_routes_are_gone(managed):  # noqa: F811
 
 
 @pytest.mark.parametrize('viewer', [False, True])
-def test_trading_page_has_no_offers_or_cable_club_tab(viewer):
+def test_trading_page_is_one_page_without_offers_or_cable_club(viewer):
     html = render_game_page('adventure-trading.html', base_path=f'/{"view" if viewer else "games"}/{"a" * 32}',
                             adventure_id='a' * 32, adventure_name='Gold', viewer=viewer)
-    tabs = re.findall(r'role="tab" id="tab-([a-z]+)"', html)
-    assert tabs == ['trade', 'auto', 'history']
-    for gone in ('tab-offers', 'panel-offers', 'offers-count', 'tab-cable', 'panel-cable', 'cable-games', 'Send offer',
+    assert 'role="tab"' not in html and 'role="tablist"' not in html
+    sections = re.findall(r'<section (?:id="([a-z-]+)" )?class="([a-z- ]+)"', html)
+    assert [name or cls for name, cls in sections if cls != 'builder-slot'] == ['trade-overview', 'current-exchange-section', 'make-trade',
+                                                       'trade-history-section']
+    for gone in ('tab-offers', 'tab-auto', 'panel-auto', 'auto-list', 'panel-offers', 'offers-count', 'tab-cable', 'panel-cable', 'cable-games', 'Send offer',
                  'ask-switch', 'trade-requests', 'Ask me first', 'Suggested trades'):
         assert gone not in html
 

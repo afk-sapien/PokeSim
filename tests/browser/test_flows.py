@@ -15,57 +15,51 @@ def expect(value):
 
 
 @pytest.mark.parametrize('width', [1280, 390])
-def test_pc_links_to_trading_where_the_setting_persists_even_when_trading_is_offline(page, game, width):
+def test_pc_popup_locks_a_pokemon_and_the_lock_persists_even_when_trading_is_offline(page, game, width):
     url, store, emu, _ = game
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(url + '/pc?scope=all')
-    # The PC only links to trading. Everything about trading lives on the Trading page.
-    page.locator('#pc-grid .pc-mon').filter(has_text='BUD').click()
+    bud = page.locator('#pc-grid .pc-mon').filter(has_text='BUD')
+    expect(bud.locator('.pc-lock')).to_have_count(0)
+    bud.click()
+    # The lock lives in the popup. Trade… still links to the game's Trading page.
     link = page.locator('#pc-trade-action').get_by_role('link', name='Trade…')
     expect(link).to_have_attribute('href', re.compile(r'/trading\?tab=trade&mon=.+'))
-    expect(page.locator('#pc-trade-action button')).to_have_count(0)
-    link.click()
-    setting = page.get_by_label('Trade setting for BUD')
-    expect(setting).to_be_enabled()
-    setting.select_option('keep')
-    expect(page.locator('.trade-saved')).to_contain_text('Never trade')
+    lock = page.locator('#pc-detail').get_by_role('button', name='Locked: never traded')
+    expect(lock).to_have_attribute('aria-pressed', 'false')
+    lock.focus()
+    page.keyboard.press('Enter')
+    expect(lock).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#pc-detail .lock-note')).to_have_text('Locked. It is never traded automatically.')
     assert any(value['state'] == 'locked' for value in store.trade_preferences().values())
-    page.reload()
-    expect(setting).to_have_value('keep')
-    setting.select_option('auto')
-    expect(setting).to_have_value('auto')
-    expect(page.locator('.trade-saved')).to_contain_text('Can trade')
-    assert all(value['state'] != 'locked' for value in store.trade_preferences().values())
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.locator('#pc-detail .close-detail').click()
+    expect(bud.locator('.pc-lock')).to_have_count(1)
+    expect(bud).to_have_attribute('aria-label', re.compile('locked, never traded automatically'))
+    page.reload()
+    bud.click()
+    expect(lock).to_have_attribute('aria-pressed', 'true')
+    page.keyboard.press('Escape')
+    bud.click()
+    lock.click()
+    expect(lock).to_have_attribute('aria-pressed', 'false')
+    expect(page.locator('#pc-detail .lock-note')).to_have_text('Unlocked. It can be traded automatically.')
+    assert all(value['state'] != 'locked' for value in store.trade_preferences().values())
 
 
-def test_trading_availability_and_viewer_mode_reach_real_controls(page, game, monkeypatch):
+def test_trading_page_is_one_page_and_viewers_cannot_lock(page, game, monkeypatch):
     url, store, emu, _ = game
+    # Old Trading addresses, the Auto view among them, open the one page.
     page.goto(url + '/trading?view=block')
     expect(page.locator('#trade-connection-note')).to_contain_text('not connected')
-    # The old Trading block address opens the Auto tab.
-    expect(page.get_by_role('tab', name='Auto')).to_have_attribute('aria-selected', 'true')
-    emu.connected = True
-    page.reload()
-    setting = page.get_by_label('Trade setting for FERN')
-    setting.select_option('first')
-    expect(page.locator('.trade-saved')).to_contain_text('Prefer to trade')
-    assert any(value['state'] == 'offered' for value in store.trade_preferences().values())
-    # The Auto view draws the PC page's cards, with the setting stamp and a filter for it.
-    fern = page.locator('#trade-content .pc-mon').filter(has_text='FERN')
-    expect(fern.locator('.trade-tag')).to_have_text('Prefer to trade')
-    page.locator('#trade-setting').select_option('first')
-    expect(page.locator('#trade-content .pc-mon')).to_have_count(1)
-    fern.click()
-    expect(page.locator('#trade-detail')).to_be_visible()
-    page.locator('#trade-detail-close').click()
-    page.locator('#trade-setting').select_option('all')
-    page.get_by_role('tab', name='Auto').press('ArrowRight')
-    expect(page.get_by_role('tab', name='Opportunities')).to_be_focused()
-    expect(page.get_by_role('tab', name='Opportunities')).to_have_attribute('aria-selected', 'true')
+    expect(page.get_by_role('tablist')).to_have_count(0)
+    expect(page.locator('#trade-setting, .trade-setting')).to_have_count(0)
     monkeypatch.setattr(config, 'VIEWER_ONLY', True)
-    page.goto(url + '/trading')
-    expect(page.get_by_label('Trade setting for FERN')).to_be_disabled()
+    page.goto(url + '/pc?scope=all')
+    page.locator('#pc-grid .pc-mon').filter(has_text='FERN').click()
+    lock = page.locator('#pc-detail').get_by_role('button', name='Locked: never traded')
+    expect(lock).to_be_disabled()
+    expect(page.locator('#pc-detail .lock-note')).to_contain_text('Only the owner')
     assert emu.commands == []
 
 

@@ -1,4 +1,4 @@
-"""The Trading page tabs: build a trade, answer suggestions, set automatic trading and read history."""
+"""The game Trading page: one page with the automatic trading switch, the trade builder and history."""
 import json
 import os
 from pathlib import Path
@@ -153,42 +153,33 @@ class Library:
         self.json(route, self.auto)
 
 
-def selected(page, name):
-    expect(page.get_by_role('tab', name=name)).to_have_attribute('aria-selected', 'true')
+def on_screen(page, selector):
+    expect(page.locator(selector)).to_be_in_viewport()
 
 
 @pytest.mark.parametrize('width', [1280, 390])
-def test_tabs_move_with_the_keyboard_and_remember_the_last_one(page, game, width):
+def test_trading_is_one_page_with_the_switch_up_top_then_trade_and_history(page, game, width):
     url = game[0]
     library = Library(page, url)
     page.set_viewport_size({'width': width, 'height': 844})
     library.open()
-    selected(page, 'Trade')
-    expect(page.locator('#panel-trade')).to_be_visible()
-    # Trading is automatic or built by hand: there is no Offers or Cable Club tab.
-    expect(page.get_by_role('tab')).to_have_text(['Trade', 'Auto', 'History'])
-    tab = page.get_by_role('tab', name='Trade')
-    tab.focus()
-    tab.press('ArrowRight')
-    selected(page, 'Auto')
-    expect(page.get_by_role('tab', name='Auto')).to_be_focused()
-    expect(page.locator('#panel-auto')).to_be_visible()
-    expect(page.locator('#panel-trade')).to_be_hidden()
-    page.keyboard.press('End')
-    selected(page, 'History')
+    # No tabs: the status box holds the switch, then Make a trade, then History.
+    expect(page.get_by_role('tablist')).to_have_count(0)
+    expect(page.get_by_role('tab')).to_have_count(0)
+    overview = page.locator('.trade-overview')
+    expect(overview.get_by_role('switch', name=re.compile('Auto trading'))).to_be_enabled()
+    expect(overview.get_by_role('link', name='PC page')).to_have_attribute('href', f'/games/{FROM}/pc')
+    expect(page.locator('#auto-list, #auto-setting, .trade-setting')).to_have_count(0)
+    order = page.evaluate("""[...document.querySelectorAll('main > section')].filter(el => !el.hidden).map(el => el.id || el.className)""")
+    assert order == ['trade-overview', 'make-trade', 'trade-history-section'], order
     expect(page.locator('#trade-history')).to_contain_text('Busy Blue could not reach the Cable Club')
     # History lists failed attempts and completed trades together, newest first.
     text = page.locator('#trade-history').inner_text()
     assert text.index('Busy Blue') < text.index('Second Red')
-    page.keyboard.press('ArrowRight')
-    selected(page, 'Trade')
-    page.keyboard.press('ArrowLeft')
-    selected(page, 'History')
-    page.get_by_role('tab', name='Auto').click()
-    page.reload()
-    selected(page, 'Auto')
+    shoot(page, f'trading-{width}')
+    # Old ?tab= links scroll to the matching section.
     library.open('?tab=history')
-    selected(page, 'History')
+    on_screen(page, '#trade-history-section')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
@@ -292,8 +283,8 @@ def test_trade_builder_picks_both_slots_in_a_modal_and_starts_an_owned_trade(pag
     expect(dialog).to_be_hidden()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     confirm.click()
-    # The trade is queued at once and the page moves to History. It waits under Current exchange.
-    selected(page, 'History')
+    # The trade is queued at once and the page scrolls to it under Current exchange.
+    on_screen(page, '#current-exchange-section')
     assert library.posted[0] | {'request_id': None} == {'from_id': FROM, 'from_key': 'box-1', 'to_id': RED, 'to_key': '1',
                                                          'request_id': None}
     current = page.locator('#current-exchange-section')
@@ -322,7 +313,7 @@ def test_a_game_busy_with_a_trade_can_be_picked_and_its_queued_trade_cancelled(p
     expect(page.locator('#pick-summary')).to_have_text(busy)
     shoot(page, f'trade-busy-{width}')
     confirm.click()
-    selected(page, 'History')
+    on_screen(page, '#current-exchange-section')
     card = page.locator('#current-exchange-section .queued-card')
     expect(card).to_contain_text('Waiting for the Cable Club')
     expect(card).to_contain_text(busy)
@@ -380,7 +371,7 @@ def test_a_view_only_adventure_is_a_disabled_choice_with_its_reason(page, game):
     assert library.posted == []
 
 
-def test_trade_link_in_the_pc_opens_the_trade_tab_with_that_pokemon_chosen(page, game):
+def test_trade_link_in_the_pc_opens_the_trade_builder_with_that_pokemon_chosen(page, game):
     url = game[0]
     library = Library(page, url)
     page.goto(f'{url}/games/{FROM}/pc?scope=all')
@@ -390,7 +381,7 @@ def test_trade_link_in_the_pc_opens_the_trade_tab_with_that_pokemon_chosen(page,
     assert href.startswith(f'/games/{FROM}/trading?tab=trade&mon=')
     library.mine_key = href.split('mon=', 1)[1]
     link.click()
-    selected(page, 'Trade')
+    on_screen(page, '#make-trade')
     expect(page.locator('#slot-send .pc-mon')).to_contain_text('BUD')
     expect(option(page, BLUE)).to_have_attribute('disabled', '')
     expect(option(page, RED)).not_to_have_attribute('disabled', '')
@@ -450,6 +441,7 @@ def test_automatic_trades_run_without_asking(page, game, width):
     library = Library(page, game[0])
     page.set_viewport_size({'width': width, 'height': 844})
     library.open('?tab=auto')
+    on_screen(page, '.trade-overview')
     expect(page.locator('#trade-status')).to_have_text('On, trades automatically')
     expect(page.locator('#trade-activity')).to_have_text('This adventure will trade when a useful exchange is ready.')
     expect(page.locator('#auto-switch')).to_be_enabled()
@@ -459,73 +451,61 @@ def test_automatic_trades_run_without_asking(page, game, width):
     expect(page.locator('#trade-requests-section, .request-card, [data-request-action]')).to_have_count(0)
     shoot(page, f'auto-on-{width}')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-    page.get_by_role('tab', name='Trade').click()
     expect(page.get_by_role('button', name=re.compile('Accept|Dismiss'))).to_have_count(0)
     page.wait_for_timeout(300)
     assert library.request_reads == []
 
 
 @pytest.mark.parametrize('width', [1280, 390])
-def test_auto_tab_switch_wish_list_and_settings(page, game, width):
-    url, store = game[0], game[1]
-    library = Library(page, url)
+def test_status_box_switch_and_wish_list(page, game, width):
+    library = Library(page, game[0])
     page.set_viewport_size({'width': width, 'height': 844})
-    library.open('?tab=auto')
-    switch = page.get_by_role('switch', name=re.compile('Auto trading'))
+    library.open()
+    switch = page.locator('.trade-overview').get_by_role('switch', name=re.compile('Auto trading'))
     expect(switch).to_have_attribute('aria-checked', 'true')
     switch.click()
     expect(switch).to_have_attribute('aria-checked', 'false')
     expect(page.locator('#auto-switch-state')).to_have_text('Off')
     expect(page.locator('#trade-status')).to_have_text('Off')
     assert library.saved[-1] == {'enabled': False}
+    # The wish list folds away under the switch.
+    page.locator('#wish-details summary').click()
     page.locator('#wish-input').fill('Pikachu')
     page.locator('#wish-add').click()
     expect(page.locator('#wish-list')).to_contain_text('Pikachu')
+    expect(page.locator('#wish-count')).to_contain_text('1')
     assert library.saved[-1] == {'wishlist': [25]}
-    # Each Pokémon is a PC card with its setting stamp. The popup changes the setting.
-    bud = page.locator('#auto-list .pc-mon').filter(has_text='BUD')
-    expect(bud.locator('.trade-tag')).to_have_text('Can trade')
-    bud.click()
-    dialog = page.locator('#trade-detail')
-    setting = dialog.get_by_label('Trade setting for BUD')
-    setting.select_option('keep')
-    # The saved setting shows in the popup, not in a toast over the list.
-    expect(dialog.locator('.trade-saved')).to_contain_text('Never trade')
-    expect(page.locator('#trade-setting-status')).to_contain_text('Never trade')
-    expect(page.locator('#toast')).to_be_hidden()
-    assert any(value['state'] == 'locked' for value in store.trade_preferences().values())
-    shoot(page, f'auto-detail-{width}')
-    page.locator('#trade-detail-close').click()
-    expect(bud.locator('.trade-tag')).to_have_text('Never trade')
-    page.locator('#auto-setting').select_option('keep')
-    expect(page.locator('#auto-list .pc-mon')).to_have_count(1)
-    expect(page.locator('#auto-list .pc-mon')).to_contain_text('BUD')
-    expect(page.locator('#auto-list')).not_to_contain_text('Kept by')
-    shoot(page, f'auto-{width}')
-    page.locator('#auto-setting').select_option('all')
     page.get_by_role('button', name='Remove Pikachu from the wish list').click()
     expect(page.locator('#wish-list')).not_to_contain_text('Pikachu')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
-def test_auto_tab_reads_again_on_every_visit(page, game):
-    library = Library(page, game[0])
-    library.open('?tab=auto')
-    expect(page.locator('#auto-switch')).to_be_enabled()
-    page.get_by_role('tab', name='History').click()
-    library.auto['enabled'] = False
-    page.get_by_role('tab', name='Auto').click()
-    expect(page.locator('#auto-switch-state')).to_have_text('Off')
-    assert library.reads['auto'] >= 2
+@pytest.mark.parametrize('width', [1280, 390])
+def test_pc_popup_lock_shows_on_the_grid_and_party(page, game, width):
+    url, store = game[0], game[1]
+    Library(page, url)
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(f'{url}/games/{FROM}/pc?scope=all')
+    bud = page.locator('#pc-grid .pc-mon').filter(has_text='BUD')
+    bud.click()
+    lock = page.locator('#pc-detail').get_by_role('button', name='Locked: never traded')
+    expect(lock).to_have_attribute('aria-pressed', 'false')
+    lock.press('Space')
+    expect(lock).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#pc-detail .lock-note')).to_have_text('Locked. It is never traded automatically.')
+    assert any(value['state'] == 'locked' for value in store.trade_preferences().values())
+    shoot(page, f'pc-lock-popup-{width}', full_page=False)
+    page.keyboard.press('Escape')
+    expect(bud.locator('.pc-lock')).to_have_count(1)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    shoot(page, f'pc-lock-grid-{width}')
 
 
-@pytest.mark.parametrize('tab', ['offers', 'cable'])
-def test_a_remembered_or_linked_offers_or_cable_tab_opens_the_trade_tab(page, game, tab):
+@pytest.mark.parametrize('tab', ['offers', 'cable', 'auto'])
+def test_an_old_tab_link_or_remembered_tab_still_opens_the_page(page, game, tab):
     library = Library(page, game[0])
     page.goto(f'{game[0]}/games/{FROM}/trading')
     page.evaluate(f'localStorage.setItem("pokesim-trading-tab", "{tab}")')
-    page.reload()
-    selected(page, 'Trade')
     library.open(f'?tab={tab}')
-    selected(page, 'Trade')
-    expect(page.locator('#panel-trade')).to_be_visible()
+    expect(page.locator('#make-trade')).to_be_visible()
+    expect(page.locator('#auto-switch')).to_be_enabled()

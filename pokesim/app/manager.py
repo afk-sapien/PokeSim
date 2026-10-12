@@ -333,7 +333,6 @@ def create_app(manager, shutdown=lambda: None):
     app.mount('/static', StaticFiles(directory=STATIC), name='static')
 
     @app.get('/', response_class=HTMLResponse)
-    @app.get('/trading', response_class=HTMLResponse)
     @app.get('/notifications', response_class=HTMLResponse)
     @app.get('/settings', response_class=HTMLResponse)
     def home(request: Request):
@@ -341,9 +340,10 @@ def create_app(manager, shutdown=lambda: None):
         return render_library(request.url.path.strip('/') or 'library')
 
     @app.get('/trade')
+    @app.get('/trading')
     def retired_trade_page():
-        # Trades are picked on each adventure's Trading page now. Old links land on the library's list of them.
-        return RedirectResponse('/trading', status_code=308)
+        # Trading lives inside each game now. Old library links land on the library.
+        return RedirectResponse('/', status_code=308)
 
     @app.get('/health/live')
     def live():

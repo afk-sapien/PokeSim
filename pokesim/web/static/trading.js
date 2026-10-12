@@ -1,10 +1,7 @@
 const $ = selector => document.querySelector(selector)
 const esc = TradeUI.esc
-const query = new URLSearchParams(location.search)
-// The old Trading block view is now Auto, one setting per Pokémon.
-const VIEWS = ['auto', 'opportunities', 'history']
-const asked = (query.get('view') || query.get('tab')) === 'block' ? 'auto' : query.get('view') || query.get('tab')
-let view = VIEWS.includes(asked) ? asked : 'auto'
+// One page: possible exchanges, then completed ones. Locks are set on the PC page,
+// so an old ?view= link (auto, block, opportunities or history) lands here as well.
 let signature = ''
 function sprite(mon, size = 'bay') {
   const dex = Number(mon.dex) || 0
@@ -22,28 +19,6 @@ function head(title, count = '') {
 }
 // Portrait scaling is shared; see panel.js.
 const fitSprites = (root) => globalThis.Panel?.fitSprites?.(root)
-// The Auto view draws the PC page's cards and filters (mon-grid.js), filled in from the PC records.
-const Grid = globalThis.MonGrid
-for (const holder of document.querySelectorAll('[data-mon-toolbar]')) {
-  if (Grid) holder.outerHTML = Grid.toolbar(holder.dataset.monToolbar, {settings: holder.dataset.settings === 'true'})
-}
-const records = new Map()
-PokeSim.fetch('/api/pokedex/status?view=pc', {cache: 'no-store'}).then(response => response.ok ? response.json() : null).then(pc => {
-  if (!pc) return
-  for (const record of [...(pc.party || []), ...(pc.storage?.pokemon || [])]) if (record.trade_key) records.set(record.trade_key, record)
-  Grid?.generation('trade', pc.generation)
-  signature = ''
-  render(TradeUI.status())
-}).catch(() => {})
-const settingOf = row => row.shiny || row.perfect_dvs ? 'protected' : row.setting || 'auto'
-// One card's data: the PC record when there is one, with the trade row's place and setting.
-function full(row) {
-  const record = records.get(row.trade_key) || {}
-  const card = {type_names: [], dv_stars: null, ...row, ...record, box: row.box || 0, position: row.position, setting: row.setting, shiny: row.shiny, perfect_dvs: row.perfect_dvs}
-  return globalThis.PokemonTypes?.asEgg ? PokemonTypes.asEgg(card) : card
-}
-let cards = []
-const filters = () => ['search', 'rating', 'setting', 'sort', 'order'].map(id => document.querySelector(`#trade-${id}`)?.value)
 function render(status) {
   if (!status) return
   $('#status').textContent = status.connected ? 'Connected' : 'Reconnecting…'
@@ -60,61 +35,15 @@ function render(status) {
   const notice = !status.connected ? status.message : peers.length ? `${peers.map(peer => peer.instance).join(', ')} is unavailable. Trades will wait.` : stale ? 'The coordinator has not checked in recently. These are the last reported opportunities.' : status.viewer_only ? 'Viewing only. Offer controls are disabled for this game.' : ''
   $('#trade-connection-note').textContent = notice
   $('#trade-connection-note').hidden = !notice
-  for (const button of document.querySelectorAll('#trade-tabs [role="tab"]')) {
-    button.setAttribute('aria-selected', String(button.dataset.view === view))
-    button.tabIndex = button.dataset.view === view ? 0 : -1
-  }
-  $('#trade-content').setAttribute('aria-labelledby', `tab-${view}`)
-  $('#trade-search-row').hidden = view !== 'auto'
-  history.replaceState(null, '', `${PokeSim.base}/trading?view=${view}`)
-  const nextSignature = JSON.stringify([status, view, filters(), records.size])
+  const nextSignature = JSON.stringify(status)
   if (signature === nextSignature) return
   signature = nextSignature
-  if (view === 'auto') {
-    const all = (status.offers || []).map(full)
-    cards = Grid ? Grid.apply('trade', all, settingOf) : all
-    const grid = cards.map(mon => `<div class="auto-card">${Grid ? Grid.card(mon, mon.trade_key, {attr: 'key', all: true, slot: mon.box ? `Box ${Number(mon.box)}, slot ${Number(mon.position)}` : 'Party', tags: Grid.settingBadge(settingOf(mon))}) : `<b>${esc(mon.nick || mon.name)}</b>`}${TradeUI.control(mon.trade_key, mon.nick || mon.name)}</div>`).join('')
-    $('#trade-content').innerHTML = head('Trade settings', '') + '<p class="trade-help"><b>Can trade</b>: automatic trading may use it when it is a spare. <b>Prefer to trade</b>: automatic trading uses it before other spares. <b>Never trade</b>: never traded automatically, and you can still pick it by hand. Shiny and perfect DV Pokémon are always protected, and automatic trades never take a last copy or your active party.</p>' + (cards.length ? `<div class="pc-grid pc-all-grid auto-grid">${grid}</div>` : `<p class="empty-note">${all.length ? 'No Pokémon match these filters.' : 'No Pokémon to set yet.'}</p>`)
-  } else if (view === 'opportunities') {
-    const rows = status.opportunities || []
-    $('#trade-content').innerHTML = head('Possible exchanges', rows.length ? `${rows.length} ${rows.length === 1 ? 'match' : 'matches'}` : '') + '<p class="trade-help">Matches can change as both adventures progress. The coordinator checks availability again before trading.</p>' + (rows.length ? `<div class="deal-list">${rows.map(row => deal(`With ${esc(row.peer)}`, '<span class="tag">Potential match</span>', side(row.send, 'You send'), side(row.receive, 'You receive'), row.reason)).join('')}</div>` : '<p class="empty-note">No useful matches right now. Offers remain available as the collections grow.</p>')
-  } else {
-    const rows = status.history || []
-    $('#trade-content').innerHTML = head('Previous exchanges', rows.length ? `${rows.length} completed` : '') + (rows.length ? `<div class="deal-list">${rows.map(row => deal(`Completed with ${esc(row.peer)}`, '<span class="tag tag--ok">Completed</span>', side(row.sent, 'You sent'), side(row.received, 'You received'), row.reason, `<time datetime="${new Date(row.ts * 1000).toISOString()}">${esc(new Date(row.ts * 1000).toLocaleString())}</time>`)).join('')}</div>` : '<p class="empty-note">Completed trades will appear here.</p>')
-  }
+  const matches = status.opportunities || []
+  const done = status.history || []
+  $('#trade-content').innerHTML = head('Possible exchanges', matches.length ? `${matches.length} ${matches.length === 1 ? 'match' : 'matches'}` : '') + '<p class="trade-help">Every Pokémon can be traded unless it is locked on the <a href="' + PokeSim.base + '/pc">PC page</a>. Matches can change as both adventures progress. The coordinator checks availability again before trading.</p>' + (matches.length ? `<div class="deal-list">${matches.map(row => deal(`With ${esc(row.peer)}`, '<span class="tag">Potential match</span>', side(row.send, 'You send'), side(row.receive, 'You receive'), row.reason)).join('')}</div>` : '<p class="empty-note">No useful matches right now. Offers remain available as the collections grow.</p>')
+    + head('History', done.length ? `${done.length} completed` : '') + (done.length ? `<div class="deal-list">${done.map(row => deal(`Completed with ${esc(row.peer)}`, '<span class="tag tag--ok">Completed</span>', side(row.sent, 'You sent'), side(row.received, 'You received'), row.reason, `<time datetime="${new Date(row.ts * 1000).toISOString()}">${esc(new Date(row.ts * 1000).toLocaleString())}</time>`)).join('')}</div>` : '<p class="empty-note">Completed trades will appear here.</p>')
   fitSprites(document.querySelector('#trade-content'))
 }
-function choose(next, focus = false) {
-  view = next
-  if (focus) $(`#tab-${view}`)?.focus()
-  render(TradeUI.status())
-}
-$('#trade-tabs').onclick = event => {
-  const button = event.target.closest('[data-view]')
-  if (button) choose(button.dataset.view)
-}
-$('#trade-tabs').onkeydown = event => {
-  const index = VIEWS.indexOf(view)
-  const moves = {ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: VIEWS.length - 1}
-  if (!(event.key in moves)) return
-  event.preventDefault()
-  choose(VIEWS[(moves[event.key] + VIEWS.length) % VIEWS.length], true)
-}
-$('#trade-content').onchange = event => {
-  if (event.target.matches('select[data-trade-key]')) TradeUI.change(event.target)
-}
-Grid?.bind('trade', () => render(TradeUI.status()))
-// A card opens the PC page's detail popup for that Pokémon.
-const dialog = $('#trade-detail')
-$('#trade-content').addEventListener('click', event => {
-  const button = event.target.closest('.pc-mon[data-key]')
-  const card = button && cards.find(row => row.trade_key === button.dataset.key)
-  if (!card || !dialog || !Grid) return
-  $('#trade-detail-body').innerHTML = Grid.detail(card, {slot: card.box ? `Box ${card.box}, slot ${card.position}` : 'Party'})
-  fitSprites($('#trade-detail-body'))
-  dialog.showModal?.()
-})
-$('#trade-detail-close')?.addEventListener('click', () => dialog.close())
 TradeUI.subscribe(render)
 TradeUI.refresh()
 setInterval(() => { if (!document.hidden) TradeUI.refresh() }, 15000)

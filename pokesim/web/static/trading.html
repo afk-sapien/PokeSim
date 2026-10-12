@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=pass2-1">
 <link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
-<link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=dex-copies-1">
+<link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=locks-1">
 <link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=pass2-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
@@ -35,7 +35,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <main id="main" class="shell">
 <header class="identity page-head">
-<div class="who"><p class="micro">Link cable</p><h1>Trading</h1><p class="page-lede">Set how each Pokémon trades, see possible matches, and let the adventures handle the exchange.</p></div>
+<div class="who"><p class="micro">Link cable</p><h1>Trading</h1><p class="page-lede">See possible matches and let the adventures handle the exchange. Lock a Pokémon on the PC page to keep it.</p></div>
 </header>
 
 <section class="trade-overview" aria-label="Automatic trading status">
@@ -43,10 +43,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </section>
 <p id="trade-connection-note" class="trade-notice" role="status" hidden></p>
 
-<div id="trade-tabs" class="trade-tabs" role="tablist" aria-label="Trading"><button type="button" role="tab" id="tab-auto" data-view="auto" aria-controls="trade-content" aria-selected="true" tabindex="0">Auto</button><button type="button" role="tab" id="tab-opportunities" data-view="opportunities" aria-controls="trade-content" aria-selected="false" tabindex="-1">Opportunities</button><button type="button" role="tab" id="tab-history" data-view="history" aria-controls="trade-content" aria-selected="false" tabindex="-1">History</button></div>
-<div id="trade-search-row" class="trade-search-row"><div data-mon-toolbar="trade" data-settings="true"></div></div>
-<p id="trade-setting-status" class="vh" role="status" aria-live="polite" data-trade-status></p>
-<section id="trade-content" class="trade-content trade-panel" role="tabpanel" aria-labelledby="tab-auto" tabindex="0" aria-live="polite"><p class="empty-note">Opening the trading room…</p></section>
+<section id="trade-content" class="trade-content trade-section" aria-live="polite"><p class="empty-note">Opening the trading room…</p></section>
 </main>
 
 <footer class="plate-foot">
@@ -56,11 +53,9 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="links"><a href="${game_base}/feed.xml">Atom feed</a><a href="https://github.com/afk-sapien/PokeSim" target="_blank" rel="noreferrer">GitHub</a></div>
 </div>
 </footer>
-<dialog id="trade-detail" class="pc-detail trade-detail" aria-labelledby="pc-detail-name"><button type="button" id="trade-detail-close" class="key close-detail" aria-label="Close Pokémon details">Close</button><div id="trade-detail-body"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="${game_base}/static/trade-ui.js?v=simple-2"></script>
-<script src="${game_base}/static/mon-grid.js?v=dex-copies-1"></script>
-<script src="${game_base}/static/trading.js?v=simple-2"></script>
+<script src="${game_base}/static/trade-ui.js?v=one-page-1"></script>
+<script src="${game_base}/static/trading.js?v=one-page-1"></script>
 </body>
 </html>

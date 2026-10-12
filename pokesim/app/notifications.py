@@ -7,7 +7,7 @@ import re
 import threading
 import copy
 import uuid
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from ..notify import publish
 
@@ -448,6 +448,8 @@ class NotificationCenter:
         if not targets:
             return None
         names = {aid: self.registry.adventure(aid)['name'] for aid in participants}
+        # The library has no trading page. A tap opens the first adventure's own Trading page.
+        click = f"{self.public_url}/games/{quote(str(participants[0]), safe='')}/trading"
         received = [f"{names[aid]} received {mon['name']}." for aid in participants
                     if (mon := (display.get(aid) or {}).get('received')) and mon.get('name')]
         def deliver():
@@ -459,7 +461,7 @@ class NotificationCenter:
                             ' ⇄ '.join(names.values()) + ' · Trade completed',
                             ' '.join(received) or 'Both adventures saved the exchange.',
                             tags='arrows_counterclockwise', priority=TRADE_PRIORITY,
-                            click=self.public_url + '/trading', **extra)
+                            click=click, **extra)
                 except Exception as error:  # noqa: BLE001
                     log.warning('Notification failed: %s', error)
         thread = threading.Thread(target=deliver, name='trade-notification', daemon=True)

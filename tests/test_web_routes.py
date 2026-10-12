@@ -75,13 +75,16 @@ def test_base_path_validation_rejects_escape(tmp_path):
 
 
 def test_manager_templates_render_without_game_setup():
-    for page in ('library', 'trading', 'settings', 'stopped'):
+    for page in ('library', 'notifications', 'settings', 'stopped'):
         output = render_library(page, {'id': 'red-one'})
         assert f'data-page="{page}"' in output
         assert '${' not in output
         assert 'data-adventure="red-one"' in output
     with pytest.raises(ValueError, match='Unknown library page'):
         render_library('trade', {'id': 'red-one'})
+    # Trading lives inside each game, so the library has no trading page.
+    with pytest.raises(ValueError, match='Unknown library page'):
+        render_library('trading', {'id': 'red-one'})
 
 
 def test_managed_local_offers_do_not_require_a_legacy_broker(tmp_path, monkeypatch):

@@ -108,12 +108,70 @@ function render() {
   fitSprites($('#pc-grid'))
 }
 
+// The open popup's Pokémon, by trade key so a refresh can redraw it with fresh data.
+let shown = null
+// A lock change in flight, and the message to show under the toggle.
+let locking = {key: '', note: ''}
+const viewer = () => String(PokeSim.base || '').startsWith('/view/') || latest?.viewer_only === true
+
 function detail(mon) {
-  // The guide and Pokédex links share the footer with Trade…, one row of keys.
-  $('#pc-detail-body').innerHTML = MonGrid.detail(mon, {links: false})
+  shown = mon
+  // The lock sits under the head. The guide and Pokédex links share the footer with Trade…
+  const top = MonGrid.lockControl(mon, {viewer: viewer(), stale: !fresh, busy: locking.key && locking.key === mon.trade_key,
+    note: locking.note && locking.key === `done:${mon.trade_key}` ? locking.note : ''})
+  $('#pc-detail-body').innerHTML = MonGrid.detail(mon, {links: false, top, trade: false})
   $('#pc-trade-action').innerHTML = `${MonGrid.detailLinks(mon)}${tradeLink(mon)}`
-  $('#pc-detail').showModal()
+  if (!$('#pc-detail').open) $('#pc-detail').showModal()
   fitSprites($('#pc-detail-body'))
+}
+
+// The same Pokémon in the newest PC, so the popup follows a refresh.
+function current(key) {
+  return key && [...party, ...(storage?.pokemon || [])].find(mon => mon.trade_key === key)
+}
+
+// Draw the open popup again, keeping focus on the lock when it had it.
+function redraw(mon) {
+  const focused = document.activeElement?.classList?.contains('lock-toggle')
+  detail(mon)
+  if (focused) $('#pc-detail-body .lock-toggle')?.focus()
+}
+
+// Lock or unlock one Pokémon. A locked Pokémon is never traded automatically.
+async function toggleLock(button) {
+  const key = button.dataset.lockKey
+  const mon = shown
+  if (!key || !mon || mon.trade_key !== key || locking.key === key || button.disabled) return
+  const locked = MonGrid.isLocked(mon)
+  const state = locked ? 'auto' : 'keep'
+  locking = {key, note: ''}
+  // Show the new state straight away. A refused change puts the old one back.
+  const apply = setting => {
+    for (const record of [...party, ...(storage?.pokemon || [])]) if (record.trade_key === key) {
+      record.trade_setting = setting
+      record.trade_locked = setting === 'keep'
+    }
+  }
+  const before = mon.trade_setting
+  apply(state)
+  redraw(current(key) || mon)
+  let note = locked ? 'Unlocked. It can be traded automatically.' : 'Locked. It is never traded automatically.'
+  try {
+    const response = await PokeSim.fetch('/api/trading/preferences', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({key, state})})
+    if (!response.ok) {
+      let detail = ''
+      try { detail = (await response.json()).detail } catch (_) {}
+      throw new Error(typeof detail === 'string' && detail ? detail : 'Could not save the lock.')
+    }
+  } catch (error) {
+    apply(before || 'auto')
+    note = error.message
+  }
+  locking = {key: `done:${key}`, note}
+  signature = ''
+  render()
+  if (shown?.trade_key === key && $('#pc-detail').open) redraw(current(key) || shown)
+  await refresh()
 }
 
 function openRequested() {
@@ -174,6 +232,9 @@ async function refresh() {
     $('#connection').title = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
     $('#connection').classList.remove('is-offline')
     render()
+    // An open popup shows the fresh lock unless a change is still saving.
+    const again = shown && $('#pc-detail').open && locking.key !== shown.trade_key && current(shown.trade_key)
+    if (again) redraw(again)
     if (first) openRequested()
   } catch (_) {
     $('#status').textContent = 'Reconnecting…'
@@ -227,6 +288,14 @@ for (const selector of ['#pc-search', '#pc-scope', '#pc-rating']) {
   $(selector).oninput = render
 }
 $('#pc-close').onclick = () => $('#pc-detail').close()
+$('#pc-detail').onclose = () => {
+  shown = null
+  if (!locking.key || locking.key.startsWith('done:')) locking = {key: '', note: ''}
+}
+$('#pc-detail-body').onclick = (event) => {
+  const button = event.target.closest?.('.lock-toggle')
+  if (button) return toggleLock(button)
+}
 $('#pc-detail').onclick = (event) => {
   if (event.target !== $('#pc-detail')) return
   const rect = event.target.getBoundingClientRect()

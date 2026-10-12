@@ -182,8 +182,10 @@ def test_game_trading_stays_scoped_and_available_when_stopped(client):
     assert 'location' not in response.headers
     assert 'First Red' in response.text
     assert f'href="{base}/trading"' in response.text
-    # Everything trading lives on this page, so it has its tabs and no detour to the PC.
-    assert 'role="tablist"' in response.text
+    # One page, no tabs: the switch sits in the status box and locks are set on the PC page.
+    assert 'role="tablist"' not in response.text and 'id="tab-auto"' not in response.text
+    assert 'id="auto-switch"' in response.text and 'id="make-trade"' in response.text and 'id="trade-history"' in response.text
+    assert f'href="{base}/pc"' in response.text
     assert f'href="{base}/pc?scope=all"' not in response.text
     assert 'href="/trading"' not in response.text
     for asset in ('adventure-trading.js', 'trade-progress.js', 'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css', 'trade-ui.js', 'trade-tabs.js',
@@ -396,13 +398,13 @@ def test_palette_changes_live_and_requires_valid_authorized_settings(client, mon
 def test_the_retired_trade_picker_redirects_and_its_admin_api_is_gone(client):
     client, manager = client
     headers = login(client, manager)
-    moved = client.get('/trade', follow_redirects=False)
-    assert moved.status_code == 308 and moved.headers['location'] == '/trading'
-    page = client.get('/trading').text
-    # The library only shows trades. They are made on each game's own Trade tab.
-    assert 'id="make-trade"' not in page and 'data-view="trade"' not in page and 'manual-left-game' not in page
-    assert 'trade-tabs.js' not in page and 'trade-builder' not in page and 'go to its Trade tab' in page
-    assert 'id="trade-queued"' in page
+    # The library has no trading page. Old links land on the library itself.
+    for old in ('/trade', '/trading', '/trading?view=history'):
+        moved = client.get(old, follow_redirects=False)
+        assert moved.status_code == 308 and moved.headers['location'] == '/'
+    page = client.get('/').text
+    assert 'data-view="trading"' not in page and 'href="/trading"' not in page and 'id="trade-queued"' not in page
+    assert 'trade-tabs.js' not in page and 'trade-builder' not in page
     assert client.get('/api/v1/interactions/manual-trades/options').status_code == 404
     assert client.post('/api/v1/interactions/manual-trades', json={}, headers=headers).status_code in {404, 405}
     assert client.get(f'/api/v1/adventures/{identifier()}/trade-inventory').status_code == 404

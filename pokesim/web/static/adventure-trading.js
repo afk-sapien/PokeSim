@@ -104,7 +104,7 @@
         : off ? 'Off' : data.attention ? 'Trades have not been completing' : 'On, trades automatically'
       $('#trade-activity').textContent = data.active.length ? 'This adventure is trading. Other adventures keep playing.'
         : !running ? 'Trades resume when this adventure is running. Its history stays here.'
-        : off ? 'Automatic trading is off. Trades you pick on the Trade tab still happen.'
+        : off ? 'Automatic trading is off. Trades you make below still happen.'
         : data.attention?.message || 'This adventure will trade when a useful exchange is ready.'
       const queued = data.queued || []
       $('#current-exchange-section').hidden = !data.active.length && !queued.length

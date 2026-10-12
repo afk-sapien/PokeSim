@@ -12,8 +12,7 @@
 <link rel="stylesheet" href="/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="/static/panel.css?v=pass2-1">
 <link rel="stylesheet" href="/static/panel-library.css?v=pass2-1">
-<script src="/static/trade-progress.js?v=offers-1" defer></script>
-<script src="/static/library.js?v=one-trading-1" defer></script>
+<script src="/static/library.js?v=three-tabs-1" defer></script>
 </head>
 <body class="library" data-trainer-names="${trainer_names}" data-page="${page}" data-adventure="${adventure_id}">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -21,7 +20,7 @@
 <header class="rail">
 <div class="shell rail-inner">
 <a class="brandplate" href="/" aria-label="PokeSim library"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model">${app_version}</span></span></a>
-<nav aria-label="Application"><a href="/" data-nav="library">Library</a><a href="/trading" data-nav="trading">Trading</a><a href="/notifications" data-nav="notifications">Notifications</a><a href="/settings" data-nav="settings">Settings</a></nav>
+<nav aria-label="Application"><a href="/" data-nav="library">Library</a><a href="/notifications" data-nav="notifications">Notifications</a><a href="/settings" data-nav="settings">Settings</a></nav>
 <span class="connection" id="connection" role="status"><i class="lamp" aria-hidden="true"></i><span id="status">Connecting</span></span>
 </div>
 </header>
@@ -42,13 +41,6 @@
 <div id="stopped-card" class="status-wrap" aria-live="polite"></div>
 </section>
 
-<section data-view="trading" hidden>
-<header class="page-head"><div class="page-title"><p class="micro">The Cable Club</p><h1>Trading</h1><p class="lede">Automatic trades never send party Pokémon or any Pokémon set to Never trade.</p><p class="lede" id="trade-howto">To make a trade, open a game and go to its Trade tab.</p></div></header>
-<section class="panel status-strip" aria-label="Automatic trading"><span class="micro"><i class="lamp" data-on="ok" aria-hidden="true"></i>Automatic trading</span><p id="trading-status" role="status">Checking your adventures…</p></section>
-<section class="block" id="trade-active-section" hidden><div class="column-head"><h2 class="legend legend--ink">In progress</h2><span class="micro">Other adventures keep playing</span></div><div id="trade-active" class="exchanges" aria-live="polite">Checking the Cable Club…</div></section>
-<section class="block" id="trade-queued-section" hidden><div class="column-head"><h2 class="legend legend--ink">Waiting in line</h2><span class="micro">Trades start one at a time</span></div><p class="exchange-note" id="trade-queued-note" role="status" hidden></p><div id="trade-queued" class="exchanges"></div></section>
-<section class="block"><div class="column-head"><h2 class="legend legend--ink">Recent trades</h2><span class="micro" id="trade-history-count"></span></div><div id="trade-history" class="exchanges">No completed trades yet.</div></section>
-<section class="panel block disclosure" id="trade-failures-section" hidden><details><summary>Recent attempts that did not complete</summary><div id="trade-failures" class="exchanges"></div></details></section>
 </section>
 
 <section data-view="notifications" hidden>
