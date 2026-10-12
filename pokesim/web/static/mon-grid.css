@@ -200,7 +200,7 @@
 /* Every key in the popup is the same small size: Close, the links and Trade…. */
 .pc-detail .close-detail,
 .pc-detail-links .key,
-#pc-trade-action .key { min-height: 32px; padding: 0 var(--s3); font-size: 14px; }
+.pc-trade-action .key { min-height: 32px; padding: 0 var(--s3); font-size: 14px; }
 .pc-detail .key-short { display: none; }
 
 /* Head: the portrait, then where it lives, its name, one line of facts and one row of stamps. */
@@ -417,11 +417,12 @@
 /* Footer: one row of keys. The PC puts Trade… at the far end; the Trading
    page shows only the guide and Pokédex keys. */
 .pc-trade-action { padding: var(--s3) var(--pad); border-top: var(--hair) solid var(--rule); background: var(--panel-2); }
-#pc-trade-action,
+.pc-trade-action,
 .pc-detail-links { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--s2); }
 .pc-detail-links { padding: var(--s3) var(--pad); border-top: var(--hair) solid var(--rule); background: var(--panel-2); }
 .pc-detail-links:empty { display: none; }
-#pc-trade-action .pc-trade-link { margin-left: auto; }
+.pc-trade-action .pc-trade-link,
+.pc-trade-action .pc-show-link { margin-left: auto; }
 .pc-trade-action:empty { display: none; }
 
 @media (min-width: 760px) {

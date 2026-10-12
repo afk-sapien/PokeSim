@@ -2,6 +2,9 @@ const $ = (selector) => document.querySelector(selector)
 const params = new URLSearchParams(location.search)
 let selectedBox = params.get('box') === 'party' ? 0 : Math.min(14, Math.max(1, Number(params.get('box')) || 1))
 let followActive = !params.has('box')
+// A link from another page (the Pokédex) can name one slot in the box: its card is marked
+// and its popup opens once the fresh PC has loaded.
+let openSlot = Number(params.get('slot')) || 0
 let storage = null
 let party = []
 let busy = false
@@ -113,6 +116,19 @@ function detail(mon) {
   fitSprites($('#pc-detail-body'))
 }
 
+function openRequested() {
+  const slot = openSlot
+  openSlot = 0
+  if (!slot || $('#pc-scope').value === 'all') return
+  const index = residents.findIndex(mon => mon.position === slot)
+  if (index < 0) return
+  const target = $(`[data-mon="${index}"]`)
+  target?.classList.add('is-target')
+  target?.scrollIntoView?.({block: 'center'})
+  target?.focus?.()
+  detail(residents[index])
+}
+
 // Everything about trading lives on the Trading page. The detail only links there.
 function tradeLink(mon) {
   if (!fresh || !mon?.trade_key || mon.egg) return ''
@@ -158,6 +174,7 @@ async function refresh() {
     $('#connection').title = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
     $('#connection').classList.remove('is-offline')
     render()
+    if (first) openRequested()
   } catch (_) {
     $('#status').textContent = 'Reconnecting…'
     $('#connection').title = ''

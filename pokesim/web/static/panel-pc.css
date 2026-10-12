@@ -115,6 +115,10 @@ body[data-page="pc"] .pc-toolbar .field--grow { flex-basis: 200px; }
 @media (max-width: 360px) {
   .stat { padding: 0 var(--s3); }
 }
+/* The card a link from the Pokédex asked for. */
+.pc-mon.is-target { outline: 2px solid var(--signal); outline-offset: 2px; }
+
 @media (forced-colors: active) {
+  .pc-mon.is-target { outline-color: Highlight; }
   .box-picker button.selected { outline: 2px solid Highlight; }
 }

@@ -241,7 +241,8 @@
 }
 .detail-nav .key { min-width: 44px; min-height: 44px; padding: 0 var(--s3); }
 .detail-hint { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.close-detail { margin-left: auto; }
+/* The shared popup styles pin its own Close key to a corner; this one sits in the nav. */
+.detail-nav .close-detail { position: static; margin-left: auto; }
 
 #detail-body { padding: 0 var(--s5) var(--s6); container: sheet / inline-size; }
 
@@ -323,6 +324,30 @@
 }
 .copy-list li + li, .place-list li + li { border-top: var(--hair) solid var(--rule-faint); }
 .copy-list span, .place-list small { color: var(--ink-2); font-size: var(--f-label); }
+/* Each copy opens its full record, so the whole row is one key. */
+.copy-list li { padding: 0; }
+.copy-open {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.copy-text { display: grid; gap: 2px; min-width: 0; }
+.copy-text strong { overflow-wrap: anywhere; }
+.copy-go { font: var(--f-read) / 1 var(--font-panel); color: var(--ink-3); }
+.copy-open:hover { background: var(--panel); }
+.copy-open:hover .copy-go, .copy-open:focus-visible .copy-go { color: var(--ink); }
+.copy-open:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.copy-open:active { box-shadow: var(--well-inset); }
 .place-list li { grid-template-columns: auto minmax(0, 1fr); align-items: baseline; }
 .place-list .place-method { grid-row: span 2; align-self: center; }
 .place-list small:empty { display: none; }

@@ -182,8 +182,7 @@ function renderDetail(dex, refresh = false) {
     ${project && state !== 'caught' ? `<p class="plan-note"><b>${esc(PLAN_LABELS[project.status] || 'Status')}</b> ${esc(project.reason || '')}</p>` : ''}
     ${project?.sources?.length ? `<section class="detail-section" aria-label="How the sim gets it"><h3>How the sim gets it</h3>
       <ul class="place-list source-list">${project.sources.map(sourceLine).join('')}</ul></section>` : ''}
-    ${copies.length ? `<section class="detail-section"><h3>With you right now</h3><ul class="copy-list">${copies.map((copy) =>
-      `<li><strong>${esc(copy.nick || entry.name)}</strong>${PokemonTypes.shinyBadge(copy)}<span>Lv. ${copy.level} · ${esc(copy.where)} · ${copy.stars ? `${copy.stars}★ DVs` : 'DVs unknown'}</span></li>`).join('')}</ul></section>` : ''}
+    ${copies.length ? `<section class="detail-section"><h3>With you right now</h3><ul class="copy-list">${copies.map((copy, index) => copyRow(copy, index, entry)).join('')}</ul></section>` : ''}
     <section class="detail-section"><h3>Base stats</h3>
       ${Object.entries(entry.stats).map(([label, value]) => statRow(label, value)).join('')}
       <p class="detail-meta">Total ${entry.total} · ${dexTotal === 251 ? 'Separate Special Attack and Special Defense' : 'Generation I shares one Special stat'}</p>
@@ -212,6 +211,76 @@ function renderDetail(dex, refresh = false) {
   history.replaceState(null, '', `#${num(dex)}`)
 }
 
+// One Pokémon with you, as a key that opens its full record in the PC's popup.
+function copyRow(copy, index, entry) {
+  const name = copy.nick || entry.name
+  const rating = copy.stars ? `${copy.stars}★ DVs` : 'DVs unknown'
+  const label = `Open ${name}, level ${copy.level}, ${copy.where}, ${copy.stars ? `${copy.stars}-star DVs` : 'DVs unknown'}${copy.shiny ? ', shiny' : ''}`
+  return `<li><button type="button" class="copy-open" data-copy="${index}" aria-label="${esc(label)}"><span class="copy-text"><strong>${esc(name)}</strong>${PokemonTypes.shinyBadge(copy)}<span>Lv. ${copy.level} · ${esc(copy.where)} · ${rating}</span></span><span class="copy-go" aria-hidden="true">›</span></button></li>`
+}
+
+// The Pokédex only knows who holds a species. The full record comes from the PC's own data:
+// its saved copy paints at once, then the server's answer replaces it. A copy is matched by
+// where it sits (party slot, or box and slot) and checked against its species and nickname.
+let copyOpen = null
+let copyRun = 0
+const pcLink = copy => `${PokeSim.base}/pc?box=${copy.box === 0 ? 'party' : copy.box}&slot=${copy.slot}`
+function findPartner(full, copy, dex) {
+  const list = copy.box === 0 ? full?.party : full?.storage?.pokemon
+  const found = (list || []).find(partner => partner?.dex === dex && (partner.nick || '') === (copy.nick || '')
+    && (copy.box === 0 ? partner.slot === copy.slot : partner.box === copy.box && partner.position === copy.slot))
+  return found ? PokemonTypes.asEgg({...found, box: copy.box, position: copy.slot}) : null
+}
+
+function showPartner(partner, copy, note = '') {
+  const where = copy.box === 0 ? `PARTY · SLOT ${copy.slot}` : `BOX ${copy.box} · SLOT ${copy.slot}`
+  $('#mon-detail-body').innerHTML = partner ? MonGrid.detail(partner, {links: false})
+    : `<div class="pc-detail-head"><div class="pc-detail-id"><p class="micro">${where}</p><h2 id="pc-detail-name">${esc(copy.nick || byDex.get(openDex)?.name || '')}</h2><p class="pc-detail-line">${esc(note)}</p></div></div>`
+  $('#mon-detail-action').innerHTML = `${partner ? MonGrid.detailLinks(partner, {dex: false}) : ''}<a class="key pc-show-link" href="${pcLink(copy)}">Show in PC<span class="key-long"> ↗</span></a>`
+  fitSprites($('#mon-detail-body'))
+}
+
+async function openCopy(index) {
+  const dex = openDex
+  const copy = (held.get(dex) || [])[index]
+  if (!copy) return
+  const run = ++copyRun
+  const dialog = $('#mon-detail')
+  const current = () => run === copyRun && dialog.open
+  copyOpen = {dex, index}
+  showPartner(null, copy, 'Loading…')
+  if (!dialog.open) dialog.showModal()
+  let shown = false
+  try {
+    const saved = findPartner(await PokeSim.recall?.('pc'), copy, dex)
+    if (saved && current()) { showPartner(saved, copy)
+      shown = true }
+  } catch (_) {}
+  try {
+    const response = await PokeSim.fetch('/api/pokedex/status?view=pc', {cache: 'no-store'})
+    if (!response.ok) throw new Error('Unavailable')
+    const full = await response.json()
+    PokeSim.remember?.('pc', full)
+    if (!current()) return
+    const partner = findPartner(full, copy, dex)
+    showPartner(partner, copy, partner ? '' : 'It has moved since the Pokédex last updated. Show in PC finds where it is now.')
+  } catch (_) {
+    if (current() && !shown) showPartner(null, copy, 'Its full record could not be loaded. Try again in a moment.')
+  }
+}
+
+function closeCopy() {
+  if ($('#mon-detail').open) $('#mon-detail').close()
+}
+
+// Closing returns to the Pokédex entry as it was, with focus on the row that opened it.
+function copyClosed() {
+  const opened = copyOpen
+  copyOpen = null
+  copyRun++
+  if (opened && opened.dex === openDex) $(`#detail-body [data-copy="${opened.index}"]`)?.focus()
+}
+
 // Portrait scaling is shared; see panel.js.
 const fitSprites = (root) => globalThis.Panel?.fitSprites?.(root)
 
@@ -238,9 +307,8 @@ function renderHolders(status) {
     if (!dex) return
     held.set(dex, [...(held.get(dex) || []), copy])
   }
-  party.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, stars: mon.dv_stars, shiny: mon.shiny, where: `Party slot ${mon.slot}`}))
-  stored.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, stars: mon.dv_stars, shiny: mon.shiny, where: `Box ${mon.box}`}))
-
+  party.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, stars: mon.dv_stars, shiny: mon.shiny, where: `Party slot ${mon.slot}`, box: 0, slot: mon.slot}))
+  stored.forEach((mon) => add(mon.dex, {nick: mon.nick, level: mon.level, stars: mon.dv_stars, shiny: mon.shiny, where: `Box ${mon.box}`, box: mon.box, slot: mon.position}))
 
 }
 
@@ -324,6 +392,8 @@ async function refreshStatus(pending = fetchStatus(), saved = false) {
 }
 
 document.addEventListener('click', (event) => {
+  const row = event.target.closest('[data-copy]')
+  if (row) return openCopy(Number(row.dataset.copy))
   const card = event.target.closest('[data-dex]')
   if (card && card.dataset.dex) renderDetail(Number(card.dataset.dex))
 })
@@ -331,11 +401,19 @@ $('#backdrop').onclick = closeDetail
 $('#close-detail').onclick = closeDetail
 $('#prev-mon').onclick = () => step(-1)
 $('#next-mon').onclick = () => step(1)
+$('#mon-close').onclick = closeCopy
+$('#mon-detail').onclose = copyClosed
+$('#mon-detail').onclick = (event) => {
+  if (event.target !== $('#mon-detail')) return
+  const rect = event.target.getBoundingClientRect()
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeCopy()
+}
 for (const control of ['#search', '#type-filter', '#status-filter', '#sort']) {
   $(control).oninput = renderGrid
 }
 window.addEventListener('keydown', (event) => {
-  if (openDex === null) return
+  // The partner popup is a modal dialog of its own: it handles Tab and Escape itself.
+  if (openDex === null || $('#mon-detail').open) return
   if (event.key === 'Tab') {
     const focusable = [...$('#detail').querySelectorAll('button, a[href]')]
     const first = focusable[0]

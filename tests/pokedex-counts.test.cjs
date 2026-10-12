@@ -158,3 +158,25 @@ test('a Gen II Pokédex never paints counts against the Gen I total while its re
   assert.ok(painted.length)
   assert.ok(painted.every(html => html.includes('/251<')), painted.join(' | '))
 })
+
+test('each copy is a key naming where it is, and finds its own full record by party slot or box and slot', async () => {
+  const view = page(status)
+  await settle()
+  view.context.renderDetail(25)
+  const detail = view.element('#detail-body').innerHTML
+  assert.equal((detail.match(/<button type="button" class="copy-open" data-copy="\d"/g) || []).length, 3)
+  assert.match(detail, /aria-label="Open SPARK, level 15, Party slot 1, DVs unknown"/)
+  const run = code => vm.runInContext(code, view.context)
+  const copies = JSON.parse(run('JSON.stringify(held.get(25))'))
+  assert.deepEqual(copies.map(copy => [copy.box, copy.slot]), [[0, 1], [1, undefined], [2, undefined]])
+  assert.equal(run(`pcLink(${JSON.stringify(copies[0])})`), '/games/red/pc?box=party&slot=1')
+  const full = {party: [{dex: 25, nick: 'SPARK', slot: 1, level: 15}],
+    storage: {pokemon: [{dex: 25, nick: 'LIGHT', box: 1, position: 4, level: 12}, {dex: 25, nick: 'OTHER', box: 2, position: 4}]}}
+  const find = (copy, dex = 25) => JSON.parse(run(`JSON.stringify(findPartner(${JSON.stringify(full)}, ${JSON.stringify(copy)}, ${dex}))`))
+  assert.deepEqual([find(copies[0]).box, find(copies[0]).position, find(copies[0]).nick], [0, 1, 'SPARK'])
+  assert.equal(find({...copies[1], slot: 4}).nick, 'LIGHT')
+  // Another Pokémon in the same slot, or the same one under another species, is not a match.
+  assert.equal(find({...copies[2], slot: 4}), null)
+  assert.equal(find(copies[0], 26), null)
+  assert.equal(run('findPartner(null, {box: 0, slot: 1}, 25)'), null)
+})

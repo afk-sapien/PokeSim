@@ -194,9 +194,10 @@
 
   // The stats guide and Pokédex keys, on their own so a page can put them in its footer.
   // A phone shows short labels without the arrows, so every footer key fits one row.
-  function detailLinks(mon) {
+  // Options: dex (false leaves out the Pokédex key, for a popup already on the Pokédex).
+  function detailLinks(mon, options = {}) {
     if (mon.egg) return ''
-    return `<a class="dex-open key" aria-label="Stats guide" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer"><span class="key-long">Stats guide ↗</span><span class="key-short">Guide</span></a>${mon.dex ? `<a class="dex-open key" href="${base()}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex<span class="key-long"> ↗</span></a>` : ''}`
+    return `<a class="dex-open key" aria-label="Stats guide" href="https://github.com/afk-sapien/PokeSim/blob/main/docs/pokemon-stats.md" target="_blank" rel="noopener noreferrer"><span class="key-long">Stats guide ↗</span><span class="key-short">Guide</span></a>${mon.dex && options.dex !== false ? `<a class="dex-open key" href="${base()}/pokedex#${String(mon.dex).padStart(3, '0')}">Pokédex<span class="key-long"> ↗</span></a>` : ''}`
   }
 
   // The popup body. Options: sprite (a portrait address from another game), trade (replaces the

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Open any Pokémon listed under "With you right now" on a Pokédex entry. Each one is now a key that shows its full record in the same popup the PC uses, on top of the Pokédex, and Esc or Close returns to the entry where it was. The popup has a Show in PC key that opens its box, or the party, with the Pokémon marked and its popup open. The PC also opens one slot from its address, such as `/pc?box=12&slot=4`.
+
 - Redesign the Pokémon detail popup on the PC and Trading pages. A head with the portrait, name, one line of facts and one row of same-height stamps (Healthy is no longer stamped), then one strip of equal cells for HP, XP, Stat Power and Battle Power, then Moves and Stats as two cards of equal height, stacked on a phone. Each move reads as two lines, name and type, then kind, power, accuracy and PP, with blank slots up to four, so a phone no longer shows a broken table header. The pixel face is kept for the name and the keys, numbers use tabular mono, and the footer keys stay in one row on a phone with shorter labels.
 
 - Fix Gold, Silver and Crystal adventures standing at a Pokémon Center PC for hours on "Bring the breeding partner from storage". With a full party of field move holders and eggs brought out to hatch, the PC had nothing it could take, so the errand pressed B in front of it forever. The party now walks until an egg hatches and then swaps the new Pokémon for the parent. Fetching the Day Care man's partner while an egg waits also collects the egg first, since he stands outside on Route 34 until then.

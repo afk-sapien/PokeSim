@@ -382,3 +382,18 @@ test('details show the trade setting the server names', async () => {
     assert.match(view.element('#pc-detail-body').innerHTML, new RegExp(label))
   }
 })
+
+test('a slot in the address opens that Pokémon once the fresh PC has loaded', async () => {
+  const view = pc([mon(3, 2, 10, {nick: 'FIRST'}), mon(3, 7, 30, {nick: 'WANTED'})], '?box=3&slot=7')
+  await view.ready()
+  assert.match(view.element('#pc-detail-body').innerHTML, /<h2 id="pc-detail-name">WANTED<\/h2>/)
+  assert.match(view.element('#pc-detail-body').innerHTML, /BOX 3 · SLOT 7/)
+  // The address keeps the box but not the slot, so a reload does not reopen it.
+  assert.doesNotMatch(view.url(), /slot=/)
+  const party = pc([], '?box=party&slot=2', [mon(undefined, undefined, 20, {slot: 1, nick: 'LEAD'}), mon(undefined, undefined, 20, {slot: 2, nick: 'SECOND'})])
+  await party.ready()
+  assert.match(party.element('#pc-detail-body').innerHTML, /SECOND/)
+  const missing = pc([mon(3, 2, 10)], '?box=3&slot=9')
+  await missing.ready()
+  assert.equal(missing.element('#pc-detail-body').innerHTML, '')
+})

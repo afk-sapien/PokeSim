@@ -17,7 +17,8 @@
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=pass2-1">
-<link rel="stylesheet" href="${game_base}/static/panel-pokedex.css?v=panel-2">
+<link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=dex-copies-1">
+<link rel="stylesheet" href="${game_base}/static/panel-pokedex.css?v=dex-copies-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 <link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
 </head>
@@ -86,8 +87,10 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="detail-nav"><button class="key" id="prev-mon" title="Previous Pokémon" aria-label="Previous Pokémon">◀</button><button class="key" id="next-mon" title="Next Pokémon" aria-label="Next Pokémon">▶</button><span class="micro detail-hint">← → to step · Esc to close</span><button id="close-detail" class="key close-detail" aria-label="Close">Close</button></div>
 <div id="detail-body"></div>
 </aside>
+<dialog id="mon-detail" class="pc-detail" aria-labelledby="pc-detail-name"><button type="button" id="mon-close" class="key close-detail" aria-label="Close Pokémon details">Close</button><div id="mon-detail-body"></div><div id="mon-detail-action" class="pc-trade-action"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="${game_base}/static/pokedex.js?v=glow-1"></script>
+<script src="${game_base}/static/mon-grid.js?v=dex-copies-1"></script>
+<script src="${game_base}/static/pokedex.js?v=dex-copies-1"></script>
 </body>
 </html>
