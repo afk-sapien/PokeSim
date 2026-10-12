@@ -1623,13 +1623,16 @@ class Policy:
         """Move the highest-level Pokémon to the front when the lead lags well behind it."""
         from .tower import holds_lead
         from .training import trainee_slot
-        # A roaming-beast or static-legendary sleeper leads on purpose even when it is far below the rest of the
-        # party, and so does the Tower team's chosen lead, which the Tower preparation would otherwise swap back.
-        if (self.collection.get('roam_lead') or holds_lead(self)
-                or self.goal and self.goal.key in {'legend_lugia', 'legend_ho_oh', 'legend_suicune', 'collection_static_lead'}):
-            return None
         # Without an Exp. Share the partner in training leads instead, so it joins every battle.
         trainee = trainee_slot(self, snapshot)
+        # The roaming-beast sleeper stays on record after the search is set aside for later, and the search
+        # names it again when it resumes. On the training walk it would keep the trainee out of every battle.
+        training = trainee is not None and self.goal is not None and self.goal.key == 'collection_train'
+        # A roaming-beast or static-legendary sleeper leads on purpose even when it is far below the rest of the
+        # party, and so does the Tower team's chosen lead, which the Tower preparation would otherwise swap back.
+        if (self.collection.get('roam_lead') and not training or holds_lead(self)
+                or self.goal and self.goal.key in {'legend_lugia', 'legend_ho_oh', 'legend_suicune', 'collection_static_lead'}):
+            return None
         if trainee is not None:
             mon = snapshot.party[trainee]
             return Lead(trainee, (mon.trainer_id, mon.dvs)) if trainee else None

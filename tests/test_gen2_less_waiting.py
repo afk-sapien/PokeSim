@@ -206,6 +206,22 @@ def test_without_exp_share_the_trainee_keeps_the_lead(data):
     assert policy.level_lead(held).slot == 1
 
 
+def test_a_set_aside_roaming_sleeper_does_not_keep_the_trainee_out_of_battle(data):
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.training import identity
+    sleeper = lead()
+    trainee = mon(94, box=None, position=1, level=20, hp=60, max_hp=60)
+    policy, state = shareless_policy(data, [sleeper, trainee], trainee)
+    # The roaming search was put off for later and left its sleeper on record.
+    policy.collection['roam_lead'] = identity(sleeper)
+    policy.goal = Goal('collection_train', 'Train 94 toward level 100 in the lead', 'SILVER_CAVE_ROOM_1', 9, 31)
+    reorder = policy.level_lead(state)
+    assert reorder.slot == 1 and tuple(reorder.identity[1]) == trainee.dvs
+    # While the search itself runs, its sleeper keeps the lead.
+    policy.goal = Goal('collection_roam_hunt', 'Track Raikou through Johto', 'ROUTE_36', 5, 5)
+    assert policy.level_lead(state) is None
+
+
 def test_a_leading_trainee_switches_out_once_when_outmatched(data):
     trainee = mon(94, box=None, position=0, level=20, hp=60, max_hp=60)
     strong = lead()

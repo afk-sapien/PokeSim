@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix Gold, Silver and Crystal adventures stalling on "Train … toward level 100 in the lead" with the Pokémon in training never leaving the back of the party. A roaming-beast search that was put off for later still kept its sleeper in the lead, so the trainee joined no battles, earned nothing, and the adventure reloaded every half hour. The training walk now leads with the trainee, and the sleeper leads again when the search resumes.
+
 - Fix a Red, Blue or Yellow Pokémon being sent to Gold, Silver or Crystal every few minutes when the Time Capsule always refuses it. A Pokémon whose saved types do not match its species (the game says it "appears to be abnormal" and cancels the trade) is now left out of Time Capsule trades with that reason, a session stops as soon as the game shows the message instead of pressing on for half a minute, and automatic trading leaves out any Pokémon whose last two trades failed the same way for 30 minutes, doubling up to a day.
 
 - Keep training Gold, Silver and Crystal Pokémon after the Exp. Share is gone. Each cartridge has only one, and Crystal and Silver lost theirs to earlier automatic trades, so Silver spent almost all its time walking the grass with nothing to do. The Pokémon in training now leads the party and switches out on the first turn of a battle it would lose, which still shares the experience with it.
