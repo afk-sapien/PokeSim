@@ -122,6 +122,9 @@ class StoredMon:
     status: int = 0
     pp: tuple[int, ...] = ()
     max_pp: tuple[int, ...] = ()
+    # The two type bytes the box record itself stores. The Time Capsule compares them
+    # with the species' types and cancels the trade when they differ.
+    types: tuple[int, ...] = ()
 
 
 _STORED_FIELDS = tuple(field.name for field in fields(StoredMon))
@@ -297,7 +300,7 @@ def _decode_box(box, structs, names):
     from .strategy_data import MOVES as MOVE_DATA
     return tuple(StoredMon(box, mon.position, mon.species, mon.level, mon.nick,
                            mon.moves, mon.experience, mon.dvs, mon.stat_exp, mon.trainer_id,
-                           hp=mon.hp, status=mon.status, pp=mon.pp,
+                           hp=mon.hp, status=mon.status, pp=mon.pp, types=tuple(mon.types),
                            max_pp=_max_pp(mon.moves, structs[mon.position * 33 + 29:mon.position * 33 + 33], MOVE_DATA))
                  for mon in decode_box(structs, names)
                  if mon.species in SPECIES_NAMES and 1 <= mon.level <= 100)

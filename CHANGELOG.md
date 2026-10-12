@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix a Red, Blue or Yellow Pokémon being sent to Gold, Silver or Crystal every few minutes when the Time Capsule always refuses it. A Pokémon whose saved types do not match its species (the game says it "appears to be abnormal" and cancels the trade) is now left out of Time Capsule trades with that reason, a session stops as soon as the game shows the message instead of pressing on for half a minute, and automatic trading leaves out any Pokémon whose last two trades failed the same way for 30 minutes, doubling up to a day.
+
 - Keep training Gold, Silver and Crystal Pokémon after the Exp. Share is gone. Each cartridge has only one, and Crystal and Silver lost theirs to earlier automatic trades, so Silver spent almost all its time walking the grass with nothing to do. The Pokémon in training now leads the party and switches out on the first turn of a battle it would lose, which still shares the experience with it.
 
 - Open any Pokémon listed under "With you right now" on a Pokédex entry. Each one is now a key that shows its full record in the same popup the PC uses, on top of the Pokédex, and Esc or Close returns to the entry where it was. The popup has a Show in PC key that opens its box, or the party, with the Pokémon marked and its popup open. The PC also opens one slot from its address, such as `/pc?box=12&slot=4`.

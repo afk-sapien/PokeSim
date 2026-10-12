@@ -42,6 +42,11 @@ BUSY_NOTE = 'Busy with a trade. Your trade will wait in line.'
 # A preparation error carries the adventure that raised it, so the Trading page can name that game.
 FAILED_TAG = re.compile(r'\(adventure ([0-9a-f]{32})\)')
 PC_FULL = 'Every PC box is full'
+# A Pokémon whose automatic trades keep failing the same way waits before it is offered
+# again: 30 minutes after the second identical failure, doubling up to a day.
+FAILURE_BACKOFF_AFTER = 2
+FAILURE_BACKOFF_SECONDS = 1800
+FAILURE_BACKOFF_MAX = 86400
 
 
 class Waiting(ValueError):
@@ -87,6 +92,48 @@ def visited(visits, aid, campaign, key):
     """Whether this Pokémon already came through a finished trade, under its key or the trainer
     and stats signature that older releases recorded as its key."""
     return bool(key) and ((aid, campaign, key) in visits or (aid, campaign, legacy(key)) in visits)
+
+
+def _failure_kind(error):
+    """An error with its transaction and adventure ids removed, so repeats compare equal."""
+    return re.sub(r'[0-9a-f]{32}', '', error or '').strip()
+
+
+def failure_backoff(history, now=None):
+    """Pokémon automatic trading leaves out for now, as {(adventure, legacy key): until}.
+
+    Only the latest run of identical failures since the Pokémon last traded counts. A
+    different error or a completed trade ends the run, and a failure the owner caused
+    (cancelling, or setting the trade aside for a chosen one) is not counted at all.
+    """
+    now = time.time() if now is None else now
+    runs, closed = {}, set()
+    for row in sorted(history, key=lambda item: item['updated_at'], reverse=True):
+        plan = row['plan']
+        sides = [(plan.get(side + '_id'), legacy(plan.get(side + '_key'))) for side in ('left', 'right')]
+        if row['phase'] == 'completed' and row['decision'] == 'COMMIT':
+            closed.update(sides)
+            continue
+        error = row.get('error') or ''
+        if row['phase'] != 'aborted' or 'Cancelled by the owner' in error or SET_ASIDE in error:
+            continue
+        kind = _failure_kind(error)
+        for side in sides:
+            if side in closed or not all(side):
+                continue
+            run = runs.setdefault(side, {'kind': kind, 'count': 0, 'latest': row['updated_at']})
+            if run['kind'] == kind:
+                run['count'] += 1
+            else:
+                closed.add(side)
+    out = {}
+    for side, run in runs.items():
+        if run['count'] >= FAILURE_BACKOFF_AFTER:
+            until = run['latest'] + min(FAILURE_BACKOFF_SECONDS * 2 ** (run['count'] - FAILURE_BACKOFF_AFTER),
+                                        FAILURE_BACKOFF_MAX)
+            if until > now:
+                out[side] = until
+    return out
 
 
 class Coordinator:
@@ -307,6 +354,10 @@ class Coordinator:
             for key, message in REASONS.items():
                 if key in error:
                     return message
+        from ..interactions.cable_metadata import ABNORMAL
+        if ABNORMAL in error:
+            return ('Gold, Silver or Crystal rejected the Pokémon from Red, Blue or Yellow as abnormal, '
+                    'because its saved types do not match its species. Both adventures kept their Pokémon.')
         if 'No supported walking route to the Cable Club' in error:
             return 'An adventure could not reach the Cable Club from its current location.'
         if 'route to the Cable Club is blocked by an unresolved obstacle' in error:
@@ -345,9 +396,16 @@ class Coordinator:
         lead = 'The last trade attempt did not complete.' if count == 1 else f'{count} recent trade attempts did not complete.'
         reason = self._failure_reason(latest)
         aid = self._failed_adventure(latest)
+        plan = latest['plan']
+        backed_off = failure_backoff(rows)
+        paused = [backed_off.get((plan.get(side + '_id'), legacy(plan.get(side + '_key'))))
+                  for side in ('left', 'right')]
         if aid and self.trade_blocked.get(aid):
             # The game is left out of automatic trades until it has room, so it is not retried.
             after = 'It is left out of automatic trades until its PC has room.'
+        elif any(paused):
+            after = ('The same failure repeated, so automatic trading leaves this Pokémon out until '
+                     + time.strftime('%H:%M', time.localtime(max(filter(None, paused)))) + '.')
         else:
             after = 'Automatic trading will try again.'
         return {'recent_failure_count': count, 'updated_at': latest['updated_at'], 'reason': reason,
@@ -451,8 +509,10 @@ class Coordinator:
     def _compatible_pair(left, right, give, take):
         if left.get('cartridge_generation', 1) == right.get('cartridge_generation', 1):
             return True
-        modern, offer = (left, give) if left.get('cartridge_generation') == 2 else (right, take)
-        return bool(modern.get('time_capsule_ready') and offer.get('time_capsule_compatible'))
+        modern, offer, classic = (left, give, take) if left.get('cartridge_generation') == 2 else (right, take, give)
+        # A classic Pokémon passes unless its own record would be rejected as abnormal.
+        return bool(modern.get('time_capsule_ready') and offer.get('time_capsule_compatible')
+                    and classic.get('time_capsule_compatible') is not False)
 
     def propose(self, data):
         required = {'left_id', 'right_id', 'left_key', 'right_key'}
@@ -969,6 +1029,8 @@ class Coordinator:
         # what the others are asked to collect, and hand-picked trades still reach it.
         settings = {aid: trade_settings.get(self.registry, aid) for aid, _ in inventories}
         reserved = self.hand_picked_keys()
+        # Automatic trading stops picking a Pokémon whose trades keep failing the same way.
+        reserved = reserved | set(failure_backoff(history))
         waiting = {aid for entry in self._manual_entries() if entry['state'] in MANUAL_WAITING
                    for aid in (entry['left_id'], entry['right_id'])}
         inventories = [self._auto_offers(aid, inv, reserved) for aid, inv in inventories
@@ -1093,9 +1155,15 @@ class Coordinator:
 
     @staticmethod
     def _capsule_reason(left, right, give, take):
-        modern, offer = (left, give) if left.get('cartridge_generation') == 2 else (right, take)
+        modern, offer, classic = (left, give, take) if left.get('cartridge_generation') == 2 else (right, take, give)
         if not modern.get('time_capsule_ready'):
             return 'The Gold, Silver or Crystal adventure cannot use the Time Capsule yet. It opens the day after meeting Bill'
+        # The trade builder passes the one chosen Pokémon as both sides. It comes from the left game.
+        rejected = classic.get('time_capsule_compatible') is False
+        if rejected and (left.get('cartridge_generation') != 2 if give is take else offer.get('time_capsule_compatible')):
+            name = classic.get('nickname') or classic.get('nick') or classic.get('name') or 'This Pokémon'
+            return f'{name} cannot go to a Gold, Silver or Crystal game. ' + (
+                classic.get('time_capsule_reason') or 'The Time Capsule would reject it')
         name = offer.get('nickname') or offer.get('name') or 'This Pokémon'
         return f'{name} cannot go to a Red, Blue or Yellow game. ' + (offer.get('time_capsule_reason') or 'It cannot go through the Time Capsule')
 

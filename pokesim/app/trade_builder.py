@@ -137,7 +137,8 @@ class TradeBuilder:
         if old == take_inventory.get('cartridge_generation', 1):
             return ''
         modern = give_inventory if old == 2 else take_inventory
-        if modern.get('time_capsule_ready') and (old != 2 or give.get('time_capsule_compatible')):
+        if modern.get('time_capsule_ready') and (give.get('time_capsule_compatible') if old == 2
+                                                 else give.get('time_capsule_compatible') is not False):
             return ''
         return self.coordinator._capsule_reason(give_inventory, take_inventory, give, give)
 

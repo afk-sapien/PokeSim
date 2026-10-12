@@ -3,6 +3,9 @@ from pokesim_core.gen1_link_metadata import ADAPTER_ID as ADAPTER_ID, BUILDS as 
 
 from ..yellow import YELLOW_SHA1
 
+# Raised when Gold, Silver or Crystal reports the incoming Pokémon "appears to be abnormal".
+ABNORMAL = 'The Gold, Silver or Crystal game rejected the incoming Pokémon as abnormal'
+
 _RED = CORE_BUILDS['ea9bcae617fdf159b045185467ae58b2e4a48b9a']
 
 # Yellow runs the Red and Blue link code from other ROM addresses, taken from

@@ -4,6 +4,7 @@ import time
 from ..interactions.cable import checked
 from .menus import choose, close_pc
 from .navigation import Navigator
+from ..interactions.cable_metadata import ABNORMAL
 from .ram import read_snapshot
 
 
@@ -26,6 +27,9 @@ class CableDriver:
         if side.counts['SaveAfterLinkTrade'] and side.counts[link] >= 2:
             return 'a' if any('▶' in row and 'CANCEL' in row for row in s.tiles) else 'down'
         if side.counts[link]:
+            # The game cancels the trade by itself after this message and goes back to the
+            # party menu, so pressing on would only repeat it until the step budget ran out.
+            checked('appears' not in s.text or 'abnormal' not in s.text, ABNORMAL)
             if 'STATS' in s.text and 'TRADE' in s.text:
                 row = next(r for r in s.tiles if 'STATS' in r and 'TRADE' in r)
                 cursor = max(row.find('▶'), row.find('▷'))

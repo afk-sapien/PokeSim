@@ -226,6 +226,27 @@ def keeps(data):
     return {'protect': protect[:256], 'wished': wished[:256]}
 
 
+def capsule_types_reason(mon):
+    """Why the Time Capsule would reject this Red, Blue or Yellow Pokémon, or an empty string.
+
+    Gold, Silver and Crystal compare the two type bytes stored in the incoming record with the
+    species' own types. When they differ the game says the Pokémon "appears to be abnormal" and
+    cancels the trade, so no amount of retrying gets it through.
+    """
+    from ..strategy_data import SPECIES
+    types, data = tuple(mon.get('types') or ()), SPECIES.get(mon.get('species'))
+    if len(types) != 2 or not data or tuple(data['types']) == types:
+        return ''
+    name = data['name'].title()
+    return (f'Its saved record lists different types than a {name} has, so Gold, Silver and Crystal '
+            'reject it as abnormal')
+
+
+def capsule_fields(mon):
+    reason = capsule_types_reason(mon)
+    return {'time_capsule_compatible': not reason, 'time_capsule_reason': reason}
+
+
 def manual_rows(payload, generation, last_party_blocked=False):
     """Every party and boxed Pokémon the owner may pick for a manual trade.
 
@@ -255,7 +276,9 @@ def manual_rows(payload, generation, last_party_blocked=False):
                      'type_names': mon.get('type_names') or [], 'dv_stars': mon.get('dv_stars'),
                      'dv_total': mon.get('dv_total'), 'dv_percent': mon.get('dv_percent'),
                      'perfect_dvs': bool(mon.get('perfect_dvs')),
-                     'cartridge_generation': generation, 'blocked': blocked})
+                     'cartridge_generation': generation, 'blocked': blocked,
+                     # Gen I rows only: Gen II rows get their own Time Capsule checks.
+                     **(capsule_fields(mon) if generation == 1 else {})})
     return rows
 
 
@@ -308,10 +331,15 @@ class Participant:
         candidates = []
         blocked = SEALED if sealed(getattr(self.emu, 'snapshot', None), self.store.trade_preferences()) else ''
         available = (status.get('game') or {}).get('map') not in LEAGUE and not blocked
+        # The offer is built from the same PC rows, located by box and position.
+        records = {(row.get('box'), row.get('position'), row.get('species')): row
+                   for row in (payload.get('storage') or {}).get('pokemon') or ()}
         for mon in offers(inv, True) if available else ():
             from ..broker.routine import EVOLVES
             from ..strategy_data import SPECIES
-            candidates.append({**mon.as_side(), 'last_copy': inv.held[mon.species] == 1,
+            side = mon.as_side()
+            candidates.append({**side, **capsule_fields(records.get((side['box'], side['position'], side['species'])) or {}),
+                               'last_copy': inv.held[mon.species] == 1,
                                'trade_preference': mon.trade_preference,
                                'arrived_dex': SPECIES[EVOLVES.get(mon.species, mon.species)]['dex']})
         return {**payload, 'adventure_id': self.bootstrap.adventure_id,
