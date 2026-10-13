@@ -146,11 +146,17 @@ def test_pokedex_status_views_trim_for_their_page_and_default_stays_full(tmp_pat
     assert set(dex.json()['party'][0]) <= set(HOLDER_FIELDS)
     assert dex.json()['storage']['active_box'] == 3
     assert size(pc) < size(full) - 90_000 and size(dex) < size(full) - 250_000
+    # The Live popup draws one party member in full and never the boxes.
+    party = api.get('/api/pokedex/status', params={'view': 'party'})
+    assert party.json()['party'] == full.json()['party'] and party.json()['viewer_only'] is False
+    assert 'storage' not in party.json() and 'plan' not in party.json()
+    assert size(party) < 20_000
     assert api.get('/api/pokedex/status', params={'view': 'other'}).status_code == 422
 
 
 def test_pages_ask_for_their_pokedex_view_and_holder_fields_cover_the_pokedex():
     assert "'/api/pokedex/status?view=pc'" in (STATIC / 'pc.js').read_text()
+    assert "'/api/pokedex/status?view=party'" in (STATIC / 'party-popup.js').read_text()
     script = (STATIC / 'pokedex.js').read_text()
     assert "'/api/pokedex/status?view=dex'" in script
     read = set(re.findall(r'\bmon\.(\w+)', script))
@@ -165,10 +171,11 @@ def reads(script, *names):
 
 def test_each_page_view_keeps_every_field_its_page_reads(tmp_path, monkeypatch):
     pc, dex = reads('pc.js+mon-grid.js', 'status', 'mon'), reads('pokedex.js', 'status', 'mon', 'row', 'project')
+    party = reads('party-popup.js+mon-grid.js', 'status', 'mon')
     assert {'move_details', 'hidden_power', 'experience'} <= pc['mon'] and {'plan', 'owned'} <= dex['status']
-    record = {field: 1 for field in pc['mon'] | dex['mon']}
+    record = {field: 1 for field in pc['mon'] | dex['mon'] | party['mon']}
     plan = [{**{field: 1 for field in dex['row'] | dex['project']}, 'dex': 1}]
-    payload = {**{field: 1 for field in pc['status'] | dex['status']}, 'party': [dict(record)],
+    payload = {**{field: 1 for field in pc['status'] | dex['status'] | party['status']}, 'party': [dict(record)],
                'storage': {'active_box': 1, 'box_counts': [1], 'pokemon': [dict(record)]}, 'plan': plan}
     monkeypatch.setattr('pokesim.web.app.live_status', lambda *args, **kwargs: json.loads(json.dumps(payload)))
     monkeypatch.setattr('pokesim.web.app.preferences.apply', lambda data, _: data)
@@ -176,10 +183,10 @@ def test_each_page_view_keeps_every_field_its_page_reads(tmp_path, monkeypatch):
     monkeypatch.setattr('pokesim.milestones.apply', lambda data, _: data)
     monkeypatch.setattr('pokesim.catches.status', lambda _: 1)
     api = client(tmp_path, monkeypatch)
-    for view, script, fields in (('pc', 'pc.js', pc), ('dex', 'pokedex.js', dex)):
+    for view, script, fields in (('pc', 'pc.js', pc), ('dex', 'pokedex.js', dex), ('party', 'party-popup.js', party)):
         data = api.get('/api/pokedex/status', params={'view': view}).json()
         assert fields['status'] <= set(data), (script, fields['status'] - set(data))
-        for mon in (data['party'][0], data['storage']['pokemon'][0]):
+        for mon in (data['party'][0], *((data['storage']['pokemon'][0],) if view != 'party' else ())):
             assert fields['mon'] <= set(mon), (script, fields['mon'] - set(mon))
         if 'plan' in fields['status']:
             assert fields['row'] | fields['project'] <= set(data['plan'][0])

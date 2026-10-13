@@ -10,7 +10,7 @@
      2  primitives ............ panel, legend, readout, lamp, meter, key, tag, plate
      3  chrome ................ top rail, identity strip, footer plate
      4  live page ............. bezel, deck, gamepad, plan, party bays
-     5  overlays .............. partner dialog, toast
+     5  overlays .............. toast
      6  responsive ............ 1100px and 640px, plus container queries on a bay
      7  motion and contrast preferences
 
@@ -1041,45 +1041,7 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
    5  OVERLAYS
    ========================================================================== */
 
-.partner-detail {
-  width: min(560px, calc(100% - 2 * var(--s4)));
-  max-height: calc(100vh - 2 * var(--s6));
-  padding: 0;
-  background: var(--panel);
-  color: var(--ink);
-  border: var(--hair) solid var(--rule);
-  box-shadow: var(--key-inset), 6px 6px 0 var(--bevel-lo);
-}
-.partner-detail, .confirm-sheet { overscroll-behavior: contain; }
-.partner-detail::backdrop { background: rgba(10, 12, 10, 0.55); }
-.partner-detail form { position: absolute; top: var(--s3); right: var(--s3); }
-.partner-close { min-height: 32px; padding: 0 var(--s3); }
-.partner-detail-head {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--s1) var(--s4);
-  align-items: center;
-  padding: var(--s4);
-  padding-right: 120px;
-  border-bottom: var(--hair) solid var(--rule);
-  background: var(--panel-2);
-}
-.partner-detail-head .plate { grid-row: span 3; }
-.partner-detail-head h2 { font: var(--f-read) / 1.1 var(--font-panel); letter-spacing: 0.04em; }
-.partner-detail-head p:last-child { font-size: 14px; color: var(--ink-2); }
-.partner-detail section { padding: var(--s4); border-bottom: var(--hair) solid var(--rule-faint); }
-.partner-detail section:last-child { border-bottom: 0; }
-.partner-detail h3 { margin-bottom: var(--s3); }
-.partner-detail .moves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: var(--hair) solid var(--rule-faint); }
-.partner-detail .moves .move { padding: var(--s2) var(--s3); font-size: var(--f-label); border-bottom: var(--hair) solid var(--rule-faint); }
-.partner-detail .moves .move:nth-child(odd) { border-right: var(--hair) solid var(--rule-faint); }
-.partner-detail .moves .move:nth-last-child(-n + 2):nth-child(odd),
-.partner-detail .moves .move:last-child { border-bottom: 0; }
-.battle-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: var(--s2); }
-.battle-stats > div { display: grid; gap: var(--s2); padding: var(--s3); background: var(--panel-2); border: var(--hair) solid var(--rule-faint); }
-.battle-stats dt { font: var(--f-micro) / 1 var(--font-mono); letter-spacing: var(--track-micro); color: var(--ink-3); }
-.battle-stats dd { font: var(--f-read) / 1 var(--font-panel); font-variant-numeric: tabular-nums; }
-.total-xp { margin-top: var(--s3); font-size: 13px; color: var(--ink-3); }
+.confirm-sheet { overscroll-behavior: contain; }
 
 .toast {
   position: fixed;
@@ -1272,12 +1234,6 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .plan .headline { font-size: var(--f-legend); line-height: 1.35; }
 
   .column-head { min-height: 48px; }
-
-  .partner-detail-head { grid-template-columns: minmax(0, 1fr); padding-right: var(--s4); padding-top: var(--s7); }
-  .partner-detail-head .plate { grid-row: auto; }
-  .partner-detail .moves { grid-template-columns: minmax(0, 1fr); }
-  .partner-detail .moves .move:nth-child(odd) { border-right: 0; }
-  .partner-detail .moves .move:nth-last-child(-n + 2):nth-child(odd) { border-bottom: var(--hair) solid var(--rule-faint); }
 
   .plate-foot .links { margin-left: 0; }
 }

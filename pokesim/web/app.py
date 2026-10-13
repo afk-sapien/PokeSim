@@ -303,8 +303,12 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return Response(body, media_type="application/json", headers=headers)
 
     @app.get("/api/pokedex/status")
-    def pokedex_route(view: Literal['pc', 'dex'] | None = Query(None)):
-        payload = pokedex_status(plan=view != 'pc')
+    def pokedex_route(view: Literal['pc', 'dex', 'party'] | None = Query(None)):
+        payload = pokedex_status(plan=view not in ('pc', 'party'))
+        if view == 'party':
+            # The Live page's popup draws one party member as the PC does, lock included, never the boxes.
+            return fast_json({**{key: value for key, value in payload.items() if key not in ('plan', 'storage')},
+                              'viewer_only': view_only()})
         if view == 'pc':
             # The PC draws party and boxes in full but never the collection plan. It hides the lock for watchers.
             return fast_json({**{key: value for key, value in payload.items() if key != 'plan'}, 'viewer_only': view_only()})

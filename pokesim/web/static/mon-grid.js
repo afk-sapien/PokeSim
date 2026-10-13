@@ -1,5 +1,5 @@
 // The shared Pokémon grid: cards, filters, sorting, badges and the detail popup.
-// The PC page and the Trading page both draw their Pokémon with it.
+// The PC, Pokédex and Trading pages and the Live party popup draw their Pokémon with it.
 (() => {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
   const base = () => globalThis.PokeSim?.base || ''
@@ -99,6 +99,19 @@
     const blocked = lockBlocked(mon, options)
     const note = options.note || blocked || (locked ? 'Never offered in automatic trades.' : 'Can be traded automatically. Tap to lock.')
     return `<div class="pc-lock-row"><button type="button" class="lock-toggle" data-lock-key="${esc(mon.trade_key || '')}" aria-pressed="${locked ? 'true' : 'false'}"${blocked || options.busy ? ' disabled' : ''}${options.busy ? ' aria-busy="true"' : ''} title="${esc(blocked || (locked ? 'Unlock so it can be traded automatically' : 'Lock so it is never traded automatically'))}">${lockIcon(locked)}<span>${LOCK_LABEL}</span></button><p class="lock-note" role="status">${esc(note)}</p></div>`
+  }
+  // Save a lock ('keep') or an unlock ('auto'). A refused change throws with the server's reason.
+  async function saveLock(key, state) {
+    const response = await globalThis.PokeSim.fetch('/api/trading/preferences', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({key, state})})
+    if (response.ok) return
+    let reason = ''
+    try { reason = (await response.json()).detail } catch (_) {}
+    throw new Error(typeof reason === 'string' && reason ? reason : 'Could not save the lock.')
+  }
+  // Everything about trading lives on the Trading page. The popup only links there.
+  function tradeLink(mon) {
+    if (!mon?.trade_key || mon.egg) return ''
+    return `<a class="key pc-trade-link" href="${base()}/trading?tab=trade&mon=${encodeURIComponent(mon.trade_key)}">Trade…</a>`
   }
 
   // Search by name, nickname or Pokédex number, and by DV rating.
@@ -323,6 +336,6 @@
   })
 
   globalThis.MonGrid = {esc, SORTS, RATINGS, SETTINGS, SETTING_LABELS, sortDefaults, statTotal, sortValue, compare,
-    formatTotal, ratingLabel, ratingBadge, settingBadge, isLocked, lockIcon, lockControl, LOCK_LABEL, matches, card, detail, detailLinks, tradeState, statPower, toolbar, generation,
+    formatTotal, ratingLabel, ratingBadge, settingBadge, isLocked, lockIcon, lockControl, saveLock, tradeLink, LOCK_LABEL, matches, card, detail, detailLinks, tradeState, statPower, toolbar, generation,
     orderLabels, bind, apply, filtered}
 })()

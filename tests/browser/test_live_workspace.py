@@ -55,14 +55,15 @@ def test_live_columns_and_partner_details(page, live_game, width):
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
 
     team_height = page.locator('#team').bounding_box()['height']
-    partner = page.get_by_role('button', name='View PARTNER 1 battle stats')
+    partner = page.get_by_role('button', name='View PARTNER 1 details')
     partner.click()
     expect(page.get_by_role('dialog')).to_be_visible()
+    expect(page.locator('#mon-detail .lock-toggle')).to_be_visible()
     page.keyboard.press('ArrowUp')
     page.keyboard.press('z')
     assert emu.commands == []
     emu.snapshot = replace(emu.snapshot, party=(replace(emu.snapshot.party[0], hp=12), *emu.snapshot.party[1:]))
-    expect(page.locator('.partner-detail-head')).to_contain_text('12 / 30 HP')
+    expect(page.locator('#mon-detail .pc-sum-meter').first).to_contain_text('12/30')
     page.keyboard.press('Escape')
     expect(page.get_by_role('dialog')).to_be_hidden()
     expect(partner).to_be_focused()

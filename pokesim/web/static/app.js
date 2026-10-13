@@ -65,7 +65,6 @@ let manualMode = false
 let stateBusy = false
 let partySignature = ''
 let currentParty = []
-let selectedPartner = null
 let eventFilter = 'highlights'
 let eventRows = []
 let eventGeneration = 0
@@ -105,7 +104,7 @@ async function control(button, action, value, message) {
 function renderParty(party) {
   if (!$('#party')) return
   currentParty = party
-  renderPartnerDetail()
+  globalThis.PartyPopup?.update(party)
   const signature = JSON.stringify(party)
   if (signature === partySignature || $('#party').contains(document.activeElement)) return
   partySignature = signature
@@ -151,7 +150,7 @@ function renderParty(party) {
     const dvLamps = rating ? `<span class="dv" title="DV rating ${rating} of 4" role="img" aria-label="DV rating ${rating} of 4">${Array.from({length: 4}, (_, i) => `<i class="lamp"${i < rating ? ' data-on="signal"' : ''}></i>`).join('')}</span>` : ''
     const sprite = mon.egg ? PokemonTypes.eggPlate : mon.dex ? `<img src="${PokeSim.sprite(mon.dex)}" alt="${esc(mon.name)} portrait">` : `<span class="plate-num">?</span>`
     const xpText = xp ? xp.max_level ? 'MAX' : `${Math.floor(clamp(xp.percent))}%` : '—'
-    return `<li class="mon${mon.hp ? '' : ' mon--fainted'}"><div class="mon-plate"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${sprite}</div></div><div class="mon-body"><div class="mon-head"><span class="slotno">${slotNo(index)}</span><h3 class="name">${esc(name)}</h3><span class="spacer"></span>${dvLamps}<span class="lv"><em>LV</em>${mon.level}</span><button class="mon-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} battle stats"><span aria-hidden="true">▶</span></button></div><div class="mon-id">${dex}<span class="micro">${esc(mon.name)}</span>${types}${PokemonTypes.shinyBadge(mon)}${statusTag}</div><div class="mon-lower"><div class="mon-meters"><div class="meter-row"><span class="micro">HP</span>${meter(hp, health, `${esc(name)} health: ${mon.hp} of ${mon.max_hp}`)}<span class="value">${fmt(mon.hp)}/${fmt(mon.max_hp)}</span></div><div class="meter-row"><span class="micro">XP</span>${meter(clamp(xp?.percent), 'signal', `${esc(name)} progress to next level`)}<span class="value">${xpText}</span></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div></div></div></li>`
+    return `<li class="mon${mon.hp ? '' : ' mon--fainted'}"><div class="mon-plate"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${sprite}</div></div><div class="mon-body"><div class="mon-head"><span class="slotno">${slotNo(index)}</span><h3 class="name">${esc(name)}</h3><span class="spacer"></span>${dvLamps}<span class="lv"><em>LV</em>${mon.level}</span><button class="mon-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} details"><span aria-hidden="true">▶</span></button></div><div class="mon-id">${dex}<span class="micro">${esc(mon.name)}</span>${types}${PokemonTypes.shinyBadge(mon)}${statusTag}</div><div class="mon-lower"><div class="mon-meters"><div class="meter-row"><span class="micro">HP</span>${meter(hp, health, `${esc(name)} health: ${mon.hp} of ${mon.max_hp}`)}<span class="value">${fmt(mon.hp)}/${fmt(mon.max_hp)}</span></div><div class="meter-row"><span class="micro">XP</span>${meter(clamp(xp?.percent), 'signal', `${esc(name)} progress to next level`)}<span class="value">${xpText}</span></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div></div></div></li>`
   }).join('') + emptySlots(party.length)
   fitSprites($('#party'))
 }
@@ -482,7 +481,7 @@ async function manualPress(button) {
 }
 let lastKeyPress = 0
 window.addEventListener('keydown', (event) => {
-  if (viewerOnly || !$('#screen') || $('#partner-detail')?.open) return
+  if (viewerOnly || !$('#screen') || globalThis.PartyPopup?.isOpen()) return
   const map = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', z: 'a', x: 'b', Z: 'a', X: 'b', Enter: 'start', Shift: 'select'}
   if (map[event.key] && !event.target.closest('input, select, textarea, [contenteditable]') && !(event.key === 'Enter' && event.target.closest('button, summary, a'))) {
     event.preventDefault()
@@ -504,39 +503,10 @@ function renderIntent(strategy) {
   set('#next-objective', 'textContent', repeated ? 'Still on this one' : next || 'Continue the journey')
 }
 
-function renderEggDetail(egg) {
-  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay">${PokemonTypes.eggPlate}</div><p class="micro">Partner ${selectedPartner.index + 1}</p><h2 id="partner-detail-heading">Egg</h2><p>It will hatch after more steps with the team.</p></div>`)
-}
-
-function renderPartnerDetail() {
-  const dialog = $('#partner-detail')
-  if (!dialog?.open || !selectedPartner) return
-  const mon = currentParty[selectedPartner.index]
-  if (!mon || mon.species !== selectedPartner.species || mon.nick !== selectedPartner.nick) {
-    dialog.close()
-    return
-  }
-  const shown = PokemonTypes.asEgg(mon)
-  if (shown !== mon) return renderEggDetail(shown)
-  const name = mon.nick || mon.name
-  const xp = mon.experience
-  const moves = (mon.move_details || []).map((move) => `<div class="move"><span class="nm">${esc(move.name)}</span><span class="pp${move.pp ? '' : ' empty'}">${move.pp}/${move.max_pp} PP</span></div>`).join('')
-  const stats = Object.entries(mon.stats || {}).map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${fmt(value)}</dd></div>`).join('')
-  const portrait = mon.egg ? PokemonTypes.eggPlate : mon.dex ? `<img src="${PokeSim.sprite(mon.dex)}" alt="">` : '<span class="plate-num">?</span>'
-  set('#partner-detail-content', 'innerHTML', `<div class="partner-detail-head"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${portrait}</div><p class="micro">Partner ${selectedPartner.index + 1}, Level ${mon.level}</p><h2 id="partner-detail-heading">${esc(name)}</h2><div class="type-tags">${PokemonTypes.badges(mon.type_names)}${PokemonTypes.shinyBadge(mon)}</div><p>${esc(mon.name)}, ${mon.hp} / ${mon.max_hp} HP, ${esc(mon.status_label || (mon.hp ? 'Healthy' : 'Fainted'))}</p></div><section><h3 class="micro">Moves</h3><div class="moves">${moves || '<p class="no-moves">No moves yet.</p>'}</div></section><section><h3 class="micro">Battle stats</h3><dl class="battle-stats">${stats}</dl>${xp ? `<p class="total-xp">${fmt(xp.total)} total experience, ${xp.max_level ? 'Max level' : `${fmt(xp.remaining)} XP to Lv. ${mon.level + 1}`}</p>` : ''}</section>`)
-  fitSprites($('#partner-detail-content'))
-}
+// A party member opens the same detail popup as the PC page (party-popup.js).
 $('#party')?.addEventListener('click', (event) => {
   const button = event.target.closest('[data-partner]')
   if (!button) return
   const index = Number(button.dataset.partner)
-  const mon = currentParty[index]
-  selectedPartner = {index, species: mon.species, nick: mon.nick}
-  $('#partner-detail').showModal()
-  renderPartnerDetail()
-})
-$('#partner-detail')?.addEventListener('close', () => {
-  const index = selectedPartner?.index
-  selectedPartner = null
-  $(`[data-partner="${index}"]`)?.focus()
+  globalThis.PartyPopup?.show(index, currentParty[index], () => $(`[data-partner="${index}"]`))
 })

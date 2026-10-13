@@ -439,8 +439,8 @@
   .individual-stats th:first-child { padding-left: var(--s3); }
   .individual-stats tr > :last-child { padding-right: var(--s3); }
   /* Footer keys share the row evenly, with short labels. */
-  #pc-trade-action .key, .pc-detail-links .key { flex: 1 1 auto; padding: 0 var(--s2); }
-  #pc-trade-action .pc-trade-link { margin-left: 0; }
+  .pc-trade-action .key, .pc-detail-links .key { flex: 1 1 auto; padding: 0 var(--s2); }
+  .pc-trade-action .pc-trade-link { margin-left: 0; }
   .pc-detail .key-long { display: none; }
   .pc-detail .key-short { display: inline; }
 }
@@ -467,7 +467,7 @@
   .pc-move-specs { grid-template-columns: 7ch 9ch; }
   .individual-stats th, .individual-stats td { padding-inline: 4px; }
   .individual-stats tbody th, .individual-stats tfoot th { font-size: 13px; white-space: normal; }
-  #pc-trade-action, .pc-detail-links { flex-wrap: wrap; }
+  .pc-trade-action, .pc-detail-links { flex-wrap: wrap; }
 }
 @media (forced-colors: active) {
   .segmented button[aria-pressed="true"] { outline: 2px solid Highlight; }
