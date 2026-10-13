@@ -130,6 +130,28 @@ def setup(tmp_path):
     registry.close()
 
 
+@pytest.mark.parametrize('versions, variant', [(('yellow', 'yellow'), 'yellow'), (('red', 'yellow'), 'red'),
+                                               (('yellow', 'gold'), 'yellow'), (('red', 'blue'), 'red')])
+def test_cable_worker_reads_yellow_maps_only_when_every_gen1_side_is_yellow(setup, monkeypatch, versions, variant):
+    from pokesim.app import coordinator as module
+    from pokesim.game_data import VARIANT_ENV
+    c, registry = setup.coordinator, setup.registry
+    participants = []
+    for index, version in enumerate(versions):
+        registry.add_rom(version + '-rom', 'sha-' + version, version)
+        participants.append(registry.create(f'{version} {index}', version + '-rom', {}, identifier())['id'])
+    seen = {}
+    def popen(command, **kwargs):
+        seen.update(kwargs['env'])
+        raise OSError('stop before running')
+    monkeypatch.setattr(module.subprocess, 'Popen', popen)
+    monkeypatch.setenv(VARIANT_ENV, 'yellow' if variant == 'red' else 'red')
+    row = {'id': identifier(), 'plan': {'attempt_id': identifier(), 'participants': participants}}
+    with pytest.raises(OSError):
+        Coordinator._run_cable(c, row, {})
+    assert seen[VARIANT_ENV] == variant
+
+
 def test_same_request_is_idempotent_and_different_selection_is_rejected(setup):
     c = setup.coordinator
     row = c.propose(setup.data)

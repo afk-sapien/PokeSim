@@ -18,6 +18,7 @@ import threading
 import time
 
 from ..checkpoints import CheckpointStore
+from ..game_data import VARIANT_ENV
 from . import trade_settings
 from .registry import digest, identifier, validate_id
 from ..individual import find, legacy
@@ -670,6 +671,10 @@ class Coordinator:
         command += ['--plan', str(plan_path), '--out', str(output), '--watch-parent']
         env = os.environ.copy()
         env['GAME_DATA_DIR'] = str(self.manager.assets.game_data_dir)
+        # The worker reads one set of Gen I maps for both sides: Yellow's when every Gen I side is Yellow.
+        gen1 = [self.registry.adventure(aid)['version'] for aid in row['plan']['participants']]
+        gen1 = [version for version in gen1 if version in {'red', 'blue', 'yellow'}]
+        env[VARIANT_ENV] = 'yellow' if gen1 and all(version == 'yellow' for version in gen1) else 'red'
         if not getattr(sys, 'frozen', False):
             env['PYTHONPATH'] = str(Path(__file__).parents[2]) + os.pathsep + env.get('PYTHONPATH', '')
         messages = deque(maxlen=100)
