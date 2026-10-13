@@ -72,6 +72,16 @@ def matching(rows, key):
     return [mon for mon in rows if individual.same(identity(mon), key)]
 
 
+def legacy_lock(preferences, mon):
+    """Whether a lock still stored under this Pokémon's older trainer and DV key answers to it.
+
+    The upgrade leaves such a key where it is when it fits two species or the collection could not
+    be read yet. A lock fails safe, so it keeps every Pokémon it could mean.
+    """
+    old = signature(mon)
+    return bool(old) and (preferences.get(old) or {}).get('state') in ('locked', 'withdrawn')
+
+
 def upgrade(db, mons):
     """Move trade settings stored under an older trainer and DV key to the family key, once.
 
@@ -149,7 +159,7 @@ def apply(payload, preferences):
             mon['trade_ambiguous_reason'] = ambiguity(mon, groups[key])
         raw = preferences.get(key, {}).get('state', AUTO)
         state = LEGACY.get(raw, raw)
-        mon['trade_preference'] = state if state in NAMES else AUTO
+        mon['trade_preference'] = KEEP if legacy_lock(preferences, mon) else state if state in NAMES else AUTO
         mon['trade_setting'] = name(mon['trade_preference'])
         mon['trade_locked'] = mon['trade_preference'] == KEEP
     return {**payload, 'party': party,

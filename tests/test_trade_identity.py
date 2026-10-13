@@ -97,10 +97,10 @@ def test_saved_settings_move_to_the_new_key_only_when_unambiguous(tmp_path):
     # Onix was the only Pokémon with its trainer and DVs, so its setting follows it.
     assert saved[preferences.identity(onix)]['state'] == preferences.FIRST
     assert alone not in saved
-    # Rattata and Pidgey shared the old key, so neither inherits Keep and it is left alone.
+    # Rattata and Pidgey shared the old key, so it is left alone. A lock fails safe, so it keeps both.
     assert saved[shared]['state'] == preferences.KEEP
     applied = rows(collection(rattata, pidgey, onix), saved)
-    assert [mon['trade_preference'] for mon in applied] == [preferences.AUTO, preferences.AUTO, preferences.FIRST]
+    assert [mon['trade_preference'] for mon in applied] == [preferences.KEEP, preferences.KEEP, preferences.FIRST]
     # The move runs once per process.
     store.upgrade_trade_preferences(lambda: pytest.fail('ran twice'))
     store.close()

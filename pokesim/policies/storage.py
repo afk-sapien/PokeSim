@@ -6,7 +6,7 @@ from .collection import Collection, held_count
 from .team import release_target, reserve_to_deposit
 from . import league_rotation
 from ..strategy_data import SPECIES
-from ..trade.preferences import identity
+from ..trade.preferences import identity, legacy_lock
 
 
 FIELD_MOVE_GOALS = {'party_cut': 15, 'party_surf': 57, 'party_strength': 70}
@@ -33,7 +33,8 @@ class StorageController:
             protected.add(project['give'])
         # Nothing is reserved without trade preferences, so the PC rows are only read when some exist.
         reserved = {(mon['box'], mon['position']) for mon in snapshot.storage_entries()
-                    if preferences.get(identity(mon), {}).get('state') in ('offered', 'locked')} if preferences else set()
+                    if preferences.get(identity(mon), {}).get('state') in ('offered', 'locked')
+                    or legacy_lock(preferences, mon)} if preferences else set()
         return release_target(snapshot, protected, reserved | set(avoid))
 
     @staticmethod

@@ -306,3 +306,28 @@ def test_preference_endpoint_reports_a_stopped_or_busy_adventure_as_conflict(gam
     response = client.post('/api/trading/preferences', json={'key': 'any', 'state': 'keep'})
     assert response.status_code == 409
     assert response.json()['detail'] == str(error)
+
+
+@pytest.mark.parametrize('current', [None, 'auto', 'offered'])
+def test_a_lock_left_under_an_older_key_still_locks(current):
+    # An older release stored the lock under the trainer and DV key, and the upgrade left it there.
+    data = payload()
+    mon = data['storage']['pokemon'][0]
+    choices = {preferences.signature(mon): {'state': 'locked'}}
+    if current:
+        choices[preferences.identity(mon)] = {'state': current}
+    rows = preferences.apply(data, choices)['storage']['pokemon']
+    assert rows[0]['trade_locked'] and rows[0]['trade_setting'] == 'keep'
+    assert not rows[1]['trade_locked']
+    red = normal(data, choices)
+    assert preferences.identity(mon) not in {partner.trade_key for partner in red.tradeable}
+    assert not routine.proposals([red, normal(payload('blue', ZUBAT))], allow_last_copies=True)
+
+
+def test_a_lock_left_under_an_older_key_keeps_the_partner_from_release(monkeypatch):
+    from pokesim.policies import storage
+    rows = [{'box': 1, 'position': i, 'species': 133, 'trainer_id': 100, 'dvs': [i + 1] * 5} for i in range(2)]
+    snapshot = Mock(storage_entries=lambda: rows)
+    monkeypatch.setattr(storage, 'release_target', lambda snapshot, protected, reserved: reserved)
+    choices = {preferences.signature(rows[0]): {'state': 'locked'}}
+    assert storage.StorageController.release_target(snapshot, {}, choices) == {(1, 0)}
