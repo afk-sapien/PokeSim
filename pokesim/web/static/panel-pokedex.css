@@ -47,7 +47,7 @@
 /* ---- filter strip ------------------------------------------------------
    Pinned under the rail on wide screens so a filter is always one reach
    away while scrolling 151 cards. Label over control, 44px targets. It sits
-   flush against the rail's lip: a gap between them showed cards sliding past. */
+   flush against the rail's bottom edge: a gap between them showed cards sliding past. */
 .filters {
   position: sticky;
   top: var(--rail-h, 0px);

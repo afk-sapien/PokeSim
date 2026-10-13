@@ -32,8 +32,7 @@
       const phone = matchMedia('(max-width: 640px)').matches
       const hidden = phone && stacked ? nav.offsetTop : 0
       root.style.setProperty('--rail-top', `${-hidden}px`)
-      // 4px is the machined lip under the rail.
-      root.style.setProperty('--rail-h', `${rail.offsetHeight - hidden + 4}px`)
+      root.style.setProperty('--rail-h', `${rail.offsetHeight - hidden}px`)
     }
     new ResizeObserver(measure).observe(rail)
     addEventListener('resize', measure)
