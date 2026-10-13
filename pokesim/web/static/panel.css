@@ -623,6 +623,7 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   font: var(--f-micro) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
   color: var(--bezel-ink);
+  text-transform: uppercase;
 }
 .bezel-head h2 {
   flex: 1;
@@ -639,6 +640,7 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   flex: none;
   font: var(--f-label) / 1 var(--font-mono);
   letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--bezel-ink);
   font-variant-numeric: tabular-nums;
 }
