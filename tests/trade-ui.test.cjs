@@ -14,6 +14,7 @@ function ui(overrides = {}, mon = {}) {
       if (options?.method === 'POST') {
         const {state} = JSON.parse(options.body)
         if (state === 'broken') return {ok:false, json:async () => ({detail:'This Pokémon left the collection.'})}
+        if (state === 'garbled') return {ok:false, json:async () => { throw new SyntaxError('Unexpected token <') }}
         status.offers[0] = {...status.offers[0], setting:state, listed:state !== 'keep'}
       }
       return {ok:true,json:async () => status}
@@ -86,4 +87,13 @@ test('the saved setting shows under its own row only', async () => {
   assert.match(view.api.control('partner'), /<span class="trade-saved">Never trade\. Never traded automatically\. You can still pick it by hand\.<\/span>$/)
   await view.api.change({value:'broken', dataset:{tradeKey:'partner', tradeSetting:'keep'}})
   assert.match(view.api.control('partner'), /class="trade-saved is-error">This Pokémon left the collection/)
+})
+
+test('an error page that is not JSON shows a readable message', async () => {
+  const view = ui()
+  await view.api.refresh()
+  await view.api.change({value:'garbled', dataset:{tradeKey:'partner', tradeSetting:'auto'}})
+  const html = view.api.control('partner')
+  assert.match(html, /class="trade-saved is-error">Could not save this setting\.</)
+  assert.doesNotMatch(html, /Unexpected token/)
 })

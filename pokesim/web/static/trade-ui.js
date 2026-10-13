@@ -56,7 +56,8 @@
     try {
       const response = await PokeSim.fetch('/api/trading/preferences', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({key: control.dataset.tradeKey, state})})
-      const result = await response.json()
+      // A proxy or crashed server can answer with an HTML page, which is not JSON.
+      const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not save this setting.')
       message = messages[state] || 'Setting saved.'
     } catch (failure) {
