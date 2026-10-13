@@ -297,3 +297,12 @@ def test_lock_mutations_respect_view_only_and_exchange_holds(game, monkeypatch, 
     store.set('trade_hold', {'id': '123', 'phase': 'prepared'})
     assert client.post('/api/trading/preferences', json=body).status_code == 409
     assert store.trade_preferences()[key]['state'] == 'locked'
+
+
+@pytest.mark.parametrize('error', [RuntimeError('The adventure is not running'), TimeoutError('The adventure is busy')])
+def test_preference_endpoint_reports_a_stopped_or_busy_adventure_as_conflict(game, error):
+    client, _, emu = game
+    emu.set_trade_preference.side_effect = error
+    response = client.post('/api/trading/preferences', json={'key': 'any', 'state': 'keep'})
+    assert response.status_code == 409
+    assert response.json()['detail'] == str(error)

@@ -369,7 +369,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             raise HTTPException(403, 'This instance is view-only')
         try:
             emu.set_trade_preference(choice.key, choice.state)
-        except ValueError as error:
+        except (ValueError, RuntimeError, TimeoutError) as error:
             raise HTTPException(409, str(error)) from error
         return {'ok': True}
 
