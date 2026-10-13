@@ -35,11 +35,19 @@ def evolved_species(raw, data):
                  if raw[0] == species and raw[1] == data.items[item]), plain.get(raw[0], raw[0]))
 
 
-def available_trade_item(data, species, held_item, inventory, *, replace_held=False):
+def available_trade_item(data, species, held_item, inventory, *, replace_held=False, held_species=()):
+    """The bag item to give ``species`` so it evolves on arrival, or None.
+
+    Each cartridge has a single King's Rock, Metal Coat, Dragon Scale or Up-Grade. When this
+    cartridge already holds the evolved species, that copy can travel instead, so the item
+    stays in the bag for an evolution nobody holds yet.
+    """
     if held_item and not replace_held:
         return None
     for evolution in data.species[species]['evolutions']:
         if evolution['method'] == 'trade' and evolution['requirements'][0] != '-1':
+            if int(evolution['species']) in held_species:
+                continue
             item = data.items[evolution['requirements'][0]]
             if inventory.get(item, 0) and held_item != item:
                 return item

@@ -110,7 +110,8 @@ def offers(emu, payload):
     for mon in stored:
         if _kept(mon, stock):
             continue
-        equip = available_trade_item(emu.data, mon['species'], mon.get('held_item', 0), dict(snapshot.items))
+        equip = available_trade_item(emu.data, mon['species'], mon.get('held_item', 0), dict(snapshot.items),
+                                     held_species={row['species'] for row in party + stored if not row.get('egg')})
         raw = bytes([mon['species'], equip or mon.get('held_item', 0)])
         actual = next(member for member in snapshot.stored if member.box + 1 == mon['box'] and member.position + 1 == mon['position'])
         result.append({**mon, 'time_capsule_compatible': compatible(actual, emu.data), 'last_copy': held[mon['species']] == 1,

@@ -957,6 +957,17 @@ def test_trade_evolution_item_replacement_requires_an_explicit_request(real_data
     assert inventory == {coat: 1}
 
 
+def test_kings_rock_stays_in_the_bag_while_an_evolved_copy_can_travel(real_data):
+    from pokesim.gen2.cable_verification import available_trade_item
+    rock = real_data.items['KINGS_ROCK']
+    inventory = {rock: 1}
+    # Each cartridge has one King's Rock. Spending it on a second Slowking left Politoed unreachable.
+    assert available_trade_item(real_data, 79, 0, inventory) == rock
+    assert available_trade_item(real_data, 79, 0, inventory, held_species={79, 199}) is None
+    assert available_trade_item(real_data, 61, 0, inventory, held_species={61, 199}) == rock
+    assert available_trade_item(real_data, 61, 0, inventory, held_species={61, 186}) is None
+
+
 def test_trade_preparation_closes_the_pc_after_link_closed_text(real_data, monkeypatch):
     import time
     from pokesim.gen2 import preparation
@@ -2160,3 +2171,27 @@ def test_static_lead_is_the_sleeper_most_likely_to_land_sleep(real_data, monkeyp
     assert static_lead(policy, snapshot, 249, Goal).key == 'collection_static_lead'
     snapshot.party = [wigglytuff, feraligatr]
     assert static_lead(policy, snapshot, 249, Goal) is None
+
+
+def test_wild_carriers_are_hunted_for_the_kings_rock_once_the_bag_has_none(real_data):
+    from pokesim.gen2.collection import item_hunts, wanted
+    rock, scale = real_data.items['KINGS_ROCK'], real_data.items['DRAGON_SCALE']
+
+    def mon(species, item=0, box=0):
+        return SimpleNamespace(species=species, held_item=item, egg=False, box=box, position=0, dvs=(1, 2, 3, 4, 5))
+
+    stored = (mon(61), mon(79), mon(117), mon(199), mon(230))
+    owned = frozenset({60, 61, 62, 79, 80, 116, 117, 199, 230})
+    snapshot = SimpleNamespace(party=(), stored=stored, items=(), owned=owned)
+    policy = SimpleNamespace(data=real_data, demand={}, collection={})
+    # The cartridge's only King's Rock went to Slowking, so Politoed needs a wild Poliwhirl's.
+    assert item_hunts(policy, snapshot) == {61: rock}
+    assert wanted(policy, snapshot, 61) and not wanted(policy, snapshot, 79)
+    with_rock = SimpleNamespace(party=(), stored=stored, items=((rock, 1),), owned=owned)
+    assert item_hunts(policy, with_rock) == {}
+    carrier = SimpleNamespace(party=(), stored=(*stored, mon(61, rock)), items=(), owned=owned)
+    assert item_hunts(policy, carrier) == {}
+    # A peer asking for Kingdra, with none here to send, starts a Dragon Scale hunt too.
+    asked = SimpleNamespace(data=real_data, demand={230: 1}, collection={})
+    no_kingdra = SimpleNamespace(party=(), stored=stored[:4], items=(), owned=owned)
+    assert item_hunts(asked, no_kingdra) == {61: rock, 117: scale}

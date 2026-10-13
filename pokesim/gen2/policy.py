@@ -1304,6 +1304,11 @@ class Policy:
         requested |= (catch_species in self.collection.get('prerequisites', ())
                       and not any(mon.species == catch_species and not mon.egg
                                   for mon in snapshot.party + snapshot.stored))
+        if snapshot.in_battle == 1:
+            # A wild carrier is caught only for the trade item it holds, never as one more copy.
+            from .collection import item_hunts
+            carried = item_hunts(self, snapshot).get(catch_species)
+            requested |= bool(carried) and mem.byte('wEnemyMonItem') == carried
         if catch_species == 201:
             # Each Unown letter counts separately in the Unown Pokédex, so catch every missing letter.
             from .collection import unown_letter, unown_missing

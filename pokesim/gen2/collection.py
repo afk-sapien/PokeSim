@@ -139,12 +139,47 @@ def held_counts(snapshot):
     return _HELD[2]
 
 
+# Wild partners whose rare held item (the second item in the ROM's base data, 2% of encounters)
+# is the one that evolves them over the cable. A cartridge has a single fixed King's Rock and
+# Dragon Scale, so once those are spent a wild carrier is the only way left to Politoed,
+# Slowking or Kingdra. Magnemite's Metal Coat is left out: it would have to move to Onix or Scyther.
+ITEM_CARRIERS = {61: ('KINGS_ROCK', 186), 79: ('KINGS_ROCK', 199), 117: ('DRAGON_SCALE', 230)}
+_ITEM_HUNTS = [None, None]
+
+
+def item_hunts(policy, snapshot):
+    """Carrier species to catch for their held trade item, as {species: item}.
+
+    A carrier is wanted while its evolution is missing here, or a peer asks for it and no copy
+    is here to send, and neither the bag nor a stored partner already holds the item.
+    """
+    demand = getattr(policy, 'demand', None) or {}
+    party, stored = tuple(getattr(snapshot, 'party', ())), tuple(getattr(snapshot, 'stored', ()))
+    items, owned = tuple(getattr(snapshot, 'items', ())), frozenset(getattr(snapshot, 'owned', ()))
+    key = (party, stored, items, owned, tuple(sorted(demand.items())))
+    if _ITEM_HUNTS[0] == key:
+        return _ITEM_HUNTS[1]
+    data, bag = getattr(policy, 'data', None), dict(items)
+    held = Counter(mon.species for mon in party + stored if not mon.egg)
+    carried = {(mon.species, getattr(mon, 'held_item', 0)) for mon in party + stored if not mon.egg}
+    result = {}
+    for species, (name, target) in ITEM_CARRIERS.items():
+        item = getattr(data, 'items', {}).get(name)
+        if item is None or bag.get(item) or (species, item) in carried:
+            continue
+        if target not in owned or demand.get(target) and not held[target]:
+            result[species] = item
+    _ITEM_HUNTS[:] = [key, result]
+    return result
+
+
 def wanted(policy, snapshot, species):
     held = held_counts(snapshot)[species]
     return (species not in snapshot.owned
             or species in policy.collection.get('prerequisites', ()) and not held
             or held < policy.demand.get(species, 0) + 1 and bool(policy.demand.get(species))
-            or species == UNOWN and bool(unown_missing(policy, snapshot)))
+            or species == UNOWN and bool(unown_missing(policy, snapshot))
+            or species in item_hunts(policy, snapshot))
 
 
 def lapras(policy, snapshot, mem, Goal):
@@ -395,8 +430,9 @@ def journey(policy, snapshot, mem, Goal):
             if mid not in distances:
                 route = policy.nav.route(snapshot.map, mid)
                 distances[mid] = len(route) if route is not None else 9999
+        carriers = item_hunts(policy, snapshot)
         ranked = sorted(groups.items(), key=lambda pair: (not bool(policy.demand.get(pair[0][2])
-                         or pair[0][2] in state['prerequisites']),
+                         or pair[0][2] in state['prerequisites'] or pair[0][2] in carriers),
                          distances[pair[0][0]] + 50 / max(1, pair[1]['chance'])))
         for (mid, method, species, rare), row in ranked:
             if choices and len(choices) >= 12:
@@ -410,7 +446,8 @@ def journey(policy, snapshot, mem, Goal):
                 continue
             attempted = state.get('attempts', {}).get(str(species), -100000)
             recent = policy.decisions - attempted < 18000
-            choices.append((not bool(policy.demand.get(species) or species in state['prerequisites']),
+            choices.append((not bool(policy.demand.get(species) or species in state['prerequisites']
+                                     or species in carriers),
                             species in snapshot.owned, recent,
                             len(route) + 50 / max(1, row['chance']), species, mid, method, row))
         if choices:
@@ -504,6 +541,9 @@ def hunt(policy, snapshot, Goal):
         x, y, face = next((point for point in points
                            if region in policy.nav.regions.memberships(mid, point[:2], True, True)), points[0])
     name = data.species[target['species']]['name']
+    item = item_hunts(policy, snapshot).get(target['species'])
+    if item and target['species'] in snapshot.owned:
+        name += ' holding ' + data.item_names.get(item, 'its item')
     key = 'collection_fish' if method.endswith('rod') else 'collection_field' if method in {'headbutt', 'rock smash'} else 'collection_hunt'
     return Goal(key,
                 f'Search for {name} in {data.maps[mid]["name"]}', data.maps[mid]['constant'], x, y, face)

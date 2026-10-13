@@ -172,8 +172,9 @@ class Preparation:
             needs_storage = location != 'party' or state.get('time_capsule') and incompatible is not None
         if location == 'party' and not state.get('time_capsule') and mon is not None:
             from .cable_verification import available_trade_item
+            held = {member.species for member in [*snapshot.party, *snapshot.stored] if not member.egg}
             item = available_trade_item(data, mon.species, mon.held_item, dict(snapshot.items),
-                                        replace_held=state.get('replace_held', False))
+                                        replace_held=state.get('replace_held', False), held_species=held)
             if item:
                 self.menu = Give(item, slot)
                 return Action(None, 0, 24)

@@ -13,7 +13,7 @@ def boxed(species, position, **extra):
 
 @pytest.fixture
 def emu(monkeypatch):
-    monkeypatch.setattr(trading, 'available_trade_item', lambda *args: 0)
+    monkeypatch.setattr(trading, 'available_trade_item', lambda *args, **kwargs: 0)
     monkeypatch.setattr(trading, 'compatible', lambda *args: True)
     monkeypatch.setattr(trading, 'evolved_species', lambda *args: None)
     monkeypatch.setattr(breeding, 'breeding_stock', lambda data, species: {2})
