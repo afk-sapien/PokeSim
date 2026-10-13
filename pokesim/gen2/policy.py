@@ -962,7 +962,10 @@ class Policy:
                         goal = self.person(snapshot, 'buy_balls', 'Restock adventure supplies', entry['constant'], shop['script'])
                         walk = self.nav.regions.route(snapshot, mid, [(goal.x, goal.y)],
                             cut=bool(snapshot.badges & 2), surf=bool(snapshot.badges & 8))
-                        if walk is None:
+                        # Shopping is switched off inside Ice Path, so a walk through it dropped the shop at
+                        # the cave mouth, the next goal walked back out, and the shop was chosen again.
+                        if walk is None or any(self.data.maps[node[0]]['constant'].startswith('ICE_PATH_')
+                                               for _, node, _, _ in walk):
                             continue
                         choices.append((priority, 0 if self.shop_location == (mid, shop['script'], item) else 1,
                                         len(walk), mid, item, shop['script'], amount))
