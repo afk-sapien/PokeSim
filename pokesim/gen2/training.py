@@ -33,11 +33,33 @@ def happiness_levels(friendship):
     return levels
 
 
-def requested(data, snapshot, demand, species):
-    """Whether cable demand wants another evolved copy of a family with no wild source."""
+def requested(data, snapshot, demand, species, *, item=False):
+    """Whether cable demand wants another evolved copy of a family with no wild source.
+
+    An evolution stone makes a copy for a peer even when the family has a wild source, if no copy
+    here could travel: automatic trading keeps a trained partner, so a single veteran never leaves.
+    """
     from .breeding import single_source
-    held = sum(mon.species == species and not mon.egg for mon in snapshot.party + snapshot.stored)
-    return species in single_source(data) and bool(demand.get(species)) and held <= demand[species]
+    copies = [mon for mon in snapshot.party + snapshot.stored if mon.species == species and not mon.egg]
+    if not demand.get(species):
+        return False
+    if species in single_source(data) and len(copies) <= demand[species]:
+        return True
+    return item and not any(spare_copy(data, mon) for mon in copies)
+
+
+def spare_copy(data, mon):
+    """Whether automatic trading could offer this copy, the rules of trading._kept that a snapshot shows."""
+    return (mon.box is not None and not mon.shiny and tuple(mon.dvs) != (15,) * 5
+            and mon.held_item != data.items['EXP_SHARE'] and sum(mon.stat_exp) < 20000)
+
+
+def stone_needed(data, snapshot, item, keep):
+    """Whether ``item`` would evolve another partner here into an entry this cartridge still lacks."""
+    return any(evo['method'] == 'item' and data.items.get(evo['requirements'][0]) == item
+               and evo['species'] not in snapshot.owned and mon is not keep
+               for mon in snapshot.party + snapshot.stored if not mon.egg
+               for evo in data.species[mon.species]['evolutions'])
 
 
 def wrong_time(evo, current_time):
@@ -58,7 +80,8 @@ def projects(data, snapshot, current_time, demand=None):
             continue
         for evo in data.species[mon.species]['evolutions']:
             if (evo['species'] in snapshot.owned and evo['species'] not in needed
-                    and not requested(data, snapshot, demand, evo['species']) or evo['method'] == 'trade'):
+                    and not requested(data, snapshot, demand, evo['species'], item=evo['method'] == 'item')
+                    or evo['method'] == 'trade'):
                 continue
             if mon.level == 100 and evo['method'] != 'item':
                 continue
@@ -66,6 +89,10 @@ def projects(data, snapshot, current_time, demand=None):
             if evo['method'] == 'item':
                 item = data.items[requirements[0]]
                 if not inventory.get(item):
+                    continue
+                # A stone spent on a peer's request must not be the one this cartridge's own entry needs.
+                if (evo['species'] in snapshot.owned and inventory[item] < 2
+                        and stone_needed(data, snapshot, item, mon)):
                     continue
                 cost, level = 0, mon.level
             else:
@@ -109,7 +136,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     demand = getattr(policy, 'demand', {})
     if (project and not project.get('terminal') and project['target'] in snapshot.owned
             and project['target'] not in prerequisites(data, snapshot)
-            and not requested(data, snapshot, demand, project['target'])):
+            and not requested(data, snapshot, demand, project['target'], item=bool(project.get('item')))):
         state['training'] = project = None
     if project and standing_down(policy, train_key(project['identity'])):
         state['training'] = project = None

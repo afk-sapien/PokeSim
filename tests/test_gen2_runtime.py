@@ -442,6 +442,30 @@ def test_training_uses_matching_time_for_eevee(real_data):
     assert {row[4] for row in projects(real_data, snapshot, 'night')} == {197}
 
 
+def test_leaf_stone_evolves_a_peer_request_when_the_only_copy_is_a_kept_veteran(real_data):
+    from pokesim.gen2.training import projects
+    stone = real_data.items['LEAF_STONE']
+
+    def mon(species, box, stat_exp, level=40):
+        return SimpleNamespace(species=species, egg=False, level=level, experience=100000, friendship=70,
+                               box=box, trainer_id=1, dvs=(9, 9, 9, 9, 9), shiny=False, held_item=0,
+                               stat_exp=(stat_exp,) * 5, position=0)
+    veteran, seed = mon(103, 6, 18000), mon(102, 14, 0, level=23)
+    snapshot = SimpleNamespace(items=[(stone, 1)], party=(), stored=(veteran, seed), owned={102, 103})
+    # Without a request the owned entry needs no stone.
+    assert not projects(real_data, snapshot, 'day')
+    # Peers ask for Exeggutor, and the only copy here is a trained partner automatic trading keeps.
+    rows = projects(real_data, snapshot, 'day', {103: 2})
+    assert [(row[4], row[5]) for row in rows] == [(103, stone)]
+    # A spare copy can travel instead, so the stone stays in the bag.
+    spare = mon(103, 7, 0)
+    snapshot.stored = (veteran, seed, spare)
+    assert not projects(real_data, snapshot, 'day', {103: 2})
+    # The stone is kept for this cartridge's own missing Vileplume.
+    snapshot.stored = (veteran, seed, mon(44, 3, 0, level=30))
+    assert {row[4] for row in projects(real_data, snapshot, 'day', {103: 2})} == {45}
+
+
 def test_real_move_and_machine_names_do_not_shift_at_alias_constants(real_data):
     assert real_data.moves[19]['name'] == 'Fly'
     assert real_data.items['HM02'] == real_data.items['HM_FLY'] == 244
