@@ -68,11 +68,17 @@ def damage_division_safe(move_id, attacker, defender):
 def damage(move_id, attacker, defender):
     """Expected connected-hit damage before accuracy, including common special moves."""
     move = MOVES.get(move_id)
-    if not move or not move["power"]:
+    if not move:
         return 0.0
     name, effect = move["name"], move["effect"]
+    # Night Shade's data power is 0, so the level-damage case comes before the power check.
     if name in ("SEISMIC_TOSS", "NIGHT_SHADE"):
         return float(attacker.level)
+    if not move["power"]:
+        return 0.0
+    # Generation I Dream Eater does nothing unless the target is asleep (status bits 0-2).
+    if effect == "DREAM_EATER_EFFECT" and not getattr(defender, "status", 0) & 7:
+        return 0.0
     factor = effectiveness(move["type"], defender.types)
     if not factor:
         return 0.0

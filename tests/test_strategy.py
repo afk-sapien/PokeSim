@@ -51,6 +51,19 @@ def test_generation_one_rules_and_move_choice():
     assert ranked_moves(replace(me, pp=(35, 0, 40, 0)), onix)[0][1] != 1
 
 
+def test_gengar_uses_night_shade_and_saves_dream_eater_for_sleeping_targets():
+    # Lick, Dream Eater, Night Shade, Hypnosis against a wild Gastly in Pokemon Tower.
+    names = {MOVES[mid]['name']: mid for mid in MOVES}
+    gengar = mon(species=0x0E, level=41, hp=120, max_hp=120, types=(8, 3), special=110,
+                 moves=(names['LICK'], names['DREAM_EATER'], names['NIGHT_SHADE'], names['HYPNOSIS']),
+                 pp=(30, 15, 15, 20))
+    gastly = mon(species=0x19, level=20, hp=50, max_hp=50, types=(8, 3))
+    assert damage(names['NIGHT_SHADE'], gengar, gastly) == 41
+    assert damage(names['DREAM_EATER'], gengar, gastly) == 0
+    assert damage(names['DREAM_EATER'], gengar, replace(gastly, status=2)) > 0
+    assert ranked_moves(gengar, gastly)[0][1] == 2
+
+
 def test_catching_conserves_balls_and_master_ball():
     me = mon(hp=100, max_hp=100, defense=100)
     enemy = mon(species=0x54, hp=3, max_hp=40, level=3, moves=(33,), pp=(35,))
