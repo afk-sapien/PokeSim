@@ -430,10 +430,10 @@ test('a refused unlock goes back to a lock shown only by trade_locked', async ()
   await view.ready()
   view.server.offline = true    // The refresh after the refusal cannot repaint the lock.
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
-  assert.match(view.element('#pc-detail-body').innerHTML, /aria-pressed="true"/)
+  assert.match(view.element('#pc-detail-body').innerHTML, /data-locked="true"/)
   await view.element('#pc-detail-body').onclick({target: {closest: () => toggle}})
   assert.deepEqual(JSON.parse(view.calls.find(call => call.options?.method === 'POST').options.body), {key: 'k', state: 'auto'})
-  assert.match(view.element('#pc-detail-body').innerHTML, /aria-pressed="true"/)
+  assert.match(view.element('#pc-detail-body').innerHTML, /data-locked="true"/)
   assert.match(view.element('#pc-detail-body').innerHTML, /An exchange is in progress\./)
 })
 
