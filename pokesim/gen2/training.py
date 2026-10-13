@@ -273,7 +273,12 @@ def arrive(policy, snapshot):
         elif key == 'collection_take':
             policy.menu = Take(state['take_slot'])
         elif key == 'collection_evolve_item':
-            policy.menu = Remedy(project['item'], slot, dict(snapshot.items)[project['item']])
+            count = dict(snapshot.items).get(project['item'])
+            if not count:
+                # The stone was used or sold on the way, so this evolution has to be planned again.
+                state['training'] = None
+                return None
+            policy.menu = Remedy(project['item'], slot, count)
         else:
             return 'wait' if key == 'collection_train' else None
         return 'wait'

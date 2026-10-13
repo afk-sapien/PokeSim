@@ -227,3 +227,22 @@ def test_a_refused_iron_tail_lesson_is_not_asked_for_again_at_once(teaching_poli
     with pytest.raises(Onward):
         policy.step(snapshot, ZEROS)
     assert policy.menu is None
+
+
+def test_a_stone_gone_before_the_evolution_drops_the_project(real_data):
+    """The evolution step read the stone's count with a lookup that raised once the stone was gone."""
+    from pokesim.gen2.menus import Remedy
+    from pokesim.gen2.training import arrive, identity, journey
+    from pokesim.gen2.policy import Goal
+    gloom = SimpleNamespace(species=44, name='Gloom', level=40, experience=100000, egg=False,
+                            box=None, trainer_id=1, dvs=(5,) * 5, held_item=0)
+    stone = (real_data.items['SUN_STONE'], 1)
+    snapshot = SimpleNamespace(party=(gloom,), stored=(), owned=set(range(1, 252)) - {182}, items=(stone,),
+                               map=real_data.map_ids['GOLDENROD_CITY'], x=1, y=1)
+    policy = SimpleNamespace(data=real_data, collection={}, menu=None)
+    policy.goal = journey(policy, snapshot, SimpleNamespace(byte=lambda name: 1), Goal)
+    assert policy.goal.key == 'collection_evolve_item' and policy.collection['training']['identity'] == identity(gloom)
+    assert arrive(policy, snapshot) == 'wait' and isinstance(policy.menu, Remedy)
+    policy.menu, snapshot.items = None, ()
+    assert arrive(policy, snapshot) is None
+    assert policy.menu is None and policy.collection['training'] is None
