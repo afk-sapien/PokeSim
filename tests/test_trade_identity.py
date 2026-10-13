@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from pokesim import individual
+from pokesim import store as store_module
 from pokesim.store import Store
 from pokesim.strategy_data import SPECIES
 from pokesim.trade import preferences
@@ -106,12 +107,18 @@ def test_saved_settings_move_to_the_new_key_only_when_unambiguous(tmp_path):
     store.close()
 
 
-def test_settings_wait_for_a_fully_readable_collection(tmp_path):
+def test_settings_wait_for_a_fully_readable_collection(tmp_path, monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(store_module.time, 'monotonic', lambda: clock[0])
     store = Store(tmp_path)
     onix = gen1(ONIX)
     store.set_trade_preference(preferences.signature(onix), {'state': preferences.KEEP})
     store.upgrade_trade_preferences(lambda: [onix, {'species': ONIX, 'box': 1}])
     assert preferences.signature(onix) in store.trade_preferences()
+    # Every observed frame offers the move, but it waits before reading the collection again.
+    clock[0] += store_module.TRADE_KEY_RETRY_SECONDS - 1
+    store.upgrade_trade_preferences(lambda: pytest.fail('retried too soon'))
+    clock[0] += 1
     store.upgrade_trade_preferences(lambda: [onix])
     assert store.trade_preferences() == {preferences.identity(onix): {'state': preferences.KEEP}}
     store.close()

@@ -17,6 +17,9 @@ from .checkpoints import CheckpointStore, compress_state
 
 log = logging.getLogger(__name__)
 
+# Seconds between tries to move older trade settings while the collection cannot be read in full.
+TRADE_KEY_RETRY_SECONDS = 30
+
 OBSERVATION_READ_KEYS = frozenset({
     'cartridge-steps-v1', 'mew-returns-v1', 'pokesim-mew-v1', 'legendary-returns-v1',
     'step-events-v1', 'pokedex-milestones-v1', 'shiny-statistics-v1',
@@ -238,13 +241,18 @@ class Store:
         """Move trade settings saved under older trainer and DV keys, once per process.
 
         ``collection`` returns every held Pokémon record. It is only called until the move
-        has run, so the emulators can offer it on every observed frame.
+        has run, and at most once every TRADE_KEY_RETRY_SECONDS while it waits for a readable
+        collection, so the emulators can offer it on every observed frame.
         """
         if getattr(self, '_trade_keys_current', False):
+            return
+        now = time.monotonic()
+        if now < getattr(self, '_trade_keys_retry_at', 0):
             return
         from .trade.preferences import upgrade
         with self.lock, self.db:
             self._trade_keys_current = upgrade(self.db, collection())
+        self._trade_keys_retry_at = now + TRADE_KEY_RETRY_SECONDS
 
     def set_trade_preference(self, key, value):
         from .trade.preferences import LEGACY, PREFIX
