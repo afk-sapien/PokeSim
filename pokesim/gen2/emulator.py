@@ -260,7 +260,7 @@ class Emulator:
             try:
                 self._load_state_file(path)
                 break
-            except (ValueError, OSError) as error:
+            except (ValueError, OSError, EOFError) as error:
                 errors.append(error)
                 log.exception('Cannot restore Gen II checkpoint %s', path.name)
         else:
@@ -640,7 +640,7 @@ class Emulator:
                     self._load_state_file(path)
                     restored = path
                     break
-                except (ValueError, OSError):
+                except (ValueError, OSError, EOFError):
                     log.exception('Cannot reload Gen II checkpoint %s', path.name)
         if restored:
             carry_over(self.policy, stalled)
@@ -794,7 +794,7 @@ class Emulator:
             if path:
                 try:
                     self._load_state_file(path)
-                except ValueError as error:
+                except (ValueError, OSError, EOFError) as error:
                     # A refused rewind (ownership barrier, other cartridge) must never end the adventure.
                     log.warning('Rewind to %s refused: %s', path.name, error)
         elif name == 'restart':
