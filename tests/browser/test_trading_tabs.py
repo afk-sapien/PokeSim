@@ -542,6 +542,11 @@ def test_pc_popup_lock_shows_on_the_grid_and_party(page, game, width):
     lock = page.get_by_role('button', name='Tradeable')
     lock.press('Space')
     expect(page.locator('#pc-detail .lock-toggle')).to_have_text('Locked')
+    # The label turns at once; the save lands a moment later.
+    for _ in range(50):
+        if any(value['state'] == 'locked' for value in store.trade_preferences().values()):
+            break
+        page.wait_for_timeout(100)
     assert any(value['state'] == 'locked' for value in store.trade_preferences().values())
     shoot(page, f'pc-lock-popup-{width}', full_page=False)
     page.keyboard.press('Escape')
