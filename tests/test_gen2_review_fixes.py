@@ -157,3 +157,73 @@ def test_arriving_at_the_rock_without_rock_smash_stands_down(real_data):
     policy.goal, policy.menu = SimpleNamespace(key='collection_release_rock'), None
     assert quests.arrive(policy, snapshot) == 'b'
     assert policy.menu is None and standing_down(policy, quests.RELEASE_ROCK_KEY)
+
+
+class Zeros:
+    """Work RAM that reads as all zeros."""
+
+    def __getitem__(self, key):
+        window = key[1] if isinstance(key, tuple) else key
+        return [0] * (window.stop - window.start)
+
+
+ZEROS = Zeros()
+
+
+class Onward(Exception):
+    """Raised once the policy walks past the teaching checks."""
+
+
+@pytest.fixture
+def teaching_policy(real_data, monkeypatch):
+    from pokesim.gen2 import contest, ruins, tower
+    from pokesim.gen2 import policy as module
+    from pokesim.gen2.policy import Goal, Policy
+    monkeypatch.setattr(module, 'update_world', lambda *args: None)
+    for part in (ruins, contest, tower):
+        monkeypatch.setattr(part, 'control', lambda *args: None)
+    policy = Policy(real_data, seed=1, starter='cyndaquil')
+    policy.naming.step = lambda snapshot, mem: None
+    policy.journey = lambda snapshot, mem: Goal('explore', 'Explore', 'NEW_BARK_TOWN', 1, 1)
+    policy.release_goal = lambda snapshot, mem: None
+    policy.level_lead = lambda snapshot: None
+    policy.nav.observe = lambda snapshot: None
+
+    def onward(snapshot):
+        raise Onward
+    policy.in_league = onward
+    return policy
+
+
+def teaching_snapshot(data, lead, *, events=(), items=(), badges=0):
+    return SimpleNamespace(started=True, valid=True, in_battle=0, hall_of_fame_count=0, map=data.map_ids['NEW_BARK_TOWN'],
+                           tiles=(' ' * 20,) * 18, text='', party=(lead,), event=lambda name: name in events,
+                           items=tuple(items), badges=badges, frame=1000, box_counts=(0,) * 14)
+
+
+def test_a_refused_hm_lesson_is_not_asked_for_again_at_once(teaching_policy, real_data):
+    from pokesim.gen2.menus import Teach
+    policy = teaching_policy
+    lead = SimpleNamespace(species=155, egg=False, moves=(33, 43, 0, 0))
+    snapshot = teaching_snapshot(real_data, lead, events={'EVENT_GOT_HM01_CUT'})
+    policy.step(snapshot, ZEROS)
+    assert policy.menu == Teach(15, 0)
+    policy.menu = None
+    policy.blocked[policy.task_key(Teach(15, 0))] = snapshot.frame + policy.RETRY_FRAMES
+    with pytest.raises(Onward):
+        policy.step(snapshot, ZEROS)
+    assert policy.menu is None
+
+
+def test_a_refused_iron_tail_lesson_is_not_asked_for_again_at_once(teaching_policy, real_data):
+    from pokesim.gen2.menus import Teach
+    policy = teaching_policy
+    lead = SimpleNamespace(species=25, egg=False, moves=(33, 0, 0, 0))
+    snapshot = teaching_snapshot(real_data, lead, items=[(real_data.items['TM23'], 1)], badges=128)
+    policy.step(snapshot, ZEROS)
+    assert policy.menu == Teach(231, 0)
+    policy.menu = None
+    policy.blocked[policy.task_key(Teach(231, 0))] = snapshot.frame + policy.RETRY_FRAMES
+    with pytest.raises(Onward):
+        policy.step(snapshot, ZEROS)
+    assert policy.menu is None

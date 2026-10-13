@@ -1085,7 +1085,11 @@ class Policy:
                             and not all(known in protected for known in mon.moves)),
                            key=lambda i: (len(protected.intersection(snapshot.party[i].moves)), i), default=None)
                 if slot is not None:
-                    self.menu = Teach(move, slot)
+                    teach = Teach(move, slot)
+                    if not self.allowed(teach, snapshot):
+                        # A refused lesson is retried later rather than asked for at every step.
+                        continue
+                    self.menu = teach
                     return Action(None, 0, 24)
                 compatible = [mon for mon in snapshot.party if not mon.egg
                               and move in self.data.species[mon.species]['machines']]
@@ -1101,10 +1105,12 @@ class Policy:
                                                 'MOVE_DELETERS_HOUSE', 'MoveDeleter')
                         break
         lead = snapshot.party[0] if snapshot.party else None
+        iron_tail = Teach(231, 0)
         if (lead and not lead.egg and snapshot.badges & 128 and self.data.items['TM23'] in dict(snapshot.items)
                 and 231 in self.data.species[lead.species]['machines']
-                and all(self.data.moves.get(move, {}).get('type', 0) in (0, 22) for move in lead.moves)):
-            self.menu = Teach(231, 0)
+                and all(self.data.moves.get(move, {}).get('type', 0) in (0, 22) for move in lead.moves)
+                and self.allowed(iron_tail, snapshot)):
+            self.menu = iron_tail
             return Action(None, 0, 24)
         if self.in_league(snapshot) and self.remedy(snapshot):
             return Action(None, 0, 24)
