@@ -224,8 +224,34 @@ class Emulator:
         self._clock_live = False
         self.tracker.attach(pb)
         self.steps.attach(pb)
-        StoreStock(self.data).attach(pb)
+        self.store_stock = StoreStock(self.data, champion=self._champion_catalogue)
+        self.store_stock.attach(pb)
         return pb
+
+    def _champion_catalogue(self):
+        """The planned Champion shop item for the clerk who opens the BUY list."""
+        from . import champion_shop
+        plan = self.policy.collection.get(champion_shop.PLAN)
+        return champion_shop.catalogue(self.data, plan, champion_shop.ready(self.store, self.data, self.steps.value))
+
+    def _champion_shop(self, snapshot):
+        """Start the walking countdowns, share ready offers and record landed purchases."""
+        from . import champion_shop
+        champion_shop.observe(self.store, snapshot, self.steps.value)
+        stock = getattr(self, 'store_stock', None)
+        purchases = list(stock.purchases) if stock else []
+        if stock:
+            stock.purchases.clear()
+        for item, count, price in purchases:
+            champion_shop.consume(self.store, self.data, item, self.steps.value)
+            plan = self.policy.collection.get(champion_shop.PLAN)
+            if plan and plan['item'] == item:
+                plan['bought'] = True
+            name = champion_shop.label(self.data, item)
+            self._event(Event('item', f'Bought {f"{count} × " if count > 1 else ""}{name}',
+                              f'Spent ₽{price * count:,} at the Goldenrod Dept. Store Champion counter. '
+                              'The purchase went through the cartridge BUY menu into the bag.', priority=3), snapshot)
+        self.policy.shop_offers = champion_shop.ready(self.store, self.data, self.steps.value)
 
     def _remember_clock(self, elapsed):
         """Keep the furthest clock reading, so no restart, reload or trade can go back before it."""
@@ -477,6 +503,7 @@ class Emulator:
         self.tracker.observe(snapshot)
         from .steps import observe_mew
         self.steps.flush()
+        self._champion_shop(snapshot)
         self.statistics.observe(snapshot)
         if not self.store.get('trade_hold') and not self.preparation and not self.manual_mode:
             from . import returns

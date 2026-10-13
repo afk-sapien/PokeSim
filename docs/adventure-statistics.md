@@ -190,6 +190,7 @@ Unavailable tracking is distinguished from a recorded zero. Unsupported cartridg
 do not install these hooks. The read-only `/api/statistics/activity` endpoint serves
 bounded species and item summaries without scanning action receipts on each refresh.
 
-Stats → Items also shows the Champion shop walking offers. Each million steps
+Stats → Items also shows the Champion shop walking offers (Gold, Silver and Crystal show them
+with **Extra store items** on, and name the Goldenrod counters). Each million steps
 earns one Master Ball purchase and one five-candy bundle purchase. These are
 paid offers, with separate countdowns that restart on purchase and no backlog.

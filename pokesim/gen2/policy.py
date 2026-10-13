@@ -63,6 +63,7 @@ class Policy:
         self.collection = {'target': None, 'attempts': {}}
         # Owned one-time encounters that a walking return brought back for another capture.
         self.returned = set()
+        self.shop_offers = set()
         self.demand = {}
         self.naming = Naming(seed)
         self.learning = False
@@ -1116,6 +1117,12 @@ class Policy:
                 and self.allowed(iron_tail, snapshot)):
             self.menu = iron_tail
             return Action(None, 0, 24)
+        if not self.in_league(snapshot) and not self.collection.get('tower') and not self.collection.get('contest'):
+            from .champion_shop import use as champion_use
+            task = champion_use(self, snapshot)
+            if task is not None and self.allowed(task, snapshot):
+                self.menu = task
+                return Action(None, 0, 24)
         if self.in_league(snapshot) and self.remedy(snapshot):
             return Action(None, 0, 24)
         well_item = (self.goal.key == 'collection_trade_item'
@@ -1277,6 +1284,11 @@ class Policy:
             if mon.egg or active is not None and slot != active:
                 continue
             names = ()
+            from .champion_shop import elixir
+            restore = elixir(self.data, snapshot, mon)
+            if restore:
+                self.menu = Remedy(restore, slot, items[restore])
+                return True
             if mon.hp == 0:
                 names = ('MAX_REVIVE', 'REVIVE')
             elif mon.hp < mon.max_hp * (0.55 if snapshot.in_battle else 0.8):

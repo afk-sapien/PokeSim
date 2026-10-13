@@ -99,6 +99,20 @@ Short of money, it runs the League for prize money first. With the setting off t
 its normal stock. Red and Blue need no such option because Champions can already buy Moon Stones,
 and their trade evolutions need no item.
 
+After the Hall of Fame the same setting opens the Gen II TM shop and Champion shop, ported from
+Red, Blue and Yellow. The Goldenrod 5F TM clerks also sell the 34 one-time TMs (not the mart or
+Game Corner TMs): TM01, 06, 07, 26, 27, 30 and 36 for ₽50,000, TM03, 16, 19, 22, 23, 24, 28, 35,
+42, 44 and 47 for ₽25,000 and the rest for ₽10,000. The 4F clerk sells a Master Ball (₽100,000) and
+five Rare Candies (₽25,000), each once per 1,000,000 steps, plus Elixir (₽5,000), Max Elixir
+(₽10,000), Leftovers and Lucky Egg (₽25,000 each, only while none is owned). Only the one item the
+adventure plans to buy is added to the list. A TM is bought only when a level 50+ partner gains
+over 8% level-100 Battle Power and is taught at once without forgetting an HM move. Rare Candies
+go to the partner they were bought for, a held item to a partner with empty hands, and Elixirs
+restore moves out of PP in the League. Every purchase keeps ₽20,000 in reserve. A price above
+₽65,535 is charged in full by a hook on the cartridge subtotal. PP Up is priced (₽25,000) but not
+bought yet, because the Core item shortcut does not recognise the Gen II move list it opens.
+Stats → Items shows the walking offers and where to buy.
+
 ## Validation
 
 The campaign, collection and trade evidence below was gathered on PyBoy 2.7.0 with
@@ -139,6 +153,7 @@ Recorded cartridge scenarios include:
 | Continuous collection with donors | One Crystal save reached all 251 registered entries through native catches, breeding, evolution, optional event features and verified Red, Blue, Gold and Silver exchanges. Imports include Articuno, Zapdos, Moltres, Mewtwo, Ho-Oh, Porygon2, Politoed, Slowking, Steelix, Kingdra, Scizor and Hitmontop. Gold caught both roaming beasts and transferred them to this Crystal save. Each exchange passed cartridge Continue, checkpoint restart and durable participant verification |
 | Game Corner | Native coin purchases, prize menus and League funding obtained Cubone, Wobbuffet, Pikachu and Porygon in Crystal. Gold obtained its 9,999-coin Porygon using native slot play for the balance above the coin purchase limit |
 | Extra store items | A fresh Gold copy with its Leaf Stone spent ran the League for funds, bought a Leaf Stone at Goldenrod 4F for 2100 and evolved Exeggcute, registering Exeggutor 0.46 game hours after loading. With the setting off the 4F list kept its five vitamins |
+| TM shop and Champion shop | A fresh copy of a Gold Champion save (money raised to ₽500,000 in RAM for the test) bought TM27 Return at Goldenrod 5F for ₽50,000 and taught it to Pidgeot over Agility, then TM26 Earthquake for Typhlosion over Headbutt. With TMs held back, it bought a Master Ball for ₽100,000 and five Rare Candies for ₽25,000 at 4F (Crobat rose from level 66 to 71), then a Lucky Egg for ₽25,000 that Pidgeot now holds |
 | Moon Stone | Collected the native Tohjo Falls item in all three games. Gold then selected Nidorina in the stone menu and evolved it into Nidoqueen |
 | Trade evolution items | Collected Up-Grade, King’s Rock and Dragon Scale in Gold, Silver and Crystal through native dialogue, Strength and item pickups |
 | Held trade evolution | Prepared Metal Coat for Steelix and King’s Rock for a Gold/Crystal exchange that produced Politoed and Slowking. A further Gold/Crystal exchange used Dragon Scale and Metal Coat to produce Kingdra and Steelix. All four results passed checkpoint restart, cartridge restart and durable commit/recovery checks |

@@ -119,7 +119,7 @@
         const progress = !shop.available ? 'Walking progress is unavailable for this cartridge.'
           : !shop.started ? 'Each countdown begins after becoming Champion.'
             : shop.offers.map(offer => `${offer.quantity} × ${offer.name}: ${offer.remaining ? offer.remaining.toLocaleString() + ' steps remaining' : 'ready to purchase'} (₽${offer.price.toLocaleString()})`).join(', ')
-        offers.textContent = `Champion shop: ${progress} Each offer holds one purchase and renews after another 1,000,000 steps. The automatic player buys when needed, with bag space and a ₽20,000 reserve.`
+        offers.textContent = `Champion shop: ${progress} Each offer holds one purchase and renews after another 1,000,000 steps. The automatic player buys when needed, with bag space and a ₽20,000 reserve.${shop.counter ? ` ${shop.counter}.` : ''}`
       }
       const date = value => new Date(value * 1000).toLocaleString(undefined, {dateStyle: 'medium'})
       let coverage = data.started_at ? `Actions since ${date(data.started_at)}. Earlier activity is not estimated.`

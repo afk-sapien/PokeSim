@@ -467,6 +467,10 @@ def journey(policy, snapshot, mem, Goal):
     goal = store(policy, snapshot, Goal)
     if goal:
         return goal
+    from .champion_shop import journey as champion_shop
+    goal = champion_shop(policy, snapshot, Goal)
+    if goal:
+        return goal
     from .breeding import hatching
     goal = hatching(policy, snapshot, Goal)
     if goal:
@@ -677,6 +681,10 @@ def arrive(policy, snapshot):
         return result
     from .store_stock import arrive as store
     result = store(policy, snapshot)
+    if result is not None:
+        return result
+    from .champion_shop import arrive as champion_shop
+    result = champion_shop(policy, snapshot)
     if result is not None:
         return result
     from .training import arrive as train

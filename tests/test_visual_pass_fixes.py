@@ -81,6 +81,16 @@ def test_gen2_activity_route_uses_the_gen2_ledger(tmp_path):
     assert len(result['pokemon']) == 251 and result['champion_shop'] is None
 
 
+def test_gen2_activity_route_shows_the_champion_shop_with_extra_store_items(tmp_path, monkeypatch):
+    from pokesim import config
+    monkeypatch.setattr(config, 'EXTRA_STORE_ITEMS', True, raising=False)
+    emu = gen2_emulator({'party': [mon(200)]})
+    emu.data.items = {'MASTER_BALL': 1, 'RARE_CANDY': 32}
+    shop = TestClient(create_app(emu, Store(tmp_path))).get('/api/statistics/activity').json()['champion_shop']
+    assert [offer['name'] for offer in shop['offers']] == ['Master Ball', 'Rare Candy']
+    assert [offer['price'] for offer in shop['offers']] == [100000, 25000] and 'Goldenrod' in shop['counter']
+
+
 def test_frame_endpoint_prefers_the_last_picture(tmp_path):
     emu = gen2_emulator()
     emu.still_frame = lambda: b'picture'

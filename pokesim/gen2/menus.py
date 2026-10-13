@@ -320,6 +320,23 @@ class Use(CoreTask):
 
 
 @dataclass
+class UseOn(CoreTask):
+    """Use one item on a party member, such as a PP Up on a move or a Rare Candy."""
+    item: int
+    slot: int
+    initial: int
+    move: int | None = None
+    member: list | None = None
+
+    def finished(self, snapshot):
+        return dict(snapshot.items).get(self.item, 0) < self.initial or tracked(self, snapshot) is None
+
+    def build(self, snapshot):
+        # A level gained from a Rare Candy never replaces a planned move.
+        return UseItem(self.item, self.slot, self.move, forget_move='keep', **self.options(snapshot))
+
+
+@dataclass
 class Storage(CoreTask):
     operation: str
     slot: int
@@ -548,5 +565,5 @@ class Flee(CoreTask):
         return RunAway(**self.options(snapshot))
 
 
-TASKS = {cls.__name__: cls for cls in (Teach, Buy, Sell, Use, Storage, Remedy, Lead, FieldMove, Fly, Give, Take,
+TASKS = {cls.__name__: cls for cls in (Teach, Buy, Sell, Use, UseOn, Storage, Remedy, Lead, FieldMove, Fly, Give, Take,
                                        Throw, Send, Attack, Flee, Forget, ChangeBox, Release, Learn, Radio, DayCare, ShowPartner)}

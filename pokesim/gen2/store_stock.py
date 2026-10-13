@@ -16,6 +16,12 @@ The 4F clerk (vitamins) sells the six stones and the 3F clerk (battle items) the
 Stones cost 2100 as in Celadon. The held items keep the cartridge's own item price (King's Rock and
 Metal Coat 100, Dragon Scale and Up-Grade 2100).
 
+After the Hall of Fame, the 5F TM clerk and the 4F clerk also sell the planned Champion shop item
+(champion_shop.py). GetItemPrice returns a 16 bit price, so a hook at BuySell_DisplaySubtotal
+writes the full subtotal for the 100,000 Master Ball into hProduct, which the routine copies to
+hMoneyTemp for CompareMoney and TakeMoney. A hook in BuyMenuLoop right after ReceiveItem succeeds
+records each landed purchase, so a capped walking offer renews only once it is really bought.
+
 The policy buys one only for a missing, prerequisite or peer-requested species, and only when no
 legitimate source is left: the bag, an unused one-time item the policy collects, a Crystal phone
 trainer, or a peer that offers the species for trade.
@@ -30,6 +36,9 @@ HELD = ('KINGS_ROCK', 'METAL_COAT', 'DRAGON_SCALE', 'UP_GRADE')
 # Mart constant, ROM label, extra items.
 MARTS = (('MART_GOLDENROD_4F', 'MartGoldenrod4F', STONES), ('MART_GOLDENROD_3F', 'MartGoldenrod3F', HELD))
 STONE_PRICE = 2100
+# Clerks that sell Champion shop items, with their ROM labels.
+CHAMPION_MARTS = (('MART_GOLDENROD_4F', 'MartGoldenrod4F'),
+                  *((f'MART_GOLDENROD_5F_{index}', f'MartGoldenrod5F{index}') for index in range(1, 5)))
 MART_ITEMS = 14
 # A purchase that has not landed after this many visits or decisions stands down.
 STORE_TRIES = 3
@@ -50,6 +59,11 @@ def price(data, item):
     names = getattr(data, 'items', {})
     if item in {names.get(name) for name in STONES}:
         return STONE_PRICE
+    if names:
+        from .champion_shop import unit_price
+        value = unit_price(data, item)
+        if value is not None:
+            return value
     return data.item_attributes[item]['price']
 
 
@@ -77,13 +91,17 @@ def bcd(value):
 class StoreStock:
     """Emulator hooks that add the extra items to an opened BUY list and charge their price."""
 
-    def __init__(self, data):
+    def __init__(self, data, champion=None):
         self.data = data
         self.marts = {}
-        for constant, label, _ in MARTS:
+        for constant, label in [(constant, label) for constant, label, _ in MARTS] + list(CHAMPION_MARTS):
             if label in data.symbols:
                 self.marts[tuple(data.symbols[label])] = constant
         self.extra_prices = {data.items[name]: STONE_PRICE for name in STONES}
+        # champion() returns {mart constant: {item: unit price}} for the planned Champion item.
+        self.champion = champion or dict
+        self.offered = {}
+        self.purchases = []
 
     def attach(self, pb):
         symbols = self.data.symbols
@@ -96,6 +114,22 @@ class StoreStock:
             raise ValueError('The Gen II buy price instruction signature does not match the cartridge')
         pb.hook_register(*symbols['BuyMenu'], self.opened, pb)
         pb.hook_register(bank, address + 6, self.priced, pb)
+        if all(name in symbols for name in ('BuySell_DisplaySubtotal', 'BuyMenuLoop', 'hProduct', 'hMoneyTemp')):
+            bank, address = symbols['BuySell_DisplaySubtotal']
+            # push hl / ld hl, hMoneyTemp / ldh a, [hProduct + 1]
+            code = bytes(pb.memory[bank, address:address + 6])
+            money, product = symbols['hMoneyTemp'][1], symbols['hProduct'][1] + 1
+            if code != bytes((0xE5, 0x21, money & 0xFF, money >> 8, 0xF0, product & 0xFF)):
+                raise ValueError('The Gen II buy subtotal instruction signature does not match the cartridge')
+            pb.hook_register(bank, address, self.subtotal, pb)
+            # ReceiveItem succeeded: ld a, [wMartItemID] / ld e, a / ld d, 0, once in BuyMenuLoop.
+            bank, address = symbols['BuyMenuLoop']
+            item = symbols['wMartItemID'][1]
+            code = bytes(pb.memory[bank, address:address + 160])
+            signature = bytes((0xFA, item & 0xFF, item >> 8, 0x5F, 0x16, 0x00))
+            if code.count(signature) != 1:
+                raise ValueError('The Gen II purchase instruction signature does not match the cartridge')
+            pb.hook_register(bank, address + code.index(signature), self.bought, pb)
         return True
 
     def _read(self, pb, name, size=1, offset=0):
@@ -104,7 +138,20 @@ class StoreStock:
 
     def _write(self, pb, name, values, offset=0):
         bank, address = self.data.symbols[name]
+        if address >= 0xFF80:
+            # High RAM has no bank.
+            pb.memory[address + offset:address + offset + len(values)] = list(values)
+            return
         pb.memory[bank, address + offset:address + offset + len(values)] = list(values)
+
+    def _champion(self, mart):
+        if not enabled():
+            return {}
+        try:
+            return dict(self.champion().get(mart, {}))
+        except Exception:
+            # A plan that cannot be read never breaks the cartridge's own BUY list.
+            return {}
 
     def mart(self, pb):
         """The mart constant of the list being bought from, or None for any other list."""
@@ -113,6 +160,7 @@ class StoreStock:
         return self.marts.get(key)
 
     def opened(self, pb):
+        self.offered = {}
         if not enabled():
             return
         mart = self.mart(pb)
@@ -121,22 +169,52 @@ class StoreStock:
         shop = next((shop for entry in self.data.maps.values() for shop in entry['shops'] if shop['mart'] == mart), None)
         count = self._read(pb, 'wCurMartCount')[0]
         current = list(self._read(pb, 'wCurMartItems', count))
-        # Only a fresh cartridge list is extended, so reopening the list never adds twice.
-        if shop is None or current != list(shop['items']):
+        if shop is None:
             return
+        self.offered = self._champion(mart)
         items = stock(self.data, shop)
+        items = (items + [item for item in self.offered if item not in items])[:MART_ITEMS]
+        # Only a fresh cartridge list is extended, so reopening the list never adds twice.
+        if current != list(shop['items']):
+            if current != items:
+                self.offered = {}
+            return
         self._write(pb, 'wCurMartCount', [len(items)])
         self._write(pb, 'wCurMartItems', items + [0xFF])
         for index, item in enumerate(items[count:], count):
-            self._write(pb, 'wMartItem1BCD', bcd(price(self.data, item)), offset=3 * index)
+            value = self.offered[item] if item in self.offered else price(self.data, item)
+            self._write(pb, 'wMartItem1BCD', bcd(min(value, 999999)), offset=3 * index)
+
+    def _price(self, item):
+        value = self.offered.get(item)
+        return self.extra_prices.get(item) if value is None else value
 
     def priced(self, pb):
         if not enabled() or self.mart(pb) is None:
             return
-        item = self._read(pb, 'wCurItem')[0]
-        value = self.extra_prices.get(item)
+        value = self._price(self._read(pb, 'wCurItem')[0])
         if value is not None:
+            value = min(value, 0xFFFF)
             pb.register_file.D, pb.register_file.E = value >> 8, value & 0xFF
+
+    def subtotal(self, pb):
+        """Charge a unit price above 65535 in full. The sell path keeps the cartridge price."""
+        if not enabled() or self.mart(pb) is None:
+            return
+        value = self.offered.get(self._read(pb, 'wCurItem')[0])
+        stored = self._read(pb, 'wBuySellItemPrice', 2)
+        if value is None or value <= 0xFFFF or stored != b'\xff\xff':
+            return
+        total = min(value * self._read(pb, 'wItemQuantityChange')[0], 0xFFFFFF)
+        self._write(pb, 'hProduct', [total >> 16, total >> 8 & 0xFF, total & 0xFF], offset=1)
+
+    def bought(self, pb):
+        """Record a landed purchase of a Champion shop item."""
+        if not enabled() or self.mart(pb) is None:
+            return
+        item = self._read(pb, 'wCurItem')[0]
+        if item in self.offered:
+            self.purchases.append((item, self._read(pb, 'wItemQuantityChange')[0], self.offered[item]))
 
 
 def _targets(policy, snapshot):

@@ -137,11 +137,11 @@ class Memory:
         self.bytes = {}
 
     def __getitem__(self, key):
-        _, span = key
+        span = key[1] if isinstance(key, tuple) else key
         return [self.bytes.get(address, 0) for address in range(span.start, span.stop)]
 
     def __setitem__(self, key, values):
-        _, span = key
+        span = key[1] if isinstance(key, tuple) else key
         for offset, value in enumerate(values):
             self.bytes[span.start + offset] = value
 
@@ -152,6 +152,13 @@ class Emulator:
         self.register_file = SimpleNamespace(D=0, E=98)
         bank, address = data.symbols['SelectQuantityToBuy']
         self.memory[bank, address:address + 7] = [0x3E, 4, 0x21, 0, 0x40, 0xCF, 0x7A]
+        # push hl / ld hl, hMoneyTemp / ldh a, [hProduct + 1], then the landed purchase in BuyMenuLoop.
+        bank, address = data.symbols['BuySell_DisplaySubtotal']
+        money, product = data.symbols['hMoneyTemp'][1], data.symbols['hProduct'][1] + 1
+        self.memory[bank, address:address + 6] = [0xE5, 0x21, money & 0xFF, money >> 8, 0xF0, product & 0xFF]
+        bank, address = data.symbols['BuyMenuLoop']
+        item = data.symbols['wMartItemID'][1]
+        self.memory[bank, address + 87:address + 93] = [0xFA, item & 0xFF, item >> 8, 0x5F, 0x16, 0x00]
 
     def hook_register(self, bank, address, callback, context):
         self.hooks[bank, address] = lambda: callback(context)
