@@ -73,7 +73,6 @@
   }
 
   // ---- locks: a locked Pokémon is never traded automatically. Set on the PC page. ----
-  const LOCK_LABEL = 'Locked: never traded'
   const isLocked = mon => Boolean(mon && (mon.trade_setting === 'keep' || mon.trade_locked))
   const isProtected = mon => Boolean(mon && (mon.shiny || mon.perfect_dvs))
   // A pixel padlock drawn on a 12 by 12 grid, shut or open.
@@ -90,15 +89,18 @@
     if (options.stale) return 'Waiting for the PC to update.'
     return ''
   }
-  // The lock toggle for the popup. Options: busy (a change is saving), viewer, stale and note
-  // (a message to show under it, such as a refused change).
+  // The lock toggle for the popup. Its face is the state: a shut padlock and Locked, or an open
+  // padlock and Tradeable. A press flips it. Options: busy (a change is saving), viewer, stale and
+  // note (a refused change to show under it). Why it cannot be pressed goes in its title.
   function lockControl(mon, options = {}) {
     if (!mon || mon.egg) return ''
-    if (isProtected(mon)) return `<div class="pc-lock-row"><span class="tag trade-tag trade-tag--protected lock-stamp">${lockIcon(true)}Protected</span><p class="lock-note">${mon.shiny ? 'Shiny' : 'Perfect DV'} Pokémon are never traded automatically.</p></div>`
+    if (isProtected(mon)) return `<div class="pc-lock-row"><span class="tag trade-tag trade-tag--protected lock-stamp" title="${mon.shiny ? 'Shiny' : 'Perfect DV'} Pokémon are never traded automatically">${lockIcon(true)}Protected</span></div>`
     const locked = isLocked(mon)
     const blocked = lockBlocked(mon, options)
-    const note = options.note || blocked || (locked ? 'Never offered in automatic trades.' : 'Can be traded automatically. Tap to lock.')
-    return `<div class="pc-lock-row"><button type="button" class="lock-toggle" data-lock-key="${esc(mon.trade_key || '')}" aria-pressed="${locked ? 'true' : 'false'}"${blocked || options.busy ? ' disabled' : ''}${options.busy ? ' aria-busy="true"' : ''} title="${esc(blocked || (locked ? 'Unlock so it can be traded automatically' : 'Lock so it is never traded automatically'))}">${lockIcon(locked)}<span>${LOCK_LABEL}</span></button><p class="lock-note" role="status">${esc(note)}</p></div>`
+    const label = locked ? 'Locked' : 'Tradeable'
+    const title = blocked || (locked ? 'Locked: never traded automatically. Press to unlock.' : 'Tradeable: may be traded automatically. Press to lock.')
+    const why = blocked ? `<span class="vh">, ${esc(blocked)}</span>` : ''
+    return `<div class="pc-lock-row"><button type="button" class="lock-toggle" data-lock-key="${esc(mon.trade_key || '')}" data-locked="${locked ? 'true' : 'false'}"${blocked || options.busy ? ' disabled' : ''}${options.busy ? ' aria-busy="true"' : ''} title="${esc(title)}">${lockIcon(locked)}<span>${label}</span>${why}</button>${options.note ? `<p class="lock-note" role="status">${esc(options.note)}</p>` : ''}</div>`
   }
   // Save a lock ('keep') or an unlock ('auto'). A refused change throws with the server's reason.
   async function saveLock(key, state) {
@@ -336,6 +338,6 @@
   })
 
   globalThis.MonGrid = {esc, SORTS, RATINGS, SETTINGS, SETTING_LABELS, sortDefaults, statTotal, sortValue, compare,
-    formatTotal, ratingLabel, ratingBadge, settingBadge, isLocked, lockIcon, lockControl, saveLock, tradeLink, LOCK_LABEL, matches, card, detail, detailLinks, tradeState, statPower, toolbar, generation,
+    formatTotal, ratingLabel, ratingBadge, settingBadge, isLocked, lockIcon, lockControl, saveLock, tradeLink, matches, card, detail, detailLinks, tradeState, statPower, toolbar, generation,
     orderLabels, bind, apply, filtered}
 })()

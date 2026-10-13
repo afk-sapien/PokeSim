@@ -157,7 +157,7 @@ async function toggleLock(button) {
   const before = locked ? 'keep' : mon.trade_setting || 'auto'
   apply(state)
   redraw(current(key) || mon)
-  let note = locked ? 'Unlocked. It can be traded automatically.' : 'Locked. It is never traded automatically.'
+  let note = ''
   try {
     const response = await PokeSim.fetch('/api/trading/preferences', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({key, state})})
     if (!response.ok) {

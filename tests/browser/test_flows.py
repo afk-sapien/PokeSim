@@ -25,12 +25,15 @@ def test_pc_popup_locks_a_pokemon_and_the_lock_persists_even_when_trading_is_off
     # The lock lives in the popup. Trade… still links to the game's Trading page.
     link = page.locator('#pc-trade-action').get_by_role('link', name='Trade…')
     expect(link).to_have_attribute('href', re.compile(r'/trading\?tab=trade&mon=.+'))
-    lock = page.locator('#pc-detail').get_by_role('button', name='Locked: never traded')
-    expect(lock).to_have_attribute('aria-pressed', 'false')
+    # The key's face is the state: an open padlock and Tradeable, or a shut one and Locked. No helper text.
+    lock = page.locator('#pc-detail .lock-toggle')
+    expect(lock).to_have_text('Tradeable')
+    expect(lock).to_have_attribute('data-locked', 'false')
     lock.focus()
     page.keyboard.press('Enter')
-    expect(lock).to_have_attribute('aria-pressed', 'true')
-    expect(page.locator('#pc-detail .lock-note')).to_have_text('Locked. It is never traded automatically.')
+    expect(lock).to_have_text('Locked')
+    expect(lock).to_have_attribute('data-locked', 'true')
+    expect(page.locator('#pc-detail .lock-note')).to_have_count(0)
     assert any(value['state'] == 'locked' for value in store.trade_preferences().values())
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     page.locator('#pc-detail .close-detail').click()
@@ -38,12 +41,12 @@ def test_pc_popup_locks_a_pokemon_and_the_lock_persists_even_when_trading_is_off
     expect(bud).to_have_attribute('aria-label', re.compile('locked, never traded automatically'))
     page.reload()
     bud.click()
-    expect(lock).to_have_attribute('aria-pressed', 'true')
+    expect(lock).to_have_text('Locked')
     page.keyboard.press('Escape')
     bud.click()
     lock.click()
-    expect(lock).to_have_attribute('aria-pressed', 'false')
-    expect(page.locator('#pc-detail .lock-note')).to_have_text('Unlocked. It can be traded automatically.')
+    expect(lock).to_have_text('Tradeable')
+    expect(page.locator('#pc-detail .lock-note')).to_have_count(0)
     assert all(value['state'] != 'locked' for value in store.trade_preferences().values())
 
 
@@ -57,9 +60,9 @@ def test_trading_page_is_one_page_and_viewers_cannot_lock(page, game, monkeypatc
     monkeypatch.setattr(config, 'VIEWER_ONLY', True)
     page.goto(url + '/pc?scope=all')
     page.locator('#pc-grid .pc-mon').filter(has_text='FERN').click()
-    lock = page.locator('#pc-detail').get_by_role('button', name='Locked: never traded')
+    lock = page.locator('#pc-detail .lock-toggle')
     expect(lock).to_be_disabled()
-    expect(page.locator('#pc-detail .lock-note')).to_contain_text('Only the owner')
+    expect(lock).to_have_attribute('title', 'Only the owner can lock Pokémon.')
     assert emu.commands == []
 
 

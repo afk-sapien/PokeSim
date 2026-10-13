@@ -14,7 +14,7 @@
   let viewerOnly = false
   let run = 0
   let lastLive = ''
-  // A lock change in flight, and the message to show under the toggle.
+  // A lock change in flight, and a refused change's reason to show under the toggle.
   let locking = {key: '', note: ''}
   const viewer = () => String(globalThis.PokeSim?.base || '').startsWith('/view/') || viewerOnly
   const same = mon => Boolean(mon) && mon.species === open.species && (mon.nick || '') === open.nick
@@ -90,7 +90,7 @@
     locking = {key, note: ''}
     record = {...mon, trade_setting: state, trade_locked: state === 'keep'}
     draw()
-    let note = locked ? 'Unlocked. It can be traded automatically.' : 'Locked. It is never traded automatically.'
+    let note = ''
     try {
       await MonGrid.saveLock(key, state)
     } catch (error) {

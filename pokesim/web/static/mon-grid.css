@@ -515,7 +515,7 @@
 .lock-toggle .lock-icon { width: 16px; height: 16px; }
 .lock-toggle:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-3); }
 .lock-toggle:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
-.lock-toggle[aria-pressed="true"] { color: var(--ok); border-color: var(--ok); background: var(--panel); box-shadow: inset 0 0 0 1px var(--ok); }
+.lock-toggle[data-locked="true"] { color: var(--ok); border-color: var(--ok); background: var(--panel); box-shadow: inset 0 0 0 1px var(--ok); }
 .lock-toggle:disabled { opacity: 0.55; cursor: not-allowed; }
 .lock-toggle[aria-busy="true"] { cursor: progress; }
 .lock-note { flex: 1 1 200px; min-width: 0; margin: 0; color: var(--ink-2); font: 13px / 1.4 var(--font-text); letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; }
@@ -527,6 +527,6 @@
   .lock-toggle { flex: 1 1 100%; justify-content: center; }
 }
 @media (forced-colors: active) {
-  .lock-toggle[aria-pressed="true"] { outline: 2px solid Highlight; }
+  .lock-toggle[data-locked="true"] { outline: 2px solid Highlight; }
   .pc-lock { border-color: CanvasText; }
 }

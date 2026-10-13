@@ -147,7 +147,7 @@ def test_gen2_detail_shows_hidden_power_power_and_eggs(page, game, width, height
         expect(body).not_to_contain_text(text)
     # An unlocked Pokémon has no trade stamp, and the popup offers the lock key instead.
     expect(body.locator('.pc-detail-head .trade-tag')).to_have_count(0)
-    expect(body.get_by_role('button', name='Locked: never traded')).to_have_attribute('aria-pressed', 'false')
+    expect(body.get_by_role('button', name='Tradeable')).to_have_attribute('data-locked', 'false')
     expect(body.locator('.pc-detail-head')).to_contain_text('Pokérus cured')
     expect(body.locator('.pc-card-stats .pc-card-head')).to_contain_text('DVs top 2.5%')
     expect(body.locator('.pc-gauges .value[title="7,230 to Lv. 51"]')).to_have_count(1)

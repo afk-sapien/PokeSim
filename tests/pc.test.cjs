@@ -389,8 +389,9 @@ test('the popup has one lock toggle that reflects the saved setting', async () =
     assert.equal(/class="pc-lock"/.test(view.element('#pc-grid').innerHTML), setting === 'keep')
     view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
     const html = view.element('#pc-detail-body').innerHTML
-    assert.match(html, new RegExp(`<button type="button" class="lock-toggle" data-lock-key="k" aria-pressed="${pressed}"`))
-    assert.match(html, /Locked: never traded/)
+    assert.match(html, new RegExp(`<button type="button" class="lock-toggle" data-lock-key="k" data-locked="${pressed}"`))
+    assert.match(html, pressed === 'true' ? /<span>Locked<\/span>/ : /<span>Tradeable<\/span>/)
+    assert.doesNotMatch(html, /lock-note|Tap to lock/)
     assert.doesNotMatch(html, /Prefer to trade|<select/)
   }
 })
@@ -419,7 +420,7 @@ test('the lock saves through the trade setting and a refused change goes back', 
   refused.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
   await click(refused)
   assert.deepEqual(JSON.parse(refused.calls.find(call => call.options?.method === 'POST').options.body), {key: 'k', state: 'auto'})
-  assert.match(refused.element('#pc-detail-body').innerHTML, /aria-pressed="true"/)
+  assert.match(refused.element('#pc-detail-body').innerHTML, /data-locked="true"/)
   assert.match(refused.element('#pc-detail-body').innerHTML, /An exchange is in progress\./)
 })
 
@@ -457,7 +458,7 @@ test('a view link shows the lock but cannot change it', async () => {
   const view = pc([], '?box=party', [mon(undefined, undefined, 20, {slot: 1, trade_key: 'k', trade_setting: 'keep'})], '/view/abc')
   await view.ready()
   view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
-  assert.match(view.element('#pc-detail-body').innerHTML, /aria-pressed="true" disabled/)
+  assert.match(view.element('#pc-detail-body').innerHTML, /data-locked="true" disabled/)
   assert.match(view.element('#pc-detail-body').innerHTML, /Only the owner can lock Pokémon/)
 })
 
