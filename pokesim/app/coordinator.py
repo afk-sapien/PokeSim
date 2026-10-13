@@ -622,7 +622,9 @@ class Coordinator:
                 try:
                     receipt = self._request(aid, 'prepare', request)
                 except (RuntimeError, ValueError) as error:
-                    raise type(error)(f'{error} (adventure {aid})') from error
+                    # Some subclasses, such as JSONDecodeError, cannot be rebuilt from a message alone.
+                    kind = ValueError if isinstance(error, ValueError) else RuntimeError
+                    raise kind(f'{error} (adventure {aid})') from error
                 if plan.get('manual'):
                     with self.view_guard:
                         progress = self.manual_progress.setdefault(row['id'], {})

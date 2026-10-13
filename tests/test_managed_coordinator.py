@@ -324,6 +324,21 @@ def test_preparation_failure_has_a_specific_explanation_in_both_views(setup, err
         assert status['recent_failures'][0]['failure_reason'] == status['attention']['reason']
 
 
+def test_an_unreadable_prepare_answer_names_its_adventure(setup):
+    """Regression: a JSONDecodeError could not be rebuilt from a message, so the label became a TypeError."""
+    c, right = setup.coordinator, setup.data['right_id']
+    original = setup.peers[right].request
+
+    def garbled(method, path, data=None, timeout=None):
+        if path.endswith('/prepare'):
+            raise json.JSONDecodeError('Expecting value', '<html>', 0)
+        return original(method, path, data, timeout)
+    setup.peers[right].request = garbled
+    row = c.execute(c.propose(setup.data)['id'])
+    assert row['phase'] == 'aborted'
+    assert row['error'].startswith('Expecting value') and row['error'].endswith(f'(adventure {right})')
+
+
 def test_a_full_pc_names_its_game_and_stops_automatic_retries(setup, monkeypatch):
     """Regression: Gold's party and PC were full, so each trade Crystal was offered with it failed
     while the banner only said that "an adventure" needed a free PC slot and would try again."""
