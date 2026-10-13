@@ -351,3 +351,28 @@ def test_a_release_confirmation_is_still_refused_outside_a_release():
     assert p._dispatch(full_box(), Screen(memory), 'yes_no', memory)[0].button == 'down'
     p.goal = Goal('party_release', 'Make room in storage', 'Free a slot')
     assert p._dispatch(full_box(), Screen(memory), 'yes_no', memory)[0].button == 'down'
+
+
+def test_a_party_with_nothing_to_deposit_does_not_fetch_a_stored_partner():
+    # A strong lead and five sole holders of a field move: no reserve may leave, so the PC trip
+    # would only open and close the menu. Storage has room, which used to make the trip look possible.
+    from pokesim.policies.team import reserve_to_deposit
+    p, s = collection_with_full_box(party_size=6)
+    lead = mon(level=100, hp=100, max_hp=100, defense=100)
+    keepers = tuple(mon(moves=(hm, 33, 0, 0), pp=(15, 35, 0, 0)) for hm in (15, 19, 57, 70, 148))
+    s = replace(s, party=(lead,) + keepers, box_counts=(20,) + (0,) * 11)
+    assert s.next_free_box is not None and reserve_to_deposit(s) is None
+    assert p.collection.goal(s) is None
+    p.collection.completed_champion = True
+    for seed in range(12):
+        p.collection.project = None
+        p.collection.last_choice = -100000
+        goal = p.collection.choose(s, p.nav, random.Random(seed), Goal('idle', 'Idle', 'Idle'))
+        assert (p.collection.project or {}).get('box') is None, 'chose a project needing a withdrawal'
+        assert goal is None or not goal.key.startswith('party_')
+
+    # Once one member is free to leave, the partner is worth fetching again.
+    from pokesim.policies.collection import EVOS
+    p.collection.project = {'method': 'evolve', 'parent': 124, 'species': 125,
+                            'box': 0, 'evolution': EVOS[124][0], 'key': 'butterfree'}
+    assert p.collection.goal(replace(s, party=(lead,) + keepers[:4] + (mon(),))).key == 'party_collection'

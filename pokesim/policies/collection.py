@@ -73,6 +73,16 @@ def storage_exchange_possible(s):
     return len(s.party) < 6 or not s.box_full or s.next_free_box is not None
 
 
+def partner_exchange_possible(s):
+    """A stored partner joins a full party only when some reserve may be deposited for it.
+
+    Field-move holders, Yellow's Pikachu and the strongest battler stay. Without that check a full
+    party of them reopened the PC to withdraw a partner it could never make room for.
+    """
+    from .team import reserve_to_deposit
+    return storage_exchange_possible(s) and (len(s.party) < 6 or reserve_to_deposit(s) is not None)
+
+
 def champion(s):
     return s.hall_of_fame_count > 0 or event_set(s.event_flags, 'EVENT_BEAT_CHAMPION_RIVAL') or s.map == MAPS['HALL_OF_FAME']
 
@@ -711,7 +721,7 @@ class Collection:
                     continue
                 if evo['method'] == 'level' and level >= 100:
                     continue
-                if box is not None and (not self.completed_champion or not storage_exchange_possible(s)):
+                if box is not None and (not self.completed_champion or not partner_exchange_possible(s)):
                     continue
                 project = {'species': evo['species'], 'parent': sid, 'method': 'evolve',
                            'evolution': evo, 'box': box, 'trainee_key': key,
@@ -740,7 +750,7 @@ class Collection:
                 if (key and len(self.partner_matches(s, reference)) != 1
                         or not key and sum(counts[relative] for relative in family) != 1):
                     continue
-                if box is not None and not storage_exchange_possible(s):
+                if box is not None and not partner_exchange_possible(s):
                     continue
                 # Prefer missing evolutions before a general level milestone for this partner. A stone
                 # counts too: a Weepinbell was being trained to level 100 with Victreebel unregistered.
@@ -1051,7 +1061,7 @@ class Collection:
                     if len(matches) != 1:
                         return None
                     p['box'] = matches[0]['box']
-                if not storage_exchange_possible(s):
+                if not partner_exchange_possible(s):
                     return None
                 return Goal('party_collection','Withdraw a training partner','Keep the main battlers and bring a reserve out of storage',CENTERS,'up',True)
             if p['method'] == 'train':
