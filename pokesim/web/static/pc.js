@@ -8,6 +8,7 @@ let openSlot = Number(params.get('slot')) || 0
 let storage = null
 let party = []
 let busy = false
+let refreshAgain = false
 let signature = ''
 let residents = []
 // True once the server has answered. Until then the page may show the last saved PC,
@@ -152,7 +153,8 @@ async function toggleLock(button) {
       record.trade_locked = setting === 'keep'
     }
   }
-  const before = mon.trade_setting
+  // What the popup showed, which may come from trade_locked alone.
+  const before = locked ? 'keep' : mon.trade_setting || 'auto'
   apply(state)
   redraw(current(key) || mon)
   let note = locked ? 'Unlocked. It can be traded automatically.' : 'Locked. It is never traded automatically.'
@@ -164,7 +166,7 @@ async function toggleLock(button) {
       throw new Error(typeof detail === 'string' && detail ? detail : 'Could not save the lock.')
     }
   } catch (error) {
-    apply(before || 'auto')
+    apply(before)
     note = error.message
   }
   locking = {key: `done:${key}`, note}
@@ -215,8 +217,11 @@ async function showSaved() {
 }
 
 async function refresh() {
-  if (busy) return
+  // A fetch already in flight may carry an older state, so one more runs after it.
+  if (busy) { refreshAgain = true
+    return }
   busy = true
+  refreshAgain = false
   try {
     const response = await PokeSim.fetch('/api/pokedex/status?view=pc', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
@@ -241,6 +246,7 @@ async function refresh() {
     $('#connection').title = ''
     $('#connection').classList.add('is-offline')
   } finally { busy = false }
+  if (refreshAgain) await refresh()
 }
 
 $('#box-picker').onclick = (event) => {

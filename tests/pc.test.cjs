@@ -16,14 +16,19 @@ function pc(pokemon, search = '?scope=all', party = [], base = '', refuse = '') 
   }
   let url
   const calls = []
+  // `server.offline` fails later status reads; `server.gate` holds them, answering with the state when asked.
+  const server = {offline: false, gate: null}
   const context = vm.createContext({
     document: {querySelector: selector => selector.startsWith('meta[') ? {content: selector.includes('pokesim-base') ? base : ''} : element(selector), activeElement: null, hidden: false, addEventListener() {}},
     location: {search}, URLSearchParams,
     history: {replaceState: (_, __, next) => { url = next }},
     fetch: async (path, options) => { calls.push({path, options})
       if (options?.method === 'POST') return refuse ? {ok: false, json: async () => ({detail: refuse})} : {ok: true, json: async () => ({ok: true})}
-      return {ok: true, json: async () => ({started: true, version: 'blue', party,
-      storage: {active_box: 1, box_counts: Array(12).fill(20), pokemon}})} },
+      if (server.offline) throw new Error('offline')
+      const body = JSON.parse(JSON.stringify({started: true, version: 'blue', party,
+        storage: {active_box: 1, box_counts: Array(12).fill(20), pokemon}}))
+      if (server.gate) await server.gate
+      return {ok: true, json: async () => body} },
     setInterval() {}, setTimeout, requestAnimationFrame: callback => setTimeout(callback, 0),
   })
   vm.runInContext(source, context)
@@ -32,7 +37,7 @@ function pc(pokemon, search = '?scope=all', party = [], base = '', refuse = '') 
     // Cards past the first screen are drawn over the next frames.
     settle: () => new Promise(resolve => setTimeout(resolve, 20)),
     rows: () => JSON.parse(vm.runInContext('JSON.stringify(residents)', context)),
-    element, url: () => url, calls,
+    element, url: () => url, calls, server,
     sort(key, order) {
       element('#pc-sort').value = key
       element('#pc-sort').onchange()
@@ -416,6 +421,36 @@ test('the lock saves through the trade setting and a refused change goes back', 
   assert.deepEqual(JSON.parse(refused.calls.find(call => call.options?.method === 'POST').options.body), {key: 'k', state: 'auto'})
   assert.match(refused.element('#pc-detail-body').innerHTML, /aria-pressed="true"/)
   assert.match(refused.element('#pc-detail-body').innerHTML, /An exchange is in progress\./)
+})
+
+test('a refused unlock goes back to a lock shown only by trade_locked', async () => {
+  const toggle = {dataset: {lockKey: 'k'}, disabled: false}
+  const view = pc([], '?box=party', [mon(undefined, undefined, 20, {slot: 1, trade_key: 'k', trade_locked: true})], '', 'An exchange is in progress.')
+  await view.ready()
+  view.server.offline = true    // The refresh after the refusal cannot repaint the lock.
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  assert.match(view.element('#pc-detail-body').innerHTML, /aria-pressed="true"/)
+  await view.element('#pc-detail-body').onclick({target: {closest: () => toggle}})
+  assert.deepEqual(JSON.parse(view.calls.find(call => call.options?.method === 'POST').options.body), {key: 'k', state: 'auto'})
+  assert.match(view.element('#pc-detail-body').innerHTML, /aria-pressed="true"/)
+  assert.match(view.element('#pc-detail-body').innerHTML, /An exchange is in progress\./)
+})
+
+test('a refresh asked for while one is in flight runs again after it', async () => {
+  const party = [mon(undefined, undefined, 20, {slot: 1, trade_key: 'k', trade_setting: 'auto'})]
+  const view = pc([], '?box=party', party)
+  await view.ready()
+  let release
+  view.server.gate = new Promise(resolve => { release = resolve })
+  const stale = view.refresh()    // Carries the unlocked state.
+  await new Promise(resolve => setImmediate(resolve))
+  party[0].trade_setting = 'keep'
+  view.refresh()    // Arrives while the stale fetch is still out.
+  view.server.gate = null
+  release()
+  await stale
+  await view.settle()
+  assert.match(view.element('#pc-grid').innerHTML, /class="pc-lock"/)
 })
 
 test('a view link shows the lock but cannot change it', async () => {
