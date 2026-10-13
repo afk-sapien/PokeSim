@@ -152,3 +152,9 @@ def test_gate_main_stops_on_temporary_pins(tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit) as stopped:
         gates.main()
     assert 'Release pins are not final' in str(stopped.value)
+
+
+def test_python_install_workflow_has_no_unused_reusable_entry():
+    """Nothing calls it as a reusable workflow, so it always checks out the ref that triggered it."""
+    text = (ROOT / '.github/workflows/python-install.yml').read_text()
+    assert 'workflow_call' not in text and 'inputs.ref' not in text
