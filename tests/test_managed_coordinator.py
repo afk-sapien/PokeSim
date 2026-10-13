@@ -854,6 +854,23 @@ def test_cancelling_manual_trades_before_commit(setup):
         c.cancel_manual(identifier())
 
 
+def test_a_trade_cancelled_while_the_queue_is_read_stays_cancelled(setup, monkeypatch):
+    c, registry = setup.coordinator, setup.registry
+    entry = c.enqueue_manual(manual_request(setup))
+    unresolved = registry.transactions
+    def cancel_then_check(*args, **kwargs):
+        # The drain has read this trade as the head of the queue but not yet claimed it.
+        if kwargs.get('unresolved') and c.manual_status(entry['id'])['state'] == 'queued':
+            c.cancel_queued(entry['id'])
+        return unresolved(*args, **kwargs)
+    monkeypatch.setattr(registry, 'transactions', cancel_then_check)
+    assert c.drain_manual() is None
+    status = c.manual_status(entry['id'])
+    assert status['state'] == 'cancelled' and status['error'] == 'Cancelled by the owner'
+    assert setup.cable_calls == []
+    assert unresolved() == []
+
+
 def test_a_waiting_chosen_trade_comes_before_automatic_trades_for_its_adventures(setup, monkeypatch):
     c, registry = setup.coordinator, setup.registry
     for name in ('Third Red', 'Fourth Red'):

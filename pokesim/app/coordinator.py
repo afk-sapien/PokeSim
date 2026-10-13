@@ -1198,6 +1198,17 @@ class Coordinator:
             self._manual_save(entries)
         return found
 
+    def _manual_claim(self, mid):
+        """Move a queued trade to starting, unless it left the queue since it was read."""
+        with self.manual_guard:
+            entries = self._manual_entries()
+            entry = next((item for item in entries if item['id'] == mid), None)
+            if entry is None or entry['state'] != 'queued':
+                return False
+            entry.update(state='starting', updated_at=time.time())
+            self._manual_save(entries)
+        return True
+
     def manual_waiting(self):
         return any(entry['state'] in MANUAL_WAITING for entry in self._manual_entries())
 
@@ -1280,7 +1291,8 @@ class Coordinator:
                 if self.execution.locked() or self.registry.transactions(unresolved=True):
                     self._set_aside_automatic()
                     break
-                self._manual_update(head['id'], state='starting')
+                if not self._manual_claim(head['id']):
+                    continue    # Cancelled after it was read, so it stays cancelled.
                 try:
                     row = self.propose({name: head[name] for name in ('left_id', 'right_id', 'left_key', 'right_key')}
                                        | {'request_id': head['id'], 'manual': True})
