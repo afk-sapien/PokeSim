@@ -147,6 +147,7 @@ def record(policy, snapshot, memory):
 
 
 def journey(policy, snapshot, mem, Goal):
+    from .breeding import free_slots
     if 'wTradeFlags' not in policy.data.symbols or getattr(mem, 'memory', None) is None:
         return None
     value = record(policy, snapshot, mem.memory)
@@ -156,6 +157,10 @@ def journey(policy, snapshot, mem, Goal):
             continue
         mon = candidate(snapshot, trade)
         if mon is None:
+            continue
+        if mon.box is not None and len(snapshot.party) == 6 and free_slots(snapshot) < 1:
+            # With the party and every box full the PC cannot swap the partner out, so the errand would
+            # press B at the PC forever. The trade waits until there is room.
             continue
         request, give = data.species[trade.request]['name'], data.species[trade.give]['name']
         policy.collection['npc_trade'] = trade.index

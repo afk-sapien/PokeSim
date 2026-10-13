@@ -246,3 +246,23 @@ def test_a_stone_gone_before_the_evolution_drops_the_project(real_data):
     policy.menu, snapshot.items = None, ()
     assert arrive(policy, snapshot) is None
     assert policy.menu is None and policy.collection['training'] is None
+
+
+def test_npc_trade_waits_while_the_party_and_every_box_are_full(monkeypatch):
+    """With nowhere to deposit a party member, fetching the boxed partner pressed B at the PC forever."""
+    from pokesim.gen2 import npc_trades
+    monkeypatch.setattr(npc_trades, 'flags', lambda memory, data: 0)
+    data = SimpleNamespace(symbols={'wTradeFlags': (0, 0)}, game='gold',
+                           species={69: {'name': 'Bellsprout'}, 95: {'name': 'Onix'}})
+    storage = SimpleNamespace(map_name='VIOLET_POKECENTER_1F', x=1, y=1, face='up')
+    policy = SimpleNamespace(data=data, collection={}, demand={}, decisions=1, storage_goal=lambda snapshot: storage,
+                             person=lambda snapshot, key, *args: SimpleNamespace(key=key))
+    party = [SimpleNamespace(species=155, level=40, box=None, position=None, held_item=0, moves=[33], gender='Male', egg=False)
+             for _ in range(6)]
+    boxed = SimpleNamespace(species=69, level=5, box=0, position=0, held_item=0, moves=[33], gender='Male', egg=False)
+    snapshot = SimpleNamespace(party=party, stored=[boxed], owned=set(), box_counts=(20,) * 14)
+    goal = lambda key, *args: SimpleNamespace(key=key)
+    mem = SimpleNamespace(memory=object())
+    assert npc_trades.journey(policy, snapshot, mem, goal) is None
+    snapshot.box_counts = (20,) * 13 + (19,)
+    assert npc_trades.journey(policy, snapshot, mem, goal).key == 'collection_npc_trade_pc'
