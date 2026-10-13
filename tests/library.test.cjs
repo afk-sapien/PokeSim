@@ -421,7 +421,7 @@ test('running adventure settings allow palettes and explain deferred application
     if (options.method === 'PATCH') return {ok: true, json: async () => ({palette_pending: true})}
   }})
   await settle()
-  for (const name of ['league-rewards', 'mew-event', 'celebi-event']) view.element(`#settings-${name}`).toggleAttribute = () => {}
+  for (const name of ['league-rewards', 'mew-event', 'celebi-event', 'extra-store-items']) view.element(`#settings-${name}`).toggleAttribute = () => {}
   for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
   view.click('settings', game.id)
   assert.equal(view.element('#settings-palette').value, 'blue')
@@ -442,7 +442,7 @@ test('Gold, Silver and Crystal adventures hide the palette and never send one', 
     if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
   }})
   await settle()
-  for (const name of ['league-rewards', 'mew-event', 'celebi-event']) view.element(`#settings-${name}`).toggleAttribute = () => {}
+  for (const name of ['league-rewards', 'mew-event', 'celebi-event', 'extra-store-items']) view.element(`#settings-${name}`).toggleAttribute = () => {}
   for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
   view.click('settings', game.id)
   assert.equal(view.element('#settings-palette-label').hidden, true)

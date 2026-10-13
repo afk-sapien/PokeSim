@@ -286,7 +286,8 @@ class Buy(CoreTask):
         return dict(snapshot.items).get(self.item, 0) > self.initial
 
     def build(self, snapshot):
-        price = snapshot.data.item_attributes[self.item]['price']
+        from .store_stock import price as store_price
+        price = store_price(snapshot.data, self.item)
         # Never ask for more than the wallet covers or the pack holds.
         amount = min(self.amount, snapshot.money // price if price else self.amount, 99 - self.initial)
         return BuyItem(self.item, amount, **self.options(snapshot)) if amount > 0 else None

@@ -50,6 +50,7 @@ class Peer:
                     'pokemon': deepcopy(self.pokemon)}
         if operation == 'collection_demand':
             self.collection_requests = data['requests']
+            self.collection_payload = data
             return {'requests': data['requests']}
         tid = data['id']
         if operation == 'prepare':
@@ -751,6 +752,17 @@ def test_collection_requests_cross_generations_only_for_kanto_species(setup):
                  'owned': [dex for dex in range(1, 252) if dex not in {1, 251}]})])
     assert setup.peers[left].collection_requests == {'1': 1}
     assert setup.peers[right].collection_requests == {}
+
+
+def test_collection_demand_names_the_missing_species_a_peer_offers(setup):
+    left, right = setup.data['left_id'], setup.data['right_id']
+    setup.coordinator._refresh_collection_demand([
+        (left, {'owned': list(range(1, 152)), 'offers': [{'trade_key': 'a', 'dex': 69}, {'trade_key': 'b', 'dex': 70}]}),
+        (right, {'owned': [dex for dex in range(1, 152) if dex not in {69, 103}], 'offers': []})])
+    # Bellsprout can come by trade, so a store item waits. Nobody offers Exeggutor.
+    assert setup.peers[right].collection_payload['supply'] == [69]
+    assert setup.peers[right].collection_payload['peers'] == 1
+    assert setup.peers[left].collection_payload['supply'] == []
 
 
 def manual_request(setup, left_key='party-0', right_key='party-1'):

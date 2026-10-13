@@ -389,12 +389,14 @@ def journey(policy, snapshot, mem, Goal):
     from .. import config
     starter_gifts = getattr(config, 'LEAGUE_REWARDS', False) and not {152, 155, 158} <= snapshot.owned
     from .quests import static_wanted, ultra_shortfall
+    from .store_stock import shortfall as store_shortfall
     if funding is None and (snapshot.money < 5000 and sum(count for _, count in snapshot.pockets['balls']) < 4
                             or fees and snapshot.money < fees + 1000 or starter_gifts
                             or snapshot.can_catch and ultra_shortfall(policy, snapshot) and static_wanted(policy, snapshot)
                             # A wanted Day Care pair waits for 3000 to start, and nothing else earns it.
                             or snapshot.money < 3000 and not state.get('breeding')
-                            and getattr(snapshot, 'daycare', None) is not None and pairings(policy, snapshot)):
+                            and getattr(snapshot, 'daycare', None) is not None and pairings(policy, snapshot)
+                            or store_shortfall(policy, snapshot)):
         state['funding'] = funding = snapshot.hall_of_fame_count + 1
     if funding is not None:
         state['phase'] = 'league'
@@ -459,6 +461,10 @@ def journey(policy, snapshot, mem, Goal):
         return goal
     from .item_sources import phones
     goal = phones(policy, snapshot, mem, Goal)
+    if goal:
+        return goal
+    from .store_stock import journey as store
+    goal = store(policy, snapshot, Goal)
     if goal:
         return goal
     from .breeding import hatching
@@ -667,6 +673,10 @@ def arrive(policy, snapshot):
         return result
     from .item_sources import arrive as item_source
     result = item_source(policy, snapshot)
+    if result is not None:
+        return result
+    from .store_stock import arrive as store
+    result = store(policy, snapshot)
     if result is not None:
         return result
     from .training import arrive as train

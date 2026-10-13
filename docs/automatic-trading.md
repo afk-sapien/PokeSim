@@ -66,6 +66,11 @@ and 50 visible exchange records are retained. Small transaction markers remain i
 game's database to prevent duplicate journal delivery. Trade preparation expeditions
 for missing peer requests remain future work.
 
+The coordinator also tells each Gold, Silver or Crystal adventure which of its missing species
+another linked game currently offers, and how many games are linked. With **Extra store items**
+on, an adventure waits for such a trade instead of buying an evolution item for that species,
+and buys a trade evolution item only while a peer is linked.
+
 
 ## Optional Mew distribution
 

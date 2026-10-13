@@ -945,8 +945,14 @@ class Coordinator:
                              for dex in missing[peer] if dex <= inventory.get('dex_total', 151))
             requests = {str(dex): count - int(dex in missing[aid]) for dex, count in totals.items()
                         if count > int(dex in missing[aid])}
+            # Missing species another linked game offers, so a store purchase can wait for the trade.
+            supply = sorted({dex for peer, inv in inventories if peer != aid for offer in inv.get('offers', [])
+                             if self._compatible_pair(inventory, inv, {'time_capsule_compatible': True}, offer)
+                             and (dex := self._offer_for(offer, inventory).get('arrived_dex', offer.get('dex')))
+                             in missing[aid]})
             try:
-                self._request(aid, 'collection_demand', {'requests': requests})
+                self._request(aid, 'collection_demand', {'requests': requests, 'supply': supply,
+                                                         'peers': len(inventories) - 1})
             except (RuntimeError, OSError):
                 log.debug('Collection requests could not reach adventure %s', aid)
 

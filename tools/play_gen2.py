@@ -28,6 +28,7 @@ def main():
     parser.add_argument('--league-rewards', action='store_true', help='Enable the existing optional Johto starter gifts')
     parser.add_argument('--celebi-event', action='store_true', help='Enable the existing optional GS Ball distribution')
     parser.add_argument('--mew-event', action='store_true', help='Enable the existing optional custom Mew gift')
+    parser.add_argument('--extra-store-items', action='store_true', help='Sell evolution stones and trade items at the Goldenrod Dept. Store')
     parser.add_argument('--runtime-store', type=Path, help='Keep optional reward claims across scenario continuations')
     parser.add_argument('--stall-frames', type=int, default=12000)
     args = parser.parse_args()
@@ -136,13 +137,19 @@ def main():
         settings = SimulationSettings(rom_path=str(args.rom.resolve()),
             data_dir=str((args.runtime_store or args.output / 'runtime').resolve()),
             game_data_dir=str(args.data.resolve()), speed=0, starter=args.starter,
-            league_rewards=args.league_rewards, celebi_event=args.celebi_event, mew_event=args.mew_event)
+            league_rewards=args.league_rewards, celebi_event=args.celebi_event, mew_event=args.mew_event,
+            extra_store_items=args.extra_store_items)
         settings.install(managed=True)
         event_emu = Emulator(Store(Path(settings.data_dir)))
         event_emu.policy = policy
         pb = event_emu.pb
     else:
         pb = boot(str(args.rom), sound=True)
+        if args.extra_store_items:
+            from pokesim import config
+            from pokesim.gen2.store_stock import StoreStock
+            config.EXTRA_STORE_ITEMS = True
+            StoreStock(data).attach(pb)
     pb.set_emulation_speed(0)
     lock_clock(pb, not args.real_clock)
     from pokesim.gen2.legendary import Recovery

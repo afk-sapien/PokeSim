@@ -86,6 +86,19 @@ Champion. Only the distribution unlock is custom. Travel, dialogue, item use
 and capture run through the cartridge. Its durable claim prevents repeated
 activation or a rewind across the committed unlock.
 
+Gold, Silver and Crystal settings also include **Extra store items**, on by default for new
+adventures. Gold and Silver have only one Leaf, Fire, Water and Thunder Stone and one
+King’s Rock, Metal Coat, Dragon Scale and Up-Grade. With the setting on, the Goldenrod Dept.
+Store 4F clerk also sells the six evolution stones at 2100 each, as in Celadon, and the 3F clerk
+sells the four trade items at the cartridge price. The cartridge is not changed. The added items
+are written into the RAM copy of the opened BUY list, and the stone price is set when the purchase
+is charged. The adventure buys an item only for a missing, prerequisite or peer-requested
+evolution, and only when the bag, an unused one-time item, a Crystal phone trainer or a linked
+peer offering that species cannot provide it. A trade item is bought only while a peer is linked.
+Short of money, it runs the League for prize money first. With the setting off the store sells
+its normal stock. Red and Blue need no such option because Champions can already buy Moon Stones,
+and their trade evolutions need no item.
+
 ## Validation
 
 The campaign, collection and trade evidence below was gathered on PyBoy 2.7.0 with
@@ -125,6 +138,7 @@ Recorded cartridge scenarios include:
 | Extended collection | Crystal completed another 5,000,028 frames without a stall, reaching 94 owned species including Espeon and Crobat, then another 750,032 frames reached 95. Gold recovered from insufficient Day Care funds, completed another 2,000,008 frames without a stall and reached 78, then Espeon and Nidoqueen raised it to 80, with subsequent collection reaching 83. Crystal reached 98 after Suicune, a native Lugia trade and Tyranitar |
 | Continuous collection with donors | One Crystal save reached all 251 registered entries through native catches, breeding, evolution, optional event features and verified Red, Blue, Gold and Silver exchanges. Imports include Articuno, Zapdos, Moltres, Mewtwo, Ho-Oh, Porygon2, Politoed, Slowking, Steelix, Kingdra, Scizor and Hitmontop. Gold caught both roaming beasts and transferred them to this Crystal save. Each exchange passed cartridge Continue, checkpoint restart and durable participant verification |
 | Game Corner | Native coin purchases, prize menus and League funding obtained Cubone, Wobbuffet, Pikachu and Porygon in Crystal. Gold obtained its 9,999-coin Porygon using native slot play for the balance above the coin purchase limit |
+| Extra store items | A fresh Gold copy with its Leaf Stone spent ran the League for funds, bought a Leaf Stone at Goldenrod 4F for 2100 and evolved Exeggcute, registering Exeggutor 0.46 game hours after loading. With the setting off the 4F list kept its five vitamins |
 | Moon Stone | Collected the native Tohjo Falls item in all three games. Gold then selected Nidorina in the stone menu and evolved it into Nidoqueen |
 | Trade evolution items | Collected Up-Grade, King’s Rock and Dragon Scale in Gold, Silver and Crystal through native dialogue, Strength and item pickups |
 | Held trade evolution | Prepared Metal Coat for Steelix and King’s Rock for a Gold/Crystal exchange that produced Politoed and Slowking. A further Gold/Crystal exchange used Dragon Scale and Metal Coat to produce Kingdra and Steelix. All four results passed checkpoint restart, cartridge restart and durable commit/recovery checks |

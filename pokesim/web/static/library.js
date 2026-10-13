@@ -803,6 +803,10 @@
       $('#settings-celebi-event').checked = Boolean(game.settings?.celebi_event)
       $('#settings-celebi-event').disabled = running(game) || game.version !== 'crystal'
       $('#settings-celebi-event').toggleAttribute('data-blocked', running(game) || game.version !== 'crystal')
+      $('#settings-store-label').hidden = !johto
+      $('#settings-extra-store-items').checked = Boolean(game.settings?.extra_store_items)
+      $('#settings-extra-store-items').disabled = running(game) || !johto
+      $('#settings-extra-store-items').toggleAttribute('data-blocked', running(game) || !johto)
       $('#settings-legendary-steps').value = game.settings?.legendary_return_steps ?? 1000000
       $('#settings-legendary-steps').disabled = running(game)
       for (const [field, setting, fallback] of [['event-steps', 'event_return_steps', 100000], ['mew-steps', 'mew_return_steps', 1000000], ['fossil-preference', 'fossil_preference', 'auto'], ['dojo-preference', 'dojo_preference', 'auto']]) {
@@ -851,7 +855,7 @@
   $('#adventure-settings-form').onsubmit = event => { event.preventDefault()
     act(async () => {
       const game = adventures.find(item => item.id === $('#settings-id').value)
-      const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, celebi_event: $('#settings-celebi-event').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
+      const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, celebi_event: $('#settings-celebi-event').checked, extra_store_items: $('#settings-extra-store-items').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
       if (['gold', 'silver', 'crystal'].includes(game?.version)) {
         for (const field of ['fossil_preference', 'dojo_preference']) delete rewards[field]
       }

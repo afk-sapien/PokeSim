@@ -63,6 +63,14 @@ Existing Pokémon, trainer names, and rival names are not renamed. **Reset edito
 Choose **Save nickname settings** to apply the reset. These settings are stored in the Library registry and
 included in full Library backups. Reconnecting workers retry the saved settings.
 
+## Extra store items
+
+Gold, Silver and Crystal adventures have an **Extra store items** setting in the Library,
+on by default for new adventures and changeable while the adventure is stopped. It lets the
+Goldenrod Dept. Store sell evolution stones (2100 each) and the King’s Rock, Metal Coat, Dragon
+Scale and Up-Grade, so a spent one-time item never blocks a Pokédex entry. Turn it off to keep
+the store’s normal stock. `tools/play_gen2.py --extra-store-items` turns it on for a scenario run.
+
 ## Where your data lives
 
 The [desktop guide](desktop.md#your-files-and-backups) lists platform-specific application folders.

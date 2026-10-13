@@ -210,7 +210,14 @@ class Participant(BaseParticipant):
         if any(not str(k).isdigit() or not 1 <= int(k) <= 251 or type(v) is not int or not 1 <= v <= 10000
                for k, v in requests.items()):
             raise ValueError('Invalid collection request')
+        supply, peers = data.get('supply', []), data.get('peers', 0)
+        if (not isinstance(supply, list) or len(supply) > 251 or type(peers) is not int or not 0 <= peers <= 10000
+                or any(type(dex) is not int or not 1 <= dex <= 251 for dex in supply)):
+            raise ValueError('Invalid collection supply')
         self.emu.policy.demand = {int(k): v for k, v in requests.items()}
+        # Species a linked peer offers, which the store errand waits for instead of buying an item.
+        self.emu.policy.peer_supply = set(supply)
+        self.emu.policy.peers = peers
         return {'requests': self.emu.policy.demand}
 
     def prepare(self, data):

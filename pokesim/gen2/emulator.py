@@ -23,6 +23,7 @@ from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
 from .policy import Action, Policy
 from .ram import BADGES, read_snapshot
+from .store_stock import StoreStock
 
 log = logging.getLogger('pokesim.gen2')
 
@@ -223,6 +224,7 @@ class Emulator:
         self._clock_live = False
         self.tracker.attach(pb)
         self.steps.attach(pb)
+        StoreStock(self.data).attach(pb)
         return pb
 
     def _remember_clock(self, elapsed):
