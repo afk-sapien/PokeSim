@@ -478,6 +478,8 @@
   loadAuto()
   loadMine()
   const asked = query.get('tab') || (query.get('mon') ? 'trade' : '')
-  if (asked) (globalThis.requestAnimationFrame || setTimeout)(() => select(asked))
+  // After the fonts swap in, so the section's place is final before the jump.
+  const settled = globalThis.document?.fonts?.ready || Promise.resolve()
+  if (asked) settled.then(() => (globalThis.requestAnimationFrame || setTimeout)(() => select(asked)))
   globalThis.TradeTabs = {select}
 })()

@@ -47,7 +47,7 @@
    as tall as a plain sans at the same font-size, so every font-size in
    the stylesheets keeps roughly its old meaning. The bundled subset widens
    the word space from about 2 to 3 design pixels, so a sentence does not run
-   together; nothing else in it is changed.
+   together, and leaves out the fi and fl ligatures, which read as "A".
 
    Departure Mono (6 KB, one weight) also draws on an 11-unit em and is crisp
    at exactly 11px and 22px, which is why --f-micro and --f-label are 11px. */
