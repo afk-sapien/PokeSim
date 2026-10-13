@@ -189,6 +189,20 @@ def test_supported_platforms_pass_the_guard(shell_environment, system, machine):
     assert 'no emulator build' not in result.stderr
 
 
+@pytest.mark.parametrize('ldd, refused', [
+    ('musl libc (x86_64)\nVersion 1.2.5', True),
+    ('ldd (Ubuntu GLIBC 2.39-0ubuntu8) 2.39', False),
+])
+def test_musl_is_detected_from_the_c_library_in_use(shell_environment, ldd, refused):
+    """Regression: a glibc machine with the musl package installed has a musl loader file but runs glibc."""
+    env, script = shell_environment
+    script('ldd', f"printf '%s\\n' '{ldd}' >&2; exit {int(refused)}")
+    script('uv', 'exit 7')
+    result = run_installer(env)
+    assert ('musl libc' in result.stderr) is refused
+    assert result.returncode == (1 if refused else 7)
+
+
 def test_installer_scripts_never_tell_users_to_pip_install_pokesim():
     for name in ('install.sh', 'install.ps1'):
         text = (ROOT / name).read_text()

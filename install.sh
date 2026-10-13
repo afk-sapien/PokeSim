@@ -33,13 +33,10 @@ main() {
     if [ "$platform" = Linux ]
     then
         # Only glibc wheels exist for the emulator, so Alpine and other musl systems are unsupported.
-        for loader in /lib/ld-musl-* /usr/lib/ld-musl-*
-        do
-            if [ -e "$loader" ]
-            then
-                unsupported "$platform $machine (musl libc)"
-            fi
-        done
+        # Ask the C library in use: a glibc system may also have the musl package installed.
+        case "$(ldd --version 2>&1 || :)" in
+            *musl*) unsupported "$platform $machine (musl libc)" ;;
+        esac
     fi
     if [ "$(id -u)" = 0 ]
     then
