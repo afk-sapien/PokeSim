@@ -1286,8 +1286,10 @@ class Policy:
             names = ()
             from .champion_shop import elixir
             restore = elixir(self.data, snapshot, mon)
-            if restore:
-                self.menu = Remedy(restore, slot, items[restore])
+            # A remedy the game refused recently is skipped like any other refused shortcut, or the
+            # battle would rebuild it every decision and never press a button.
+            if restore and self.allowed(task := Remedy(restore, slot, items[restore]), snapshot):
+                self.menu = task
                 return True
             if mon.hp == 0:
                 names = ('MAX_REVIVE', 'REVIVE')
@@ -1297,9 +1299,10 @@ class Policy:
                 names = ('FULL_RESTORE', 'FULL_HEAL', 'ANTIDOTE' if mon.status & 8 else
                          'AWAKENING' if mon.status & 7 else 'PARLYZ_HEAL' if mon.status & 64 else
                          'BURN_HEAL' if mon.status & 16 else 'ICE_HEAL')
-            item = next((self.data.items[name] for name in names if items.get(self.data.items[name], 0)), None)
-            if item:
-                self.menu = Remedy(item, slot, items[item])
+            task = next((task for name in names if items.get(item := self.data.items[name], 0)
+                         and self.allowed(task := Remedy(item, slot, items[item]), snapshot)), None)
+            if task:
+                self.menu = task
                 return True
         return False
 

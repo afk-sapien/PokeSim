@@ -141,6 +141,20 @@ def test_mosquito_nickname_is_not_the_quit_item_menu(real_data):
     assert decision(policy, which_screen, 'MOSQUITO') == decision(policy, which_screen, 'ZZZZ')
 
 
+def test_a_refused_remedy_is_not_rebuilt_every_battle_decision(real_data):
+    from pokesim.gen2.menus import Remedy
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data, seed=1, starter='cyndaquil')
+    potion, super_potion = real_data.items['POTION'], real_data.items['SUPER_POTION']
+    hurt = screen(fight_menu('ZZZZ'), party=[mon(hp=10)], items=((potion, 3), (super_potion, 1)), frame=100)
+    policy.blocked[Remedy(super_potion, 0, 1).key()] = 10**9
+    assert action_of(policy, hurt) == (None, 0, 24)
+    assert (policy.menu.item, policy.menu.slot) == (potion, 0)
+    policy.menu = None
+    policy.blocked[Remedy(potion, 0, 3).key()] = 10**9
+    assert action_of(policy, hurt) != (None, 0, 24)
+    assert policy.menu is None
+
 def test_real_crystal_hang_screens_are_read_correctly(real_data):
     """The captured hang frames from the Crystal ROM now classify as the plain menus they are."""
     rows = fight_menu('CANCEL')
