@@ -2195,3 +2195,38 @@ def test_wild_carriers_are_hunted_for_the_kings_rock_once_the_bag_has_none(real_
     asked = SimpleNamespace(data=real_data, demand={230: 1}, collection={})
     no_kingdra = SimpleNamespace(party=(), stored=stored[:4], items=(), owned=owned)
     assert item_hunts(asked, no_kingdra) == {61: rock, 117: scale}
+
+
+def test_a_peer_requested_evolution_is_boxed_so_it_can_be_offered(real_data):
+    from pokesim.gen2.collection import peer_store, peer_store_arrive, peer_store_slots
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.menus import Storage
+
+    def mon(species, slot, stat_exp=0, moves=(33,), item=0):
+        return SimpleNamespace(species=species, name=real_data.species[species]['name'], egg=False, moves=moves,
+                               held_item=item, level=23 + slot, trainer_id=1000 + slot, dvs=(slot, 8, 9, 10, 11),
+                               stat_exp=(stat_exp,) * 5, box=None)
+
+    # Ho-Oh leads; Exeggutor was just evolved with a Leaf Stone for a peer; Alakazam arrived over
+    # the cable; Machamp is trained and Gyarados is the active training partner.
+    party = (mon(250, 0), mon(103, 1), mon(65, 2), mon(68, 3, stat_exp=30000), mon(160, 4), mon(130, 5))
+    snapshot = SimpleNamespace(party=party, stored=(), box_counts=[20, 3] + [0] * 12, active_box=0,
+                               map=real_data.map_ids['VIOLET_POKECENTER_1F'], x=3, y=3)
+    goal = SimpleNamespace(map_name='VIOLET_POKECENTER_1F', x=1, y=1, face='up')
+    policy = SimpleNamespace(data=real_data, demand={103: 2, 250: 1}, decisions=0, storage_goal=lambda s: goal,
+                             collection={'training': {'identity': [1005, [5, 8, 9, 10, 11]]}})
+    assert peer_store_slots(policy, snapshot) == [1, 2]
+    policy.collection['training']['identity'] = [1002, [2, 8, 9, 10, 11]]
+    party = party[:5] + (mon(65, 5),)
+    snapshot.party = party
+    # Alakazam in training stays; the other cable arrival in the last slot goes instead.
+    assert peer_store_slots(policy, snapshot) == [1, 5]
+    assert peer_store(policy, snapshot, Goal).label == 'Store Exeggutor where a peer trade can reach it'
+    # The open box is full, so the trip changes to one with room first, then deposits.
+    assert peer_store_arrive(policy, snapshot) == 'a' and policy.menu.box == 1
+    snapshot.active_box = 1
+    assert peer_store_arrive(policy, snapshot) == 'a'
+    assert isinstance(policy.menu, Storage) and policy.menu.operation == 'DEPOSIT'
+    # Nothing to store when no peer asks and no cable evolution is in the party.
+    policy.demand = {}
+    assert peer_store_slots(policy, SimpleNamespace(**{**vars(snapshot), 'party': party[:2]})) == []

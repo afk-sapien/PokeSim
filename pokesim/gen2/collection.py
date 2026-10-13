@@ -1,7 +1,7 @@
 """Persistent postgame expeditions using version and time specific encounters."""
 from collections import Counter
 
-from .menus import ChangeBox, FieldMove, Release, Teach, Use
+from .menus import ChangeBox, FieldMove, Release, Storage, Teach, Use
 from .navigation import DIRS
 from .ram import Memory
 from .standdown import hunt_key, stand_down, standing_down
@@ -171,6 +171,77 @@ def item_hunts(policy, snapshot):
             result[species] = item
     _ITEM_HUNTS[:] = [key, result]
     return result
+
+
+PEER_STORE = 'peer_store'
+# PC visits a peer-store trip may take before it stands down.
+PEER_STORE_OPS = 8
+
+
+def peer_store_slots(policy, snapshot):
+    """Party slots holding a Pokémon to box so a peer can be offered it, best choice first.
+
+    Gen II offers only boxed Pokémon, so a stone evolution made for a peer, or a trade-evolved or
+    peer-requested arrival, can sit in the party for good and never reach the peer. The lead, the
+    trainee, the Exp. Share holder, plan partners and the only holder of a field move stay (see
+    hatch_spares). A trained, shiny or perfect partner stays too, since it would not be offered.
+    """
+    from ..milestones import is_perfect
+    from ..shiny import is_shiny
+    from .breeding import hatch_spares
+    demand = getattr(policy, 'demand', None) or {}
+    if not demand and not any(not mon.egg and mon.species in trade_targets(policy.data) for mon in snapshot.party[1:]):
+        return []
+    result = []
+    for slot in hatch_spares(policy, snapshot):
+        mon = snapshot.party[slot]
+        record = {'dvs': list(mon.dvs)}
+        if ((demand.get(mon.species) or mon.species in trade_targets(policy.data))
+                and sum(mon.stat_exp) < 20000 and not is_shiny(record) and not is_perfect(record)):
+            result.append(slot)
+    return result
+
+
+_TRADE_TARGETS = {}
+
+
+def trade_targets(data):
+    """Species that only evolve over the cable."""
+    if data.game not in _TRADE_TARGETS:
+        _TRADE_TARGETS[data.game] = {int(evo['species']) for row in data.species.values()
+                                     for evo in row.get('evolutions', ()) if evo['method'] == 'trade'}
+    return _TRADE_TARGETS[data.game]
+
+
+def peer_store(policy, snapshot, Goal):
+    if (standing_down(policy, PEER_STORE) or not any(count < 20 for count in snapshot.box_counts)
+            or len(snapshot.party) < 2 or not peer_store_slots(policy, snapshot)):
+        policy.collection.pop('peer_store_ops', None)
+        return None
+    mon = snapshot.party[peer_store_slots(policy, snapshot)[0]]
+    goal = policy.storage_goal(snapshot)
+    return Goal('collection_peer_store', f'Store {mon.name} where a peer trade can reach it',
+                goal.map_name, goal.x, goal.y, goal.face)
+
+
+def peer_store_arrive(policy, snapshot):
+    state = policy.collection
+    state['peer_store_ops'] = state.get('peer_store_ops', 0) + 1
+    slots = peer_store_slots(policy, snapshot)
+    if not slots or len(snapshot.party) < 2 or state['peer_store_ops'] > PEER_STORE_OPS:
+        if slots:
+            stand_down(policy, PEER_STORE)
+        state.pop('peer_store_ops', None)
+        return 'b'
+    if snapshot.box_counts[snapshot.active_box] >= 20:
+        box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)
+        if box is None:
+            stand_down(policy, PEER_STORE)
+            return 'b'
+        policy.menu = ChangeBox(box)
+        return 'a'
+    policy.menu = Storage('DEPOSIT', slots[0], len(snapshot.party))
+    return 'a'
 
 
 def wanted(policy, snapshot, species):
@@ -385,6 +456,9 @@ def journey(policy, snapshot, mem, Goal):
     goal = hatching(policy, snapshot, Goal)
     if goal:
         return while_waiting(policy, snapshot, mem, goal, Goal)
+    goal = peer_store(policy, snapshot, Goal)
+    if goal:
+        return goal
     from .training import journey as training
     goal = training(policy, snapshot, mem, Goal)
     if goal:
@@ -586,6 +660,8 @@ def arrive(policy, snapshot):
     result = train(policy, snapshot)
     if result is not None:
         return result
+    if key == 'collection_peer_store':
+        return peer_store_arrive(policy, snapshot)
     if key == 'collection_release':
         mon = policy.release_target(snapshot)
         if mon is None:
