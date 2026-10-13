@@ -73,3 +73,38 @@ def test_a_truncated_autosave_falls_back_to_an_older_one(gen2_emu, monkeypatch):
     with pytest.raises(StopIteration):
         emu.start()
     assert loaded == [older]
+
+
+def contest_case(monkeypatch, day=2, flags=0, decisions=100, started=0):
+    from pokesim.gen2 import contest
+    values = {'wCurDay': day, 'wDailyFlags1': flags, 'wStatusFlags2': 0}
+    monkeypatch.setattr(contest, 'Memory', lambda memory, data: SimpleNamespace(byte=lambda name: values.get(name, 0)))
+    data = SimpleNamespace(maps={1: {'constant': 'ROUTE_35'}})
+    policy = SimpleNamespace(memory=None, data=data, decisions=decisions,
+                             collection={'contest': {'entered': False, 'started': started}})
+    snapshot = SimpleNamespace(map=1, x=5, y=5)
+    return contest, policy, snapshot
+
+
+def goal(*args, **kwargs):
+    return SimpleNamespace(key=args[0])
+
+
+def test_contest_entry_continues_on_a_contest_day(monkeypatch):
+    contest, policy, snapshot = contest_case(monkeypatch)
+    assert contest.journey(policy, snapshot, goal).key == 'contest_enter'
+
+
+@pytest.mark.parametrize('change', [{'day': 3}, {'flags': 2}])
+def test_contest_entry_is_dropped_once_the_contest_is_closed(monkeypatch, change):
+    """Midnight passing on the walk, or today's contest already run, once sent the run to the gate forever."""
+    contest, policy, snapshot = contest_case(monkeypatch, **change)
+    assert contest.journey(policy, snapshot, goal) is None
+    assert 'contest' not in policy.collection
+
+
+def test_contest_entry_that_never_reaches_the_gate_stands_down(monkeypatch):
+    from pokesim.gen2.standdown import standing_down
+    contest, policy, snapshot = contest_case(monkeypatch, decisions=6000)
+    assert contest.journey(policy, snapshot, goal) is None
+    assert 'contest' not in policy.collection and standing_down(policy, contest.CONTEST_KEY)

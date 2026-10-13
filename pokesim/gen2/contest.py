@@ -1,6 +1,7 @@
 """Earn Sun Stones through the native Bug-Catching Contest."""
 from .menus import choose
 from .ram import Memory
+from .standdown import stand_down, standing_down
 
 
 def score(mem, prefix):
@@ -16,6 +17,9 @@ def score(mem, prefix):
 # The contest runs on Tuesday, Thursday and Saturday by the cartridge clock (wCurDay counts from Sunday).
 # That clock follows game time, so a skipped day comes as fast as the run plays (about 5.2 million frames a day).
 CONTEST_DAYS = (2, 4, 6)
+# Decisions the walk to the gate may take before the plan to enter is dropped.
+ENTER_DECISIONS = 5000
+CONTEST_KEY = 'contest'
 
 
 # Every contest encounter table (pret data/wild/bug_contest_mons.asm), the same in all three games.
@@ -63,7 +67,8 @@ def journey(policy, snapshot, Goal, *, force=False):
     if state is None:
         needed = needs_sun_stone(policy, snapshot) or bool(targets(policy, snapshot))
         if (not force and not needed or mem.byte('wCurDay') % 7 not in CONTEST_DAYS
-                or mem.byte('wDailyFlags1') & 2 or policy.collection.get('tower')):
+                or mem.byte('wDailyFlags1') & 2 or policy.collection.get('tower')
+                or not force and standing_down(policy, CONTEST_KEY)):
             return None
         if not snapshot.can_catch:
             if policy.no_room(snapshot):
@@ -99,6 +104,16 @@ def journey(policy, snapshot, Goal, *, force=False):
         policy.collection['contest_result'] = {'first_place': mem.byte('wBugContestFirstPlaceWinnerID') == 1}
         policy.collection.pop('contest', None)
         policy.completed['contest'] = snapshot.frame
+        return None
+    if policy.decisions - state['started'] > ENTER_DECISIONS:
+        # The gate was never reached, so walking there again at once would only repeat the trouble.
+        stand_down(policy, CONTEST_KEY)
+        policy.collection.pop('contest', None)
+        return None
+    if mem.byte('wCurDay') % 7 not in CONTEST_DAYS or mem.byte('wDailyFlags1') & 2:
+        # Midnight passed on the walk, or today's contest is over: the receptionist will not let the
+        # player in, so stop heading there.
+        policy.collection.pop('contest', None)
         return None
     return Goal('contest_enter', 'Enter the Bug-Catching Contest', 'ROUTE_35_NATIONAL_PARK_GATE', 2, 2, 'up')
 
