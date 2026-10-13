@@ -8,7 +8,7 @@
   const query = new URLSearchParams(location.search)
 
   // One page, no tabs. An old ?tab= link scrolls to the matching section instead.
-  const SECTIONS = {trade: '#make-trade', history: '#trade-history-section', auto: '.trade-overview', current: '#current-exchange-section'}
+  const SECTIONS = {trade: '#make-trade', history: '#trade-history-section', auto: '#trade-overview', current: '#current-exchange-section'}
   function select(name) {
     const target = SECTIONS[name] ? $(SECTIONS[name]) : null
     if (!target || target.hidden) return
@@ -125,22 +125,24 @@
     const button = $('#pick-confirm')
     const game = pick.games.find(row => row.id === pick.game)
     const blocked = (pick.mon && mineBlocked(pick.mon)) || (pick.their && theirsBlocked(pick.their)) || ''
+    // The next step is the Trade key's tooltip. Only a real blocker or a wait shows as text.
+    let next = ''
     let reason = ''
-    if (!owner) reason = 'Trades are picked from the owner’s page, not from a view link.'
-    else if (!pick.game) reason = 'Choose a game to trade with.'
+    if (!owner) reason = 'Trades are picked from the owner’s page.'
+    else if (!pick.game) next = 'Choose a game to trade with.'
     else if (game && !game.available) reason = game.reason
-    else if (!pick.mon && !pick.their) reason = 'Choose a Pokémon to send and one to get.'
-    else if (!pick.mon) reason = 'Choose a Pokémon to send.'
-    else if (!pick.their) reason = 'Choose a Pokémon to get.'
+    else if (!pick.mon && !pick.their) next = 'Choose a Pokémon to send and one to get.'
+    else if (!pick.mon) next = 'Choose a Pokémon to send.'
+    else if (!pick.their) next = 'Choose a Pokémon to get.'
     else if (blocked) reason = blocked
-    else if (!pick.limits || pick.limits.from?.key !== pick.mon.key || pick.limits.to?.adventure_id !== pick.game) reason = 'Checking this trade…'
+    else if (!pick.limits || pick.limits.from?.key !== pick.mon.key || pick.limits.to?.adventure_id !== pick.game) next = 'Checking this trade…'
     else if (!pick.limits.starts_now) reason = VIEW_ONLY
-    const ready = !reason && !pick.busy
+    const ready = !reason && !next && !pick.busy
     // A game busy with another trade can still be picked. The trade waits in line for it.
     const waits = (game?.busy || pick.limits?.busy || pick.mineBusy) && 'Busy with a trade. Your trade will wait in line.'
-    $('#pick-summary').textContent = reason || waits || 'The trade starts as soon as both games are ready.'
-    $('#pick-summary').classList.toggle('is-reason', Boolean(reason))
+    note('#pick-summary', reason || waits || '')
     button.disabled = !ready
+    button.title = next || reason || ''
     if ($('#slot-get-game')) $('#slot-get-game').textContent = pick.game ? `In ${gameName(pick.game)}` : ''
   }
   function reset() {
@@ -361,7 +363,6 @@
     const blocked = side === 'mine' ? mineBlocked(card) : side === 'theirs' ? theirsBlocked(card) : ''
     const parts = []
     if (blocked) parts.push(`<p class="pick-blocked-reason" role="note"><span class="micro">Cannot be traded</span>${esc(blocked)}</p>`)
-    if (side === 'mine' && ownSetting(card) === 'keep') parts.push(`<p class="trade-help trade-detail-lock">${Grid.lockIcon(true)} Locked on the <a href="${PokeSim.base}/pc">PC page</a>, so automatic trading never uses it. You can still pick it here.</p>`)
     if (side === 'mine' || side === 'theirs') parts.push(`<button type="button" class="key" data-detail-change="${side}">Choose another Pokémon</button>`)
     return parts.length ? `<div class="pc-trade-action trade-detail-action">${parts.join('')}</div>` : ''
   }
@@ -369,7 +370,7 @@
     if (side === 'theirs') return false
     const state = ownSetting(card)
     return state === 'protected' ? {state: 'Protected', note: 'Never traded automatically'}
-      : state === 'keep' ? {state: 'Locked', note: 'Never traded automatically. Change it on the PC page'} : false
+      : state === 'keep' ? {state: 'Locked', note: 'Never traded automatically'} : false
   }
   function renderDetail() {
     if (!open || !Grid) return
@@ -415,32 +416,25 @@
   $('#pick-reset')?.addEventListener('click', () => { note('#pick-note', '')
     reset() })
 
-  // Automatic trading: the on or off switch and the wish list, in the status box.
+  // Automatic trading: the on or off switch in the status box.
   let auto = null
   let autoBusy = false
   let autoLoading = false
   function renderAuto() {
     if (!auto) return
-    const locked = auto.viewer_only || autoBusy
     const switcher = $('#auto-switch')
     switcher.setAttribute('aria-checked', String(auto.enabled))
-    switcher.disabled = locked
+    switcher.disabled = auto.viewer_only || autoBusy
     $('#auto-switch-state').textContent = auto.enabled ? 'On' : 'Off'
-    $('#wish-input').disabled = locked
-    $('#wish-add').disabled = locked
-    $('#wish-species').innerHTML = auto.species.map(row => `<option value="${esc(row.name)}">No. ${row.dex}</option>`).join('')
-    if ($('#wish-count')) $('#wish-count').textContent = auto.wishes.length ? String(auto.wishes.length) : 'Empty'
-    $('#wish-list').innerHTML = auto.wishes.map(row => `<li class="wish"><span>${esc(row.name)} <span class="micro">No. ${row.dex}</span></span><button type="button" class="key wish-remove" data-dex="${row.dex}" aria-label="Remove ${esc(row.name)} from the wish list"${locked ? ' disabled' : ''}>Remove</button></li>`).join('')
-      || '<li class="empty-note">No wishes yet. Automatic trading picks useful trades on its own.</li>'
   }
-  async function saveAuto(change, message) {
+  async function saveAuto(change) {
     if (autoBusy || !auto) return
     autoBusy = true
     renderAuto()
     try {
       auto = await json(await PokeSim.api(`${SETTINGS}?adventure_id=${encodeURIComponent(aid)}`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(change)}),
         'Could not save this setting.')
-      note('#auto-note', message(auto))
+      note('#auto-note', '')
       globalThis.AdventureTrading?.refresh?.()
     } catch (error) {
       note('#auto-note', error.message)
@@ -453,40 +447,25 @@
   async function loadAuto() {
     globalThis.TradeUI?.refresh?.()
     if (!owner) {
-      if (String(PokeSim.base || '').startsWith('/view/')) note('#auto-note', 'Automatic trading is set from the owner’s page, not from a view link.')
-      for (const el of document.querySelectorAll('#auto-switch, #wish-input, #wish-add')) el.disabled = true
+      const switcher = $('#auto-switch')
+      if (switcher) {
+        switcher.disabled = true
+        if (String(PokeSim.base || '').startsWith('/view/')) switcher.title = 'Set from the owner’s page'
+      }
       return
     }
     if (autoLoading || autoBusy) return
     autoLoading = true
     try {
       auto = await json(await PokeSim.api(`${SETTINGS}?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not read the automatic trading settings.')
-      if (auto.viewer_only) note('#auto-note', 'This adventure is view-only. Its trading settings cannot be changed here.')
+      if (auto.viewer_only) $('#auto-switch').title = 'This adventure is view-only'
       renderAuto()
     } catch (error) {
       note('#auto-note', error.message)
     } finally { autoLoading = false }
   }
   $('#auto-switch')?.addEventListener('click', () => {
-    if (!auto) return
-    const enabled = !auto.enabled
-    saveAuto({enabled}, data => data.enabled ? 'Auto trading is on.' : 'Auto trading is off. Trades you make below still happen.')
-  })
-  $('#wish-form')?.addEventListener('submit', event => {
-    event.preventDefault()
-    if (!auto) return
-    const text = String($('#wish-input').value || '').trim().toLowerCase().replace(/^no\.\s*|^#/, '')
-    const found = auto.species.find(row => row.name.toLowerCase() === text || String(row.dex) === String(Number(text)))
-    if (!found) return note('#auto-note', 'Choose a species from the list.')
-    if (auto.wishlist.includes(found.dex)) return note('#auto-note', `${found.name} is already on the wish list.`)
-    $('#wish-input').value = ''
-    saveAuto({wishlist: [...auto.wishlist, found.dex]}, () => `${found.name} added to the wish list.`)
-  })
-  $('#wish-list')?.addEventListener('click', event => {
-    const button = event.target.closest?.('.wish-remove')
-    if (!button || button.disabled || !auto) return
-    const dex = Number(button.dataset.dex)
-    saveAuto({wishlist: auto.wishlist.filter(value => value !== dex)}, () => 'Removed from the wish list.')
+    if (auto) saveAuto({enabled: !auto.enabled})
   })
   // Fresh trade settings update the picker's lock icons.
   globalThis.TradeUI?.subscribe?.(() => {

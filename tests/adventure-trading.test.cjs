@@ -47,7 +47,7 @@ test('stopped history remains available and failed updates retain it with a reco
     ]}
   })
   await settle()
-  assert.equal(view.element('#trade-status').textContent, 'Waiting for this adventure')
+  assert.equal(view.element('#trade-lamp').title, 'Waiting for this adventure')
   const saved = view.element('#trade-history').innerHTML
   broken = true
   view.poll()
@@ -70,8 +70,7 @@ test('failed attempts explain missing trades and remain distinct from completed 
       failure_reason: 'An adventure could not reach the Cable Club.', error: '/private/worker/path'}],
   }))
   await settle()
-  assert.equal(view.element('#trade-status').textContent, 'Trades have not been completing')
-  assert.match(view.element('#trade-activity').textContent, /3 recent.*Cable Club/)
+  assert.match(view.element('#trade-lamp').title, /3 recent.*Cable Club/)
   // Attempts that did not complete sit in the one History list, next to completed trades.
   const html = view.element('#trade-history').innerHTML
   assert.match(html, /Blue &lt.Ripple&gt./)
@@ -99,7 +98,7 @@ test('a new attempt is shown as active even when earlier attempts failed', async
     attention: {message: 'A previous attempt did not complete.'}, recent_failures: [],
   }))
   await settle()
-  assert.equal(view.element('#trade-status').textContent, 'Exchange in progress')
+  assert.equal(view.element('#trade-lamp').title, 'Trading now')
   assert.match(view.element('#trade-active').innerHTML, /Getting ready for the Cable Club/)
   assert.equal(view.element('#current-exchange-section').hidden, false)
 })
@@ -202,7 +201,7 @@ test('a trade that has started, or a view link, offers no Cancel key', async () 
   const viewer = page('red', () => ({adventure: {id: 'red', state: 'running'}, active: [], history: [],
     queued: [{...entry, state: 'queued', cancellable: true}]}), {base: '/view/red'})
   await settle()
-  assert.match(owner.element('#trade-active').innerHTML, /Checking both Pokémon\. It starts when the Cable Club is free\./)
+  assert.match(owner.element('#trade-active').innerHTML, /<p class="queued-place">Checking both Pokémon<\/p>/)
   for (const view of [owner, viewer]) assert.doesNotMatch(view.element('#trade-active').innerHTML, /data-cancel|Cancel trade/)
   assert.match(viewer.element('#trade-active').innerHTML, /Next for the Cable Club/)
 })

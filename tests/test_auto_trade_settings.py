@@ -1,4 +1,4 @@
-"""Automatic trading settings: on or off, a wish list, Prefer to trade, and hand-picked trades first."""
+"""Automatic trading settings: on or off, Prefer to trade, and hand-picked trades first."""
 import asyncio
 import threading
 import time
@@ -66,18 +66,26 @@ def test_changes_to_different_adventures_at_once_all_stick():
     assert all(trade_settings.get(registry, aid)['enabled'] is False for aid in ids)
 
 
-def test_settings_default_on_with_an_empty_wish_list(setup):  # noqa: F811
+def test_settings_default_on_and_switch_per_adventure(setup):  # noqa: F811
     aid = setup.data['left_id']
-    assert trade_settings.get(setup.registry, aid) == {'enabled': True, 'wishlist': []}
-    assert trade_settings.update(setup.registry, aid, enabled=False, wishlist=[25, 25, 4]) == {
-        'enabled': False, 'wishlist': [25, 4]}
+    assert trade_settings.get(setup.registry, aid) == {'enabled': True}
+    assert trade_settings.update(setup.registry, aid, enabled=False) == {'enabled': False}
     assert trade_settings.get(setup.registry, aid)['enabled'] is False
     assert trade_settings.get(setup.registry, setup.data['right_id'])['enabled'] is True
     with pytest.raises(ValueError):
-        trade_settings.update(setup.registry, aid, wishlist=[200], dex_total=151)
-    with pytest.raises(ValueError):
         trade_settings.update(setup.registry, aid, enabled='yes')
-    assert trade_settings.wanted({'wishlist': [25, 4]}, {'party': [{'dex': 25}]}) == {4}
+
+
+def test_an_old_stored_wish_list_is_ignored_and_kept(setup, monkeypatch):  # noqa: F811
+    """The wish list is gone. One saved by an earlier build neither crashes nor changes trades, and stays stored."""
+    c, left = setup.coordinator, setup.data['left_id']
+    setup.registry.set_setting(trade_settings.KEY, {left: {'enabled': True, 'wishlist': [2, 'bad', 999]}, 'junk': 5})
+    assert trade_settings.get(setup.registry, left) == {'enabled': True}
+    monkeypatch.setattr(c, '_benefit', lambda inventory, mon: 0)
+    # Both peers offer an Ivysaur (No. 2). An old wish for it no longer makes a useless trade worth it.
+    assert c.schedule_once() is None
+    trade_settings.update(setup.registry, left, enabled=False)
+    assert setup.registry.setting(trade_settings.KEY)[left] == {'enabled': False, 'wishlist': [2, 'bad', 999]}
 
 
 def test_auto_off_stops_automatic_trades_only(setup):  # noqa: F811
@@ -92,31 +100,6 @@ def test_auto_off_stops_automatic_trades_only(setup):  # noqa: F811
     trade_settings.update(setup.registry, left, enabled=True)
     setup.registry.db.execute('UPDATE interactions SET updated_at=0')
     assert c.schedule_once()['phase'] == 'completed'
-
-
-def test_wish_list_makes_an_otherwise_useless_trade_worth_it(setup, monkeypatch):  # noqa: F811
-    c, left = setup.coordinator, setup.data['left_id']
-    monkeypatch.setattr(c, '_benefit', lambda inventory, mon: 0)
-    assert c.schedule_once() is None
-    # Both peers offer an Ivysaur (No. 2). The left game wishes for it and holds none.
-    trade_settings.update(setup.registry, left, wishlist=[2])
-    assert c.schedule_once()['phase'] == 'completed'
-
-
-def test_a_held_wish_does_not_count(setup, monkeypatch):  # noqa: F811
-    c, left = setup.coordinator, setup.data['left_id']
-    monkeypatch.setattr(c, '_benefit', lambda inventory, mon: 0)
-    trade_settings.update(setup.registry, left, wishlist=[2])
-    peer = setup.peers[left]
-    plain = peer.request
-
-    def holding(method, path, data=None, timeout=None):
-        result = plain(method, path, data, timeout)
-        if path.endswith('/inventory'):
-            result['party'] = [{'dex': 2}]
-        return result
-    monkeypatch.setattr(peer, 'request', holding)
-    assert c.schedule_once() is None
 
 
 def third_game(setup):  # noqa: F811
@@ -135,17 +118,6 @@ def test_trade_first_pokemon_are_used_before_anything_else(setup, monkeypatch): 
     setup.peers[outsider].offer = {'trade_preference': 'offered'}
     assert outsider in chosen(c)
     assert third in setup.peers
-
-
-def test_wish_list_hits_rank_before_trade_first(setup, monkeypatch):  # noqa: F811
-    c = setup.coordinator
-    third_game(setup)
-    capture(c, monkeypatch)
-    ids = list(setup.peers)
-    setup.peers[ids[0]].offer = {'trade_preference': 'offered'}
-    setup.peers[ids[1]].offer = {'dex': 7, 'arrived_dex': 7}
-    trade_settings.update(setup.registry, ids[2], wishlist=[7])
-    assert chosen(c) == {ids[1], ids[2]}
 
 
 def test_stored_trade_offers_are_ignored(setup):  # noqa: F811
@@ -238,10 +210,10 @@ def test_auto_settings_route_reads_writes_and_respects_view_only(managed, monkey
     client, aid = managed.client, managed.aid
     path = f'/api/v1/interactions/auto-settings?adventure_id={aid}'
     data = client.get(path).json()
-    assert data['enabled'] is True and data['wishlist'] == [] and data['viewer_only'] is False
-    saved = client.put(path, json={'enabled': False, 'wishlist': [25]}).json()
-    assert saved['enabled'] is False and [wish['dex'] for wish in saved['wishes']] == [25]
-    assert client.put(path, json={'wishlist': [400]}).status_code == 400
+    assert data == {'adventure_id': aid, 'enabled': True, 'viewer_only': False}
+    saved = client.put(path, json={'enabled': False}).json()
+    assert saved == {'adventure_id': aid, 'enabled': False, 'viewer_only': False}
+    assert client.put(path, json={'wishlist': [25]}).status_code == 400
     assert client.put(path, json={'other': 1}).status_code == 400
     monkeypatch.setattr(config, 'VIEWER_ONLY', True)
     assert client.put(path, json={'enabled': True}).status_code == 403

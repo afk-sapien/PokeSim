@@ -657,7 +657,7 @@ def create_app(manager, shutdown=lambda: None):
     async def cancel_built_trade(mid: str):
         return await asyncio.to_thread(manager.builder.cancel, validate_id(mid))
 
-    # Automatic trading settings: on or off and a wish list, per adventure.
+    # Automatic trading settings: on or off, per adventure.
     @app.get('/api/v1/interactions/auto-settings')
     async def auto_settings(adventure_id: str):
         return await asyncio.to_thread(auto_settings_public, validate_id(adventure_id))
@@ -667,28 +667,23 @@ def create_app(manager, shutdown=lambda: None):
         manager.check_available()
         aid = validate_id(adventure_id)
         data = await json_body(request)
-        if not isinstance(data, dict) or set(data) - {'enabled', 'wishlist'}:
-            raise HTTPException(400, 'Send enabled and wishlist only')
+        if not isinstance(data, dict) or set(data) - {'enabled'}:
+            raise HTTPException(400, 'Send enabled only')
 
         def write():
             if manager.builder.viewer_only(aid):
                 raise HTTPException(403, 'This adventure is view-only')
-            game = manager.registry.adventure(aid)
+            manager.registry.adventure(aid)
             try:
-                trade_settings.update(manager.registry, aid, enabled=data.get('enabled'), wishlist=data.get('wishlist'),
-                                      dex_total=251 if game['version'] in {'gold', 'silver', 'crystal'} else 151)
+                trade_settings.update(manager.registry, aid, enabled=data.get('enabled'))
             except ValueError as error:
                 raise HTTPException(400, str(error)) from error
             return auto_settings_public(aid)
         return await asyncio.to_thread(write)
 
     def auto_settings_public(aid):
-        game = manager.registry.adventure(aid)
-        settings = trade_settings.get(manager.registry, aid)
-        names = manager.coordinator.species_names(2 if game['version'] in {'gold', 'silver', 'crystal'} else 1)
-        return {'adventure_id': aid, **settings,
-                'wishes': [{'dex': dex, 'name': names.get(dex) or f'No. {dex}'} for dex in settings['wishlist']],
-                'species': [{'dex': dex, 'name': name} for dex, name in sorted(names.items())],
+        manager.registry.adventure(aid)
+        return {'adventure_id': aid, **trade_settings.get(manager.registry, aid),
                 'viewer_only': manager.builder.viewer_only(aid)}
 
     @app.post('/api/v1/interactions/{tid}/cancel')

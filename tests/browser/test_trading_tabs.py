@@ -46,8 +46,7 @@ class Library:
         self.queued = []
         self.held = {}
         self.request_reads = []
-        self.auto = {'adventure_id': FROM, 'enabled': True, 'wishlist': [], 'wishes': [], 'viewer_only': False,
-                     'species': [{'dex': 1, 'name': 'Bulbasaur'}, {'dex': 16, 'name': 'Pidgey'}, {'dex': 25, 'name': 'Pikachu'}]}
+        self.auto = {'adventure_id': FROM, 'enabled': True, 'viewer_only': False}
         trading = render_game_page('adventure-trading.html', base_path=f'/games/{FROM}', adventure_id=FROM,
                                    adventure_name='Crystal')
         pc = render_game_page('pc.html', base_path=f'/games/{FROM}', adventure_id=FROM, adventure_name='Crystal')
@@ -148,8 +147,6 @@ class Library:
             change = json.loads(route.request.post_data)
             self.saved.append(change)
             self.auto.update(change)
-            names = {row['dex']: row['name'] for row in self.auto['species']}
-            self.auto['wishes'] = [{'dex': dex, 'name': names[dex]} for dex in self.auto['wishlist']]
         self.json(route, self.auto)
 
 
@@ -168,7 +165,9 @@ def test_trading_is_one_page_with_the_switch_up_top_then_trade_and_history(page,
     expect(page.get_by_role('tab')).to_have_count(0)
     overview = page.locator('.trade-overview')
     expect(overview.get_by_role('switch', name=re.compile('Auto trading'))).to_be_enabled()
-    expect(overview.get_by_role('link', name='PC page')).to_have_attribute('href', f'/games/{FROM}/pc')
+    # The status box is the switch and nothing else: no headline, no explanation, no wish list.
+    assert overview.inner_text().split() == ['Auto', 'trading', 'On'], overview.inner_text()
+    expect(page.locator('main .trade-help, .page-lede, #trade-status, #trade-activity, [id^="wish"]')).to_have_count(0)
     expect(page.locator('#auto-list, #auto-setting, .trade-setting')).to_have_count(0)
     order = page.evaluate("""[...document.querySelectorAll('main > section')].filter(el => !el.hidden).map(el => el.id || el.className)""")
     assert order == ['trade-overview', 'make-trade', 'trade-history-section'], order
@@ -215,7 +214,8 @@ def test_trade_builder_picks_both_slots_in_a_modal_and_starts_an_owned_trade(pag
     expect(page.locator('#slot-send')).to_contain_text('Choose a Pokémon')
     expect(page.locator('#slot-get .slot-empty')).to_be_disabled()
     expect(confirm).to_be_disabled()
-    expect(page.locator('#pick-summary')).to_contain_text('Choose a game to trade with')
+    expect(page.locator('#pick-summary')).to_be_hidden()
+    expect(confirm).to_have_attribute('title', 'Choose a game to trade with.')
     # Before a Pokémon is chosen, only the game's own limits grey a game out.
     expect(option(page, BLUE)).to_have_attribute('disabled', '')
     expect(option(page, BLUE)).to_contain_text(REASON)
@@ -251,13 +251,13 @@ def test_trade_builder_picks_both_slots_in_a_modal_and_starts_an_owned_trade(pag
     expect(picker).to_be_hidden()
     choose(page, 'mine', 'box-1')
     expect(page.locator('#slot-send .pc-mon')).to_contain_text('BUD')
-    expect(page.locator('#pick-summary')).to_contain_text('Choose a game to trade with')
+    expect(confirm).to_have_attribute('title', 'Choose a game to trade with.')
     # With a Pokémon chosen, every game is checked against it.
     expect(option(page, BLUE)).to_contain_text(REASON)
     expect(option(page, RED)).not_to_have_attribute('disabled', '')
     page.locator('#pick-game').select_option(RED)
     expect(page.locator('#slot-get-game')).to_have_text('In Second Red')
-    expect(page.locator('#pick-summary')).to_contain_text('Choose a Pokémon to get')
+    expect(confirm).to_have_attribute('title', 'Choose a Pokémon to get.')
     picker = open_picker(page, 'theirs')
     mew = page.locator('#pick-theirs [data-key="2"]')
     expect(mew).to_have_attribute('aria-disabled', 'true')
@@ -271,7 +271,8 @@ def test_trade_builder_picks_both_slots_in_a_modal_and_starts_an_owned_trade(pag
     expect(page.locator('#slot-get .pc-mon')).to_contain_text('Pidgey')
     expect(confirm).to_be_enabled()
     expect(confirm).to_have_text('Trade')
-    expect(page.locator('#pick-summary')).to_contain_text('starts as soon as both games are ready')
+    expect(page.locator('#pick-summary')).to_be_hidden()
+    expect(confirm).to_have_attribute('title', '')
     shoot(page, f'trade-confirm-{width}')
     # A chosen card opens the shared detail panel.
     page.locator('#slot-send .pc-mon').click()
@@ -331,7 +332,7 @@ def test_their_pokemon_can_be_chosen_first_and_clear_empties_both_slots(page, ga
     library.open()
     page.locator('#pick-game').select_option(RED)
     choose(page, 'theirs', '1')
-    expect(page.locator('#pick-summary')).to_contain_text('Choose a Pokémon to send')
+    expect(page.locator('#pick-confirm')).to_have_attribute('title', 'Choose a Pokémon to send.')
     expect(page.locator('#pick-confirm')).to_be_disabled()
     choose(page, 'mine', 'box-1')
     expect(page.locator('#pick-confirm')).to_be_enabled()
@@ -442,8 +443,7 @@ def test_automatic_trades_run_without_asking(page, game, width):
     page.set_viewport_size({'width': width, 'height': 844})
     library.open('?tab=auto')
     on_screen(page, '.trade-overview')
-    expect(page.locator('#trade-status')).to_have_text('On, trades automatically')
-    expect(page.locator('#trade-activity')).to_have_text('This adventure will trade when a useful exchange is ready.')
+    expect(page.locator('#trade-lamp')).to_have_attribute('title', 'On')
     expect(page.locator('#auto-switch')).to_be_enabled()
     # There is no Ask me first switch and no suggested trades to accept or dismiss.
     expect(page.get_by_role('switch')).to_have_count(1)
@@ -457,7 +457,7 @@ def test_automatic_trades_run_without_asking(page, game, width):
 
 
 @pytest.mark.parametrize('width', [1280, 390])
-def test_status_box_switch_and_wish_list(page, game, width):
+def test_status_box_switch_turns_auto_trading_off(page, game, width):
     library = Library(page, game[0])
     page.set_viewport_size({'width': width, 'height': 844})
     library.open()
@@ -466,17 +466,10 @@ def test_status_box_switch_and_wish_list(page, game, width):
     switch.click()
     expect(switch).to_have_attribute('aria-checked', 'false')
     expect(page.locator('#auto-switch-state')).to_have_text('Off')
-    expect(page.locator('#trade-status')).to_have_text('Off')
-    assert library.saved[-1] == {'enabled': False}
-    # The wish list folds away under the switch.
-    page.locator('#wish-details summary').click()
-    page.locator('#wish-input').fill('Pikachu')
-    page.locator('#wish-add').click()
-    expect(page.locator('#wish-list')).to_contain_text('Pikachu')
-    expect(page.locator('#wish-count')).to_contain_text('1')
-    assert library.saved[-1] == {'wishlist': [25]}
-    page.get_by_role('button', name='Remove Pikachu from the wish list').click()
-    expect(page.locator('#wish-list')).not_to_contain_text('Pikachu')
+    expect(page.locator('#trade-lamp')).to_have_attribute('title', 'Off')
+    assert library.saved == [{'enabled': False}]
+    # Saving says nothing. The switch shows the state.
+    expect(page.locator('#auto-note')).to_be_hidden()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 

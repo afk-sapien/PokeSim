@@ -304,7 +304,7 @@ def test_trading_page_is_one_page_without_offers_or_cable_club(viewer):
     assert [name or cls for name, cls in sections if cls != 'builder-slot'] == ['trade-overview', 'current-exchange-section', 'make-trade',
                                                        'trade-history-section']
     for gone in ('tab-offers', 'tab-auto', 'panel-auto', 'auto-list', 'panel-offers', 'offers-count', 'tab-cable', 'panel-cable', 'cable-games', 'Send offer',
-                 'ask-switch', 'trade-requests', 'Ask me first', 'Suggested trades'):
+                 'ask-switch', 'trade-requests', 'Ask me first', 'Suggested trades', 'wish', 'Wish'):
         assert gone not in html
 
 

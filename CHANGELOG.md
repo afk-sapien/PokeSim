@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Make each game's Trading page one page. The Auto tab is gone: the automatic trading switch and the wish list sit in the status box at the top, then Make a trade and History follow. Lock a Pokémon on the PC page instead: press it and press **Locked: never traded** in its popup. Every Pokémon can be traded automatically unless it is locked, and a locked one has a lock icon in the PC grid and the party. Locks are the old Never trade setting, so existing choices carry over. The Library loses its Trading tab and keeps Library, Notifications and Settings. `/trading` and `/trade` now redirect to the library, and a trade notification opens the first game's Trading page.
+- Trading page trimmed to the essentials; wishlist removed.
+
+- Make each game's Trading page one page. The Auto tab is gone: the automatic trading switch sits at the top, then Make a trade and History follow. Lock a Pokémon on the PC page instead: press it and press **Locked: never traded** in its popup. Every Pokémon can be traded automatically unless it is locked, and a locked one has a lock icon in the PC grid and the party. Locks are the old Never trade setting, so existing choices carry over. The Library loses its Trading tab and keeps Library, Notifications and Settings. `/trading` and `/trade` now redirect to the library, and a trade notification opens the first game's Trading page.
 
 - Fix Crystal adventures stuck in Battle Tower 1F with "A conversation in Battle Tower 1F made no progress" logged every two seconds. The Tower team was chosen for level 20 at levels 16 to 18, and Silver Cave training toward level 20 took two partners to 21 in one battle, so the receptionist answered "A party POKéMON tops this level." and asked for the level again, forever. A partner that outgrows the chosen level now cancels the challenge at the level question, the adventure team is restored, and that level backs off like a lost challenge. The next challenge is chosen from the partners' current levels.
 

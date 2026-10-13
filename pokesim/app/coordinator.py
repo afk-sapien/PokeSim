@@ -182,20 +182,6 @@ class Coordinator:
                 return {}
         return self.display_species.get(str(species), {})
 
-    def species_names(self, generation):
-        """Pokédex number to species name for one generation, for the wish list."""
-        if generation == 2:
-            names = {dex: (row.get('name') or '').replace('_', ' ').title() for dex, row in self._gen2_species().items()
-                     if type(dex) is int and 1 <= dex <= 251}
-            if names:
-                return names
-        from ..game_data import load
-        try:
-            table = load('tables.json', directory=self.manager.assets.game_data_dir)['dex']
-        except (RuntimeError, KeyError):
-            return {}
-        return {int(dex): name for dex, name in table.items() if str(dex).isdigit()}
-
     def _gen2_species(self):
         """Gen II species rows, read once. Loading a bundle parses and checksums about 3 MB, and
         every Gen II Pokémon on the trading pages is displayed through here."""
@@ -610,9 +596,8 @@ class Coordinator:
         deadline = time.monotonic() + self.prepare_timeout
         prepared = {}
         plan = row['plan']
-        # A full PC releases one spare to make room, never a hand-picked Pokémon or a wished species.
+        # A full PC releases one spare to make room, never a hand-picked Pokémon.
         hand_picked = self.hand_picked_keys()
-        wished = trade_settings.wished(self.registry)
         while len(prepared) != 2:
             if self.closed.is_set() or self.registry.transaction(row['id'])['decision'] == 'ABORT':
                 raise RuntimeError('Cable Club preparation was cancelled')
@@ -622,7 +607,7 @@ class Coordinator:
                 request = {'id': row['id'], 'plan_digest': plan['plan_digest'], 'selected_key': plan[side + '_key'],
                            'time_capsule': len({self.registry.adventure(p)['version'] in {'red', 'blue', 'yellow'}
                                                 for p in plan['participants']}) == 2,
-                           'protect': sorted(key for owner, key in hand_picked if owner == aid), 'wished': wished}
+                           'protect': sorted(key for owner, key in hand_picked if owner == aid)}
                 if plan.get('manual'):
                     request['manual'] = True
                 if plan.get('session'):
@@ -1041,7 +1026,6 @@ class Coordinator:
         inventories = [self._auto_offers(aid, inv, reserved) for aid, inv in inventories
                        if settings[aid]['enabled'] and time.time() - last.get(aid, 0) >= COOLDOWN_SECONDS
                        and aid not in waiting]
-        wishes = {aid: trade_settings.wanted(settings[aid], inv) for aid, inv in inventories}
         candidates = []
         for index, (left_id, left) in enumerate(inventories):
             for right_id, right in inventories[index + 1:]:
@@ -1055,9 +1039,7 @@ class Coordinator:
                     for take, mine in zip(takes, mine_by_take):
                         if not self._compatible_pair(left, right, give, take):
                             continue
-                        wished = (int(take.get('arrived_dex', take.get('dex')) in wishes[left_id])
-                                  + int(give.get('arrived_dex', give.get('dex')) in wishes[right_id]))
-                        if not (mine + theirs or wished) or not self._last_copies_useful(give, take, mine, theirs):
+                        if not mine + theirs or not self._last_copies_useful(give, take, mine, theirs):
                             continue
                         # Do not circulate the same individual for repeat quality gains.
                         # A newly available Pokédex entry still justifies its return.
@@ -1067,9 +1049,9 @@ class Coordinator:
                         repetition = sum(recent_species[aid, dex] for aid, dex in {
                             (left_id, give.get('dex')), (left_id, take.get('arrived_dex', take.get('dex'))),
                             (right_id, take.get('dex')), (right_id, give.get('arrived_dex', give.get('dex')))})
-                        # A wish list hit comes first, then Pokémon the owners set to Prefer to trade.
+                        # Pokémon the owners set to Prefer to trade come first.
                         first = sum(mon.get('trade_preference') == FIRST for mon in (give, take))
-                        rank = (wished, first, mine + theirs, bool(mine and theirs), -repetition,
+                        rank = (first, mine + theirs, bool(mine and theirs), -repetition,
                                 -max(last.get(left_id, 0), last.get(right_id, 0)),
                                 -(give.get('level', 0) + take.get('level', 0)),
                                 give.get('trade_key') or '', take.get('trade_key') or '')

@@ -11,8 +11,8 @@ Everything about trading lives on each adventure's Trading page at
 which start on their own, and trades you build by hand between your own
 adventures. The page is one page, top to bottom:
 
-1. The **Automatic trading** status box, with the on/off switch, a note on the
-   rules and the wish list, folded away under the switch.
+1. The **Auto trading** switch. Its lamp shows the state, and hovering the lamp
+   gives the reason when trades are not completing.
 2. **Current exchange**, for trades that are waiting or running, on the pages of
    both adventures. It is hidden when there is none.
 3. **Make a trade** builds a trade by hand: another adventure, the Pokémon you
@@ -59,15 +59,12 @@ after it was selected is not released or traded.
 The status box at the top of the Trading page has a switch that turns automatic
 trading on or off for this adventure.
 Switching it off stops only automatic trades. Other adventures still collect for
-it, and trades you pick by hand still reach it. The overview shows Off for an
+it, and trades you pick by hand still reach it. The switch shows Off for an
 adventure with automatic trading switched off.
 
-The wish list names species this adventure wants. A wished species it holds none of
-makes an exchange worth doing even when the Pokédex does not need it, and such an
-exchange is ranked ahead of every other.
-
 Automatic trades start by themselves when a useful exchange is ready, with no
-approval step. The status box reads **On, trades automatically**.
+approval step. There is no wish list. One saved by an earlier 0.5.0 build is
+ignored and left in storage.
 
 Automatic trading also follows fixed rules that no setting changes:
 
@@ -153,9 +150,8 @@ The trade builder is under `/api/v1/interactions/trade-builder`:
 `active` and `history`. The older `/api/v1/interactions/manual-trades` admin API
 is gone.
 
-`GET /api/v1/interactions/auto-settings?adventure_id=` reads the switch and wish
-list, and `PUT` with `enabled` and `wishlist` (a list of Pokédex numbers, up to 50)
-saves them. A game's own `POST /api/trading/preferences` sets one Pokémon with
+`GET /api/v1/interactions/auto-settings?adventure_id=` reads the switch, and
+`PUT` with `enabled` saves it. A game's own `POST /api/trading/preferences` sets one Pokémon with
 `key` and `state`: `keep` locks it and `auto` unlocks it. `first` (Prefer to
 trade) is still accepted.
 

@@ -57,10 +57,10 @@
     const peer = /^[a-f0-9]{32}$/.test(entry.peer_id || '')
       ? `<a href="/games/${entry.peer_id}/trading">${esc(entry.peer_name)}</a>` : esc(entry.peer_name)
     const place = entry.state === 'starting' ? 'Checking both Pokémon' : entry.position > 1 ? `Number ${entry.position} in line for the Cable Club` : 'Next for the Cable Club'
-    const wait = entry.state !== 'starting' && entry.busy ? 'Busy with a trade. Your trade will wait in line.' : 'It starts when the Cable Club is free.'
+    const wait = 'Busy with a trade. Your trade will wait in line.'
     const cancel = entry.cancellable && entry.state === 'queued' && owner() && /^[a-f0-9]{32}$/.test(entry.id || '')
       ? `<footer class="deal-foot"><button type="button" class="key queued-cancel" data-cancel="${entry.id}">Cancel trade</button></footer>` : ''
-    return `<article class="deal trade-deal cable-card queued-card"><header class="deal-head"><h3>With ${peer}</h3><span class="tag tag--signal cable-status"><i class="lamp lamp--blink" data-on="signal" aria-hidden="true"></i>Waiting for the Cable Club</span></header><p class="trade-help">${esc(place)}. ${esc(wait)}</p>${cancel}</article>`
+    return `<article class="deal trade-deal cable-card queued-card"><header class="deal-head"><h3>With ${peer}</h3><span class="tag tag--signal cable-status"><i class="lamp lamp--blink" data-on="signal" aria-hidden="true"></i>Waiting for the Cable Club</span></header><p class="queued-place">${esc(place)}${entry.state !== 'starting' && entry.busy ? `. ${esc(wait)}` : ''}</p>${cancel}</article>`
   }
   // Cancel takes a waiting trade out of line. Once it has started, the server refuses and says why.
   async function cancelQueued(button) {
@@ -100,12 +100,10 @@
       const running = data.adventure.state === 'running' && !data.adventure.archived
       const off = data.auto_enabled === false
       setLamp(data.active.length ? 'signal' : !running || off ? 'warn' : data.attention ? 'warn' : 'ok')
-      $('#trade-status').textContent = data.active.length ? 'Exchange in progress' : !running ? 'Waiting for this adventure'
-        : off ? 'Off' : data.attention ? 'Trades have not been completing' : 'On, trades automatically'
-      $('#trade-activity').textContent = data.active.length ? 'This adventure is trading. Other adventures keep playing.'
-        : !running ? 'Trades resume when this adventure is running. Its history stays here.'
-        : off ? 'Automatic trading is off. Trades you make below still happen.'
-        : data.attention?.message || 'This adventure will trade when a useful exchange is ready.'
+      // The lamp carries the state. A problem shows as the lamp's tooltip, not as text.
+      const lamp = $('#trade-lamp')
+      if (lamp) lamp.title = data.active.length ? 'Trading now' : !running ? 'Waiting for this adventure'
+        : off ? 'Off' : data.attention?.message || 'On'
       const queued = data.queued || []
       $('#current-exchange-section').hidden = !data.active.length && !queued.length
       $('#trade-active').innerHTML = data.active.length || queued.length
@@ -119,14 +117,14 @@
       $('#trade-history-count').textContent = `${completed.length}${completed.length === 20 ? '+' : ''} completed`
         + (failures.length ? `, ${failures.length} did not complete` : '')
       $('#trade-history').innerHTML = rows.length ? rows.map(([trade, done]) => exchange(trade, done)).join('')
-        : '<p class="empty-note">This adventure’s trades will appear here.</p>'
+        : '<p class="empty-note">No trades yet.</p>'
       globalThis.Panel?.fitSprites?.(document)
     } catch (_) {
       $('#status').textContent = 'Reconnecting…'
       $('#connection').title = ''
       $('#connection').classList.toggle('is-offline', true)
       setLamp('crit')
-      $('#trade-connection-note').textContent = 'This adventure’s trading updates are reconnecting. Any displayed history is from the last successful update.'
+      $('#trade-connection-note').textContent = 'Reconnecting…'
       $('#trade-connection-note').hidden = false
     } finally { loading = false }
   }

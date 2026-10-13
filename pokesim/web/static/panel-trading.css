@@ -147,7 +147,7 @@ main.shell { padding-bottom: var(--s7); }
   border-bottom: var(--hair) solid var(--rule-faint);
 }
 .deal-head h3 { font: 600 var(--f-body) / 1.3 var(--font-text); overflow-wrap: anywhere; }
-.queued-card .trade-help { margin: 0; padding: var(--s3) var(--s4); }
+.queued-card .trade-help, .queued-place { margin: 0; padding: var(--s3) var(--s4); color: var(--ink-2); }
 .swap {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -274,33 +274,13 @@ main.shell { padding-bottom: var(--s7); }
 .manual-result { color: var(--ink) }
 .manual-result.error { color: var(--crit) }
 
-/* ---- one page: the overview holds the switch, the rules and the wish list ---- */
-.trade-overview-switch { flex: 0 0 auto }
-.trade-overview-rules { flex: 1 1 100% }
-.trade-overview-rules { margin: 0 }
-.trade-overview-rules { max-width: 72ch }
-.trade-overview-rules a { color: var(--ink) }
-.wish-details { flex: 1 1 100% }
-.wish-details { min-width: 0 }
-.wish-details { border-top: var(--hair) solid var(--rule-faint) }
-.wish-details { padding-top: var(--s3) }
-.wish-details > summary { display: inline-flex }
-.wish-details > summary { align-items: center }
-.wish-details > summary { gap: var(--s2) }
-.wish-details > summary { min-height: 44px }
-.wish-details > summary { cursor: pointer }
-.wish-details > summary { list-style: none }
-.wish-details > summary::-webkit-details-marker { display: none }
-.wish-details > summary::before { content: "\25B6" }
-.wish-details > summary::before { font: 8px / 1 var(--font-panel) }
-.wish-details > summary::before { color: var(--ink-3) }
-.wish-details[open] > summary::before { content: "\25BC" }
-.wish-details > summary:focus-visible { outline: 2px solid var(--signal) }
-.wish-details > summary:focus-visible { outline-offset: 2px }
-.wish-count { font: 12px / 1 var(--font-panel) }
-.wish-count { color: var(--ink-2) }
-.wish-count { font-variant-numeric: tabular-nums }
-.wish-details .trade-help { margin: var(--s2) 0 0 }
+/* ---- one page: the overview is just the automatic trading switch ---- */
+#trade-overview { padding: 0 }
+#trade-overview { gap: var(--s3) }
+#trade-overview { background: none }
+#trade-overview { border: 0 }
+#trade-overview { box-shadow: none }
+.auto-switch .lamp { flex: 0 0 auto }
 .trade-overview > .trade-notice { flex: 1 1 100% }
 .trade-overview > .trade-notice { margin: 0 }
 #make-trade, #trade-history-section, #current-exchange-section { scroll-margin-top: var(--s7) }
@@ -385,29 +365,8 @@ a.pick-item { text-decoration: none }
 .auto-switch[aria-checked="true"] .auto-switch-track { background: var(--signal) }
 .auto-switch[aria-checked="true"] .auto-switch-track::after { left: 18px }
 .auto-switch[aria-checked="true"] .auto-switch-track::after { background: var(--panel) }
-.wish-form { display: flex }
-.wish-form { flex-wrap: wrap }
-.wish-form { align-items: end }
-.wish-form { gap: var(--s2) }
-.wish-form .pick-search { flex: 1 1 240px }
-.wish-form .pick-search { margin-bottom: 0 }
-.wish-form .key { min-height: 44px }
-.wish-list { display: flex }
-.wish-list { flex-wrap: wrap }
-.wish-list { gap: var(--s2) }
-.wish-list { margin: var(--s3) 0 0 }
-.wish-list { padding: 0 }
-.wish-list { list-style: none }
-.wish { display: inline-flex }
-.wish { align-items: center }
-.wish { gap: var(--s2) }
-.wish { padding: var(--s1) var(--s1) var(--s1) var(--s3) }
-.wish { background: var(--panel-2) }
-.wish { border: var(--hair) solid var(--rule) }
-.wish .key { min-height: 36px }
 
 @media (max-width: 640px) {
-  .trade-overview-switch { flex: 1 1 100% }
   .auto-switch { width: 100% }
   .pick-list { grid-template-columns: minmax(0, 1fr) }
   .pick-search { max-width: none }
