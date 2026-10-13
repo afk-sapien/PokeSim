@@ -124,7 +124,7 @@ function renderParty(party) {
   const openBay = (index, title, note) =>
     `<li class="mon mon--empty"><div class="mon-plate"><div class="plate plate--bay"><span class="plate-num">${slotNo(index)}</span></div></div><div class="mon-body">${title ? `<p class="micro">${title}</p>` : ''}<p>${note}</p></div></li>`
   const emptySlots = (filled) => Array.from({length: Math.max(0, 6 - filled)}, (_, slot) =>
-    openBay(filled + slot, '', 'Room for one more')).join('')
+    openBay(filled + slot, `Slot ${slotNo(filled + slot)}`, 'Room for one more')).join('')
   // A Pokémon on the naming screen is counted before the cartridge writes its stats,
   // so show the slot as arriving rather than as a fainted level 0 nobody.
   const pendingSlot = (index) => openBay(index, `Slot ${slotNo(index)}`, 'Joining the team…')
