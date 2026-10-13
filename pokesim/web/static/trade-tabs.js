@@ -7,13 +7,41 @@
   const owner = String(PokeSim.base || '').startsWith('/games/') && typeof PokeSim.api === 'function'
   const query = new URLSearchParams(location.search)
 
-  // One page, no tabs. An old ?tab= link scrolls to the matching section instead.
-  const SECTIONS = {trade: '#make-trade', history: '#trade-history-section', auto: '#trade-overview', current: '#current-exchange-section'}
-  function select(name) {
-    const target = SECTIONS[name] ? $(SECTIONS[name]) : null
-    if (!target || target.hidden) return
-    target.scrollIntoView?.({block: 'start'})
+  // Two tabs under the switch: Make a trade and History. The hash (#make, #history) keeps the choice.
+  const tabs = [...document.querySelectorAll('.trade-tabs [role="tab"]')]
+  const TABS = {make: 'make', trade: 'make', current: 'make', auto: 'make', history: 'history'}
+  // A section inside a tab. Picking it shows its tab, then scrolls to it.
+  const SECTIONS = {current: '#current-exchange-section'}
+  function show(name, {focus = false, hash = true} = {}) {
+    const current = TABS[name] || 'make'
+    for (const tab of tabs) {
+      const on = tab.id === `tab-${current}`
+      tab.setAttribute('aria-selected', String(on))
+      tab.tabIndex = on ? 0 : -1
+      const panel = document.getElementById(tab.getAttribute('aria-controls'))
+      if (panel) panel.hidden = !on
+      if (on && focus) tab.focus()
+    }
+    if (hash && location.hash !== `#${current}`) history.replaceState?.(history.state, '', `${location.pathname}${location.search}#${current}`)
+    return current
   }
+  function select(name) {
+    show(name)
+    const target = SECTIONS[name] ? $(SECTIONS[name]) : null
+    if (target && !target.hidden) target.scrollIntoView?.({block: 'start'})
+  }
+  for (const tab of tabs) {
+    tab.addEventListener('click', () => show(tab.id.slice(4)))
+    tab.addEventListener('keydown', event => {
+      const index = tabs.indexOf(tab)
+      const moves = {ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: tabs.length - 1}
+      if (!(event.key in moves)) return
+      event.preventDefault()
+      show(tabs[(moves[event.key] + tabs.length) % tabs.length].id.slice(4), {focus: true})
+    })
+  }
+  globalThis.addEventListener?.('hashchange', () => { const name = location.hash.slice(1)
+    if (TABS[name]) show(name, {hash: false}) })
 
   // Pokémon cards: the same grid, filters and detail popup as the PC page (mon-grid.js).
   const Grid = globalThis.MonGrid
@@ -474,12 +502,14 @@
     if (open?.side === 'mine') renderDetail()
   })
 
-  // Deep links: ?mon=key preselects a Pokémon to send, ?tab= scrolls to its section.
+  // Deep links: ?mon=key preselects a Pokémon to send on Make a trade. Otherwise the hash,
+  // then an older ?tab= link, picks the tab. A section link scrolls once the fonts settle.
   loadAuto()
   loadMine()
-  const asked = query.get('tab') || (query.get('mon') ? 'trade' : '')
-  // After the fonts swap in, so the section's place is final before the jump.
+  const fromHash = location.hash.slice(1)
+  const asked = query.get('mon') ? 'trade' : TABS[fromHash] ? fromHash : query.get('tab') || ''
+  show(asked, {hash: Boolean(TABS[asked])})
   const settled = globalThis.document?.fonts?.ready || Promise.resolve()
-  if (asked) settled.then(() => (globalThis.requestAnimationFrame || setTimeout)(() => select(asked)))
-  globalThis.TradeTabs = {select}
+  if (SECTIONS[asked]) settled.then(() => (globalThis.requestAnimationFrame || setTimeout)(() => select(asked)))
+  globalThis.TradeTabs = {select, show}
 })()

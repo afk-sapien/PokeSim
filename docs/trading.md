@@ -9,19 +9,22 @@ exchange rules, and recovery.
 Everything about trading lives on each adventure's Trading page at
 `/games/{id}/trading`. Trading in 0.5.0 is one of two things: automatic trades,
 which start on their own, and trades you build by hand between your own
-adventures. The page is one page, top to bottom:
+adventures. The page has the switch on top and two tabs under it:
 
 1. The **Auto trading** switch. Its lamp shows the state, and hovering the lamp
    gives the reason when trades are not completing.
-2. **Current exchange**, for trades that are waiting or running, on the pages of
-   both adventures. It is hidden when there is none.
-3. **Make a trade** builds a trade by hand: another adventure, the Pokémon you
-   send and the Pokémon you get.
-4. **History** shows hand-picked and automatic trades together, newest first.
+2. **Make a trade**, the default tab. **Current exchange** comes first, for
+   trades that are waiting or running, and is hidden when there is none. Under
+   it you build a trade by hand: another adventure, the Pokémon you send and the
+   Pokémon you get.
+3. **History** shows hand-picked and automatic trades together, newest first.
+   Its tab label counts them, for example "History (2)".
 
-Older links with `?tab=trade`, `?tab=auto` or `?tab=history` scroll to the
-matching section, and `&mon=` with a trade key preselects a Pokémon to send. The
-PC's **Trade…** link opens Make a trade with that Pokémon chosen.
+The tab is kept in the address as `#make` or `#history`, so links and reloads
+keep it. `&mon=` with a trade key always opens Make a trade with that Pokémon
+chosen to send, as the PC's **Trade…** link does. Older `?tab=history` links
+open History, and other older `?tab=` links open Make a trade. A trade completed
+notification opens History, and so does a partner's name on a finished trade.
 
 The library has no trading page. It has Library, Notifications and Settings, and
 the old `/trading` and `/trade` addresses redirect to the library.

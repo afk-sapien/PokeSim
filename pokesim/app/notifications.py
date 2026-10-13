@@ -448,8 +448,8 @@ class NotificationCenter:
         if not targets:
             return None
         names = {aid: self.registry.adventure(aid)['name'] for aid in participants}
-        # The library has no trading page. A tap opens the first adventure's own Trading page.
-        click = f"{self.public_url}/games/{quote(str(participants[0]), safe='')}/trading"
+        # The library has no trading page. A tap opens the first adventure's trade History.
+        click = f"{self.public_url}/games/{quote(str(participants[0]), safe='')}/trading#history"
         received = [f"{names[aid]} received {mon['name']}." for aid in participants
                     if (mon := (display.get(aid) or {}).get('received')) and mon.get('name')]
         def deliver():

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Split each game's Trading page into a Make a trade tab and a History tab under the Auto trading switch. The tab is kept in the address as `#make` or `#history`; a Trade… link from the PC opens Make a trade, and a trade completed notification opens History.
+
 - Trading page trimmed to the essentials; wishlist removed.
 
 - Make each game's Trading page one page. The Auto tab is gone: the automatic trading switch sits at the top, then Make a trade and History follow. Lock a Pokémon on the PC page instead: press it and press **Locked: never traded** in its popup. Every Pokémon can be traded automatically unless it is locked, and a locked one has a lock icon in the PC grid and the party. Locks are the old Never trade setting, so existing choices carry over. The Library loses its Trading tab and keeps Library, Notifications and Settings. `/trading` and `/trade` now redirect to the library, and a trade notification opens the first game's Trading page.

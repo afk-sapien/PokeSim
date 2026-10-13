@@ -12,7 +12,7 @@ function page(id, response, {api, base = `/games/${id}`} = {}) {
   let poll
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {innerHTML: '', textContent: '', hidden: false, classList: {toggle() {}},
-      listeners: {}, addEventListener(type, fn) { this.listeners[type] = fn }})
+      listeners: {}, addEventListener(type, fn) { this.listeners[type] = fn }, setAttribute(name, value) { this[name] = String(value) }})
     return elements.get(selector)
   }
   vm.runInNewContext(source, {
@@ -77,7 +77,9 @@ test('failed attempts explain missing trades and remain distinct from completed 
   assert.match(html, /Trade did not complete/)
   assert.match(html, /could not reach the Cable Club/)
   assert.doesNotMatch(html, /private|Trade completed/)
-  assert.equal(view.element('#trade-history-count').textContent, '0 completed, 1 did not complete')
+  // The History tab shows the row count. Its tooltip splits completed from not.
+  assert.equal(view.element('#trade-history-count').textContent, '(1)')
+  assert.equal(view.element('#tab-history').title, '0 completed, 1 did not complete')
 })
 
 test('history lists completed trades and failed attempts together, newest first', async () => {
@@ -124,8 +126,10 @@ test('completed cards show the exact sent and received Pokemon with scoped sprit
   assert.match(html, /Machoke → Machamp/)
   assert.match(html, /pokedex#68/)
   assert.match(html, /<time datetime="1970-01-01T00:16:40.000Z">/)
-  assert.match(html, new RegExp(`/games/${'b'.repeat(32)}/trading`))
-  assert.equal(view.element('#trade-history-count').textContent, '1 completed')
+  // A finished trade's partner link opens the partner's History tab.
+  assert.match(html, new RegExp(`/games/${'b'.repeat(32)}/trading#history`))
+  assert.equal(view.element('#trade-history-count').textContent, '(1)')
+  assert.equal(view.element('#tab-history').title, '1 completed')
 })
 
 test('planned and failed trades never claim a Pokemon was received or evolved', async () => {

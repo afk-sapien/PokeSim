@@ -1,4 +1,4 @@
-"""The game Trading page: one page with the automatic trading switch, the trade builder and history."""
+"""The game Trading page: the automatic trading switch, then a Make a trade tab and a History tab."""
 import json
 import os
 from pathlib import Path
@@ -154,32 +154,88 @@ def on_screen(page, selector):
     expect(page.locator(selector)).to_be_in_viewport()
 
 
+def tabs(page):
+    return page.get_by_role('tablist', name='Trading').get_by_role('tab')
+
+
+def on_tab(page, name):
+    """The named tab is selected, its panel shows and the other panel is hidden."""
+    other = 'history' if name == 'make' else 'make'
+    expect(page.locator(f'#tab-{name}')).to_have_attribute('aria-selected', 'true')
+    expect(page.locator(f'#tab-{other}')).to_have_attribute('aria-selected', 'false')
+    expect(page.locator(f'#panel-{name}')).to_be_visible()
+    expect(page.locator(f'#panel-{other}')).to_be_hidden()
+
+
 @pytest.mark.parametrize('width', [1280, 390])
-def test_trading_is_one_page_with_the_switch_up_top_then_trade_and_history(page, game, width):
+def test_trading_has_the_switch_up_top_then_make_a_trade_and_history_tabs(page, game, width):
     url = game[0]
     library = Library(page, url)
     page.set_viewport_size({'width': width, 'height': 844})
     library.open()
-    # No tabs: the status box holds the switch, then Make a trade, then History.
-    expect(page.get_by_role('tablist')).to_have_count(0)
-    expect(page.get_by_role('tab')).to_have_count(0)
     overview = page.locator('.trade-overview')
     expect(overview.get_by_role('switch', name=re.compile('Auto trading'))).to_be_enabled()
     # The status box is the switch and nothing else: no headline, no explanation, no wish list.
     assert overview.inner_text().split() == ['Auto', 'trading', 'On'], overview.inner_text()
     expect(page.locator('main .trade-help, .page-lede, #trade-status, #trade-activity, [id^="wish"]')).to_have_count(0)
     expect(page.locator('#auto-list, #auto-setting, .trade-setting')).to_have_count(0)
-    order = page.evaluate("""[...document.querySelectorAll('main > section')].filter(el => !el.hidden).map(el => el.id || el.className)""")
-    assert order == ['trade-overview', 'make-trade', 'trade-history-section'], order
+    # Under the switch, two tabs. Make a trade is the default and the URL keeps no hash for it.
+    expect(tabs(page)).to_have_text(['Make a trade', re.compile(r'^History \(2\)$')])
+    expect(page.locator('#tab-history')).to_have_attribute('title', '1 completed, 1 did not complete')
+    order = page.evaluate("""[...document.querySelectorAll('main > *')].map(el => el.id || el.className)""")
+    assert order[1:] == ['trade-overview', 'trade-connection-note', 'trade-tabs', 'panel-make', 'panel-history'], order
+    on_tab(page, 'make')
+    expect(page.locator('#make-trade')).to_be_visible()
+    expect(page.locator('#trade-history')).to_be_hidden()
+    assert urlparse(page.url).fragment == ''
+    # The tabs sit on their divider and the switch sits above them.
+    strip = page.locator('.trade-tabs').bounding_box()
+    chosen = page.locator('#tab-make').bounding_box()
+    assert abs(chosen['y'] + chosen['height'] - (strip['y'] + strip['height'])) <= 1, (chosen, strip)
+    assert overview.bounding_box()['y'] + overview.bounding_box()['height'] <= strip['y']
+    shoot(page, f'trading-make-{width}')
+    # A click shows History alone and writes #history.
+    page.locator('#tab-history').click()
+    on_tab(page, 'history')
+    expect(page.locator('#make-trade')).to_be_hidden()
     expect(page.locator('#trade-history')).to_contain_text('Busy Blue could not reach the Cable Club')
     # History lists failed attempts and completed trades together, newest first.
     text = page.locator('#trade-history').inner_text()
     assert text.index('Busy Blue') < text.index('Second Red')
-    shoot(page, f'trading-{width}')
-    # Old ?tab= links scroll to the matching section.
-    library.open('?tab=history')
-    on_screen(page, '#trade-history-section')
+    # A finished trade's partner link opens the partner's History.
+    expect(page.locator('#trade-history').get_by_role('link', name='Second Red')).to_have_attribute(
+        'href', f'/games/{RED}/trading#history')
+    assert urlparse(page.url).fragment == 'history'
+    shoot(page, f'trading-history-{width}')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    # A reload keeps the tab.
+    page.reload()
+    on_tab(page, 'history')
+    # Arrow keys move between the tabs, wrapping around, and Home and End jump.
+    page.locator('#tab-history').focus()
+    page.keyboard.press('ArrowRight')
+    on_tab(page, 'make')
+    expect(page.locator('#tab-make')).to_be_focused()
+    assert urlparse(page.url).fragment == 'make'
+    page.keyboard.press('ArrowLeft')
+    on_tab(page, 'history')
+    expect(page.locator('#tab-history')).to_be_focused()
+    page.keyboard.press('Home')
+    on_tab(page, 'make')
+    page.keyboard.press('End')
+    on_tab(page, 'history')
+    # Only the selected tab is in the Tab order.
+    expect(page.locator('#tab-make')).to_have_attribute('tabindex', '-1')
+    expect(page.locator('#tab-history')).to_have_attribute('tabindex', '0')
+    # A link to #make, or a hash change on the page, picks the tab too.
+    library.open('#make')
+    on_tab(page, 'make')
+    page.evaluate("location.hash = '#history'")
+    on_tab(page, 'history')
+    # An old ?tab=history link opens History.
+    library.open('?tab=history')
+    on_tab(page, 'history')
+    assert urlparse(page.url).fragment == 'history'
 
 
 SLOTS = {'mine': '#slot-send', 'theirs': '#slot-get'}
@@ -284,8 +340,9 @@ def test_trade_builder_picks_both_slots_in_a_modal_and_starts_an_owned_trade(pag
     expect(dialog).to_be_hidden()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     confirm.click()
-    # The trade is queued at once and the page scrolls to it under Current exchange.
+    # The trade is queued at once and the page scrolls to it under Current exchange, on Make a trade.
     on_screen(page, '#current-exchange-section')
+    on_tab(page, 'make')
     assert library.posted[0] | {'request_id': None} == {'from_id': FROM, 'from_key': 'box-1', 'to_id': RED, 'to_key': '1',
                                                          'request_id': None}
     current = page.locator('#current-exchange-section')
@@ -382,6 +439,7 @@ def test_trade_link_in_the_pc_opens_the_trade_builder_with_that_pokemon_chosen(p
     assert href.startswith(f'/games/{FROM}/trading?tab=trade&mon=')
     library.mine_key = href.split('mon=', 1)[1]
     link.click()
+    on_tab(page, 'make')
     on_screen(page, '#make-trade')
     expect(page.locator('#slot-send .pc-mon')).to_contain_text('BUD')
     expect(option(page, BLUE)).to_have_attribute('disabled', '')
@@ -498,5 +556,24 @@ def test_an_old_tab_link_or_remembered_tab_still_opens_the_page(page, game, tab)
     page.goto(f'{game[0]}/games/{FROM}/trading')
     page.evaluate(f'localStorage.setItem("pokesim-trading-tab", "{tab}")')
     library.open(f'?tab={tab}')
+    on_tab(page, 'make')
     expect(page.locator('#make-trade')).to_be_visible()
     expect(page.locator('#auto-switch')).to_be_enabled()
+
+
+@pytest.mark.parametrize('width', [1280, 390])
+def test_a_deep_link_that_chooses_a_pokemon_lands_on_make_a_trade(page, game, width):
+    library = Library(page, game[0])
+    page.set_viewport_size({'width': width, 'height': 844})
+    # Even from a page left on History, a ?mon= link opens Make a trade with that Pokémon chosen.
+    library.open('#history')
+    on_tab(page, 'history')
+    library.open('?tab=trade&mon=box-1#history')
+    on_tab(page, 'make')
+    on_screen(page, '#make-trade')
+    expect(page.locator('#slot-send .pc-mon')).to_contain_text('BUD')
+    assert urlparse(page.url).fragment == 'make'
+    # A plain Trading link, as the nav bar has, opens Make a trade.
+    library.open()
+    on_tab(page, 'make')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

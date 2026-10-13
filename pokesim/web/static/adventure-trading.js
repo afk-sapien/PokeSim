@@ -43,7 +43,7 @@
       ? `<time datetime="${date.toISOString()}">${esc(date.toLocaleString())}</time>` : ''
     const reason = failed ? `<p class="deal-reason deal-reason--crit cable-failure">${esc(trade.failure_reason || 'The exchange could not finish safely.')}</p>` : ''
     const peer = /^[a-f0-9]{32}$/.test(trade.peer_id || '')
-      ? `<a href="/games/${trade.peer_id}/trading">${esc(trade.peer_name)}</a>` : esc(trade.peer_name)
+      ? `<a href="/games/${trade.peer_id}/trading${completed || failed ? '#history' : ''}">${esc(trade.peer_name)}</a>` : esc(trade.peer_name)
     const pair = failed && !trade.sent && !trade.received ? ''
       : `<div class="swap cable-exchange">${pokemon(trade.sent, 'sent', completed, failed)}<span class="swap-arrow" aria-hidden="true">→</span>${pokemon(trade.received, 'received', completed, failed)}</div>`
     const foot = time || completed ? `<footer class="deal-foot">${time}${completed ? '<span>Saved in both adventures</span>' : ''}</footer>` : ''
@@ -114,8 +114,10 @@
       const failures = data.recent_failures || []
       const rows = [...completed.map(trade => [trade, true]), ...failures.map(trade => [trade, false])]
         .sort((a, b) => (b[0].updated_at || 0) - (a[0].updated_at || 0))
-      $('#trade-history-count').textContent = `${completed.length}${completed.length === 20 ? '+' : ''} completed`
-        + (failures.length ? `, ${failures.length} did not complete` : '')
+      // The History tab counts its rows. Its tooltip splits them into completed and not.
+      $('#trade-history-count').textContent = rows.length ? `(${rows.length}${completed.length === 20 ? '+' : ''})` : ''
+      $('#tab-history')?.setAttribute?.('title', `${completed.length}${completed.length === 20 ? '+' : ''} completed`
+        + (failures.length ? `, ${failures.length} did not complete` : ''))
       $('#trade-history').innerHTML = rows.length ? rows.map(([trade, done]) => exchange(trade, done)).join('')
         : '<p class="empty-note">No trades yet.</p>'
       globalThis.Panel?.fitSprites?.(document)

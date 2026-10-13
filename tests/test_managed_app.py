@@ -182,8 +182,9 @@ def test_game_trading_stays_scoped_and_available_when_stopped(client):
     assert 'location' not in response.headers
     assert 'First Red' in response.text
     assert f'href="{base}/trading"' in response.text
-    # One page, no tabs: the switch sits in the status box and locks are set on the PC page.
-    assert 'role="tablist"' not in response.text and 'id="tab-auto"' not in response.text
+    # The switch, then a Make a trade tab and a History tab. Locks are set on the PC page.
+    assert response.text.count('role="tab"') == 2 and 'id="tab-auto"' not in response.text
+    assert 'id="tab-make"' in response.text and 'id="tab-history"' in response.text
     assert 'id="auto-switch"' in response.text and 'id="make-trade"' in response.text and 'id="trade-history"' in response.text
     assert f'href="{base}/pc"' in response.text
     assert f'href="{base}/pc?scope=all"' not in response.text

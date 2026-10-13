@@ -20,7 +20,7 @@
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=pass2-1">
 <link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
 <link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=locks-1">
-<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=trim-1">
+<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=tabs-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
@@ -45,27 +45,33 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </section>
 <p id="trade-connection-note" class="trade-notice" role="status" hidden></p>
 
+<div class="trade-tabs" role="tablist" aria-label="Trading">
+<button type="button" role="tab" id="tab-make" aria-controls="panel-make" aria-selected="true" tabindex="0">Make a trade</button>
+<button type="button" role="tab" id="tab-history" aria-controls="panel-history" aria-selected="false" tabindex="-1">History <span class="tab-count" id="trade-history-count"></span></button>
+</div>
+
+<div id="panel-make" class="trade-panel" role="tabpanel" aria-labelledby="tab-make" tabindex="0">
 <section id="current-exchange-section" class="trade-section" aria-labelledby="current-heading"><div class="section-head"><h2 class="legend legend--ink" id="current-heading">Current exchange</h2></div><div id="trade-active" class="deal-list" aria-live="polite">Checking for an exchange…</div></section>
 
-<section id="make-trade" class="trade-section" aria-labelledby="make-trade-heading">
-<div class="section-head"><h2 class="legend legend--ink" id="make-trade-heading">Make a trade</h2></div>
+<section id="make-trade" class="trade-section" aria-labelledby="tab-make">
 <p id="pick-note" class="trade-notice" role="status" aria-live="polite" hidden></p>
 <div class="builder">
 <div class="builder-partner"><label class="field builder-game" for="pick-game"><span class="micro">Trade with</span><span class="select"><select id="pick-game"><option value="">Choose a game</option></select></span></label><p class="builder-from micro">From <b>${adventure_name}</b></p></div>
 <p id="pick-game-reason" class="pick-reason builder-reason" role="note" hidden></p>
 <div class="builder-slots">
-<section class="builder-slot" aria-labelledby="slot-send-label"><div class="section-head"><h3 class="legend legend--ink" id="slot-send-label">You send</h3></div><div id="slot-send" class="slot-body"></div></section>
+<section class="builder-slot" aria-labelledby="slot-send-label"><div class="section-head"><h2 class="legend legend--ink" id="slot-send-label">You send</h2></div><div id="slot-send" class="slot-body"></div></section>
 <span class="swap-arrow builder-arrow" aria-hidden="true">⇄</span>
-<section class="builder-slot" aria-labelledby="slot-get-label"><div class="section-head"><h3 class="legend legend--ink" id="slot-get-label">You get</h3><span class="micro" id="slot-get-game"></span></div><div id="slot-get" class="slot-body"></div></section>
+<section class="builder-slot" aria-labelledby="slot-get-label"><div class="section-head"><h2 class="legend legend--ink" id="slot-get-label">You get</h2><span class="micro" id="slot-get-game"></span></div><div id="slot-get" class="slot-body"></div></section>
 </div>
 <p id="pick-summary" class="builder-summary is-reason" hidden></p>
 <div class="builder-actions"><button type="button" class="key key--primary" id="pick-confirm" disabled>Trade</button><button type="button" class="key" id="pick-reset">Clear</button></div>
 </div>
 </section>
+</div>
 
-<section id="trade-history-section" class="trade-section" aria-labelledby="history-heading">
-<div class="section-head"><h2 class="legend legend--ink" id="history-heading">History</h2><span class="micro" id="trade-history-count"></span></div><div id="trade-history" class="deal-list" aria-live="polite">Loading…</div>
-</section>
+<div id="panel-history" class="trade-panel" role="tabpanel" aria-labelledby="tab-history" tabindex="0" hidden>
+<section id="trade-history-section" class="trade-section" aria-labelledby="tab-history"><div id="trade-history" class="deal-list" aria-live="polite">Loading…</div></section>
+</div>
 </main>
 
 <dialog id="pick-dialog" class="pick-dialog" aria-labelledby="pick-dialog-title"><div class="pick-dialog-head"><h2 class="legend legend--ink" id="pick-dialog-title">Choose a Pokémon</h2><button type="button" id="pick-dialog-close" class="key close-detail" aria-label="Close the picker">Close</button></div>
@@ -85,7 +91,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <script src="${game_base}/static/mon-grid.js?v=locks-1"></script>
 <script src="${game_base}/static/trade-ui.js?v=one-page-1"></script>
-<script src="${game_base}/static/adventure-trading.js?v=trim-1"></script>
-<script src="${game_base}/static/trade-tabs.js?v=trim-1"></script>
+<script src="${game_base}/static/adventure-trading.js?v=tabs-1"></script>
+<script src="${game_base}/static/trade-tabs.js?v=tabs-1"></script>
 </body>
 </html>
