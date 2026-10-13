@@ -17,6 +17,8 @@ import sys
 import threading
 import time
 
+import httpx
+
 from ..checkpoints import CheckpointStore
 from ..game_data import VARIANT_ENV
 from . import trade_settings
@@ -479,8 +481,13 @@ class Coordinator:
         if recovery:
             self.manager.supervisor.start(aid, recovery=True)
         child = self.manager.supervisor.child(aid)
-        return child.request('GET' if data is None else 'POST', '/internal/participant/' + operation,
-                             data, timeout=55)
+        try:
+            return child.request('GET' if data is None else 'POST', '/internal/participant/' + operation,
+                                 data, timeout=55)
+        except httpx.HTTPError as error:
+            # A worker that hangs or drops the connection cannot answer, like one that refuses, so the
+            # callers' refusal handling (reject a hand-picked trade, skip an adventure) applies to it too.
+            raise RuntimeError(f'Adventure worker did not answer: {error}') from error
 
     def inventory(self, aid):
         return self._request(aid, 'inventory')

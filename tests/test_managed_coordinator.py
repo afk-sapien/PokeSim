@@ -5,6 +5,7 @@ import os
 import threading
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 from pokesim.app.coordinator import Coordinator
@@ -808,6 +809,24 @@ def test_manual_trade_is_idempotent_and_rejects_hard_limits_with_a_reason(setup)
     assert status['error'] == 'Eggs cannot be traded'
     assert setup.cable_calls == []
 
+
+def test_manual_trade_is_rejected_when_a_worker_does_not_answer(setup):
+    c = setup.coordinator
+    entry = c.enqueue_manual(manual_request(setup))
+    peer = setup.peers[setup.data['left_id']]
+    answer = peer.request
+
+    def hung(method, path, data=None, timeout=None):
+        if path.endswith('manual-inventory'):
+            raise httpx.ReadTimeout('timed out')
+        return answer(method, path, data, timeout)
+
+    peer.request = hung
+    c.drain_manual()
+    status = c.manual_status(entry['id'])
+    assert status['state'] == 'rejected'
+    assert 'did not answer' in status['error']
+    assert setup.cable_calls == []
 
 def test_manual_trade_explains_time_capsule_limits(setup):
     c = setup.coordinator
