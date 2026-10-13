@@ -100,3 +100,24 @@ def test_popup_closes_when_the_partner_leaves_the_slot(page, game):
     expect(page.locator('#mon-detail')).to_be_visible()
     emu.snapshot = replace(emu.snapshot, party=(replace(emu.snapshot.party[0], nick='SPROUT'),))
     expect(page.locator('#mon-detail')).to_be_hidden()
+
+
+@pytest.mark.parametrize('width,height', [(1280, 900), (390, 844)])
+def test_live_party_popup_shows_stats_and_potential_power_from_the_live_record(page, game, width, height):
+    url, _, emu, _ = game
+    emu.snapshot = replace(emu.snapshot, party=(replace(emu.snapshot.party[0], moves=(33, 45), pp=(35, 40), max_pp=(35, 40)),))
+    # The PC's party record never arrives, so the popup draws from the Live state alone.
+    page.route(re.compile(r'/api/pokedex/status\?view=party$'), lambda route: None)
+    page.set_viewport_size({'width': width, 'height': height})
+    page.goto(url)
+    page.get_by_role('button', name='View LEAF details').click()
+    dialog = page.get_by_role('dialog', name='LEAF')
+    # Stat Power now against its level 100 ceiling, and Battle Power, as on the PC.
+    readouts = dialog.locator('.pc-readouts')
+    expect(readouts).to_contain_text(re.compile(r'Stat Power\s*\d[\d,]* / \d[\d,]*', re.I))
+    expect(readouts).to_contain_text(re.compile(r'Battle Power\s*\d', re.I))
+    expect(dialog).not_to_contain_text('Unavailable')
+    expect(dialog.locator('.individual-stats tbody tr')).to_have_count(5)
+    expect(dialog.locator('.individual-stats tbody tr').first).to_contain_text(re.compile(r'HP\s*\d+\s*8\s*0'))
+    expect(dialog.locator('.dv-badge.dv-unknown')).to_have_count(0)
+    check_fits(page, '#mon-detail', '#mon-detail-action')

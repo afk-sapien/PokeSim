@@ -3,7 +3,7 @@ import os
 import pytest
 
 from pokesim.gen2.battle_power import battle_power, hidden_power
-from pokesim.gen2.web import live_status
+from pokesim.gen2.web import live_party, live_status
 from pokesim.statistics import highlights
 
 TYPES = {'NORMAL': 0, 'FIGHTING': 1, 'FLYING': 2, 'POISON': 3, 'GROUND': 4, 'ROCK': 5, 'BUG': 7,
@@ -82,6 +82,13 @@ def test_gen2_power_uses_split_specials_coverage_and_recovery():
     assert battle_power(solar, boosted) > battle_power(solar, DATA)
     tackle = meganium(moves=[33])
     assert battle_power(tackle, boosted) == battle_power(tackle, DATA)
+
+
+def test_gen2_live_party_carries_the_pc_detail_battle_and_hidden_power():
+    party = meganium(moves=[33, 231, 76, 237])
+    pc = live_status({'party': [party], 'dex_owned': [154]}, {}, data=DATA)['party'][0]
+    live = live_party([party], DATA)[0]
+    assert live == pc and live['battle_power'] > 0 and live['hidden_power']['power'] > 0
 
 
 def test_hidden_power_follows_the_dvs():

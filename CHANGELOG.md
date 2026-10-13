@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix the party popup on the Live page missing the stats table, Stat Power with its level 100 ceiling, Battle Power and the DV rating. It drew from the Live party record, which lacked them, until the PC record arrived, and kept that record if the request was slow or failed. The Live party now carries the same fields, built by the same code as the PC, for Gen I and Gen II.
+
 - Port the TM shop and Champion shop to Gold, Silver and Crystal under **Extra store items**. After the Hall of Fame the Goldenrod 5F clerks also sell the 34 one-time TMs (₽50,000, ₽25,000 or ₽10,000 by tier, as in Red and Blue), and the 4F clerk sells a Master Ball (₽100,000) and five Rare Candies (₽25,000), each once per 1,000,000 steps, plus Elixir, Max Elixir, Leftovers and Lucky Egg. The adventure buys a TM only for a real level-100 Battle Power gain on a level 50+ partner and teaches it at once, uses Rare Candies on the partner they were bought for, gives a held item to a partner with empty hands, keeps ₽20,000 in reserve, and uses Elixirs in the League when an attacking move is out of PP. Prices above ₽65,535 are charged in full through a hook on the cartridge subtotal; the cartridge is unchanged. Stats → Items shows the Gen II walking offers. PP Up is priced but not bought yet, because the Core item shortcut does not recognise the Gen II move list.
 
 - Split each game's Trading page into a Make a trade tab and a History tab under the Auto trading switch. The tab is kept in the address as `#make` or `#history`; a Trade… link from the PC opens Make a trade, and a trade completed notification opens History.

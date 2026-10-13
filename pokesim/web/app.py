@@ -128,12 +128,14 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     if gen2:
         from functools import partial
         from ..gen2.web import Reference, live_status as gen2_status
+        from ..gen2.web import live_party as gen2_party
         gen2_live_status = partial(gen2_status, data=emu.data)
+        live_party = partial(gen2_party, data=emu.data)
         reference_json = Reference(emu.data).json
         DEFAULT_VERSION = emu.data.game
         VERSIONS = (DEFAULT_VERSION,)
     else:
-        from .pokedex import DEFAULT_VERSION, VERSIONS, reference_json
+        from .pokedex import DEFAULT_VERSION, VERSIONS, live_party, reference_json
     try:
         if gen2:
             journal_species = species_index({dex: row.get('name') for dex, row in emu.data.species.items()})
@@ -399,7 +401,13 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         status = emu.status()
         if not storage:
             status = without_stored_pokemon(status)
-        return {**status, 'viewer_only': view_only()} if isinstance(status, dict) else status
+        if not isinstance(status, dict):
+            return status
+        game = status.get('game')
+        if isinstance(game, dict) and isinstance(game.get('party'), list):
+            # A partner's popup draws from this record until the PC's own arrives, so it carries the same stats.
+            status = {**status, 'game': {**game, 'party': live_party(game['party'])}}
+        return {**status, 'viewer_only': view_only()}
 
     @app.get("/api/summary")
     def summary():

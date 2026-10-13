@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.ram import PartyMon, Snapshot, StoredMon
-from pokesim.web.pokedex import live_status
+from pokesim.web.pokedex import live_party, live_status
 
 
 def gen1_snapshot():
@@ -36,6 +36,17 @@ def test_gen1_party_and_boxes_carry_move_details_and_level_progress():
     assert boxed['max_hp'] == 48 and boxed['hp'] == 31 and boxed['status_label'] == 'Healthy'
     assert boxed['experience'] == 6000
     assert boxed['experience_progress']['total'] == 6000 and not boxed['experience_progress']['max_level']
+
+
+def test_gen1_live_party_carries_the_pc_detail_stats_and_potential_power():
+    game = gen1_snapshot().to_dict()
+    pc, live = live_status(game)['party'][0], live_party(game['party'])[0]
+    for field in ('calculated_stats', 'stat_total', 'power', 'potential_power', 'battle_power', 'slot'):
+        assert live[field] == pc[field] is not None, field
+    assert live['dv_top_percent'] == pc['dv_top_percent']
+    assert live['dv_stars'] == 2 and live['potential_power'] > live['power']
+    # The Live record keeps its own experience progress, which the bay draws.
+    assert live['experience'] == game['party'][0]['experience'] and 'experience_progress' not in live
 
 
 def test_gen1_box_records_decode_current_hp_status_and_pp_ups():

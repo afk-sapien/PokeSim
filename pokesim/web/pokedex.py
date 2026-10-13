@@ -10,7 +10,7 @@ from functools import lru_cache
 from urllib.parse import quote
 
 from ..game_data import load
-from ..pokemon import STAT_NAMES, TYPES, experience_details, stored_condition, stored_strength
+from ..pokemon import STAT_NAMES, TYPES, dv_rating, experience_details, stored_condition, stored_strength
 from ..investment import assessment
 from ..battle_power import battle_power
 from ..ram import DEX_NAMES, MAP_NAMES, MOVES as MOVE_TABLE
@@ -152,6 +152,34 @@ def species_types(species):
                               for kind in SPECIES.get(species, {}).get('types', ())))
 
 
+def party_record(mon: dict, slot: int) -> dict:
+    """One party member as the PC detail popup draws it: stats, Stat Power and its ceiling, Battle Power."""
+    return {"dex": mon.get("dex"), "species": mon["species"], "name": mon["name"], "nick": mon["nick"],
+            "level": mon["level"], "hp": mon["hp"], "max_hp": mon["max_hp"],
+            "type_names": species_types(mon["species"]),
+            "moves": mon.get("moves", ()), "dvs": mon.get("dvs", ()),
+            "stat_exp": mon.get("stat_exp", ()),
+            **({'trainer_id': mon['trainer_id']} if mon.get('trainer_id') is not None else {}),
+            "experience": (mon.get("experience") or {}).get("total", 0),
+            "experience_progress": mon.get("experience"), "move_details": mon.get("move_details", []),
+            "status_label": mon.get("status_label"), "slot": slot, **strength(mon)}
+
+
+def strength(mon: dict) -> dict:
+    """Stats, Stat Power and its level 100 ceiling, the DV odds and Battle Power of one record."""
+    return {**stored_strength(mon), **assessment(mon), 'battle_power': battle_power(mon)}
+
+
+def live_party(party: list[dict]) -> list[dict]:
+    """The Live page's party with the fields the PC detail popup reads, so a partner opens complete.
+
+    The Live record keeps its own fields, such as the experience progress the bay draws.
+    """
+    return [{**strength(mon), **dv_rating(mon), 'slot': slot + 1, **mon}
+            if isinstance(mon, dict) and not mon.get('pending') else mon
+            for slot, mon in enumerate(party)]
+
+
 def live_status(game: dict | None, collection: dict | None = None, *, league_rewards=None) -> dict:
     """The parts of a snapshot a Pokédex reader needs, without the rest of the state payload."""
     # Only the fields the page reads: the planner's entries repeat on every poll.
@@ -178,16 +206,7 @@ def live_status(game: dict | None, collection: dict | None = None, *, league_rew
         "started": True,
         "owned": game.get("dex_owned", []), "seen": game.get("dex_seen", []),
         "player_name": game.get("player_name", ""), "playtime": game.get("playtime", ""),
-        "party": [{"dex": mon.get("dex"), "species": mon["species"], "name": mon["name"], "nick": mon["nick"],
-                   "level": mon["level"], "hp": mon["hp"], "max_hp": mon["max_hp"],
-                   "type_names": species_types(mon["species"]),
-                   "moves": mon.get("moves", ()), "dvs": mon.get("dvs", ()),
-                   "stat_exp": mon.get("stat_exp", ()),
-                   **({'trainer_id': mon['trainer_id']} if mon.get('trainer_id') is not None else {}),
-                   "experience": (mon.get("experience") or {}).get("total", 0),
-                   "experience_progress": mon.get("experience"), "move_details": mon.get("move_details", []),
-                   "status_label": mon.get("status_label"), "slot": slot + 1, **stored_strength(mon), **assessment(mon), 'battle_power': battle_power(mon)}
-                  for slot, mon in enumerate(game.get("party", []))],
+        "party": [party_record(mon, slot + 1) for slot, mon in enumerate(game.get("party", []))],
         "storage": {**storage,
                     "pokemon": [{**mon, "dex": dex_of.get(mon["species"]),
                                  "type_names": species_types(mon["species"]),
