@@ -721,7 +721,7 @@
   function updateStarters() {
     const choices = startersFor(selectedVersion())
     const previous = $('#starter').value
-    $('#starter').innerHTML = '<option value="random">Surprise me</option>' + choices.map(name => `<option value="${name}">${name[0].toUpperCase() + name.slice(1)}</option>`).join('')
+    $('#starter').innerHTML = '<option value="random">Surprise me</option>' + choices.map(name => `<option value="${esc(name)}">${esc(name[0].toUpperCase() + name.slice(1))}</option>`).join('')
     $('#starter').value = choices.includes(previous) ? previous : 'random'
   }
   $('#game-choices').onchange = event => {

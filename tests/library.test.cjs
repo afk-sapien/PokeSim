@@ -488,6 +488,16 @@ test('one installed cartridge is preselected and narrows the starters', async ()
   assert.equal(view.element('#create-submit').hidden, false)
 })
 
+test('starter names are escaped in the starter list', async () => {
+  const view = library({slots: [slot('gold', 'gold-rom', {starters: ['x"><img src=x onerror=alert(1)>']})]})
+  await settle()
+  await view.element('#new-adventure').onclick()
+  await settle()
+  const html = view.element('#starter').innerHTML
+  assert.doesNotMatch(html, /<img/)
+  assert.match(html, /value="x&quot;&gt;&lt;img src=x onerror=alert\(1\)&gt;">X&quot;&gt;&lt;img/)
+})
+
 test('several cartridges need a choice and the choice sets the game and starters', async () => {
   const view = library({slots: SHELF.map(version => slot(version, ['red', 'crystal'].includes(version) ? `${version}-rom` : ''))})
   await settle()
