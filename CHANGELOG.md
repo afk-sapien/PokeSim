@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Split each game's Trading page into a Make a trade tab and a History tab under the Auto trading switch. The tab is kept in the address as `#make` or `#history`; a Trade… link from the PC opens Make a trade, and a trade completed notification opens History.
+- Give Gold, Silver and Crystal adventures repeatable evolution stones once the one-time stones are spent, so a missing Pokédex entry or a peer's request can still be evolved. In Crystal the adventure registers Picnicker Gina (Leaf Stone), Schoolboy Alan (Fire Stone), Lass Dana (Thunderstone) or Fisher Tully (Water Stone), waits by a Pokémon Center phone for the call, and collects the stone the same day. Every game also visits Mt. Moon Square on Monday night for the Moon Stone the Clefairy uncover, and enters the Bug-Catching Contest for a Sun Stone a peer needs. Gold and Silver phone trainers never give items, so those games still have no second Leaf, Fire, Water or Thunder Stone. A source that cannot progress, such as a full phone list or a call that never comes, stands down for a while instead of looping.
 
 - Trading page trimmed to the essentials; wishlist removed.
 

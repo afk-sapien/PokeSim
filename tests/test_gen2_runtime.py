@@ -2230,3 +2230,150 @@ def test_a_peer_requested_evolution_is_boxed_so_it_can_be_offered(real_data):
     # Nothing to store when no peer asks and no cable evolution is in the party.
     policy.demand = {}
     assert peer_store_slots(policy, SimpleNamespace(**{**vars(snapshot), 'party': party[:2]})) == []
+
+
+class _ItemMemory:
+    """Named WRAM bytes for item source planning, zero unless set."""
+
+    def __init__(self, data, **values):
+        self.data, self.values = data, values
+
+    def read(self, name, size=1, offset=0):
+        raw = self.values.get(name, b'')
+        raw = bytes(raw) if not isinstance(raw, int) else bytes([raw])
+        return (raw + bytes(offset + size))[offset:offset + size]
+
+    def byte(self, name, offset=0):
+        return self.read(name, 1, offset)[0]
+
+
+def _item_mon(species, *, box=0, moves=(), item=0):
+    return SimpleNamespace(species=species, egg=False, box=box, position=0, shiny=False, dvs=(1, 2, 3, 4, 5),
+                           held_item=item, stat_exp=(0,) * 5, level=40, moves=moves)
+
+
+def _item_policy(data, demand=None):
+    from pokesim.gen2.policy import Goal
+
+    def person(snapshot, key, label, map_name, script):
+        return Goal(key, label, map_name, 0, 0)
+    return SimpleNamespace(data=data, demand=demand or {}, collection={}, decisions=0, person=person,
+                           storage_goal=lambda snapshot: Goal('storage', 'PC', 'SILVER_CAVE_POKECENTER_1F', 9, 2, 'up'),
+                           nav=SimpleNamespace(route=lambda start, end: []))
+
+
+def test_item_needs_count_stones_for_missing_and_requested_evolutions(real_data):
+    from pokesim.gen2.item_sources import item_needs
+    leaf = real_data.items['LEAF_STONE']
+    # Exeggutor is owned, but a peer asks for one and no stored Exeggutor could travel.
+    held = (_item_mon(102), _item_mon(103, box=None))
+    snapshot = SimpleNamespace(party=held[1:], stored=held[:1], items=(), owned=frozenset({102, 103}))
+    assert item_needs(_item_policy(real_data, {103: 1}), snapshot) == {leaf: 1}
+    assert item_needs(_item_policy(real_data), snapshot) == {}
+    stocked = SimpleNamespace(party=held[1:], stored=held[:1], items=((leaf, 1),), owned=frozenset({102, 103}))
+    assert item_needs(_item_policy(real_data, {103: 1}), stocked) == {}
+    # A missing Pokédex entry needs a stone without any request, one per evolution still missing.
+    eevee = SimpleNamespace(party=(), stored=(_item_mon(133),), items=(), owned=frozenset({133, 135}))
+    assert item_needs(_item_policy(real_data), eevee) == {real_data.items['WATER_STONE']: 1, real_data.items['FIRE_STONE']: 1}
+
+
+def test_crystal_phone_trainers_are_registered_waited_for_and_visited_for_a_stone(real_data):
+    from pokesim.gen2 import item_sources
+    from pokesim.gen2.policy import Goal
+    leaf = real_data.items['LEAF_STONE']
+    snapshot = SimpleNamespace(party=(_item_mon(103, box=None),), stored=(_item_mon(102),), items=(), owned=frozenset({102, 103}),
+                               event=lambda name: name == 'EVENT_BEAT_PICNICKER_GINA', map=0, objects=())
+    policy = _item_policy(real_data, {103: 1})
+    if real_data.game != 'crystal':
+        # Gold and Silver phone trainers never find items, so no phone plan exists.
+        assert item_sources.phones(policy, snapshot, _ItemMemory(real_data, wPhoneList=[1, 4]), Goal) is None
+        return
+    mem = _ItemMemory(real_data, wPhoneList=[1, 4])
+    goal = item_sources.phones(policy, snapshot, mem, Goal)
+    assert (goal.key, goal.map_name) == ('collection_phone_register', 'ROUTE_34') and 'Gina' in goal.label
+    assert item_sources.pickups(policy, snapshot, mem, Goal) is None
+    registered = _ItemMemory(real_data, wPhoneList=[1, 4, 21])
+    goal = item_sources.phones(policy, snapshot, registered, Goal)
+    assert goal.key == 'collection_phone_wait' and goal.map_name == 'SILVER_CAVE_POKECENTER_1F'
+    # Gina's call set today's Leaf Stone flag, so she is visited before any other work.
+    called = _ItemMemory(real_data, wPhoneList=[1, 4, 21], wDailyPhoneItemFlags=[1 << 3])
+    goal = item_sources.pickups(policy, snapshot, called, Goal)
+    assert (goal.key, goal.map_name) == ('collection_phone_gift', 'ROUTE_34') and 'LEAF STONE' in goal.label.upper()
+    rematch = _ItemMemory(real_data, wPhoneList=[1, 4, 21], wDailyRematchFlags=[0, 1 << 4])
+    assert item_sources.pickups(policy, snapshot, rematch, Goal).key == 'collection_phone_gift'
+    # A bag with the stone stops the plan.
+    stocked = SimpleNamespace(**{**vars(snapshot), 'items': ((leaf, 1),)})
+    assert item_sources.pickups(policy, stocked, called, Goal) is None
+    assert item_sources.phones(policy, stocked, registered, Goal) is None
+
+
+def test_phone_waits_and_full_phone_lists_stand_down_instead_of_looping(real_data):
+    if real_data.game != 'crystal':
+        pytest.skip('Phone trainers give stones only in Crystal')
+    from pokesim.gen2 import item_sources
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.standdown import STAND_DOWN
+    snapshot = SimpleNamespace(party=(_item_mon(103, box=None),), stored=(_item_mon(102),), items=(), owned=frozenset({102, 103}),
+                               event=lambda name: True, map=0, objects=())
+    policy = _item_policy(real_data, {103: 1})
+    registered = _ItemMemory(real_data, wPhoneList=[1, 4, 21])
+    while policy.decisions <= item_sources.WAIT_DECISIONS:
+        assert item_sources.phones(policy, snapshot, registered, Goal).key == 'collection_phone_wait'
+        policy.decisions += 500
+    assert item_sources.phones(policy, snapshot, registered, Goal) is None
+    policy.decisions += STAND_DOWN
+    assert item_sources.phones(policy, snapshot, registered, Goal).key == 'collection_phone_wait'
+    # A step interrupted by other work counts again from the start when it comes back.
+    policy.decisions += item_sources.WAIT_DECISIONS + item_sources.GAP + 1
+    assert item_sources.phones(policy, snapshot, registered, Goal).key == 'collection_phone_wait'
+    full = _ItemMemory(real_data, wPhoneList=list(range(1, 11)))
+    fresh = _item_policy(real_data, {103: 1})
+    assert item_sources.phones(fresh, snapshot, full, Goal) is None
+    assert 'phone:LEAF_STONE' in fresh.collection['stood_down']
+
+
+def test_phone_number_prompt_is_accepted_only_while_registering(real_data):
+    from pokesim.gen2 import item_sources
+    from pokesim.gen2.policy import Goal
+    tiles = ['' for _ in range(18)]
+    tiles[7], tiles[8] = '│▶YES│', '│ NO │'
+    prompt = SimpleNamespace(tiles=tiles, text='Can I get your number? YES NO')
+    policy = SimpleNamespace(goal=Goal('collection_phone_register', 'Get Gina’s number', 'ROUTE_34', 0, 0))
+    assert item_sources.answer(policy, prompt) == 'a'
+    policy.goal = Goal('collection_wait', 'Walk', 'ROUTE_34', 0, 0)
+    assert item_sources.answer(policy, prompt) is None
+
+
+def test_mt_moon_square_moon_stone_waits_for_monday_night_and_smashes_the_rock(real_data):
+    from pokesim.gen2 import item_sources
+    from pokesim.gen2.policy import Goal
+    square = real_data.map_ids['MOUNT_MOON_SQUARE']
+    clefairy = _item_mon(35, box=None, moves=(249,))
+    events = set()
+    snapshot = SimpleNamespace(party=(clefairy,), stored=(), items=(), owned=frozenset({35}), map=0, objects=(),
+                               event=lambda name: name in events)
+    policy = _item_policy(real_data)
+    monday_night = _ItemMemory(real_data, wCurDay=1, wTimeOfDay=2)
+    goal = item_sources.pickups(policy, snapshot, monday_night, Goal)
+    assert (goal.key, goal.map_name, goal.x, goal.y) == ('collection_square', 'MOUNT_MOON_SQUARE', 7, 11)
+    assert item_sources.pickups(policy, snapshot, _ItemMemory(real_data, wCurDay=2, wTimeOfDay=2), Goal) is None
+    assert item_sources.pickups(policy, snapshot, _ItemMemory(real_data, wCurDay=1, wTimeOfDay=1), Goal) is None
+    # The dance uncovered the rock: smash it, then pick up the stone, both from below.
+    danced = _ItemMemory(real_data, wCurDay=1, wTimeOfDay=2, wDailyFlags2=1)
+    there = SimpleNamespace(**{**vars(snapshot), 'map': square, 'objects': ((3, 7, 7),)})
+    goal = item_sources.pickups(policy, there, danced, Goal)
+    assert (goal.key, goal.x, goal.y, goal.face) == ('collection_square_rock', 7, 8, 'up')
+    smashed = SimpleNamespace(**{**vars(there), 'objects': ()})
+    assert item_sources.pickups(policy, smashed, danced, Goal).key == 'collection_square_stone'
+    events.add('EVENT_MOUNT_MOON_SQUARE_HIDDEN_MOON_STONE')
+    assert item_sources.pickups(policy, smashed, danced, Goal) is None
+    # Without Rock Smash the stone cannot be reached, so the square is not visited.
+    plain = SimpleNamespace(**{**vars(snapshot), 'party': (_item_mon(35, box=None),)})
+    assert item_sources.pickups(policy, plain, monday_night, Goal) is None
+
+
+def test_contest_runs_for_a_sun_stone_a_peer_needs(real_data):
+    from pokesim.gen2.contest import needs_sun_stone
+    snapshot = SimpleNamespace(party=(), stored=(_item_mon(44),), items=(), owned=frozenset({44, 45, 182, 191, 192}))
+    assert not needs_sun_stone(_item_policy(real_data), snapshot)
+    assert needs_sun_stone(_item_policy(real_data, {182: 1}), snapshot)

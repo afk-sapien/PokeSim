@@ -405,6 +405,11 @@ def journey(policy, snapshot, mem, Goal):
         goal = legends(policy, snapshot, Goal)
         if goal:
             return goal
+    from .item_sources import pickups
+    # A stone a phone trainer holds today and the Monday night Moon Stone expire, so they go first.
+    goal = pickups(policy, snapshot, mem, Goal)
+    if goal:
+        return goal
     from .ruins import journey as ruins
     goal = ruins(policy, snapshot, Goal)
     if goal:
@@ -450,6 +455,10 @@ def journey(policy, snapshot, mem, Goal):
         return league_funding(policy, snapshot, Goal)
     from .quests import stones
     goal = stones(policy, snapshot, Goal)
+    if goal:
+        return goal
+    from .item_sources import phones
+    goal = phones(policy, snapshot, mem, Goal)
     if goal:
         return goal
     from .breeding import hatching
@@ -654,6 +663,10 @@ def arrive(policy, snapshot):
         return result
     from .npc_trades import arrive as npc_trade
     result = npc_trade(policy, snapshot)
+    if result is not None:
+        return result
+    from .item_sources import arrive as item_source
+    result = item_source(policy, snapshot)
     if result is not None:
         return result
     from .training import arrive as train

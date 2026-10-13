@@ -1059,6 +1059,10 @@ class Policy:
                 action = choose(snapshot.tiles, label, exact=True)
                 if action:
                     return Action(action, 8, 28)
+        from .item_sources import answer as number_answer
+        action = number_answer(self, snapshot)
+        if action:
+            return Action(action, 8, 28)
         if self.goal.key == 'radio_card' and 'YES' in snapshot.text and 'NO' in snapshot.text:
             negative = any(word in snapshot.text for word in ('FLASH', 'CHARMANDER', 'APRIKORN', 'MARIE'))
             return Action(choose(snapshot.tiles, 'NO' if negative else 'YES', exact=True) or 'a', 8, 28)

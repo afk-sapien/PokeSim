@@ -27,7 +27,11 @@ CONTEST_SPECIES = (10, 11, 12, 13, 14, 15, 48, 46, 123, 127)
 
 
 def needs_sun_stone(policy, snapshot):
-    return len({182, 192} - snapshot.owned) > dict(snapshot.items).get(policy.data.items['SUN_STONE'], 0)
+    """Whether first prize is wanted: Bellossom or Sunflora is missing, or a held Gloom or Sunkern
+    should evolve for a peer and the bag has no Sun Stone for it."""
+    from .item_sources import item_needs
+    stone = policy.data.items['SUN_STONE']
+    return len({182, 192} - snapshot.owned) > dict(snapshot.items).get(stone, 0) or stone in item_needs(policy, snapshot)
 
 
 def targets(policy, snapshot):
