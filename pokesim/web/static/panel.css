@@ -541,6 +541,9 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   letter-spacing: var(--track-micro);
   text-transform: uppercase;
 }
+/* Footer links leave the page (a feed or GitHub), so they carry the arrow they
+   had before the restyle. It is drawn here and kept out of the accessible name. */
+.plate-foot .links a::after { content: "\00A0\2197"; content: "\00A0\2197" / ""; }
 .restart-link {
   padding: 0;
   background: none;
