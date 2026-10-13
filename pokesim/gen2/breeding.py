@@ -17,6 +17,7 @@ HATCH_BATCH = 3
 # PC operations a hatching trip may take before it stands down instead of looping at the PC.
 HATCH_OPS = 30
 HATCH_KEY = 'hatch'
+BREED_KEY = 'breed'
 
 
 @lru_cache(maxsize=8)
@@ -213,9 +214,16 @@ def spare_slots(snapshot, project):
 
 
 def make_room(policy, snapshot, Goal, label, project):
-    if not spare_slots(snapshot, project) and any(mon.egg for mon in snapshot.party):
+    spare = spare_slots(snapshot, project)
+    if not spare and any(mon.egg for mon in snapshot.party):
         # Every member is needed. Hatching an egg gives the party a Pokémon it can spare.
         return nursery(policy, snapshot, Goal)
+    if not spare or free_slots(snapshot) < 1:
+        # Nothing the PC may take, or nowhere to put it: the errand would press B at the PC forever.
+        from .standdown import stand_down
+        stand_down(policy, BREED_KEY)
+        policy.collection['breeding'] = None
+        return None
     return pc_goal(policy, snapshot, Goal, label)
 
 
@@ -297,7 +305,8 @@ def journey(policy, snapshot, Goal):
     if project is None and walk:
         return nursery(policy, snapshot, Goal)
     if project is None:
-        choices = pairings(policy, snapshot)
+        from .standdown import standing_down
+        choices = [] if standing_down(policy, BREED_KEY) else pairings(policy, snapshot)
         if choices and snapshot.money >= 3000:
             target, _, _, first, second, *species = deepcopy(min(choices))
             project = state['breeding'] = {'target': target, 'parents': [first, second], 'species': species,

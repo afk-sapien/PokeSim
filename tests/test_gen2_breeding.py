@@ -380,3 +380,22 @@ def test_the_day_care_man_returns_his_partner_after_the_waiting_egg(real_data):
     assert journey(policy, state, Goal).key == 'collection_breed_egg'
     state.egg_ready = False
     assert journey(policy, state, Goal).key == 'collection_breed_take_0'
+
+
+@pytest.mark.parametrize('spare', [False, True])
+def test_a_party_the_pc_cannot_take_from_stands_breeding_down(real_data, spare):
+    """With no egg to hatch and nothing the PC may take, or every box full, the run pressed B at the PC forever."""
+    from pokesim.gen2.breeding import BREED_KEY, journey
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.standdown import standing_down
+    ditto, porygon2 = mon(132, 'Genderless', box=0, position=19, dvs=(1, 2, 6, 4, 1)), mon(233, 'Genderless', box=3, dvs=(2, 2, 0, 1, 14))
+    holders = [mon(18, box=None, moves=(19, 0, 0, 0)), mon(40, box=None, moves=(70, 0, 0, 0)),
+               mon(72, box=None, moves=(148, 0, 0, 0)), mon(130, box=None, moves=(250, 0, 0, 0)),
+               mon(19 if spare else 119, box=None, moves=(33, 0, 0, 0) if spare else (127, 0, 0, 0))]
+    policy, state = hatcher(real_data, [lead(), *holders], [ditto, porygon2], boxes=(20,) * 14 if spare else (5,) * 14)
+    policy.collection['breeding'] = {'target': 137, 'parents': [[4321, [1, 2, 6, 4, 1]], [4321, [2, 2, 0, 1, 14]]],
+                                     'species': [132, 233], 'duplicate': True, 'existing': []}
+    assert journey(policy, state, Goal) is None
+    assert policy.collection['breeding'] is None and standing_down(policy, BREED_KEY)
+    # Standing down, the run does not plan the same pairing straight away.
+    assert journey(policy, state, Goal) is None and policy.collection['breeding'] is None
