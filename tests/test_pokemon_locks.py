@@ -79,3 +79,24 @@ def test_preference_update_uses_current_emulator_state_and_discards_pending_inpu
     assert emu.input_epoch == 8
     assert emu.snapshot == s
     emu.store.close()
+
+
+def test_release_that_already_landed_is_not_cancelled():
+    copies = [stored(i, trainer_id=100, dvs=(i + 1,) * 5, level=10 + i) for i in range(2)]
+    s = snapshot(copies)
+    policy = StrategicPolicy(7)
+    recorder = Recorder.on(policy)
+    policy.trade_preferences = lambda: {}
+    policy.goal = Goal('party_release', 'Make room', 'Free a slot')
+    memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
+    policy._dispatch(s, Screen(memory), 'pc', memory)
+    released = recorder.last.position
+    # The box shrank, so the only spare is gone: Core must see the effect, not a cancel.
+    after = snapshot([c for i, c in enumerate(copies) if i != released])
+    assert policy._release_target(after) != (0, released)
+    assert not policy.release_changed(after) and policy.shortcut.active
+    # A confirmed release cannot be taken back either.
+    recorder.last.committed = True
+    choices = {identity(asdict(copies[released])): {'state': 'locked'}}
+    policy.trade_preferences = lambda: choices
+    assert not policy.release_changed(s) and policy.shortcut.active

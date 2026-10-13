@@ -1077,6 +1077,7 @@ class StrategicPolicy(Policy):
             machine, key = ChangeBox(*args), ('change_box', *args)
         elif operation == 'release':
             machine, key = ReleasePokemon(*args, allow_release=True), ('release', s.active_box, *args)
+            self.release_start = (s.active_box, self._box_count(s))
         else:
             raise ValueError(f'Unsupported menu request: {operation}')
         return self._start_shortcut(s, machine, key, purpose)
@@ -1154,11 +1155,20 @@ class StrategicPolicy(Policy):
                         (tm_shop.COUNTER,))
         return goal, None
 
+    @staticmethod
+    def _box_count(s):
+        return sum(1 for p in s.stored_details if p.box == s.active_box)
+
     def release_changed(self, s):
         """Cancel a release whose spare moved or became protected. Core does not check who sits there."""
         machine = self.shortcut.machine
         if (machine is None or machine.kind != 'release_pokemon'
                 or self._release_target(s) == (s.active_box, machine.position)):
+            return False
+        # Once the release is confirmed or the box has shrunk, it has landed. Let Core record it.
+        start = getattr(self, 'release_start', None)
+        if getattr(machine, 'committed', False) or (
+                start and start[0] == s.active_box and self._box_count(s) < start[1]):
             return False
         self.shortcut.cancel()
         self.reason = 'The spare changed or became protected, so keep every Pokémon'
