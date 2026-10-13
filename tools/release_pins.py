@@ -37,7 +37,9 @@ def direct_urls(lock):
         if package['name'] not in EMULATOR_PACKAGES:
             continue
         for wheel in package.get('wheels', []):
-            found[wheel['url']] = wheel['hash'].removeprefix('sha256:')
+            # A wheel locked from a local path has no URL; pin_problems reports it as missing from the lock.
+            if 'url' in wheel:
+                found[wheel['url']] = wheel['hash'].removeprefix('sha256:')
     return found
 
 

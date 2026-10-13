@@ -154,6 +154,65 @@ def test_finalize_refuses_an_incomplete_or_malformed_manifest(tmp_path):
         finalize_release_pins.load_manifest(manifest(tmp_path, **{WHEEL: {'url': FINAL_BASE + WHEEL, 'sha256': 'abc'}}))
 
 
+def path_sourced_tree(root):
+    """The 0.5.0 candidate's shape: Core locked from tools/temp-wheels through [tool.uv.sources]."""
+    (root / 'tools/temp-wheels').mkdir(parents=True)
+    (root / 'tools/temp-wheels' / CORE).write_bytes(BLOBS[CORE])
+    (root / 'TEMP_REMOVE_BEFORE_RELEASE.md').write_text('# TEMP\n')
+    (root / 'pyproject.toml').write_text(
+        '[project]\nname = "x"\nversion = "9.9.9"\ndependencies = [\n'
+        f'  "pokesim-core[emulator] @ {TEMP_BASE + CORE}#sha256={HASHES[CORE]} ; sys_platform == \'linux\'",\n'
+        f'  "pyboy-rs @ {FINAL_BASE + WHEEL}#sha256={HASHES[WHEEL]} ; sys_platform == \'win32\'",\n]\n\n'
+        '# TEMP: lock Core from the copy in tools/temp-wheels.\n[tool.uv.sources]\n'
+        f'pokesim-core = {{ path = "tools/temp-wheels/{CORE}" }}\n\n[tool.uv]\nrequired-version = ">=0.9"\n')
+    (root / 'uv.lock').write_text(
+        '[[package]]\nname = "pokesim-core"\nversion = "0.2.0"\n'
+        f'source = {{ path = "tools/temp-wheels/{CORE}" }}\n'
+        f'wheels = [\n    {{ filename = "{CORE}", hash = "sha256:{HASHES[CORE]}" }},\n]\n\n'
+        '[[package]]\nname = "pyboy-rs"\nversion = "0.1.1"\n'
+        f'source = {{ url = "{FINAL_BASE + WHEEL}" }}\n'
+        f'wheels = [\n    {{ url = "{FINAL_BASE + WHEEL}", hash = "sha256:{HASHES[WHEEL]}" }},\n]\n\n'
+        '[package.metadata]\nrequires-dist = [\n'
+        f'    {{ name = "pokesim-core", extras = ["emulator"], path = "tools/temp-wheels/{CORE}" }},\n]\n')
+    (root / 'Dockerfile').write_text(
+        'COPY pokesim ./pokesim\n# TEMP: uv.lock reads Core from this copy.\nCOPY tools/temp-wheels ./tools/temp-wheels\n'
+        f'ARG EMULATOR_SOURCE_URL={FINAL_BASE + SDIST}\nARG EMULATOR_SOURCE_SHA256={HASHES[SDIST]}\n')
+    return root
+
+
+def test_pin_check_reports_a_path_sourced_wheel_instead_of_crashing(tmp_path):
+    problems = release_pins.local_problems(path_sourced_tree(tmp_path))
+    assert any('pyproject URL is not in uv.lock' in problem for problem in problems)
+
+
+def test_finalize_rewrites_a_path_sourced_tree(tmp_path):
+    tree = path_sourced_tree(tmp_path / 'tree')
+    assets, sdist = finalize_release_pins.load_manifest(manifest(tmp_path))
+    finalize_release_pins.finalize(tree, assets, sdist)
+    assert release_pins.local_problems(tree) == []
+    pyproject = (tree / 'pyproject.toml').read_text()
+    assert pyproject.count('#sha256=' + HASHES[CORE]) == 1 and 'tool.uv.sources' not in pyproject
+    assert '[tool.uv]' in pyproject
+    assert 'temp' not in (tree / 'Dockerfile').read_text().lower()
+    assert f'source = {{ url = "{FINAL_BASE + CORE}" }}' in (tree / 'uv.lock').read_text()
+    assert sorted(path.name for path in tree.iterdir()) == ['Dockerfile', 'pyproject.toml', 'tools', 'uv.lock']
+
+
+def test_finalize_changes_nothing_when_its_result_fails_the_checks(tmp_path):
+    tree = path_sourced_tree(tmp_path / 'tree')
+    before = {path: path.read_bytes() for path in tree.rglob('*') if path.is_file()}
+    other = 'pyboy_rs-0.1.0.tar.gz'
+    # The archive does not match the locked pyboy-rs version, which only the final check notices.
+    assets = {name: {'url': FINAL_BASE + name, 'sha256': HASHES[name]} for name in (CORE, WHEEL)}
+    assets[other] = {'url': FINAL_BASE + other, 'sha256': HASHES[SDIST]}
+    path = tmp_path / 'manifest.json'
+    path.write_text(json.dumps({'assets': assets, 'pyboy_rs_sdist': other}))
+    assets, sdist = finalize_release_pins.load_manifest(path)
+    with pytest.raises(SystemExit, match='nothing was changed'):
+        finalize_release_pins.finalize(tree, assets, sdist)
+    assert {path: path.read_bytes() for path in tree.rglob('*') if path.is_file()} == before
+
+
 def make_sdist(path, name, version):
     import io
     import tarfile

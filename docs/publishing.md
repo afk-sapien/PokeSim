@@ -116,9 +116,10 @@ To finalize, once both upstream releases are public:
 1. Write a manifest of the final asset URLs and hashes (see the docstring of
    `tools/finalize_release_pins.py`). The asset names are the same wheels as the temporary copies.
 2. `python tools/finalize_release_pins.py manifest.json` rewrites `pyproject.toml` (final URLs with
-   `#sha256=` fragments), `uv.lock` (URLs and hashes), and the Dockerfile (source archive URL and
-   checksum), removes the TEMP comment, and deletes `tools/temp-wheels/` and
-   `TEMP_REMOVE_BEFORE_RELEASE.md`. It re-checks its own result and fails if anything is left over.
+   `#sha256=` fragments, no temp-wheels `[tool.uv.sources]` entry), `uv.lock` (URL sources and
+   hashes), and the Dockerfile (source archive URL and checksum, no temp-wheels COPY), removes the TEMP
+   comments, and deletes `tools/temp-wheels/` and `TEMP_REMOVE_BEFORE_RELEASE.md`. It re-checks its own
+   result and, if anything is left over, puts every file back and fails.
 3. `uv lock --check` confirms the lock still matches. Run `uv lock` if the upstream metadata changed.
 4. `python tools/check_release_pins.py --remote` downloads the published assets and compares hashes.
 5. Commit, let CI pass on the release commit, then tag.
