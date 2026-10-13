@@ -188,7 +188,7 @@
 .card-open { grid-template-columns: minmax(0, 1fr) 44px auto }
 .card-open { gap: var(--s2) }
 .card-actions .key { min-height: 44px }
-.card-actions button.key { padding: 0 var(--s3) }
+.card-actions .key:not(.card-settings) { padding: 0 var(--s3) }
 .card-actions .card-settings { padding: 0 }
 .card-more { position: relative }
 .card-more-toggle { height: 100% }

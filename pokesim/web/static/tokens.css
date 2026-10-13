@@ -27,9 +27,9 @@
    perfectly square, unblurred pixels. Use 8 / 16 / 24 / 32 / 40 and nothing
    between them.
 
-   PRODUCTION: keep only the url() source. The data: source exists so this
-   prototype works when opened straight off the disk with file://, and would
-   otherwise need `font-src 'self' data:` added to the CSP.
+   Every face loads from fonts/ on the same origin, which the CSP's
+   default-src 'self' already allows. Every page's <head> preloads this face
+   and Pixelify Sans at the exact url() below.
    -------------------------------------------------------------------------- */
 @font-face {
   font-family: "PokeSim Panel";
@@ -38,12 +38,31 @@
   font-style: normal;
   font-display: swap;
 }
-/* Inter 4, Latin subset with the variable weight axis, OFL 1.1. Bundled in
-   fonts/ with its licence. Nothing loads from a font service. */
+/* The two lowercase voices are pixel faces too, so a sentence sits beside a
+   panel readout without changing era. Both are Latin subsets, OFL 1.1, bundled
+   in fonts/ with their licences. Nothing loads from a font service.
+
+   Pixelify Sans (12 KB, variable weight 400 to 700) draws on an 11-unit em,
+   with a short x-height. size-adjust scales it so its lowercase stands nearly
+   as tall as a plain sans at the same font-size, so every font-size in
+   the stylesheets keeps roughly its old meaning. The bundled subset widens
+   the word space from about 2 to 3 design pixels, so a sentence does not run
+   together; nothing else in it is changed.
+
+   Departure Mono (6 KB, one weight) also draws on an 11-unit em and is crisp
+   at exactly 11px and 22px, which is why --f-micro and --f-label are 11px. */
 @font-face {
-  font-family: "Inter";
-  src: url("fonts/inter-latin-wght.woff2") format("woff2");
-  font-weight: 100 900;
+  font-family: "Pixelify Sans";
+  src: url("fonts/pixelify-sans-latin-wght.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 112%;
+}
+@font-face {
+  font-family: "Departure Mono";
+  src: url("fonts/departure-mono-latin.woff2") format("woff2");
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
@@ -55,21 +74,21 @@
 
 :root {
   /* -- type ---------------------------------------------------------------
-     Three voices and no more.
+     Three voices and no more, all of them pixel faces.
        panel   the display face. Numerals, legends, names, headings. Never a
                paragraph, never below 16px except the chassis marks.
-       mono    JetBrains Mono (OFL 1.1, self-hosted) for micro-labels and any
-               string that needs lowercase at a small size.
-       text    Inter (OFL 1.1, self-hosted, variable, ~110 KB woff2) for every
-               sentence a human has to read.
-     Both fallbacks below are system stacks, so the page is never unstyled. */
+       mono    Departure Mono for micro-labels and any string that needs
+               lowercase at a small size. 11px, its native size.
+       text    Pixelify Sans for tabs, keys and every sentence a human has to
+               read. Weights 400 to 700.
+     The fallbacks are system stacks, so the page is never unstyled. */
   --font-panel: "PokeSim Panel", "Courier New", monospace;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --font-text: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Departure Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-text: "Pixelify Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --f-chassis: 8px;    /* panel font. Model plates, registration marks only. */
-  --f-micro: 11px;     /* mono.  Silkscreen micro-labels, PP counts.         */
-  --f-label: 12px;     /* mono.  Form labels, table headers, captions.       */
+  --f-micro: 11px;     /* mono.  Micro-labels, PP counts. Departure's size.  */
+  --f-label: 11px;     /* mono.  Form labels, table headers, captions.       */
   --f-body: 15px;      /* text.  Paragraphs. Line height 1.55.               */
   --f-legend: 16px;    /* panel. Section legends, nav keys, Pokemon names.   */
   --f-read: 24px;      /* panel. Card values, levels, dex numbers.           */
