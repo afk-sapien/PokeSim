@@ -21,7 +21,7 @@
 
 - Refresh the look after the Game Boy Color. A warm grey shell, a slate bezel around the live screen with a red power lamp that goes dark when the game is paused, and berry keys. The dark theme takes its colours from the slate bezel, and both themes keep text at WCAG AA contrast (the figures are listed in `tokens.css`). Journal entries sit in a double-bordered game text box.
 
-- Write labels, tabs, keys and sentences in sentence case in the Pixelify Sans and Departure Mono pixel faces, bundled with the app, and keep the PokeSim pixel face for names, places and numbers. The top bar ends in one clean line that the tabs sit on. Separator dots and arrow marks on links are gone (slots read "Box 1, slot 2" and versions read "v0.5.0 (abc1234)"), and open party slots are a light dashed outline instead of a full panel.
+- Write labels, tabs and keys in sentence case using Inter, bundled with the app, and keep the pixel face for names, places and numbers. The top bar ends in one clean line that the tabs sit on. Separator dots and arrow marks on links are gone (slots read "Box 1, slot 2" and versions read "v0.5.0 (abc1234)"), and open party slots are a light dashed outline instead of a full panel.
 
 - Ask before rewinding the live game. The rewind key on a journal entry now opens a question that names the play time it goes back to and how much play would be lost, with Keep playing as the default. Nothing is sent until Rewind and lose progress is chosen.
 
