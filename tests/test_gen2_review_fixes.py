@@ -108,3 +108,52 @@ def test_contest_entry_that_never_reaches_the_gate_stands_down(monkeypatch):
     contest, policy, snapshot = contest_case(monkeypatch, decisions=6000)
     assert contest.journey(policy, snapshot, goal) is None
     assert 'contest' not in policy.collection and standing_down(policy, contest.CONTEST_KEY)
+
+
+@pytest.fixture(scope='module', params=['gold', 'silver'])
+def real_data(request):
+    import os
+    from pokesim.gen2.data import GameData
+    directory = os.environ.get('GEN2_DATA_DIR')
+    if not directory:
+        pytest.skip('Set GEN2_DATA_DIR to generated local game data')
+    return GameData.load(directory, request.param)
+
+
+def rock_case(data, party, items=()):
+    flags = {'EVENT_GOT_MASTER_BALL_FROM_ELM', 'EVENT_GOT_TM08_ROCK_SMASH'}
+    policy = SimpleNamespace(data=data, collection={}, returned=set(), decisions=1000,
+                             nav=SimpleNamespace(regions=SimpleNamespace(cleared_rocks={})),
+                             person=lambda snapshot, key, *args: SimpleNamespace(key=key))
+    snapshot = SimpleNamespace(owned=set(), can_catch=True, items=tuple(items), event=lambda name: name in flags,
+                               map=data.map_ids['NEW_BARK_TOWN'], party=party, stored=[], roamers=())
+    return policy, snapshot
+
+
+def party_mon(species, moves=(33, 0, 0, 0)):
+    return SimpleNamespace(species=species, moves=moves, egg=False)
+
+
+def test_burned_tower_rock_needs_someone_who_can_smash_it(real_data):
+    """With TM08 used up and no one knowing Rock Smash, the run once waited at the rock forever."""
+    from pokesim.gen2 import quests
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.standdown import standing_down
+    tm = (real_data.items['TM_ROCK_SMASH'], 1)
+    policy, snapshot = rock_case(real_data, [party_mon(74)], [tm])
+    assert quests.legends(policy, snapshot, Goal).key == 'collection_release_rock'
+    policy, snapshot = rock_case(real_data, [party_mon(74, (249, 0, 0, 0))])
+    assert quests.legends(policy, snapshot, Goal).key == 'collection_release_rock'
+    for party, items in [([party_mon(74)], ()), ([party_mon(129)], [tm])]:
+        policy, snapshot = rock_case(real_data, party, items)
+        assert quests.legends(policy, snapshot, Goal).key == 'pewter_wing'
+        assert standing_down(policy, quests.RELEASE_ROCK_KEY)
+
+
+def test_arriving_at_the_rock_without_rock_smash_stands_down(real_data):
+    from pokesim.gen2 import quests
+    from pokesim.gen2.standdown import standing_down
+    policy, snapshot = rock_case(real_data, [party_mon(74)])
+    policy.goal, policy.menu = SimpleNamespace(key='collection_release_rock'), None
+    assert quests.arrive(policy, snapshot) == 'b'
+    assert policy.menu is None and standing_down(policy, quests.RELEASE_ROCK_KEY)

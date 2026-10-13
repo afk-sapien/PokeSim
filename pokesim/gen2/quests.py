@@ -1,6 +1,24 @@
 """Postgame gifts and legendary encounters driven by cartridge quest flags."""
 from .menus import ChangeBox, FieldMove, ShowPartner, Storage, Teach
+from .standdown import stand_down, standing_down
 from .training import FIELD_MOVES
+
+
+# The Burned Tower rock stands down for a while when no party member can smash it.
+RELEASE_ROCK_KEY = 'release_rock'
+
+
+def rock_smash_task(policy, snapshot):
+    """Using Rock Smash, or teaching it from TM08 in the bag, or None when no party member can."""
+    slot = next((i for i, mon in enumerate(snapshot.party) if 249 in mon.moves and not mon.egg), None)
+    if slot is not None:
+        return FieldMove(slot, 'ROCK SMASH')
+    if policy.data.items['TM_ROCK_SMASH'] not in dict(snapshot.items):
+        return None
+    slot = next((i for i, mon in enumerate(snapshot.party) if not mon.egg
+                 and 249 in policy.data.species[mon.species]['machines']
+                 and not all(move in FIELD_MOVES for move in mon.moves)), None)
+    return Teach(249, slot) if slot is not None else None
 
 
 def room_for_gift(policy, snapshot, Goal):
@@ -49,14 +67,20 @@ def legends(policy, snapshot, Goal):
         return Goal('collection_box', 'Make room for the legendary encounter', goal.map_name, goal.x, goal.y, goal.face)
     if not snapshot.event('EVENT_GOT_MASTER_BALL_FROM_ELM'):
         return policy.person(snapshot, 'gift_master_ball', 'Receive Elm’s Master Ball', 'ELMS_LAB', 'ProfElmScript')
-    if data.game != 'crystal' and not snapshot.event('EVENT_RELEASED_THE_BEASTS'):
+    if (data.game != 'crystal' and not snapshot.event('EVENT_RELEASED_THE_BEASTS')
+            and not standing_down(policy, RELEASE_ROCK_KEY)):
         tower = data.map_ids['BURNED_TOWER_1F']
         if snapshot.map != data.map_ids['BURNED_TOWER_B1F'] and 3 not in policy.nav.regions.cleared_rocks.get(tower, set()):
             if not snapshot.event('EVENT_GOT_TM08_ROCK_SMASH'):
                 return policy.person(snapshot, 'rock_smash', 'Prepare to explore the Burned Tower',
                                      'ROUTE_36', 'Route36RockSmashGuyScript')
-            return Goal('collection_release_rock', 'Clear the Burned Tower passage', 'BURNED_TOWER_1F', 4, 4, 'up')
-        return Goal('release_beasts', 'Awaken the legendary beasts in the Burned Tower', 'BURNED_TOWER_B1F', 9, 5)
+            if rock_smash_task(policy, snapshot):
+                return Goal('collection_release_rock', 'Clear the Burned Tower passage', 'BURNED_TOWER_1F', 4, 4, 'up')
+            # No one knows Rock Smash and TM08 is used up or no one can learn it, so the rock would be
+            # waited at forever. The beasts wait while the other legends go on.
+            stand_down(policy, RELEASE_ROCK_KEY)
+        else:
+            return Goal('release_beasts', 'Awaken the legendary beasts in the Burned Tower', 'BURNED_TOWER_B1F', 9, 5)
     items = dict(snapshot.items)
     wing = 'RAINBOW_WING' if data.game == 'silver' else 'SILVER_WING'
     if data.items[wing] not in items:
@@ -385,15 +409,11 @@ def roamers(policy, snapshot, Goal):
 
 def arrive(policy, snapshot):
     if policy.goal.key == 'collection_release_rock':
-        slot = next((i for i, mon in enumerate(snapshot.party) if 249 in mon.moves and not mon.egg), None)
-        if slot is None:
-            slot = next((i for i, mon in enumerate(snapshot.party) if not mon.egg
-                         and 249 in policy.data.species[mon.species]['machines']
-                         and not all(move in FIELD_MOVES for move in mon.moves)), None)
-            if slot is not None:
-                policy.menu = Teach(249, slot)
-        else:
-            policy.menu = FieldMove(slot, 'ROCK SMASH')
+        task = rock_smash_task(policy, snapshot)
+        if task is None:
+            stand_down(policy, RELEASE_ROCK_KEY)
+            return 'b'
+        policy.menu = task
         return 'wait'
     if policy.goal.key == 'collection_stone_show':
         species, flag = policy.collection['stone_show']
