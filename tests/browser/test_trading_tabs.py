@@ -176,7 +176,7 @@ def test_trading_has_the_switch_up_top_then_make_a_trade_and_history_tabs(page, 
     overview = page.locator('.trade-overview')
     expect(overview.get_by_role('switch', name=re.compile('Auto trading'))).to_be_enabled()
     # The status box is the switch and nothing else: no headline, no explanation, no wish list.
-    assert overview.inner_text().split() == ['Auto', 'trading', 'On'], overview.inner_text()
+    assert overview.inner_text().upper().split() == ['AUTO', 'TRADING', 'ON'], overview.inner_text()
     expect(page.locator('main .trade-help, .page-lede, #trade-status, #trade-activity, [id^="wish"]')).to_have_count(0)
     expect(page.locator('#auto-list, #auto-setting, .trade-setting')).to_have_count(0)
     # Under the switch, two tabs. Make a trade is the default and the URL keeps no hash for it.

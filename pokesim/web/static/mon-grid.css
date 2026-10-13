@@ -16,6 +16,7 @@
   box-shadow: var(--key-inset);
   font: var(--f-micro) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
+  text-transform: uppercase;
   color: var(--ink-2);
   white-space: nowrap;
   cursor: pointer;
@@ -104,6 +105,7 @@
 .pc-slot {
   font: var(--f-micro) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
+  text-transform: uppercase;
   color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
@@ -116,6 +118,7 @@
 .pc-name {
   font: var(--f-legend) / 1.1 var(--font-panel);
   letter-spacing: 0.04em;
+  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .pc-sub { font-size: 13px; color: var(--ink-2); }
@@ -136,6 +139,7 @@
   background: var(--panel);
   font: var(--f-micro) / 1.2 var(--font-mono);
   letter-spacing: var(--track-micro);
+  text-transform: uppercase;
   color: var(--ink-3);
 }
 .pc-metrics b {
@@ -167,6 +171,7 @@
   border: var(--hair) solid var(--rule-faint);
   font: var(--f-micro) / 1.3 var(--font-mono);
   letter-spacing: var(--track-micro);
+  text-transform: uppercase;
   color: var(--ink-2);
   white-space: nowrap;
 }
@@ -214,7 +219,7 @@
 .pc-detail-head > .plate { grid-area: plate; align-self: center; }
 .pc-detail-id { grid-area: id; display: grid; gap: var(--s1); align-self: end; min-width: 0; }
 .pc-detail-id > * { margin: 0; }
-.pc-detail-head h2 { margin: 2px 0; font: var(--f-read) / 1.1 var(--font-panel); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+.pc-detail-head h2 { margin: 2px 0; font: var(--f-read) / 1.1 var(--font-panel); letter-spacing: 0.04em; text-transform: uppercase; overflow-wrap: anywhere; }
 .pc-detail-line { font: 14px / 1.4 var(--font-text); color: var(--ink-2); }
 /* One row of stamps, every one the same height: types filled, states outlined. */
 .pc-detail-tags { grid-area: tags; align-self: start; align-items: center; gap: var(--s1); margin: 0; }
@@ -341,7 +346,7 @@
 .pc-move-ppcell { font: 12px / 1.2 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
 .pc-move-kind { color: var(--ink-2); }
 .pc-move-stat b { font-weight: 600; color: var(--ink); }
-.pc-k { font-size: 10px; letter-spacing: var(--track-micro); color: var(--ink-3); }
+.pc-k { font-size: 10px; letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-3); }
 .pc-move-ppcell { grid-area: pp; justify-self: end; }
 .pc-move-pp { color: var(--ink-2); }
 .pc-move-pp b { font-weight: 600; color: var(--ink); }
@@ -362,6 +367,7 @@
 .pc-facts dt {
   font: var(--f-micro) / 1.2 var(--font-mono);
   letter-spacing: var(--track-micro);
+  text-transform: uppercase;
   color: var(--ink-3);
 }
 .pc-facts dd {
@@ -399,6 +405,7 @@
   height: 24px;
   font-size: 10px;
   letter-spacing: var(--track-micro);
+  text-transform: uppercase;
   color: var(--ink-3);
   font-weight: 400;
 }
@@ -509,7 +516,10 @@
   color: var(--ink-2);
   border: var(--hair) solid var(--rule);
   box-shadow: var(--key-inset);
-  font: 600 15px / 1 var(--font-text);
+  /* Set like a .key, so the toggle reads as one of the panel's keys. */
+  font: var(--f-legend) / 1 var(--font-panel);
+  letter-spacing: var(--track-legend);
+  text-transform: uppercase;
   cursor: pointer;
 }
 .lock-toggle .lock-icon { width: 16px; height: 16px; }

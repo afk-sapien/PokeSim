@@ -826,7 +826,7 @@ def create_app(manager, shutdown=lambda: None):
             asset = path.removeprefix('static/')
             if asset in {'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css',
                          'adventure-trading.js', 'trade-progress.js', 'trade-ui.js', 'trade-tabs.js',
-                         'fonts/pokesim-panel.woff2', 'fonts/inter-latin-wght.woff2', 'mon-grid.js',
+                         'fonts/pokesim-panel.woff2', 'mon-grid.js',
                          'mon-grid.css', 'types.js', 'types.css'}:
                 return FileResponse(STATIC / asset)
         sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)

@@ -21,9 +21,7 @@
 
 - Stop Gold, Silver and Crystal adventures reporting "Stuck? 6 game hours without progress" while walking eggs from the PC to hatching. A level 100 party earns no experience and a hatchling of a registered species adds nothing new, so a box of slow eggs such as Sneasel tripped the stall alert and asked for help every few eggs. Every egg cycle walked off and every hatching now counts as progress, once each, so a reload back to an older save does not.
 
-- Refresh the look after the Game Boy Color. A warm grey shell, a slate bezel around the live screen with a red power lamp that goes dark when the game is paused, and berry keys. The dark theme takes its colours from the slate bezel, and both themes keep text at WCAG AA contrast (the figures are listed in `tokens.css`). Journal entries sit in a double-bordered game text box.
-
-- Write labels, tabs and keys in sentence case using Inter, bundled with the app, and keep the pixel face for names, places and numbers. The top bar ends in one clean line that the tabs sit on. Separator dots and arrow marks on links are gone (slots read "Box 1, slot 2" and versions read "v0.5.0 (abc1234)"), and open party slots are a light dashed outline instead of a full panel.
+- Keep the original Bench Instrument look: the putty panel, near-black dark theme, rust and orange accent, uppercase pixel-face labels, tabs and keys, the plain journal list and full open party bays. A short-lived Game Boy Color restyle (grey shell, slate bezel, berry keys, bundled Inter) is gone, and sentences use the system font again, so the app bundles only its own pixel face. Newer parts, such as the Trading tabs and the lock toggle in the PC popup, use the same look. The top bar ends in one clean line that the tabs sit on. Separator dots and arrow marks on links are gone (slots read "Box 1, slot 2" and versions read "v0.5.0 (abc1234)").
 
 - Ask before rewinding the live game. The rewind key on a journal entry now opens a question that names the play time it goes back to and how much play would be lost, with Keep playing as the default. Nothing is sent until Rewind and lose progress is chosen.
 

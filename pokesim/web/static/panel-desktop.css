@@ -78,6 +78,7 @@ input.well-input::file-selector-button {
   box-shadow: var(--key-inset);
   font: var(--f-label) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
+  text-transform: uppercase;
   color: var(--ink);
   cursor: pointer;
 }
@@ -129,6 +130,7 @@ input.well-input::file-selector-button {
   list-style: none;
   font: var(--f-label) / 1 var(--font-mono);
   letter-spacing: var(--track-micro);
+  text-transform: uppercase;
   color: var(--ink-2);
 }
 .files > summary::-webkit-details-marker { display: none; }

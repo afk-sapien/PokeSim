@@ -72,8 +72,9 @@ body[data-page="pc"] .pc-toolbar .field--grow { flex-basis: 200px; }
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
-  font: 600 20px / 1 var(--font-text);
-  letter-spacing: 0;
+  font: 20px / 1 var(--font-panel);
+  letter-spacing: var(--track-legend);
+  text-transform: uppercase;
   color: var(--ink);
 }
 .box-picker small {
