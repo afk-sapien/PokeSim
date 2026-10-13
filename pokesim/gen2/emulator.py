@@ -826,6 +826,15 @@ class Emulator:
             self.policy.trade_preferences = self.store.trade_preferences
             self.play_clock = PlayClock()
             self.paused = self.manual_mode = False
+            # The old run's bests and reload streak would hold the new one stalled for good, and the
+            # watch clocks still pointed at its frames, which kept the guards and reward checks off.
+            self.best_progress = (0,) * 5
+            self.best_experience, self.best_egg_cycles = {}, {}
+            self.unstick_streak = 0
+            self.reloads_exhausted = False
+            self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
+                                    config.STALL_ALERT_REPEAT_HOURS)
+            self._reset_watch()
             self._autosave()
         return True
 
