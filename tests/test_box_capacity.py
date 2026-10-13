@@ -376,3 +376,30 @@ def test_a_party_with_nothing_to_deposit_does_not_fetch_a_stored_partner():
     p.collection.project = {'method': 'evolve', 'parent': 124, 'species': 125,
                             'box': 0, 'evolution': EVOS[124][0], 'key': 'butterfree'}
     assert p.collection.goal(replace(s, party=(lead,) + keepers[:4] + (mon(),))).key == 'party_collection'
+
+
+def test_a_party_member_trains_when_its_stronger_copy_cannot_leave_the_box():
+    # Yellow's Slowbro stalled at 48: a better-DV Slowbro sat in a box, and the full party had no one
+    # to deposit for it, so neither copy was ever offered training and the planner went idle.
+    from pokesim.ram import StoredMon
+    p, s = collection_with_full_box(party_size=6)
+    p.collection.completed_champion = True
+    lead = mon(level=100, hp=100, max_hp=100, defense=100, trainer_id=1, dvs=(9,) * 5)
+    keepers = [mon(moves=(hm, 33, 0, 0), pp=(15, 35, 0, 0), level=100, trainer_id=1, dvs=(9,) * 5,
+                   species=species) for hm, species in zip((15, 19, 57, 70, 148), (0x85, 0x31, 0x23, 0x76, 0x54))]
+    keepers[0] = replace(keepers[0], species=0x08, level=48, dvs=(5,) * 5)
+    stronger = StoredMon(1, 0, 0x08, 30, 'BOX', (33, 0, 0, 0), 0, (15,) * 5, (0,) * 5, 1)
+    s = replace(s, party=(lead, *keepers), box_counts=(20, 1) + (0,) * 10,
+                stored_pokemon=((1, 0x08, 30, 'BOX'),), stored_details=(stronger,))
+    trained = []
+    goal = p.collection.goal
+    def spy(snapshot, project=None):
+        if project and project.get('method') == 'train':
+            trained.append((project['parent'], project['box']))
+        return goal(snapshot, project)
+    p.collection.goal = spy
+    p.collection.project = None
+    p.collection.last_choice = -100000
+    p.collection.choose(s, p.nav, random.Random(1), Goal('idle', 'Idle', 'Idle'))
+    assert (0x08, None) in trained
+    assert (0x08, 1) not in trained

@@ -736,13 +736,19 @@ class Collection:
             counts = Counter(sid for sid, level, box in held)
             individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
             preferences = self.trade_preferences()
+            # A stronger stored copy that cannot be withdrawn must not keep the party copy from training.
+            exchange = partner_exchange_possible(s)
+            reachable_best = {}
+            for mon in individuals:
+                if exchange or mon['box'] is None:
+                    reachable_best[mon['species']] = max(reachable_best.get(mon['species'], -1), potential_power(mon) or -1)
             for mon in individuals:
                 sid, level, box = mon['species'], mon['level'], mon.get('box')
                 family = training_family(sid)
                 key = identity(mon)
                 if counts[sid] <= self.demand().get(dex(sid), 0):
                     continue
-                if (potential_power(mon) or -1) < best_potential[sid]:
+                if (potential_power(mon) or -1) < reachable_best.get(sid, -1):
                     continue
                 if level >= 100 or preferences.get(key, {}).get('state') == 'offered':
                     continue
