@@ -37,13 +37,21 @@ def benefit(inv, incoming):
     return 0, ''
 
 
-def offers(inv, allow_last_copies):
+def offers(inv, allow_last_copies, demanded=None):
+    """Boxed copies this run can trade away.
+
+    ``demanded`` maps Pokédex numbers to the copies peers asked for. A species a peer needs is
+    offered whenever a second copy stays behind, even a keeper: a Jynx from Red's Cerulean
+    exchange otherwise sat beside the veteran (or was released) while Yellow never got one.
+    """
     held = inv.held
     slots = inv.spare_slots
+    wanted = {int(key) for key, count in (demanded or {}).items() if count}
     return inv.spares + tuple(copy for copy in inv.tradeable
                              if (copy.box, copy.position) not in slots
                              and ((held[copy.species] == 1 and allow_last_copies)
-                                  or (held[copy.species] > 1 and copy.trade_preference == 'offered')))
+                                  or (held[copy.species] > 1 and (copy.trade_preference == 'offered'
+                                                                  or copy.dex in wanted))))
 
 
 def listings(inv, allow_last_copies=False):

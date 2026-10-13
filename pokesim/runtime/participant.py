@@ -334,7 +334,10 @@ class Participant:
         # The offer is built from the same PC rows, located by box and position.
         records = {(row.get('box'), row.get('position'), row.get('species')): row
                    for row in (payload.get('storage') or {}).get('pokemon') or ()}
-        for mon in offers(inv, True) if available else ():
+        collection = getattr(getattr(self.emu, 'policy', None), 'collection', None)
+        demanded = collection.demand() if hasattr(collection, 'demand') else {}
+        demanded = demanded if isinstance(demanded, dict) else {}
+        for mon in offers(inv, True, demanded) if available else ():
             from ..broker.routine import EVOLVES
             from ..strategy_data import SPECIES
             side = mon.as_side()
