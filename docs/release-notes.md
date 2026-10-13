@@ -20,6 +20,7 @@ This release changes the emulator under every adventure and adds Yellow, Gold, S
   [Gen II notes](gen2-exploration.md) for what is verified and what is not.
 - **Fixes carried over.** The 0.4.20 PP menu fix, a Game Corner prize-menu detection fix, and shiny protection
   after Transform (the wild Pokémon's original DVs are now read by Core).
+- **Uncatchable shinies.** Since 0.4.20, a shiny that cannot be caught is fled from and logged instead of pausing the game.
 
 ## Upgrading is one-way for Gen II
 
