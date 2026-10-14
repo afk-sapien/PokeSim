@@ -14,7 +14,7 @@ from .. import __version__, config
 from ..audio import AudioFeed
 from ..build_info import build_info
 from ..checkpoints import open_state
-from ..events import HIGH
+from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..play_clock import PlayClock
 from ..stalls import StallWatch
@@ -480,6 +480,25 @@ class Emulator:
             self.ntfy.send(event.title, event.body, priority=event.priority, image=shot,
                            event_type=event.type, click=f'{config.PUBLIC_URL}/events/{eid}')
 
+    def _report_missed_shiny(self, snapshot):
+        """Say once per battle why a wild shiny was run from, with the Red, Blue and Yellow notice.
+
+        Balls cannot be bought and storage cannot be freed in battle, so the policy runs instead
+        of knocking it out. The supply and storage reserves are what keep a shiny catchable.
+        """
+        if not snapshot.enemy_shiny or snapshot.in_battle != 1:
+            self._shiny_reported = False
+            return False
+        why = getattr(self.policy, 'shiny_missed', None)
+        if not why or getattr(self, '_shiny_reported', False):
+            return bool(why)
+        self._shiny_reported = True
+        species = self.data.species.get(snapshot.enemy_species, {}).get('name') or 'Pokémon'
+        self._event(Event('shiny_missed', f'Shiny {species} could not be caught: {why}',
+                          f'A shiny {species} appeared with {why}, so the adventure ran from it. '
+                          'The supply and storage reserves should prevent this.', priority=LOW), snapshot)
+        return True
+
     def _observe(self):
         snapshot = read_snapshot(self.pb.memory, self.data, self.frame)
         self.snapshot = snapshot
@@ -903,6 +922,7 @@ class Emulator:
                 else:
                     snapshot = read_snapshot(self.pb.memory, self.data, self.frame)
                     action = self.policy.step(snapshot, self.pb.memory)
+                    self._report_missed_shiny(snapshot)
                 if action.button:
                     self.pb.button_press(action.button)
                 try:

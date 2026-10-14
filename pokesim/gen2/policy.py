@@ -78,6 +78,8 @@ class Policy:
         self.recoveries = 0
         self.stranded = 0
         self.rescue = deque()
+        # Why the wild shiny in this battle cannot be caught, read by the emulator for its notice.
+        self.shiny_missed = None
         self.failure = None
         self.menu_ref, self.menu_steps = None, 0
         self.partner_move = None
@@ -982,6 +984,7 @@ class Policy:
         self.memory = memory
         self.decisions += 1
         self.backing_out = False
+        self.shiny_missed = None
         if self.rescue:
             self.mode = 'finding another approach'
             self.backing_out = True
@@ -1345,6 +1348,10 @@ class Policy:
                 and snapshot.badges < 128 and snapshot.money < 1200
                 and sum(count for _, count in snapshot.pockets['balls']) <= 3):
             catch = False
+        # A shiny that cannot be caught is run from, as Red, Blue and Yellow do, never knocked out.
+        # The Bug-Catching Contest uses Park Balls and has its own rules in contest.control.
+        self.shiny_missed = (self.shiny_miss_reason(snapshot)
+                             if shiny and not catch and not mem.byte('wStatusFlags2') & 4 else None)
         weaken = self.capture_move(snapshot, mem) if catch else None
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
         trapped = bool(mem.byte('wEnemySubStatus5') & 128 or mem.byte('wPlayerWrapCount'))
@@ -1380,6 +1387,12 @@ class Policy:
             cursor = mem.byte('wMenuCursorY')
             return Action('a' if target + 1 == cursor else 'down' if cursor < target + 1 else 'up')
         if 'FIGHT' in text and 'TYPE' not in text:
+            if self.shiny_missed and not trapped:
+                # A failed escape brings the menu back and Run is tried again. Only a trap that
+                # forbids running leaves the fight below.
+                action = self.battle_task(Flee(), snapshot, mem)
+                if action:
+                    return action
             active = mem.byte('wCurBattleMon')
             switch = None
             # A static legendary only ever calls for the sleeper, and only while it is awake and
@@ -1469,6 +1482,14 @@ class Policy:
     def wild_shiny(snapshot):
         """The wild opponent is shiny. Trainers' Pokémon and a Ditto's borrowed look never count."""
         return getattr(snapshot, 'in_battle', 0) == 1 and bool(getattr(snapshot, 'enemy_shiny', False))
+
+    def shiny_miss_reason(self, snapshot):
+        """Why a wild shiny cannot be caught, in the words of the Red, Blue and Yellow notice."""
+        if not snapshot.can_catch:
+            return 'no storage space'
+        if dict(snapshot.pockets['balls']).get(self.data.items['MASTER_BALL']):
+            return 'only the Master Ball, kept for a legendary'
+        return 'no balls'
 
     def static_legend(self, snapshot):
         """Lugia, Ho-Oh and Crystal's Tin Tower Suicune: catch rate 3, met once at a fixed spot."""

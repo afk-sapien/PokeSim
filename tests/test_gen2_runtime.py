@@ -2463,3 +2463,82 @@ def test_a_shiny_leaves_the_master_ball_to_a_legend_still_to_catch(real_data):
     # A shiny static legend still leaves it to the roaming beasts.
     snapshot.enemy_species, snapshot.owned = 249, {130} | legends - {244, 249}
     assert 'MASTER BALL' not in policy.ball_labels(snapshot)
+
+
+def _shiny_lead():
+    return SimpleNamespace(species=155, nick='CYNDAQUIL', name='CYNDAQUIL', level=40, hp=120, max_hp=120, status=0,
+                           egg=False, moves=(33, 0, 0, 0), pp=(35, 0, 0, 0), stats=(120, 60, 60, 60, 60, 60),
+                           item=0, box=None)
+
+
+@pytest.mark.parametrize('can_catch,balls,why', [
+    (False, (('POKE_BALL', 5),), 'no storage space'),
+    (True, (), 'no balls'),
+    (True, (('MASTER_BALL', 1),), 'only the Master Ball, kept for a legendary'),
+])
+def test_an_uncatchable_shiny_is_run_from_not_knocked_out(real_data, can_catch, balls, why):
+    """Red, Blue and Yellow run from a shiny they cannot catch. Gold, Silver and Crystal used to attack it."""
+    from pokesim.gen2.policy import Policy
+    policy = started(Policy(real_data))
+    policy.needed_move = lambda snapshot: 0
+    policy.remedy = lambda *args, **kwargs: False
+    snapshot = shiny_battle(real_data, 130, balls=balls)
+    # Lugia is still to catch, so the Master Ball stays reserved for it.
+    snapshot.can_catch, snapshot.party = can_catch, (_shiny_lead(),)
+    bytes_ = {}
+    mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0), word=lambda name: 0, read=lambda name, size: bytes(size))
+    assert policy.battle(snapshot, mem).button == ('Flee',)
+    assert policy.shiny_missed == why
+    # A Mean Look or a wrap forbids running, so the turn is fought instead.
+    bytes_['wEnemySubStatus5'] = 128
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    # A plain opponent is fought as before, and no notice is due.
+    bytes_.clear()
+    snapshot.enemy_shiny = False
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert policy.shiny_missed is None
+
+
+def test_a_catchable_shiny_and_a_contest_shiny_are_not_run_from(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = started(Policy(real_data))
+    policy.needed_move = lambda snapshot: 0
+    policy.capture_move = lambda *args: None
+    policy.remedy = lambda *args, **kwargs: False
+    snapshot = shiny_battle(real_data, 130)
+    snapshot.party = (_shiny_lead(),)
+    mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: 0, read=lambda name, size: bytes(size))
+    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    assert policy.shiny_missed is None
+    # Park Balls never sit in the ball pocket: the contest has its own rules and is not run from here.
+    snapshot.pockets = {'balls': []}
+    contest = SimpleNamespace(byte=lambda name: 4 if name == 'wStatusFlags2' else 0, word=lambda name: 0,
+                              read=lambda name, size: bytes(size))
+    assert policy.battle(snapshot, contest).button != ('Flee',)
+    assert policy.shiny_missed is None
+
+
+def test_a_missed_shiny_is_reported_once_per_battle_like_red_blue_and_yellow(real_data):
+    from unittest.mock import Mock
+    from pokesim.events import LOW
+    from pokesim.gen2.emulator import Emulator
+    emu = Emulator.__new__(Emulator)
+    emu.data, emu.policy, emu._event = real_data, SimpleNamespace(shiny_missed='no balls'), Mock()
+    snapshot = SimpleNamespace(in_battle=1, enemy_shiny=True, enemy_species=130)
+    for _ in range(3):
+        assert emu._report_missed_shiny(snapshot)
+    emu._event.assert_called_once()
+    event = emu._event.call_args[0][0]
+    assert (event.type, event.priority) == ('shiny_missed', LOW)
+    assert event.title == f"Shiny {real_data.species[130]['name']} could not be caught: no balls"
+    # The battle ends, and the next uncatchable shiny gets its own notice.
+    assert not emu._report_missed_shiny(SimpleNamespace(in_battle=0, enemy_shiny=False, enemy_species=0))
+    emu.policy.shiny_missed = 'no storage space'
+    assert emu._report_missed_shiny(snapshot)
+    assert emu._event.call_args[0][0].title.endswith('could not be caught: no storage space')
+    assert emu._event.call_count == 2
+    # A shiny the policy can catch is never reported.
+    emu._report_missed_shiny(SimpleNamespace(in_battle=0, enemy_shiny=False, enemy_species=0))
+    emu.policy.shiny_missed = None
+    assert not emu._report_missed_shiny(snapshot)
+    assert emu._event.call_count == 2
