@@ -177,7 +177,7 @@ jobs:
           docker run --rm --network none "$IMAGE" cat /usr/share/pokesim/python-dependencies.json > rehearsal/python-dependencies.json
           docker image inspect "$IMAGE" --format '{{json .}}' > rehearsal/image-metadata.json
           python tools/assemble_release.py rehearsal --version "$VERSION" --revision "$REVISION" --without-desktop
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: release-inputs
           path: release/
@@ -201,7 +201,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: release-inputs
           path: release
