@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Move to hash-pinned PokeSim Core 0.7.0 and drop PokeSim's own copies of the Gen II code Core now owns: the memory map and RAM decoder, clock, snapshot and save handling, hooks and resets, ice and Ruins puzzles, breeding, portraits, screens, Battle Power, NPC trade and prize tables, the Time Capsule rules, and the Gen I and Gen II cable drivers, as well as the Gen I sprites, save export, Pokémon Center checks, text matching and DV checks. Gameplay policies, navigation and the adventure's clock memory stay in PokeSim. A failed save export now says "No save was produced" in every game.
+
 - Move to PyBoy RS 0.1.2. A Gold, Silver or Crystal write to a clock register now sets exactly that counter, the halt bit stops the clock, and loading a save state rebuilds the clock latch from the loaded clock, so loads are deterministic. Saves and checkpoints from 0.1.1 still load. This fixes the clock of an adventure that reaches day 140, where the game takes 140 days off its clock: 0.1.1 turned that write into a clock racing ahead by minutes every frame. Adventures now remember the clock's latest reading instead of the largest one, so a restart after such a write resumes at the game's time instead of going back to the moment of the write. The wheels, the lock and the image's emulator source archive all point at the 0.1.2 release.
 
 - Keep Never trade locks when rolling back to 0.4.20 without restoring a backup. The upgrade moved each lock to the new trade key and deleted the old one, which is the only one 0.4.20 reads, so after a rollback a locked Pokémon could be traded or released as a duplicate. The old row now stays as a copy that follows every lock and unlock, and a lock set in 0.4.20 after a rollback is kept when upgrading again.
