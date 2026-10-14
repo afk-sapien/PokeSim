@@ -22,6 +22,7 @@ import httpx
 from ..checkpoints import CheckpointStore
 from ..game_data import VARIANT_ENV
 from . import trade_settings
+from .assets import portrait_url
 from .registry import digest, identifier, validate_id
 from pokesim_core.identity import find, legacy
 from ..trade.preferences import FIRST
@@ -211,6 +212,8 @@ class Coordinator:
                   'level': _display_number(offer.get('level'), 100), 'evolved_from': None}
         if gen2:
             result['cartridge_generation'] = 2
+            if offer.get('shiny') is True:
+                result['shiny'] = True
         return result if any(value is not None for value in result.values()) else None
 
     def _receipt_display(self, receipt):
@@ -429,7 +432,7 @@ class Coordinator:
                 if value is None:
                     return None
                 dex = value['dex']
-                return {**value, 'sprite_url': f'/games/{aid}/sprites/{dex}.png?v=rom-portraits-1' if dex else None}
+                return {**value, 'sprite_url': portrait_url(aid, dex, bool(value.get('shiny')))}
             return {'id': row['id'], 'phase': row['phase'], 'decision': row['decision'],
                     'updated_at': row['updated_at'], 'peer_id': peer, 'peer_name': names.get(peer, 'Another adventure'),
                     'sent': mon(detail['sent']), 'received': mon(detail['received']),

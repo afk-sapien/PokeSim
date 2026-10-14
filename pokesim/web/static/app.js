@@ -16,7 +16,7 @@ function tradeArt(event) {
   try { detail = event.detail ? JSON.parse(event.detail) : null } catch (error) { return '' }
   if (!detail || detail.kind !== 'trade') return ''
   const face = (side) => side && side.dex
-    ? `<img loading="lazy" src="${PokeSim.sprite(side.dex)}" alt="${esc(side.name || '')}" width="56" height="56">`
+    ? `<img loading="lazy" src="${PokeSim.sprite(side.dex, Boolean(side.shiny))}" alt="${esc(side.name || '')}" width="56" height="56">`
     : '<span class="unknown-sprite" aria-hidden="true">?</span>'
   const label = (side) => esc(side && side.nick ? side.nick : '')
   return `<span class="trade-art">`
@@ -148,7 +148,7 @@ function renderParty(party) {
     const moveRows = (mon.move_details || []).map((move) => `<div class="move" title="${esc(move.name)}, ${esc(move.type || '')}, ${move.pp}/${move.max_pp} PP"><span class="nm">${esc(move.name)}</span><span class="pp${move.pp ? '' : ' empty'}">${move.pp}</span></div>`).join('')
     const rating = dvStars(mon.dvs)
     const dvLamps = rating ? `<span class="dv" title="DV rating ${rating} of 4" role="img" aria-label="DV rating ${rating} of 4">${Array.from({length: 4}, (_, i) => `<i class="lamp"${i < rating ? ' data-on="signal"' : ''}></i>`).join('')}</span>` : ''
-    const sprite = mon.egg ? PokemonTypes.eggPlate : mon.dex ? `<img src="${PokeSim.sprite(mon.dex)}" alt="${esc(mon.name)} portrait">` : `<span class="plate-num">?</span>`
+    const sprite = mon.egg ? PokemonTypes.eggPlate : mon.dex ? `<img src="${PokeSim.sprite(mon.dex, Boolean(mon.shiny))}" alt="${esc(mon.name)} portrait">` : `<span class="plate-num">?</span>`
     const xpText = xp ? xp.max_level ? 'MAX' : `${Math.floor(clamp(xp.percent))}%` : '—'
     return `<li class="mon${mon.hp ? '' : ' mon--fainted'}"><div class="mon-plate"><div class="plate plate--bay ${PokemonTypes.portraitClass(mon.type_names)}">${sprite}</div></div><div class="mon-body"><div class="mon-head"><span class="slotno">${slotNo(index)}</span><h3 class="name">${esc(name)}</h3><span class="spacer"></span>${dvLamps}<span class="lv"><em>LV</em>${mon.level}</span><button class="mon-open" data-partner="${index}" aria-haspopup="dialog" aria-label="View ${esc(name)} details"><span aria-hidden="true">▶</span></button></div><div class="mon-id">${dex}<span class="micro">${esc(mon.name)}</span>${types}${PokemonTypes.shinyBadge(mon)}${statusTag}</div><div class="mon-lower"><div class="mon-meters"><div class="meter-row"><span class="micro">HP</span>${meter(hp, health, `${esc(name)} health: ${mon.hp} of ${mon.max_hp}`)}<span class="value">${fmt(mon.hp)}/${fmt(mon.max_hp)}</span></div><div class="meter-row"><span class="micro">XP</span>${meter(clamp(xp?.percent), 'signal', `${esc(name)} progress to next level`)}<span class="value">${xpText}</span></div></div><div class="mon-moves">${moveRows || '<p class="no-moves">No moves yet.</p>'}</div></div></div></li>`
   }).join('') + emptySlots(party.length)

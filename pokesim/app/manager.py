@@ -59,7 +59,7 @@ def public_game_path(method, path):
         return True
     if any(part in {'', '.', '..'} for part in path.split('/')):
         return False
-    return bool(re.fullmatch(r'(?:api/events|events)/[0-9]+|(?:sprites|shots|item-artwork)/[0-9]+\.png'
+    return bool(re.fullmatch(r'(?:api/events|events)/[0-9]+|(?:sprites|sprites/shiny|shots|item-artwork)/[0-9]+\.png'
                              r'|static/[A-Za-z0-9_.-]+|static/fonts/[A-Za-z0-9_.-]+', path))
 
 
@@ -839,12 +839,17 @@ def create_app(manager, shutdown=lambda: None):
                          'fonts/pokesim-panel.woff2', 'mon-grid.js',
                          'mon-grid.css', 'types.js', 'types.css'}:
                 return FileResponse(STATIC / asset)
-        sprite = re.fullmatch(r'sprites/([0-9]{1,3})\.png', path)
+        sprite = re.fullmatch(r'sprites/(shiny/)?([0-9]{1,3})\.png', path)
         if sprite and request.method in {'GET', 'HEAD'}:
-            dex = int(sprite[1])
+            dex = int(sprite[2])
             if not 1 <= dex <= 251:
                 raise HTTPException(404)
-            image = await run_in_threadpool(manager.assets.sprite_path, aid, dex)
+            image = await run_in_threadpool(manager.assets.sprite_path, aid, dex, bool(sprite[1]))
+            if image is None and sprite[1]:
+                # No shiny artwork (Generation I, or a cartridge that could not be read): the
+                # normal portrait stands in.
+                image = await run_in_threadpool(manager.assets.sprite_path, aid, dex)
+                path = f'sprites/{dex}.png'
             if image is not None:
                 return FileResponse(image, media_type='image/png')
         if adventure['state'] not in {'running', 'recovering'}:

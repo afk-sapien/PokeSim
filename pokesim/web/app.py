@@ -384,6 +384,15 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             raise HTTPException(409, str(error)) from error
         return {'ok': True}
 
+    @app.get("/sprites/shiny/{dex}.png")
+    def shiny_sprite(dex: int):
+        # Only Generation II has shiny palettes. Without a shiny image the normal one stands in.
+        if gen2 and 1 <= dex <= 251:
+            path = (store.dir / "sprites" / "shiny" / f"{dex}.png").resolve()
+            if path.parent == (store.dir / "sprites" / "shiny").resolve() and path.is_file():
+                return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, no-cache"})
+        return sprite(dex)
+
     @app.get("/sprites/{dex}.png")
     def sprite(dex: int):
         if not 1 <= dex <= (251 if gen2 else 151):

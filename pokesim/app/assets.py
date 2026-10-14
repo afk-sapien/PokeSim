@@ -15,6 +15,15 @@ from .. import game_data
 log = logging.getLogger(__name__)
 # Bump when extraction changes the portraits it writes for the same cartridge.
 ROM_PORTRAITS = 'rom-portraits-1'
+# Only Generation II has shiny Pokémon, each with its own palette in the cartridge.
+SHINY_VERSIONS = {'gold', 'silver', 'crystal'}
+
+
+def portrait_url(adventure_id, dex, shiny=False):
+    """The address of a portrait an adventure serves, or None for an unknown species."""
+    if type(dex) is not int or not 1 <= dex <= 251:
+        return None
+    return f"/games/{adventure_id}/sprites/{'shiny/' if shiny else ''}{dex}.png?v={ROM_PORTRAITS}"
 
 
 class Assets:
@@ -197,18 +206,26 @@ class Assets:
             raise ValueError('Stored ROM verification failed')
         return path
 
-    def sprite_path(self, adventure_id, dex):
+    def sprite_path(self, adventure_id, dex, shiny=False):
         """The portrait an adventure shows for `dex`.
 
         A hand-installed image in the adventure's own `sprites` folder wins. Next comes the
         community pack set for the adventure's version when the owner installed and enabled
         it, then the portraits extracted from the owner's own cartridge (per version, with the
         shared Generation I folder last).
+
+        A shiny portrait looks in each `shiny` subfolder the same way and, when none holds
+        one, is drawn from the cartridge with the species' shiny palette. Generation I has no
+        shiny palettes, so it answers the normal portrait.
         """
         if not 1 <= dex <= 251:
             return None
         adventure = self.registry.adventure(adventure_id)
         version = adventure['version']
+        if shiny and version in SHINY_VERSIONS:
+            found = self._shiny_path(adventure, dex)
+            if found is not None:
+                return found
         override = self._contained(self.registry.root / 'adventures' / adventure_id / 'sprites', dex)
         if override is not None:
             return override
@@ -222,6 +239,29 @@ class Assets:
         if version in {'yellow', 'gold', 'silver', 'crystal'}:
             return None
         return self._contained(self.root / 'sprites', dex)
+
+    def _shiny_path(self, adventure, dex):
+        override = self._contained(self.registry.root / 'adventures' / adventure['id'] / 'sprites' / 'shiny', dex)
+        if override is not None:
+            return override
+        community = self.portraits.path(dex, version=adventure['version'], shiny=True)
+        if community is not None:
+            return community
+        path = self.root / 'sprites' / adventure['version'] / 'shiny' / f'{dex}.png'
+        if path.is_file():
+            return path
+        # Portraits extracted before shiny ones existed are completed on first request.
+        try:
+            from ..gen2.data import GameData
+            from ..gen2.sprites import portrait
+            raw = self.rom_path(adventure['rom_id']).read_bytes()
+            png = portrait(raw, GameData.load(self.game_data_dir, adventure['version']), dex, shiny=True)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            CheckpointStore.atomic_write(path, png)
+        except Exception:
+            log.warning('Could not draw the shiny portrait for %s', dex, exc_info=True)
+            return None
+        return path
 
     def sprite_version(self, adventure_id):
         """A stamp for the portraits an adventure shows, used as their `?v=`.
@@ -238,7 +278,7 @@ class Assets:
         if self.registry.setting(self.portraits.setting, False) is True:
             from .portrait_packs import VERSION_SETS
             community = self.portraits._present().get(VERSION_SETS.get(version, version))
-        for folder in (override, self.root / 'sprites' / version, self.root / 'sprites', community):
+        for folder in (override, override / 'shiny', self.root / 'sprites' / version, self.root / 'sprites', community):
             try:
                 parts.append(f'{folder}:{folder.stat().st_mtime_ns}' if folder else '-')
             except OSError:

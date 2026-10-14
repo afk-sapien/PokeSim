@@ -19,6 +19,7 @@ import threading
 import time
 
 from . import trade_settings
+from .assets import portrait_url
 from .registry import identifier, validate_id
 from pokesim_core.identity import find
 
@@ -248,8 +249,7 @@ class TradeRequests:
             game = games.get(aid) or {}
             return {**display, 'adventure_id': aid, 'adventure_name': game.get('name') or 'A deleted adventure',
                     'version': game.get('version'), 'key': row[prefix + '_key'],
-                    'sprite_url': f'/games/{aid}/sprites/{dex}.png?v=rom-portraits-1'
-                    if type(dex) is int and 1 <= dex <= 251 else None}
+                    'sprite_url': portrait_url(aid, dex, bool(display.get('shiny')))}
         return {'id': row['id'], 'status': row['status'], 'reason': row.get('status_reason'),
                 'reasons': list(row.get('reasons') or []), 'created_at': row['created_at'],
                 'updated_at': row['updated_at'], 'manual_id': row.get('manual_id'),

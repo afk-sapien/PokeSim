@@ -4,7 +4,8 @@
   const adventureId = meta('pokesim-adventure')
   // The library stamps the portraits this adventure shows, so a stamped portrait is kept for a year.
   const spriteVersion = meta('pokesim-sprites') || 'rom-portraits-1'
-  const sprite = dex => `${base}/sprites/${Number(dex) || 0}.png?v=${encodeURIComponent(spriteVersion)}`
+  // A shiny Pokémon gets its shiny portrait. The library answers the normal one where there is none (Generation I).
+  const sprite = (dex, shiny = false) => `${base}/sprites/${shiny ? 'shiny/' : ''}${Number(dex) || 0}.png?v=${encodeURIComponent(spriteVersion)}`
   let csrf = ''
   let sessionRequest = null
   const url = path => {

@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from .. import config
 from pokesim_core.identity import find
 from .coordinator import BUSY_NOTE, LINKABLE
+from .assets import portrait_url
 from .registry import identifier, validate_id
 
 FIELDS = ('from_id', 'from_key', 'to_id', 'to_key')
@@ -125,7 +126,7 @@ class TradeBuilder:
     def _side(self, aid, name, version, display):
         dex = display.get('dex')
         return {'adventure_id': aid, 'adventure_name': name, 'version': version, **display,
-                'sprite_url': f'/games/{aid}/sprites/{dex}.png?v=rom-portraits-1' if type(dex) is int and 1 <= dex <= 251 else None}
+                'sprite_url': portrait_url(aid, dex, bool(display.get('shiny')))}
 
     # Picker
 

@@ -24,6 +24,8 @@ def install(raw, root, destination, game):
     data = GameData.load(root, game)
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
+    (destination / 'shiny').mkdir(exist_ok=True)
     for dex in range(1, 252):
         CheckpointStore.atomic_write(destination / f'{dex}.png', portrait(raw, data, dex))
+        CheckpointStore.atomic_write(destination / 'shiny' / f'{dex}.png', portrait(raw, data, dex, shiny=True))
     return 251

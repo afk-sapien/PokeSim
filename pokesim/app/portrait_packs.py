@@ -157,11 +157,12 @@ class PortraitPacks:
             self.registry.set_setting(self.setting, False)
             self.error = None
 
-    def path(self, key, *, version=None, preview=False):
+    def path(self, key, *, version=None, preview=False, shiny=False):
         """The installed image for `key`, from the set matching the adventure `version`.
 
         Without a version the pack's first set answers (the only set for item artwork,
-        Red/Blue for portraits). A version the pack has no set for gets nothing."""
+        Red/Blue for portraits). A version the pack has no set for gets nothing. A shiny
+        image comes from the set's `shiny` subfolder, and nothing answers when it has none."""
         if version is None:
             name = next(iter(self.sets))
         else:
@@ -173,7 +174,7 @@ class PortraitPacks:
         folder = self._present().get(name)
         if folder is None:
             return None
-        path = folder / f'{key}.png'
+        path = (folder / 'shiny' if shiny else folder) / f'{key}.png'
         return path if path.is_file() else None
 
     # Download -------------------------------------------------------------------------------

@@ -5,7 +5,7 @@ const esc = TradeUI.esc
 let signature = ''
 function sprite(mon, size = 'bay') {
   const dex = Number(mon.dex) || 0
-  const img = dex ? `<img src="${PokeSim.sprite(dex)}" alt="" loading="lazy">` : '<span class="plate-num">?</span>'
+  const img = dex ? `<img src="${PokeSim.sprite(dex, Boolean(mon?.shiny))}" alt="" loading="lazy">` : '<span class="plate-num">?</span>'
   return `<div class="plate plate--${size}">${img}</div>`
 }
 function side(mon, label) {
