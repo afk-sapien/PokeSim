@@ -33,7 +33,8 @@ start the new version.
   Yellow nor Gen II.
   Restore your backup or remove them before you roll back.
 - A checkpoint saved with a locked clock has no `pyboy_version` tag and 0.4.x refuses it.
-  Only verification tools lock the clock. Ordinary adventures use the host clock.
+  Gold, Silver and Crystal adventures always lock the clock to game time. Red, Blue and Yellow
+  adventures use the host clock, so only verification tools lock theirs.
 
 To roll back, stop the app and start the 0.4.20 image or install. Restore the backup only if you have Gen II adventures.
 Set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.5.0` to upgrade with Compose, then run

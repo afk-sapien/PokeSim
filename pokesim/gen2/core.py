@@ -116,6 +116,11 @@ def clock_elapsed(emulator):
     return float(state['clock']) - float(state['timezero'])
 
 
+def clock_lock_state(emulator):
+    """The clock lock as Core stores it in a checkpoint (``rtc_clock``), or None while unlocked."""
+    return _clock_call(_method(emulator, 'clock_lock_state'))
+
+
 def host_elapsed(emulator):
     """Seconds the clock would show on the host clock now, as an unlocked cartridge reads it."""
     state = _clock_call(_method(emulator, 'rtc_state'))

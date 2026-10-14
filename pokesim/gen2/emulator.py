@@ -18,7 +18,7 @@ from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..play_clock import PlayClock
 from ..stalls import StallWatch
-from .core import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
+from .core import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
 from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
 from .policy import Action, Policy
@@ -283,6 +283,16 @@ class Emulator:
         return elapsed
 
     def start(self):
+        # Any failure before the thread runs, such as a Core capability error, would otherwise leave
+        # the booted emulator open with nothing to stop it.
+        try:
+            self._prepare_start()
+        except BaseException:
+            self.pb.stop(save=False)
+            raise
+        self.thread.start()
+
+    def _prepare_start(self):
         errors = []
         for path in reversed(self.store.autosaves()):
             try:
@@ -293,7 +303,6 @@ class Emulator:
                 log.exception('Cannot restore Gen II checkpoint %s', path.name)
         else:
             if errors:
-                self.pb.stop(save=False)
                 raise ValueError('No compatible Gen II autosave could be restored') from errors[-1]
             self._sync_clock()
         from .. import rewards
@@ -302,7 +311,6 @@ class Emulator:
         preparation = self.store.get('interaction_preparation') or {}
         if preparation.get('phase') in {'travelling', 'storage', 'rendezvous'} or self.store.get('trade_hold'):
             self.paused = True
-        self.thread.start()
 
     def _clear_stale_hold(self):
         """Drop a trade hold whose exchange no longer exists, since a hold freezes every command."""
@@ -387,7 +395,10 @@ class Emulator:
         return output.getvalue()
 
     def _manifest(self):
-        return {'app_version': __version__, **checkpoint_metadata(), 'generation': 2,
+        # Gen II saves with the clock locked to game time, which PyBoy 2.7.0 cannot reproduce, so the
+        # lock goes into the manifest and Core leaves off the legacy pyboy_version tag.
+        lock = clock_lock_state(self.pb)
+        return {'app_version': __version__, **checkpoint_metadata(rtc_clock=lock), 'rtc_clock': lock, 'generation': 2,
                 'rom_sha1': self.rom_sha1, 'frame': self.frame, 'policy': config.POLICY,
                 'policy_state': self.policy.state_dict(), 'run_memory': {}, 'play_clock': self.play_clock.state_dict(),
                 'gen2_history': self.history, 'legendary_recovery': self.legendary_recovery.state_dict(),
