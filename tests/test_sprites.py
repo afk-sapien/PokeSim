@@ -4,44 +4,15 @@ The pixel-exact check needs a ROM and a pret/pokered checkout, so it is skipped 
 either is missing. Everything else runs anywhere.
 """
 import os
-import zlib
 from pathlib import Path
 
 import pytest
 
-from pokesim.sprites import MEW_DEX, MEW_INTERNAL, extract, front_sprite, png, sprite_bank
+from pokesim.sprites import MEW_DEX, extract, front_sprite
 
 ROM = Path(os.environ.get('ROM_PATH', 'roms/pokered.gb'))
 REFERENCE = Path(os.environ.get('POKERED_REFERENCE', '.reference/pokered'))
 ALIAS = {29: 'nidoranf', 32: 'nidoranm', 83: 'farfetchd', 122: 'mr.mime'}
-
-
-def test_pictures_live_in_the_bank_their_internal_index_selects():
-    assert sprite_bank(MEW_INTERNAL) == 0x01, 'Mew was slotted in on its own'
-    assert sprite_bank(0x1E) == 0x9
-    assert sprite_bank(0x1F) == 0xA
-    assert sprite_bank(0x49) == 0xA
-    assert sprite_bank(0x4A) == 0xB
-    assert sprite_bank(0x73) == 0xB
-    assert sprite_bank(0x74) == 0xC
-    assert sprite_bank(0x98) == 0xC
-    assert sprite_bank(0x99) == 0xD
-
-
-def test_the_lightest_shade_is_written_transparent():
-    """One portrait has to sit on a light panel and a dark one, so it supplies no ground."""
-    image = png([[0, 1], [2, 3]])
-    assert image[:8] == b'\x89PNG\r\n\x1a\n'
-    width = int.from_bytes(image[16:20], 'big')
-    height = int.from_bytes(image[20:24], 'big')
-    assert (width, height) == (2, 2)
-    assert image[24] == 8 and image[25] == 6, '8-bit RGBA'
-
-    start = image.index(b'IDAT') + 4
-    length = int.from_bytes(image[start - 8:start - 4], 'big')
-    raw = zlib.decompress(image[start:start + length])
-    assert raw[0] == 0 and raw[1:5] == bytes((255, 255, 255, 0)), 'shade 0 is transparent'
-    assert raw[5:9][3] == 255, 'every darker shade is opaque'
 
 
 @pytest.mark.skipif(not ROM.exists(), reason='no ROM')

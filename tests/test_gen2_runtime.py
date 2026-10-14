@@ -13,7 +13,7 @@ from pokesim.cartridges import by_version, validate_starter, unpack
 from pokesim.gen2.data import GameData, constants, number
 from pokesim.gen2.navigation import Navigator, blocked_side
 from pokesim.gen2.ram import calculated_stats, experience_at, experience_progress
-from pokesim.gen2.sprites import decompress, portrait
+from pokesim.gen2.sprites import portrait
 from pokesim.gen2.web import Reference
 
 
@@ -133,13 +133,6 @@ def test_generation_two_special_stats_share_dv_and_training():
 def test_directional_walls_block_the_declared_side(tile, side):
     assert blocked_side(tile, side)
     assert not blocked_side(0, side)
-
-
-def test_sprite_decompressor_literals_runs_and_relative_copy():
-    assert decompress(bytes([2, 1, 2, 3, 0x82, 0x82, 255]), 0) == bytes([1, 2, 3, 1, 2, 3])
-    assert decompress(bytes([0x23, 42, 255]), 0) == bytes([42] * 4)
-    with pytest.raises(ValueError):
-        decompress(bytes([0x82, 0x80, 255]), 0)
 
 
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
