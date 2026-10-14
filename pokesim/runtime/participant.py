@@ -91,7 +91,7 @@ def _promote(store, record):
         if not store.db.execute('SELECT 1 FROM kv WHERE k=?', (marker,)).fetchone():
             location = 'Pokémon Center'
             if record.get('cartridge_generation') != 2:
-                from ..interactions.centers import CENTERS
+                from pokesim_core.centers import CENTERS
                 location = CENTERS.get(record.get('source_center_map'), {}).get('name', location)
             title, body, detail = _trade_story(record)
             store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime,detail)
@@ -443,7 +443,7 @@ class Participant:
         chosen = {**individual_data(row['struct']), 'species': row['struct'][0]}
         if not same(identity(chosen), selected):
             raise ValueError('Prepared party member does not match the selected individual')
-        from ..interactions.centers import safe_center
+        from pokesim_core.centers import safe_center
         from ..ram import read_snapshot
         snapshot = read_snapshot(self.emu.pb.memory, self.emu.frame)
         if not safe_center(snapshot, snapshot.map, self.emu.pb.memory):
@@ -533,7 +533,7 @@ class Participant:
             pb.load_state(io.BytesIO(_artifact(record['source']['checkpoint_path'], record['source']['checkpoint_sha256'])))
             before, boxes = party(pb, symbols), boxed_inventory(pb, symbols)
             from ..ram import read_snapshot
-            from ..interactions.centers import safe_center
+            from pokesim_core.centers import safe_center
             source = read_snapshot(pb.memory, 0)
             if not safe_center(source, source.map, pb.memory):
                 raise ValueError('Prepared checkpoint is not in a supported Center')

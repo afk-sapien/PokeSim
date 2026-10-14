@@ -7,7 +7,7 @@ import time
 from pokesim_core.shortcuts import ChangeBox, DepositPokemon, WithdrawPokemon
 
 from ..policies.base import Action
-from ..interactions.centers import CENTERS
+from pokesim_core.centers import CENTERS
 from ..policies.navigation import Navigator
 from ..policies.progression import YELLOW
 from ..policies.collection import LEAGUE

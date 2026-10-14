@@ -19,6 +19,14 @@ def sha256(data):
 class CableSide(CableEndpoint):
     """Own an emulator, independent cartridge RAM, and one bounded cable endpoint."""
 
+    @property
+    def label(self):
+        return self.spec.adventure_id
+
+    @property
+    def party_slot(self):
+        return self.spec.party_slot
+
     def __init__(self, spec, max_queue=4, *, builds=None):
         from ..yellow import open_emulator
         self.spec = spec

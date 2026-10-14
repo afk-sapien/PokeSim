@@ -5,7 +5,8 @@ import pytest
 
 from pokesim.interactions.cable import CableError
 from pokesim.interactions.cable_driver import CableDriver
-from pokesim.interactions.centers import CENTERS, safe_center
+from pokesim_core import centers as core_centers
+from pokesim_core.centers import CENTERS, safe_center
 from pokesim.interactions import verification
 
 
@@ -28,47 +29,6 @@ def snapshot(map_id, **changes):
     target = CENTERS.get(map_id, {}).get('rendezvous', (map_id, 1, 1))
     return SimpleNamespace(valid=True, started=True, map=map_id, x=target[1], y=target[2],
                            **{'in_battle': False, 'textbox': False, 'start_menu': False, **changes})
-
-
-def test_supported_centers_exclude_the_hotel():
-    assert set(CENTERS) == {41, 58, 64, 68, 81, 89, 133, 141, 154, 171, 174, 182}
-    assert CENTERS[174]['pc'] == (174, 15, 8)
-    assert CENTERS[174]['rendezvous'] == (174, 13, 7)
-    assert CENTERS[89]['rendezvous'] == (89, 11, 3)
-    assert not safe_center(snapshot(140), 140, memory())
-
-
-@pytest.mark.parametrize('changes', [
-    {'in_battle': True}, {'textbox': True}, {'start_menu': True},
-])
-def test_center_requires_closed_gameplay_interfaces(changes):
-    assert not safe_center(snapshot(174, **changes), 174, memory())
-
-
-def test_center_requires_the_original_location():
-    assert safe_center(snapshot(174), 174, memory())
-    assert not safe_center(snapshot(89), 174, memory())
-    assert not safe_center(snapshot(174), None, memory())
-    assert not safe_center(snapshot(174), '174', memory())
-    value = snapshot(174)
-    value.valid = False
-    assert not safe_center(value, 174, memory())
-    value.valid = True
-    value.started = False
-    assert not safe_center(value, 174, memory())
-
-
-def test_continue_menu_with_loaded_save_ram_is_not_an_overworld():
-    from pokesim.screen import Screen
-    saved = snapshot(174)
-    menu = continue_menu()
-    assert Screen(menu).kind(saved) == 'overworld'
-    assert not safe_center(saved, 174, menu)
-    menu[0xcfcb] = 1
-    assert not safe_center(saved, 174, menu)
-    blank = memory()
-    blank[0xcfcb] = 255
-    assert not safe_center(saved, 174, blank)
 
 
 def test_driver_confirms_both_continue_prompts_before_accepting_loaded_ram(monkeypatch):
@@ -219,6 +179,8 @@ def test_restarts_require_exact_original_center(monkeypatch, checkpoint_map, car
                         lambda memory, frame: snapshot(next(pb.map_id for pb in instances if pb.memory is memory)))
     monkeypatch.setattr(pokesim.screen, 'Screen', lambda memory: SimpleNamespace(
         text=memory['text'], cursor=None, menu_index=0, kind=lambda snapshot: 'overworld'))
+    monkeypatch.setattr(core_centers, 'screen', lambda memory: SimpleNamespace(
+        rows=(), text=memory['text'], cursor=None, menu_index=0))
     monkeypatch.setattr(verification, 'verify_control', lambda *args: None)
     side = SimpleNamespace(source_center_map=174, rom_bytes=b'fixture', sym={'wLinkState': (0, 0)})
     if error:
@@ -259,6 +221,7 @@ def test_participant_derives_original_center_from_source_checkpoint(
     monkeypatch.setattr(pyboy, 'Emulator', PyBoy)
     monkeypatch.setattr(pokesim.screen, 'Screen', lambda memory: SimpleNamespace(
         text='', cursor=None, kind=lambda snapshot: 'overworld'))
+    monkeypatch.setattr(core_centers, 'screen', lambda memory: SimpleNamespace(rows=(), text='', cursor=None))
     monkeypatch.setattr(cable_metadata, 'BUILDS', {'test-rom': {'symbols': {}}})
     monkeypatch.setattr(verification, 'party', lambda pb, symbols: [])
     monkeypatch.setattr(verification, 'boxed_inventory', lambda pb, symbols: [])

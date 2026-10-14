@@ -5,7 +5,7 @@ import io
 
 from pokesim_core.identity import GEN1_DEX, family_key as trade_key
 from .cable import checked
-from .centers import CENTERS, safe_center
+from pokesim_core.centers import CENTERS, safe_center
 
 EVOLUTIONS = {38: 149, 147: 14, 41: 126, 39: 49}
 
