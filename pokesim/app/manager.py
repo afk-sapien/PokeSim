@@ -42,7 +42,7 @@ log = logging.getLogger(__name__)
 STATIC = Path(__file__).parents[1] / 'web' / 'static'
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon', 'stats/items', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
-                   'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml'}
+                   'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
 
 # Pages a person opens. A stopped adventure answers these with its status page, not raw JSON.
 GAME_PAGES = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon',
@@ -59,7 +59,7 @@ def public_game_path(method, path):
         return True
     if any(part in {'', '.', '..'} for part in path.split('/')):
         return False
-    return bool(re.fullmatch(r'(?:api/events|events)/[0-9]+|(?:sprites|shots)/[0-9]+\.png'
+    return bool(re.fullmatch(r'(?:api/events|events)/[0-9]+|(?:sprites|shots|item-artwork)/[0-9]+\.png'
                              r'|static/[A-Za-z0-9_.-]+|static/fonts/[A-Za-z0-9_.-]+', path))
 
 
@@ -230,7 +230,7 @@ def cache_policy(path, query, content_type):
     Pages reference their stylesheets and scripts with a ?v= stamp that changes with
     the file, so those never need a round trip. Everything live stays uncached.
     """
-    if (re.fullmatch(r'/api/v1/item-artwork/images/[0-9]+\.png', path)
+    if (re.fullmatch(r'(?:/api/v1/item-artwork/images|/(?:games|view)/[A-Za-z0-9_-]+/item-artwork)/[0-9]+\.png', path)
             and 'v=' in query and content_type.startswith('image/png')):
         return 'private, max-age=86400'
     game = GAME_ASSET.match(path)
@@ -822,6 +822,16 @@ def create_app(manager, shutdown=lambda: None):
                 sprite_version=await run_in_threadpool(manager.assets.sprite_version, aid)))
         if path == 'api/interactions' and request.method in {'GET', 'HEAD'}:
             return JSONResponse(await run_in_threadpool(manager.coordinator.adventure_status, aid))
+        # Item artwork is a library setting, served here too so a view link never needs /api/v1/.
+        if path == 'item-artwork':
+            status = await run_in_threadpool(manager.assets.item_artwork.status)
+            return JSONResponse({'active': status['active'], 'revision': status['revision']})
+        item = re.fullmatch(r'item-artwork/([0-9]{1,3})\.png', path)
+        if item:
+            image = await run_in_threadpool(manager.assets.item_artwork.path, int(item[1]))
+            if image is None:
+                raise HTTPException(404)
+            return FileResponse(image, media_type='image/png')
         if path.startswith('static/') and request.method in {'GET', 'HEAD'}:
             asset = path.removeprefix('static/')
             if asset in {'routes.js', 'tokens.css', 'panel.css', 'panel.js', 'panel-trading.css',

@@ -79,7 +79,9 @@ def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', 
         # Printed into the page, so the brandplate is its full width at first paint
         # instead of growing when app.js reads the version from the status.
         app_version=html.escape(version_label()),
-        brand_label='PokeSim library' if base_path else 'PokeSim home',
+        # A view link must not lead to the Library, which stays behind the login.
+        brand_href=html.escape(f'{base_path}/' if viewer and base_path else '/', quote=True),
+        brand_label='Live adventure' if viewer and base_path else 'PokeSim library' if base_path else 'PokeSim home',
         save_export_control='' if base_path else (
             '<button id="export-save" class="key" title="Download your current progress for another emulator">'
             'Download .sav</button>'),

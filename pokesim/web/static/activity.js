@@ -58,7 +58,7 @@
       if (pokemon || itemArtwork) {
         const sprite = add(identity, 'img')
         sprite.src = pokemon ? PokeSim.sprite(row.id)
-          : `/api/v1/item-artwork/images/${row.id}.png?v=${encodeURIComponent(itemArtwork)}`
+          : PokeSim.url(`/item-artwork/${row.id}.png?v=${encodeURIComponent(itemArtwork)}`)
         sprite.addEventListener('error', () => { sprite.hidden = true }, {once: true})
         sprite.alt = ''
         sprite.width = sprite.height = 40
@@ -107,7 +107,8 @@
       if (!pokemon && data.generation === 2) itemArtwork = null
       else if (!pokemon) {
         try {
-          const response = await fetch('/api/v1/item-artwork', {cache: 'no-store'})
+          // Under the adventure's own address, so a view link never reaches the Library API.
+          const response = await PokeSim.fetch('/item-artwork', {cache: 'no-store'})
           const artwork = response.ok ? await response.json() : null
           itemArtwork = artwork?.active === 'community' ? artwork.revision : null
         } catch (_) { /* Keep the last known artwork setting while reconnecting. */ }

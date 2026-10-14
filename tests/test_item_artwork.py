@@ -5,8 +5,9 @@ from fastapi.testclient import TestClient
 
 from pokesim.activity_ledger import ITEMS, MACHINE_MOVES
 from pokesim.app.item_artwork import IMAGES
-from pokesim.app.manager import create_app
-from pokesim.app.portrait_packs import PortraitPacks
+from pokesim.app.manager import STATIC, create_app
+from pokesim.app.portrait_packs import REVISION, PortraitPacks
+from pokesim.app.registry import identifier
 from pokesim.pokemon import TYPES
 from pokesim.strategy_data import MOVES
 from test_portrait_packs import manager, upstream, png
@@ -66,3 +67,25 @@ def test_item_routes_require_owner_action_and_serve_only_active_pack(manager, mo
         assert client.get('/api/v1/item-artwork/images/251.png').status_code == 404
         assert client.post('/api/v1/item-artwork/default', headers=headers).json()['active'] == 'default'
         assert client.get('/api/v1/item-artwork/images/222.png').status_code == 404
+
+
+def test_view_links_read_item_artwork_without_the_library_api(manager, monkeypatch):
+    # A proxy opens only /view/ to anonymous watchers, so the item ledger reads artwork there.
+    upstream(monkeypatch)
+    manager.registry.add_rom('fixture', 'sha1', 'red')
+    aid = manager.registry.create('Artwork', 'fixture', {}, identifier())['id']
+    with TestClient(create_app(manager)) as client:
+        for base in (f'/view/{aid}', f'/games/{aid}'):
+            assert client.get(base + '/item-artwork').json() == {'active': 'default', 'revision': REVISION}
+            assert client.get(base + '/item-artwork/222.png').status_code == 404
+        manager.assets.item_artwork.begin()
+        manager.assets.item_artwork.install()
+        for base in (f'/view/{aid}', f'/games/{aid}'):
+            assert client.get(base + '/item-artwork').json()['active'] == 'community'
+            response = client.get(base + '/item-artwork/222.png?v=pinned')
+            assert response.content == png() and response.headers['cache-control'] == 'private, max-age=86400'
+            assert client.get(base + '/item-artwork/251.png').status_code == 404
+            assert client.get(base + '/item-artwork/..%2F..%2Fapi%2Fv1%2Fsettings').status_code == 404
+        assert client.post(f'/view/{aid}/item-artwork').status_code == 403
+    script = (STATIC / 'activity.js').read_text()
+    assert '/api/v1/' not in script and "PokeSim.fetch('/item-artwork'" in script

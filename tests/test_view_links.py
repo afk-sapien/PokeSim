@@ -169,3 +169,14 @@ def test_instance_viewer_only_still_applies_everywhere(tmp_path, monkeypatch):
     assert client.get('/api/state').json()['viewer_only'] is True
     assert client.post('/api/control', json={'action': 'pause'}).status_code == 403
     assert client.get('/api/states').status_code == 403
+
+
+def test_view_pages_never_link_to_the_library(tmp_path):
+    # Anonymous watchers cannot open the Library, so the brandplate returns to the view link.
+    client = TestClient(worker(tmp_path))
+    viewer = {VIEWER_HEADER: '1'}
+    for path in ('/', '/pokedex', '/pc', '/journal', '/stats', '/stats/pokemon', '/stats/items', '/events/42'):
+        page = client.get(path, headers=viewer).text
+        assert 'class="brandplate" href="/view/red-two/"' in page, path
+        assert 'href="/"' not in page and 'PokeSim library' not in page, path
+        assert 'class="brandplate" href="/"' in client.get(path).text, path
