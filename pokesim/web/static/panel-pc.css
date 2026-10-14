@@ -22,15 +22,9 @@ body[data-page="pc"] .pc-toolbar .field--grow { flex-basis: 200px; }
 }
 .pc-workspace-all { grid-template-columns: minmax(0, 1fr); }
 .pc-sidebar[hidden] { display: none; }
-.pc-sidebar {
-  position: sticky;
-  top: calc(var(--rail-h) + var(--s3));
-  /* Twelve boxes are taller than most screens. Scroll the list inside the
-     window instead of letting its top slide under the rail. */
-  max-height: calc(100vh - var(--rail-h) - 2 * var(--s3));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
+/* The party and twelve boxes run their full height and scroll with the page,
+   so the column never shows a scroll bar of its own. */
+.pc-sidebar { min-width: 0; }
 .pc-sidebar-head {
   display: flex;
   align-items: center;
@@ -100,7 +94,6 @@ body[data-page="pc"] .pc-toolbar .field--grow { flex-basis: 200px; }
 @media (max-width: 860px) {
   .pc-workspace:not(.pc-workspace-all) { grid-template-columns: minmax(0, 1fr) }
   .pc-workspace { gap: var(--s3) }
-  .pc-sidebar { position: static; max-height: none; overflow: visible; }
   .pc-sidebar-head, .box-picker { display: none; }
   .mobile-box-control { display: flex; }
   .pc-summary .stats { margin-left: 0; width: 100%; }

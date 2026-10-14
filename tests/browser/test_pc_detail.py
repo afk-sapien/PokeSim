@@ -193,6 +193,17 @@ def test_view_switch_sits_in_the_filter_bar_without_wrapping(page, game, width):
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
+@pytest.mark.parametrize('width,height', [(1280, 600), (1440, 900), (1920, 1080)])
+def test_box_list_scrolls_with_the_page(page, game, width, height):
+    url, _, _, _ = game
+    page.set_viewport_size({'width': width, 'height': height})
+    page.goto(url + '/pc')
+    sidebar = page.locator('#pc-sidebar')
+    expect(sidebar).to_be_visible()
+    # The party and box list never carries a scroll bar of its own, even on a short window.
+    assert sidebar.evaluate('node => node.scrollHeight <= node.clientHeight && getComputedStyle(node).overflowY == "visible"')
+
+
 def variant_payload():
     """A shiny level 100 with one move and the widest ten-letter nickname, beside a fainted Gen II partner
     with no gender, held item or Battle Power."""
