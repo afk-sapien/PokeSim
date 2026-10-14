@@ -9,6 +9,9 @@ from ..dvs import is_perfect
 
 PREFIX = 'trade_offer:'
 MIGRATED = 'trade_settings_v1'
+# Marks a row under the older trainer and DV key that only copies the family keys' setting for
+# 0.4.x, which reads nothing else. This release ignores such rows; see sync_legacy.
+MIRROR = 'mirror'
 
 # One trade setting per Pokémon. The stored strings predate the three named
 # settings and stay the same so an older release can still read them.
@@ -82,14 +85,59 @@ def legacy_lock(preferences, mon):
     return bool(old) and (preferences.get(old) or {}).get('state') in ('locked', 'withdrawn')
 
 
+def is_mirror(value):
+    return isinstance(value, dict) and value.get(MIRROR) is True
+
+
+def _value(raw):
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return None
+
+
+def sync_legacy(db, old, force=False):
+    """Keep the older trainer and DV row in step with the family keys that start with it.
+
+    0.4.x looks a setting up only under the older key, so a rollback without a backup would drop
+    every Never trade lock moved to a family key and could then trade or release a locked Pokémon.
+    The older row therefore stays as a copy: Never trade when any family key with that signature
+    is locked (a lock fails safe), otherwise the one setting they share, and removed when there is
+    none. A row an older release wrote itself is left alone unless ``force`` is set.
+    """
+    if not old or not individual.is_legacy(old):
+        return
+    target = PREFIX + old
+    current = db.execute('SELECT v FROM kv WHERE k=?', (target,)).fetchone()
+    if current and not force and not is_mirror(_value(current[0])):
+        return
+    start = PREFIX + old + '-'
+    values = [value for (raw,) in db.execute('SELECT v FROM kv WHERE substr(k, 1, ?) = ?', (len(start), start))
+              if isinstance(value := _value(raw), dict)]
+    states = [LEGACY.get(value.get('state'), value.get('state')) for value in values]
+    if KEEP in states:
+        source = values[states.index(KEEP)]
+    elif states and len(set(states)) == 1 and states[0] != AUTO:
+        source = values[0]
+    else:
+        db.execute('DELETE FROM kv WHERE k=?', (target,))
+        return
+    state = KEEP if KEEP in states else states[0]
+    db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)',
+               (target, json.dumps({**source, 'state': state, MIRROR: True})))
+
+
 def upgrade(db, mons):
     """Move trade settings stored under an older trainer and DV key to the family key, once.
 
     A setting moves only when exactly one held Pokémon answers to its old key. One that now fits
-    two different species stays where it is and applies to neither. Returns False when the
-    collection is not fully readable yet, so the caller tries again later.
+    two different species stays where it is and applies to neither. The older row stays behind as
+    a copy for a rollback to 0.4.x (see sync_legacy). Returns False when the collection is not
+    fully readable yet, so the caller tries again later.
     """
-    rows = db.execute("SELECT k,v FROM kv WHERE k LIKE ? AND k NOT LIKE ?", (PREFIX + '%', PREFIX + '%-%')).fetchall()
+    rows = [(k, raw) for k, raw in db.execute("SELECT k,v FROM kv WHERE k LIKE ? AND k NOT LIKE ?",
+                                              (PREFIX + '%', PREFIX + '%-%')).fetchall()
+            if not is_mirror(_value(raw))]
     if not rows:
         return True
     if not mons or any(signature(mon) is None for mon in mons):
@@ -104,9 +152,14 @@ def upgrade(db, mons):
         if len(new) != 1 or None in new:
             continue
         target = PREFIX + next(iter(new))
-        if not db.execute('SELECT 1 FROM kv WHERE k=?', (target,)).fetchone():
-            db.execute('INSERT INTO kv(k,v) VALUES (?,?)', (target, raw))
-        db.execute('DELETE FROM kv WHERE k=?', (stored_key,))
+        existing = db.execute('SELECT v FROM kv WHERE k=?', (target,)).fetchone()
+        value = _value(raw)
+        locked = isinstance(value, dict) and value.get('state') in ('locked', 'withdrawn')
+        # A family key already set wins, except over a lock written since, by 0.4.x after a rollback.
+        if not existing or locked:
+            db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)',
+                       (target, json.dumps({**value, 'state': KEEP}) if existing else raw))
+        sync_legacy(db, old, force=True)
     return True
 
 
@@ -134,8 +187,10 @@ def ambiguity(mon, twins):
 
 
 def read(db):
-    return {row[0][len(PREFIX):]: json.loads(row[1])
-            for row in db.execute('SELECT k,v FROM kv WHERE k LIKE ?', (PREFIX + '%',))}
+    """Saved settings by key, without the copies kept for 0.4.x."""
+    saved = {row[0][len(PREFIX):]: json.loads(row[1])
+             for row in db.execute('SELECT k,v FROM kv WHERE k LIKE ?', (PREFIX + '%',))}
+    return {key: value for key, value in saved.items() if not is_mirror(value)}
 
 
 def apply(payload, preferences):

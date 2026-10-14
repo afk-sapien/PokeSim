@@ -255,7 +255,8 @@ class Store:
         self._trade_keys_retry_at = now + TRADE_KEY_RETRY_SECONDS
 
     def set_trade_preference(self, key, value):
-        from .trade.preferences import LEGACY, PREFIX
+        from .individual import legacy
+        from .trade.preferences import LEGACY, PREFIX, sync_legacy
         # One setting per Pokémon and no lock order: Can trade, Prefer to trade or Never trade.
         value = {**value, 'state': LEGACY.get(value['state'], value['state'])}
         with self.lock, self.db:
@@ -264,6 +265,8 @@ class Store:
                 raise ValueError('An exchange is in progress. Try again when it finishes.')
             self.db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)',
                             (PREFIX + key, json.dumps(value)))
+            if key != legacy(key):
+                sync_legacy(self.db, legacy(key))
 
     def clear_trade_preferences(self):
         from .trade.preferences import PREFIX

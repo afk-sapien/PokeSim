@@ -124,6 +124,46 @@ def test_settings_wait_for_a_fully_readable_collection(tmp_path, monkeypatch):
     store.close()
 
 
+def old_release_locked(store, mon):
+    """Whether 0.4.20 sees a Pokémon as locked: it reads only the trainer and DV row's state."""
+    row = store.db.execute('SELECT v FROM kv WHERE k=?', (preferences.PREFIX + preferences.signature(mon),)).fetchone()
+    return bool(row) and json.loads(row[0]).get('state') == 'locked'
+
+
+def test_moved_lock_still_reads_in_the_older_release_after_a_rollback(tmp_path):
+    onix, rattata, pidgey = gen1(ONIX, trainer=99), gen1(RATTATA), gen1(PIDGEY)
+    store = Store(tmp_path)
+    # 0.4.20 wrote Never trade under the trainer and DV key.
+    store.set_trade_preference(preferences.signature(onix), {'state': 'locked', 'name': 'Onix'})
+    store.upgrade_trade_preferences(lambda: [onix, rattata, pidgey])
+    assert store.trade_preferences() == {preferences.identity(onix): {'state': 'locked', 'name': 'Onix'}}
+    assert old_release_locked(store, onix)
+    # Unlocking and locking again in this release reaches the older row too.
+    store.set_trade_preference(preferences.identity(onix), {'state': preferences.stored('auto')})
+    assert not old_release_locked(store, onix)
+    store.set_trade_preference(preferences.identity(onix), {'state': preferences.stored('keep')})
+    assert old_release_locked(store, onix)
+    # A lock set in this release on one of two species sharing a key locks that key for 0.4.x,
+    # which cannot tell them apart, but this release still locks only that one.
+    store.set_trade_preference(preferences.identity(rattata), {'state': preferences.stored('keep')})
+    assert old_release_locked(store, pidgey)
+    applied = rows(collection(rattata, pidgey, onix), store.trade_preferences())
+    assert [mon['trade_locked'] for mon in applied] == [True, False, True]
+    store.close()
+
+
+def test_a_lock_set_after_a_rollback_wins_when_upgrading_again(tmp_path):
+    onix = gen1(ONIX)
+    store = Store(tmp_path)
+    store.set_trade_preference(preferences.identity(onix), {'state': preferences.stored('first')})
+    # The older release overwrites its row with a plain lock, without the copy marker.
+    store.set_trade_preference(preferences.signature(onix), {'state': 'locked'})
+    store.upgrade_trade_preferences(lambda: [onix])
+    assert store.trade_preferences() == {preferences.identity(onix): {'state': preferences.KEEP}}
+    assert old_release_locked(store, onix)
+    store.close()
+
+
 def test_gen1_index_table_matches_game_data():
     assert {sid: row['dex'] for sid, row in SPECIES.items()} == individual.GEN1_DEX
 
