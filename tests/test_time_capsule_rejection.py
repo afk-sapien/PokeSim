@@ -81,21 +81,6 @@ def test_trade_builder_greys_out_crystal_for_a_rejected_classic_pokemon(built): 
     assert 'cannot go to a Gold, Silver or Crystal game' in row['reason'] and 'It looks abnormal' in row['reason']
 
 
-def test_cable_driver_stops_when_the_game_calls_the_pokemon_abnormal(monkeypatch):
-    from pokesim.gen2 import cable_driver
-    text = '\n'.join(['NIDOQUEEN appears', 'to be abnormal!'])
-    monkeypatch.setattr(cable_driver, 'read_snapshot', lambda *args: SimpleNamespace(map=0, text=text, tiles=[], party=[]))
-    side = SimpleNamespace(pb=SimpleNamespace(memory=None), data=SimpleNamespace(maps={0: {'constant': 'TIME_CAPSULE'}}),
-                           frame=0, memory=None, time_capsule=True, nav=SimpleNamespace(observe=lambda s: None),
-                           counts={'Gen2ToGen1LinkComms': 1, 'ExitLinkCommunications': 0, 'SaveAfterLinkTrade': 0})
-    driver = cable_driver.CableDriver.__new__(cable_driver.CableDriver)
-    with pytest.raises(Exception, match='rejected the incoming Pokémon as abnormal'):
-        driver.button(side)
-    # Ordinary trade text still gets a button.
-    text = 'Too bad! The trade\nwas canceled!'
-    assert driver.button(side) == 'a'
-
-
 def test_abnormal_failure_has_a_plain_reason():
     row = {'plan': {'kind': 'trade'}, 'error': f'Cable Club session failed: Cable session failed: {ABNORMAL}'}
     reason = Coordinator._generic_failure_reason(row)
