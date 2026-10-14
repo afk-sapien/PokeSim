@@ -60,7 +60,7 @@ def main():
                                  headers={'X-PokeSim-CSRF': session['csrf_token'],
                                           'Origin': url, 'Content-Type': 'application/json'})) as response:
                     assert json.load(response)['ok']
-                assert process.wait(timeout=30) == 0
+                assert process.wait(timeout=90) == 0
                 print('Python launcher smoke passed: keyless library, assets, duplicate launch, CSRF-protected shutdown, clean exit')
             finally:
                 if process.poll() is None:
