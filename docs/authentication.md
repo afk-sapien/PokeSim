@@ -34,6 +34,17 @@ networks:
 
 ## Authelia rules
 
+Authelia needs its own address and a session cookie for a domain that covers both it and
+PokeSim. For example, with Authelia at `auth.example.com`:
+
+```yaml
+session:
+  cookies:
+    - domain: example.com
+      authelia_url: https://auth.example.com
+      default_redirection_url: https://pokesim.example.com
+```
+
 Authelia checks `access_control` rules from top to bottom and uses the first rule that
 matches. Keep `default_policy: deny`, so anything the rules do not name is refused.
 
@@ -72,13 +83,23 @@ access_control:
 ## Traefik forward authentication
 
 A minimal Compose setup where Traefik asks Authelia about every request to PokeSim. It
-assumes Traefik and Authelia (listening on port 9091) already share the `proxy` network.
+assumes Traefik and Authelia (listening on port 9091) already share the `proxy` network,
+and that Traefik's `websecure` entry point serves HTTPS.
+
+The Authelia service needs `traefik.enable` too. Traefik reads the middleware from that
+container's labels, and with `exposedByDefault=false` it ignores a container without it.
+PokeSim then answers 404 and Traefik logs `middleware "authelia@docker" does not exist`.
+The `authelia` router publishes the login page at the `authelia_url`.
 
 ```yaml
 services:
   authelia:
     # image, configuration and volumes as in the Authelia documentation
     labels:
+      traefik.enable: 'true'
+      traefik.http.routers.authelia.rule: Host(`auth.example.com`)
+      traefik.http.routers.authelia.entrypoints: websecure
+      traefik.http.routers.authelia.tls: 'true'
       traefik.http.middlewares.authelia.forwardAuth.address: http://authelia:9091/api/authz/forward-auth
       traefik.http.middlewares.authelia.forwardAuth.trustForwardHeader: 'true'
       traefik.http.middlewares.authelia.forwardAuth.authResponseHeaders: Remote-User,Remote-Groups,Remote-Name,Remote-Email
@@ -91,6 +112,9 @@ services:
       traefik.http.routers.pokesim.middlewares: authelia@docker
       traefik.http.services.pokesim.loadbalancer.server.port: '8000'
 ```
+
+PokeSim does not read the `Remote-*` headers. Authelia's rules alone decide who reaches
+which path.
 
 Use your proxy's connection and bandwidth limits too. Each open view link keeps a live
 stream running.
