@@ -6,7 +6,7 @@ from pokesim_core.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositPokem
                                     ReorderParty, RunAway, SellItem, SwitchPokemon, UseItem, WithdrawPokemon, item_kind)
 
 from .base import Action, Policy
-from ..textmatch import ScreenText
+from pokesim_core.textmatch import ScreenText
 from .battle import (BALLS, CURES, HEALING, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
                      healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator

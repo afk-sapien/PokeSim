@@ -6,7 +6,7 @@ the party roster, so plain substring search would read it as a menu label.
 Two defences live here. HUD name fields are blanked, and keyword search uses
 letter boundaries so a keyword only matches as a whole word.
 """
-from ..textmatch import ScreenText as ScreenText, has_word as has_word
+from pokesim_core.textmatch import ScreenText as ScreenText, has_word as has_word
 
 KEEP = set('│┌┐└┘─▶▷▼×')
 

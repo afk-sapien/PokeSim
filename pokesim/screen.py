@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 
 from .ram import W_TILEMAP as W_TILEMAP
-from .textmatch import ScreenText
+from pokesim_core.textmatch import ScreenText
 from pokesim_core.gen1_ui import read_screen
 
 W_CURRENT_MENU_ITEM = 0xCC26

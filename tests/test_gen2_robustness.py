@@ -9,7 +9,7 @@ from pokesim import config
 from pokesim.gen2.data import GameData
 from pokesim.gen2.screens import mask_hud, mask_roster
 from pokesim.nicknames import MENU_WORDS, name_pool, validate_parts
-from pokesim.textmatch import ScreenText, has_word
+from pokesim_core.textmatch import ScreenText, has_word
 
 # Words the Gen 2 policy, menus and Gen 1 screen classifiers search for. A mon nicknamed with
 # any of them (or containing one) must never change which screen the bot thinks it sees.

@@ -3,7 +3,7 @@ import random
 from pokesim_core.naming import name_step
 
 from .base import Action
-from ..textmatch import ScreenText
+from pokesim_core.textmatch import ScreenText
 
 
 from ..nicknames import (

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.gen2.data import GameData
-from pokesim.textmatch import ScreenText
+from pokesim_core.textmatch import ScreenText
 
 PC_LIST = [
     '┌──────────────┐べべべべ',
