@@ -96,3 +96,21 @@ def test_contest_keeps_a_shiny_over_any_prize_and_never_swaps_one_away(monkeypat
     keep.clear()
     contest.control(policy, snapshot, mem)
     assert keep == ['NO']
+
+
+def test_a_held_shiny_goes_straight_to_the_judges(monkeypatch):
+    """Nothing is caught while a shiny is held, so the contest no longer runs out its timer."""
+    data = SimpleNamespace(encounters=[], items={'SUN_STONE': 1}, maps={1: {'constant': 'NATIONAL_PARK_BUG_CONTEST'}})
+    policy = SimpleNamespace(data=data, collection={'contest': {'entered': True, 'started': 0}, 'prerequisites': ()},
+                             demand={}, memory=None, decisions=10)
+    snapshot = SimpleNamespace(party=[], stored=[], owned=set(contest.CONTEST_SPECIES) - {123}, map=1, x=10, y=30)
+    bytes_ = {'wStatusFlags2': 4, 'wContestMonSpecies': 10, 'wParkBallsRemaining': 15}
+    dvs = {'wContestMonDVs': b'\x00\x00'}
+    mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0), word=lambda name: 0,
+                          read=lambda name, size: dvs.get(name, bytes(size)))
+    monkeypatch.setattr(contest, 'Memory', lambda memory, data: mem)
+    monkeypatch.setattr(collection, 'encounter_points', lambda *args: [])
+    goal = lambda *args: SimpleNamespace(key=args[0])  # noqa: E731
+    assert contest.journey(policy, snapshot, goal).key == 'contest_search'
+    dvs['wContestMonDVs'] = b'\x2a\xaa'
+    assert contest.journey(policy, snapshot, goal).key == 'contest_finish'

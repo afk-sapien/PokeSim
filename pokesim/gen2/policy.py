@@ -1591,13 +1591,17 @@ class Policy:
         return max(options)[1] if options else None
 
     def ball_labels(self, snapshot):
-        shiny = self.wild_shiny(snapshot)
-        # A shiny may have the Master Ball once every other ball is spent: it may never be seen again.
-        master = ('MASTER BALL',) if snapshot.enemy_species in {243, 244, 245, 249, 250, 251} or shiny else ()
-        if master and self.static_legend(snapshot) and not shiny:
-            from .quests import beasts_roaming
-            if beasts_roaming(self, snapshot):
+        from .quests import beasts_roaming, static_wanted
+        master = ()
+        if snapshot.enemy_species in {243, 244, 245, 249, 250, 251}:
+            master = ('MASTER BALL',)
+            # A static legend waits for its own room, so the roaming beasts keep the Master Ball.
+            if self.static_legend(snapshot) and beasts_roaming(self, snapshot):
                 master = ()
+        elif self.wild_shiny(snapshot) and not beasts_roaming(self, snapshot) and not static_wanted(self, snapshot):
+            # A shiny may have the Master Ball once every other ball is spent, as it may never be seen
+            # again, but not while a legend still to catch needs it.
+            master = ('MASTER BALL',)
         regular = ('ULTRA BALL', 'GREAT BALL', 'POKé BALL', 'LURE BALL', 'FAST BALL',
                    'HEAVY BALL', 'LEVEL BALL', 'LOVE BALL', 'FRIEND BALL', 'MOON BALL')
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'

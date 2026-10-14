@@ -2406,7 +2406,8 @@ def test_contest_runs_for_a_sun_stone_a_peer_needs(real_data):
 def shiny_battle(real_data, species, *, in_battle=1, shiny=True, owned=None, money=10000, balls=(('POKE_BALL', 5),)):
     return SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
         in_battle=in_battle, enemy_species=species, enemy_shiny=shiny, owned={species} if owned is None else owned,
-        can_catch=True, badges=4, money=money, enemy_hp=40, enemy_max_hp=40, enemy_level=20,
+        can_catch=True, badges=4, money=money, enemy_hp=40, enemy_max_hp=40, enemy_level=20, roamers=(),
+        event=lambda name: False,
         pockets={'balls': [(real_data.items[name], count) for name, count in balls]})
 
 
@@ -2435,8 +2436,30 @@ def test_a_shiny_trainer_mon_is_not_a_catch_target(real_data):
 def test_master_ball_is_a_last_resort_for_a_shiny(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
-    roamer = {'species': 244, 'level': 40, 'map': real_data.map_ids['ROUTE_36']}
-    snapshot = SimpleNamespace(enemy_species=130, owned={130}, roamers=(roamer,), in_battle=1, enemy_shiny=False)
+    legends = {243, 244, 245, 249, 250}
+    snapshot = SimpleNamespace(enemy_species=130, owned={130} | legends, roamers=(), in_battle=1, enemy_shiny=False,
+                               event=lambda name: False)
     assert 'MASTER BALL' not in policy.ball_labels(snapshot)
     snapshot.enemy_shiny = True
     assert policy.ball_labels(snapshot)[-1] == 'MASTER BALL'
+
+
+def test_a_shiny_leaves_the_master_ball_to_a_legend_still_to_catch(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    legends = {243, 244, 245, 249, 250}
+    roamer = {'species': 244, 'level': 40, 'map': real_data.map_ids['ROUTE_36']}
+    fought = set()
+    snapshot = SimpleNamespace(enemy_species=130, owned={130} | legends - {244}, roamers=(roamer,), in_battle=1,
+                               enemy_shiny=True, event=lambda name: name in fought)
+    # A roaming beast is still wanted.
+    assert 'MASTER BALL' not in policy.ball_labels(snapshot)
+    # Lugia is still waiting in its chamber.
+    snapshot.owned = {130} | legends - {249}
+    assert 'MASTER BALL' not in policy.ball_labels(snapshot)
+    # Lugia was fought and knocked out, so nothing is left to keep it for.
+    fought.add('EVENT_FOUGHT_LUGIA')
+    assert policy.ball_labels(snapshot)[-1] == 'MASTER BALL'
+    # A shiny static legend still leaves it to the roaming beasts.
+    snapshot.enemy_species, snapshot.owned = 249, {130} | legends - {244, 249}
+    assert 'MASTER BALL' not in policy.ball_labels(snapshot)

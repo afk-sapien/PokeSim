@@ -35,6 +35,23 @@ def encounter_hook(pb, data):
     return bank, wild
 
 
+def contest_hook(pb, data):
+    """(bank, address) of BugContest_SetCaughtContestMon.firstcatch, where a contest catch is kept.
+
+    A Bug-Catching Contest catch skips the party and box code, so the capture hooks never see it.
+    It reaches ``.firstcatch`` as the first catch or once a swap for the held Pokémon is accepted.
+    """
+    bank, address = data.symbols['BugContest_SetCaughtContestMon']
+    _, held = data.symbols['wContestMon']
+    head = bytes(pb.memory[bank, address:address + 6])
+    if head[:5] != bytes((0xFA, held & 0xFF, held >> 8, 0xA7, 0x28)):
+        raise ValueError('The Gen II contest catch signature does not match the cartridge')
+    first = address + 6 + (head[5] ^ 0x80) - 0x80
+    if bytes(pb.memory[bank, first:first + 1]) != b'\xcd':
+        raise ValueError('The Gen II contest catch signature does not match the cartridge')
+    return bank, first
+
+
 def empty_goals():
     return {'level_100': [], 'perfect_species': [], 'high_quality_species': [],
             'perfect_groups': {}, 'perfect_catches': 0}
@@ -81,6 +98,7 @@ class Tracker:
                 raise ValueError('The Gen II capture completion signature does not match the cartridge')
             pb.hook_register(bank, address, self.captured, pb)
         pb.hook_register(*encounter_hook(pb, self.data), self.encountered, pb)
+        pb.hook_register(*contest_hook(pb, self.data), self.contest_caught, pb)
 
     def encountered(self, pb):
         """A wild battle opens. Count it once when the opponent is shiny."""
@@ -93,6 +111,17 @@ class Tracker:
         fingerprint = hashlib.sha256(bytes(pb.memory[0xC000:0xE000])).hexdigest()
         with self.store.lock, self.store.db:
             shiny.record(self.store.db, 'seen', fingerprint, species, generation=2)
+
+    def contest_caught(self, pb):
+        """A Bug-Catching Contest catch is kept. Count a shiny one as acquired, once."""
+        mem = Memory(pb.memory, self.data)
+        species = mem.byte('wEnemyMonSpecies')
+        if (not 1 <= species <= 251 or mem.byte('wBattleMode') != 1 or mem.byte('wBattleType') != 6
+                or not shiny.shiny_bytes(mem.read('wEnemyMonDVs', 2))):
+            return
+        fingerprint = hashlib.sha256(bytes(pb.memory[0xC000:0xE000])).hexdigest()
+        with self.store.lock, self.store.db:
+            shiny.record(self.store.db, 'acquired', fingerprint, species, generation=2)
 
     def captured(self, pb):
         mem = Memory(pb.memory, self.data)

@@ -87,8 +87,10 @@ def journey(policy, snapshot, Goal, *, force=False):
         if name != 'NATIONAL_PARK_BUG_CONTEST':
             return Goal('contest_results', 'Finish the Bug-Catching Contest', name, snapshot.x, snapshot.y)
         wanted = targets(policy, snapshot)
-        # A wanted species only counts once the judges see it, so take it straight to them.
-        if (mem.byte('wContestMonSpecies') in wanted
+        # A wanted species only counts once the judges see it, so take it straight to them. A held
+        # shiny is never swapped, so there is nothing left to catch either.
+        held = mem.byte('wContestMonSpecies')
+        if (held in wanted or held and shiny_bytes(mem.read('wContestMonDVs', 2))
                 or score(mem, 'wContestMon') >= 376 and not wanted or not mem.byte('wParkBallsRemaining')
                 or policy.decisions - state['started'] > 5000):
             return Goal('contest_finish', 'Take the contest catch to the judges', 'ROUTE_35_NATIONAL_PARK_GATE', 3, 1)

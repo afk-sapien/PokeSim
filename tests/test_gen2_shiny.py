@@ -120,3 +120,36 @@ def test_wild_shiny_hook_resolves_on_the_cartridge(real_data):
         assert (bank, address) == (0x0F, 0x7CAA if real_data.game == 'crystal' else 0x7CBA)
     finally:
         pb.stop(save=False)
+
+
+def test_a_shiny_bug_contest_catch_is_acquired_once(real_data, tmp_path):
+    from pokesim.gen2.tracking import Tracker
+    store = Store(tmp_path)
+    tracker = Tracker(store, real_data, fresh=True)
+    scyther = battle(real_data, species=123, kind=6)
+    tracker.encountered(scyther)
+    tracker.contest_caught(scyther)
+    tracker.contest_caught(scyther)  # a reload replays the same catch
+    for ignored in (battle(real_data, species=10, kind=6, dvs=PLAIN), battle(real_data, species=10, kind=7)):
+        tracker.contest_caught(ignored)
+    result = shiny.status(store, 2)
+    assert (result['seen'], result['acquired'], result['acquired_species']) == (1, 1, [123])
+    # A contest Pokémon is not a capture until it joins the team.
+    assert not store.get('capture-statistics-v1')['total']
+    store.close()
+
+
+def test_contest_catch_hook_resolves_on_the_cartridge(real_data):
+    from pokesim.gen2.core import boot
+    from pokesim.gen2.tracking import contest_hook
+    directory = os.environ.get('GEN2_CARTRIDGE_DIR')
+    if not directory:
+        pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
+    pb = boot(io.BytesIO((Path(directory) / (real_data.game + '.gbc')).read_bytes()), sound=False)
+    try:
+        bank, address = contest_hook(pb, real_data)
+        start = real_data.symbols['BugContest_SetCaughtContestMon'][1]
+        # Past the swap question: two farcalls, its name, the YES/NO box and ``ret c``.
+        assert (bank, address) == (3, start + 28)
+    finally:
+        pb.stop(save=False)
