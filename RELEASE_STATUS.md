@@ -10,7 +10,7 @@ Gold, Silver and Crystal. See the [release notes](docs/release-notes.md). Core a
 are not on PyPI: PokeSim depends on their GitHub release wheels, named in `pyproject.toml` and
 hashed in `uv.lock`. A release is not ready until those two releases exist, the lock matches them
 and the publication workflow has produced a receipt.
-Until then one commit marked TEMP points Core at a copy of its 0.6.0 wheel stored in this repository.
+Both now exist: Core is pinned to its 0.7.0 release wheel and PyBoy RS to 0.1.2.
 
 ## Known limits, deliberately not addressed here
 
