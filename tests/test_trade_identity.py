@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from pokesim import individual
+from pokesim_core import identity as individual
 from pokesim import store as store_module
 from pokesim.store import Store
 from pokesim.strategy_data import SPECIES
@@ -186,4 +186,4 @@ def test_families_match_gen2_evolutions():
             assert individual.family(int(dex)) == individual.family(evolution['species'])
             linked[int(dex)] = linked[evolution['species']] = True
     # Every listed family is a real evolution line, and every evolving species is listed.
-    assert set(linked) == set(individual.ROOT)
+    assert set(linked) == set(individual.FAMILY_ROOTS)

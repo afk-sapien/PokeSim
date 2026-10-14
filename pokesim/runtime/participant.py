@@ -13,7 +13,7 @@ import time
 from fastapi import HTTPException, Request
 
 from ..checkpoints import CheckpointStore
-from ..individual import find, legacy, same
+from pokesim_core.identity import find, legacy, same
 from ..app.registry import digest, validate_id
 
 PREFIX = 'managed_interaction:'

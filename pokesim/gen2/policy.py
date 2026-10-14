@@ -629,7 +629,7 @@ class Policy:
         """
         from .breeding import breeding_stock
         from .release import _keys, plan_partners, target
-        from ..individual import same
+        from pokesim_core.identity import same
         preferences = dict(self.trade_preferences())
         if protect:
             # A key from an older release names its Pokémon by trainer and DVs only.

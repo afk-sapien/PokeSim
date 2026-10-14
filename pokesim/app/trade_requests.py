@@ -20,7 +20,7 @@ import time
 
 from . import trade_settings
 from .registry import identifier, validate_id
-from ..individual import find
+from pokesim_core.identity import find
 
 KEY = 'trade_requests'
 MAX_PENDING = 3

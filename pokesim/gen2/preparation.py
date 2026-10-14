@@ -1,7 +1,7 @@
 """Prepare a boxed Gen II offer with ordinary travel and PC controls."""
 import time
 
-from ..individual import same
+from pokesim_core.identity import same
 from ..trade.preferences import identity
 from .teams import key as team_key
 from .menus import ChangeBox, Give, Release, Storage

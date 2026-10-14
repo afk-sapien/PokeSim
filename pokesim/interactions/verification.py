@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import io
 
-from ..individual import GEN1_DEX, key as trade_key
+from pokesim_core.identity import GEN1_DEX, family_key as trade_key
 from .cable import checked
 from .centers import CENTERS, safe_center
 
@@ -30,7 +30,7 @@ def individual_key(row):
     attack, defense = raw[27] >> 4, raw[27] & 15
     speed, special = raw[28] >> 4, raw[28] & 15
     hp = ((attack & 1) << 3) | ((defense & 1) << 2) | ((speed & 1) << 1) | (special & 1)
-    # The trade key (pokesim.individual), without importing the trade package into the manager.
+    # The trade key (pokesim_core.identity.family_key), without importing the trade package into the manager.
     return trade_key(int.from_bytes(raw[12:14], 'big'), (hp, attack, defense, speed, special), GEN1_DEX.get(raw[0]))
 
 

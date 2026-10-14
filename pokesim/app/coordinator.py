@@ -23,7 +23,7 @@ from ..checkpoints import CheckpointStore
 from ..game_data import VARIANT_ENV
 from . import trade_settings
 from .registry import digest, identifier, validate_id
-from ..individual import find, legacy
+from pokesim_core.identity import find, legacy
 from ..trade.preferences import FIRST
 
 log = logging.getLogger(__name__)

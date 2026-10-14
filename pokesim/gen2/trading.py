@@ -10,7 +10,7 @@ from .core import boot
 from .. import config
 from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
-from ..individual import find, same
+from pokesim_core.identity import find, same
 from ..shiny import shiny_bytes
 from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, keeps, manual_rows
 from ..trade.preferences import apply, name as setting_name

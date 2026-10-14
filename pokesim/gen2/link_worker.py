@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from ..individual import same
+from pokesim_core.identity import same
 from ..interactions.cable import checked, sha256
 from ..interactions.link_worker import _write
 from .cable import CableSide

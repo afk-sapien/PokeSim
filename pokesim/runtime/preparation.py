@@ -15,7 +15,7 @@ from ..policies.team import STAYS_IN_PARTY, reserve_to_deposit
 from ..ram import read_snapshot
 from ..screen import Screen
 from ..shortcuts import ShortcutRunner, gen1_ui
-from ..individual import dex_of, is_legacy, legacy, same
+from pokesim_core.identity import dex_of, is_legacy, legacy, same
 from ..trade.preferences import identity
 from ..web.pokedex import live_status
 

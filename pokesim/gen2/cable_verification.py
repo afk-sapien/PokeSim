@@ -3,7 +3,7 @@ import io
 
 from .core import boot, export_clock
 
-from ..individual import key as trade_key
+from pokesim_core.identity import family_key as trade_key
 from ..interactions.cable import checked
 from .ram import Memory, read_snapshot
 from .save import press

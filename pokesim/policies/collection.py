@@ -3,7 +3,7 @@ import time
 from collections import Counter
 from dataclasses import asdict
 from ..duplicates import quality
-from ..individual import same
+from pokesim_core.identity import same
 from .move_development import evolution_wait, move_name
 from ..investment import automatic_trade_protected, training_investment, potential_power, assessment, GOOD_TAIL, SEARCH_BUDGET
 from functools import lru_cache

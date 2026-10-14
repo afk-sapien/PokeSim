@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from ..cartridges import identify
-from ..individual import same
+from pokesim_core.identity import same
 from ..interactions import verification as gen1
 from ..interactions.cable import CableSide, checked, sha256
 from ..interactions.cable_driver import CableDriver

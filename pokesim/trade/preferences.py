@@ -3,7 +3,7 @@ from pokesim_core.identity import pokemon_identity
 import json
 from collections import defaultdict
 
-from .. import individual
+from pokesim_core import identity as individual
 from ..shiny import is_shiny
 from ..dvs import is_perfect
 
@@ -61,8 +61,8 @@ def migrate(db):
 
 
 def identity(mon):
-    """The trade key: trainer ID, DVs and evolution family (see pokesim.individual)."""
-    return individual.key(mon.get('trainer_id'), mon.get('dvs', ()), individual.dex_of(mon))
+    """The trade key: trainer ID, DVs and evolution family (see pokesim_core.identity)."""
+    return individual.family_key(mon.get('trainer_id'), mon.get('dvs', ()), individual.dex_of(mon))
 
 
 def signature(mon):
