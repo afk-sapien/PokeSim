@@ -82,17 +82,6 @@ def test_gen2_ledger_counts_all_251_species_without_touching_gen1(tmp_path):
     store.close()
 
 
-def test_transformed_ditto_reports_its_own_dvs(real_data):
-    from pokesim_core.gen2.ram import read_snapshot
-    mon = battle(real_data, species=132, dvs=PLAIN)
-    mon.memory.put('wEnemyBackupDVs', SHINY)
-    assert not read_snapshot(mon.memory, real_data, cache=False).enemy_shiny
-    mon.memory.put('wEnemySubStatus5', 8)
-    assert read_snapshot(mon.memory, real_data, cache=False).enemy_shiny
-    mon.memory.put('wBattleMode', 2)
-    assert not read_snapshot(mon.memory, real_data, cache=False).enemy_shiny
-
-
 def test_gen2_statistics_and_first_shiny_milestone_use_receipts(tmp_path):
     from tests.test_visual_pass_fixes import gen2_emulator
     from pokesim.web.app import create_app

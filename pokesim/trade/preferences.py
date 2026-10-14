@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from pokesim_core import identity as individual
 from ..shiny import is_shiny
-from ..dvs import is_perfect
+from pokesim_core.dvs import is_perfect
 
 PREFIX = 'trade_offer:'
 MIGRATED = 'trade_settings_v1'

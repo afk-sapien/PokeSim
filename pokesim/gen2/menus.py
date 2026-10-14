@@ -12,7 +12,7 @@ from pokesim_core.shortcuts import (BuyItem, ChangeBox as CoreChangeBox, ChooseM
                                     RunAway, SellItem, SwitchPokemon, TakeItem, UseItem, WithdrawPokemon, current_screen)
 from pokesim_core.shortcuts.machine import BACKABLE
 
-from .screens import has_word
+from pokesim_core.textmatch import has_word
 
 # A menu task that needs more steps than this is lost. It ends and the stuck path takes over.
 MAX_STEPS = 600

@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 from .navigation import DIRS, Navigator
 from pokesim_core.gen2.ram import Memory
-from .screens import ScreenText, mask_roster
+from pokesim_core.gen2.screens import ScreenText, mask_roster
 from .puzzles import push_plan
 from .world import update as update_world
 from .naming import Naming

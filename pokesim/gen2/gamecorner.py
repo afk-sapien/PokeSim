@@ -2,17 +2,10 @@
 from dataclasses import dataclass
 import re
 
+from pokesim_core.gen2.tables import prizes
+
 from .menus import MAX_STEPS, SLOT_MAX_STEPS, choose
 from .quests import room_for_gift
-
-
-def prizes(game):
-    if game == 'crystal':
-        return [(63, 100, 'GOLDENROD'), (104, 800, 'GOLDENROD'), (202, 1500, 'GOLDENROD'),
-                (25, 2222, 'CELADON'), (137, 5555, 'CELADON'), (246, 8888, 'CELADON')]
-    return [(63, 200, 'GOLDENROD'), (27 if game == 'gold' else 23, 700, 'GOLDENROD'),
-            (147, 2100, 'GOLDENROD'), (122, 3333, 'CELADON'), (133, 6666, 'CELADON'),
-            (137, 9999, 'CELADON')]
 
 
 def journey(policy, snapshot, Goal):

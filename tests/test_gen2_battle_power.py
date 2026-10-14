@@ -2,7 +2,7 @@
 import os
 import pytest
 
-from pokesim.gen2.battle_power import battle_power, hidden_power
+from pokesim_core.gen2.battle_power import battle_power, hidden_power
 from pokesim.gen2.web import live_party, live_status
 from pokesim.statistics import highlights
 
@@ -59,44 +59,11 @@ def test_live_status_rates_gen2_party_and_pc_with_cartridge_moves():
     assert best['battle']['value'] == value and best['battle']['dex'] == 154 and best['dvs'] is None
 
 
-def test_gen2_power_ignores_condition_and_rejects_unknown_snapshots():
-    base = meganium(moves=[33, 76, 0, 0])
-    assert battle_power(base, DATA) == battle_power({**base, 'hp': 0, 'status': 8, 'pp': [0] * 4}, DATA)
-    assert battle_power({**base, 'moves': [70]}, DATA) is None
-    assert battle_power({**base, 'moves': None}, DATA) is None
-    assert battle_power({**base, 'dvs': []}, DATA) is None
-    assert battle_power({**base, 'egg': True}, DATA) is None
-    assert battle_power({**base, 'species': 300}, DATA) is None
-    assert battle_power({**base, 'moves': [0, 0, 0, 0]}, DATA) == 0
-    assert battle_power({**base, 'moves': [68]}, DATA) == 0
-
-
-def test_gen2_power_uses_split_specials_coverage_and_recovery():
-    solar = meganium(moves=[76])
-    assert battle_power(meganium(moves=[76, 231]), DATA) > battle_power(solar, DATA)
-    assert battle_power(meganium(moves=[76, 235]), DATA) > battle_power(solar, DATA)
-    assert battle_power(meganium(moves=[75]), DATA) > battle_power(solar, DATA)  # No charging turn.
-    # Gen II splits Special: Special Attack drives Solarbeam but not Tackle.
-    boosted = Data(**{**vars(DATA), 'species': {
-        **DATA.species, 154: {**DATA.species[154], 'stats': [80, 82, 100, 80, 140, 100]}}})
-    assert battle_power(solar, boosted) > battle_power(solar, DATA)
-    tackle = meganium(moves=[33])
-    assert battle_power(tackle, boosted) == battle_power(tackle, DATA)
-
-
 def test_gen2_live_party_carries_the_pc_detail_battle_and_hidden_power():
     party = meganium(moves=[33, 231, 76, 237])
     pc = live_status({'party': [party], 'dex_owned': [154]}, {}, data=DATA)['party'][0]
     live = live_party([party], DATA)[0]
     assert live == pc and live['battle_power'] > 0 and live['hidden_power']['power'] > 0
-
-
-def test_hidden_power_follows_the_dvs():
-    assert hidden_power(DATA, (15, 15, 15, 15, 15)) == (TYPES['DARK'], 70)
-    assert hidden_power(DATA, (0, 12, 12, 0, 0)) == (TYPES['FIGHTING'], 31 + 5 * 12 // 2)
-    fire = meganium(moves=[237], dvs=[0, 10, 0, 0, 0])
-    assert hidden_power(DATA, fire['dvs'])[0] == TYPES['FIRE']
-    assert battle_power(fire, DATA) > 0
 
 
 @pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])

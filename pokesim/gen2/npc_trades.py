@@ -1,69 +1,20 @@
 """In-game NPC trades for Gold, Silver and Crystal.
 
-The table follows pret data/events/npc_trades.asm (pokegold and pokecrystal). Each row lists the
-trade index, which is also its bit in wTradeFlags, the person's map object script, the requested
-species and the species the person gives. engine/events/npc_trade.asm sets the flag bit before
-the trade animation, so a set bit means the trade has happened on this cartridge.
+Core owns the trade table (pret data/events/npc_trades.asm) and the rule for which Pokémon a
+person accepts. Each trade's index is also its bit in wTradeFlags, and engine/events/npc_trade.asm
+sets that bit before the trade animation, so a set bit means the trade has happened on this cartridge.
 """
 from dataclasses import dataclass
 
 from .menus import ChangeBox, Storage, choose, tracked
 from pokesim_core.gen2.ram import Memory
+from pokesim_core.gen2.state import npc_trade_qualifies as qualifies
+from pokesim_core.gen2.tables import NPC_TRADES as TRADES, NpcTrade, npc_trades as trades  # noqa: F401  (re-exported)
 from .training import FIELD_MOVES
-
-
-@dataclass(frozen=True)
-class NpcTrade:
-    index: int
-    npc: str
-    map_name: str
-    script: str
-    request: int
-    give: int
-    nickname: str
-    item: str
-    female: bool = False
-
-
-_SHARED = {
-    'KYLE': NpcTrade(1, 'Kyle', 'VIOLET_KYLES_HOUSE', 'Kyle', 69, 95, 'ROCKY', 'BITTER_BERRY'),
-    'TIM': NpcTrade(2, 'Tim', 'OLIVINE_TIMS_HOUSE', 'Tim', 98, 100, 'VOLTY', 'PRZCUREBERRY'),
-    'KIM': NpcTrade(5, 'Kim', 'ROUTE_14', 'Kim', 113, 142, 'AEROY', 'GOLD_BERRY'),
-}
-TRADES = {
-    'gold': (
-        NpcTrade(0, 'Mike', 'GOLDENROD_DEPT_STORE_5F', 'Mike', 96, 66, 'MUSCLE', 'GOLD_BERRY'),
-        _SHARED['KYLE'], _SHARED['TIM'],
-        NpcTrade(3, 'Emy', 'BLACKTHORN_EMYS_HOUSE', 'Emy', 148, 112, 'DON', 'BITTER_BERRY', female=True),
-        NpcTrade(4, 'Chris', 'PEWTER_POKECENTER_1F', 'Chris', 44, 78, 'RUNNY', 'BURNT_BERRY'),
-        _SHARED['KIM'],
-    ),
-    'crystal': (
-        NpcTrade(0, 'Mike', 'GOLDENROD_DEPT_STORE_5F', 'Mike', 63, 66, 'MUSCLE', 'GOLD_BERRY'),
-        _SHARED['KYLE'], _SHARED['TIM'],
-        NpcTrade(3, 'Emy', 'BLACKTHORN_EMYS_HOUSE', 'Emy', 148, 85, 'DORIS', 'SMOKE_BALL', female=True),
-        NpcTrade(4, 'Chris', 'PEWTER_POKECENTER_1F', 'Chris', 93, 178, 'PAUL', 'MYSTERYBERRY'),
-        _SHARED['KIM'],
-        NpcTrade(6, 'Forest', 'POWER_PLANT', 'Forest', 51, 82, 'MAGGIE', 'METAL_COAT'),
-    ),
-}
-TRADES['silver'] = TRADES['gold']
-
-
-def trades(game):
-    return TRADES[game]
 
 
 def flags(memory, data):
     return Memory(memory, data).byte('wTradeFlags')
-
-
-def done(memory, data, trade):
-    return bool(flags(memory, data) >> trade.index & 1)
-
-
-def qualifies(mon, trade):
-    return mon.species == trade.request and not mon.egg and (not trade.female or mon.gender == 'Female')
 
 
 def candidate(snapshot, trade):

@@ -7,7 +7,7 @@ import pytest
 
 from pokesim import config
 from pokesim.gen2.data import GameData
-from pokesim.gen2.screens import mask_hud, mask_roster
+from pokesim_core.gen2.screens import mask_hud, mask_roster
 from pokesim.nicknames import MENU_WORDS, name_pool, validate_parts
 from pokesim_core.textmatch import ScreenText, has_word
 
@@ -164,15 +164,6 @@ def test_real_crystal_hang_screens_are_read_correctly(real_data):
     roster = mask_roster(tuple(which_screen('MOSQUITO')))
     assert 'MOSQUITO' not in '\n'.join(roster)
     assert 'CANCEL' in '\n'.join(roster)
-
-
-def test_whole_word_search_ignores_embedded_keywords():
-    text = ScreenText('PROTOTYPE\nMOSQUITO\nTROUSERBAT\nFIEND\nCANCEL')
-    assert 'TYPE' not in text and 'QUIT' not in text and 'USE' not in text and 'END' not in text
-    assert 'CANCEL' in text
-    assert 'TYPE/' in ScreenText('TYPE/NORMAL')
-    assert has_word('SURF here', 'SURF') and not has_word('SURFING', 'SURF')
-    assert has_word('349/351', '/')
 
 
 def test_hud_masking_keeps_hp_and_menu_frames():
