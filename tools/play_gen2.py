@@ -8,7 +8,7 @@ from pokesim_core.gen2.clock import boot, lock_clock
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy
-from pokesim.gen2.ram import Memory, read_snapshot
+from pokesim_core.gen2.ram import Memory, read_snapshot
 
 
 def main():
@@ -247,14 +247,14 @@ def main():
                         pb.save_state(output)
                     (args.output / 'latest.policy.json').write_text(json.dumps(policy.state_dict()))
                     (args.output / 'progress.json').write_text(json.dumps({
-                        'game': snapshot.to_dict(), 'mode': policy.mode,
+                        'game': snapshot.to_dict(egg_view=True), 'mode': policy.mode,
                         'seconds': time.monotonic() - start}, indent=2))
         snapshot = read_snapshot(pb.memory, data, frame)
         pb.screen.image.save(args.output / 'final.png')
         with (args.output / 'final.state').open('wb') as output:
             pb.save_state(output)
         (args.output / 'final.policy.json').write_text(json.dumps(policy.state_dict()))
-        (args.output / 'final.json').write_text(json.dumps({'game': snapshot.to_dict(), 'policy': policy.state_dict(),
+        (args.output / 'final.json').write_text(json.dumps({'game': snapshot.to_dict(egg_view=True), 'policy': policy.state_dict(),
                                                          'seconds': time.monotonic() - start, 'stopped': stopped}, indent=2))
     finally:
         pb.stop(save=False)

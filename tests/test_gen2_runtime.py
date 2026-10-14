@@ -11,8 +11,8 @@ from PIL import Image
 
 from pokesim.cartridges import by_version, validate_starter, unpack
 from pokesim.gen2.data import GameData, constants, number
-from pokesim.gen2.navigation import Navigator, blocked_side
-from pokesim.gen2.ram import calculated_stats, experience_at, experience_progress
+from pokesim.gen2.navigation import Navigator
+from pokesim_core.gen2.ram import calculated_stats, experience_at, experience_progress
 from pokesim.gen2.sprites import portrait
 from pokesim.gen2.web import Reference
 
@@ -129,12 +129,6 @@ def test_generation_two_special_stats_share_dv_and_training():
     assert stats == (403, 298, 298, 298, 338, 258)
 
 
-@pytest.mark.parametrize('tile,side', [(0xB0, 'right'), (0xB1, 'left'), (0xB2, 'up'), (0xB3, 'down')])
-def test_directional_walls_block_the_declared_side(tile, side):
-    assert blocked_side(tile, side)
-    assert not blocked_side(0, side)
-
-
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
 def real_data(request):
     directory = os.environ.get('GEN2_DATA_DIR')
@@ -159,7 +153,7 @@ def test_real_reference_has_all_species_correct_types_and_versioned_encounters(r
 
 def test_full_box_gift_preserves_existing_native_names(real_data):
     from collections import defaultdict
-    from pokesim.gen2.ram import Memory, read_snapshot
+    from pokesim_core.gen2.ram import Memory, read_snapshot
     from pokesim.gen2.rewards import gift
     class BankedMemory:
         def __init__(self):
@@ -377,7 +371,7 @@ def test_radio_can_open_when_the_pokegear_icon_is_not_text():
 
 
 def test_snorlax_blocks_its_whole_footprint_until_the_battle(real_data):
-    from pokesim.gen2.world import travel_collision
+    from pokesim_core.gen2.maps import travel_collision
     mid = real_data.map_ids['VERMILION_CITY']
     entry = real_data.maps[mid]
     original = list(entry['collision'])
@@ -530,7 +524,7 @@ def test_tree_rarity_uses_facing_coordinates_and_trainer_id():
 
 
 def test_victory_road_guards_block_remote_routes_until_story_flags(real_data):
-    from pokesim.gen2.world import travel_collision
+    from pokesim_core.gen2.maps import travel_collision
     mid = real_data.map_ids['VICTORY_ROAD_GATE']
     entry = real_data.maps[mid]
     snapshot = SimpleNamespace(event=lambda name: False)
@@ -544,7 +538,7 @@ def test_gen2_league_records_survive_evolution_and_replayed_return_trades(real_d
     from pokesim.gen2 import league
     from pokesim.store import Store
     mon = {'species': 95, 'nick': 'ONIX', 'trainer_id': 123, 'dvs': [7, 3, 9, 5, 7], 'egg': False}
-    party_mon = SimpleNamespace(egg=False, to_dict=lambda: dict(mon))
+    party_mon = SimpleNamespace(egg=False, to_dict=lambda **_: dict(mon))
     source, target = Store(tmp_path / 'source'), Store(tmp_path / 'target')
     try:
         snapshot = SimpleNamespace(hall_of_fame_count=1, party=(party_mon,), stored=())
@@ -795,7 +789,7 @@ def test_faster_roamer_lead_traps_then_sleeps_and_never_paralyzes(real_data):
 
 def test_roamer_lead_is_the_cheapest_sleeper_that_outspeeds_the_beasts(real_data):
     from pokesim.gen2.quests import roam_lead, roamer_speed
-    from pokesim.gen2.ram import calculated_stats, experience_at
+    from pokesim_core.gen2.ram import calculated_stats, experience_at
     policy = SimpleNamespace(data=real_data, memory=None)
     def mon(species, level, moves, box=None):
         return SimpleNamespace(species=species, level=level, moves=moves, pp=tuple(10 if m else 0 for m in moves),
@@ -1018,7 +1012,7 @@ def test_time_capsule_team_restoration_takes_priority_over_story(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, seed=1, starter='cyndaquil')
     from pokesim.gen2.teams import key
-    original = SimpleNamespace(box=0, position=0, to_dict=lambda: {'trainer_id': 1, 'dvs': [1, 2, 3, 4]})
+    original = SimpleNamespace(box=0, position=0, to_dict=lambda **_: {'trainer_id': 1, 'dvs': [1, 2, 3, 4]})
     policy.collection['time_capsule_restore'] = [key(original)]
     from pokesim.gen2.policy import Goal
     policy.storage_goal = lambda _: Goal('pc', 'PC', 'NEW_BARK_TOWN', 1, 1, 'up')
@@ -1077,7 +1071,7 @@ def test_celebi_quest_respects_the_overnight_wait(real_data):
 
 def test_time_capsule_preserves_league_counts_across_return_trade(real_data):
     from pokesim.gen2 import league
-    from pokesim.gen2.ram import decode_mon
+    from pokesim_core.gen2.ram import decode_mon
     from pokesim.gen2.timecapsule_conversion import to_gen1
     from pokesim.gen2.timecapsule_records import to_gen1 as old_record, to_gen2 as new_record
     from pokesim.trade.preferences import signature as identity
@@ -1425,18 +1419,6 @@ def test_breeding_deposits_keep_the_only_field_move_partner(real_data):
     assert make_room(policy, snapshot, Goal, 'Make room', project).key == 'collection_hatch'
 
 
-def test_party_eggs_hide_their_species(real_data):
-    from pokesim.gen2.ram import Mon
-    fields = dict(species=215, nick='EGG', level=5, hp=20, max_hp=20, status=0, held_item=0, moves=(98, 43, 0, 0),
-                  pp=(30, 30, 0, 0), max_pp=(30, 30, 0, 0), stats=(20, 12, 10, 14, 9, 10), experience=125,
-                  dvs=(1, 2, 3, 4, 5), stat_exp=(0,) * 5, trainer_id=1, friendship=20, data=real_data)
-    egg = Mon(egg=True, **fields).to_dict()
-    assert (egg['dex'], egg['name'], egg['types'], egg['type_names']) == (None, 'Egg', [], [])
-    assert egg['species'] == 215
-    hatched = Mon(**fields).to_dict()
-    assert hatched['dex'] == 215 and hatched['types']
-
-
 def test_imported_legends_do_not_require_the_local_wing_quest(monkeypatch):
     from pokesim.gen2 import celebi
     from pokesim.gen2.quests import legends
@@ -1490,7 +1472,7 @@ def test_tower_training_does_not_finish_during_held_item_transfer(real_data, mon
     policy.memory = None
     policy.menu = object()
     mon = SimpleNamespace(species=101, level=23, trainer_id=1, dvs=(0,) * 5,
-                           to_dict=lambda: {'trainer_id': 1, 'dvs': [0] * 5})
+                           to_dict=lambda **_: {'trainer_id': 1, 'dvs': [0] * 5})
     state = policy.collection['tower'] = {'team': [tower.key(mon)], 'original': [], 'cap': 30,
         'entered': False, 'returning': False, 'previous_training': None}
     snapshot = SimpleNamespace(map=real_data.map_ids['SILVER_CAVE_POKECENTER_1F'], party=(mon,), stored=(), x=9, y=2)
@@ -1609,7 +1591,7 @@ def test_tower_strength_preparation_preserves_the_active_menu(real_data):
     policy = Policy(real_data)
     policy.memory = None
     mon = SimpleNamespace(species=99, level=50, moves=(23, 57, 182, 250), stats=(138, 160, 120, 90, 60, 65),
-                           held_item=0, to_dict=lambda: {'trainer_id': 1, 'dvs': [0] * 5})
+                           held_item=0, to_dict=lambda **_: {'trainer_id': 1, 'dvs': [0] * 5})
     policy.collection['tower'] = {'team': [tower.key(mon)], 'original': [], 'cap': 50,
                                   'entered': False, 'returning': False, 'trained': True, 'preparation_center': True}
     snapshot = SimpleNamespace(map=real_data.map_ids['OLIVINE_POKECENTER_1F'], party=(mon,),
@@ -1697,9 +1679,9 @@ def test_tower_teaches_psychic_to_the_stronger_special_attacker(real_data):
     policy = Policy(real_data)
     policy.memory = None
     lugia = SimpleNamespace(species=249, level=70, moves=(105, 56, 240, 129), stats=(245, 151, 195, 170, 133, 235),
-        held_item=0, to_dict=lambda: {'trainer_id': 1, 'dvs': [1] * 5})
+        held_item=0, to_dict=lambda **_: {'trainer_id': 1, 'dvs': [1] * 5})
     espeon = SimpleNamespace(species=196, level=70, moves=(33, 98, 44, 36), stats=(220, 125, 123, 208, 220, 179),
-        held_item=0, to_dict=lambda: {'trainer_id': 1, 'dvs': [2] * 5})
+        held_item=0, to_dict=lambda **_: {'trainer_id': 1, 'dvs': [2] * 5})
     policy.collection['tower'] = {'team': [tower.key(lugia), tower.key(espeon)], 'original': [], 'cap': 70,
         'entered': False, 'returning': False, 'trained': True, 'preparation_center': True}
     snapshot = SimpleNamespace(map=real_data.map_ids['OLIVINE_POKECENTER_1F'], party=(lugia, espeon),
@@ -1749,7 +1731,7 @@ def test_tower_toxic_targets_healthy_bulky_opponents(real_data):
 
 
 def test_tower_trains_an_evolution_to_cover_shared_weaknesses(real_data):
-    from pokesim.gen2.ram import calculated_stats
+    from pokesim_core.gen2.ram import calculated_stats
     from pokesim.gen2.tower import forecast, select_team
     mons = []
     for species, level, moves in [(249, 70, (105, 92, 89, 70)), (196, 70, (94, 247, 44, 36)),
@@ -1776,7 +1758,7 @@ def test_recover_can_outpace_damage_between_two_fifths_and_half_hp(real_data):
 
 def test_tower_switches_away_from_a_lethal_fighting_matchup(real_data):
     from pokesim.gen2.policy import Policy
-    from pokesim.gen2.ram import calculated_stats
+    from pokesim_core.gen2.ram import calculated_stats
     policy = Policy(real_data)
     party = []
     for species, moves in [(248, (89, 157, 37, 242)), (249, (105, 92, 89, 70)), (196, (94, 247, 44, 36))]:
@@ -1866,7 +1848,7 @@ def test_tower_leads_with_its_poison_and_recovery_partner(real_data):
         (249, (105, 92, 89, 70), (245, 143, 205, 170, 145, 234)),
         (196, (94, 247, 44, 36), (212, 150, 140, 194, 215, 166))]):
         party.append(SimpleNamespace(species=species, level=70, moves=moves, stats=stats, held_item=0,
-            trainer_id=1, dvs=(index,) * 5, to_dict=lambda index=index: {'trainer_id': 1, 'dvs': [index] * 5}))
+            trainer_id=1, dvs=(index,) * 5, to_dict=lambda index=index, **_: {'trainer_id': 1, 'dvs': [index] * 5}))
     policy.collection['tower'] = {'team': [tower.key(mon) for mon in party], 'original': [], 'cap': 70,
         'entered': False, 'returning': False, 'trained': True, 'preparation_center': True}
     snapshot = SimpleNamespace(map=real_data.map_ids['OLIVINE_POKECENTER_1F'], party=tuple(party), items=(), x=9, y=2)
@@ -2004,7 +1986,7 @@ def test_real_lighthouse_jasmine_is_reached_while_amphy_blocks_the_near_side():
     import json
     from pokesim_core.gen2.clock import boot, lock_clock
     from pokesim.gen2.policy import Policy
-    from pokesim.gen2.ram import read_snapshot
+    from pokesim_core.gen2.ram import read_snapshot
     cartridges, data_dir, state = (os.environ.get(name) for name in ('GEN2_CARTRIDGE_DIR', 'GEN2_DATA_DIR', 'GEN2_PERSON_STATE'))
     if not (cartridges and data_dir and state) or not Path(state).is_file() or not (Path(cartridges) / 'gold.gbc').is_file():
         pytest.skip('Set GEN2_CARTRIDGE_DIR, GEN2_DATA_DIR and GEN2_PERSON_STATE to private local files')

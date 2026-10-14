@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pokesim_core.gen2.save import BUTTONS, clock_archive, export, export_with_clock, press, progress, verify
 
-from .ram import read_snapshot
+from pokesim_core.gen2.ram import read_snapshot
 
 __all__ = ['BUTTONS', 'capture', 'clock_archive', 'export', 'export_with_clock', 'press', 'progress', 'verify']
 

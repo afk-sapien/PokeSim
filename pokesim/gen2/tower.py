@@ -3,7 +3,7 @@ from itertools import combinations
 from types import SimpleNamespace
 
 from .menus import Give, Lead, Take, Teach, choose
-from .ram import Memory, calculated_stats
+from pokesim_core.gen2.ram import Memory, calculated_stats
 from .teams import assemble, assembled, key, no_room
 
 MACHINES = ((70, 'HM04'), (57, 'HM03'), (19, 'HM02'), (94, 'TM29'), (89, 'TM26'), (188, 'TM36'), (247, 'TM30'))

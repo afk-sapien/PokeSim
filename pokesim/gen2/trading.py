@@ -16,7 +16,7 @@ from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, 
 from ..trade.preferences import apply, name as setting_name
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin
-from .ram import Memory, read_snapshot
+from pokesim_core.gen2.ram import Memory, read_snapshot
 # The Exp. Share item number, as release.EXP_SHARE (kept local so this module imports without Gen I data).
 EXP_SHARE = 0x39
 from .web import live_status
@@ -275,7 +275,7 @@ class Participant(BaseParticipant):
                               'party_slot': prepared['party_slot'], 'selected_key': selected},
                       outgoing={key: value.hex() for key, value in row.items()})
         from .league import export
-        record['outgoing_league_record'] = export(self.store, self.emu.data, snapshot.party[prepared['party_slot']].to_dict())
+        record['outgoing_league_record'] = export(self.store, self.emu.data, snapshot.party[prepared['party_slot']].to_dict(egg_view=True))
         return _save(self.store, record)
 
     def prepare_session(self, data):
@@ -348,13 +348,13 @@ class Participant(BaseParticipant):
         record['incoming_shiny'] = ([evolved_species(incoming['struct'], self.emu.data)]
                                     if shiny_bytes(incoming['struct'][21:23]) else [])
         from .league import validate
-        from .ram import decode_mon
+        from pokesim_core.gen2.ram import decode_mon
         mon = decode_mon(incoming['struct'], incoming['nickname'], self.emu.data)
         league = data.get('incoming_league_record')
         if record.get('time_capsule'):
             from .timecapsule_records import to_gen2
             league = to_gen2(league, data['incoming'], self.emu.data)
-        record['incoming_league_record'] = validate(league, self.emu.data, mon.to_dict())
+        record['incoming_league_record'] = validate(league, self.emu.data, mon.to_dict(egg_view=True))
 
     def verify_session(self, record, result, state, save):
         """Check this side of an owner-driven session against its own prepared source."""

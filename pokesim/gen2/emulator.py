@@ -22,7 +22,7 @@ from pokesim_core.gen2.clock import boot, clock_elapsed, clock_lock_state, follo
 from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
 from .policy import Action, Policy
-from .ram import BADGES, read_snapshot
+from pokesim_core.gen2.ram import BADGES, read_snapshot
 from .store_stock import StoreStock
 
 log = logging.getLogger('pokesim.gen2')
@@ -47,7 +47,7 @@ def game_clock(memory, data):
     The game copies the cartridge clock plus its own saved offsets into these bytes as it runs,
     so this is a few memory reads with no emulator stepping.
     """
-    from .ram import Memory
+    from pokesim_core.gen2.ram import Memory
     try:
         mem = Memory(memory, data)
         day, hour, minute = mem.byte('wCurDay'), mem.byte('hHours'), mem.byte('hMinutes')
@@ -523,7 +523,7 @@ class Emulator:
             self.stuck_frame, self.stuck_ts = self.frame, time.time()
             return
         if not self.options_applied and not self.manual_mode:
-            from .ram import Memory
+            from pokesim_core.gen2.ram import Memory
             mem = Memory(self.pb.memory, self.data)
             value = mem.byte('wOptions')
             if config.FAST_TEXT:
@@ -533,7 +533,7 @@ class Emulator:
             self.pb.memory[bank, address] = value
             self.options_applied = True
         self.play_clock.seed(snapshot.playtime_seconds)
-        self.store.upgrade_trade_preferences(lambda: [mon.to_dict() for mon in (*snapshot.party, *snapshot.stored)])
+        self.store.upgrade_trade_preferences(lambda: [mon.to_dict(egg_view=True) for mon in (*snapshot.party, *snapshot.stored)])
         self.game_clock = game_clock(self.pb.memory, self.data)
         self.tracker.observe(snapshot)
         from .steps import observe_mew
@@ -983,7 +983,7 @@ class Emulator:
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
                 'health': self.health(), 'paused': self.paused, 'manual_mode': self.manual_mode, 'speed': self.speed,
                 'policy': self.policy.describe(), 'strategy': self.policy.details(), 'frame': self.frame,
-                'game': self.snapshot.to_dict() if self.snapshot else None, 'rom': self.rom_note,
+                'game': self.snapshot.to_dict(egg_view=True) if self.snapshot else None, 'rom': self.rom_note,
                 'play_clock': self.play_clock.status(), 'clock': getattr(self, 'game_clock', None), 'performance': {'frames': self.executed_frames, 'sampled_at': time.monotonic()},
                 'uptime': int(time.time() - self.started_at), 'stuck_seconds': int(time.time() - self.stuck_since),
                 'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,

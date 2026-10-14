@@ -6,7 +6,7 @@ from ..trade.preferences import identity
 from .teams import key as team_key
 from .menus import ChangeBox, Give, Release, Storage
 from .policy import Action
-from .ram import Memory, read_snapshot
+from pokesim_core.gen2.ram import Memory, read_snapshot
 from .world import update as update_world
 
 KEY = 'interaction_preparation'
@@ -15,11 +15,11 @@ FULL = 'Every PC box is full and no spare duplicate can be safely released to ma
 
 def selected(snapshot, preferences, key):
     matches = [('party', index, mon) for index, mon in enumerate(snapshot.party)
-               if same(identity(mon.to_dict()), key)]
-    matches += [('box', mon.position, mon) for mon in snapshot.stored if same(identity(mon.to_dict()), key)]
+               if same(identity(mon.to_dict(egg_view=True)), key)]
+    matches += [('box', mon.position, mon) for mon in snapshot.stored if same(identity(mon.to_dict(egg_view=True)), key)]
     if len(matches) != 1 or matches[0][2].egg:
         raise ValueError('The selected individual is missing or ambiguous')
-    if (preferences.get(identity(matches[0][2].to_dict())) or preferences.get(key) or {}).get('state') in {'locked', 'withdrawn'}:
+    if (preferences.get(identity(matches[0][2].to_dict(egg_view=True))) or preferences.get(key) or {}).get('state') in {'locked', 'withdrawn'}:
         raise ValueError('The selected Pokémon is protected or withdrawn')
     return matches[0]
 

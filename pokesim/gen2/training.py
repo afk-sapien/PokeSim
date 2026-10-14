@@ -1,6 +1,6 @@
 """Raise collected partners through normal battles, held items and evolution."""
 from .menus import ChangeBox, Give, Release, Remedy, Storage, Take
-from .ram import calculated_stats, experience_at
+from pokesim_core.gen2.ram import calculated_stats, experience_at
 from .standdown import stand_down, standing_down, train_key
 
 FIELD_MOVES = {15, 19, 57, 70, 148, 250, 127}

@@ -17,7 +17,7 @@ RETRY_AFTER = 50000
 
 
 def key(mon):
-    return identity(mon.to_dict())
+    return identity(mon.to_dict(egg_view=True))
 
 
 def assembled(snapshot, wanted):

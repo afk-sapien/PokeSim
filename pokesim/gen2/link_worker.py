@@ -15,7 +15,7 @@ from .cable_metadata import ADAPTER_ID, BUILDS
 from pokesim_core.gen2.clock import stop_with_clock
 from .cable_verification import continue_save, individual_key, party, verify_exchange
 from .data import GameData
-from .ram import read_snapshot
+from pokesim_core.gen2.ram import read_snapshot
 
 
 def run_session(plan, output_dir, progress=None, cancelled=None):

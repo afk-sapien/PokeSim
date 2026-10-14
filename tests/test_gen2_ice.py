@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from pokesim.gen2 import ice
+from pokesim_core.gen2 import maps as ice
 from pokesim.gen2.data import GameData
 from pokesim.gen2.navigation import Navigator
 from pokesim.gen2.policy import Policy
@@ -35,15 +35,6 @@ def synthetic():
 def snapshot(x, y, mid=ROOM):
     return SimpleNamespace(map=mid, x=x, y=y, badges=0, party=[], objects=(), frame=0, in_battle=False,
                            event=lambda name: False)
-
-
-def test_a_slide_runs_to_the_wall_a_stopper_or_a_door():
-    data = synthetic()
-    grid, enter = data.maps[ROOM]['collision'], lambda tile: tile != WALL
-    assert ice.move(grid, 8, 6, (7, 0), 'left', enter, frozenset(), frozenset({(3, 2)})) == (0, 0)
-    assert ice.move(grid, 8, 6, (7, 0), 'left', enter, frozenset({(2, 0)}), frozenset({(3, 2)})) == (3, 0)
-    assert ice.move(grid, 8, 6, (3, 0), 'down', enter, frozenset(), frozenset({(3, 2)})) == (3, 2)
-    assert ice.move(grid, 8, 6, (0, 0), 'up', enter, frozenset(), frozenset()) is None
 
 
 def test_the_region_graph_knows_an_unreachable_door_until_a_stopper_appears():

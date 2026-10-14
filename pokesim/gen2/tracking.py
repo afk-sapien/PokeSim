@@ -6,68 +6,12 @@ import json
 import time
 
 from .. import shiny
-from .ram import Memory
+from pokesim_core.gen2.hooks import capture_hooks, contest_hook, encounter_hook, hatch_hook
+from pokesim_core.gen2.ram import Memory
 
 CAPTURES = 'capture-statistics-v1'
 MILESTONES = 'pokedex-milestones-v1'
-HOOKS = {
-    'gold': ((3, 27495, '21496ecd5e0ffa04'), (3, 27600, 'cdf13021496ecd5e')),
-    'silver': ((3, 27493, '21476ecd5e0ffa04'), (3, 27598, 'cdf13021476ecd5e')),
-    'crystal': ((3, 27384, '21f56dcd5710fa08'), (3, 27495, 'cde12f21f56dcd57')),
-}
-
-
-def encounter_hook(pb, data):
-    """(bank, address) of BattleStartMessage.wild, where every wild battle checks for a shiny.
-
-    The local label is not in the symbol table, so it is found from the ``jr z`` that the routine
-    opens with and both instruction sequences are verified on the cartridge.
-    """
-    bank, address = data.symbols['BattleStartMessage']
-    _, mode = data.symbols['wBattleMode']
-    _, check = data.symbols['BattleCheckEnemyShininess']
-    head = bytes(pb.memory[bank, address:address + 6])
-    if head[:5] != bytes((0xFA, mode & 0xFF, mode >> 8, 0x3D, 0x28)):
-        raise ValueError('The Gen II wild battle signature does not match the cartridge')
-    wild = address + 6 + (head[5] ^ 0x80) - 0x80
-    if bytes(pb.memory[bank, wild:wild + 4]) != bytes((0xCD, check & 0xFF, check >> 8, 0x30)):
-        raise ValueError('The Gen II shiny check signature does not match the cartridge')
-    return bank, wild
-
-
-def contest_hook(pb, data):
-    """(bank, address) of BugContest_SetCaughtContestMon.firstcatch, where a contest catch is kept.
-
-    A Bug-Catching Contest catch skips the party and box code, so the capture hooks never see it.
-    It reaches ``.firstcatch`` as the first catch or once a swap for the held Pokémon is accepted.
-    """
-    bank, address = data.symbols['BugContest_SetCaughtContestMon']
-    _, held = data.symbols['wContestMon']
-    head = bytes(pb.memory[bank, address:address + 6])
-    if head[:5] != bytes((0xFA, held & 0xFF, held >> 8, 0xA7, 0x28)):
-        raise ValueError('The Gen II contest catch signature does not match the cartridge')
-    first = address + 6 + (head[5] ^ 0x80) - 0x80
-    if bytes(pb.memory[bank, first:first + 1]) != b'\xcd':
-        raise ValueError('The Gen II contest catch signature does not match the cartridge')
-    return bank, first
-
-
 EGG = 0xFD
-
-
-def hatch_hook(pb, data):
-    """(bank, address) of HatchEggs, which hatches every party Egg whose cycles have run out.
-
-    Every Egg reaches it, the Odd Egg and the gift Eggs included. The opening that sets up its
-    party loop is verified on the cartridge.
-    """
-    bank, address = data.symbols['HatchEggs']
-    words = [data.symbols[name][1] for name in ('wPartySpecies', 'wPartyMon1Happiness', 'wCurPartyMon')]
-    lo_hi = [bytes((word & 0xFF, word >> 8)) for word in words]
-    expected = b'\x11' + lo_hi[0] + b'\x21' + lo_hi[1] + b'\xaf\xea' + lo_hi[2]
-    if bytes(pb.memory[bank, address:address + len(expected)]) != expected:
-        raise ValueError('The Gen II Egg hatch signature does not match the cartridge')
-    return bank, address
 
 
 def empty_goals():
@@ -111,13 +55,11 @@ class Tracker:
         self.candidate = self.confirmed = None
 
     def attach(self, pb):
-        for bank, address, signature in HOOKS[self.data.game]:
-            if bytes(pb.memory[bank, address:address + 8]).hex() != signature:
-                raise ValueError('The Gen II capture completion signature does not match the cartridge')
+        for bank, address in capture_hooks(pb.memory, self.data):
             pb.hook_register(bank, address, self.captured, pb)
-        pb.hook_register(*encounter_hook(pb, self.data), self.encountered, pb)
-        pb.hook_register(*contest_hook(pb, self.data), self.contest_caught, pb)
-        pb.hook_register(*hatch_hook(pb, self.data), self.hatching, pb)
+        pb.hook_register(*encounter_hook(pb.memory, self.data), self.encountered, pb)
+        pb.hook_register(*contest_hook(pb.memory, self.data), self.contest_caught, pb)
+        pb.hook_register(*hatch_hook(pb.memory, self.data), self.hatching, pb)
 
     def hatching(self, pb):
         """The overworld is about to hatch Eggs. Count each shiny one as acquired, once.

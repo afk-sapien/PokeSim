@@ -1,6 +1,6 @@
 """Read-only expectations for the retail Time Capsule party conversion."""
 from ..interactions.cable import checked
-from .ram import calculated_stats, individual
+from pokesim_core.gen2.ram import calculated_stats, individual
 
 
 def to_gen1(row, data):

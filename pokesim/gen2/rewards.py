@@ -9,52 +9,17 @@ import uuid
 from .. import config, rewards
 from ..checkpoints import CheckpointStore
 from ..runtime.reward_delivery import BARRIER, PENDING, recover_storage
-from .ram import Memory, experience_at, read_snapshot
+from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokesim_core.gen2.resets import box_gift
 from .steps import RETURNS, consume, ready
 
 MYTHICAL = 'gen2-mythical-gift-v1'
 
 
-def write(memory, data, symbol, raw, offset=0):
-    bank, address = data.symbols[symbol]
-    for index, byte in enumerate(raw):
-        memory[bank, address + offset + index] = byte
-
-
 def gift(memory, data, species, seed, box, position):
-    rng = random.Random(seed)
-    entry = data.species[species]
-    raw = bytearray(32)
-    raw[0] = species
-    moves = []
-    for level, move in entry['learnset']:
-        if level <= 5 and move not in moves:
-            moves.append(move)
-    moves = moves[-4:]
-    raw[2:2 + len(moves)] = bytes(moves)
-    raw[6:8] = rng.randrange(65536).to_bytes(2, 'big')
-    raw[8:11] = experience_at(5, entry['growth']).to_bytes(3, 'big')
-    raw[21:23] = bytes((rng.randrange(256), rng.randrange(256)))
-    raw[23:23 + len(moves)] = bytes(data.moves[move]['pp'] for move in moves)
-    raw[27] = 70
-    raw[31] = 5
-    alphabet = {value: key for key, value in data.charmap.items() if len(value) == 1}
-    def encode(text):
-        return bytes([alphabet.get(char, 0x7F) for char in text.upper()[:10]] + [0x50]).ljust(11, b'\x50')
+    """Core's box gift, nicknamed from the configured nickname pool."""
     from ..nicknames import configured_pool
-    nickname = encode(rng.choice(configured_pool()))
-    mem = Memory(memory, data)
-    name = 'sBox' if box == mem.byte('wCurBox') & 0x7F else f'sBox{box + 1}'
-    if mem.byte(name) != position or not 0 <= position < 20:
-        raise ValueError('The gift destination changed')
-    write(memory, data, name, raw, 22 + position * 32)
-    write(memory, data, name, encode('POKESIM'), 662 + position * 11)
-    write(memory, data, name, nickname, 882 + position * 11)
-    write(memory, data, name, bytes((species, 0xFF)), 1 + position)
-    write(memory, data, name, bytes((position + 1,)))
-    offset, bit = divmod(species - 1, 8)
-    for symbol in ('wPokedexCaught', 'wPokedexSeen'):
-        write(memory, data, symbol, bytes((mem.byte(symbol, offset) | 1 << bit,)), offset)
+    box_gift(memory, data, species, seed, box, position, nicknames=configured_pool())
 
 
 def deliver(emu):

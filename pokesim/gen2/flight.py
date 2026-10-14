@@ -6,17 +6,9 @@ to the goal, the policy first walks to the nearest outside place it can reach, t
 from collections import deque
 from dataclasses import replace
 
+from pokesim_core.gen2.maps import OUTSIDE, flyer
+
 from .menus import Fly
-
-# The map environments Fly can be used from.
-OUTSIDE = frozenset({'TOWN', 'ROUTE'})
-
-
-def flyer(snapshot):
-    """The party slot that can use Fly, or None without the badge or a Pokémon that knows it."""
-    if not snapshot.badges & 32:
-        return None
-    return next((i for i, mon in enumerate(snapshot.party) if not mon.egg and 19 in mon.moves), None)
 
 
 def shortcut(policy, snapshot, mem, destination):

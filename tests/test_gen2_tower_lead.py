@@ -20,7 +20,7 @@ def crystal():
 def mon(trainer_id, level, stats):
     dvs = (1, 2, 3, 4, 5)
     return SimpleNamespace(trainer_id=trainer_id, dvs=dvs, level=level, stats=stats, moves=(33,), species=16,
-                           egg=False, held_item=0, to_dict=lambda: {'trainer_id': trainer_id, 'dvs': list(dvs)})
+                           egg=False, held_item=0, to_dict=lambda **_: {'trainer_id': trainer_id, 'dvs': list(dvs)})
 
 
 def view(crystal, party):

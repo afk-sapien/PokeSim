@@ -7,7 +7,7 @@ from pokesim.gen2.cable import CableSide
 from pokesim.gen2.data import GameData
 from pokesim.gen2.menus import choose
 from pokesim.gen2.navigation import Navigator
-from pokesim.gen2.ram import read_snapshot
+from pokesim_core.gen2.ram import read_snapshot
 from pokesim.interactions.link_worker import CableParticipant
 
 

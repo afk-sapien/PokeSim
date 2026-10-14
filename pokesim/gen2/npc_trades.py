@@ -8,7 +8,7 @@ the trade animation, so a set bit means the trade has happened on this cartridge
 from dataclasses import dataclass
 
 from .menus import ChangeBox, Storage, choose, tracked
-from .ram import Memory
+from pokesim_core.gen2.ram import Memory
 from .training import FIELD_MOVES
 
 

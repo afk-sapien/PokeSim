@@ -1,7 +1,7 @@
 """Bounded serial transport for two isolated Generation II cartridges."""
 from ..interactions.cable import CableSide as BaseSide, checked
 from .cable_metadata import BUILDS
-from .ram import Memory
+from pokesim_core.gen2.ram import Memory
 
 
 class CableSide(BaseSide):

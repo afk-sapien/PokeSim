@@ -8,7 +8,7 @@ so the split Special stats, Steel and Dark, and Gen II move effects all count.
 from functools import lru_cache
 from math import sqrt
 
-from .ram import calculated_stats
+from pokesim_core.gen2.ram import calculated_stats
 
 UTILITY = {'EFFECT_HEAL': 0.12, 'EFFECT_MORNING_SUN': 0.12, 'EFFECT_SYNTHESIS': 0.12,
            'EFFECT_MOONLIGHT': 0.12, 'EFFECT_SLEEP': 0.08, 'EFFECT_PARALYZE': 0.06,

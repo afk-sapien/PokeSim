@@ -31,7 +31,7 @@ def test_a_returned_sudowoodo_on_route_36_leaves_fly_as_the_way_to_olivine(cryst
     from pokesim.gen2.flight import shortcut
     from pokesim.gen2.menus import Fly
     from pokesim.gen2.navigation import Navigator
-    from pokesim.gen2.world import travel_collision
+    from pokesim_core.gen2.maps import travel_collision
 
     data = crystal
     ids = data.map_ids
@@ -55,7 +55,7 @@ def test_a_returned_sudowoodo_on_route_36_leaves_fly_as_the_way_to_olivine(cryst
 def test_fly_is_not_offered_when_no_visited_town_leads_there(crystal):
     from pokesim.gen2.flight import shortcut
     from pokesim.gen2.navigation import Navigator
-    from pokesim.gen2.world import travel_collision
+    from pokesim_core.gen2.maps import travel_collision
 
     data = crystal
     ids = data.map_ids
@@ -75,7 +75,7 @@ def test_fly_is_not_offered_when_no_visited_town_leads_there(crystal):
 def walled(data):
     """A navigator with Route 36 blocked by a returned Sudowoodo."""
     from pokesim.gen2.navigation import Navigator
-    from pokesim.gen2.world import travel_collision
+    from pokesim_core.gen2.maps import travel_collision
 
     nav = Navigator(data)
     standing = SimpleNamespace(event=lambda name: name != 'EVENT_ROUTE_36_SUDOWOODO', items=())

@@ -2,7 +2,7 @@
 import json
 
 from .battle_power import battle_power, hidden_power
-from .ram import STAT_NAMES
+from pokesim_core.gen2.ram import STAT_NAMES
 
 VERSIONS = ('gold', 'silver', 'crystal')
 DEFAULT_VERSION = 'crystal'

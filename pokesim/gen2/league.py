@@ -62,7 +62,7 @@ def record(store, data, snapshot):
             return
         if not value['victories'] and snapshot.hall_of_fame_count > 1:
             value['incomplete'] = True
-        mons = [mon.to_dict() for mon in snapshot.party + snapshot.stored if not mon.egg]
+        mons = [mon.to_dict(egg_view=True) for mon in snapshot.party + snapshot.stored if not mon.egg]
         keys = resolve(data, value, mons)
         for key in set(keys[:sum(not mon.egg for mon in snapshot.party)]):
             row = value['partners'][key]

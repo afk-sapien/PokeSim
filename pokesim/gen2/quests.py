@@ -133,7 +133,7 @@ def roamer_speed(policy, species, level):
     Roamers carry no stat experience, and the cartridge keeps their DVs in the roam struct after the
     first encounter, so the Speed stat is exact from then on.
     """
-    from .ram import Memory
+    from pokesim_core.gen2.ram import Memory
     dv = 15
     if policy.memory is not None and 'wRoamMon1' in policy.data.symbols:
         mem = Memory(policy.memory, policy.data)
@@ -161,7 +161,7 @@ def roam_lead(policy, snapshot, wanted):
     Gen II. Mean Look or Spider Web on the same lead keeps the beast from leaving after it wakes. Only
     sleep counts on the roamer: switching in a sleeper resets Mean Look and gives the beast its turn.
     """
-    from .ram import calculated_stats, experience_at
+    from pokesim_core.gen2.ram import calculated_stats, experience_at
     data = policy.data
     need = max(roamer_speed(policy, roamer['species'], roamer['level']) for roamer in wanted)
     options = []
@@ -189,7 +189,7 @@ def roam_lead(policy, snapshot, wanted):
 def prepare_lead(policy, snapshot, wanted, Goal):
     """Train, withdraw and lead with the roamer sleeper. None once it leads the party."""
     from .menus import Lead
-    from .ram import Memory
+    from pokesim_core.gen2.ram import Memory
     from .teams import assemble, key
     from .training import identity, journey as train
     state, data = policy.collection, policy.data
@@ -278,7 +278,7 @@ def static_level(data, species):
 def sleep_chance(policy, mon, species, level):
     """Chance this Pokémon puts the legendary to sleep before it faints, from the legendary's strongest hit."""
     from types import SimpleNamespace
-    from .ram import calculated_stats
+    from pokesim_core.gen2.ram import calculated_stats
     data = policy.data
     sleep = sleep_move(data, mon, species)
     if sleep is None:
@@ -348,7 +348,7 @@ def roamers(policy, snapshot, Goal):
     chance to step into the same map, and then its grass is searched.
     """
     from .collection import encounter_points
-    from .ram import Memory
+    from pokesim_core.gen2.ram import Memory
     state, data = policy.collection, policy.data
     owned = snapshot.owned - getattr(policy, 'returned', set())
     if policy.decisions < state.get('roam_after', 0):

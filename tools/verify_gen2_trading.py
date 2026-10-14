@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from pokesim.gen2.emulator import Emulator
-from pokesim.gen2.ram import read_snapshot
+from pokesim_core.gen2.ram import read_snapshot
 from pokesim.gen2.trading import Participant
 from pokesim.runtime.settings import SimulationSettings
 from pokesim.store import Store
@@ -51,7 +51,7 @@ def main():
             emu.pb.tick(32, True)
         emu.snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
         for _ in range(6000):
-            from pokesim.gen2.ram import Memory
+            from pokesim_core.gen2.ram import Memory
             snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
             if (snapshot.started and not snapshot.in_battle and not emu.policy.in_league(snapshot)
                     and not Memory(emu.pb.memory, emu.data).byte('wScriptRunning')):
@@ -72,7 +72,7 @@ def main():
         if args.offer_trained:
             from pokesim.gen2.web import live_status
             from pokesim.trade.preferences import apply, update
-            payload = apply(live_status(emu.snapshot.to_dict()), store.trade_preferences())
+            payload = apply(live_status(emu.snapshot.to_dict(egg_view=True)), store.trade_preferences())
             for mon in payload['storage']['pokemon']:
                 if mon['species'] == args.species and not mon['trade_ambiguous'] and tuple(mon['dvs']) != (15,) * 5:
                     update(store, payload, mon['trade_key'], 'offered')

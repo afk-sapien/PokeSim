@@ -3,11 +3,11 @@ import json
 import time
 
 from .. import config, rewards
-from .ram import Memory
+from pokesim_core.gen2.hooks import step_hook
+from pokesim_core.gen2.ram import Memory
 
 STEPS = 'cartridge-steps-v1'
 RETURNS = 'gen2-mew-returns-v1'
-SIGNATURES = {'gold': 'fa42d0a7204a3e24', 'silver': 'fa42d0a7204a3e24', 'crystal': 'fadcc2a7204a3e24'}
 
 
 class StepTracker:
@@ -17,10 +17,7 @@ class StepTracker:
         self.last_flush = 0
 
     def attach(self, pb):
-        bank, address = self.data.symbols['CountStep']
-        if bytes(pb.memory[bank, address:address + 8]).hex() != SIGNATURES[self.data.game]:
-            raise ValueError('The Gen II walking instruction signature does not match the cartridge')
-        pb.hook_register(bank, address, self.completed, pb)
+        pb.hook_register(*step_hook(pb.memory, self.data), self.completed, pb)
 
     def completed(self, pb):
         if not Memory(pb.memory, self.data).byte('wLinkMode'):

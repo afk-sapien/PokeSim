@@ -2,7 +2,7 @@
 from copy import deepcopy
 
 from .. import config
-from .ram import Memory
+from pokesim_core.gen2.ram import Memory
 
 NOTICES = 'gen2-legendary-retry-notices-v1'
 

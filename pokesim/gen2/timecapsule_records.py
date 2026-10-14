@@ -4,7 +4,7 @@ import json
 
 from ..trade.preferences import signature as identity
 from . import league
-from .ram import decode_mon
+from pokesim_core.gen2.ram import decode_mon
 from .timecapsule_conversion import convert
 
 
@@ -32,7 +32,7 @@ def to_gen2(record, encoded, data):
     mon = {**individual_data(row['struct']), 'species': row['struct'][0], 'nick': decode_text(row['nickname'])}
     old.validate(record, identity(mon), mon)
     converted = convert(row, 2, data)
-    target = decode_mon(converted['struct'], converted['nickname'], data).to_dict()
+    target = decode_mon(converted['struct'], converted['nickname'], data).to_dict(egg_view=True)
     signature, name = league.signature(data, target)
     return remap(record, signature, name, 'gen2-1')
 
@@ -41,7 +41,7 @@ def to_gen1(record, encoded, data):
     from .. import league_partners as old
     from ..ram import individual_data, decode_text
     row = {key: bytes.fromhex(value) for key, value in encoded.items()}
-    mon = decode_mon(row['struct'], row['nickname'], data).to_dict()
+    mon = decode_mon(row['struct'], row['nickname'], data).to_dict(egg_view=True)
     league.validate(record, data, mon)
     converted = convert(row, 1, data)
     target = {**individual_data(converted['struct']), 'species': converted['struct'][0],

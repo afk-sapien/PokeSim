@@ -1,19 +1,12 @@
 """Gen II map routing with live collision blocks and object avoidance."""
 from collections import deque
 
-from . import ice
-from .ram import Memory, Snapshot
+from pokesim_core.gen2 import maps as ice
+from pokesim_core.gen2.maps import (DIRS, OPPOSITE, WALLS, blocked_side, decode_blocks, ice_solids,
+                                    passable, travel_collision)
+
+from pokesim_core.gen2.ram import Memory, Snapshot
 from .routes import Regions, Search
-from .world import ice_solids, travel_collision
-
-DIRS = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}
-OPPOSITE = {'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'}
-WALLS = ({'right'}, {'left'}, {'up'}, {'down'}, {'down', 'right'}, {'down', 'left'},
-         {'up', 'right'}, {'up', 'left'})
-
-
-def blocked_side(tile, direction):
-    return tile & 0xF0 in (0xB0, 0xC0) and direction in WALLS[tile & 7]
 
 
 class Navigator:
@@ -109,16 +102,13 @@ class Navigator:
         key = (snapshot.map, blocks, snapshot.event_flags, snapshot.items) if isinstance(snapshot, Snapshot) else None
         cached = getattr(self, '_collision', None)
         if key is None or cached is None or cached[0] != key:
-            table = entry['block_collision']
-            grid = [table[block][(y % 2) * 2 + x % 2] if (block := blocks[(y // 2 + 3) * stride + x // 2 + 3]) < len(table) else 7
-                    for y in range(height) for x in range(width)]
+            grid = decode_blocks(blocks, width, height, entry['block_collision'])
             cached = self._collision = key, travel_collision(self.data, snapshot, snapshot.map, grid)
         # Each caller gets its own list, as a fresh decode would give it.
         return list(cached[1])
 
     def passable(self, collision, *, surf=False):
-        permission = self.data.permissions[collision] & 15
-        return permission == 0 or permission == 1 and surf
+        return passable(self.data, collision, surf)
 
     def local(self, snapshot, targets, memory=None, *, surf=False, avoid_warps=True, distant_objects=True):
         entry = self.data.maps[snapshot.map]

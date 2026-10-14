@@ -10,7 +10,6 @@ required = {
     'pokesim/gen2/data.py',
     'pokesim/gen2/emulator.py',
     'pokesim/gen2/policy.py',
-    'pokesim/gen2/ram.py',
     'pokesim/gen2/save.py',
     'pokesim/gen2/steps.py',
     'pokesim/gen2/rewards.py',

@@ -8,7 +8,7 @@ from pathlib import Path
 from pokesim_core.gen2.clock import boot
 
 from pokesim.gen2.data import GameData
-from pokesim.gen2.ram import read_snapshot
+from pokesim_core.gen2.ram import read_snapshot
 from pokesim.gen2.save import export
 
 

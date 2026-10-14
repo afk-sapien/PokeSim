@@ -8,7 +8,8 @@ import uuid
 from .. import config
 from ..checkpoints import CheckpointStore
 from ..runtime.reward_delivery import BARRIER, PENDING, recover_storage
-from .ram import Memory, read_snapshot
+from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokesim_core.gen2.resets import set_gs_ball
 
 CLAIM = 'gen2-gs-ball-distribution-v1'
 
@@ -28,10 +29,10 @@ def activate(emu):
         return None
     source = emu._autosave()
     metadata = emu.store.checkpoint_metadata(source)
-    from .rewards import clone_emulator, write
+    from .rewards import clone_emulator
     clone = clone_emulator(emu)
     try:
-        write(clone.memory, emu.data, 'sGSBallFlag', b'\x0b')
+        set_gs_ball(clone.memory, emu.data)
         if read_snapshot(clone.memory, emu.data, emu.frame) != before:
             raise ValueError('GS Ball distribution changed unrelated adventure state')
         stream = io.BytesIO()

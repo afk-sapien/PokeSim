@@ -1,16 +1,8 @@
 """Route between connected map regions, including revisits through other entrances."""
 from collections import deque
 
-from . import ice
-
-DIRECTIONS = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}
-OPPOSITE = {'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'}
-WALLS = ({'right'}, {'left'}, {'up'}, {'down'}, {'down', 'right'}, {'down', 'left'},
-         {'up', 'right'}, {'up', 'left'})
-
-
-def side_wall(tile, direction):
-    return tile & 0xF0 in (0xB0, 0xC0) and direction in WALLS[tile & 7]
+from pokesim_core.gen2 import maps as ice
+from pokesim_core.gen2.maps import DIRS as DIRECTIONS, OPPOSITE, WALLS, side_blocked as side_wall
 
 
 class Search:

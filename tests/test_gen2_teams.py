@@ -20,7 +20,7 @@ def real_data():
 def mon(name, *, box=None, position=0, dvs=(8, 8, 8, 8, 8), trainer_id=None, species=16):
     trainer = trainer_id if trainer_id is not None else sum(map(ord, name))
     return SimpleNamespace(name=name, box=box, position=position, dvs=dvs, trainer_id=trainer, species=species,
-                           to_dict=lambda: {'trainer_id': trainer, 'dvs': list(dvs)})
+                           to_dict=lambda **_: {'trainer_id': trainer, 'dvs': list(dvs)})
 
 
 def snapshot(party, stored=(), *, active_box=0, boxes=(10,) * 14):

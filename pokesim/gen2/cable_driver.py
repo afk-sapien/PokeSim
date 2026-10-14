@@ -5,7 +5,7 @@ from ..interactions.cable import checked
 from .menus import choose, close_pc
 from .navigation import Navigator
 from ..interactions.cable_metadata import ABNORMAL
-from .ram import read_snapshot
+from pokesim_core.gen2.ram import read_snapshot
 
 
 class CableDriver:

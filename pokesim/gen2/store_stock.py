@@ -28,6 +28,8 @@ trainer, or a peer that offers the species for trade.
 """
 from collections import Counter
 
+from pokesim_core.gen2.hooks import bcd, mart_hooks
+
 from .. import config
 from .standdown import stand_down, standing_down
 
@@ -83,11 +85,6 @@ def stock(data, shop):
     return (items + [item for item in extras(data, shop['mart']) if item not in items])[:MART_ITEMS]
 
 
-def bcd(value):
-    digits = f'{value:06d}'
-    return [int(digits[i]) << 4 | int(digits[i + 1]) for i in range(0, 6, 2)]
-
-
 class StoreStock:
     """Emulator hooks that add the extra items to an opened BUY list and charge their price."""
 
@@ -104,32 +101,11 @@ class StoreStock:
         self.purchases = []
 
     def attach(self, pb):
-        symbols = self.data.symbols
-        if not self.marts or 'BuyMenu' not in symbols or 'SelectQuantityToBuy' not in symbols:
+        hooks = mart_hooks(pb.memory, self.data) if self.marts else {}
+        if not hooks:
             return False
-        bank, address = symbols['SelectQuantityToBuy']
-        # farcall GetItemPrice (ld a, BANK / ld hl, addr / rst FarCall), then ld a, d.
-        code = bytes(pb.memory[bank, address:address + 7])
-        if code[0] != 0x3E or code[2] != 0x21 or code[5] != 0xCF or code[6] != 0x7A:
-            raise ValueError('The Gen II buy price instruction signature does not match the cartridge')
-        pb.hook_register(*symbols['BuyMenu'], self.opened, pb)
-        pb.hook_register(bank, address + 6, self.priced, pb)
-        if all(name in symbols for name in ('BuySell_DisplaySubtotal', 'BuyMenuLoop', 'hProduct', 'hMoneyTemp')):
-            bank, address = symbols['BuySell_DisplaySubtotal']
-            # push hl / ld hl, hMoneyTemp / ldh a, [hProduct + 1]
-            code = bytes(pb.memory[bank, address:address + 6])
-            money, product = symbols['hMoneyTemp'][1], symbols['hProduct'][1] + 1
-            if code != bytes((0xE5, 0x21, money & 0xFF, money >> 8, 0xF0, product & 0xFF)):
-                raise ValueError('The Gen II buy subtotal instruction signature does not match the cartridge')
-            pb.hook_register(bank, address, self.subtotal, pb)
-            # ReceiveItem succeeded: ld a, [wMartItemID] / ld e, a / ld d, 0, once in BuyMenuLoop.
-            bank, address = symbols['BuyMenuLoop']
-            item = symbols['wMartItemID'][1]
-            code = bytes(pb.memory[bank, address:address + 160])
-            signature = bytes((0xFA, item & 0xFF, item >> 8, 0x5F, 0x16, 0x00))
-            if code.count(signature) != 1:
-                raise ValueError('The Gen II purchase instruction signature does not match the cartridge')
-            pb.hook_register(bank, address + code.index(signature), self.bought, pb)
+        for role, (bank, address) in hooks.items():
+            pb.hook_register(bank, address, getattr(self, role), pb)
         return True
 
     def _read(self, pb, name, size=1, offset=0):

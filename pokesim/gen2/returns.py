@@ -7,7 +7,8 @@ import json
 
 from .. import config
 from ..events import Event
-from .ram import Memory
+from pokesim_core.gen2.ram import Memory
+from pokesim_core.gen2.resets import write_byte, write_flag
 
 KEY = 'gen2-legendary-returns-v1'
 EVENTS = 'gen2-event-returns-v1'
@@ -46,25 +47,6 @@ def legends(data):
     if data.game == 'crystal' and getattr(config, 'CELEBI_EVENT', False):
         rows.append(251)
     return rows
-
-
-def write_flag(memory, data, name, value):
-    bank, address = data.symbols['wEventFlags']
-    offset, bit = divmod(data.events[name], 8)
-    old = Memory(memory, data).byte('wEventFlags', offset)
-    new = old | 1 << bit if value else old & ~(1 << bit)
-    if new != old:
-        memory[bank, address + offset] = new
-        return True
-    return False
-
-
-def write_byte(memory, data, name, value, offset=0):
-    if Memory(memory, data).byte(name, offset) == value:
-        return False
-    bank, address = data.symbols[name]
-    memory[bank, address + offset] = value
-    return True
 
 
 def roamer(memory, data, dex, *, present):

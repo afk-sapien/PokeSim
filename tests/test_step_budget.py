@@ -165,7 +165,7 @@ class Gen2Memory:
 
 
 def gen2_mon(data, rng, species, level, moves=(33, 45, 52, 55), box=None, position=None):
-    from pokesim.gen2.ram import Mon
+    from pokesim_core.gen2.ram import Mon
     return Mon(species, data.species[species]['name'].upper(), level, 150, 150, 0, 0, moves, (20,) * 4, (20,) * 4,
                (150, 100, 100, 100, 100, 100), 100000, tuple(rng.randint(0, 15) for _ in range(4)), (0,) * 5,
                4242, 70, box=box, position=position, data=data)
@@ -196,7 +196,7 @@ def test_gen2_step_stays_within_budget_on_a_large_state(game):
         pytest.skip('Set GEN2_DATA_DIR to generated local game data')
     from pokesim.gen2.data import GameData
     from pokesim.gen2.policy import Policy
-    from pokesim.gen2.ram import Snapshot as Gen2Snapshot
+    from pokesim_core.gen2.ram import Snapshot as Gen2Snapshot
     data = GameData.load(directory, game)
     rng = random.Random(7)
     # A finished team that knows every field move, so the walk to the League is all that is left.

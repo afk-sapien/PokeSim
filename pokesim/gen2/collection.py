@@ -3,7 +3,7 @@ from collections import Counter
 
 from .menus import ChangeBox, FieldMove, Release, Storage, Teach, Use
 from .navigation import DIRS
-from .ram import Memory
+from pokesim_core.gen2.ram import Memory
 from .standdown import hunt_key, stand_down, standing_down
 
 

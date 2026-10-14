@@ -83,7 +83,7 @@ def test_gen2_ledger_counts_all_251_species_without_touching_gen1(tmp_path):
 
 
 def test_transformed_ditto_reports_its_own_dvs(real_data):
-    from pokesim.gen2.ram import read_snapshot
+    from pokesim_core.gen2.ram import read_snapshot
     mon = battle(real_data, species=132, dvs=PLAIN)
     mon.memory.put('wEnemyBackupDVs', SHINY)
     assert not read_snapshot(mon.memory, real_data, cache=False).enemy_shiny
@@ -110,13 +110,13 @@ def test_gen2_statistics_and_first_shiny_milestone_use_receipts(tmp_path):
 
 def test_wild_shiny_hook_resolves_on_the_cartridge(real_data):
     from pokesim_core.gen2.clock import boot
-    from pokesim.gen2.tracking import encounter_hook
+    from pokesim_core.gen2.hooks import encounter_hook
     directory = os.environ.get('GEN2_CARTRIDGE_DIR')
     if not directory:
         pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
     pb = boot(io.BytesIO((Path(directory) / (real_data.game + '.gbc')).read_bytes()), sound=False)
     try:
-        bank, address = encounter_hook(pb, real_data)
+        bank, address = encounter_hook(pb.memory, real_data)
         assert (bank, address) == (0x0F, 0x7CAA if real_data.game == 'crystal' else 0x7CBA)
     finally:
         pb.stop(save=False)
@@ -141,13 +141,13 @@ def test_a_shiny_bug_contest_catch_is_acquired_once(real_data, tmp_path):
 
 def test_contest_catch_hook_resolves_on_the_cartridge(real_data):
     from pokesim_core.gen2.clock import boot
-    from pokesim.gen2.tracking import contest_hook
+    from pokesim_core.gen2.hooks import contest_hook
     directory = os.environ.get('GEN2_CARTRIDGE_DIR')
     if not directory:
         pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
     pb = boot(io.BytesIO((Path(directory) / (real_data.game + '.gbc')).read_bytes()), sound=False)
     try:
-        bank, address = contest_hook(pb, real_data)
+        bank, address = contest_hook(pb.memory, real_data)
         start = real_data.symbols['BugContest_SetCaughtContestMon'][1]
         # Past the swap question: two farcalls, its name, the YES/NO box and ``ret c``.
         assert (bank, address) == (3, start + 28)
@@ -227,16 +227,6 @@ def test_a_shiny_odd_egg_is_acquired_when_it_hatches(real_data, tmp_path):
     tracker.hatching(party(real_data, [(EGG, bytes(pichu))]))
     assert shiny.status(store, 2)['acquired_species'] == [172]
     store.close()
-
-
-def test_egg_hatch_hook_resolves_on_the_cartridge(real_data):
-    from pokesim_core.gen2.clock import boot
-    from pokesim.gen2.tracking import hatch_hook
-    pb = boot(io.BytesIO(cartridge(real_data)), sound=False)
-    try:
-        assert hatch_hook(pb, real_data) == tuple(real_data.symbols['HatchEggs'])
-    finally:
-        pb.stop(save=False)
 
 
 def test_no_in_game_trade_gives_a_shiny(real_data):

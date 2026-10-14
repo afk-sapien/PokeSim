@@ -68,7 +68,7 @@ def test_gen1_box_records_decode_current_hp_status_and_pp_ups():
 
 
 def test_crystal_caught_data_names_events_gifts_and_unknown_places():
-    from pokesim.gen2.ram import caught_details
+    from pokesim_core.gen2.ram import caught_details
     data = SimpleNamespace(maps={1: {'landmark': 4, 'environment': 'INDOOR', 'name': 'Route 30 Berry House'},
                                  2: {'landmark': 4, 'environment': 'ROUTE', 'name': 'Route 30'},
                                  3: {'landmark': 10, 'environment': 'CAVE', 'name': 'Union Cave B1F'}})
@@ -100,7 +100,7 @@ def raw_mon(species, level, *, pokerus=0, caught=0, friendship=70):
 
 
 def test_gen2_status_adds_hidden_power_pokerus_caught_data_and_egg_cycles(crystal):
-    from pokesim.gen2.ram import decode_mon
+    from pokesim_core.gen2.ram import decode_mon
     from pokesim.gen2.web import live_status as gen2_status
     name = [0x50] * 11
     partner = decode_mon(raw_mon(121, 30, pokerus=0x21, caught=(2 << 14) | (12 << 8) | 4), name, crystal, box=0, position=0)
