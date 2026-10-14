@@ -378,7 +378,11 @@ class Collection:
             else:
                 # First visits and completed battles count toward an expedition. Walking between
                 # familiar maps, rearranging menus, and taking damage do not extend its deadline.
-                self.idle_frames += delta
+                # Time spent in a battle is not time lost wandering. A rematch that crossed Diglett's
+                # Cave without Repels met a wild Pokémon every few steps, and those battles alone used up
+                # the two minutes, so the League loop was given up before it left the cave.
+                if not s.in_battle:
+                    self.idle_frames += delta
                 if ((token is not None and self.progress_token is not None and token != self.progress_token)
                         or new_flags or s.map not in self.project_maps
                         or (self.project['method'] in ('grass', 'surf', 'fish', 'safari', 'trade') or legendary_project(self.project))
@@ -1089,7 +1093,9 @@ class Collection:
                         f'Work toward level {evo["requirement"]}, then resume other activities',
                         evolution_training_targets(self.version, s.party[index].level))
         if p['method'] in ('gift','fossil') and len(s.party)>=6:
-            if not storage_exchange_possible(s):
+            # A party of field-move holders, Yellow's Pikachu and the strongest battler has nothing to
+            # deposit. Offering the gift anyway parked the adventure at a PC until the project timed out.
+            if not partner_exchange_possible(s):
                 return None
             return Goal('party_collection_space','Make room for a gift','Store a reserve before receiving a Pokémon',CENTERS,'up',True)
         return self.project_goal(s,p)
