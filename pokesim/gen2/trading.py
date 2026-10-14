@@ -95,7 +95,7 @@ def _kept(mon, stock):
 
 
 def _stock(emu, rows):
-    from .breeding import breeding_stock
+    from pokesim_core.gen2.breeding import breeding_stock
     return breeding_stock(emu.data, [mon['species'] for mon in rows if not mon.get('egg')])
 
 

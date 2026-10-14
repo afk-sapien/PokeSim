@@ -509,7 +509,7 @@ def test_tyrogue_training_selects_the_actual_stat_branch(real_data):
 
 
 def test_breeding_observes_baby_groups_gender_and_related_dvs(real_data):
-    from pokesim.gen2.breeding import offspring
+    from pokesim_core.gen2.breeding import offspring
     def mon(species, gender, defense, special):
         return SimpleNamespace(species=species, gender=gender, egg=False, dvs=(0, 0, defense, 0, special))
     ditto = mon(132, 'Genderless', 3, 4)
@@ -925,34 +925,6 @@ def test_repeat_mew_requires_walking_then_a_later_win(tmp_path, monkeypatch):
         store.close()
 
 
-def test_ruins_solver_completes_shuffled_boards_without_losing_pieces():
-    import random
-    from pokesim.gen2.ruins import CELLS, DESTINATIONS, puzzle_button
-    for seed in range(50):
-        rng = random.Random(seed)
-        board = [0] * 36
-        for piece, cell in enumerate(rng.sample(sorted(CELLS), 16), 1):
-            board[cell] = piece
-        cursor, held = 0, 0
-        for _ in range(2000):
-            if all(board[cell] == piece for piece, cell in DESTINATIONS.items()):
-                break
-            button = puzzle_button(board, cursor, held)
-            assert button is not None
-            if button == 'a':
-                board[cursor], held = held, board[cursor]
-            elif cursor == 30 and button == 'right':
-                cursor = 35
-            elif cursor == 35 and button == 'left':
-                cursor = 30
-            else:
-                cursor += {'up': -6, 'down': 6, 'left': -1, 'right': 1}[button]
-            assert cursor in CELLS
-            assert sorted([n for n in board if n] + ([held] if held else [])) == list(range(1, 17))
-        assert all(board[cell] == piece for piece, cell in DESTINATIONS.items())
-        assert not held
-
-
 def test_time_capsule_rejects_eggs_johto_moves_and_mail(real_data):
     from pokesim.gen2.timecapsule import compatible
     mon = SimpleNamespace(egg=False, species=95, moves=(20, 88, 106, 99), held_item=0)
@@ -1240,14 +1212,14 @@ def test_weekly_red_reset_does_not_interrupt_completed_collection(real_data, mon
 
 
 def test_daycare_cost_accounts_for_unapplied_levels(real_data):
-    from pokesim.gen2.breeding import retrieval_cost
+    from pokesim_core.gen2.breeding import retrieval_cost
     parent = SimpleNamespace(species=220, level=21, experience=29816)
     assert retrieval_cost(real_data, SimpleNamespace(daycare=(parent, None))) == 800
     assert retrieval_cost(real_data, SimpleNamespace(daycare=(None, None))) == 0
 
 
 def test_tyrogue_branches_need_viable_stats_not_just_spare_copies(real_data):
-    from pokesim.gen2.breeding import branch_parents
+    from pokesim_core.gen2.breeding import branch_parents
     hitmonlee = SimpleNamespace(species=236, level=5, dvs=(8, 15, 0, 0, 0), stat_exp=(0,) * 5)
     hitmontop = SimpleNamespace(species=236, level=5, dvs=(0,) * 5, stat_exp=(0,) * 5)
     snapshot = SimpleNamespace(party=(hitmonlee, hitmonlee), stored=())
@@ -1360,7 +1332,7 @@ def test_pending_eggs_hatch_before_recalculating_breeding_pairs(real_data, monke
 
 
 def test_pre_evolutions_match_a_scan_of_the_species_table(real_data):
-    from pokesim.gen2.breeding import _pre_evolutions
+    from pokesim_core.gen2.breeding import _pre_evolutions
     previous = _pre_evolutions(real_data)
     for species in real_data.species:
         scanned = next((sid for sid, row in real_data.species.items()

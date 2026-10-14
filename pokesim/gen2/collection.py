@@ -384,7 +384,8 @@ def journey(policy, snapshot, mem, Goal):
     if funding is not None and snapshot.hall_of_fame_count >= funding:
         state.pop('funding', None)
         funding = None
-    from .breeding import pairings, retrieval_cost
+    from pokesim_core.gen2.breeding import retrieval_cost
+    from .breeding import pairings
     fees = retrieval_cost(data, snapshot)
     from .. import config
     starter_gifts = getattr(config, 'LEAGUE_REWARDS', False) and not {152, 155, 158} <= snapshot.owned

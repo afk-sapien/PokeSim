@@ -147,7 +147,7 @@ def record(policy, snapshot, memory):
 
 
 def journey(policy, snapshot, mem, Goal):
-    from .breeding import free_slots
+    from pokesim_core.gen2.breeding import free_slots
     if 'wTradeFlags' not in policy.data.symbols or getattr(mem, 'memory', None) is None:
         return None
     value = record(policy, snapshot, mem.memory)

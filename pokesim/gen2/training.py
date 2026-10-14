@@ -39,7 +39,7 @@ def requested(data, snapshot, demand, species, *, item=False):
     An evolution stone makes a copy for a peer even when the family has a wild source, if no copy
     here could travel: automatic trading keeps a trained partner, so a single veteran never leaves.
     """
-    from .breeding import single_source
+    from pokesim_core.gen2.breeding import single_source
     copies = [mon for mon in snapshot.party + snapshot.stored if mon.species == species and not mon.egg]
     if not demand.get(species):
         return False

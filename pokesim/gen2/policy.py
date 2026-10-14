@@ -612,7 +612,7 @@ class Policy:
                tuple(self.collection.get('prerequisites', ())), tuple(sorted(map(str, partners))),
                self.decisions // 600)
         if self.release_cache[0] != key:
-            from .breeding import breeding_stock
+            from pokesim_core.gen2.breeding import breeding_stock
             keep = breeding_stock(self.data, [mon.species for mon in snapshot.party + snapshot.stored if not mon.egg])
             mon = target(snapshot, self.demand, keep, self.trade_preferences(), partners,
                          allowed=lambda mon: self.allowed(Release(mon.box, mon.position), snapshot))
@@ -627,7 +627,7 @@ class Policy:
         a shiny, perfect or rare-DV Pokémon, one set to Never trade or Prefer to trade, the ``protect`` trade keys
         (hand-picked for a trade), a ``wished`` species, a species' last or best copy or a plan partner.
         """
-        from .breeding import breeding_stock
+        from pokesim_core.gen2.breeding import breeding_stock
         from .release import _keys, plan_partners, target
         from pokesim_core.identity import same
         preferences = dict(self.trade_preferences())
@@ -905,7 +905,7 @@ class Policy:
                 return min(choices, key=lambda row: row[:2])[-1]
             return None
         reserve = 400 if snapshot.money >= 1200 else 0
-        from .breeding import retrieval_cost
+        from pokesim_core.gen2.breeding import retrieval_cost
         fees = retrieval_cost(self.data, snapshot)
         if fees:
             reserve = max(reserve, fees + 1000)

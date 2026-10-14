@@ -38,7 +38,7 @@ def planner(data, demand):
 
 
 def test_gift_and_static_families_have_no_wild_source(real_data):
-    from pokesim.gen2.breeding import single_source
+    from pokesim_core.gen2.breeding import single_source
     single = single_source(real_data)
     # Eevee and every Eeveelution, Tyrogue and the Hitmons, Togepi, Sudowoodo, Snorlax and Lapras.
     assert {133, 134, 135, 136, 196, 197, 236, 106, 107, 237, 175, 176, 185, 143, 131} <= set(single)
@@ -77,7 +77,7 @@ def test_cable_demand_for_a_hitmon_breeds_tyrogue_and_waits_for_box_space(real_d
 
 
 def test_the_last_parent_of_a_single_source_family_stays_home(real_data):
-    from pokesim.gen2.breeding import breeding_stock
+    from pokesim_core.gen2.breeding import breeding_stock
     assert breeding_stock(real_data, [132, 196, 25, 143]) == {132, 196, 143}
     assert breeding_stock(real_data, [132, 132, 133, 196, 25, 143, 143]) == set()
 
