@@ -258,3 +258,59 @@ def test_the_exp_share_holder_is_never_released_or_traded(data):
     state = snapshot([lead()], [holder, other, best])
     assert spares(state, lenient=True) == [other]
     assert _kept({'species': 16, 'held_item': EXP_SHARE, 'trade_key': 'k', 'dvs': [3] * 5}, set()) == 'Holds the Exp. Share'
+
+
+def test_a_finished_run_loops_the_league_instead_of_walking_the_grass(data, monkeypatch):
+    from pokesim.gen2.collection import journey
+    from pokesim.gen2.policy import Goal
+    # A live Crystal run with every Pokémon, sixteen badges and a level 100 party walked Route 29 for
+    # hours once its last training ended. A finished Gen I run loops the League, and so does this one.
+    patrols = stub_activities(monkeypatch)
+    party = [mon(157 + i, box=None, position=i, level=100) for i in range(6)]
+    state = snapshot(party)
+    state.hall_of_fame_count = 180
+    state.event = lambda name: name != 'EVENT_WILLS_ROOM_ENTRANCE_CLOSED'
+    policy = expedition(data)
+    policy.completed = {'tower': 1, 'champion': 1, 'red': 1}
+    policy.person = lambda snapshot, key, label, *where: Goal(key, label, where[0], 0, 0)
+    goal = journey(policy, state, clock(), Goal)
+    assert not patrols and goal.key == 'funds_will' and policy.collection['phase'] == 'league'
+    assert goal.label == 'Challenge the Elite Four again for another Hall of Fame entry'
+    assert 'Walk the grass' not in goal.label
+    # The run continues until its Hall of Fame entry, then the next decision starts another.
+    assert policy.collection['league_loop'] == 181
+    policy.in_league = lambda snapshot: True
+    state.event = lambda name: not name.startswith(('EVENT_BEAT_ELITE_4_', 'EVENT_BEAT_CHAMPION')) or name.endswith('WILL')
+    assert journey(policy, state, clock(), Goal).key == 'funds_koga'
+    state.hall_of_fame_count = 181
+    policy.in_league = lambda snapshot: False
+    state.event = lambda name: True
+    goal = journey(policy, state, clock(), Goal)
+    assert goal.key == 'funds_arrive' and policy.collection['league_loop'] == 182 and not patrols
+
+
+def test_the_league_loop_waits_for_unfinished_work(data, monkeypatch):
+    from pokesim.gen2.collection import journey
+    from pokesim.gen2.policy import Goal
+    party = [mon(157, box=None, level=100)]
+    policy = expedition(data)
+    policy.completed = {'tower': 1, 'champion': 1}
+    policy.person = lambda snapshot, key, label, *where: Goal(key, label, where[0], 0, 0)
+    # Training still has work, so it goes first.
+    train = Goal('collection_train', 'Train MON toward level 100', 'SILVER_CAVE_ROOM_1', 9, 31)
+    patrols = stub_activities(monkeypatch, **{'training.journey': train})
+    assert journey(policy, snapshot(party), clock(), Goal).key == 'collection_train'
+    # A clock-gated encounter keeps the walk that names it.
+    patrols = stub_activities(monkeypatch)
+    state = snapshot(party, owned=set(range(1, 252)) - {131})
+    goal = journey(policy, state, clock(), Goal)
+    assert goal.key == 'collection_idle' and patrols == ['Walk the grass while Lapras waits for Friday']
+    # Carried eggs hatch on the walk.
+    patrols = stub_activities(monkeypatch)
+    eggs = snapshot(party + [mon(175, box=None, position=1, egg=True)])
+    assert journey(policy, eggs, clock(), Goal).key == 'collection_idle' and patrols
+    # A run that has not beaten the Champion has no League loop yet.
+    patrols = stub_activities(monkeypatch)
+    policy = expedition(data)
+    assert journey(policy, snapshot(party), clock(), Goal).key == 'collection_idle'
+    assert 'league_loop' not in policy.collection

@@ -338,13 +338,18 @@ def _prerequisites(data, snapshot):
     return needed
 
 
-def league_funding(policy, snapshot, Goal):
-    """Run the Elite Four again for prize money, ending with a Hall of Fame entry."""
+def league_funding(policy, snapshot, Goal, *, again=False):
+    """Run the Elite Four again for prize money, ending with a Hall of Fame entry.
+
+    ``again`` is the postgame loop of a run with nothing else left, which challenges the League for
+    its own sake rather than for money.
+    """
     if not policy.in_league(snapshot):
         if snapshot.event('EVENT_WILLS_ROOM_ENTRANCE_CLOSED'):
             return Goal('funds_arrive', 'Return to the League reception', 'INDIGO_PLATEAU_POKECENTER_1F', 17, 10)
-        return policy.person(snapshot, 'funds_will', 'Challenge the League to fund the next expedition',
-                             'WILLS_ROOM', 'WillScript_Battle')
+        label = ('Challenge the Elite Four again for another Hall of Fame entry' if again
+                 else 'Challenge the League to fund the next expedition')
+        return policy.person(snapshot, 'funds_will', label, 'WILLS_ROOM', 'WillScript_Battle')
     for trainer, room in [('WILL', 'WILLS'), ('KOGA', 'KOGAS'), ('BRUNO', 'BRUNOS'), ('KAREN', 'KARENS')]:
         if not snapshot.event(f'EVENT_BEAT_ELITE_4_{trainer}'):
             return policy.person(snapshot, 'funds_' + trainer.lower(), 'Continue the League expedition',
@@ -402,6 +407,13 @@ def journey(policy, snapshot, mem, Goal):
     if funding is not None:
         state['phase'] = 'league'
         return league_funding(policy, snapshot, Goal)
+    loop = state.get('league_loop')
+    if loop is not None and snapshot.hall_of_fame_count >= loop:
+        state.pop('league_loop', None)
+    elif loop is not None:
+        # A postgame League run, once started, finishes with its Hall of Fame entry before new work.
+        state['phase'] = 'league'
+        return league_funding(policy, snapshot, Goal, again=True)
     if getattr(policy, 'returned', set()) & {243, 244, 245, 249, 250, 251}:
         # A returned legendary waits at its original home ahead of routine collection.
         from .quests import legends
@@ -554,12 +566,26 @@ def journey(policy, snapshot, mem, Goal):
             goal = training(policy, snapshot, mem, Goal, terminal=True)
             if goal:
                 return while_waiting(policy, snapshot, mem, goal, Goal)
+            eggs = any(mon.egg for mon in snapshot.party)
+            if not eggs and postgame_league(policy, snapshot, mem, current_time):
+                # A finished run keeps playing: with no collection, training or clock-gated work left,
+                # it challenges the Elite Four again, the way a finished Gen I run loops the League.
+                state['league_loop'] = snapshot.hall_of_fame_count + 1
+                state['phase'] = 'league'
+                return league_funding(policy, snapshot, Goal, again=True)
             # Carried eggs hatch on this walk, so only a walk without them is idle.
-            state['phase'] = 'hatching' if any(mon.egg for mon in snapshot.party) else 'waiting'
+            state['phase'] = 'hatching' if eggs else 'waiting'
             # Nothing else is useful until the cartridge clock opens a window or a trade brings new work.
             # The plan is rebuilt every step, so clock-gated work starts as soon as its window opens.
             return patrol(policy, snapshot, Goal, waiting_label(policy, snapshot, mem, current_time))
     return hunt(policy, snapshot, Goal)
+
+
+def postgame_league(policy, snapshot, mem, current_time):
+    """Whether the League loop replaces the idle walk: the Champion is beaten and no clock wait is due."""
+    if 'champion' not in getattr(policy, 'completed', {}) or not snapshot.hall_of_fame_count:
+        return False
+    return clock_wait(policy, snapshot, mem, current_time) is None
 
 
 # Where the run passes time when nothing else is useful, the last resort of the plan.
