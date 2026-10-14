@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from pokesim.sprites import MEW_DEX, MEW_INTERNAL, _png, extract, front_sprite, sprite_bank
+from pokesim.sprites import MEW_DEX, MEW_INTERNAL, extract, front_sprite, png, sprite_bank
 
 ROM = Path(os.environ.get('ROM_PATH', 'roms/pokered.gb'))
 REFERENCE = Path(os.environ.get('POKERED_REFERENCE', '.reference/pokered'))
@@ -30,16 +30,16 @@ def test_pictures_live_in_the_bank_their_internal_index_selects():
 
 def test_the_lightest_shade_is_written_transparent():
     """One portrait has to sit on a light panel and a dark one, so it supplies no ground."""
-    png = _png([[0, 1], [2, 3]])
-    assert png[:8] == b'\x89PNG\r\n\x1a\n'
-    width = int.from_bytes(png[16:20], 'big')
-    height = int.from_bytes(png[20:24], 'big')
+    image = png([[0, 1], [2, 3]])
+    assert image[:8] == b'\x89PNG\r\n\x1a\n'
+    width = int.from_bytes(image[16:20], 'big')
+    height = int.from_bytes(image[20:24], 'big')
     assert (width, height) == (2, 2)
-    assert png[24] == 8 and png[25] == 6, '8-bit RGBA'
+    assert image[24] == 8 and image[25] == 6, '8-bit RGBA'
 
-    start = png.index(b'IDAT') + 4
-    length = int.from_bytes(png[start - 8:start - 4], 'big')
-    raw = zlib.decompress(png[start:start + length])
+    start = image.index(b'IDAT') + 4
+    length = int.from_bytes(image[start - 8:start - 4], 'big')
+    raw = zlib.decompress(image[start:start + length])
     assert raw[0] == 0 and raw[1:5] == bytes((255, 255, 255, 0)), 'shade 0 is transparent'
     assert raw[5:9][3] == 255, 'every darker shade is opaque'
 
@@ -50,9 +50,9 @@ def test_every_portrait_decodes_to_a_plausible_picture():
 
     portraits = extract(ROM.read_bytes(), SPECIES)
     assert len(portraits) == 151
-    for dex, png in portraits.items():
-        assert png[:8] == b'\x89PNG\r\n\x1a\n', dex
-        side = int.from_bytes(png[16:20], 'big')
+    for dex, image in portraits.items():
+        assert image[:8] == b'\x89PNG\r\n\x1a\n', dex
+        side = int.from_bytes(image[16:20], 'big')
         assert 8 <= side <= 56 and side % 8 == 0, (dex, side)
 
 

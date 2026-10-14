@@ -29,7 +29,7 @@ def main():
             assert rom == raw
             assert all(isinstance(key, int) for key in species)
             assert {entry['dex'] for entry in species.values()} >= set(range(1, 152))
-            return {dex: sprites._png([[0]]) for dex in range(1, 152)}
+            return {dex: sprites.png([[0]]) for dex in range(1, 152)}
 
         sprites.extract = demo_portraits
 
@@ -59,7 +59,7 @@ def main():
             manager.supervisor.stop(aid)
             assert list((manager.root / 'adventures' / aid / 'states').glob('*.state'))
             custom = manager.assets.root / 'sprites' / '1.png'
-            custom_art = sprites._png([[1]])
+            custom_art = sprites.png([[1]])
             custom.write_bytes(custom_art)
 
             def unexpected_download(*args, **kwargs):
