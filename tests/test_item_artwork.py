@@ -87,5 +87,5 @@ def test_view_links_read_item_artwork_without_the_library_api(manager, monkeypat
             assert client.get(base + '/item-artwork/251.png').status_code == 404
             assert client.get(base + '/item-artwork/..%2F..%2Fapi%2Fv1%2Fsettings').status_code == 404
         assert client.post(f'/view/{aid}/item-artwork').status_code == 403
-    script = (STATIC / 'activity.js').read_text()
+    script = (STATIC / 'activity.js').read_text(encoding='utf-8')
     assert '/api/v1/' not in script and "PokeSim.fetch('/item-artwork'" in script
