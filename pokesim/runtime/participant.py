@@ -79,6 +79,11 @@ def _promote(store, record):
         else:
             from ..gen2.league import merge
         merge(store.db, record.get('incoming_league_record'))
+        if record.get('cartridge_generation') == 2:
+            # Only the receiving side counts a shiny, once per exchange however often this commit is retried.
+            from ..shiny import record as record_shiny
+            for index, dex in enumerate(record.get('incoming_shiny') or ()):
+                record_shiny(store.db, 'acquired', f"trade:{record['id']}:{index}", dex, generation=2)
         store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', ('trade_barrier', json.dumps(record['id'])))
         hold = {'id': record['id'], 'source': record['source_name'], 'phase': 'prepared'}
         store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', ('trade_hold', json.dumps(hold)))

@@ -22,6 +22,8 @@ let seen = new Set()
 let plan = new Map()
 let held = new Map()
 let shinySpecies = new Set()
+// Species with a shiny seen in the wild but none acquired or held.
+let shinySeen = new Set()
 let catches = null
 let maxed = new Set()
 let perfectSpecies = new Set()
@@ -77,14 +79,16 @@ function sorted(rows) {
 }
 
 function milestoneBadges(dex) {
-  return `<span class="milestone-badges">${PokemonTypes.shinyBadge({shiny: shinySpecies.has(dex)})}${maxed.has(dex) ? '<span class="tag tag--warn mastery-badge"><span aria-hidden="true">⚑</span> Lv. 100</span>' : ''}${perfectSpecies.has(dex) ? '<span class="tag tag--signal perfect-badge"><span aria-hidden="true">★★★★</span> Perfect DV</span>' : highQualitySpecies.has(dex) ? '<span class="tag tag--ok dv-badge dv-stars-3" aria-label="3-star or better DVs found"><span aria-hidden="true">★★★</span> DV found</span>' : ''}</span>`
+  const seenOnly = !shinySpecies.has(dex) && shinySeen.has(dex)
+    ? '<span class="tag shiny-badge shiny-seen-badge" title="A shiny one was seen in the wild, but none has been acquired.">★ Shiny seen</span>' : ''
+  return `<span class="milestone-badges">${PokemonTypes.shinyBadge({shiny: shinySpecies.has(dex)})}${seenOnly}${maxed.has(dex) ? '<span class="tag tag--warn mastery-badge"><span aria-hidden="true">⚑</span> Lv. 100</span>' : ''}${perfectSpecies.has(dex) ? '<span class="tag tag--signal perfect-badge"><span aria-hidden="true">★★★★</span> Perfect DV</span>' : highQualitySpecies.has(dex) ? '<span class="tag tag--ok dv-badge dv-stars-3" aria-label="3-star or better DVs found"><span aria-hidden="true">★★★</span> DV found</span>' : ''}</span>`
 }
 
 function renderGrid() {
   if (!entries.length) return
   const rows = sorted(entries.filter(matches))
   $('#result-count').textContent = `${rows.length} Pokémon`
-  const signature = JSON.stringify([rows, [...owned], [...seen], [...held], [...plan], hunting, catches, [...maxed], [...perfectSpecies], [...highQualitySpecies], [...shinySpecies]])
+  const signature = JSON.stringify([rows, [...owned], [...seen], [...held], [...plan], hunting, catches, [...maxed], [...perfectSpecies], [...highQualitySpecies], [...shinySpecies], [...shinySeen]])
   if (signature === gridSignature) return
   gridSignature = signature
   paintCards($('#grid'), rows.map((entry) => {
@@ -93,7 +97,7 @@ function renderGrid() {
     const note = RECORD_LABELS[state]
     const caught = caughtCount(entry.dex)
     const counts = `${caught === null ? 'Catch count unavailable' : `Caught ${caught}`}, Have ${copies?.length || 0}`
-    return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${shinySpecies.has(entry.dex) ? ', shiny species found' : ''}${maxed.has(entry.dex) ? ', level 100 reached' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}, ${counts}" aria-describedby="catch-tracking-note">
+    return `<button class="dex-card ${state}${perfectSpecies.has(entry.dex) ? ' perfect-entry' : ''}" data-dex="${entry.dex}" aria-label="${esc(entry.name)}, number ${num(entry.dex)}, ${RECORD_LABELS[state]}${shinySpecies.has(entry.dex) ? ', shiny species found' : shinySeen.has(entry.dex) ? ', shiny seen' : ''}${maxed.has(entry.dex) ? ', level 100 reached' : ''}${perfectSpecies.has(entry.dex) ? ', perfect DV species found' : highQualitySpecies.has(entry.dex) ? ', 3-star or better DV species found' : ''}, ${counts}" aria-describedby="catch-tracking-note">
       <span class="dex-top"><span class="dex-num">${num(entry.dex)}</span>${entry.dex === hunting
         // The hunt flag takes the note's place, so the head stays one line.
         ? '<span class="tag tag--crit hunt-flag" title="The current expedition">Hunting</span>'
@@ -158,7 +162,7 @@ function renderDetail(dex, refresh = false) {
   const state = record(dex)
   const project = plan.get(dex)
   const copies = held.get(dex) || []
-  const signature = JSON.stringify([entry, state, project, copies, hunting, catches, maxed.has(dex), perfectSpecies.has(dex), highQualitySpecies.has(dex), shinySpecies.has(dex)])
+  const signature = JSON.stringify([entry, state, project, copies, hunting, catches, maxed.has(dex), perfectSpecies.has(dex), highQualitySpecies.has(dex), shinySpecies.has(dex), shinySeen.has(dex)])
   if (refresh && signature === detailSignature) return
   detailSignature = signature
   const partyCount = copies.filter(copy => copy.where.startsWith('Party slot ')).length
@@ -351,6 +355,7 @@ async function refreshStatus(pending = fetchStatus(), saved = false) {
     if (!saved) latest = status
     const shiny = status.shiny || {}
     shinySpecies = new Set(shiny.collection_species || [])
+    shinySeen = new Set(shiny.seen_species || [])
     catches = status.catches || null
     const goals = status.milestones || {}
     maxed = new Set(goals.level_100 || [])

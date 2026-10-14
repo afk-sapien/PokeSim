@@ -52,6 +52,24 @@ def contest_hook(pb, data):
     return bank, first
 
 
+EGG = 0xFD
+
+
+def hatch_hook(pb, data):
+    """(bank, address) of HatchEggs, which hatches every party Egg whose cycles have run out.
+
+    Every Egg reaches it, the Odd Egg and the gift Eggs included. The opening that sets up its
+    party loop is verified on the cartridge.
+    """
+    bank, address = data.symbols['HatchEggs']
+    words = [data.symbols[name][1] for name in ('wPartySpecies', 'wPartyMon1Happiness', 'wCurPartyMon')]
+    lo_hi = [bytes((word & 0xFF, word >> 8)) for word in words]
+    expected = b'\x11' + lo_hi[0] + b'\x21' + lo_hi[1] + b'\xaf\xea' + lo_hi[2]
+    if bytes(pb.memory[bank, address:address + len(expected)]) != expected:
+        raise ValueError('The Gen II Egg hatch signature does not match the cartridge')
+    return bank, address
+
+
 def empty_goals():
     return {'level_100': [], 'perfect_species': [], 'high_quality_species': [],
             'perfect_groups': {}, 'perfect_catches': 0}
@@ -99,6 +117,29 @@ class Tracker:
             pb.hook_register(bank, address, self.captured, pb)
         pb.hook_register(*encounter_hook(pb, self.data), self.encountered, pb)
         pb.hook_register(*contest_hook(pb, self.data), self.contest_caught, pb)
+        pb.hook_register(*hatch_hook(pb, self.data), self.hatching, pb)
+
+    def hatching(self, pb):
+        """The overworld is about to hatch Eggs. Count each shiny one as acquired, once.
+
+        HatchEggs hatches every party Egg whose cycle count (the happiness byte) is zero. The
+        fingerprint is the RAM at this call plus the slot, so a reload that replays it counts nothing.
+        """
+        mem = Memory(pb.memory, self.data)
+        species = mem.read('wPartySpecies', 6)
+        hatching = []
+        for slot, kind in enumerate(species):
+            if kind == 0xFF:
+                break
+            raw = mem.read('wPartyMons', 48, slot * 48)
+            if kind == EGG and not raw[27] and 1 <= raw[0] <= 251 and shiny.shiny_bytes(raw[21:23]):
+                hatching.append((slot, raw[0]))
+        if not hatching:
+            return
+        ram = hashlib.sha256(bytes(pb.memory[0xC000:0xE000])).hexdigest()
+        with self.store.lock, self.store.db:
+            for slot, dex in hatching:
+                shiny.record(self.store.db, 'acquired', f'hatch:{slot}:{ram}', dex, generation=2)
 
     def encountered(self, pb):
         """A wild battle opens. Count it once when the opponent is shiny."""
@@ -183,11 +224,19 @@ class Tracker:
         self.confirmed = token
 
 
-def apply(payload, store):
+def apply(payload, store, data=None):
     goals = {**empty_goals(), **(store.get(MILESTONES) or {})}
     groups = goals.pop('perfect_groups')
     held = [mon for mon in payload['party'] + (payload.get('storage') or {}).get('pokemon', []) if not mon.get('egg')]
     goals.update(perfect_found=max(goals['perfect_catches'], sum(groups.values())), perfect_count_is_minimum=True,
                  perfect_held=sum(mon.get('dv_total') == 75 for mon in held),
                  three_star_held=sum(mon.get('dv_stars') == 3 for mon in held))
-    return {**payload, 'milestones': goals, 'catches': store.get(CAPTURES) or {'available': False}}
+    # The Pokédex marks shiny species as Red, Blue and Yellow do: acquired or held now, with final
+    # evolutions crediting earlier forms. Seen-only species carry their own marker.
+    shinies = shiny.status(store, 2)
+    shinies['held'] = sum(bool(mon.get('shiny')) for mon in held)
+    shinies['held_species'] = sorted({mon['dex'] for mon in held if mon.get('shiny') and mon.get('dex')})
+    found = set(shinies['acquired_species']) | set(shinies['held_species'])
+    shinies['collection_species'] = sorted({dex for species in found
+                                            for dex in (level_credit(data, species) if data else {species})})
+    return {**payload, 'milestones': goals, 'catches': store.get(CAPTURES) or {'available': False}, 'shiny': shinies}

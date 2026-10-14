@@ -140,3 +140,36 @@ def test_a_copy_that_moved_says_so_and_still_links_to_the_pc(page, game):
     expect(popup.locator('.pc-detail-line')).to_contain_text('It has moved')
     expect(popup.locator('#pc-detail-name')).to_have_text('TIDEPOOL')
     expect(popup.locator('.pc-show-link')).to_be_visible()
+
+
+@pytest.mark.parametrize('width,height', SIZES)
+def test_gen2_pokedex_marks_shiny_species_from_the_receipts(page, game, tmp_path, width, height):
+    from pokesim import shiny
+    from pokesim.gen2.tracking import apply
+    from pokesim.store import Store
+    store = Store(tmp_path / 'gen2')
+    with store.db:
+        shiny.start(store.db, 2, available=True, fresh=True)
+        shiny.record(store.db, 'acquired', 'hatch', 121, generation=2)
+        shiny.record(store.db, 'seen', 'wild', 118, generation=2)
+    # The Gen II Pokédex status as the server builds it.
+    payload = apply(gen2_payload(), store)
+    store.close()
+    url, _, _, _ = game
+    page.route(re.compile(r'/api/pokedex/status(\?|$)'), lambda route: route.fulfill(json=payload))
+    page.set_viewport_size({'width': width, 'height': height})
+    page.goto(f'{url}/pokedex')
+    starmie, goldeen, staryu = (page.locator(f'.dex-card[data-dex="{dex}"]') for dex in (121, 118, 120))
+    expect(starmie.locator('.shiny-badge')).to_have_text('★ Shiny')
+    expect(starmie).to_have_attribute('aria-label', re.compile(', shiny species found,'))
+    expect(goldeen.locator('.shiny-badge')).to_have_text('★ Shiny seen')
+    expect(goldeen).to_have_attribute('aria-label', re.compile(', shiny seen,'))
+    expect(staryu.locator('.shiny-badge')).to_have_count(0)
+    expect(page.locator('#sum-shiny')).to_have_text('1/151')
+    goldeen.click()
+    expect(page.locator('#detail-body .detail-head .shiny-badge')).to_have_text('★ Shiny seen')
+    page.keyboard.press('Escape')
+    page.locator('#status-filter').select_option('shiny')
+    expect(page.locator('.dex-card')).to_have_count(1)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    shoot(page, f'shiny-{width}.png')

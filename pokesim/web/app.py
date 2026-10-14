@@ -341,7 +341,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         if gen2:
             from ..gen2.tracking import apply as achievements
             from ..gen2.league import apply as league_partners
-            return preferences.apply(achievements(league_partners(payload, store, emu.data), store), store.trade_preferences())
+            return preferences.apply(achievements(league_partners(payload, store, emu.data), store, emu.data), store.trade_preferences())
         from ..catches import status as catch_status
         payload['catches'] = catch_status(store)
         from ..league_partners import apply as league_partners

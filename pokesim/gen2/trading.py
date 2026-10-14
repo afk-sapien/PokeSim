@@ -11,6 +11,7 @@ from .. import config
 from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
 from ..individual import find, same
+from ..shiny import shiny_bytes
 from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, keeps, manual_rows
 from ..trade.preferences import apply, name as setting_name
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
@@ -336,10 +337,16 @@ class Participant(BaseParticipant):
             record['incoming_display'] = display(gained[0], self.emu.data) if gained else None
             record['outgoing'] = {key: value.hex() for key, value in lost[0].items()} if lost else None
             record['incoming_league_record'] = None
+            # An Egg is counted when it hatches, not when it arrives.
+            record['incoming_shiny'] = [row['struct'][0] for row in gained
+                                        if shiny_bytes(row['struct'][21:23]) and self.emu.data.text(row['nickname']) != 'EGG']
             return
         incoming = {key: bytes.fromhex(value) for key, value in data['incoming'].items()}
         incoming = convert(incoming, 2, self.emu.data)
         record['incoming_display'] = display(incoming, self.emu.data)
+        # The exchange never delivers an Egg. A trade evolution arrives as the evolved species.
+        record['incoming_shiny'] = ([evolved_species(incoming['struct'], self.emu.data)]
+                                    if shiny_bytes(incoming['struct'][21:23]) else [])
         from .league import validate
         from .ram import decode_mon
         mon = decode_mon(incoming['struct'], incoming['nickname'], self.emu.data)
