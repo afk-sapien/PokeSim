@@ -142,7 +142,7 @@ def deliver(emu):
 
 
 def clone_emulator(emu):
-    from .core import boot
+    from pokesim_core.gen2.clock import boot
     clone = boot(str(emu.rom), sound=True)
     clone.load_state(io.BytesIO(emu._state_bytes()))
     return clone

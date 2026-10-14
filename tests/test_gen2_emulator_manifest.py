@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from pokesim.gen2 import core
+from pokesim_core.gen2 import clock as core
 from pokesim.store import Store
 from pokesim_core.emulator_state import checkpoint_metadata, retag_checkpoint
 from pokesim_core.errors import CoreCapabilityError

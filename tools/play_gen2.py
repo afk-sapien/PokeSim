@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import time
 
-from pokesim.gen2.core import boot, lock_clock
+from pokesim_core.gen2.clock import boot, lock_clock
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy

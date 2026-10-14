@@ -109,7 +109,7 @@ def test_gen2_statistics_and_first_shiny_milestone_use_receipts(tmp_path):
 
 
 def test_wild_shiny_hook_resolves_on_the_cartridge(real_data):
-    from pokesim.gen2.core import boot
+    from pokesim_core.gen2.clock import boot
     from pokesim.gen2.tracking import encounter_hook
     directory = os.environ.get('GEN2_CARTRIDGE_DIR')
     if not directory:
@@ -140,7 +140,7 @@ def test_a_shiny_bug_contest_catch_is_acquired_once(real_data, tmp_path):
 
 
 def test_contest_catch_hook_resolves_on_the_cartridge(real_data):
-    from pokesim.gen2.core import boot
+    from pokesim_core.gen2.clock import boot
     from pokesim.gen2.tracking import contest_hook
     directory = os.environ.get('GEN2_CARTRIDGE_DIR')
     if not directory:
@@ -230,7 +230,7 @@ def test_a_shiny_odd_egg_is_acquired_when_it_hatches(real_data, tmp_path):
 
 
 def test_egg_hatch_hook_resolves_on_the_cartridge(real_data):
-    from pokesim.gen2.core import boot
+    from pokesim_core.gen2.clock import boot
     from pokesim.gen2.tracking import hatch_hook
     pb = boot(io.BytesIO(cartridge(real_data)), sound=False)
     try:

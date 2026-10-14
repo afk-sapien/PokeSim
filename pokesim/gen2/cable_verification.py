@@ -1,12 +1,12 @@
 """Read-only verification of Gen II cartridge trade results and save restarts."""
-import io
-
-from .core import boot, export_clock
-
+from pokesim_core.gen2.save import checkpoint_clock, continue_save as core_continue_save
 from pokesim_core.identity import family_key as trade_key
+
 from ..interactions.cable import checked
 from .ram import Memory, read_snapshot
-from .save import press
+
+__all__ = ['available_trade_item', 'checkpoint_clock', 'continue_save', 'evolved_species', 'individual_key', 'party',
+           'untraded_party', 'verify_exchange']
 
 
 def party(pb, data):
@@ -105,36 +105,18 @@ def verify_exchange(side, before, incoming, slot, source_snapshot, *, time_capsu
                    'default_name_evolved': nickname_changed}
 
 
-def checkpoint_clock(rom, state):
-    """Export the checkpoint RTC through Core without changing the source."""
-    clone = boot(io.BytesIO(rom), sound=False)
-    try:
-        clone.load_state(io.BytesIO(state))
-        return export_clock(clone)
-    finally:
-        clone.stop(save=False)
-
-
 def continue_save(rom, save, data, *, rtc=None):
-    pb = boot(io.BytesIO(rom), ram=io.BytesIO(save), rtc=rtc, sound=False)
+    """Core's Continue, which must reach the Pokémon Center upstairs with the link closed.
+
+    The caller owns the returned emulator and stops it.
+    """
+    pb = core_continue_save(rom, save, data, rtc=rtc)
     try:
-        pb.tick(180, True)
-        continuing = False
-        for step in range(240):
-            snapshot = read_snapshot(pb.memory, data, step * 48)
-            if continuing and snapshot.started and snapshot.party and 'CONTINUE' not in snapshot.text and 'BADGES' not in snapshot.text:
-                if data.maps[snapshot.map]['constant'] == 'POKECENTER_2F':
-                    press(pb, wait=120)
-                    checked(Memory(pb.memory, data).byte('wLinkMode') == 0, 'Continue retained link mode')
-                    return pb
-            if 'CONTINUE' in snapshot.text:
-                continuing = True
-                selected = next((row for row in snapshot.tiles if '▶' in row), '')
-                button = 'a' if 'CONTINUE' in selected else 'up'
-            else:
-                button = 'start' if step % 3 == 0 else 'a'
-            press(pb, button, 40)
-        raise ValueError('Gen II cartridge save did not Continue outside the link session')
+        snapshot = read_snapshot(pb.memory, data)
+        checked(data.maps[snapshot.map]['constant'] == 'POKECENTER_2F',
+                'Gen II cartridge save did not Continue outside the link session')
+        checked(Memory(pb.memory, data).byte('wLinkMode') == 0, 'Continue retained link mode')
+        return pb
     except BaseException:
         pb.stop(save=False)
         raise

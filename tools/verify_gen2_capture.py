@@ -5,7 +5,7 @@ import io
 from pathlib import Path
 import tempfile
 
-from pokesim.gen2.core import boot
+from pokesim_core.gen2.clock import boot
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Action, Policy

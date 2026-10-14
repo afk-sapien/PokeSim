@@ -5,7 +5,7 @@ import io
 from pathlib import Path
 from types import SimpleNamespace
 
-from .core import boot
+from pokesim_core.gen2.clock import boot
 
 from .. import config
 from ..app.registry import digest, validate_id

@@ -28,7 +28,7 @@ def ram_digest(pb):
 
 
 def probe(source: Path, output: Path) -> dict:
-    from pokesim.gen2.core import FIXED_CLOCK_EPOCH, boot, lock_clock
+    from pokesim_core.gen2.clock import FIXED_CLOCK_EPOCH, boot, lock_clock
     from pokesim_core.emulator_state import runtime_provenance
     profile, raw = load_rom(source)
     output.mkdir(parents=True, exist_ok=False)

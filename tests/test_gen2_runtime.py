@@ -1527,7 +1527,7 @@ def test_idle_training_yields_to_new_collection_opportunities(real_data):
 
 def test_checkpoint_clock_export_preserves_elapsed_days(real_data):
     import struct
-    from pokesim.gen2.core import boot
+    from pokesim_core.gen2.clock import boot
     from pokesim.gen2.cable_verification import checkpoint_clock
     from tools.advance_gen2_clock import advance
     directory = os.environ.get('GEN2_CARTRIDGE_DIR')
@@ -2002,7 +2002,7 @@ def test_real_lighthouse_jasmine_is_reached_while_amphy_blocks_the_near_side():
     """Needs private files: set GEN2_CARTRIDGE_DIR, GEN2_DATA_DIR and GEN2_PERSON_STATE (a Gold savestate
     taken at Olivine Lighthouse 6F with Amphy beside Jasmine, plus a matching .policy.json). Never commit them."""
     import json
-    from pokesim.gen2.core import boot, lock_clock
+    from pokesim_core.gen2.clock import boot, lock_clock
     from pokesim.gen2.policy import Policy
     from pokesim.gen2.ram import read_snapshot
     cartridges, data_dir, state = (os.environ.get(name) for name in ('GEN2_CARTRIDGE_DIR', 'GEN2_DATA_DIR', 'GEN2_PERSON_STATE'))

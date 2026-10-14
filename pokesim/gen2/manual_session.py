@@ -281,7 +281,7 @@ class Session:
         from ..interactions.link_worker import _write
         from .cable_metadata import ADAPTER_ID
         from .cable_verification import continue_save, evolved_species, party
-        from .core import stop_with_clock
+        from pokesim_core.gen2.clock import stop_with_clock
         from .ram import read_snapshot
         self.leave()
         self.phase = 'verifying'

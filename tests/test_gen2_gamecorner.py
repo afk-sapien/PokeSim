@@ -257,7 +257,7 @@ def test_real_cartridge_slot_machine_leaves_a_spinning_machine(real_data):
     cartridges, state = os.environ.get('GEN2_CARTRIDGE_DIR'), os.environ.get('GEN2_SLOTS_STATE')
     if not cartridges or not state:
         pytest.skip('Set GEN2_CARTRIDGE_DIR and GEN2_SLOTS_STATE to replay a real slot machine')
-    from pokesim.gen2.core import boot, lock_clock
+    from pokesim_core.gen2.clock import boot, lock_clock
     from pokesim.gen2.ram import Memory, read_snapshot
     pb = boot(str(Path(cartridges) / 'silver.gbc'), sound=False)
     try:

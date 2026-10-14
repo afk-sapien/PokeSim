@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from pokesim.gen2 import core
-from pokesim.gen2.core import CoreCapabilityError, export_clock, lock_clock, stop_with_clock
+from pokesim_core.gen2 import clock as core
+from pokesim_core.gen2.clock import export_clock, lock_clock, stop_with_clock
+
+from pokesim.capability import CoreCapabilityError
 
 
 class FakeClock:
@@ -38,75 +40,9 @@ class FakeClock:
         rtc_file.write(bytes(10))
 
 
-def test_lock_defaults_to_current_reading_without_rebase():
-    emulator = FakeClock()
-    lock_clock(emulator)
-    assert emulator.calls == [('lock', 123.0, False)]
-
-
-def test_lock_with_rebase_moves_zero_point_to_the_instant():
-    emulator = FakeClock()
-    lock_clock(emulator, at=core.FIXED_CLOCK_EPOCH, follow_frames=True, rebase=True)
-    assert emulator.calls == [('lock', core.FIXED_CLOCK_EPOCH, True), ('zero', core.FIXED_CLOCK_EPOCH)]
-
-
-def test_unlock_only_when_locked():
-    emulator = FakeClock()
-    lock_clock(emulator, False)
-    assert emulator.calls == []
-    lock_clock(emulator)
-    lock_clock(emulator, False)
-    assert emulator.calls[-1] == ('unlock',)
-
-
-def test_stop_with_clock_writes_both_streams():
-    emulator, save, clock = FakeClock(), io.BytesIO(), io.BytesIO()
-    stop_with_clock(emulator, save, clock)
-    assert clock.getvalue() == bytes(10)
-    assert export_clock(emulator) == bytes(10)
-
-
-@pytest.mark.parametrize('operation', [
-    lambda e: lock_clock(e),
-    lambda e: stop_with_clock(e, io.BytesIO(), io.BytesIO()),
-    lambda e: export_clock(e),
-])
-def test_core_without_clock_methods_is_a_capability_error(operation):
-    with pytest.raises(CoreCapabilityError):
-        operation(object())
-
-
-@pytest.mark.parametrize('error', [
-    NotImplementedError('rtc_file is not supported'),
-    RuntimeError('this build requires real-time clock control'),
-])
-def test_backend_refusals_become_capability_errors(error):
-    class Refusing(FakeClock):
-        def export_rtc(self):
-            raise error
-    with pytest.raises(CoreCapabilityError):
-        export_clock(Refusing())
-
-
-def test_unrelated_runtime_errors_pass_through():
-    class Broken(FakeClock):
-        def export_rtc(self):
-            raise RuntimeError('disk on fire')
-    with pytest.raises(RuntimeError, match='disk on fire'):
-        export_clock(Broken())
-
-
 def test_capability_error_is_the_backends_so_one_handler_reports_it():
     from pokesim_core.errors import CoreCapabilityError as BackendError
     assert issubclass(CoreCapabilityError, BackendError)
-
-
-def test_boot_with_a_clock_on_an_old_core_is_a_clear_capability_error(monkeypatch):
-    def old_core(rom, **options):
-        raise TypeError("__init__() got an unexpected keyword argument 'rtc_file'")
-    monkeypatch.setattr(core, 'CoreEmulator', old_core)
-    with pytest.raises(CoreCapabilityError, match='cartridge clock'):
-        core.boot(io.BytesIO(b''), rtc=bytes(10))
 
 
 GAMES = ['gold', 'silver', 'crystal']
@@ -195,20 +131,6 @@ class FakeRtc(FakeClock):
     def lock_clock(self, at, follow_frames=False):
         super().lock_clock(at, follow_frames)
         self.state.update(clock=at, locked=True, follow_frames=follow_frames)
-
-
-def test_follow_game_time_locks_at_the_current_reading_with_frames():
-    emulator = FakeRtc()
-    assert core.follow_game_time(emulator) == 500.0
-    assert emulator.calls == [('lock', 1500.0, True)]
-    assert core.clock_elapsed(emulator) == 500.0
-
-
-def test_follow_game_time_never_rounds_below_the_target():
-    emulator = FakeRtc(zero=1_791_759_621.6996284)
-    for target in (0.1, 1234.5678, 86_400 * 3 + 0.3):
-        core.follow_game_time(emulator, target)
-        assert core.clock_elapsed(emulator) >= target
 
 
 class Store:

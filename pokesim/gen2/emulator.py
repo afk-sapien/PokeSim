@@ -18,7 +18,7 @@ from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..play_clock import PlayClock
 from ..stalls import StallWatch
-from .core import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
+from pokesim_core.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
 from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
 from .policy import Action, Policy

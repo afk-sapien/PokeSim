@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from pokesim.gen2.core import boot
+from pokesim_core.gen2.clock import boot
 
 
 def inspect_classic(rom, state, *, offer_trained=False):

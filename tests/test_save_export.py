@@ -98,7 +98,7 @@ def test_missing_core_capability_is_not_reported_as_busy(tmp_path, monkeypatch, 
     if origin == 'core':
         from pokesim_core.errors import CoreCapabilityError
     else:
-        from pokesim.gen2.core import CoreCapabilityError
+        from pokesim_core.gen2.clock import CoreCapabilityError
     message = 'Core does not provide cartridge clock import or export.'
 
     def unavailable(*_):

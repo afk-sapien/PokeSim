@@ -4,7 +4,7 @@ import io
 import os
 from pathlib import Path
 
-from pokesim.gen2.core import boot
+from pokesim_core.gen2.clock import boot
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.ram import read_snapshot

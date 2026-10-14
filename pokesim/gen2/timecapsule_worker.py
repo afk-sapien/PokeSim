@@ -12,7 +12,7 @@ from ..interactions.cable import CableSide, checked, sha256
 from ..interactions.cable_driver import CableDriver
 from ..interactions.link_worker import _write
 from . import cable_verification as gen2
-from .core import stop_with_clock
+from pokesim_core.gen2.clock import stop_with_clock
 from .data import GameData
 from .ram import Memory, read_snapshot
 from .timecapsule import ADAPTER_ID, MixedDriver, TimeCapsuleSide, compatible, unlocked
