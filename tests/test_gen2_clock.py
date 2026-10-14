@@ -222,6 +222,15 @@ class Store:
         self.values[key] = value
 
 
+def test_remembered_clock_follows_the_live_reading_down():
+    # A game write can lower the live reading (a blank cartridge zeroes it, day 140 wraps to 0).
+    from pokesim.gen2.emulator import CLOCK_KEY, Emulator
+    adventure = Emulator.__new__(Emulator)
+    adventure.store = Store({CLOCK_KEY: {'elapsed': 140 * 86_400.0}})
+    adventure._remember_clock(12.5)
+    assert adventure.store.get(CLOCK_KEY) == {'elapsed': 12.5}
+
+
 def _adventure(cartridge, store=None):
     """The clock half of a Gen II adventure: a booted cartridge, its store and the emulator's methods."""
     from pokesim.gen2.emulator import Emulator
@@ -239,9 +248,16 @@ def _run(emulator, frames):
         emulator.tick()
 
 
+# A cartridge with blank save memory zeroes its clock registers about 80 frames after power-on, and
+# PyBoy RS 0.1.2 and later apply each write exactly. Tests that follow the clock across frames
+# start after that write.
+BLANK_CARTRIDGE_CLOCK_RESET = 120
+
+
 def test_real_boot_locks_at_the_current_reading_and_follows_frames(cartridge):
     emulator = core.boot(io.BytesIO(cartridge), sound=False)
     try:
+        _run(emulator, BLANK_CARTRIDGE_CLOCK_RESET)
         before = core.host_elapsed(emulator)
         locked_at = core.follow_game_time(emulator)
         state = emulator.rtc_state()
@@ -279,6 +295,7 @@ def test_real_reload_of_an_older_state_never_goes_back(cartridge):
     from pokesim.gen2.emulator import CLOCK_KEY
     adventure = _adventure(cartridge)
     try:
+        _run(adventure.pb, BLANK_CARTRIDGE_CLOCK_RESET)
         adventure._sync_clock(running=86_400.0)
         old = adventure._state_bytes()
         old_reading = core.clock_elapsed(adventure.pb)
@@ -290,6 +307,25 @@ def test_real_reload_of_an_older_state_never_goes_back(cartridge):
         adventure._sync_clock({'rtc_elapsed': old_reading}, running)
         assert core.clock_elapsed(adventure.pb) >= running
         assert adventure.store.get(CLOCK_KEY)['elapsed'] >= running
+    finally:
+        adventure.pb.stop(save=False)
+
+
+def test_real_game_clock_write_is_remembered_even_when_lower(cartridge):
+    # The game's own clock writes are its time: a blank cartridge zeroes the clock, and every
+    # cartridge takes 140 days off when the day counter reaches 140. A restart must resume from the
+    # written reading, not from the larger reading before the write.
+    from pokesim.gen2.emulator import CLOCK_KEY
+    adventure = _adventure(cartridge)
+    try:
+        adventure._sync_clock(running=86_400.0)
+        assert adventure.store.get(CLOCK_KEY)['elapsed'] == pytest.approx(86_400.0)
+        _run(adventure.pb, BLANK_CARTRIDGE_CLOCK_RESET)
+        written = adventure._clock_reading()
+        assert written < 60
+        adventure._remember_clock(written)
+        assert adventure.store.get(CLOCK_KEY)['elapsed'] == pytest.approx(written)
+        assert adventure._sync_clock() == pytest.approx(written)
     finally:
         adventure.pb.stop(save=False)
 

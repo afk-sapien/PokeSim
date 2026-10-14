@@ -585,11 +585,11 @@ dependencies = [
     { name = "pillow", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
     { name = "pokesim-core", extra = ["emulator"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
     { name = "psutil", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" }, marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
+    { name = "pyboy-rs", version = "0.1.2", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "pyboy-rs", version = "0.1.2", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "pyboy-rs", version = "0.1.2", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "pyboy-rs", version = "0.1.2", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "pyboy-rs", version = "0.1.2", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-win_amd64.whl" }, marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
     { name = "uvicorn", extra = ["standard"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
 ]
 
@@ -614,11 +614,11 @@ requires-dist = [
     { name = "playwright", marker = "extra == 'browser-test'", specifier = ">=1.50" },
     { name = "pokesim-core", extras = ["emulator"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')", path = "tools/temp-wheels/pokesim_core-0.6.0-py3-none-any.whl" },
     { name = "psutil", specifier = ">=7,<8" },
-    { name = "pyboy-rs", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" },
-    { name = "pyboy-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" },
-    { name = "pyboy-rs", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" },
-    { name = "pyboy-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" },
-    { name = "pyboy-rs", marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" },
+    { name = "pyboy-rs", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-macosx_11_0_arm64.whl" },
+    { name = "pyboy-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-macosx_10_12_x86_64.whl" },
+    { name = "pyboy-rs", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" },
+    { name = "pyboy-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" },
+    { name = "pyboy-rs", marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-win_amd64.whl" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.53.0" },
 ]
@@ -635,11 +635,11 @@ wheels = [
 [package.optional-dependencies]
 emulator = [
     { name = "pillow", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
-    { name = "pyboy-rs", version = "0.1.1", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" }, marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
+    { name = "pyboy-rs", version = "0.1.2", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "pyboy-rs", version = "0.1.2", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "pyboy-rs", version = "0.1.2", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "pyboy-rs", version = "0.1.2", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "pyboy-rs", version = "0.1.2", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-win_amd64.whl" }, marker = "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
 ]
 
 [package.metadata]
@@ -678,14 +678,14 @@ wheels = [
 
 [[package]]
 name = "pyboy-rs"
-version = "0.1.1"
-source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl" }
+version = "0.1.2"
+source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-macosx_10_12_x86_64.whl" }
 resolution-markers = [
     "python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
     "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
 ]
 wheels = [
-    { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:3a2ed6798967bf0887565b2b79530608f94b44292ff8846a6c67eb26e920df9f" },
+    { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:51a894a0c27171f8dc88a3ca1f156eab43f180dd1e8798f0d84156429bdeafec" },
 ]
 
 [package.metadata]
@@ -699,14 +699,14 @@ provides-extras = ["images", "test"]
 
 [[package]]
 name = "pyboy-rs"
-version = "0.1.1"
-source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl" }
+version = "0.1.2"
+source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-macosx_11_0_arm64.whl" }
 resolution-markers = [
     "python_full_version >= '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
     "python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
 ]
 wheels = [
-    { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:ebf7ecded4238546c080ba968ee68756f409ddb68c63fb3f16cc73497f524adb" },
+    { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:0f5defbe1edb67e9c0d41de3628b58e3ceb3aab7574fd063f0cef1792171e5ec" },
 ]
 
 [package.metadata]
@@ -720,14 +720,14 @@ provides-extras = ["images", "test"]
 
 [[package]]
 name = "pyboy-rs"
-version = "0.1.1"
-source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }
+version = "0.1.2"
+source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" }
 resolution-markers = [
     "python_full_version >= '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
-    { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:34bd154b4cd857bb133cb25ce2563b55c1276d12cced08ee207095c0113ff465" },
+    { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:41cabe5225909ba290a80dd0b674a1d33b679ca7069ef149cc1d61f3af9f0850" },
 ]
 
 [package.metadata]
@@ -741,14 +741,14 @@ provides-extras = ["images", "test"]
 
 [[package]]
 name = "pyboy-rs"
-version = "0.1.1"
-source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
+version = "0.1.2"
+source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
 resolution-markers = [
     "python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
 ]
 wheels = [
-    { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:424ab5b2ba03e80ce0c13c776687fa51f2e217488200d30c6061df40fb3b2ceb" },
+    { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b0fd7f4699fed5c2c73a49e3d3767ec74fb5e73117b4fb07285d1eff511c26e2" },
 ]
 
 [package.metadata]
@@ -762,14 +762,14 @@ provides-extras = ["images", "test"]
 
 [[package]]
 name = "pyboy-rs"
-version = "0.1.1"
-source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl" }
+version = "0.1.2"
+source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-win_amd64.whl" }
 resolution-markers = [
     "(python_full_version >= '3.12' and platform_machine == 'AMD64' and sys_platform == 'win32') or (python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'win32')",
     "(python_full_version < '3.12' and platform_machine == 'AMD64' and sys_platform == 'win32') or (python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'win32')",
 ]
 wheels = [
-    { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl", hash = "sha256:25b5c20d238851e1b4ce3206a28b2423787337c079cd7ba2f3ba1a73c2aff0bf" },
+    { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-win_amd64.whl", hash = "sha256:f50c125f28cd1f520241951f52087c3a1570e0c5b3b8d867aaa4baa3a2ae97e6" },
 ]
 
 [package.metadata]

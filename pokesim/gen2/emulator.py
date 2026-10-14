@@ -27,7 +27,7 @@ from .store_stock import StoreStock
 
 log = logging.getLogger('pokesim.gen2')
 
-# The furthest the cartridge clock has counted, in seconds since its zero point (see core.clock_elapsed).
+# The running cartridge clock's latest reading, in seconds since its zero point (see core.clock_elapsed).
 CLOCK_KEY = 'gen2-clock-v1'
 
 
@@ -254,10 +254,15 @@ class Emulator:
         self.policy.shop_offers = champion_shop.ready(self.store, self.data, self.steps.value)
 
     def _remember_clock(self, elapsed):
-        """Keep the furthest clock reading, so no restart, reload or trade can go back before it."""
-        latest = (self.store.get(CLOCK_KEY) or {}).get('elapsed')
-        if latest is None or elapsed > latest:
-            self.store.set(CLOCK_KEY, {'elapsed': elapsed})
+        """Store the running clock's reading, so no restart, reload or trade can go back before it.
+
+        Callers pass the live reading, which only moves forward with frames unless the game itself
+        writes the clock registers: it zeroes the clock on a blank cartridge and takes 140 days off
+        once the day counter reaches 140. Those writes are the game's time, so the newest reading
+        replaces the stored one even when it is lower. Keeping the largest instead would put the
+        clock back to before such a write on the next restart, and the game would see its time rewind.
+        """
+        self.store.set(CLOCK_KEY, {'elapsed': elapsed})
 
     def _clock_reading(self):
         """Seconds the running cartridge clock shows, or None before it belongs to an adventure."""
