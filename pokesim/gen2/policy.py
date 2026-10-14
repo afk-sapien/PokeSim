@@ -1335,11 +1335,13 @@ class Policy:
             # Each Unown letter counts separately in the Unown Pokédex, so catch every missing letter.
             from .collection import unown_letter, unown_missing
             requested |= unown_letter(mem.read('wEnemyMonDVs', 2)) in unown_missing(self, snapshot)
-        catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or requested
+        # A wild shiny is always caught, an owned species too. Trainers' Pokémon never count.
+        shiny = self.wild_shiny(snapshot)
+        catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or requested or shiny
                                               or catch_species in self.returned)
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in
                     {label.casefold() for label in self.ball_labels(snapshot)} for item, count in snapshot.pockets['balls'] if count))
-        if (catch and not partner and snapshot.enemy_species not in {130, 143, 185, 243, 244, 245, 249, 250, 251}
+        if (catch and not partner and not shiny and snapshot.enemy_species not in {130, 143, 185, 243, 244, 245, 249, 250, 251}
                 and snapshot.badges < 128 and snapshot.money < 1200
                 and sum(count for _, count in snapshot.pockets['balls']) <= 3):
             catch = False
@@ -1384,7 +1386,7 @@ class Policy:
             # unguarded: a switch costs a sleep turn that a ball would use better.
             static = self.static_legend(snapshot)
             sleepable = static and not mem.byte('wEnemyMonStatus') and not mem.byte('wEnemyScreens') & 4
-            if (catch and not roaming and not trapped and (partner or snapshot.enemy_species in {245, 249, 250, 251})
+            if (catch and not roaming and not trapped and (partner or shiny or snapshot.enemy_species in {245, 249, 250, 251})
                     and weaken is None and (sleepable if static else snapshot.enemy_hp > snapshot.enemy_max_hp // 2)):
                 candidates = [(self.capture_move(snapshot, mem, slot=i), i)
                               for i, mon in enumerate(snapshot.party)
@@ -1462,6 +1464,11 @@ class Policy:
                     return Action('down' if cursor < target else 'up', 8, 40)
             return Action('a', 8, 40)
         return Action('a', 8, 24)
+
+    @staticmethod
+    def wild_shiny(snapshot):
+        """The wild opponent is shiny. Trainers' Pokémon and a Ditto's borrowed look never count."""
+        return getattr(snapshot, 'in_battle', 0) == 1 and bool(getattr(snapshot, 'enemy_shiny', False))
 
     def static_legend(self, snapshot):
         """Lugia, Ho-Oh and Crystal's Tin Tower Suicune: catch rate 3, met once at a fixed spot."""
@@ -1584,8 +1591,10 @@ class Policy:
         return max(options)[1] if options else None
 
     def ball_labels(self, snapshot):
-        master = ('MASTER BALL',) if snapshot.enemy_species in {243, 244, 245, 249, 250, 251} else ()
-        if master and self.static_legend(snapshot):
+        shiny = self.wild_shiny(snapshot)
+        # A shiny may have the Master Ball once every other ball is spent: it may never be seen again.
+        master = ('MASTER BALL',) if snapshot.enemy_species in {243, 244, 245, 249, 250, 251} or shiny else ()
+        if master and self.static_legend(snapshot) and not shiny:
             from .quests import beasts_roaming
             if beasts_roaming(self, snapshot):
                 master = ()

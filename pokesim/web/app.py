@@ -237,12 +237,18 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             from ..gen2 import returns as gen2_returns
             from ..gen2.battle_power import battle_power as gen2_power
             from ..gen2.tracking import CAPTURES, apply as gen2_goals
+            from ..shiny import status as gen2_shiny
             current = emu.status() or {}
             game = current.get('game') or {}
             goals = gen2_goals({'party': game.get('party', []), 'storage': game.get('storage')}, store)['milestones']
             walked = store.get(STEPS) or {}
+            shinies = gen2_shiny(store, 2)
+            if not shinies['available']:
+                # No receipts were kept, so only what is held now is known.
+                shinies.update(seen=None, acquired=None)
             held = [mon for mon in game.get('party', []) + (game.get('storage') or {}).get('pokemon', [])
                     if not mon.get('egg')]
+            shinies['held'] = sum(bool(mon.get('shiny')) for mon in held)
             return {**status(store),
                     'overview': overview(current, {'milestones': goals}, {
                         'steps': walked.get('total'), 'available': bool(walked), 'started_at': walked.get('started_at')}),
@@ -254,9 +260,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                     'collection_records': {'catches': store.get(CAPTURES) or {'available': False},
                                            'perfect_found': goals['perfect_found'],
                                            'perfect_count_is_minimum': goals['perfect_count_is_minimum'],
-                                           # Gen II keeps no shiny encounter receipts, only what is held now.
-                                           'shiny': {'available': False, 'seen': None, 'acquired': None,
-                                                     'held': sum(bool(mon.get('shiny')) for mon in held)}},
+                                           'shiny': shinies},
                     # The Kanto Marathon is a Red, Blue and Yellow race.
                     'mew_returns': mew_status(store), 'marathon': None}
         from ..legendary_returns import status as returns_status

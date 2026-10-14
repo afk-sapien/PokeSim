@@ -1,9 +1,16 @@
-"""Generation II shiny DVs, protection, and durable verified encounter receipts."""
+"""Generation II shiny DVs, protection, and durable verified encounter receipts.
+
+Red, Blue and Yellow keep their receipts under ``KEY``. Gold, Silver and Crystal keep theirs
+apart under ``GEN2_KEY`` with their own table and the 251-species Pokédex.
+"""
 import hashlib
 import json
 import time
 
 KEY = 'shiny-statistics-v1'
+GEN2_KEY = 'gen2-shiny-statistics-v1'
+# generation: (kv key, receipt table, Pokédex size)
+LEDGERS = {1: (KEY, 'shiny_receipts', 151), 2: (GEN2_KEY, 'gen2_shiny_receipts', 251)}
 # LoadEnemyMonData.storeDVs writes both DV bytes before loading the enemy level.
 # Scan only the verified English Red/Blue bank, then verify the complete instruction sequence.
 BANK = 15
@@ -27,28 +34,52 @@ def empty():
             'started_at': None, 'available': False, 'complete_history': False}
 
 
-def status(store):
-    return {**empty(), **(store.get(KEY) or {})}
+def status(store, generation=1):
+    return {**empty(), **(store.get(LEDGERS[generation][0]) or {})}
 
 
-def initialize(db):
-    db.execute('CREATE TABLE IF NOT EXISTS shiny_receipts '
+def initialize(db, generation=1):
+    key, table, _ = LEDGERS[generation]
+    db.execute(f'CREATE TABLE IF NOT EXISTS {table} '
                '(kind TEXT NOT NULL, fingerprint TEXT NOT NULL, dex INTEGER NOT NULL, '
                'PRIMARY KEY(kind,fingerprint))')
-    db.execute('INSERT OR IGNORE INTO kv VALUES (?, ?)', (KEY, json.dumps(empty())))
+    db.execute('INSERT OR IGNORE INTO kv VALUES (?, ?)', (key, json.dumps(empty())))
 
 
-def record(db, kind, fingerprint, dex):
-    if kind not in {'seen', 'acquired'} or type(dex) is not int or not 1 <= dex <= 151:
+def record(db, kind, fingerprint, dex, *, generation=1):
+    """Count one verified shiny once inside the caller transaction. Returns whether it was new."""
+    key, table, size = LEDGERS[generation]
+    if kind not in {'seen', 'acquired'} or type(dex) is not int or not 1 <= dex <= size:
         raise ValueError('Invalid shiny receipt')
-    initialize(db)
-    if not db.execute('INSERT OR IGNORE INTO shiny_receipts VALUES (?,?,?)', (kind, fingerprint, dex)).rowcount:
-        return
-    value = {**empty(), **json.loads(db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])}
+    initialize(db, generation)
+    if not db.execute(f'INSERT OR IGNORE INTO {table} VALUES (?,?,?)', (kind, fingerprint, dex)).rowcount:
+        return False
+    value = {**empty(), **json.loads(db.execute('SELECT v FROM kv WHERE k=?', (key,)).fetchone()[0])}
     value[kind] += 1
     value[kind + '_species'] = sorted(set(value[kind + '_species']) | {dex})
     value['started_at'] = value['started_at'] or time.time()
-    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), key))
+    return True
+
+
+def start(db, generation, *, available, fresh=False):
+    """Open a ledger for a cartridge that tracks shinies, keeping any receipts already counted."""
+    key = LEDGERS[generation][0]
+    initialize(db, generation)
+    value = {**empty(), **json.loads(db.execute('SELECT v FROM kv WHERE k=?', (key,)).fetchone()[0])}
+    if value['started_at'] is None:
+        value['complete_history'] = fresh
+    value.update(started_at=value['started_at'] or time.time(), available=available)
+    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), key))
+
+
+def clear(db, generation):
+    """Forget every receipt when the adventure restarts from a new game."""
+    key, table, _ = LEDGERS[generation]
+    initialize(db, generation)
+    db.execute(f'DELETE FROM {table}')
+    value = {**empty(), 'started_at': time.time(), 'available': True, 'complete_history': True}
+    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), key))
 
 
 class ShinyTracker:

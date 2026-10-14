@@ -99,9 +99,11 @@ class RecordTracker:
             goals = self.store.get(GEN2_GOALS) or {}
             rows = [mon for mon in tuple(snapshot.party) + tuple(snapshot.stored) if not mon.egg]
             perfect = max(goals.get('perfect_catches', 0), sum((goals.get('perfect_groups') or {}).values()))
+            # A caught shiny counts even after it is traded or released before the record is seen.
+            shiny = any(mon.shiny for mon in rows) or bool(shiny_status(self.store, 2)['acquired'])
             return (bool(snapshot.badges), snapshot.badges & 0xFFFF == 0xFFFF,
                     snapshot.hall_of_fame_count > 0, len(snapshot.owned) >= 251,
-                    bool(goals.get('level_100')), any(mon.shiny for mon in rows), bool(perfect))
+                    bool(goals.get('level_100')), shiny, bool(perfect))
         goals = goals_status(self.store)
         shiny = shiny_status(self.store)
         return (bool(snapshot.badges), snapshot.badges == 255,

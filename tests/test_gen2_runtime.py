@@ -2401,3 +2401,42 @@ def test_contest_runs_for_a_sun_stone_a_peer_needs(real_data):
     snapshot = SimpleNamespace(party=(), stored=(_item_mon(44),), items=(), owned=frozenset({44, 45, 182, 191, 192}))
     assert not needs_sun_stone(_item_policy(real_data), snapshot)
     assert needs_sun_stone(_item_policy(real_data, {182: 1}), snapshot)
+
+
+def shiny_battle(real_data, species, *, in_battle=1, shiny=True, owned=None, money=10000, balls=(('POKE_BALL', 5),)):
+    return SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
+        in_battle=in_battle, enemy_species=species, enemy_shiny=shiny, owned={species} if owned is None else owned,
+        can_catch=True, badges=4, money=money, enemy_hp=40, enemy_max_hp=40, enemy_level=20,
+        pockets={'balls': [(real_data.items[name], count) for name, count in balls]})
+
+
+@pytest.mark.parametrize('species,money,balls', [(130, 10000, (('POKE_BALL', 5),)), (19, 0, (('POKE_BALL', 1),))])
+def test_a_shiny_wild_mon_is_caught_even_when_owned_or_low_on_money(real_data, species, money, balls):
+    from pokesim.gen2.policy import Policy
+    policy = started(Policy(real_data))
+    policy.needed_move = lambda snapshot: 0
+    policy.capture_move = lambda *args: None
+    policy.remedy = lambda *args, **kwargs: False
+    snapshot = shiny_battle(real_data, species, money=money, balls=balls)
+    button = policy.battle(snapshot, SimpleNamespace(byte=lambda name: 1)).button
+    assert button == ('Throw', real_data.items['POKE_BALL'])
+    snapshot.enemy_shiny = False
+    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: 1)).button != ('Throw', real_data.items['POKE_BALL'])
+
+
+def test_a_shiny_trainer_mon_is_not_a_catch_target(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    assert policy.wild_shiny(shiny_battle(real_data, 130))
+    assert not policy.wild_shiny(shiny_battle(real_data, 130, in_battle=2))
+    assert not policy.wild_shiny(SimpleNamespace(in_battle=1))
+
+
+def test_master_ball_is_a_last_resort_for_a_shiny(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    roamer = {'species': 244, 'level': 40, 'map': real_data.map_ids['ROUTE_36']}
+    snapshot = SimpleNamespace(enemy_species=130, owned={130}, roamers=(roamer,), in_battle=1, enemy_shiny=False)
+    assert 'MASTER BALL' not in policy.ball_labels(snapshot)
+    snapshot.enemy_shiny = True
+    assert policy.ball_labels(snapshot)[-1] == 'MASTER BALL'

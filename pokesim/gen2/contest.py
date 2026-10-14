@@ -1,4 +1,5 @@
 """Earn Sun Stones through the native Bug-Catching Contest."""
+from ..shiny import shiny_bytes
 from .menus import choose
 from .ram import Memory
 from .standdown import stand_down, standing_down
@@ -128,15 +129,21 @@ def control(policy, snapshot, mem):
     text = snapshot.text
     wanted = targets(policy, snapshot)
     enemy, held = mem.byte('wEnemyMonSpecies'), mem.byte('wContestMonSpecies')
+    # A shiny is kept over any prize: the contest Pokémon joins the team when the contest ends.
+    shiny = shiny_bytes(mem.read('wEnemyMonDVs', 2))
+    held_shiny = bool(held) and shiny_bytes(mem.read('wContestMonDVs', 2))
     if 'YES' in text and 'NO' in text:
-        if enemy in wanted or held in wanted:
+        if shiny or held_shiny:
+            keep = not held_shiny
+        elif enemy in wanted or held in wanted:
             keep = held not in wanted
         else:
             keep = score(mem, 'wEnemyMon') >= score(mem, 'wContestMon')
         return choose(snapshot.tiles, 'YES' if keep else 'NO', exact=True) or 'a'
     if 'FIGHT' in text and 'TYPE' not in text:
-        catching = ((enemy in wanted and held not in wanted
-                     or score(mem, 'wEnemyMon') > max(350, score(mem, 'wContestMon')) and held not in wanted)
+        catching = ((shiny and not held_shiny or enemy in wanted and held not in wanted and not held_shiny
+                     or score(mem, 'wEnemyMon') > max(350, score(mem, 'wContestMon')) and held not in wanted
+                     and not held_shiny)
                     and bool(mem.byte('wParkBallsRemaining')))
         x = 1 if catching else 2
         current = mem.byte('wMenuCursorX')

@@ -53,7 +53,7 @@ def test_contest_keeps_a_target_over_a_stronger_ordinary_catch(monkeypatch):
     snapshot = SimpleNamespace(party=[], stored=[], owned=set(contest.CONTEST_SPECIES) - {123}, in_battle=1,
                                text='Switch POKéMON? YES NO', tiles=[' ' * 20] * 18, items=[(1, 2)])
     bytes_ = {'wStatusFlags2': 4, 'wEnemyMonSpecies': 123, 'wContestMonSpecies': 48}
-    mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0))
+    mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0), read=lambda name, size: bytes(size))
     keep = []
     monkeypatch.setattr(contest, 'choose', lambda tiles, label, exact=False: keep.append(label) or 'a')
     contest.control(policy, snapshot, mem)
@@ -70,3 +70,29 @@ def test_roamer_neighbours_follow_the_roam_map_table():
     assert quests.roam_neighbours(data, 36) == (35, 31, 32, 37)
     assert quests.roam_neighbours(data, 39) == (38,)
     assert all(origin in quests.ROAM_MAPS[target] for origin, targets in quests.ROAM_MAPS.items() for target in targets)
+
+
+def test_contest_keeps_a_shiny_over_any_prize_and_never_swaps_one_away(monkeypatch):
+    data = SimpleNamespace(encounters=[], items={'SUN_STONE': 1})
+    policy = SimpleNamespace(data=data, collection={'contest': {'entered': True}, 'prerequisites': ()}, demand={}, memory=None)
+    snapshot = SimpleNamespace(party=[], stored=[], owned=set(contest.CONTEST_SPECIES) - {123}, in_battle=1,
+                               text='Switch POKéMON? YES NO', tiles=[' ' * 20] * 18, items=[(1, 2)])
+    bytes_ = {'wStatusFlags2': 4, 'wEnemyMonSpecies': 10, 'wContestMonSpecies': 123, 'wParkBallsRemaining': 5}
+    dvs = {'wEnemyMonDVs': b'\x2a\xaa', 'wContestMonDVs': b'\x00\x00'}
+    mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0), word=lambda name: 0,
+                          read=lambda name, size: dvs.get(name, bytes(size)))
+    keep = []
+    monkeypatch.setattr(contest, 'choose', lambda tiles, label, exact=False: keep.append(label) or 'a')
+    # A shiny Caterpie replaces the wanted Scyther the contest was after.
+    contest.control(policy, snapshot, mem)
+    assert keep == ['YES']
+    snapshot.text = 'FIGHT PKMN PACK RUN'
+    bytes_.update(wMenuCursorX=1, wMenuCursorY=2)
+    assert contest.control(policy, snapshot, mem) == 'a'  # PARK BALL, not RUN
+    # A held shiny is never swapped for the wanted species.
+    dvs.update({'wEnemyMonDVs': b'\x00\x00', 'wContestMonDVs': b'\x2a\xaa'})
+    bytes_.update(wEnemyMonSpecies=123, wContestMonSpecies=10)
+    snapshot.text = 'Switch POKéMON? YES NO'
+    keep.clear()
+    contest.control(policy, snapshot, mem)
+    assert keep == ['NO']

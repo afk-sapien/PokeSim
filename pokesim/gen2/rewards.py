@@ -94,6 +94,7 @@ def deliver(emu):
                 or len(after.stored) != len(before.stored) + 1
                 or any(existing.get((mon.box, mon.position), mon) != mon for mon in after.stored)):
             raise ValueError('The Gen II gift changed unrelated adventure state')
+        shiny_gift = any(mon.shiny for mon in after.stored if (mon.box, mon.position) not in existing)
         output = io.BytesIO()
         clone.save_state(output)
         raw = output.getvalue()
@@ -123,6 +124,9 @@ def deliver(emu):
             consume(db, emu.steps.value['total'])
         else:
             db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (MYTHICAL, json.dumps(identifier)))
+        if shiny_gift:
+            from ..shiny import record as record_shiny
+            record_shiny(db, 'acquired', f'gift-event:{identifier}', species, generation=2)
         for key, value in ((PENDING, record), (BARRIER, identifier)):
             db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (key, json.dumps(value)))
         db.execute('INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (?,?,?,?,?,?,?,?)',

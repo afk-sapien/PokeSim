@@ -6,6 +6,7 @@ import re
 from math import isqrt
 
 from ..experimental.gen2 import dex_flags
+from ..shiny import shiny_bytes
 from .screens import ScreenText, mask_hud
 
 BADGES = ('Zephyr', 'Hive', 'Plain', 'Fog', 'Mineral', 'Storm', 'Glacier', 'Rising',
@@ -271,6 +272,7 @@ class Snapshot:
     roamers: tuple[dict, ...] = ()
     step_count: int = 0
     happiness_cycle: int = 0
+    enemy_shiny: bool = False
 
     @property
     def started(self):
@@ -314,7 +316,7 @@ class Snapshot:
                           for item, count in self.items], 'money': self.money, 'coins': self.coins,
                 'in_battle': self.in_battle,
                 'enemy': self.data.species.get(self.enemy_species, {}).get('name') if self.in_battle else None,
-                'enemy_level': self.enemy_level, 'opponent': self.trainer_class if self.in_battle == 2 else None,
+                'enemy_level': self.enemy_level, 'enemy_shiny': self.enemy_shiny, 'opponent': self.trainer_class if self.in_battle == 2 else None,
                 'playtime': '%d:%02d:%02d' % self.playtime, 'playtime_seconds': self.playtime_seconds,
                 'hall_of_fame_count': self.hall_of_fame_count,
                 'daycare': {'parents': [mon.to_dict() if mon else None for mon in self.daycare],
@@ -431,6 +433,8 @@ def read_snapshot(memory, data, frame=0, *, cache=True):
         if raw[0] in (243, 244, 245):
             roamers.append({'species': raw[0], 'level': raw[1], 'map': raw[2] * 256 + raw[3], 'hp': raw[4]})
     battle = mem.byte('wBattleMode')
+    # A wild Ditto that Transformed shows its target's DVs. Its own are kept in the backup.
+    enemy_dvs = mem.read('wEnemyBackupDVs' if mem.byte('wEnemySubStatus5') & 8 else 'wEnemyMonDVs', 2) if battle == 1 else b''
     tilemap = mem.read('wTilemap', 360)
     screen_tiles = region('screen', (battle, tilemap), data, lambda: _screen(tilemap, battle, data))
     return Snapshot(frame, mem.byte('wMapGroup') * 256 + mem.byte('wMapNumber'), mem.byte('wXCoord'), mem.byte('wYCoord'),
@@ -444,4 +448,5 @@ def read_snapshot(memory, data, frame=0, *, cache=True):
                     mem.byte('wHallOfFameCount'), mem.read('wEventFlags', 256), screen_tiles, tuple(objects), valid, data,
                     daycare=daycare, egg_ready=bool(mem.byte('wDayCareMan') & 64),
                     breeding_compatible=bool(mem.byte('wDayCareMan') & 32), roamers=tuple(roamers),
-                    step_count=mem.byte('wStepCount'), happiness_cycle=mem.byte('wHappinessStepCount'))
+                    step_count=mem.byte('wStepCount'), happiness_cycle=mem.byte('wHappinessStepCount'),
+                    enemy_shiny=shiny_bytes(enemy_dvs))
