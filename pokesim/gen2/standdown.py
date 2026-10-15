@@ -37,6 +37,10 @@ def stalled_objectives(policy):
     training = state.get('training')
     if training and goal is not None and goal.key.startswith('collection_train'):
         keys.add(train_key(training['identity']))
+    from .postgame import stall_key
+    search = stall_key(policy) if not target else None
+    if search:
+        keys.add(search)
     team = state.get('activity_team') if goal is not None and goal.key == 'collection_activity_team' else None
     return {'keys': sorted(keys), 'earlier': dict(state.get('stood_down') or {}), 'team': team}
 
@@ -56,6 +60,9 @@ def carry_over(policy, stalled):
     training = state.get('training')
     if training and train_key(training['identity']) in stalled['keys']:
         state['training'] = None
+    from .postgame import finish, stall_key
+    if stall_key(policy) in stalled['keys']:
+        finish(policy)
     if stalled['team']:
         from .teams import RETRY_AFTER
         state.pop('activity_team', None)

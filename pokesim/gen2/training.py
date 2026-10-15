@@ -124,6 +124,13 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     project = state.get('training')
     if project and project.get('terminal') and not project.get('level_goal') and not terminal:
         state['training'] = None
+    if project and project.get('postgame') and not terminal:
+        # Postgame training waits behind collection work and only runs from postgame.journey, but an
+        # evolution that adds a Pokédex entry takes its place at once.
+        current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
+        if not projects(data, snapshot, current_time, getattr(policy, 'demand', {})):
+            return None
+        state['training'] = None
     share = data.items['EXP_SHARE']
     inventory = dict(snapshot.items)
     missing = shareless(data, snapshot)

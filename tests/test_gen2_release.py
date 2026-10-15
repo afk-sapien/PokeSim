@@ -31,9 +31,24 @@ def test_the_best_copy_stays_and_the_most_numerous_species_goes_first():
 
 
 def test_party_copies_count_as_the_kept_copy():
-    boxed = mon(16, dvs=(15, 15, 15, 15, 14))
+    boxed = mon(16, dvs=(0, 2, 2, 2, 2))
     assert spares(snapshot([boxed], party=[mon(16, box=None, position=None)])) == [boxed]
     assert spares(snapshot([boxed])) == []
+
+
+def test_a_boxed_upgrade_survives_even_with_a_weaker_party_copy():
+    boxed = mon(16, dvs=(0, 10, 10, 10, 8))
+    party = mon(16, box=None, position=None, dvs=(0, 8, 8, 8, 8))
+    spare = mon(16, position=1, dvs=(0, 2, 2, 2, 2))
+    for lenient in (False, True):
+        assert spares(snapshot([boxed, spare], party=[party]), lenient=lenient) == [spare]
+
+
+def test_special_dv_contributes_to_both_special_stats_when_keeping_an_upgrade():
+    # The boxed copy has a lower raw DV sum but a higher total across the six final stats.
+    boxed = mon(16, dvs=(0, 8, 8, 8, 12))
+    party = mon(16, box=None, position=None, dvs=(0, 10, 10, 10, 8))
+    assert spares(snapshot([boxed], party=[party])) == []
 
 
 def test_plan_demand_and_kept_species_are_never_offered():

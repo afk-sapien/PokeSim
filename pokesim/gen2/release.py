@@ -49,7 +49,10 @@ def _group(mon):
 
 def quality(mon):
     """Natural potential first, then training, within one species."""
-    return (sum(mon.dvs), min(mon.dvs), mon.level, sum(isqrt(value) for value in mon.stat_exp), mon.experience)
+    # Special contributes to both Special Attack and Special Defense in Gen II. This ranks
+    # copies by the same fully trained level 100 stat total as the postgame training planner.
+    return (sum(mon.dvs) + mon.dvs[-1], min(mon.dvs), mon.level,
+            sum(isqrt(value) for value in mon.stat_exp), mon.experience)
 
 
 def _keys(mon):
@@ -108,11 +111,11 @@ def spares(snapshot, demand=None, keep=(), preferences=None, partners=(), lenien
     for (species, _), copies in groups.items():
         if species in keep:
             continue
-        # Party members are kept on the team, so they count toward the copies kept first.
+        # Party members stay on the team, but a weaker party copy must not cost us a boxed upgrade.
         party = [mon for mon in copies if mon.box is None]
         stored = sorted((mon for mon in copies if mon.box is not None), key=quality, reverse=True)
-        kept = max(1, demand.get(species, 0))
-        candidates = stored[max(0, kept - len(party)):]
+        kept = sorted(party + stored, key=quality, reverse=True)[:max(1, demand.get(species, 0))]
+        candidates = [mon for mon in stored if mon not in kept]
         result.extend((len(copies), mon) for mon in candidates if not _protected(mon, reserved, lenient))
     # A copy without a held item or training goes first. Among equally numerous species the open
     # box goes first, which saves a box change.

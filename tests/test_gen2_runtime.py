@@ -2489,3 +2489,34 @@ def test_a_missed_shiny_is_reported_once_per_battle_like_red_blue_and_yellow(rea
     emu.policy.shiny_missed = None
     assert not emu._report_missed_shiny(snapshot)
     assert emu._event.call_count == 2
+
+
+def test_postgame_searches_flee_plain_battles_and_catch_their_species(real_data):
+    """A shiny session runs from ordinary wild battles to meet the next one sooner, and a better-DV
+    hunt catches every copy of its species, owned or not."""
+    from pokesim.gen2.policy import Policy
+    policy = started(Policy(real_data))
+    policy.needed_move = lambda snapshot: 0
+    policy.capture_move = lambda *args: None
+    policy.remedy = lambda *args, **kwargs: False
+    snapshot = shiny_battle(real_data, 19, shiny=False)
+    snapshot.party = (_shiny_lead(),)
+    bytes_ = {}
+    mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0), word=lambda name: 0, read=lambda name, size: bytes(size))
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    session = {'kind': 'shiny', 'row': {'map': snapshot.map, 'method': 'grass', 'time': 'any', 'species': None},
+               'started': 0, 'shinies': 0}
+    policy.collection['postgame'] = {'activity': session, 'recent': [], 'searches': {}, 'shiny_break': 0, 'shiny_maps': []}
+    assert policy.battle(snapshot, mem).button == ('Flee',) and policy.shiny_missed is None
+    # A trap that forbids running leaves the turn to be fought.
+    bytes_['wEnemySubStatus5'] = 128
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    bytes_.clear()
+    # Encounter 100 still gets its capture attempt when it is shiny. The outing ends after battle.
+    session['encounters'] = 100
+    snapshot.enemy_shiny = True
+    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    snapshot.enemy_shiny = False
+    policy.collection['postgame']['activity'] = {'kind': 'quality', 'species': 19, 'row': session['row'],
+                                                 'started': 0, 'seen': [], 'caught': 0}
+    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])

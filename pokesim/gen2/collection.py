@@ -513,20 +513,9 @@ def journey(policy, snapshot, mem, Goal):
         items = dict(snapshot.items)
         for row in data.encounters if room else ():
             if (not wanted(policy, snapshot, row['species']) or not matching_time(row['time'], current_time)
-                    or standing_down(policy, hunt_key(row['species']))):
+                    or standing_down(policy, hunt_key(row['species'])) or not usable(policy, snapshot, row, items)):
                 continue
             method = row['method']
-            if method not in {'grass', 'surf', 'old rod', 'good rod', 'super rod', 'headbutt', 'rock smash'}:
-                continue
-            if method in {'headbutt', 'rock smash'}:
-                move = 29 if method == 'headbutt' else 249
-                machine = data.items['TM_HEADBUTT' if move == 29 else 'TM_ROCK_SMASH']
-                if not any(move in mon.moves or machine in items and move in data.species[mon.species]['machines']
-                           and not all(known in {15, 19, 57, 70, 148, 250, 127} for known in mon.moves)
-                           for mon in snapshot.party if not mon.egg):
-                    continue
-            if method.endswith('rod') and data.items[method.upper().replace(' ', '_')] not in items:
-                continue
             key = (row['map'], method, row['species'], row['time'] == 'rare trees')
             groups.setdefault(key, {**row, 'chance': 0})['chance'] += row['chance']
         routes, points = {}, {}
@@ -563,16 +552,13 @@ def journey(policy, snapshot, mem, Goal):
             goal = tower(policy, snapshot, Goal)
             if goal:
                 return goal
-            goal = training(policy, snapshot, mem, Goal, terminal=True)
+            # A finished run keeps playing the way Red, Blue and Yellow do: better-DV hunts, training ten
+            # levels at a time, bounded shiny searches and League runs, in rotation (see postgame).
+            from . import postgame
+            goal = postgame.journey(policy, snapshot, mem, Goal, current_time)
             if goal:
-                return while_waiting(policy, snapshot, mem, goal, Goal)
+                return goal
             eggs = any(mon.egg for mon in snapshot.party)
-            if not eggs and postgame_league(policy, snapshot, mem, current_time):
-                # A finished run keeps playing: with no collection, training or clock-gated work left,
-                # it challenges the Elite Four again, the way a finished Gen I run loops the League.
-                state['league_loop'] = snapshot.hall_of_fame_count + 1
-                state['phase'] = 'league'
-                return league_funding(policy, snapshot, Goal, again=True)
             # Carried eggs hatch on this walk, so only a walk without them is idle.
             state['phase'] = 'hatching' if eggs else 'waiting'
             # Nothing else is useful until the cartridge clock opens a window or a trade brings new work.
@@ -582,10 +568,34 @@ def journey(policy, snapshot, mem, Goal):
 
 
 def postgame_league(policy, snapshot, mem, current_time):
-    """Whether the League loop replaces the idle walk: the Champion is beaten and no clock wait is due."""
+    """Whether a postgame League run may start: the Champion is beaten and no clock wait is due."""
     if 'champion' not in getattr(policy, 'completed', {}) or not snapshot.hall_of_fame_count:
         return False
     return clock_wait(policy, snapshot, mem, current_time) is None
+
+
+HUNT_METHODS = {'grass', 'surf', 'old rod', 'good rod', 'super rod', 'headbutt', 'rock smash'}
+
+
+def usable(policy, snapshot, row, items):
+    """Whether the party can search an encounter row now: walking, surfing, a rod in the bag, or a
+    Headbutt or Rock Smash it knows or can be taught."""
+    data, method = policy.data, row['method']
+    if method not in HUNT_METHODS:
+        return False
+    if method in {'headbutt', 'rock smash'}:
+        move = 29 if method == 'headbutt' else 249
+        machine = data.items['TM_HEADBUTT' if move == 29 else 'TM_ROCK_SMASH']
+        return any(move in mon.moves or machine in items and move in data.species[mon.species]['machines']
+                   and not all(known in {15, 19, 57, 70, 148, 250, 127} for known in mon.moves)
+                   for mon in snapshot.party if not mon.egg)
+    return not method.endswith('rod') or data.items[method.upper().replace(' ', '_')] in items
+
+
+def active_target(policy):
+    """The encounter row being searched: a Pokédex hunt, or else a postgame search."""
+    from .postgame import searching
+    return policy.collection.get('target') or searching(policy)
 
 
 # Where the run passes time when nothing else is useful, the last resort of the plan.
@@ -620,13 +630,18 @@ def patrol(policy, snapshot, Goal, label):
     return Goal('collection_idle', label, PATROL_MAP, x, y)
 
 
-def hunt(policy, snapshot, Goal):
+def hunt(policy, snapshot, Goal, target=None, label=None):
+    """Walk an encounter row. ``target`` is a postgame search, which ``label`` names, instead of the
+    Pokédex hunt target. A postgame search that cannot go on ends and gives None."""
     data, state = policy.data, policy.collection
-    target = state['target']
+    postgame = target is not None
+    target = target or state['target']
     state['phase'] = 'hunting'
     mid, method = target['map'], target['method']
     points = encounter_points(policy, snapshot, mid, method, rare=target['time'] == 'rare trees')
     if not points:
+        if postgame:
+            return abandon(policy)
         state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
         state['target'] = None
         return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
@@ -652,6 +667,8 @@ def hunt(policy, snapshot, Goal):
                 x, y, face = next((point for point in points
                                    if region in policy.nav.regions.memberships(mid, point[:2], True, True)), points[0])
             else:
+                if postgame:
+                    return abandon(policy)
                 state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
                 state['target'] = None
                 return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[mid]['constant'], snapshot.x, snapshot.y)
@@ -660,13 +677,20 @@ def hunt(policy, snapshot, Goal):
         region = route[-1][1][1] if route else None
         x, y, face = next((point for point in points
                            if region in policy.nav.regions.memberships(mid, point[:2], True, True)), points[0])
-    name = data.species[target['species']]['name']
-    item = item_hunts(policy, snapshot).get(target['species'])
-    if item and target['species'] in snapshot.owned:
-        name += ' holding ' + data.item_names.get(item, 'its item')
+    if label is None:
+        name = data.species[target['species']]['name']
+        item = item_hunts(policy, snapshot).get(target['species'])
+        if item and target['species'] in snapshot.owned:
+            name += ' holding ' + data.item_names.get(item, 'its item')
+        label = f'Search for {name}'
     key = 'collection_fish' if method.endswith('rod') else 'collection_field' if method in {'headbutt', 'rock smash'} else 'collection_hunt'
-    return Goal(key,
-                f'Search for {name} in {data.maps[mid]["name"]}', data.maps[mid]['constant'], x, y, face)
+    return Goal(key, f'{label} in {data.maps[mid]["name"]}', data.maps[mid]['constant'], x, y, face)
+
+
+def abandon(policy):
+    from .postgame import drop
+    drop(policy)
+    return None
 
 
 def give_up(policy):
@@ -676,6 +700,9 @@ def give_up(policy):
     if target:
         state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
         stand_down(policy, hunt_key(target['species']))
+    else:
+        from .postgame import drop
+        drop(policy)
     state['target'] = None
     return 'wait'
 
@@ -733,14 +760,14 @@ def arrive(policy, snapshot):
             policy.menu = ChangeBox(box)
             return 'a'
     if key == 'collection_fish':
-        method = policy.collection['target']['method']
+        method = active_target(policy)['method']
         rod = Use(policy.data.items[method.upper().replace(' ', '_')])
         if not policy.allowed(rod, snapshot):
             return give_up(policy)
         policy.menu = rod
         return 'wait'
     if key == 'collection_field':
-        method = policy.collection['target']['method']
+        method = active_target(policy)['method']
         move = 29 if method == 'headbutt' else 249
         slot = next((i for i, mon in enumerate(snapshot.party) if not mon.egg and move in mon.moves), None)
         if slot is None:

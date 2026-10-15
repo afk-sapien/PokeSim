@@ -47,12 +47,12 @@ def clock(day=1, time=1):
 
 def stub_activities(monkeypatch, **goals):
     """Make every activity of the expedition idle except the ``goals`` given by name."""
-    from pokesim.gen2 import (breeding, celebi, collection, contest, gamecorner, npc_trades, quests, ruins, tower,
-                              training)
+    from pokesim.gen2 import (breeding, celebi, collection, contest, gamecorner, npc_trades, postgame, quests, ruins,
+                              tower, training)
     for module, name in [(contest, 'journey'), (tower, 'journey'), (ruins, 'journey'), (celebi, 'journey'),
                          (quests, 'gifts'), (quests, 'trade_items'), (quests, 'legends'), (quests, 'stones'),
                          (npc_trades, 'journey'), (breeding, 'journey'), (breeding, 'hatching'),
-                         (gamecorner, 'journey'), (training, 'journey')]:
+                         (gamecorner, 'journey'), (training, 'journey'), (postgame, 'journey')]:
         goal = goals.get(f'{module.__name__.rsplit(".", 1)[1]}.{name}')
         monkeypatch.setattr(module, name, lambda *args, goal=goal, **kwargs: goal)
     monkeypatch.setattr(npc_trades, 'requests', lambda *args: set())
@@ -265,9 +265,15 @@ def test_a_finished_run_loops_the_league_instead_of_walking_the_grass(data, monk
     from pokesim.gen2.policy import Goal
     # A live Crystal run with every Pokémon, sixteen badges and a level 100 party walked Route 29 for
     # hours once its last training ended. A finished Gen I run loops the League, and so does this one.
+    # Here the League is the only postgame activity left: no balls for a hunt and nobody to train.
+    from pokesim.gen2 import postgame
+    journey_of_postgame = postgame.journey
     patrols = stub_activities(monkeypatch)
+    monkeypatch.setattr(postgame, 'journey', journey_of_postgame)
+    monkeypatch.setattr(postgame, 'trainee', lambda policy, snapshot: None)
     party = [mon(157 + i, box=None, position=i, level=100) for i in range(6)]
     state = snapshot(party)
+    state.pockets = {'balls': []}
     state.hall_of_fame_count = 180
     state.event = lambda name: name != 'EVENT_WILLS_ROOM_ENTRANCE_CLOSED'
     policy = expedition(data)

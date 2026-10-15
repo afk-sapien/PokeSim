@@ -223,17 +223,23 @@ class Policy:
         return f'strategic ({self.mode})'
 
     def details(self):
+        from .collection import active_target
         return {'action': self.mode, 'decisions': self.decisions, 'starter': self.starter,
                 'milestones': dict(self.completed), 'recoveries': self.recoveries, 'visited_tiles': len(self.nav.visits),
                 'objective': {'key': self.goal.key, 'label': self.goal.label, 'reason': self.goal.label} if self.goal else {},
                 'collection': {'version': self.data.game, 'dex_total': 251,
                                'phase': self.collection.get('phase', 'journey'),
-                               'hunting': (self.collection.get('target') or {}).get('species'),
+                               'hunting': (active_target(self) or {}).get('species'),
                                'npc_trades': [row['index'] for row in self.collection.get('npc_trades', [])]},
                 'blocked': self.unreachable_waits >= STUCK_WAITS,
                 'reason': self.goal.label if self.goal else 'Start the adventure'}
 
     def journey(self, snapshot, mem):
+        # A saved postgame outing waits while an evolution, trade or other collection task takes
+        # priority. Its battle rules resume only when the director chooses its hunting goal again.
+        activity = (self.collection.get('postgame') or {}).get('activity')
+        if activity:
+            activity['suspended'] = True
         if snapshot.map == self.data.map_ids['POKECENTER_2F']:
             return Goal('return_from_cable', 'Return downstairs after the Cable Club', 'POKECENTER_2F', 0, 7)
         if self.collection.get('time_capsule_restore'):
@@ -983,6 +989,8 @@ class Policy:
     def step(self, snapshot, memory):
         self.memory = memory
         self.decisions += 1
+        from .postgame import observe
+        observe(self, snapshot)
         self.backing_out = False
         self.shiny_missed = None
         if self.rescue:
@@ -1340,8 +1348,11 @@ class Policy:
             requested |= unown_letter(mem.read('wEnemyMonDVs', 2)) in unown_missing(self, snapshot)
         # A wild shiny is always caught, an owned species too. Trainers' Pokémon never count.
         shiny = self.wild_shiny(snapshot)
+        # A postgame better-DV hunt catches every copy it meets, and the boxes keep the best one.
+        from .postgame import quality_species, shiny_session
+        upgrade = snapshot.in_battle == 1 and catch_species == quality_species(self)
         catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or requested or shiny
-                                              or catch_species in self.returned)
+                                              or upgrade or catch_species in self.returned)
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in
                     {label.casefold() for label in self.ball_labels(snapshot)} for item, count in snapshot.pockets['balls'] if count))
         if (catch and not partner and not shiny and snapshot.enemy_species not in {130, 143, 185, 243, 244, 245, 249, 250, 251}
@@ -1387,7 +1398,9 @@ class Policy:
             cursor = mem.byte('wMenuCursorY')
             return Action('a' if target + 1 == cursor else 'down' if cursor < target + 1 else 'up')
         if 'FIGHT' in text and 'TYPE' not in text:
-            if self.shiny_missed and not trapped:
+            # A shiny session runs from every plain wild battle, which brings the next encounter sooner.
+            if (self.shiny_missed or snapshot.in_battle == 1 and not catch and not shiny
+                    and shiny_session(self, snapshot)) and not trapped:
                 # A failed escape brings the menu back and Run is tried again. Only a trap that
                 # forbids running leaves the fight below.
                 action = self.battle_task(Flee(), snapshot, mem)

@@ -49,7 +49,7 @@ def test_a_trade_may_release_a_spare_holding_an_item_but_never_an_egg_or_a_last_
     assert spares(snapshot) == []
     order = spares(snapshot, lenient=True)
     # The weakest boxed Snorlax goes first. The lead and best copies, the eggs and the single Bulbasaur stay.
-    assert [(m.box, m.position) for m in order] == [(11, 1), (4, 3), (13, 5)]
+    assert [(m.box, m.position) for m in order] == [(11, 1), (4, 3)]
     plain = mon(SNORLAX, box=6, position=0, dvs=(13, 13, 13, 13, 13))
     trained = mon(SNORLAX, box=6, position=1, dvs=(2, 2, 2, 2, 2), stat_exp=(30000,) * 5)
     roomy = full([*snapshot.stored, plain, trained], party=snapshot.party)
@@ -88,7 +88,8 @@ def test_trade_spare_protects_keep_hand_picked_and_wished_pokemon(gold):
     # A Pokémon set to Never trade, one hand-picked for a trade (even by an older trainer-and-DV key) and a wished species stay.
     policy.trade_preferences = lambda: {key(weakest): {'state': 'locked'}}
     assert policy.trade_spare(snapshot) is middle
-    assert policy.trade_spare(snapshot, protect=[key(middle).split('-')[0]]) is best
+    # With the weaker spares protected, the boxed upgrade stays even though the party has a copy.
+    assert policy.trade_spare(snapshot, protect=[key(middle).split('-')[0]]) is None
     assert policy.trade_spare(snapshot, protect=[key(middle), key(best)]) is None
     assert policy.trade_spare(snapshot, wished=[SNORLAX]) is None
 
