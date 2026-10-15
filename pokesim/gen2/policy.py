@@ -272,6 +272,10 @@ class Policy:
             return Goal('deliver_egg', 'Bring the mystery egg to Elm', 'ELMS_LAB', 5, 3, 'up')
         self.completed.setdefault('deliver_egg', snapshot.frame)
         if not snapshot.badges & 1:
+            if max((mon.level for mon in snapshot.party if not mon.egg), default=0) < 12:
+                from .training import walk_goal
+                return walk_goal(self, snapshot, Goal, lambda: 'Train the team to level 12 before Falkner',
+                                 map_name='ROUTE_31')
             return Goal('zephyr', 'Challenge Falkner', 'VIOLET_GYM', 5, 2, 'up')
         self.completed.setdefault('zephyr', snapshot.frame)
         if not snapshot.event('EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE'):
@@ -1366,6 +1370,8 @@ class Policy:
         weaken = self.capture_move(snapshot, mem) if catch else None
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
         trapped = bool(mem.byte('wEnemySubStatus5') & 128 or mem.byte('wPlayerWrapCount'))
+        # Scripted trap, red Gyarados, Celebi and Suicune battles forbid escape even without Mean Look.
+        can_escape = not trapped and mem.byte('wBattleType') not in {7, 9, 11, 12}
         # Core shortcuts pick moves, balls and switches. Any pack or party submenu still open
         # here belongs to no running shortcut, so it is closed.
         if 'SWITCH' in text and 'STATS' in text:
@@ -1400,7 +1406,7 @@ class Policy:
         if 'FIGHT' in text and 'TYPE' not in text:
             # A shiny session runs from every plain wild battle, which brings the next encounter sooner.
             if (self.shiny_missed or snapshot.in_battle == 1 and not catch and not shiny
-                    and shiny_session(self, snapshot)) and not trapped:
+                    and shiny_session(self, snapshot)) and can_escape:
                 # A failed escape brings the menu back and Run is tried again. Only a trap that
                 # forbids running leaves the fight below.
                 action = self.battle_task(Flee(), snapshot, mem)
@@ -1437,7 +1443,7 @@ class Policy:
             if self.constant(snapshot) != 'BATTLE_TOWER_BATTLE_ROOM' and self.remedy(snapshot, active=mem.byte('wCurBattleMon')):
                 return Action(None, 0, 24)
             self.learning = False
-            if (roaming and not catch and not trapped and snapshot.in_battle == 1
+            if (roaming and not catch and can_escape and snapshot.in_battle == 1
                     and (snapshot.enemy_species not in snapshot.owned or snapshot.enemy_species in self.returned)):
                 # A fainted roaming beast never returns, so leave it for a visit with room and balls.
                 action = self.battle_task(Flee(), snapshot, mem)

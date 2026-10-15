@@ -103,7 +103,7 @@ test('adventure cards show League wins independently of reward counts', async ()
   assert.doesNotMatch(markup, />2 League wins/)
 })
 
-test('a running adventure that reports a stall says so on its card', async () => {
+test('library cards omit the generic stall warning', async () => {
   const games = [{id: 'a'.repeat(32), name: 'Red', version: 'red', state: 'running', summary: {stalled: true}},
     {id: 'b'.repeat(32), name: 'Blue', version: 'blue', state: 'running', summary: {}},
     {id: 'c'.repeat(32), name: 'Old', version: 'red', state: 'stopped', summary: {stalled: true}}]
@@ -113,7 +113,7 @@ test('a running adventure that reports a stall says so on its card', async () =>
   const cards = []
   view.element('#adventure-list').insertAdjacentHTML = (_, html) => { cards.push(html) }
   await settle()
-  assert.deepEqual(cards.map(html => /Stuck\?/.test(html)), [true, false, false])
+  assert.deepEqual(cards.map(html => /Stuck\?/.test(html)), [false, false, false])
 })
 
 test('stopped and failed cards say so and start in one click, translating raw network errors', async () => {

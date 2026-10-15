@@ -2412,6 +2412,35 @@ def test_a_shiny_leaves_the_master_ball_to_a_legend_still_to_catch(real_data):
     assert 'MASTER BALL' not in policy.ball_labels(snapshot)
 
 
+@pytest.mark.parametrize('battle_type', [7, 9, 11, 12])
+def test_scripted_uncatchable_shiny_does_not_retry_forbidden_escape(real_data, battle_type):
+    from pokesim.gen2.policy import Policy
+    policy = started(Policy(real_data))
+    policy.needed_move = lambda snapshot: 0
+    policy.remedy = lambda *args, **kwargs: False
+    snapshot = shiny_battle(real_data, 130, balls=())
+    snapshot.party = (_shiny_lead(),)
+    mem = SimpleNamespace(byte=lambda name: battle_type if name == 'wBattleType' else 0,
+                          word=lambda name: 0, read=lambda name, size: bytes(size))
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert policy.shiny_missed == 'no balls'
+
+
+def test_first_gym_waits_for_a_level_twelve_partner(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    mon = SimpleNamespace(level=9, egg=False)
+    snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], frame=1000, badges=0,
+                               party=(mon,), event=lambda name: True)
+    goal = policy.journey(snapshot, None)
+    assert goal.key == 'collection_train'
+    assert goal.map_name == 'ROUTE_31'
+    mon.level = 12
+    assert policy.journey(snapshot, None).key == 'zephyr'
+    mon.egg = True
+    assert policy.journey(snapshot, None).key == 'collection_train'
+
+
 def _shiny_lead():
     return SimpleNamespace(species=155, nick='CYNDAQUIL', name='CYNDAQUIL', level=40, hp=120, max_hp=120, status=0,
                            egg=False, moves=(33, 0, 0, 0), pp=(35, 0, 0, 0), stats=(120, 60, 60, 60, 60, 60),

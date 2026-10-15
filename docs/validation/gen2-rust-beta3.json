@@ -1,0 +1,466 @@
+{
+  "date": "2026-10-15",
+  "backend": "Rust",
+  "dependencies": {
+    "pokesim-core": "0.7.0",
+    "pyboy-rs": "0.1.2"
+  },
+  "fresh_campaigns": [
+    {
+      "game": "gold",
+      "passed": true,
+      "frames": 4005500,
+      "red_frame": 4000564,
+      "badges": 16,
+      "seconds": 377.97,
+      "final_state_sha256": "d08723c6ff93b5ff31e63975fbfb847b1e0333ca5985d4b9059dedb409d5a8d9"
+    },
+    {
+      "game": "silver",
+      "passed": true,
+      "frames": 3630672,
+      "red_frame": 3625736,
+      "badges": 16,
+      "seconds": 342.31,
+      "final_state_sha256": "e925d0d383fa30f364965413680c3f46059a98ab44c786ea602f26259a56d22f"
+    },
+    {
+      "game": "crystal",
+      "passed": true,
+      "frames": 5059324,
+      "red_frame": 5054388,
+      "badges": 16,
+      "seconds": 473.45,
+      "final_state_sha256": "480acf3924be1073519b167472689b234e53df33272d2e740c81e06768e9db99"
+    }
+  ],
+  "postgame_encounter_checks": [
+    {
+      "game": "gold",
+      "scope": "focused postgame director with collection errands bypassed",
+      "source_sha256": "be5bf953f3ee707cf151f6b32615126e4d3a5148d192af7a4cc1fc30e4af5657",
+      "first_hunt_map": "ROUTE_29",
+      "restart": {
+        "frame": 80780,
+        "encounters": 50,
+        "battle_latch_preserved": true,
+        "party_preserved": true
+      },
+      "first_outing": {
+        "encounters": 100,
+        "frames": 148660,
+        "battle_finished": true
+      },
+      "frames": 148660,
+      "transitions": [
+        {
+          "frame": 0,
+          "kind": null,
+          "previous_encounters": null,
+          "shiny_break": 0,
+          "map": "Silver Cave Room 3",
+          "can_catch": false,
+          "balls": 11,
+          "shinies": 1
+        },
+        {
+          "frame": 7488,
+          "kind": "shiny",
+          "previous_encounters": 0,
+          "shiny_break": 0,
+          "map": "Silver Cave Pok\u00e9mon Center 1F",
+          "can_catch": true,
+          "balls": 11,
+          "shinies": 1
+        },
+        {
+          "frame": 148660,
+          "kind": "train",
+          "previous_encounters": 100,
+          "shiny_break": 1,
+          "map": "Route 29",
+          "can_catch": true,
+          "balls": 7,
+          "shinies": 1
+        }
+      ],
+      "training": [
+        {
+          "species": 175,
+          "start_level": 5,
+          "goal": 10,
+          "best_potential": true
+        }
+      ],
+      "restart_passed": true,
+      "first_outing_finished": true,
+      "passed": true
+    },
+    {
+      "game": "silver",
+      "scope": "focused postgame director with collection errands bypassed",
+      "source_sha256": "79b9e8aa95c1454b17dc4b832e25dd6f0fc48b8fc901a7f5b45fb77512de57ed",
+      "first_hunt_map": "ROUTE_29",
+      "restart": {
+        "frame": 75968,
+        "encounters": 50,
+        "battle_latch_preserved": true,
+        "party_preserved": true
+      },
+      "first_outing": {
+        "encounters": 100,
+        "frames": 145076,
+        "battle_finished": true
+      },
+      "frames": 145076,
+      "transitions": [
+        {
+          "frame": 0,
+          "kind": null,
+          "previous_encounters": null,
+          "shiny_break": 0,
+          "map": "Silver Cave Room 3",
+          "can_catch": false,
+          "balls": 11,
+          "shinies": 0
+        },
+        {
+          "frame": 7488,
+          "kind": "shiny",
+          "previous_encounters": 0,
+          "shiny_break": 0,
+          "map": "Silver Cave Pok\u00e9mon Center 1F",
+          "can_catch": true,
+          "balls": 11,
+          "shinies": 0
+        },
+        {
+          "frame": 145076,
+          "kind": "train",
+          "previous_encounters": 100,
+          "shiny_break": 1,
+          "map": "Route 29",
+          "can_catch": true,
+          "balls": 10,
+          "shinies": 0
+        }
+      ],
+      "training": [
+        {
+          "species": 175,
+          "start_level": 5,
+          "goal": 10,
+          "best_potential": true
+        }
+      ],
+      "restart_passed": true,
+      "first_outing_finished": true,
+      "passed": true
+    },
+    {
+      "game": "crystal",
+      "scope": "focused postgame director with collection errands bypassed",
+      "source_sha256": "10a9ede02c02c6378a50ce2ba975894d299d4e8de84882ddc107f4c58e86e75d",
+      "first_hunt_map": "ROUTE_29",
+      "restart": {
+        "frame": 79148,
+        "encounters": 50,
+        "battle_latch_preserved": true,
+        "party_preserved": true
+      },
+      "first_outing": {
+        "encounters": 100,
+        "frames": 154180,
+        "battle_finished": true
+      },
+      "frames": 154180,
+      "transitions": [
+        {
+          "frame": 0,
+          "kind": null,
+          "previous_encounters": null,
+          "shiny_break": 0,
+          "map": "Silver Cave Room 3",
+          "can_catch": false,
+          "balls": 7,
+          "shinies": 1
+        },
+        {
+          "frame": 7344,
+          "kind": "shiny",
+          "previous_encounters": 0,
+          "shiny_break": 0,
+          "map": "Silver Cave Pok\u00e9mon Center 1F",
+          "can_catch": true,
+          "balls": 7,
+          "shinies": 1
+        },
+        {
+          "frame": 154180,
+          "kind": "quality",
+          "previous_encounters": 100,
+          "shiny_break": 1,
+          "map": "Route 29",
+          "can_catch": true,
+          "balls": 7,
+          "shinies": 1
+        }
+      ],
+      "training": [],
+      "restart_passed": true,
+      "first_outing_finished": true,
+      "passed": true
+    }
+  ],
+  "cable": [
+    {
+      "pair": [
+        "gold",
+        "silver"
+      ],
+      "status": "passed",
+      "checks": [
+        "native exchange",
+        "participant verification",
+        "fresh cartridge Continue",
+        "stage",
+        "apply",
+        "recovery",
+        "release"
+      ]
+    },
+    {
+      "pair": [
+        "gold",
+        "crystal"
+      ],
+      "status": "passed",
+      "checks": [
+        "native exchange",
+        "participant verification",
+        "fresh cartridge Continue",
+        "stage",
+        "apply",
+        "recovery",
+        "release"
+      ]
+    },
+    {
+      "pair": [
+        "silver",
+        "crystal"
+      ],
+      "status": "passed",
+      "checks": [
+        "native exchange",
+        "participant verification",
+        "fresh cartridge Continue",
+        "stage",
+        "apply",
+        "recovery",
+        "release"
+      ]
+    }
+  ],
+  "time_capsule": [
+    {
+      "pair": [
+        "red",
+        "gold"
+      ],
+      "passed": true,
+      "checks": [
+        "native exchange",
+        "fresh cartridge Continue",
+        "both participant verifiers",
+        "incoming record"
+      ]
+    },
+    {
+      "pair": [
+        "red",
+        "silver"
+      ],
+      "passed": true,
+      "checks": [
+        "native exchange",
+        "fresh cartridge Continue",
+        "both participant verifiers",
+        "incoming record"
+      ]
+    },
+    {
+      "pair": [
+        "red",
+        "crystal"
+      ],
+      "passed": true,
+      "checks": [
+        "native exchange",
+        "fresh cartridge Continue",
+        "both participant verifiers",
+        "incoming record"
+      ]
+    },
+    {
+      "pair": [
+        "blue",
+        "gold"
+      ],
+      "passed": true,
+      "checks": [
+        "native exchange",
+        "fresh cartridge Continue",
+        "both participant verifiers",
+        "incoming record"
+      ]
+    },
+    {
+      "pair": [
+        "blue",
+        "silver"
+      ],
+      "passed": true,
+      "checks": [
+        "native exchange",
+        "fresh cartridge Continue",
+        "both participant verifiers",
+        "incoming record"
+      ]
+    },
+    {
+      "pair": [
+        "blue",
+        "crystal"
+      ],
+      "passed": true,
+      "checks": [
+        "native exchange",
+        "fresh cartridge Continue",
+        "both participant verifiers",
+        "incoming record"
+      ]
+    }
+  ],
+  "scope_notes": [
+    "Private ROMs, states, screenshots and absolute local paths are excluded.",
+    "Fresh campaigns use seed 1, Cyndaquil and a clock advanced by simulated gameplay. They do not establish coverage for every starter or seed.",
+    "Postgame counter checks bypass collection errands, prepare storage through cartridge menus and pin the first hunt to Route 29. Subsequent activity selection is unchanged.",
+    "These checks do not establish multi-day endurance or cross-platform gameplay."
+  ],
+  "completed_collection_replay": {
+    "game": "crystal",
+    "frames": 1500020,
+    "stopped": null,
+    "source_sha256": "ee2cebffad852b4e5afef7f8798bec92635fd8cc84b9c9aafa1332b114d51d50",
+    "scope": "Normal policy replay of the documented all-251 save. Remaining collection errands retain priority."
+  },
+  "postgame_rotation": {
+    "game": "crystal",
+    "scope": "focused postgame director with collection errands bypassed",
+    "source_sha256": "ee2cebffad852b4e5afef7f8798bec92635fd8cc84b9c9aafa1332b114d51d50",
+    "first_hunt_map": "ROUTE_29",
+    "restart": {
+      "frame": 84100,
+      "encounters": 50,
+      "battle_latch_preserved": true,
+      "party_preserved": true
+    },
+    "first_outing": {
+      "encounters": 100,
+      "frames": 158720,
+      "battle_finished": true
+    },
+    "rotation_passed": true,
+    "frames": 572476,
+    "transitions": [
+      {
+        "frame": 0,
+        "kind": null,
+        "previous_encounters": null,
+        "shiny_break": 0,
+        "map": "Blackthorn City",
+        "can_catch": false,
+        "balls": 9,
+        "shinies": 0
+      },
+      {
+        "frame": 8772,
+        "kind": "shiny",
+        "previous_encounters": 0,
+        "shiny_break": 0,
+        "map": "Mahogany Pok\u00e9mon Center 1F",
+        "can_catch": true,
+        "balls": 9,
+        "shinies": 0
+      },
+      {
+        "frame": 158720,
+        "kind": "quality",
+        "previous_encounters": 100,
+        "shiny_break": 1,
+        "map": "Route 29",
+        "can_catch": true,
+        "balls": 9,
+        "shinies": 0
+      },
+      {
+        "frame": 235532,
+        "kind": "train",
+        "previous_encounters": null,
+        "shiny_break": 0,
+        "map": "Silver Cave Room 1",
+        "can_catch": true,
+        "balls": 0,
+        "shinies": 0
+      },
+      {
+        "frame": 572476,
+        "kind": "train",
+        "previous_encounters": null,
+        "shiny_break": 0,
+        "map": "Silver Cave Room 1",
+        "can_catch": true,
+        "balls": 0,
+        "shinies": 0
+      }
+    ],
+    "training": [
+      {
+        "species": 197,
+        "start_level": 42,
+        "goal": 50,
+        "best_potential": true,
+        "end_level": 50,
+        "goal_reached": true
+      },
+      {
+        "species": 219,
+        "start_level": 40,
+        "goal": 50,
+        "best_potential": true
+      }
+    ],
+    "restart_passed": true,
+    "first_outing_finished": true,
+    "passed": true
+  },
+  "automated_checks": {
+    "full_python": {
+      "passed": 3204,
+      "skipped": 130,
+      "note": "Before the final map-transition retry change"
+    },
+    "affected_python_after_final_gameplay_change": {
+      "passed": 566,
+      "skipped": 9
+    },
+    "javascript": {
+      "passed": 139,
+      "skipped": 0
+    },
+    "ruff": "passed",
+    "git_diff_check": "passed",
+    "remote_release_pins": "passed"
+  }
+}

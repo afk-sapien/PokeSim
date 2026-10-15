@@ -245,3 +245,19 @@ def test_a_stalled_search_stands_down_across_a_reload(data):
     postgame.state(restored)['activity'] = dict(session)
     carry_over(restored, stalled)
     assert postgame.state(restored)['activity'] is None and standing_down(restored, 'shiny:5')
+
+
+def test_unloaded_encounter_tiles_get_a_bounded_retry(data, monkeypatch):
+    from pokesim.gen2 import collection, postgame
+    from pokesim.gen2.policy import Goal
+    policy = expedition(data)
+    view = snapshot([lead()])
+    view.map, view.x, view.y = data.map_ids['ROUTE_29'], 2, 3
+    activity = {'kind': 'shiny', 'row': row(view.map, None), 'started': 0, 'shinies': 0}
+    postgame.state(policy)['activity'] = activity
+    monkeypatch.setattr(collection, 'encounter_points', lambda *args, **kwargs: [])
+    for _ in range(20):
+        assert collection.hunt(policy, view, Goal, target=activity['row']).key == 'collection_wait'
+        assert postgame.state(policy)['activity'] is activity
+    assert collection.hunt(policy, view, Goal, target=activity['row']) is None
+    assert postgame.state(policy)['activity'] is None

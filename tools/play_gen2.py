@@ -1,10 +1,11 @@
 """Run an isolated Gen II policy scenario and retain failure evidence."""
 import argparse
+from dataclasses import asdict
 import json
 from pathlib import Path
 import time
 
-from pokesim_core.gen2.clock import boot, lock_clock
+from pokesim_core.gen2.clock import boot, follow_game_time, lock_clock
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy
@@ -25,6 +26,7 @@ def main():
     parser.add_argument('--focus', choices=('ruins', 'tower', 'celebi', 'contest', 'gifts', 'legends', 'stones', 'trade_items', 'breeding', 'gamecorner', 'restore', 'encounter', 'headbutt', 'rock smash'))
     parser.add_argument('--species', type=int)
     parser.add_argument('--real-clock', action='store_true', help='Use the checkpoint real-time clock instead of freezing it')
+    parser.add_argument('--game-clock', action='store_true', help='Advance the cartridge clock with simulated gameplay')
     parser.add_argument('--league-rewards', action='store_true', help='Enable the existing optional Johto starter gifts')
     parser.add_argument('--celebi-event', action='store_true', help='Enable the existing optional GS Ball distribution')
     parser.add_argument('--mew-event', action='store_true', help='Enable the existing optional custom Mew gift')
@@ -32,6 +34,8 @@ def main():
     parser.add_argument('--runtime-store', type=Path, help='Keep optional reward claims across scenario continuations')
     parser.add_argument('--stall-frames', type=int, default=12000)
     args = parser.parse_args()
+    if args.real_clock and args.game_clock:
+        parser.error('--real-clock and --game-clock are mutually exclusive')
     if args.restore_team_from and args.focus != 'restore':
         parser.error('--restore-team-from requires --focus restore')
     data = GameData.load(args.data, args.game)
@@ -165,6 +169,8 @@ def main():
             metadata = args.load.with_suffix('.policy.json')
             if metadata.exists():
                 policy.load_state_dict(json.loads(metadata.read_text()))
+        if args.game_clock:
+            follow_game_time(pb)
         if args.focus:
             policy.completed.pop(args.focus, None)
             if args.focus in {'encounter', 'headbutt', 'rock smash'}:
@@ -220,7 +226,7 @@ def main():
                     row = {'frame': frame, 'map': snapshot.map_name, 'x': snapshot.x, 'y': snapshot.y,
                            'battle': snapshot.in_battle, 'party': [(mon.name, mon.level, mon.hp) for mon in snapshot.party],
                            'mode': policy.mode, 'action': action.button, 'text': snapshot.tiles,
-                           'menu': vars(policy.menu) if policy.menu else None}
+                           'menu': asdict(policy.menu) if policy.menu else None}
                     trace.write(json.dumps(row) + '\n')
                     trace.flush()
                     print(frame, snapshot.map_name, snapshot.x, snapshot.y, policy.mode, action.button,
@@ -260,6 +266,8 @@ def main():
         pb.stop(save=False)
         if event_emu:
             event_emu.store.close()
+    if stopped or args.until and args.until not in policy.completed:
+        raise SystemExit(stopped or f'Did not reach {args.until} within the frame budget')
 
 
 if __name__ == '__main__':

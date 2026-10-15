@@ -229,14 +229,14 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     return walk_goal(policy, snapshot, Goal, lambda: f'Train {mon.name} toward {target}')
 
 
-def walk_goal(policy, snapshot, Goal, label):
-    """Walk the Mt. Silver grass, which trains the party and counts carried eggs down.
+def walk_goal(policy, snapshot, Goal, label, *, map_name='SILVER_CAVE_ROOM_1'):
+    """Walk encounter tiles, which trains the party and counts carried eggs down.
 
     ``label`` names the walk once the grass is known.
     """
     data = policy.data
     # Mt. Silver provides renewable experience for the trained champion and its partner.
-    mid = data.map_ids['SILVER_CAVE_ROOM_1']
+    mid = data.map_ids[map_name]
     from .collection import encounter_points
     points = encounter_points(policy, snapshot, mid, 'grass')
     if not points:
@@ -252,8 +252,8 @@ def walk_goal(policy, snapshot, Goal, label):
         else:
             x, y, _ = points[0]
     else:
-        x, y = 9, 31
-    return Goal('collection_train', label(), 'SILVER_CAVE_ROOM_1', x, y)
+        x, y = (9, 31) if map_name == 'SILVER_CAVE_ROOM_1' else points[0][:2]
+    return Goal('collection_train', label(), map_name, x, y)
 
 
 def arrive(policy, snapshot):

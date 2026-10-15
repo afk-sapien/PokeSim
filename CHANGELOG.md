@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Remove the generic "Stuck? No progress for a while" warning from Library cards.
+
+- Let encounter maps finish loading before abandoning a Gen II postgame hunt. An outing no longer ends immediately when a map transition briefly leaves its encounter tiles unavailable.
+
+- Train a Gen II partner to level 12 before challenging Falkner, so an underlevelled team does not repeatedly lose without earning experience. Respect scripted escape restrictions when an uncatchable shiny appears, including red Gyarados, instead of choosing Run forever.
+
 - Fix finished Gold, Silver and Crystal adventures walking the Route 29 grass forever with "Walk the grass until a trade or a return brings new collection work". A Gen II run only went back to the League when it was short of money or stock, so once every Pokémon was registered and the party reached level 100 nothing else was left. With no collection, training or clock-gated work and the Champion beaten, it now challenges the Elite Four again and records another Hall of Fame entry, then starts the next run, the way a finished Red, Blue or Yellow adventure loops the League. A League run that has started finishes before new work. Carried eggs and a clock wait such as Lapras's Friday still keep the walk.
 
 - Give finished Gold, Silver and Crystal adventures the postgame of Red, Blue and Yellow. Once the collection work runs out, the adventure rotates between four activities instead of only looping the League. It hunts better-DV copies of an owned species whose best copy has ordinary DVs, catching up to three copies per hunt and at most three hunts per species, and the boxes keep the best copy. It trains the best copy of a species ten levels at a time at Mt. Silver, skipping a species whose level 100 copy is already as strong. Each shiny-hunting outing checks up to 100 wild encounters on one grass map, running from ordinary battles. It finishes the current battle, then gives two other activities a turn before another outing. An hour of simulated gameplay, including travel, is a fallback limit when encounters are scarce. Pausing or changing playback speed does not change these limits. A stronger boxed copy stays safe even when a weaker copy of its species is in the party, and both Special stats count when comparing copies. And it challenges the Elite Four again. Better-DV hunts and training weigh most and the League least, and no activity is picked three times in a row. Pokédex, trade, breeding and clock-gated work still go first, and a wild shiny met at any time is still caught.

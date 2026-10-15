@@ -641,7 +641,7 @@ def hunt(policy, snapshot, Goal, target=None, label=None):
     points = encounter_points(policy, snapshot, mid, method, rare=target['time'] == 'rare trees')
     if not points:
         if postgame:
-            return abandon(policy)
+            return unavailable(policy, snapshot, Goal)
         state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
         state['target'] = None
         return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
@@ -668,7 +668,7 @@ def hunt(policy, snapshot, Goal, target=None, label=None):
                                    if region in policy.nav.regions.memberships(mid, point[:2], True, True)), points[0])
             else:
                 if postgame:
-                    return abandon(policy)
+                    return unavailable(policy, snapshot, Goal)
                 state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
                 state['target'] = None
                 return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[mid]['constant'], snapshot.x, snapshot.y)
@@ -684,7 +684,19 @@ def hunt(policy, snapshot, Goal, target=None, label=None):
             name += ' holding ' + data.item_names.get(item, 'its item')
         label = f'Search for {name}'
     key = 'collection_fish' if method.endswith('rod') else 'collection_field' if method in {'headbutt', 'rock smash'} else 'collection_hunt'
+    if postgame:
+        policy.collection['postgame']['activity'].pop('unavailable_steps', None)
     return Goal(key, f'{label} in {data.maps[mid]["name"]}', data.maps[mid]['constant'], x, y, face)
+
+
+def unavailable(policy, snapshot, Goal):
+    """Allow map transitions to finish before abandoning a postgame outing."""
+    activity = policy.collection['postgame']['activity']
+    activity['unavailable_steps'] = activity.get('unavailable_steps', 0) + 1
+    if activity['unavailable_steps'] > 20:
+        return abandon(policy)
+    return Goal('collection_wait', 'Wait for the encounter map to finish loading',
+                policy.data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
 
 
 def abandon(policy):

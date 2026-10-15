@@ -1,16 +1,22 @@
-# Release status: 0.5.0 DRAFT, not published
+# Release status: 0.5.0 beta, stable release pending
 
-This is a draft note for the 0.5.0 release candidate. Nothing here claims that 0.5.0 has
-been tagged, published or deployed, and there is no 0.5.0 publication receipt yet.
-The last published release is [0.4.20](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.20);
+The 0.5.0 beta series is published for testing. The latest stable release remains
+[0.4.20](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.20), and
 its [receipt](docs/validation/release-0.4.20.json) is unchanged.
+There is no final 0.5.0 publication receipt or stable container release yet.
 
-0.5.0 moves every adventure to the Rust emulator (PyBoy RS through Core 0.2) and adds
+0.5.0 moves every adventure to the Rust emulator (PyBoy RS 0.1.2 through Core 0.7.0) and adds
 Gold, Silver and Crystal. See the [release notes](docs/release-notes.md). Core and PyBoy RS
 are not on PyPI: PokeSim depends on their GitHub release wheels, named in `pyproject.toml` and
 hashed in `uv.lock`. A release is not ready until those two releases exist, the lock matches them
 and the publication workflow has produced a receipt.
 Both now exist: Core is pinned to its 0.7.0 release wheel and PyBoy RS to 0.1.2.
+
+The [beta 3 gameplay receipt](docs/validation/gen2-rust-beta3.json) records fresh Rust campaigns
+through Red in Gold, Silver and Crystal, 100-encounter postgame checks with a mid-battle restart,
+all three native Gen II cable pairings and all six Red/Blue Time Capsule pairings. Each fresh
+campaign uses Cyndaquil and seed 1. These checks close the fresh-campaign and private cable
+evidence gaps for that configuration, without claiming every starter, seed or platform.
 
 ## Known limits, deliberately not addressed here
 
