@@ -30,7 +30,7 @@ This release changes the emulator under every adventure and adds Yellow, Gold, S
   avoiding repeated losses without experience gains.
 - **Library cards.** Removed the generic no-progress warning from adventure cards.
 
-## Upgrading is one-way for Gen II
+## Yellow and Gen II need 0.5.0 or later
 
 Back up the complete library first, as a copy of the whole data directory, before you
 start the new version.
@@ -44,7 +44,8 @@ start the new version.
   Gold, Silver and Crystal adventures always lock the clock to game time. Red, Blue and Yellow
   adventures use the host clock, so only verification tools lock theirs.
 
-To roll back, stop the app and start the 0.4.20 image or install. Restore the backup only if you have Gen II adventures.
+To roll back, stop the app and start the 0.4.20 image or install. Restore the backup or remove
+any Yellow, Gold, Silver and Crystal adventures before starting 0.4.20.
 Use `ghcr.io/afk-sapien/pokesim:0.5.0` for the versioned Docker image. The release downloads
 include Compose files, installation scripts, the Python wheel, source archive and an offline
 Linux amd64 image, with checksums and a release manifest. Python users can follow the

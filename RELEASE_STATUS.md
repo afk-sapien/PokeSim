@@ -1,16 +1,19 @@
-# Release status: 0.5.0 prepared for publication
+# Release status: 0.5.0 published
 
-The 0.5.0 release is prepared from the tested beta 3 gameplay code. The publication workflow
-must verify the exact tagged commit, build the packages and container, and verify the uploaded
-assets before making the release public. The publication receipt is recorded after that succeeds.
+[PokeSim 0.5.0](https://github.com/afk-sapien/PokeSim/releases/tag/v0.5.0) is published as the latest
+stable release from the tested beta 3 gameplay code. All 24 required CI and installation jobs
+passed on the exact tagged commit. The publication workflow built and tested the packages and
+container, verified anonymous image access, and checked all 12 uploaded asset digests.
+Independent public-download checks and a fresh wheel Library smoke test also passed.
+See the [0.5.0 publication receipt](docs/validation/release-0.5.0.json) for the exact revision,
+image digest and validation scope. The versioned image is `ghcr.io/afk-sapien/pokesim:0.5.0`.
 The [0.4.20 receipt](docs/validation/release-0.4.20.json) remains available for rollback.
 
 0.5.0 moves every adventure to the Rust emulator (PyBoy RS 0.1.2 through Core 0.7.0) and adds
 Gold, Silver and Crystal. See the [release notes](docs/release-notes.md). Core and PyBoy RS
 are not on PyPI: PokeSim depends on their GitHub release wheels, named in `pyproject.toml` and
-hashed in `uv.lock`. A release is not ready until those two releases exist, the lock matches them
-and the publication workflow has produced a receipt.
-Both now exist: Core is pinned to its 0.7.0 release wheel and PyBoy RS to 0.1.2.
+hashed in `uv.lock`. Both dependency releases exist, their published assets match the lock,
+and the publication receipt records the completed release checks.
 
 The [beta 3 gameplay receipt](docs/validation/gen2-rust-beta3.json) records fresh Rust campaigns
 through Red in Gold, Silver and Crystal, 100-encounter postgame checks with a mid-battle restart,

@@ -175,8 +175,8 @@ a login.
 
 ## Help and documentation
 
-PokeSim is an experimental beta. Adventures can reach the Hall of Fame, but the
-automatic player can still get stuck. See [release status and known limits](RELEASE_STATUS.md).
+Adventures can reach the Hall of Fame, but the automatic player can still get stuck.
+See [release status and known limits](RELEASE_STATUS.md).
 
 - [Gameplay and notifications](docs/guide.md)
 - [Statistics and counting rules](docs/adventure-statistics.md)

@@ -1,0 +1,54 @@
+{
+  "version": "0.5.0",
+  "tag": "v0.5.0",
+  "revision": "835203dfd8b3ad796eae3fbedddfed2251dcb4b8",
+  "release_url": "https://github.com/afk-sapien/PokeSim/releases/tag/v0.5.0",
+  "published_at": "2026-10-16T05:49:19Z",
+  "image": "ghcr.io/afk-sapien/pokesim:0.5.0",
+  "image_digest": "ghcr.io/afk-sapien/pokesim@sha256:d99066c8503353d3144b0baa7441878ff7f00b79d4b874f25441932a973cefac",
+  "image_id": "sha256:1256fbe960269d0845d17541517b9a5e013f1f716f47b8cf19fc485a476871c9",
+  "assets": 12,
+  "prs": [
+    52,
+    99
+  ],
+  "publication_run": 38856329368,
+  "publication_url": "https://github.com/afk-sapien/PokeSim/actions/runs/38856329368",
+  "status": "published",
+  "anonymous_downloads": "passed for all 11 non-image-archive assets",
+  "uploaded_checksums": "passed for all 12 assets in the publication workflow",
+  "anonymous_registry_pull": "passed in the publication workflow",
+  "anonymous_registry_manifest": "independently verified against the release manifest after publication",
+  "offline_image_archive": "upload digest verified, not downloaded again locally",
+  "validation": {
+    "exact_commit_ci_jobs": 10,
+    "ci_run": 38856320168,
+    "ci_url": "https://github.com/afk-sapien/PokeSim/actions/runs/38856320168",
+    "exact_commit_python_install_jobs": 14,
+    "python_install_run": 38856325439,
+    "python_install_url": "https://github.com/afk-sapien/PokeSim/actions/runs/38856325439",
+    "required_checks": "all 24 passed",
+    "publication_jobs": "all 4 passed",
+    "python_versions": [
+      "3.11",
+      "3.12",
+      "3.14"
+    ],
+    "platforms": [
+      "Linux x86_64",
+      "Linux ARM64",
+      "macOS Intel",
+      "macOS Apple silicon",
+      "Windows"
+    ],
+    "public_wheel_build_identity": {
+      "version": "0.5.0",
+      "revision": "835203dfd8b3ad796eae3fbedddfed2251dcb4b8",
+      "dirty": false
+    },
+    "public_wheel_fresh_install": "passed on Linux x86_64 with Python 3.14.7",
+    "public_wheel_library_smoke": "passed readiness, static assets, session, duplicate launch, CSRF protection and clean shutdown",
+    "gameplay_receipt": "docs/validation/gen2-rust-beta3.json",
+    "scope": "Gameplay code is unchanged from beta 3. The linked receipt retains its starter, seed and endurance limitations."
+  }
+}
