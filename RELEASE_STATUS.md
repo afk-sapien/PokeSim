@@ -1,9 +1,9 @@
-# Release status: 0.5.0 beta, stable release pending
+# Release status: 0.5.0 prepared for publication
 
-The 0.5.0 beta series is published for testing. The latest stable release remains
-[0.4.20](https://github.com/afk-sapien/PokeSim/releases/tag/v0.4.20), and
-its [receipt](docs/validation/release-0.4.20.json) is unchanged.
-There is no final 0.5.0 publication receipt or stable container release yet.
+The 0.5.0 release is prepared from the tested beta 3 gameplay code. The publication workflow
+must verify the exact tagged commit, build the packages and container, and verify the uploaded
+assets before making the release public. The publication receipt is recorded after that succeeds.
+The [0.4.20 receipt](docs/validation/release-0.4.20.json) remains available for rollback.
 
 0.5.0 moves every adventure to the Rust emulator (PyBoy RS 0.1.2 through Core 0.7.0) and adds
 Gold, Silver and Crystal. See the [release notes](docs/release-notes.md). Core and PyBoy RS
@@ -45,7 +45,7 @@ evidence gaps for that configuration, without claiming every starter, seed or pl
 - **No formatter or type checker.** Ruff runs the Pyflakes rules only, and 15% of functions carry
   return annotations.
 
-Gameplay remains an experimental beta. Synthetic tests, copied-save marathon and purchase replays, and
+Gameplay validation is bounded. Synthetic tests, copied-save marathon and purchase replays, and
 demonstration-ROM worker checks do not establish uninterrupted multi-day cartridge gameplay on
 all platforms. Existing private gameplay and cable-trading receipts retain their original scope.
 Back up the complete library before upgrading. Import legacy adventures into a new application

@@ -1,4 +1,4 @@
-# PokeSim 0.5.0 experimental beta
+# PokeSim 0.5.0 release
 
 This release changes the emulator under every adventure and adds Yellow, Gold, Silver and Crystal.
 
@@ -45,8 +45,21 @@ start the new version.
   adventures use the host clock, so only verification tools lock theirs.
 
 To roll back, stop the app and start the 0.4.20 image or install. Restore the backup only if you have Gen II adventures.
-The beta releases provide desktop wheels on GitHub. The Docker quickstart continues to use the
-stable release until the final 0.5.0 image is published. Python users can follow the
-[installation guide](desktop.md) and the installation command on the selected beta release.
+Use `ghcr.io/afk-sapien/pokesim:0.5.0` for the versioned Docker image. The release downloads
+include Compose files, installation scripts, the Python wheel, source archive and an offline
+Linux amd64 image, with checksums and a release manifest. Python users can follow the
+[installation guide](desktop.md).
 
-Gameplay remains an experimental beta. See [release status](../RELEASE_STATUS.md).
+## Known limitations
+
+The verified fresh Gen II campaigns use Cyndaquil and seed 1. Totodile and Chikorita passed
+first-gym checks, but full campaigns for those starters and multi-day unattended operation
+remain outside this validation. Repeated League rotations have limited endurance coverage.
+
+A permanently failing committed trade can keep both adventures held for recovery, including
+their stop, archive, edit and backup controls. Recovery preserves the paired commit instead
+of abandoning a trade that could already have completed on one side.
+
+The reported Blue music glitches remain unconfirmed on this release. See
+[issue 38](https://github.com/afk-sapien/PokeSim/issues/38) and
+[release status](../RELEASE_STATUS.md) for the remaining limitations.
