@@ -808,12 +808,16 @@
 [data-slot="gold"], [data-version="gold"] { --cart: #B08A2E; }
 [data-slot="silver"], [data-version="silver"] { --cart: #8C949C; }
 [data-slot="crystal"], [data-version="crystal"] { --cart: #4AA3B5; }
+/* Six slots, so the shelf is always whole rows: six, three, two or one. */
 .cartridge-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--s3);
   width: 100%;
 }
+@media (max-width: 1139px) { .cartridge-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .cartridge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .cartridge-grid { grid-template-columns: minmax(0, 1fr); } }
 .cartridge-slot {
   display: grid;
   /* Art, title and details, then the message, then the keys pinned to the bottom. */
