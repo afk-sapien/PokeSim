@@ -26,6 +26,9 @@ WIDTHS = [(390, 844), (1024, 768), (1440, 900)]
 THEMES = ['light', 'dark']
 TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']
 FAIL = {'serious', 'critical'}
+# Lesser rules the pages already pass, kept failing so they stay fixed.
+FAIL_RULES = {'landmark-complementary-is-top-level', 'landmark-no-duplicate-banner', 'landmark-unique',
+              'aria-allowed-role'}
 
 # Each entry is a deliberate design choice with its reason, never a way to hide a real problem.
 # A finding is allowed when its element sits inside the selector.
@@ -68,8 +71,8 @@ def scan(page, name, width, theme, root=None):
 
 
 def check(found):
-    serious = [row for row in found if row['outcome'] == 'violation' and row['impact'] in FAIL]
-    lines = [f'{len(serious)} serious or critical accessibility findings:']
+    serious = [row for row in found if row['outcome'] == 'violation' and (row['impact'] in FAIL or row['rule'] in FAIL_RULES)]
+    lines = [f'{len(serious)} serious, critical or held accessibility findings:']
     for row in serious:
         lines.append(f'{row["impact"]:<9} {row["rule"]:<24} {row["page"]} {row["width"]} {row["theme"]}  {row["target"]}')
         lines.append(f'{"":<10}{row["summary"][:300]}')
