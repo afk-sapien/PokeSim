@@ -10,6 +10,7 @@ Existing Pokémon are never removed by an event reset.
 | Fossil | 100,000 steps | Collect Helix or Dome in Mt. Moon, or Old Amber in Pewter, then visit Cinnabar's lab |
 | Fighting Dojo | 100,000 steps | Defeat the Karate Master again and choose Hitmonlee or Hitmonchan |
 | NPC exchange | 100,000 steps per completed exchange | Repeat the trade, supplying an eligible partner |
+| Snorlax | 100,000 steps | The Route 12 Snorlax blocks the road again. The AI wakes it with the Poké Flute and battles it |
 | Legendary return | 1,000,000 steps | Revisit previously acquired Articuno, Zapdos, Moltres, or Mewtwo |
 | First Mew | Become Champion | A custom level-5 gift joins the PC |
 | Later Mew | 1,000,000 steps, then a new League victory | Another custom level-5 Mew joins the PC |
@@ -21,7 +22,13 @@ The supported repeating NPC exchanges are Mr. Mime, Farfetch'd, Lickitung, and
 Jynx. These use the original cartridge trades, including the requested species
 and native individual stats. They do not generate randomized trade DVs.
 
-Each gift, fossil, dojo, and exchange activity holds one opportunity. Unclaimed
+Snorlax returns after the original Route 12 battle. Every battle counts, even
+one lost to a blackout. A battle that ends without a catch leaves the road clear
+until the player walks off Route 12, then Snorlax is back. A missing Snorlax is
+a new Pokédex entry, so the AI goes for it before repeat work. The Route 16
+Snorlax stays one of a kind.
+
+Each gift, fossil, dojo, exchange, and Snorlax activity holds one opportunity. Unclaimed
 opportunities do not accumulate. Claiming one starts its next walking requirement.
 The fossil opportunity is claimed when the fossil item is collected. The AI then
 brings it to the lab. A fossil already in the bag or lab delays another expedition.

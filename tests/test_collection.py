@@ -476,3 +476,49 @@ def test_evolution_training_reuses_destinations_and_preserves_level_filters(monk
     finally:
         for cache in caches:
             cache.cache_clear()
+
+
+def snorlax_world(**kw):
+    from pokesim.policies.collection import SNORLAX_SOURCE
+    c = Collection()
+    c.completed_champion = True
+    c.returned_events = {'snorlax': {'dex': 143, 'room': MAPS['ROUTE_12'], 'item': None}}
+    items = tuple((ITEMS[n], q) for n, q in (('POKE_BALL', 10), ('ULTRA_BALL', 10), ('POKE_FLUTE', 1),
+                                             ('OLD_ROD', 1), ('GOOD_ROD', 1), ('SUPER_ROD', 1)))
+    base = dict(map=MAPS['ROUTE_12'], x=10, y=70, hall_of_fame_count=1, items=items,
+                owned=frozenset(range(1, 152)) - {143}, party=(mon(hp=200, max_hp=200, level=60),))
+    base.update(kw)
+    return c, state(**base), SNORLAX_SOURCE
+
+
+def test_returning_snorlax_needs_the_league_and_the_flute():
+    c, s, source = snorlax_world()
+    assert c.available(s, source)
+    assert not c.available(replace(s, items=tuple(i for i in s.items if i[0] != ITEMS['POKE_FLUTE'])), source)
+    c.completed_champion = False
+    assert not c.available(s, source)
+
+
+def test_missing_returning_snorlax_is_a_new_pokedex_entry():
+    from pokesim.policies.director import new_entry
+    c, s, _ = snorlax_world()
+    nav = Navigator()
+    nav.update_story(s)
+    c.elapsed = 10000
+    goal = c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
+    assert goal.key == 'collect_static' and c.project['event_return'] == 'snorlax'
+    assert new_entry(c.project)
+    # The flute tiles beside Snorlax are the targets.
+    assert set(goal.targets) == {(MAPS['ROUTE_12'], 10, 63), (MAPS['ROUTE_12'], 11, 62),
+                                 (MAPS['ROUTE_12'], 10, 61), (MAPS['ROUTE_12'], 9, 62)}
+
+
+def test_snorlax_battle_without_a_catch_ends_the_project():
+    c, s, _ = snorlax_world()
+    nav = Navigator()
+    nav.update_story(s)
+    c.elapsed = 10000
+    c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
+    c.observe(replace(s, event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_BEAT_ROUTE12_SNORLAX')))
+    assert c.project is None
+    assert c.history[-1].endswith('Snorlax battle ended without a catch')

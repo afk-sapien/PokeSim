@@ -31,7 +31,7 @@ def steps(store, total):
     store.set(STEPS, {'total': total, 'available': True})
 
 
-@pytest.mark.parametrize('key', ['eevee', 'dojo', 'fossil', 'trade_1', 'trade_4', 'trade_5', 'trade_6'])
+@pytest.mark.parametrize('key', ['eevee', 'dojo', 'snorlax', 'fossil', 'trade_1', 'trade_4', 'trade_5', 'trade_6'])
 def test_native_opportunity_requires_new_steps_and_consumes_once(world, key):
     store, snapshot, memory = world
     spec = next(a for a in events.activities('helix', 107) if a.key == key)
@@ -198,3 +198,58 @@ def test_trade_claim_survives_duplicate_cleanup_during_preparation(world):
     acquired = replace(at_house, party=(*at_house.party, mon(species=sid(124))))
     events.observe(store, acquired, memory)
     assert 'trade_6' not in events.available(store)
+
+
+def snorlax_open(world):
+    store, snapshot, memory = world
+    beaten, hidden = events.snorlax()
+    events.write(memory, beaten, True)
+    events.write(memory, hidden, True)
+    events.observe(store, snapshot, memory)
+    steps(store, 5100)
+    events.observe(store, snapshot, memory)
+    assert 'snorlax' in events.available(store)
+    return beaten, hidden
+
+
+def test_snorlax_battle_is_judged_after_leaving_route_12(world):
+    store, snapshot, memory = world
+    beaten, hidden = snorlax_open(world)
+    route = replace(snapshot, map=MAPS['ROUTE_12'])
+    events.observe(store, route, memory)
+    # The battle hides Snorlax and sets the beaten flag, and the player has not caught it.
+    events.write(memory, beaten, True)
+    events.write(memory, hidden, True)
+    assert events.observe(store, route, memory) == ([], False)
+    # The road stays clear while the player is still on Route 12.
+    assert events.read(memory, hidden) and 'snorlax' in events.available(store)
+    rows, changed = events.observe(store, snapshot, memory)
+    assert changed and not rows and 'snorlax' in events.available(store)
+    assert not events.read(memory, beaten) and not events.read(memory, hidden)
+
+
+def test_caught_snorlax_closes_the_return_after_leaving_route_12(world):
+    store, snapshot, memory = world
+    beaten, hidden = snorlax_open(world)
+    route = replace(snapshot, map=MAPS['ROUTE_12'])
+    events.observe(store, route, memory)
+    events.write(memory, beaten, True)
+    events.write(memory, hidden, True)
+    caught = replace(route, party=(*route.party, mon(species=sid(143))))
+    assert not events.observe(store, caught, memory)[0]
+    rows, _ = events.observe(store, replace(caught, map=MAPS['PALLET_TOWN']), memory)
+    assert [row.title for row in rows] == ['Caught the returning Snorlax']
+    assert 'snorlax' not in events.available(store)
+    assert events.read(memory, beaten) and events.read(memory, hidden)
+
+
+def test_snorlax_lost_to_a_blackout_still_returns(world):
+    store, snapshot, memory = world
+    beaten, hidden = events.snorlax()
+    # A blackout ends the script before the beaten flag, leaving Snorlax hidden.
+    events.write(memory, hidden, True)
+    events.observe(store, snapshot, memory)
+    assert 'snorlax' in store.get(events.KEY)['tickets']
+    steps(store, 5100)
+    assert events.observe(store, snapshot, memory)[1]
+    assert not events.read(memory, hidden) and not events.read(memory, beaten)

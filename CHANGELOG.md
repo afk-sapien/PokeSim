@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bring the Route 12 Snorlax back in Red, Blue and Yellow. After becoming Champion and battling the original Snorlax, every 100,000 steps it blocks the road again, set by the same setting as gift and trade returns. The trainer walks to it with the Poké Flute, wakes it and battles it. A battle that ends without a catch waits for the trainer to leave Route 12 before Snorlax returns, so the road stays clear in the meantime. A missing Snorlax is a new Pokédex entry and goes before repeat work.
+
 - Fix Gold, Silver and Crystal Time Capsule trades stalling at the Pokémon Center PC until "The trainer did not reach the Cable Club before the preparation deadline". When the lead had fainted and the only other party member could not enter the Time Capsule, the game refused to deposit that last Pokémon able to battle, so the PC opened and closed for the whole preparation while the partner waited at the Cable Club. The trainer now walks to the nurse first, then deposits it at the nearest PC from there. A full party also skips a reserve whose deposit the game would refuse.
 
 - Fix the Live page totals overlapping between phone and desktop widths. From 641 to 1099 pixels the badges, registered count, areas, League wins, money and play hours were squeezed into one row, so Gen II's sixteen badges ran into the registered count and play hours were cut off. The badges now take their own row with the five readings beneath.

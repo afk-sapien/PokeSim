@@ -43,6 +43,16 @@ def held_count(snapshot, species):
     boxed = [(sid, level) for box, sid, level, nick in stored] if stored else snapshot.boxed_pokemon
     return sum(mon.species == species for mon in snapshot.party) + sum(sid == species for sid, level in boxed)
 
+SNORLAX = next(sid for sid, row in SPECIES.items() if row['dex'] == 143)
+# The Route 12 Snorlax, woken with the Poké Flute. Walking reopens it after the first battle.
+SNORLAX_SOURCE = {'map': MAPS['ROUTE_12'], 'method': 'static', 'fragment': 'SNORLAX',
+                  'flag': 'EVENT_BEAT_ROUTE12_SNORLAX'}
+
+
+def snorlax_project(project):
+    return bool(project and project.get('method') == 'static' and project.get('fragment') == 'SNORLAX')
+
+
 def legendary_project(project):
     return bool(project and project.get('method') == 'static'
                 and (SPECIES.get(project.get('species'), {}).get('dex') in (144, 145, 146, 150)
@@ -407,6 +417,14 @@ class Collection:
                 finished = caught >= project.get('catch_goal', 1)
             if project.get('event_return'):
                 finished = project['event_return'] not in getattr(self, 'returned_events', {})
+            if (snorlax_project(project) and not s.in_battle and project.get('flag')
+                    and event_set(s.event_flags, project['flag'])):
+                # The walking return closes once Route 12 is behind, so judge the battle here.
+                finished = (max(0, held_count(s, target) - project['initial_count']) >= 1 if project.get('repeat')
+                            else dex(target) in s.owned)
+                if not finished:
+                    self.abandon('Snorlax battle ended without a catch')
+                    return
             if project.get('legendary_return'):
                 finished = dex(target) not in getattr(self, 'returned_legendaries', ())
             if project.get('upgrade_evolution'):
@@ -453,7 +471,9 @@ class Collection:
             self.report = self.describe(s)
 
     def sources(self):
-        return {int(k):v for k,v in DATA['versions'].get(self.version, {}).items()}
+        rows = {int(k):v for k,v in DATA['versions'].get(self.version, {}).items()}
+        rows[SNORLAX] = [*rows.get(SNORLAX, ()), SNORLAX_SOURCE]
+        return rows
 
     def returned_event(self, sid, source):
         for key, event in getattr(self, 'returned_events', {}).items():
@@ -470,6 +490,9 @@ class Collection:
         if source.get('fragment') == 'ARTICUNO' and not any(70 in p.moves for p in s.party):
             return False
         if source.get('flag') in EVENTS and event_set(s.event_flags, source['flag']):
+            return False
+        if snorlax_project(source) and not (self.completed_champion and dict(s.items).get(ITEMS['POKE_FLUTE'])):
+            # Before the League the story wakes Snorlax. Without the flute it cannot wake.
             return False
         if mode in ('gift','static'):
             objects = WORLD[source['map']]['objects']
@@ -538,6 +561,8 @@ class Collection:
                 if d in (144, 145, 146, 150) and any(
                         r.get('flag') and event_set(s.event_flags, r['flag']) for r in rows):
                     reason = 'Missed legendary encounter. Leave the area and prepare for its return'
+                if d == 143 and event_set(s.event_flags, SNORLAX_SOURCE['flag']):
+                    reason = 'Snorlax woke up and left. Walking brings it back to Route 12'
             entries.append({'dex':d,'name':name(sid),'species':sid,'status':status,'reason':reason,
                             'methods':sorted({r['method'] for r in rows})})
         evos = []
@@ -657,7 +682,8 @@ class Collection:
                 project = dict(source,species=sid)
                 event_key = self.returned_event(sid, source)
                 if event_key:
-                    project.update(event_return=event_key, repeat=True, initial_count=held_count(s, sid), catch_goal=1)
+                    project.update(event_return=event_key, repeat=True, initial_count=held_count(s, sid), catch_goal=1,
+                                   needed_capture=dex(sid) not in s.owned)
                 elif mode == 'fossil' and dex(sid) in s.owned:
                     project.update(repeat=True, initial_count=held_count(s, sid), catch_goal=1)
                 if mode in REPEATABLE:

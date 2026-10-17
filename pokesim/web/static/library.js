@@ -819,7 +819,7 @@
         input.closest('label').hidden = johto
         input.disabled = johto || running(game)
       }
-      $('#settings-event-steps-label').textContent = johto ? 'Steps between Sudowoodo and Snorlax returns' : 'Steps between gift and trade returns'
+      $('#settings-event-steps-label').textContent = johto ? 'Steps between Sudowoodo and Snorlax returns' : 'Steps between gift, trade and Snorlax returns'
       $('#adventure-settings').showModal()
       return
     }
