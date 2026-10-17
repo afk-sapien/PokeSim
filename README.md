@@ -1,93 +1,76 @@
 # PokeSim
 
-**Pokémon Red, Blue, Yellow, Gold, Silver and Crystal adventures that keep going while you're away.**
+**Generation I and II Pokémon adventures that keep going while you're away.**
+
+| Generation | Games | Pokédex |
+| --- | --- | --- |
+| I | Red, Blue and Yellow | 151 Kanto species |
+| II | Gold, Silver and Crystal | 251 species across Johto and Kanto |
 
 Watch an automatic player catch Pokémon, earn badges and challenge the League in
 your browser. Take control whenever you like, then hand the adventure back.
 Everything runs locally, with no model API or subscription.
 
-![A live Red adventure training Magikarp, traveling and battling alongside its party](docs/images/live-adventure.gif)
+![A live Crystal adventure with all 16 badges and 251 Pokémon registered, battling Will of the Elite Four](docs/images/gen2-live.gif)
 
-An eight-second clip from a running adventure. [Still image](docs/images/live-adventure.jpg).
+Eight seconds of a Crystal adventure at the Elite Four, with all 16 badges and all 251 Pokémon registered.
 
 ## Keep the adventure going
 
-- **Independent games:** Run adventures from both generations side by side, each with its own saves
-  and speed. Check CPU, memory and observed speed in the Library.
+- **Six games side by side:** Run any mix of Generation I and II adventures, each with
+  its own saves and speed. Check CPU, memory and observed speed in the Library.
 - **A growing collection:** Explore the Pokédex and search every PC box. Compare
   power, types and DV quality to find promising Pokémon.
-- **They trade with each other:** Adventures automatically meet in the in-game
-  Cable Club and exchange Pokémon over a virtual link cable, including trade evolutions.
+- **They trade with each other:** Adventures meet in the in-game Cable Club and
+  exchange Pokémon over a virtual link cable, including trade evolutions. Generation I
+  and II games trade with each other through the Time Capsule.
 - **Milestones and stats:** Follow catches, League wins, collection strength and
   marathon personal bests in the Journal.
 - **Life after the League:** Keep training, rotate League teammates, revisit
   eligible encounters and earn new Pokémon.
 - **Your own touch:** Add nickname prefixes and suffixes, take over the controls,
-  or export a `.sav` (a `.zip` with the `.rtc` clock for Gen II) to continue in another emulator.
+  or export your save to continue in another emulator.
 
 | Journal entries | Adventure stats |
 | --- | --- |
 | [![Journal entries](docs/images/journal-panel.jpg)](docs/images/journal-panel.jpg) | [![Adventure stats](docs/images/stats-panel.jpg)](docs/images/stats-panel.jpg) |
 
-Yellow adventures start with Pikachu and follow Yellow's own story, including Jessie and
-James and the gift starters. They trade with Red and Blue over the Cable Club and with Gold,
-Silver and Crystal through the Time Capsule. A new Yellow game was played to the Champion on
-the Rust backend for this release.
+## Generation I: Red, Blue and Yellow
 
-Gold, Silver and Crystal adventures play through all 16 badges and Red and work toward
-the 251-species Pokédex, with breeding and held items. Generation II runs on the Rust
-emulator (PyBoy RS through PokeSim Core) only. There is no PyBoy fallback: 0.5.0 does not
-depend on PyBoy, and 0.4.x, which does, has no Generation II support.
+![A live Blue adventure walking Victory Road and battling a wild Geodude](docs/images/gen1-live.gif)
 
-The cartridges contain a real-time clock. In the app, a Generation II adventure runs that clock
-on game time: it advances with emulated frames, so at 1x it keeps pace with a console and at
-Max the day, night and weekday arrive as fast as the run plays. It never runs backward, even
-after a restart, a save reload, a trade or a crash. The Live page shows the in-game weekday,
-time and period. The verification tools and the checkpoints made for them lock the clock to a
-fixed instant so that runs are reproducible. Exporting a Generation II adventure downloads a `.zip` holding the 32 KiB `.sav` and its ten-byte
-`.rtc` clock file with the same base name. Put both next to the ROM, since a save without its clock
-is read as having lost the time. Generation I exports remain a single `.sav`. A checkpoint saved with a
-locked clock is refused by 0.4.x.
+Red and Blue adventures play the Kanto story to the Hall of Fame and keep going.
+Yellow starts with Pikachu and follows its own story, including Jessie and James
+and the gift starters. Exports are a standard `.sav`.
 
-Verified for this release on the Rust backend, with owner-supplied cartridges: the Library
-runtime and checkpoint restart for each of Gold, Silver and Crystal; `.sav` export with a fresh
-cartridge Continue and clock for each; Time Capsule exchange of a prepared Gen II offer with both
-Red and Blue (six pairings); and the Red and Blue Cable Club exchange in both directions.
-Not re-run on this backend: the full campaigns from a new game. The recorded campaigns in the
-[Generation II notes](docs/gen2-exploration.md) were played on development builds that used
-PyBoy 2.7.0, before the move to the Rust backend, and replay identically from their saved states, but 0.5.0 has not played a fresh Gold, Silver or Crystal game to the League.
+## Generation II: Gold, Silver and Crystal
 
-## Upgrading is one way for Generation II
+Gold, Silver and Crystal adventures earn all 16 badges, beat Red and work toward the
+251-species Pokédex, with breeding, held items and roaming beasts. Crystal adds the
+Battle Tower and an optional Celebi event.
 
-Copy the whole data directory (the library) somewhere safe before you upgrade. To go back,
-stop the app and start the previous version.
-
-- Red and Blue adventures need no restore. Their saves and manifests keep the
-  `pyboy_version: "2.7.0"` tag that 0.4.x checks, so 0.4.x opens them as they are.
-- Gold, Silver and Crystal adventures need 0.5.0 or later. 0.4.x cannot open them, so restore
-  your copy of the library or remove those adventures before you go back.
-- Locked-clock checkpoints are refused by 0.4.x. Only verification tools make them.
-
-See [Generation II support and validation](docs/gen2-exploration.md) for cartridge revisions,
-test evidence and compatibility boundaries.
+The cartridge clock that decides day, night and weekday events runs on game time. At 1x
+it keeps pace with a console, and at Max the days pass as fast as the run plays. Exports
+are a `.zip` holding the `.sav` and its `.rtc` clock file. Put both next to the ROM.
+[How the clock works](docs/guide.md) and [cartridge details](docs/gen2-exploration.md).
 
 ## The collection is half the fun
 
-In Red and Blue, want all 151? Run both games and let them trade version exclusives and
-trade evolutions automatically. New adventures created in the Library have
-these rewards and return visits **enabled by default**, so the collection keeps
-growing beyond the original games' one-time encounters:
+Want every species? Run more than one game and let them trade version exclusives
+and trade evolutions automatically, across generations too. New adventures created in the
+Library have these rewards and return visits **enabled by default**, so the collection
+keeps growing beyond the original games' one-time encounters:
 
-- **Another Eevee, another fossil:** After becoming Champion and unlocking the
-  original events, revisit gifts, fossils, the Fighting Dojo and supported NPC
-  trades after **100,000 steps** by default.
-- **Legendary rematches:** Previously acquired legendary birds and Mewtwo can
-  return to be caught again every **1,000,000 steps** by default.
+- **Another Eevee, another fossil (Generation I):** After becoming Champion and
+  unlocking the original events, revisit gifts, fossils, the Fighting Dojo and
+  supported NPC trades after **100,000 steps** by default.
+- **Legendary rematches (Generation I):** Previously acquired legendary birds and
+  Mewtwo can return to be caught again every **1,000,000 steps** by default.
 - **A mythical reward:** A custom Mew gift arrives in the PC after your first
-  League win. Mew isn't normally obtainable in either game. Another
+  League win. Mew isn't normally obtainable in these games. Another
   million steps followed by a new League win earns another.
-- **More starters:** Receive a random Bulbasaur, Charmander or
-  Squirtle after each new League win.
+- **More starters:** Receive a random Kanto starter in Generation I, or a random
+  Johto starter in Generation II, after each new League win.
 
 Change or disable these rewards in each adventure's settings.
 [How return visits work](docs/step-rewards.md).
@@ -105,8 +88,7 @@ Change or disable these rewards in each adventure's settings.
 - **The Kanto Marathon:** Sometimes the next big goal is a run around Kanto.
   Follow the race and see whether your trainer beats their personal best.
 
-The expanded name pool and Discord and Telegram support arrived in
-[0.5.0](docs/release-notes.md). Follow the [changelog](CHANGELOG.md) for new additions.
+Follow the [changelog](CHANGELOG.md) for new additions.
 
 ## Your adventure library
 
@@ -116,7 +98,7 @@ one cartridge slot in Settings → Game cartridges. Drop a ROM on any slot and P
 recognises the game and files it in the right one. New adventure then lets you pick
 from the cartridges you have installed.
 
-![Library with Red and Blue running alongside a saved adventure](docs/images/library.jpg)
+![Library running Red, Blue, Yellow, Gold, Silver and Crystal at once](docs/images/library.jpg)
 
 ## Install
 
@@ -141,7 +123,8 @@ On Windows PowerShell, use `curl.exe`. Docker keeps your library in a persistent
 volume. Keep this folder for future Compose commands.
 
 **Already installed?** Keep your existing Compose file and data mount. Back up
-before upgrading. The [self-hosting guide](docs/self-hosting.md) covers updates,
+before upgrading, since Yellow, Gold, Silver and Crystal adventures cannot be opened by
+earlier releases. See [update and roll back](docs/operations.md#update-and-roll-back). The [self-hosting guide](docs/self-hosting.md) covers updates,
 remote access and custom ports.
 
 ### Desktop: install with uv
