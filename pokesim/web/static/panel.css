@@ -1101,9 +1101,11 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 
 /* ==========================================================================
    6  RESPONSIVE
-     1100px  the rail's tabs take a row of their own.
-      860px  the stage and the party stack. The party goes two bays abreast
-             so it does not become a column of very wide, empty strips.
+     1279px  an adventure's tabs take a row of their own, and the stage and
+             the party stack. The party goes two bays abreast so it does not
+             become a column of very wide, empty strips.
+     1100px  the page gutter narrows.
+      860px  the Library's tabs take a row of their own.
       640px  the phone. The rail stops being sticky and hands that job to the
              tab strip alone; everything goes single file.
    A bay also answers to its own width, so it is right in either layout.
@@ -1136,24 +1138,33 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .mon-head .name { flex: 1 0 100%; }
 }
 
-/* The tabs share one line with the brand, the switcher and the status only
-   from 1280px; narrower, they take their own full-width row instead of being
-   clipped. */
+/* An adventure's six tabs share one line with the brand, the switcher and the
+   status only from 1280px. The Library's three fit down to 861px. Narrower,
+   the tabs take their own full-width row instead of being clipped. */
 @media (max-width: 1279px) {
-  .rail-inner { flex-wrap: wrap; column-gap: var(--s4); }
-  .rail nav:not(.breadcrumb) {
+  body:not(.library) .rail-inner { flex-wrap: wrap; column-gap: var(--s4); }
+  body:not(.library) .rail nav:not(.breadcrumb) {
     order: 3;
     width: 100%;
     margin-left: 0;
     border-top: var(--hair) solid var(--rule-faint);
   }
-  .rail nav:not(.breadcrumb) a { flex: 1 0 auto; justify-content: center; min-height: 44px; }
-  .rail nav:not(.breadcrumb) a:first-child { border-left: 0; }
-  .rail nav:not(.breadcrumb) a:last-child { border-right: 0; }
-  .connection { margin-left: auto; }
+  body:not(.library) .rail nav:not(.breadcrumb) a { flex: 1 0 auto; justify-content: center; min-height: 44px; }
+  body:not(.library) .rail nav:not(.breadcrumb) a:first-child { border-left: 0; }
+  body:not(.library) .rail nav:not(.breadcrumb) a:last-child { border-right: 0; }
+  body:not(.library) .connection { margin-left: auto; }
   .rail-key { margin-left: calc(var(--s2) - var(--s4)); }
 
-  .brandplate { min-height: 56px; }
+  body:not(.library) .brandplate { min-height: 56px; }
+}
+@media (max-width: 860px) {
+  .library .rail-inner { flex-wrap: wrap; column-gap: var(--s4); }
+  .library .rail nav:not(.breadcrumb) { order: 3; width: 100%; margin-left: 0; border-top: var(--hair) solid var(--rule-faint); }
+  .library .rail nav:not(.breadcrumb) a { flex: 1 0 auto; justify-content: center; min-height: 44px; }
+  .library .rail nav:not(.breadcrumb) a:first-child { border-left: 0; }
+  .library .rail nav:not(.breadcrumb) a:last-child { border-right: 0; }
+  .library .connection { margin-left: auto; }
+  .library .brandplate { min-height: 56px; }
 }
 
 @media (max-width: 1100px) {
