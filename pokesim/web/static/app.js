@@ -225,8 +225,10 @@ async function refreshState() {
         set('#decision', 'textContent', repeats ? '' : reason)
         set('#decision', 'hidden', repeats)
       }
-      set('#action-tag', 'textContent', (strategy.action || '').replace(/^./, (letter) => letter.toUpperCase()))
-      set('#progress', 'textContent', `${fmt(strategy.visited_tiles)} tiles explored`)
+      // Actions are internal names like "shortcut: choose_move", so they read as words, and a comma keeps them apart from the tile count.
+      const action = (strategy.action || '').replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase())
+      set('#action-tag', 'textContent', action)
+      set('#progress', 'textContent', `${action ? ', ' : ''}${fmt(strategy.visited_tiles)} tiles explored`)
     }
     if (!game) return
     set('#live-heading', 'textContent', game.map_name)

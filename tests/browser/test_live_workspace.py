@@ -170,3 +170,12 @@ def test_live_speed_changes_and_failed_updates(page, live_game):
     expect(page.locator('#toast')).to_have_text('Adventure is busy')
     expect(select).to_have_value('0')
     expect(select).to_be_enabled()
+
+
+def test_plan_action_reads_as_words_apart_from_the_tile_count(page, game):
+    url, store, emu, eid = game
+    original = emu.status
+    emu.status = lambda: {**original(), 'strategy': {'objective': {'title': 'Train the team'}, 'visited_tiles': 31524,
+                                                     'action': 'shortcut: choose_move', 'collection': {'version': 'red'}}}
+    page.goto(url)
+    expect(page.locator('.plan-meta')).to_have_text('Shortcut: choose move, 31,524 tiles explored')
