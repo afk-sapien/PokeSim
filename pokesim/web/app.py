@@ -223,6 +223,12 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return page('activity.html', ledger_kind='items', ledger_title='Item statistics',
                     pokemon_current='', items_current=' aria-current="page"')
 
+    @app.get('/item-artwork')
+    def item_artwork():
+        # The Library answers this before it reaches the game with its item icon setting.
+        # A game served on its own has no icon pack, so its item ledger keeps the plain marks.
+        return {'active': None, 'revision': None}
+
     @app.get('/api/statistics/activity')
     def activity_statistics():
         if gen2:
