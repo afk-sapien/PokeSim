@@ -6,6 +6,8 @@
 
 - Fix the Live page totals overlapping between phone and desktop widths. From 641 to 1099 pixels the badges, registered count, areas, League wins, money and play hours were squeezed into one row, so Gen II's sixteen badges ran into the registered count and play hours were cut off. The badges now take their own row with the five readings beneath.
 
+- Fix Red, Blue and Yellow trades failing with "The PC could not withdraw for this trade: Menu did not respond". A nickname received in a cable trade carried a text command, so the PC box list stalled on that name while scrolling and never reached the Pokémon stored after it. Red offered Muk, Kabutops and others from behind such a name in Box 11, and each trade travelled to the PC only to fail. Those Pokémon are no longer offered, and a trade that picks one stops before travelling with a reason.
+
 ## 0.5.1
 
 - Keep counting Gold, Silver and Crystal League wins past 200. The cartridge stops recording Hall of Fame entries at 200, so a finished run kept challenging the League for a victory that never arrived, earned no rewards and raised "Stuck? N game hours without progress" every six hours. A win from Lance's Room into the Hall of Fame now counts once the cartridge stops, and each League win counts as progress.
