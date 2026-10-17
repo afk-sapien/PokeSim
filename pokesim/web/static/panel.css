@@ -1175,19 +1175,20 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 
 /* Sixteen Gen II badges and five readings do not fit one row below 1100px,
    so between a phone and a desktop the badges take the top row and the five
-   readings share the row beneath, each column as wide as its reading. */
+   readings share the row beneath, each column as wide as its reading. Only the
+   live page's summary has that shape; the PC's two readings stay one row. */
 @media (min-width: 641px) and (max-width: 1099px) {
-  .identity .stats {
+  #journey-progress .stats {
     display: grid;
     grid-template-columns: repeat(5, minmax(max-content, 1fr));
     row-gap: var(--s4);
   }
-  .identity .stat { padding: 0 var(--s3); }
-  .identity .stat:first-child { grid-column: 1 / -1; padding-left: 0; }
-  .identity .stat:nth-child(2) { padding-left: 0; border-left: 0; }
+  #journey-progress .stat { padding: 0 var(--s3); }
+  #journey-progress .stat:first-child { grid-column: 1 / -1; padding-left: 0; }
+  #journey-progress .stat:nth-child(2) { padding-left: 0; border-left: 0; }
 }
 @media (min-width: 641px) and (max-width: 940px) {
-  .identity .stat .readout { font-size: var(--f-legend); }
+  #journey-progress .stat .readout { font-size: var(--f-legend); }
 }
 
 /* Side by side needs the fixed stage plus a party column wide enough for a
