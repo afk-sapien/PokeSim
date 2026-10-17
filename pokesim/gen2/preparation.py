@@ -67,6 +67,11 @@ def begin(emu, key, tid, *, time_capsule=False, manual=False, session=False, pro
     return state
 
 
+def stranded(party, slot):
+    """Whether depositing ``slot`` leaves no party Pokémon able to battle, which Gen II refuses."""
+    return not any(mon.hp and not mon.egg for i, mon in enumerate(party) if i != slot)
+
+
 class Preparation:
     def __init__(self, emu, state):
         self.emu, self.state = emu, state
@@ -74,6 +79,7 @@ class Preparation:
         self.center = None
         self.claimed = False
         self.released = None
+        self.reviving = False
 
     def step(self, snapshot):
         if not self.claimed:
@@ -125,6 +131,21 @@ class Preparation:
             from .emulator import Event
             log(Event('release', title, body, priority=3), snapshot)
 
+    def heal(self, snapshot, mem):
+        """Walk to the nurse and talk to her until the party is healed."""
+        policy, data = self.emu.policy, self.emu.data
+        goal = policy.healing(snapshot)
+        if goal is None:
+            raise ValueError('The party needs a Pokémon Center before link preparation')
+        surf = any(57 in member.moves for member in snapshot.party) and bool(snapshot.badges & 8)
+        path = policy.nav.toward(snapshot, data.map_ids[goal.map_name], [(goal.x, goal.y)], self.emu.pb.memory, surf=surf)
+        policy.mode = 'Heal the party before the Cable Club exchange'
+        if path:
+            return policy.walk(snapshot, self.emu.pb.memory, path)
+        if path is None:
+            return Action(None, 0, 24)
+        return Action('up' if mem.byte('wPlayerDirection') & 12 != 4 else 'a', 8, 32)
+
     def advance(self, snapshot):
         emu, state = self.emu, self.state
         if time.time() > state['deadline'] or emu.frame - state['started_frame'] > 108000:
@@ -152,17 +173,14 @@ class Preparation:
         if '┌' in snapshot.tiles[12] or mem.byte('wScriptRunning'):
             return Action('a', 8, 32)
         if any(member.status for member in snapshot.party if not member.egg):
-            goal = policy.healing(snapshot)
-            if goal is None:
-                raise ValueError('The party needs a Pokémon Center before link preparation')
-            surf = any(57 in member.moves for member in snapshot.party) and bool(snapshot.badges & 8)
-            path = policy.nav.toward(snapshot, data.map_ids[goal.map_name], [(goal.x, goal.y)], emu.pb.memory, surf=surf)
-            policy.mode = 'Heal the party before the Cable Club exchange'
-            if path:
-                return policy.walk(snapshot, emu.pb.memory, path)
-            if path is None:
-                return Action(None, 0, 24)
-            return Action('up' if mem.byte('wPlayerDirection') & 12 != 4 else 'a', 8, 32)
+            return self.heal(snapshot, mem)
+        if self.reviving:
+            # Once a deposit was found to strand the party, the walk to the nurse continues away
+            # from the PC until every fainted Pokémon is revived.
+            if any(not member.hp for member in snapshot.party if not member.egg):
+                return self.heal(snapshot, mem)
+            # The nurse can be in another town, past ledges that never lead back to the old PC.
+            self.reviving, self.center = False, None
         if state.get('session'):
             location, slot, mon, incompatible, needs_storage = 'party', 0, None, None, False
         else:
@@ -222,6 +240,11 @@ class Preparation:
         if mem.byte('wPlayerDirection') & 12 != 4:
             return Action('up', 8, 16)
         if state.get('time_capsule') and incompatible is not None and len(snapshot.party) > 1:
+            if stranded(snapshot.party, incompatible):
+                # The game refuses to deposit the last Pokémon that can battle, and the PC would
+                # open and close forever. A nurse revives the fainted ones first.
+                self.reviving = True
+                return self.heal(snapshot, mem)
             if snapshot.box_counts[snapshot.active_box] >= 20:
                 self.menu = self.make_room(snapshot)
             else:
@@ -237,6 +260,10 @@ class Preparation:
                     candidates = list(range(1, len(snapshot.party)))
                 if not candidates:
                     raise ValueError('The party has no safe reserve to deposit for this exchange')
+                if all(stranded(snapshot.party, i) for i in candidates):
+                    self.reviving = True
+                    return self.heal(snapshot, mem)
+                candidates = [i for i in candidates if not stranded(snapshot.party, i)]
                 # An egg only hatches in the party, so it goes to the PC last, after any other egg if it was
                 # brought out to hatch.
                 from .breeding import carried
