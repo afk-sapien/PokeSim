@@ -82,6 +82,8 @@ function render() {
   $('#pc-order-control').hidden = !all
   $('#pc-workspace').classList.toggle('pc-workspace-all', all)
   $('#pc-grid').classList.toggle('pc-all-grid', all)
+  $('#pc-grid').classList.toggle('pc-box-grid', !all && selectedBox !== 0)
+  $('#pc-grid').classList.toggle('pc-party-grid', !all && selectedBox === 0)
   $('#pc-boxes-view').setAttribute('aria-pressed', String(!all))
   $('#pc-all-view').setAttribute('aria-pressed', String(all))
   const key = JSON.stringify([storage, party, selectedBox, query, all, sort, order, rating])
