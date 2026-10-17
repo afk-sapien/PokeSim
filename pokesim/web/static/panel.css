@@ -1143,6 +1143,9 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 @container bay (max-width: 300px) {
   .mon-head { flex-wrap: wrap; row-gap: var(--s1); }
   .mon-head .name { flex: 1 0 100%; }
+  /* The readings (HP 123/123) step down so the meters keep a usable track. */
+  .mon-meters { grid-template-columns: auto minmax(16px, 1fr) auto; gap: var(--s1); padding-inline: var(--s2); }
+  .meter-row .value { font-size: 12px; }
 }
 
 /* An adventure's six tabs share one line with the brand, the switcher and the
