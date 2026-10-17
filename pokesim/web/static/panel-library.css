@@ -555,7 +555,9 @@
   .form-actions .key { flex: 1 1 100%; min-height: 44px; }
   /* Long key labels wrap rather than push a narrow panel sideways. */
   .panel-body .key,
+  .sheet-body > .key,
   .form-actions .key { width: 100%; min-height: 44px; padding-block: var(--s2); white-space: normal; text-align: center; line-height: 1.25; }
+  .sheet-body > .key { letter-spacing: 0.04em; }
   .sheet-foot .key { width: 100%; min-height: 44px; }
 }
 
