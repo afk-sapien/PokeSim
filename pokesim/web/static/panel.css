@@ -349,6 +349,9 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   display: flex;
   align-items: center;
   min-width: 0;
+  /* Pulled left so the name lines up with the text above while the select's
+     hover box still has padding. The wrapper moves, so the select stays inside it. */
+  margin-left: calc(-1 * var(--s2));
 }
 .adventure-switch select {
   appearance: none;
@@ -357,7 +360,6 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
      once routes.js lists the other adventures. */
   width: 13rem;
   height: 22px;
-  margin-left: calc(-1 * var(--s2));
   padding: 0 var(--s5) 0 var(--s2);
   background: none;
   border: var(--hair) solid transparent;
@@ -1239,10 +1241,10 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
      a full-size touch target. */
   .breadcrumb { order: 2; flex-direction: row; align-items: center; gap: var(--s3); width: 100%; padding: 0 0 var(--s2); border-left: 0; }
   .breadcrumb > a { align-self: center; padding: var(--s3) 0; }
-  .adventure-switch { flex: 1; }
+  .adventure-switch { flex: 1; margin-left: 0; }
   /* The adventure's name is read in the text face, so a long one fits
      instead of being cut down to a few capitals and an ellipsis. */
-  .adventure-switch select { width: 100%; height: 44px; margin-left: 0; font: 600 15px / 1.2 var(--font-text); letter-spacing: 0; text-transform: none; background: var(--well); border-color: var(--rule); box-shadow: var(--well-inset); }
+  .adventure-switch select { width: 100%; height: 44px; font: 600 15px / 1.2 var(--font-text); letter-spacing: 0; text-transform: none; background: var(--well); border-color: var(--rule); box-shadow: var(--well-inset); }
   /* The tabs are a strip that scrolls sideways, inset by the page gutter, so
      each keeps its own width and none of them touch the screen edge. */
   .rail nav:not(.breadcrumb) {
