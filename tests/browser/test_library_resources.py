@@ -8,7 +8,7 @@ from PIL import Image
 from pokesim.app.manager import Manager, create_app
 from pokesim.app.registry import identifier
 from pokesim.web.pages import render_game_page
-from conftest import serve
+from conftest import refused, serve, serve_screens
 
 
 def expect(locator):
@@ -110,6 +110,9 @@ def test_logo_returns_to_library_without_a_separate_button(page, game, width):
     page.route('**/games/example/**', lambda route: route.continue_(
         url=route.request.url.replace('/games/example/', '/')))
     page.route('**/managed-preview', lambda route: route.fulfill(body=html, content_type='text/html'))
+    # The adventure switcher asks the Library for the list, which this lone game worker does not serve.
+    page.route('**/api/v1/adventures', lambda route: route.fulfill(json={'adventures': [
+        {'id': 'example', 'name': 'Blue', 'version': 'blue', 'archived': False}]}))
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(url + '/managed-preview')
     button = page.get_by_role('link', name='PokeSim library', exact=True)
@@ -129,7 +132,12 @@ def test_logo_returns_to_library_without_a_separate_button(page, game, width):
 
 
 @pytest.mark.parametrize('expired', [False, True])
-def test_library_downloads_selected_save_and_reports_busy_game(page, tmp_path, monkeypatch, expired):
+def test_library_downloads_selected_save_and_reports_busy_game(page, tmp_path, monkeypatch, expired, expected_errors):
+    # The last download is answered with a busy refusal, and an expired session refuses the first one.
+    expected_errors(*refused('/api/export-save', 409))
+    if expired:
+        expected_errors(*refused('/api/export-save', 403))
+    serve_screens(page)
     games = {}
     requests = []
     def factory(url):
@@ -194,6 +202,7 @@ def test_adventure_speed_changes_independently_and_global_controls_are_removed(p
             games.append(game)
             manager.registry.update(game['id'], state='running')
         return create_app(manager)
+    serve_screens(page)
     with serve(factory) as url:
         page.set_viewport_size({'width': width, 'height': 900})
         page.goto(url)
@@ -243,6 +252,7 @@ def test_running_adventure_removal_saves_and_stops_first(page, tmp_path, monkeyp
         monkeypatch.setattr(manager.supervisor, 'stop', stop)
         captured.update(manager=manager, row=row, path=path, saved=saved)
         return create_app(manager)
+    serve_screens(page)
     with serve(factory) as url:
         page.goto(url)
         page.get_by_role('button', name='More actions for Disposable', exact=True).click()

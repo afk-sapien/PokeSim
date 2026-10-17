@@ -8,7 +8,7 @@ import pytest
 from pokesim import cartridges
 from pokesim.app.manager import Manager, create_app
 from pokesim.app.registry import identifier
-from conftest import serve
+from conftest import refused, serve
 
 
 JOHTO = {'gold', 'silver', 'crystal'}
@@ -85,6 +85,8 @@ def upload(page, version, payload):
     chooser.value.set_files(payload)
 
 
+# The shelf refuses the upload that is not a game.
+@pytest.mark.expected_errors(*refused('/api/v1/cartridges?slot=crystal', 409))
 @pytest.mark.parametrize('width', WIDTHS)
 def test_shelf_places_uploads_by_hash_and_rejects_unknown_files(page, library, width):
     from playwright.sync_api import expect

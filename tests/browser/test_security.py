@@ -1,4 +1,6 @@
 """Check that the actual browser enforces the application content policy."""
+import pytest
+
 from pokesim.app.manager import Manager, create_app
 from conftest import serve
 
@@ -8,6 +10,8 @@ def expect(value):
     return assertion(value)
 
 
+# The test injects an inline script to prove the page policy blocks it.
+@pytest.mark.expected_errors(r'^console .*Executing inline script violates the following Content Security Policy')
 def test_library_scripts_work_and_injected_inline_script_is_blocked(page, tmp_path, monkeypatch):
     def factory(url):
         manager = Manager(tmp_path / 'library', url)

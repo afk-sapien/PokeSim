@@ -4,6 +4,8 @@ import re
 
 import pytest
 
+from conftest import refused
+
 from pokesim import config
 from test_flows import expect
 
@@ -100,6 +102,8 @@ def test_fullscreen_fills_viewport_without_stretching_picture(page, live_game, w
     expect(page.locator('#screen:fullscreen')).to_have_count(0)
 
 
+# The test answers one download with a busy refusal.
+@pytest.mark.expected_errors(*refused('/api/export-save', 409))
 def test_download_save_and_busy_message(page, live_game, tmp_path):
     url, emu = live_game
     page.route('**/api/export-save', lambda route: route.fulfill(
@@ -145,6 +149,8 @@ def test_live_pause_resume_and_save_have_clear_actions(page, live_game):
     assert emu.commands[-1] == ('save', None)
 
 
+# The test refuses one speed change.
+@pytest.mark.expected_errors(*refused('/api/control', 409))
 def test_live_speed_changes_and_failed_updates(page, live_game):
     url, emu = live_game
     original = emu.status

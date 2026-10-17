@@ -4,9 +4,11 @@ from pathlib import Path
 import pytest
 
 from pokesim.app.manager import Manager, create_app
-from conftest import serve
+from conftest import refused, serve
 
 
+# The library refuses the invalid prefix the test types.
+@pytest.mark.expected_errors(*refused('/api/v1/settings', 409))
 @pytest.mark.parametrize('width', [320, 780, 1280])
 def test_nickname_settings_save_reload_reset_and_validate(page, tmp_path, monkeypatch, width):
     from playwright.sync_api import expect

@@ -6,7 +6,7 @@ import pytest
 
 from pokesim import config, desktop, desktop_setup
 from pokesim.web.app import create_app
-from conftest import serve
+from conftest import refused, serve
 
 
 def expect(value):
@@ -66,6 +66,8 @@ def test_trading_page_is_one_page_and_viewers_cannot_lock(page, game, monkeypatc
     assert emu.commands == []
 
 
+# The game refuses the first rewind on purpose.
+@pytest.mark.expected_errors(*refused('/api/control', 409))
 def test_rewind_rejection_keeps_event_page_and_retry_navigates(page, game):
     url, store, emu, eid = game
     page.goto(f'{url}/events/{eid}')
@@ -97,6 +99,8 @@ def test_rewind_rejection_keeps_event_page_and_retry_navigates(page, game):
     assert emu.commands == [('load_state', f'event-{eid}.state')]
 
 
+# Desktop setup refuses the file that is not a game.
+@pytest.mark.expected_errors(*refused('/desktop/rom?starter=random', 400))
 def test_desktop_upload_validation_retry_and_shutdown(page, game, tmp_path, monkeypatch):
     _, _, emu, _ = game
     raw = b'synthetic-browser-cartridge'

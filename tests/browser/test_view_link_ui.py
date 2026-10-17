@@ -13,6 +13,8 @@ def managed_live_page(page, url):
     live = render_game_page('index.html', base_path=f'/games/{ID}', adventure_id=ID, adventure_name='Crystal', **GEN2_CONTEXT)
     page.route(f'**/games/{ID}/**', lambda route: route.continue_(url=route.request.url.replace(f'/games/{ID}/', '/')))
     page.route(re.compile(rf'/games/{ID}/?(\?|$)'), lambda route: route.fulfill(body=live, content_type='text/html'))
+    page.route('**/api/v1/adventures', lambda route: route.fulfill(json={'adventures': [
+        {'id': ID, 'name': 'Crystal', 'version': 'crystal', 'archived': False}]}))
     page.context.grant_permissions(['clipboard-read', 'clipboard-write'], origin=url)
     page.goto(f'{url}/games/{ID}/')
 
