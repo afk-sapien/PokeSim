@@ -230,6 +230,19 @@ async def json_body(request, limit=65536):
 GAME_ASSET = re.compile(r'/(?:games|view)/[A-Za-z0-9_-]+/(static|sprites|shots)/')
 
 
+def read_preview(path):
+    """Read a trade preview whole, or None once the trade has cleaned it up.
+
+    Link workers replace the preview ten times a second and the coordinator removes the
+    folder when the trade ends, so the size has to come from the bytes actually read.
+    A FileResponse sizes the file before opening it and can promise more than it sends.
+    """
+    try:
+        return Path(path).read_bytes()
+    except OSError:
+        return None
+
+
 def cache_policy(path, query, content_type):
     """How long a browser may reuse a response without asking again.
 
@@ -893,9 +906,11 @@ def create_app(manager, shutdown=lambda: None):
                 side = 'left' if active['plan']['participants'][0] == aid else 'right'
                 preview_path = (manager.root / 'interactions' / active['id'] / 'attempts'
                                 / active['plan']['attempt_id'] / 'outputs' / (side + '.jpg'))
-                if await run_in_threadpool(preview_path.is_file):
-                    if path == 'frame.jpg':
-                        return FileResponse(preview_path, media_type='image/jpeg')
+                if path == 'frame.jpg':
+                    raw = await run_in_threadpool(read_preview, preview_path)
+                    if raw is not None:
+                        return Response(raw, media_type='image/jpeg')
+                elif await run_in_threadpool(preview_path.is_file):
                     async def provisional_frames():
                         try:
                             while not manager.closing:
