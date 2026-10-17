@@ -162,3 +162,23 @@ def test_upload_extracts_portraits_in_the_background(tmp_path, monkeypatch):
         headers = {'X-PokeSim-CSRF': client.get('/api/v1/session').json()['csrf_token']}
         assert client.post('/api/v1/cartridges', content=synthetic('blue'), headers=headers).status_code == 200
     assert seen == [synthetic('blue')]
+
+
+def test_a_browser_leaving_mid_upload_is_quiet(client):
+    client, manager, headers = client
+    sent = []
+
+    async def receive():
+        return {'type': 'http.disconnect'}
+
+    async def send(message):
+        sent.append(message)
+
+    cookie = '; '.join(f'{name}={value}' for name, value in client.cookies.items())
+    scope = {'type': 'http', 'asgi': {'version': '3.0'}, 'http_version': '1.1', 'method': 'POST', 'scheme': 'http',
+             'path': '/api/v1/cartridges', 'raw_path': b'/api/v1/cartridges', 'query_string': b'', 'root_path': '',
+             'headers': [(b'host', b'testserver'), (b'cookie', cookie.encode()),
+                         *((name.lower().encode(), value.encode()) for name, value in headers.items())],
+             'client': ('127.0.0.1', 1), 'server': ('testserver', 80)}
+    client.portal.call(client.app, scope, receive, send)
+    assert sent[0]['status'] == 499

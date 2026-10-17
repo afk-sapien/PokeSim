@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
+from starlette.requests import ClientDisconnect
 
 from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
@@ -301,6 +302,11 @@ def create_app(manager, shutdown=lambda: None):
     @app.exception_handler(RuntimeError)
     async def unavailable(request, error):
         return JSONResponse({'detail': str(error)}, status_code=409)
+
+    # A browser that leaves while sending a body has gone, so there is no one to tell.
+    @app.exception_handler(ClientDisconnect)
+    async def departed(request, error):
+        return Response(status_code=499)
 
     @app.middleware('http')
     async def access(request, call_next):
