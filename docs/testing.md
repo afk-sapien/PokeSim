@@ -56,6 +56,18 @@ state replaces the emulator boundary, so CI needs no Pokémon ROM. Coverage incl
 - PC locks persisted across refresh at desktop and mobile widths.
 - Disconnected trading, the trade builder, and view-only controls.
 - A trade hold beginning after an event page loads, rejected rewind feedback, and retry.
+- A layout audit of every page and dialog at ten screen sizes, from a 320px phone to 1920px.
+  It fails on sideways page scroll, spilled or cut-off text, overlapping siblings, uneven card
+  rows and phone tap targets under 40px. Deliberate cases are listed with reasons in
+  `tests/browser/test_layout_audit.py`.
+
+Set `LAYOUT_AUDIT_REPORT` to a folder to collect every layout problem at once instead of
+stopping at the first page. The folder gets `summary.md`, `report.json` and a screenshot of
+each page at each size:
+
+```sh
+POKESIM_BROWSER_TESTS=1 LAYOUT_AUDIT_REPORT=scratchpad/layout-audit uv run --locked --extra dev --extra browser-test pytest tests/browser/test_layout_audit.py -q
+```
 
 CI splits the browser tests into four parallel jobs. Set `POKESIM_TEST_SHARD=2/4` to run one
 shard locally. Whole test modules are assigned to shards, and the shards together cover every
