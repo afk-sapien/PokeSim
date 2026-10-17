@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1
 
 - Keep counting Gold, Silver and Crystal League wins past 200. The cartridge stops recording Hall of Fame entries at 200, so a finished run kept challenging the League for a victory that never arrived, earned no rewards and raised "Stuck? N game hours without progress" every six hours. A win from Lance's Room into the Hall of Fame now counts once the cartridge stops, and each League win counts as progress.
 
