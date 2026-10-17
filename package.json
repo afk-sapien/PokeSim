@@ -1,0 +1,12 @@
+{
+  "name": "pokesim-dev-tools",
+  "private": true,
+  "description": "Development checks for the PokeSim web stylesheets. Nothing here ships in the wheel, the source archive or the image.",
+  "license": "MIT",
+  "scripts": {
+    "lint:css": "stylelint \"pokesim/**/static/*.css\""
+  },
+  "devDependencies": {
+    "stylelint": "17.16.0"
+  }
+}

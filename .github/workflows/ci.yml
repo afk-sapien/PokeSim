@@ -53,6 +53,12 @@ jobs:
         with:
           node-version: '22'
       - run: uv sync --locked --extra dev
+      # Stylelint is a development tool only. tests/test_stylelint.py runs it once it is installed.
+      - name: Lint stylesheets
+        if: matrix.python == '3.14'
+        run: |
+          npm ci --no-audit --no-fund
+          npm run lint:css
       - name: Read user-content reference for tests only
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

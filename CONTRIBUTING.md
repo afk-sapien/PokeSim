@@ -34,6 +34,11 @@ uv build
 uv run --locked python tools/check_package.py
 ```
 
+Stylesheet changes also need `npm ci` once, then `npm run lint:css`. Stylelint enforces the
+shared breakpoints in `tools/stylelint/breakpoints.mjs`, and the pytest suite runs it when it
+is installed. These Node packages are development tools only and stay out of the wheel, the
+source archive and the image.
+
 `check_web.py` checks every packaged browser script and runs every `tests/*.test.cjs`
 file. `check_docs.py` checks local Markdown link destinations. CI runs the same checks.
 Run focused tests while editing, then the full suite for changes to shared behavior.
