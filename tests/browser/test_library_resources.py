@@ -57,8 +57,17 @@ def test_library_usage_updates_without_replacing_cards(page, tmp_path, monkeypat
         expect(page.get_by_role('button', name='Settings for Blue', exact=True)).to_be_enabled()
         opening = page.get_by_role('link', name='Open adventure').bounding_box()
         settings = page.get_by_role('button', name='Settings for Blue', exact=True).bounding_box()
-        assert settings['x'] >= opening['x'] + opening['width']
-        assert abs(settings['y'] - opening['y']) < 1
+        if page.locator('.adventure-card').evaluate('(card) => card.clientWidth') > 330:
+            assert settings['x'] >= opening['x'] + opening['width']
+            assert abs(settings['y'] - opening['y']) < 1
+        else:
+            # The smallest cards give the main key a row of its own.
+            assert settings['y'] >= opening['y'] + opening['height']
+        # The main key reads on one line, and the screen is 2x once the card has room.
+        assert page.locator('.card-open .key--primary').evaluate(
+            '(key) => { const r = document.createRange(); r.selectNodeContents(key); return new Set([...r.getClientRects()].map(b => Math.round(b.top))).size }') == 1
+        if page.locator('.adventure-card').evaluate('(card) => card.clientWidth') >= 320:
+            assert page.locator('.card-screen img').bounding_box()['width'] == 320
         for button in page.locator('.card-actions .key').all():
             assert button.bounding_box()['height'] >= 44
         usage.update(cpu_percent=47.1, memory_bytes=251 * 1048576, observed_speed=18.7)

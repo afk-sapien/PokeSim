@@ -155,3 +155,38 @@ def test_live_controls_are_an_even_grid_that_never_clips(page, game, width):
           document.querySelector('#pause').textContent = 'Resume'
           document.querySelector('#sound').textContent = 'Sound: On'
         }""")
+
+
+@pytest.mark.parametrize('width,height', [(360, 800), (390, 844), (640, 900), (768, 1024), (1024, 768),
+                                          (1100, 900), (1280, 900), (1600, 900), (844, 390)])
+def test_game_screen_scales_by_whole_pixels(page, game, width, height):
+    page.set_viewport_size({'width': width, 'height': height})
+    page.goto(game[0])
+    expect(page.locator('#screen')).to_be_visible()
+    box = page.evaluate('''() => {
+      const well = document.querySelector('#screen').getBoundingClientRect()
+      const picture = document.querySelector('#screen img').getBoundingClientRect()
+      const rail = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rail-h')) || 0
+      return {well: well.width, width: picture.width, height: picture.height, rail}
+    }''')
+    assert box['height'] == pytest.approx(box['width'] * 144 / 160, abs=1)
+    if box['well'] >= 320:
+        # From 2x up the picture is a whole multiple of 160x144, never a blurry 3.5x.
+        assert box['width'] % 160 == pytest.approx(0, abs=0.5), box
+    else:
+        assert box['width'] == pytest.approx(box['well'], abs=1)
+    if height < 500:
+        # A phone on its side pins only the tab strip and the whole picture fits under it.
+        assert box['rail'] <= 60
+        assert box['height'] + box['rail'] <= height
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [641, 768, 1024, 1099])
+def test_pc_summary_readings_share_one_row(page, game, width):
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(game[0] + '/pc')
+    expect(page.locator('#pc-total')).to_be_visible()
+    tops = page.locator('.pc-summary .stat').evaluate_all('(stats) => stats.map(stat => Math.round(stat.getBoundingClientRect().top))')
+    assert len(tops) == 2 and tops[0] == tops[1]
+

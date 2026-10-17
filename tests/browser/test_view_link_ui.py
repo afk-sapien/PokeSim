@@ -42,3 +42,16 @@ def test_view_link_sits_in_the_rail(page, game, width):
     expect(key).to_have_attribute('data-copied', '')
     assert page.evaluate('navigator.clipboard.readText()') == f'{url}/view/{ID}/'
     expect(key.locator('.rail-key-note')).to_have_text('', timeout=4000)
+
+
+@pytest.mark.parametrize('width', [360, 390])
+def test_phone_rail_keeps_the_copy_link_beside_the_status(page, game, width):
+    page.set_viewport_size({'width': width, 'height': 800})
+    managed_live_page(page, game[0])
+    key = page.locator('.rail #copy-view-link')
+    expect(key).to_be_visible()
+    box, status = key.bounding_box(), page.locator('#connection').bounding_box()
+    # One row for the brand, the status and the key, and a 40px key a thumb can hit.
+    assert abs((box['y'] + box['height'] / 2) - (status['y'] + status['height'] / 2)) < 2
+    assert box['width'] >= 40 and box['height'] >= 40
+    assert page.locator('#fullscreen').bounding_box()['height'] >= 40
