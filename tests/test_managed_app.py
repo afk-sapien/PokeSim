@@ -29,12 +29,12 @@ def test_keyless_library_retains_request_boundaries(client):
     client, manager = client
     assert client.get('/').status_code == 200
     assert client.get('/health/ready').json()['adventures'] == 0
-    assert client.get('/api/v1/adventures').json() == {'adventures': []}
+    assert client.get('/api/v1/adventures').json() == {'adventures': [], 'attention': {'enabled': True, 'problems': []}}
     assert not (manager.root / 'owner.token').exists()
     assert 'Owner key' not in client.get('/').text
     assert client.get('/api/v1/session', headers={'Sec-Fetch-Site': 'cross-site'}).status_code == 403
     headers = login(client, manager)
-    assert client.get('/api/v1/adventures').json() == {'adventures': []}
+    assert client.get('/api/v1/adventures').json()['adventures'] == []
     assert client.patch('/api/v1/settings', json={'max_running': 3}).status_code == 403
     assert client.patch('/api/v1/settings', json={'max_running': 3}, headers=headers).status_code == 409
     assert client.patch('/api/v1/settings', json={'max_running': 2}, headers={**headers, 'Origin': 'https://evil.example'}).status_code == 403

@@ -63,6 +63,9 @@
   font-size: 14px;
 }
 .notice.error { border-left-color: var(--crit-lamp); color: var(--crit); }
+.notice.attention { display: grid; gap: var(--s1); border-left-color: var(--warn-lamp); }
+.notice.attention[hidden] { display: none; }
+.attention ul { display: grid; gap: var(--s1); padding: 0; margin: 0; list-style: none; overflow-wrap: anywhere; }
 
 .back-link a {
   font: var(--f-micro) / 1.4 var(--font-mono);

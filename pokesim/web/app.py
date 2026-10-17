@@ -89,8 +89,13 @@ def status_summary(status):
     if not isinstance(status, dict):
         return status
     game = status.get('game') or {}
+    badges = game.get('badges')
+    # The library watchdog compares these between polls to tell a looping game from a playing one.
+    watch = {'map': game.get('map'), 'owned': game.get('owned'),
+             'badges': len(badges) if isinstance(badges, (list, tuple)) else badges,
+             'hall_of_fame': game.get('hall_of_fame_count')}
     return {**{key: value for key, value in status.items() if key not in ('game', 'strategy')},
-            'game': {key: game[key] for key in ('map_name', 'playtime') if key in game}}
+            'game': {key: game[key] for key in ('map_name', 'playtime') if key in game}, 'watch': watch}
 
 
 def fast_json(payload):

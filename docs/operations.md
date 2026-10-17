@@ -184,6 +184,35 @@ It is a compact overview, not the full journal or a raw diagnostic log. Every
 managed simulation page links back to the Library through the PokeSim logo.
 The adventure selector switches between games without returning to the Library.
 
+## Watchdog
+
+The Library checks every adventure once a minute and tells you about problems an adventure
+cannot fix by itself. It sends through your existing notification destinations under
+Stuck or needs attention, and lists current problems above the adventure cards.
+
+| Problem | Default limit |
+| --- | --- |
+| An adventure that should be running is not, and you did not stop it | 2 minutes |
+| An adventure is stuck in one place | 15 minutes |
+| An adventure keeps playing but nothing new happens, such as a loop between two spots | 60 minutes |
+| A trade waits in preparing or connecting | 10 minutes |
+| Trades fail for the same reason | 3 times in 2 hours |
+| PokeSim or a worker logs an unexpected error | Once per error per hour |
+
+New Pokédex entries, badges, events, League wins and maps not visited recently count as
+progress. Walking around does not. A help request from Gold, Silver or Crystal appears in
+the list only, since that adventure already sends its own Stuck notification.
+
+Each problem sends one alert when it starts and one short note when it clears. The same
+problem stays quiet for an hour after its last alert. For five minutes after a restart,
+problems are noted but not sent, so restarting does not repeat old alerts.
+
+Turn the watchdog off with `POKESIM_WATCHDOG=0`, or with
+`PATCH /api/v1/watchdog` and `{"enabled": false}`, which is saved and wins over the
+environment. Change a limit with `POKESIM_WATCHDOG_<NAME>` in minutes, using the names
+`DOWN`, `STUCK`, `NO_PROGRESS`, `TRADE_WAITING`, `FAILURE_WINDOW`, `ERROR_QUIET`,
+`COOLDOWN`, `GRACE` and `INTERVAL`. `POKESIM_WATCHDOG_FAILURE_REPEATS` is a count.
+
 ## Update and roll back
 
 Create and download a backup, then stop the app. For a native installation, follow

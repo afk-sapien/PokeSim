@@ -176,6 +176,11 @@ def library(tmp_path, monkeypatch):
                                                                  enumerate(['Caught a wild THUNDERPAW on Route 24',
                                                                             'Entered the Hall of Fame again',
                                                                             'Beat Cooltrainer Samantha'])]})
+        from pokesim.app.watchdog import Problem
+        # The watchdog list with a long message, so it is audited at every width.
+        manager.watchdog.problems = {'stuck:x': Problem(
+            'stuck:x', 'stuck', 'Extraordinarily Mischievous Badge Hunt Expedition has been stuck in '
+            'Cerulean Cave Basement Floor Two for 2 hours and 18 minutes.', 1790700000)}
         return create_library(manager)
     image = io.BytesIO()
     Image.new('RGB', (160, 144), '#99aa77').save(image, 'JPEG')

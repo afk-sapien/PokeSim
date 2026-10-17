@@ -94,6 +94,8 @@ class Manager:
         self.coordinator = Coordinator(self)
         from .trade_builder import TradeBuilder
         self.builder = TradeBuilder(self)
+        from .watchdog import Watchdog
+        self.watchdog = Watchdog(self)
 
     @staticmethod
     def validate_adventure_settings(values):
@@ -159,6 +161,7 @@ class Manager:
             raise ValueError('PokeSim is saving, backing up, or shutting down')
 
     def start(self):
+        self.watchdog.install()
         from .deletion import recover_deletions
         recover_deletions(self)
         self.coordinator.recover()
@@ -174,11 +177,13 @@ class Manager:
                     self.registry.update(adventure['id'], state='failed', error=str(error))
         self.supervisor.run_monitor()
         self.coordinator.start_scheduler()
+        self.watchdog.run()
 
     def close(self):
         if self._closed:
             return
         self.closing = True
+        self.watchdog.close()
         self.coordinator.close()
         errors = self.supervisor.close()
         if errors:
@@ -380,7 +385,8 @@ def create_app(manager, shutdown=lambda: None):
     @app.get('/api/v1/adventures')
     def adventures():
         return {'adventures': [{**row, 'resources': manager.supervisor.resources(row['id'])}
-                               for row in manager.registry.adventures()]}
+                               for row in manager.registry.adventures()],
+                'attention': manager.watchdog.public()}
 
     @app.get('/api/v1/adventures/{aid}')
     def adventure(aid: str):
@@ -586,6 +592,21 @@ def create_app(manager, shutdown=lambda: None):
         if path is None:
             raise HTTPException(404)
         return FileResponse(path, media_type='image/png')
+
+    @app.get('/api/v1/watchdog')
+    def watchdog():
+        return manager.watchdog.public()
+
+    @app.patch('/api/v1/watchdog')
+    async def set_watchdog(request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        if not isinstance(data, dict) or set(data) != {'enabled'}:
+            raise HTTPException(422, 'Send {"enabled": true} or {"enabled": false}')
+        try:
+            return await asyncio.to_thread(manager.watchdog.set_enabled, data['enabled'])
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
 
     @app.get('/api/v1/notifications')
     def notifications():

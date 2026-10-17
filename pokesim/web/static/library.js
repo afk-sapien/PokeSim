@@ -302,6 +302,15 @@
     const links = `<a class="key" href="${gameUrl(game.id)}trading">Cable Club trading</a><a class="key" href="/">Back to the library</a>`
     return `<article class="adventure-status ${esc(game.version)}" data-state="${esc(game.state || 'stopped')}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">${esc(gameName(game).toUpperCase())}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(stateLabel(game))}</span></header><div class="status-body"><h2 class="status-headline">${esc(headline)}</h2>${reason ? `<p class="card-error" role="alert">${esc(reason)}</p>` : ''}${setup}${technical}${again ? `<p class="note">${esc(again)}</p>` : ''}<div class="status-actions">${action}</div><p class="note">Your saves are safe while it is not running. The live view, PC, Pokédex, and journal open once it is running.</p><nav class="status-links" aria-label="Adventure">${links}</nav></div></article>`
   }
+  let attentionSignature = ''
+  function renderAttention(attention) {
+    const problems = attention?.enabled ? attention.problems || [] : []
+    const markup = problems.map(row => `<li>${esc(row.message)}</li>`).join('')
+    if (markup === attentionSignature) return
+    attentionSignature = markup
+    $('#attention-list').innerHTML = markup
+    $('#attention').hidden = !problems.length
+  }
   function renderAdventures() {
     const visible = adventures.filter(game => $('#show-archived').checked || !game.archived)
     const container = $('#adventure-list')
@@ -496,6 +505,7 @@
     try {
       const data = await api('/api/v1/adventures')
       adventures = data.adventures || []
+      renderAttention(data.attention)
       if (page === 'library' || page === 'settings') await refreshCartridges()
       renderAdventures()
       if (page === 'notifications') renderNotifyAdventures()
