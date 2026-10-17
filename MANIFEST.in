@@ -19,6 +19,7 @@ recursive-include docs/validation *.json
 recursive-include tests *.cjs
 recursive-include tests *.py
 recursive-include tests/browser *.js *.html
+recursive-include tests/browser/vendor LICENSE*
 recursive-include docs/images *.png *.jpg *.gif
 include install.sh
 include install.ps1
