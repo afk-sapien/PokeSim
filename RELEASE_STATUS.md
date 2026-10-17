@@ -32,7 +32,7 @@ evidence gaps for that configuration, without claiming every starter, seed or pl
   ten seconds, though each combination is now cheap: about 0.2 s per pair of full libraries.
 - **The bundled broker Compose file serves an unauthenticated endpoint on 0.0.0.0** and returns
   full inventories, and that endpoint is expensive to compute. The broker is optional and is not
-  part of the Library deployment; do not expose it beyond a trusted network.
+  part of the Library deployment. Do not expose it beyond a trusted network.
 - **Journal screenshots already stored blank are not repaired**, including the one in the shipped
   Journal image. Only new entries are retaken.
 - **Seen counts, level 100 species and perfect finds have no backfill.** Journal entries never
