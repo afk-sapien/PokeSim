@@ -425,7 +425,11 @@
 }
 .field select:disabled { opacity: 0.6; cursor: not-allowed; }
 
-/* A checkbox row. The box is square and hard-edged like everything else. */
+/* A checkbox row. The box is square and hard-edged like everything else.
+   On a phone the row is a full-size touch target, so short labels get centred. */
+@media (max-width: 640px) {
+  .check, .inline-label { min-height: 44px; align-content: center; }
+}
 .check,
 .inline-label {
   display: grid;
@@ -521,7 +525,7 @@
   background: var(--panel-2);
   border-top: var(--hair) solid var(--rule);
 }
-.key--close { width: 40px; padding: 0; font: 22px / 1 var(--font-text); }
+.key--close { flex: none; width: 40px; padding: 0; font: 22px / 1 var(--font-text); }
 
 
 /* ==========================================================================

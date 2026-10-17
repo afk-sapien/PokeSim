@@ -19,6 +19,9 @@
   margin-bottom: var(--s4);
   color: var(--link);
 }
+@media (max-width: 640px) {
+  .page-head .back { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: var(--s2); }
+}
 
 
 /* ---- segmented filter -------------------------------------------------
@@ -578,9 +581,12 @@
 .milestone-row { padding-block: var(--s3) }
 .milestone-row + .milestone-row { border-top: var(--hair) solid var(--rule-faint) }
 .milestone-row > * { overflow-wrap: anywhere }
-.highlight-name { display: block }
+/* A full-size tap target. The name still wraps when it is long. */
+.highlight-name { display: flex }
+.highlight-name { align-items: center }
+.highlight-name { min-height: 44px }
 .highlight-name { font-size: 22px }
-.highlight-name { margin-top: var(--s2) }
+.highlight-name { margin-top: var(--s1) }
 .highlight-name { overflow-wrap: anywhere }
 .stats-period select { min-height: 44px }
 .stats-period select { max-width: 100% }

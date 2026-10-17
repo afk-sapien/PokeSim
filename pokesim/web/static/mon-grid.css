@@ -204,6 +204,10 @@
 .pc-detail .close-detail,
 .pc-detail-links .key,
 .pc-trade-action .key { min-height: 32px; padding: 0 var(--s3); font-size: 14px; }
+/* Phones get full-size touch targets instead. */
+@media (max-width: 640px) {
+  .pc-detail .close-detail, .pc-detail-links .key, .pc-trade-action .key { min-height: 44px; }
+}
 .pc-detail .key-short { display: none; }
 
 /* Head: the portrait, then where it lives, its name, one line of facts and one row of stamps. */
