@@ -451,6 +451,15 @@
   .detail-id h2 { font-size: var(--f-read); }
 }
 
+/* Two cards side by side on a 320px phone leave about 75px for the note, so
+   "In Pokédex" drops its tracking to stay on the card. Names step down so a
+   ten-letter one such as Charmeleon stays whole on one line. */
+@media (max-width: 400px) {
+  .dex-name { font-size: 13px; letter-spacing: 0; }
+  .dex-top { gap: var(--s1); }
+  .card-note { gap: var(--s1); letter-spacing: 0; }
+  .filters .result { padding: 0 var(--s1); letter-spacing: 0; }
+}
 
 @media (forced-colors: active) {
   .dex-card.unseen .plate img { filter: none; opacity: 0.4; }
