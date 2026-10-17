@@ -550,6 +550,8 @@
 .collection-records > div { gap: var(--s2) }
 .collection-records > div { padding: var(--s4) }
 .collection-records > div { min-width: 0 }
+/* One shrinkable track, so a long label or reading wraps instead of widening the cell. */
+.collection-records > div { grid-template-columns: minmax(0, 1fr) }
 .collection-records .readout { font-size: clamp(20px, 3vw, 32px) }
 .collection-records .readout { overflow-wrap: anywhere }
 @media (max-width: 860px) {
@@ -619,4 +621,9 @@
 .stats-overview .readout:not(.readout--missing), .stats-recent .readout:not(.readout--missing), .stats-activity .readout:not(.readout--missing) { white-space: nowrap }
 @media (max-width: 640px) {
   .stats-overview .readout:not(.readout--missing), .stats-recent .readout:not(.readout--missing), .stats-activity .readout:not(.readout--missing), #collection-details .readout:not(.readout--missing) { font-size: 16px }
+}
+/* A half-width cell on a 320px phone is too narrow for a playtime like
+   "9,297h 37m", so playtime and the last cell take the full row. */
+@media (max-width: 400px) {
+  .stats-overview > div:first-child, .stats-overview > div:last-child { grid-column: 1 / -1 }
 }
