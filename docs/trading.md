@@ -7,7 +7,7 @@ exchange rules, and recovery.
 ## Trading page
 
 Everything about trading lives on each adventure's Trading page at
-`/games/{id}/trading`. Trading in 0.5.0 is one of two things: automatic trades,
+`/games/{id}/trading`. Trading is one of two things: automatic trades,
 which start on their own, and trades you build by hand between your own
 adventures. The page has the switch on top and two tabs under it:
 

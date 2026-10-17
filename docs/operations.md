@@ -134,8 +134,10 @@ first if it is stopped. Standalone instances keep **Download .sav** on the Live
 page. Export outside battles, dialogue, and trades. If a screen is changing,
 wait a moment and retry.
 The download contains the current party, PC collection, and cartridge progress.
-Load it with the same English Red or Blue ROM in another emulator, using that
+Load it with the same English ROM in another emulator, using that
 emulator's import-save option or matching the save's filename to the ROM.
+Gold, Silver and Crystal downloads are a ZIP holding the `.sav` and its `.rtc`
+clock file. Put both next to the ROM.
 
 PokeSim opens the native Save menu on a private copy of the current checkpoint,
 then boots the resulting 32 KiB cartridge save and verifies Continue restores

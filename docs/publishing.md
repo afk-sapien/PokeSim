@@ -14,10 +14,10 @@ reviewed changes to `main`. Push a new `v<version>` tag for that exact commit, t
 create a draft release and start the publishing workflow:
 
 ```sh
-git tag v0.4.17
-git push origin v0.4.17
-gh release create v0.4.17 --verify-tag --draft --title "PokeSim 0.4.17" --notes-file docs/release-notes.md
-gh workflow run release.yml --ref main -f tag=v0.4.17
+git tag v0.5.2
+git push origin v0.5.2
+gh release create v0.5.2 --verify-tag --draft --title "PokeSim 0.5.2" --notes-file docs/release-notes.md
+gh workflow run release.yml --ref main -f tag=v0.5.2
 ```
 
 Use the actual next version when following these examples. A tag push alone does
@@ -60,7 +60,7 @@ exposes draft releases to identities with push access. All other jobs retain rea
 To rehearse the whole workflow without publishing, start it with the dry run input:
 
 ```sh
-gh workflow run release.yml --ref main -f tag=v0.4.17 -f dry_run=true
+gh workflow run release.yml --ref main -f tag=v0.5.2 -f dry_run=true
 ```
 
 A dry run validates the tag, runs the gate, and runs the full build and image checks. The

@@ -11,7 +11,8 @@ The application manager owns the Adventure Library and supervises one worker per
 | Runtime ownership | `pokesim/runtime/simulation.py`, `pokesim/runtime/legacy.py` | Opens storage and emulator, retains directory locks through shutdown, and reports final-save errors. Legacy mode keeps its separate owner. |
 | Shopping controller | `pokesim/policies/shopping.py` | Owns buying, selling, and restocking state. Returns menu decisions and supply plans from explicit snapshot, goal, and project inputs. |
 | Storage controller | `pokesim/policies/storage.py` | Owns PC operation, reserve destination, and pending release confirmation. Rechecks protection and slot identity before release. |
-| Emulator lifecycle and input | `pokesim/emulator.py` | Owns the PyBoy RS emulator (through Core) and executes queued commands on the worker thread. Releases each pressed button even if a frame update fails. |
+| Emulator lifecycle and input | `pokesim/emulator.py` | Owns the Red, Blue and Yellow PyBoy RS emulator (through Core) and executes queued commands on the worker thread. Releases each pressed button even if a frame update fails. |
+| Generation II runtime | `pokesim/gen2/emulator.py`, `pokesim/gen2/policy.py`, `pokesim_core.gen2` | Runs Gold, Silver and Crystal adventures with their own policy, Cable Club and Time Capsule adapters. |
 | Event journal and run memory | `pokesim/store.py` | Owns SQLite and event attachments. Serializes connection access and rolls back failed writes. |
 | Checkpoint files | `pokesim/checkpoints.py` | Owns file publication, checksums, manifests, lookup, and autosave retention. Can be used without SQLite or an emulator. |
 | HTTP endpoints | `pokesim/web/app.py` | Validates requests, applies viewer restrictions, and connects runtime services to responses. |

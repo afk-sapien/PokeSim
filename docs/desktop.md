@@ -1,6 +1,6 @@
 # PokeSim on your desktop
 
-Open one PokeSim application to manage a library of independent adventures. Create several Red or Blue games, give each a name, and start or stop them independently. Every running adventure has its own emulator process, save files, journal, and policy state.
+Open one PokeSim application to manage a library of independent adventures. Create several Red, Blue, Yellow, Gold, Silver or Crystal games, give each a name, and start or stop them independently. Every running adventure has its own emulator process, save files, journal, and policy state.
 
 Install PokeSim as a Python package to run it on your desktop, or use one Docker container. The `pokesim-desktop` command opens the same Adventure Library in your browser. Docker is optional. Standalone executables and app bundles are outside the release scope.
 
@@ -35,7 +35,7 @@ pipx ensurepath
 Open a new terminal so it can find uv. Install the current public PokeSim release:
 
 ```sh
-uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.5.0/pokesim-0.5.0-py3-none-any.whl
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.5.1/pokesim-0.5.1-py3-none-any.whl
 uv tool update-shell
 ```
 
@@ -55,7 +55,7 @@ launcher. There is no separate PokeSim EXE download in this installation flow.
 With pipx and Python 3.12 already installed, you can install PokeSim directly:
 
 ```sh
-pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.5.0/pokesim-0.5.0-py3-none-any.whl
+pipx install --python python3.12 https://github.com/afk-sapien/PokeSim/releases/download/v0.5.1/pokesim-0.5.1-py3-none-any.whl
 pipx ensurepath
 ```
 
@@ -160,7 +160,7 @@ games retain their own settings afterward.
 
 ## Trading
 
-Trading is automatic across all eligible running adventures in the same library. New adventures join automatically. There are no groups to configure or exchanges to choose. Each adventure’s Trading page shows only its own current exchange and recent completed trades, with the adventure navigation kept in place. Its history remains available while stopped. Participation requires a compatible game and an eligible boxed Pokémon. Active party members and Pokémon locked on the PC page are protected. Automatic trades start on their own, with no approval step. Make a trade, on the same page, also builds a trade by hand between two of your adventures, and it starts as soon as both games are ready. There are no trade offers or manual Cable Club sessions in 0.5.0.
+Trading is automatic across all eligible running adventures in the same library. New adventures join automatically. There are no groups to configure or exchanges to choose. Each adventure’s Trading page shows only its own current exchange and recent completed trades, with the adventure navigation kept in place. Its history remains available while stopped. Participation requires a compatible game and an eligible boxed Pokémon. Active party members and Pokémon locked on the PC page are protected. Automatic trades start on their own, with no approval step. Make a trade, on the same page, also builds a trade by hand between two of your adventures, and it starts as soon as both games are ready. There are no trade offers or manual Cable Club sessions.
 
 Games finish battles or menus before preparing for an exchange. Interrupted exchanges recover automatically from their recorded decisions.
 
@@ -168,7 +168,7 @@ Preparation routes each adventure to a reachable Pokémon Center, using normal m
 
 If every box and the party are full, preparation uses the existing duplicate cleanup rules to release one unprotected spare through the PC. The Pokémon chosen for the trade and locked Pokémon are protected. If there is no safe duplicate to release, the attempt stops and reports the storage problem.
 
-The current adapter supports clean English Red and Blue at all twelve Cable Club centers, including the Indigo Plateau lobby. Each cartridge returns to its own original center after trading. An adventure without a supported route waits or reports a preparation failure. Trading pages show recent failed attempts and their reasons alongside completed exchanges. Link battles and trading with another application installation are not implemented.
+Clean English Red, Blue and Yellow trade with each other at all twelve Kanto Cable Club centers, including the Indigo Plateau lobby. Gold, Silver and Crystal trade with each other through the Cable Club, and with Red, Blue and Yellow through the Time Capsule. See [Gold, Silver and Crystal support](gen2-exploration.md) for the Time Capsule rules. Each cartridge returns to its own original center after trading. An adventure without a supported route waits or reports a preparation failure. Trading pages show recent failed attempts and their reasons alongside completed exchanges. Link battles and trading with another application installation are not implemented.
 
 League rewards grant a random level-5 starter after each new victory while enabled.
 Mew's first custom gift follows becoming Champion. Another Mew requires a million
@@ -290,6 +290,6 @@ Each species shows **Caught**, the number of successful captures and custom rewa
 
 Duplicate captures, Pokémon sent directly to the PC, committed League reward gifts, and the custom Mew gift count. Saved custom reward journal entries are backfilled once. Ordinary cartridge gifts, trades, evolutions, failed throws, and the catching tutorial do not count. Releasing, trading, or evolving a Pokémon does not subtract its original capture. Counts persist independently of journal retention and checkpoint restores. Replaying the exact same saved capture completion does not add a second receipt. An explicit adventure restart clears the counts for the new run.
 
-Existing adventures begin tracking when the updated version first runs and display the tracking date. Missing wild-capture totals cannot be reconstructed reliably from Pokédex flags or journal summaries. Capture tracking uses verified English retail Red and Blue cartridge routines. Other ROMs display an unavailable catch count while still showing current ownership.
+Existing adventures begin tracking when the updated version first runs and display the tracking date. Missing wild-capture totals cannot be reconstructed reliably from Pokédex flags or journal summaries. Capture tracking uses verified English retail cartridge routines for all six supported games. Other ROMs display an unavailable catch count while still showing current ownership.
 
 Automatic trade selection remembers which individual Pokémon have already belonged to each campaign. Returning an individual must unlock a new Pokédex entry, rather than repeat a previous quality upgrade. Among equally useful exchanges, the scheduler favors species traded less often in each adventure's last eight completed exchanges. It compares all eligible game pairs while preserving party, last-copy, project, and lock protections.

@@ -4,10 +4,13 @@
 shared by PokeSim and PokeAgent Bench. Its distribution name is `pokesim-core`
 and its import name is `pokesim_core`.
 
-PokeSim uses `pokesim_core.gen1` for Red and Blue WRAM addresses, text and numeric
+PokeSim uses `pokesim_core.gen1` for Red, Blue and Yellow WRAM addresses, text and numeric
 decoding, individual Pokémon fields, party reads, and bag reads. Its known ROM
 hashes come from `pokesim_core.rom`. `pokesim_core.dvs` supplies the reusable
 DV-total probability reference model, with training and retention policy in PokeSim.
+`pokesim_core.gen2` supplies the Gold, Silver and Crystal memory map and verified
+cartridge hooks. Yellow reads the Red addresses through the translating view in
+`pokesim/yellow.py`.
 
 Core also owns cached screen glyphs, immutable box decoding, resumable name
 entry, linear menu selection and explicit flag-update mechanics. PokeSim keeps
@@ -20,8 +23,7 @@ constants and helpers, wraps decoded party dictionaries in `PartyMon`, and
 builds the same `Snapshot` objects. Species names and move PP data still come
 from PokeSim's user-provided game data. Derived state,
 gameplay policies, recovery, trading, and the application UI remain in PokeSim.
-PokeSim retains its existing emulator runtime for those application behaviors.
-The benchmark can use the core's optional emulator adapter independently.
+Every adventure runs on Core's emulator adapter (`pokesim_core.emulator`) over PyBoy RS.
 
 ## Where fixes belong
 

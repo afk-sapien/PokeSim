@@ -12,6 +12,11 @@ The adapter runs on the PyBoy RS backend through PokeSim Core and accepts these 
 | --- | --- |
 | Red | `ea9bcae617fdf159b045185467ae58b2e4a48b9a` |
 | Blue | `d7037c83e1ae5b39bde3c30787637ba1d4c48ce2` |
+| Yellow | `cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1` |
+
+Yellow runs the same link code from its own ROM addresses. Gold, Silver and Crystal use the
+Generation II adapter in `pokesim/gen2/cable.py`, and the Time Capsule links them with these
+Generation I cartridges. See [Gold, Silver and Crystal support](gen2-exploration.md).
 
 Verified symbol addresses and hook instruction signatures are bundled in `pokesim/interactions/cable_metadata.py`. Installed applications do not require RGBDS, a reference disassembly, or a development worktree. Each emulator receives its own ROM byte stream and cartridge RAM stream. A checkpoint alone is sufficient because it contains cartridge RAM. An absent save file initializes a private 32 KiB stream before the checkpoint is loaded.
 

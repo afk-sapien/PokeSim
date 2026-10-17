@@ -1,7 +1,9 @@
 # Automatic trading between trusted adventures
 
 The owner explicitly authorized live automatic trading on September 15, 2026 UTC.
-The Red and Blue coordinator is enabled. Individual exchanges do not require further
+This page covers the standalone pair coordinator, which links exactly one Red and one
+Blue game in separate containers. Adventures in one library trade through the built-in
+coordinator instead, see [Trading](desktop.md#trading). Individual exchanges do not require further
 approval. Other installations default to disabled until configured by their owner.
 
 The coordinator checks each minute and permits one useful exchange every 15 minutes.
@@ -66,7 +68,7 @@ and 50 visible exchange records are retained. Small transaction markers remain i
 game's database to prevent duplicate journal delivery. Trade preparation expeditions
 for missing peer requests remain future work.
 
-The coordinator also tells each Gold, Silver or Crystal adventure which of its missing species
+The library coordinator also tells each Gold, Silver or Crystal adventure which of its missing species
 another linked game currently offers, and how many games are linked. With **Extra store items**
 on, an adventure waits for such a trade instead of buying an evolution item for that species,
 and buys a trade evolution item only while a peer is linked.

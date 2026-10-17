@@ -150,7 +150,7 @@ class Emulator:
         if known:
             log.info("ROM verified: %s", known)
             return known
-        log.warning("ROM sha1 %s is not a known clean Red/Blue dump; RAM addresses may be off", sha)
+        log.warning("ROM sha1 %s is not a known clean Red, Blue or Yellow dump, so RAM addresses may be off", sha)
         return f"unverified ROM (sha1 {sha[:12]})"
 
     def _boot(self, *, sound=True) -> CoreEmulator:

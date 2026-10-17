@@ -142,7 +142,7 @@ package manager:
 Open a new terminal, then install the current public release:
 
 ```sh
-uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.5.1/pokesim-0.5.0-py3-none-any.whl
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.5.1/pokesim-0.5.1-py3-none-any.whl
 uv tool update-shell
 ```
 

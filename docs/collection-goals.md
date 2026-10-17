@@ -63,8 +63,8 @@ ordinary Pokédex is complete, while training and supply trips still have priori
 
 Journal Stats shows individual perfect finds. Its total with a plus sign is a
 **confirmed minimum**, separate from the Pokédex species coverage counter.
-Existing partners establish a baseline. New perfect catches on verified Red and
-Blue cartridges add durable capture receipts, so replaying the same saved capture
+Existing partners establish a baseline. New perfect catches on every verified
+cartridge add durable capture receipts, so replaying the same saved capture
 does not add another find.
 
 Generation I does not have a unique individual identifier. For existing inventory,
