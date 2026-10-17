@@ -357,7 +357,7 @@
 .settings-controls input[type="file"] { width: 100%; min-width: 0; }
 .settings-wide { grid-column: 1 / -1; display: grid; gap: var(--s3); width: 100%; min-width: 0; }
 .settings-wide:not(:has(> :not(:empty):not([hidden]))) { display: none; }
-@media (max-width: 720px) {
+@media (max-width: 860px) {
   .settings-row { grid-template-columns: minmax(0, 1fr); row-gap: var(--s4); }
 }
 /* One key size for every Settings action. */
@@ -552,7 +552,7 @@
 
   .exchange-pair { grid-template-columns: minmax(0, 1fr); }
   .exchange-arrow { padding: var(--s1) 0; border-inline: 0; border-block: var(--hair) solid var(--rule-faint); }
-  .form-actions .key { flex: 1 1 100%; min-height: 44px; }
+  .form-actions .key { flex: 1 1 100%; }
   /* Long key labels wrap rather than push a narrow panel sideways. */
   .panel-body .key,
   .sheet-body > .key,
@@ -599,7 +599,7 @@
 .card-actions .key { text-align: center }
 .adventure-card { grid-template-columns: minmax(0, 1fr) }
 
-@media (max-width: 360px) {
+@media (max-width: 400px) {
   .card-resources { gap: var(--s2) }
   .card-resources dd { font-size: 14px }
 }
@@ -626,7 +626,7 @@
 .notification-fields { width: 100% }
 .notification-fields { align-items: start }
 #notify-form .form-result:empty { display: none }
-@media (min-width: 700px) {
+@media (min-width: 641px) {
   .notification-fields { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) }
   #notify-categories { grid-template-columns: repeat(2, minmax(0, 1fr)) }
   #notify-adventures { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) }
@@ -687,7 +687,6 @@
 .nickname-builtins summary, .nickname-exclusions summary { padding-block: var(--s3) }
 .nickname-builtins summary, .nickname-exclusions summary { cursor: pointer }
 .nickname-choices { display: grid }
-.nickname-choices { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)) }
 .nickname-choices { gap: var(--s2) }
 .nickname-choices { padding-bottom: var(--s3) }
 .nickname-choices .check { font-size: 13px }
@@ -781,7 +780,7 @@
 #portrait-progress { accent-color: var(--signal) }
 #portrait-feedback:empty { display: none }
 #portrait-feedback.is-error { color: var(--crit) }
-@media (max-width: 800px) {
+@media (max-width: 860px) {
   .portrait-settings-body { grid-template-columns: minmax(0, 1fr) }
   .portrait-preview .plate { height: 80px }
 }
@@ -817,9 +816,9 @@
   gap: var(--s3);
   width: 100%;
 }
-@media (max-width: 1139px) { .cartridge-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .cartridge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 480px) { .cartridge-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1100px) { .cartridge-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .cartridge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 400px) { .cartridge-grid { grid-template-columns: minmax(0, 1fr); } }
 .cartridge-slot {
   display: grid;
   /* Art, title and details, then the message, then the keys pinned to the bottom. */
@@ -855,7 +854,7 @@
 .cartridge-name { font: var(--f-legend) / 1.25 var(--font-panel); letter-spacing: 0.04em; text-transform: uppercase; overflow-wrap: anywhere; }
 /* Six across, some names take two lines; every name gets two so the facts
    below line up from slot to slot. */
-@media (min-width: 1000px) {
+@media (min-width: 1101px) {
   .cartridge-name { min-height: 2.5em; }
 }
 .cartridge-state { color: var(--ink-2); }

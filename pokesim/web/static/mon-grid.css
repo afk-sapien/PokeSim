@@ -426,7 +426,7 @@
 .pc-trade-action .pc-show-link { margin-left: auto; }
 .pc-trade-action:empty { display: none; }
 
-@media (min-width: 760px) {
+@media (min-width: 641px) {
   .pc-detail-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
@@ -454,7 +454,7 @@
 /* A phone sets Close, the location and the species line beside the portrait,
    then gives the name and the stamps the full width, so a ten-letter
    nickname never breaks. */
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   .pc-detail-head {
     grid-template-areas: "plate ." "plate where" "plate line" "name name" "tags tags";
     grid-template-rows: 1fr auto auto auto auto;
@@ -469,7 +469,7 @@
 }
 /* The smallest phones drop the move kind, which Gen I and II derive from the
    type beside it, tighten the stats table and let footer keys wrap. */
-@media (max-width: 360px) {
+@media (max-width: 400px) {
   .pc-move-kind { display: none; }
   .pc-move-specs { grid-template-columns: 7ch 9ch; }
   .individual-stats th, .individual-stats td { padding-inline: 4px; }
@@ -533,7 +533,7 @@
 .pc-detail .trade-tag--keep .lock-icon { margin-right: 4px; }
 .trade-detail-lock { display: flex; align-items: center; gap: var(--s2); margin: 0; }
 .trade-detail-lock .lock-icon { color: var(--ok); }
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   .lock-toggle { flex: 1 1 100%; justify-content: center; }
 }
 @media (forced-colors: active) {

@@ -111,7 +111,7 @@ body[data-page="pc"] .pc-toolbar .field--grow { flex-basis: 200px; }
   .pc-view-field .segmented { align-self: stretch; }
   .pc-view-field .segmented button { min-height: 44px; }
 }
-@media (max-width: 360px) {
+@media (max-width: 400px) {
   .stat { padding: 0 var(--s3); }
 }
 /* The card a link from the Pokédex asked for. */
