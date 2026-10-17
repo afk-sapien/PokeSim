@@ -1,19 +1,12 @@
 # PokeSim
 
-**Generation I and II Pokémon adventures that keep going while you're away.**
+**Pokémon Red, Blue, Yellow, Gold, Silver and Crystal that play themselves while you're away.**
 
-| Generation | Games | Pokédex |
-| --- | --- | --- |
-| I | Red, Blue and Yellow | 151 Kanto species |
-| II | Gold, Silver and Crystal | 251 species across Johto and Kanto |
+![A live Crystal adventure with all 16 badges and 251 Pokémon registered, battling Bruno of the Elite Four](docs/images/gen2-live.gif)
 
 Watch an automatic player catch Pokémon, earn badges and challenge the League in
 your browser. Take control whenever you like, then hand the adventure back.
 Everything runs locally, with no model API or subscription.
-
-![A live Crystal adventure with all 16 badges and 251 Pokémon registered, battling Bruno of the Elite Four](docs/images/gen2-live.gif)
-
-Eight seconds of a Crystal adventure at the Elite Four, with all 16 badges and all 251 Pokémon registered.
 
 ## Keep the adventure going
 
