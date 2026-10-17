@@ -11,7 +11,7 @@ from pokesim_core.centers import CENTERS
 from ..policies.navigation import Navigator
 from ..policies.progression import YELLOW
 from ..policies.collection import LEAGUE
-from ..policies.team import STAYS_IN_PARTY, reserve_to_deposit
+from ..policies.team import reserve_to_deposit, stays_in_party
 from ..ram import read_snapshot
 from ..screen import Screen
 from ..shortcuts import ShortcutRunner, gen1_ui
@@ -440,7 +440,7 @@ class Preparation:
         strongest = max(range(len(snap.party)), key=lambda i: snap.party[i].level)
         safe = [i for i, mon in enumerate(snap.party)
                 if i != strongest and keys[i] and keys.count(keys[i]) == 1
-                and mon.species not in STAYS_IN_PARTY
+                and not stays_in_party(snap, mon)
                 and preferences.get(keys[i], {}).get('state') not in protected
                 and not any(move in (15, 19, 57, 70, 148)
                             and not any(move in other.moves for j, other in enumerate(snap.party) if j != i)

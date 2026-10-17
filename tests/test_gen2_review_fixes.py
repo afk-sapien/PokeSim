@@ -33,7 +33,7 @@ def test_restart_clears_the_old_runs_watch_and_bests(gen2_emu):
     emu = gen2_emu
     emu.frame = 500000
     emu.last_reload_frame = emu._reward_check_frame = emu._guard_frame = 499000
-    emu.best_progress = (8, 900, 120, 40, 400000)
+    emu.best_progress = (8, 900, 120, 40, 400000, 3)
     emu.best_experience = {(1, (), 7): 400000}
     emu.best_egg_cycles = {'egg': 3}
     emu.unstick_streak, emu.reloads_exhausted = STALL_RELOADS + 5, True
@@ -43,7 +43,7 @@ def test_restart_clears_the_old_runs_watch_and_bests(gen2_emu):
     emu._handle_command('restart', None)
     assert emu.frame == 0 and emu.last_reload_frame == 0
     assert emu._reward_check_frame == 0 and emu._guard_frame == 0
-    assert emu.best_progress == (0,) * 5 and emu.best_experience == {} and emu.best_egg_cycles == {}
+    assert emu.best_progress == (0,) * 6 and emu.best_experience == {} and emu.best_egg_cycles == {}
     assert emu.unstick_streak == 0 and not emu.reloads_exhausted
     assert emu.stall.frame is None and emu.stall.alerted is None
 
