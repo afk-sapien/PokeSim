@@ -35,7 +35,7 @@ from test_trading_tabs import FROM, Library
 HERE = Path(__file__).parent
 AUDIT = (HERE / 'layout_audit.js').read_text()
 REPORT = os.environ.get('LAYOUT_AUDIT_REPORT')
-WIDTHS = [(320, 800), (360, 800), (390, 844), (768, 1024), (1024, 768), (1100, 900), (1280, 900),
+WIDTHS = [(320, 800), (360, 800), (390, 844), (520, 900), (700, 900), (768, 1024), (1024, 768), (1100, 900), (1120, 900), (1280, 900),
           (1440, 900), (1920, 1080), (844, 390)]
 # Tap targets are judged on phones, where a finger is the pointer.
 TAP_WIDTH = 390
