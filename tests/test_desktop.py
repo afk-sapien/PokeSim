@@ -197,3 +197,20 @@ def test_existing_instance_must_prove_its_identity(tmp_path, monkeypatch):
     response.__exit__ = Mock(return_value=False)
     monkeypatch.setattr(desktop, 'build_opener', lambda *args: Mock(open=Mock(return_value=response)))
     assert desktop.existing_url(tmp_path) is None
+
+
+def test_live_page_is_the_rendered_game_page_with_a_desktop_link(launcher):
+    from fastapi import FastAPI
+    from fastapi.responses import HTMLResponse
+    client, adventure, _ = launcher
+    game = FastAPI()
+
+    @game.get('/')
+    def live():
+        return HTMLResponse('<nav><a href="/static/app.css">Live</a></nav><nav>Other</nav>',
+                            headers={'Content-Security-Policy': "script-src 'self'"})
+    adventure.game = game
+    page = client.get('/')
+    assert page.text == '<nav><a href="/static/app.css">Live</a><a href="/desktop">Desktop</a></nav><nav>Other</nav>'
+    assert page.headers['content-security-policy'] == "script-src 'self'"
+    assert int(page.headers['content-length']) == len(page.content)
