@@ -6,12 +6,24 @@
 .ledger-tools label { gap: var(--s2) }
 .ledger-tools label { min-width: 0 }
 .ledger-tools label { font: var(--f-label) / 1.4 var(--font-mono) }
+/* The same recessed wells and caret as the Library's form fields. */
 .ledger-tools input, .ledger-tools select { min-height: 44px }
 .ledger-tools input, .ledger-tools select { max-width: 100% }
-.ledger-tools input, .ledger-tools select { background: var(--panel) }
-.ledger-tools input, .ledger-tools select { color: var(--ink) }
+.ledger-tools input, .ledger-tools select { padding: var(--s2) var(--s3) }
+.ledger-tools input, .ledger-tools select { background-color: var(--well) }
 .ledger-tools input, .ledger-tools select { border: var(--hair) solid var(--rule) }
-.ledger-tools input, .ledger-tools select { padding: var(--s2) }
+.ledger-tools input, .ledger-tools select { border-radius: 0 }
+.ledger-tools input, .ledger-tools select { box-shadow: var(--well-inset) }
+.ledger-tools input, .ledger-tools select { color: var(--ink) }
+.ledger-tools input, .ledger-tools select { font: 15px / 1.3 var(--font-text) }
+.ledger-tools select { appearance: none }
+.ledger-tools select { padding-right: var(--s6) }
+.ledger-tools select { cursor: pointer }
+.ledger-tools select { background-image: linear-gradient(to bottom left, var(--ink-3) 50%, transparent 50%), linear-gradient(to bottom right, var(--ink-3) 50%, transparent 50%) }
+.ledger-tools select { background-size: 4px 4px }
+.ledger-tools select { background-position: right 18px center, right 14px center }
+.ledger-tools select { background-repeat: no-repeat }
+.ledger-tools input::placeholder { color: var(--ink-3) }
 #ledger-coverage, #ledger-help, #ledger-status { margin-block: var(--s3) }
 .ledger-scroll { overflow-x: auto }
 .ledger-scroll { border: var(--hair) solid var(--rule) }
