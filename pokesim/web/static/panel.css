@@ -1274,6 +1274,8 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .stat:first-child { grid-column: 1 / -1; border-top: 0; padding: var(--s3); }
   .stat:nth-child(even) { border-left: 0; }
   .stat:last-child { padding-right: var(--s3); }
+  /* Badges span the top, so a fifth reading would sit alone in half a row. */
+  #journey-progress .stat:last-child:nth-child(even) { grid-column: 1 / -1; }
   .stat .readout { font-size: var(--f-legend); }
   .badge-bank { height: 16px; }
   .badge-bank .lamp { flex: 1; max-width: 24px; height: 16px; }
@@ -1293,6 +1295,14 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .column-head { min-height: 48px; }
 
   .plate-foot .links { margin-left: 0; }
+
+  /* Touch targets: every key a thumb can reach is at least 40px. The status
+     gives up its fixed slot, since the tabs no longer sit beside it, so the
+     copy link key stays on the brand's row. */
+  .connection { width: auto; }
+  .rail-key, .bezel-key { width: 40px; height: 40px; }
+  .theme button { min-height: 40px; }
+  .plate-foot a, .plate-foot .restart-link { display: inline-flex; align-items: center; min-height: 40px; }
 }
 
 
