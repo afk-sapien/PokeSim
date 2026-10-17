@@ -1269,6 +1269,13 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
     letter-spacing: 0;
     text-transform: none;
   }
+  /* The Library has only three tabs, so on a 320px phone they tighten to fit
+     on one line rather than scroll. */
+  @media (max-width: 400px) {
+    body.library .rail nav:not(.breadcrumb) a,
+    body.library .rail nav:not(.breadcrumb) a:first-child,
+    body.library .rail nav:not(.breadcrumb) a:last-child { padding: 0 var(--s2); font-size: 13px; }
+  }
 
   .identity { padding: var(--s5) 0 var(--s4); gap: var(--s4); }
   .identity h1 { font-size: var(--f-read); }
