@@ -692,6 +692,7 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   background: #0A0C07;
   box-shadow: inset 0 0 0 2px #2B3222;
   overflow: hidden;
+  container-type: inline-size;
 }
 .screen-well::before {
   content: "";
@@ -710,6 +711,14 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   image-rendering: pixelated;
 }
 .screen-well img:not([src]) { visibility: hidden; }
+/* Pixels stay square and sharp only at a whole multiple of 160x144, so from
+   2x up the picture snaps down to one and the well's dark glass frames the
+   rest. Stacked, the well itself snaps, so there is no frame to show. */
+@supports (width: round(down, 1px, 1px)) {
+  @container (min-width: 320px) {
+    .screen-well img { width: round(down, 100cqi, 160px); height: auto; aspect-ratio: 10 / 9; }
+  }
+}
 html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .screen-well:fullscreen { aspect-ratio: auto }
 .screen-well:fullscreen { display: flex }
@@ -723,6 +732,10 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .screen-well:fullscreen::before { display: none }
 .screen-well:fullscreen img { min-width: 0 }
 .screen-well:fullscreen img { min-height: 0 }
+.screen-well:fullscreen { container-type: size }
+@supports (width: round(down, 1px, 1px)) {
+  .screen-well:fullscreen img { width: min(round(down, 100cqi, 160px), round(down, 100cqb * 10 / 9, 160px)) }
+}
 /* screen.js appends this to the well while the stream connects. */
 .screen-status {
   position: absolute;
@@ -1175,11 +1188,13 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .game-card .bezel { align-items: center; }
   .bezel-head, .bezel-foot { width: 100%; }
   .screen-well { max-width: 640px; }
+  @supports (width: round(down, 1px, 1px)) {
+    .screen-well { width: max(min(100%, 320px), round(down, 100%, 160px)); }
+  }
   .party { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .plan { margin-top: var(--s6); }
 }
 @media (max-width: 860px) {
-  .screen-well { max-width: 560px; }
   /* Narrow, the plan's headline takes the full row above state and next. */
   .plan { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .plan .plan-now { grid-column: 1 / -1; border-bottom: var(--hair) solid var(--rule-faint); }
@@ -1188,6 +1203,12 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 
 @media (max-width: 760px) {
   .party { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* A phone on its side is wide but short. panel.js pins only the tab strip, as
+   on a phone held upright, and the screen drops to 2x so all of it fits below. */
+@media (max-width: 1279px) and (max-height: 500px) {
+  .screen-well { max-width: 320px; }
 }
 
 @media (max-width: 640px) {
@@ -1246,10 +1267,12 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   .badge-bank .lamp { flex: 1; max-width: 24px; height: 16px; }
 
   .live-grid { gap: var(--s5); }
-  .bezel { padding: var(--s2); }
-  .bezel-head { padding-bottom: var(--s2); }
+  /* The picture runs to the bezel's edges, so a 360px phone still gets a
+     sharp 2x screen. The head and the caption keep their inset. */
+  .bezel { padding: var(--s2) 0; }
+  .bezel-head { padding: 0 var(--s2) var(--s2); }
   .bezel-head h2 { font-size: var(--f-legend); }
-  .bezel-foot { padding-top: var(--s2); }
+  .bezel-foot { padding: var(--s2) var(--s2) 0; }
 
   .plan { grid-template-columns: minmax(0, 1fr); }
   .plan .plan-next { border-left: 0; border-top: var(--hair) solid var(--rule-faint); }
