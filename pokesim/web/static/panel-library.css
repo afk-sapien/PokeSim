@@ -131,8 +131,10 @@
    line up across a row whatever each adventure is doing. */
 .card-screen--off { background: var(--well); box-shadow: var(--well-inset); }
 .card-screen--off .micro { color: var(--ink-3); }
-@container card (min-width: 354px) {
-  .card-screen { height: calc(288px + 2 * var(--s4)); }
+/* 2x as soon as the card is 320px across, which takes in a phone and a
+   three-across desktop row. Under 354px the bezel gives up its side margin. */
+@container card (min-width: 320px) {
+  .card-screen { height: calc(288px + 2 * var(--s4)); padding-inline: 0; }
   .card-screen img { width: 320px; height: 288px; }
 }
 
@@ -194,6 +196,19 @@
 .card-actions .key { min-height: 44px }
 .card-actions button.key { padding: 0 var(--s3) }
 .card-actions .card-settings { padding: 0 }
+/* "Open adventure" holds one line in a narrow card: the tracking comes in
+   first, then the size, and on the smallest phones it takes a row of its own. */
+@container card (max-width: 400px) {
+  .card-open .key--primary { padding-inline: var(--s2); letter-spacing: 0.02em; }
+}
+@container card (max-width: 360px) {
+  .card-open .key--primary { padding-inline: var(--s1); font-size: 14px; letter-spacing: 0; }
+}
+@container card (max-width: 330px) {
+  .card-open { grid-template-columns: 44px minmax(0, 1fr); }
+  .card-open .key--primary { grid-column: 1 / -1; }
+  .card-more-toggle { width: 100%; }
+}
 .card-more { position: relative }
 .card-more-toggle { height: 100% }
 .card-more-toggle[aria-expanded="true"] { background: var(--well); box-shadow: var(--well-inset) }
