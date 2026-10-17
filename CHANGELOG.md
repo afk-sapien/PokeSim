@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix the Live page totals overlapping between phone and desktop widths. From 641 to 1099 pixels the badges, registered count, areas, League wins, money and play hours were squeezed into one row, so Gen II's sixteen badges ran into the registered count and play hours were cut off. The badges now take their own row with the five readings beneath.
+
 ## 0.5.1
 
 - Keep counting Gold, Silver and Crystal League wins past 200. The cartridge stops recording Hall of Fame entries at 200, so a finished run kept challenging the League for a victory that never arrived, earned no rewards and raised "Stuck? N game hours without progress" every six hours. A win from Lance's Room into the Hall of Fame now counts once the cartridge stops, and each League win counts as progress.

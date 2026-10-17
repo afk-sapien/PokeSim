@@ -11,7 +11,7 @@ Watch an automatic player catch Pokémon, earn badges and challenge the League i
 your browser. Take control whenever you like, then hand the adventure back.
 Everything runs locally, with no model API or subscription.
 
-![A live Crystal adventure with all 16 badges and 251 Pokémon registered, battling Will of the Elite Four](docs/images/gen2-live.gif)
+![A live Crystal adventure with all 16 badges and 251 Pokémon registered, battling Bruno of the Elite Four](docs/images/gen2-live.gif)
 
 Eight seconds of a Crystal adventure at the Elite Four, with all 16 badges and all 251 Pokémon registered.
 
@@ -37,7 +37,7 @@ Eight seconds of a Crystal adventure at the Elite Four, with all 16 badges and a
 
 ## Generation I: Red, Blue and Yellow
 
-![A live Blue adventure walking Victory Road and battling a wild Geodude](docs/images/gen1-live.gif)
+![A live Blue adventure on Route 18 meeting a wild Fearow](docs/images/gen1-live.gif)
 
 Red and Blue adventures play the Kanto story to the Hall of Fame and keep going.
 Yellow starts with Pikachu and follows its own story, including Jessie and James
