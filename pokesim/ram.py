@@ -15,6 +15,7 @@ from pokesim_core.gen1 import (
     W_CUR_OPPONENT as W_CUR_OPPONENT,
     W_BATTLE_TYPE as W_BATTLE_TYPE,
     W_PLAYER_NAME as W_PLAYER_NAME,
+    W_PLAYER_ID as W_PLAYER_ID,
     W_PARTY_COUNT as W_PARTY_COUNT,
     W_PARTY_SPECIES as W_PARTY_SPECIES,
     W_PARTY_MONS as W_PARTY_MONS,
@@ -167,6 +168,8 @@ class Snapshot:
     enemy_shiny: bool = False
     # Yellow only. Melanie gives Bulbasaur once Pikachu is happy enough.
     pikachu_happiness: int = 0
+    # The player's trainer ID, which marks the Pokémon this player caught.
+    player_id: int | None = None
 
     def storage_entries(self):
         """Expose individual data while preserving legacy compact storage snapshots."""
@@ -377,6 +380,7 @@ def read_snapshot(mem, frame: int) -> Snapshot:
     from .yellow import PIKACHU_HAPPINESS, YellowMemory
     if isinstance(mem, YellowMemory):
         decoded['pikachu_happiness'] = mem.raw[PIKACHU_HAPPINESS]
+    decoded['player_id'] = mem[W_PLAYER_ID] << 8 | mem[W_PLAYER_ID + 1]
     return Snapshot(frame=frame, **decoded, box_counts=box_counts,
                     stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
                     stored_details=stored, unlisted=unlisted)

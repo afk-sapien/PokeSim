@@ -1,7 +1,7 @@
 """Managed Gen II runtime with isolated saves, manual input and policy control."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import io
 import logging
 from pathlib import Path
@@ -29,6 +29,30 @@ log = logging.getLogger('pokesim.gen2')
 
 # The running cartridge clock's latest reading, in seconds since its zero point (see core.clock_elapsed).
 CLOCK_KEY = 'gen2-clock-v1'
+
+
+# pret engine/events/halloffame.asm: the cartridge stops counting Hall of Fame entries at
+# HOF_MASTER_COUNT, so every League win after the 200th leaves wHallOfFameCount where it is.
+HOF_MASTER_COUNT = 200
+
+
+def count_league(history, data, snapshot, *, observe=True):
+    """Return the snapshot with the League wins the cartridge no longer counts added back.
+
+    Reaching the Hall of Fame from Lance's Room with the count already at the cap is a win the
+    cartridge drops. The run then saw no new victory, so its League loop waited for one forever
+    and the stall alert fired every few hours. The visit is kept in the history so a reload
+    rewinds it along with the count. Only the observation loop records a win. Other reads only
+    add the wins already recorded.
+    """
+    if snapshot is None or not snapshot.valid or not snapshot.started:
+        return snapshot
+    if observe and snapshot.map == data.map_ids['LANCES_ROOM']:
+        history['league_attempt'] = snapshot.hall_of_fame_count >= HOF_MASTER_COUNT
+    elif observe and snapshot.map == data.map_ids['HALL_OF_FAME'] and history.pop('league_attempt', False):
+        history['capped_wins'] = history.get('capped_wins', 0) + 1
+    extra = history.get('capped_wins', 0)
+    return replace(snapshot, hall_of_fame_count=snapshot.hall_of_fame_count + extra) if extra else snapshot
 
 
 WEEKDAYS = ('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
@@ -193,7 +217,7 @@ class Emulator:
         self.unstick_streak = 0
         self.reloads_exhausted = False
         self.waiting = False
-        self.best_progress = (0,) * 5
+        self.best_progress = (0,) * 6
         self.failure_streak = 0
         self.invalid_frame = self.battle_frame = None
         self.screen_key = None
@@ -475,12 +499,18 @@ class Emulator:
         self.policy.load_state_dict(metadata.get('policy_state', {}))
         self.policy.on_restore()
         self.play_clock.restore(metadata.get('play_clock'))
-        self.history = metadata.get('gen2_history', self.history)
+        if 'gen2_history' in metadata:
+            self.history = metadata['gen2_history']
+        else:
+            # Without its own history the save's League count cannot be matched to the wins kept
+            # past the cartridge's cap, and adding them to an older count would invent victories.
+            self.history.pop('capped_wins', None)
+            self.history.pop('league_attempt', None)
         self.previous = None
         self.statistics.previous = None
         from .legendary import Recovery
         self.legendary_recovery = Recovery(metadata.get('legendary_recovery'))
-        self.snapshot = read_snapshot(self.pb.memory, self.data, self.frame)
+        self.snapshot = self._read()
         self.audio.clear()
         self.options_applied = False
         self._reset_watch()
@@ -515,8 +545,11 @@ class Emulator:
                           'The supply and storage reserves should prevent this.', priority=LOW), snapshot)
         return True
 
+    def _read(self, observe=False):
+        return count_league(self.history, self.data, read_snapshot(self.pb.memory, self.data, self.frame), observe=observe)
+
     def _observe(self):
-        snapshot = read_snapshot(self.pb.memory, self.data, self.frame)
+        snapshot = self._read(observe=True)
         self.snapshot = snapshot
         self.invalid_frame = (self.invalid_frame if self.invalid_frame is not None else self.frame) if not snapshot.valid else None
         if not snapshot.valid or not snapshot.started:
@@ -557,7 +590,7 @@ class Emulator:
                 self._event(Event('legendary_retry', f'{self.data.species[species]["name"]} can be encountered again',
                     'The encounter ended without a catch. Used supplies and adventure progress are preserved.'), snapshot)
             if changed or reopened:
-                snapshot = self.snapshot = read_snapshot(self.pb.memory, self.data, self.frame)
+                snapshot = self.snapshot = self._read()
         if snapshot.map not in self.history['maps']:
             self.history['maps'].append(snapshot.map)
             self._event(Event('map', f'Arrived at {snapshot.map_name}', priority=2), snapshot)
@@ -638,9 +671,11 @@ class Emulator:
 
     def _note_progress(self, snapshot, now):
         # Wandering to new tiles is not progress, and a reload rewinds to an older save, so only a
-        # new high for badges, events, Pokédex entries, areas or experience ends a run of reloads.
+        # new high for badges, events, Pokédex entries, areas, experience or League wins ends a run
+        # of reloads. A finished run with a full Pokédex and a level 100 team still wins the League.
         score = (snapshot.badges.bit_count(), sum(byte.bit_count() for byte in snapshot.event_flags), len(snapshot.owned),
-                 len(self.history['maps']), sum(getattr(mon, 'experience', 0) or 0 for mon in snapshot.party))
+                 len(self.history['maps']), sum(getattr(mon, 'experience', 0) or 0 for mon in snapshot.party),
+                 self.history.get('league', 0))
         # The party total drops when a trained Pokémon is swapped for a new trainee, so experience
         # also counts per Pokémon: any party member beating its own best is progress.
         best_experience = self.__dict__.setdefault('best_experience', {})
@@ -892,7 +927,7 @@ class Emulator:
             self.paused = self.manual_mode = False
             # The old run's bests and reload streak would hold the new one stalled for good, and the
             # watch clocks still pointed at its frames, which kept the guards and reward checks off.
-            self.best_progress = (0,) * 5
+            self.best_progress = (0,) * 6
             self.best_experience, self.best_egg_cycles = {}, {}
             self.unstick_streak = 0
             self.reloads_exhausted = False
@@ -925,7 +960,7 @@ class Emulator:
                     if activate(self) or deliver(self):
                         continue
                 if self.preparation and not self.paused:
-                    snapshot = read_snapshot(self.pb.memory, self.data, self.frame)
+                    snapshot = self._read()
                     action = self.preparation.step(snapshot)
                 elif not self.manual.empty():
                     action = self.manual.get_nowait()
@@ -936,7 +971,7 @@ class Emulator:
                     time.sleep(0.03)
                     continue
                 else:
-                    snapshot = read_snapshot(self.pb.memory, self.data, self.frame)
+                    snapshot = self._read()
                     action = self.policy.step(snapshot, self.pb.memory)
                     self._report_missed_shiny(snapshot)
                 if action.button:

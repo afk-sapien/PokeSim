@@ -32,6 +32,22 @@ STAYS_IN_PARTY = ({sid for sid, data in SPECIES.items() if data.get('name') == '
                   if current_variant() == 'yellow' else set())
 
 
+def stays_in_party(s, mon):
+    """Whether this party member is Yellow's starter Pikachu, which never leaves the party.
+
+    pret/pokeyellow IsStarterPikachuAliveInOurParty treats a Pikachu as the starter only when its
+    trainer ID is the player's. A Pikachu traded in from another game can go to the PC like any
+    other Pokémon. Kept for every Pikachu, a party of HM holders and a traded Pikachu had no one
+    left to deposit, so every trade into Yellow failed to make room.
+    """
+    species = mon['species'] if isinstance(mon, dict) else mon.species
+    if species not in STAYS_IN_PARTY:
+        return False
+    player = getattr(s, 'player_id', None)
+    trainer = mon.get('trainer_id') if isinstance(mon, dict) else getattr(mon, 'trainer_id', None)
+    return player is None or trainer is None or trainer == player
+
+
 def potential(species, teammates=()):
     data = SPECIES.get(species, {})
     covered = {t for p in teammates for t in p.types}
@@ -89,7 +105,7 @@ def _release_target(s, protected, reserved):
 
 def reserve_to_deposit(s, *, prefer_completed=False):
     strongest = max(range(len(s.party)), key=lambda i: s.party[i].level, default=None)
-    candidates = [i for i, p in enumerate(s.party) if i != strongest and p.species not in STAYS_IN_PARTY
+    candidates = [i for i, p in enumerate(s.party) if i != strongest and not stays_in_party(s, p)
                   and not any(move in (15, 19, 57, 70, 148)
                               and not any(move in other.moves for j, other in enumerate(s.party) if j != i)
                               for move in p.moves)]
@@ -104,7 +120,7 @@ def development_candidate(s, encounter_level):
     # Yellow's Pikachu cannot be boxed, so it is trained first. Battle switching covers a tougher opponent
     # and shares the experience.
     candidates = [i for i, p in enumerate(s.party)
-                  if p.level < lead_level * 0.8 and p.species in STAYS_IN_PARTY and p.level + 12 >= encounter_level
+                  if p.level < lead_level * 0.8 and stays_in_party(s, p) and p.level + 12 >= encounter_level
                   and p.hp >= p.max_hp * 0.85 and not p.status
                   and any(MOVES.get(m, {}).get('power') and pp for m, pp in zip(p.moves, p.pp))]
     if candidates:

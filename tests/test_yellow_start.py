@@ -33,8 +33,8 @@ PARTY = '''
 from types import SimpleNamespace
 from pokesim.strategy_data import SPECIES, MOVES
 sid = lambda name: next(k for k, v in SPECIES.items() if v['name'] == name)
-def mon(name, level, moves=(33,)):
-    return SimpleNamespace(species=sid(name), level=level, hp=100, max_hp=100, status=0,
+def mon(name, level, moves=(33,), trainer_id=None):
+    return SimpleNamespace(species=sid(name), level=level, hp=100, max_hp=100, status=0, trainer_id=trainer_id,
                            moves=list(moves) + [0] * (4 - len(moves)), pp=[30, 0, 0, 0], nick='', name=name)
 '''
 
@@ -95,6 +95,28 @@ def test_pikachu_never_evolves_and_gifts_follow_happiness_and_badges():
     assert out.strip() == 'ok'
 
 
+def test_traded_pikachu_can_leave_the_party():
+    # The live Yellow party that failed every incoming trade: four sole HM holders, the starter
+    # and a Pikachu traded in from Red. Only the traded Pikachu is free to go to the PC.
+    out = run_yellow(PARTY, '''
+        from pokesim.policies.team import development_candidate, reserve_to_deposit, stays_in_party
+        from pokesim.policies.league_rotation import deposit_target
+        from dataclasses import asdict
+        party = [mon('DUGTRIO', 100, (15,), 35926), mon('FEAROW', 100, (19,), 7726),
+                 mon('PIKACHU', 100, (84,), 35926), mon('BLASTOISE', 52, (57,), 32086),
+                 mon('CLEFAIRY', 100, (70,), 39503), mon('PIKACHU', 20, (84,), 20897)]
+        s = SimpleNamespace(party=party, player_id=35926)
+        assert stays_in_party(s, party[2]) and not stays_in_party(s, party[5])
+        assert stays_in_party(s, vars(party[2])) and not stays_in_party(s, vars(party[5]))
+        assert reserve_to_deposit(s) == 5
+        # Without a player ID, as in an older snapshot, every Pikachu stays.
+        assert reserve_to_deposit(SimpleNamespace(party=party)) is None
+        assert stays_in_party(SimpleNamespace(party=party), party[5])
+        print('ok')
+    ''')
+    assert out.strip() == 'ok'
+
+
 def test_yellow_preparation_keeps_pikachu_out_of_storage():
     source = (ROOT / 'pokesim/runtime/preparation.py').read_text()
-    assert 'mon.species not in STAYS_IN_PARTY' in source
+    assert 'not stays_in_party(snap, mon)' in source

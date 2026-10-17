@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Keep counting Gold, Silver and Crystal League wins past 200. The cartridge stops recording Hall of Fame entries at 200, so a finished run kept challenging the League for a victory that never arrived, earned no rewards and raised "Stuck? N game hours without progress" every six hours. A win from Lance's Room into the Hall of Fame now counts once the cartridge stops, and each League win counts as progress.
+
+- Let a Pikachu traded into Yellow go to the PC. Only the starter, a Pikachu with the player's own trainer ID, stays in the party, as on the cartridge. A party of field-move holders with a traded Pikachu had no one to deposit, so every trade into Yellow failed with "could not safely make room in its party".
+
 ## 0.5.0
 
 - Remove the generic "Stuck? No progress for a while" warning from Library cards.

@@ -946,12 +946,12 @@ class Collection:
 
     def trade_deposit_target(self, s, project):
         """Keep battle strength, field moves, and reserved partners while making space."""
-        from .team import STAYS_IN_PARTY, potential
+        from .team import potential, stays_in_party
         from ..trade.preferences import identity
         choices = self.trade_preferences()
         strongest = max(range(len(s.party)), key=lambda i: s.party[i].level, default=None)
         candidates = [i for i, mon in enumerate(s.party)
-                      if i != strongest and mon.species != project['give'] and mon.species not in STAYS_IN_PARTY
+                      if i != strongest and mon.species != project['give'] and not stays_in_party(s, mon)
                       and choices.get(identity(asdict(mon)), {}).get('state') not in ('locked', 'offered')
                       and not any(move in (15, 19, 57, 70, 148)
                                   and not any(move in other.moves for j, other in enumerate(s.party) if j != i)
