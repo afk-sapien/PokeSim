@@ -35,6 +35,18 @@ it. Full storage delays delivery without losing the opportunity. Delivery starts
 the next walking requirement, and saved reward receipts prevent duplicate gifts.
 Previously owned Mew still prevents another *initial* gift.
 
+## Generation II
+
+| Activity | Default requirement | What happens |
+| --- | --- | --- |
+| Legendary return | 1,000,000 steps | Previously caught Raikou, Entei and Suicune roam again from their starting routes, and Lugia and Ho-Oh wait in their chambers |
+| Celebi (Crystal) | 1,000,000 steps | With the Celebi event on, the GS Ball quest opens again |
+| Sudowoodo and Snorlax | 100,000 steps after becoming Champion | The Route 36 Sudowoodo and the Vermilion Snorlax return |
+| League reward | Each new League victory | A random level-5 Johto starter |
+
+The Red Gyarados stays one of a kind. A return that ends without a capture waits
+for the next visit.
+
 ## Settings
 
 Stop an adventure and open its Library settings to change the intervals. Zero

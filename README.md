@@ -17,7 +17,7 @@ Eight seconds of a Crystal adventure at the Elite Four, with all 16 badges and a
 
 ## Keep the adventure going
 
-- **Six games side by side:** Run any mix of Generation I and II adventures, each with
+- **Many games side by side:** Run any mix of Generation I and II adventures, each with
   its own saves and speed. Check CPU, memory and observed speed in the Library.
 - **A growing collection:** Explore the Pokédex and search every PC box. Compare
   power, types and DV quality to find promising Pokémon.
@@ -64,8 +64,9 @@ keeps growing beyond the original games' one-time encounters:
 - **Another Eevee, another fossil (Generation I):** After becoming Champion and
   unlocking the original events, revisit gifts, fossils, the Fighting Dojo and
   supported NPC trades after **100,000 steps** by default.
-- **Legendary rematches (Generation I):** Previously acquired legendary birds and
-  Mewtwo can return to be caught again every **1,000,000 steps** by default.
+- **Legendary rematches:** Previously acquired legendary birds and Mewtwo, or
+  the legendary beasts, Lugia and Ho-Oh, return to be caught again every
+  **1,000,000 steps** by default. Sudowoodo and Snorlax return in Generation II too.
 - **A mythical reward:** A custom Mew gift arrives in the PC after your first
   League win. Mew isn't normally obtainable in these games. Another
   million steps followed by a new League win earns another.
