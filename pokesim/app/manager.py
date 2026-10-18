@@ -101,7 +101,7 @@ class Manager:
     def validate_adventure_settings(values):
         allowed = {'trainer_name', 'rival_name', 'speed', 'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
                    'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards',
-                   'mew_event', 'celebi_event', 'extra_store_items', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
+                   'mew_event', 'celebi_event', 'extra_store_items', 'fair_wild_dvs', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
                    'fossil_preference', 'dojo_preference', 'event_retention_days', 'palette'}
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError('Unsupported adventure settings')
@@ -121,9 +121,12 @@ class Manager:
         if result['policy'] not in {'strategic', 'guided_random', 'smart_random'}:
             raise ValueError('Unknown adventure policy')
         for name in ('auto_start', 'fast_text', 'battle_animations', 'viewer_only', 'league_rewards', 'mew_event', 'celebi_event',
-                     'extra_store_items'):
+                     'extra_store_items', 'fair_wild_dvs'):
             if name in result and type(result[name]) is not bool:
                 raise ValueError(f'{name} must be a boolean')
+        # Off is stored as absent, so releases that predate the setting still open the adventure.
+        if result.get('fair_wild_dvs') is False:
+            del result['fair_wild_dvs']
         # Every notable event keeps a full save state beside its screenshot, which is about
         # 40 MB an hour, so an adventure needs a way to bound its own journal. Zero keeps all.
         for name, low, high in [('autosave_seconds', 1, 86400), ('keep_autosaves', 1, 10000),
@@ -459,6 +462,7 @@ def create_app(manager, shutdown=lambda: None):
             'mew_event': data.get('mew_event', True),
             'celebi_event': data.get('celebi_event', True),
             'extra_store_items': data.get('extra_store_items', True),
+            **({'fair_wild_dvs': data['fair_wild_dvs']} if 'fair_wild_dvs' in data else {}),
             'legendary_return_steps': data.get('legendary_return_steps', 1000000),
             'event_return_steps': data.get('event_return_steps', 100000),
             'mew_return_steps': data.get('mew_return_steps', 1000000),
@@ -535,6 +539,8 @@ def create_app(manager, shutdown=lambda: None):
                 raise ValueError('Stop the adventure before changing these settings')
             previous = adventure['settings']
             values['settings'] = manager.validate_adventure_settings({**previous, **changes})
+            from ..cartridges import validate_generation_settings
+            validate_generation_settings(values['settings'], adventure['version'])
         result = manager.registry.update(aid, **values) if values else adventure
         if 'speed' in data.get('settings', {}):
             result['pace_pending'] = await asyncio.to_thread(manager.supervisor.push_speed, aid)

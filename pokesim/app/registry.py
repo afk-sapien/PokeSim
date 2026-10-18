@@ -152,8 +152,9 @@ class Registry:
             rom = self.db.execute('SELECT * FROM roms WHERE id=?', (rom_id,)).fetchone()
             if rom is None:
                 raise ValueError('Add a game cartridge in Settings before creating an adventure')
-            from ..cartridges import validate_starter
+            from ..cartridges import validate_generation_settings, validate_starter
             validate_starter(settings.get('starter', 'random'), rom['version'])
+            validate_generation_settings(settings, rom['version'])
             aid = identifier()
             campaign = identifier()
             self.db.execute('''INSERT INTO adventures
