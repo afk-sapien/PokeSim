@@ -290,7 +290,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                 'collection_records': {'catches': catch_status(store),
                                        'perfect_found': goals['perfect_found'],
                                        'perfect_count_is_minimum': goals['perfect_count_is_minimum'],
-                                       'shiny': records['shiny']},
+                                       'shiny': records['shiny'],
+                                       # Off means wild grass, cave and water DVs keep the cartridge's limits.
+                                       'fair_wild_dvs': getattr(config, 'FAIR_WILD_DVS', False) is True},
                 'marathon': collection.get('marathon', {})}
 
     @app.get('/trading', response_class=HTMLResponse)

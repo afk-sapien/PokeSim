@@ -122,6 +122,8 @@
     document.querySelector('#stats-shiny-acquired').textContent = shiny ? display(useHeld ? shiny.held : shiny.acquired) : 'Not tracked'
     document.querySelector('#stats-shiny-held').textContent = shiny ? display(shiny.held) : 'Not tracked'
     document.querySelector('#stats-shiny-held-cell').hidden = useHeld
+    // Only Red, Blue and Yellow send this, and only off keeps the cartridge's wild DV limits.
+    document.querySelector('#stats-wild-dv-note').hidden = records.fair_wild_dvs !== false
 
     document.querySelectorAll('.stats-overview .readout, #collection-details .readout').forEach(node => {
       node.classList.toggle('readout--missing', node.textContent === 'Not tracked')
