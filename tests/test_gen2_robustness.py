@@ -292,7 +292,8 @@ def make_emulator(**extra):
     reloads = []
     policy = SimpleNamespace(recoveries=0, failure=None, details=lambda: {},
                              take_failure=lambda: None, idle=lambda snapshot: False,
-                             waiting=lambda snapshot: False, recover=lambda level: recoveries.append(level))
+                             waiting=lambda snapshot: False, recover=lambda level: recoveries.append(level),
+                             hopeless_battle=lambda snapshot: False)
     values = dict(paused=False, manual_mode=False, preparation=None, store=SimpleNamespace(get=lambda key: None),
                   snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 29'), frame=100000,
                   last_reload_frame=0, policy=policy, failure_streak=0, invalid_frame=None, battle_frame=None,
@@ -388,7 +389,7 @@ def test_second_consecutive_unstick_raises_a_stuck_event():
     emu = SimpleNamespace(unstick_streak=1, snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 29'),
                           store=SimpleNamespace(autosaves=lambda: saves),
                           policy=SimpleNamespace(recoveries=4, menu=None, on_restore=lambda: None,
-                                                 collection={}, goal=None, decisions=0),
+                                                 collection={}, goal=None, decisions=0, in_league=lambda snapshot: False),
                           reloads=0, last_reload=0, audio=SimpleNamespace(clear=lambda: None),
                           statistics=SimpleNamespace(previous=None), options_applied=True, _tick=lambda n: None,
                           _reset_watch=lambda: None, _boot=lambda: SimpleNamespace(), _sync_clock=lambda: None,

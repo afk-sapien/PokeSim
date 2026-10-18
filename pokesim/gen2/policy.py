@@ -1604,6 +1604,23 @@ class Policy:
             self.menu = None
         return None
 
+    def hopeless_battle(self, snapshot):
+        """Whether a trainer battle under way can never be won.
+
+        Nobody standing has an attack with PP that touches the foe, and each still has PP for some
+        other move, so not even Struggle is left. A Vaporeon with only Rest and Growl left faced
+        Lance's Gyarados this way, and Growl kept the foe from ever knocking it out. An Elixir in
+        the bag would restore an attack, so the battle is not lost while one is there.
+        """
+        if snapshot.in_battle != 2:
+            return False
+        from .champion_shop import elixir
+        standing = [mon for mon in snapshot.party if mon.hp and not mon.egg]
+        if not standing or any(not any(mon.pp) or elixir(self.data, snapshot, mon) for mon in standing):
+            return False
+        return not any(pp and self.move_score(move, mon, snapshot) > 0
+                       for mon in standing for move, pp in zip(mon.moves, mon.pp))
+
     def move_choice(self, snapshot, mem, mon, opponent, weaken):
         """The move slot to use this turn, or None when no move has PP."""
         options = [(self.move_score(move, mon, opponent), index)
