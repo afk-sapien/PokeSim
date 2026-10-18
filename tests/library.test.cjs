@@ -459,6 +459,26 @@ test('Gold, Silver and Crystal adventures hide the palette and never send one', 
   assert.equal('fossil_preference' in settings, false)
 })
 
+test('fair wild DVs is offered for Generation I only and is off until chosen', async () => {
+  for (const [version, offered] of [['red', true], ['yellow', true], ['crystal', false]]) {
+    const game = {id: 'd'.repeat(32), name: 'Game', version, state: 'stopped', settings: {}}
+    const view = library({respond(path, options) {
+      if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+      if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
+    }})
+    await settle()
+    for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+    view.click('settings', game.id)
+    assert.equal(view.element('#settings-fair-dvs-label').hidden, !offered)
+    assert.equal(view.element('#settings-fair-wild-dvs').checked, false)
+    view.element('#settings-fair-wild-dvs').checked = offered
+    view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+    await settle()
+    const settings = JSON.parse(view.calls.find(call => call.options.method === 'PATCH').options.body).settings
+    assert.equal(settings.fair_wild_dvs, offered ? true : undefined)
+  }
+})
+
 test('settings render existing backups without an adventure variable', async () => {
   const view = library({page: 'settings', respond(path) {
     if (path === '/api/v1/backups') return {ok: true, json: async () => ({backups: [

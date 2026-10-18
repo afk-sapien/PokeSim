@@ -812,6 +812,11 @@
       $('#settings-celebi-event').checked = Boolean(game.settings?.celebi_event)
       $('#settings-celebi-event').disabled = running(game) || game.version !== 'crystal'
       $('#settings-celebi-event').toggleAttribute('data-blocked', running(game) || game.version !== 'crystal')
+      $('#settings-fair-dvs-label').hidden = johto
+      $('#settings-fair-dvs-note').hidden = johto
+      $('#settings-fair-wild-dvs').checked = Boolean(game.settings?.fair_wild_dvs)
+      $('#settings-fair-wild-dvs').disabled = running(game) || johto
+      $('#settings-fair-wild-dvs').toggleAttribute('data-blocked', running(game) || johto)
       $('#settings-store-label').hidden = !johto
       $('#settings-extra-store-items').checked = Boolean(game.settings?.extra_store_items)
       $('#settings-extra-store-items').disabled = running(game) || !johto
@@ -865,6 +870,7 @@
     act(async () => {
       const game = adventures.find(item => item.id === $('#settings-id').value)
       const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, celebi_event: $('#settings-celebi-event').checked, extra_store_items: $('#settings-extra-store-items').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
+      if (game && !running(game) && !['gold', 'silver', 'crystal'].includes(game.version)) rewards.fair_wild_dvs = $('#settings-fair-wild-dvs').checked
       if (['gold', 'silver', 'crystal'].includes(game?.version)) {
         for (const field of ['fossil_preference', 'dojo_preference']) delete rewards[field]
       }
