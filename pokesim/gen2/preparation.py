@@ -4,13 +4,25 @@ import time
 from pokesim_core.identity import same
 from ..trade.preferences import identity
 from .teams import key as team_key
-from .menus import ChangeBox, Give, Release, Storage
+from .menus import PROTECTED_MOVES, ChangeBox, Give, Release, Storage
 from .policy import Action
 from pokesim_core.gen2.ram import Memory, read_snapshot
 from .world import update as update_world
 
 KEY = 'interaction_preparation'
 FULL = 'Every PC box is full and no spare duplicate can be safely released to make room for this trade'
+
+
+def reserves(party):
+    """Party slots an automatic trade may deposit, never the lead or the party's only user of a field move."""
+    found = []
+    for index, member in enumerate(party):
+        if not index:
+            continue
+        others = {move for other, mate in enumerate(party) if other != index for move in getattr(mate, 'moves', ())}
+        if PROTECTED_MOVES.intersection(getattr(member, 'moves', ())) <= others:
+            found.append(index)
+    return found
 
 
 def selected(snapshot, preferences, key):
@@ -253,8 +265,7 @@ class Preparation:
             if snapshot.box_counts[snapshot.active_box] >= 20:
                 self.menu = self.make_room(snapshot)
             else:
-                protected = {15, 19, 57, 70, 148, 250, 127}
-                candidates = [i for i, member in enumerate(snapshot.party) if i and not protected.intersection(member.moves)]
+                candidates = reserves(snapshot.party)
                 if not candidates and state.get('manual'):
                     # A manual trade may send any reserve except the lead to the PC.
                     candidates = list(range(1, len(snapshot.party)))

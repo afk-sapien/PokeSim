@@ -362,7 +362,8 @@ class Coordinator:
             return 'An adventure needs a partner with Strength to reach the Cable Club.'
         if 'Cable Club preparation stopped making progress' in error:
             return 'An adventure stopped making progress while preparing for the Cable Club.'
-        if 'No safe unprotected reserve can leave the party' in error:
+        if ('No safe unprotected reserve can leave the party' in error
+                or 'The party has no safe reserve to deposit' in error):
             return 'An adventure could not safely make room in its party for the selected Pokémon.'
         if 'cannot be identified uniquely' in error or 'no longer eligible' in error:
             return 'A selected Pokémon was no longer available for this exchange.'
@@ -394,7 +395,8 @@ class Coordinator:
                   for side in ('left', 'right')]
         if aid and self.trade_blocked.get(aid):
             # The game is left out of automatic trades until it has room, so it is not retried.
-            after = 'It is left out of automatic trades until its PC has room.'
+            after = ('It is left out of automatic trades until its PC has room.' if PC_FULL in (latest.get('error') or '')
+                     else 'It is left out of automatic trades until its party has room.')
         elif any(paused):
             after = ('The same failure repeated, so automatic trading leaves this Pokémon out until '
                      + time.strftime('%H:%M', time.localtime(max(filter(None, paused)))) + '.')
