@@ -338,6 +338,23 @@ def _prerequisites(data, snapshot):
     return needed
 
 
+# Every Elite Four and Champion Pokémon is level 40 or higher, and the five battles field 26 of them.
+LEAGUE_LEVEL, LEAGUE_OPPONENTS = 40, 26
+
+
+def league_ready(policy, snapshot):
+    """Whether the party is strong enough to choose a League run.
+
+    Nothing restores PP inside the League. A level 100 Vaporeon beside Pokémon too weak to face the
+    Elite Four ran out of attacks at Lance and the battle never ended. So the Pokémon at League
+    level need at least one attack for each opponent, counted at full PP since the run heals first.
+    """
+    moves = policy.data.moves
+    return sum(moves.get(move, {}).get('pp', 0) for mon in snapshot.party
+               if not mon.egg and mon.level >= LEAGUE_LEVEL
+               for move in mon.moves if moves.get(move, {}).get('power')) >= LEAGUE_OPPONENTS
+
+
 def league_funding(policy, snapshot, Goal, *, again=False):
     """Run the Elite Four again for prize money, ending with a Hall of Fame entry.
 
@@ -409,6 +426,9 @@ def journey(policy, snapshot, mem, Goal):
         return league_funding(policy, snapshot, Goal)
     loop = state.get('league_loop')
     if loop is not None and snapshot.hall_of_fame_count >= loop:
+        state.pop('league_loop', None)
+    elif loop is not None and not policy.in_league(snapshot) and not league_ready(policy, snapshot):
+        # A postgame run is optional, so a team too weak to finish it trains instead of trying.
         state.pop('league_loop', None)
     elif loop is not None:
         # A postgame League run, once started, finishes with its Hall of Fame entry before new work.
@@ -568,8 +588,10 @@ def journey(policy, snapshot, mem, Goal):
 
 
 def postgame_league(policy, snapshot, mem, current_time):
-    """Whether a postgame League run may start: the Champion is beaten and no clock wait is due."""
+    """Whether a postgame League run may start: the Champion is beaten, the team is ready and no clock wait is due."""
     if 'champion' not in getattr(policy, 'completed', {}) or not snapshot.hall_of_fame_count:
+        return False
+    if not league_ready(policy, snapshot):
         return False
     return clock_wait(policy, snapshot, mem, current_time) is None
 
