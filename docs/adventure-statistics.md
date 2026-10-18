@@ -60,6 +60,8 @@ These are individual totals, separate from the Pokédex's species coverage out o
 151. Partial catch history is labeled as tracked since collection began, and
 perfect finds retain the plus sign for a verified minimum. Unavailable tracking
 is shown explicitly. The API exposes these records under `collection_records`.
+With **Fair wild DVs** off, Red, Blue and Yellow show a note that wild grass and cave
+encounters cannot be shiny or perfect there. Fishing, gifts and trades can.
 
 ## Collection strength
 

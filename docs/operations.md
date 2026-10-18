@@ -74,6 +74,15 @@ Goldenrod 5F) and the Champion shop (supplies at 4F); see
 [Gen II exploration](gen2-exploration.md). `tools/play_gen2.py --extra-store-items` turns it on
 for a scenario run.
 
+## Fair wild DVs
+
+Red, Blue and Yellow adventures have a **Fair wild DVs** setting in the Library, off by default
+and changeable while the adventure is stopped. The cartridge draws wild DVs from two correlated
+random bytes, so grass and cave encounters are never shiny or perfect. With the setting on, each
+wild encounter gets fully random DVs. Trainer, cable and Transform battles and the old man's
+tutorial keep their cartridge DVs. The same saved moment always gives the same DVs, so rewinds
+and replays repeat. Gold, Silver and Crystal do not offer it.
+
 ## Where your data lives
 
 The [desktop guide](desktop.md#your-files-and-backups) lists platform-specific application folders.
@@ -228,7 +237,8 @@ release explicitly supports it. Restore into a separate location to preserve cur
 Gold, Silver and Crystal adventures need 0.5.0 or later. Starting one on 0.4.x fails with
 "Worker exited before becoming ready" and "Unknown settings: celebi_event", because 0.4.x does not know
 Generation II. Older releases cannot be taught a clearer message from this side, so stop those adventures
-before rolling back and use 0.5.0 or later to open them. Generation I adventures roll back normally.
+before rolling back and use 0.5.0 or later to open them. Generation I adventures roll back normally once
+**Fair wild DVs** is turned off.
 
 ## Health, storage, and recovery
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add **Fair wild DVs**, an optional Red, Blue and Yellow adventure setting that is off by default. The cartridge never gives a grass or cave Pokémon shiny or perfect DVs. With the setting on, each wild encounter gets fully random DVs, while trainer, cable and Transform battles keep theirs. With it off, Statistics notes the cartridge limit.
+
 - Bring the Route 12 Snorlax back in Red, Blue and Yellow. After becoming Champion and battling the original Snorlax, every 100,000 steps it blocks the road again, set by the same setting as gift and trade returns. The trainer walks to it with the Poké Flute, wakes it and battles it. A battle that ends without a catch waits for the trainer to leave Route 12 before Snorlax returns, so the road stays clear in the meantime. A missing Snorlax is a new Pokédex entry and goes before repeat work.
 
 - Fix Gold, Silver and Crystal Time Capsule trades stalling at the Pokémon Center PC until "The trainer did not reach the Cable Club before the preparation deadline". When the lead had fainted and the only other party member could not enter the Time Capsule, the game refused to deposit that last Pokémon able to battle, so the PC opened and closed for the whole preparation while the partner waited at the Cable Club. The trainer now walks to the nurse first, then deposits it at the nearest PC from there. A full party also skips a reserve whose deposit the game would refuse.
