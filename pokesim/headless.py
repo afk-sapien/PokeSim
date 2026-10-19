@@ -24,6 +24,8 @@ BLUE_SHA1 = 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2'
 
 
 class HeadlessRun:
+    generation = 1
+
     def __init__(self, rom, checkpoint=None, seed=7, rng=None, reseed=False):
         self.rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
         self.pb = open_emulator(str(rom), default=CoreEmulator, window='null', sound_emulated=False)

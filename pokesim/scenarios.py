@@ -10,15 +10,21 @@ Checkpoints are private game data, so scenario folders live outside the checkout
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
 import json
+import os
 from pathlib import Path
 import random
+import subprocess
+import sys
 
 from .events import diff
+from .game_data import VARIANT_ENV, current_variant
 from .headless import HeadlessRun
 from .ram import PARTY_STRUCT, W_BAG_ITEMS, W_IS_IN_BATTLE, W_MONEY, W_NUM_BAG_ITEMS, W_PARTY_COUNT, W_PARTY_MONS, read_snapshot
 from .stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, advanced
 from .strategy_data import ITEMS
+from .yellow import YELLOW_SHA1
 
 STATUS = {'healthy': 0, 'asleep': 3, 'poisoned': 8, 'burned': 16, 'frozen': 32, 'paralyzed': 64}
 # The active battler is copied out of the party when it enters, so an edit during battle goes to both.
@@ -117,58 +123,229 @@ def discover(root):
     return [Scenario.load(path.parent) for path in sorted(root.glob('**/scenario.json'))] if root.is_dir() else []
 
 
-def play(scenario, rom, progress=None):
-    """Replay one scenario and say whether the player got going again."""
-    run = HeadlessRun(Path(rom), scenario.checkpoint, scenario.seed, rng=random.Random(scenario.seed))
+# Where play looks for a scenario's cartridge when the caller names none. The manifest's ROM hash
+# picks the file, so one replay covers Red, Blue, Yellow, Gold, Silver and Crystal scenarios.
+ROM_VARIABLES = ('ROM_PATH', 'BLUE_ROM_PATH', 'YELLOW_ROM_PATH')
+CARTRIDGE_DIRECTORY = 'GEN2_CARTRIDGE_DIR'
+
+
+def cartridge(checkpoint):
+    """The generation and ROM hash a checkpoint's manifest names."""
+    metadata = json.loads(Path(checkpoint).with_suffix('.json').read_text())
+    return (2 if metadata.get('generation') == 2 else 1), metadata.get('rom_sha1')
+
+
+def rom_candidates(environ=None):
+    environ = os.environ if environ is None else environ
+    paths = [Path(environ[name]) for name in ROM_VARIABLES if environ.get(name)]
+    if environ.get(CARTRIDGE_DIRECTORY):
+        folder = Path(environ[CARTRIDGE_DIRECTORY])
+        paths += sorted(path for path in folder.glob('*') if path.suffix.lower() in ('.gb', '.gbc'))
+    return paths
+
+
+_HASHES = {}
+
+
+def find_rom(sha1, roms):
+    """The first of ``roms`` whose SHA-1 is ``sha1``, or None."""
+    for path in roms:
+        path = Path(path)
+        if not path.is_file():
+            continue
+        key = (path.resolve(), path.stat().st_mtime_ns)
+        if key not in _HASHES:
+            _HASHES[key] = hashlib.sha1(path.read_bytes()).hexdigest()
+        if _HASHES[key] == sha1:
+            return path
+    return None
+
+
+def gen2_data_root(environ=None):
+    environ = os.environ if environ is None else environ
+    if environ.get('GEN2_DATA_DIR'):
+        return Path(environ['GEN2_DATA_DIR'])
+    from .game_data import directory
+    return directory()
+
+
+class Gen1Watch:
+    """Achievements as the Red, Blue and Yellow application counts them for its stall watch."""
+
+    def __init__(self, run):
+        self.run = run
+        self.reset()
+
+    def reset(self):
+        self.previous, self.pending = None, []
+
+    def observe(self, snapshot):
+        events = [event for event in self.pending if event.still(snapshot)]
+        new = diff(self.previous, snapshot, self.run.memory)
+        self.pending = [event for event in new if event.still is not None]
+        events += [event for event in new if event.still is None]
+        earned = (self.previous is not None and self.previous.valid and snapshot.valid
+                  and advanced(self.previous, snapshot))
+        self.previous = snapshot
+        return [(event.type, event.title) for event in events if event.type in PROGRESS_EVENTS], earned
+
+    def battle_clock(self, snapshot, since, frame):
+        """The frame the hung-battle clock counts from, or None outside battle."""
+        return (since or frame) if snapshot.in_battle and snapshot.started else None
+
+    def hopeless(self, snapshot):
+        return bool(self.run.policy.hopeless_battle)
+
+    def in_league(self, snapshot):
+        return False
+
+
+class Gen2Watch:
+    """Achievements as the Gen II runtime counts them: a new best for badges, story events, the
+    Pokédex, areas, experience or League wins restarts its stall watch."""
+
+    def __init__(self, run):
+        self.run = run
+        history = run.history
+        self.maps, self.owned = set(history.get('maps', ())), set(history.get('owned', ()))
+        self.badges, self.league = history.get('badges', 0), history.get('league', 0)
+        self.flags, self.experience = 0, {}
+        self.reset()
+
+    def reset(self):
+        self.previous, self.opponents = None, set()
+
+    def observe(self, snapshot):
+        if not snapshot.valid or not snapshot.started:
+            return [], False
+        data, gained, earned = self.run.data, [], False
+        if snapshot.map not in self.maps:
+            self.maps.add(snapshot.map)
+            gained.append(('map', f'Arrived at {snapshot.map_name}'))
+        for dex in sorted(snapshot.owned - self.owned):
+            self.owned.add(dex)
+            gained.append(('catch', f'{data.species[dex]["name"]} joined the Pokédex'))
+        if snapshot.badges & ~self.badges:
+            self.badges |= snapshot.badges
+            gained.append(('badge', 'Earned a badge'))
+        if snapshot.hall_of_fame_count > self.league:
+            self.league = snapshot.hall_of_fame_count
+            gained.append(('champion', f'Champion! League victory #{snapshot.hall_of_fame_count}'))
+        flags = sum(byte.bit_count() for byte in snapshot.event_flags)
+        if flags > self.flags:
+            earned, self.flags = bool(self.previous), flags
+        for mon in snapshot.party:
+            key = (mon.trainer_id, tuple(mon.dvs or ()), mon.species)
+            if mon.experience > self.experience.get(key, mon.experience):
+                earned = True
+            self.experience[key] = max(mon.experience, self.experience.get(key, 0))
+        previous = {(mon.trainer_id, tuple(mon.dvs or ())): mon for mon in (self.previous.party if self.previous else ())}
+        for mon in snapshot.party:
+            old = previous.get((mon.trainer_id, tuple(mon.dvs or ())))
+            if old and mon.level > old.level and not mon.egg:
+                gained.append(('level', f'{mon.nick} grew to level {mon.level}'))
+        self.previous = snapshot
+        return gained, earned
+
+    def battle_clock(self, snapshot, since, frame):
+        """The runtime restarts its hung-battle clock each time a new opposing Pokémon enters."""
+        if not snapshot.in_battle or not snapshot.started:
+            self.opponents = set()
+            return None
+        opponent = (snapshot.enemy_species, snapshot.enemy_level)
+        if since is None or opponent not in self.opponents:
+            since = frame
+            self.opponents.add(opponent)
+        return since
+
+    def hopeless(self, snapshot):
+        return self.run.policy.hopeless_battle(snapshot)
+
+    def in_league(self, snapshot):
+        return self.run.policy.in_league(snapshot)
+
+
+def open_run(scenario, rom=None):
+    """Boot the scenario's cartridge at its checkpoint. ``rom`` is a file or a list of files to choose from."""
+    generation, sha1 = cartridge(scenario.checkpoint)
+    roms = [rom] if isinstance(rom, (str, Path)) else list(rom or ()) or rom_candidates()
+    path = find_rom(sha1, roms)
+    if path is None:
+        raise FileNotFoundError(f'No cartridge with SHA-1 {sha1} for {scenario.name}')
+    if generation == 2:
+        if scenario.edits:
+            raise ValueError('Scenario edits use the Red, Blue and Yellow memory layout')
+        from .gen2.headless import HeadlessRun as Gen2Run
+        run = Gen2Run(path, scenario.checkpoint, scenario.seed, rng=random.Random(scenario.seed), data_root=gen2_data_root())
+        return run, Gen2Watch(run)
+    run = HeadlessRun(path, scenario.checkpoint, scenario.seed, rng=random.Random(scenario.seed))
+    apply_edits(run.pb.memory, scenario.edits)
+    return run, Gen1Watch(run)
+
+
+def gen1_variant(scenario):
+    """The Gen I game data a scenario needs, or None for Gen II, which loads its data per run."""
+    generation, sha1 = cartridge(scenario.checkpoint)
+    return None if generation == 2 else 'yellow' if sha1 == YELLOW_SHA1 else 'red'
+
+
+def play(scenario, rom=None, progress=None):
+    """Replay one scenario and say whether the player got going again.
+
+    The Gen I policy reads its game data once at import, so a Yellow scenario in a Red process, or
+    the reverse, replays in a fresh interpreter with the matching data.
+    """
+    variant = gen1_variant(scenario)
+    if variant is not None and variant != current_variant():
+        return _play_elsewhere(scenario, rom, variant)
+    run, watch = open_run(scenario, rom)
+    read = run.read if run.generation == 2 else lambda: read_snapshot(run.pb.memory, run.frame)
     try:
-        apply_edits(run.pb.memory, scenario.edits)
         start = progress_frame = run.frame
         budget = scenario.budget_game_minutes * MINUTE
-        previous, pending, battle_frame = None, [], None
+        battle_frame = None
         worst, reloads, achieved, failure, reached = 0, 0, [], None, scenario.until is None
         while run.frame - start < budget:
-            snapshot = read_snapshot(run.pb.memory, run.frame)
-            events = [event for event in pending if event.still(snapshot)]
-            new = diff(previous, snapshot, run.memory)
-            pending = [event for event in new if event.still is not None]
-            events += [event for event in new if event.still is None]
-            earned = previous is not None and previous.valid and snapshot.valid and advanced(previous, snapshot)
-            previous = snapshot
-            gained = [event for event in events if event.type in PROGRESS_EVENTS]
-            if gained or earned:
+            snapshot = read()
+            gained, earned = watch.observe(snapshot)
+            if gained or earned or run.generation == 2 and snapshot.started and run.waiting(snapshot):
                 progress_frame = run.frame
-            for event in gained:
-                achieved.append({'minute': (run.frame - start) // MINUTE, 'type': event.type, 'title': event.title})
+            for kind, title in gained:
+                achieved.append({'minute': (run.frame - start) // MINUTE, 'type': kind, 'title': title})
                 if progress:
-                    progress(f'{scenario.name}: {achieved[-1]["minute"]}m {event.title}')
-            if scenario.until and any(event.type == scenario.until for event in gained):
+                    progress(f'{scenario.name}: {achieved[-1]["minute"]}m {title}')
+            if scenario.until and any(kind == scenario.until for kind, _ in gained):
                 reached = True
                 break
-            battle_frame = (battle_frame or run.frame) if snapshot.in_battle and snapshot.started else None
+            battle_frame = watch.battle_clock(snapshot, battle_frame, run.frame)
             worst = max(worst, run.frame - progress_frame)
             if run.frame - progress_frame >= scenario.max_quiet_game_minutes * MINUTE:
                 failure = f'nothing achieved for {scenario.max_quiet_game_minutes} game minutes'
                 break
-            if battle_frame and (run.frame - battle_frame >= scenario.battle_timeout_game_minutes * MINUTE
-                                 or getattr(run.policy, 'hopeless_battle', False)):
+            hopeless = battle_frame is not None and watch.hopeless(snapshot)
+            if battle_frame and (run.frame - battle_frame >= scenario.battle_timeout_game_minutes * MINUTE or hopeless):
                 # The application reloads a save from before a battle that never ends, and restarts
-                # the League attempt from its entry save when that did not help.
+                # the League attempt from its entry save when that did not help. Gen II restarts it at
+                # once when the battle inside the League cannot be won.
                 reloads += 1
                 if reloads > scenario.max_reloads:
                     failure = f'a battle could not end after {scenario.max_reloads} reloads'
                     break
-                if reloads >= 2 and scenario.fallback:
+                if scenario.fallback and (reloads >= 2 or hopeless and watch.in_league(snapshot)):
                     run.reload(scenario.fallback)
                 else:
                     run.reload(scenario.checkpoint)
-                    apply_edits(run.pb.memory, scenario.edits)
-                previous, pending, battle_frame = None, [], None
+                    if run.generation == 1:
+                        apply_edits(run.pb.memory, scenario.edits)
+                watch.reset()
+                battle_frame = None
+                continue
             run.step(snapshot)
         if failure is None and not reached:
             failure = f'no {scenario.until} within {scenario.budget_game_minutes} game minutes'
-        final = read_snapshot(run.pb.memory, run.frame)
+        final = read()
         details = run.policy.details()
-        return {'name': scenario.name, 'passed': failure is None, 'failure': failure,
+        return {'name': scenario.name, 'generation': run.generation, 'passed': failure is None, 'failure': failure,
                 'game_minutes': (run.frame - start) // MINUTE, 'worst_quiet_minutes': worst // MINUTE,
                 'reloads': reloads, 'policy_recoveries': run.policy.recoveries, 'achieved': achieved[-12:],
                 'achievements': len(achieved), 'final_map': final.map_name,
@@ -176,3 +353,23 @@ def play(scenario, rom, progress=None):
                 'objective': (details.get('objective') or {}).get('title'), 'reason': details.get('reason')}
     finally:
         run.stop()
+
+
+def _play_elsewhere(scenario, rom, variant):
+    roms = [rom] if isinstance(rom, (str, Path)) else list(rom or ())
+    command = [sys.executable, '-m', 'pokesim.scenarios', str(scenario.folder)]
+    command += [part for path in roms for part in ('--rom', str(path))]
+    done = subprocess.run(command, env={**os.environ, VARIANT_ENV: variant}, cwd=Path(__file__).resolve().parents[1],
+                          capture_output=True, text=True, check=False)
+    if done.returncode:
+        raise RuntimeError(f'{scenario.name} failed to replay: {done.stderr.strip()[-2000:]}')
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='Replay one scenario and print its result as JSON')
+    parser.add_argument('folder', type=Path)
+    parser.add_argument('--rom', type=Path, action='append')
+    arguments = parser.parse_args()
+    print(json.dumps(play(Scenario.load(arguments.folder), arguments.rom)))

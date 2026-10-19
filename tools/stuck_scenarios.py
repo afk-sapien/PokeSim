@@ -4,6 +4,9 @@
   run   replay every scenario in parallel and report which ones still get stuck
   show  describe the party, bag and place a checkpoint holds, after the scenario's edits
 
+Red, Blue, Yellow, Gold, Silver and Crystal checkpoints all replay, each on the cartridge its manifest
+names. Edits change Red, Blue and Yellow memory only.
+
 Scenario folders hold private game data and must stay outside the checkout or under data/.
 """
 import argparse
@@ -18,9 +21,8 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from pokesim.headless import HeadlessRun
 from pokesim.ram import ITEM_NAMES, read_snapshot
-from pokesim.scenarios import STATUS, Scenario, apply_edits, discover, play
+from pokesim.scenarios import STATUS, Scenario, discover, open_run, play
 
 DEFAULT_ROOT = ROOT / 'data' / 'scenarios'
 
@@ -84,16 +86,22 @@ def add(args):
 
 def show(args):
     scenario = Scenario.load(args.scenario)
-    run = HeadlessRun(args.rom, scenario.checkpoint, scenario.seed)
+    run, _ = open_run(scenario, args.rom)
     try:
-        apply_edits(run.pb.memory, scenario.edits)
-        snapshot = read_snapshot(run.pb.memory, run.frame)
+        if run.generation == 2:
+            snapshot = run.read()
+            items = ', '.join(f'{run.data.item_names.get(item, item)} x{count}' for item, count in snapshot.items)
+        else:
+            snapshot = read_snapshot(run.pb.memory, run.frame)
+            items = ', '.join(f'{ITEM_NAMES.get(item, item)} x{count}' for item, count in snapshot.items)
+        goal = getattr(run.policy, 'goal', None)
         print(f'{scenario.name}: {snapshot.map_name} ({snapshot.x}, {snapshot.y}), '
               f'{bin(snapshot.badges).count("1")} badges, ${snapshot.money}, '
-              f'{"in battle" if snapshot.in_battle else "in the field"}, goal "{run.policy.goal.title}"')
+              f'{"in battle" if snapshot.in_battle else "in the field"}'
+              + (f', goal "{goal.title}"' if goal else ''))
         for mon in snapshot.party:
             print(f'  {mon.name:<11} L{mon.level:<3} {mon.hp}/{mon.max_hp} status {mon.status} pp {list(mon.pp)}')
-        print('  bag: ' + ', '.join(f'{ITEM_NAMES.get(item, item)} x{count}' for item, count in snapshot.items))
+        print('  bag: ' + items)
     finally:
         run.stop()
 
@@ -129,7 +137,9 @@ def run(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--rom', type=Path, default=Path(os.environ.get('ROM_PATH', ROOT / 'roms' / 'pokered.gb')))
+    parser.add_argument('--rom', type=Path, action='append',
+                        help='a cartridge to replay with, repeatable. By default ROM_PATH, BLUE_ROM_PATH, '
+                             'YELLOW_ROM_PATH and the cartridges in GEN2_CARTRIDGE_DIR, chosen by the checkpoint ROM hash')
     parser.add_argument('--root', type=Path, default=Path(os.environ.get('POKESIM_SCENARIOS', DEFAULT_ROOT)))
     commands = parser.add_subparsers(dest='command', required=True)
     adding = commands.add_parser('add', help='keep a checkpoint as a scenario')
