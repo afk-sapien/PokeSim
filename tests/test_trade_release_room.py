@@ -68,18 +68,18 @@ def test_a_lenient_release_still_keeps_shiny_perfect_and_rare_copies():
     assert spares(full([shiny, perfect, egg]), lenient=True) == []
 
 
-@pytest.fixture(scope='module')
-def gold():
+@pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
+def gen2_data(request):
     directory = os.environ.get('GEN2_DATA_DIR')
     if not directory:
         pytest.skip('Set GEN2_DATA_DIR to generated local game data')
     from pokesim.gen2.data import GameData
-    return GameData.load(directory, 'gold')
+    return GameData.load(directory, request.param)
 
 
-def test_trade_spare_protects_keep_hand_picked_and_wished_pokemon(gold):
+def test_trade_spare_protects_keep_hand_picked_and_wished_pokemon(gen2_data):
     from pokesim.gen2.policy import Policy
-    policy = Policy(gold, seed=1, starter='chikorita')
+    policy = Policy(gen2_data, seed=1, starter='chikorita')
     snapshot = gold_like()
     weakest, middle, best = sorted(snapshot.stored[4:], key=lambda m: sum(m.dvs))
     assert policy.release_target(snapshot) is None
