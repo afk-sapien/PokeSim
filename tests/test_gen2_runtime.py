@@ -1741,12 +1741,13 @@ def test_tower_teaches_psychic_to_the_stronger_special_attacker(real_data):
     assert policy.menu.move == 94 and policy.menu.slot == 1
 
 
-def test_box_change_opens_the_pc_and_runs_the_core_shortcut(monkeypatch):
+@pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])
+def test_box_change_opens_the_pc_and_runs_the_core_shortcut(monkeypatch, version):
     from pokesim.gen2 import menus
     screens = iter(['overworld', 'pc'])
     monkeypatch.setattr(menus, 'current_screen', lambda memory, version: next(screens))
     menu = menus.ChangeBox(3)
-    snapshot = SimpleNamespace(active_box=0, data=SimpleNamespace(game='crystal'))
+    snapshot = SimpleNamespace(active_box=0, data=SimpleNamespace(game=version))
     mem = SimpleNamespace(memory=None)
     assert menu.step(snapshot, mem) == 'a'
     monkeypatch.setattr(menus.CoreChangeBox, 'step', lambda self, memory, ui: 'down')
