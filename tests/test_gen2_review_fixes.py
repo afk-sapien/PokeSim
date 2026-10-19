@@ -110,7 +110,7 @@ def test_contest_entry_that_never_reaches_the_gate_stands_down(monkeypatch):
     assert 'contest' not in policy.collection and standing_down(policy, contest.CONTEST_KEY)
 
 
-@pytest.fixture(scope='module', params=['gold', 'silver'])
+@pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
 def real_data(request):
     import os
     from pokesim.gen2.data import GameData
@@ -125,7 +125,8 @@ def rock_case(data, party, items=()):
     policy = SimpleNamespace(data=data, collection={}, returned=set(), decisions=1000,
                              nav=SimpleNamespace(regions=SimpleNamespace(cleared_rocks={})),
                              person=lambda snapshot, key, *args: SimpleNamespace(key=key))
-    snapshot = SimpleNamespace(owned=set(), can_catch=True, items=tuple(items), event=lambda name: name in flags,
+    # Celebi is registered, so Crystal's GS Ball errand comes after the rock.
+    snapshot = SimpleNamespace(owned={251}, can_catch=True, items=tuple(items), event=lambda name: name in flags,
                                map=data.map_ids['NEW_BARK_TOWN'], party=party, stored=[], roamers=())
     return policy, snapshot
 
@@ -141,6 +142,11 @@ def test_burned_tower_rock_needs_someone_who_can_smash_it(real_data):
     from pokesim.gen2.standdown import standing_down
     tm = (real_data.items['TM_ROCK_SMASH'], 1)
     policy, snapshot = rock_case(real_data, [party_mon(74)], [tm])
+    if real_data.game == 'crystal':
+        # Crystal wakes the beasts during the story, so there is no rock to clear.
+        assert quests.legends(policy, snapshot, Goal).key == 'pewter_wing'
+        assert not standing_down(policy, quests.RELEASE_ROCK_KEY)
+        return
     assert quests.legends(policy, snapshot, Goal).key == 'collection_release_rock'
     policy, snapshot = rock_case(real_data, [party_mon(74, (249, 0, 0, 0))])
     assert quests.legends(policy, snapshot, Goal).key == 'collection_release_rock'
