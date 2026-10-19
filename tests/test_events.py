@@ -135,6 +135,8 @@ def test_intro_and_glitch_are_silent():
 def test_validity():
     assert snap().valid
     assert not snap(in_battle=1, party=()).valid
+    # Yellow's opening, where Oak catches Pikachu in a battle the player watches with no party.
+    assert snap(map=0, in_battle=1, battle_type=4, party=(), playtime=(0, 0, 22)).valid
     assert not snap(playtime=(0, 77, 0)).valid
     assert snap().started
     assert snap(player_name="").started
