@@ -25,7 +25,6 @@ from ..ram import MAP_NAMES
 
 DATA = load('collection.json')
 EVOS = {int(sid): rows for sid, rows in DATA['evolutions'].items()}
-PROJECT_BUDGET = 10800
 PROJECT_COOLDOWN = 12000
 CENTERS = tuple((m, 13, 4) for m, w in WORLD.items() if 'Pokecenter' in w['name'] and w['width'] == 14)
 CENTERS += ((MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8),)
@@ -602,8 +601,6 @@ class Collection:
             return self.goal(s)
         if self.cooldown or self.elapsed-self.last_choice < 600:
             return None
-        if not self.completed_champion and main.key.startswith('league_'):
-            return None
         self.last_choice = self.elapsed
         bag = dict(s.items)
         held = [(p.species,p.level,None) for p in s.party] + [(sid,level,box) for box,sid,level,nick in s.stored_pokemon]
@@ -641,7 +638,7 @@ class Collection:
         distance_to = nav.distance_lookup((s.map, s.x, s.y), s.frame)
         plateau_maps = {MAPS[n] for n in ('INDIGO_PLATEAU', 'INDIGO_PLATEAU_LOBBY',
                         'ROUTE_23', 'VICTORY_ROAD_1F', 'VICTORY_ROAD_2F', 'VICTORY_ROAD_3F')}
-        if (self.completed_champion and s.map in plateau_maps
+        if (s.map in plateau_maps
                 and any(70 in mon.moves for mon in s.party)
                 and distance_to(((MAPS['ROUTE_23'], 8, 138),)) is None):
             # At a project boundary, reopen the route instead of endlessly selecting
@@ -664,8 +661,6 @@ class Collection:
                 if not self.available(s,source):
                     continue
                 mode = source['method']
-                if not self.completed_champion and source['map'] != s.map:
-                    continue
                 if mode in ('grass','surf','fish','safari','static') and (not s.can_catch or not any(bag.get(ITEMS[n]) for n in ('POKE_BALL','GREAT_BALL','ULTRA_BALL','MASTER_BALL'))):
                     continue
                 if mode == 'surf' and not nav.can_surf:
@@ -679,8 +674,6 @@ class Collection:
                     continue
                 offered = self.trade_candidate(s, source) if mode == 'trade' else None
                 if mode == 'trade' and offered is None:
-                    continue
-                if mode in ('gift','fossil','trade','static') and not self.completed_champion and s.map != source['map']:
                     continue
                 if mode in ('gift','fossil') and len(s.party)>=6 and not storage_exchange_possible(s):
                     continue
@@ -727,8 +720,6 @@ class Collection:
                 distance = distance_to(goal.targets)
                 if distance is None:
                     continue
-                if not self.completed_champion and (source['map'] != s.map or distance>60):
-                    continue
                 weight = self.capture_weight(s, sid) if mode in REPEATABLE else 5 if mode in ('gift','fossil','static') else 1
                 add(project, 5 if legendary_project(project) else weight / (1+distance/40))
         individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
@@ -750,7 +741,7 @@ class Collection:
                     continue
                 registered = dex(evo['species']) in s.owned
                 evolved = dict(mon, species=evo['species'])
-                upgrade = (self.completed_champion and key and potential_power(evolved) is not None
+                upgrade = (key and potential_power(evolved) is not None
                            and potential_power(evolved) > best_potential.get(evo['species'], -1)
                            and training_investment(evolved, individuals)['eligible'])
                 if registered and not upgrade:
@@ -762,7 +753,7 @@ class Collection:
                     continue
                 if evo['method'] == 'level' and level >= 100:
                     continue
-                if box is not None and (not self.completed_champion or not partner_exchange_possible(s)):
+                if box is not None and not partner_exchange_possible(s):
                     continue
                 project = {'species': evo['species'], 'parent': sid, 'method': 'evolve',
                            'evolution': evo, 'box': box, 'trainee_key': key,
@@ -772,83 +763,82 @@ class Collection:
                 if key and len(self.partner_matches(s, project)) != 1:
                     continue
                 add(project, 3)
-        if self.completed_champion:
-            huntable = {p['species'] for _, p in candidates if p.get('dv_hunt')}
-            counts = Counter(sid for sid, level, box in held)
-            individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
-            preferences = self.trade_preferences()
-            # A stronger stored copy that cannot be withdrawn must not keep the party copy from training.
-            exchange = partner_exchange_possible(s)
-            reachable_best = {}
-            for mon in individuals:
-                if exchange or mon['box'] is None:
-                    reachable_best[mon['species']] = max(reachable_best.get(mon['species'], -1), potential_power(mon) or -1)
-            for mon in individuals:
-                sid, level, box = mon['species'], mon['level'], mon.get('box')
-                family = training_family(sid)
-                key = identity(mon)
-                if counts[sid] <= self.demand().get(dex(sid), 0):
-                    continue
-                if (potential_power(mon) or -1) < reachable_best.get(sid, -1):
-                    continue
-                if level >= 100 or preferences.get(key, {}).get('state') == 'offered':
-                    continue
-                reference = {'trainee_key': key, 'family': family, 'trainee_nick': mon.get('nick', ''), 'scoped_partner': True}
-                if (key and len(self.partner_matches(s, reference)) != 1
-                        or not key and sum(counts[relative] for relative in family) != 1):
-                    continue
-                if box is not None and not partner_exchange_possible(s):
-                    continue
-                # Prefer missing evolutions before a general level milestone for this partner. A stone
-                # counts too: a Weepinbell was being trained to level 100 with Victreebel unregistered.
-                if any(evo['method'] != 'trade' and dex(evo['species']) not in s.owned for evo in EVOS.get(sid, [])):
-                    continue
-                investment = training_investment(mon, individuals, hunt_available=sid in huntable,
-                                                 searches=self.quality_searches.get(str(sid), 0))
-                if not investment['eligible']:
-                    continue
-                # Aim for the next ten rather than the whole climb. Training to 100 in one project
-                # held a partner for hundreds of game hours while trades and unregistered species
-                # waited; a ten level step finishes, hands the turn back, and resumes later.
-                add({**reference, 'method': 'train', 'parent': sid, 'family': family,
-                     'trainee_key': key, 'box': box, 'initial_level': level,
-                     'target_level': min(100, level - level % 10 + 10),
-                     'investment_priority': investment['priority'],
-                     'investment_reason': investment['reason'],
-                     'perfect_partner': is_perfect(mon),
-                     'mastery_needed': any(level_credit(relative) - set(self.milestones.get('level_100', ())) for relative in family)},
-                    investment['weight'])
-            if (self.elapsed >= self.next_marathon and s.saffron_open and nav.can_cut
-                    and sum(self.director.completed.values()) >= 4):
-                add(marathon.candidate(), 1)
-            add({'method':'rematch','hof_count':s.hall_of_fame_count}, 10 if s.money < 10000 else 2)
-            porygon = next(sid for sid,mon in SPECIES.items() if mon['dex']==137)
-            if 137 not in s.owned and (s.money >= 20000 or s.coins >= PORYGON_COINS.get(self.version, 9999)):
-                add({'method':'prize','species':porygon,'map':MAPS['GAME_CORNER_PRIZE_ROOM']},0.5)
-            for trainer in DATA.get('trainers',[]):
-                if trainer['map'] in LEAGUE or event_set(s.event_flags,trainer['flag']):
-                    continue
-                if trainer['map'] == s.map:
-                    add(dict(trainer,method='trainer'),1.5)
-            unseen = []
-            visited = {m for m,x,y in nav.visits}
-            for m,w in WORLD.items():
-                if m in visited or m in LEAGUE or m==s.map or not w['warps']:
-                    continue
-                warp = w['warps'][0]
-                target = (m,warp[0],max(0,warp[1]-1))
-                unseen.append((m,target))
-            rng.shuffle(unseen)
-            for m,target in unseen[:8]:
-                if distance_to((target,)) is not None:
-                    add({'method':'explore','map':m,'target':target},0.3)
-                    break
-            for rod,room in RODS.items():
-                if not bag.get(ITEMS[rod]):
-                    add({'method':'rod','item':rod,'map':MAPS[room],'room':room},2)
-            if not bag.get(ITEMS['OLD_AMBER']) and 142 not in s.owned:
-                if not event_set(s.event_flags,'EVENT_GOT_OLD_AMBER'):
-                    add({'method':'amber','item':'OLD_AMBER','map':MAPS['MUSEUM_1F']},1)
+        huntable = {p['species'] for _, p in candidates if p.get('dv_hunt')}
+        counts = Counter(sid for sid, level, box in held)
+        individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
+        preferences = self.trade_preferences()
+        # A stronger stored copy that cannot be withdrawn must not keep the party copy from training.
+        exchange = partner_exchange_possible(s)
+        reachable_best = {}
+        for mon in individuals:
+            if exchange or mon['box'] is None:
+                reachable_best[mon['species']] = max(reachable_best.get(mon['species'], -1), potential_power(mon) or -1)
+        for mon in individuals:
+            sid, level, box = mon['species'], mon['level'], mon.get('box')
+            family = training_family(sid)
+            key = identity(mon)
+            if counts[sid] <= self.demand().get(dex(sid), 0):
+                continue
+            if (potential_power(mon) or -1) < reachable_best.get(sid, -1):
+                continue
+            if level >= 100 or preferences.get(key, {}).get('state') == 'offered':
+                continue
+            reference = {'trainee_key': key, 'family': family, 'trainee_nick': mon.get('nick', ''), 'scoped_partner': True}
+            if (key and len(self.partner_matches(s, reference)) != 1
+                    or not key and sum(counts[relative] for relative in family) != 1):
+                continue
+            if box is not None and not partner_exchange_possible(s):
+                continue
+            # Prefer missing evolutions before a general level milestone for this partner. A stone
+            # counts too: a Weepinbell was being trained to level 100 with Victreebel unregistered.
+            if any(evo['method'] != 'trade' and dex(evo['species']) not in s.owned for evo in EVOS.get(sid, [])):
+                continue
+            investment = training_investment(mon, individuals, hunt_available=sid in huntable,
+                                             searches=self.quality_searches.get(str(sid), 0))
+            if not investment['eligible']:
+                continue
+            # Aim for the next ten rather than the whole climb. Training to 100 in one project
+            # held a partner for hundreds of game hours while trades and unregistered species
+            # waited; a ten level step finishes, hands the turn back, and resumes later.
+            add({**reference, 'method': 'train', 'parent': sid, 'family': family,
+                 'trainee_key': key, 'box': box, 'initial_level': level,
+                 'target_level': min(100, level - level % 10 + 10),
+                 'investment_priority': investment['priority'],
+                 'investment_reason': investment['reason'],
+                 'perfect_partner': is_perfect(mon),
+                 'mastery_needed': any(level_credit(relative) - set(self.milestones.get('level_100', ())) for relative in family)},
+                investment['weight'])
+        if (self.elapsed >= self.next_marathon and s.saffron_open and nav.can_cut
+                and sum(self.director.completed.values()) >= 4):
+            add(marathon.candidate(), 1)
+        add({'method':'rematch','hof_count':s.hall_of_fame_count}, 10 if s.money < 10000 else 2)
+        porygon = next(sid for sid,mon in SPECIES.items() if mon['dex']==137)
+        if 137 not in s.owned and (s.money >= 20000 or s.coins >= PORYGON_COINS.get(self.version, 9999)):
+            add({'method':'prize','species':porygon,'map':MAPS['GAME_CORNER_PRIZE_ROOM']},0.5)
+        for trainer in DATA.get('trainers',[]):
+            if trainer['map'] in LEAGUE or event_set(s.event_flags,trainer['flag']):
+                continue
+            if trainer['map'] == s.map:
+                add(dict(trainer,method='trainer'),1.5)
+        unseen = []
+        visited = {m for m,x,y in nav.visits}
+        for m,w in WORLD.items():
+            if m in visited or m in LEAGUE or m==s.map or not w['warps']:
+                continue
+            warp = w['warps'][0]
+            target = (m,warp[0],max(0,warp[1]-1))
+            unseen.append((m,target))
+        rng.shuffle(unseen)
+        for m,target in unseen[:8]:
+            if distance_to((target,)) is not None:
+                add({'method':'explore','map':m,'target':target},0.3)
+                break
+        for rod,room in RODS.items():
+            if not bag.get(ITEMS[rod]):
+                add({'method':'rod','item':rod,'map':MAPS[room],'room':room},2)
+        if not bag.get(ITEMS['OLD_AMBER']) and 142 not in s.owned:
+            if not event_set(s.event_flags,'EVENT_GOT_OLD_AMBER'):
+                add({'method':'amber','item':'OLD_AMBER','map':MAPS['MUSEUM_1F']},1)
         fossil = getattr(self, 'returned_events', {}).get('fossil')
         if fossil and not bag.get(ITEMS[fossil['item']]):
             add({'method': 'return_fossil', 'map': fossil['room'], 'item': fossil['item'],
@@ -859,9 +849,7 @@ class Collection:
         if not candidates:
             self.cooldown = 3600
             return None
-        self.project = (self.director.select(candidates, rng, urgent=s.money < 10000)
-                        if self.completed_champion else
-                        rng.choices([p for w,p in candidates],weights=[w for w,p in candidates])[0])
+        self.project = self.director.select(candidates, rng, urgent=s.money < 10000)
         if self.project['method'] == 'rematch':
             self.prepare_league_rotation(s)
         if self.project['method'] == 'marathon':
@@ -874,7 +862,7 @@ class Collection:
         self.project_maps = [s.map]
         self.project_flags = list(s.event_flags)
         self.progress_token = None
-        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project.get('event_return') or self.project['method'] in ('trade', 'fossil') else training.TRAINING_BUDGET if self.project['method']=='train' or self.project['method']=='evolve' else 108000 if self.project.get('dv_hunt') else 36000 if self.completed_champion else PROJECT_BUDGET
+        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project.get('event_return') or self.project['method'] in ('trade', 'fossil') else training.TRAINING_BUDGET if self.project['method']=='train' or self.project['method']=='evolve' else 108000 if self.project.get('dv_hunt') else 36000
         if self.project['method'] == 'marathon':
             self.remaining = marathon.BUDGET
         nav.path.clear()
