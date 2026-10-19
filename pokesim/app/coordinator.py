@@ -354,8 +354,12 @@ class Coordinator:
             return 'An adventure could not reach the Cable Club from its current location.'
         if 'route to the Cable Club is blocked by an unresolved obstacle' in error:
             return 'An obstacle still blocks an adventure’s route to the Cable Club.'
-        if 'Cable Club preparation exceeded its travel deadline' in error:
+        if any(text in error for text in ('Cable Club preparation exceeded its travel deadline',
+                                          'did not reach the Cable Club before the preparation deadline',
+                                          'did not reach a safe Cable Club rendezvous in time')):
             return 'An adventure took too long to reach the Cable Club and prepare its Pokémon.'
+        if 'Resume autonomous play before preparing a trade' in error:
+            return 'An adventure was paused or under manual control, so it could not prepare its Pokémon.'
         if PC_FULL in error:
             return 'An adventure has a full PC and no spare duplicate it can safely release to make room for this trade.'
         if 'route to the Cable Club needs a partner with Strength' in error:
@@ -644,7 +648,10 @@ class Coordinator:
             if len(prepared) == 2:
                 return prepared
             if time.monotonic() >= deadline:
-                raise TimeoutError('The adventures did not reach a safe Cable Club rendezvous in time')
+                waiting = [aid for aid in plan['participants'] if aid not in prepared]
+                # Name the game that never got ready, so the failure says which one to look at.
+                tag = f' (adventure {waiting[0]})' if len(waiting) == 1 else ''
+                raise TimeoutError('The adventures did not reach a safe Cable Club rendezvous in time' + tag)
             self.closed.wait(self.prepare_poll)
         return prepared
 

@@ -395,13 +395,41 @@ def assert_both_aborted(matrix, row, left, right):
 @pytest.mark.parametrize('stalled', ['left', 'right'])
 @pytest.mark.parametrize('pair', PAIRS, ids=label)
 def test_a_side_that_never_finishes_preparing_aborts_both(matrix, pair, stalled):
+    """Regression: a Crystal and Red trade timed out with Red paused, and the banner could not say which
+    game never got ready or that it took too long."""
     request, left, right = matrix.pair(*pair)
-    (left if stalled == 'left' else right).stall = True
+    late = left if stalled == 'left' else right
+    late.stall = True
     matrix.coordinator.prepare_timeout = 0
     row = matrix.coordinator.execute(matrix.coordinator.propose(request)['id'])
     assert_both_aborted(matrix, row, left, right)
-    assert row['error'].startswith('The adventures did not reach a safe Cable Club rendezvous in time')
+    assert row['error'] == f'The adventures did not reach a safe Cable Club rendezvous in time (adventure {late.aid})'
     assert matrix.cable_calls == []
+    name = matrix.registry.adventure(late.aid)['name']
+    assert matrix.coordinator._failure_reason(row) == (
+        f'{name} ({late.version.title()}) took too long to reach the Cable Club and prepare its Pokémon.')
+
+
+def test_both_sides_missing_the_rendezvous_name_neither(matrix):
+    request, left, right = matrix.pair('crystal', 'red')
+    left.stall = right.stall = True
+    matrix.coordinator.prepare_timeout = 0
+    row = matrix.coordinator.execute(matrix.coordinator.propose(request)['id'])
+    assert_both_aborted(matrix, row, left, right)
+    assert row['error'] == 'The adventures did not reach a safe Cable Club rendezvous in time'
+    assert matrix.coordinator._failure_reason(row) == (
+        'An adventure took too long to reach the Cable Club and prepare its Pokémon.')
+
+
+@pytest.mark.parametrize('version', GEN2)
+def test_the_gen2_preparation_deadline_reads_as_taking_too_long(matrix, version):
+    """Regression: Gen II's own deadline fell through to the reason for an unknown failure."""
+    request, left, right = matrix.pair(version, 'red')
+    left.prepare_error = 'The trainer did not reach the Cable Club before the preparation deadline'
+    row = matrix.coordinator.execute(matrix.coordinator.propose(request)['id'])
+    assert_both_aborted(matrix, row, left, right)
+    assert matrix.coordinator._failure_reason(row) == (
+        f'{version.title()} 0 ({version.title()}) took too long to reach the Cable Club and prepare its Pokémon.')
 
 
 @pytest.mark.parametrize('paused', ['left', 'right'])
@@ -414,6 +442,9 @@ def test_a_paused_side_aborts_both_and_is_named(matrix, pair, paused):
     assert_both_aborted(matrix, row, left, right)
     assert row['error'] == f'Resume autonomous play before preparing a trade (adventure {held.aid})'
     assert matrix.cable_calls == []
+    name = matrix.registry.adventure(held.aid)['name']
+    assert matrix.coordinator._failure_reason(row) == (
+        f'{name} ({held.version.title()}) was paused or under manual control, so it could not prepare its Pokémon.')
 
 
 @pytest.mark.parametrize('pair', PAIRS, ids=label)

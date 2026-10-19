@@ -12,6 +12,8 @@
 
 - Fix Red, Blue and Yellow trades failing with "The PC could not withdraw for this trade: Menu did not respond". A nickname received in a cable trade carried a text command, so the PC box list stalled on that name while scrolling and never reached the Pokémon stored after it. Red offered Muk, Kabutops and others from behind such a name in Box 11, and each trade travelled to the PC only to fail. Those Pokémon are no longer offered, and a trade that picks one stops before travelling with a reason.
 
+- Fix trade failures that did not say which game held them up. When one side never reached the Cable Club, the reason now names that adventure. A Gold, Silver or Crystal trainer that missed its preparation deadline now reads as taking too long to reach the Cable Club, and a paused or manually controlled adventure is named as the reason, instead of both reading "could not finish safely".
+
 ## 0.5.1
 
 - Keep counting Gold, Silver and Crystal League wins past 200. The cartridge stops recording Hall of Fame entries at 200, so a finished run kept challenging the League for a victory that never arrived, earned no rewards and raised "Stuck? N game hours without progress" every six hours. A win from Lance's Room into the Hall of Fame now counts once the cartridge stops, and each League win counts as progress.
