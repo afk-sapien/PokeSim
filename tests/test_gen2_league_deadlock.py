@@ -5,8 +5,11 @@ Vaporeon spent its last Hydro Pump and Waterfall before Lance, then kept Growlin
 with Rest and Growl PP left, so not even Struggle could end the battle. The battle timeout
 reloaded the same save from Karen's room three times and gave up.
 """
+import os
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from pokesim.gen2 import collection
 from pokesim.gen2.emulator import CANNOT_END, LEAGUE_CHECKPOINT, Emulator
@@ -28,7 +31,19 @@ DATA = SimpleNamespace(
     moves={HYDRO_PUMP: move('Hydro Pump', 120, 21, 5), WATERFALL: move('Waterfall', 80, 21, 15),
            REST: move('Rest', 0, 24, 10), GROWL: move('Growl', 0, 0, 40), PECK: move('Peck', 35, 2, 35),
            SURF: move('Surf', 95, 21, 15)},
-    matchups={(21, 21): 0.5}, items={'MAX_ELIXER': 1, 'ELIXER': 2}, map_ids={'INDIGO_PLATEAU_POKECENTER_1F': 7})
+    matchups={(21, 21): 0.5}, items={'MAX_ELIXER': 1, 'ELIXER': 2}, map_ids={'INDIGO_PLATEAU_POKECENTER_1F': 7, 'ROUTE_23': 3})
+
+
+@pytest.fixture(scope='module', params=['synthetic', 'gold', 'silver', 'crystal'])
+def data(request):
+    """The moves, species and maps above, then each cartridge's own."""
+    if request.param == 'synthetic':
+        return DATA
+    directory = os.environ.get('GEN2_DATA_DIR')
+    if not directory:
+        pytest.skip('Set GEN2_DATA_DIR to generated local game data')
+    from pokesim.gen2.data import GameData
+    return GameData.load(directory, request.param)
 
 
 def mon(species, level, hp, moves, pp):
@@ -45,22 +60,21 @@ def lance(party, items=(), in_battle=2):
                            enemy_hp=150, hall_of_fame_count=215)
 
 
-def policy():
-    fake = SimpleNamespace(data=DATA)
+def policy(data):
+    fake = SimpleNamespace(data=data)
     fake.move_score = lambda mid, mon, snapshot: Policy.move_score(fake, mid, mon, snapshot)
     return fake
 
 
-def hopeless(snapshot):
-    return Policy.hopeless_battle(policy(), snapshot)
-
-
-def test_a_party_with_nothing_but_rest_and_growl_cannot_end_the_battle():
+def test_a_party_with_nothing_but_rest_and_growl_cannot_end_the_battle(data):
+    def hopeless(snapshot):
+        return Policy.hopeless_battle(policy(data), snapshot)
     fainted = mon(84, 20, 0, (PECK, GROWL, 0, 0), (35, 40, 0, 0))
     assert hopeless(lance((fainted, vaporeon())))
     # One Waterfall left, an Elixir in the bag or a standing partner that can attack still has a way to win.
     assert not hopeless(lance((fainted, vaporeon(waterfall=1))))
-    assert not hopeless(lance((vaporeon(),), items=((1, 1),)))
+    assert not hopeless(lance((vaporeon(),), items=((data.items['MAX_ELIXER'], 1),)))
+    assert not hopeless(lance((vaporeon(),), items=((data.items['ELIXER'], 1),)))
     assert not hopeless(lance((vaporeon(), mon(84, 28, 59, (PECK, 0, 0, 0), (35, 0, 0, 0)))))
     # With no PP at all Struggle attacks, and a wild battle can be run from.
     assert not hopeless(lance((mon(134, 100, 359, (HYDRO_PUMP, REST, 0, 0), (0, 0, 0, 0)),)))
@@ -112,12 +126,13 @@ def test_a_lost_league_attempt_restarts_from_the_league_entry_save():
     assert unstick(CANNOT_END, entry=False).startswith('auto-')
 
 
-def test_arriving_at_the_league_pokemon_center_keeps_the_entry_save():
+def test_arriving_at_the_league_pokemon_center_keeps_the_entry_save(data):
     written = []
-    emu = SimpleNamespace(data=DATA, _state_bytes=lambda: b'state', _manifest=lambda: {},
+    emu = SimpleNamespace(data=data, _state_bytes=lambda: b'state', _manifest=lambda: {},
                           store=SimpleNamespace(get=lambda key: None,
                                                 write_checkpoint=lambda state, manifest, name: written.append(name)))
-    outside, lobby = SimpleNamespace(map=3), SimpleNamespace(map=7)
+    entry = data.map_ids['INDIGO_PLATEAU_POKECENTER_1F']
+    outside, lobby = SimpleNamespace(map=data.map_ids['ROUTE_23']), SimpleNamespace(map=entry)
     Emulator._note_league_entry(emu, outside, lobby)
     assert written == [LEAGUE_CHECKPOINT]
     Emulator._note_league_entry(emu, lobby, lobby)
@@ -126,10 +141,10 @@ def test_arriving_at_the_league_pokemon_center_keeps_the_entry_save():
     assert written == [LEAGUE_CHECKPOINT]
 
 
-def test_a_postgame_league_run_waits_for_a_team_with_attacks_for_every_opponent(monkeypatch):
+def test_a_postgame_league_run_waits_for_a_team_with_attacks_for_every_opponent(data, monkeypatch):
     monkeypatch.setattr(collection, 'clock_wait', lambda *args: None)
     carrier = mon(73, 39, 123, (SURF, 0, 0, 0), (15, 0, 0, 0))
-    run = SimpleNamespace(data=DATA, completed={'champion': 1})
+    run = SimpleNamespace(data=data, completed={'champion': 1})
     # Hydro Pump and Waterfall give 20 attacks against 26 opponents, and the level 39 carrier is too weak to count.
     weak = lance((vaporeon(), carrier), in_battle=0)
     assert not collection.league_ready(run, weak) and not collection.postgame_league(run, weak, None, 'day')
