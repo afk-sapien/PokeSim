@@ -1,7 +1,10 @@
+import os
 from types import SimpleNamespace
 
+import pytest
+
 from pokesim.app.coordinator import Coordinator
-from pokesim.gen2 import trading
+from pokesim.gen2 import champion_shop, menus, trading, training
 from pokesim.gen2.preparation import reserves
 
 CUT, FLY, SURF, STRENGTH, FLASH, WHIRLPOOL, WATERFALL = 15, 19, 57, 70, 148, 250, 127
@@ -15,6 +18,20 @@ def hm_party(last):
     # The live Crystal party that failed four trades in a row: every reserve knows a field move.
     return (member(22, 51, 35, 230), member(84, 65, FLY, 156), member(51, 61, 35, CUT),
             member(173, SURF, 34, STRENGTH), member(56, WHIRLPOOL, WATERFALL, 156), last)
+
+
+@pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])
+def test_the_protected_field_moves_are_the_seven_hms_in_every_version(version):
+    directory = os.environ.get('GEN2_DATA_DIR')
+    if not directory:
+        pytest.skip('Set GEN2_DATA_DIR to generated local game data')
+    from pokesim.gen2.data import GameData
+    data = GameData.load(directory, version)
+    hms = {'CUT', 'FLY', 'SURF', 'STRENGTH', 'FLASH', 'WHIRLPOOL', 'WATERFALL'}
+    assert all('HM_' + name in data.items for name in hms)
+    moves = {CUT, FLY, SURF, STRENGTH, FLASH, WHIRLPOOL, WATERFALL}
+    assert {data.moves[move]['constant'] for move in moves} == hms
+    assert menus.PROTECTED_MOVES == champion_shop.PROTECTED_MOVES == training.FIELD_MOVES == moves
 
 
 def test_a_reserve_whose_field_moves_another_member_knows_can_be_deposited():
