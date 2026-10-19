@@ -33,12 +33,12 @@ def pc_screen(first, second, *, cursor='bill'):
     return SimpleNamespace(tiles=tuple(rows), text=ScreenText('\n'.join(rows)))
 
 
-@pytest.fixture(scope='module')
-def crystal():
+@pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
+def data(request):
     directory = os.environ.get('GEN2_DATA_DIR')
     if not directory:
         pytest.skip('Set GEN2_DATA_DIR to generated local game data')
-    return GameData.load(directory, 'crystal')
+    return GameData.load(directory, request.param)
 
 
 @pytest.mark.parametrize('first,second', [('BILL  PC', 'accessed.'), ('POKéMON Storage', 'System opened.'),
@@ -55,15 +55,15 @@ def test_the_pc_list_itself_is_navigated_to_turn_off():
     assert close_pc(pc_screen('Access whose PC?', '', cursor='off')) == 'a'
 
 
-def test_policy_backs_out_of_an_ownerless_pc_and_reports_it(crystal, monkeypatch):
+def test_policy_backs_out_of_an_ownerless_pc_and_reports_it(data, monkeypatch):
     from pokesim.gen2 import policy as module
     from pokesim.gen2.policy import Policy
     monkeypatch.setattr(module, 'update_world', lambda *args: None)
-    policy = Policy(crystal, seed=1, starter='cyndaquil')
+    policy = Policy(data, seed=1, starter='cyndaquil')
     policy.naming.step = lambda snapshot, mem: None
     screen = pc_screen('BILL  PC', 'accessed.')
     snapshot = SimpleNamespace(**vars(screen), started=True, valid=True, in_battle=0, hall_of_fame_count=0,
-                               map=crystal.map_ids['OLIVINE_POKECENTER_1F'], party=(), event_flags=bytes(256))
+                               map=data.map_ids['OLIVINE_POKECENTER_1F'], party=(), event_flags=bytes(256))
     memory = SimpleNamespace(byte=lambda name: 0)
     from pokesim.gen2 import contest, ruins, tower
     monkeypatch.setattr(ruins, 'control', lambda *args: None)
@@ -102,13 +102,13 @@ def test_no_autosave_while_backing_out_of_an_ownerless_screen():
     assert writes == []
 
 
-def test_return_from_cable_steps_off_the_stairs_instead_of_pressing_a(crystal):
+def test_return_from_cable_steps_off_the_stairs_instead_of_pressing_a(data):
     # Live Crystal: a trade cancelled on the Pokémon Center 2F stairs left the player standing on
     # them, and "Return downstairs after the Cable Club" pressed A there until the watchdog fired.
     from pokesim.gen2.navigation import DIRS
     from pokesim.gen2.policy import Policy
-    policy = Policy(crystal, seed=1, starter='cyndaquil')
-    upstairs = crystal.map_ids['POKECENTER_2F']
+    policy = Policy(data, seed=1, starter='cyndaquil')
+    upstairs = data.map_ids['POKECENTER_2F']
     snapshot = SimpleNamespace(map=upstairs, x=0, y=7, frame=0, badges=0, party=(), objects=(),
                                event=lambda name: False)
     assert policy.nav.toward(snapshot, upstairs, [(0, 7)]) == []
