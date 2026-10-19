@@ -9,12 +9,12 @@ from pokesim.gen2.menus import ChangeBox, Release, Storage
 from pokesim.gen2.teams import BLOCKED_LIMIT, arrive, assemble, assembled, key
 
 
-@pytest.fixture(scope='module')
-def real_data():
+@pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
+def real_data(request):
     directory = os.environ.get('GEN2_DATA_DIR')
     if not directory:
         pytest.skip('Set GEN2_DATA_DIR to generated local game data')
-    return GameData.load(directory, 'crystal')
+    return GameData.load(directory, request.param)
 
 
 def mon(name, *, box=None, position=0, dvs=(8, 8, 8, 8, 8), trainer_id=None, species=16):
@@ -99,6 +99,8 @@ def test_a_team_with_nothing_left_to_do_stands_down_and_waits_before_retrying():
 
 
 def test_tower_challenge_stands_down_when_its_team_cannot_be_assembled(real_data):
+    if real_data.game != 'crystal':
+        pytest.skip('Only Crystal has the Battle Tower')
     from pokesim.gen2.policy import Goal as RealGoal, Policy as RealPolicy
     from pokesim.gen2.tower import journey
     policy = RealPolicy(real_data, seed=1, starter='cyndaquil')
@@ -120,6 +122,8 @@ def test_tower_challenge_stands_down_when_its_team_cannot_be_assembled(real_data
 def test_tower_trip_stays_home_while_a_full_party_has_nowhere_to_deposit(real_data):
     """With six in the party and every box full, the Tower team cannot be put together. The trip to
     Olivine stands down at once and is not started again until a box slot frees up."""
+    if real_data.game != 'crystal':
+        pytest.skip('Only Crystal has the Battle Tower')
     from pokesim.gen2.policy import Goal as RealGoal, Policy as RealPolicy
     from pokesim.gen2.teams import no_room
     from pokesim.gen2.tower import journey
