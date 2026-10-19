@@ -177,3 +177,11 @@ def test_a_postgame_league_run_lost_at_lance_waits_for_the_team_to_grow(monkeypa
     run.collection.update(league_loop=216, league_entered=True)
     assert collection.league_loop(run, at('HALL_OF_FAME', grown, 216), None) is None
     assert 'league_lost' not in run.collection and collection.league_ready(run, at('ROUTE_29'))
+
+
+def test_a_team_at_level_100_that_lost_the_league_may_try_again():
+    # A full team cannot gain 10 more levels, so the wait after a loss must not stop its League runs for good.
+    run = SimpleNamespace(data=DATA, completed={'champion': 1}, collection={'league_lost': 600},
+                          in_league=lambda snapshot: False)
+    party = tuple(mon(73, 100, 300, (SURF, 0, 0, 0), (15, 0, 0, 0)) for _ in range(6))
+    assert collection.league_ready(run, SimpleNamespace(party=party, where='ROUTE_29', hall_of_fame_count=215))

@@ -351,7 +351,7 @@ def league_ready(policy, snapshot):
     """
     moves = policy.data.moves
     lost = getattr(policy, 'collection', {}).get('league_lost')
-    if lost is not None and league_strength(snapshot) < lost + LEAGUE_REGROWTH:
+    if lost is not None and league_strength(snapshot) < min(lost + LEAGUE_REGROWTH, league_ceiling(snapshot)):
         return False
     return sum(moves.get(move, {}).get('pp', 0) for mon in snapshot.party
                if not mon.egg and mon.level >= LEAGUE_LEVEL
@@ -365,6 +365,11 @@ LEAGUE_REGROWTH = 10
 def league_strength(snapshot):
     """The levels the party holds at League level, which grow as training brings it closer to winning."""
     return sum(mon.level for mon in snapshot.party if not mon.egg and mon.level >= LEAGUE_LEVEL)
+
+
+def league_ceiling(snapshot):
+    """The most League strength the party can reach, so a team that lost at level 100 may try again."""
+    return 100 * len(snapshot.party)
 
 
 def league_funding(policy, snapshot, Goal, *, again=False):
