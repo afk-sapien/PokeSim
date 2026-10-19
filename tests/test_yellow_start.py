@@ -159,3 +159,19 @@ def test_fixed_object_indices_and_story_events_hold_in_yellow():
         assert data['numbers'] == ([1406, 1407, 37, 2305] if game == 'red' else [1400, 1407, 37, 2305])
     # Every Gen I story event the code names also exists in Yellow.
     assert len(known['red']) > 40 and known['red'] <= known['yellow']
+
+
+def test_pokedex_reference_describes_yellow():
+    out = run_yellow('''
+        from pokesim.web import pokedex
+        assert pokedex.VERSIONS == ('yellow',) and pokedex.DEFAULT_VERSION == 'yellow'
+        reference = pokedex.reference()
+        entries = {row['dex']: row for row in reference['entries']}
+        assert reference['version'] == 'yellow' and len(entries) == 151
+        # Pikachu is never wild in Yellow, and the Kanto starters become gifts.
+        assert entries[25]['locations'] == []
+        for dex in (1, 4, 7):
+            assert [row['method'] for row in entries[dex]['locations']] == ['gift'], dex
+        print('ok')
+    ''')
+    assert out.strip() == 'ok'
