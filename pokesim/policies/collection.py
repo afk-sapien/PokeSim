@@ -43,6 +43,9 @@ def held_count(snapshot, species):
     boxed = [(sid, level) for box, sid, level, nick in stored] if stored else snapshot.boxed_pokemon
     return sum(mon.species == species for mon in snapshot.party) + sum(sid == species for sid, level in boxed)
 
+
+# Porygon's Game Corner price. Blue sells it cheaper, Red and Yellow ask 9999 coins.
+PORYGON_COINS = {'red': 9999, 'blue': 6500, 'yellow': 9999}
 SNORLAX = next(sid for sid, row in SPECIES.items() if row['dex'] == 143)
 # The Route 12 Snorlax, woken with the Poké Flute. Walking reopens it after the first battle.
 SNORLAX_SOURCE = {'map': MAPS['ROUTE_12'], 'method': 'static', 'fragment': 'SNORLAX',
@@ -812,7 +815,7 @@ class Collection:
                 add(marathon.candidate(), 1)
             add({'method':'rematch','hof_count':s.hall_of_fame_count}, 10 if s.money < 10000 else 2)
             porygon = next(sid for sid,mon in SPECIES.items() if mon['dex']==137)
-            if 137 not in s.owned and (s.money >= 20000 or s.coins >= (9999 if self.version=='red' else 6500)):
+            if 137 not in s.owned and (s.money >= 20000 or s.coins >= PORYGON_COINS.get(self.version, 9999)):
                 add({'method':'prize','species':porygon,'map':MAPS['GAME_CORNER_PRIZE_ROOM']},0.5)
             for trainer in DATA.get('trainers',[]):
                 if trainer['map'] in LEAGUE or event_set(s.event_flags,trainer['flag']):
@@ -912,7 +915,7 @@ class Collection:
         if mode=='prize':
             if not dict(s.items).get(ITEMS['COIN_CASE']):
                 return object_goal('collect_coins','Get the Coin Case','Prepare to exchange coins for Porygon','CELADON_DINER','FISHER')
-            cost = 9999 if self.version=='red' else 6500
+            cost = PORYGON_COINS.get(self.version, 9999)
             if s.coins < cost:
                 if s.money < 10000:
                     self.remaining=0

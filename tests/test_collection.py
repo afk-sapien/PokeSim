@@ -208,6 +208,16 @@ def test_coin_project_stages_and_cash_reserve():
     assert c.remaining==0
 
 
+@pytest.mark.parametrize('version,cost', [('red',9999),('blue',6500),('yellow',9999)])
+def test_porygon_prize_cost_follows_the_cartridge(version,cost):
+    c=Collection()
+    c.version=version
+    c.project={'method':'prize','species':sid(137),'key':'prize'}
+    s=state(items=((ITEMS['COIN_CASE'],1),),money=20000,coins=6500)
+    assert c.goal(s).key==('collect_prize' if cost==6500 else 'collect_coins')
+    assert c.goal(replace(s,coins=cost)).key=='collect_prize'
+
+
 def test_snapshot_reads_coin_and_completion_bytes():
     mem=bytearray(65536)
     mem[0xD5A2]=2
