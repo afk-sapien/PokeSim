@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix Gold, Silver and Crystal League runs reloading the League entry save again and again at Koga. When only a level 100 Ditto was left standing, the trainer saw a battle that could never end because Transform does no damage, so it restarted the attempt before Ditto could copy the foe. A Ditto with Transform left, or one already Transformed, now plays the battle out, and in the stuck save it beat Koga. After three restarts of the same attempt without a new League win, the run is now treated as lost, so the team leaves to train before trying again.
+
 - Add **Fair wild DVs**, an optional Red, Blue and Yellow adventure setting that is off by default. The cartridge never gives a grass or cave Pokémon shiny or perfect DVs. With the setting on, each wild encounter gets fully random DVs, while trainer, cable and Transform battles keep theirs. With it off, Statistics notes the cartridge limit.
 
 - Bring the Route 12 Snorlax back in Red, Blue and Yellow. After becoming Champion and battling the original Snorlax, every 100,000 steps it blocks the road again, set by the same setting as gift and trade returns. The trainer walks to it with the Poké Flute, wakes it and battles it. A battle that ends without a catch waits for the trainer to leave Route 12 before Snorlax returns, so the road stays clear in the meantime. A missing Snorlax is a new Pokédex entry and goes before repeat work.

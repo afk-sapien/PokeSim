@@ -393,6 +393,20 @@ def league_funding(policy, snapshot, Goal, *, again=False):
     return Goal('funds_champion', 'Record another League victory', 'HALL_OF_FAME', 4, 7)
 
 
+def call_off_league(policy):
+    """Treat the postgame League run under way as lost, so the team prepares before the next.
+
+    The guards call this after restarting the same attempt from the entry save again and again. The
+    entry save was taken before the run went in, so this marks it entered and the League loop then
+    sees a team outside the League without its Hall of Fame entry, as after a black out.
+    """
+    state = policy.collection
+    if state.get('league_loop') is None:
+        return False
+    state['league_entered'] = True
+    return True
+
+
 def league_loop(policy, snapshot, Goal):
     """The next step of a postgame League run under way, or None once it is over or called off."""
     state = policy.collection

@@ -94,7 +94,24 @@ MAX_RELOADS = 12  # and the number after which reloading stops, since it only re
 # Written on arriving at the Indigo Plateau Pokémon Center, the last place before an Elite Four attempt.
 LEAGUE_CHECKPOINT = 'league-entry.state'
 CANNOT_END = 'battle cannot end'
+# League attempts restarted from the entry save without a new Hall of Fame entry before the run is
+# called off. Experience gained before each loss counts as progress, so the reload streak never caps it.
+LEAGUE_RESTARTS = 3
 BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
+
+
+def league_restart(restarts, wins):
+    """Count a League attempt restarted from its entry save: the new count, and whether to call the run off.
+
+    A live Crystal run reloaded its League entry fourteen times in half an hour, as the same team
+    met the same trouble at Koga each time. The entry save forgets every attempt, so the count lives
+    in the emulator and starts again only with a new Hall of Fame entry.
+    """
+    seen, count = restarts
+    count = count + 1 if wins <= seen else 1
+    if count >= LEAGUE_RESTARTS:
+        return (max(wins, seen), 0), True
+    return (max(wins, seen), count), False
 
 
 @dataclass(frozen=True)
@@ -219,6 +236,7 @@ class Emulator:
         self.last_reload = 0.0
         self.unstick_streak = 0
         self.reloads_exhausted = False
+        self.league_restarts = (0, 0)
         self.waiting = False
         self.best_progress = (0,) * 6
         self.failure_streak = 0
@@ -743,6 +761,7 @@ class Emulator:
         saves = [path for path in all_saves if not self._behind_barrier(self.store.checkpoint_metadata(path))]
         target = reload_target(self.store, saves, since_frame)
         self.unstick_streak += 1
+        entry = None
         if ((self.unstick_streak >= 2 or why == CANNOT_END) and self.snapshot is not None
                 and self.policy.in_league(self.snapshot)):
             # A save part way through the League keeps the PP already spent, so going back a little
@@ -751,6 +770,8 @@ class Emulator:
             if entry and not self._behind_barrier(self.store.checkpoint_metadata(entry)):
                 log.warning('%s inside the League, restarting the attempt', why)
                 target, saves = entry, [entry] + saves
+            else:
+                entry = None
         if self.unstick_streak == 2 and self.snapshot is not None and self.snapshot.valid and self.snapshot.started:
             self._event(Event('stall', 'Stuck? The adventure had to reload twice',
                               f'{why.capitalize()} at {self.snapshot.map_name} and a reload did not help. '
@@ -758,6 +779,7 @@ class Emulator:
         restored = None
         from .standdown import carry_over, stalled_objectives
         stalled = stalled_objectives(self.policy)
+        wins = getattr(self.snapshot, 'hall_of_fame_count', 0)
         if target:
             log.warning('%s for %.1f game minutes, reloading %s', why, max(0, self.frame - since_frame) / 3600, target.name)
             for path in [target] + [path for path in reversed(saves) if path != target]:
@@ -769,6 +791,11 @@ class Emulator:
                     log.exception('Cannot reload Gen II checkpoint %s', path.name)
         if restored:
             carry_over(self.policy, stalled)
+            if entry is not None and restored == entry:
+                self.league_restarts, call_off = league_restart(getattr(self, 'league_restarts', (0, 0)), wins)
+                from .collection import call_off_league
+                if call_off and call_off_league(self.policy):
+                    log.warning('the League attempt restarted %d times, leaving to prepare the team', LEAGUE_RESTARTS)
             # The emulator is deterministic, so the same save and choices would replay the same
             # trouble. Idling a random moment moves the game's random numbers along.
             self._tick(1 + secrets.randbelow(180))
@@ -960,6 +987,7 @@ class Emulator:
             self.best_experience, self.best_egg_cycles = {}, {}
             self.unstick_streak = 0
             self.reloads_exhausted = False
+            self.league_restarts = (0, 0)
             self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                     config.STALL_ALERT_REPEAT_HOURS)
             self._reset_watch()
