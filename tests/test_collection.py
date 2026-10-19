@@ -107,10 +107,11 @@ def test_restricted_entries_are_not_counted_as_available():
 
 
 @pytest.mark.parametrize('legacy_style', ['focused', 'balanced', 'thorough', 'invalid'])
-def test_legacy_style_uses_automatic_collection_before_champion(legacy_style):
+def test_legacy_style_uses_automatic_collection(legacy_style):
     restored = Collection()
-    restored.load({'pace': legacy_style})
+    restored.load({'pace': legacy_style, 'completed_champion': True})
     fresh = Collection()
+    fresh.completed_champion = True
     s = state(map=MAPS['ROUTE_1'])
     nav = Navigator()
     nav.update_story(s)
@@ -532,3 +533,34 @@ def test_snorlax_battle_without_a_catch_ends_the_project():
     c.observe(replace(s, event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_BEAT_ROUTE12_SNORLAX')))
     assert c.project is None
     assert c.history[-1].endswith('Snorlax battle ended without a catch')
+
+
+def test_story_comes_before_side_projects_until_the_champion():
+    """Seed 37 after Brock trained partners toward evolutions for four game hours instead of reaching Misty."""
+    from pokesim.policies.director import new_entry
+    from pokesim.policies.progression import story_goal
+    caterpie = mon(species=sid(10), level=6, hp=30, max_hp=30)
+    s = state(map=MAPS['ROUTE_3'], x=10, y=10, badges=1, owned=frozenset({1, 10}),
+              party=(mon(hp=100, max_hp=100, level=20), caterpie))
+    main = story_goal(s)
+    assert main.key == 'moon_trainer'
+    nav = Navigator()
+    nav.update_story(s)
+    before = Collection()
+    assert before.choose(s, nav, random.Random(3), main) is None
+    assert before.project is None
+    # A side project carried in an older save gives the turn back to the story.
+    before.project = {'method': 'evolve', 'parent': sid(10), 'species': sid(11),
+                      'evolution': EVOS[sid(10)][0], 'key': 'evo'}
+    before.last_choice = before.elapsed - 600
+    assert before.choose(s, nav, random.Random(3), main) is None
+    assert before.project is None and before.history[-1].startswith('Changed plan')
+    # After the Champion the same moment offers expeditions, and a missing entry still comes first.
+    chosen = []
+    for seed in range(8):
+        after = Collection()
+        after.completed_champion = True
+        assert after.choose(s, nav, random.Random(seed), main) is not None
+        chosen.append(after.project)
+    assert all(new_entry(project) for project in chosen)
+    assert {project['method'] for project in chosen} & {'grass', 'evolve'}

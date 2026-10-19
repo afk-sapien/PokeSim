@@ -590,6 +590,14 @@ class Collection:
         from ..trade.preferences import identity
         if s.map in LEAGUE or not s.party or not s.owned or not event_set(s.event_flags,'EVENT_GOT_POKEDEX') or main.key.startswith(('heal','party_','teach_','restock')):
             return None
+        if not self.completed_champion:
+            # The story comes first until the Champion is beaten. Seed 37 after Brock spent 244 of 300
+            # game minutes training partners toward evolutions and 16 more hunting grass beside Mt. Moon,
+            # and never reached Misty. Catches and training the story needs come from story_goal: an HM
+            # partner through teaching_goal and gym or League preparation through gym_goal. Wild
+            # battles on the way still catch missing species.
+            self.abandon('The story comes before side projects until the Champion is beaten')
+            return None
         if self.project:
             return self.goal(s)
         if self.cooldown or self.elapsed-self.last_choice < 600:
