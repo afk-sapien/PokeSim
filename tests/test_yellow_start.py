@@ -120,3 +120,42 @@ def test_traded_pikachu_can_leave_the_party():
 def test_yellow_preparation_keeps_pikachu_out_of_storage():
     source = (ROOT / 'pokesim/runtime/preparation.py').read_text()
     assert 'not stays_in_party(snap, mon)' in source
+
+
+OBJECTS_AND_EVENTS = '''
+import json
+import re
+from pathlib import Path
+from pokesim.strategy_data import EVENTS, MAPS, WORLD
+labels = {f'{room} {i}': WORLD[MAPS[room]]['objects'][i][4] for room, i in (
+    ('GAME_CORNER', 10), ('FIGHTING_DOJO', 5), ('FIGHTING_DOJO', 6),
+    ('CELADON_MANSION_ROOF_HOUSE', 1), ('MUSEUM_1F', 4))}
+used = set()
+import pokesim
+for path in Path(pokesim.__file__).parent.rglob('*.py'):
+    if not path.name.startswith('jev'):
+        used |= set(re.findall(r"['\\"](EVENT_[A-Z0-9_]+)['\\"]", path.read_text()))
+print(json.dumps({'labels': labels, 'known': sorted(used & set(EVENTS)),
+                  'numbers': [EVENTS[n] for n in ('EVENT_GOT_DOME_FOSSIL', 'EVENT_GOT_HELIX_FOSSIL',
+                                                  'EVENT_GOT_POKEDEX', 'EVENT_BEAT_CHAMPION_RIVAL')]}))
+'''
+FIXED_OBJECTS = {'GAME_CORNER 10': 'ROCKET', 'FIGHTING_DOJO 5': 'HITMONLEE', 'FIGHTING_DOJO 6': 'HITMONCHAN',
+                 'CELADON_MANSION_ROOF_HOUSE 1': 'EEVEE', 'MUSEUM_1F 4': 'OLD_AMBER'}
+
+
+def test_fixed_object_indices_and_story_events_hold_in_yellow():
+    import contextlib
+    import io
+    import json
+    red = io.StringIO()
+    with contextlib.redirect_stdout(red):
+        exec(OBJECTS_AND_EVENTS, {})
+    known = {}
+    for game, out in (('red', red.getvalue()), ('yellow', run_yellow(OBJECTS_AND_EVENTS))):
+        data = json.loads(out)
+        known[game] = set(data['known'])
+        assert all(FIXED_OBJECTS[key] in label for key, label in data['labels'].items()), game
+        # Yellow numbers Mt. Moon's events differently, so the Dome Fossil flag moves.
+        assert data['numbers'] == ([1406, 1407, 37, 2305] if game == 'red' else [1400, 1407, 37, 2305])
+    # Every Gen I story event the code names also exists in Yellow.
+    assert len(known['red']) > 40 and known['red'] <= known['yellow']
