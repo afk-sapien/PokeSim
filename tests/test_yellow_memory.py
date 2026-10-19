@@ -28,6 +28,16 @@ class Owner:
         self.raw_memory = Raw()
 
 
+def machine(red):
+    """A Yellow emulator stand-in whose raw RAM holds the Red-layout bytes `red` at Yellow addresses."""
+    from types import SimpleNamespace
+    owner = Owner()
+    owner.raw_memory.data[:] = red
+    for a in [*range(0xC000, 0xE000), *yellow._HRAM]:
+        owner.raw_memory.data[yellow.address(a)] = red[a]
+    return SimpleNamespace(memory=yellow.YellowMemory(owner), raw_memory=owner.raw_memory)
+
+
 @pytest.fixture
 def memory():
     return yellow.YellowMemory(Owner())

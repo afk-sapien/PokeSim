@@ -252,3 +252,28 @@ def test_npc_trader_cannot_take_shiny_partner():
     assert policy._dispatch(state, Screen(memory), 'party', memory)[0].button == 'b'
     state = replace(state, party=(replace(partner, dvs=(8,)*5), mon(level=80)))
     assert policy._dispatch(state, Screen(memory), 'party', memory)[0].button == 'a'
+
+
+def test_yellow_encounter_receipts_read_shifted_ram(tmp_path):
+    from pokesim.catches import YELLOW
+    from pokesim.shiny import YELLOW_SIGNATURE
+    from test_yellow_memory import machine
+    with closing(Store(tmp_path)) as store:
+        tracker = ShinyTracker(store, YELLOW)
+        assert tracker.signature == YELLOW_SIGNATURE
+        red = bytearray(65536)
+        red[0xcfe5] = 153
+        red[0xcff1:0xcff3] = bytes((0x2a, 0xaa))
+        red[0xd057] = 2
+        tracker.encounter(machine(red))
+        red[0xd057], red[0xd069] = 1, 8
+        tracker.encounter(machine(red))
+        assert status(store)['seen'] == 0
+        red[0xd069] = 0
+        tracker.encounter(machine(red))
+        tracker.encounter(machine(red))
+        assert status(store)['seen'] == 1 and status(store)['seen_species'] == [1]
+        red[0xcff1:0xcff3] = bytes((0x2a, 0xab))
+        red[0xc000] = 1
+        tracker.encounter(machine(red))
+        assert status(store)['seen'] == 1
