@@ -150,3 +150,30 @@ def test_a_postgame_league_run_waits_for_a_team_with_attacks_for_every_opponent(
     assert not collection.league_ready(run, weak) and not collection.postgame_league(run, weak, None, 'day')
     strong = lance((vaporeon(), mon(73, 50, 150, (SURF, 0, 0, 0), (15, 0, 0, 0))), in_battle=0)
     assert collection.league_ready(run, strong) and collection.postgame_league(run, strong, None, 'day')
+
+
+def test_a_postgame_league_run_lost_at_lance_waits_for_the_team_to_grow(monkeypatch):
+    # A live Crystal run took one level 71 Poliwhirl and its trainees to Lance every twenty minutes
+    # and blacked out each time, since one Pokémon with enough attacks passed the readiness check.
+    monkeypatch.setattr(collection, 'league_funding', lambda policy, snapshot, Goal, again=False: 'challenge')
+    league = {'WILLS_ROOM'}
+    run = SimpleNamespace(data=DATA, completed={'champion': 1}, collection={'league_loop': 216},
+                          in_league=lambda snapshot: snapshot.where in league)
+    party = (mon(73, 71, 200, (SURF, 0, 0, 0), (15, 0, 0, 0)), mon(73, 71, 200, (SURF, 0, 0, 0), (15, 0, 0, 0)))
+
+    def at(where, party=party, count=215):
+        return SimpleNamespace(party=party, where=where, hall_of_fame_count=count)
+
+    assert collection.league_ready(run, at('INDIGO_PLATEAU_POKECENTER_1F'))
+    assert collection.league_loop(run, at('INDIGO_PLATEAU_POKECENTER_1F'), None) == 'challenge'
+    assert collection.league_loop(run, at('WILLS_ROOM'), None) == 'challenge'
+    # Blacking out leaves the League without a Hall of Fame entry, which ends the run.
+    assert collection.league_loop(run, at('INDIGO_PLATEAU_POKECENTER_1F'), None) is None
+    assert 'league_loop' not in run.collection and run.collection['league_lost'] == 142
+    assert not collection.league_ready(run, at('ROUTE_29'))
+    grown = party + (mon(73, 45, 150, (SURF, 0, 0, 0), (15, 0, 0, 0)),)
+    assert collection.league_ready(run, at('ROUTE_29', grown))
+    # A run that reaches the Hall of Fame clears the memory of the loss.
+    run.collection.update(league_loop=216, league_entered=True)
+    assert collection.league_loop(run, at('HALL_OF_FAME', grown, 216), None) is None
+    assert 'league_lost' not in run.collection and collection.league_ready(run, at('ROUTE_29'))
