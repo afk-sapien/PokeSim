@@ -28,9 +28,13 @@ def snorlax():
     The route script hides Snorlax as the battle starts and sets the beaten flag once it ends. A
     blackout skips the flag, so either bit alone means the encounter was spent.
     """
-    objects = WORLD[MAPS['ROUTE_12']]['objects']
-    index = next(i for i, row in enumerate(objects) if 'SNORLAX' in row[4])
-    return flag('EVENT_BEAT_ROUTE12_SNORLAX'), toggle('ROUTE_12', index)
+    return flag('EVENT_BEAT_ROUTE12_SNORLAX'), toggle('ROUTE_12', named('ROUTE_12', 'SNORLAX'))
+
+
+def named(room, label):
+    """The index of the room object whose text names it, since Yellow adds objects before some."""
+    objects = WORLD[MAPS[room]]['objects']
+    return next(i for i, row in enumerate(objects) if label in row[4])
 
 
 def flag(name):
@@ -80,7 +84,8 @@ def activities(choice='helix', dojo=106):
         rows.append(Activity('fossil', 'Fossil expedition', MAPS['MUSEUM_1F'], dex, bits, bits[:1], item))
     else:
         bits = (flag('EVENT_GOT_HELIX_FOSSIL'), flag('EVENT_GOT_DOME_FOSSIL'),
-                toggle('MT_MOON_B2F', 5), toggle('MT_MOON_B2F', 6))
+                toggle('MT_MOON_B2F', named('MT_MOON_B2F', 'DOME_FOSSIL')),
+                toggle('MT_MOON_B2F', named('MT_MOON_B2F', 'HELIX_FOSSIL')))
         rows.append(Activity('fossil', 'Fossil expedition', MAPS['MT_MOON_B2F'], dex, bits, bits[:2], item))
     rows.extend(Activity(f'trade_{index}', f'{SPECIES[next(s for s in SPECIES if SPECIES[s]["dex"] == dex)]["name"].title()} exchange',
                          MAPS[room], dex, ((TRADE_FLAGS, index),), ((TRADE_FLAGS, index),))
