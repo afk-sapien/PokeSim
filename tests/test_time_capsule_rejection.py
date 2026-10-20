@@ -8,7 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from pokesim.app.coordinator import (FAILURE_BACKOFF_SECONDS, SET_ASIDE, Coordinator, failure_backoff)
+from pokesim.app.coordinator import (FAILURE_BACKOFF_SECONDS, PC_FULL, SET_ASIDE, WHOLE_GAME, Coordinator,
+                                     failure_backoff)
 from pokesim.app.registry import identifier
 from pokesim.interactions.cable_metadata import ABNORMAL
 from pokesim.ram import _decode_box
@@ -137,3 +138,20 @@ def test_scheduler_leaves_out_a_pokemon_whose_trades_keep_failing(setup, monkeyp
     # Once the wait is over the Pokémon is offered again.
     monkeypatch.setattr(time, 'time', lambda: real() + 400 + FAILURE_BACKOFF_SECONDS)
     assert c.schedule_once()['phase'] == 'completed'
+
+
+def test_a_full_pc_backs_off_the_whole_game_across_different_pokemon():
+    # Live, Blue offered Caterpie, Marowak and Goldeen in turn and each trade found its PC full.
+    now = 10_000
+    blue = 'b' * 32
+    error = f'{PC_FULL} and no unprotected spare duplicate can make room for this trade (adventure {blue})'
+    rows = [row(now - 300 * index, error=error, left=blue, left_key=identifier() + '-1') for index in range(3)]
+    backed = failure_backoff(rows, now)
+    assert backed[(blue, WHOLE_GAME)] == now + 2 * FAILURE_BACKOFF_SECONDS
+    assert all(side[1] == WHOLE_GAME for side in backed)
+    offers = {'offers': [{'trade_key': identifier() + '-1'}]}
+    assert Coordinator._auto_offers(blue, offers, set(backed))[1]['offers'] == []
+    assert Coordinator._auto_offers('s' * 32, offers, set(backed))[1]['offers'] == offers['offers']
+    # A completed trade by that game ends the wait.
+    done = row(now - 5, left=blue, phase='completed', decision='COMMIT')
+    assert (blue, WHOLE_GAME) not in failure_backoff([*rows, done], now)

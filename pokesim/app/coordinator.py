@@ -51,6 +51,8 @@ PC_FULL = 'Every PC box is full'
 FAILURE_BACKOFF_AFTER = 2
 FAILURE_BACKOFF_SECONDS = 1800
 FAILURE_BACKOFF_MAX = 86400
+# The key failure_backoff gives a game whose every offer waits.
+WHOLE_GAME = '*'
 
 
 class Waiting(ValueError):
@@ -116,12 +118,16 @@ def failure_backoff(history, now=None):
         plan = row['plan']
         sides = [(plan.get(side + '_id'), legacy(plan.get(side + '_key'))) for side in ('left', 'right')]
         if row['phase'] == 'completed' and row['decision'] == 'COMMIT':
-            closed.update(sides)
+            closed.update(sides + [(aid, WHOLE_GAME) for aid, _ in sides])
             continue
         error = row.get('error') or ''
         if row['phase'] != 'aborted' or 'Cancelled by the owner' in error or SET_ASIDE in error:
             continue
         kind = _failure_kind(error)
+        tagged = FAILED_TAG.search(error)
+        if PC_FULL in error and tagged:
+            # A full PC refuses every Pokémon the game offers, so the whole game waits.
+            sides = sides + [(tagged.group(1), WHOLE_GAME)]
         for side in sides:
             if side in closed or not all(side):
                 continue
@@ -1112,7 +1118,7 @@ class Coordinator:
     def _auto_offers(aid, inventory, reserved):
         """The offers automatic trading may use: never a shiny and never a hand-picked Pokémon."""
         offers = [offer for offer in inventory.get('offers') or []
-                  if not offer.get('shiny') and (aid, offer.get('trade_key')) not in reserved
+                  if (aid, WHOLE_GAME) not in reserved and not offer.get('shiny') and (aid, offer.get('trade_key')) not in reserved
                   and (aid, legacy(offer.get('trade_key'))) not in reserved]
         return aid, {**inventory, 'offers': offers}
 
