@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix Gold, Silver and Crystal adventures stuck in the Route 36 National Park Gate with "no route" to every goal. The officer's corner behind the counter opens only onto the warp carpets by the National Park door, and route planning treated those carpets as walls, so a trainer who stepped into the corner after a Bug-Catching Contest found no way out, and trades failed with "No reachable Pokémon Center for this offer". Route planning now walks over warp carpets and only warps from one when walking off it the warp's way, and in the stuck save the trainer walked out and went back to training.
+
 - Fix Gold, Silver and Crystal League runs reloading the League entry save again and again at Koga. When only a level 100 Ditto was left standing, the trainer saw a battle that could never end because Transform does no damage, so it restarted the attempt before Ditto could copy the foe. A Ditto with Transform left, or one already Transformed, now plays the battle out, and in the stuck save it beat Koga. After three restarts of the same attempt without a new League win, the run is now treated as lost, so the team leaves to train before trying again.
 
 - Add **Fair wild DVs**, an optional Red, Blue and Yellow adventure setting that is off by default. The cartridge never gives a grass or cave Pokémon shiny or perfect DVs. With the setting on, each wild encounter gets fully random DVs, while trainer, cable and Transform battles keep theirs. With it off, Statistics notes the cartridge limit.

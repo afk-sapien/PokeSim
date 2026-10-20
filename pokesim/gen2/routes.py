@@ -4,6 +4,11 @@ from collections import deque
 from pokesim_core.gen2 import maps as ice
 from pokesim_core.gen2.maps import DIRS as DIRECTIONS, OPPOSITE, WALLS, side_blocked as side_wall
 
+# Warp carpets and the direction that warps from them. The game warps only when the player already
+# stands on one and walks that way, so walking onto a carpet or along a row of them is ordinary ground.
+CARPETS = {0x70: 'down', 0x76: 'left', 0x78: 'up', 0x7E: 'right'}
+EDGE_BUTTONS = {'north': 'up', 'south': 'down', 'west': 'left', 'east': 'right'}
+
 
 class Search:
     """A breadth-first search that keeps its progress, so later questions from the same start reuse it.
@@ -112,6 +117,9 @@ class Regions:
             labels = self.ice_regions(mid, key, grid, entry, terminals, cut, surf)
             self.cache[key] = labels
             return labels
+        # A carpet joins the ground on either side of it. In a gate the officer's corner behind the
+        # counter opens only onto the carpet row, so leaving it out cut that corner off from the exits.
+        terminals = {point for point in terminals if grid[point[1] * width + point[0]] not in CARPETS}
         index = 0
         for y in range(height):
             for x in range(width):
@@ -127,6 +135,7 @@ class Regions:
                         if (nx, ny) in labels or (nx, ny) in terminals or not 0 <= nx < width or not 0 <= ny < height:
                             continue
                         if (side_wall(grid[py * width + px], button)
+                                or CARPETS.get(grid[py * width + px]) == button
                                 or side_wall(grid[ny * width + nx], OPPOSITE[button])
                                 or not self.walkable(grid[ny * width + nx], cut, surf)):
                             continue
@@ -297,6 +306,9 @@ class Regions:
                     landing = (target['width'] - 1 if direction == 'west' else 0, other)
                     exit_point = (-1 if direction == 'west' else entry['width'], index)
                 target_region = other_labels.get(landing)
+                if CARPETS.get(grid[point[1] * entry['width'] + point[0]]) == EDGE_BUTTONS[direction]:
+                    # Walking off this edge from a carpet warps instead of crossing the connection.
+                    continue
                 if labels.get(point) == region and target_region is not None:
                     groups.setdefault(target_region, []).append(exit_point)
             for target_region, points in groups.items():
