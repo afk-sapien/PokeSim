@@ -10,6 +10,7 @@ import ctypes
 import gc
 import json
 import logging
+import random
 import sys
 import threading
 
@@ -47,11 +48,71 @@ def rss_mib():
     return None
 
 
-def snapshot(top=12):
+def _describe(obj):
+    if isinstance(obj, dict):
+        return f'dict[{len(obj)}]'
+    if isinstance(obj, (list, tuple, set, frozenset)):
+        return f'{type(obj).__name__}[{len(obj)}]'
+    return type(obj).__name__
+
+
+def _key_of(mapping, target):
+    for key, value in mapping.items():
+        if value is target:
+            return key
+    return ''
+
+
+def _owner(obj, skip, depth=3):
+    """A short chain of what holds ``obj``, naming the attribute or key at each step."""
+    chain = []
+    for _ in range(depth):
+        holders = [r for r in gc.get_referrers(obj) if id(r) not in skip and not isinstance(r, type(sys._getframe()))]
+        if not holders:
+            break
+        holder = holders[0]
+        name = ''
+        # Objects with inline attribute values refer to them directly, not through a dict.
+        attrs = getattr(holder, '__dict__', None)
+        if isinstance(attrs, dict) and not isinstance(holder, type):
+            name = _key_of(attrs, obj)
+            if name:
+                chain.append(f'{type(holder).__name__}.{name}')
+                break
+        if isinstance(holder, dict):
+            key = _key_of(holder, obj)
+            name = repr(key)[:40] if key != '' else ''
+            owners = [r for r in gc.get_referrers(holder) if getattr(r, '__dict__', None) is holder]
+            if owners:
+                chain.append(f'{type(owners[0]).__name__}.{name.strip(chr(39))}')
+                break
+        chain.append(f'{_describe(holder)}{"[" + name + "]" if name else ""}')
+        obj = holder
+    return ' <- '.join(chain)
+
+
+def lists(sample=2000, owners=25):
+    """Shapes of a random sample of live lists, and what holds a few of them."""
+    found = [obj for obj in gc.get_objects() if type(obj) is list]
+    picked = random.sample(found, min(sample, len(found)))
+    shapes = Counter(f'{len(x)}:{type(x[0]).__name__ if x else "-"}' for x in picked)
+    traced = picked[:owners]
+    skip = {id(found), id(picked), id(traced)}
+    held = Counter()
+    for x in traced:
+        held[_owner(x, skip)] += 1
+    del found, picked, traced, x
+    return {'shapes': dict(shapes.most_common(8)), 'owners': dict(held.most_common(8))}
+
+
+def snapshot(top=12, detail=False):
     counts = Counter(type(obj).__name__ for obj in gc.get_objects())
-    return {'rss_mib': rss_mib(), 'malloc': allocator(),
+    data = {'rss_mib': rss_mib(), 'malloc': allocator(),
             'python_blocks': sys.getallocatedblocks(), 'objects': sum(counts.values()),
             'top_types': dict(counts.most_common(top))}
+    if detail:
+        data['lists'] = lists()
+    return data
 
 
 def start(adventure_id, minutes, stop):
@@ -60,9 +121,13 @@ def start(adventure_id, minutes, stop):
         return None
 
     def report():
+        reports = 0
         while True:
             try:
-                log.info('memory %s %s', adventure_id, json.dumps(snapshot(), separators=(',', ':')))
+                # Tracing owners walks every object, so it runs on every sixth report only.
+                data = snapshot(detail=reports % 6 == 1)
+                reports += 1
+                log.info('memory %s %s', adventure_id, json.dumps(data, separators=(',', ':')))
             except Exception:
                 log.exception('memory report failed')
             if stop.wait(minutes * 60):

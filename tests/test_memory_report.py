@@ -34,3 +34,17 @@ def test_report_logs_once_and_stops(caplog):
 
 def test_zero_minutes_turns_it_off():
     assert memory_report.start('abc', 0, threading.Event()) is None
+
+
+class _Holder:
+    def __init__(self):
+        self.rows = [[1, 2], [3, 4]]
+
+
+def test_lists_names_the_attribute_holding_a_list():
+    holder = _Holder()
+    skip = set()
+    assert memory_report._owner(holder.rows[0], skip).endswith('_Holder.rows')
+    data = memory_report.lists(sample=50, owners=5)
+    assert data['shapes'] and data['owners']
+    json.dumps(data)
