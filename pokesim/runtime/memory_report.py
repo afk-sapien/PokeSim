@@ -63,11 +63,14 @@ def _key_of(mapping, target):
     return ''
 
 
-def _owner(obj, skip, depth=3):
+def _owner(obj, skip, depth=16):
     """A short chain of what holds ``obj``, naming the attribute or key at each step."""
     chain = []
+    skip = set(skip)
     for _ in range(depth):
         holders = [r for r in gc.get_referrers(obj) if id(r) not in skip and not isinstance(r, type(sys._getframe()))]
+        # The previous step's list of holders refers to this holder too.
+        skip.add(id(holders))
         if not holders:
             break
         holder = holders[0]
@@ -83,15 +86,19 @@ def _owner(obj, skip, depth=3):
             key = _key_of(holder, obj)
             name = repr(key)[:40] if key != '' else ''
             owners = [r for r in gc.get_referrers(holder) if getattr(r, '__dict__', None) is holder]
+            skip.add(id(owners))
             if owners:
                 chain.append(f'{type(owners[0]).__name__}.{name.strip(chr(39))}')
                 break
         chain.append(f'{_describe(holder)}{"[" + name + "]" if name else ""}')
         obj = holder
+    # Nested containers repeat, so keep the first holder and the last few, where a name appears.
+    if len(chain) > 4:
+        chain = chain[:1] + ['...'] + chain[-3:]
     return ' <- '.join(chain)
 
 
-def lists(sample=2000, owners=25):
+def lists(sample=2000, owners=12):
     """Shapes of a random sample of live lists, and what holds a few of them."""
     found = [obj for obj in gc.get_objects() if type(obj) is list]
     picked = random.sample(found, min(sample, len(found)))
@@ -124,8 +131,8 @@ def start(adventure_id, minutes, stop):
         reports = 0
         while True:
             try:
-                # Tracing owners walks every object, so it runs on every sixth report only.
-                data = snapshot(detail=reports % 6 == 1)
+                # Tracing owners walks every object, so it runs on every third report only.
+                data = snapshot(detail=reports % 3 == 1)
                 reports += 1
                 log.info('memory %s %s', adventure_id, json.dumps(data, separators=(',', ':')))
             except Exception:
