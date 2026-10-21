@@ -19,7 +19,7 @@ def ledger(tmp_path):
         yield tracker
 
 
-def action(tracker, kind, *, sequence=1, species=84, battle=1, item=20, quantity=1, tutorial=False, link=False, transformed=False, hp=0):
+def action(tracker, kind, *, sequence=1, species=84, battle=1, item=20, quantity=1, tutorial=False, link=False, transformed=False, hp=0, yellow=False):
     memory = bytearray(65536)
     memory[0xcfd8] = species
     memory[0xd057] = battle
@@ -34,6 +34,10 @@ def action(tracker, kind, *, sequence=1, species=84, battle=1, item=20, quantity
     memory[0xda44] = sequence
     memory[0xcfe6:0xcfe8] = hp.to_bytes(2, 'big')
     memory[0xffdb] = item
+    if yellow:
+        from test_yellow_memory import machine
+        tracker.completed((kind, machine(memory)))
+        return
     tracker.completed((kind, SimpleNamespace(memory=memory)))
 
 
@@ -185,3 +189,22 @@ def test_successful_capture_uses_bag_slot_not_overwritten_species(ledger):
     ledger.completed(('ball', SimpleNamespace(memory=memory)))
     assert row(ledger.store, 'items', 4)['used'] == 1
     assert row(ledger.store, 'items', 34)['used'] == 0
+
+
+def test_yellow_actions_read_shifted_ram(tmp_path):
+    from pokesim.activity_ledger import YELLOW_HOOKS
+    from pokesim.catches import YELLOW
+    with closing(Store(tmp_path)) as store:
+        ledger = ActivityLedger(store, YELLOW)
+        store.set(KEY, {'started_at': 123, 'available': True})
+        assert ledger.hooks is YELLOW_HOOKS and ledger.supported
+        action(ledger, 'wild', yellow=True)
+        action(ledger, 'wild', yellow=True)
+        action(ledger, 'defeated', sequence=2, yellow=True)
+        action(ledger, 'trainer', battle=2, sequence=3, yellow=True)
+        action(ledger, 'trainer', battle=2, transformed=True, sequence=4, yellow=True)
+        action(ledger, 'defeated', hp=5, sequence=5, yellow=True)
+        action(ledger, 'wild', tutorial=True, sequence=6, yellow=True)
+        action(ledger, 'wild', link=True, sequence=7, yellow=True)
+        pikachu = row(store, 'pokemon', 25)
+        assert (pikachu['wild'], pikachu['trainer'], pikachu['defeated']) == (1, 1, 1)

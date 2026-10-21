@@ -459,6 +459,26 @@ test('Gold, Silver and Crystal adventures hide the palette and never send one', 
   assert.equal('fossil_preference' in settings, false)
 })
 
+test('fair wild DVs is offered for Generation I only and is off until chosen', async () => {
+  for (const [version, offered] of [['red', true], ['yellow', true], ['crystal', false]]) {
+    const game = {id: 'd'.repeat(32), name: 'Game', version, state: 'stopped', settings: {}}
+    const view = library({respond(path, options) {
+      if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+      if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
+    }})
+    await settle()
+    for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+    view.click('settings', game.id)
+    assert.equal(view.element('#settings-fair-dvs-label').hidden, !offered)
+    assert.equal(view.element('#settings-fair-wild-dvs').checked, false)
+    view.element('#settings-fair-wild-dvs').checked = offered
+    view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+    await settle()
+    const settings = JSON.parse(view.calls.find(call => call.options.method === 'PATCH').options.body).settings
+    assert.equal(settings.fair_wild_dvs, offered ? true : undefined)
+  }
+})
+
 test('settings render existing backups without an adventure variable', async () => {
   const view = library({page: 'settings', respond(path) {
     if (path === '/api/v1/backups') return {ok: true, json: async () => ({backups: [
@@ -595,3 +615,20 @@ test('a game paused for a trade shows Paused rather than a measured 0.0× speed'
   assert.equal(labels['a-cpu'], '2.1%')
 })
 
+
+test('the library lists watchdog problems and hides the list when there are none', async () => {
+  let attention = {enabled: true, problems: [{kind: 'stuck', adventure_id: 'a'.repeat(32),
+    message: 'Mischievous Badge Hunt has been stuck in <Violet City> for 18 minutes.', since: 1}]}
+  const view = library({respond(path) {
+    return path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: [], attention})} : null
+  }})
+  await settle()
+  assert.equal(view.element('#attention').hidden, false)
+  assert.equal(view.element('#attention-list').innerHTML,
+    '<li>Mischievous Badge Hunt has been stuck in &lt;Violet City&gt; for 18 minutes.</li>')
+  attention = {enabled: true, problems: []}
+  await view.poll()
+  await settle()
+  assert.equal(view.element('#attention').hidden, true)
+  assert.equal(view.element('#attention-list').innerHTML, '')
+})

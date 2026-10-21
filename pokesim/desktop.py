@@ -144,11 +144,27 @@ class GameGateway:
             await RedirectResponse('/desktop')(scope, receive, send)
             return
         if scope['type'] == 'http' and scope['path'] == '/' and scope['method'] == 'GET':
-            page = (STATIC / 'index.html').read_text(encoding='utf-8')
-            page = page.replace('</nav>', '<a href="/desktop">Desktop</a></nav>', 1)
-            await HTMLResponse(page)(scope, receive, send)
+            await self.live_page(game, scope, receive, send)
             return
         await game(scope, receive, send)
+
+    @staticmethod
+    async def live_page(game, scope, receive, send):
+        """The game's own rendered live page, with its security headers, plus a link back to Desktop."""
+        start, body = {}, []
+
+        async def capture(message):
+            if message['type'] == 'http.response.start':
+                start.update(message)
+            else:
+                body.append(message.get('body', b''))
+        await game(scope, receive, capture)
+        page = b''.join(body)
+        if start.get('status') == 200:
+            page = page.decode('utf-8').replace('</nav>', '<a href="/desktop">Desktop</a></nav>', 1).encode('utf-8')
+        headers = [(name, value) for name, value in start.get('headers', []) if name.lower() != b'content-length']
+        await send({**start, 'headers': [*headers, (b'content-length', str(len(page)).encode())]})
+        await send({'type': 'http.response.body', 'body': page})
 
 
 def create_desktop_app(adventure, token, shutdown=lambda: None):

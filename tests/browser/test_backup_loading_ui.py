@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from conftest import serve
+from conftest import refused, serve
 from pokesim import desktop_setup
 from pokesim.app.backup import create_backup
 from pokesim.app.manager import Manager, create_app
@@ -58,6 +58,8 @@ def test_load_backup_file_and_open_copy(page, tmp_path, monkeypatch, width):
         page.screenshot(path=str(folder / f'backups-settings-{width}.png'), full_page=True)
 
 
+# The test answers the first delete with a busy refusal.
+@pytest.mark.expected_errors(*refused('/api/v1/backups/', 409))
 @pytest.mark.parametrize('width,theme', [(320, 'light'), (1024, 'light'), (1280, 'light'), (1280, 'dark')])
 def test_delete_backups_confirmation_and_pagination(page, tmp_path, monkeypatch, width, theme):
     from playwright.sync_api import expect

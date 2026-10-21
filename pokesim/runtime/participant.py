@@ -342,10 +342,15 @@ class Participant:
         collection = getattr(getattr(self.emu, 'policy', None), 'collection', None)
         demanded = collection.demand() if hasattr(collection, 'demand') else {}
         demanded = demanded if isinstance(demanded, dict) else {}
+        # A Gen I PC list stops at a nickname holding a text command, so the Pokémon stored after it
+        # can never be withdrawn. Offering one fails every trade that picks it.
+        unlisted = set(getattr(getattr(self.emu, 'snapshot', None), 'unlisted', ()) or ())
         for mon in offers(inv, True, demanded) if available else ():
             from ..broker.routine import EVOLVES
             from ..strategy_data import SPECIES
             side = mon.as_side()
+            if (side['box'] - 1, side['position'] - 1) in unlisted:
+                continue
             candidates.append({**side, **capsule_fields(records.get((side['box'], side['position'], side['species'])) or {}),
                                'last_copy': inv.held[mon.species] == 1,
                                'trade_preference': mon.trade_preference,

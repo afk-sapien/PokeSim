@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layout audit fixture</title>
+<style>
+body { margin: 0; font: 16px/1.4 sans-serif }
+.row { display: flex; gap: 8px; padding: 8px }
+.card { width: 120px; height: 60px; background: #ddd; border: 1px solid #888 }
+/* Known overlap: the second card is pulled 40px onto the first. */
+#overlap-b { margin-left: -48px }
+/* Known overflow: a fixed 200px box inside a 120px parent that does not clip. */
+#overflow-parent { width: 120px; height: 80px; border: 1px solid #888 }
+#overflow-child { width: 200px; height: 40px; background: #cde }
+/* Known clipped text: one long word in a narrow box that hides its overflow. */
+#clipped-text { width: 80px; overflow: hidden; white-space: nowrap; border: 1px solid #888 }
+/* Deliberate cases the audit must accept. */
+.fine-scroller { width: 120px; overflow-x: auto; white-space: nowrap }
+.fine-ellipsis { width: 80px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis }
+.fine-badge { position: relative; width: 60px; height: 30px }
+.fine-sticky { height: 80px; overflow-y: auto }
+.fine-sticky p { height: 120px; margin: 0 }
+.fine-sticky footer { position: sticky; bottom: 0; height: 30px; background: #eee }
+.fine-badge i { position: absolute; right: -10px; top: -10px; width: 20px; height: 20px; background: red }
+</style>
+</head>
+<body>
+<div class="row" id="overlap-row"><div class="card" id="overlap-a">A</div><div class="card" id="overlap-b">B</div></div>
+<div id="overflow-parent"><div id="overflow-child">wide</div></div>
+<p id="clipped-text">Supercalifragilistic</p>
+<div class="fine-scroller" id="fine-scroller"><span>one two three four five six seven eight nine ten</span></div>
+<p class="fine-ellipsis">Supercalifragilistic</p>
+<div class="fine-badge"><i></i></div>
+<div class="fine-sticky"><p>Content scrolls under the footer.</p><footer>Sticky footer</footer></div>
+</body>
+</html>

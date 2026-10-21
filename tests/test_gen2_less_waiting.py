@@ -295,6 +295,28 @@ def test_a_finished_run_loops_the_league_instead_of_walking_the_grass(data, monk
     assert goal.key == 'funds_arrive' and policy.collection['league_loop'] == 182 and not patrols
 
 
+def test_a_league_loop_ends_when_the_team_has_too_few_attacks_for_it(data, monkeypatch):
+    from pokesim.gen2.collection import journey
+    from pokesim.gen2.policy import Goal
+    # A live Crystal run took a level 100 lead and its HM carriers into the League, ran out of
+    # attacks at Lance and never finished the battle. Five Hydro Pumps cannot cover 26 opponents.
+    patrols = stub_activities(monkeypatch)
+    lead = mon(157, box=None, level=100, moves=(56, 0, 0, 0), pp=(5, 0, 0, 0))
+    state = snapshot([lead, mon(16, box=None, position=1, level=20)])
+    state.pockets = {'balls': []}
+    state.hall_of_fame_count = 180
+    policy = expedition(data)
+    policy.completed = {'tower': 1, 'champion': 1}
+    policy.collection['league_loop'] = 181
+    policy.person = lambda snapshot, key, label, *where: Goal(key, label, where[0], 0, 0)
+    goal = journey(policy, state, clock(), Goal)
+    assert 'league_loop' not in policy.collection and not goal.key.startswith('funds_') and patrols
+    # Inside the League there is no way back, so an attempt already under way carries on.
+    policy.collection['league_loop'] = 181
+    policy.in_league = lambda snapshot: True
+    assert journey(policy, state, clock(), Goal).key.startswith('funds_') and policy.collection['league_loop'] == 181
+
+
 def test_the_league_loop_waits_for_unfinished_work(data, monkeypatch):
     from pokesim.gen2.collection import journey
     from pokesim.gen2.policy import Goal

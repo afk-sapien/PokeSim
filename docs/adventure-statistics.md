@@ -60,6 +60,8 @@ These are individual totals, separate from the Pokédex's species coverage out o
 151. Partial catch history is labeled as tracked since collection began, and
 perfect finds retain the plus sign for a verified minimum. Unavailable tracking
 is shown explicitly. The API exposes these records under `collection_records`.
+With **Fair wild DVs** off, Red, Blue and Yellow show a note that wild grass and cave
+encounters cannot be shiny or perfect there. Fishing, gifts and trades can.
 
 ## Collection strength
 
@@ -176,7 +178,7 @@ Both tables support name or number search, numeric sorting in either direction,
 and an activity filter. The selected view survives a refresh. Tables scroll
 horizontally on phones while keeping the Pokémon or item name visible.
 
-Verified English Red and Blue action hooks record these counters independently
+Verified English Red, Blue and Yellow action hooks record these counters independently
 of sampled snapshots. Counts and duplicate-detection receipts commit together.
 They survive journal pruning, process restarts, and save rewinds. Replaying an
 identical action state does not count again. These are cumulative records for the

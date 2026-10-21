@@ -11,7 +11,7 @@ from pokesim.gen2.standdown import standing_down
 from tests.test_gen2_store_stock import Emulator, open_list
 
 
-@pytest.fixture(scope='module', params=['gold', 'silver'])
+@pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
 def real_data(request):
     from pokesim.gen2.data import GameData
     directory = os.environ.get('GEN2_DATA_DIR')

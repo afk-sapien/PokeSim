@@ -429,6 +429,38 @@ class NotificationCenter:
             return {'ok': False, 'error': str(error)[:300]}
         return {'ok': True, 'subscribe_url': target['url'] if values['provider'] == 'ntfy' else ''}
 
+    def alert(self, title, body, adventure_id=None, priority=TRADE_PRIORITY):
+        """The library watchdog speaks through the Stuck or needs attention category."""
+        values = self.settings()
+        if 'integrations' in values:
+            targets = [destination(item) for item in integrations(values)
+                       if values['enabled'] and item['enabled'] and destination(item)['url']
+                       and item['categories']['stall'] and 'stall' not in item.get('mute', ())
+                       and item['min_priority'] <= priority
+                       and (adventure_id is None or subscribed(item, adventure_id))]
+        else:
+            targets = destinations(values)
+            if (not values['enabled'] or not values['categories']['stall']
+                    or 'stall' in values.get('mute', ()) or values['min_priority'] > priority
+                    or adventure_id in values['muted_adventures']):
+                targets = []
+        if not targets:
+            return None
+        click = (f"{self.public_url}/games/{quote(str(adventure_id), safe='')}" if adventure_id
+                 else self.public_url + '/')
+        def deliver():
+            for target in targets:
+                extra = {} if target['provider'] == 'ntfy' else {
+                    'provider': target['provider'], 'chat_id': target['chat_id']}
+                try:
+                    publish(target['url'], target['token'], title, body, tags='warning',
+                            priority=priority, click=click, **extra)
+                except Exception as error:  # noqa: BLE001
+                    log.warning('Notification failed: %s', error)
+        thread = threading.Thread(target=deliver, name='watchdog-notification', daemon=True)
+        thread.start()
+        return thread
+
     def trade_completed(self, row, display):
         """Trades are recorded by the manager, so it announces them once for both adventures."""
         values = self.settings()

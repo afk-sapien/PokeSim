@@ -984,6 +984,57 @@ def test_trade_preparation_heals_poison_before_freezing_the_source(real_data, mo
     assert controller.state.get('phase') != 'ready'
 
 
+def test_time_capsule_preparation_heals_before_depositing_the_last_pokemon_that_can_battle(real_data, monkeypatch):
+    # Live Crystal: the lead had fainted and the only other member could not enter the Time Capsule.
+    # The game refuses that deposit, so the PC opened and closed until the preparation deadline.
+    import time
+    from pokesim.gen2 import preparation, timecapsule
+    from pokesim.gen2.menus import Storage
+    monkeypatch.setattr(preparation, 'update_world', lambda *args: None)
+    monkeypatch.setattr(preparation, 'Memory', lambda *args: SimpleNamespace(
+        byte=lambda name: 4 if name == 'wPlayerDirection' else 0))
+    offer = SimpleNamespace(species=27, box=3, position=1, hp=20, egg=False, status=0, moves=(10,))
+    monkeypatch.setattr(preparation, 'selected', lambda *args: ('box', 1, offer))
+    monkeypatch.setattr(timecapsule, 'compatible', lambda mon, data: mon.species != 143)
+    center = real_data.map_ids['PEWTER_POKECENTER_1F']
+    spot = {'at': (9, 1)}
+
+    def toward(snapshot, target, points, memory, surf=False):
+        return [] if points[0] == spot['at'] else ['walk']
+
+    policy = SimpleNamespace(in_league=lambda snapshot: False, mode=None,
+        healing=lambda snapshot: SimpleNamespace(map_name='PEWTER_POKECENTER_1F', x=5, y=2),
+        walk=lambda snapshot, memory, path: SimpleNamespace(button='down'),
+        nav=SimpleNamespace(observe=lambda snapshot: None, collision=lambda *args: [],
+            toward=toward, regions=SimpleNamespace(observe=lambda *args: None,
+                route=lambda snapshot, mid, points, **kwargs: [] if mid == center else None)))
+    emu = SimpleNamespace(policy=policy, data=real_data, frame=0, pb=SimpleNamespace(memory={}))
+    state = {'deadline': time.time() + 60, 'started_frame': 0, 'trade_key': 'k', 'manual': True,
+             'time_capsule': True}
+    controller = preparation.Preparation(emu, state)
+    controller.center = (center, (9, 1))
+    party = (SimpleNamespace(species=3, hp=0, egg=False, status=0, moves=(22,)),
+             SimpleNamespace(species=143, hp=233, egg=False, status=0, moves=(156,)))
+    snapshot = SimpleNamespace(in_battle=False, map=center, text='', tiles=[''] * 18, badges=0, party=party,
+                               stored=(offer,), active_box=0, box_counts=(19,) + (20,) * 13)
+    assert controller.advance(snapshot).button == 'down'
+    assert controller.menu is None and policy.mode == 'Heal the party before the Cable Club exchange'
+    spot['at'] = None
+    # One step away from the PC, the trainer keeps walking to the nurse instead of turning back.
+    assert controller.advance(snapshot).button == 'down'
+    assert policy.mode == 'Heal the party before the Cable Club exchange'
+    # Once the nurse has revived the lead, the incompatible member goes to the PC as before.
+    healed = (SimpleNamespace(**{**vars(party[0]), 'hp': 150}), party[1])
+    snapshot.party = healed
+    assert controller.advance(snapshot).button == 'down'
+    assert policy.mode == 'Prepare the Cable Club exchange'
+    # The PC is chosen again from wherever the nurse was.
+    assert controller.center[0] == center
+    spot['at'] = controller.center[1]
+    assert controller.advance(snapshot).button == 'a'
+    assert controller.menu == Storage('DEPOSIT', 1, 2)
+
+
 def test_time_capsule_conversion_matches_retail_exchange(real_data):
     from pokesim.gen2.timecapsule_conversion import to_gen1, to_gen2
     old = bytes.fromhex('85002306001515ff9621000051a1001c0a0410061e052f065603d2a6f728230000110024000d001b0027000f')
@@ -1690,12 +1741,13 @@ def test_tower_teaches_psychic_to_the_stronger_special_attacker(real_data):
     assert policy.menu.move == 94 and policy.menu.slot == 1
 
 
-def test_box_change_opens_the_pc_and_runs_the_core_shortcut(monkeypatch):
+@pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])
+def test_box_change_opens_the_pc_and_runs_the_core_shortcut(monkeypatch, version):
     from pokesim.gen2 import menus
     screens = iter(['overworld', 'pc'])
     monkeypatch.setattr(menus, 'current_screen', lambda memory, version: next(screens))
     menu = menus.ChangeBox(3)
-    snapshot = SimpleNamespace(active_box=0, data=SimpleNamespace(game='crystal'))
+    snapshot = SimpleNamespace(active_box=0, data=SimpleNamespace(game=version))
     mem = SimpleNamespace(memory=None)
     assert menu.step(snapshot, mem) == 'a'
     monkeypatch.setattr(menus.CoreChangeBox, 'step', lambda self, memory, ui: 'down')

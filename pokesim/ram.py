@@ -53,6 +53,9 @@ from dataclasses import dataclass, fields, replace
 from functools import lru_cache
 from pokesim_core.storage import decode_box, memory_bytes
 
+# Yellow's opening scene, where Oak catches Pikachu before the player has a party.
+BATTLE_TYPE_PIKACHU = 4
+
 TABLES = load("tables.json")
 MAP_NAMES = {int(k): place_name(v) for k, v in TABLES["maps"].items()}   # display spelling
 SPECIES_NAMES = {int(k): v for k, v in TABLES["species"].items()}
@@ -212,7 +215,7 @@ class Snapshot:
             return False
         if any(p.species not in SPECIES_NAMES or p.level > 100 or p.hp > p.max_hp for p in self.party):
             return False
-        if self.in_battle in (1, 2) and not self.party and self.started:
+        if self.in_battle in (1, 2) and not self.party and self.started and self.battle_type != BATTLE_TYPE_PIKACHU:
             return False        # a battle with no Pokémon is a softlock
         return True
 

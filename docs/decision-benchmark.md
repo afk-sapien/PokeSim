@@ -10,7 +10,7 @@ A fixture directory contains:
 
 - `fixture.json`, with a name and the validated runtime `settings`, including ROM,
   reference-data paths, policy, starter, and seed.
-- `checkpoint.state`, a copied PyBoy checkpoint.
+- `checkpoint.state`, a copied emulator checkpoint.
 - `checkpoint.json`, its original metadata with policy and RNG state.
 - Optional `trade_preferences` inside `fixture.json` for partner protections.
 
@@ -72,7 +72,7 @@ python tools/benchmark_decisions.py trace /path/to/private/fixture.json --frames
 
 This reruns ordinary input from the exact original checkpoint using the candidate
 policy, with the same frame budget and virtual clock. It fails unless action counts,
-decision counts, snapshot/action/policy traces, final snapshot, and final PyBoy
+decision counts, snapshot/action/policy traces, final snapshot, and final emulator
 checkpoint hashes match the baseline. This catches changes that a faster wall-clock
 run could hide by advancing a different amount of gameplay.
 
@@ -130,7 +130,7 @@ switches the process back to Python.
 
 Use the same Python environment for the baseline and candidate, even if only the
 candidate uses the optional compiler. Each report records the installed versions
-of PyBoy, NumPy, Numba, and llvmlite. A missing optional dependency is recorded as
+of PokeSim Core, NumPy, Numba, and llvmlite. A missing optional dependency is recorded as
 `null`. Installing Numba does not prove that a workload used it.
 
 Each trial reports graph-route calls, calls with an actual nopython dispatcher,

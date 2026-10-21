@@ -15,7 +15,7 @@ from ..shiny import shiny_bytes
 from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, keeps, manual_rows
 from ..trade.preferences import apply, name as setting_name
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
-from .preparation import begin
+from .preparation import begin, reserves
 from pokesim_core.gen2.ram import Memory, read_snapshot
 # The Exp. Share item number, as release.EXP_SHARE (kept local so this module imports without Gen I data).
 EXP_SHARE = 0x39
@@ -48,6 +48,14 @@ def _paused(emu, snapshot):
 
 
 SEALED = 'The party and every PC box are full and no spare duplicate can be released, so no boxed Pokémon can join the party for a trade'
+CROWDED = ('The party is full and every Pokémon after the lead is the only one knowing one of its field moves, '
+           'so none can go to the PC to make room for a trade')
+
+
+def crowded(snapshot):
+    """Whether a full party has no reserve an automatic trade could deposit for a boxed offer."""
+    party = getattr(snapshot, 'party', ())
+    return len(party) >= 6 and not reserves(party)
 
 
 def sealed(snapshot, policy=None):
@@ -101,7 +109,7 @@ def _stock(emu, rows):
 
 def offers(emu, payload):
     snapshot = emu.snapshot
-    if _paused(emu, snapshot) or sealed(snapshot, emu.policy):
+    if _paused(emu, snapshot) or sealed(snapshot, emu.policy) or crowded(snapshot):
         return []
     party = payload.get('party') or []
     stored = (payload.get('storage') or {}).get('pokemon') or []
@@ -168,7 +176,8 @@ class Participant(BaseParticipant):
                 'generation': self.bootstrap.generation, 'cartridge_generation': 2,
                 'offers': offers(self.emu, payload), 'revision': digest(payload),
                 'time_capsule_ready': unlocked(self.emu.snapshot, Memory(self.emu.pb.memory, self.emu.data)),
-                'trade_blocked': SEALED if sealed(self.emu.snapshot, self.emu.policy) else '',
+                'trade_blocked': (SEALED if sealed(self.emu.snapshot, self.emu.policy) else
+                                  CROWDED if crowded(self.emu.snapshot) else ''),
                 'holding': bool(self.store.get('trade_hold'))}
 
     def manual_inventory(self):

@@ -6,10 +6,11 @@ import pytest
 
 from pokesim import config
 from pokesim.gen2 import store_stock
-from pokesim.gen2.standdown import standing_down
+from pokesim.gen2.item_sources import PHONE_GIFTS, phone_key
+from pokesim.gen2.standdown import stand_down, standing_down
 
 
-@pytest.fixture(scope='module', params=['gold', 'silver'])
+@pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
 def real_data(request):
     from pokesim.gen2.data import GameData
     directory = os.environ.get('GEN2_DATA_DIR')
@@ -28,7 +29,7 @@ def mon(species, **extra):
                               'position': 0, 'trainer_id': 1, 'dvs': (9, 9, 9, 9, 9), **extra})
 
 
-def case(data, party=(), stored=(), items=(), money=50000, events=(), owned=(), **policy):
+def case(data, party=(), stored=(), items=(), money=50000, events=(), owned=(), phone=False, **policy):
     spent = {'EVENT_GOT_LEAF_STONE_FROM_BILLS_GRANDPA', 'EVENT_GOT_FIRE_STONE_FROM_BILLS_GRANDPA',
              'EVENT_GOT_WATER_STONE_FROM_BILLS_GRANDPA', 'EVENT_GOT_THUNDERSTONE_FROM_BILLS_GRANDPA',
              *store_stock.ONE_TIME.values()} - set(events)
@@ -40,6 +41,10 @@ def case(data, party=(), stored=(), items=(), money=50000, events=(), owned=(), 
                                 key=key, label=label, map=place, script=script))
     for name, value in policy.items():
         setattr(state, name, value)
+    if data.game == 'crystal' and not phone:
+        # Crystal phone trainers give stones too. Unless asked for, they have already been tried.
+        for name in PHONE_GIFTS:
+            stand_down(state, phone_key(name))
     return state, snapshot
 
 
@@ -94,6 +99,9 @@ def test_legitimate_sources_win(real_data, on):
     # A stone in the bag is used before buying another.
     policy, snapshot = case(real_data, party=[mon(102)], owned={102}, items=[(leaf, 1)])
     assert store_stock.needs(policy, snapshot) == {}
+    # In Crystal, Picnicker Gina still calls with a Leaf Stone. Gold and Silver have no such call.
+    policy, snapshot = case(real_data, party=[mon(102)], owned={102}, phone=True)
+    assert store_stock.needs(policy, snapshot) == ({} if real_data.game == 'crystal' else {leaf: 1})
 
 
 def test_trade_items_wait_for_a_linked_peer(real_data, on):

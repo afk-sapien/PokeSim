@@ -69,6 +69,11 @@ def validate_starter(starter, version=None):
         raise ValueError('Choose a starter from this cartridge')
 
 
+def validate_generation_settings(settings, version):
+    if settings.get('fair_wild_dvs') and SLOT_GENERATIONS.get(version) != 1:
+        raise ValueError('Fair wild DVs is only for Red, Blue and Yellow')
+
+
 def unpack(raw):
     """Accept a verified cartridge or a ZIP containing exactly one cartridge."""
     if raw[:4] == b'PK\x03\x04':

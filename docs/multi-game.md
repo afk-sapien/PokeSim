@@ -1,7 +1,7 @@
 # Earlier multi-game design
 
 Historical design notes. Automatic trading is now implemented for configured trusted
-peers. See [automatic trading](automatic-trading.md) for current behavior and the
+peers. See [Trading](trading.md) for current behavior and the
 [architecture guide](architecture.md) for the implemented Adventure Library.
 The original proposal below is retained for context.
 

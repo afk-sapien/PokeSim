@@ -29,18 +29,18 @@ def test_gen1_map_names_read_with_apostrophes():
     assert 'Digletts Cave' not in MAP_NAMES.values()
 
 
-@pytest.fixture
-def crystal():
+@pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
+def gen2_data(request):
     directory = os.environ.get('GEN2_DATA_DIR')
     if not directory:
         pytest.skip('Set GEN2_DATA_DIR to generated local game data')
     from pokesim.gen2.data import GameData
-    return GameData.load(directory, 'crystal')
+    return GameData.load(directory, request.param)
 
 
-def test_gen2_evolutions_name_items_instead_of_constants(crystal):
+def test_gen2_evolutions_name_items_instead_of_constants(gen2_data):
     from pokesim.gen2.web import Reference
-    entries = {row['name']: row for row in json.loads(Reference(crystal).json('crystal'))['entries']}
+    entries = {row['name']: row for row in json.loads(Reference(gen2_data).json(gen2_data.game))['entries']}
     labels = {(row['name'], step['name']): step['label'] for row in entries.values() for step in row['evolves_to']}
     assert labels['Scyther', 'Scizor'] == 'Trade holding Metal Coat'
     assert labels['Poliwhirl', 'Politoed'] == "Trade holding King's Rock"
@@ -56,9 +56,9 @@ def test_gen2_evolutions_name_items_instead_of_constants(crystal):
     assert not [label for label in every if '_' in label or label.isupper()]
 
 
-def test_gen2_place_and_source_text_use_display_spelling(crystal):
-    assert "Diglett's Cave" in {row['name'] for row in crystal.maps.values()}
+def test_gen2_place_and_source_text_use_display_spelling(gen2_data):
+    assert "Diglett's Cave" in {row['name'] for row in gen2_data.maps.values()}
     from pokesim.gen2.dex_sources import _evolution_text
-    scyther = next(sid for sid, row in crystal.species.items() if row['name'] == 'Scyther')
-    evo = next(row for row in crystal.species[scyther]['evolutions'] if row['method'] == 'trade')
-    assert _evolution_text(crystal, scyther, evo) == 'Trade Scyther holding a Metal Coat'
+    scyther = next(sid for sid, row in gen2_data.species.items() if row['name'] == 'Scyther')
+    evo = next(row for row in gen2_data.species[scyther]['evolutions'] if row['method'] == 'trade')
+    assert _evolution_text(gen2_data, scyther, evo) == 'Trade Scyther holding a Metal Coat'

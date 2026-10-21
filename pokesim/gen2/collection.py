@@ -338,6 +338,40 @@ def _prerequisites(data, snapshot):
     return needed
 
 
+# Every Elite Four and Champion Pokémon is level 40 or higher, and the five battles field 26 of them.
+LEAGUE_LEVEL, LEAGUE_OPPONENTS = 40, 26
+
+
+def league_ready(policy, snapshot):
+    """Whether the party is strong enough to choose a League run.
+
+    Nothing restores PP inside the League. A level 100 Vaporeon beside Pokémon too weak to face the
+    Elite Four ran out of attacks at Lance and the battle never ended. So the Pokémon at League
+    level need at least one attack for each opponent, counted at full PP since the run heals first.
+    """
+    moves = policy.data.moves
+    lost = getattr(policy, 'collection', {}).get('league_lost')
+    if lost is not None and league_strength(snapshot) < min(lost + LEAGUE_REGROWTH, league_ceiling(snapshot)):
+        return False
+    return sum(moves.get(move, {}).get('pp', 0) for mon in snapshot.party
+               if not mon.egg and mon.level >= LEAGUE_LEVEL
+               for move in mon.moves if moves.get(move, {}).get('power')) >= LEAGUE_OPPONENTS
+
+
+# A team that lost a postgame League run tries again only after this many more levels at League level.
+LEAGUE_REGROWTH = 10
+
+
+def league_strength(snapshot):
+    """The levels the party holds at League level, which grow as training brings it closer to winning."""
+    return sum(mon.level for mon in snapshot.party if not mon.egg and mon.level >= LEAGUE_LEVEL)
+
+
+def league_ceiling(snapshot):
+    """The most League strength the party can reach, so a team that lost at level 100 may try again."""
+    return 100 * len(snapshot.party)
+
+
 def league_funding(policy, snapshot, Goal, *, again=False):
     """Run the Elite Four again for prize money, ending with a Hall of Fame entry.
 
@@ -357,6 +391,47 @@ def league_funding(policy, snapshot, Goal, *, again=False):
     if not snapshot.event('EVENT_BEAT_CHAMPION_LANCE'):
         return policy.person(snapshot, 'funds_lance', 'Challenge Champion Lance again', 'LANCES_ROOM', 'LancesRoomLanceScript')
     return Goal('funds_champion', 'Record another League victory', 'HALL_OF_FAME', 4, 7)
+
+
+def call_off_league(policy):
+    """Treat the postgame League run under way as lost, so the team prepares before the next.
+
+    The guards call this after restarting the same attempt from the entry save again and again. The
+    entry save was taken before the run went in, so this marks it entered and the League loop then
+    sees a team outside the League without its Hall of Fame entry, as after a black out.
+    """
+    state = policy.collection
+    if state.get('league_loop') is None:
+        return False
+    state['league_entered'] = True
+    return True
+
+
+def league_loop(policy, snapshot, Goal):
+    """The next step of a postgame League run under way, or None once it is over or called off."""
+    state = policy.collection
+    loop = state.get('league_loop')
+    if loop is not None and snapshot.hall_of_fame_count >= loop:
+        state.pop('league_loop', None)
+        state.pop('league_entered', None)
+        state.pop('league_lost', None)
+    elif loop is not None and not policy.in_league(snapshot) and state.get('league_entered'):
+        # Leaving the League without its Hall of Fame entry means the team blacked out. A live Crystal
+        # run took one level 71 Poliwhirl and its trainees back to Lance every twenty minutes and lost
+        # each time, so the next run waits for the team to grow.
+        state.pop('league_loop', None)
+        state.pop('league_entered', None)
+        state['league_lost'] = league_strength(snapshot)
+    elif loop is not None and not policy.in_league(snapshot) and not league_ready(policy, snapshot):
+        # A postgame run is optional, so a team too weak to finish it trains instead of trying.
+        state.pop('league_loop', None)
+    elif loop is not None:
+        # A postgame League run, once started, finishes with its Hall of Fame entry before new work.
+        if policy.in_league(snapshot):
+            state['league_entered'] = True
+        state['phase'] = 'league'
+        return league_funding(policy, snapshot, Goal, again=True)
+    return None
 
 
 def journey(policy, snapshot, mem, Goal):
@@ -407,13 +482,9 @@ def journey(policy, snapshot, mem, Goal):
     if funding is not None:
         state['phase'] = 'league'
         return league_funding(policy, snapshot, Goal)
-    loop = state.get('league_loop')
-    if loop is not None and snapshot.hall_of_fame_count >= loop:
-        state.pop('league_loop', None)
-    elif loop is not None:
-        # A postgame League run, once started, finishes with its Hall of Fame entry before new work.
-        state['phase'] = 'league'
-        return league_funding(policy, snapshot, Goal, again=True)
+    goal = league_loop(policy, snapshot, Goal)
+    if goal:
+        return goal
     if getattr(policy, 'returned', set()) & {243, 244, 245, 249, 250, 251}:
         # A returned legendary waits at its original home ahead of routine collection.
         from .quests import legends
@@ -568,8 +639,10 @@ def journey(policy, snapshot, mem, Goal):
 
 
 def postgame_league(policy, snapshot, mem, current_time):
-    """Whether a postgame League run may start: the Champion is beaten and no clock wait is due."""
+    """Whether a postgame League run may start: the Champion is beaten, the team is ready and no clock wait is due."""
     if 'champion' not in getattr(policy, 'completed', {}) or not snapshot.hall_of_fame_count:
+        return False
+    if not league_ready(policy, snapshot):
         return False
     return clock_wait(policy, snapshot, mem, current_time) is None
 

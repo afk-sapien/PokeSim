@@ -170,13 +170,13 @@ function renderDetail(dex, refresh = false) {
   const moves = entry.moves.map((move) => `<tr><td>${move.level ? `Lv. ${move.level}` : 'Start'}</td><td>${esc(move.name)}</td>
     <td>${typeTags([move.type])}</td><td>${move.power || 'N/A'}</td><td>${move.accuracy ?? 'N/A'}%</td><td>${move.pp ?? 'N/A'}</td></tr>`).join('')
   $('#detail-body').innerHTML = `
-    <header class="detail-head">
+    <div class="detail-head">
       <span class="plate plate--hero ${PokemonTypes.portraitClass(entry.types)}"><img src="${PokeSim.sprite(dex)}" alt="${esc(entry.name)}" width="56" height="56"></span>
       <div class="detail-id"><span class="micro eyebrow">No. ${num(dex)}${entry.dex === hunting ? ', current expedition' : ''}</span>
         <h2 id="detail-name">${esc(entry.name)}</h2>
         <div class="detail-types">${typeTags(entry.types)}</div>
         <span class="record-pill ${state}"><i class="lamp"${RECORD_LAMPS[state] ? ` data-on="${RECORD_LAMPS[state]}"` : ''} aria-hidden="true"></i>${RECORD_LABELS[state]}</span>${milestoneBadges(entry.dex)}</div>
-    </header>
+    </div>
     <section class="detail-section" aria-label="Collection counts">
       <dl class="collection-counts"><div><dt>Caught</dt><dd${catchesAvailable() ? '' : ' class="count-unavailable"'}>${caughtCount(dex) ?? 'Unavailable'}</dd></div><div><dt>Have</dt><dd>${copies.length}</dd></div></dl>
       <p class="detail-meta">Party ${partyCount}, PC ${pcCount}</p>

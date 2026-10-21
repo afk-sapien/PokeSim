@@ -30,6 +30,8 @@ def test_journal_entries_and_stats(page, game, width, theme):
     expect(page.locator('#statistics-charts')).to_contain_text('Not recorded')
     expect(page.locator('#road')).to_be_visible()
     assert page.locator('#events').count() == 0
+    # Red, Blue and Yellow explain why wild shinies and perfect finds stay at zero with fair wild DVs off.
+    expect(page.locator('#stats-wild-dv-note')).to_contain_text('cannot be shiny or perfect')
     assert page.locator('.progress-chart').count() == 18
     assert page.locator('.progress-chart:visible').count() == 18
     assert page.locator('#statistics-charts .progress-label').evaluate_all(

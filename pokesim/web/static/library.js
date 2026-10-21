@@ -247,7 +247,7 @@
     const wins = summary.league_rewards?.wins
     const league = Number.isInteger(wins) ? `<p class="card-stat micro">${wins.toLocaleString()} League ${wins === 1 ? 'win' : 'wins'}</p>` : ''
     const recent = (summary.recent_activity || []).slice(0, 3)
-    const log = recent.length ? `<section class="card-log" aria-label="Recent activity"><h3 class="micro">Recent activity</h3><ol>${recent.map(row => `<li><time datetime="${esc(new Date(row.time * 1000).toISOString())}">${esc(new Date(row.time * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}))}</time><span>${esc(row.message)}</span></li>`).join('')}</ol></section>` : ''
+    const log = recent.length ? `<section class="card-log" aria-label="Recent activity, ${esc(game.name)}"><h3 class="micro">Recent activity</h3><ol>${recent.map(row => `<li><time datetime="${esc(new Date(row.time * 1000).toISOString())}">${esc(new Date(row.time * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}))}</time><span>${esc(row.message)}</span></li>`).join('')}</ol></section>` : ''
     const resources = '<dl class="card-resources" aria-label="Resource usage" aria-live="off"><div><dt title="100% CPU means one fully used processor core">CPU (1 core)</dt><dd data-usage="cpu">Measuring…</dd></div><div><dt title="Resident memory for this simulation, excluding the shared library process">Memory</dt><dd data-usage="memory">Measuring…</dd></div><div><dt title="Simulated seconds per real second, measured over the latest health-check interval">Actual speed</dt><dd data-usage="speed">Measuring…</dd></div></dl>'
     const provenance = game.provenance?.trading_blocked ? `<p class="card-error">${esc(game.provenance.reason || 'Legacy trade history needs reconciliation before trading.')}</p>` : ''
     const failure = game.error ? `<p class="card-error">${esc(explainError(game))}</p>` : ''
@@ -301,6 +301,15 @@
       : `<button class="key key--primary key--large" data-action="start" data-id="${esc(game.id)}" data-owner>${failed ? 'Retry' : 'Start adventure'}</button>`
     const links = `<a class="key" href="${gameUrl(game.id)}trading">Cable Club trading</a><a class="key" href="/">Back to the library</a>`
     return `<article class="adventure-status ${esc(game.version)}" data-state="${esc(game.state || 'stopped')}" data-adventure-id="${esc(game.id)}"><header class="card-banner"><span class="micro">${esc(gameName(game).toUpperCase())}</span><span class="tag state-pill"><i class="lamp"${lamp ? ` data-on="${lamp}"` : ''} aria-hidden="true"></i>${esc(stateLabel(game))}</span></header><div class="status-body"><h2 class="status-headline">${esc(headline)}</h2>${reason ? `<p class="card-error" role="alert">${esc(reason)}</p>` : ''}${setup}${technical}${again ? `<p class="note">${esc(again)}</p>` : ''}<div class="status-actions">${action}</div><p class="note">Your saves are safe while it is not running. The live view, PC, Pokédex, and journal open once it is running.</p><nav class="status-links" aria-label="Adventure">${links}</nav></div></article>`
+  }
+  let attentionSignature = ''
+  function renderAttention(attention) {
+    const problems = attention?.enabled ? attention.problems || [] : []
+    const markup = problems.map(row => `<li>${esc(row.message)}</li>`).join('')
+    if (markup === attentionSignature) return
+    attentionSignature = markup
+    $('#attention-list').innerHTML = markup
+    $('#attention').hidden = !problems.length
   }
   function renderAdventures() {
     const visible = adventures.filter(game => $('#show-archived').checked || !game.archived)
@@ -496,6 +505,7 @@
     try {
       const data = await api('/api/v1/adventures')
       adventures = data.adventures || []
+      renderAttention(data.attention)
       if (page === 'library' || page === 'settings') await refreshCartridges()
       renderAdventures()
       if (page === 'notifications') renderNotifyAdventures()
@@ -802,6 +812,11 @@
       $('#settings-celebi-event').checked = Boolean(game.settings?.celebi_event)
       $('#settings-celebi-event').disabled = running(game) || game.version !== 'crystal'
       $('#settings-celebi-event').toggleAttribute('data-blocked', running(game) || game.version !== 'crystal')
+      $('#settings-fair-dvs-label').hidden = johto
+      $('#settings-fair-dvs-note').hidden = johto
+      $('#settings-fair-wild-dvs').checked = Boolean(game.settings?.fair_wild_dvs)
+      $('#settings-fair-wild-dvs').disabled = running(game) || johto
+      $('#settings-fair-wild-dvs').toggleAttribute('data-blocked', running(game) || johto)
       $('#settings-store-label').hidden = !johto
       $('#settings-extra-store-items').checked = Boolean(game.settings?.extra_store_items)
       $('#settings-extra-store-items').disabled = running(game) || !johto
@@ -819,7 +834,7 @@
         input.closest('label').hidden = johto
         input.disabled = johto || running(game)
       }
-      $('#settings-event-steps-label').textContent = johto ? 'Steps between Sudowoodo and Snorlax returns' : 'Steps between gift and trade returns'
+      $('#settings-event-steps-label').textContent = johto ? 'Steps between Sudowoodo and Snorlax returns' : 'Steps between gift, trade and Snorlax returns'
       $('#adventure-settings').showModal()
       return
     }
@@ -855,6 +870,7 @@
     act(async () => {
       const game = adventures.find(item => item.id === $('#settings-id').value)
       const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, celebi_event: $('#settings-celebi-event').checked, extra_store_items: $('#settings-extra-store-items').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
+      if (game && !running(game) && !['gold', 'silver', 'crystal'].includes(game.version)) rewards.fair_wild_dvs = $('#settings-fair-wild-dvs').checked
       if (['gold', 'silver', 'crystal'].includes(game?.version)) {
         for (const field of ['fossil_preference', 'dojo_preference']) delete rewards[field]
       }

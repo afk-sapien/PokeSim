@@ -8,7 +8,7 @@ import pytest
 from pokesim import cartridges
 from pokesim.app.manager import Manager, create_app
 from pokesim.app.registry import identifier
-from conftest import serve
+from conftest import refused, serve
 
 
 JOHTO = {'gold', 'silver', 'crystal'}
@@ -85,6 +85,8 @@ def upload(page, version, payload):
     chooser.value.set_files(payload)
 
 
+# The shelf refuses the upload that is not a game.
+@pytest.mark.expected_errors(*refused('/api/v1/cartridges?slot=crystal', 409))
 @pytest.mark.parametrize('width', WIDTHS)
 def test_shelf_places_uploads_by_hash_and_rejects_unknown_files(page, library, width):
     from playwright.sync_api import expect
@@ -236,3 +238,21 @@ def test_remove_is_confirmed_and_blocked_while_an_adventure_uses_it(page, librar
     expect(dialog).not_to_be_visible()
     expect(page.locator('#cartridge-blue')).to_have_attribute('data-state', 'empty')
     assert [row['version'] for row in manager.registry.roms()] == ['red']
+
+
+@pytest.mark.parametrize('width', [320, 390, 600, 601, 768, 860, 861, 1024, 1139, 1140, 1280, 1920])
+def test_shelf_is_whole_rows_and_the_rail_fits(page, library, width):
+    from playwright.sync_api import expect
+    url, _ = library
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(f'{url}/settings#cartridges')
+    slots = page.locator('#cartridge-grid .cartridge-slot')
+    expect(slots).to_have_count(6)
+    tops = slots.evaluate_all('(slots) => slots.map(slot => Math.round(slot.getBoundingClientRect().top))')
+    # Six slots in six, three, two or one columns: never a row with one left over.
+    rows = sorted(set(tops))
+    assert len(rows) in (1, 2, 3, 6) and all(tops.count(top) == 6 // len(rows) for top in rows), tops
+    # The Library rail keeps its three tabs beside the brand down to 861px.
+    rail = page.locator('.rail').bounding_box()['height']
+    assert (rail < 70) == (width > 860), rail
+    no_sideways_scroll(page)

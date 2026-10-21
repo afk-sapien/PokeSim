@@ -19,6 +19,24 @@ from .menus import (MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, TASKS, Attack, B
                     close_pc, menu_label, restore)
 
 STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) before reporting a blocked objective
+# The wPlayerSubStatus5 bit the battle engine sets while the player's Pokémon is Transformed.
+SUBSTATUS_TRANSFORMED = 8
+# Moves with no power of their own that use another move, which may be an attack.
+BORROWED_MOVES = frozenset({'EFFECT_TRANSFORM', 'EFFECT_MIMIC', 'EFFECT_METRONOME', 'EFFECT_MIRROR_MOVE', 'EFFECT_SLEEP_TALK'})
+
+
+def transformed(mem, mon):
+    """The active Pokémon as it fights. After Transform it has the foe's species, stats and moves.
+
+    The party record keeps a Transformed Ditto's own Transform, so judging it by the party alone
+    saw a level 100 Ditto with no attack at all.
+    """
+    if mem is None or mon is None or not mem.byte('wPlayerSubStatus5') & SUBSTATUS_TRANSFORMED:
+        return mon
+    stats = (mon.stats[0],) + tuple(mem.word(name) for name in (
+        'wBattleMonAttack', 'wBattleMonDefense', 'wBattleMonSpeed', 'wBattleMonSpclAtk', 'wBattleMonSpclDef'))
+    return replace(mon, species=mem.byte('wBattleMonSpecies'), moves=tuple(mem.read('wBattleMonMoves', 4)),
+                   pp=tuple(value & 63 for value in mem.read('wBattleMonPP', 4)), stats=stats)
 
 
 @dataclass(frozen=True)
@@ -1430,8 +1448,9 @@ class Policy:
                 switch = next((i for move, i in candidates if move is not None), None)
             if switch is None and not catch and not trapped and self.collection.get('tower'):
                 switch = self.tower_switch(snapshot, mem, active)
+            fighters = [transformed(mem, mon) if index == active else mon for index, mon in enumerate(snapshot.party)]
             scores = [max((self.move_score(move, mon, opponent) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
-                      if mon.hp and not mon.egg else 0 for mon in snapshot.party]
+                      if mon.hp and not mon.egg else 0 for mon in fighters]
             if (switch is None and not catch and not trapped and scores
                     and scores[min(active, len(scores) - 1)] == 0 and max(scores) > 0):
                 switch = max(range(len(scores)), key=scores.__getitem__)
@@ -1456,7 +1475,7 @@ class Policy:
                 action = ball is not None and self.battle_task(Throw(ball), snapshot, mem)
                 if action:
                     return action
-            mon = snapshot.party[min(active, len(snapshot.party) - 1)] if snapshot.party else None
+            mon = transformed(mem, snapshot.party[min(active, len(snapshot.party) - 1)]) if snapshot.party else None
             move = weaken if catch and weaken is not None else self.move_choice(snapshot, mem, mon, opponent, None) if mon else None
             if move is None and mon and not any(mon.pp):
                 move = 0  # FIGHT with no PP left is Struggle, which the Core shortcut runs.
@@ -1489,7 +1508,7 @@ class Policy:
                         return Action('b')
                     target = forget + 1
                 else:
-                    move = self.move_choice(snapshot, mem, mon, opponent, weaken)
+                    move = self.move_choice(snapshot, mem, transformed(mem, mon), opponent, weaken)
                     target = 1 if move is None else move + 1
                 cursor = mem.byte('wMenuCursorY')
                 if cursor != target:
@@ -1603,6 +1622,31 @@ class Policy:
         if self.menu is task:
             self.menu = None
         return None
+
+    def hopeless_battle(self, snapshot):
+        """Whether a trainer battle under way can never be won.
+
+        Nobody standing has an attack with PP that touches the foe, and each still has PP for some
+        other move, so not even Struggle is left. A Vaporeon with only Rest and Growl left faced
+        Lance's Gyarados this way, and Growl kept the foe from ever knocking it out. An Elixir in
+        the bag would restore an attack, so the battle is not lost while one is there. A move that
+        borrows another, like Transform or Metronome, may still bring an attack. A level 100 Ditto
+        last in line at Koga was reloaded away before it could Transform, and once Transformed it
+        was reloaded again for spending the copied attack, though Struggle was a few turns away.
+        """
+        if snapshot.in_battle != 2:
+            return False
+        from .champion_shop import elixir
+        memory = getattr(self, 'memory', None)
+        if memory is not None and Memory(memory, self.data).byte('wPlayerSubStatus5') & SUBSTATUS_TRANSFORMED:
+            # A Transformed battler has five PP for each borrowed move, so Struggle is never far off.
+            return False
+        standing = [mon for mon in snapshot.party if mon.hp and not mon.egg]
+        if not standing or any(not any(mon.pp) or elixir(self.data, snapshot, mon) for mon in standing):
+            return False
+        return not any(pp and (self.move_score(move, mon, snapshot) > 0
+                               or self.data.moves.get(move, {}).get('effect') in BORROWED_MOVES)
+                       for mon in standing for move, pp in zip(mon.moves, mon.pp))
 
     def move_choice(self, snapshot, mem, mon, opponent, weaken):
         """The move slot to use this turn, or None when no move has PP."""

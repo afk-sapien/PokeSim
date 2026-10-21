@@ -31,3 +31,9 @@ manifest-error.txt
 
 # Separate emulator checkout, kept as a local convenience link.
 /pyboy-rs
+
+# Stylelint and other Node development tools, installed with npm ci.
+node_modules/
+
+# Layout audit reports and other local working files.
+/scratchpad/

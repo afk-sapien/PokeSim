@@ -351,14 +351,30 @@ class Navigator:
         self.failures.clear()
 
     def state_dict(self):
-        return {"visits": [[list(p), n] for p, n in sorted(self.visits.items())],
-                "edges": [[list(p), dr, list(q)] for p, edges in sorted(self.edges.items())
-                          for dr, q in sorted(edges.items())]}
+        # Flat integers, because one small list per tile made every save and every checkpoint
+        # read build about 300,000 lists, and those bursts kept growing the worker (issue #111).
+        order = {dr: i for i, dr in enumerate(DIRS)}
+        visits = [value for p, n in sorted(self.visits.items()) for value in (*p, n)]
+        edges = [value for p, edges in sorted(self.edges.items())
+                 for dr, q in sorted(edges.items()) for value in (*p, order[dr], *q)]
+        # New keys, so an older release rolled back to starts a fresh map instead of failing.
+        return {"visit_cells": visits, "edge_cells": edges}
+
+    @staticmethod
+    def _saved(data):
+        """Visits and edges as tuples, from flat integers or the nested lists of older saves."""
+        if "visit_cells" not in data and "edge_cells" not in data:
+            return (((tuple(p), n) for p, n in data.get("visits", [])),
+                    ((p, dr, q) for p, dr, q in data.get("edges", [])))
+        visits, edges, names = data.get("visit_cells", []), data.get("edge_cells", []), tuple(DIRS)
+        return ((tuple(visits[i:i + 3]), visits[i + 3]) for i in range(0, len(visits), 4)), \
+            ((edges[i:i + 3], names[edges[i + 3]], edges[i + 4:i + 7]) for i in range(0, len(edges), 7))
 
     def load_state_dict(self, data):
-        self.visits = {tuple(p): n for p, n in data.get("visits", [])}
+        visits, edges = self._saved(data)
+        self.visits = dict(visits)
         self.edges = {}
-        for p, dr, q in data.get("edges", []):
+        for p, dr, q in edges:
             if WORLD.get(p[0], {}).get("forced_moves"):
                 continue
             if not self.connected_maps(p[0], q[0]):

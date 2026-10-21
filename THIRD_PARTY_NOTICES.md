@@ -14,6 +14,8 @@ PokeSim 0.5.0 runs games on PyBoy RS, a Rust port of PyBoy 2.7.0, installed thro
 
 Other Python dependencies retain their own licenses. The image records their installed names, versions, license metadata, and notice paths in `/usr/share/pokesim/python-dependencies.json`. Native components and Debian packages retain their installed notices under `/usr/share/doc`. The OCI license label summarizes the application and emulator licenses. It is not an exhaustive license expression for every OS and transitive dependency.
 
+The browser test suite vendors [axe-core](https://github.com/dequelabs/axe-core) 4.10.3 under `tests/browser/vendor/axe-core`, with its Mozilla Public License 2.0 text and third-party notices beside it. It runs only in tests and is never part of the application.
+
 Sources:
 
 - [PyBoy source and LGPL license](https://github.com/Baekalfen/PyBoy/tree/4627b90b878e91faff443b3acd6d4e4be09a4387), the upstream project that PyBoy RS ports

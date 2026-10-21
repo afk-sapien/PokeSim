@@ -1,6 +1,8 @@
 """Full Gen II storage frees a slot by releasing a spare duplicate, and waiting on the clock is not a stall."""
 from types import SimpleNamespace
 
+import pytest
+
 from pokesim.gen2.release import BOX_CAPACITY, headroom, plan_partners, spares, target
 
 
@@ -151,15 +153,14 @@ def test_exhausted_reloads_are_reported_once(caplog):
     assert sum('reloads did not help' in record.getMessage() for record in caplog.records) == 1
 
 
-def test_policy_is_idle_only_on_the_waiting_tile():
+@pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])
+def test_policy_is_idle_only_on_the_waiting_tile(version):
     import os
-
-    import pytest
     if not os.environ.get('GEN2_DATA_DIR'):
         pytest.skip('Set GEN2_DATA_DIR to generated local game data')
     from pokesim.gen2.data import GameData
     from pokesim.gen2.policy import Goal, Policy
-    data = GameData.load(os.environ['GEN2_DATA_DIR'], 'crystal')
+    data = GameData.load(os.environ['GEN2_DATA_DIR'], version)
     policy = Policy(data, seed=1, starter='cyndaquil')
     here = SimpleNamespace(map=data.map_ids['ROUTE_29'], x=12, y=8, in_battle=0)
     policy.goal = Goal('collection_idle', 'Waiting for Tuesday', 'ROUTE_29', 12, 8)

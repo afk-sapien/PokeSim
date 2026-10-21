@@ -1,8 +1,30 @@
 # Changelog
 
-## Unreleased
+## 0.5.2
+
+- Update Pillow to 13.0.0 for its security fixes, through Core 0.7.1, which allows it. Nothing else in Core changes.
+
+- Fix Red, Blue and Yellow workers growing to about 900 MiB over a day of play ([#111](https://github.com/afk-sapien/PokeSim/issues/111)). Every autosave rebuilt the learned map as about 300,000 small lists, twice, and each trade and reward check parsed it again, which fragmented memory faster than it was returned. The map is now saved as two flat lists of numbers, which cuts the peak during a save from about 31 MiB to 6 MiB. Older saves still load. A save written by this version starts a fresh map if it is opened by an older one.
+
+- Fix automatic trades failing over and over when one game's PC is full. The wait after repeated failures counted each Pokémon separately, and Blue offered a different Pokémon each time, so new trades kept being planned and kept failing. A repeated full-PC failure now pauses automatic trades for that whole game until it completes a trade.
+
+- Add `POKESIM_MEMORY_REPORT_MINUTES`, off by default. When set, each adventure writes a memory summary to its worker log at that interval.
+
+- Fix Gold, Silver and Crystal adventures stuck in the Route 36 National Park Gate with "no route" to every goal. The officer's corner behind the counter opens only onto the warp carpets by the National Park door, and route planning treated those carpets as walls, so a trainer who stepped into the corner after a Bug-Catching Contest found no way out, and trades failed with "No reachable Pokémon Center for this offer". Route planning now walks over warp carpets and only warps from one when walking off it the warp's way, and in the stuck save the trainer walked out and went back to training.
+
+- Fix Gold, Silver and Crystal League runs reloading the League entry save again and again at Koga. When only a level 100 Ditto was left standing, the trainer saw a battle that could never end because Transform does no damage, so it restarted the attempt before Ditto could copy the foe. A Ditto with Transform left, or one already Transformed, now plays the battle out, and in the stuck save it beat Koga. After three restarts of the same attempt without a new League win, the run is now treated as lost, so the team leaves to train before trying again.
+
+- Add **Fair wild DVs**, an optional Red, Blue and Yellow adventure setting that is off by default. The cartridge never gives a grass or cave Pokémon shiny or perfect DVs. With the setting on, each wild encounter gets fully random DVs, while trainer, cable and Transform battles keep theirs. With it off, Statistics notes the cartridge limit.
+
+- Bring the Route 12 Snorlax back in Red, Blue and Yellow. After becoming Champion and battling the original Snorlax, every 100,000 steps it blocks the road again, set by the same setting as gift and trade returns. The trainer walks to it with the Poké Flute, wakes it and battles it. A battle that ends without a catch waits for the trainer to leave Route 12 before Snorlax returns, so the road stays clear in the meantime. A missing Snorlax is a new Pokédex entry and goes before repeat work.
+
+- Fix Gold, Silver and Crystal Time Capsule trades stalling at the Pokémon Center PC until "The trainer did not reach the Cable Club before the preparation deadline". When the lead had fainted and the only other party member could not enter the Time Capsule, the game refused to deposit that last Pokémon able to battle, so the PC opened and closed for the whole preparation while the partner waited at the Cable Club. The trainer now walks to the nurse first, then deposits it at the nearest PC from there. A full party also skips a reserve whose deposit the game would refuse.
 
 - Fix the Live page totals overlapping between phone and desktop widths. From 641 to 1099 pixels the badges, registered count, areas, League wins, money and play hours were squeezed into one row, so Gen II's sixteen badges ran into the registered count and play hours were cut off. The badges now take their own row with the five readings beneath.
+
+- Fix Red, Blue and Yellow trades failing with "The PC could not withdraw for this trade: Menu did not respond". A nickname received in a cable trade carried a text command, so the PC box list stalled on that name while scrolling and never reached the Pokémon stored after it. Red offered Muk, Kabutops and others from behind such a name in Box 11, and each trade travelled to the PC only to fail. Those Pokémon are no longer offered, and a trade that picks one stops before travelling with a reason.
+
+- Fix trade failures that did not say which game held them up. When one side never reached the Cable Club, the reason now names that adventure. A Gold, Silver or Crystal trainer that missed its preparation deadline now reads as taking too long to reach the Cable Club, and a paused or manually controlled adventure is named as the reason, instead of both reading "could not finish safely".
 
 ## 0.5.1
 

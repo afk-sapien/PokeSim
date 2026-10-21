@@ -81,7 +81,7 @@ substantial. Another party member already knowing the HM does not block this.
 The policy uses normal cartridge menus, preserves existing moves, and spaces retries.
 Navigation teaching of Cut, Surf, and Strength continues as before.
 
-After becoming Champion, managed adventures on supported Red and Blue cartridges
+After becoming Champion, managed adventures on supported Red, Blue and Yellow cartridges
 can buy replacements for the 38 limited TMs at the Celadon Department Store 2F
 counter. The AI considers healthy compatible party members at level 50 or above. A move
 must improve the current moveset score by more than 8 percent and one score

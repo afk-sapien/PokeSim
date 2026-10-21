@@ -6,46 +6,46 @@ from types import SimpleNamespace
 import pytest
 
 
-@pytest.fixture(scope='module')
-def gold():
+@pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
+def data(request):
     directory = os.environ.get('GEN2_DATA_DIR')
     if not directory:
         pytest.skip('Set GEN2_DATA_DIR to generated local game data')
     from pokesim.gen2.data import GameData
-    return GameData.load(directory, 'gold')
+    return GameData.load(directory, request.param)
 
 
 def member(species, level, *, box=None, position=0):
     return SimpleNamespace(species=species, level=level, egg=False, box=box, position=position, moves=(33, 0, 0, 0))
 
 
-def sealed_snapshot(gold, *, box_counts=(20,) * 14):
+def sealed_snapshot(data, *, box_counts=(20,) * 14):
     # The live team after a trade sent its Waterfall partner away for a Slugma: nobody left can learn
     # Waterfall, the team is full and every box is full.
     party = tuple(member(species, level, position=slot) for slot, (species, level) in
                   enumerate([(154, 100), (169, 66), (73, 41), (18, 51), (218, 5), (143, 50)]))
     stored = (member(120, 40, box=3, position=19),)
     return SimpleNamespace(party=party, stored=stored, box_counts=box_counts, active_box=11,
-                           can_catch=box_counts[11] < 20, map=gold.map_ids['CHERRYGROVE_POKECENTER_1F'], x=9, y=2)
+                           can_catch=box_counts[11] < 20, map=data.map_ids['CHERRYGROVE_POKECENTER_1F'], x=9, y=2)
 
 
-def test_a_sealed_pc_does_not_send_the_run_to_deposit_a_field_move_partner(gold):
+def test_a_sealed_pc_does_not_send_the_run_to_deposit_a_field_move_partner(data):
     """Regression: with no Waterfall partner left after a trade, a full team, 14 full boxes and nothing
     spare to release, the run stood at the Cherrygrove PC failing to deposit until the watchdog gave up."""
     from pokesim.gen2.policy import Policy
-    policy = Policy(gold, seed=1, starter='chikorita')
+    policy = Policy(data, seed=1, starter='chikorita')
     policy.release_target = lambda snapshot: None
-    snapshot = sealed_snapshot(gold)
-    assert not any(127 in gold.species[mon.species]['machines'] for mon in snapshot.party)
+    snapshot = sealed_snapshot(data)
+    assert not any(127 in data.species[mon.species]['machines'] for mon in snapshot.party)
     assert policy.no_room(snapshot)
     assert policy.partner_goal(snapshot, 127) is None
 
 
-def test_a_pc_with_room_still_fetches_the_field_move_partner(gold):
+def test_a_pc_with_room_still_fetches_the_field_move_partner(data):
     from pokesim.gen2.policy import Policy
-    policy = Policy(gold, seed=1, starter='chikorita')
+    policy = Policy(data, seed=1, starter='chikorita')
     policy.release_target = lambda snapshot: None
-    goal = policy.partner_goal(sealed_snapshot(gold, box_counts=(20,) * 13 + (19,)), 127)
+    goal = policy.partner_goal(sealed_snapshot(data, box_counts=(20,) * 13 + (19,)), 127)
     assert goal.key == 'storage'
 
 

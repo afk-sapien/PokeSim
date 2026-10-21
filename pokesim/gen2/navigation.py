@@ -6,7 +6,7 @@ from pokesim_core.gen2.maps import (DIRS, OPPOSITE, WALLS, blocked_side, decode_
                                     passable, travel_collision)
 
 from pokesim_core.gen2.ram import Memory, Snapshot
-from .routes import Regions, Search
+from .routes import CARPETS, Regions, Search
 
 
 class Navigator:
@@ -134,8 +134,10 @@ class Navigator:
         boulders = {index for index, obj in enumerate(entry['objects'], 1) if obj['sprite'] == 'SPRITE_BOULDER'}
         occupied.update(point for index, point in self.objects.get(snapshot.map, {}).items() if index in boulders)
         occupied.update((x, y) for index, x, y in snapshot.objects if index in boulders)
+        # Carpets warp only when walked off in their direction, so a path may cross them.
         warps = {(warp['x'], warp['y']) for warp in entry['warps']
-                 if 0x60 <= grid[warp['y'] * width + warp['x']] <= 0x7F} - targets if avoid_warps else set()
+                 if 0x60 <= grid[warp['y'] * width + warp['x']] <= 0x7F
+                 and grid[warp['y'] * width + warp['x']] not in CARPETS} - targets if avoid_warps else set()
         # Objects out of sight still stop a slide, so ice maps also count the ones the map data places.
         occupied |= self.regions.solids.get(snapshot.map, frozenset()) if snapshot.map in self.regions.ice_maps else set()
         bumped = {(nx, ny) for (mid, nx, ny) in self.blocked if mid == snapshot.map}
@@ -157,6 +159,8 @@ class Navigator:
                         or (snapshot.map, nx, ny) in self.blocked):
                     continue
                 inside = 0 <= nx < width and 0 <= ny < height
+                if avoid_warps and inside and CARPETS.get(grid[y * width + x]) == button:
+                    continue
                 if not inside:
                     if point in targets and self.passable(border.get(point, 7), surf=surf):
                         return paths[(x, y)] + [button]
@@ -261,7 +265,7 @@ class Navigator:
             if path == []:
                 entry = self.data.maps[snapshot.map]
                 tile = grid[snapshot.y * entry['width'] + snapshot.x]
-                button = {0x70: 'down', 0x76: 'left', 0x78: 'up', 0x7E: 'right'}.get(tile)
+                button = CARPETS.get(tile)
                 if button:
                     return [button]
                 path = next(([direction] for direction, (dx, dy) in DIRS.items()

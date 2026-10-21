@@ -37,6 +37,7 @@ class SimulationSettings:
     mew_event: bool = False
     celebi_event: bool = False
     extra_store_items: bool = False
+    fair_wild_dvs: bool = False
     legendary_return_steps: int = 1000000
     event_return_steps: int = 100000
     mew_return_steps: int = 1000000
@@ -79,7 +80,7 @@ class SimulationSettings:
         cartridge = identify(Path(self.rom_path).read_bytes())
         validate_starter(self.starter, cartridge.version if cartridge else None)
         for name in ('viewer_only', 'fast_text', 'battle_animations', 'league_rewards', 'mew_event', 'celebi_event',
-                     'extra_store_items'):
+                     'extra_store_items', 'fair_wild_dvs'):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f'{name} must be a boolean')
         if self.seed is not None and type(self.seed) is not int:

@@ -1,23 +1,16 @@
 # PokeSim
 
-**Generation I and II Pokémon adventures that keep going while you're away.**
+**Pokémon Red, Blue, Yellow, Gold, Silver and Crystal that play themselves while you're away.**
 
-| Generation | Games | Pokédex |
-| --- | --- | --- |
-| I | Red, Blue and Yellow | 151 Kanto species |
-| II | Gold, Silver and Crystal | 251 species across Johto and Kanto |
+![A live Crystal adventure with all 16 badges and 251 Pokémon registered, battling Bruno of the Elite Four](docs/images/gen2-live.gif)
 
 Watch an automatic player catch Pokémon, earn badges and challenge the League in
 your browser. Take control whenever you like, then hand the adventure back.
 Everything runs locally, with no model API or subscription.
 
-![A live Crystal adventure with all 16 badges and 251 Pokémon registered, battling Bruno of the Elite Four](docs/images/gen2-live.gif)
-
-Eight seconds of a Crystal adventure at the Elite Four, with all 16 badges and all 251 Pokémon registered.
-
 ## Keep the adventure going
 
-- **Six games side by side:** Run any mix of Generation I and II adventures, each with
+- **Many games side by side:** Run any mix of Generation I and II adventures, each with
   its own saves and speed. Check CPU, memory and observed speed in the Library.
 - **A growing collection:** Explore the Pokédex and search every PC box. Compare
   power, types and DV quality to find promising Pokémon.
@@ -64,8 +57,9 @@ keeps growing beyond the original games' one-time encounters:
 - **Another Eevee, another fossil (Generation I):** After becoming Champion and
   unlocking the original events, revisit gifts, fossils, the Fighting Dojo and
   supported NPC trades after **100,000 steps** by default.
-- **Legendary rematches (Generation I):** Previously acquired legendary birds and
-  Mewtwo can return to be caught again every **1,000,000 steps** by default.
+- **Legendary rematches:** Previously acquired legendary birds and Mewtwo, or
+  the legendary beasts, Lugia and Ho-Oh, return to be caught again every
+  **1,000,000 steps** by default. Sudowoodo and Snorlax return in Generation II too.
 - **A mythical reward:** A custom Mew gift arrives in the PC after your first
   League win. Mew isn't normally obtainable in these games. Another
   million steps followed by a new League win earns another.
@@ -141,7 +135,7 @@ package manager:
 Open a new terminal, then install the current public release:
 
 ```sh
-uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.5.1/pokesim-0.5.0-py3-none-any.whl
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.5.2/pokesim-0.5.2-py3-none-any.whl
 uv tool update-shell
 ```
 

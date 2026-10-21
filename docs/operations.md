@@ -74,6 +74,15 @@ Goldenrod 5F) and the Champion shop (supplies at 4F); see
 [Gen II exploration](gen2-exploration.md). `tools/play_gen2.py --extra-store-items` turns it on
 for a scenario run.
 
+## Fair wild DVs
+
+Red, Blue and Yellow adventures have a **Fair wild DVs** setting in the Library, off by default
+and changeable while the adventure is stopped. The cartridge draws wild DVs from two correlated
+random bytes, so grass and cave encounters are never shiny or perfect. With the setting on, each
+wild encounter gets fully random DVs. Trainer, cable and Transform battles and the old man's
+tutorial keep their cartridge DVs. The same saved moment always gives the same DVs, so rewinds
+and replays repeat. Gold, Silver and Crystal do not offer it.
+
 ## Where your data lives
 
 The [desktop guide](desktop.md#your-files-and-backups) lists platform-specific application folders.
@@ -134,8 +143,10 @@ first if it is stopped. Standalone instances keep **Download .sav** on the Live
 page. Export outside battles, dialogue, and trades. If a screen is changing,
 wait a moment and retry.
 The download contains the current party, PC collection, and cartridge progress.
-Load it with the same English Red or Blue ROM in another emulator, using that
+Load it with the same English ROM in another emulator, using that
 emulator's import-save option or matching the save's filename to the ROM.
+Gold, Silver and Crystal downloads are a ZIP holding the `.sav` and its `.rtc`
+clock file. Put both next to the ROM.
 
 PokeSim opens the native Save menu on a private copy of the current checkpoint,
 then boots the resulting 32 KiB cartridge save and verifies Continue restores
@@ -182,6 +193,35 @@ It is a compact overview, not the full journal or a raw diagnostic log. Every
 managed simulation page links back to the Library through the PokeSim logo.
 The adventure selector switches between games without returning to the Library.
 
+## Watchdog
+
+The Library checks every adventure once a minute and tells you about problems an adventure
+cannot fix by itself. It sends through your existing notification destinations under
+Stuck or needs attention, and lists current problems above the adventure cards.
+
+| Problem | Default limit |
+| --- | --- |
+| An adventure that should be running is not, and you did not stop it | 2 minutes |
+| An adventure is stuck in one place | 15 minutes |
+| An adventure keeps playing but nothing new happens, such as a loop between two spots | 60 minutes |
+| A trade waits in preparing or connecting | 10 minutes |
+| Trades fail for the same reason | 3 times in 2 hours |
+| PokeSim or a worker logs an unexpected error | Once per error per hour |
+
+New Pokédex entries, badges, events, League wins and maps not visited recently count as
+progress. Walking around does not. A help request from Gold, Silver or Crystal appears in
+the list only, since that adventure already sends its own Stuck notification.
+
+Each problem sends one alert when it starts and one short note when it clears. The same
+problem stays quiet for an hour after its last alert. For five minutes after a restart,
+problems are noted but not sent, so restarting does not repeat old alerts.
+
+Turn the watchdog off with `POKESIM_WATCHDOG=0`, or with
+`PATCH /api/v1/watchdog` and `{"enabled": false}`, which is saved and wins over the
+environment. Change a limit with `POKESIM_WATCHDOG_<NAME>` in minutes, using the names
+`DOWN`, `STUCK`, `NO_PROGRESS`, `TRADE_WAITING`, `FAILURE_WINDOW`, `ERROR_QUIET`,
+`COOLDOWN`, `GRACE` and `INTERVAL`. `POKESIM_WATCHDOG_FAILURE_REPEATS` is a count.
+
 ## Update and roll back
 
 Create and download a backup, then stop the app. For a native installation, follow
@@ -197,7 +237,8 @@ release explicitly supports it. Restore into a separate location to preserve cur
 Gold, Silver and Crystal adventures need 0.5.0 or later. Starting one on 0.4.x fails with
 "Worker exited before becoming ready" and "Unknown settings: celebi_event", because 0.4.x does not know
 Generation II. Older releases cannot be taught a clearer message from this side, so stop those adventures
-before rolling back and use 0.5.0 or later to open them. Generation I adventures roll back normally.
+before rolling back and use 0.5.0 or later to open them. Generation I adventures roll back normally once
+**Fair wild DVs** is turned off.
 
 ## Health, storage, and recovery
 

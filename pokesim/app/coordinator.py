@@ -51,6 +51,8 @@ PC_FULL = 'Every PC box is full'
 FAILURE_BACKOFF_AFTER = 2
 FAILURE_BACKOFF_SECONDS = 1800
 FAILURE_BACKOFF_MAX = 86400
+# The key failure_backoff gives a game whose every offer waits.
+WHOLE_GAME = '*'
 
 
 class Waiting(ValueError):
@@ -116,12 +118,16 @@ def failure_backoff(history, now=None):
         plan = row['plan']
         sides = [(plan.get(side + '_id'), legacy(plan.get(side + '_key'))) for side in ('left', 'right')]
         if row['phase'] == 'completed' and row['decision'] == 'COMMIT':
-            closed.update(sides)
+            closed.update(sides + [(aid, WHOLE_GAME) for aid, _ in sides])
             continue
         error = row.get('error') or ''
         if row['phase'] != 'aborted' or 'Cancelled by the owner' in error or SET_ASIDE in error:
             continue
         kind = _failure_kind(error)
+        tagged = FAILED_TAG.search(error)
+        if PC_FULL in error and tagged:
+            # A full PC refuses every Pokémon the game offers, so the whole game waits.
+            sides = sides + [(tagged.group(1), WHOLE_GAME)]
         for side in sides:
             if side in closed or not all(side):
                 continue
@@ -354,15 +360,20 @@ class Coordinator:
             return 'An adventure could not reach the Cable Club from its current location.'
         if 'route to the Cable Club is blocked by an unresolved obstacle' in error:
             return 'An obstacle still blocks an adventure’s route to the Cable Club.'
-        if 'Cable Club preparation exceeded its travel deadline' in error:
+        if any(text in error for text in ('Cable Club preparation exceeded its travel deadline',
+                                          'did not reach the Cable Club before the preparation deadline',
+                                          'did not reach a safe Cable Club rendezvous in time')):
             return 'An adventure took too long to reach the Cable Club and prepare its Pokémon.'
+        if 'Resume autonomous play before preparing a trade' in error:
+            return 'An adventure was paused or under manual control, so it could not prepare its Pokémon.'
         if PC_FULL in error:
             return 'An adventure has a full PC and no spare duplicate it can safely release to make room for this trade.'
         if 'route to the Cable Club needs a partner with Strength' in error:
             return 'An adventure needs a partner with Strength to reach the Cable Club.'
         if 'Cable Club preparation stopped making progress' in error:
             return 'An adventure stopped making progress while preparing for the Cable Club.'
-        if 'No safe unprotected reserve can leave the party' in error:
+        if ('No safe unprotected reserve can leave the party' in error
+                or 'The party has no safe reserve to deposit' in error):
             return 'An adventure could not safely make room in its party for the selected Pokémon.'
         if 'cannot be identified uniquely' in error or 'no longer eligible' in error:
             return 'A selected Pokémon was no longer available for this exchange.'
@@ -394,7 +405,8 @@ class Coordinator:
                   for side in ('left', 'right')]
         if aid and self.trade_blocked.get(aid):
             # The game is left out of automatic trades until it has room, so it is not retried.
-            after = 'It is left out of automatic trades until its PC has room.'
+            after = ('It is left out of automatic trades until its PC has room.' if PC_FULL in (latest.get('error') or '')
+                     else 'It is left out of automatic trades until its party has room.')
         elif any(paused):
             after = ('The same failure repeated, so automatic trading leaves this Pokémon out until '
                      + time.strftime('%H:%M', time.localtime(max(filter(None, paused)))) + '.')
@@ -642,7 +654,10 @@ class Coordinator:
             if len(prepared) == 2:
                 return prepared
             if time.monotonic() >= deadline:
-                raise TimeoutError('The adventures did not reach a safe Cable Club rendezvous in time')
+                waiting = [aid for aid in plan['participants'] if aid not in prepared]
+                # Name the game that never got ready, so the failure says which one to look at.
+                tag = f' (adventure {waiting[0]})' if len(waiting) == 1 else ''
+                raise TimeoutError('The adventures did not reach a safe Cable Club rendezvous in time' + tag)
             self.closed.wait(self.prepare_poll)
         return prepared
 
@@ -1103,7 +1118,7 @@ class Coordinator:
     def _auto_offers(aid, inventory, reserved):
         """The offers automatic trading may use: never a shiny and never a hand-picked Pokémon."""
         offers = [offer for offer in inventory.get('offers') or []
-                  if not offer.get('shiny') and (aid, offer.get('trade_key')) not in reserved
+                  if (aid, WHOLE_GAME) not in reserved and not offer.get('shiny') and (aid, offer.get('trade_key')) not in reserved
                   and (aid, legacy(offer.get('trade_key'))) not in reserved]
         return aid, {**inventory, 'offers': offers}
 

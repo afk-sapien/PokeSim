@@ -20,7 +20,7 @@ from .menus import select, tap
 from .shopping import ShoppingController
 from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
-from .collection import CENTERS, Collection, LEAGUE, legendary_project
+from .collection import CENTERS, Collection, LEAGUE, legendary_project, snorlax_project
 from .awareness import ActionWatch
 from .team import development_candidate, potential, readiness, reserve_to_deposit, storage_headroom
 from ..screen import Screen, W_PLAYER_MON_NUMBER
@@ -919,7 +919,7 @@ class StrategicPolicy(Policy):
                 self.collection.abandon('Prepare capture supplies and storage before starting the legendary battle')
                 self.goal = Goal('collect_plan', 'Prepare another expedition', 'Make room and restock before returning')
                 return wait()
-            if goal.key == "snorlax":
+            if goal.key == "snorlax" or goal.key == 'collect_static' and snorlax_project(project):
                 action = self._use_item(s, ITEMS["POKE_FLUTE"])
                 if action:
                     return action

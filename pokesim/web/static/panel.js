@@ -20,7 +20,7 @@
   }
 
   // On a phone the rail stacks to three rows. Pinning all of it would cost a
-  // fifth of the screen, so it sticks at a negative offset that leaves only the
+  // fifth of the screen, or a third of one held sideways, so it sticks at a negative offset that leaves only the
   // tab strip showing. Sticky column headers read --rail-h to sit below it.
   function wireRail() {
     const rail = document.querySelector('.rail')
@@ -28,8 +28,10 @@
     const nav = rail?.querySelector('nav:not(.breadcrumb)')
     if (!rail || !nav) return
     const measure = () => {
-      const stacked = nav.offsetTop > 0 && nav.offsetWidth >= rail.offsetWidth - 1
-      const phone = matchMedia('(max-width: 640px)').matches
+      // Stacked means the tabs took a full row of their own under the brand.
+      const row = nav.parentElement, pad = getComputedStyle(row)
+      const stacked = nav.offsetTop > 0 && nav.offsetWidth >= row.clientWidth - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight) - 1
+      const phone = matchMedia('(max-width: 640px), (max-height: 500px)').matches
       const hidden = phone && stacked ? nav.offsetTop : 0
       root.style.setProperty('--rail-top', `${-hidden}px`)
       root.style.setProperty('--rail-h', `${rail.offsetHeight - hidden}px`)

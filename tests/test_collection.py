@@ -107,10 +107,11 @@ def test_restricted_entries_are_not_counted_as_available():
 
 
 @pytest.mark.parametrize('legacy_style', ['focused', 'balanced', 'thorough', 'invalid'])
-def test_legacy_style_uses_automatic_collection_before_champion(legacy_style):
+def test_legacy_style_uses_automatic_collection(legacy_style):
     restored = Collection()
-    restored.load({'pace': legacy_style})
+    restored.load({'pace': legacy_style, 'completed_champion': True})
     fresh = Collection()
+    fresh.completed_champion = True
     s = state(map=MAPS['ROUTE_1'])
     nav = Navigator()
     nav.update_story(s)
@@ -206,6 +207,16 @@ def test_coin_project_stages_and_cash_reserve():
     c.remaining=100
     assert c.goal(replace(s,coins=0,money=9000)) is None
     assert c.remaining==0
+
+
+@pytest.mark.parametrize('version,cost', [('red',9999),('blue',6500),('yellow',9999)])
+def test_porygon_prize_cost_follows_the_cartridge(version,cost):
+    c=Collection()
+    c.version=version
+    c.project={'method':'prize','species':sid(137),'key':'prize'}
+    s=state(items=((ITEMS['COIN_CASE'],1),),money=20000,coins=6500)
+    assert c.goal(s).key==('collect_prize' if cost==6500 else 'collect_coins')
+    assert c.goal(replace(s,coins=cost)).key=='collect_prize'
 
 
 def test_snapshot_reads_coin_and_completion_bytes():
@@ -476,3 +487,80 @@ def test_evolution_training_reuses_destinations_and_preserves_level_filters(monk
     finally:
         for cache in caches:
             cache.cache_clear()
+
+
+def snorlax_world(**kw):
+    from pokesim.policies.collection import SNORLAX_SOURCE
+    c = Collection()
+    c.completed_champion = True
+    c.returned_events = {'snorlax': {'dex': 143, 'room': MAPS['ROUTE_12'], 'item': None}}
+    items = tuple((ITEMS[n], q) for n, q in (('POKE_BALL', 10), ('ULTRA_BALL', 10), ('POKE_FLUTE', 1),
+                                             ('OLD_ROD', 1), ('GOOD_ROD', 1), ('SUPER_ROD', 1)))
+    base = dict(map=MAPS['ROUTE_12'], x=10, y=70, hall_of_fame_count=1, items=items,
+                owned=frozenset(range(1, 152)) - {143}, party=(mon(hp=200, max_hp=200, level=60),))
+    base.update(kw)
+    return c, state(**base), SNORLAX_SOURCE
+
+
+def test_returning_snorlax_needs_the_league_and_the_flute():
+    c, s, source = snorlax_world()
+    assert c.available(s, source)
+    assert not c.available(replace(s, items=tuple(i for i in s.items if i[0] != ITEMS['POKE_FLUTE'])), source)
+    c.completed_champion = False
+    assert not c.available(s, source)
+
+
+def test_missing_returning_snorlax_is_a_new_pokedex_entry():
+    from pokesim.policies.director import new_entry
+    c, s, _ = snorlax_world()
+    nav = Navigator()
+    nav.update_story(s)
+    c.elapsed = 10000
+    goal = c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
+    assert goal.key == 'collect_static' and c.project['event_return'] == 'snorlax'
+    assert new_entry(c.project)
+    # The flute tiles beside Snorlax are the targets.
+    assert set(goal.targets) == {(MAPS['ROUTE_12'], 10, 63), (MAPS['ROUTE_12'], 11, 62),
+                                 (MAPS['ROUTE_12'], 10, 61), (MAPS['ROUTE_12'], 9, 62)}
+
+
+def test_snorlax_battle_without_a_catch_ends_the_project():
+    c, s, _ = snorlax_world()
+    nav = Navigator()
+    nav.update_story(s)
+    c.elapsed = 10000
+    c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
+    c.observe(replace(s, event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_BEAT_ROUTE12_SNORLAX')))
+    assert c.project is None
+    assert c.history[-1].endswith('Snorlax battle ended without a catch')
+
+
+def test_story_comes_before_side_projects_until_the_champion():
+    """Seed 37 after Brock trained partners toward evolutions for four game hours instead of reaching Misty."""
+    from pokesim.policies.director import new_entry
+    from pokesim.policies.progression import story_goal
+    caterpie = mon(species=sid(10), level=6, hp=30, max_hp=30)
+    s = state(map=MAPS['ROUTE_3'], x=10, y=10, badges=1, owned=frozenset({1, 10}),
+              party=(mon(hp=100, max_hp=100, level=20), caterpie))
+    main = story_goal(s)
+    assert main.key == 'moon_trainer'
+    nav = Navigator()
+    nav.update_story(s)
+    before = Collection()
+    assert before.choose(s, nav, random.Random(3), main) is None
+    assert before.project is None
+    # A side project carried in an older save gives the turn back to the story.
+    before.project = {'method': 'evolve', 'parent': sid(10), 'species': sid(11),
+                      'evolution': EVOS[sid(10)][0], 'key': 'evo'}
+    before.last_choice = before.elapsed - 600
+    assert before.choose(s, nav, random.Random(3), main) is None
+    assert before.project is None and before.history[-1].startswith('Changed plan')
+    # After the Champion the same moment offers expeditions, and a missing entry still comes first.
+    chosen = []
+    for seed in range(8):
+        after = Collection()
+        after.completed_champion = True
+        assert after.choose(s, nav, random.Random(seed), main) is not None
+        chosen.append(after.project)
+    assert all(new_entry(project) for project in chosen)
+    assert {project['method'] for project in chosen} & {'grass', 'evolve'}

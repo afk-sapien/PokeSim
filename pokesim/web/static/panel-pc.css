@@ -11,6 +11,12 @@
 /* Narrower selects keep the switch, search, filters and count on one line at desktop widths. */
 body[data-page="pc"] .pc-toolbar .field:not(.field--grow):not(.pc-view-field) { flex-basis: 168px; }
 body[data-page="pc"] .pc-toolbar .field--grow { flex-basis: 200px; }
+/* The all-Pokémon view adds Sort by and Order. Slimmer bases keep all of them
+   on one line from 1024px, instead of Order wrapping onto a row of its own. */
+@media (min-width: 861px) {
+  body[data-page="pc"] .pc-toolbar:has(#pc-order-control:not([hidden])) .field:not(.field--grow):not(.pc-view-field) { flex-basis: 144px; }
+  body[data-page="pc"] .pc-toolbar:has(#pc-order-control:not([hidden])) .field--grow { flex-basis: 140px; }
+}
 
 /* ---- workspace: box bank beside the box -------------------------------- */
 .pc-workspace {
@@ -88,7 +94,11 @@ body[data-page="pc"] .pc-toolbar .field--grow { flex-basis: 200px; }
 .pc-head .micro#pc-note { color: var(--ink-2); }
 
 /* ---- responsive -------------------------------------------------------- */
+/* A box holds 20, so its rows are 5 wide (4 on tablets, 2 on phones) and always fill. The party holds 6. */
+.pc-grid.pc-box-grid { grid-template-columns: repeat(5, minmax(0, 1fr)) }
+.pc-grid.pc-party-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) }
 @media (max-width: 1100px) {
+  .pc-grid.pc-box-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) }
   .pc-workspace:not(.pc-workspace-all) { grid-template-columns: 232px minmax(0, 1fr) }
 }
 @media (max-width: 860px) {
@@ -99,13 +109,15 @@ body[data-page="pc"] .pc-toolbar .field--grow { flex-basis: 200px; }
   .pc-summary .stats { margin-left: 0; width: 100%; }
 }
 @media (max-width: 640px) {
+  .pc-grid.pc-box-grid, .pc-grid.pc-party-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) }
   /* Stored and new catches share one row. */
   .pc-summary .stat:first-child { grid-column: auto; }
   .pc-summary .stat:nth-child(2) { border-top: 0; }
   .pc-view-field { flex: 1 1 100%; }
   .pc-view-field .segmented { align-self: stretch; }
+  .pc-view-field .segmented button { min-height: 44px; }
 }
-@media (max-width: 360px) {
+@media (max-width: 400px) {
   .stat { padding: 0 var(--s3); }
 }
 /* The card a link from the Pokédex asked for. */

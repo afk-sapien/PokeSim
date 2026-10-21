@@ -145,6 +145,7 @@ def test_stats_routes_are_scoped_and_entries_do_not_load_charts(tmp_path):
     assert result.pop('highlights') == {'battle': None, 'dvs': None}
     records = result.pop('collection_records')
     assert records['perfect_found'] == 0
+    assert records['fair_wild_dvs'] is False
     assert records['shiny']['held'] == 0
     assert not records['catches']['available']
     returns = result.pop('legendary_returns')

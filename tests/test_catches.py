@@ -191,3 +191,18 @@ def test_gift_receipts_update_species_stats_and_perfect_milestones_once(tracking
     tracker.flush(now=200)
     tracker.flush(now=201)
     assert tracker.value['current']['captures'] == 2
+
+
+def test_yellow_captures_read_shifted_ram(tmp_path):
+    from pokesim.catches import YELLOW
+    from test_yellow_memory import machine
+    store = Store(tmp_path)
+    try:
+        tracker = CatchTracker(store, YELLOW)
+        assert tracker.supported
+        for kind, sequence in ((0, 1), (2, 2), (1, 3)):
+            tracker.completed(machine(capture(kind=kind, sequence=sequence).memory))
+        tracker.completed(machine(capture(battle=2, sequence=4).memory))
+        assert status(store)['counts'] == {'25': 2}
+    finally:
+        store.close()

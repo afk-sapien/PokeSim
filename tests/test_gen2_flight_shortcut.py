@@ -6,13 +6,13 @@ from types import SimpleNamespace
 import pytest
 
 
-@pytest.fixture(scope='module')
-def crystal():
+@pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
+def data(request):
     directory = os.environ.get('GEN2_DATA_DIR')
     if not directory:
         pytest.skip('Set GEN2_DATA_DIR to generated local game data')
     from pokesim.gen2.data import GameData
-    return GameData.load(directory, 'crystal')
+    return GameData.load(directory, request.param)
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ class Spot:
     event_flags: bytes = b''
 
 
-def test_a_returned_sudowoodo_on_route_36_leaves_fly_as_the_way_to_olivine(crystal):
+def test_a_returned_sudowoodo_on_route_36_leaves_fly_as_the_way_to_olivine(data):
     """A reopened Sudowoodo encounter blocks Route 36 again, which cuts every walking route from Route 29 to
     Ecruteak and Olivine. The Battle Tower trip then flew nowhere and gave up on "no route" once a second."""
     from pokesim.gen2.flight import shortcut
@@ -33,7 +33,6 @@ def test_a_returned_sudowoodo_on_route_36_leaves_fly_as_the_way_to_olivine(cryst
     from pokesim.gen2.navigation import Navigator
     from pokesim_core.gen2.maps import travel_collision
 
-    data = crystal
     ids = data.map_ids
     nav = Navigator(data)
     standing = SimpleNamespace(event=lambda name: name != 'EVENT_ROUTE_36_SUDOWOODO', items=())
@@ -52,12 +51,11 @@ def test_a_returned_sudowoodo_on_route_36_leaves_fly_as_the_way_to_olivine(cryst
     assert flight.destination == ids['OLIVINE_CITY']
 
 
-def test_fly_is_not_offered_when_no_visited_town_leads_there(crystal):
+def test_fly_is_not_offered_when_no_visited_town_leads_there(data):
     from pokesim.gen2.flight import shortcut
     from pokesim.gen2.navigation import Navigator
     from pokesim_core.gen2.maps import travel_collision
 
-    data = crystal
     ids = data.map_ids
     nav = Navigator(data)
     standing = SimpleNamespace(event=lambda name: name != 'EVENT_ROUTE_36_SUDOWOODO', items=())
@@ -89,12 +87,11 @@ def walled(data):
     ('DARK_CAVE_VIOLET_ENTRANCE', 3, 14, 'ROUTE_31'),
     ('ROUTE_29_ROUTE_46_GATE', 4, 4, 'ROUTE_46'),
 ])
-def test_inside_with_no_walking_route_walks_out_before_flying(crystal, inside, x, y, outdoors):
+def test_inside_with_no_walking_route_walks_out_before_flying(data, inside, x, y, outdoors):
     """Fly only works on town and route maps. Inside a Pokémon Center, a cave or a gate, the Tower trip
     used to see no route at all and gave up about 45 times a minute."""
     from pokesim.gen2.flight import outside, shortcut
 
-    data = crystal
     ids = data.map_ids
     nav = walled(data)
     here = Spot(ids[inside], x, y, 0xFFFF, (SimpleNamespace(egg=False, moves=(19, 57, 15, 0)),))
@@ -113,10 +110,9 @@ def test_inside_with_no_walking_route_walks_out_before_flying(crystal, inside, x
     assert shortcut(policy, landed, mem, target) is not None
 
 
-def test_walking_out_is_left_alone_when_walking_works_or_fly_cannot(crystal):
+def test_walking_out_is_left_alone_when_walking_works_or_fly_cannot(data):
     from pokesim.gen2.flight import outside
 
-    data = crystal
     ids = data.map_ids
     nav = walled(data)
     mem = SimpleNamespace(read=lambda name, size: (2 ** 32 - 1).to_bytes(4, 'little'), memory=None)
@@ -135,14 +131,13 @@ def test_walking_out_is_left_alone_when_walking_works_or_fly_cannot(crystal):
     ('ROUTE_22', (21, 6), (21, 7), (21, 8)),
     ('ROUTE_26', (7, 10), (7, 11), (7, 12)),
 ])
-def test_hopping_down_a_ledge_does_not_fly_back(crystal, route, before, during, after):
+def test_hopping_down_a_ledge_does_not_fly_back(data, route, before, during, after):
     """Halfway over a ledge the player is reported on the blocked tile it hops across, which no region
     holds. A Crystal Tower trip from Kanto read that as "no walking route", flew back to Viridian City,
     walked to the same ledge and flew again, reloading every few minutes on Route 22."""
     from pokesim.gen2.flight import shortcut
     from pokesim.gen2.navigation import Navigator
 
-    data = crystal
     ids = data.map_ids
     nav = Navigator(data)
     party = (SimpleNamespace(egg=False, moves=(19, 57, 15, 0)),)

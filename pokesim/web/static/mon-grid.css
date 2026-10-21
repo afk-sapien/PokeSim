@@ -123,6 +123,8 @@
 }
 .pc-sub { font-size: 13px; color: var(--ink-2); }
 .pc-tags { display: flex; flex-wrap: wrap; gap: var(--s1); margin-top: var(--s1); }
+/* A narrow card wraps "Perfect DV" under its lamps instead of running off the edge. */
+.pc-tags .dv-badge { flex-wrap: wrap; row-gap: 2px; max-width: 100%; white-space: normal; }
 
 .pc-metrics {
   display: grid;
@@ -202,6 +204,10 @@
 .pc-detail .close-detail,
 .pc-detail-links .key,
 .pc-trade-action .key { min-height: 32px; padding: 0 var(--s3); font-size: 14px; }
+/* Phones get full-size touch targets instead. */
+@media (max-width: 640px) {
+  .pc-detail .close-detail, .pc-detail-links .key, .pc-trade-action .key { min-height: 44px; }
+}
 .pc-detail .key-short { display: none; }
 
 /* Head: the portrait, then where it lives, its name, one line of facts and one row of stamps. */
@@ -426,7 +432,7 @@
 .pc-trade-action .pc-show-link { margin-left: auto; }
 .pc-trade-action:empty { display: none; }
 
-@media (min-width: 760px) {
+@media (min-width: 641px) {
   .pc-detail-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
@@ -454,7 +460,7 @@
 /* A phone sets Close, the location and the species line beside the portrait,
    then gives the name and the stamps the full width, so a ten-letter
    nickname never breaks. */
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   .pc-detail-head {
     grid-template-areas: "plate ." "plate where" "plate line" "name name" "tags tags";
     grid-template-rows: 1fr auto auto auto auto;
@@ -469,7 +475,7 @@
 }
 /* The smallest phones drop the move kind, which Gen I and II derive from the
    type beside it, tighten the stats table and let footer keys wrap. */
-@media (max-width: 360px) {
+@media (max-width: 400px) {
   .pc-move-kind { display: none; }
   .pc-move-specs { grid-template-columns: 7ch 9ch; }
   .individual-stats th, .individual-stats td { padding-inline: 4px; }
@@ -533,7 +539,7 @@
 .pc-detail .trade-tag--keep .lock-icon { margin-right: 4px; }
 .trade-detail-lock { display: flex; align-items: center; gap: var(--s2); margin: 0; }
 .trade-detail-lock .lock-icon { color: var(--ok); }
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   .lock-toggle { flex: 1 1 100%; justify-content: center; }
 }
 @media (forced-colors: active) {

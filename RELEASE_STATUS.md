@@ -1,11 +1,12 @@
-# Release status: 0.5.1 prepared for publication
+# Release status: 0.5.2 prepared for publication
 
-PokeSim 0.5.1 is a patch on 0.5.0 that fixes the Gen II League count past 200 Hall of Fame
-entries and trades into Yellow with a traded Pikachu. See the [release notes](docs/release-notes.md).
-The publication workflow must verify the exact tagged commit, build the packages and container,
-and verify the uploaded assets before making the release public. The publication receipt is
-recorded after that succeeds. The [0.5.0 receipt](docs/validation/release-0.5.0.json) remains
-available for rollback.
+PokeSim 0.5.2 is a patch on 0.5.1 that fixes worker memory growth ([#111](https://github.com/afk-sapien/PokeSim/issues/111)),
+several Gen I and Gen II stalls and trade failures, and adds Fair wild DVs and the returning Route 12
+Snorlax. See the [release notes](docs/release-notes.md). The publication workflow must verify the exact
+tagged commit, build the packages and container, and verify the uploaded assets before making the
+release public. The publication receipt is recorded after that succeeds. PokeSim 0.5.1 was published
+on October 17, 2026 ([notes](docs/release-0.5.1.md)). The [0.5.0 receipt](docs/validation/release-0.5.0.json)
+remains available for rollback.
 
 0.5.0 moves every adventure to the Rust emulator (PyBoy RS 0.1.2 through Core 0.7.0) and adds
 Gold, Silver and Crystal. See the [0.5.0 release notes](docs/release-0.5.0.md). Core and PyBoy RS
@@ -33,7 +34,7 @@ evidence gaps for that configuration, without claiming every starter, seed or pl
   ten seconds, though each combination is now cheap: about 0.2 s per pair of full libraries.
 - **The bundled broker Compose file serves an unauthenticated endpoint on 0.0.0.0** and returns
   full inventories, and that endpoint is expensive to compute. The broker is optional and is not
-  part of the Library deployment; do not expose it beyond a trusted network.
+  part of the Library deployment. Do not expose it beyond a trusted network.
 - **Journal screenshots already stored blank are not repaired**, including the one in the shipped
   Journal image. Only new entries are retaken.
 - **Seen counts, level 100 species and perfect finds have no backfill.** Journal entries never

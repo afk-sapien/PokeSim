@@ -93,6 +93,9 @@ class ShinyTracker:
             value = {**empty(), **json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])}
             value.update(started_at=value['started_at'] or time.time(), available=self.supported)
             store.db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+        from . import fair_dvs
+        # The reroll shares this hook so it lands before CalcStats and before the shiny check.
+        self.fair_key = fair_dvs.secret(store) if self.supported and fair_dvs.enabled() else None
 
     def attach(self, pb):
         if not self.supported:
@@ -106,6 +109,9 @@ class ShinyTracker:
     def encounter(self, pb):
         from .strategy_data import SPECIES
         mem = pb.memory
+        if getattr(self, 'fair_key', None):
+            from .fair_dvs import reroll
+            reroll(mem, self.fair_key)
         # Trainer battles and Transform do not create wild encounters.
         if mem[0xd057] != 1 or mem[0xd069] & 8 or not shiny_bytes(bytes(mem[0xcff1:0xcff3])):
             return

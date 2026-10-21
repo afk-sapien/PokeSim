@@ -66,11 +66,11 @@ a screenshot and a report with the objective, position, money and recent failure
 Both checkpoints replay with `tools/validate_progress.py`, so a candidate fix can be
 compared with the baseline on identical input. The run stops after six game hours in
 one stall, at the Hall of Fame with `--until-champion`, or when `--hours` is spent, and
-exits nonzero when it found any stall. Run several seeds and both editions.
+exits nonzero when it found any stall. Run several seeds on Red, Blue and Yellow.
 
 ## Investigate and validate
 
-Reproduce failures on private copied saves with matching ROM and PyBoy metadata.
+Reproduce failures on private copied saves with matching ROM and emulator metadata.
 Distinguish policy replanning, blackouts, save reloads, failed health checks, and process
 restarts. Keep failures in the record even when a later sample recovers.
 

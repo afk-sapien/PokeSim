@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Accessibility scan self-test</title>
+<style>
+  body { background: #ffffff; color: #111111; font: 15px sans-serif; }
+  #faint { color: #b4b4b4; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Known failures</h1>
+  <p id="faint">This grey text is far too faint to read on white.</p>
+  <input id="unlabelled" type="text">
+  <p id="fine">This text and the labelled field below are fine.</p>
+  <label for="labelled">Trainer name</label>
+  <input id="labelled" type="text">
+</main>
+</body>
+</html>

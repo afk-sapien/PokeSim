@@ -34,6 +34,8 @@ class Child:
         self.token = bootstrap['token']
         self.generation = bootstrap['generation']
         self.notified = None
+        self.observer = None   # aid, line -> None, for the library watchdog
+        self.watch = None      # (time, latest /api/summary) kept by the monitor
         self.process = None
         self.usage = None
         self.url = None
@@ -106,6 +108,11 @@ class Child:
     def _stderr(self):
         while line := self.process.stderr.readline(4097):
             self.logs.append(line[-4000:].rstrip())
+            if self.observer is not None:
+                try:
+                    self.observer(self.bootstrap['adventure_id'], line)
+                except Exception:  # noqa: BLE001
+                    pass
             try:
                 self.log_path.parent.mkdir(parents=True, exist_ok=True)
                 if self.log_path.exists() and self.log_path.stat().st_size > 2 * 1024 * 1024:
@@ -171,6 +178,7 @@ class Supervisor:
         self.setup_retries = {}   # aid -> (due time, automatic attempts made) after a failed data download
         self.unhealthy_since = {}
         self.notifications = None   # installed by the manager: adventure row -> worker notification settings
+        self.worker_output = None   # installed by the watchdog: aid, stderr line -> None
         self.closed = threading.Event()
         self.thread = None
 
@@ -220,6 +228,7 @@ class Supervisor:
                                  token=secrets.token_urlsafe(32), settings=settings, adventure_name=adventure['name'])
                 child = self.child_factory(bootstrap)
                 child.pace = ObservedSpeed()
+                child.observer = self.worker_output
                 self.children[aid] = child
                 self.registry.update(aid, state='starting', generation=generation, error=None)
             try:
@@ -460,6 +469,7 @@ class Supervisor:
                     child.request('GET', '/healthz', timeout=3)
                     status = child.request('GET', '/api/summary', timeout=3)
                     child.pace.observe(status.get('performance'))
+                    child.watch = (time.time(), status)
                     settings_errors = self.sync_optional(aid, child, status)
                     self.unhealthy_since.pop(aid, None)
                     game = status.get('game') or {}

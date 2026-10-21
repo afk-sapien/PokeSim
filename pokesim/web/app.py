@@ -89,8 +89,13 @@ def status_summary(status):
     if not isinstance(status, dict):
         return status
     game = status.get('game') or {}
+    badges = game.get('badges')
+    # The library watchdog compares these between polls to tell a looping game from a playing one.
+    watch = {'map': game.get('map'), 'owned': game.get('owned'),
+             'badges': len(badges) if isinstance(badges, (list, tuple)) else badges,
+             'hall_of_fame': game.get('hall_of_fame_count')}
     return {**{key: value for key, value in status.items() if key not in ('game', 'strategy')},
-            'game': {key: game[key] for key in ('map_name', 'playtime') if key in game}}
+            'game': {key: game[key] for key in ('map_name', 'playtime') if key in game}, 'watch': watch}
 
 
 def fast_json(payload):
@@ -218,6 +223,12 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return page('activity.html', ledger_kind='items', ledger_title='Item statistics',
                     pokemon_current='', items_current=' aria-current="page"')
 
+    @app.get('/item-artwork')
+    def item_artwork():
+        # The Library answers this before it reaches the game with its item icon setting.
+        # A game served on its own has no icon pack, so its item ledger keeps the plain marks.
+        return {'active': None, 'revision': None}
+
     @app.get('/api/statistics/activity')
     def activity_statistics():
         if gen2:
@@ -279,7 +290,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                 'collection_records': {'catches': catch_status(store),
                                        'perfect_found': goals['perfect_found'],
                                        'perfect_count_is_minimum': goals['perfect_count_is_minimum'],
-                                       'shiny': records['shiny']},
+                                       'shiny': records['shiny'],
+                                       # Off means wild grass, cave and water DVs keep the cartridge's limits.
+                                       'fair_wild_dvs': getattr(config, 'FAIR_WILD_DVS', False) is True},
                 'marathon': collection.get('marathon', {})}
 
     @app.get('/trading', response_class=HTMLResponse)

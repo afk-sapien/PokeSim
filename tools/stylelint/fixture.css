@@ -1,0 +1,11 @@
+/* Known problems for tests/test_stylelint.py. Each rule notes what it trips. */
+.too-wide { width: 400px }                                  /* fits-narrowest-phone */
+.tracks { grid-template-columns: repeat(3, 200px) }         /* fits-narrowest-phone */
+.capped { width: min(520px, 100%) }                         /* fine: capped */
+.overridden { width: 480px }                                /* fine: phone override below */
+@media (max-width: 640px) { .overridden { width: 300px } }
+@media (min-width: 861px) { .desktop { width: 900px } }     /* fine: desktop only */
+.typo { colr: red }                                         /* property-no-unknown */
+.twice { color: red }                                       /* no-duplicate-declarations */
+.twice { color: blue }
+@media (max-width: 700px) { .odd { color: red } }           /* off the breakpoint list */

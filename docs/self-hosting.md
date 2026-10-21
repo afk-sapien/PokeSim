@@ -2,7 +2,7 @@
 
 ## Current application
 
-One manager serves the browser, owns the library, and starts one child process per running adventure. Several Red or Blue games can run inside one container. Cable trading uses an additional temporary paired emulator process. Set capacity according to available CPU, memory, and storage.
+One manager serves the browser, owns the library, and starts one child process per running adventure. Any number of Red, Blue, Yellow, Gold, Silver and Crystal games can run inside one container. Cable trading uses an additional temporary paired emulator process. Set capacity according to available CPU, memory, and storage.
 
 The container runs as UID and GID 10001, with a read-only root filesystem. Its `/data`
 volume contains the complete application. Reference setup writes verified shared assets
@@ -47,7 +47,7 @@ this volume if you want to keep your saves.**
 
 The latest-download URLs select the newest completed stable release. Its installers and
 Compose files pin that release's wheel and image. To pin a configuration yourself, replace
-`latest/download` with `download/v0.5.1` in the download URL. Draft releases stay hidden
+`latest/download` with `download/v0.5.2` in the download URL. Draft releases stay hidden
 until all their downloads are verified, so preparing the next version does not interrupt
 these install commands.
 
@@ -155,9 +155,8 @@ in a [support request](../SUPPORT.md). Remove private paths or tokens before sha
 - **Library works on the server but not another computer:** Use the SSH tunnel or configure both the bind address and public URL.
 - **Host or Origin rejected:** Open the exact `PUBLIC_URL`, including its hostname and port. `localhost` and `127.0.0.1` are different hosts.
 - **An empty Library appears after an update:** Stop the service and check your Compose project name and `DATA_PATH`. Restore the original mount before creating any new adventures.
-- **ROM upload asks for prepare-data:** Update to 0.4.6 or newer and retry the upload. Earlier versions could try to generate portraits before automatic reference setup.
 - **First adventure setup fails:** Starting the first adventure downloads a pinned reference archive and generates portraits. Check connectivity and the error shown in the Library. Prepared adventures can run offline.
-- **A Gold, Silver or Crystal adventure shows "Couldn't download the Pokémon game data (no network)":** The first adventure of each of those games downloads its pinned, hash-verified pret source archive once, generates its map data in the data volume, and never needs the network again. The image does not bake that data in, because it is generated from third-party game sources on your machine, just like the Red and Blue reference data. The container needs outbound HTTPS to `codeload.github.com` and `raw.githubusercontent.com` for that first start. PokeSim retries a few seconds apart, and again after 30 seconds, 2 minutes and 5 minutes. Press **Retry** on the adventure once the network is back. A failed start never touches saves.
+- **A Gold, Silver or Crystal adventure shows "Couldn't download the Pokémon game data (no network)":** The first adventure of each of those games downloads its pinned, hash-verified pret source archive once, generates its map data in the data volume, and never needs the network again. The image does not bake that data in, because it is generated from third-party game sources on your machine, just like the Red, Blue and Yellow reference data. The container needs outbound HTTPS to `codeload.github.com` and `raw.githubusercontent.com` for that first start. PokeSim retries a few seconds apart, and again after 30 seconds, 2 minutes and 5 minutes. Press **Retry** on the adventure once the network is back. A failed start never touches saves.
 
 ### Settings
 
@@ -167,7 +166,7 @@ in a [support request](../SUPPORT.md). Remove private paths or tokens before sha
 | `PUBLIC_URL=http://localhost:8930` | Exact browser address, including scheme and port |
 | `HTTP_PORT=8930` | Host port mapped to the manager |
 | `BIND_ADDRESS=127.0.0.1` | Host interface accepting connections |
-| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.5.1` | Exact published image version, overridden by `compose.build.yaml` for source builds |
+| `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.5.2` | Exact published image version, overridden by `compose.build.yaml` for source builds |
 
 Phone notifications need no setting here. Open the Library, choose **Notifications**, generate a topic, and subscribe to it in the [ntfy](https://ntfy.sh) app. See the [guide](guide.md#notifications). `NTFY_URL`, `NTFY_TOKEN`, `NTFY_MIN_PRIORITY`, and `NTFY_MUTE` are still read from the environment as defaults until notifications are saved in the Library.
 
@@ -179,7 +178,7 @@ The Library opens directly without a sign-in or owner key. Its default published
 
 The Compose service uses an init process to reap children and allows 90 seconds for orderly shutdown. Keep a single manager process per application folder. Do not add Uvicorn workers or share one application volume between containers.
 
-The image includes the optional [navigation acceleration](desktop.md#optional-navigation-acceleration). Each Red or Blue adventure compiles its route search once at startup and keeps the compiled code in `/tmp/numba-cache`. The compiled search gives the same moves as the Python one. It makes repeated searches faster and uses about 115 MB more memory per adventure. Set `POKESIM_NAVIGATION_BACKEND=python` in the service environment to use the Python search instead.
+The image includes the optional [navigation acceleration](desktop.md#optional-navigation-acceleration). Each Red, Blue or Yellow adventure compiles its route search once at startup and keeps the compiled code in `/tmp/numba-cache`. The compiled search gives the same moves as the Python one. It makes repeated searches faster and uses about 115 MB more memory per adventure. Set `POKESIM_NAVIGATION_BACKEND=python` in the service environment to use the Python search instead.
 
 A native server uses the same application:
 
@@ -219,6 +218,6 @@ Restore a complete backup into an empty application directory. Recovery needs th
 
 ### Validation boundary
 
-Native source launch depends on the availability of Python and the PyBoy RS wheel for the host (published wheels cover Windows, macOS and Linux on x86-64 and ARM; other targets need a Rust toolchain). Docker packages those dependencies for a Linux target. Neither the manager nor the simulation protocol requires x86-64. The Python install workflow covers multiple OS and CPU targets, with actual passing results required before claiming support for a release.
+Native source launch depends on the availability of Python and the PyBoy RS wheel for the host (published wheels cover Linux and macOS on x86-64 and ARM, and Windows on x86-64. Other targets need a Rust toolchain). Docker packages those dependencies for a Linux target. Neither the manager nor the simulation protocol requires x86-64. The Python install workflow covers multiple OS and CPU targets, with actual passing results required before claiming support for a release.
 
 Historical instructions for retired v0.2.0rc6 installations are kept in the [archive](history/self-hosting-rc6.md).

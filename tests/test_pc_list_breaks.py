@@ -1,13 +1,19 @@
 """Storage cleanup never waits on a box slot the PC release menu cannot reach."""
-from dataclasses import replace
+from dataclasses import asdict, replace
 from types import SimpleNamespace
+
+import pytest
 
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.policies.team import release_target
 from pokesim.ram import list_breaks, read_snapshot
+from pokesim.runtime import preparation
 from pokesim.shortcuts import RETRY_FRAMES
 from pokesim.trade import boxes
+from pokesim.trade.preferences import identity
 from test_duplicates import snapshot, stored
+from test_managed_trade_evolutions import SPECIES_BY_DEX, runtime_inventory
+from test_preparation import participant  # noqa: F401  (fixture)
 from test_trade_save import ABRA, Memory, entry, populate
 
 
@@ -49,3 +55,21 @@ def test_a_failed_release_lets_another_spare_go_first():
     assert decision.request == ('release', 2)
     # The failed slot is offered again once its retry time has passed.
     assert policy._release_target(replace(s, frame=s.frame + RETRY_FRAMES)) == (0, 1)
+
+
+def test_a_trade_never_offers_or_prepares_a_partner_the_pc_list_cannot_reach(participant, monkeypatch):
+    # Red offered Muk and Kabutops stored after WETFUND in Box 11. The list stalled on that name
+    # while scrolling, so every withdrawal for the trade failed with "Menu did not respond".
+    emu, snap, _ = participant
+    reachable = stored(0, species=SPECIES_BY_DEX[64], trainer_id=101)
+    hidden = stored(1, species=SPECIES_BY_DEX[67], trainer_id=303)
+    snap = replace(snapshot([reachable, hidden], party=snap.party), map=89, x=13, y=4)
+    emu.snapshot = snap
+    assert [offer['position'] for offer in runtime_inventory(emu, snap)['offers']] == [1, 2]
+    emu.snapshot = snap = replace(snap, unlisted=((0, 1),))
+    assert [offer['trade_key'] for offer in runtime_inventory(emu, snap)['offers']] == [identity(asdict(reachable))]
+    monkeypatch.setattr(preparation, 'read_snapshot', lambda *args: snap)
+    with pytest.raises(ValueError, match='PC list cannot reach'):
+        preparation.begin(emu, identity(asdict(hidden)), 'hidden', manual=True)
+    assert emu.store.get(preparation.KEY) is None
+    assert preparation.begin(emu, identity(asdict(reachable)), 'reachable')['phase'] == 'travelling'

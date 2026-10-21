@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
+from starlette.requests import ClientDisconnect
 
 from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
@@ -93,12 +94,14 @@ class Manager:
         self.coordinator = Coordinator(self)
         from .trade_builder import TradeBuilder
         self.builder = TradeBuilder(self)
+        from .watchdog import Watchdog
+        self.watchdog = Watchdog(self)
 
     @staticmethod
     def validate_adventure_settings(values):
         allowed = {'trainer_name', 'rival_name', 'speed', 'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
                    'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards',
-                   'mew_event', 'celebi_event', 'extra_store_items', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
+                   'mew_event', 'celebi_event', 'extra_store_items', 'fair_wild_dvs', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
                    'fossil_preference', 'dojo_preference', 'event_retention_days', 'palette'}
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError('Unsupported adventure settings')
@@ -118,9 +121,12 @@ class Manager:
         if result['policy'] not in {'strategic', 'guided_random', 'smart_random'}:
             raise ValueError('Unknown adventure policy')
         for name in ('auto_start', 'fast_text', 'battle_animations', 'viewer_only', 'league_rewards', 'mew_event', 'celebi_event',
-                     'extra_store_items'):
+                     'extra_store_items', 'fair_wild_dvs'):
             if name in result and type(result[name]) is not bool:
                 raise ValueError(f'{name} must be a boolean')
+        # Off is stored as absent, so releases that predate the setting still open the adventure.
+        if result.get('fair_wild_dvs') is False:
+            del result['fair_wild_dvs']
         # Every notable event keeps a full save state beside its screenshot, which is about
         # 40 MB an hour, so an adventure needs a way to bound its own journal. Zero keeps all.
         for name, low, high in [('autosave_seconds', 1, 86400), ('keep_autosaves', 1, 10000),
@@ -158,6 +164,7 @@ class Manager:
             raise ValueError('PokeSim is saving, backing up, or shutting down')
 
     def start(self):
+        self.watchdog.install()
         from .deletion import recover_deletions
         recover_deletions(self)
         self.coordinator.recover()
@@ -173,11 +180,13 @@ class Manager:
                     self.registry.update(adventure['id'], state='failed', error=str(error))
         self.supervisor.run_monitor()
         self.coordinator.start_scheduler()
+        self.watchdog.run()
 
     def close(self):
         if self._closed:
             return
         self.closing = True
+        self.watchdog.close()
         self.coordinator.close()
         errors = self.supervisor.close()
         if errors:
@@ -222,6 +231,19 @@ async def json_body(request, limit=65536):
 
 
 GAME_ASSET = re.compile(r'/(?:games|view)/[A-Za-z0-9_-]+/(static|sprites|shots)/')
+
+
+def read_preview(path):
+    """Read a trade preview whole, or None once the trade has cleaned it up.
+
+    Link workers replace the preview ten times a second and the coordinator removes the
+    folder when the trade ends, so the size has to come from the bytes actually read.
+    A FileResponse sizes the file before opening it and can promise more than it sends.
+    """
+    try:
+        return Path(path).read_bytes()
+    except OSError:
+        return None
 
 
 def cache_policy(path, query, content_type):
@@ -302,6 +324,11 @@ def create_app(manager, shutdown=lambda: None):
     async def unavailable(request, error):
         return JSONResponse({'detail': str(error)}, status_code=409)
 
+    # A browser that leaves while sending a body has gone, so there is no one to tell.
+    @app.exception_handler(ClientDisconnect)
+    async def departed(request, error):
+        return Response(status_code=499)
+
     @app.middleware('http')
     async def access(request, call_next):
         expected = urlsplit(manager.public_url)
@@ -374,7 +401,8 @@ def create_app(manager, shutdown=lambda: None):
     @app.get('/api/v1/adventures')
     def adventures():
         return {'adventures': [{**row, 'resources': manager.supervisor.resources(row['id'])}
-                               for row in manager.registry.adventures()]}
+                               for row in manager.registry.adventures()],
+                'attention': manager.watchdog.public()}
 
     @app.get('/api/v1/adventures/{aid}')
     def adventure(aid: str):
@@ -434,6 +462,7 @@ def create_app(manager, shutdown=lambda: None):
             'mew_event': data.get('mew_event', True),
             'celebi_event': data.get('celebi_event', True),
             'extra_store_items': data.get('extra_store_items', True),
+            **({'fair_wild_dvs': data['fair_wild_dvs']} if 'fair_wild_dvs' in data else {}),
             'legendary_return_steps': data.get('legendary_return_steps', 1000000),
             'event_return_steps': data.get('event_return_steps', 100000),
             'mew_return_steps': data.get('mew_return_steps', 1000000),
@@ -510,6 +539,8 @@ def create_app(manager, shutdown=lambda: None):
                 raise ValueError('Stop the adventure before changing these settings')
             previous = adventure['settings']
             values['settings'] = manager.validate_adventure_settings({**previous, **changes})
+            from ..cartridges import validate_generation_settings
+            validate_generation_settings(values['settings'], adventure['version'])
         result = manager.registry.update(aid, **values) if values else adventure
         if 'speed' in data.get('settings', {}):
             result['pace_pending'] = await asyncio.to_thread(manager.supervisor.push_speed, aid)
@@ -580,6 +611,21 @@ def create_app(manager, shutdown=lambda: None):
         if path is None:
             raise HTTPException(404)
         return FileResponse(path, media_type='image/png')
+
+    @app.get('/api/v1/watchdog')
+    def watchdog():
+        return manager.watchdog.public()
+
+    @app.patch('/api/v1/watchdog')
+    async def set_watchdog(request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        if not isinstance(data, dict) or set(data) != {'enabled'}:
+            raise HTTPException(422, 'Send {"enabled": true} or {"enabled": false}')
+        try:
+            return await asyncio.to_thread(manager.watchdog.set_enabled, data['enabled'])
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
 
     @app.get('/api/v1/notifications')
     def notifications():
@@ -866,9 +912,11 @@ def create_app(manager, shutdown=lambda: None):
                 side = 'left' if active['plan']['participants'][0] == aid else 'right'
                 preview_path = (manager.root / 'interactions' / active['id'] / 'attempts'
                                 / active['plan']['attempt_id'] / 'outputs' / (side + '.jpg'))
-                if await run_in_threadpool(preview_path.is_file):
-                    if path == 'frame.jpg':
-                        return FileResponse(preview_path, media_type='image/jpeg')
+                if path == 'frame.jpg':
+                    raw = await run_in_threadpool(read_preview, preview_path)
+                    if raw is not None:
+                        return Response(raw, media_type='image/jpeg')
+                elif await run_in_threadpool(preview_path.is_file):
                     async def provisional_frames():
                         try:
                             while not manager.closing:

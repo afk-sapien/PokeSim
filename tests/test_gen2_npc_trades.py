@@ -8,7 +8,7 @@ from pokesim.gen2 import npc_trades
 from pokesim.gen2.npc_trades import TRADES, Trade, candidate, completed, worth_trading
 
 
-@pytest.fixture(scope='module', params=['gold', 'crystal'])
+@pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
 def real_data(request):
     from pokesim.gen2.data import GameData
     directory = os.environ.get('GEN2_DATA_DIR')
@@ -25,6 +25,7 @@ PRET = {
                 ('EMY', 'Dragonair', 'Dodrio'), ('CHRIS', 'Haunter', 'Xatu'), ('KIM', 'Chansey', 'Aerodactyl'),
                 ('FOREST', 'Dugtrio', 'Magneton')],
 }
+PRET['silver'] = PRET['gold']
 
 
 def test_trade_table_matches_pret(real_data):

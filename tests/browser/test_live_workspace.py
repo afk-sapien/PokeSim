@@ -4,6 +4,8 @@ import re
 
 import pytest
 
+from conftest import refused
+
 from pokesim import config
 from test_flows import expect
 
@@ -100,6 +102,8 @@ def test_fullscreen_fills_viewport_without_stretching_picture(page, live_game, w
     expect(page.locator('#screen:fullscreen')).to_have_count(0)
 
 
+# The test answers one download with a busy refusal.
+@pytest.mark.expected_errors(*refused('/api/export-save', 409))
 def test_download_save_and_busy_message(page, live_game, tmp_path):
     url, emu = live_game
     page.route('**/api/export-save', lambda route: route.fulfill(
@@ -145,6 +149,8 @@ def test_live_pause_resume_and_save_have_clear_actions(page, live_game):
     assert emu.commands[-1] == ('save', None)
 
 
+# The test refuses one speed change.
+@pytest.mark.expected_errors(*refused('/api/control', 409))
 def test_live_speed_changes_and_failed_updates(page, live_game):
     url, emu = live_game
     original = emu.status
@@ -170,3 +176,12 @@ def test_live_speed_changes_and_failed_updates(page, live_game):
     expect(page.locator('#toast')).to_have_text('Adventure is busy')
     expect(select).to_have_value('0')
     expect(select).to_be_enabled()
+
+
+def test_plan_action_reads_as_words_apart_from_the_tile_count(page, game):
+    url, store, emu, eid = game
+    original = emu.status
+    emu.status = lambda: {**original(), 'strategy': {'objective': {'title': 'Train the team'}, 'visited_tiles': 31524,
+                                                     'action': 'shortcut: choose_move', 'collection': {'version': 'red'}}}
+    page.goto(url)
+    expect(page.locator('.plan-meta')).to_have_text('Shortcut: choose move, 31,524 tiles explored')

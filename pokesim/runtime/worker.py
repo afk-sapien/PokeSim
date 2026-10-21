@@ -104,6 +104,9 @@ def serve(bootstrap, parent_stream, ready_stream):
         runtime.start()
         if parent_gone.is_set():
             return
+        from .memory_report import start as report_memory
+        report_memory(bootstrap.adventure_id, float(os.environ.get('POKESIM_MEMORY_REPORT_MINUTES', '0') or 0),
+                      finished)
         app = create_app(runtime.emulator, runtime.store,
                          base_path=f'/games/{bootstrap.adventure_id}',
                          adventure_id=bootstrap.adventure_id, adventure_name=bootstrap.adventure_name)

@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 from pokesim.web.pages import render_game_page
+from conftest import frame_png, refused
 from test_flows import expect
 
 FROM = 'a' * 32
@@ -17,6 +18,7 @@ REASON = 'Busy Blue is busy finishing another trade'
 # The reason Busy Blue gives for the shiny Meganium, which is not a Gen I species.
 MEGANIUM = 'Meganium cannot go to a Red, Blue or Yellow game. Meganium did not exist in Gen I'
 JSON = 'application/json'
+PORTRAIT = frame_png()
 
 
 def shoot(page, name, full_page=True):
@@ -27,6 +29,10 @@ def shoot(page, name, full_page=True):
         # A sticky rail repeats down a full-page capture. Pin it to the top for the picture.
         page.add_style_tag(content='.rail { position: static }')
         page.screenshot(path=str(Path(folder) / f'{name}.png'), full_page=full_page)
+
+
+def worker(prefix):
+    return lambda route: route.continue_(url=route.request.url.replace(prefix, '/'))
 
 
 class Library:
@@ -50,7 +56,11 @@ class Library:
         trading = render_game_page('adventure-trading.html', base_path=f'/games/{FROM}', adventure_id=FROM,
                                    adventure_name='Crystal')
         pc = render_game_page('pc.html', base_path=f'/games/{FROM}', adventure_id=FROM, adventure_name='Crystal')
-        page.route(f'**/games/{FROM}/**', lambda route: route.continue_(url=route.request.url.replace(f'/games/{FROM}/', '/')))
+        # Every adventure in this Library is the one synthetic Red worker, so a Gen II shiny portrait is a stand-in.
+        for aid in (FROM, RED, BLUE):
+            page.route(f'**/games/{aid}/**', worker(f'/games/{aid}/'))
+        page.route(re.compile(rf'/games/{FROM}/sprites/shiny/(15[2-9]|1[6-9][0-9]|2[0-5][0-9])\.png'),
+                   lambda route: route.fulfill(body=PORTRAIT, content_type='image/png'))
         page.route(re.compile(rf'/games/{FROM}/trading(\?|$)'), lambda route: route.fulfill(body=trading, content_type='text/html'))
         page.route(re.compile(rf'/games/{FROM}/pc(\?|$)'), lambda route: route.fulfill(body=pc, content_type='text/html'))
         page.route(re.compile(rf'/games/{FROM}/api/interactions(\?|$)'), self.interactions)
@@ -473,7 +483,10 @@ def test_a_view_only_adventure_cannot_fill_the_send_slot(page, game):
 
 
 @pytest.mark.parametrize('late', ['answer', 'error'])
-def test_a_late_limits_answer_does_not_replace_the_newer_list(page, game, late):
+def test_a_late_limits_answer_does_not_replace_the_newer_list(page, game, late, expected_errors):
+    if late == 'error':
+        # The late answer for the earlier pick is a failure on purpose.
+        expected_errors(*refused('/api/v1/interactions/trade-builder/limits', 500))
     library = Library(page, game[0])
     library.limits_held = []
     library.open()

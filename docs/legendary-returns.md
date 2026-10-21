@@ -1,7 +1,9 @@
 # Legendary returns
 
 PokeSim can bring Articuno, Zapdos, Moltres, and Mewtwo back to their original
-locations for repeat expeditions. Every adventure has its own walking progress.
+locations for repeat expeditions. In Gold, Silver and Crystal, Raikou, Entei and
+Suicune roam again and Lugia and Ho-Oh return to their chambers. See
+[Generation II returns](step-rewards.md#generation-ii). Every adventure has its own walking progress.
 The default milestone is 1,000,000 completed steps.
 
 ## Rules
@@ -35,9 +37,10 @@ Standalone deployments can set `LEGENDARY_RETURN_STEPS`.
 
 Walking progress begins when this feature is installed. Older sampled walking
 statistics are not converted into milestone credit. The counter hooks the
-verified English Red and Blue cartridge instruction that decrements the game's
+verified English Red, Blue and Yellow cartridge instruction that decrements the game's
 step counter after a completed movement tile. Scripted movement is excluded by
 the cartridge routine. Walking, cycling, and surfing use the same routine.
+Gold, Silver and Crystal use a verified hook on their own step routine.
 Unknown cartridges do not receive an unverified hook or claim exact progress.
 
 The durable step total is saved every 30 seconds, at milestones, and during

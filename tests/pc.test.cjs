@@ -476,3 +476,20 @@ test('a slot in the address opens that Pokémon once the fresh PC has loaded', a
   await missing.ready()
   assert.equal(missing.element('#pc-detail-body').innerHTML, '')
 })
+
+test('boxes lay out in rows that divide 20 and the party in rows that divide 6', async () => {
+  const layout = async search => {
+    const view = pc([mon(1, 1, 10)], search, [mon(0, 1, 5)])
+    const classes = new Set()
+    view.element('#pc-grid').classList = {add() {}, remove() {}, toggle(name, on) { if (on) classes.add(name); else classes.delete(name) }}
+    await view.ready()
+    return {view, classes}
+  }
+  const box = await layout('?box=1')
+  assert.deepEqual([...box.classes], ['pc-box-grid'])
+  box.view.element('#pc-all-view').onclick()
+  assert.deepEqual([...box.classes], ['pc-all-grid'])
+  assert.deepEqual([...(await layout('?box=party')).classes], ['pc-party-grid'])
+  const css = fs.readFileSync('pokesim/web/static/panel-pc.css', 'utf8')
+  for (const columns of css.matchAll(/\.pc-box-grid[^{]*\{ grid-template-columns: repeat\((\d+)/g)) assert.equal(20 % Number(columns[1]), 0)
+})

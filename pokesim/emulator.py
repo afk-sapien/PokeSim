@@ -150,7 +150,7 @@ class Emulator:
         if known:
             log.info("ROM verified: %s", known)
             return known
-        log.warning("ROM sha1 %s is not a known clean Red/Blue dump; RAM addresses may be off", sha)
+        log.warning("ROM sha1 %s is not a known clean Red, Blue or Yellow dump, so RAM addresses may be off", sha)
         return f"unverified ROM (sha1 {sha[:12]})"
 
     def _boot(self, *, sound=True) -> CoreEmulator:
@@ -669,7 +669,8 @@ class Emulator:
         if snap is not None and not snap.valid:
             log.warning("skipping autosave: game state looks glitched")
             return
-        path = self.store.write_checkpoint(self._state_bytes(), self._manifest())
+        manifest = self._manifest()
+        path = self.store.write_checkpoint(self._state_bytes(), manifest)
         stall = getattr(self, 'stall', None)
         if stall and stall.fresh and config.KEEP_STALL_BUNDLES and not (snap is not None and snap.in_battle):
             # The first save after an achievement is the last one known to be from before any stall.
@@ -681,7 +682,8 @@ class Emulator:
                 log.exception("cannot keep the save from before a stall")
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
-        self.store.set("policy_state", self.policy.state_dict())
+        # The checkpoint's copy, since building it again doubles the work of every save.
+        self.store.set("policy_state", manifest["policy_state"])
 
     def _unstick(self, since: float, why: str):
         """Go back to an autosave from before the trouble started (or power-cycle if there is none)."""

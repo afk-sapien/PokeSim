@@ -3,6 +3,8 @@ import math
 
 import pytest
 
+from conftest import refused
+
 from test_flows import expect
 
 
@@ -119,6 +121,8 @@ def test_sound_lead_follows_control_mode(page, game, mode, low, high):
     expect(page.locator('#sound-status')).to_be_hidden()
 
 
+# The test refuses every audio request. Turning sound off cancels the request still waiting.
+@pytest.mark.expected_errors(*refused('/api/audio', 503), r'^requestfailed \S*/api/audio\S* GET net::ERR_ABORTED')
 def test_sound_failure_can_be_retried(page, game):
     url, _, _, _ = game
     page.route('**/api/audio?*', lambda route: route.fulfill(status=503))

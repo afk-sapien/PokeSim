@@ -31,7 +31,7 @@ def steps(store, total):
     store.set(STEPS, {'total': total, 'available': True})
 
 
-@pytest.mark.parametrize('key', ['eevee', 'dojo', 'fossil', 'trade_1', 'trade_4', 'trade_5', 'trade_6'])
+@pytest.mark.parametrize('key', ['eevee', 'dojo', 'snorlax', 'fossil', 'trade_1', 'trade_4', 'trade_5', 'trade_6'])
 def test_native_opportunity_requires_new_steps_and_consumes_once(world, key):
     store, snapshot, memory = world
     spec = next(a for a in events.activities('helix', 107) if a.key == key)
@@ -198,3 +198,100 @@ def test_trade_claim_survives_duplicate_cleanup_during_preparation(world):
     acquired = replace(at_house, party=(*at_house.party, mon(species=sid(124))))
     events.observe(store, acquired, memory)
     assert 'trade_6' not in events.available(store)
+
+
+def snorlax_open(world):
+    store, snapshot, memory = world
+    beaten, hidden = events.snorlax()
+    events.write(memory, beaten, True)
+    events.write(memory, hidden, True)
+    events.observe(store, snapshot, memory)
+    steps(store, 5100)
+    events.observe(store, snapshot, memory)
+    assert 'snorlax' in events.available(store)
+    return beaten, hidden
+
+
+def test_snorlax_battle_is_judged_after_leaving_route_12(world):
+    store, snapshot, memory = world
+    beaten, hidden = snorlax_open(world)
+    route = replace(snapshot, map=MAPS['ROUTE_12'])
+    events.observe(store, route, memory)
+    # The battle hides Snorlax and sets the beaten flag, and the player has not caught it.
+    events.write(memory, beaten, True)
+    events.write(memory, hidden, True)
+    assert events.observe(store, route, memory) == ([], False)
+    # The road stays clear while the player is still on Route 12.
+    assert events.read(memory, hidden) and 'snorlax' in events.available(store)
+    rows, changed = events.observe(store, snapshot, memory)
+    assert changed and not rows and 'snorlax' in events.available(store)
+    assert not events.read(memory, beaten) and not events.read(memory, hidden)
+
+
+def test_caught_snorlax_closes_the_return_after_leaving_route_12(world):
+    store, snapshot, memory = world
+    beaten, hidden = snorlax_open(world)
+    route = replace(snapshot, map=MAPS['ROUTE_12'])
+    events.observe(store, route, memory)
+    events.write(memory, beaten, True)
+    events.write(memory, hidden, True)
+    caught = replace(route, party=(*route.party, mon(species=sid(143))))
+    assert not events.observe(store, caught, memory)[0]
+    rows, _ = events.observe(store, replace(caught, map=MAPS['PALLET_TOWN']), memory)
+    assert [row.title for row in rows] == ['Caught the returning Snorlax']
+    assert 'snorlax' not in events.available(store)
+    assert events.read(memory, beaten) and events.read(memory, hidden)
+
+
+def test_snorlax_lost_to_a_blackout_still_returns(world):
+    store, snapshot, memory = world
+    beaten, hidden = events.snorlax()
+    # A blackout ends the script before the beaten flag, leaving Snorlax hidden.
+    events.write(memory, hidden, True)
+    events.observe(store, snapshot, memory)
+    assert 'snorlax' in store.get(events.KEY)['tickets']
+    steps(store, 5100)
+    assert events.observe(store, snapshot, memory)[1]
+    assert not events.read(memory, hidden) and not events.read(memory, beaten)
+
+
+FOSSIL_OBJECTS = '''
+from pokesim import step_events as events
+from pokesim.strategy_data import DATA, MAPS, WORLD
+objects = WORLD[MAPS['MT_MOON_B2F']]['objects']
+for activity in (a for a in events.activities('helix') if a.key == 'fossil'):
+    for base, index in activity.bits[2:]:
+        room, obj = DATA['toggle_objects'][index]
+        assert room == MAPS['MT_MOON_B2F']
+        print(objects[obj][4])
+for key in ('eevee', 'dojo', 'snorlax'):
+    activity = next(a for a in events.activities() if a.key == key)
+    for base, index in activity.bits:
+        if base == events.W_TOGGLE_OBJECT_FLAGS:
+            room, obj = DATA['toggle_objects'][index]
+            print(key, WORLD[room]['objects'][obj][4])
+'''
+
+
+def fossil_objects(output):
+    labels = output.split('\n')
+    return labels[:2], {line.split()[0]: line.split()[1] for line in labels[2:] if line}
+
+
+def test_fossil_reset_rearms_both_mt_moon_fossils():
+    import contextlib
+    import io
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        exec(FOSSIL_OBJECTS, {})
+    fossils, others = fossil_objects(out.getvalue())
+    assert ['DOME_FOSSIL' in fossils[0], 'HELIX_FOSSIL' in fossils[1]] == [True, True]
+    assert 'EEVEE' in others['eevee'] and 'SNORLAX' in others['snorlax']
+
+
+def test_yellow_fossil_reset_rearms_its_fossils_not_james():
+    from test_yellow_start import run_yellow
+    fossils, others = fossil_objects(run_yellow(FOSSIL_OBJECTS))
+    assert ['DOME_FOSSIL' in fossils[0], 'HELIX_FOSSIL' in fossils[1]] == [True, True]
+    assert 'EEVEE' in others['eevee'] and 'SNORLAX' in others['snorlax']
+    assert all('JAMES' not in label for label in fossils)

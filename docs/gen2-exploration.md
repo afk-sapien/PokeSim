@@ -1,6 +1,6 @@
 # Gold, Silver and Crystal support
 
-This branch implements Generation II adventures in the normal Library and
+PokeSim plays Generation II adventures in the normal Library and
 adventure runtime. Gold, Silver and Crystal have each completed Johto, the
 Pokémon League, all eight Kanto gyms, and Red through ordinary cartridge input.
 The original boot experiment remains available in `tools/probe_gen2.py`.
@@ -58,7 +58,7 @@ No ROM, save, screenshot, reference checkout or full symbol file is committed.
   delivery or a rewind across the latest committed gift.
 
 Gold, Silver and Crystal can trade with each other through the managed Cable
-Club. Red and Blue can trade with each of them through the Time Capsule. Preparation uses the cartridge PC and held-item menus. The exchange runs
+Club. Red, Blue and Yellow can trade with each of them through the Time Capsule. Preparation uses the cartridge PC and held-item menus. The exchange runs
 both cartridges through their link routines, verifies the resulting party,
 checks unaffected Pokémon and story state, verifies a fresh cartridge Continue,
 and uses the existing durable two-adventure commit protocol. Held-item trade
@@ -69,7 +69,7 @@ waiting until the following day. It temporarily deposits incompatible party
 members, trades only Kanto species with Generation I moves and no Mail, then
 restores the adventure team. Verification accounts for the cartridge’s species
 number conversion, Special stat split, catch-rate items and trade evolution.
-Cross-generation collection requests let Red and Blue collect missing Kanto
+Cross-generation collection requests let Red, Blue and Yellow collect missing Kanto
 species for the Johto adventures.
 
 The postgame controller solves all four Ruins of Alph picture puzzles, including
@@ -102,7 +102,7 @@ is charged. The adventure buys an item only for a missing, prerequisite or peer-
 evolution, and only when the bag, an unused one-time item, a Crystal phone trainer or a linked
 peer offering that species cannot provide it. A trade item is bought only while a peer is linked.
 Short of money, it runs the League for prize money first. With the setting off the store sells
-its normal stock. Red and Blue need no such option because Champions can already buy Moon Stones,
+its normal stock. Red, Blue and Yellow need no such option because Champions can already buy Moon Stones,
 and their trade evolutions need no item.
 
 After the Hall of Fame the same setting opens the Gen II TM shop and Champion shop, ported from
@@ -299,11 +299,11 @@ donor exchanges and simulated clock advances. Unattended fresh-start completion
 remains unproven. Sun Stones have an automated acquisition path through contest
 wins, with two further first-place wins supplying Bellossom and Sunflora in the
 completed collection. Contest wins are not guaranteed for every attempt.
-The Red/Blue Kanto Marathon and repeatable fossil, dojo and NPC-trade rewards
+The Generation I Kanto Marathon and repeatable fossil, dojo and NPC-trade rewards
 have not been transplanted into the Generation II campaign. Generation II
-retries missed static legendary encounters, but does not schedule repeat
-encounters with already caught legends. Settings that apply only to Red and
-Blue are hidden for these adventures.
+retries missed static legendary encounters, and caught legends, Sudowoodo and
+Snorlax return through [walking returns](step-rewards.md#generation-ii). Settings
+that apply only to Generation I are hidden for these adventures.
 
 ## Reference provenance
 

@@ -19,6 +19,9 @@
   margin-bottom: var(--s4);
   color: var(--link);
 }
+@media (max-width: 640px) {
+  .page-head .back { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: var(--s2); }
+}
 
 
 /* ---- segmented filter -------------------------------------------------
@@ -344,9 +347,10 @@
 /* ---- responsive -------------------------------------------------------
    1100px  an entry's frame drops from 3x to 2x.
     860px  an entry stacks, frame above the sheet.
-    640px  a log line loses its time column; the time rides above the copy.
-    560px  a log line stacks and its frame goes to 2x.
-    380px  the smallest phones get 1x frames, the only whole multiple that fits.
+    640px  a log line stacks, time above a 2x frame above the copy.
+   A frame drops to 1x once a 2x frame no longer fits its line or entry, the
+   only whole multiple left. That depends on the box, not the window, so it
+   is a container query.
    ========================================================================== */
 
 @media (max-width: 1100px) {
@@ -365,38 +369,19 @@
   .filters button { flex: 1 1 0; min-height: 44px; padding: 0 var(--s2); }
 
   .event-card {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: "frame time" "frame copy";
-    grid-template-rows: auto 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "time" "frame" "copy";
+    grid-template-rows: auto;
   }
   .event-time {
     align-items: center;
-    padding: var(--s3) var(--s4) 0;
+    padding: var(--s3) var(--s3) 0;
     background: none;
     border-right: 0;
   }
   .event-time .lamp { margin-top: 0; }
   .event-time time { display: flex; gap: var(--s2); }
-  .event-picture { grid-row: 1 / span 2; margin: var(--s3) 0 var(--s3) var(--s3); }
-  .event-copy { justify-content: flex-start; padding: var(--s2) var(--s4) var(--s3); }
-  .event-copy h3 { font-size: var(--f-legend); line-height: 1.3; }
-
-  .spec { grid-template-columns: minmax(0, 1fr); }
-  .spec > div:nth-child(2) { border-top: var(--hair) solid var(--rule-faint); }
-  .spec > div:nth-child(even) { border-left: 0; }
-  .entry-frame { padding: var(--s2); }
-  #rewind { justify-self: stretch; }
-}
-
-@media (max-width: 560px) {
-  .event-card {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "time" "frame" "copy";
-    grid-template-rows: auto;
-  }
-  .event-time { padding: var(--s3) var(--s3) 0; }
   .event-picture {
-    grid-row: auto;
     justify-self: center;
     width: calc(320px + 8px);
     height: calc(288px + 8px);
@@ -408,20 +393,33 @@
   .event-picture.is-art .trade-side img,
   .event-picture.is-art .unknown-sprite { width: 112px; height: 112px; }
   .event-picture.is-art .trade-side small { max-width: 112px; }
-  .event-copy { padding: var(--s3); }
+  .event-copy { justify-content: flex-start; padding: var(--s3); }
+  .event-copy h3 { font-size: var(--f-legend); line-height: 1.3; }
+
+  .spec { grid-template-columns: minmax(0, 1fr); }
+  .spec > div:nth-child(2) { border-top: var(--hair) solid var(--rule-faint); }
+  .spec > div:nth-child(even) { border-left: 0; }
+  .entry-frame { padding: var(--s2); }
+  #rewind { justify-self: stretch; }
 }
 
-@media (max-width: 380px) {
+/* A 2x frame needs 328px plus its 12px margins inside a log line, and
+   320px plus its padding and border inside an entry's frame. */
+.event-card { container: event-line / inline-size; }
+.entry { container: entry / inline-size; }
+@container event-line (width < 352px) {
   .event-picture { width: calc(160px + 8px); height: calc(144px + 8px); }
   .event-picture img { width: 160px; height: 144px; }
   .event-picture.is-art .trade-side img,
   .event-picture.is-art .unknown-sprite { width: 56px; height: 56px; }
   .event-picture.is-art .trade-side small { max-width: 64px; }
+}
+@container entry (width < 338px) {
   .entry-frame .shot { width: 160px; height: 144px; }
   .entry-frame:empty { width: 100%; }
 }
 
-@media (max-width: 380px) {
+@media (max-width: 400px) {
   .filters button { padding: 0 var(--s1); letter-spacing: 0.04em; white-space: nowrap; }
 }
 
@@ -467,7 +465,7 @@
 .statistics-section > .note:empty { display: none }
 .progress-label { min-width: 0 }
 .progress-label .readout { overflow-wrap: anywhere }
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   #road .column-head { flex-wrap: wrap }
   #road .column-head { gap: var(--s2) }
   #road-heading { flex-basis: 100% }
@@ -497,7 +495,7 @@
   .marathon-records > div + div { border-top: var(--hair) solid var(--rule) }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   #marathon-records .column-head { flex-wrap: wrap }
   #marathon-records .column-head { gap: var(--s2) }
   #marathon-heading { flex-basis: 100% }
@@ -555,9 +553,11 @@
 .collection-records > div { gap: var(--s2) }
 .collection-records > div { padding: var(--s4) }
 .collection-records > div { min-width: 0 }
+/* One shrinkable track, so a long label or reading wraps instead of widening the cell. */
+.collection-records > div { grid-template-columns: minmax(0, 1fr) }
 .collection-records .readout { font-size: clamp(20px, 3vw, 32px) }
 .collection-records .readout { overflow-wrap: anywhere }
-@media (max-width: 800px) {
+@media (max-width: 860px) {
   .collection-records { grid-template-columns: repeat(2, minmax(0, 1fr)) }
   .collection-records > div:last-child { grid-column: 1 / -1 }
 }
@@ -581,16 +581,30 @@
 .milestone-row { padding-block: var(--s3) }
 .milestone-row + .milestone-row { border-top: var(--hair) solid var(--rule-faint) }
 .milestone-row > * { overflow-wrap: anywhere }
-.highlight-name { display: block }
+/* A full-size tap target. The name still wraps when it is long. */
+.highlight-name { display: flex }
+.highlight-name { align-items: center }
+.highlight-name { min-height: 44px }
 .highlight-name { font-size: 22px }
-.highlight-name { margin-top: var(--s2) }
+.highlight-name { margin-top: var(--s1) }
 .highlight-name { overflow-wrap: anywhere }
+/* The period picker uses the shared recessed well and caret. */
 .stats-period select { min-height: 44px }
 .stats-period select { max-width: 100% }
-.stats-period select { background: var(--panel) }
-.stats-period select { color: var(--ink) }
+.stats-period select { padding: var(--s2) var(--s3) }
+.stats-period select { background-color: var(--well) }
 .stats-period select { border: var(--hair) solid var(--rule) }
-.stats-period select { padding: var(--s2) }
+.stats-period select { border-radius: 0 }
+.stats-period select { box-shadow: var(--well-inset) }
+.stats-period select { color: var(--ink) }
+.stats-period select { font: 15px / 1.3 var(--font-text) }
+.stats-period select { appearance: none }
+.stats-period select { padding-right: var(--s6) }
+.stats-period select { cursor: pointer }
+.stats-period select { background-image: linear-gradient(to bottom left, var(--ink-3) 50%, transparent 50%), linear-gradient(to bottom right, var(--ink-3) 50%, transparent 50%) }
+.stats-period select { background-size: 4px 4px }
+.stats-period select { background-position: right 18px center, right 14px center }
+.stats-period select { background-repeat: no-repeat }
 #collection-details .collection-records { grid-template-columns: repeat(3, minmax(0, 1fr)) }
 @media (max-width: 640px) {
   .stats-overview, .stats-recent, .stats-activity { grid-template-columns: repeat(2, minmax(0, 1fr)) }
@@ -622,6 +636,11 @@
    other. Figures stay on one line and step down a size on a phone instead. */
 .stats-overview .readout, .stats-recent .readout, .stats-activity .readout, #collection-details .readout { line-height: 1.15 }
 .stats-overview .readout:not(.readout--missing), .stats-recent .readout:not(.readout--missing), .stats-activity .readout:not(.readout--missing) { white-space: nowrap }
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .stats-overview .readout:not(.readout--missing), .stats-recent .readout:not(.readout--missing), .stats-activity .readout:not(.readout--missing), #collection-details .readout:not(.readout--missing) { font-size: 16px }
+}
+/* A half-width cell on a 320px phone is too narrow for a playtime like
+   "9,297h 37m", so playtime and the last cell take the full row. */
+@media (max-width: 400px) {
+  .stats-overview > div:first-child, .stats-overview > div:last-child { grid-column: 1 / -1 }
 }

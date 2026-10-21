@@ -1,6 +1,6 @@
 # Gameplay and feature guide
 
-A Pokémon Red that plays itself. A headless Game Boy emulator (PyBoy RS, through PokeSim Core) runs the game 24/7,
+A Pokémon Red, Blue, Yellow, Gold, Silver or Crystal that plays itself. A headless Game Boy emulator (PyBoy RS, through PokeSim Core) runs the game 24/7,
 driven by a policy that plans objectives and checks each action against the game state. A small web app shows the
 live screen, party and stats, and a timeline of things that happened. Notable events
 (caught a Pokémon, beat a gym, evolved, new area, blacked out, champion, ...) are detected by
@@ -346,8 +346,8 @@ the strategy's `pickups` status records recent pickup outcomes.
 Navigation combines map geometry with observed movement. Learned edges store the actual
 button and destination, including doors, map connections, and ledges. Reverse movement is
 never inferred from a learned edge. Temporary obstacles expire, and map transitions settle
-before coordinates are learned. Static geometry is enabled only for a recognized Red or
-Blue ROM. Unverified ROMs fall back to observed paths and exploration.
+before coordinates are learned. Static geometry is enabled only for a recognized Red,
+Blue or Yellow ROM. Unverified ROMs fall back to observed paths and exploration.
 
 Battle decisions use live battle stats, the Generation I physical and special type split,
 same-type bonuses, type matchups, accuracy, PP, common fixed-damage effects, and estimated
@@ -473,7 +473,7 @@ The GUI has four pages:
   The game and the plan with the party align in two columns on desktop.
   A compact trainer strip below both columns holds badges, registrations, League wins, and money.
   The gamepad opens when taking control. Detailed planning, route, and bag panels are omitted from Live.
-- **Pokédex** (`/pokedex`): all 151 species in one list, with search, filters, and individual records.
+- **Pokédex** (`/pokedex`): all 151 species (251 in Gold, Silver and Crystal) in one list, with search, filters, and individual records.
 - **PC** (`/pc`): physical boxes or the entire collection on one page, with search, sorting,
   individual DVs, and training. All Pokémon includes every partner without pagination.
 - **Journal** (`/journal`): event filters, highlights, and earlier moments.
@@ -518,7 +518,7 @@ The searchable Pokédex separates link-trade and event requirements from availab
 sources. “Possible here” includes future evolutions and choices, rather than claiming
 that every listed entry is immediately reachable or that all mutually exclusive
 choices can be collected in one save. The planner checks routes before hunts and
-uses separate Red and Blue encounter data.
+uses separate Red, Blue and Yellow encounter data.
 
 Collection source data is regenerated from a pret/pokered checkout with:
 
