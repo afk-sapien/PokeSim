@@ -1,0 +1,54 @@
+{
+  "version": "0.5.2",
+  "tag": "v0.5.2",
+  "revision": "f0a34017eba662890f17bbd2506991003c8ba5ab",
+  "release_url": "https://github.com/afk-sapien/PokeSim/releases/tag/v0.5.2",
+  "published_at": "2026-10-21T16:00:19Z",
+  "image": "ghcr.io/afk-sapien/pokesim:0.5.2",
+  "image_digest": "ghcr.io/afk-sapien/pokesim@sha256:fd39cd7f0d000e5b0d9c5d9032fde5ff6f7cd72aa32c24038fd8bd10344552f4",
+  "image_id": "sha256:56d55ebe510b74f30405abc090bb336929ed95416fdd4d8873e5215237b71254",
+  "assets": 12,
+  "prs": [
+    112
+  ],
+  "publication_run": 39629023464,
+  "publication_url": "https://github.com/afk-sapien/PokeSim/actions/runs/39629023464",
+  "status": "published",
+  "anonymous_downloads": "passed for all 11 non-image-archive assets",
+  "uploaded_checksums": "passed for all 12 assets in the publication workflow",
+  "anonymous_registry_pull": "passed in the publication workflow",
+  "anonymous_registry_manifest": "independently verified against the release manifest after publication",
+  "offline_image_archive": "upload digest verified, not downloaded again locally",
+  "validation": {
+    "exact_commit_ci_jobs": 10,
+    "ci_run": 39629010471,
+    "ci_url": "https://github.com/afk-sapien/PokeSim/actions/runs/39629010471",
+    "exact_commit_python_install_jobs": 14,
+    "python_install_run": 39629010456,
+    "python_install_url": "https://github.com/afk-sapien/PokeSim/actions/runs/39629010456",
+    "required_checks": "all 48 passed on PR #112",
+    "publication_jobs": "all 4 passed",
+    "python_versions": [
+      "3.11",
+      "3.12",
+      "3.14"
+    ],
+    "platforms": [
+      "Linux x86_64",
+      "Linux ARM64",
+      "macOS Intel",
+      "macOS Apple silicon",
+      "Windows"
+    ],
+    "public_wheel_build_identity": {
+      "version": "0.5.2",
+      "revision": "f0a34017eba662890f17bbd2506991003c8ba5ab",
+      "dirty": false
+    },
+    "public_wheel_fresh_install": "passed on Linux x86_64 with Python 3.14.7",
+    "public_wheel_library_smoke": "passed library page, static assets and clean shutdown",
+    "local_suite": "4,174 passed with private game data, including the numba navigation checks",
+    "dependencies": "Core 0.7.1 and Pillow 13.0.0",
+    "known_flake": "The main-branch CI run 39628987796 on the same commit failed one browser case with an unexpected 409 from the stopped adventure trading API. The tag run passed."
+  }
+}

@@ -1,11 +1,17 @@
-# Release status: 0.5.2 prepared for publication
+# Release status: 0.5.2 published
 
-PokeSim 0.5.2 is a patch on 0.5.1 that fixes worker memory growth ([#111](https://github.com/afk-sapien/PokeSim/issues/111)),
+[PokeSim 0.5.2](https://github.com/afk-sapien/PokeSim/releases/tag/v0.5.2) is a patch on 0.5.1
+that fixes worker memory growth ([#111](https://github.com/afk-sapien/PokeSim/issues/111)),
 several Gen I and Gen II stalls and trade failures, and adds Fair wild DVs and the returning Route 12
-Snorlax. See the [release notes](docs/release-notes.md). The publication workflow must verify the exact
-tagged commit, build the packages and container, and verify the uploaded assets before making the
-release public. The publication receipt is recorded after that succeeds. PokeSim 0.5.1 was published
-on October 17, 2026 ([notes](docs/release-0.5.1.md)). The [0.5.0 receipt](docs/validation/release-0.5.0.json)
+Snorlax. It pins Core 0.7.1 and Pillow 13.0.0. See the [release notes](docs/release-notes.md).
+[PR #112](https://github.com/afk-sapien/PokeSim/pull/112) passed all 48 checks before merging.
+
+The [publication receipt](docs/validation/release-0.5.2.json) records the exact source revision,
+image digest and publication workflow. The publishing workflow verified the container, anonymous
+registry access and every uploaded asset before making the release public. Public installer,
+Compose and wheel downloads were checked again against the published checksums, and the public
+wheel passed a fresh install and launch. PokeSim 0.5.1 was published on October 17, 2026
+([notes](docs/release-0.5.1.md)). The [0.5.0 receipt](docs/validation/release-0.5.0.json)
 remains available for rollback.
 
 0.5.0 moves every adventure to the Rust emulator (PyBoy RS 0.1.2 through Core 0.7.0) and adds
