@@ -6,6 +6,9 @@ not live status or substitutes for executable regression tests.
 
 ## Retained records
 
+- [0.5.2 publication receipt](release-0.5.2.json): memory and stall fixes, Core 0.7.1,
+  source revision, image digest and public download checks.
+
 - [0.4.20 publication receipt](release-0.4.20.json): PP menu hotfix, source
   revision, image digest, public download checks, and cross-platform validation.
 
