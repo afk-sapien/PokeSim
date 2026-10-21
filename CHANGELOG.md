@@ -2,6 +2,8 @@
 
 ## 0.5.2
 
+- Update Pillow to 13.0.0 for its security fixes, through Core 0.7.1, which allows it. Nothing else in Core changes.
+
 - Fix Red, Blue and Yellow workers growing to about 900 MiB over a day of play ([#111](https://github.com/afk-sapien/PokeSim/issues/111)). Every autosave rebuilt the learned map as about 300,000 small lists, twice, and each trade and reward check parsed it again, which fragmented memory faster than it was returned. The map is now saved as two flat lists of numbers, which cuts the peak during a save from about 31 MiB to 6 MiB. Older saves still load. A save written by this version starts a fresh map if it is opened by an older one.
 
 - Fix automatic trades failing over and over when one game's PC is full. The wait after repeated failures counted each Pokémon separately, and Blue offered a different Pokémon each time, so new trades kept being planned and kept failing. A repeated full-PC failure now pauses automatic trades for that whole game until it completes a trade.

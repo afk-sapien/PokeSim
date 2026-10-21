@@ -43,7 +43,7 @@ PokeSim uses `update_flags` after its existing scheduling and unloaded-room
 checks. It preserves durable claim history and never resets a game simply
 because Core offers a reset function. Benchmark agents never receive these APIs.
 
-PokeSim pins Core 0.7.0. Each consumer records its reviewed dependency version. Publish a compatible Core release, then
+PokeSim pins Core 0.7.1. Each consumer records its reviewed dependency version. Publish a compatible Core release, then
 update and validate each consumer's dependency pin. Core improvements reach both
 applications through those reviewed package updates.
 

@@ -26,7 +26,7 @@ See the [changelog](../CHANGELOG.md#052) for every change.
 Back up the complete library. Set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.5.2`
 and run `docker compose pull` followed by `docker compose up -d --wait`.
 Keep the existing data mount and project name. Python users can follow the
-[installation guide](desktop.md). Core stays at 0.7.0 and PyBoy RS at 0.1.2.
+[installation guide](desktop.md). Core moves to 0.7.1, which only allows Pillow 13 for its security fixes. PyBoy RS stays at 0.1.2.
 Saves and checkpoints from 0.5.1 load unchanged. Rolling back to 0.5.1 is safe, but a
 Red, Blue or Yellow adventure saved by 0.5.2 starts a fresh learned map under 0.5.1.
 
