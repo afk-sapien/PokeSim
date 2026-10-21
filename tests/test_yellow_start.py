@@ -118,7 +118,7 @@ def test_traded_pikachu_can_leave_the_party():
 
 
 def test_yellow_preparation_keeps_pikachu_out_of_storage():
-    source = (ROOT / 'pokesim/runtime/preparation.py').read_text()
+    source = (ROOT / 'pokesim/runtime/preparation.py').read_text(encoding='utf-8')
     assert 'not stays_in_party(snap, mon)' in source
 
 
@@ -134,7 +134,7 @@ used = set()
 import pokesim
 for path in Path(pokesim.__file__).parent.rglob('*.py'):
     if not path.name.startswith('jev'):
-        used |= set(re.findall(r"['\\"](EVENT_[A-Z0-9_]+)['\\"]", path.read_text()))
+        used |= set(re.findall(r"['\\"](EVENT_[A-Z0-9_]+)['\\"]", path.read_text(encoding='utf-8')))
 print(json.dumps({'labels': labels, 'known': sorted(used & set(EVENTS)),
                   'numbers': [EVENTS[n] for n in ('EVENT_GOT_DOME_FOSSIL', 'EVENT_GOT_HELIX_FOSSIL',
                                                   'EVENT_GOT_POKEDEX', 'EVENT_BEAT_CHAMPION_RIVAL')]}))

@@ -29,7 +29,7 @@ def allocator():
     try:
         libc = ctypes.CDLL(None)
         call = libc.mallinfo2
-    except (OSError, AttributeError):
+    except (OSError, AttributeError, TypeError):  # Windows cannot open the C library by None
         return None
     call.restype = _Mallinfo2
     info = call()

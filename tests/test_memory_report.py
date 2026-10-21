@@ -21,6 +21,13 @@ def test_allocator_is_optional(monkeypatch):
     assert memory_report.allocator() is None
 
 
+def test_allocator_is_optional_on_windows(monkeypatch):
+    def windows(_):
+        raise TypeError("argument of type 'NoneType' is not iterable")
+    monkeypatch.setattr(memory_report.ctypes, 'CDLL', windows)
+    assert memory_report.allocator() is None
+
+
 def test_report_logs_once_and_stops(caplog):
     stop = threading.Event()
     with caplog.at_level(logging.INFO, logger=memory_report.__name__):

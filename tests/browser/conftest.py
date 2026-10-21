@@ -78,7 +78,10 @@ class BrowserErrors:
 
     def failed(self, request):
         text = request.failure or ''
-        cancelled = text == 'net::ERR_ABORTED' and self.started.get(request, self.navigations) != self.navigations
+        # A navigation cancels what the old page was loading, and the live screen drops a frame
+        # it has already replaced. Neither is a failure.
+        cancelled = text == 'net::ERR_ABORTED' and (
+            self.started.get(request, self.navigations) != self.navigations or request.resource_type == 'image')
         if not cancelled:
             self.add('requestfailed', request.url, f'{request.method} {text}')
 
