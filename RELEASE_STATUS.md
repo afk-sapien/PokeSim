@@ -1,10 +1,12 @@
-# Release status: 0.5.1 published
+# Release status: 0.5.2 prepared for publication
 
-PokeSim 0.5.1 is a patch on 0.5.0 that fixes the Gen II League count past 200 Hall of Fame
-entries and trades into Yellow with a traded Pikachu. See the [release notes](docs/release-notes.md).
-It was published on October 17, 2026 as [v0.5.1](https://github.com/afk-sapien/PokeSim/releases/tag/v0.5.1)
-with the image `ghcr.io/afk-sapien/pokesim:0.5.1`. Its publication receipt is not recorded yet. The [0.5.0 receipt](docs/validation/release-0.5.0.json) remains
-available for rollback.
+PokeSim 0.5.2 is a patch on 0.5.1 that fixes worker memory growth ([#111](https://github.com/afk-sapien/PokeSim/issues/111)),
+several Gen I and Gen II stalls and trade failures, and adds Fair wild DVs and the returning Route 12
+Snorlax. See the [release notes](docs/release-notes.md). The publication workflow must verify the exact
+tagged commit, build the packages and container, and verify the uploaded assets before making the
+release public. The publication receipt is recorded after that succeeds. PokeSim 0.5.1 was published
+on October 17, 2026 ([notes](docs/release-0.5.1.md)). The [0.5.0 receipt](docs/validation/release-0.5.0.json)
+remains available for rollback.
 
 0.5.0 moves every adventure to the Rust emulator (PyBoy RS 0.1.2 through Core 0.7.0) and adds
 Gold, Silver and Crystal. See the [0.5.0 release notes](docs/release-0.5.0.md). Core and PyBoy RS

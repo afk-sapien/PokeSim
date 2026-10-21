@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.2
+
+- Fix Red, Blue and Yellow workers growing to about 900 MiB over a day of play ([#111](https://github.com/afk-sapien/PokeSim/issues/111)). Every autosave rebuilt the learned map as about 300,000 small lists, twice, and each trade and reward check parsed it again, which fragmented memory faster than it was returned. The map is now saved as two flat lists of numbers, which cuts the peak during a save from about 31 MiB to 6 MiB. Older saves still load. A save written by this version starts a fresh map if it is opened by an older one.
+
+- Fix automatic trades failing over and over when one game's PC is full. The wait after repeated failures counted each Pokémon separately, and Blue offered a different Pokémon each time, so new trades kept being planned and kept failing. A repeated full-PC failure now pauses automatic trades for that whole game until it completes a trade.
+
+- Add `POKESIM_MEMORY_REPORT_MINUTES`, off by default. When set, each adventure writes a memory summary to its worker log at that interval.
 
 - Fix Gold, Silver and Crystal adventures stuck in the Route 36 National Park Gate with "no route" to every goal. The officer's corner behind the counter opens only onto the warp carpets by the National Park door, and route planning treated those carpets as walls, so a trainer who stepped into the corner after a Bug-Catching Contest found no way out, and trades failed with "No reachable Pokémon Center for this offer". Route planning now walks over warp carpets and only warps from one when walking off it the warp's way, and in the stuck save the trainer walked out and went back to training.
 

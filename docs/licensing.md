@@ -7,7 +7,7 @@ This public repository starts with a reviewed source snapshot. Earlier developme
 To obtain the application source, exact PyBoy RS source, and dependency notices from an image:
 
 ```sh
-docker create --name pokesim-notices ghcr.io/afk-sapien/pokesim:0.5.1
+docker create --name pokesim-notices ghcr.io/afk-sapien/pokesim:0.5.2
 docker cp pokesim-notices:/usr/share/pokesim ./pokesim-notices
 docker rm pokesim-notices
 ```
