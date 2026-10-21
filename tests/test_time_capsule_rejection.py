@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from pokesim.app.coordinator import (FAILURE_BACKOFF_SECONDS, PC_FULL, SET_ASIDE, WHOLE_GAME, Coordinator,
-                                     failure_backoff)
+from pokesim.app.coordinator import (FAILURE_BACKOFF_SECONDS, NO_PARTY_ROOM, PC_FULL, SET_ASIDE, WHOLE_GAME,
+                                     Coordinator, failure_backoff)
 from pokesim.app.registry import identifier
 from pokesim.interactions.cable_metadata import ABNORMAL
 from pokesim.ram import _decode_box
@@ -155,3 +155,16 @@ def test_a_full_pc_backs_off_the_whole_game_across_different_pokemon():
     # A completed trade by that game ends the wait.
     done = row(now - 5, left=blue, phase='completed', decision='COMMIT')
     assert (blue, WHOLE_GAME) not in failure_backoff([*rows, done], now)
+
+
+@pytest.mark.parametrize('refusal', NO_PARTY_ROOM)
+def test_a_party_that_cannot_make_room_backs_off_the_whole_game(refusal):
+    # Live, Yellow's party was the starter, four lone HM holders and one Pokémon kept for training,
+    # and each trade into it failed with a different boxed Pokémon.
+    now = 10_000
+    yellow = '7' * 32
+    error = f'{refusal} for this trade (adventure {yellow})'
+    rows = [row(now - 300 * index, error=error, left=yellow, left_key=identifier() + '-1') for index in range(3)]
+    backed = failure_backoff(rows, now)
+    assert backed[(yellow, WHOLE_GAME)] == now + 2 * FAILURE_BACKOFF_SECONDS
+    assert Coordinator._auto_offers(yellow, {'offers': [{'trade_key': identifier() + '-1'}]}, set(backed))[1]['offers'] == []

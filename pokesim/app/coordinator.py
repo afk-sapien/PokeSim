@@ -46,6 +46,8 @@ BUSY_NOTE = 'Busy with a trade. Your trade will wait in line.'
 # A preparation error carries the adventure that raised it, so the Trading page can name that game.
 FAILED_TAG = re.compile(r'\(adventure ([0-9a-f]{32})\)')
 PC_FULL = 'Every PC box is full'
+# Gen I and Gen II preparation word the same refusal differently.
+NO_PARTY_ROOM = ('No safe unprotected reserve can leave the party', 'The party has no safe reserve to deposit')
 # A Pokémon whose automatic trades keep failing the same way waits before it is offered
 # again: 30 minutes after the second identical failure, doubling up to a day.
 FAILURE_BACKOFF_AFTER = 2
@@ -125,8 +127,9 @@ def failure_backoff(history, now=None):
             continue
         kind = _failure_kind(error)
         tagged = FAILED_TAG.search(error)
-        if PC_FULL in error and tagged:
-            # A full PC refuses every Pokémon the game offers, so the whole game waits.
+        if (PC_FULL in error or any(text in error for text in NO_PARTY_ROOM)) and tagged:
+            # A full PC, or a party where every member must stay, refuses every Pokémon the
+            # game offers, so the whole game waits.
             sides = sides + [(tagged.group(1), WHOLE_GAME)]
         for side in sides:
             if side in closed or not all(side):
@@ -372,8 +375,7 @@ class Coordinator:
             return 'An adventure needs a partner with Strength to reach the Cable Club.'
         if 'Cable Club preparation stopped making progress' in error:
             return 'An adventure stopped making progress while preparing for the Cable Club.'
-        if ('No safe unprotected reserve can leave the party' in error
-                or 'The party has no safe reserve to deposit' in error):
+        if any(text in error for text in NO_PARTY_ROOM):
             return 'An adventure could not safely make room in its party for the selected Pokémon.'
         if 'cannot be identified uniquely' in error or 'no longer eligible' in error:
             return 'A selected Pokémon was no longer available for this exchange.'
