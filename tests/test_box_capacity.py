@@ -293,6 +293,8 @@ def test_storage_buffer_sends_the_run_to_a_pc_to_free_slots():
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
     p.step(PolicyContext(s, 0, 0, memory))
     assert p.goal.key == 'party_release'
+    # Trading reads the spare it is about to let go, so it never offers that one.
+    assert p.release_spare == release_target(s) is not None
 
     # With room to spare the run leaves storage alone.
     roomy = stuffed(box_counts=(20,) * 11 + (10,))
@@ -301,6 +303,7 @@ def test_storage_buffer_sends_the_run_to_a_pc_to_free_slots():
     p2.observed_map = roomy.map
     p2.step(PolicyContext(roomy, 0, 0, memory))
     assert p2.goal.key != 'party_release'
+    assert p2.release_spare is None
 
 
 def test_release_menu_is_only_opened_for_the_release_goal():
