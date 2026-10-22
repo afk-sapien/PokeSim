@@ -194,6 +194,8 @@ def teaching_policy(real_data, monkeypatch):
     policy.release_goal = lambda snapshot, mem: None
     policy.level_lead = lambda snapshot: None
     policy.nav.observe = lambda snapshot: None
+    # Zeroed RAM has no map width, which reads as a cartridge back at its opening.
+    policy.unloaded = lambda snapshot, mem: False
 
     def onward(snapshot):
         raise Onward

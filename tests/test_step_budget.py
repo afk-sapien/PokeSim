@@ -139,7 +139,7 @@ def test_gen1_step_stays_within_budget_on_a_large_state():
 
 
 class Gen2Memory:
-    """Banked memory of zeros, holding only the block map the navigator reads collision from."""
+    """Banked memory of zeros, holding only the loaded map the navigator reads collision from."""
 
     def __init__(self, data):
         self.data = data
@@ -159,9 +159,14 @@ class Gen2Memory:
         blocks = bytearray(stride * (height + 6))
         for y in range(height):
             blocks[(y + 3) * stride + 3:(y + 3) * stride + 3 + width] = entry['blocks'][y * width:(y + 1) * width]
-        bank, address = self.data.symbols['wOverworldMapBlocks']
+        self.write('wOverworldMapBlocks', blocks)
+        # A loaded map has a width. Zero means the cartridge is back at its opening.
+        self.write('wMapWidth', bytes([width]))
+
+    def write(self, name, values):
+        bank, address = self.data.symbols[name]
         target = self.banks.setdefault(bank, bytearray(0x10000)) if 0x8000 <= address < 0xE000 else self.flat
-        target[address:address + len(blocks)] = blocks
+        target[address:address + len(values)] = values
 
 
 def gen2_mon(data, rng, species, level, moves=(33, 45, 52, 55), box=None, position=None):

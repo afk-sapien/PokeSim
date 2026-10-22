@@ -61,6 +61,7 @@ def test_policy_backs_out_of_an_ownerless_pc_and_reports_it(data, monkeypatch):
     monkeypatch.setattr(module, 'update_world', lambda *args: None)
     policy = Policy(data, seed=1, starter='cyndaquil')
     policy.naming.step = lambda snapshot, mem: None
+    policy.unloaded = lambda snapshot, mem: False
     screen = pc_screen('BILL  PC', 'accessed.')
     snapshot = SimpleNamespace(**vars(screen), started=True, valid=True, in_battle=0, hall_of_fame_count=0,
                                map=data.map_ids['OLIVINE_POKECENTER_1F'], party=(), event_flags=bytes(256))
