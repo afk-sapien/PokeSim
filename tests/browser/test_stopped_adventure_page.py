@@ -6,7 +6,7 @@ import pytest
 
 from pokesim.app.manager import Manager, create_app
 from pokesim.app.registry import identifier
-from conftest import serve
+from conftest import refused, serve
 
 OFFLINE = '<urlopen error [Errno -5] No address associated with hostname>'
 SHOTS = Path(os.environ.get('POKESIM_SHOT_DIR', '/tmp/pokesim-stopped-ui'))
@@ -71,6 +71,8 @@ def test_failed_adventure_page_explains_and_offers_retry(page, tmp_path, monkeyp
 
 
 @pytest.mark.parametrize('width', [320, 1280])
+# The trading page asks for trade status and PC records, which a stopped adventure refuses.
+@pytest.mark.expected_errors(*refused('/api/trading', 409), *refused('/api/pokedex/status?view=pc', 409))
 def test_stopped_adventure_page_starts_in_one_click(page, tmp_path, monkeypatch, width):
     factory, ids = build(tmp_path, monkeypatch, {'Quiet Cove': ('stopped', None, 'stopped')})
     with serve(factory) as url:
@@ -83,7 +85,9 @@ def test_stopped_adventure_page_starts_in_one_click(page, tmp_path, monkeypatch,
         expect(page.locator('[data-nav="library"]')).to_have_attribute('aria-current', 'page')
         SHOTS.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(SHOTS / f'stopped-{width}.png'), full_page=True, animations='disabled')
-        page.get_by_role('link', name='Cable Club trading').click()
+        with (page.expect_response(lambda response: response.url.endswith('/api/trading')),
+              page.expect_response(lambda response: response.url.endswith('/api/pokedex/status?view=pc'))):
+            page.get_by_role('link', name='Cable Club trading').click()
         expect(page).to_have_url(f'{url}/games/{ids["Quiet Cove"]}/trading')
 
 
