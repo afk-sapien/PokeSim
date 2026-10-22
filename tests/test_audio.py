@@ -180,7 +180,9 @@ def test_audio_endpoint_reports_playback_without_changing_speed(tmp_path, monkey
         assert response.headers['Cache-Control'] == 'no-store'
         emu.audio.publish(b'\x01\x02')
         response = client.get('/api/audio?after=0')
-        assert response.content == (b'\x01\x02' if state == 'playing' else b'')
+        # Unlimited falls back to the measured pace, which is still 1x after a single frame.
+        audible = state == 'playing' and (manual or speed <= MAX_SPEED)
+        assert response.content == (b'\x01\x02' if audible else b'')
         assert client.get('/api/audio?after=-2').status_code == 422
         if state == 'playing':
             # A fake clock keeps the burst's pace exact, whatever the platform's timer resolution.
@@ -190,8 +192,54 @@ def test_audio_endpoint_reports_playback_without_changing_speed(tmp_path, monkey
             for index in range(600):
                 clock[0] += 1 / 960
                 emu.audio.publish(b'\x01\x02')
-            assert float(client.get('/api/audio?after=1').headers['X-Audio-Speed']) > MAX_SPEED
-            assert client.get('/api/audio?after=1').content == b''
+            audible = manual or 0 < speed <= MAX_SPEED
+            response = client.get('/api/audio?after=1')
+            if speed == 0:
+                assert float(response.headers['X-Audio-Speed']) > MAX_SPEED
+            else:
+                assert float(response.headers['X-Audio-Speed']) == (1 if manual else speed)
+            assert response.content == (b'\x01\x02' * 600 if audible else b'')
+            assert response.headers['X-Audio-Dropped'] == ('0' if audible else '600')
+    assert emu.speed == speed
+
+
+@pytest.mark.parametrize('speed,manual', [(4, False), (1, False), (2, True)])
+def test_a_catch_up_burst_keeps_the_reported_speed_and_its_audio(tmp_path, monkeypatch, speed, manual):
+    clock = [10.0]
+    monkeypatch.setattr('pokesim.audio.time.monotonic', lambda: clock[0])
+    emu = Emulator.__new__(Emulator)
+    emu.speed, emu.paused, emu.manual_mode = speed, False, manual
+    emu.audio = AudioFeed()
+    expected = 1 if manual else speed
+    with TestClient(create_app(emu, SimpleNamespace(shots=tmp_path))) as client:
+        after = int(client.get('/api/audio').headers['X-Audio-Sequence'])
+
+        def poll():
+            nonlocal after
+            response = client.get(f'/api/audio?after={after}')
+            fresh = int(response.headers['X-Audio-Sequence']) - after
+            assert float(response.headers['X-Audio-Speed']) == expected
+            assert response.headers['X-Audio-Dropped'] == '0'
+            assert len(response.content) == 2 * fresh
+            after += fresh
+            return fresh
+
+        frames = 0
+        for _ in range(60 * expected):
+            clock[0] += 1 / (60 * expected)
+            emu.audio.publish(b'ab')
+            frames += 1
+            if frames % 6 == 0:
+                poll()
+        # The worker stalls for most of a second, then runs flat out to catch up.
+        for _ in range(8):
+            clock[0] += 0.1
+            assert poll() == 0
+        for _ in range(4):
+            for _ in range(int(48 * expected)):
+                clock[0] += 0.0001
+                emu.audio.publish(b'ab')
+            assert poll() > 0
     assert emu.speed == speed
 
 

@@ -78,7 +78,7 @@
         state.primed = false
         state.trim = 0
       },
-      // Offer a packet that lasts `duration` of game audio. `speed` is the measured pace.
+      // Offer a packet that lasts `duration` of game audio. `speed` is the pace the server reports.
       // Held audio stays with the caller, who offers the combined duration next time.
       // Returns {type: 'mute'|'hold'|'play', ...}. A play plan says when to start, the
       // playback rate, how many seconds of game audio to drop from the head, and whether

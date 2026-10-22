@@ -552,7 +552,11 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         from ..audio import MAX_SPEED, SAMPLE_RATE
         state, sequence, pcm, speed, dropped = emu.audio_packet(after)
         if speed > MAX_SPEED:
-            pcm = b''  # Too fast to hear. The page mutes and the wire stays quiet.
+            # Too fast to hear. The page mutes and the wire stays quiet, and the cut frames
+            # count as dropped so no audio goes missing without a trace.
+            pcm = b''
+            if after >= 0:
+                dropped = max(dropped, sequence - after)
         return Response(pcm, media_type='application/octet-stream', headers={
             'Cache-Control': 'no-store', 'X-Audio-State': state,
             'X-Audio-Mode': 'manual' if getattr(emu, 'manual_mode', False) else 'watch',
