@@ -261,3 +261,27 @@ jobs:
                           '--prerelease=' + str('rc' in tag).lower(),
                           '--latest=' + str('rc' not in tag).lower()], check=True)
           PY
+      - name: Move the floating image tags
+        env:
+          IMAGE: ${{ needs.validate.outputs.image }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
+        run: |
+          published=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.draft | not) | .tag_name')
+          tags=$(python tools/floating_tags.py "$VERSION" $published)
+          [ -n "$tags" ] || { echo 'No floating tags move for this release'; exit 0; }
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          for tag in $tags; do
+            docker tag "$IMAGE" "${IMAGE%:*}:$tag"
+            docker push "${IMAGE%:*}:$tag"
+          done
+          docker logout ghcr.io
+          for tag in $tags; do
+            python tools/check_registry_image.py "${IMAGE%:*}:$tag"
+          done
+      - name: Remove registry credentials after the floating tags
+        if: always()
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
+        run: docker logout ghcr.io

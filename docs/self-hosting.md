@@ -111,6 +111,10 @@ docker compose up -d --wait
 docker compose logs --tail=50 pokesim
 ```
 
+To follow updates automatically, set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:latest`, or
+`:0.5` to stay on one release line. An automatic update skips the backup above, so keep
+regular backups and read the release notes for each version.
+
 Choose a real version from the [release page](https://github.com/afk-sapien/PokeSim/releases).
 The configuration pins its image version. Pulling alone does not select a newer release.
 Review release notes and configuration changes before updating. Do not replace your

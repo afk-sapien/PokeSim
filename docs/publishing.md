@@ -76,7 +76,10 @@ included in the checksums. The Python matrix exercises both installer scripts on
 respective platforms, including repeat installation. The container checks exercise a
 fresh named volume and verify that it survives container removal and recreation. The workflow uploads the
 downloads to the release and verifies every uploaded checksum. Versions containing
-`rc` are marked as prereleases. No floating `latest` tag is published.
+`rc` are marked as prereleases. After publication, `tools/floating_tags.py` moves
+`latest` to the newest stable release and `<major>.<minor>`, such as `0.5`, to the newest
+stable release of its line. A fix to an older line moves only that line, and release
+candidates move neither. Each moved tag is pulled anonymously and checked against the tested image.
 
 ## Emulator dependencies are GitHub release wheels
 
