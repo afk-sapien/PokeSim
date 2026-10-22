@@ -1,13 +1,12 @@
 """Durable individual League records for Gen II partners and exchanges."""
 from collections import Counter
-from functools import lru_cache
 import hashlib
 import json
 import re
 import uuid
 
 from ..trade.preferences import signature as identity
-from .tracking import ancestors
+from .tracking import ancestors, data_cache
 
 KEY = 'gen2-league-partners-v1'
 
@@ -21,10 +20,13 @@ def save(db, value):
     db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
 
 
-@lru_cache(maxsize=1024)
 def family(data, species):
-    root = min(ancestors(data, species))
-    return root, {row['name'].upper() for sid, row in data.species.items() if root in ancestors(data, sid)}
+    families = data_cache(data, '_league_families')
+    if species not in families:
+        root = min(ancestors(data, species))
+        families[species] = root, frozenset(row['name'].upper() for sid, row in data.species.items()
+                                            if root in ancestors(data, sid))
+    return families[species]
 
 
 def signature(data, mon):
