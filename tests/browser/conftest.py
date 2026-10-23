@@ -7,6 +7,7 @@ from pathlib import Path
 import socket
 import threading
 import time
+from urllib.parse import urlsplit
 
 import pytest
 from PIL import Image
@@ -79,9 +80,10 @@ class BrowserErrors:
     def failed(self, request):
         text = request.failure or ''
         # A navigation cancels what the old page was loading, and the live screen drops a frame
-        # it has already replaced. Neither is a failure.
+        # it has already replaced or cancels its frame fetch when the page hides. None is a failure.
         cancelled = text == 'net::ERR_ABORTED' and (
-            self.started.get(request, self.navigations) != self.navigations or request.resource_type == 'image')
+            self.started.get(request, self.navigations) != self.navigations or request.resource_type == 'image'
+            or urlsplit(request.url).path.endswith('/frame.jpg'))
         if not cancelled:
             self.add('requestfailed', request.url, f'{request.method} {text}')
 

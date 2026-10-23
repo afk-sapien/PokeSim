@@ -179,6 +179,26 @@ test('a fixed non-unit pace holds one rate and the same lead', () => {
   }
 })
 
+test('a stall and catch-up burst at a steady reported 4x keeps the 4x rate', () => {
+  const buffer = createJitterBuffer()
+  const speed = 4
+  const plans = []
+  let held = 0
+  // The worker stalls for 0.8 seconds, so those polls come back empty and the page skips them.
+  // The next poll brings everything it missed in one burst.
+  for (let tick = 0; tick < 100; tick++) {
+    if (tick >= 30 && tick < 38) continue
+    const fresh = (tick === 38 ? 9 : 1) * PACKET * speed
+    const plan = buffer.accept(tick * PACKET, held + fresh, speed)
+    plans.push(plan)
+    held = plan.type === 'hold' ? held + fresh : 0
+  }
+  assert.ok(plans.every(plan => plan.type !== 'mute'))
+  const played = plans.filter(plan => plan.type === 'play')
+  for (const plan of played) assert.ok(Math.abs(plan.rate / speed - 1) <= 0.02 + 1e-9, `rate ${plan.rate}`)
+  assert.equal(buffer.rate, speed)
+})
+
 test('the problem flag appears only when the largest buffer keeps underrunning', () => {
   const buffer = createJitterBuffer()
   assert.equal(buffer.problem(0), false)

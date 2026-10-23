@@ -73,3 +73,19 @@ def test_a_trade_never_offers_or_prepares_a_partner_the_pc_list_cannot_reach(par
         preparation.begin(emu, identity(asdict(hidden)), 'hidden', manual=True)
     assert emu.store.get(preparation.KEY) is None
     assert preparation.begin(emu, identity(asdict(reachable)), 'reachable')['phase'] == 'travelling'
+
+
+def test_a_trade_never_offers_the_spare_the_game_is_releasing(participant):
+    # Blue offered the Pidgey, Squirtle and Bulbasaur it was letting go at the PC. Each release
+    # landed seconds after the trade was chosen, so preparation found the Pokémon gone and every
+    # trade failed as "cannot be identified uniquely".
+    emu, snap, _ = participant
+    copies = [stored(0, level=30, trainer_id=101), stored(1, level=5, trainer_id=202),
+              stored(2, level=6, trainer_id=303)]
+    snap = replace(snapshot(copies, party=snap.party), map=89, x=13, y=4)
+    emu.snapshot = snap
+    emu.policy = policy = StrategicPolicy(7)
+    assert sorted(offer['position'] for offer in runtime_inventory(emu, snap)['offers']) == [1, 2, 3]
+    policy.release_spare = release_target(snap)
+    assert policy.release_spare == (0, 1)
+    assert sorted(offer['position'] for offer in runtime_inventory(emu, snap)['offers']) == [1, 3]
