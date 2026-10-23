@@ -230,6 +230,7 @@ class Emulator:
         self.stuck_since = time.time()
         self.progress_frame = 0
         self.progress_key = None
+        self.explored = set()
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
         self.reloads = 0
@@ -654,12 +655,8 @@ class Emulator:
                 elif mon.level > old.level and not mon.egg:
                     self._event(Event('level', f'{mon.nick} grew to level {mon.level}',
                                       priority=4 if mon.level in (50, 100) else 2, notable=mon.level % 10 == 0), snapshot)
-        key = progress_key(len(self.policy.nav.visits), len(self.history['maps']), snapshot)
         now = time.time()
-        if key != self.progress_key:
-            self.progress_key, self.progress_frame = key, self.frame
-            self.stuck_frame, self.stuck_ts = self.frame, now
-            self.failure_streak = 0
+        self._watch_progress(snapshot, now)
         self._note_progress(snapshot, now)
         screen = hash((snapshot.tiles, snapshot.map, snapshot.x, snapshot.y, snapshot.in_battle))
         if screen != self.screen_key:
@@ -729,9 +726,25 @@ class Emulator:
             self.unstick_streak = 0
             self.reloads_exhausted = False
 
+    def _watch_progress(self, snapshot, now):
+        """Restart the progress clocks and the failure streak when the run achieves something new.
+
+        Tiles stepped on count from this record, not from the policy's navigator. Each policy recovery
+        starts a fresh navigator, so its first tile looked new after every failure. A goal that failed
+        for want of a route then never reached the failure limit, and a Crystal run kept failing at the
+        Battle Tower for hours without a reload.
+        """
+        self.explored.add((snapshot.map, snapshot.x, snapshot.y))
+        key = progress_key(len(self.explored), len(self.history['maps']), snapshot)
+        if key != self.progress_key:
+            self.progress_key, self.progress_frame = key, self.frame
+            self.stuck_frame, self.stuck_ts = self.frame, now
+            self.failure_streak = 0
+
     def _reset_watch(self):
         """Restart the stuck clocks after a reload, which also rewinds the frame counter."""
         now = time.time()
+        self.explored = set()
         self.progress_frame = self.screen_frame = self.stuck_frame = self.last_reload_frame = self.frame
         self.stuck_ts = self.stuck_since = now
         self.screen_key = self.progress_key = None

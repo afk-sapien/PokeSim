@@ -376,8 +376,12 @@ class Emulator:
 
     def audio_packet(self, after):
         state = 'paused' if self.paused and not self.manual_mode else 'playing'
-        sequence, pcm, speed, dropped = self.audio.read(after, state)
-        return state, sequence, pcm, speed, dropped
+        sequence, pcm, measured, dropped = self.audio.read(after, state)
+        # The worker catches up in bursts after a stall, so the measured pace jumps around the
+        # setting. Report the setting and let the page's buffer absorb the bursts. Unlimited has
+        # no setting to report, so it keeps the measurement.
+        speed = 1 if self.manual_mode else self.speed
+        return state, sequence, pcm, speed if speed > 0 else measured, dropped
 
     def current_frame(self, timeout: float = 1.0) -> bytes:
         """The latest frame, waiting for the first one if the run has only just started."""

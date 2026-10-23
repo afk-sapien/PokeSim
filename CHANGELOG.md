@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.3
+
+- Fix Red, Blue and Yellow workers still growing after many Time Capsule trades ([#111](https://github.com/afk-sapien/PokeSim/issues/111)). Each trade with Gold, Silver or Crystal loads a fresh copy of the Gen II data, and two lookups cached their results by that copy, so every copy stayed in memory. Red held about 24 copies, about 1.8 million lists, after a day of trading. The lookups now keep their results on the copy itself, and Red's worker stays near 19,000 lists.
+
+- Fix browser sound jumping in pitch or cutting out. The page was told the speed measured over the last second, so after a short stall the catch-up burst read as 7x and the next second as 2x. The page now hears the speed setting, or 1x when playing by hand, and smooths the bursts itself. Sound cut because the speed is too fast to hear now counts as dropped audio.
+
+- Fix a Gold, Silver or Crystal adventure stuck for hours with "no route" to every goal after its cartridge reset. The title menu had read the save, so the game looked started on its last map, but no map was loaded and every tile read as a wall. A started game with no loaded map now presses through to Continue. Repeated failures of one goal now also add up toward a reload, which they did not before.
+
+- Fix Red, Blue and Yellow trades failing with "The selected Pokémon cannot be identified uniquely". The trade offered the spare the game was about to release at the PC, so the Pokémon was gone a few seconds later. That spare is no longer offered.
+
+- Fix automatic trades failing over and over when a game's party cannot make room. Each attempt picked a different boxed Pokémon and failed with "No safe unprotected reserve", or "The party has no safe reserve to deposit" in Gold, Silver and Crystal. Like a full PC, that failure now pauses automatic trades for the whole game.
+
+- Add floating image tags ([#115](https://github.com/afk-sapien/PokeSim/issues/115)). Each release moves `latest` to the newest stable release and `0.5` to the newest release of the 0.5 line, so automatic updaters can follow releases.
+
 ## 0.5.2
 
 - Update Pillow to 13.0.0 for its security fixes, through Core 0.7.1, which allows it. Nothing else in Core changes.

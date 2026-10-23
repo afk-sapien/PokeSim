@@ -1,6 +1,5 @@
 """Durable captures and collection achievements for the 251-species cartridges."""
 from collections import Counter
-from functools import lru_cache
 import hashlib
 import json
 import time
@@ -19,15 +18,27 @@ def empty_goals():
             'perfect_groups': {}, 'perfect_catches': 0}
 
 
-@lru_cache(maxsize=1024)
+def data_cache(data, name):
+    """A cache that lives and dies with one loaded copy of the game data.
+
+    Gen I workers load a fresh copy for each Time Capsule trade, and caches keyed by the copy
+    kept every one of them alive (issue #111).
+    """
+    return vars(data).setdefault(name, {})
+
+
 def ancestors(data, species):
-    family = {species}
-    while True:
-        parents = {sid for sid, row in data.species.items()
-                   if any(evo['species'] in family for evo in row['evolutions'])}
-        if parents <= family:
-            return frozenset(family)
-        family.update(parents)
+    cache = data_cache(data, '_ancestors')
+    if species not in cache:
+        family = {species}
+        while True:
+            parents = {sid for sid, row in data.species.items()
+                       if any(evo['species'] in family for evo in row['evolutions'])}
+            if parents <= family:
+                break
+            family.update(parents)
+        cache[species] = frozenset(family)
+    return cache[species]
 
 
 def level_credit(data, species):

@@ -150,6 +150,8 @@ class StrategicPolicy(Policy):
         self.heal_latch = False
         self.shop = ShoppingController()
         self.pc = StorageController()
+        # The spare the run lets go next as (box, position). Trading never offers it.
+        self.release_spare = None
         self.pending_trade_key = None
         self.goal_attempts = 0
         self.observed_map = None
@@ -347,6 +349,7 @@ class StrategicPolicy(Policy):
             and self.pc.field_move_box(s, self.goal.key) is not None
         )
         release = self._release_target(s) if storage_headroom(s) < RELEASE_BUFFER else None
+        self.release_spare = release
         if release and not withdrawing_partner and s.map not in league_rooms:
             self.pc.species = None
             self.pc.destination = None

@@ -14,10 +14,10 @@ reviewed changes to `main`. Push a new `v<version>` tag for that exact commit, t
 create a draft release and start the publishing workflow:
 
 ```sh
-git tag v0.5.2
-git push origin v0.5.2
-gh release create v0.5.2 --verify-tag --draft --title "PokeSim 0.5.2" --notes-file docs/release-notes.md
-gh workflow run release.yml --ref main -f tag=v0.5.2
+git tag v0.5.3
+git push origin v0.5.3
+gh release create v0.5.3 --verify-tag --draft --title "PokeSim 0.5.3" --notes-file docs/release-notes.md
+gh workflow run release.yml --ref main -f tag=v0.5.3
 ```
 
 Use the actual next version when following these examples. A tag push alone does
@@ -60,7 +60,7 @@ exposes draft releases to identities with push access. All other jobs retain rea
 To rehearse the whole workflow without publishing, start it with the dry run input:
 
 ```sh
-gh workflow run release.yml --ref main -f tag=v0.5.2 -f dry_run=true
+gh workflow run release.yml --ref main -f tag=v0.5.3 -f dry_run=true
 ```
 
 A dry run validates the tag, runs the gate, and runs the full build and image checks. The
@@ -76,7 +76,10 @@ included in the checksums. The Python matrix exercises both installer scripts on
 respective platforms, including repeat installation. The container checks exercise a
 fresh named volume and verify that it survives container removal and recreation. The workflow uploads the
 downloads to the release and verifies every uploaded checksum. Versions containing
-`rc` are marked as prereleases. No floating `latest` tag is published.
+`rc` are marked as prereleases. After publication, `tools/floating_tags.py` moves
+`latest` to the newest stable release and `<major>.<minor>`, such as `0.5`, to the newest
+stable release of its line. A fix to an older line moves only that line, and release
+candidates move neither. Each moved tag is pulled anonymously and checked against the tested image.
 
 ## Emulator dependencies are GitHub release wheels
 

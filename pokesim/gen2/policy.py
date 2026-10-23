@@ -675,6 +675,15 @@ class Policy:
                 return mon
         return None
 
+    def unloaded(self, snapshot, mem):
+        """Whether the cartridge restarted to its opening while memory still shows the save it read.
+
+        The main menu reads the save's party and place to describe it, so the run looks started.
+        No map is loaded until Continue, though, and every loaded map has a width. A live Crystal run
+        reset in the Battle Tower walked into the blank walls of that unloaded map for hours.
+        """
+        return snapshot.started and not snapshot.in_battle and mem.byte('wMapWidth') == 0
+
     def idle(self, snapshot):
         """Whether the run stands on its clock-wait tile, the moment between two patrol steps.
 
@@ -1033,7 +1042,7 @@ class Policy:
         if snapshot.hall_of_fame_count and snapshot.map == self.data.map_ids['HALL_OF_FAME']:
             self.mode = 'Hall of Fame and credits'
             return Action('a', 8, 52)
-        if not snapshot.started:
+        if not snapshot.started or self.unloaded(snapshot, mem):
             self.mode = 'opening'
             return Action('start' if self.decisions % 20 == 1 else 'a', 8, 52)
         from .contest import control as contest_control
