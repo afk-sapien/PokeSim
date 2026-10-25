@@ -158,7 +158,12 @@ class Child:
                     self.process.wait(timeout=3)
                 except subprocess.TimeoutExpired:
                     self.process.kill()
-                    self.process.wait(timeout=3)
+                    # A worker blocked in the kernel outlives even a kill. Escaping as TimeoutExpired
+                    # ended the live monitor thread, and no game was restarted for 19 hours.
+                    try:
+                        self.process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        pass
                 raise RuntimeError('Worker exceeded the shutdown deadline. Its previous safe save was retained.')
         if self.process.returncode not in (None, 0):
             raise RuntimeError(f'Worker exited with code {self.process.returncode}. Inspect its diagnostics.')

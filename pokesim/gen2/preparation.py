@@ -170,6 +170,10 @@ class Preparation:
         # Left in place, it would resume after an abort, wait on the open PC and freeze the screen.
         policy.menu = None
         update_world(policy.nav.regions, snapshot)
+        # A reset back to the opening reads map 0, which has no layout. Looking up its collision
+        # crashed a live Crystal run during a Cable Club walk. The policy presses through the opening.
+        if snapshot.map not in data.maps:
+            return policy.step(snapshot, emu.pb.memory)
         policy.nav.regions.observe(snapshot.map, policy.nav.collision(snapshot, emu.pb.memory))
         policy.nav.observe(snapshot)
         if self.menu:
