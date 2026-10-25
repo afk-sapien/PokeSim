@@ -251,6 +251,36 @@ def test_readiness_timeout_names_the_last_cause_and_the_log_not_forty_lines(tmp_
     assert 'noise 10' not in message and ' | ' not in message and len(message) < 400
 
 
+
+def test_a_worker_that_survives_a_kill_fails_its_stop_with_a_runtime_error(tmp_path):
+    """The monitor only catches RuntimeError from a stop, so a stuck worker must not escape as a timeout."""
+    import subprocess
+    from pokesim.app.supervisor import Child
+
+    class Unkillable:
+        stdin = None
+        returncode = None
+        signals = []
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            raise subprocess.TimeoutExpired('worker', timeout)
+
+        def terminate(self):
+            self.signals.append('terminate')
+
+        def kill(self):
+            self.signals.append('kill')
+
+    bootstrap = {'token': 't', 'generation': 1, 'adventure_id': 'a', 'settings': {'data_dir': str(tmp_path)}}
+    child = Child(bootstrap)
+    child.process = Unkillable()
+    with pytest.raises(RuntimeError, match='shutdown deadline'):
+        child.stop(timeout=0.1)
+    assert child.process.signals == ['terminate', 'kill']
+
 def run_monitor_once(supervisor, aid, child, requests):
     child.request = requests
     child.pace = SimpleNamespace(observe=lambda value: None)
