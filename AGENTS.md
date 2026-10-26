@@ -57,3 +57,9 @@ checkouts that might not load this file automatically.
 ## Project conventions
 
 - Never use em dashes or semicolons in authored output.
+
+## Work on the related benchmark
+
+When the task concerns PokeBench, also read `../pokebench/AGENTS.md`, especially
+its exploratory working agreement. Apply those preferences to benchmark work
+even when the conversation starts in this PokeSim checkout.
