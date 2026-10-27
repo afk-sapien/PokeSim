@@ -7,7 +7,7 @@ const source = fs.readFileSync('pokesim/web/static/routes.js', 'utf8') + '\n{}\n
 const flush = () => new Promise(resolve => setImmediate(resolve))
 const response = body => ({ok: true, blob: async () => body})
 
-function viewer(responses, decode) {
+function viewer(responses, decode, globals = {}) {
   let clock = 0
   let nextId = 0
   let requests = 0
@@ -23,7 +23,7 @@ function viewer(responses, decode) {
     createElement: () => ({setAttribute() {}}),
     addEventListener: (name, callback) => listeners.set(name, callback),
   }
-  const window = {addEventListener: (name, callback) => listeners.set(name, callback)}
+  const window = {addEventListener: (name, callback) => listeners.set(name, callback), ...globals}
   const harness = {
     screen, document, window, timers, revoked, signals,
     requests: () => requests,
@@ -131,6 +131,28 @@ test('aborts a hung download and recovers without clearing the image', async () 
   assert.equal(view.screen.src, first)
   await view.advance(0)
   assert.notEqual(view.screen.src, first)
+})
+
+test('cached sound holds frames by its delay and realtime shows them at once', async () => {
+  const {createFrameQueue} = require('../pokesim/web/static/frame-delay.js')
+  let wait = 0.5
+  const view = viewer([response('first'), response('second'), response('third')], undefined, {
+    PokeSimFrameDelay: {createFrameQueue},
+    PokeSimAudioSync: {delay: () => wait},
+  })
+  await flush()
+  assert.equal(view.screen.src, undefined)
+  await view.advance(100)
+  assert.equal(view.screen.src, undefined)
+  await view.advance(400)
+  const first = view.screen.src
+  assert.ok(first)
+  wait = 0
+  await view.advance(100)
+  assert.notEqual(view.screen.src, first)
+  // The first frame was replaced and the second was still waiting, so both are released.
+  assert.equal(view.revoked.length, 2)
+  assert.ok(view.revoked.includes(first))
 })
 
 test('stops hidden-tab downloads and resumes when visible', async () => {

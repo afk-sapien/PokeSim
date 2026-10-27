@@ -98,6 +98,7 @@ required = {
     'pokesim/web/static/app.js',
     'pokesim/web/static/screen.js',
     'pokesim/web/static/audio-buffer.js',
+    'pokesim/web/static/frame-delay.js',
     'pokesim/web/static/pokedex.html',
     'pokesim/web/static/pokedex.js',
     'pokesim/web/static/panel-pokedex.css',

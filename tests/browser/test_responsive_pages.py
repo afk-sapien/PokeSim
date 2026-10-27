@@ -115,7 +115,7 @@ def _live_keys(page):
     }''')
 
 
-@pytest.mark.parametrize('width', [1024, 1280, 1920])
+@pytest.mark.parametrize('width', [1101, 1280, 1920])
 def test_live_controls_are_equal_keys_on_desktop(page, game, width):
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(game[0])
@@ -123,13 +123,14 @@ def test_live_controls_are_equal_keys_on_desktop(page, game, width):
     deck = _live_keys(page)
     keys = deck['keys']
     rows = {round(k['top']) for k in keys}
-    # Five keys share one row; the standalone page's sixth (Download .sav) makes it 3 x 2.
-    assert len(rows) == (1 if len(keys) == 5 else 2)
+    # Six keys share one row. The standalone page's seventh (Download .sav) spans two of four columns.
+    assert len(rows) == (1 if len(keys) == 6 else 2)
+    keys = [k for k in keys if k['id'] != 'export-save']
     assert max(k['width'] for k in keys) - min(k['width'] for k in keys) <= 1
     assert not any(k['clipped'] for k in keys)
 
 
-@pytest.mark.parametrize('width', [320, 390, 480, 640, 700, 768, 820])
+@pytest.mark.parametrize('width', [320, 390, 480, 640, 700, 768, 820, 1024])
 def test_live_controls_are_an_even_grid_that_never_clips(page, game, width):
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(game[0])

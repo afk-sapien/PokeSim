@@ -72,6 +72,10 @@ Click **Sound: Off** below the live screen to listen. Audio follows the observed
 Music and effects speed up with the game. Your adventure keeps its chosen speed. Audio starts off on every page
 and turns off when you hide or leave the tab.
 
+Pick **Audio mode** next to the Sound button to choose how sound is buffered. **Realtime** is the default and keeps the
+lowest delay. **Cached** holds about one second of audio, up to three on a poor connection, and delays the live screen by
+the same amount so picture and sound stay in sync. Use it when sound stutters. Your browser remembers the choice.
+
 Sound keeps a short buffer so a slow connection does not cause crackling. Watching holds about 0.4 seconds of audio ahead.
 After a dropout the buffer grows up to 1.5 seconds and then shrinks slowly while the connection stays calm.
 If even that is not enough, the status line says "Audio connection is unstable".

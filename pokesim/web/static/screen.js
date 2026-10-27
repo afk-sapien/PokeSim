@@ -14,6 +14,32 @@
   let busy = false
   let pageActive = true
   let displayedUrl
+  // Cached sound plays behind the live edge. Frames wait the same time so picture and sound match.
+  const queue = window.PokeSimFrameDelay?.createFrameQueue()
+  let showTimer
+  const delay = () => (queue && window.PokeSimAudioSync?.delay()) || 0
+
+  function show(url) {
+    const previousUrl = displayedUrl
+    screen.src = url
+    displayedUrl = url
+    if (previousUrl) URL.revokeObjectURL(previousUrl)
+  }
+
+  function showDue() {
+    clearTimeout(showTimer)
+    const {show: frame, drop} = queue.take(performance.now())
+    for (const url of drop) URL.revokeObjectURL(url)
+    if (frame) show(frame)
+    const next = queue.next()
+    if (next !== null) showTimer = setTimeout(showDue, Math.max(0, next - performance.now()))
+  }
+
+  function dropQueued() {
+    if (!queue?.size) return
+    clearTimeout(showTimer)
+    for (const url of queue.clear()) URL.revokeObjectURL(url)
+  }
 
   async function nextFrame() {
     if (busy || !pageActive || document.hidden) return
@@ -34,11 +60,16 @@
       await candidate.decode()
       if (request.signal.aborted || !pageActive || document.hidden) return
 
-      const previousUrl = displayedUrl
-      screen.src = candidateUrl
-      displayedUrl = candidateUrl
-      candidateUrl = undefined
-      if (previousUrl) URL.revokeObjectURL(previousUrl)
+      const wait = delay()
+      if (wait > 0) {
+        for (const url of queue.push(candidateUrl, performance.now() + wait * 1000)) URL.revokeObjectURL(url)
+        candidateUrl = undefined
+        showDue()
+      } else {
+        dropQueued()
+        show(candidateUrl)
+        candidateUrl = undefined
+      }
       status.hidden = true
     } catch (error) {
       if (!request.signal.aborted || (pageActive && !document.hidden)) {
@@ -65,6 +96,7 @@
   function suspend() {
     clearTimeout(timer)
     controller?.abort()
+    dropQueued()
   }
 
   document.addEventListener('visibilitychange', () => {

@@ -121,6 +121,32 @@ def test_sound_lead_follows_control_mode(page, game, mode, low, high):
     expect(page.locator('#sound-status')).to_be_hidden()
 
 
+def test_cached_audio_mode_persists_and_delays_the_screen(page, game):
+    url, _, _, _ = game
+    calls = []
+    pcm = bytes(int(40 + 30 * math.sin(2 * math.pi * frame * 100 / 48000))
+                for frame in range(4800) for _ in range(2))
+
+    def audio(route):
+        calls.append(route.request.url)
+        route.fulfill(body=pcm, content_type='application/octet-stream', headers={
+            'X-Audio-State': 'playing', 'X-Audio-Rate': '48000', 'X-Audio-Mode': 'watch',
+            'X-Audio-Sequence': str(len(calls)), 'X-Audio-Speed': '1',
+        })
+    page.route('**/api/audio?*', audio)
+    page.goto(url)
+    expect(page.locator('#audio-mode')).to_have_value('realtime')
+    page.locator('#audio-mode').select_option('cached')
+    page.reload()
+    expect(page.locator('#audio-mode')).to_have_value('cached')
+    assert page.evaluate('window.PokeSimAudioSync.delay()') == 0
+    page.locator('#sound').click()
+    page.wait_for_function('() => window.PokeSimAudioSync.delay() > 0', timeout=15000)
+    assert 1 <= page.evaluate('window.PokeSimAudioSync.delay()') <= 3
+    page.locator('#audio-mode').select_option('realtime')
+    assert page.evaluate('window.PokeSimAudioSync.delay()') == 0
+
+
 # The test refuses every audio request. Turning sound off cancels the request still waiting.
 @pytest.mark.expected_errors(*refused('/api/audio', 503), r'^requestfailed \S*/api/audio\S* GET net::ERR_ABORTED')
 def test_sound_failure_can_be_retried(page, game):

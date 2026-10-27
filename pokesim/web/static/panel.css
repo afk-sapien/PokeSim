@@ -1394,9 +1394,10 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 /* ---- live controls: one even grid of identical keys --------------------
    Every control is the same height and type. Wide enough for each key to
    hold its label: one row of equal keys. Otherwise an even grid (3 columns,
-   then 2 on phones) with Take control spanning so no row is ragged. A label
-   that still does not fit wraps inside its key instead of clipping or
-   pushing the key wider. Status text gets its own full-width line. */
+   then 2 on phones). The standalone page's seventh key (Download .sav) uses
+   4 columns and spans two so no row is ragged. A label that
+   still does not fit wraps inside its key instead of clipping or pushing
+   the key wider. Status text gets its own full-width line. */
 .deck.controls {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1404,8 +1405,8 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   gap: var(--s2);
 }
 .deck.controls > * { min-width: 0; margin: 0; }
-.deck.controls .key--primary { grid-column: span 2; }
-.deck.controls:has(#export-save) .key--primary { grid-column: auto; }
+.deck.controls:has(#export-save) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.deck.controls #export-save { grid-column: span 2; }
 .deck.controls .key,
 .deck.controls .live-speed select {
   width: 100%;
@@ -1442,17 +1443,16 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 }
 .deck.controls #sound-status[hidden] { display: none; }
 
-/* One row of five equal keys once each key is about 130px wide. */
-@media (min-width: 861px) {
-  .deck.controls:not(:has(#export-save)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .deck.controls:not(:has(#export-save)) .key--primary { grid-column: auto; }
+/* One row of six equal keys once each key is about 130px wide. */
+@media (min-width: 1101px) {
+  .deck.controls:not(:has(#export-save)) { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
   .deck.controls,
   .deck.controls:has(#export-save) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .deck.controls .key--primary,
-  .deck.controls:has(#export-save) .key--primary,
-  .deck.controls #export-save { grid-column: 1 / -1; }
+  .deck.controls #export-save,
+  .deck.controls .live-speed:has(#audio-mode) { grid-column: 1 / -1; }
 }
 /* Long Gen 2 places (Azalea Pokémon Center 1F) need the smaller type to read on a phone. */
 @media (max-width: 640px) {
