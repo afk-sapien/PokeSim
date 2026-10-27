@@ -63,13 +63,15 @@ def landings(policy, destination, targets, region, visited, cut, surf, snapshot)
 
 
 def outside(policy, snapshot, mem, destination):
-    """Where to walk out to when inside with no walking route to the destination, so Fly can take over.
+    """Where to walk to when no walking route leads to the destination, so Fly can take over.
 
+    Fly only works outside and only reaches Fly points of the region the player stands in, so this is
+    out of a building, or on into the other region (Kanto to Johto, say) when no Fly point here helps.
     Returns a map and a point there in the nearest reachable town or route region from which a visited
     Fly point leads to the destination, or None when walking works, Fly cannot be used or does not help.
     """
     data, nav = policy.data, policy.nav
-    if data.maps[snapshot.map]['environment'] in OUTSIDE or flyer(snapshot) is None:
+    if flyer(snapshot) is None:
         return None
     visited = int.from_bytes(mem.read('wVisitedSpawns', 4), 'little')
     targets = [(policy.goal.x, policy.goal.y)]
