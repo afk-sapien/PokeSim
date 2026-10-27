@@ -128,7 +128,8 @@ jobs:
           POKESIM_TEST_SHARD: ${{ matrix.shard }}
         run: |
           mkdir -p build
-          uv run --locked --extra dev --extra browser-test pytest tests/browser -q --durations=10 --basetemp=build/browser-tests
+          # The browser checks wait on real timers, so each shard runs them in one process.
+          uv run --locked --extra dev --extra browser-test pytest tests/browser -n 0 -q --durations=10 --basetemp=build/browser-tests
       - name: Retain browser diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
