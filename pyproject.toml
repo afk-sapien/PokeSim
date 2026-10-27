@@ -35,7 +35,7 @@ Repository = "https://github.com/afk-sapien/PokeSim"
 Issues = "https://github.com/afk-sapien/PokeSim/issues"
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "pytest-xdist"]
 browser-test = [
     "playwright>=1.50",
 ]
@@ -48,6 +48,9 @@ pokesim-desktop = "pokesim.desktop:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+# Tests run on every core. loadgroup spreads single tests and keeps each xdist_group on one worker.
+# Pass -n 0 to run in one process.
+addopts = "-n auto --dist loadgroup"
 filterwarnings = ["ignore::UserWarning"]
 
 [tool.setuptools.package-data]

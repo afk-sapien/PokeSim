@@ -14,6 +14,10 @@ uv run --locked python tools/check_docs.py
 uvx ruff==0.16.9 check pokesim tests tools
 ```
 
+pytest runs the suite across every core with pytest-xdist. Add `-n 0` to run it in one
+process, for example to use a debugger. Tests that must share one worker carry an
+`xdist_group` mark.
+
 Ruff runs the Pyflakes checks only: unused names, undefined names and names used before
 they are assigned. It does not restyle the code.
 

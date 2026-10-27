@@ -99,6 +99,8 @@ def replays():
 
 
 @pytest.mark.skipif(os.environ.get('POKESIM_SCENARIO_TESTS') != '1', reason='set POKESIM_SCENARIO_TESTS=1 to replay private scenarios')
+# The replays fixture plays every scenario at once in its own process pool, so all of them run on one test worker.
+@pytest.mark.xdist_group('scenario-replays')
 @pytest.mark.parametrize('scenario', SCENARIOS, ids=[scenario.name for scenario in SCENARIOS])
 def test_the_player_gets_going_again(scenario, replays):
     results, skipped = replays
