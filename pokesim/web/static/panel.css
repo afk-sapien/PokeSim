@@ -727,6 +727,21 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   image-rendering: pixelated;
 }
 .screen-well img:not([src]) { visibility: hidden; }
+/* A stopped adventure shows its last saved frame, greyed out under a label. */
+.is-stopped .screen-well img { filter: grayscale(1) brightness(0.55); }
+.is-stopped .screen-well::after {
+  content: "Stopped";
+  position: absolute;
+  padding: 4px 10px;
+  background: rgba(10, 12, 7, 0.8);
+  box-shadow: inset 0 0 0 1px #8E9A6B;
+  color: #E6EBD4;
+  font: var(--f-label) / 1.4 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.is-stopped .lamp--blink { animation: none; opacity: 0.4; }
 /* Pixels stay square and sharp only at a whole multiple of 160x144, so from
    2x up the picture snaps down to one and the well's dark glass frames the
    rest. Stacked, the well itself snaps, so there is no frame to show. */

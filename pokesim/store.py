@@ -46,10 +46,32 @@ CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 
 
 class Store:
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, *, read_only=False):
         self.dir = Path(data_dir)
         self.shots = self.dir / "shots"
         self.states = self.dir / "states"
+        # A stopped adventure's pages read its files without changing them. They work on a copy
+        # of the database in memory, so what the emulator records while it restores a save,
+        # and the setup every tracker runs, never reaches the disk.
+        self.read_only = read_only
+        self.lock = threading.Lock()
+        self._read_local = threading.local()
+        self._read_cache = {}
+        self._read_epoch = None
+        self._cache_reads = os.environ.get('POKESIM_EXPERIMENT_READ_CACHE', '1') != '0'
+        if read_only:
+            database = self.dir / "pokesim.sqlite"
+            if not all(path.exists() for path in (database, self.shots, self.states)):
+                raise FileNotFoundError(f"{self.dir} has no adventure to show")
+            self.checkpoints = CheckpointStore(self.states)
+            source = sqlite3.connect(database.resolve().as_uri() + '?mode=ro', uri=True)
+            try:
+                self.db = sqlite3.connect(':memory:', check_same_thread=False)
+                source.backup(self.db)
+            finally:
+                source.close()
+            self.db.row_factory = sqlite3.Row
+            return
         for d in (self.dir, self.shots, self.states):
             d.mkdir(parents=True, exist_ok=True)
             try:
@@ -72,11 +94,6 @@ class Store:
             initialize_activity(self.db)
             from .trade_statistics import initialize as initialize_trade_statistics
             initialize_trade_statistics(self.db)
-        self.lock = threading.Lock()
-        self._read_local = threading.local()
-        self._read_cache = {}
-        self._read_epoch = None
-        self._cache_reads = os.environ.get('POKESIM_EXPERIMENT_READ_CACHE', '1') != '0'
 
     def _migrate(self):
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(events)")}
@@ -292,6 +309,8 @@ class Store:
     atomic_write = staticmethod(CheckpointStore.atomic_write)
 
     def write_checkpoint(self, state: bytes, metadata: dict, name: str | None = None) -> Path:
+        if self.read_only:
+            raise PermissionError('A stopped adventure is read only')
         return self.checkpoints.write_checkpoint(state, metadata, name)
 
     def checkpoint_metadata(self, path: Path) -> dict | None:

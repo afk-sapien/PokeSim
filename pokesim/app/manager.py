@@ -910,7 +910,15 @@ def create_app(manager, shutdown=lambda: None):
                 path = f'sprites/{dex}.png'
             if image is not None:
                 return FileResponse(image, media_type='image/png')
-        if adventure['state'] not in {'running', 'recovering'}:
+        stopped_view = None
+        if (adventure['state'] in {'stopped', 'failed'} and not adventure['archived']
+                and request.method in {'GET', 'HEAD'}):
+            # A stopped adventure is shown read only from its newest save.
+            try:
+                stopped_view = await run_in_threadpool(manager.supervisor.viewer, aid)
+            except (RuntimeError, OSError, KeyError):
+                log.info('Adventure %s has no stopped view', aid, exc_info=True)
+        if stopped_view is None and adventure['state'] not in {'running', 'recovering'}:
             if path in GAME_PAGES and viewer:
                 return HTMLResponse('<!doctype html><title>PokeSim</title><p>This adventure is not running right now.</p>', status_code=409)
             if path in GAME_PAGES:
@@ -942,7 +950,7 @@ def create_app(manager, shutdown=lambda: None):
                             return
                     return StreamingResponse(provisional_frames(), media_type='multipart/x-mixed-replace',
                                              headers={'Content-Type': 'multipart/x-mixed-replace' + chr(59) + ' boundary=frame'})
-        child = manager.supervisor.child(aid)
+        child = stopped_view or manager.supervisor.child(aid)
         body = bytearray()
         async for chunk in request.stream():
             body.extend(chunk)
