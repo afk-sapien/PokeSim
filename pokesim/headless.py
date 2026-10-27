@@ -75,7 +75,7 @@ class HeadlessRun:
                     **checkpoint_metadata(), 'rom_sha1': self.rom_sha1, 'policy': 'strategic',
                     'policy_state': self.policy.state_dict(), 'run_memory': self.memory.to_dict(),
                     'frame': self.frame}
-        path.with_suffix('.json').write_text(json.dumps(manifest))
+        path.with_suffix('.json').write_text(json.dumps(manifest), encoding='utf-8')
 
     def step(self, snapshot):
         self.pb.memory[W_OPTIONS] = (self.pb.memory[W_OPTIONS] & ~7) | 1

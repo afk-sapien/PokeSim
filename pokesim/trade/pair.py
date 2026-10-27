@@ -64,7 +64,7 @@ def stage(root, transaction):
         snapshot, metadata, slots = inspect(rom, state)
         project = metadata['policy_state'].get('collection', {}).get('project') or {}
         protected = [project[k] for k in ['species', 'parent'] if project.get(k)]
-        policy = json.loads((root / 'policy.json').read_text())
+        policy = json.loads((root / 'policy.json').read_text(encoding='utf-8'))
         protected += policy.get('protected_species', {}).get(name, [])
         payload = live_status(snapshot.to_dict())
         with sqlite3.connect(data / 'pokesim.sqlite') as db:
@@ -91,7 +91,7 @@ def stage(root, transaction):
     result = perform(deals[0], source, outputs)
     for index, name in enumerate(['red', 'blue']):
         manifest = outputs[name].with_suffix('.json')
-        metadata = json.loads(manifest.read_text())
+        metadata = json.loads(manifest.read_text(encoding='utf-8'))
         metadata['trade_id'] = transaction
         write_json(manifest, metadata)
         after, _, slots = inspect(source[name]['rom'], outputs[name])
@@ -120,7 +120,7 @@ def stage(root, transaction):
 
 
 def journal(root, transaction):
-    result = json.loads((root / 'transactions' / transaction / 'result.json').read_text())
+    result = json.loads((root / 'transactions' / transaction / 'result.json').read_text(encoding='utf-8'))
     for moved in result['moved']:
         name = moved['instance']
         data = PAIR_ROOT / name

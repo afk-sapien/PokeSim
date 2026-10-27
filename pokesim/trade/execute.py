@@ -102,7 +102,7 @@ def _manifest(state: Path) -> dict | None:
     sidecar = state.with_suffix(".json")
     if not sidecar.exists():
         return None
-    data = json.loads(sidecar.read_text())
+    data = json.loads(sidecar.read_text(encoding='utf-8'))
     if not isinstance(data, dict):
         raise TradeError(f"{sidecar.name} is not a checkpoint manifest")
     return data

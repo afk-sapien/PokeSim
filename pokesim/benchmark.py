@@ -189,7 +189,7 @@ def main():
     args = parser.parse_args()
     if args.frames <= 0:
         parser.error("--frames must be positive")
-    scenarios = json.loads(args.scenarios.read_text()) if args.scenarios else [dict(
+    scenarios = json.loads(args.scenarios.read_text(encoding="utf-8")) if args.scenarios else [dict(
         name="checkpoint" if args.checkpoint else "boot", checkpoint=args.checkpoint, target=args.target, frames=args.frames)]
     if args.trace and len(scenarios) * len(args.policies) * len(args.seeds) != 1:
         parser.error("--trace requires one scenario, policy, and seed")
@@ -203,7 +203,7 @@ def main():
             parser.error("scenario frame budgets must be positive")
         for policy in args.policies:
             for seed in args.seeds:
-                trace = args.trace.open("w") if args.trace else None
+                trace = args.trace.open("w", encoding="utf-8") if args.trace else None
                 try:
                     result = run(args.rom, policy, seed, budget, checkpoint, scenario.get("target"), trace)
                 finally:
@@ -212,7 +212,7 @@ def main():
                 result["scenario"] = scenario["name"]
                 results.append(result)
                 args.output.parent.mkdir(parents=True, exist_ok=True)
-                args.output.write_text(json.dumps({"runs": results, "summary": aggregate(results)}, indent=2) + "\n")
+                args.output.write_text(json.dumps({"runs": results, "summary": aggregate(results)}, indent=2) + "\n", encoding="utf-8")
                 print(f"{scenario['name']} {policy} seed={seed}: {result['milestones']} blackouts={result['blackouts']} reloads={result['recovery_reloads']}", flush=True)
 
 

@@ -341,7 +341,7 @@ class CableSessions:
             if process.returncode:
                 last = messages[-1] if messages else str(process.returncode)
                 raise RuntimeError(NO_TRADE if NO_TRADE in last else 'Cable Club session failed: ' + last)
-            return json.loads((output / 'manifest.json').read_text())
+            return json.loads((output / 'manifest.json').read_text(encoding='utf-8'))
         finally:
             live['phase'] = 'verifying' if live['finishing'] else live['phase']
             if process.stdin:

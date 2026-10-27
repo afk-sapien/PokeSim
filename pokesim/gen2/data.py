@@ -38,7 +38,7 @@ def download(url, limit, game, report=lambda message: None, sleep=None):
 
 
 def lines(path):
-    return [line.split(chr(59), 1)[0].strip() for line in Path(path).read_text().splitlines()]
+    return [line.split(chr(59), 1)[0].strip() for line in Path(path).read_text(encoding='utf-8').splitlines()]
 
 
 def number(expression, constants=None):
@@ -409,7 +409,7 @@ def generate(source, symbols, game):
     permissions = [number(line[3:], collisions) for line in lines(source / 'data/collision/collision_permissions.asm')
                    if line.startswith('db ')]
     parsed_symbols = {}
-    for line in Path(symbols).read_text().splitlines():
+    for line in Path(symbols).read_text(encoding='utf-8').splitlines():
         match = re.fullmatch(r'([0-9a-fA-F]+):([0-9a-fA-F]+) (\w+)', line)
         if match:
             parsed_symbols[match[3]] = [int(match[1], 16), int(match[2], 16)]
@@ -458,7 +458,7 @@ class GameData:
     @classmethod
     def load(cls, root, game):
         directory = Path(root) / 'gen2' / game
-        manifest = json.loads((directory / 'manifest.json').read_text())
+        manifest = json.loads((directory / 'manifest.json').read_text(encoding='utf-8'))
         raw = (directory / 'data.json').read_bytes()
         if manifest != {'schema': SCHEMA, 'game': game, 'source_revision': SOURCES[game][1],
                         'sha256': hashlib.sha256(raw).hexdigest()}:

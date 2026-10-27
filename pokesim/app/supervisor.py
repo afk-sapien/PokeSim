@@ -118,7 +118,7 @@ class Child:
                 self.log_path.parent.mkdir(parents=True, exist_ok=True)
                 if self.log_path.exists() and self.log_path.stat().st_size > 2 * 1024 * 1024:
                     self.log_path.replace(self.log_path.with_suffix('.previous.log'))
-                with self.log_path.open('a') as output:
+                with self.log_path.open('a', encoding='utf-8') as output:
                     output.write(line[-4000:])
             except OSError:
                 pass

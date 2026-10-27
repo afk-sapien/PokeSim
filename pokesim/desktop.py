@@ -292,7 +292,7 @@ def legacy_main(argv=None):
     logging.getLogger().setLevel(logging.INFO)
     # Windowed bundles have no standard streams. Libraries may still print.
     if sys.stdout is None:
-        sys.stdout = open(os.devnull, 'w')
+        sys.stdout = open(os.devnull, 'w', encoding='utf-8')
     if sys.stderr is None:
         sys.stderr = open(root / 'desktop-errors.log', 'a', encoding='utf-8')
     with (root / 'desktop.lock').open('a+b') as lock:

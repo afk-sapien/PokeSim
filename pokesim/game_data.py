@@ -36,7 +36,7 @@ def bundle_path(root=None, variant=None):
     variant = current_variant() if variant is None else variant
     root = variant_root(directory() if root is None else root, variant)
     try:
-        pointer = json.loads((root / 'current.json').read_text())
+        pointer = json.loads((root / 'current.json').read_text(encoding='utf-8'))
         bundle_id = pointer['bundle']
         if len(bundle_id) != 64 or any(c not in '0123456789abcdef' for c in bundle_id):
             raise ValueError('Invalid bundle identifier')
@@ -51,7 +51,7 @@ def load(name, *, directory=None, variant=None):
     variant = current_variant() if variant is None else variant
     root = bundle_path(directory, variant)
     try:
-        manifest = json.loads((root / 'manifest.json').read_text())
+        manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
         raw = (root / name).read_bytes()
         if manifest['schema'] != SCHEMA or manifest['source_revision'] != VARIANTS[variant][1]:
             raise ValueError('Incompatible game data bundle')

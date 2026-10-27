@@ -50,7 +50,7 @@ def safe(state):
 class Coordinator:
     def __init__(self, root):
         self.root = root
-        self.config = json.loads((root / 'policy.json').read_text())
+        self.config = json.loads((root / 'policy.json').read_text(encoding='utf-8'))
         self.peers = self.config['peers']
         if set(self.peers) != {'red', 'blue'}:
             raise ValueError('Legacy pair trading expects exactly a red and a blue peer')
@@ -65,7 +65,7 @@ class Coordinator:
                 hold = json.loads(row[0]) if row else None
                 if not hold or hold['id'] != transaction or hold['phase'] != 'prepared':
                     raise ValueError('Both games must hold this prepared transaction')
-        kind = (json.loads(self.active_path.read_text()).get('kind') if action == 'stage'
+        kind = (json.loads(self.active_path.read_text(encoding='utf-8')).get('kind') if action == 'stage'
                 else self.result(transaction).get('kind'))
         if kind in ('mew_event', 'league_reward'):
             from . import event
@@ -85,7 +85,7 @@ class Coordinator:
             return json.load(response)
 
     def result(self, transaction):
-        return json.loads((self.root / 'transactions' / transaction / 'result.json').read_text())
+        return json.loads((self.root / 'transactions' / transaction / 'result.json').read_text(encoding='utf-8'))
 
     def prepare(self, name, transaction, deadline):
         while True:
@@ -125,7 +125,7 @@ class Coordinator:
             for name in active.get('prepared', []):
                 self.control(name, 'abort', active['id'])
         status_path = self.root / 'public' / 'status.json'
-        status = json.loads(status_path.read_text()) if status_path.exists() else {'history': [], 'completed': 0}
+        status = json.loads(status_path.read_text(encoding='utf-8')) if status_path.exists() else {'history': [], 'completed': 0}
         if committed and active.get('kind') in ('mew_event', 'league_reward'):
             result = self.result(active['id'])
             events = status.get('events', [])
@@ -159,12 +159,12 @@ class Coordinator:
 
     def cycle(self):
         if self.active_path.exists():
-            self.finish(json.loads(self.active_path.read_text()))
+            self.finish(json.loads(self.active_path.read_text(encoding='utf-8')))
             return
         if not self.config.get('enabled', False):
             return
         status_path = self.root / 'public' / 'status.json'
-        status = json.loads(status_path.read_text()) if status_path.exists() else {'history': [], 'completed': 0}
+        status = json.loads(status_path.read_text(encoding='utf-8')) if status_path.exists() else {'history': [], 'completed': 0}
         interval = max(300, self.config.get('interval_seconds', 900))
         trade_cooling = time.time() - status.get('last_trade', 0) < interval
         if trade_cooling and not mew_enabled(self.config):
@@ -240,7 +240,7 @@ class Coordinator:
             self.finish(active)
         except BaseException:
             # Recovery uses the durable decision, including after an interrupted write.
-            self.finish(json.loads(self.active_path.read_text()))
+            self.finish(json.loads(self.active_path.read_text(encoding='utf-8')))
             raise
 
 
@@ -260,7 +260,7 @@ def main():
                 Coordinator(args.root).cycle()
             except Exception as error:
                 path = args.root / 'public' / 'status.json'
-                status = json.loads(path.read_text()) if path.exists() else {'history': [], 'completed': 0}
+                status = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {'history': [], 'completed': 0}
                 status.update(last_check=time.time(), state='retrying', error=type(error).__name__)
                 write(path, status)
                 print(f'Trading will retry after {type(error).__name__}', flush=True)

@@ -39,7 +39,7 @@ def allocator():
 
 def rss_mib():
     try:
-        with open('/proc/self/status') as status:
+        with open('/proc/self/status', encoding='utf-8') as status:
             for line in status:
                 if line.startswith('VmRSS:'):
                     return round(int(line.split()[1]) / 1024, 1)

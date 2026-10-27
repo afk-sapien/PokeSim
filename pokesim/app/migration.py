@@ -37,7 +37,7 @@ def import_directory(manager, source, *, rom=None, name=None, stopped=False):
                 trading_blocked = bool(values.get('trade_barrier'))
             starter = 'random'
             if desktop and (source / 'settings.json').is_file():
-                starter = json.loads((source / 'settings.json').read_text()).get('starter', starter)
+                starter = json.loads((source / 'settings.json').read_text(encoding='utf-8')).get('starter', starter)
             asset = manager.assets.install_rom(rom.read_bytes())
             settings = manager.validate_adventure_settings({'starter': starter})
             aid_request = identifier()
