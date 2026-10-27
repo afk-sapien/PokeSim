@@ -110,6 +110,28 @@ def test_inside_with_no_walking_route_walks_out_before_flying(data, inside, x, y
     assert shortcut(policy, landed, mem, target) is not None
 
 
+def test_from_kanto_a_walled_route_walks_into_johto_before_flying(data):
+    """The cartridge's Fly map only lists the current region's towns. A Crystal run on Route 23 heading to
+    Olivine past a returned Sudowoodo saw no route and no Fly point for 11 hours."""
+    from pokesim.gen2.flight import outside, shortcut
+
+    ids = data.map_ids
+    nav = walled(data)
+    here = Spot(ids['ROUTE_23'], 9, 9, 0xFFFF, (SimpleNamespace(egg=False, moves=(19, 57, 15, 0)),))
+    target = ids['OLIVINE_POKECENTER_1F']
+    policy = SimpleNamespace(data=data, nav=nav, goal=SimpleNamespace(x=5, y=6))
+    mem = SimpleNamespace(read=lambda name, size: (2 ** 32 - 1).to_bytes(4, 'little'), memory=None)
+    assert data.maps[here.map]['region'] != data.maps[target]['region']
+    assert nav.regions.route(here, target, [(5, 6)], cut=True, surf=True) is None
+    assert shortcut(policy, here, mem, target) is None
+    exit_point = outside(policy, here, mem, target)
+    assert exit_point is not None
+    assert data.maps[exit_point[0]]['region'] == data.maps[target]['region']
+    assert nav.regions.route(here, exit_point[0], [exit_point[1]], cut=True, surf=True) is not None
+    landed = Spot(exit_point[0], *exit_point[1], 0xFFFF, here.party)
+    assert shortcut(policy, landed, mem, target) is not None
+
+
 def test_walking_out_is_left_alone_when_walking_works_or_fly_cannot(data):
     from pokesim.gen2.flight import outside
 

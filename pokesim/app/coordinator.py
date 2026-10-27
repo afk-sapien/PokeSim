@@ -53,6 +53,8 @@ NO_PARTY_ROOM = ('No safe unprotected reserve can leave the party', 'The party h
 FAILURE_BACKOFF_AFTER = 2
 FAILURE_BACKOFF_SECONDS = 1800
 FAILURE_BACKOFF_MAX = 86400
+# How long automatic trading leaves out a Pokémon whose offer vanished before its exchange began.
+INELIGIBLE_SECONDS = 1800
 # The key failure_backoff gives a game whose every offer waits.
 WHOLE_GAME = '*'
 
@@ -64,6 +66,13 @@ class Waiting(ValueError):
 class Missing(ValueError):
     """A chosen Pokémon is no longer in its adventure. ``side`` names which one."""
     side = None
+
+
+class Ineligible(ValueError):
+    """A selected Pokémon left its adventure's offers between scoring and the exchange."""
+    def __init__(self, aid, key):
+        super().__init__('This Pokémon is no longer eligible. Check its locks and trade preferences.')
+        self.aid, self.key = aid, key
 
 
 def _display_number(value, maximum):
@@ -166,6 +175,7 @@ class Coordinator:
         self.last_message = 'Your adventures will trade automatically when a useful exchange is ready.'
         self.next_recovery_at = 0
         self.recovery_failures = {}
+        self.ineligible = {}
         self.prepare_timeout = 900
         self.prepare_poll = 1
         self.session_timeout = 960
@@ -568,7 +578,7 @@ class Coordinator:
                 continue
             selected_offer = find(inventory.get('offers', []), selection[side + '_key'])
             if selected_offer is None:
-                raise ValueError('This Pokémon is no longer eligible. Check its locks and trade preferences.')
+                raise Ineligible(aid, selection[side + '_key'])
             selected_inventories.append(inventory)
             selected_offers.append(selected_offer)
             display_offers[aid] = self._mon_display(selected_offer)
@@ -1056,6 +1066,11 @@ class Coordinator:
         reserved = self.hand_picked_keys()
         # Automatic trading stops picking a Pokémon whose trades keep failing the same way.
         reserved = reserved | set(failure_backoff(history))
+        # And one whose offer vanished before its exchange began. No exchange is recorded for it,
+        # so the history above never sees it, and the same pick used to fail every time it scored best.
+        now = time.monotonic()
+        self.ineligible = {side: until for side, until in self.ineligible.items() if until > now}
+        reserved = reserved | set(self.ineligible)
         waiting = {aid for entry in self._manual_entries() if entry['state'] in MANUAL_WAITING
                    for aid in (entry['left_id'], entry['right_id'])}
         inventories = [self._auto_offers(aid, inv, reserved) for aid, inv in inventories
@@ -1096,8 +1111,16 @@ class Coordinator:
             return self.drain_manual()
         if candidates:
             _, left_id, right_id, left_key, right_key = max(candidates, key=lambda item: item[0])
-            row = self.propose({'left_id': left_id, 'right_id': right_id,
-                                'left_key': left_key, 'right_key': right_key, 'request_id': identifier()})
+            try:
+                row = self.propose({'left_id': left_id, 'right_id': right_id,
+                                    'left_key': left_key, 'right_key': right_key, 'request_id': identifier()})
+            except Ineligible as error:
+                # Offers change while inventories are read (a release, a League visit), so this
+                # is expected now and then. The next pass picks something else.
+                self.ineligible[(error.aid, error.key)] = time.monotonic() + INELIGIBLE_SECONDS
+                log.info('Automatic trade skipped: Pokémon %s of adventure %s left its offers before the exchange',
+                         error.key, error.aid)
+                return None
             self.last_message = 'A useful exchange is preparing at the Cable Club.'
             return self.execute(row['id'])
         self.last_message = 'Your adventures are playing. They will trade when a useful exchange is ready.'

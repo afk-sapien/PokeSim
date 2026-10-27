@@ -1176,7 +1176,7 @@ class Policy:
             prize_errand = self.goal.key in {'collection_coin_case', 'collection_coins', 'collection_prize', 'collection_slots'}
             self.goal = self.healing(snapshot) or (None if prize_errand else self.shop(snapshot)) or self.goal
         target = self.data.map_ids[self.goal.map_name]
-        from .flight import outside, shortcut
+        from .flight import shortcut
         flight = shortcut(self, snapshot, mem, target)
         if flight:
             self.menu = flight
@@ -1190,19 +1190,13 @@ class Policy:
                                        [(journey_goal.x, journey_goal.y)], memory, surf=surf)
             if fallback is not None:
                 self.goal, path = journey_goal, fallback
+        waypoint = False
         if path is None:
-            # Fly only works outside, so a goal with no walking route is reached by walking out first.
-            exit_point = outside(self, snapshot, mem, target)
-            if exit_point is not None:
-                path = self.nav.toward(snapshot, exit_point[0], [exit_point[1]], memory, surf=surf)
+            path, waypoint = self.detour(snapshot, mem, memory, target, surf)
         self.mode = self.goal.label
-        if path is not None:
-            self.unreachable_waits = 0
-        if path:
-            self.stranded = 0
-            return self.walk(snapshot, memory, path)
-        if path is None:
-            return self.stranded_action(snapshot, memory, surf)
+        action = self.follow(snapshot, memory, path, waypoint, surf)
+        if action:
+            return action
         self.stranded = 0
         if path == []:
             if self.goal.key == 'return_from_cable':
@@ -1272,6 +1266,40 @@ class Policy:
                 return Action(self.goal.face, 8, 8)
             return Action('a', 8, 36)
         return Action(None, 0, 24)
+
+    def detour(self, snapshot, mem, memory, target, surf):
+        """A path for a goal with no walking route, and whether it only leads to a waypoint."""
+        from .flight import outside
+        # Fly only works outside and within one region, so a goal with no walking route is reached by
+        # walking out, or on into the other region, first.
+        exit_point = outside(self, snapshot, mem, target)
+        if exit_point is not None:
+            path = self.nav.toward(snapshot, exit_point[0], [exit_point[1]], memory, surf=surf)
+            if path is not None:
+                return path, True
+        if (self.goal.key != 'sudowoodo' and snapshot.event('EVENT_FOUGHT_SUDOWOODO')
+                and not snapshot.event('EVENT_ROUTE_36_SUDOWOODO')):
+            # A returned Sudowoodo walls off Route 36. With no other way round, battle it even without a ball.
+            tree = self.nav.toward(snapshot, self.data.map_ids['ROUTE_36'], [(35, 10)], memory, surf=surf)
+            if tree is not None:
+                self.goal = Goal('sudowoodo', 'Clear the moving tree off Route 36', 'ROUTE_36', 35, 10, 'up')
+                return tree, False
+        return None, False
+
+    def follow(self, snapshot, memory, path, waypoint, surf):
+        """Walk the path, or handle having none. None once the goal itself is reached."""
+        if path is not None:
+            self.unreachable_waits = 0
+        if path:
+            # Walking toward a waypoint is not progress toward the goal. Stepping back out of a door the
+            # stranded search walked into must not restart the count, or the policy never reports it.
+            if not waypoint:
+                self.stranded = 0
+            return self.walk(snapshot, memory, path)
+        if path is None or waypoint:
+            # Standing on a waypoint Fly did not leave from is no better than having no route.
+            return self.stranded_action(snapshot, memory, surf)
+        return None
 
     def stranded_action(self, snapshot, memory, surf):
         """No route to the goal exists from here, so look around and, in the end, ask for a reload."""
