@@ -545,7 +545,7 @@
   $('#random-rival').onclick = () => randomizeTrainer('#new-rival', '#new-trainer')
   const KANTO = ['bulbasaur', 'charmander', 'squirtle']
   const JOHTO = ['chikorita', 'cyndaquil', 'totodile']
-  // Randomizer share codes are PSR1-<GAME>-<W, S, T in that order>-<seed>, the same as pokesim-core writes.
+  // Randomizer share codes are PSR1-<GAME>-<W, S, T in that order>-<seed>, the same as pokecore writes.
   const MAX_SEED = (1n << 64n) - 1n
   const RANDOMIZED = [['wild', 'W'], ['starters', 'S'], ['trainers', 'T']]
   const RANDOMIZER_GAMES = ['red', 'blue', 'yellow', 'gold', 'silver', 'crystal']

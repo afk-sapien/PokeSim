@@ -1,4 +1,4 @@
-"""Run pokesim-core menu shortcuts one policy decision at a time.
+"""Run pokecore menu shortcuts one policy decision at a time.
 
 Core shortcut machines return one button, a wait or a ``Done`` per ``step``. The
 policies call ``ShortcutRunner.step`` once per decision, so a shortcut shares the

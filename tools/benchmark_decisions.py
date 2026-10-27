@@ -51,7 +51,7 @@ def peak_rss_mib():
 
 def dependency_versions():
     result = {}
-    for name in ('pokesim-core', 'numpy', 'numba', 'llvmlite'):
+    for name in ('pokecore', 'numpy', 'numba', 'llvmlite'):
         try:
             result[name] = version(name)
         except PackageNotFoundError:

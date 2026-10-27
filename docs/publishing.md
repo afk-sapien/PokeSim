@@ -83,7 +83,7 @@ candidates move neither. Each moved tag is pulled anonymously and checked agains
 
 ## Emulator dependencies are GitHub release wheels
 
-PokeSim 0.5 depends on `pokesim-core` and `pyboy-rs`, which are not on PyPI. `pyproject.toml` names
+PokeSim depends on `pokecore` and `pyboy-rs`, which are not on PyPI. `pyproject.toml` names
 their release wheels directly, each with a `#sha256=` fragment that pip and uv verify, so the PokeSim
 wheel's metadata resolves for uv, pip and pipx without a Rust toolchain, and `uv.lock` records the same
 hashes. pyboy-rs has one abi3 wheel per supported platform (Linux x86-64 and aarch64, macOS x86-64 and

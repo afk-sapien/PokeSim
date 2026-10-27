@@ -13,7 +13,7 @@ import release_pins  # noqa: E402
 TEMP_BASE = 'https://raw.githubusercontent.com/example/PokeSim/refs/heads/release/9.9.9/tools/temp-wheels/'
 FINAL_BASE = 'https://github.com/example/pyboy-rs/releases/download/v0.1.1/'
 WHEEL = 'pyboy_rs-0.1.1-cp311-abi3-win_amd64.whl'
-CORE = 'pokesim_core-0.2.0-py3-none-any.whl'
+CORE = 'pokecore-0.2.0-py3-none-any.whl'
 SDIST = 'pyboy_rs-0.1.1.tar.gz'
 BLOBS = {WHEEL: b'wheel bytes', CORE: b'core bytes', SDIST: b'sdist bytes'}
 HASHES = {name: hashlib.sha256(blob).hexdigest() for name, blob in BLOBS.items()}
@@ -25,11 +25,11 @@ def make_tree(root, base=TEMP_BASE, fragments=False, sdist_hash=None, temp_files
 
     (root / 'pyproject.toml').write_text(
         '[project]\nname = "x"\nversion = "9.9.9"\ndependencies = [\n'
-        f'  "pokesim-core[emulator] @ {url(CORE)}",\n'
+        f'  "pokecore[emulator] @ {url(CORE)}",\n'
         f'  "pyboy-rs @ {url(WHEEL)} ; sys_platform == \'win32\'",\n]\n')
     lock = ''
-    for name, package in ((CORE, 'pokesim-core'), (WHEEL, 'pyboy-rs')):
-        version = '0.2.0' if package == 'pokesim-core' else '0.1.1'
+    for name, package in ((CORE, 'pokecore'), (WHEEL, 'pyboy-rs')):
+        version = '0.2.0' if package == 'pokecore' else '0.1.1'
         lock += (f'[[package]]\nname = "{package}"\nversion = "{version}"\nsource = {{ url = "{base + name}" }}\n'
                  f'wheels = [\n    {{ url = "{base + name}", hash = "sha256:{HASHES[name]}" }},\n]\n\n')
     (root / 'uv.lock').write_text(lock)
@@ -161,19 +161,19 @@ def path_sourced_tree(root):
     (root / 'TEMP_REMOVE_BEFORE_RELEASE.md').write_text('# TEMP\n')
     (root / 'pyproject.toml').write_text(
         '[project]\nname = "x"\nversion = "9.9.9"\ndependencies = [\n'
-        f'  "pokesim-core[emulator] @ {TEMP_BASE + CORE}#sha256={HASHES[CORE]} ; sys_platform == \'linux\'",\n'
+        f'  "pokecore[emulator] @ {TEMP_BASE + CORE}#sha256={HASHES[CORE]} ; sys_platform == \'linux\'",\n'
         f'  "pyboy-rs @ {FINAL_BASE + WHEEL}#sha256={HASHES[WHEEL]} ; sys_platform == \'win32\'",\n]\n\n'
         '# TEMP: lock Core from the copy in tools/temp-wheels.\n[tool.uv.sources]\n'
-        f'pokesim-core = {{ path = "tools/temp-wheels/{CORE}" }}\n\n[tool.uv]\nrequired-version = ">=0.9"\n')
+        f'pokecore = {{ path = "tools/temp-wheels/{CORE}" }}\n\n[tool.uv]\nrequired-version = ">=0.9"\n')
     (root / 'uv.lock').write_text(
-        '[[package]]\nname = "pokesim-core"\nversion = "0.2.0"\n'
+        '[[package]]\nname = "pokecore"\nversion = "0.2.0"\n'
         f'source = {{ path = "tools/temp-wheels/{CORE}" }}\n'
         f'wheels = [\n    {{ filename = "{CORE}", hash = "sha256:{HASHES[CORE]}" }},\n]\n\n'
         '[[package]]\nname = "pyboy-rs"\nversion = "0.1.1"\n'
         f'source = {{ url = "{FINAL_BASE + WHEEL}" }}\n'
         f'wheels = [\n    {{ url = "{FINAL_BASE + WHEEL}", hash = "sha256:{HASHES[WHEEL]}" }},\n]\n\n'
         '[package.metadata]\nrequires-dist = [\n'
-        f'    {{ name = "pokesim-core", extras = ["emulator"], path = "tools/temp-wheels/{CORE}" }},\n]\n')
+        f'    {{ name = "pokecore", extras = ["emulator"], path = "tools/temp-wheels/{CORE}" }},\n]\n')
     (root / 'Dockerfile').write_text(
         'COPY pokesim ./pokesim\n# TEMP: uv.lock reads Core from this copy.\nCOPY tools/temp-wheels ./tools/temp-wheels\n'
         f'ARG EMULATOR_SOURCE_URL={FINAL_BASE + SDIST}\nARG EMULATOR_SOURCE_SHA256={HASHES[SDIST]}\n')

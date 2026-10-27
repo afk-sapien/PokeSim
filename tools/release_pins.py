@@ -22,7 +22,7 @@ PIN_FILES = ['pyproject.toml', 'uv.lock', 'Dockerfile', 'install.sh', 'install.p
 # Anything matching one of these in a pin file means the temporary wheels are still in use.
 TEMP_PATTERNS = [r'refs/heads/', r'temp-wheels', r'TEMP_REMOVE_BEFORE_RELEASE', r'TEMP-\d+\.\d+\.\d+-']
 TEMP_PATHS = ['tools/temp-wheels', 'TEMP_REMOVE_BEFORE_RELEASE.md']
-EMULATOR_PACKAGES = ('pyboy-rs', 'pokesim-core')
+EMULATOR_PACKAGES = ('pyboy-rs', 'pokecore')
 SHA256 = re.compile(r'[0-9a-f]{64}')
 
 
