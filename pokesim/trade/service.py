@@ -11,7 +11,7 @@ import time
 from urllib.error import HTTPError
 import urllib.request
 
-from ..platform_io import lock_file, sync_directory
+from ..platform_io import lock_file, replace_file, sync_directory
 from ..rewards import mew_enabled
 
 
@@ -23,7 +23,7 @@ def atomic(path, data):
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        replace_file(temporary, path)
         sync_directory(path.parent)
     finally:
         Path(temporary).unlink(missing_ok=True)
