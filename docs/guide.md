@@ -32,6 +32,31 @@ The API is `GET /api/v1/cartridges`, `POST /api/v1/cartridges?slot=<game>` with 
 file as the request body, and `DELETE /api/v1/cartridges/<game>`. The older
 `POST /api/v1/assets/rom` still works.
 
+## Randomized adventures
+
+**New adventure** has a **Randomize this adventure** box, off by default. When it
+is on, wild Pokémon and starters are shuffled, and trainer parties can be shuffled
+too. Leave **Seed** blank for a random one, or type a whole number from 0 to
+18446744073709551615. The same seed and options always give the same world.
+
+Each randomized adventure has a share code such as `PSR1-RED-WS-12345`: the game,
+the letters for what was shuffled (W wild, S starters, T trainers) and the seed.
+Paste one into **Share code** to play the same world as someone else. A code only
+works on its own game. The code is shown under the trainer name on the Live page,
+where a click copies it, and in the adventure's settings. It cannot be changed once
+the adventure exists.
+
+PokeSim patches the cartridge in memory each time the adventure starts. The ROM
+file on disk is never changed, so saves, checkpoints and trades keep working. The
+planner uses the shuffled tables to choose where to catch and what to expect from
+Gym Leaders. Fishing, gifts, in-game trades and fixed encounters such as legendaries
+keep their usual Pokémon. Cable Club, link and Time Capsule sessions boot the clean
+cartridge, which does not affect the Pokémon traded. Goal text can still name the
+original starter in a Poké Ball.
+
+The API takes `randomizer` with the share code when creating an adventure
+(`POST /api/v1/adventures`), and the run status reports it under `randomizer`.
+
 ## Optional community sprites
 
 Portraits normally come from your own ROM. Settings → Pokémon artwork →

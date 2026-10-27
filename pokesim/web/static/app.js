@@ -255,6 +255,8 @@ async function refreshState() {
       set('#game-clock', 'title', `In-game clock: ${cartridge.weekday} ${shown}, ${cartridge.period}. It runs on game time, so it moves at the simulation's speed.`)
     }
     set('#trainer-name', 'textContent', game.player_name || 'A new trainer')
+    set('#randomizer-code', 'hidden', !state.randomizer)
+    if (state.randomizer && !$('#randomizer-code').dataset.copied) set('#randomizer-code', 'textContent', state.randomizer.code)
     set('#trainer-rival', 'textContent', game.rival_name ? `Trainer, rival ${game.rival_name}` : 'Trainer, a new story begins')
     set('#dex-count', 'innerHTML', `${fmt(game.owned)}<span class="unit">/${game.dex_total || 151}</span>`)
     set('#dex-count', 'title', `${game.seen} Pokémon seen`)
@@ -394,6 +396,21 @@ if ($('#copy-view-link')) $('#copy-view-link').onclick = async (event) => {
     }, 1800)
   } catch (_) {
     window.prompt('Copy this view link. It shows this adventure without any controls.', link)
+  }
+}
+if ($('#randomizer-code')) $('#randomizer-code').onclick = async (event) => {
+  const button = event.currentTarget
+  const code = button.textContent
+  try {
+    await navigator.clipboard.writeText(code)
+    button.dataset.copied = ''
+    button.textContent = 'Copied'
+    setTimeout(() => {
+      delete button.dataset.copied
+      button.textContent = code
+    }, 1800)
+  } catch (_) {
+    window.prompt('Copy this share code to play the same randomized world.', code)
   }
 }
 if ($('#restart')) $('#restart').onclick = (event) => {

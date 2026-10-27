@@ -204,6 +204,8 @@ class Emulator:
         self.rom_note = f'Pokémon {self.profile.game.title()} ({self.profile.revision})'
         from ..game_data import directory
         self.data = GameData.load(directory(), self.profile.game)
+        from ..randomized import gen2_encounters
+        self.data.encounters = gen2_encounters(self.data.encounters, self.profile.game)
         self.isolated_ram = isolated_ram
         self.preparation = None
         self.options_applied = False
@@ -263,7 +265,8 @@ class Emulator:
 
     def _boot(self):
         # Save states own both SRAM and RTC. Shared ROM assets never own save files.
-        pb = boot(str(self.rom), sound=True)
+        from ..randomized import rom_stream
+        pb = boot(rom_stream(self.rom), sound=True)
         # Game time from the first frame. The reading belongs to no adventure yet: a loaded state
         # or _sync_clock sets it before the policy plays.
         follow_game_time(pb)
@@ -1083,6 +1086,7 @@ class Emulator:
 
     def status(self):
         from .. import rewards
+        from ..randomized import status as randomizer_status
         achievement = self.last_achievement
         quiet_minutes = max(0, self.frame - self.progress_frame) / 3600
         live = not self.paused and not self.manual_mode
@@ -1102,7 +1106,8 @@ class Emulator:
                 'progress': {'state': 'stalled' if stalled else 'waiting' if waiting else 'recovering' if recovering
                              else 'making_progress',
                              'last_achievement': achievement, 'quiet_game_minutes': round(quiet_minutes, 1)},
-                'league_rewards': rewards.status(self.store), 'legendary_recovery': self.legendary_recovery.state_dict()}
+                'league_rewards': rewards.status(self.store), 'legendary_recovery': self.legendary_recovery.state_dict(),
+                'randomizer': randomizer_status()}
 
     def set_trade_preference(self, key, state):
         from ..trade.preferences import update

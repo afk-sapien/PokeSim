@@ -136,11 +136,12 @@ class YellowEmulator(CoreEmulator):
         return self.memory.read_bytes(*read_range)
 
 
-def open_emulator(rom, default=None, **kwargs):
+def open_emulator(rom, default=None, yellow=None, **kwargs):
     """Construct the Core emulator that matches the cartridge.
 
     ``rom`` is a path or a binary stream, as for the Core emulator. Red and Blue use ``default``,
-    which is the Core emulator unless the caller names its own class.
+    which is the Core emulator unless the caller names its own class. ``yellow`` names the variant
+    for a patched ROM, whose checksum no longer identifies it.
     """
     if hasattr(rom, 'read'):
         raw = rom.read()
@@ -148,7 +149,7 @@ def open_emulator(rom, default=None, **kwargs):
         rom = io.BytesIO(raw)
     else:
         raw = Path(rom).read_bytes()
-    if hashlib.sha1(raw).hexdigest() == YELLOW_SHA1:
+    if yellow if yellow is not None else hashlib.sha1(raw).hexdigest() == YELLOW_SHA1:
         return YellowEmulator(rom, **kwargs)
     if default is None:
         import pokesim_core.emulator

@@ -72,6 +72,9 @@ def validate_starter(starter, version=None):
 def validate_generation_settings(settings, version):
     if settings.get('fair_wild_dvs') and SLOT_GENERATIONS.get(version) != 1:
         raise ValueError('Fair wild DVs is only for Red, Blue and Yellow')
+    if settings.get('randomizer'):
+        from .randomized import validate
+        validate(settings['randomizer'], version)
 
 
 def unpack(raw):

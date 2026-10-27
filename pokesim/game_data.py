@@ -57,6 +57,9 @@ def load(name, *, directory=None, variant=None):
             raise ValueError('Incompatible game data bundle')
         if hashlib.sha256(raw).hexdigest() != manifest['files'][name]:
             raise ValueError('Game data checksum mismatch')
-        return json.loads(raw)
+        data = json.loads(raw)
     except (OSError, ValueError, KeyError) as error:
         raise RuntimeError('Game data could not be verified. Regenerate it using the documented prepare-data command.') from error
+    # A randomized adventure's planner sees the shuffled wild slots, not the verified bundle's.
+    from .randomized import gen1_game_data
+    return gen1_game_data(name, data, variant)

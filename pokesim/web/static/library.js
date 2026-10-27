@@ -545,6 +545,22 @@
   $('#random-rival').onclick = () => randomizeTrainer('#new-rival', '#new-trainer')
   const KANTO = ['bulbasaur', 'charmander', 'squirtle']
   const JOHTO = ['chikorita', 'cyndaquil', 'totodile']
+  // Randomizer share codes are PSR1-<GAME>-<W, S, T in that order>-<seed>, the same as pokesim-core writes.
+  const MAX_SEED = (1n << 64n) - 1n
+  const RANDOMIZED = [['wild', 'W'], ['starters', 'S'], ['trainers', 'T']]
+  const RANDOMIZER_GAMES = ['red', 'blue', 'yellow', 'gold', 'silver', 'crystal']
+  const validSeed = text => /^(0|[1-9][0-9]*)$/.test(text) && BigInt(text) <= MAX_SEED
+  const shareCode = (version, choices, seed) => `PSR1-${version.toUpperCase()}-${RANDOMIZED.filter(([name]) => choices[name]).map(([, letter]) => letter).join('')}-${seed}`
+  function parseShareCode(text) {
+    const match = /^PSR1-([A-Z]+)-([WST]+)-([0-9]+)$/.exec(String(text).trim().toUpperCase())
+    if (!match || !RANDOMIZER_GAMES.includes(match[1].toLowerCase()) || !validSeed(match[3])) return null
+    const choices = Object.fromEntries(RANDOMIZED.map(([name, letter]) => [name, match[2].includes(letter)]))
+    if (shareCode(match[1].toLowerCase(), choices, match[3]) !== match[0]) return null
+    return {version: match[1].toLowerCase(), seed: match[3], ...choices}
+  }
+  function randomSeed() {
+    return Array.from(crypto.getRandomValues(new Uint8Array(8))).reduce((seed, byte) => (seed << 8n) | BigInt(byte), 0n).toString()
+  }
   // The cartridge shelf: one slot per game, filled from GET /api/v1/cartridges.
   let cartridges = []
   let cartridgesLoaded = false
@@ -738,6 +754,32 @@
     $('#rom-id').value = event.target.value
     updateStarters()
   }
+  $('#randomize').onchange = () => { $('#randomizer-options').hidden = !$('#randomize').checked }
+  // A pasted share code fills in the options it names. Changing an option afterwards drops the code.
+  $('#randomizer-share').oninput = () => {
+    const parsed = parseShareCode($('#randomizer-share').value)
+    if (!parsed) return
+    for (const name of ['wild', 'starters', 'trainers']) $(`#randomize-${name}`).checked = parsed[name]
+    $('#randomizer-seed').value = parsed.seed
+  }
+  for (const id of ['#randomize-wild', '#randomize-starters', '#randomize-trainers', '#randomizer-seed']) {
+    $(id).oninput = () => { $('#randomizer-share').value = '' }
+  }
+  function randomizerCode(version) {
+    if (!$('#randomize').checked) return ''
+    const pasted = $('#randomizer-share').value.trim()
+    if (pasted) {
+      const parsed = parseShareCode(pasted)
+      if (!parsed) throw new Error('That share code is not valid. It looks like PSR1-RED-WS-12345.')
+      if (parsed.version !== version) throw new Error(`That share code is for Pokémon ${versionName(parsed.version)}. Choose that game or clear the code.`)
+      return shareCode(version, parsed, parsed.seed)
+    }
+    const typed = $('#randomizer-seed').value.trim()
+    if (typed && !validSeed(typed)) throw new Error(`The seed must be a whole number from 0 to ${MAX_SEED}.`)
+    const choices = {wild: $('#randomize-wild').checked, starters: $('#randomize-starters').checked, trainers: $('#randomize-trainers').checked}
+    if (!choices.wild && !choices.starters && !choices.trainers) throw new Error('Choose at least one thing to randomize.')
+    return shareCode(version, choices, typed ? BigInt(typed).toString() : randomSeed())
+  }
   async function openCreate() {
     await act(async () => {
       await refreshCartridges()
@@ -801,6 +843,8 @@
       $('#settings-palette-note').textContent = refused ? `This adventure has not accepted the palette yet: ${refused}` : 'GBC-inspired colors applied to the whole screen. Changes apply immediately, including while paused.'
       $('#settings-palette').disabled = colour
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
+      $('#settings-randomizer').hidden = !game.settings?.randomizer
+      $('#settings-randomizer-code').textContent = game.settings?.randomizer || ''
       for (const [field, setting] of [['league-rewards', 'league_rewards'], ['mew-event', 'mew_event']]) {
         const input = $(`#settings-${field}`)
         input.checked = Boolean(game.settings?.[setting])
@@ -855,13 +899,16 @@
       if (!romId) throw new Error(installed().length ? 'Choose the game for this adventure.' : 'Add a game cartridge in Settings first.')
       const starter = $('#starter').value
       if (starter !== 'random' && !startersFor(selectedVersion()).includes(starter)) throw new Error('That starter belongs to a different game. Pick one from the list.')
+      const randomizer = randomizerCode(selectedVersion())
       $('#create-progress').textContent = 'Creating your adventure…'
       const startNow = $('#start-created').checked
       const result = await write('/api/v1/adventures', {name: $('#new-name').value.trim(), rom_id: romId, starter,
-        trainer_name: $('#new-trainer').value.trim().toUpperCase(), rival_name: $('#new-rival').value.trim().toUpperCase()})
+        trainer_name: $('#new-trainer').value.trim().toUpperCase(), rival_name: $('#new-rival').value.trim().toUpperCase(),
+        ...(randomizer ? {randomizer} : {})})
       const game = result.adventure || result
       $('#create-dialog').close()
       $('#create-form').reset()
+      $('#randomizer-options').hidden = true
       $('#rom-id').value = ''
       if (startNow) await write(`/api/v1/adventures/${encodeURIComponent(game.id)}/start`)
       notice('Adventure created. Its status will update as it gets ready.')

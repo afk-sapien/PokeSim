@@ -479,6 +479,57 @@ test('fair wild DVs is offered for Generation I only and is off until chosen', a
   }
 })
 
+test('the randomizer is off until chosen and sends a canonical share code', async () => {
+  async function create(fill) {
+    const view = library()
+    await settle()
+    view.element('#new-name').value = 'Shuffled'
+    await view.element('#new-adventure').onclick()
+    await settle()
+    view.element('#starter').value = 'random'
+    view.element('#randomize-wild').checked = true
+    view.element('#randomize-starters').checked = true
+    fill(view)
+    view.element('#create-form').onsubmit({preventDefault() {}})
+    await settle()
+    const request = view.calls.find(call => call.path === '/api/v1/adventures' && call.options.method === 'POST')
+    return {view, payload: request && JSON.parse(request.options.body)}
+  }
+  assert.equal('randomizer' in (await create(() => {})).payload, false)
+  const typed = await create(view => {
+    view.element('#randomize').checked = true
+    view.element('#randomize-trainers').checked = true
+    view.element('#randomizer-seed').value = '18446744073709551615'
+  })
+  assert.equal(typed.payload.randomizer, 'PSR1-RED-WST-18446744073709551615')
+  const blank = await create(view => { view.element('#randomize').checked = true })
+  assert.match(blank.payload.randomizer, /^PSR1-RED-WS-(0|[1-9][0-9]*)$/)
+  assert.ok(BigInt(blank.payload.randomizer.split('-')[3]) < 1n << 64n)
+  const pasted = await create(view => {
+    view.element('#randomize').checked = true
+    view.element('#randomizer-share').value = ' psr1-red-t-7 '
+    view.element('#randomizer-share').oninput()
+  })
+  assert.equal(pasted.payload.randomizer, 'PSR1-RED-T-7')
+  assert.equal(pasted.view.element('#randomize-wild').checked, false)
+  assert.equal(pasted.view.element('#randomizer-seed').value, '7')
+  for (const [field, value, message] of [['#randomizer-share', 'PSR1-GOLD-W-1', /Pokémon Gold/], ['#randomizer-share', 'PSR1-RED-SW-1', /not valid/],
+    ['#randomizer-seed', '18446744073709551616', /whole number/], ['#randomizer-seed', '012', /whole number/]]) {
+    const refused = await create(view => {
+      view.element('#randomize').checked = true
+      view.element(field).value = value
+    })
+    assert.equal(refused.payload, undefined)
+    assert.match(refused.view.element('dialog[open] .dialog-feedback').textContent, message)
+  }
+  const none = await create(view => {
+    view.element('#randomize').checked = true
+    view.element('#randomize-wild').checked = false
+    view.element('#randomize-starters').checked = false
+  })
+  assert.equal(none.payload, undefined)
+})
+
 test('settings render existing backups without an adventure variable', async () => {
   const view = library({page: 'settings', respond(path) {
     if (path === '/api/v1/backups') return {ok: true, json: async () => ({backups: [

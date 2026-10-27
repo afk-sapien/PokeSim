@@ -102,7 +102,7 @@ class Manager:
         allowed = {'trainer_name', 'rival_name', 'speed', 'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
                    'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards',
                    'mew_event', 'celebi_event', 'extra_store_items', 'fair_wild_dvs', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
-                   'fossil_preference', 'dojo_preference', 'event_retention_days', 'palette'}
+                   'fossil_preference', 'dojo_preference', 'event_retention_days', 'palette', 'randomizer'}
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError('Unsupported adventure settings')
         result = {'starter': 'random', 'policy': 'strategic', 'auto_start': False, **values}
@@ -127,6 +127,11 @@ class Manager:
         # Off is stored as absent, so releases that predate the setting still open the adventure.
         if result.get('fair_wild_dvs') is False:
             del result['fair_wild_dvs']
+        if 'randomizer' in result:
+            from ..randomized import validate
+            result['randomizer'] = validate(result['randomizer'])
+            if not result['randomizer']:
+                del result['randomizer']
         # Every notable event keeps a full save state beside its screenshot, which is about
         # 40 MB an hour, so an adventure needs a way to bound its own journal. Zero keeps all.
         for name, low, high in [('autosave_seconds', 1, 86400), ('keep_autosaves', 1, 10000),
@@ -463,6 +468,7 @@ def create_app(manager, shutdown=lambda: None):
             'celebi_event': data.get('celebi_event', True),
             'extra_store_items': data.get('extra_store_items', True),
             **({'fair_wild_dvs': data['fair_wild_dvs']} if 'fair_wild_dvs' in data else {}),
+            **({'randomizer': data['randomizer']} if data.get('randomizer') else {}),
             'legendary_return_steps': data.get('legendary_return_steps', 1000000),
             'event_return_steps': data.get('event_return_steps', 100000),
             'mew_return_steps': data.get('mew_return_steps', 1000000),
@@ -535,6 +541,12 @@ def create_app(manager, shutdown=lambda: None):
                 raise ValueError('Settings must be an object')
             if {'trainer_name', 'rival_name'} & set(changes):
                 raise ValueError('Trainer and rival names are chosen when creating an adventure')
+            # The seed shapes the whole world, so changing it mid-adventure would contradict the save.
+            if 'randomizer' in changes:
+                from ..randomized import validate
+                if validate(changes['randomizer']) != adventure['settings'].get('randomizer', ''):
+                    raise ValueError('The randomizer is chosen when creating an adventure')
+                changes = {key: value for key, value in changes.items() if key != 'randomizer'}
             if adventure['state'] == 'running' and set(changes) - {'auto_start', 'speed', 'palette'}:
                 raise ValueError('Stop the adventure before changing these settings')
             previous = adventure['settings']
