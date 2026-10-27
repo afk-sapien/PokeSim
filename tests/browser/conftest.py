@@ -38,6 +38,8 @@ def browser():
 def pytest_configure(config):
     config.addinivalue_line('markers', 'expected_errors(*patterns): browser errors this test causes on purpose. '
                                        'Each pattern is a regular expression that must match at least one error.')
+    config.addinivalue_line('markers', 'allowed_errors(*patterns): browser errors this test may cause, depending on '
+                                       'timing. Each pattern is a regular expression that may match nothing.')
 
 
 class BrowserErrors:
@@ -51,6 +53,7 @@ class BrowserErrors:
     def __init__(self, page):
         self.found = []
         self.patterns = []
+        self.allowed = []
         self.navigations = 0
         self.closing = False
         self.started = {}
@@ -90,8 +93,11 @@ class BrowserErrors:
     def expect(self, *patterns):
         self.patterns += [re.compile(pattern) for pattern in patterns]
 
+    def allow(self, *patterns):
+        self.allowed += [re.compile(pattern) for pattern in patterns]
+
     def check(self):
-        unexpected = [line for line in self.found if not any(p.search(line) for p in self.patterns)]
+        unexpected = [line for line in self.found if not any(p.search(line) for p in self.patterns + self.allowed)]
         unused = [p.pattern for p in self.patterns if not any(p.search(line) for line in self.found)]
         problems = []
         if unexpected:
@@ -143,6 +149,8 @@ def page(browser, tmp_path, request):
     errors = request.node.stash[ERRORS] = BrowserErrors(page)
     for marker in request.node.iter_markers('expected_errors'):
         errors.expect(*marker.args)
+    for marker in request.node.iter_markers('allowed_errors'):
+        errors.allow(*marker.args)
     try:
         yield page
     finally:
