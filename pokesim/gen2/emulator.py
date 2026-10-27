@@ -414,8 +414,12 @@ class Emulator:
 
     def audio_packet(self, after):
         state = 'playing' if not self.paused or self.manual_mode else 'paused'
-        sequence, pcm, speed, dropped = self.audio.read(after, state)
-        return state, sequence, pcm, speed, dropped
+        sequence, pcm, measured, dropped = self.audio.read(after, state)
+        # The worker catches up in bursts after a stall, and the measured pace then reads well above
+        # the setting, past the point where the page mutes. Report the setting as Red and Blue do.
+        # Unlimited has no setting to report, so it keeps the measurement.
+        speed = 1 if self.manual_mode else self.speed
+        return state, sequence, pcm, speed if speed > 0 else measured, dropped
 
     def _shot_png(self):
         output = io.BytesIO()

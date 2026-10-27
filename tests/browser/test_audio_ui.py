@@ -84,12 +84,17 @@ def test_sound_requires_a_click_and_stops_on_mute_and_navigation(page, game, spe
     assert page.evaluate('window.audioContexts[1].state') == 'closed'
 
 
-@pytest.mark.parametrize('mode,low,high', [('watch', 0.3, 1.0), ('manual', 0.05, 0.35)])
-def test_sound_lead_follows_control_mode(page, game, mode, low, high):
+def tone(seconds):
+    return bytes(int(40 + 30 * math.sin(2 * math.pi * frame * 100 / 48000))
+                 for frame in range(round(seconds * 48000)) for _ in range(2))
+
+
+# Each response carries one poll interval of audio, as the live server would.
+@pytest.mark.parametrize('mode,seconds,low,high', [('watch', 0.15, 0.9, 1.3), ('manual', 0.04, 0.05, 0.35)])
+def test_sound_lead_follows_control_mode(page, game, mode, seconds, low, high):
     url, _, _, _ = game
     calls = []
-    pcm = bytes(int(40 + 30 * math.sin(2 * math.pi * frame * 100 / 48000))
-                for frame in range(4800) for _ in range(2))
+    pcm = tone(seconds)
     page.add_init_script('''
       window.leads = []
       const NativeAudioContext = window.AudioContext
@@ -121,30 +126,32 @@ def test_sound_lead_follows_control_mode(page, game, mode, low, high):
     expect(page.locator('#sound-status')).to_be_hidden()
 
 
-def test_cached_audio_mode_persists_and_delays_the_screen(page, game):
+def test_watching_delays_the_screen_and_taking_control_removes_the_delay(page, game):
     url, _, _, _ = game
     calls = []
-    pcm = bytes(int(40 + 30 * math.sin(2 * math.pi * frame * 100 / 48000))
-                for frame in range(4800) for _ in range(2))
+    control = {'mode': 'watch'}
+    pcm = {'watch': tone(0.15), 'manual': tone(0.04)}
 
     def audio(route):
         calls.append(route.request.url)
-        route.fulfill(body=pcm, content_type='application/octet-stream', headers={
-            'X-Audio-State': 'playing', 'X-Audio-Rate': '48000', 'X-Audio-Mode': 'watch',
+        mode = control['mode']
+        route.fulfill(body=pcm[mode], content_type='application/octet-stream', headers={
+            'X-Audio-State': 'playing', 'X-Audio-Rate': '48000', 'X-Audio-Mode': mode,
             'X-Audio-Sequence': str(len(calls)), 'X-Audio-Speed': '1',
         })
     page.route('**/api/audio?*', audio)
     page.goto(url)
-    expect(page.locator('#audio-mode')).to_have_value('realtime')
-    page.locator('#audio-mode').select_option('cached')
-    page.reload()
-    expect(page.locator('#audio-mode')).to_have_value('cached')
+    assert page.locator('#audio-mode').count() == 0
     assert page.evaluate('window.PokeSimAudioSync.delay()') == 0
     page.locator('#sound').click()
-    page.wait_for_function('() => window.PokeSimAudioSync.delay() > 0', timeout=15000)
-    assert 1 <= page.evaluate('window.PokeSimAudioSync.delay()') <= 3
-    page.locator('#audio-mode').select_option('realtime')
-    assert page.evaluate('window.PokeSimAudioSync.delay()') == 0
+    page.wait_for_function('() => window.PokeSimAudioSync.delay() > 0.9', timeout=15000)
+    assert page.evaluate('window.PokeSimAudioSync.delay()') <= 1.3
+    control['mode'] = 'manual'
+    page.wait_for_function('() => window.PokeSimAudioSync.delay() === 0', timeout=5000)
+    control['mode'] = 'watch'
+    # Handing back grows the delay again without a restart.
+    page.wait_for_function('() => window.PokeSimAudioSync.delay() > 0.5', timeout=30000)
+    expect(page.locator('#sound-status')).to_be_hidden()
 
 
 # The test refuses every audio request. Turning sound off cancels the request still waiting.

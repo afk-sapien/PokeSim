@@ -5,18 +5,15 @@
   if (!button || !status || !Buffer) return
   const RETRY_WINDOW = 6000
   const REQUEST_TIMEOUT = 3000
-  const MODE_KEY = 'pokesim.audioMode'
-  const modeSelect = document.querySelector('#audio-mode')
   let playback = null
-  // Realtime follows the server's watch or manual pace. Cached is a deep buffer the screen trails.
-  let preferred = 'realtime'
-  try { if (localStorage.getItem(MODE_KEY) === 'cached') preferred = 'cached' } catch (_) {}
-  const bufferMode = manual => preferred === 'cached' ? 'cached' : manual ? 'manual' : 'watch'
+  // Watching uses a deep buffer the screen trails. Take Control needs sound close to the live edge.
+  const bufferMode = manual => manual ? 'manual' : 'cached'
   window.PokeSimAudioSync = {
-    // Seconds the screen should wait so it matches what is heard. Zero unless cached sound plays.
+    // Seconds the screen should wait so it matches what is heard: how far the newest sound plays
+    // behind the live edge. Zero while playing by hand, so button presses show at once.
     delay() {
       const buffer = playback?.buffer
-      return buffer && buffer.mode === 'cached' && buffer.primed ? buffer.target : 0
+      return buffer && buffer.mode === 'cached' ? buffer.latency : 0
     },
   }
   const message = text => {
@@ -147,9 +144,9 @@
         if (!Number.isSafeInteger(sequence) || sequence < 0) throw new Error('Invalid audio sequence')
         // A restarted worker has a new sequence. Rejoin at its current live edge.
         if (sequence < after) clearQueue(session)
-        // The server no longer holds frames this page never received, so what is queued is stale.
-        // Drop it and let the jitter buffer prime again at the live edge instead of playing a gap.
-        if (Number(response.headers.get('X-Audio-Dropped')) > 0) clearQueue(session)
+        // Frames this page never received (X-Audio-Dropped) are only a hole in the game's audio.
+        // What is queued still plays, and the jitter buffer skips forward if the lead grew too long.
+        // Clearing here would turn every hole into a full second of silence.
         after = sequence
         const manual = response.headers.get('X-Audio-Mode') === 'manual'
         session.buffer.setMode(bufferMode(manual))
@@ -202,15 +199,6 @@
       if (!session || playback === session) stop('Could not start audio. Try again.')
     }
   })
-  if (modeSelect) {
-    modeSelect.value = preferred
-    modeSelect.addEventListener('change', () => {
-      preferred = modeSelect.value === 'cached' ? 'cached' : 'realtime'
-      try { localStorage.setItem(MODE_KEY, preferred) } catch (_) {}
-      // Rejoin at the new depth now rather than drifting toward it.
-      if (playback) clearQueue(playback)
-    })
-  }
   document.addEventListener('visibilitychange', () => { if (document.hidden) stop() })
   window.addEventListener('pagehide', () => stop())
 })()
