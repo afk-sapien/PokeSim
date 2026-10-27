@@ -7,9 +7,10 @@ Day Care and showing a Pokémon to a person.
 from dataclasses import KW_ONLY, dataclass, fields
 import re
 
-from pokecore.shortcuts import (BuyItem, ChangeBox as CoreChangeBox, ChooseMove, DeleteMove, DepositPokemon,
+from pokecore.shortcuts import (BuyItem, ChangeBox as CoreChangeBox, ChooseMove, DeleteMove, DepositItem, DepositPokemon,
                                     Done, FieldMove as CoreFieldMove, GiveItem, LearnMove, ReleasePokemon, ReorderParty,
-                                    RunAway, SellItem, SwitchPokemon, TakeItem, UseItem, WithdrawPokemon, current_screen)
+                                    RunAway, SellItem, SwitchPokemon, TakeItem, TossItem, UseItem, WithdrawPokemon,
+                                    current_screen)
 from pokecore.shortcuts.machine import BACKABLE
 
 from pokecore.textmatch import has_word
@@ -309,6 +310,35 @@ class Sell(CoreTask):
 
 
 @dataclass
+class PutAway(CoreTask):
+    """Store every copy of a bag item in the player's PC, which frees its pocket entry."""
+    item: int
+    initial: int
+
+    start = ('pc', 'players_pc')
+    leave = True
+
+    def finished(self, snapshot):
+        return dict(snapshot.items).get(self.item, 0) < self.initial
+
+    def build(self, snapshot):
+        return DepositItem(self.item, self.initial, **self.options(snapshot))
+
+
+@dataclass
+class Toss(CoreTask):
+    """Toss every copy of a bag item, for when the item PC has no room left."""
+    item: int
+    initial: int
+
+    def finished(self, snapshot):
+        return dict(snapshot.items).get(self.item, 0) < self.initial
+
+    def build(self, snapshot):
+        return TossItem(self.item, self.initial, **self.options(snapshot))
+
+
+@dataclass
 class Use(CoreTask):
     item: int
 
@@ -565,5 +595,5 @@ class Flee(CoreTask):
         return RunAway(**self.options(snapshot))
 
 
-TASKS = {cls.__name__: cls for cls in (Teach, Buy, Sell, Use, UseOn, Storage, Remedy, Lead, FieldMove, Fly, Give, Take,
+TASKS = {cls.__name__: cls for cls in (Teach, Buy, Sell, PutAway, Toss, Use, UseOn, Storage, Remedy, Lead, FieldMove, Fly, Give, Take,
                                        Throw, Send, Attack, Flee, Forget, ChangeBox, Release, Learn, Radio, DayCare, ShowPartner)}

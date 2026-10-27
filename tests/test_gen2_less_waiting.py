@@ -265,6 +265,18 @@ def full_bag(data, *, share=True):
     return ([(data.items['EXP_SHARE'], 1)] if share else []) + rows[:20 - share]
 
 
+def pc_goal(snapshot):
+    return SimpleNamespace(map_name='GOLDENROD_POKECENTER_1F', x=1, y=1, face='up')
+
+
+def kept_bag(data, *, share=True):
+    """An items pocket with every entry taken by items some plan uses, so none can be put away."""
+    from pokesim.gen2.training import KEPT_ITEMS
+    rows = [(data.items[name], 1) for name in sorted(KEPT_ITEMS - {'EXP_SHARE'}) if name in data.items]
+    rows += [(data.items[name], 1) for name in ('FIRE_STONE', 'WATER_STONE', 'THUNDERSTONE', 'LEAF_STONE')]
+    return ([(data.items['EXP_SHARE'], 1)] if share else []) + rows[:20 - share]
+
+
 def test_a_trainee_holding_an_item_the_full_bag_cannot_take_back_trains_in_the_lead(data, monkeypatch):
     from pokesim.gen2.policy import Goal
     from pokesim.gen2.training import journey, trainee_slot
@@ -273,14 +285,21 @@ def test_a_trainee_holding_an_item_the_full_bag_cannot_take_back_trains_in_the_l
     policy, state = shareless_policy(data, [lead(), trainee], trainee)
     policy.collection['training']['level_goal'] = 50
     policy.demand, policy.decisions, policy.no_room = {}, 1000, lambda snapshot: False
+    policy.storage_goal = pc_goal
+    state.map = data.map_ids['GOLDENROD_POKECENTER_1F']
     state.pockets['items'] = full_bag(data)
     state.items = tuple(state.pockets['items'])
-    # Giving the share would hand the Pearl back to a pocket with no free entry, which the game refuses.
+    # Giving the share would hand the Pearl back to a pocket with no free entry, which the game refuses,
+    # so a spare item goes to the PC first.
+    goal = journey(policy, state, clock(), Goal, terminal=True)
+    assert goal.key == 'collection_tidy' and policy.collection['tidy_item'] in dict(state.items)
+    # A bag of items some plan uses has nothing to put away, so the trainee leads instead.
+    state.pockets['items'] = kept_bag(data)
+    state.items = tuple(state.pockets['items'])
     goal = journey(policy, state, clock(), Goal, terminal=True)
     assert goal.key == 'collection_train' and goal.label.endswith('in the lead')
     assert trainee_slot(policy, state) == 1
     # One free entry lets the swap through.
-    state.map = data.map_ids['GOLDENROD_POKECENTER_1F']
     state.pockets['items'] = state.pockets['items'][:-1]
     state.items = tuple(state.pockets['items'])
     assert journey(policy, state, clock(), Goal, terminal=True).key == 'collection_equip'
@@ -292,9 +311,14 @@ def test_a_trainee_holding_an_item_the_full_bag_cannot_take_back_trains_in_the_l
     policy, state = shareless_policy(data, [holder, bare], bare)
     policy.collection['training']['level_goal'] = 50
     policy.demand, policy.decisions, policy.no_room = {}, 1000, lambda snapshot: False
-    state.pockets['items'] = full_bag(data, share=False)
+    policy.storage_goal = pc_goal
+    state.map = data.map_ids['GOLDENROD_POKECENTER_1F']
+    state.pockets['items'] = kept_bag(data, share=False)
     state.items = tuple(state.pockets['items'])
     assert journey(policy, state, clock(), Goal, terminal=True).label.endswith('in the lead')
+    state.pockets['items'] = full_bag(data, share=False)
+    state.items = tuple(state.pockets['items'])
+    assert journey(policy, state, clock(), Goal, terminal=True).key == 'collection_tidy'
 
 
 def test_an_item_task_the_game_keeps_refusing_stands_the_project_down(data):

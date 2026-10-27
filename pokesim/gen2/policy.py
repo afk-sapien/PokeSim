@@ -15,7 +15,8 @@ from .world import update as update_world
 from .naming import Naming
 from .kanto import journey as kanto_journey
 from .menus import (MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, TASKS, Attack, Buy, ChangeBox, DayCare, FieldMove, Flee, Fly, Release,
-                    Forget, Give, Lead, Learn, Radio, Remedy, Sell, Send, ShowPartner, Storage, Take, Teach, Throw, Use, choose,
+                    Forget, Give, Lead, Learn, PutAway, Radio, Remedy, Sell, Send, ShowPartner, Storage, Take, Teach, Throw,
+                    Toss, Use, choose,
                     close_pc, menu_label, restore)
 
 STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) before reporting a blocked objective
@@ -1095,7 +1096,8 @@ class Policy:
                           ChangeBox: 'Choose a receiving box', Use: 'Use an item', ShowPartner: 'Show a Pokémon',
                           DayCare: 'Manage the Day Care partners', Lead: 'Prepare the lead Pokémon',
                           Give: 'Give a held item', Take: 'Take a held item', Fly: 'Fly to the next destination',
-                          FieldMove: 'Use a field move', Radio: 'Tune the radio', Teach: 'Teach a move'}
+                          FieldMove: 'Use a field move', Radio: 'Tune the radio', Teach: 'Teach a move',
+                          PutAway: 'Store a spare item in the PC', Toss: 'Toss a spare item'}
                 self.mode = labels.get(type(self.menu), 'Manage the team')
                 return Action(None, 0, 24) if button == 'wait' else Action(button, 8, 28)
             self.menu = None
