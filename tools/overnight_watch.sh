@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Nightly watch: runs Core's real-cartridge tests and checks that the hosted
 # PokeSim app is up. Writes one log per night and keeps the newest 14.
-# Settings come from the environment, with defaults for the owner's machine.
+# Settings come from POKESIM_WATCH_* environment variables. HOST and SITE have no default.
 set -uo pipefail
 CORE=${POKESIM_WATCH_CORE:-$HOME/.local/share/pokesim-overnight/pokesim-core}
 CORE_REPO=${POKESIM_WATCH_CORE_REPO:-https://github.com/afk-sapien/pokesim-core.git}
 ROMS=${POKESIM_WATCH_ROMS:-$HOME/roms/pokemon}
-HOST=${POKESIM_WATCH_HOST:-servarr}
+# The SSH host that runs the app and the site name its proxy answers to.
+HOST=${POKESIM_WATCH_HOST:?set POKESIM_WATCH_HOST to the SSH host running the app}
+SITE=${POKESIM_WATCH_SITE:?set POKESIM_WATCH_SITE to the app site name}
+PORT=${POKESIM_WATCH_PORT:-8950}
 CONTAINER=${POKESIM_WATCH_CONTAINER:-pokesim-app-pokesim-1}
 LOGS=${POKESIM_WATCH_LOGS:-$HOME/.local/state/pokesim-overnight}
 KEEP=${POKESIM_WATCH_KEEP:-14}
@@ -34,7 +37,7 @@ echo "-- app on $HOST"
 if ! ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST" "
   set -e
   docker inspect -f '{{.State.Health.Status}} {{.Config.Image}}' $CONTAINER | tee /dev/stderr | grep -q '^healthy '
-  curl -fsS -m 20 -H 'Host: pokesim.tynet.app' -H 'X-Forwarded-Proto: https' localhost:8950/api/v1/adventures
+  curl -fsS -m 20 -H 'Host: $SITE' -H 'X-Forwarded-Proto: https' localhost:$PORT/api/v1/adventures
 " | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
