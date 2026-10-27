@@ -16,6 +16,7 @@ from ..build_info import build_info
 from ..checkpoints import open_state
 from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
+from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
 from ..stalls import StallWatch
 from pokecore.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
@@ -1029,58 +1030,62 @@ class Emulator:
 
     def _run(self):
         next_save = time.monotonic() + config.AUTOSAVE_SECONDS
+        self.consecutive_errors = 0
         try:
             running = True
             while running:
-                while not self.commands.empty():
-                    name, arg = self.commands.get_nowait()
-                    running = self._handle_command(name, arg)
+                try:
+                    while not self.commands.empty():
+                        name, arg = self.commands.get_nowait()
+                        running = self._handle_command(name, arg)
+                        if not running:
+                            break
                     if not running:
                         break
-                if not running:
-                    break
-                if self.store.get('trade_hold'):
-                    self.last_activity = time.monotonic()
-                    time.sleep(0.03)
-                    continue
-                if self.frame - getattr(self, '_reward_check_frame', -300) >= 300:
-                    from .rewards import deliver
-                    from .celebi import activate
-                    self._reward_check_frame = self.frame
-                    if activate(self) or deliver(self):
+                    if self.store.get('trade_hold'):
+                        self.last_activity = time.monotonic()
+                        time.sleep(0.03)
                         continue
-                if self.preparation and not self.paused:
-                    snapshot = self._read()
-                    action = self.preparation.step(snapshot)
-                elif not self.manual.empty():
-                    action = self.manual.get_nowait()
-                elif self.manual_mode:
-                    action = Action(None, 0, 4)
-                elif self.paused:
-                    self.last_activity = time.monotonic()
-                    time.sleep(0.03)
-                    continue
-                else:
-                    snapshot = self._read()
-                    action = self.policy.step(snapshot, self.pb.memory)
-                    self._report_missed_shiny(snapshot)
-                if action.button:
-                    self.pb.button_press(action.button)
-                try:
-                    self._tick(action.hold)
-                finally:
+                    if self.frame - getattr(self, '_reward_check_frame', -300) >= 300:
+                        from .rewards import deliver
+                        from .celebi import activate
+                        self._reward_check_frame = self.frame
+                        if activate(self) or deliver(self):
+                            continue
+                    if self.preparation and not self.paused:
+                        snapshot = self._read()
+                        action = self.preparation.step(snapshot)
+                    elif not self.manual.empty():
+                        action = self.manual.get_nowait()
+                    elif self.manual_mode:
+                        action = Action(None, 0, 4)
+                    elif self.paused:
+                        self.last_activity = time.monotonic()
+                        self.consecutive_errors = 0
+                        time.sleep(0.03)
+                        continue
+                    else:
+                        snapshot = self._read()
+                        action = self.policy.step(snapshot, self.pb.memory)
+                        self._report_missed_shiny(snapshot)
                     if action.button:
-                        self.pb.button_release(action.button)
-                self._tick(action.gap)
-                if self.frame >= self._guard_frame:
-                    self._guard_frame = self.frame + 60
-                    self._check_guards()
-                if time.monotonic() >= next_save and not getattr(self.policy, 'backing_out', False):
-                    self._autosave()
-                    next_save = time.monotonic() + config.AUTOSAVE_SECONDS
-        except Exception as error:
-            self.fatal_error = str(error)
-            log.exception('Gen II adventure failed')
+                        self.pb.button_press(action.button)
+                    try:
+                        self._tick(action.hold)
+                    finally:
+                        if action.button:
+                            self.pb.button_release(action.button)
+                    self._tick(action.gap)
+                    if self.frame >= self._guard_frame:
+                        self._guard_frame = self.frame + 60
+                        self._check_guards()
+                    if time.monotonic() >= next_save and not getattr(self.policy, 'backing_out', False):
+                        self._autosave()
+                        next_save = time.monotonic() + config.AUTOSAVE_SECONDS
+                    self.consecutive_errors = 0
+                except Exception:
+                    if loop_failed(self, log):
+                        break
         finally:
             try:
                 self.steps.flush(force=True)

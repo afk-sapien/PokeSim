@@ -24,6 +24,7 @@ from .checkpoints import open_state
 from .events import HIGH, LOW, Event, RunMemory, diff
 from . import rewards
 from .legendary import LegendaryRecovery
+from .loop_errors import loop_failed
 from .play_clock import PlayClock
 from .palettes import PALETTES, recolor, validate_palette
 from .policies import make_policy
@@ -1072,12 +1073,8 @@ class Emulator:
                 self.last_activity = time.monotonic()
                 self.consecutive_errors = 0
             except Exception:  # noqa: BLE001
-                log.exception("emulator loop error")
-                self.consecutive_errors += 1
-                if self.consecutive_errors >= 10:
-                    self.fatal_error = "Emulator stopped after 10 consecutive errors. See server logs."
+                if loop_failed(self, log):
                     break
-                time.sleep(1)
         try:
             if not getattr(self, "fatal_error", None):
                 self._autosave()

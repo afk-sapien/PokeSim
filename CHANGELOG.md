@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep Gold, Silver and Crystal running after an unexpected error. One error anywhere in the loop used to stop the adventure until it was restarted. The error is now logged and the next step goes ahead, the same way Red, Blue and Yellow recover. The adventure stops only after ten errors in a row, or when a committed gift needs a restart to recover.
+
 - Stop Gold, Silver and Crystal retrying "Give Exp. Share" without end when the bag is full. The partner in training held a Pearl, and the game refuses the swap when the items pocket has no free entry for it, so replays of one Gold run spent over half their frames on that retry. The run now stores the cheapest item no plan uses in the PC, or tosses it if the PC is full, and then makes the swap. Medicine, evolution items and held items for training stay, and Nuggets and Pearls go last since they sell for money. The same applies to taking back an Everstone or a held item before a time-of-day evolution. When nothing can go, the partner trains in the lead as it does without an Exp. Share. An item task the game refuses three times also sets the training aside for a while.
 
 - Show a stopped adventure read only instead of the "not running" page. Every panel loads from the newest save, and the screen shows the last frame greyed out under a Stopped label. Nothing runs or is written, controls are hidden, and the view closes after five idle minutes or when the adventure starts.
