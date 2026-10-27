@@ -1,6 +1,10 @@
 name: Python install
 on:
+  # Branches are tested through their pull request, so a push runs only on main and tags. The release gate
+  # needs those push runs as evidence for the exact commit it publishes.
   push:
+    branches: [main]
+    tags: ['**']
   pull_request:
     # Documentation-only pull requests do not change what installs. Pushes to main and tags always run everything.
     paths-ignore:
