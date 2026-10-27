@@ -174,7 +174,7 @@ def signature(mon):
 
 
 def _power(data, mon, moves, level=None):
-    from pokesim_core.gen2.battle_power import battle_power
+    from pokecore.gen2.battle_power import battle_power
     return battle_power({'species': mon.species, 'level': level or mon.level, 'dvs': mon.dvs,
                          'stat_exp': (65535,) * 5 if level else mon.stat_exp, 'moves': list(moves),
                          'friendship': mon.friendship}, data)

@@ -18,11 +18,11 @@ from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..play_clock import PlayClock
 from ..stalls import StallWatch
-from pokesim_core.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
-from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
+from pokecore.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
+from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
 from .policy import Action, Policy
-from pokesim_core.gen2.ram import BADGES, read_snapshot
+from pokecore.gen2.ram import BADGES, read_snapshot
 from .store_stock import StoreStock
 
 log = logging.getLogger('pokesim.gen2')
@@ -71,7 +71,7 @@ def game_clock(memory, data):
     The game copies the cartridge clock plus its own saved offsets into these bytes as it runs,
     so this is a few memory reads with no emulator stepping.
     """
-    from pokesim_core.gen2.ram import Memory
+    from pokecore.gen2.ram import Memory
     try:
         mem = Memory(memory, data)
         day, hour, minute = mem.byte('wCurDay'), mem.byte('hHours'), mem.byte('hMinutes')
@@ -585,7 +585,7 @@ class Emulator:
             self.stuck_frame, self.stuck_ts = self.frame, time.time()
             return
         if not self.options_applied and not self.manual_mode:
-            from pokesim_core.gen2.ram import Memory
+            from pokecore.gen2.ram import Memory
             mem = Memory(self.pb.memory, self.data)
             value = mem.byte('wOptions')
             if config.FAST_TEXT:

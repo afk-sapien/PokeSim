@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from pokesim_core.centers import CENTERS
+from pokecore.centers import CENTERS
 from pokesim.policies.travel import TravelNavigator, TravelPolicy
 from pokesim.strategy_data import MAPS, WORLD
 from test_events import snap

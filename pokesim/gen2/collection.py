@@ -3,7 +3,7 @@ from collections import Counter
 
 from .menus import ChangeBox, FieldMove, Release, Storage, Teach, Use
 from .navigation import DIRS
-from pokesim_core.gen2.ram import Memory
+from pokecore.gen2.ram import Memory
 from .standdown import hunt_key, stand_down, standing_down
 
 
@@ -464,7 +464,7 @@ def journey(policy, snapshot, mem, Goal):
     if funding is not None and snapshot.hall_of_fame_count >= funding:
         state.pop('funding', None)
         funding = None
-    from pokesim_core.gen2.breeding import retrieval_cost
+    from pokecore.gen2.breeding import retrieval_cost
     from .breeding import pairings
     fees = retrieval_cost(data, snapshot)
     from .. import config

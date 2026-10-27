@@ -10,7 +10,7 @@ import pytest
 
 pyboy_module = pytest.importorskip('pyboy', reason='PyBoy 2.7.0 is only needed for the rollback check')
 
-from pokesim_core.emulator import Emulator, demo_rom  # noqa: E402
+from pokecore.emulator import Emulator, demo_rom  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     version('pyboy') != '2.7.0', reason='the rollback target is exactly PyBoy 2.7.0')

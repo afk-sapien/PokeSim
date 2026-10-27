@@ -9,7 +9,7 @@ import hashlib
 import pytest
 
 from pokesim.checkpoints import CheckpointStore
-from pokesim_core.emulator_state import checkpoint_metadata, retag_checkpoint
+from pokecore.emulator_state import checkpoint_metadata, retag_checkpoint
 
 INSTALLED_PYBOY = '2.7.0'  # what version('pyboy') returned in the 0.4.x images
 

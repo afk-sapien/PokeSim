@@ -18,7 +18,7 @@ def check_runtime(reference_archive=None):
         ensure_game_data(root / 'game-data', print, threading.Event(), reference_archive)
         os.environ['DATA_DIR'] = str(root)
         os.environ['GAME_DATA_DIR'] = str(root / 'game-data')
-        from pokesim_core.emulator import check_runtime as check_emulator
+        from pokecore.emulator import check_runtime as check_emulator
         from .emulator import Emulator
         from .store import Store
         from .web.app import create_app

@@ -294,7 +294,7 @@ def test_route_37_twins_keep_their_sprite_while_sudowoodo_is_out(world):
 @pytest.mark.parametrize('flag, visible', [
     ('EVENT_ROUTE_36_SUDOWOODO', 'ROUTE_36'), ('EVENT_VERMILION_CITY_SNORLAX', 'VERMILION_CITY')])
 def test_returned_statics_block_their_tile_but_keep_the_gate_open(data, flag, visible):
-    from pokesim_core.gen2.maps import travel_collision
+    from pokecore.gen2.maps import travel_collision
     mid = data.map_ids[visible]
     shown = SimpleNamespace(event=lambda name: name != flag, map=mid)
     hidden = SimpleNamespace(event=lambda name: True, map=mid)

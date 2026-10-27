@@ -8,7 +8,7 @@ private game data and must remain outside the checkout.
 """
 import argparse
 from collections import Counter, deque
-from pokesim_core.emulator_state import runtime_provenance
+from pokecore.emulator_state import runtime_provenance
 import json
 from pathlib import Path
 import sys

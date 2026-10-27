@@ -8,12 +8,12 @@ import logging
 import queue
 import secrets
 import threading
-from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
+from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 import time
 from pathlib import Path
 
 from PIL import Image
-from pokesim_core.emulator import Emulator as CoreEmulator
+from pokecore.emulator import Emulator as CoreEmulator
 
 from .yellow import YELLOW_SHA1, open_emulator
 
@@ -733,7 +733,7 @@ class Emulator:
             return
         invalid_grace = 5
         if self.invalid_since:
-            from pokesim_core.centers import CENTERS
+            from pokecore.centers import CENTERS
             snapshot = self.snapshot
             if (snapshot is not None and snapshot.map in CENTERS and not snapshot.in_battle
                     and snapshot.hp_overflow_only and hasattr(self.policy, 'heal_latch')):

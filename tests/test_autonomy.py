@@ -88,7 +88,7 @@ def test_hm_dialogue_advances_despite_bag_quantity_behind_it():
 
 
 def test_active_shortcut_keeps_control_until_it_is_done():
-    from pokesim_core.shortcuts import Done
+    from pokecore.shortcuts import Done
 
     class Machine:
         kind, inputs = 'use_field_move', 1

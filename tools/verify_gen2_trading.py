@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from pokesim.gen2.emulator import Emulator
-from pokesim_core.gen2.ram import read_snapshot
+from pokecore.gen2.ram import read_snapshot
 from pokesim.gen2.trading import Participant
 from pokesim.runtime.settings import SimulationSettings
 from pokesim.store import Store
@@ -51,7 +51,7 @@ def main():
             emu.pb.tick(32, True)
         emu.snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
         for _ in range(6000):
-            from pokesim_core.gen2.ram import Memory
+            from pokecore.gen2.ram import Memory
             snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
             if (snapshot.started and not snapshot.in_battle and not emu.policy.in_league(snapshot)
                     and not Memory(emu.pb.memory, emu.data).byte('wScriptRunning')):

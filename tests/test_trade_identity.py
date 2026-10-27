@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from pokesim_core import identity as individual
+from pokecore import identity as individual
 from pokesim import store as store_module
 from pokesim.store import Store
 from pokesim.strategy_data import SPECIES

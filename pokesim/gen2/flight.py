@@ -6,7 +6,7 @@ to the goal, the policy first walks to the nearest outside place it can reach, t
 from collections import deque
 from dataclasses import replace
 
-from pokesim_core.gen2.maps import OUTSIDE, flyer
+from pokecore.gen2.maps import OUTSIDE, flyer
 
 from .menus import Fly
 

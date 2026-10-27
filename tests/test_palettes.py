@@ -3,7 +3,7 @@ from pathlib import Path
 import threading
 
 from PIL import Image
-from pokesim_core.emulator import Emulator as PyBoy
+from pokecore.emulator import Emulator as PyBoy
 import pytest
 
 from pokesim import config

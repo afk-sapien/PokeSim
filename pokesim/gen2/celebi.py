@@ -8,8 +8,8 @@ import uuid
 from .. import config
 from ..checkpoints import CheckpointStore
 from ..runtime.reward_delivery import BARRIER, PENDING, recover_storage
-from pokesim_core.gen2.ram import Memory, read_snapshot
-from pokesim_core.gen2.resets import set_gs_ball
+from pokecore.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.resets import set_gs_ball
 
 CLAIM = 'gen2-gs-ball-distribution-v1'
 

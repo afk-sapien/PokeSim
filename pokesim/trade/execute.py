@@ -30,10 +30,10 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
-from pokesim_core.emulator import Emulator as CoreEmulator
+from pokecore.emulator import Emulator as CoreEmulator
 
 from ..yellow import open_emulator
-from pokesim_core.emulator_state import retag_checkpoint
+from pokecore.emulator_state import retag_checkpoint
 
 from ..checkpoints import CheckpointStore
 from ..policies.collection import EVOS

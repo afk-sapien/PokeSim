@@ -102,7 +102,7 @@ def test_the_patched_cartridge_lives_only_in_memory(monkeypatch):
     assert hashlib.sha1(rom.read_bytes()).hexdigest() == before
     run = randomized.current(rom)
     assert run.effective.starters != run.clean.starters
-    from pokesim_core import romdata
+    from pokecore import romdata
     assert romdata.load(patched, 'red').starters == run.effective.starters
     from pokesim import config
     monkeypatch.setattr(config, 'ROM_PATH', rom, raising=False)

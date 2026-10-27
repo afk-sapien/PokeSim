@@ -86,9 +86,9 @@ def test_real_cartridge_export_restarts_with_current_collection():
 def test_missing_core_capability_is_not_reported_as_busy(tmp_path, monkeypatch, origin):
     from pokesim.gen2 import save as gen2_save
     if origin == 'core':
-        from pokesim_core.errors import CoreCapabilityError
+        from pokecore.errors import CoreCapabilityError
     else:
-        from pokesim_core.gen2.clock import CoreCapabilityError
+        from pokecore.gen2.clock import CoreCapabilityError
     message = 'Core does not provide cartridge clock import or export.'
 
     def unavailable(*_):
@@ -109,7 +109,7 @@ def test_missing_core_capability_is_not_reported_as_busy(tmp_path, monkeypatch, 
 def test_core_capability_error_is_a_runtime_error_but_not_busy():
     """Core 0.2 raises a RuntimeError subclass. It must not fall into the busy 503 branch."""
     from pokesim.capability import CAPABILITY_ERRORS
-    from pokesim_core.errors import CoreCapabilityError as CoreError
+    from pokecore.errors import CoreCapabilityError as CoreError
     assert issubclass(CoreError, RuntimeError) and not issubclass(CoreError, NotImplementedError)
     assert CAPABILITY_ERRORS == (CoreError,)
 

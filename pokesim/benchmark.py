@@ -4,7 +4,7 @@ import hashlib
 import io
 import json
 import platform
-from pokesim_core.emulator_state import checkpoint_metadata
+from pokecore.emulator_state import checkpoint_metadata
 from collections import Counter
 from pathlib import Path
 from statistics import mean

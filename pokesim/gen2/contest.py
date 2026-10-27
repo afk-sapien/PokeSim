@@ -1,7 +1,7 @@
 """Earn Sun Stones through the native Bug-Catching Contest."""
 from ..shiny import shiny_bytes
 from .menus import choose
-from pokesim_core.gen2.ram import Memory
+from pokecore.gen2.ram import Memory
 from .standdown import stand_down, standing_down
 
 

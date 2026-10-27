@@ -1,5 +1,5 @@
 """Persistent map changes derived from cartridge event flags."""
-from pokesim_core.gen2.maps import event_changes
+from pokecore.gen2.maps import event_changes
 
 
 def update(regions, snapshot):

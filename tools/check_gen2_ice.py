@@ -9,7 +9,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from pokesim_core.gen2 import maps as ice
+from pokecore.gen2 import maps as ice
 from pokesim.gen2.data import GameData
 
 DOOR = range(0x60, 0x80)

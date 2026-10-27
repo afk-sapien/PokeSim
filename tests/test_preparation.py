@@ -457,7 +457,7 @@ def test_encounter_during_travel_uses_the_same_traveller(participant):
 
 
 def test_field_move_shortcut_stays_with_traveller(participant):
-    from pokesim_core.shortcuts import Done
+    from pokecore.shortcuts import Done
     from test_strategy import menu
 
     emu, snap, candidate = participant

@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 
 from pokesim import rewards
-from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.ram import Memory, read_snapshot
 from pokesim.gen2.rewards import deliver
 from pokesim.runtime.settings import SimulationSettings
 from pokesim.runtime.simulation import SimulationRuntime

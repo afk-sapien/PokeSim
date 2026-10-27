@@ -1,5 +1,5 @@
 """Shared verified Gen1 link metadata."""
-from pokesim_core.gen1_link_metadata import ADAPTER_ID as ADAPTER_ID, BUILDS as CORE_BUILDS, SOURCE_REVISION as SOURCE_REVISION
+from pokecore.gen1_link_metadata import ADAPTER_ID as ADAPTER_ID, BUILDS as CORE_BUILDS, SOURCE_REVISION as SOURCE_REVISION
 
 from ..yellow import YELLOW_SHA1
 

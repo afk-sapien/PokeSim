@@ -296,7 +296,7 @@ def test_real_rom_sound_switch_preserves_save_and_queued_buttons(tmp_path):
     rom = Path('roms/pokered.gb')
     if not rom.is_file():
         pytest.skip('Private ROM is not available')
-    from pokesim_core.emulator import Emulator as PyBoy
+    from pokecore.emulator import Emulator as PyBoy
     emu = Emulator.__new__(Emulator)
     emu.rom = rom
     emu.isolated_ram = True

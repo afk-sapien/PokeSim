@@ -12,8 +12,8 @@ import re
 import sys
 import threading
 
-from pokesim_core.emulator_state import checkpoint_metadata
-from pokesim_core.identity import same
+from pokecore.emulator_state import checkpoint_metadata
+from pokecore.identity import same
 
 from .cable import CableError, CableSide, checked, sha256
 from .cable_driver import CableDriver

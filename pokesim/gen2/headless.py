@@ -10,9 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 import secrets
 
-from pokesim_core.emulator_state import validate_runtime
-from pokesim_core.gen2.clock import boot, clock_elapsed, follow_game_time
-from pokesim_core.gen2.ram import read_snapshot
+from pokecore.emulator_state import validate_runtime
+from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time
+from pokecore.gen2.ram import read_snapshot
 
 from .. import config
 from ..checkpoints import CheckpointStore, open_state

@@ -15,8 +15,8 @@ no Pokédex, trade, breeding or clock-gated work is left.
 """
 import random
 
-from pokesim_core.dvs import dv_probabilities
-from pokesim_core.gen2.ram import calculated_stats, experience_at
+from pokecore.dvs import dv_probabilities
+from pokecore.gen2.ram import calculated_stats, experience_at
 
 from ..investment import GOOD_TAIL, MIN_UPGRADE, SEARCH_BUDGET
 from .standdown import hunt_key, stand_down, standing_down, train_key

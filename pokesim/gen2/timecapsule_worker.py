@@ -6,15 +6,15 @@ import os
 from pathlib import Path
 
 from ..cartridges import identify
-from pokesim_core.identity import same
+from pokecore.identity import same
 from ..interactions import verification as gen1
 from ..interactions.cable import CableSide, checked, sha256
 from ..interactions.cable_driver import CableDriver
 from ..interactions.link_worker import _write
 from . import cable_verification as gen2
-from pokesim_core.gen2.clock import stop_with_clock
+from pokecore.gen2.clock import stop_with_clock
 from .data import GameData
-from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.ram import Memory, read_snapshot
 from .timecapsule import ADAPTER_ID, MixedDriver, TimeCapsuleSide, compatible, unlocked
 from .timecapsule_conversion import convert
 

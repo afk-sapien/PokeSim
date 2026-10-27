@@ -24,7 +24,7 @@ from ..game_data import VARIANT_ENV
 from . import trade_settings
 from .assets import portrait_url
 from .registry import digest, identifier, validate_id
-from pokesim_core.identity import find, legacy
+from pokecore.identity import find, legacy
 from ..trade.preferences import FIRST
 
 log = logging.getLogger(__name__)

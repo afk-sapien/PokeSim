@@ -1,12 +1,12 @@
 """Prepare a boxed Gen II offer with ordinary travel and PC controls."""
 import time
 
-from pokesim_core.identity import same
+from pokecore.identity import same
 from ..trade.preferences import identity
 from .teams import key as team_key
 from .menus import PROTECTED_MOVES, ChangeBox, Give, Release, Storage
 from .policy import Action
-from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.ram import Memory, read_snapshot
 from .world import update as update_world
 
 KEY = 'interaction_preparation'

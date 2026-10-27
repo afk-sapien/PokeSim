@@ -1,5 +1,5 @@
 """Backend capability errors, which the web layer reports as 501 and never as a busy adventure."""
-from pokesim_core.errors import CoreCapabilityError as CoreBackendCapabilityError
+from pokecore.errors import CoreCapabilityError as CoreBackendCapabilityError
 
 
 class CoreCapabilityError(CoreBackendCapabilityError):

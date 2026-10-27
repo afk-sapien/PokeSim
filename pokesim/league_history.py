@@ -26,7 +26,7 @@ def recover(store, rom, *, factory=None):
             latest = store.latest_state()
             if latest is not None:
                 if factory is None:
-                    from pokesim_core.emulator import Emulator as CoreEmulator
+                    from pokecore.emulator import Emulator as CoreEmulator
                     factory = CoreEmulator
                 pb = factory(str(rom), ram_file=io.BytesIO(bytes(32768)),
                              window='null', sound_emulated=False, log_level='ERROR')
@@ -52,7 +52,7 @@ def recover(store, rom, *, factory=None):
             try:
                 if pb is None:
                     if factory is None:
-                        from pokesim_core.emulator import Emulator as CoreEmulator
+                        from pokecore.emulator import Emulator as CoreEmulator
                         factory = CoreEmulator
                     pb = factory(str(rom), ram_file=io.BytesIO(bytes(32768)),
                                  window='null', sound_emulated=False, log_level='ERROR')

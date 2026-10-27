@@ -6,11 +6,11 @@ in the other and in the application.
 from __future__ import annotations
 
 import hashlib
-from pokesim_core.emulator_state import checkpoint_metadata, validate_runtime
+from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 import json
 import secrets
 
-from pokesim_core.emulator import Emulator as CoreEmulator
+from pokecore.emulator import Emulator as CoreEmulator
 
 from .yellow import YELLOW_SHA1, open_emulator
 

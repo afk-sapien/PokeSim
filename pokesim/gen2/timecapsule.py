@@ -5,9 +5,9 @@ its spec-built Gen 2 side, the unlock check and the snapshot form of ``compatibl
 """
 from copy import deepcopy
 
-from pokesim_core.gen2.cable import MixedDriver as CoreMixedDriver
-from pokesim_core.timecapsule import COMMUNICATION, COMMUNICATION_BANK, communication_ok
-from pokesim_core.timecapsule import compatible as core_compatible
+from pokecore.gen2.cable import MixedDriver as CoreMixedDriver
+from pokecore.timecapsule import COMMUNICATION, COMMUNICATION_BANK, communication_ok
+from pokecore.timecapsule import compatible as core_compatible
 
 from ..interactions.cable import checked
 from .cable import CableSide

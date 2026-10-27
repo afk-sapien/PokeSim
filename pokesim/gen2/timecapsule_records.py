@@ -4,7 +4,7 @@ import json
 
 from ..trade.preferences import signature as identity
 from . import league
-from pokesim_core.gen2.ram import decode_mon
+from pokecore.gen2.ram import decode_mon
 from .timecapsule_conversion import convert
 
 

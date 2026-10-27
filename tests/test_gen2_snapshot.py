@@ -4,9 +4,9 @@ from collections import defaultdict
 
 import pytest
 
-from pokesim_core.gen2 import ram
+from pokecore.gen2 import ram
 from pokesim.gen2.data import GameData
-from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.ram import Memory, read_snapshot
 
 SYMBOLS = {'wPartyCount': 1, 'wPartySpecies': 7, 'wPartyMons': 288, 'wPartyMonNicknames': 66, 'wCurBox': 1,
            'wNumItems': 41, 'wNumBalls': 25, 'wNumKeyItems': 27, 'wTMsHMs': 57, 'wObjectStructs': 520,

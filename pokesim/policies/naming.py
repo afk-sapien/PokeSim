@@ -1,9 +1,9 @@
 """Enter random, readable names using the game's normal naming menus."""
 import random
-from pokesim_core.naming import name_step
+from pokecore.naming import name_step
 
 from .base import Action
-from pokesim_core.textmatch import ScreenText
+from pokecore.textmatch import ScreenText
 
 
 from ..nicknames import (

@@ -5,8 +5,8 @@ import pytest
 
 from pokesim.interactions.cable import CableError
 from pokesim.interactions.cable_driver import CableDriver
-from pokesim_core import centers as core_centers
-from pokesim_core.centers import CENTERS, safe_center
+from pokecore import centers as core_centers
+from pokecore.centers import CENTERS, safe_center
 from pokesim.interactions import verification
 
 
@@ -143,7 +143,7 @@ def test_driver_rejects_unprepared_sources_before_input(monkeypatch, map_id, lin
     (174, 140, 'Cartridge restart'),
 ])
 def test_restarts_require_exact_original_center(monkeypatch, checkpoint_map, cartridge_map, error):
-    from pokesim_core import emulator as pyboy
+    from pokecore import emulator as pyboy
     import pokesim.ram
     import pokesim.screen
     instances = []
@@ -199,7 +199,7 @@ def test_restarts_require_exact_original_center(monkeypatch, checkpoint_map, car
 def test_participant_derives_original_center_from_source_checkpoint(
         monkeypatch, tmp_path, source_map, reserved_map, error):
     import hashlib
-    from pokesim_core import emulator as pyboy
+    from pokecore import emulator as pyboy
     import pokesim.ram
     import pokesim.screen
     from pokesim.interactions import cable_metadata

@@ -98,8 +98,8 @@ def test_gen2_statistics_and_first_shiny_milestone_use_receipts(tmp_path):
 
 
 def test_wild_shiny_hook_resolves_on_the_cartridge(real_data):
-    from pokesim_core.gen2.clock import boot
-    from pokesim_core.gen2.hooks import encounter_hook
+    from pokecore.gen2.clock import boot
+    from pokecore.gen2.hooks import encounter_hook
     directory = os.environ.get('GEN2_CARTRIDGE_DIR')
     if not directory:
         pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
@@ -129,8 +129,8 @@ def test_a_shiny_bug_contest_catch_is_acquired_once(real_data, tmp_path):
 
 
 def test_contest_catch_hook_resolves_on_the_cartridge(real_data):
-    from pokesim_core.gen2.clock import boot
-    from pokesim_core.gen2.hooks import contest_hook
+    from pokecore.gen2.clock import boot
+    from pokecore.gen2.hooks import contest_hook
     directory = os.environ.get('GEN2_CARTRIDGE_DIR')
     if not directory:
         pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')

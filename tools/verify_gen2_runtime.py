@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from pokesim.runtime.settings import SimulationSettings
 from pokesim.runtime.simulation import SimulationRuntime
-from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.ram import Memory, read_snapshot
 
 
 def main():

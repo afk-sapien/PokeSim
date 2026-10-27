@@ -97,6 +97,6 @@ A 12 minute probe on three live adventures found the remaining gaps of about a s
 
 ## Randomized adventures
 
-An adventure can store one share code, `PSR1-<GAME>-<W, S, T>-<seed>`, chosen when it is created and refused on any later change. `pokesim/randomized.py` decodes it with the Core randomizer (pinned to Core main at `0b7b281`), patches the clean ROM with `romdata.patch_rom` and boots the emulator from those bytes. Randomizing and patching takes 20 to 50 ms and is cached per worker. The ROM file is never written, so the cartridge hash that saves, checkpoints and trades check stays the same.
+An adventure can store one share code, `PSR1-<GAME>-<W, S, T>-<seed>`, chosen when it is created and refused on any later change. `pokesim/randomized.py` decodes it with the Core 0.8.0 randomizer, patches the clean ROM with `romdata.patch_rom` and boots the emulator from those bytes. Randomizing and patching takes 20 to 50 ms and is cached per worker. The ROM file is never written, so the cartridge hash that saves, checkpoints and trades check stays the same.
 
 The planner reads the effective tables. In Red, Blue and Yellow the strategy map encounters and the collection's grass, surf and Safari Zone sources are rebuilt from the shuffled wild tables, and the Gym Leader aces follow a trainer shuffle by party slot. In Gold, Silver and Crystal the grass rows (morning, day and night) and surf rows are rebuilt, and swarms are left out. Fishing, gifts, in-game trades and fixed encounters are not shuffled. Link sessions boot the clean cartridge.

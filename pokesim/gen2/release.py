@@ -15,7 +15,7 @@ Pokémon holding the Exp. Share: a cartridge has only the one, and every later t
 from collections import defaultdict
 from math import isqrt
 
-from pokesim_core.dvs import is_perfect, is_shiny
+from pokecore.dvs import is_perfect, is_shiny
 
 from ..investment import rare_find
 from ..trade.preferences import identity, signature

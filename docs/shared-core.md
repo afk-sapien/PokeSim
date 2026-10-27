@@ -2,13 +2,14 @@
 
 [PokeSim Core](https://github.com/afk-sapien/pokesim-core) is the Python package
 shared by PokeSim and PokeAgent Bench. Its distribution name is `pokesim-core`
-and its import name is `pokesim_core`.
+and its import name is `pokecore`. Core 0.8.0 still accepts the old import name
+`pokesim_core`, with a deprecation warning.
 
-PokeSim uses `pokesim_core.gen1` for Red, Blue and Yellow WRAM addresses, text and numeric
+PokeSim uses `pokecore.gen1` for Red, Blue and Yellow WRAM addresses, text and numeric
 decoding, individual Pokémon fields, party reads, and bag reads. Its known ROM
-hashes come from `pokesim_core.rom`. `pokesim_core.dvs` supplies the reusable
+hashes come from `pokecore.rom`. `pokecore.dvs` supplies the reusable
 DV-total probability reference model, with training and retention policy in PokeSim.
-`pokesim_core.gen2` supplies the Gold, Silver and Crystal memory map and verified
+`pokecore.gen2` supplies the Gold, Silver and Crystal memory map and verified
 cartridge hooks. Yellow reads the Red addresses through the translating view in
 `pokesim/yellow.py`.
 
@@ -23,7 +24,7 @@ constants and helpers, wraps decoded party dictionaries in `PartyMon`, and
 builds the same `Snapshot` objects. Species names and move PP data still come
 from PokeSim's user-provided game data. Derived state,
 gameplay policies, recovery, trading, and the application UI remain in PokeSim.
-Every adventure runs on Core's emulator adapter (`pokesim_core.emulator`) over PyBoy RS.
+Every adventure runs on Core's emulator adapter (`pokecore.emulator`) over PyBoy RS.
 
 ## Where fixes belong
 

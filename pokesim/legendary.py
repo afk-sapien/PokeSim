@@ -1,6 +1,6 @@
 """Restore missed static encounters without rewinding the adventure or its resources."""
 from copy import deepcopy
-from pokesim_core.resets import Flag, update_flags
+from pokecore.resets import Flag, update_flags
 
 from .events import Event, LOW
 from .ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS

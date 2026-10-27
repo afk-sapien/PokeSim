@@ -9,7 +9,7 @@ from .cable_metadata import BUILDS
 from ..audio import enable_checkpoint_sound
 
 
-from pokesim_core.gen1_cable import CableEndpoint, CableError as CableError, checked
+from pokecore.gen1_cable import CableEndpoint, CableError as CableError, checked
 
 
 def sha256(data):

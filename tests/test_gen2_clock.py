@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from pokesim_core.gen2 import clock as core
-from pokesim_core.gen2.clock import export_clock, lock_clock, stop_with_clock
+from pokecore.gen2 import clock as core
+from pokecore.gen2.clock import export_clock, lock_clock, stop_with_clock
 
 from pokesim.capability import CoreCapabilityError
 
@@ -41,7 +41,7 @@ class FakeClock:
 
 
 def test_capability_error_is_the_backends_so_one_handler_reports_it():
-    from pokesim_core.errors import CoreCapabilityError as BackendError
+    from pokecore.errors import CoreCapabilityError as BackendError
     assert issubclass(CoreCapabilityError, BackendError)
 
 

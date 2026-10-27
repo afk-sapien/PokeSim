@@ -182,7 +182,7 @@ UNCHANGED = [0xC000, 0xC214, 0xC215, 0xCC24, 0xCC25, 0xCC26, 0xCC28, 0xCC2F, 0xC
 
 @pytest.mark.parametrize('name, red, raw', CORE_FIELDS, ids=[row[0] for row in CORE_FIELDS])
 def test_every_core_address_maps_to_its_yellow_symbol(name, red, raw):
-    from pokesim_core import gen1
+    from pokecore import gen1
     assert getattr(gen1, name) == red
     assert yellow.address(red) == raw
 

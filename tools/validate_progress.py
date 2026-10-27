@@ -2,7 +2,7 @@
 import argparse
 from collections import Counter
 import hashlib
-from pokesim_core.emulator_state import runtime_provenance, validate_runtime
+from pokecore.emulator_state import runtime_provenance, validate_runtime
 import json
 from pathlib import Path
 import sys
@@ -10,7 +10,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pokesim_core.emulator import Emulator as PyBoy
+from pokecore.emulator import Emulator as PyBoy
 from pokesim.benchmark import policy_fingerprint
 from pokesim.checkpoints import CheckpointStore
 from pokesim.events import RunMemory, diff

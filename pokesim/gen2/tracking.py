@@ -5,8 +5,8 @@ import json
 import time
 
 from .. import shiny
-from pokesim_core.gen2.hooks import capture_hooks, contest_hook, encounter_hook, hatch_hook
-from pokesim_core.gen2.ram import Memory
+from pokecore.gen2.hooks import capture_hooks, contest_hook, encounter_hook, hatch_hook
+from pokecore.gen2.ram import Memory
 
 CAPTURES = 'capture-statistics-v1'
 MILESTONES = 'pokedex-milestones-v1'
