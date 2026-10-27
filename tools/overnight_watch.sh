@@ -3,7 +3,8 @@
 # PokeSim app is up. Writes one log per night and keeps the newest 14.
 # Settings come from the environment, with defaults for the owner's machine.
 set -uo pipefail
-CORE=${POKESIM_WATCH_CORE:-$HOME/Repos/pokesim-core}
+CORE=${POKESIM_WATCH_CORE:-$HOME/.local/share/pokesim-overnight/pokesim-core}
+CORE_REPO=${POKESIM_WATCH_CORE_REPO:-https://github.com/afk-sapien/pokesim-core.git}
 ROMS=${POKESIM_WATCH_ROMS:-$HOME/roms/pokemon}
 HOST=${POKESIM_WATCH_HOST:-servarr}
 CONTAINER=${POKESIM_WATCH_CONTAINER:-pokesim-app-pokesim-1}
@@ -16,12 +17,15 @@ exec >>"$log" 2>&1
 echo "== $(date -Is) overnight watch"
 failed=()
 
-# Core reads every entry in the ROM folder, so hand it only the cartridge files.
-carts=$(mktemp -d)
-trap 'rm -rf "$carts"' EXIT
-find "$ROMS" -maxdepth 1 -type f -exec ln -s {} "$carts/" \;
-echo "-- core real-ROM tests at $(git -C "$CORE" log -1 --format='%h %s')"
-if ! (cd "$CORE" && POKESIM_CORE_ROMS=$carts .venv/bin/python -m pytest -q -rs -p no:cacheprovider tests/test_real_roms.py); then
+# The watch keeps its own Core clone at origin/main, apart from any working checkout.
+[ -d "$CORE/.git" ] || git clone -q "$CORE_REPO" "$CORE"
+if git -C "$CORE" fetch -q origin && git -C "$CORE" reset -q --hard origin/main && git -C "$CORE" clean -qfdx -e .venv; then
+  echo "-- core real-ROM tests at $(git -C "$CORE" log -1 --format='%h %s')"
+  if ! (cd "$CORE" && POKESIM_CORE_ROMS=$ROMS uv run -q --locked --extra dev --extra emulator pytest -q -rs -p no:cacheprovider tests/test_real_roms.py); then
+    failed+=(core)
+  fi
+else
+  echo "-- could not update the Core clone"
   failed+=(core)
 fi
 
