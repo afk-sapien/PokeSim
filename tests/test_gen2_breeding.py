@@ -29,7 +29,7 @@ def lead():
 def snapshot(stored, *, owned=None, boxes=(5,) * 14):
     return SimpleNamespace(party=(lead(),), stored=tuple(stored), daycare=(None, None), egg_ready=False,
                            owned=set(range(1, 252)) if owned is None else owned, money=50000, box_counts=boxes,
-                           active_box=0, map=1, x=1, y=1, items=())
+                           active_box=0, map=1, x=1, y=1, items=(), pockets={})
 
 
 def planner(data, demand):

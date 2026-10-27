@@ -1,4 +1,4 @@
-"""A Gen II trainee whose held item the full bag cannot take back trains in the lead instead of retrying the share.
+"""A Gen II trainee whose held item the full bag cannot take back gets room made in the bag, then the share.
 
 The replay needs a private Gold checkpoint, kept as a stuck scenario under the data folder: the postgame
 Goldenrod Pokémon Center with Shellder in training, holding a Pearl, and an items pocket with every entry
@@ -17,9 +17,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SCENARIO_ROOT = Path(os.environ.get('POKESIM_SCENARIOS') or Path(os.environ.get('DATA_DIR', ROOT / 'data')) / 'scenarios')
 FOLDER = SCENARIO_ROOT / 'gold-expshare-full-bag-20261027'
 FRAMES = 24000
+SHELLDER = 90
 
 
-def test_a_refused_exp_share_swap_is_not_retried_from_a_real_checkpoint():
+def test_a_full_bag_makes_room_for_the_exp_share_swap_from_a_real_checkpoint():
     if not os.environ.get('GEN2_CARTRIDGE_DIR'):
         pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
     if not (FOLDER / 'scenario.json').is_file():
@@ -38,6 +39,8 @@ def test_a_refused_exp_share_swap_is_not_retried_from_a_real_checkpoint():
         frames[goal.key if goal else run.policy.mode] += run.frame - before
         if goal:
             labels.add(goal.label)
-    # The swap loop took most of these frames before. Now Shellder joins the party and leads the walk.
-    assert frames['collection_equip'] < FRAMES // 50, frames.most_common(5)
-    assert 'Train Shellder toward level 50 in the lead' in labels, sorted(labels)
+    # The swap loop took most of these frames before. Now a spare item goes to the PC and the swap succeeds.
+    assert frames['collection_tidy'], frames.most_common(5)
+    assert frames['collection_equip'] < FRAMES // 8, frames.most_common(5)
+    share = run.policy.data.items['EXP_SHARE']
+    assert any(mon.held_item == share for mon in run.read().party if mon.species == SHELLDER), labels
