@@ -115,7 +115,7 @@ def _live_keys(page):
     }''')
 
 
-@pytest.mark.parametrize('width', [1024, 1280, 1920])
+@pytest.mark.parametrize('width', [1101, 1280, 1920])
 def test_live_controls_are_equal_keys_on_desktop(page, game, width):
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(game[0])
@@ -130,7 +130,7 @@ def test_live_controls_are_equal_keys_on_desktop(page, game, width):
     assert not any(k['clipped'] for k in keys)
 
 
-@pytest.mark.parametrize('width', [320, 390, 480, 640, 700, 768, 820])
+@pytest.mark.parametrize('width', [320, 390, 480, 640, 700, 768, 820, 1024])
 def test_live_controls_are_an_even_grid_that_never_clips(page, game, width):
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(game[0])

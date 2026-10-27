@@ -1444,7 +1444,7 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
 .deck.controls #sound-status[hidden] { display: none; }
 
 /* One row of six equal keys once each key is about 130px wide. */
-@media (min-width: 1024px) {
+@media (min-width: 1101px) {
   .deck.controls:not(:has(#export-save)) { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
