@@ -1,6 +1,21 @@
 """File durability and process locks on desktop and server platforms."""
 import errno
 import os
+import time
+
+
+def replace_file(source, destination, attempts=10, delay=0.02):
+    """Replace a file, retrying while another process briefly holds it open on Windows."""
+    for attempt in range(attempts):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError:
+            # Windows refuses to replace a file a reader still has open. Readers
+            # here close within milliseconds, so back off and try again.
+            if os.name != 'nt' or attempt == attempts - 1:
+                raise
+            time.sleep(delay * (attempt + 1))
 
 
 def sync_directory(path):

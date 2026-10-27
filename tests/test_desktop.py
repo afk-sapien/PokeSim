@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -100,10 +101,38 @@ def test_windows_atomic_write_flushes_file_without_opening_directory(tmp_path, m
     # Change only the directory-sync platform decision, leaving pathlib intact.
     windows = Mock()
     windows.name = 'nt'
+    windows.replace = os.replace
     monkeypatch.setattr(platform_io, 'os', windows)
     CheckpointStore.atomic_write(path, b'complete')
     assert path.read_bytes() == b'complete'
     platform_io.os.open.assert_not_called()
+
+
+@pytest.mark.parametrize('name, published', [('nt', True), ('posix', False)])
+def test_atomic_write_retries_a_briefly_open_file_only_on_windows(tmp_path, monkeypatch, name, published):
+    path = tmp_path / 'adventure.json'
+    path.write_bytes(b'old')
+    refusals = []
+
+    def replace(source, destination):
+        # A reader holding the file open makes Windows refuse the first two tries.
+        if len(refusals) < 2:
+            refusals.append(source)
+            raise PermissionError(5, 'Access is denied')
+        os.replace(source, destination)
+
+    platform = Mock()
+    platform.name = name
+    platform.replace = replace
+    monkeypatch.setattr(platform_io, 'os', platform)
+    monkeypatch.setattr(platform_io.time, 'sleep', lambda seconds: None)
+    if published:
+        CheckpointStore.atomic_write(path, b'new')
+    else:
+        with pytest.raises(PermissionError):
+            CheckpointStore.atomic_write(path, b'new')
+    assert path.read_bytes() == (b'new' if published else b'old')
+    assert not list(tmp_path.glob('.pending-*'))
 
 
 @pytest.fixture

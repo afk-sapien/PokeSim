@@ -12,7 +12,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from .platform_io import sync_directory
+from .platform_io import replace_file, sync_directory
 
 log = logging.getLogger(__name__)
 GZIP_MAGIC = b'\x1f\x8b'
@@ -91,7 +91,7 @@ class CheckpointStore:
                 output.write(data)
                 output.flush()
                 os.fsync(output.fileno())
-            os.replace(temporary, path)
+            replace_file(temporary, path)
             sync_directory(path.parent)
         finally:
             temporary.unlink(missing_ok=True)
