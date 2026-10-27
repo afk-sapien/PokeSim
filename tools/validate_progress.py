@@ -118,5 +118,5 @@ if __name__ == '__main__':
     if args.output.resolve() in (args.rom.resolve(), args.checkpoint.resolve(), args.checkpoint.with_suffix('.json').resolve()):
         parser.error('Output must not overwrite a replay input')
     result = run(args.rom, args.checkpoint, args.frames)
-    args.output.write_text(json.dumps(result, indent=2) + '\n')
+    args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({key: result[key] for key in ('edition', 'frames', 'initial_owned', 'final_owned', 'policy_recoveries', 'final_map')}))

@@ -76,7 +76,7 @@ def main():
         saved = max((upgrade / 'states').glob('auto-v1-*.json'), key=lambda p: p.stat().st_mtime)
         backup = root / 'pre-upgrade-backup'
         copy_backup(upgrade, backup)
-        original_checkpoint = json.loads((backup / 'states' / saved.name).read_text())
+        original_checkpoint = json.loads((backup / 'states' / saved.name).read_text(encoding='utf-8'))
         run('docker', 'run', '--rm', '--network', 'none', '--read-only', '-v', f'{upgrade}:/data',
             '-v', f'{args.source.resolve()}:/source:ro', args.image, 'python', '-m', 'pokesim.prepare_data', '/source')
         upgraded = start_direct(args.image, upgrade)
@@ -104,7 +104,7 @@ def main():
                 run(*command)
             except subprocess.CalledProcessError:
                 pass
-        (root / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
+        (root / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
         print(json.dumps(report, indent=2), flush=True)
 
 

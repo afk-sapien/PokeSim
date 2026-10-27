@@ -34,9 +34,9 @@ def main():
                                  'command': ['python', '-m', 'pokesim.prepare_data', '--download']},
             },
             'volumes': {'audit-data': {}},
-        }))
+        }), encoding='utf-8')
         settings = root / 'empty.env'
-        settings.write_text('')
+        settings.write_text('', encoding='utf-8')
         env = {**os.environ, 'POKESIM_IMAGE': args.image, 'ROM_FILE': str(rom),
                'DATA_PATH': str(root / 'unused'), 'BIND_ADDRESS': '127.0.0.1',
                'HTTP_PORT': '0', 'POLICY': 'guided_random', 'SPEED': '1',
@@ -60,7 +60,7 @@ def main():
         try:
             compose('--profile', 'setup', 'run', '--rm', '--pull', 'never', 'prepare-data')
             offline = root / 'offline.json'
-            offline.write_text(json.dumps({'services': {'prepare-data': {'network_mode': 'none'}}}))
+            offline.write_text(json.dumps({'services': {'prepare-data': {'network_mode': 'none'}}}), encoding='utf-8')
             subprocess.run([*command, '-f', str(offline), '--profile', 'setup',
                             'run', '--rm', '--pull', 'never', 'prepare-data'],
                            env=env, check=True, timeout=30)
@@ -93,7 +93,7 @@ def main():
                     'command': ['python', '-m', 'pokesim', 'serve', '--data-dir', '/data/library', '--host', '0.0.0.0'],
                     'healthcheck': {'interval': '2s'}}},
                 'volumes': {'audit-data': {}},
-            }))
+            }), encoding='utf-8')
             command[command.index(str(ROOT / 'compose.legacy.yaml'))] = str(ROOT / 'compose.yaml')
             for attempt in range(2):
                 compose('up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '60', 'pokesim')

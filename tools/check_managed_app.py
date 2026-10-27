@@ -115,7 +115,7 @@ def exercise_app(root, fixtures, roms, game_data, progress=print):
                 'Original fixture was changed')
     report['journal_exactly_once'] = True
     report['source_fixtures_unchanged'] = True
-    (root / 'integration-result.json').write_text(json.dumps(report, indent=2) + '\n')
+    (root / 'integration-result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     return report
 
 

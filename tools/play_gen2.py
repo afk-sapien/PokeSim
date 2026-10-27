@@ -168,7 +168,7 @@ def main():
                 pb.load_state(source)
             metadata = args.load.with_suffix('.policy.json')
             if metadata.exists():
-                policy.load_state_dict(json.loads(metadata.read_text()))
+                policy.load_state_dict(json.loads(metadata.read_text(encoding='utf-8')))
         if args.game_clock:
             follow_game_time(pb)
         if args.focus:
@@ -192,7 +192,7 @@ def main():
             event_emu.snapshot = read_snapshot(pb.memory, data, frame)
             rewards.initialize(event_emu.store, event_emu.snapshot.hall_of_fame_count)
         reward_frame = -5000
-        with (args.output / 'trace.jsonl').open('w') as trace:
+        with (args.output / 'trace.jsonl').open('w', encoding='utf-8') as trace:
             while frame < args.frames:
                 snapshot = read_snapshot(pb.memory, data, frame)
                 if event_emu and frame - reward_frame >= 5000:
@@ -203,7 +203,7 @@ def main():
                     rewards.earn(event_emu.store, snapshot.hall_of_fame_count, enabled=args.league_rewards)
                     records = [record for record in (activate(event_emu), deliver(event_emu)) if record]
                     if records:
-                        with (args.output / 'optional-events.jsonl').open('a') as events:
+                        with (args.output / 'optional-events.jsonl').open('a', encoding='utf-8') as events:
                             for record in records:
                                 events.write(json.dumps(record) + '\n')
                         continue
@@ -251,17 +251,17 @@ def main():
                     pb.screen.image.save(args.output / 'latest.png')
                     with (args.output / 'latest.state').open('wb') as output:
                         pb.save_state(output)
-                    (args.output / 'latest.policy.json').write_text(json.dumps(policy.state_dict()))
+                    (args.output / 'latest.policy.json').write_text(json.dumps(policy.state_dict()), encoding='utf-8')
                     (args.output / 'progress.json').write_text(json.dumps({
                         'game': snapshot.to_dict(egg_view=True), 'mode': policy.mode,
-                        'seconds': time.monotonic() - start}, indent=2))
+                        'seconds': time.monotonic() - start}, indent=2), encoding='utf-8')
         snapshot = read_snapshot(pb.memory, data, frame)
         pb.screen.image.save(args.output / 'final.png')
         with (args.output / 'final.state').open('wb') as output:
             pb.save_state(output)
-        (args.output / 'final.policy.json').write_text(json.dumps(policy.state_dict()))
+        (args.output / 'final.policy.json').write_text(json.dumps(policy.state_dict()), encoding='utf-8')
         (args.output / 'final.json').write_text(json.dumps({'game': snapshot.to_dict(egg_view=True), 'policy': policy.state_dict(),
-                                                         'seconds': time.monotonic() - start, 'stopped': stopped}, indent=2))
+                                                         'seconds': time.monotonic() - start, 'stopped': stopped}, indent=2), encoding='utf-8')
     finally:
         pb.stop(save=False)
         if event_emu:

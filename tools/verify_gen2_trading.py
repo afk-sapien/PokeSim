@@ -43,7 +43,7 @@ def main():
             emu.pb.load_state(source)
         metadata = args.load.with_suffix('.policy.json')
         if metadata.exists():
-            emu.policy.load_state_dict(json.loads(metadata.read_text()))
+            emu.policy.load_state_dict(json.loads(metadata.read_text(encoding='utf-8')))
         for _ in range(12):
             emu.pb.button_press('b')
             emu.pb.tick(8, True)
@@ -114,7 +114,7 @@ def main():
                 receipt = participant.prepare(request)
                 break
         assert receipt['phase'] == 'prepared', receipt
-        (args.output / 'receipt.json').write_text(json.dumps(receipt, indent=2))
+        (args.output / 'receipt.json').write_text(json.dumps(receipt, indent=2), encoding='utf-8')
         print('Prepared boxed offer through the cartridge PC', receipt['source'], flush=True)
     finally:
         emu.pb.screen.image.save(args.output / 'final.png')

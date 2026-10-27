@@ -79,7 +79,7 @@ def add(args):
         for suffix in ('.state', '.json'):
             shutil.copyfile(args.fallback.with_suffix(suffix), folder / f'fallback{suffix}')
         scenario['fallback'] = 'fallback.state'
-    (folder / 'scenario.json').write_text(json.dumps(scenario, indent=2) + '\n')
+    (folder / 'scenario.json').write_text(json.dumps(scenario, indent=2) + '\n', encoding='utf-8')
     print(f'wrote {folder}')
     show(argparse.Namespace(rom=args.rom, scenario=folder))
 
@@ -129,7 +129,7 @@ def run(args):
                                                  f'{result["objective"]} ({result["reason"]})'), flush=True)
     results.sort(key=lambda row: row['name'])
     if args.output:
-        args.output.write_text(json.dumps(results, indent=2) + '\n')
+        args.output.write_text(json.dumps(results, indent=2) + '\n', encoding='utf-8')
     stuck = [row['name'] for row in results if not row['passed']]
     print(f'{len(results) - len(stuck)} of {len(results)} scenarios got going again')
     return 1 if stuck else 0

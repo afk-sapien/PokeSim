@@ -21,15 +21,15 @@ def main():
     with tempfile.TemporaryDirectory(prefix='pokesim-smoke-', ignore_cleanup_errors=True) as temporary:
         root = Path(temporary)
         command = [*args.command, '--no-browser', '--data-dir', str(root)]
-        with (root / 'process.log').open('w') as output:
+        with (root / 'process.log').open('w', encoding='utf-8') as output:
             process = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT)
             try:
                 deadline = time.monotonic() + 60
                 while True:
                     if process.poll() is not None:
-                        raise RuntimeError((root / 'process.log').read_text())
+                        raise RuntimeError((root / 'process.log').read_text(encoding='utf-8'))
                     try:
-                        identity = json.loads((root / 'manager.json').read_text())
+                        identity = json.loads((root / 'manager.json').read_text(encoding='utf-8'))
                         url = identity['url']
                         with opener.open(url + '/health/ready', timeout=1) as response:
                             assert json.load(response)['ok']

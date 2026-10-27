@@ -33,7 +33,7 @@ def main():
     policy = StrategicPolicy(args.seed)
     policy_path = args.checkpoint.with_suffix('.policy.json')
     if policy_path.exists():
-        policy.load_state_dict(json.loads(policy_path.read_text()))
+        policy.load_state_dict(json.loads(policy_path.read_text(encoding='utf-8')))
     frame = 0
     last = None
     last_report = -6000
@@ -42,12 +42,12 @@ def main():
         path = args.output / (name + '.state')
         with path.open('wb') as stream:
             pb.save_state(stream)
-        path.with_suffix('.policy.json').write_text(json.dumps(policy.state_dict()))
+        path.with_suffix('.policy.json').write_text(json.dumps(policy.state_dict()), encoding='utf-8')
         state = read_snapshot(pb.memory, frame)
         detail = {'frame': frame, 'elapsed': round(time.monotonic() - started, 2),
                   'game': state.to_dict(), 'strategy': policy.details(), 'screen': Screen(pb.memory).text,
                   'flags': list(state.event_flags)}
-        path.with_suffix('.json').write_text(json.dumps(detail, indent=2))
+        path.with_suffix('.json').write_text(json.dumps(detail, indent=2), encoding='utf-8')
         pb.screen.image.save(path.with_suffix('.png'))
         return detail
     try:

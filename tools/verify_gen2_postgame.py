@@ -140,7 +140,7 @@ def main():
                 with path.open('wb') as stream:
                     pb.save_state(stream)
                 saved = json.loads(json.dumps(policy.state_dict()))
-                (args.output / 'restart.policy.json').write_text(json.dumps(saved))
+                (args.output / 'restart.policy.json').write_text(json.dumps(saved), encoding='utf-8')
                 pb.stop(save=False)
                 pb = open_game(path)
                 policy = make_policy(saved)
@@ -168,10 +168,10 @@ def main():
         receipt['passed'] = bool(restarted and receipt.get('first_outing', {}).get('encounters') == 100
                                  and (args.first_outing_only or receipt.get('rotation_passed')
                                       or receipt.get('next_shiny_frame')))
-        (args.output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+        (args.output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
         with (args.output / 'final.state').open('wb') as stream:
             pb.save_state(stream)
-        (args.output / 'final.policy.json').write_text(json.dumps(policy.state_dict()))
+        (args.output / 'final.policy.json').write_text(json.dumps(policy.state_dict()), encoding='utf-8')
         pb.screen.image.save(args.output / 'final.png')
         print(json.dumps(receipt, indent=2))
     finally:

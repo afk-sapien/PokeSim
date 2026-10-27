@@ -38,7 +38,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix=project) as temporary:
         root = Path(temporary)
         shutil.copyfile(ROOT / 'compose.quickstart.yaml', root / 'compose.yaml')
-        (root / '.env').write_text('')
+        (root / '.env').write_text('', encoding='utf-8')
         env = compose_environment(args.image, port)
         command = compose_command(root, project)
 
@@ -67,7 +67,7 @@ def main():
                     code += 'assert p.read_text() == "retained library"\n'
                 compose('exec', '-T', 'pokesim', 'python', '-c', code)
                 if attempt == 0:
-                    probe = (ROOT / 'tools/check_first_run.py').read_text()
+                    probe = (ROOT / 'tools/check_first_run.py').read_text(encoding='utf-8')
                     compose('exec', '-T', 'pokesim', 'python', '-c', probe, '--data-dir', '/data')
                 container = compose('ps', '-q', 'pokesim', capture=True).stdout.strip()
                 compose('stop')

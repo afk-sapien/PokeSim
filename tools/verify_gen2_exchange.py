@@ -19,7 +19,7 @@ def main():
     parser.add_argument('right', type=Path)
     parser.add_argument('--data', type=Path, default=Path('.release-local/all-data'))
     args = parser.parse_args()
-    receipts = [json.loads((directory / 'receipt.json').read_text()) for directory in (args.left, args.right)]
+    receipts = [json.loads((directory / 'receipt.json').read_text(encoding='utf-8')) for directory in (args.left, args.right)]
     tid = receipts[0]['id']
     attempt = uuid.uuid4().hex
     output = args.left.resolve().parent / 'interactions' / tid / 'attempts' / attempt / 'outputs'
@@ -71,9 +71,9 @@ def main():
             with (directory / 'adopted.state').open('wb') as stream:
                 participant.emu.pb.save_state(stream)
             policy = participant.emu.policy.state_dict()
-            (directory / 'adopted.policy.json').write_text(json.dumps(policy))
-            (directory / 'adopted.json').write_text(json.dumps({'policy_state': policy}))
-        (output.parent / 'adoption.json').write_text(json.dumps({'status': 'passed', 'participants': list(manifest['participants'])}))
+            (directory / 'adopted.policy.json').write_text(json.dumps(policy), encoding='utf-8')
+            (directory / 'adopted.json').write_text(json.dumps({'policy_state': policy}), encoding='utf-8')
+        (output.parent / 'adoption.json').write_text(json.dumps({'status': 'passed', 'participants': list(manifest['participants'])}), encoding='utf-8')
         print('BOTH EXCHANGES STAGED, COMMITTED, RECOVERED AND RELEASED', flush=True)
     finally:
         for participant in participants:

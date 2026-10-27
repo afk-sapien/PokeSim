@@ -20,9 +20,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
     args = parser.parse_args()
-    status = json.loads((args.directory / 'status.json').read_text())
+    status = json.loads((args.directory / 'status.json').read_text(encoding='utf-8'))
     sample_path = args.directory / 'samples.jsonl'
-    samples = [json.loads(line) for line in sample_path.read_text().splitlines()] if sample_path.exists() else []
+    samples = [json.loads(line) for line in sample_path.read_text(encoding='utf-8').splitlines()] if sample_path.exists() else []
     result = {key: status.get(key) for key in ('status', 'started_at', 'updated_at', 'finished_at', 'image', 'configuration', 'failures')}
     result['failed_health'] = {label: point['health'] for label, point in status.get('failed_sample', {}).get('runs', {}).items()
                                if 'health' in point and not point['health'].get('ok')}

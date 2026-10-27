@@ -329,7 +329,7 @@ def main(argv=None):
     for item in results:
         print('\t'.join(str(item.get(column, '')) for column in columns))
     if args.json:
-        Path(args.json).write_text(json.dumps(results, indent=2))
+        Path(args.json).write_text(json.dumps(results, indent=2), encoding='utf-8')
 
 
 if __name__ == '__main__':

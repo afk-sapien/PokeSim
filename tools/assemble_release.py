@@ -57,7 +57,7 @@ def assemble(root, version, revision, *, include_desktop=True, image=None):
         check_identity(json.load(archive.extractfile(f'pokesim-{version}/pokesim/_build.json')),
                        version, revision)
 
-    metadata = json.loads((root / 'image-metadata.json').read_text())
+    metadata = json.loads((root / 'image-metadata.json').read_text(encoding='utf-8'))
     labels = metadata['Config']['Labels']
     if (metadata['Os'] != 'linux' or metadata['Architecture'] != 'amd64'
             or labels['org.opencontainers.image.version'] != version
@@ -79,18 +79,18 @@ def assemble(root, version, revision, *, include_desktop=True, image=None):
 
     desktop = {}
     for name in archives:
-        identity = json.loads((root / (name + '.json')).read_text())
+        identity = json.loads((root / (name + '.json')).read_text(encoding='utf-8'))
         check_identity(identity, version, revision)
         checksum = digest(root / name)
         if identity.get('archive') != name or identity.get('sha256') != checksum:
             raise ValueError(f'Desktop archive does not match its build receipt: {name}')
-        if (root / (name + '.sha256')).read_text().strip() != f'{checksum}  {name}':
+        if (root / (name + '.sha256')).read_text(encoding='utf-8').strip() != f'{checksum}  {name}':
             raise ValueError(f'Desktop checksum mismatch: {name}')
         desktop[name] = identity
 
     image = image or f'pokesim:{version}'
     settings = root / 'env.example'
-    contents = settings.read_text()
+    contents = settings.read_text(encoding='utf-8')
     if len(re.findall(r'^POKESIM_IMAGE=.*$', contents, flags=re.M)) != 1:
         raise ValueError('Release settings must select exactly one image')
     settings.write_text(re.sub(r'^POKESIM_IMAGE=.*$', f'POKESIM_IMAGE={image}',
@@ -98,7 +98,7 @@ def assemble(root, version, revision, *, include_desktop=True, image=None):
     image_default = r'\$\{POKESIM_IMAGE:-[^}\s]+\}'
     for name in ('compose.yaml', 'compose.quickstart.yaml'):
         compose = root / name
-        contents = compose.read_text()
+        contents = compose.read_text(encoding='utf-8')
         if len(re.findall(image_default, contents)) not in (1, 2):
             raise ValueError('Release Compose must select the versioned application image')
         compose.write_text(re.sub(image_default, '${POKESIM_IMAGE:-' + image + '}', contents),
@@ -108,7 +108,7 @@ def assemble(root, version, revision, *, include_desktop=True, image=None):
         ('install.ps1', r"^\$version = '[^']+'$", "$version = '" + version + "'"),
     ):
         installer = root / name
-        contents, count = re.subn(pattern, lambda match: replacement, installer.read_text(), flags=re.M)
+        contents, count = re.subn(pattern, lambda match: replacement, installer.read_text(encoding='utf-8'), flags=re.M)
         if count != 1:
             raise ValueError(f'{name} must select exactly one release version')
         installer.write_text(contents, encoding='utf-8')

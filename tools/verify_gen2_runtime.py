@@ -88,7 +88,7 @@ def main():
             assert restored['party'][0]['species'] == previous['party'][0]['species']
             assert runtime.store.get('cartridge-steps-v1')['total'] >= steps
             assert emu.health()['ok']
-        (args.output / 'report.json').write_text(json.dumps({'game': previous, 'routes': 'passed', 'restart': 'passed'}, indent=2))
+        (args.output / 'report.json').write_text(json.dumps({'game': previous, 'routes': 'passed', 'restart': 'passed'}, indent=2), encoding='utf-8')
         print('API routes and checkpoint restart passed')
 
 

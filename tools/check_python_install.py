@@ -17,7 +17,7 @@ def main():
     parser.add_argument('--dependency-wheel', type=Path, action='append', default=[],
                         help='Explicit local dependency wheel for unreleased stack validation')
     args = parser.parse_args()
-    version = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['version']
+    version = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     wheels = list((ROOT / 'dist').glob(f'pokesim-{version}-*.whl'))
     if len(wheels) != 1:
         raise SystemExit('Build exactly one current wheel with uv build first')

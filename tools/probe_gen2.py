@@ -107,7 +107,7 @@ def probe(source: Path, output: Path) -> dict:
         'before_walk': asdict(before), 'after_walk': asdict(after),
         'checkpoint_bytes': len(state), 'production_support': False,
     }
-    (output / 'report.json').write_text(json.dumps(result, indent=2) + '\n')
+    (output / 'report.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     return result
 
 
@@ -126,7 +126,7 @@ def main(argv=None):
         report = probe(source, args.output / profile.game)
         reports.append(report)
         print(f'{profile.game}: bedroom, movement and both checkpoint replays passed', flush=True)
-    (args.output / 'report.json').write_text(json.dumps(reports, indent=2) + '\n')
+    (args.output / 'report.json').write_text(json.dumps(reports, indent=2) + '\n', encoding='utf-8')
 
 
 if __name__ == '__main__':

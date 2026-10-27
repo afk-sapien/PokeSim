@@ -232,10 +232,10 @@ class Timings:
 
 
 def simulate(fixture_path, frames, capture):
-    fixture = json.loads(fixture_path.read_text())
+    fixture = json.loads(fixture_path.read_text(encoding='utf-8'))
     metadata_path = fixture_path.with_name('checkpoint.json')
     checkpoint = fixture_path.with_name('checkpoint.state')
-    metadata = json.loads(metadata_path.read_text())
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
     checkpoint_sha256 = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
     if metadata.get('sha256') != checkpoint_sha256:
         raise ValueError('Fixture checkpoint failed its metadata SHA256 check')
@@ -334,7 +334,7 @@ def replay(path, repeats, warmups, decisions):
     runs = []
     warmup_runs = []
     pooled = Timings()
-    fixture = json.loads(path.with_name('fixture.json').read_text())
+    fixture = json.loads(path.with_name('fixture.json').read_text(encoding='utf-8'))
     with tempfile.TemporaryDirectory(prefix='pokesim-decision-replay-') as temporary:
         configure(fixture, Path(temporary))
         with gzip.open(path, 'rb') as stream:
@@ -377,7 +377,7 @@ def replay(path, repeats, warmups, decisions):
 
 
 def startup(fixture_path):
-    fixture = json.loads(fixture_path.read_text())
+    fixture = json.loads(fixture_path.read_text(encoding='utf-8'))
     with tempfile.TemporaryDirectory(prefix='pokesim-compiled-startup-') as temporary:
         configure(fixture, Path(temporary))
         imported = time.perf_counter_ns()
@@ -437,11 +437,11 @@ def main():
             parser.error('Use a positive frame budget')
         report, corpus = simulate(args.fixture.resolve(), args.frames, args.mode == 'capture')
         if args.mode == 'capture':
-            (output / 'fixture.json').write_text(json.dumps(corpus['fixture']) + '\n')
+            (output / 'fixture.json').write_text(json.dumps(corpus['fixture']) + '\n', encoding='utf-8')
             with gzip.open(output / 'workload.pickle.gz', 'wb') as stream:
                 pickle.dump(corpus, stream, protocol=5)
         else:
-            baseline = json.loads(args.compare.read_text())
+            baseline = json.loads(args.compare.read_text(encoding='utf-8'))
             compared = ('frame_budget', 'start_frame', 'end_frame', 'actions_executed', 'decisions',
                         'checkpoint_sha256', 'metadata_sha256', 'trace_sha256',
                         'final_snapshot_sha256', 'final_state_sha256')
@@ -455,7 +455,7 @@ def main():
     report['source'] = source_before
     report['source_unchanged'] = source_before == source_info(source)
     report['peak_rss_mib'] = peak_rss_mib()
-    (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
+    (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({key: value for key, value in report.items() if key != 'trace'}))
     if not report['source_unchanged']:
         raise SystemExit('Production source changed during the benchmark')

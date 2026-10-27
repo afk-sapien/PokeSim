@@ -116,11 +116,11 @@ def main():
         sample = json.loads(result.stdout)
     except (subprocess.SubprocessError, ValueError) as error:
         sample = {'ts': time.time(), 'error': str(error)}
-    rows = json.loads(args.output.read_text()) if args.output.exists() else []
+    rows = json.loads(args.output.read_text(encoding='utf-8')) if args.output.exists() else []
     rows = (rows + [sample])[-3360:]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.output.with_suffix('.tmp')
-    temporary.write_text(json.dumps(rows, indent=2) + '\n')
+    temporary.write_text(json.dumps(rows, indent=2) + '\n', encoding='utf-8')
     temporary.replace(args.output)
     print(json.dumps(sample))
 

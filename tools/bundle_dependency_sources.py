@@ -18,7 +18,7 @@ args = parser.parse_args()
 output = args.output
 output.mkdir(parents=True, exist_ok=True)
 root = Path(__file__).resolve().parents[1]
-lock = tomllib.loads((root / 'uv.lock').read_text())
+lock = tomllib.loads((root / 'uv.lock').read_text(encoding='utf-8'))
 packages = [package for package in lock['package'] if package['name'] == 'pyboy-rs']
 versions = {package['version'] for package in packages}
 if len(versions) != 1:
@@ -72,5 +72,5 @@ for dist in sorted(distributions(), key=lambda d: d.metadata['Name'].lower()):
     report.append({'name': name, 'version': dist.version,
                    'license': dist.metadata.get('License-Expression') or dist.metadata.get('License'),
                    'project_urls': dist.metadata.get_all('Project-URL') or [], 'notices': notices})
-(output / 'python-dependencies.json').write_text(json.dumps(report, indent=2))
-(output / 'source-manifest.json').write_text(json.dumps({'pyboy-rs': source}, indent=2))
+(output / 'python-dependencies.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+(output / 'source-manifest.json').write_text(json.dumps({'pyboy-rs': source}, indent=2), encoding='utf-8')

@@ -15,7 +15,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--package', help='Wheel path or URL, defaults to the current built wheel')
     args = parser.parse_args()
-    version = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['version']
+    version = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     package = args.package or str(ROOT / 'dist' / f'pokesim-{version}-py3-none-any.whl')
     with tempfile.TemporaryDirectory(prefix='pokesim installer ') as temporary:
         root = Path(temporary)
