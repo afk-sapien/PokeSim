@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Stop Gold, Silver and Crystal pacing Goldenrod City while the Day Care makes an egg. One Gold run spent about a fifth of each day there while it bred spare copies. The Day Care counts the steps of any walk, so the run now trains, hunts, collects stones or does postgame work in that time and goes back only to collect the egg or swap a parent. The Goldenrod walk is left only for when nothing else is useful.
+
 - Fix saving on Windows failing with "Access is denied" when another process was reading the same file. Windows refuses to replace an open file, so the save now retries for up to about a second before giving up.
 
 - Add randomized adventures for all six games. New adventure can shuffle wild Pokémon and starters, and trainer parties if chosen, from a seed. Each run gets a share code such as `PSR1-RED-WS-12345` that recreates the same world, shown on the Live page with a copy button. The cartridge is patched in memory only, and the planner follows the shuffled tables. Fishing, gifts, in-game trades and fixed encounters are not shuffled.

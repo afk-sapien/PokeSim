@@ -83,6 +83,28 @@ def test_available_work_goes_ahead_of_a_clock_wait_and_names_it(data, monkeypatc
     assert goal.label == 'Walk with the eggs and the Day Care partners'
 
 
+@pytest.mark.parametrize('activity, key', [('training.journey', 'collection_train'), ('postgame.journey', 'postgame_hunt'),
+                                           ('quests.stones', 'collection_stone'), ('breeding.hatching', 'collection_hatch_pc')])
+def test_the_day_care_wait_trains_or_collects_instead_of_pacing_goldenrod(data, monkeypatch, activity, key):
+    from pokesim.gen2.collection import journey
+    from pokesim.gen2.policy import Goal
+    walk = Goal('collection_hatch', 'Walk with the eggs and the Day Care partners', 'GOLDENROD_CITY', 20, 10)
+    work = Goal(key, 'Other work', 'ROUTE_27', 5, 5)
+    # The Day Care counts the steps of any walk, so the wait goes to the other work and Goldenrod is never paced.
+    patrols = stub_activities(monkeypatch, **{'breeding.journey': walk, activity: work})
+    goal = journey(expedition(data), snapshot([lead()]), clock(), Goal)
+    assert goal.key == key and goal.map_name != 'GOLDENROD_CITY' and not patrols
+
+
+def test_the_day_care_errands_still_go_ahead_of_other_work(data, monkeypatch):
+    from pokesim.gen2.collection import journey
+    from pokesim.gen2.policy import Goal
+    egg = Goal('collection_breed_egg', 'Receive the Day Care egg', 'ROUTE_34', 15, 15)
+    train = Goal('collection_train', 'Train MON toward level 100', 'SILVER_CAVE_ROOM_1', 9, 31)
+    stub_activities(monkeypatch, **{'breeding.journey': egg, 'training.journey': train})
+    assert journey(expedition(data), snapshot([lead()]), clock(), Goal).key == 'collection_breed_egg'
+
+
 def test_hatching_and_training_come_before_the_patrol(data, monkeypatch):
     from pokesim.gen2.collection import journey
     from pokesim.gen2.policy import Goal
