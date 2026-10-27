@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- Add randomized adventures for all six games. New adventure can shuffle wild Pokémon and starters, and trainer parties if chosen, from a seed. Each run gets a share code such as `PSR1-RED-WS-12345` that recreates the same world, shown on the Live page with a copy button. The cartridge is patched in memory only, and the planner follows the shuffled tables. Fishing, gifts, in-game trades and fixed encounters are not shuffled. This uses the Core randomizer, pinned to Core main at `0b7b281`.
+- Add randomized adventures for all six games. New adventure can shuffle wild Pokémon and starters, and trainer parties if chosen, from a seed. Each run gets a share code such as `PSR1-RED-WS-12345` that recreates the same world, shown on the Live page with a copy button. The cartridge is patched in memory only, and the planner follows the shuffled tables. Fishing, gifts, in-game trades and fixed encounters are not shuffled.
+- Require PokeSim Core 0.8.0, which adds the randomizer, and import it as `pokecore`. The old `pokesim_core` import name still works with a deprecation warning.
 
 - Pick the sound buffer automatically and remove the Audio mode select. Watching keeps about one second of sound and delays the live screen by the same amount. Take Control drops to about 0.1 seconds with no screen delay, and handing back grows the buffer again without a silence.
 

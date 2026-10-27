@@ -1,12 +1,12 @@
 """Ruins of Alph goals. Core solves the four picture boards through controller input."""
-from pokesim_core.gen2 import puzzles
-from pokesim_core.gen2.puzzles import CELLS, DESTINATIONS, PUZZLES, puzzle_button
+from pokecore.gen2 import puzzles
+from pokecore.gen2.puzzles import CELLS, DESTINATIONS, PUZZLES, puzzle_button
 
 __all__ = ['CELLS', 'DESTINATIONS', 'PUZZLES', 'control', 'journey', 'puzzle_button']
 
 
 def control(snapshot, mem):
-    """Core's board solver (``pokesim_core.gen2.puzzles.control``) for the current map."""
+    """Core's board solver (``pokecore.gen2.puzzles.control``) for the current map."""
     return puzzles.control(mem.memory, snapshot.data.game, snapshot.data.maps[snapshot.map]['constant'])
 
 

@@ -2,9 +2,9 @@
 
 Core's driver presses the buttons. PokeSim walks each side with its own navigator.
 """
-from pokesim_core.gen2.cable import TRADE_ROOMS
-from pokesim_core.gen2.cable import CableDriver as CoreDriver
-from pokesim_core.gen2.ram import read_snapshot
+from pokecore.gen2.cable import TRADE_ROOMS
+from pokecore.gen2.cable import CableDriver as CoreDriver
+from pokecore.gen2.ram import read_snapshot
 
 from .navigation import Navigator
 

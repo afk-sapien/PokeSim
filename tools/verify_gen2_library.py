@@ -1,6 +1,6 @@
 """Exercise Gen II installation, real Library workers and automatic trading."""
 import argparse
-from pokesim_core.emulator_state import checkpoint_metadata
+from pokecore.emulator_state import checkpoint_metadata
 import json
 from pathlib import Path
 import time

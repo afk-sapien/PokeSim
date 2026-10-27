@@ -9,7 +9,7 @@ import tempfile
 def main():
     os.environ.setdefault('POKESIM_WORKER_STACK_DUMP', '30')
     import httpx
-    from pokesim_core import emulator as pyboy
+    from pokecore import emulator as pyboy
     from pokesim.app.supervisor import Child
     from pokesim import game_data
     reference = game_data.directory().resolve()

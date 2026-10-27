@@ -4,10 +4,10 @@ import io
 import os
 from pathlib import Path
 
-from pokesim_core.gen2.clock import boot
+from pokecore.gen2.clock import boot
 
 from pokesim.gen2.data import GameData
-from pokesim_core.gen2.ram import read_snapshot
+from pokecore.gen2.ram import read_snapshot
 from pokesim.gen2.save import export_with_clock, press
 
 

@@ -1,13 +1,13 @@
 """Export verified cartridge saves on a private Generation II emulator.
 
-Core drives the game's own Save menu and verifies the result (``pokesim_core.gen2.save``).
+Core drives the game's own Save menu and verifies the result (``pokecore.gen2.save``).
 PokeSim adds the checks that belong to a running adventure.
 """
 from __future__ import annotations
 
-from pokesim_core.gen2.save import BUTTONS, clock_archive, export, export_with_clock, press, progress, verify
+from pokecore.gen2.save import BUTTONS, clock_archive, export, export_with_clock, press, progress, verify
 
-from pokesim_core.gen2.ram import read_snapshot
+from pokecore.gen2.ram import read_snapshot
 
 __all__ = ['BUTTONS', 'capture', 'clock_archive', 'export', 'export_with_clock', 'press', 'progress', 'verify']
 

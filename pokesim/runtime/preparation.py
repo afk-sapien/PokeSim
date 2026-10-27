@@ -4,10 +4,10 @@ from __future__ import annotations
 from dataclasses import asdict
 import time
 
-from pokesim_core.shortcuts import ChangeBox, DepositPokemon, WithdrawPokemon
+from pokecore.shortcuts import ChangeBox, DepositPokemon, WithdrawPokemon
 
 from ..policies.base import Action
-from pokesim_core.centers import CENTERS
+from pokecore.centers import CENTERS
 from ..policies.navigation import Navigator
 from ..policies.progression import YELLOW
 from ..policies.collection import LEAGUE
@@ -15,7 +15,7 @@ from ..policies.team import reserve_to_deposit, stays_in_party
 from ..ram import read_snapshot
 from ..screen import Screen
 from ..shortcuts import ShortcutRunner, gen1_ui
-from pokesim_core.identity import dex_of, is_legacy, legacy, same
+from pokecore.identity import dex_of, is_legacy, legacy, same
 from ..trade.preferences import identity
 from ..web.pokedex import live_status
 

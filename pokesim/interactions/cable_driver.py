@@ -5,8 +5,8 @@ the attendant with its own navigator.
 """
 from __future__ import annotations
 
-from pokesim_core.gen1_cable import CableDriver as CoreCableDriver
-from pokesim_core.gen1_cable import CLUB_MAP, FACING_UP, PLAYER_FACING, WALK_COUNTER  # noqa: F401  (re-exported)
+from pokecore.gen1_cable import CableDriver as CoreCableDriver
+from pokecore.gen1_cable import CLUB_MAP, FACING_UP, PLAYER_FACING, WALK_COUNTER  # noqa: F401  (re-exported)
 
 
 class CableDriver(CoreCableDriver):

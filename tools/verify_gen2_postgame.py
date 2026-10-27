@@ -9,8 +9,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from pokesim_core.gen2.clock import boot, follow_game_time
-from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.clock import boot, follow_game_time
+from pokecore.gen2.ram import Memory, read_snapshot
 
 from pokesim.gen2 import postgame
 from pokesim.gen2.data import GameData

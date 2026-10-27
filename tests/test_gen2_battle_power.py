@@ -2,7 +2,7 @@
 import os
 import pytest
 
-from pokesim_core.gen2.battle_power import battle_power, hidden_power
+from pokecore.gen2.battle_power import battle_power, hidden_power
 from pokesim.gen2.web import live_party, live_status
 from pokesim.statistics import highlights
 

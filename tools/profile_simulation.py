@@ -79,7 +79,7 @@ def run(args):
         settings.install()
         from pokesim.emulator import Emulator
         from pokesim.policies.strategic import StrategicPolicy
-        from pokesim_core.emulator import Emulator as CoreEmulator
+        from pokecore.emulator import Emulator as CoreEmulator
         timings = defaultdict(lambda: {'calls': 0, 'wall': 0.0, 'cpu': 0.0,
                                        'exclusive_wall': 0.0, 'exclusive_cpu': 0.0})
         stack = []

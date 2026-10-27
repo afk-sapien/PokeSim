@@ -9,8 +9,8 @@ import uuid
 from .. import config, rewards
 from ..checkpoints import CheckpointStore
 from ..runtime.reward_delivery import BARRIER, PENDING, recover_storage
-from pokesim_core.gen2.ram import Memory, read_snapshot
-from pokesim_core.gen2.resets import box_gift
+from pokecore.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.resets import box_gift
 from .steps import RETURNS, consume, ready
 
 MYTHICAL = 'gen2-mythical-gift-v1'
@@ -107,7 +107,7 @@ def deliver(emu):
 
 
 def clone_emulator(emu):
-    from pokesim_core.gen2.clock import boot
+    from pokecore.gen2.clock import boot
     clone = boot(str(emu.rom), sound=True)
     clone.load_state(io.BytesIO(emu._state_bytes()))
     return clone

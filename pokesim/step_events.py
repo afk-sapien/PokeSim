@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 import json
 from functools import lru_cache
-from pokesim_core.resets import Flag, update_flags
+from pokecore.resets import Flag, update_flags
 
 from . import config
 from .events import Event

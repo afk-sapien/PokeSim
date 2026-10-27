@@ -15,7 +15,7 @@ def main():
     args = parser.parse_args()
 
     from fastapi.testclient import TestClient
-    from pokesim_core import emulator as pyboy
+    from pokecore import emulator as pyboy
     from pokesim import desktop_setup, sprites
     from pokesim.app.manager import Manager, create_app
     from pokesim.app.registry import identifier

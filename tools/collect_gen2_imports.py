@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from pokesim_core.gen2.clock import boot
+from pokecore.gen2.clock import boot
 
 
 def inspect_classic(rom, state, *, offer_trained=False):
@@ -33,7 +33,7 @@ def inspect_modern(rom, state, data, *, offer_trained=False):
     from types import SimpleNamespace
     from pokesim.trade.preferences import apply, identity
     from pokesim.gen2.policy import Policy
-    from pokesim_core.gen2.ram import read_snapshot
+    from pokecore.gen2.ram import read_snapshot
     from pokesim.gen2.trading import offers
     from pokesim.gen2.web import live_status
     pb = boot(str(rom), sound=True)

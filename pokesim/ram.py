@@ -5,7 +5,7 @@ against the community RAM map and verified in-emulator (see tests/).
 """
 from __future__ import annotations
 
-from pokesim_core.gen1 import (
+from pokecore.gen1 import (
     W_TILEMAP as W_TILEMAP,
     W_ENEMY_SPECIES2 as W_ENEMY_SPECIES2,
     W_ENEMY_MON as W_ENEMY_MON,
@@ -51,7 +51,7 @@ from .display_names import place_name
 from .game_data import load
 from dataclasses import dataclass, fields, replace
 from functools import lru_cache
-from pokesim_core.storage import decode_box, memory_bytes
+from pokecore.storage import decode_box, memory_bytes
 
 # Yellow's opening scene, where Oak catches Pikachu before the player has a party.
 BATTLE_TYPE_PIKACHU = 4
@@ -375,7 +375,7 @@ def _read_storage(mem, counts=None):
 def read_snapshot(mem, frame: int) -> Snapshot:
     """Decode through Core while retaining application-specific storage filtering."""
     from .strategy_data import MOVES as MOVE_DATA
-    from pokesim_core.snapshot import read_fields
+    from pokecore.snapshot import read_fields
     decoded = read_fields(mem, move_data=MOVE_DATA)
     decoded['party'] = tuple(PartyMon(**mon) for mon in decoded['party'])
     box_counts = read_box_counts(mem)

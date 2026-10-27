@@ -22,7 +22,7 @@ def main():
         rom = root / 'demo.gb'
         rom.write_bytes(subprocess.check_output([
             'docker', 'run', '--rm', '--network', 'none', '--entrypoint', 'python', args.image,
-            '-c', 'from pokesim_core.emulator import demo_rom\nimport sys\n'
+            '-c', 'from pokecore.emulator import demo_rom\nimport sys\n'
             'sys.stdout.buffer.write(demo_rom().read_bytes())',
         ], timeout=30))
         rom.chmod(0o644)

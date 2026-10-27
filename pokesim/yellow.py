@@ -16,7 +16,7 @@ import hashlib
 import operator
 from pathlib import Path
 
-from pokesim_core.emulator import Emulator as CoreEmulator
+from pokecore.emulator import Emulator as CoreEmulator
 
 YELLOW_SHA1 = 'cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1'
 YELLOW_NAME = 'Pokemon Yellow (USA, Europe) (GBC,SGB Enhanced)'
@@ -152,6 +152,6 @@ def open_emulator(rom, default=None, yellow=None, **kwargs):
     if yellow if yellow is not None else hashlib.sha1(raw).hexdigest() == YELLOW_SHA1:
         return YellowEmulator(rom, **kwargs)
     if default is None:
-        import pokesim_core.emulator
-        default = pokesim_core.emulator.Emulator
+        import pokecore.emulator
+        default = pokecore.emulator.Emulator
     return default(rom, **kwargs)

@@ -28,7 +28,7 @@ trainer, or a peer that offers the species for trade.
 """
 from collections import Counter
 
-from pokesim_core.gen2.hooks import bcd, mart_hooks
+from pokecore.gen2.hooks import bcd, mart_hooks
 
 from .. import config
 from .standdown import stand_down, standing_down

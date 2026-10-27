@@ -7,12 +7,12 @@ Day Care and showing a Pokémon to a person.
 from dataclasses import KW_ONLY, dataclass, fields
 import re
 
-from pokesim_core.shortcuts import (BuyItem, ChangeBox as CoreChangeBox, ChooseMove, DeleteMove, DepositPokemon,
+from pokecore.shortcuts import (BuyItem, ChangeBox as CoreChangeBox, ChooseMove, DeleteMove, DepositPokemon,
                                     Done, FieldMove as CoreFieldMove, GiveItem, LearnMove, ReleasePokemon, ReorderParty,
                                     RunAway, SellItem, SwitchPokemon, TakeItem, UseItem, WithdrawPokemon, current_screen)
-from pokesim_core.shortcuts.machine import BACKABLE
+from pokecore.shortcuts.machine import BACKABLE
 
-from pokesim_core.textmatch import has_word
+from pokecore.textmatch import has_word
 
 # A menu task that needs more steps than this is lost. It ends and the stuck path takes over.
 MAX_STEPS = 600

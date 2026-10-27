@@ -1,11 +1,11 @@
 """Gen II map routing with live collision blocks and object avoidance."""
 from collections import deque
 
-from pokesim_core.gen2 import maps as ice
-from pokesim_core.gen2.maps import (DIRS, OPPOSITE, WALLS, blocked_side, decode_blocks, ice_solids,
+from pokecore.gen2 import maps as ice
+from pokecore.gen2.maps import (DIRS, OPPOSITE, WALLS, blocked_side, decode_blocks, ice_solids,
                                     passable, travel_collision)
 
-from pokesim_core.gen2.ram import Memory, Snapshot
+from pokecore.gen2.ram import Memory, Snapshot
 from .routes import CARPETS, Regions, Search
 
 

@@ -22,7 +22,7 @@ def validate(code, version=None):
         return ''
     if not isinstance(code, str):
         raise ValueError('The randomizer share code must be text')
-    from pokesim_core.randomizer import decode_share_code, encode_share_code
+    from pokecore.randomizer import decode_share_code, encode_share_code
     try:
         game, seed, options = decode_share_code(code)
     except ValueError as error:
@@ -44,8 +44,8 @@ class Run:
 
 @lru_cache(maxsize=4)
 def _run(code, rom_path, size, mtime):
-    from pokesim_core import romdata
-    from pokesim_core.randomizer import decode_share_code, randomize
+    from pokecore import romdata
+    from pokecore.randomizer import decode_share_code, randomize
     version, seed, options = decode_share_code(code)
     clean_rom = Path(rom_path).read_bytes()
     clean = romdata.load(clean_rom, version)

@@ -5,11 +5,11 @@ import io
 from pathlib import Path
 import tempfile
 
-from pokesim_core.gen2.clock import boot
+from pokecore.gen2.clock import boot
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Action, Policy
-from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.ram import Memory, read_snapshot
 from pokesim.gen2.tracking import CAPTURES, Tracker
 from pokesim.store import Store
 

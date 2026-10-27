@@ -1,5 +1,5 @@
 """Bounded live PCM delivery."""
-from pokesim_core.checkpoint_audio import enable_checkpoint_sound as enable_checkpoint_sound
+from pokecore.checkpoint_audio import enable_checkpoint_sound as enable_checkpoint_sound
 from collections import deque, namedtuple
 import threading
 import time

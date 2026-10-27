@@ -7,8 +7,8 @@ import json
 
 from .. import config
 from ..events import Event
-from pokesim_core.gen2.ram import Memory
-from pokesim_core.gen2.resets import write_byte, write_flag
+from pokecore.gen2.ram import Memory
+from pokecore.gen2.resets import write_byte, write_flag
 
 KEY = 'gen2-legendary-returns-v1'
 EVENTS = 'gen2-event-returns-v1'

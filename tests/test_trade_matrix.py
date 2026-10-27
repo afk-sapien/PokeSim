@@ -21,7 +21,7 @@ from pokesim.policies.base import PolicyContext
 from pokesim.runtime import preparation
 from pokesim.store import Store
 from pokesim.trade.preferences import identity
-from pokesim_core import timecapsule as core
+from pokecore import timecapsule as core
 from shortcut_fakes import PRESS, Recorder
 from test_duplicates import snapshot, stored
 from test_managed_coordinator import Peer
@@ -659,7 +659,7 @@ def test_gen2_full_pc_with_nothing_to_release_says_why():
 
 @pytest.mark.parametrize('version', VERSIONS)
 def test_every_game_can_change_to_its_last_pc_box(version):
-    from pokesim_core.shortcuts import ChangeBox as CoreChangeBox
+    from pokecore.shortcuts import ChangeBox as CoreChangeBox
     last = 11 if generation(version) == 1 else 13
     assert CoreChangeBox(last, version=version).box == last
     with pytest.raises(ValueError):

@@ -1,7 +1,7 @@
 """Durable walking milestones and repeat legendary encounter claims."""
 import json
 import time
-from pokesim_core.resets import Flag, update_flags
+from pokecore.resets import Flag, update_flags
 
 from . import config
 from .catches import TRACKED, YELLOW, site

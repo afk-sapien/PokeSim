@@ -1,12 +1,12 @@
 """Gen II front portraits from the owner's verified cartridge, as PNG files.
 
-Core decodes the pictures and palettes (``pokesim_core.gen2.sprites``). This module writes
+Core decodes the pictures and palettes (``pokecore.gen2.sprites``). This module writes
 them as PNG files for the web page.
 """
 from pathlib import Path
 
-from pokesim_core.gen2.sprites import decompress, offset, portrait as _portrait
-from pokesim_core.sprites import png
+from pokecore.gen2.sprites import decompress, offset, portrait as _portrait
+from pokecore.sprites import png
 
 from .data import GameData
 

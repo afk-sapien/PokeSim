@@ -1,11 +1,11 @@
 """Collect missing hatchlings through the cartridge's two parent Day Care.
 
-Core holds the breeding rules (``pokesim_core.gen2.breeding``). This module plans the trips.
+Core holds the breeding rules (``pokecore.gen2.breeding``). This module plans the trips.
 """
 from copy import deepcopy
 from itertools import combinations
 
-from pokesim_core.gen2.breeding import (branch_parents, descendants_wanted, egg_lines, families,
+from pokecore.gen2.breeding import (branch_parents, descendants_wanted, egg_lines, families,
                                         free_slots, offspring)
 
 from .menus import ChangeBox, DayCare, Storage

@@ -7,9 +7,9 @@ sets that bit before the trade animation, so a set bit means the trade has happe
 from dataclasses import dataclass
 
 from .menus import ChangeBox, Storage, choose, tracked
-from pokesim_core.gen2.ram import Memory
-from pokesim_core.gen2.state import npc_trade_qualifies as qualifies
-from pokesim_core.gen2.tables import NPC_TRADES as TRADES, NpcTrade, npc_trades as trades  # noqa: F401  (re-exported)
+from pokecore.gen2.ram import Memory
+from pokecore.gen2.state import npc_trade_qualifies as qualifies
+from pokecore.gen2.tables import NPC_TRADES as TRADES, NpcTrade, npc_trades as trades  # noqa: F401  (re-exported)
 from .training import FIELD_MOVES
 
 
@@ -98,7 +98,7 @@ def record(policy, snapshot, memory):
 
 
 def journey(policy, snapshot, mem, Goal):
-    from pokesim_core.gen2.breeding import free_slots
+    from pokecore.gen2.breeding import free_slots
     if 'wTradeFlags' not in policy.data.symbols or getattr(mem, 'memory', None) is None:
         return None
     value = record(policy, snapshot, mem.memory)

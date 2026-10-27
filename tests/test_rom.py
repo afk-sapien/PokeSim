@@ -12,7 +12,7 @@ pytestmark = pytest.mark.skipif(not ROM.exists(), reason="no ROM")
 
 
 def test_boot_and_snapshot():
-    from pokesim_core.emulator import Emulator as PyBoy
+    from pokecore.emulator import Emulator as PyBoy
     pb = PyBoy(str(ROM), window="null", sound_emulated=False)
     try:
         pb.set_emulation_speed(0)

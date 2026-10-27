@@ -5,7 +5,7 @@ policies call ``ShortcutRunner.step`` once per decision, so a shortcut shares th
 policy loop instead of blocking it. A request that failed is not retried for a
 while, which keeps a refused menu from looping.
 """
-from pokesim_core.shortcuts import Done
+from pokecore.shortcuts import Done
 
 from .policies.base import Action
 

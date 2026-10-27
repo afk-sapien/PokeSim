@@ -1,6 +1,6 @@
 """Shared button selection and explicit results from menu controllers."""
 from dataclasses import dataclass
-from pokesim_core.naming import menu_button
+from pokecore.naming import menu_button
 
 from .base import Action
 

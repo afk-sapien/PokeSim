@@ -5,18 +5,18 @@ import io
 from pathlib import Path
 from types import SimpleNamespace
 
-from pokesim_core.gen2.clock import boot
+from pokecore.gen2.clock import boot
 
 from .. import config
 from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
-from pokesim_core.identity import find, same
+from pokecore.identity import find, same
 from ..shiny import shiny_bytes
 from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, keeps, manual_rows
 from ..trade.preferences import apply, name as setting_name
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin, reserves
-from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.ram import Memory, read_snapshot
 # The Exp. Share item number, as release.EXP_SHARE (kept local so this module imports without Gen I data).
 EXP_SHARE = 0x39
 from .web import live_status
@@ -103,7 +103,7 @@ def _kept(mon, stock):
 
 
 def _stock(emu, rows):
-    from pokesim_core.gen2.breeding import breeding_stock
+    from pokecore.gen2.breeding import breeding_stock
     return breeding_stock(emu.data, [mon['species'] for mon in rows if not mon.get('egg')])
 
 
@@ -357,7 +357,7 @@ class Participant(BaseParticipant):
         record['incoming_shiny'] = ([evolved_species(incoming['struct'], self.emu.data)]
                                     if shiny_bytes(incoming['struct'][21:23]) else [])
         from .league import validate
-        from pokesim_core.gen2.ram import decode_mon
+        from pokecore.gen2.ram import decode_mon
         mon = decode_mon(incoming['struct'], incoming['nickname'], self.emu.data)
         league = data.get('incoming_league_record')
         if record.get('time_capsule'):

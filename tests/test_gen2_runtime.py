@@ -12,7 +12,7 @@ from PIL import Image
 from pokesim.cartridges import by_version, validate_starter, unpack
 from pokesim.gen2.data import GameData, constants, number
 from pokesim.gen2.navigation import Navigator
-from pokesim_core.gen2.ram import calculated_stats, experience_at, experience_progress
+from pokecore.gen2.ram import calculated_stats, experience_at, experience_progress
 from pokesim.gen2.sprites import portrait
 from pokesim.gen2.web import Reference
 
@@ -153,7 +153,7 @@ def test_real_reference_has_all_species_correct_types_and_versioned_encounters(r
 
 def test_full_box_gift_preserves_existing_native_names(real_data):
     from collections import defaultdict
-    from pokesim_core.gen2.ram import Memory, read_snapshot
+    from pokecore.gen2.ram import Memory, read_snapshot
     from pokesim.gen2.rewards import gift
     class BankedMemory:
         def __init__(self):
@@ -371,7 +371,7 @@ def test_radio_can_open_when_the_pokegear_icon_is_not_text():
 
 
 def test_snorlax_blocks_its_whole_footprint_until_the_battle(real_data):
-    from pokesim_core.gen2.maps import travel_collision
+    from pokecore.gen2.maps import travel_collision
     mid = real_data.map_ids['VERMILION_CITY']
     entry = real_data.maps[mid]
     original = list(entry['collision'])
@@ -503,7 +503,7 @@ def test_tyrogue_training_selects_the_actual_stat_branch(real_data):
 
 
 def test_breeding_observes_baby_groups_gender_and_related_dvs(real_data):
-    from pokesim_core.gen2.breeding import offspring
+    from pokecore.gen2.breeding import offspring
     def mon(species, gender, defense, special):
         return SimpleNamespace(species=species, gender=gender, egg=False, dvs=(0, 0, defense, 0, special))
     ditto = mon(132, 'Genderless', 3, 4)
@@ -524,7 +524,7 @@ def test_tree_rarity_uses_facing_coordinates_and_trainer_id():
 
 
 def test_victory_road_guards_block_remote_routes_until_story_flags(real_data):
-    from pokesim_core.gen2.maps import travel_collision
+    from pokecore.gen2.maps import travel_collision
     mid = real_data.map_ids['VICTORY_ROAD_GATE']
     entry = real_data.maps[mid]
     snapshot = SimpleNamespace(event=lambda name: False)
@@ -789,7 +789,7 @@ def test_faster_roamer_lead_traps_then_sleeps_and_never_paralyzes(real_data):
 
 def test_roamer_lead_is_the_cheapest_sleeper_that_outspeeds_the_beasts(real_data):
     from pokesim.gen2.quests import roam_lead, roamer_speed
-    from pokesim_core.gen2.ram import calculated_stats, experience_at
+    from pokecore.gen2.ram import calculated_stats, experience_at
     policy = SimpleNamespace(data=real_data, memory=None)
     def mon(species, level, moves, box=None):
         return SimpleNamespace(species=species, level=level, moves=moves, pp=tuple(10 if m else 0 for m in moves),
@@ -1122,7 +1122,7 @@ def test_celebi_quest_respects_the_overnight_wait(real_data):
 
 def test_time_capsule_preserves_league_counts_across_return_trade(real_data):
     from pokesim.gen2 import league
-    from pokesim_core.gen2.ram import decode_mon
+    from pokecore.gen2.ram import decode_mon
     from pokesim.gen2.timecapsule_conversion import to_gen1
     from pokesim.gen2.timecapsule_records import to_gen1 as old_record, to_gen2 as new_record
     from pokesim.trade.preferences import signature as identity
@@ -1257,14 +1257,14 @@ def test_weekly_red_reset_does_not_interrupt_completed_collection(real_data, mon
 
 
 def test_daycare_cost_accounts_for_unapplied_levels(real_data):
-    from pokesim_core.gen2.breeding import retrieval_cost
+    from pokecore.gen2.breeding import retrieval_cost
     parent = SimpleNamespace(species=220, level=21, experience=29816)
     assert retrieval_cost(real_data, SimpleNamespace(daycare=(parent, None))) == 800
     assert retrieval_cost(real_data, SimpleNamespace(daycare=(None, None))) == 0
 
 
 def test_tyrogue_branches_need_viable_stats_not_just_spare_copies(real_data):
-    from pokesim_core.gen2.breeding import branch_parents
+    from pokecore.gen2.breeding import branch_parents
     hitmonlee = SimpleNamespace(species=236, level=5, dvs=(8, 15, 0, 0, 0), stat_exp=(0,) * 5)
     hitmontop = SimpleNamespace(species=236, level=5, dvs=(0,) * 5, stat_exp=(0,) * 5)
     snapshot = SimpleNamespace(party=(hitmonlee, hitmonlee), stored=())
@@ -1377,7 +1377,7 @@ def test_pending_eggs_hatch_before_recalculating_breeding_pairs(real_data, monke
 
 
 def test_pre_evolutions_match_a_scan_of_the_species_table(real_data):
-    from pokesim_core.gen2.breeding import _pre_evolutions
+    from pokecore.gen2.breeding import _pre_evolutions
     previous = _pre_evolutions(real_data)
     for species in real_data.species:
         scanned = next((sid for sid, row in real_data.species.items()
@@ -1560,7 +1560,7 @@ def test_idle_training_yields_to_new_collection_opportunities(real_data):
 
 def test_checkpoint_clock_export_preserves_elapsed_days(real_data):
     import struct
-    from pokesim_core.gen2.clock import boot
+    from pokecore.gen2.clock import boot
     from pokesim.gen2.cable_verification import checkpoint_clock
     from tools.advance_gen2_clock import advance
     directory = os.environ.get('GEN2_CARTRIDGE_DIR')
@@ -1783,7 +1783,7 @@ def test_tower_toxic_targets_healthy_bulky_opponents(real_data):
 
 
 def test_tower_trains_an_evolution_to_cover_shared_weaknesses(real_data):
-    from pokesim_core.gen2.ram import calculated_stats
+    from pokecore.gen2.ram import calculated_stats
     from pokesim.gen2.tower import forecast, select_team
     mons = []
     for species, level, moves in [(249, 70, (105, 92, 89, 70)), (196, 70, (94, 247, 44, 36)),
@@ -1810,7 +1810,7 @@ def test_recover_can_outpace_damage_between_two_fifths_and_half_hp(real_data):
 
 def test_tower_switches_away_from_a_lethal_fighting_matchup(real_data):
     from pokesim.gen2.policy import Policy
-    from pokesim_core.gen2.ram import calculated_stats
+    from pokecore.gen2.ram import calculated_stats
     policy = Policy(real_data)
     party = []
     for species, moves in [(248, (89, 157, 37, 242)), (249, (105, 92, 89, 70)), (196, (94, 247, 44, 36))]:
@@ -2036,9 +2036,9 @@ def test_real_lighthouse_jasmine_is_reached_while_amphy_blocks_the_near_side():
     """Needs private files: set GEN2_CARTRIDGE_DIR, GEN2_DATA_DIR and GEN2_PERSON_STATE (a Gold savestate
     taken at Olivine Lighthouse 6F with Amphy beside Jasmine, plus a matching .policy.json). Never commit them."""
     import json
-    from pokesim_core.gen2.clock import boot, lock_clock
+    from pokecore.gen2.clock import boot, lock_clock
     from pokesim.gen2.policy import Policy
-    from pokesim_core.gen2.ram import read_snapshot
+    from pokecore.gen2.ram import read_snapshot
     cartridges, data_dir, state = (os.environ.get(name) for name in ('GEN2_CARTRIDGE_DIR', 'GEN2_DATA_DIR', 'GEN2_PERSON_STATE'))
     if not (cartridges and data_dir and state) or not Path(state).is_file() or not (Path(cartridges) / 'gold.gbc').is_file():
         pytest.skip('Set GEN2_CARTRIDGE_DIR, GEN2_DATA_DIR and GEN2_PERSON_STATE to private local files')

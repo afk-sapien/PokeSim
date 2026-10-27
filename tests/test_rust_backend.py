@@ -4,8 +4,8 @@ These checks need no private ROM, so CI runs them on every platform that install
 """
 import io
 
-from pokesim_core.emulator import Emulator, check_runtime, demo_rom
-from pokesim_core.emulator_state import runtime_provenance
+from pokecore.emulator import Emulator, check_runtime, demo_rom
+from pokecore.emulator_state import runtime_provenance
 
 
 def boot():

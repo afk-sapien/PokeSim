@@ -6,16 +6,16 @@ import json
 import os
 from pathlib import Path
 
-from pokesim_core.identity import same
+from pokecore.identity import same
 from ..interactions.cable import checked, sha256
 from ..interactions.link_worker import _write
 from .cable import CableSide
 from .cable_driver import CableDriver
 from .cable_metadata import ADAPTER_ID, BUILDS
-from pokesim_core.gen2.clock import stop_with_clock
+from pokecore.gen2.clock import stop_with_clock
 from .cable_verification import continue_save, individual_key, party, verify_exchange
 from .data import GameData
-from pokesim_core.gen2.ram import read_snapshot
+from pokecore.gen2.ram import read_snapshot
 
 
 def run_session(plan, output_dir, progress=None, cancelled=None):

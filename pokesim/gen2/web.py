@@ -1,8 +1,8 @@
 """Generation II data presented through the shared adventure interface."""
 import json
 
-from pokesim_core.gen2.battle_power import battle_power, hidden_power
-from pokesim_core.gen2.ram import STAT_NAMES
+from pokecore.gen2.battle_power import battle_power, hidden_power
+from pokecore.gen2.ram import STAT_NAMES
 
 VERSIONS = ('gold', 'silver', 'crystal')
 DEFAULT_VERSION = 'crystal'

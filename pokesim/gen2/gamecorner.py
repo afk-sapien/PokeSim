@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 import re
 
-from pokesim_core.gen2.tables import prizes
+from pokecore.gen2.tables import prizes
 
 from .menus import MAX_STEPS, SLOT_MAX_STEPS, choose
 from .quests import room_for_gift

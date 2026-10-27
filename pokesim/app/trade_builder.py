@@ -10,7 +10,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 from .. import config
-from pokesim_core.identity import find
+from pokecore.identity import find
 from .coordinator import BUSY_NOTE, LINKABLE
 from .assets import portrait_url
 from .registry import identifier, validate_id

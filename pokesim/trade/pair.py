@@ -3,7 +3,7 @@ import argparse
 import hashlib
 import json
 import sqlite3
-from pokesim_core.emulator_state import validate_runtime
+from pokecore.emulator_state import validate_runtime
 from pathlib import Path
 
 from ..broker import inventory, routine

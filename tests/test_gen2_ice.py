@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from pokesim_core.gen2 import maps as ice
+from pokecore.gen2 import maps as ice
 from pokesim.gen2.data import GameData
 from pokesim.gen2.navigation import Navigator
 from pokesim.gen2.policy import Policy

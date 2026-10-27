@@ -7,10 +7,10 @@ from unittest.mock import Mock
 
 import pytest
 
-from pokesim_core.gen2 import clock as core
+from pokecore.gen2 import clock as core
 from pokesim.store import Store
-from pokesim_core.emulator_state import checkpoint_metadata, retag_checkpoint
-from pokesim_core.errors import CoreCapabilityError
+from pokecore.emulator_state import checkpoint_metadata, retag_checkpoint
+from pokecore.errors import CoreCapabilityError
 
 LOCK = {'base': 1_700_000_000.0, 'offset': 0.0, 'frames': 12, 'follow_frames': True}
 

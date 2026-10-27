@@ -14,7 +14,7 @@ MESSAGE = (
 def require_emulator():
     """Exit with a clear message when the emulator packages are absent. Does nothing where they are installed."""
     try:
-        import pokesim_core  # noqa: F401  (Core imports its emulator backend itself)
+        import pokecore  # noqa: F401  (Core imports its emulator backend itself)
         missing = importlib.util.find_spec('pyboy_rs') is None
     except ImportError as error:
         sys.exit(MESSAGE.format(system=platform.system() or sys.platform, machine=platform.machine()) + f'\n({error})')

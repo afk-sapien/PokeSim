@@ -13,7 +13,7 @@ from pokesim import config
 from pokesim.emulator import Emulator
 from pokesim.policies.base import Action, PolicyContext, stack_pointer
 from pokesim.shortcuts import ShortcutRunner
-from pokesim_core.shortcuts import ChooseMove
+from pokecore.shortcuts import ChooseMove
 from pokesim.ram import W_BAG_ITEMS, W_NUM_BAG_ITEMS, read_snapshot
 from pokesim.screen import Screen
 from pokesim.store import Store

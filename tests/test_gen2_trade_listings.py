@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.gen2 import trading
-from pokesim_core.gen2 import breeding
+from pokecore.gen2 import breeding
 
 
 def boxed(species, position, **extra):

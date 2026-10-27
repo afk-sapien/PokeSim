@@ -10,7 +10,7 @@ import sqlite3
 import tempfile
 import time
 
-from pokesim_core.emulator_state import same_runtime_or_recorded_migration
+from pokecore.emulator_state import same_runtime_or_recorded_migration
 
 from ..checkpoints import CheckpointStore
 from ..platform_io import lock_file, sync_directory

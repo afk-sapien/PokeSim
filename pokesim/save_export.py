@@ -1,9 +1,9 @@
 """Export current progress through the cartridge's own Save menu on a private clone.
 
-Core saves and verifies the result (``pokesim_core.gen1_save``). PokeSim adds the checks that
+Core saves and verifies the result (``pokecore.gen1_save``). PokeSim adds the checks that
 belong to a running adventure.
 """
-from pokesim_core.gen1_save import export, verify
+from pokecore.gen1_save import export, verify
 
 from .ram import read_snapshot
 from .screen import Screen

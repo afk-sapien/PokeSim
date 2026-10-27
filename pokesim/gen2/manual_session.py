@@ -111,7 +111,7 @@ class Session:
         from .cable import CableSide
         from .cable_verification import party
         from .data import GameData
-        from pokesim_core.gen2.ram import read_snapshot
+        from pokecore.gen2.ram import read_snapshot
         self.plan.validate()
         self.out.mkdir(parents=True, exist_ok=False)
         for spec in (self.plan.left, self.plan.right):
@@ -136,7 +136,7 @@ class Session:
 
     def ready(self, side):
         """True when this side shows the trade party list, waiting for the owner."""
-        from pokesim_core.gen2.ram import read_snapshot
+        from pokecore.gen2.ram import read_snapshot
         if not side.counts[LINK]:
             return False
         s = read_snapshot(side.pb.memory, side.data, side.frame)
@@ -175,7 +175,7 @@ class Session:
 
     def leave_button(self, side):
         from .menus import choose
-        from pokesim_core.gen2.ram import read_snapshot
+        from pokecore.gen2.ram import read_snapshot
         if side.counts['ExitLinkCommunications']:
             return None
         s = read_snapshot(side.pb.memory, side.data, side.frame)
@@ -281,8 +281,8 @@ class Session:
         from ..interactions.link_worker import _write
         from .cable_metadata import ADAPTER_ID
         from .cable_verification import continue_save, evolved_species, party
-        from pokesim_core.gen2.clock import stop_with_clock
-        from pokesim_core.gen2.ram import read_snapshot
+        from pokecore.gen2.clock import stop_with_clock
+        from pokecore.gen2.ram import read_snapshot
         self.leave()
         self.phase = 'verifying'
         self.report(force=True)

@@ -246,7 +246,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         if gen2:
             from ..gen2.steps import STEPS, status as mew_status
             from ..gen2 import returns as gen2_returns
-            from pokesim_core.gen2.battle_power import battle_power as gen2_power
+            from pokecore.gen2.battle_power import battle_power as gen2_power
             from ..gen2.tracking import CAPTURES, apply as gen2_goals
             from ..shiny import status as gen2_shiny
             current = emu.status() or {}

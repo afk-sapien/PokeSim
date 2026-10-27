@@ -103,7 +103,7 @@ class BattleMemory:
 
 
 def ditto(pp=10):
-    from pokesim_core.gen2.ram import Mon
+    from pokecore.gen2.ram import Mon
     return Mon(DITTO, 'DITTO', 100, 285, 285, 0, 0, (TRANSFORM, 0, 0, 0), (pp, 0, 0, 0), (10, 0, 0, 0),
                (285, 200, 200, 200, 200, 200), 1000000, (15, 15, 15, 15), (0,) * 5, 1, 70)
 

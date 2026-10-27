@@ -1,11 +1,11 @@
 """Persistent per-partner offers, independent of box positions and training."""
-from pokesim_core.identity import pokemon_identity
+from pokecore.identity import pokemon_identity
 import json
 from collections import defaultdict
 
-from pokesim_core import identity as individual
+from pokecore import identity as individual
 from ..shiny import is_shiny
-from pokesim_core.dvs import is_perfect
+from pokecore.dvs import is_perfect
 
 PREFIX = 'trade_offer:'
 MIGRATED = 'trade_settings_v1'
@@ -61,7 +61,7 @@ def migrate(db):
 
 
 def identity(mon):
-    """The trade key: trainer ID, DVs and evolution family (see pokesim_core.identity)."""
+    """The trade key: trainer ID, DVs and evolution family (see pokecore.identity)."""
     return individual.family_key(mon.get('trainer_id'), mon.get('dvs', ()), individual.dex_of(mon))
 
 

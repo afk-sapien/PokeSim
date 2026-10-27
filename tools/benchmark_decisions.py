@@ -243,8 +243,8 @@ def simulate(fixture_path, frames, capture):
     timings = Timings()
     with tempfile.TemporaryDirectory(prefix='pokesim-decisions-') as temporary:
         settings = configure(fixture, Path(temporary))
-        from pokesim_core.emulator_state import validate_runtime
-        from pokesim_core.emulator import Emulator as PyBoy
+        from pokecore.emulator_state import validate_runtime
+        from pokecore.emulator import Emulator as PyBoy
         from pokesim.policies.base import Action, PolicyContext, stack_pointer
         from pokesim.ram import read_snapshot
         from pokesim.screen import W_OPTIONS

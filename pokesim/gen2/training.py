@@ -1,6 +1,6 @@
 """Raise collected partners through normal battles, held items and evolution."""
 from .menus import ChangeBox, Give, Release, Remedy, Storage, Take
-from pokesim_core.gen2.ram import calculated_stats, experience_at
+from pokecore.gen2.ram import calculated_stats, experience_at
 from .standdown import stand_down, standing_down, train_key
 
 FIELD_MOVES = {15, 19, 57, 70, 148, 250, 127}
@@ -39,7 +39,7 @@ def requested(data, snapshot, demand, species, *, item=False):
     An evolution stone makes a copy for a peer even when the family has a wild source, if no copy
     here could travel: automatic trading keeps a trained partner, so a single veteran never leaves.
     """
-    from pokesim_core.gen2.breeding import single_source
+    from pokecore.gen2.breeding import single_source
     copies = [mon for mon in snapshot.party + snapshot.stored if mon.species == species and not mon.egg]
     if not demand.get(species):
         return False

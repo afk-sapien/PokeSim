@@ -5,11 +5,11 @@ import json
 from pathlib import Path
 import time
 
-from pokesim_core.gen2.clock import boot, follow_game_time, lock_clock
+from pokecore.gen2.clock import boot, follow_game_time, lock_clock
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy
-from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.ram import Memory, read_snapshot
 
 
 def main():

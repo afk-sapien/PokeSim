@@ -147,7 +147,7 @@ def test_verified_rom_hooks_coexist_without_changing_ram(tmp_path):
     rom = Path('roms/pokered.gb')
     if not rom.is_file():
         pytest.skip('Private ROM unavailable')
-    from pokesim_core.emulator import Emulator as PyBoy
+    from pokecore.emulator import Emulator as PyBoy
     from pokesim.shiny import ShinyTracker
     from pokesim.legendary_returns import StepTracker
     import hashlib

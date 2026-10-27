@@ -1,8 +1,8 @@
 """Route between connected map regions, including revisits through other entrances."""
 from collections import deque
 
-from pokesim_core.gen2 import maps as ice
-from pokesim_core.gen2.maps import DIRS as DIRECTIONS, OPPOSITE, WALLS, side_blocked as side_wall
+from pokecore.gen2 import maps as ice
+from pokecore.gen2.maps import DIRS as DIRECTIONS, OPPOSITE, WALLS, side_blocked as side_wall
 
 # Warp carpets and the direction that warps from them. The game warps only when the player already
 # stands on one and walks that way, so walking onto a carpet or along a row of them is ordinary ground.

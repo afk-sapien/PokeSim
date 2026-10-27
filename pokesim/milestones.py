@@ -6,7 +6,7 @@ import time
 
 from . import progress
 from .shiny import is_shiny, status as shiny_status
-from pokesim_core.dvs import is_perfect  # noqa: F401  (re-exported)
+from pokecore.dvs import is_perfect  # noqa: F401  (re-exported)
 from .game_data import load
 from .pokemon import dv_rating
 from .strategy_data import SPECIES

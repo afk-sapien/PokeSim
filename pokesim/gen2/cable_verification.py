@@ -1,9 +1,9 @@
 """Read-only verification of Gen II cartridge trade results and save restarts."""
-from pokesim_core.gen2.save import checkpoint_clock, continue_save as core_continue_save
-from pokesim_core.identity import family_key as trade_key
+from pokecore.gen2.save import checkpoint_clock, continue_save as core_continue_save
+from pokecore.identity import family_key as trade_key
 
 from ..interactions.cable import checked
-from pokesim_core.gen2.ram import Memory, read_snapshot
+from pokecore.gen2.ram import Memory, read_snapshot
 
 __all__ = ['available_trade_item', 'checkpoint_clock', 'continue_save', 'evolved_species', 'individual_key', 'party',
            'untraded_party', 'verify_exchange']
@@ -19,7 +19,7 @@ def party(pb, data):
 
 
 def individual_key(row):
-    from pokesim_core.gen2.ram import individual
+    from pokecore.gen2.ram import individual
     raw = row['struct']
     dvs, _ = individual(raw)
     return trade_key(int.from_bytes(raw[6:8], 'big'), tuple(dvs), raw[0])

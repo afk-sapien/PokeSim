@@ -1,7 +1,7 @@
 """Collection investment decisions, separate from shared DV probability math."""
 from functools import lru_cache
 
-from pokesim_core.dvs import dv_probabilities
+from pokecore.dvs import dv_probabilities
 
 from .pokemon import experience_at_level, stored_strength
 from .strategy_data import SPECIES

@@ -2,8 +2,8 @@
 
 The transport is Core's. PokeSim's side still builds and checks its own emulator from a session spec.
 """
-from pokesim_core.gen2.cable import CableSide as CoreSide
-from pokesim_core.gen2.ram import Memory
+from pokecore.gen2.cable import CableSide as CoreSide
+from pokecore.gen2.ram import Memory
 
 from ..interactions.cable import CableSide as BaseSide
 from .cable_metadata import BUILDS
