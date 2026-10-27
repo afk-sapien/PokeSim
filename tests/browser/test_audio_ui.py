@@ -9,6 +9,8 @@ from test_flows import expect
 
 
 @pytest.mark.parametrize('speed', [0.5, 1, 4, 16, 50])
+# Muting cancels the audio poll still waiting, when one is, so the abort may or may not happen.
+@pytest.mark.allowed_errors(r'^requestfailed \S*/api/audio\S* GET net::ERR_ABORTED')
 def test_sound_requires_a_click_and_stops_on_mute_and_navigation(page, game, speed):
     url, _, _, _ = game
     calls = []
@@ -122,12 +124,14 @@ def test_sound_lead_follows_control_mode(page, game, mode, seconds, low, high):
     page.locator('#sound').click()
     # A poll that runs late on a loaded machine drains the queue for a moment, and the buffer
     # then rebuilds it. Wait for six packets in a row inside the band, not for a packet count.
-    # The bands do not overlap, so settling in one proves the buffer follows that mode.
+    # The bands do not overlap, so settling in one proves the buffer follows that mode. After a
+    # dropout watching resumes at 0.4 seconds and refills at most 4% slow, so it can take about
+    # 20 seconds to get back into its band.
     try:
         page.wait_for_function('''([low, high]) => {
           const leads = window.leads.slice(-6)
           return leads.length === 6 && leads.every(lead => low <= lead && lead <= high)
-        }''', arg=[low, high], timeout=15000)
+        }''', arg=[low, high], timeout=45000)
     except Exception:
         raise AssertionError(page.evaluate('window.leads.slice(-12)')) from None
     expect(page.locator('#sound-status')).to_be_hidden()
