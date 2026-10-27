@@ -123,8 +123,9 @@ def test_live_controls_are_equal_keys_on_desktop(page, game, width):
     deck = _live_keys(page)
     keys = deck['keys']
     rows = {round(k['top']) for k in keys}
-    # Five keys share one row; the standalone page's sixth (Download .sav) makes it 3 x 2.
-    assert len(rows) == (1 if len(keys) == 5 else 2)
+    # Six keys share one row. The standalone page's seventh (Download .sav) spans two of four columns.
+    assert len(rows) == (1 if len(keys) == 6 else 2)
+    keys = [k for k in keys if k['id'] != 'export-save']
     assert max(k['width'] for k in keys) - min(k['width'] for k in keys) <= 1
     assert not any(k['clipped'] for k in keys)
 

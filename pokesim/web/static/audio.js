@@ -5,7 +5,20 @@
   if (!button || !status || !Buffer) return
   const RETRY_WINDOW = 6000
   const REQUEST_TIMEOUT = 3000
+  const MODE_KEY = 'pokesim.audioMode'
+  const modeSelect = document.querySelector('#audio-mode')
   let playback = null
+  // Realtime follows the server's watch or manual pace. Cached is a deep buffer the screen trails.
+  let preferred = 'realtime'
+  try { if (localStorage.getItem(MODE_KEY) === 'cached') preferred = 'cached' } catch (_) {}
+  const bufferMode = manual => preferred === 'cached' ? 'cached' : manual ? 'manual' : 'watch'
+  window.PokeSimAudioSync = {
+    // Seconds the screen should wait so it matches what is heard. Zero unless cached sound plays.
+    delay() {
+      const buffer = playback?.buffer
+      return buffer && buffer.mode === 'cached' && buffer.primed ? buffer.target : 0
+    },
+  }
   const message = text => {
     status.textContent = text
     status.hidden = !text
@@ -139,7 +152,7 @@
         if (Number(response.headers.get('X-Audio-Dropped')) > 0) clearQueue(session)
         after = sequence
         const manual = response.headers.get('X-Audio-Mode') === 'manual'
-        session.buffer.setMode(manual ? 'manual' : 'watch')
+        session.buffer.setMode(bufferMode(manual))
         if (state === 'playing') {
           const speed = Number(response.headers.get('X-Audio-Speed') || 1)
           if (!Number.isFinite(speed) || speed < 0.1) throw new Error('Unsupported audio format')
@@ -189,6 +202,15 @@
       if (!session || playback === session) stop('Could not start audio. Try again.')
     }
   })
+  if (modeSelect) {
+    modeSelect.value = preferred
+    modeSelect.addEventListener('change', () => {
+      preferred = modeSelect.value === 'cached' ? 'cached' : 'realtime'
+      try { localStorage.setItem(MODE_KEY, preferred) } catch (_) {}
+      // Rejoin at the new depth now rather than drifting toward it.
+      if (playback) clearQueue(playback)
+    })
+  }
   document.addEventListener('visibilitychange', () => { if (document.hidden) stop() })
   window.addEventListener('pagehide', () => stop())
 })()

@@ -8,7 +8,10 @@
     watch: {base: 0.4, max: 1.5, excess: 0.35, poll: 0.1},
     // Playing by hand: button presses must feel immediate.
     manual: {base: 0.1, max: 0.3, excess: 0.08, poll: 0.04},
+    // Cached, chosen by the viewer: a deep buffer, with the screen delayed by the same target.
+    cached: {base: 1, max: 3, excess: 0.6, poll: 0.15},
   }
+  const modeName = mode => Object.hasOwn(MODES, mode) ? mode : 'watch'
   const START_DELAY = 0.03
   const UNDERRUN_SLACK = 0.005
   const GROW_PADDING = 0.05
@@ -42,8 +45,8 @@
 
   function createJitterBuffer(options = {}) {
     const state = {
-      mode: options.mode === 'manual' ? 'manual' : 'watch',
-      targets: {watch: MODES.watch.base, manual: MODES.manual.base},
+      mode: modeName(options.mode),
+      targets: Object.fromEntries(Object.entries(MODES).map(([name, mode]) => [name, mode.base])),
       next: 0,
       primed: false,
       rate: null,
@@ -67,7 +70,7 @@
         return now - state.lastUnderrun < PROBLEM_SECONDS && state.targets[state.mode] >= config().max * 0.9
       },
       setMode(mode) {
-        mode = mode === 'manual' ? 'manual' : 'watch'
+        mode = modeName(mode)
         if (mode === state.mode) return false
         state.mode = mode
         return true

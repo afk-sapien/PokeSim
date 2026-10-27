@@ -208,6 +208,36 @@ test('the problem flag appears only when the largest buffer keeps underrunning',
   assert.equal(buffer.problem(buffer.lastUnderrun + 60), false)
 })
 
+test('cached mode buffers a full second before playing', () => {
+  const buffer = createJitterBuffer({mode: 'cached'})
+  assert.equal(buffer.mode, 'cached')
+  const plans = drive(buffer, {until: 3})
+  const first = plans.find(item => item.plan.type === 'play')
+  assert.ok(first.plan.wall >= MODES.cached.base)
+  assert.ok(first.at >= MODES.cached.base - PACKET)
+  assert.equal(buffer.target, MODES.cached.base)
+})
+
+test('cached mode rides out a stall that makes watch mode underrun', () => {
+  // Each 0.1 second packet arrives on time, except one that is 0.7 seconds late.
+  const late = tick => tick === 40 ? 0.7 : 0
+  const watch = createJitterBuffer()
+  drive(watch, {until: 8, delays: late})
+  assert.ok(watch.stats.underruns > 0)
+  const cached = createJitterBuffer({mode: 'cached'})
+  drive(cached, {until: 8, delays: late})
+  assert.equal(cached.stats.underruns, 0)
+  assert.equal(cached.target, MODES.cached.base)
+})
+
+test('unknown modes fall back to watch', () => {
+  const buffer = createJitterBuffer({mode: 'bogus'})
+  assert.equal(buffer.mode, 'watch')
+  assert.equal(buffer.setMode('cached'), true)
+  assert.equal(buffer.setMode('nonsense'), true)
+  assert.equal(buffer.mode, 'watch')
+})
+
 test('a pause resets without counting an underrun', () => {
   const buffer = createJitterBuffer()
   drive(buffer, {until: 3})
