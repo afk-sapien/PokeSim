@@ -37,9 +37,12 @@ class AdventureLock:
 
 class SimulationRuntime:
     """Keep the lock until the emulator has exited and storage is closed."""
-    def __init__(self, settings, *, managed=True):
+    def __init__(self, settings, *, managed=True, frozen=False):
         self.settings = settings
         self.managed = managed
+        # A frozen runtime shows a stopped adventure's newest save. It never runs or writes, so it
+        # takes no ownership lock and the adventure can start while one is open.
+        self.frozen = frozen
         self.store = None
         self.emulator = None
         self.lock = AdventureLock(settings.data_dir)
@@ -49,7 +52,8 @@ class SimulationRuntime:
         with self._guard:
             if self.emulator is not None:
                 raise RuntimeError('This simulation runtime has already started')
-            self.lock.acquire()
+            if not self.frozen:
+                self.lock.acquire()
             try:
                 self.settings.install(managed=self.managed)
                 from ..cartridges import identify
@@ -74,8 +78,8 @@ class SimulationRuntime:
                     from ..emulator import Emulator
                 from ..store import Store
                 from ..notify import LiveNtfy, Ntfy
-                self.store = Store(Path(self.settings.data_dir))
-                if self.managed:
+                self.store = Store(Path(self.settings.data_dir), read_only=self.frozen)
+                if self.managed and not self.frozen:
                     from .participant import recover_storage
                     recover_storage(self.store)
                     from .reward_delivery import recover_storage as recover_rewards
@@ -84,8 +88,11 @@ class SimulationRuntime:
                           self.settings.ntfy_min_priority, set(self.settings.ntfy_mute))
                 # A managed adventure receives its destination and filters from the Library while it runs.
                 ntfy = LiveNtfy(*sender) if self.managed else Ntfy(*sender) if self.settings.ntfy_url else None
-                self.emulator = Emulator(self.store, ntfy, isolated_ram=self.managed)
-                self.emulator.start()
+                self.emulator = Emulator(self.store, None if self.frozen else ntfy, isolated_ram=self.managed)
+                if self.frozen:
+                    self.emulator.freeze()
+                else:
+                    self.emulator.start()
             except BaseException:
                 self._close()
                 raise

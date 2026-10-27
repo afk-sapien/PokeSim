@@ -20,7 +20,7 @@ class FakeChild:
         self.starts += 1
         self.url = 'http://127.0.0.1:12345'
 
-    def stop(self):
+    def stop(self, timeout=None):
         self.stops += 1
         self.process.poll = lambda: 0
 
@@ -57,6 +57,30 @@ def test_multiple_red_games_have_separate_workers_and_one_start_each(supervisor)
     assert supervisor.children[first].bootstrap['settings']['data_dir'] != supervisor.children[second].bootstrap['settings']['data_dir']
     supervisor.stop(first)
     assert second in supervisor.children
+
+
+def test_stopped_view_is_one_frozen_worker_that_closes_before_a_start(supervisor):
+    aid = adventure(supervisor)
+    with pytest.raises(RuntimeError, match='no save'):
+        supervisor.viewer(aid)
+    data = supervisor.registry.root / 'adventures' / aid
+    (data / 'states').mkdir(parents=True)
+    (data / 'states' / 'auto-1.state').write_bytes(b'save')
+    (data / 'pokesim.sqlite').write_bytes(b'')
+    view = supervisor.viewer(aid)
+    assert supervisor.viewer(aid) is view and view.starts == 1
+    assert view.bootstrap['frozen'] is True
+    assert aid not in supervisor.children
+    supervisor.start(aid)
+    assert view.stops == 1 and aid not in supervisor.viewers
+    with pytest.raises(RuntimeError, match='running'):
+        supervisor.viewer(aid)
+    supervisor.stop(aid)
+    idle = supervisor.viewer(aid)
+    supervisor.close_idle_viewers(idle=3600)
+    assert aid in supervisor.viewers
+    supervisor.close_idle_viewers(idle=0)
+    assert idle.stops == 1 and aid not in supervisor.viewers
 
 
 def test_unlimited_workers_and_latest_desired_state(supervisor):

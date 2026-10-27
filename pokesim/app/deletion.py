@@ -59,6 +59,7 @@ def delete_adventure(manager, aid, confirmation):
             child = manager.supervisor.children.get(aid)
             if child and child.process is not None and child.process.poll() is None:
                 raise ValueError('The adventure worker is still running')
+        manager.supervisor.close_viewer(aid)
         _paths(manager, aid)
         with manager.registry.lock, manager.registry.db:
             manager.registry.db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',

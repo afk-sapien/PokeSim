@@ -166,7 +166,10 @@ async function refreshState() {
     if (!response.ok) throw new Error('Unavailable')
     const state = await response.json()
     if ($('#connection').classList.contains('is-offline')) window.pokesimScreen?.reconnect()
-    viewerOnly = Boolean(state.viewer_only)
+    // A stopped adventure shows its last save read only, so it takes no controls either.
+    const stopped = Boolean(state.stopped)
+    viewerOnly = Boolean(state.viewer_only) || stopped
+    $('.game-card')?.classList.toggle('is-stopped', stopped)
     document.querySelectorAll('.controls > :not(#sound):not(#sound-status), .manual-controls, .controller, #restart').forEach((element) => {
       element.hidden = viewerOnly
     })
@@ -185,13 +188,13 @@ async function refreshState() {
     $('.game-card')?.classList.toggle('is-manual', manualMode)
     // The bezel's power LED is lit while the game runs and dark while it is paused.
     $('.game-card')?.classList.toggle('is-paused', Boolean(paused) && !manualMode)
-    set('#on-air-label', 'textContent', manualMode ? 'Manual' : paused ? 'Paused' : 'Live')
+    set('#on-air-label', 'textContent', stopped ? 'Stopped' : manualMode ? 'Manual' : paused ? 'Paused' : 'Live')
     set('#take-control', 'textContent', manualMode ? 'Let AI play' : 'Take control')
-    set('#control-mode', 'textContent', manualMode ? 'You’re playing. AI paused' : paused ? 'Game paused' : 'AI is playing')
+    set('#control-mode', 'textContent', stopped ? 'Showing the last save' : manualMode ? 'You’re playing. AI paused' : paused ? 'Game paused' : 'AI is playing')
     $('#connection').classList.toggle('is-paused', paused)
     $('#connection').classList.remove('is-offline')
-    set('#status', 'textContent', manualMode ? 'In control' : paused ? 'Paused' : 'Running')
-    $('#connection').title = manualMode ? 'You’re in control' : paused ? 'Game paused' : 'Adventure in progress'
+    set('#status', 'textContent', stopped ? 'Stopped' : manualMode ? 'In control' : paused ? 'Paused' : 'Running')
+    $('#connection').title = stopped ? 'Adventure stopped. Start it from the library.' : manualMode ? 'You’re in control' : paused ? 'Game paused' : 'Adventure in progress'
     set('#pause', 'textContent', paused && !manualMode ? 'Resume' : 'Pause')
     set('#pause', 'title', paused && !manualMode ? 'Resume AI play' : 'Pause the game and AI')
     const speedSelect = $('#simulation-speed')

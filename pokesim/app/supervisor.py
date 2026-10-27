@@ -26,6 +26,7 @@ log = logging.getLogger(__name__)
 GEN2_VERSIONS = {'gold', 'silver', 'crystal'}
 SETUP_RETRIES = 3
 SETUP_DELAYS = (30, 120, 300)
+VIEWER_IDLE = 300   # seconds before an unwatched stopped-adventure viewer closes
 
 
 class Child:
@@ -176,6 +177,9 @@ class Supervisor:
         self.public_url = public_url.rstrip('/')
         self.child_factory = child_factory
         self.children = {}
+        # Read-only workers that show a stopped adventure's newest save: aid -> [child, last use].
+        # They stay out of children, which backup, deletion and the watchdog treat as running games.
+        self.viewers = {}
         self.guard = threading.RLock()
         self.admission = threading.RLock()
         self.locks = {}
@@ -207,11 +211,71 @@ class Supervisor:
         reading = usage.sample() if usage is not None else None
         return {**(reading or {}), **child.pace.sample()}
 
+    def _settings(self, aid, adventure):
+        settings = {**adventure['settings'],
+                    **self.registry.setting('nickname_parts', {}),
+                    'speed': adventure['settings'].get('speed', 1),
+                    'rom_path': str(self.assets.rom_path(adventure['rom_id'])),
+                    'data_dir': str(self.registry.root / 'adventures' / aid),
+                    'game_data_dir': str(self.assets.game_data_dir),
+                    'public_url': self.public_url + f'/games/{aid}'}
+        settings.pop('auto_start', None)
+        return settings
+
+    def viewer(self, aid):
+        """Return a read-only worker for a stopped adventure, launching one from its newest save."""
+        with self._lock(aid):
+            if self.closed.is_set():
+                raise RuntimeError('PokeSim is shutting down')
+            with self.guard:
+                entry = self.viewers.get(aid)
+                running = aid in self.children
+            if running:
+                raise RuntimeError('This adventure is running')
+            if entry and entry[0].url and entry[0].process.poll() is None:
+                entry[1] = time.monotonic()
+                return entry[0]
+            self.close_viewer(aid)
+            adventure = self.registry.adventure(aid)
+            data = self.registry.root / 'adventures' / aid
+            if not (data / 'pokesim.sqlite').is_file() or next((data / 'states').glob('auto-*.state'), None) is None:
+                raise RuntimeError('This adventure has no save to show yet')
+            bootstrap = dict(protocol=1, adventure_id=aid, generation=identifier(),
+                             token=secrets.token_urlsafe(32), settings=self._settings(aid, adventure),
+                             adventure_name=adventure['name'], frozen=True)
+            child = self.child_factory(bootstrap)
+            child.start()
+            with self.guard:
+                self.viewers[aid] = [child, time.monotonic()]
+            return child
+
+    def close_viewer(self, aid):
+        with self.guard:
+            entry = self.viewers.pop(aid, None)
+        if entry:
+            try:
+                entry[0].stop(timeout=5)
+            except RuntimeError:
+                log.warning('The stopped view of adventure %s did not exit cleanly', aid)
+
+    def close_idle_viewers(self, idle=VIEWER_IDLE):
+        if not self.viewers:
+            return
+        now = time.monotonic()
+        with self.guard:
+            stale = [aid for aid, (child, used) in self.viewers.items()
+                     if now - used >= idle or child.process is None or child.process.poll() is not None]
+        for aid in stale:
+            with self._lock(aid):
+                self.close_viewer(aid)
+
     def start(self, aid, recovery=False):
         with self.admission, self._lock(aid):
             adventure = self.registry.adventure(aid)
             if self.closed.is_set():
                 raise RuntimeError('PokeSim is shutting down')
+            # A running game owns the adventure, so its read-only view closes first.
+            self.close_viewer(aid)
             if not recovery and adventure['desired_state'] != 'running':
                 return adventure
             if adventure['archived']:
@@ -221,14 +285,7 @@ class Supervisor:
                 if existing and existing.process and existing.process.poll() is None:
                     return self.registry.update(aid, state='running' if existing.url else 'starting', error=None)
                 generation = identifier()
-                settings = {**adventure['settings'],
-                            **self.registry.setting('nickname_parts', {}),
-                            'speed': adventure['settings'].get('speed', 1),
-                            'rom_path': str(self.assets.rom_path(adventure['rom_id'])),
-                            'data_dir': str(self.registry.root / 'adventures' / aid),
-                            'game_data_dir': str(self.assets.game_data_dir),
-                            'public_url': self.public_url + f'/games/{aid}'}
-                settings.pop('auto_start', None)
+                settings = self._settings(aid, adventure)
                 bootstrap = dict(protocol=1, adventure_id=aid, generation=generation,
                                  token=secrets.token_urlsafe(32), settings=settings, adventure_name=adventure['name'])
                 child = self.child_factory(bootstrap)
@@ -446,6 +503,7 @@ class Supervisor:
     def _monitor(self):
         while not self.closed.wait(3):
             self.run_setup_retries()
+            self.close_idle_viewers()
             with self.guard:
                 children = list(self.children.items())
             for aid, child in children:
@@ -517,6 +575,9 @@ class Supervisor:
         self.assets.cancelled.set()
         with self.guard:
             ids = list(self.children)
+            viewers = list(self.viewers)
+        for aid in viewers:
+            self.close_viewer(aid)
         errors = []
         def stop_one(aid):
             try:

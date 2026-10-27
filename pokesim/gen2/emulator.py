@@ -214,6 +214,7 @@ class Emulator:
         self.policy.trade_preferences = store.trade_preferences
         self.speed = config.SPEED
         self.paused = False
+        self.frozen = False
         self.manual_mode = False
         self.stopping = False
         self.fatal_error = None
@@ -346,6 +347,18 @@ class Emulator:
             raise
         self.thread.start()
 
+    def freeze(self):
+        """Show the newest save of a stopped adventure without running it."""
+        for path in reversed(self.store.autosaves()):
+            try:
+                self._load_state_file(path)
+                break
+            except (ValueError, OSError, EOFError):
+                log.exception('Cannot show Gen II checkpoint %s', path.name)
+        else:
+            raise RuntimeError('This adventure has no save to show yet')
+        self.frozen = self.paused = True
+
     def _prepare_start(self):
         errors = []
         for path in reversed(self.store.autosaves()):
@@ -408,7 +421,7 @@ class Emulator:
 
     def current_frame(self, timeout=1):
         self.watch()
-        if self.paused or not self.frame_image:
+        if (self.paused or not self.frame_image) and not self.frozen:
             self.call(self._publish_frame, timeout=max(1, timeout))
         with self.frame_cond:
             if not self.frame_image:
@@ -1094,6 +1107,7 @@ class Emulator:
         stalled = live and not waiting and (self.stall.stalled(self.frame, time.time()) or self.unstick_streak >= STALL_RELOADS)
         recovering = time.time() - self.last_reload < 30 or self.policy.mode == 'finding another approach'
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
+                'stopped': self.frozen,
                 'health': self.health(), 'paused': self.paused, 'manual_mode': self.manual_mode, 'speed': self.speed,
                 'policy': self.policy.describe(), 'strategy': self.policy.details(), 'frame': self.frame,
                 'game': self.snapshot.to_dict(egg_view=True) if self.snapshot else None, 'rom': self.rom_note,

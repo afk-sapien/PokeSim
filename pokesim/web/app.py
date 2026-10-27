@@ -172,6 +172,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         viewing = request.headers.get(VIEWER_HEADER) == '1'
         if viewing and not viewer_allows(request.method, request.url.path):
             return JSONResponse({'detail': 'This is a view-only link'}, status_code=403)
+        if getattr(emu, 'frozen', False) is True and request.method not in {'GET', 'HEAD'}:
+            return JSONResponse({'detail': 'This adventure is stopped. Start it to make changes.'}, status_code=409)
         token = VIEWING.set(viewing)
         try:
             return await call_next(request)

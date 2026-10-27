@@ -338,6 +338,29 @@ def test_create_saves_normalized_intro_names_and_rejects_later_edits(client):
     assert len(manager.registry.adventures()) == 1
 
 
+def test_stopped_adventure_pages_come_from_a_read_only_view(client, monkeypatch):
+    import httpx
+    client, manager = client
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    adventure = manager.registry.create('Stopped Red', 'fixture-rom', {}, identifier())
+    assert manager.registry.adventure(adventure['id'])['state'] == 'stopped'
+    child = SimpleNamespace(url='http://viewer', token='viewer-token')
+    opened = []
+    monkeypatch.setattr(manager.supervisor, 'viewer', lambda aid: opened.append(aid) or child)
+    monkeypatch.setattr(manager.supervisor, 'child', lambda aid: pytest.fail('a stopped adventure has no worker'))
+    def worker(request):
+        assert request.method == 'GET' and request.headers['authorization'] == 'Bearer viewer-token'
+        return httpx.Response(200, json={'stopped': True})
+    client.app.state.children = httpx.AsyncClient(transport=httpx.MockTransport(worker))
+    base = f'/games/{adventure["id"]}'
+    assert client.get(base + '/api/state').json() == {'stopped': True}
+    assert opened == [adventure['id']]
+    assert client.post(base + '/api/control', json={'action': 'pause'}).status_code in {403, 409}
+    assert opened == [adventure['id']]
+    monkeypatch.setattr(manager.supervisor, 'viewer', lambda aid: (_ for _ in ()).throw(RuntimeError('no save')))
+    assert client.get(base + '/api/state').status_code == 409
+
+
 def test_audio_proxy_preserves_pcm_metadata_and_adventure_boundary(client, monkeypatch):
     import httpx
     client, manager = client

@@ -24,6 +24,8 @@ class Bootstrap:
     token: str = field(repr=False)
     settings: SimulationSettings
     adventure_name: str = ''
+    # Serve a stopped adventure's newest save read only, without running the game.
+    frozen: bool = False
 
     @classmethod
     def read(cls, stream):
@@ -34,7 +36,7 @@ class Bootstrap:
             data = json.loads(line)
         except (ValueError, UnicodeError) as error:
             raise ValueError('Invalid worker bootstrap JSON') from error
-        allowed = {'protocol', 'adventure_id', 'adventure_name', 'generation', 'token', 'settings'}
+        allowed = {'protocol', 'adventure_id', 'adventure_name', 'generation', 'token', 'settings', 'frozen'}
         if not isinstance(data, dict) or set(data) - allowed or type(data.get('protocol')) is not int or data.get('protocol') != PROTOCOL:
             raise ValueError('Unsupported worker bootstrap protocol')
         for name in ('adventure_id', 'generation'):
@@ -48,8 +50,11 @@ class Bootstrap:
         name = data.get('adventure_name', data['adventure_id'])
         if not isinstance(name, str) or len(name) > 200:
             raise ValueError('Invalid adventure name')
+        frozen = data.get('frozen', False)
+        if type(frozen) is not bool:
+            raise ValueError('Invalid frozen flag')
         return cls(data['adventure_id'], data['generation'], token,
-                   SimulationSettings.from_dict(data.get('settings')), name)
+                   SimulationSettings.from_dict(data.get('settings')), name, frozen)
 
 
 class WorkerAuthorization:
@@ -96,7 +101,7 @@ def serve(bootstrap, parent_stream, ready_stream):
                 os._exit(2)
 
     threading.Thread(target=watch_parent, name='parent-liveness', daemon=True).start()
-    runtime = SimulationRuntime(bootstrap.settings)
+    runtime = SimulationRuntime(bootstrap.settings, frozen=bootstrap.frozen)
     server = None
     try:
         if parent_gone.is_set():
@@ -177,11 +182,13 @@ def serve(bootstrap, parent_stream, ready_stream):
             server.should_exit = True
             return {'ok': True}
 
-        if getattr(runtime.emulator, 'generation', 1) == 2:
-            from ..gen2.trading import install
-        else:
-            from .participant import install
-        install(app, runtime)
+        # A stopped adventure takes no part in trades.
+        if not bootstrap.frozen:
+            if getattr(runtime.emulator, 'generation', 1) == 2:
+                from ..gen2.trading import install
+            else:
+                from .participant import install
+            install(app, runtime)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             # Accepted sockets inherit this; see the manager's listener.
             listener.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -196,7 +203,7 @@ def serve(bootstrap, parent_stream, ready_stream):
             def monitor():
                 reported = False
                 while not finished.wait(0.05):
-                    if parent_gone.is_set() or not runtime.emulator.thread.is_alive():
+                    if parent_gone.is_set() or not (bootstrap.frozen or runtime.emulator.thread.is_alive()):
                         server.should_exit = True
                         return
                     if server.started and not reported:

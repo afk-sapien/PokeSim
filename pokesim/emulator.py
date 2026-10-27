@@ -80,6 +80,7 @@ class Emulator:
         self.speed = config.SPEED
         self.palette = validate_palette(getattr(config, 'PALETTE', 'original'))
         self.paused = False
+        self.frozen = False
         self.manual_mode = False
         self.policy = make_policy(config.POLICY, config.SEED)
         self.policy.trade_preferences = store.trade_preferences
@@ -187,6 +188,15 @@ class Emulator:
             restore(self)
         self.thread.start()
 
+    def freeze(self):
+        """Show the newest save of a stopped adventure without running it."""
+        saves = self.store.autosaves()
+        if not saves:
+            raise RuntimeError('This adventure has no save to show yet')
+        self._restore_first_valid(reversed(saves))
+        self.frozen = self.paused = True
+        self._publish_frame()
+
     def stop(self):
         self.stopping = True
         self.commands.put(("stop", None))
@@ -225,7 +235,7 @@ class Emulator:
             strategy = preparation.details(strategy)
         return {
             "version": __version__, "viewer_only": config.VIEWER_ONLY,
-            "build": build_info(),
+            "build": build_info(), "stopped": self.frozen,
             "health": self.health(),
             "paused": self.paused, "speed": self.speed, "policy": self.policy.describe(),
             # Yellow renders its own Game Boy Color palettes, so like Generation II it reports none.
