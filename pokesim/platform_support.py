@@ -8,7 +8,7 @@ MESSAGE = (
     'Supported: Linux x86-64 and ARM64 (glibc), macOS Intel and Apple Silicon, and Windows x64.\n'
     'The Docker image (linux/amd64) is the alternative.\n'
     'Do not run "pip install pokesim": that installs an unrelated project from PyPI. The emulator packages\n'
-    '(pyboy-rs and pokesim-core) are published only as GitHub release files, never from PyPI.')
+    '(pyboy-rs and pokecore) are published only as GitHub release files, never from PyPI.')
 
 
 def require_emulator():

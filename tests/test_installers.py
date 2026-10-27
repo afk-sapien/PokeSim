@@ -216,7 +216,7 @@ def test_pyproject_markers_cover_exactly_the_platforms_with_a_wheel():
     from packaging.markers import Marker
     from packaging.requirements import Requirement
     requirements = [Requirement(line) for line in tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['dependencies']]
-    core = next(item for item in requirements if item.name == 'pokesim-core')
+    core = next(item for item in requirements if item.name == 'pokecore')
     wheels = [item for item in requirements if item.name == 'pyboy-rs']
     assert core.marker is not None, 'Without a marker pip would look up pyboy-rs on PyPI on unsupported platforms'
     supported = [('linux', 'x86_64'), ('linux', 'aarch64'), ('darwin', 'x86_64'), ('darwin', 'arm64'),

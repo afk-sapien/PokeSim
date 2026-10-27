@@ -11,7 +11,7 @@ if ($architecture -ne 'X64') {
     Write-Host "PokeSim 0.5 has no emulator build for Windows $architecture. Only Windows x64 is supported."
     Write-Host 'The Docker image (linux/amd64) is the alternative: see the Docker guide in the PokeSim documentation.'
     Write-Host 'Nothing was installed. Do not run "pip install pokesim": that installs an unrelated project from PyPI.'
-    Write-Host 'Do not install pyboy-rs or pokesim-core from PyPI either: they are published only as GitHub release files.'
+    Write-Host 'Do not install pyboy-rs or pokecore from PyPI either: they are published only as GitHub release files.'
     throw 'Unsupported platform.'
 }
 

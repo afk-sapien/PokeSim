@@ -46,7 +46,7 @@ this package installation.
 
 PokeSim's package comes from this project's [GitHub releases](https://github.com/afk-sapien/PokeSim/releases).
 Do not use `pip install pokesim`: PyPI has an unrelated project with that name, and neither
-`pokesim-core` nor `pyboy-rs` is published there. Install only from the release files above.
+`pokecore` nor `pyboy-rs` is published there. Install only from the release files above.
 On Windows, the Python package installation creates the `pokesim-desktop.exe`
 launcher. There is no separate PokeSim EXE download in this installation flow.
 

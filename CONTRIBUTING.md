@@ -83,7 +83,7 @@ Do not treat them all as disposable caches.
 ## Compatibility and documentation
 
 Save-format changes need a format version, upgrade and rollback notes, and a recovery
-test. The emulator comes from `pokesim-core` and `pyboy-rs`, which are bounded to compatible ranges deliberately. Test existing checkpoints, including loading them with the previous release, before widening a range.
+test. The emulator comes from `pokecore` and `pyboy-rs`, which are bounded to compatible ranges deliberately. Test existing checkpoints, including loading them with the previous release, before widening a range.
 Use `uv lock --upgrade-package PACKAGE` for an intentional dependency update, then rerun
 affected checks and the container build.
 

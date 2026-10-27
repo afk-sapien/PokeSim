@@ -1,9 +1,9 @@
 # Shared game core
 
 [PokeSim Core](https://github.com/afk-sapien/pokesim-core) is the Python package
-shared by PokeSim and PokeAgent Bench. Its distribution name is `pokesim-core`
-and its import name is `pokecore`. Core 0.8.0 still accepts the old import name
-`pokesim_core`, with a deprecation warning.
+shared by PokeSim and PokeAgent Bench. Its distribution and import name is
+`pokecore`. Core 0.9.0 dropped the old `pokesim-core` distribution and the
+`pokesim_core` import name.
 
 PokeSim uses `pokecore.gen1` for Red, Blue and Yellow WRAM addresses, text and numeric
 decoding, individual Pokémon fields, party reads, and bag reads. Its known ROM
