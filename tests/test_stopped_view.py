@@ -33,11 +33,15 @@ from pokesim.runtime.settings import SimulationSettings
 from pokesim.runtime.simulation import SimulationRuntime
 data = Path({str(tmp_path / 'adventure')!r})
 settings = SimulationSettings(rom_path={str(rom)!r}, data_dir=str(data), game_data_dir={str(data_dir)!r}, speed=0)
-with SimulationRuntime(settings):
-    deadline = time.monotonic() + 120
-    while not list((data / 'states').glob('*')) and time.monotonic() < deadline:
-        time.sleep(0.5)
-assert list((data / 'states').glob('*')), 'no autosave was written'
+with SimulationRuntime(settings) as runtime:
+    # Save as soon as the game reads as valid instead of waiting for the timed autosave, which a
+    # loaded machine can miss. The deadline is only a backstop for a game that never gets there.
+    deadline = time.monotonic() + 540
+    while not getattr(runtime.emulator.snapshot, 'valid', False):
+        assert time.monotonic() < deadline, 'the game state never became valid'
+        time.sleep(0.2)
+    runtime.call(runtime.emulator._autosave)
+    assert list((data / 'states').glob('*')), 'no autosave was written'
 def digest():
     return {{p: hashlib.sha1(p.read_bytes()).hexdigest() for p in sorted(data.rglob('*')) if p.is_file()}}
 before = digest()

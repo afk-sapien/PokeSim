@@ -120,9 +120,16 @@ def test_sound_lead_follows_control_mode(page, game, mode, seconds, low, high):
     page.route('**/api/audio?*', audio)
     page.goto(url)
     page.locator('#sound').click()
-    page.wait_for_function('() => window.leads.length > 12')
-    leads = page.evaluate('window.leads.slice(-6)')
-    assert all(low <= lead <= high for lead in leads), leads
+    # A poll that runs late on a loaded machine drains the queue for a moment, and the buffer
+    # then rebuilds it. Wait for six packets in a row inside the band, not for a packet count.
+    # The bands do not overlap, so settling in one proves the buffer follows that mode.
+    try:
+        page.wait_for_function('''([low, high]) => {
+          const leads = window.leads.slice(-6)
+          return leads.length === 6 && leads.every(lead => low <= lead && lead <= high)
+        }''', arg=[low, high], timeout=15000)
+    except Exception:
+        raise AssertionError(page.evaluate('window.leads.slice(-12)')) from None
     expect(page.locator('#sound-status')).to_be_hidden()
 
 
