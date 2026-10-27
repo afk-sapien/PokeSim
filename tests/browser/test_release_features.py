@@ -1,4 +1,5 @@
 from dataclasses import replace
+import re
 
 
 def expect(locator):
@@ -6,30 +7,46 @@ def expect(locator):
     return assertion(locator)
 
 
+def until(page, check, message, timeout=15000):
+    # The presses land in the test's emulator, which the page cannot see, so poll it from here.
+    for _ in range(timeout // 50):
+        if check():
+            return
+        page.wait_for_timeout(50)
+    raise AssertionError(message())
+
+
 def test_mobile_hold_stops_on_release_and_blur(page, game):
     url, _, emu, _ = game
     emu.press = lambda button: emu.commands.append(('press', button))
+    sending = set()
+    page.on('request', lambda request: '/api/control' in request.url and sending.add(request))
+    page.on('requestfinished', lambda request: sending.discard(request))
+    page.on('requestfailed', lambda request: sending.discard(request))
     page.set_viewport_size({'width': 390, 'height': 844})
     page.goto(url + '/')
     page.locator('#manual-controls').evaluate('(element) => element.open = true')
     button = page.locator('.controller [data-b="right"]')
     expect(button).to_be_visible()
+
+    def stopped():
+        # Once the hold is released and the last press has landed, nothing may follow.
+        expect(button).not_to_have_class(re.compile(r'\bis-held\b'))
+        until(page, lambda: not sending, lambda: f'{len(sending)} presses still sending')
+        count = len(emu.commands)
+        page.wait_for_timeout(350)
+        assert len(emu.commands) == count, emu.commands
+
     button.hover()
     page.mouse.down()
-    page.wait_for_timeout(600)
-    assert len(emu.commands) >= 3
+    until(page, lambda: len(emu.commands) >= 3, lambda: f'the hold repeated only {len(emu.commands)} times')
     page.mouse.up()
-    page.wait_for_timeout(200)
+    stopped()
     count = len(emu.commands)
-    page.wait_for_timeout(350)
-    assert len(emu.commands) == count
     page.mouse.down()
-    page.wait_for_timeout(200)
+    until(page, lambda: len(emu.commands) > count, lambda: 'the second hold sent nothing')
     page.evaluate("window.dispatchEvent(new Event('blur'))")
-    page.wait_for_timeout(200)
-    count = len(emu.commands)
-    page.wait_for_timeout(350)
-    assert len(emu.commands) == count
+    stopped()
     assert button.evaluate("e => getComputedStyle(e).touchAction") == 'none'
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
