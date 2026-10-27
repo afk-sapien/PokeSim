@@ -151,7 +151,7 @@ class CheckpointStore:
         manifest = path.with_suffix(".json")
         if not manifest.exists() and not path.name.startswith("auto-v1-"):
             return None
-        data = json.loads(manifest.read_text())
+        data = json.loads(manifest.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or data.get("format") != 1:
             raise ValueError("Unsupported checkpoint format")
         if data.get("sha256") != hashlib.sha256(path.read_bytes()).hexdigest():

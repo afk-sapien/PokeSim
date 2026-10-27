@@ -746,7 +746,7 @@ class Coordinator:
             reader.join(timeout=2)
             if process.returncode:
                 raise RuntimeError('Cable Club session failed: ' + (messages[-1] if messages else str(process.returncode)))
-            return json.loads((output / 'manifest.json').read_text())
+            return json.loads((output / 'manifest.json').read_text(encoding='utf-8'))
         finally:
             if process.stdin:
                 process.stdin.close()

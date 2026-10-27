@@ -96,7 +96,7 @@ def create_backup(manager):
                     if path.is_file():
                         files[path.relative_to(staging).as_posix()] = file_checksum(path)
                 manifest = {'format': 1, 'id': bid, 'created_at': time.time(), 'files': files}
-                (staging / 'backup.json').write_text(json.dumps(manifest, indent=2))
+                (staging / 'backup.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
                 pending = backups / (bid + '.pending')
                 with zipfile.ZipFile(pending, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
                     for path in staging.rglob('*'):
@@ -122,7 +122,7 @@ def restore_backup(archive, destination):
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.pokesim-restore-', dir=destination.parent) as temporary:
         staging = extract_archive(archive, Path(temporary) / 'verified')
-        manifest = json.loads((staging / 'backup.json').read_text())
+        manifest = json.loads((staging / 'backup.json').read_text(encoding='utf-8'))
         if not isinstance(manifest, dict) or manifest.get('format') != 1 or not isinstance(manifest.get('files'), dict):
             raise ValueError('Unsupported backup format')
         actual = {p.relative_to(staging).as_posix() for p in staging.rglob('*') if p.is_file()} - {'backup.json'}
@@ -174,7 +174,7 @@ def _verified_backup(manager, archive):
 
 def inspect_backup(manager, archive):
     with _verified_backup(manager, archive) as root:
-        manifest = json.loads((root / 'backup.json').read_text())
+        manifest = json.loads((root / 'backup.json').read_text(encoding='utf-8'))
         created_at = manifest.get('created_at')
         if type(created_at) not in (int, float) or not math.isfinite(created_at) or not 0 <= created_at <= time.time() + 86400:
             raise ValueError('Backup contains an invalid creation date')

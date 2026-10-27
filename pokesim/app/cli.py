@@ -59,7 +59,7 @@ class RunningApplication:
     def __init__(self, root):
         root = Path(root)
         try:
-            identity = json.loads((root / 'manager.json').read_text())
+            identity = json.loads((root / 'manager.json').read_text(encoding='utf-8'))
         except (OSError, ValueError) as error:
             raise ValueError('Start the PokeSim application for this data directory before using this command') from error
         address = urlsplit(identity.get('url', ''))

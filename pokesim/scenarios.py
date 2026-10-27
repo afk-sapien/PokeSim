@@ -111,7 +111,7 @@ class Scenario:
     @classmethod
     def load(cls, folder):
         folder = Path(folder)
-        data = json.loads((folder / 'scenario.json').read_text())
+        data = json.loads((folder / 'scenario.json').read_text(encoding='utf-8'))
         checkpoint = (folder / data.pop('checkpoint', 'start.state')).resolve()
         if data.get('fallback'):
             data['fallback'] = (folder / data['fallback']).resolve()
@@ -131,7 +131,7 @@ CARTRIDGE_DIRECTORY = 'GEN2_CARTRIDGE_DIR'
 
 def cartridge(checkpoint):
     """The generation and ROM hash a checkpoint's manifest names."""
-    metadata = json.loads(Path(checkpoint).with_suffix('.json').read_text())
+    metadata = json.loads(Path(checkpoint).with_suffix('.json').read_text(encoding='utf-8'))
     return (2 if metadata.get('generation') == 2 else 1), metadata.get('rom_sha1')
 
 

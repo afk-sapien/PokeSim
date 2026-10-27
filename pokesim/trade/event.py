@@ -140,7 +140,7 @@ def stage(root, transaction, league_rewards=False):
 
 
 def journal(root, transaction):
-    result = json.loads((root / 'transactions' / transaction / 'result.json').read_text())
+    result = json.loads((root / 'transactions' / transaction / 'result.json').read_text(encoding='utf-8'))
     recipients = {gift['instance'] for gift in result['gifts']}
     for name in result['states']:
         with sqlite3.connect(pair.PAIR_ROOT / name / 'pokesim.sqlite') as db:

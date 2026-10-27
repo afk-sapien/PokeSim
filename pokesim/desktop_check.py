@@ -10,9 +10,9 @@ from .desktop_setup import ensure_game_data
 
 def check_runtime(reference_archive=None):
     if sys.stdout is None:
-        sys.stdout = open(os.devnull, 'w')
+        sys.stdout = open(os.devnull, 'w', encoding='utf-8')
     if sys.stderr is None:
-        sys.stderr = open(os.devnull, 'w')
+        sys.stderr = open(os.devnull, 'w', encoding='utf-8')
     with tempfile.TemporaryDirectory(prefix='pokesim-runtime-check-') as temporary:
         root = Path(temporary)
         ensure_game_data(root / 'game-data', print, threading.Event(), reference_archive)

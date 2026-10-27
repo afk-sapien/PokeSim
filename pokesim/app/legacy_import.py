@@ -77,10 +77,10 @@ def validate_pair(sources, roms, coordinator_root):
         raise ValueError('Legacy peer directories must be distinct and nonoverlapping')
     if (coordinator / 'active.json').exists():
         raise ValueError('Resolve the active legacy coordinator transaction before import')
-    policy = json.loads((coordinator / 'policy.json').read_text())
+    policy = json.loads((coordinator / 'policy.json').read_text(encoding='utf-8'))
     if set(policy.get('peers', {})) != set(PEERS):
         raise ValueError('Legacy coordinator does not identify this two-peer protocol')
-    status = json.loads((coordinator / 'public' / 'status.json').read_text())
+    status = json.loads((coordinator / 'public' / 'status.json').read_text(encoding='utf-8'))
     records = {name: _read_source(sources[name]) for name in PEERS}
     barriers = {record[0].get('trade_barrier') for record in records.values()}
     if len(barriers) != 1:
@@ -93,7 +93,7 @@ def validate_pair(sources, roms, coordinator_root):
     if len(completed) != 1:
         raise ValueError('Coordinator history does not prove the latest operation completed')
     work = coordinator / 'transactions' / transaction
-    result = json.loads((work / 'result.json').read_text())
+    result = json.loads((work / 'result.json').read_text(encoding='utf-8'))
     if (result.get('status') != 'staged' or result.get('id') != transaction
             or set(result.get('states', {})) != set(PEERS)
             or set(result.get('hashes', {})) != set(PEERS)):

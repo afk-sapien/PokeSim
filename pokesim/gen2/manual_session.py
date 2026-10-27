@@ -393,7 +393,7 @@ def main(argv=None):
     cancelled = threading.Event()
     commands = read_commands(sys.stdin, cancelled)
     try:
-        plan = CableSessionPlan.from_dict(json.loads(args.plan.read_text()))
+        plan = CableSessionPlan.from_dict(json.loads(args.plan.read_text(encoding='utf-8')))
         run_session(plan, args.out, commands, lambda value: print(json.dumps(value), flush=True), cancelled)
     except (CableError, ValueError, OSError, TypeError) as error:
         parser.exit(1, f'Cable session failed: {error}\n')

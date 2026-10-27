@@ -30,9 +30,9 @@ def trading_status():
         return {'enabled': False, 'history': [], 'completed': 0}
     try:
         directory = Path(root)
-        policy = json.loads((directory / 'policy.json').read_text())
+        policy = json.loads((directory / 'policy.json').read_text(encoding='utf-8'))
         path = directory / 'status.json'
-        status = json.loads(path.read_text()) if path.exists() else {}
+        status = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
         return {**status, 'enabled': policy.get('enabled', False),
                 'allow_last_copies': policy.get('allow_last_copies', False),
                 'mew_event': mew_enabled(policy),

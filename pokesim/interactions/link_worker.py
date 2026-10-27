@@ -212,7 +212,7 @@ def main(argv=None):
     if args.watch_parent:
         threading.Thread(target=watch_parent, name='link-parent-liveness', daemon=True).start()
     try:
-        raw = sys.stdin.read() if args.plan == '-' else Path(args.plan).read_text()
+        raw = sys.stdin.read() if args.plan == '-' else Path(args.plan).read_text(encoding='utf-8')
         plan = CableSessionPlan.from_dict(json.loads(raw))
         run_session(plan, args.out, lambda value: print(json.dumps(value), flush=True), cancelled)
     except (CableError, ValueError, OSError, TypeError) as error:

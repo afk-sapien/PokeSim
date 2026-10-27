@@ -1060,7 +1060,7 @@ def main(argv=None):
             manager = Manager(root, public_url, game_data_dir=args.game_data_dir,
                               reference_archive=args.reference_archive)
         except BlockingIOError:
-            identity = json.loads((root / 'manager.json').read_text())
+            identity = json.loads((root / 'manager.json').read_text(encoding='utf-8'))
             if args.desktop and not args.no_browser:
                 webbrowser.open(identity['url'])
             return
