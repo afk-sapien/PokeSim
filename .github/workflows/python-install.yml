@@ -53,6 +53,8 @@ jobs:
           # The step budget median is about 0.6 ms on a workstation and has reached 5.1 ms on the Intel macOS
           # runner, so hosted runners get twice the 5 ms budget.
           POKESIM_STEP_BUDGET_SCALE: '2'
+          # Windows is already split into four jobs, and starting test workers there cost more than they saved.
+          PYTEST_ADDOPTS: ${{ startsWith(matrix.os, 'windows') && '-n 0' || '' }}
         run: uv run --locked pytest --ignore=tests/test_rom.py -q -o faulthandler_timeout=120 --durations=10
   install:
     timeout-minutes: 20
