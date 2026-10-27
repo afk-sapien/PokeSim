@@ -33,7 +33,7 @@ def main():
             emu.pb.load_state(source)
         metadata = args.load.with_suffix('.json')
         if metadata.exists():
-            saved = json.loads(metadata.read_text())
+            saved = json.loads(metadata.read_text(encoding='utf-8'))
             emu.policy.load_state_dict(saved.get('policy_state', {}))
         emu.snapshot = read_snapshot(emu.pb.memory, emu.frame)
         runtime = SimpleNamespace(store=store, emulator=emu, settings=settings)
@@ -73,13 +73,13 @@ def main():
                 break
         if receipt['phase'] != 'prepared':
             raise ValueError(f'Trade preparation did not finish: {receipt.get("phase")}')
-        (args.output / 'receipt.json').write_text(json.dumps(receipt, indent=2))
+        (args.output / 'receipt.json').write_text(json.dumps(receipt, indent=2), encoding='utf-8')
         print('Prepared native Gen I offer', args.dex, flush=True)
     finally:
         emu.pb.screen.image.save(args.output / 'final.png')
         with (args.output / 'final.state').open('wb') as output:
             emu.pb.save_state(output)
-        (args.output / 'final.json').write_text(json.dumps({'policy_state': emu.policy.state_dict()}))
+        (args.output / 'final.json').write_text(json.dumps({'policy_state': emu.policy.state_dict()}), encoding='utf-8')
         emu.pb.stop(save=False)
         store.close()
 

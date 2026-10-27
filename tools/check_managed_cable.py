@@ -77,10 +77,10 @@ def exercise(root, fixtures, roms, game_data, abort=False, progress=print):
         out = root / 'interactions' / tid / 'attempts' / attempt / 'outputs'
         result = subprocess.run([sys.executable, '-m', 'pokesim.interactions.link_worker', '--out', str(out)],
             input=json.dumps(asdict(plan)), text=True, capture_output=True, timeout=90)
-        (root / 'link.stdout.log').write_text(result.stdout)
-        (root / 'link.stderr.log').write_text(result.stderr)
+        (root / 'link.stdout.log').write_text(result.stdout, encoding='utf-8')
+        (root / 'link.stderr.log').write_text(result.stderr, encoding='utf-8')
         checked(result.returncode == 0, 'Link subprocess failed: ' + result.stderr[-1200:])
-        manifest = json.loads((out / 'manifest.json').read_text())
+        manifest = json.loads((out / 'manifest.json').read_text(encoding='utf-8'))
         progress('Temporary link subprocess verified both cartridges')
         stages = {}
         for aid, other in ((A, B), (B, A)):
@@ -148,7 +148,7 @@ def exercise(root, fixtures, roms, game_data, abort=False, progress=print):
         report['link_manifest'] = str((out / 'manifest.json').resolve())
     except BaseException:
         for aid, child in children.items():
-            (root / f'{aid}.worker.log').write_text('\n'.join(child.logs))
+            (root / f'{aid}.worker.log').write_text('\n'.join(child.logs), encoding='utf-8')
         raise
     finally:
         for child in children.values():
@@ -158,7 +158,7 @@ def exercise(root, fixtures, roms, game_data, abort=False, progress=print):
             count = db.execute('SELECT COUNT(*) FROM kv WHERE k=?', ('managed_journal:' + tid,)).fetchone()[0]
             checked(count == (0 if abort else 1), 'Trade journal was duplicated or lost')
     report['journal_once' if not abort else 'no_committed_journal'] = True
-    (root / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
+    (root / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     return report
 
 

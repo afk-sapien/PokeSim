@@ -37,7 +37,7 @@ def main():
         for i, side in enumerate(sides):
             side.attach(i + 1)
         previous = [None, None]
-        with (args.output / 'trace.jsonl').open('w') as log:
+        with (args.output / 'trace.jsonl').open('w', encoding='utf-8') as log:
             for step in range(1600):
                 buttons = []
                 for i, side in enumerate(sides):

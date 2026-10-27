@@ -117,7 +117,7 @@ def main():
                         (folder / f'before{suffix}').write_bytes(before.with_suffix(suffix).read_bytes())
                 open_stall = {'folder': folder.name, 'noticed_frame': run.frame, 'quiet_minutes': quiet // MINUTE,
                               'has_before': bool(before), **report(snapshot)}
-                (folder / 'report.json').write_text(json.dumps(open_stall, indent=2))
+                (folder / 'report.json').write_text(json.dumps(open_stall, indent=2), encoding='utf-8')
                 stalls.append(open_stall)
                 objective = (open_stall['objective'] or {}).get('title')
                 print(f'{clock(run.frame - start)} STALL {folder.name}: {quiet // MINUTE} quiet minutes on '
@@ -130,7 +130,7 @@ def main():
                     restart = escapes >= 2 and snapshot.map in LEAGUE and league_entry.exists()
                     run.reload(league_entry if restart else calm or folder / 'before.state')
                     open_stall['escape'] = 'restarted the League attempt' if restart else 'reloaded a checkpoint from before the battle'
-                    (folder / 'report.json').write_text(json.dumps(open_stall, indent=2))
+                    (folder / 'report.json').write_text(json.dumps(open_stall, indent=2), encoding='utf-8')
                     print(f'  battle could not end, {open_stall["escape"]}', flush=True)
                     # Watch again from here, so a second dead end is noticed instead of waited out.
                     previous, pending, open_stall, progress_frame = None, [], None, run.frame
@@ -164,7 +164,7 @@ def main():
                    'stall_minutes': args.stall_minutes, 'stalls': stalls, 'timeline': timeline,
                    'mode_frames': dict(modes.most_common(12)), 'final': report(final),
                    'emulator': runtime_provenance()}
-        (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+        (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
         print(json.dumps({'outcome': outcome, 'game_hours': summary['game_hours'], 'wall_minutes': summary['wall_minutes'],
                           'stalls': [(row['folder'], row['map'], (row['objective'] or {}).get('title'),
                                       row.get('ended_after_minutes')) for row in stalls],

@@ -23,7 +23,7 @@ def main():
     parser.add_argument('--data', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    receipt = json.loads(args.gen2_receipt.read_text())
+    receipt = json.loads(args.gen2_receipt.read_text(encoding='utf-8'))
     classic = CableParticipant('classic', str(args.gen1_rom.resolve()), str(args.gen1_state.resolve()), party_slot=args.gen1_slot)
     modern = CableParticipant(**receipt['source'])
     from pokesim.cartridges import identify

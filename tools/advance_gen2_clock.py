@@ -42,7 +42,7 @@ def main():
         'source': str(args.source.resolve()), 'hours_elapsed': args.hours,
         'source_sha256': hashlib.sha256(raw).hexdigest(),
         'result_sha256': hashlib.sha256(result).hexdigest(),
-        'changed': 'Only the emulator RTC epoch. No cartridge RAM or Pokémon data was changed.'}, indent=2))
+        'changed': 'Only the emulator RTC epoch. No cartridge RAM or Pokémon data was changed.'}, indent=2), encoding='utf-8')
 
 
 if __name__ == '__main__':

@@ -42,7 +42,7 @@ def inspect_modern(rom, state, data, *, offer_trained=False):
             pb.load_state(stream)
         snapshot = read_snapshot(pb.memory, data)
         policy = Policy(data)
-        policy.load_state_dict(json.loads(state.with_suffix('.policy.json').read_text()))
+        policy.load_state_dict(json.loads(state.with_suffix('.policy.json').read_text(encoding='utf-8')))
         emu = SimpleNamespace(snapshot=snapshot, data=data, policy=policy)
         payload = live_status(snapshot.to_dict(egg_view=True))
         preferences = {identity(mon): {'state': 'offered'} for mon in payload['storage']['pokemon']
@@ -53,7 +53,7 @@ def inspect_modern(rom, state, data, *, offer_trained=False):
 
 
 def run(arguments, log):
-    with log.open('w') as output:
+    with log.open('w', encoding='utf-8') as output:
         subprocess.run([sys.executable, *map(str, arguments)], stdout=output, stderr=subprocess.STDOUT, check=True)
 
 
@@ -75,7 +75,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     cursor = args.output / 'progress.json'
     if cursor.exists():
-        progress = json.loads(cursor.read_text())
+        progress = json.loads(cursor.read_text(encoding='utf-8'))
     else:
         progress = {'classic': str(args.classic_state.resolve()), 'modern': str(args.modern_state.resolve()), 'trades': []}
     for _ in range(args.limit):
@@ -87,7 +87,7 @@ def main():
         if not choices or not spare:
             progress['remaining_gen1'] = sorted(set(range(1, 152)) - owned)
             progress['reason'] = 'No eligible missing donor' if not choices else 'No compatible boxed return partner'
-            cursor.write_text(json.dumps(progress, indent=2))
+            cursor.write_text(json.dumps(progress, indent=2), encoding='utf-8')
             print(progress['reason'], progress['remaining_gen1'], flush=True)
             break
         species = choices[0]
@@ -109,7 +109,7 @@ def main():
             run(['tools/play_gen2.py', rom, '--game', args.game, '--load', directory / 'modern/adopted.state',
                  '--real-clock', '--frames', 60000, '--stall-frames', 20000, '--focus', 'restore', '--until', 'restore',
                  '--output', directory / 'restored'], directory / 'restore.log')
-        final = json.loads((directory / 'restored/final.json').read_text())
+        final = json.loads((directory / 'restored/final.json').read_text(encoding='utf-8'))
         if final['stopped'] or 'restore' not in final['policy']['completed'] or species not in final['game']['dex_owned']:
             raise ValueError('The traded species or restored team did not verify')
         progress.update(classic=str((directory / 'classic/adopted.state').resolve()),
@@ -118,7 +118,7 @@ def main():
         progress.pop('remaining_gen1', None)
         progress['trades'].append({'species': species, 'returned': outgoing['species'], 'directory': str(directory.resolve()),
                                    'owned': final['game']['owned']})
-        cursor.write_text(json.dumps(progress, indent=2))
+        cursor.write_text(json.dumps(progress, indent=2), encoding='utf-8')
         print('Verified', species, 'owned', progress['owned'], flush=True)
 
 

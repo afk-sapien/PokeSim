@@ -33,7 +33,7 @@ def main():
             try:
                 metadata = {'app_version': __version__, **checkpoint_metadata(),
                             'generation': 2, 'rom_sha1': rom['sha1'], 'frame': 0, 'policy': 'strategic',
-                            'policy_state': json.loads(path.with_suffix('.policy.json').read_text()),
+                            'policy_state': json.loads(path.with_suffix('.policy.json').read_text(encoding='utf-8')),
                             'run_memory': {}, 'play_clock': {}, 'trade_id': None, 'reward_id': None}
                 store.write_checkpoint(path.read_bytes(), metadata)
             finally:
@@ -78,7 +78,7 @@ def main():
             state = manager.supervisor.child(aid).request('GET', '/api/state')
             assert state['generation'] == 2 and state['health']['ok']
             assert not manager.coordinator.inventory(aid)['holding']
-        (args.output / 'result.json').write_text(json.dumps(result, indent=2))
+        (args.output / 'result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
         print('All three real workers passed. Automatic Gen II trade completed and released both adventures.', flush=True)
     finally:
         manager.close()

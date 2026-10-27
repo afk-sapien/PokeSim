@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    version = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['version']
+    version = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     wheel = ROOT / 'dist' / f'pokesim-{version}-py3-none-any.whl'
     with tempfile.TemporaryDirectory(prefix='pokesim-wheel-') as temporary:
         root = Path(temporary)

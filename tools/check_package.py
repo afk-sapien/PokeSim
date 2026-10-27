@@ -109,7 +109,7 @@ required = {
     'pokesim/web/feed.py',
     'pokesim/data_tools/strategy.py',
 }
-release_version = tomllib.loads(Path('pyproject.toml').read_text())['project']['version']
+release_version = tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version']
 artifacts = list(Path('dist').glob(f'pokesim-{release_version}-*.whl')) + list(Path('dist').glob(f'pokesim-{release_version}.tar.gz'))
 if len(artifacts) != 2 or sum(path.suffix == '.whl' for path in artifacts) != 1:
     raise SystemExit('Build exactly one wheel and one source archive first with uv build')

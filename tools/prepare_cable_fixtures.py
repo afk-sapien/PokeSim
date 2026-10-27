@@ -13,7 +13,7 @@ import re
 
 def symbols(path):
     result = {}
-    for line in Path(path).read_text().splitlines():
+    for line in Path(path).read_text(encoding='utf-8').splitlines():
         match = re.fullmatch(r'([0-9a-fA-F]{2}):([0-9a-fA-F]{4}) (.+)', line)
         if match:
             result[match[3]] = (int(match[1], 16), int(match[2], 16))

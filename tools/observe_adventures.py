@@ -14,7 +14,7 @@ from pokesim.app.cli import RunningApplication
 def observe(root, output):
     root = Path(root).expanduser().resolve()
     output = Path(output).expanduser().resolve()
-    previous = json.loads(output.read_text()) if output.exists() else {}
+    previous = json.loads(output.read_text(encoding='utf-8')) if output.exists() else {}
     prior = {row['id']: row for row in previous.get('adventures', [])}
     now = time.time()
     report = {'observed_at': now, 'utc': datetime.now(timezone.utc).isoformat(),
@@ -99,9 +99,9 @@ def observe(root, output):
         app.close()
     output.parent.mkdir(parents=True, exist_ok=True)
     pending = output.with_suffix('.pending')
-    pending.write_text(json.dumps(report, indent=2) + '\n')
+    pending.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     pending.replace(output)
-    with output.with_suffix('.jsonl').open('a') as history:
+    with output.with_suffix('.jsonl').open('a', encoding='utf-8') as history:
         history.write(json.dumps(report) + '\n')
     return report
 

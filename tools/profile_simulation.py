@@ -49,14 +49,14 @@ def capture(source, output, rom, game_data):
     for directory in ('shots',):
         if (source / directory).exists():
             shutil.copytree(source / directory, target / directory)
-    settings = json.loads((source / 'adventure.json').read_text())['settings']
+    settings = json.loads((source / 'adventure.json').read_text(encoding='utf-8'))['settings']
     settings.pop('auto_start', None)
     shutil.copy2(rom, output / 'rom.gb')
     shutil.copytree(game_data, output / 'game-data')
     record = {'settings': settings, 'checkpoint': state.name,
               'checkpoint_sha256': metadata['sha256'], 'start_frame': metadata['frame'],
               'note': 'Database backup and latest complete autosave are separate snapshots, not an atomic application backup'}
-    (output / 'fixture.json').write_text(json.dumps(record, indent=2) + '\n')
+    (output / 'fixture.json').write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({key: value for key, value in record.items() if key != 'settings'}, indent=2))
 
 
@@ -64,7 +64,7 @@ def run(args):
     fixture = args.fixture.resolve()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
-    meta = json.loads((fixture / 'fixture.json').read_text())
+    meta = json.loads((fixture / 'fixture.json').read_text(encoding='utf-8'))
     if args.cpu is not None:
         os.sched_setaffinity(0, {args.cpu})
     import psutil
@@ -200,7 +200,7 @@ def run(args):
                 rows.append({'file': filename, 'line': line, 'name': name, 'calls': calls,
                              'self_seconds': own, 'cumulative_seconds': cumulative})
             result['functions'] = sorted(rows, key=lambda row: row['self_seconds'], reverse=True)
-        (output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+        (output / 'result.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
         print(json.dumps({key: value for key, value in result.items() if key not in {'functions', 'timings'}}, indent=2))
 
 

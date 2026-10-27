@@ -21,7 +21,7 @@ def now():
 
 def write(path, value):
     temporary = path.with_suffix('.pending')
-    temporary.write_text(json.dumps(value, indent=2) + '\n')
+    temporary.write_text(json.dumps(value, indent=2) + '\n', encoding='utf-8')
     temporary.replace(path)
 
 
@@ -144,7 +144,7 @@ def main():
                     details['uninterrupted'] = state['reloads'] == 0
                     docker('stop', '--time', '20', name)
             active_label = None
-            with (root / 'samples.jsonl').open('a') as output:
+            with (root / 'samples.jsonl').open('a', encoding='utf-8') as output:
                 output.write(json.dumps(sample) + '\n')
             assert shutil.disk_usage(root).free > 5 * 1024**3, 'Less than 5 GiB free disk space'
             assert sum(run['latest']['data_bytes'] for run in report['runs'].values()) < 10 * 1024**3, 'Test data exceeded 10 GiB'
@@ -169,7 +169,7 @@ def main():
         for name in containers:
             try:
                 docker('stop', '--time', '20', name)
-                (root / f'{name}.log').write_text(docker('logs', '--tail', '1000', name))
+                (root / f'{name}.log').write_text(docker('logs', '--tail', '1000', name), encoding='utf-8')
             except subprocess.CalledProcessError:
                 pass
         for details in report['runs'].values():

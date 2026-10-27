@@ -71,7 +71,7 @@ def main():
             assert emu.snapshot.stored == after.stored
             assert rewards.status(runtime.store)['delivered'] == 1
             assert emu.health()['ok']
-        (args.output / 'result.txt').write_text('Delivery, replay protection, commitment recovery and restart passed\n')
+        (args.output / 'result.txt').write_text('Delivery, replay protection, commitment recovery and restart passed\n', encoding='utf-8')
         print('Delivery, replay protection, commitment recovery and restart passed', record['species'])
 
 

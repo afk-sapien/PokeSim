@@ -23,7 +23,7 @@ def main():
     donor_rom = Path(f'.release-local/gen2/{args.donor_game}.gbc')
     args.output.mkdir(parents=True, exist_ok=True)
     cursor = args.output / 'progress.json'
-    progress = json.loads(cursor.read_text()) if cursor.exists() else {
+    progress = json.loads(cursor.read_text(encoding='utf-8')) if cursor.exists() else {
         'donor': str(args.donor_state.resolve()), 'modern': str(args.load.resolve()), 'trades': []}
     while True:
         donor, modern = Path(progress['donor']), Path(progress['modern'])
@@ -33,7 +33,7 @@ def main():
         if not choices or not offered:
             progress['remaining'] = sorted(set(range(1, 252)) - owned)
             progress['reason'] = 'No missing donor available' if not choices else 'No boxed return partner available'
-            cursor.write_text(json.dumps(progress, indent=2))
+            cursor.write_text(json.dumps(progress, indent=2), encoding='utf-8')
             print(progress['reason'], progress['remaining'], flush=True)
             break
         incoming = min(choices, key=lambda row: (row['species'], row['level']))
@@ -62,7 +62,7 @@ def main():
                         modern=str(result.resolve()), owned=len(after))
         progress['trades'].append({'species': species, 'arrived': incoming['arrived_dex'],
             'returned': outgoing['species'], 'directory': str(directory.resolve()), 'owned': len(after)})
-        cursor.write_text(json.dumps(progress, indent=2))
+        cursor.write_text(json.dumps(progress, indent=2), encoding='utf-8')
         print('Verified', species, 'owned', len(after), flush=True)
 
 

@@ -144,5 +144,5 @@ if __name__ == '__main__':
     if args.frames <= 0 or args.output.resolve() in (args.rom.resolve(), args.checkpoint.resolve(), args.checkpoint.with_suffix('.json').resolve()):
         parser.error('Use a positive frame budget and a separate output file')
     result = run(args.rom, args.checkpoint, args.failure, args.frames, args.revisit)
-    args.output.write_text(json.dumps(result, indent=2) + '\n')
+    args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({key: result[key] for key in ('scenario', 'frames', 'rewinds', 'caught', 'final_map')}))

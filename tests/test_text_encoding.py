@@ -1,4 +1,4 @@
-"""Every text read and write in pokesim names UTF-8, so Windows does not fall back to its ANSI code page.
+"""Every text read and write in pokesim and tools names UTF-8, so Windows does not fall back to its ANSI code page.
 
 Ruff's PLW1514 only sees calls on values it can tell are paths, so this walks the source instead. It checks
 the builtin open, read_text and write_text, and any .open call given a text mode such as 'w' or 'a'.
@@ -8,7 +8,8 @@ import ast
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1] / 'pokesim'
+ROOT = Path(__file__).resolve().parents[1]
+SOURCES = ('pokesim', 'tools')
 TEXT_MODE = re.compile(r'[rwax+t]+')
 
 
@@ -40,10 +41,10 @@ def unencoded(call):
 
 def test_every_text_read_and_write_names_an_encoding():
     found = []
-    for path in sorted(ROOT.rglob('*.py')):
+    for path in sorted(path for source in SOURCES for path in (ROOT / source).rglob('*.py')):
         for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
             if isinstance(node, ast.Call) and unencoded(node):
-                found.append(f'{path.relative_to(ROOT.parent)}:{node.lineno}: {ast.unparse(node)}')
+                found.append(f'{path.relative_to(ROOT)}:{node.lineno}: {ast.unparse(node)}')
     assert not found, "Pass encoding='utf-8':\n" + '\n'.join(found)
 
 

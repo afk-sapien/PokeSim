@@ -50,10 +50,10 @@ def run_replay(root, rom, checkpoint, frames, output, timeout):
                '--rom', str(rom), '--checkpoint', str(checkpoint), '--frames', str(frames),
                '--output', str(output)]
     env = {**os.environ, 'GAME_DATA_DIR': str(directory().resolve())}
-    with output.with_suffix('.log').open('w') as log:
+    with output.with_suffix('.log').open('w', encoding='utf-8') as log:
         subprocess.run(command, cwd=root, env=env, stdout=log, stderr=subprocess.STDOUT,
                        check=True, timeout=timeout)
-    return json.loads(output.read_text())
+    return json.loads(output.read_text(encoding='utf-8'))
 
 
 def main(argv=None):
@@ -98,7 +98,7 @@ def main(argv=None):
         if not report['inputs_unchanged']:
             report['status'] = 'failed'
             report['input_error'] = 'A replay input changed during validation'
-        (output / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
+        (output / 'summary.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     if not report['inputs_unchanged']:
         raise RuntimeError(report['input_error'])
     print(json.dumps({'status': report['status'], 'summary': str(output / 'summary.json')}))

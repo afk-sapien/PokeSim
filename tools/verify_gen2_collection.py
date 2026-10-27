@@ -43,7 +43,7 @@ def main():
     (args.output / f'{args.game}-251.sav').write_bytes(save)
     result.update(portable_save_bytes=len(save), portable_save_sha256=hashlib.sha256(save).hexdigest(),
                   fresh_continue_verified=True)
-    (args.output / 'verification.json').write_text(json.dumps(result, indent=2) + '\n')
+    (args.output / 'verification.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     print(f'{args.game}: all 251 entries verified, including fresh cartridge Continue')
 
 
