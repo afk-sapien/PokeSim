@@ -528,6 +528,11 @@ def journey(policy, snapshot, mem, Goal):
         return goal
     from .breeding import journey as breed
     goal = breed(policy, snapshot, Goal)
+    # The Day Care counts the steps of any walk and carried eggs hatch on any walk, so pacing Goldenrod
+    # for them waits behind every other errand. The egg and partner errands still go first.
+    nursery = None
+    if goal and goal.key == 'collection_hatch':
+        nursery, goal = goal, None
     if goal:
         return while_waiting(policy, snapshot, mem, goal, Goal)
     from .gamecorner import journey as prizes
@@ -629,6 +634,8 @@ def journey(policy, snapshot, mem, Goal):
             goal = postgame.journey(policy, snapshot, mem, Goal, current_time)
             if goal:
                 return goal
+            if nursery:
+                return while_waiting(policy, snapshot, mem, nursery, Goal)
             eggs = any(mon.egg for mon in snapshot.party)
             # Carried eggs hatch on this walk, so only a walk without them is idle.
             state['phase'] = 'hatching' if eggs else 'waiting'
