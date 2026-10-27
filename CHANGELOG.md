@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add randomized adventures for all six games. New adventure can shuffle wild Pokémon and starters, and trainer parties if chosen, from a seed. Each run gets a share code such as `PSR1-RED-WS-12345` that recreates the same world, shown on the Live page with a copy button. The cartridge is patched in memory only, and the planner follows the shuffled tables. Fishing, gifts, in-game trades and fixed encounters are not shuffled. This uses the Core randomizer, pinned to Core main at `0b7b281`.
+
 - Pick the sound buffer automatically and remove the Audio mode select. Watching keeps about one second of sound and delays the live screen by the same amount. Take Control drops to about 0.1 seconds with no screen delay, and handing back grows the buffer again without a silence.
 
 - Fix live sound going quiet for a second or more. Gold, Silver and Crystal still told the page the measured speed, so a catch-up burst read above 4.5x and its sound was cut, and the page then cleared its queue and waited a full second. They now report the speed setting like Red, Blue and Yellow, and a hole in the audio no longer clears what is queued. After a dropout sound now resumes after 0.4 seconds instead of a full second and the buffer refills by playing up to 4% slow.

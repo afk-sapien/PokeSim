@@ -38,6 +38,7 @@ class SimulationSettings:
     celebi_event: bool = False
     extra_store_items: bool = False
     fair_wild_dvs: bool = False
+    randomizer: str = ''
     legendary_return_steps: int = 1000000
     event_return_steps: int = 100000
     mew_return_steps: int = 1000000
@@ -79,6 +80,11 @@ class SimulationSettings:
         from ..cartridges import identify, validate_starter
         cartridge = identify(Path(self.rom_path).read_bytes())
         validate_starter(self.starter, cartridge.version if cartridge else None)
+        if self.randomizer:
+            if cartridge is None:
+                raise ValueError('Only a verified cartridge can be randomized')
+            from ..randomized import validate
+            object.__setattr__(self, 'randomizer', validate(self.randomizer, cartridge.version))
         for name in ('viewer_only', 'fast_text', 'battle_animations', 'league_rewards', 'mew_event', 'celebi_event',
                      'extra_store_items', 'fair_wild_dvs'):
             if type(getattr(self, name)) is not bool:

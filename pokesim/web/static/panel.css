@@ -499,6 +499,20 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
   text-transform: uppercase;
   overflow-wrap: anywhere;
 }
+/* A randomized run's share code. Clicking it copies the code. */
+.share-code {
+  display: block;
+  margin-top: var(--s2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: var(--f-label) / 1.4 var(--font-mono);
+  cursor: copy;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.share-code[hidden] { display: none; }
 .identity .stats {
   display: flex;
   margin-left: auto;

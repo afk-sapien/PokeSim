@@ -15,7 +15,7 @@ from pathlib import Path
 from PIL import Image
 from pokesim_core.emulator import Emulator as CoreEmulator
 
-from .yellow import open_emulator
+from .yellow import YELLOW_SHA1, open_emulator
 
 from . import __version__, config
 from .audio import AudioFeed, enable_checkpoint_sound
@@ -158,7 +158,9 @@ class Emulator:
         if getattr(self, 'isolated_ram', False):
             import io
             options['ram_file'] = io.BytesIO(bytes(32768))
-        pb = open_emulator(str(self.rom), default=CoreEmulator, window="null", sound_emulated=sound, **options)
+        from .randomized import rom_stream
+        pb = open_emulator(rom_stream(self.rom), default=CoreEmulator, window="null", sound_emulated=sound,
+                           yellow=self.rom_sha1 == YELLOW_SHA1, **options)
         pb.set_emulation_speed(0)
         if getattr(self, 'activity_ledger', None) is not None:
             self.activity_ledger.attach(pb)
@@ -215,6 +217,7 @@ class Emulator:
             self.command("press", button)
 
     def status(self) -> dict:
+        from .randomized import status as randomizer_status
         snap = self.snapshot
         strategy = self.policy.details()
         preparation = getattr(self, 'preparation', None)
@@ -239,6 +242,7 @@ class Emulator:
             "progress": self.progress_status(),
             "league_rewards": rewards.status(self.store),
             "legendary_recovery": self.legendary_recovery.state_dict(),
+            "randomizer": randomizer_status(),
         }
 
     def progress_status(self):

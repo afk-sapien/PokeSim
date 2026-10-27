@@ -24,6 +24,9 @@ if current_variant() == 'yellow':
         16: ('Koga', 'VENOMOTH', 50), 32: ('Sabrina', 'ALAKAZAM', 50),
         64: ('Blaine', 'ARCANINE', 54), 128: ('Giovanni', 'RHYDON', 55),
     })
+# A randomized adventure with shuffled trainers meets whatever now holds each ace's party slot.
+from ..randomized import gen1_opponents
+OPPONENTS = gen1_opponents(OPPONENTS, SPECIES)
 
 
 # Yellow's Pikachu follows the player and loses friendship when it leaves the party,
