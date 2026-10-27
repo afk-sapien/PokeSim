@@ -1,6 +1,10 @@
 name: CI
 on:
+  # Branches are tested through their pull request, so a push runs only on main and tags. The release gate
+  # needs those push runs as evidence for the exact commit it publishes.
   push:
+    branches: [main]
+    tags: ['**']
   pull_request:
   workflow_dispatch:
 permissions:
