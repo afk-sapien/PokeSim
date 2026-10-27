@@ -1,4 +1,5 @@
 import io
+import os
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -201,6 +202,30 @@ def test_audio_endpoint_reports_playback_without_changing_speed(tmp_path, monkey
             assert response.content == (b'\x01\x02' * 600 if audible else b'')
             assert response.headers['X-Audio-Dropped'] == ('0' if audible else '600')
     assert emu.speed == speed
+
+
+@pytest.mark.parametrize('speed,manual,reported', [(4, False, 4), (1, False, 1), (2, True, 1), (0, False, None)])
+def test_gold_silver_and_crystal_report_the_setting_through_a_catch_up_burst(monkeypatch, speed, manual, reported):
+    if not os.environ.get('GEN2_DATA_DIR'):
+        pytest.skip('Set GEN2_DATA_DIR to generated local game data')
+    from pokesim.gen2.emulator import Emulator as Gen2Emulator
+    clock = [10.0]
+    monkeypatch.setattr('pokesim.audio.time.monotonic', lambda: clock[0])
+    emu = Gen2Emulator.__new__(Gen2Emulator)
+    emu.speed, emu.paused, emu.manual_mode = speed, False, manual
+    emu.audio = AudioFeed()
+    after = emu.audio_packet(-1)[1]
+    # A stall, then a burst that the ring measures at well over the 4.5x mute limit.
+    clock[0] += 0.8
+    for _ in range(200):
+        clock[0] += 0.001
+        emu.audio.publish(b'ab')
+    state, sequence, pcm, pace, dropped = emu.audio_packet(after)
+    assert (state, sequence - after, len(pcm), dropped) == ('playing', 200, 400, 0)
+    if reported is None:
+        assert pace > MAX_SPEED
+    else:
+        assert pace == reported
 
 
 @pytest.mark.parametrize('speed,manual', [(4, False), (1, False), (2, True)])

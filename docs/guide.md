@@ -72,14 +72,13 @@ Click **Sound: Off** below the live screen to listen. Audio follows the observed
 Music and effects speed up with the game. Your adventure keeps its chosen speed. Audio starts off on every page
 and turns off when you hide or leave the tab.
 
-Pick **Audio mode** next to the Sound button to choose how sound is buffered. **Realtime** is the default and keeps the
-lowest delay. **Cached** holds about one second of audio, up to three on a poor connection, and delays the live screen by
-the same amount so picture and sound stay in sync. Use it when sound stutters. Your browser remembers the choice.
-
-Sound keeps a short buffer so a slow connection does not cause crackling. Watching holds about 0.4 seconds of audio ahead.
-After a dropout the buffer grows up to 1.5 seconds and then shrinks slowly while the connection stays calm.
+Sound keeps a buffer so a slow connection or a busy server does not cause crackling. While you watch it holds about one
+second of audio ahead and delays the live screen by the same amount, so picture and sound stay in sync. After a dropout
+sound comes back within half a second, and the buffer refills by playing slightly slow. It grows up to three seconds
+on a poor connection and shrinks slowly while the connection stays calm.
 If even that is not enough, the status line says "Audio connection is unstable".
-Take Control uses about 0.1 seconds so button presses sound immediate. Sound is off above 4.5x because the pitch is not useful, and it returns when the speed drops.
+Take Control switches to about 0.1 seconds with no screen delay, so button presses show and sound immediate.
+Handing control back to the AI grows the buffer again without a pause. Sound is off above 4.5x because the pitch is not useful, and it returns when the speed drops.
 
 Only adventures with a listener run sound emulation. Existing saves remain usable.
 A previously silent save may need the next music change before all channels play.

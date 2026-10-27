@@ -3,15 +3,15 @@
 // The buffer decides when a packet should start, how fast it should play and how much of its
 // head to skip, so that the queued audio ("lead") holds a target that grows after underruns.
 (function (root) {
+  // `restart` is how much audio a dropout waits for before sound resumes. The rest of the target
+  // is then rebuilt by playing slightly slow, so a short dropout is never a long silence.
   const MODES = {
-    // Watching: smoothness over latency.
-    watch: {base: 0.4, max: 1.5, excess: 0.35, poll: 0.1},
+    // Watching: a deep buffer, with the screen delayed by the same lead so picture and sound match.
+    cached: {base: 1, max: 3, excess: 0.6, poll: 0.15, restart: 0.4},
     // Playing by hand: button presses must feel immediate.
-    manual: {base: 0.1, max: 0.3, excess: 0.08, poll: 0.04},
-    // Cached, chosen by the viewer: a deep buffer, with the screen delayed by the same target.
-    cached: {base: 1, max: 3, excess: 0.6, poll: 0.15},
+    manual: {base: 0.1, max: 0.3, excess: 0.08, poll: 0.04, restart: 0.05},
   }
-  const modeName = mode => Object.hasOwn(MODES, mode) ? mode : 'watch'
+  const modeName = mode => Object.hasOwn(MODES, mode) ? mode : 'cached'
   const START_DELAY = 0.03
   const UNDERRUN_SLACK = 0.005
   const GROW_PADDING = 0.05
@@ -19,10 +19,15 @@
   const STABLE_SECONDS = 10
   const SHRINK_STEP = 0.05
   const TRIM_MAX = 0.02
+  // Below the target the lead is rebuilt a little faster, about 0.7 of a semitone at most.
+  const REFILL_MAX = 0.04
+  const REFILL_GAIN = 0.1
   const TRIM_GAIN = 0.05
   const TRIM_DEADBAND = 0.04
   const TRIM_SMOOTHING = 0.3
   const MIN_KEEP = 0.02
+  // Packet durations are summed in floating point, so ten 0.1 second packets can fall just short.
+  const EPSILON = 1e-6
   const FADE = 0.006
   // Above this the pitch is meaningless and the server stops sending audio.
   const MAX_SPEED = 4.5
@@ -49,6 +54,10 @@
       targets: Object.fromEntries(Object.entries(MODES).map(([name, mode]) => [name, mode.base])),
       next: 0,
       primed: false,
+      // Resume after a dropout or a mode change with a short restart instead of a full prime.
+      quick: false,
+      rebuffering: false,
+      latency: 0,
       rate: null,
       trim: 0,
       lastUnderrun: -Infinity,
@@ -63,6 +72,8 @@
       get rate() { return state.rate },
       get pollInterval() { return config().poll },
       lead(now) { return Math.max(0, state.next - now) },
+      // How far behind the live edge the newest packet plays: the lead it joined the queue with.
+      get latency() { return state.primed ? state.latency : 0 },
       get primed() { return state.primed },
       get lastUnderrun() { return state.lastUnderrun },
       // True while the connection is recently unreliable even with a nearly full buffer.
@@ -79,6 +90,8 @@
       reset() {
         state.next = 0
         state.primed = false
+        state.quick = false
+        state.rebuffering = false
         state.trim = 0
       },
       // Offer a packet that lasts `duration` of game audio. `speed` is the pace the server reports.
@@ -111,6 +124,7 @@
           // for instance on taking control.
           // Cut the queue with a fade and rejoin at the target.
           state.primed = false
+          state.quick = true
           state.stats.flushes += 1
           flush = true
         }
@@ -121,17 +135,25 @@
           state.lastUnderrun = now
           target = state.targets[state.mode] = Math.min(cfg.max, target + Math.min(gap, MAX_GROW) + GROW_PADDING)
           state.primed = false
-          rebuffered = true
+          state.quick = true
+          state.rebuffering = true
           state.trim = 0
         } else if (state.primed && state.next < now) {
           state.primed = false
+          state.quick = true
         }
         if (!state.primed) {
-          if (wall < target) {
+          // Only the first start waits for the whole target. Afterwards sound resumes quickly
+          // and the trim below rebuilds the rest without another silence.
+          if (wall + EPSILON < (state.quick ? Math.min(target, cfg.restart) : target)) {
             state.stats.holds += 1
             return {type: 'hold', target, flush}
           }
-          if (rebuffered) state.stats.rebuffers += 1
+          if (state.rebuffering) {
+            state.stats.rebuffers += 1
+            rebuffered = true
+            state.rebuffering = false
+          }
           const start = now + START_DELAY
           let skip = 0
           let fade = false
@@ -146,15 +168,19 @@
             state.stats.skipped += dropped
           }
           state.primed = true
+          state.quick = false
           state.next = start + wall
+          state.latency = state.next - now
           state.trim = 0
-          return {type: 'play', start, rate: base, skip, fade, wall, rebuffered, target, flush, lead: state.next - now}
+          return {type: 'play', start, rate: base, skip, fade, wall, rebuffered, target, flush, lead: state.latency}
         }
         const lead = state.next - now
         const start = state.next
         let skip = 0
         let fade = false
         let error = lead + wall - target
+        // The calm spell that shrinks the target starts only once the lead has been rebuilt.
+        if (error < -TRIM_DEADBAND) state.lastChange = now
         if (error > cfg.excess) {
           // Far ahead of the target: skip forward rather than draining slowly or clearing.
           const dropped = Math.min(error, wall - MIN_KEEP)
@@ -168,12 +194,14 @@
           }
         }
         // Hold the target with a tiny, smoothed speed change, never a hard jump.
-        const wanted = Math.abs(error) < TRIM_DEADBAND ? 0 : clamp(error * TRIM_GAIN, -TRIM_MAX, TRIM_MAX)
+        const wanted = Math.abs(error) < TRIM_DEADBAND ? 0
+          : error < 0 ? Math.max(error * REFILL_GAIN, -REFILL_MAX) : Math.min(error * TRIM_GAIN, TRIM_MAX)
         state.trim += (wanted - state.trim) * TRIM_SMOOTHING
         const rate = base * (1 + state.trim)
         wall = (duration - skip) / rate
         state.next = start + wall
-        return {type: 'play', start, rate, skip, fade, wall, rebuffered: false, target, flush: false, lead: state.next - now}
+        state.latency = state.next - now
+        return {type: 'play', start, rate, skip, fade, wall, rebuffered: false, target, flush: false, lead: state.latency}
       },
     }
     return api
