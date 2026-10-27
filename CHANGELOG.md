@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Stop Gold, Silver and Crystal retrying "Give Exp. Share" without end when the bag is full. The partner in training held a Pearl, and the game refuses the swap when the items pocket has no free entry for it, so replays of one Gold run spent over half their frames on that retry. The partner now trains in the lead instead, as it does without an Exp. Share. An item task the game refuses three times also sets the training aside for a while.
+
 - Show a stopped adventure read only instead of the "not running" page. Every panel loads from the newest save, and the screen shows the last frame greyed out under a Stopped label. Nothing runs or is written, controls are hidden, and the view closes after five idle minutes or when the adventure starts.
 
 - Stop Gold, Silver and Crystal pacing Goldenrod City while the Day Care makes an egg. One Gold run spent about a fifth of each day there while it bred spare copies. The Day Care counts the steps of any walk, so the run now trains, hunts, collects stones or does postgame work in that time and goes back only to collect the egg or swap a parent. The Goldenrod walk is left only for when nothing else is useful.

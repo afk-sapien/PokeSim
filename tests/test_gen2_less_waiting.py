@@ -258,6 +258,76 @@ def test_a_leading_trainee_switches_out_once_when_outmatched(data):
     assert policy.trainee_switch(state, 0) is None
 
 
+def full_bag(data, *, share=True):
+    """An items pocket with every entry taken, holding the Exp. Share when ``share`` is set."""
+    rows = [(item, 1) for item, attributes in sorted(data.item_attributes.items())
+            if attributes['pocket'] == 'ITEM' and item not in (data.items['EXP_SHARE'], data.items['PEARL'])]
+    return ([(data.items['EXP_SHARE'], 1)] if share else []) + rows[:20 - share]
+
+
+def test_a_trainee_holding_an_item_the_full_bag_cannot_take_back_trains_in_the_lead(data, monkeypatch):
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.training import journey, trainee_slot
+    walk_anywhere(monkeypatch)
+    trainee = mon(90, box=None, position=1, level=30, held_item=data.items['PEARL'])
+    policy, state = shareless_policy(data, [lead(), trainee], trainee)
+    policy.collection['training']['level_goal'] = 50
+    policy.demand, policy.decisions, policy.no_room = {}, 1000, lambda snapshot: False
+    state.pockets['items'] = full_bag(data)
+    state.items = tuple(state.pockets['items'])
+    # Giving the share would hand the Pearl back to a pocket with no free entry, which the game refuses.
+    goal = journey(policy, state, clock(), Goal, terminal=True)
+    assert goal.key == 'collection_train' and goal.label.endswith('in the lead')
+    assert trainee_slot(policy, state) == 1
+    # One free entry lets the swap through.
+    state.map = data.map_ids['GOLDENROD_POKECENTER_1F']
+    state.pockets['items'] = state.pockets['items'][:-1]
+    state.items = tuple(state.pockets['items'])
+    assert journey(policy, state, clock(), Goal, terminal=True).key == 'collection_equip'
+    assert trainee_slot(policy, state) is None
+    # Taking the share from another member needs room for the share itself.
+    holder = mon(157, box=None, position=0, dvs=(1,) * 5, moves=(57, 15, 53, 0), level=100, trainer_id=1,
+                 held_item=data.items['EXP_SHARE'])
+    bare = mon(90, box=None, position=1, level=30)
+    policy, state = shareless_policy(data, [holder, bare], bare)
+    policy.collection['training']['level_goal'] = 50
+    policy.demand, policy.decisions, policy.no_room = {}, 1000, lambda snapshot: False
+    state.pockets['items'] = full_bag(data, share=False)
+    state.items = tuple(state.pockets['items'])
+    assert journey(policy, state, clock(), Goal, terminal=True).label.endswith('in the lead')
+
+
+def test_an_item_task_the_game_keeps_refusing_stands_the_project_down(data):
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.standdown import standing_down, train_key
+    from pokesim.gen2.training import arrive, identity
+    trainee = mon(90, box=None, position=1, level=30, held_item=data.items['PEARL'])
+    policy, state = shareless_policy(data, [lead(), trainee], trainee)
+    policy.blocked, policy.decisions = {}, 1000
+    policy.goal = Goal('collection_equip', 'Give Exp. Share to 90', 'GOLDENROD_POKECENTER_1F', 9, 2)
+    state.frame = 0
+    assert arrive(policy, state) == 'wait'
+    task = policy.menu
+    key = policy.task_key(task)
+    for refusal in range(1, 3):
+        # The game refused the shortcut, so the policy blocks it for a while and the plan waits it out.
+        policy.menu = None
+        policy.blocked[key] = state.frame + policy.RETRY_FRAMES
+        assert arrive(policy, state) == 'wait' and policy.menu is None
+        state.frame += 1
+        assert arrive(policy, state) == 'wait'
+        # Each block counts once however many steps it lasts.
+        assert len(policy.collection['training']['refused']) == refusal
+        state.frame = policy.blocked[key]
+        assert arrive(policy, state) == 'wait' and policy.menu is not None
+    # The third refusal in a row drops the project for the stand-down period.
+    policy.menu = None
+    policy.blocked[key] = state.frame + policy.RETRY_FRAMES
+    assert arrive(policy, state) is None
+    assert policy.collection['training'] is None
+    assert standing_down(policy, train_key(identity(trainee)))
+
+
 def test_without_exp_share_a_stone_evolution_still_runs(data):
     from pokesim.gen2.policy import Goal
     from pokesim.gen2.training import journey

@@ -1709,9 +1709,12 @@ def test_exp_share_goes_to_training_partner_after_storage_retrieval(real_data):
     holder = SimpleNamespace(trainer_id=1, dvs=(2,) * 5, box=None)
     policy.collection.update(training={'identity': [1, [1] * 5]}, share_holder=[1, [2] * 5])
     policy.goal = Goal('collection_equip', 'Equip the training partner', 'OLIVINE_POKECENTER_1F', 5, 6)
-    assert arrive(policy, SimpleNamespace(party=(partner, holder), stored=())) == 'wait'
+    assert arrive(policy, SimpleNamespace(party=(partner, holder), stored=(), frame=0)) == 'wait'
     assert isinstance(policy.menu, Give)
     assert policy.menu.slot == 0
+    # Once the game refused the swap, the plan waits instead of starting it again at once.
+    policy.blocked[policy.task_key(policy.menu)], policy.menu = 3600, None
+    assert arrive(policy, SimpleNamespace(party=(partner, holder), stored=(), frame=0)) == 'wait' and policy.menu is None
 
 
 def test_tower_attack_replacement_keeps_recover(real_data):

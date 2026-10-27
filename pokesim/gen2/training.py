@@ -16,12 +16,43 @@ def shareless(data, snapshot):
     return not dict(snapshot.items).get(share) and not any(mon.held_item == share for mon in snapshot.party + snapshot.stored)
 
 
+# Distinct entries each Gen 2 pocket holds. A held item handed back on a swap or a take needs one free.
+POCKET_SLOTS = {'items': 20, 'balls': 12}
+# Refusals of one training project's item task before the project stands down.
+ITEM_REFUSALS = 3
+
+
+def bag_takes(data, snapshot, item):
+    """Whether the bag has room for one more ``item``."""
+    pocket = 'balls' if data.item_attributes[item]['pocket'] == 'BALL' else 'items'
+    held = snapshot.pockets.get(pocket, ())
+    count = dict(held).get(item, 0)
+    return count < 99 if count else len(held) < POCKET_SLOTS[pocket]
+
+
+def share_blocked(data, snapshot, mon):
+    """Whether the Exp. Share cannot reach ``mon`` because the bag has no room for an item the move hands back.
+
+    Giving the share to a Pokémon that holds something else puts that item in the bag, and taking the share
+    from another party member puts the share there, so either one needs a free pocket entry.
+    """
+    share = data.items['EXP_SHARE']
+    if mon.held_item == share:
+        return False
+    if mon.held_item and not bag_takes(data, snapshot, mon.held_item):
+        return True
+    return any(row is not mon and row.held_item == share for row in snapshot.party) and not bag_takes(data, snapshot, share)
+
+
 def trainee_slot(policy, snapshot):
     """The party slot of a partner levelling without an Exp. Share, which leads so it joins every battle."""
     project = policy.collection.get('training')
-    if not project or project.get('item') or not shareless(policy.data, snapshot):
+    if not project or project.get('item'):
         return None
-    return next((i for i, mon in enumerate(snapshot.party) if not mon.egg and identity(mon) == project['identity']), None)
+    slot = next((i for i, mon in enumerate(snapshot.party) if not mon.egg and identity(mon) == project['identity']), None)
+    if slot is None or not (shareless(policy.data, snapshot) or share_blocked(policy.data, snapshot, snapshot.party[slot])):
+        return None
+    return slot
 
 
 def happiness_levels(friendship):
@@ -201,10 +232,10 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         return Goal('collection_train_pc', f'Prepare {mon.name} for training', goal.map_name, goal.x, goal.y, goal.face)
     if project['item']:
         return Goal('collection_evolve_item', f'Evolve {mon.name}', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
-    if missing:
-        # The cartridge's only Exp. Share is gone for good, so the partner leads instead: the policy keeps it
-        # in front and switches it out on the first turn of a battle it cannot win, which still splits the
-        # experience with it.
+    if missing or share_blocked(data, snapshot, mon):
+        # The cartridge's only Exp. Share is gone for good, or the bag has no room for the item that moving the
+        # share hands back, so the partner leads instead: the policy keeps it in front and switches it out on
+        # the first turn of a battle it cannot win, which still splits the experience with it.
         target = 'level ' + str(project.get('level_goal', 100)) if project.get('terminal') else data.species[project['target']]['name']
         return walk_goal(policy, snapshot, Goal, lambda: f'Train {mon.name} toward {target} in the lead')
     if mon.held_item != share:
@@ -303,17 +334,37 @@ def arrive(policy, snapshot):
     if mon and mon.box is None:
         slot = snapshot.party.index(mon)
         if key == 'collection_equip':
-            policy.menu = Give(data.items['EXP_SHARE'], slot)
+            task = Give(data.items['EXP_SHARE'], slot)
         elif key == 'collection_take':
-            policy.menu = Take(state['take_slot'])
+            task = Take(state['take_slot'])
         elif key == 'collection_evolve_item':
             count = dict(snapshot.items).get(project['item'])
             if not count:
                 # The stone was used or sold on the way, so this evolution has to be planned again.
                 state['training'] = None
                 return None
-            policy.menu = Remedy(project['item'], slot, count)
+            task = Remedy(project['item'], slot, count)
         else:
             return 'wait' if key == 'collection_train' else None
+        if not getattr(policy, 'allowed', lambda task, snapshot: True)(task, snapshot):
+            return held_back(policy, task, project)
+        policy.menu = task
         return 'wait'
     return None
+
+
+def held_back(policy, task, project):
+    """Wait out a refused item task, and stand the project down once the game keeps refusing it.
+
+    The policy blocks a refused shortcut for a minute, and the plan would otherwise name it again the moment
+    the block ends. Each block counts once, by the frame it ends on.
+    """
+    until = policy.blocked[policy.task_key(task)]
+    refused = project.setdefault('refused', [])
+    if until not in refused:
+        refused.append(until)
+    if len(refused) >= ITEM_REFUSALS:
+        stand_down(policy, train_key(project['identity']))
+        policy.collection['training'] = None
+        return None
+    return 'wait'
