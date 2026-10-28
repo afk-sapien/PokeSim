@@ -447,7 +447,7 @@ test('Gold, Silver and Crystal adventures hide the palette and never send one', 
   view.click('settings', game.id)
   assert.equal(view.element('#settings-palette-label').hidden, true)
   assert.equal(view.element('#settings-palette-note').hidden, true)
-  assert.equal(view.element('#settings-event-steps-label').textContent, 'Steps between Sudowoodo and Snorlax returns')
+  assert.equal(view.element('#settings-event-steps-label').textContent, 'Steps between gift, trade, Sudowoodo and Snorlax returns')
   view.element('#settings-legendary-steps').value = '500'
   view.element('#settings-event-steps').value = '200'
   view.element('#adventure-settings-form').onsubmit({preventDefault() {}})

@@ -396,3 +396,84 @@ def test_static_legendary_trip_waits_for_an_affordable_ultra_ball_stock(data):
     # Too little money: the collection runs the League for prize money first.
     snapshot.money, snapshot.pockets = 3000, {'balls': [(ultra, 3)]}
     assert ultra_shortfall(policy, snapshot)
+
+
+def test_only_gifts_and_trades_with_no_other_source_return(data):
+    from pokesim.gen2.returns import offers
+    keys = [row[0] for row in offers(data)]
+    gifts = ['gift_eevee', 'gift_odd_egg', 'gift_dratini', 'gift_tyrogue'] if data.game == 'crystal' else [
+        'gift_eevee', 'gift_tyrogue']
+    # Kim's Aerodactyl is the only trade whose Pokémon cannot be caught or bred from a catch.
+    assert keys == gifts + ['trade_5']
+
+
+def test_a_gift_returns_after_walking_and_waits_for_the_new_copy(world):
+    from pokesim.gen2.returns import EVENTS, event_status, observe_events, returned_events
+    data, snap = world.data, world.snapshot
+    snap.party, snap.stored = [SimpleNamespace(species=133)], []
+    world.flag('EVENT_GOT_EEVEE')
+    world.walk(10)
+    observe_events(world.store, snap, world.memory)
+    assert world.store.get(EVENTS)['tickets']['gift_eevee']['next_at'] == 60
+    world.walk(60)
+    events, changed = observe_events(world.store, snap, world.memory)
+    assert changed and events[0].title == 'Eevee gift available' and not world.event('EVENT_GOT_EEVEE')
+    row = next(row for row in event_status(world.store)['activities'] if row['key'] == 'gift_eevee')
+    assert row['ready'] and row['name'] == 'Eevee gift'
+    # Gifts are walked to, never caught, so the policy's catch list stays as it was.
+    assert returned_events(world.store) == set()
+    # Bill hands over Eevee in his house. The visit completes once the new copy is held.
+    snap.map = data.map_ids['BILLS_FAMILYS_HOUSE']
+    observe_events(world.store, snap, world.memory)
+    world.flag('EVENT_GOT_EEVEE')
+    snap.party.append(SimpleNamespace(species=133))
+    events, _ = observe_events(world.store, snap, world.memory)
+    assert events[0].title == 'Completed the Eevee gift'
+    assert world.store.get(EVENTS)['tickets']['gift_eevee']['state'] == 'walking'
+    # An older checkpoint from the open window is closed again.
+    snap.map = data.map_ids['NEW_BARK_TOWN']
+    world.flag('EVENT_GOT_EEVEE', False)
+    observe_events(world.store, snap, world.memory)
+    assert world.event('EVENT_GOT_EEVEE')
+
+
+def test_a_gift_flag_without_a_new_copy_opens_again_away_from_the_room(world):
+    from pokesim.gen2.returns import observe_events
+    snap = world.snapshot
+    snap.party, snap.stored = [], []
+    world.flag('EVENT_GOT_TYROGUE_FROM_KIYO')
+    world.walk(10)
+    observe_events(world.store, snap, world.memory)
+    world.walk(60)
+    observe_events(world.store, snap, world.memory)
+    world.flag('EVENT_GOT_TYROGUE_FROM_KIYO')
+    observe_events(world.store, snap, world.memory)
+    assert not world.event('EVENT_GOT_TYROGUE_FROM_KIYO')
+
+
+def test_kims_aerodactyl_trade_reopens_and_makes_aerodactyl_worth_trading_for(world):
+    from pokesim.gen2.npc_trades import trades, worth_trading
+    from pokesim.gen2.returns import observe_events, returned_events
+    data, snap = world.data, world.snapshot
+    snap.party, snap.stored = [SimpleNamespace(species=142)], []
+    world.memory.raw[data.symbols['wTradeFlags'][1]] = 1 << 5 | 1
+    world.walk(10)
+    observe_events(world.store, snap, world.memory)
+    world.walk(60)
+    events, changed = observe_events(world.store, snap, world.memory)
+    assert changed and events[0].title == 'Aerodactyl exchange available'
+    # Only Kim's bit opens. Mike's trade stays done.
+    assert world.byte('wTradeFlags') == 1 and returned_events(world.store) == {142}
+    kim = next(trade for trade in trades(data.game) if trade.index == 5)
+    chansey = SimpleNamespace(species=113, egg=False)
+    # The only Chansey is wanted elsewhere, so it is kept until another is caught.
+    policy = SimpleNamespace(returned={142}, demand={113: 1}, collection={'prerequisites': ()})
+    one = SimpleNamespace(owned={142, 113}, party=(chansey,), stored=())
+    assert not worth_trading(policy, one, kim)
+    policy.demand = {}
+    assert worth_trading(policy, one, kim)
+    assert not worth_trading(policy, SimpleNamespace(owned={142, 113}, party=(), stored=()), kim)
+    snap.party.append(SimpleNamespace(species=142))
+    world.memory.raw[data.symbols['wTradeFlags'][1]] = 1 << 5 | 1
+    events, _ = observe_events(world.store, snap, world.memory)
+    assert events[0].title == 'Completed the Aerodactyl exchange' and returned_events(world.store) == set()

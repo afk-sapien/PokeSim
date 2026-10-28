@@ -14,7 +14,8 @@ from pokesim.web.app import create_app
 
 def gen2_emulator(game=None, **status):
     species = {sid: {'name': f'Species {sid}', 'dex': sid} for sid in range(1, 252)}
-    data = SimpleNamespace(game='gold', species=species, item_names={1: 'Master Ball', 18: 'Potion'})
+    data = SimpleNamespace(game='gold', species=species, item_names={1: 'Master Ball', 18: 'Potion'},
+                           items={'MASTER_BALL': 1, 'RARE_CANDY': 32})
     current = {'game': game or {}, **status}
     return SimpleNamespace(generation=2, data=data, status=lambda: current, current_frame=lambda timeout=1: b'live')
 
@@ -78,14 +79,13 @@ def test_gen2_activity_lists_all_251_species_and_skips_eggs():
 def test_gen2_activity_route_uses_the_gen2_ledger(tmp_path):
     client = TestClient(create_app(gen2_emulator({'party': [mon(200)]}), Store(tmp_path)))
     result = client.get('/api/statistics/activity').json()
-    assert len(result['pokemon']) == 251 and result['champion_shop'] is None
+    assert len(result['pokemon']) == 251 and result['generation'] == 2
 
 
-def test_gen2_activity_route_shows_the_champion_shop_with_extra_store_items(tmp_path, monkeypatch):
+def test_gen2_activity_route_shows_the_champion_shop_without_extra_store_items(tmp_path, monkeypatch):
     from pokesim import config
-    monkeypatch.setattr(config, 'EXTRA_STORE_ITEMS', True, raising=False)
+    monkeypatch.setattr(config, 'EXTRA_STORE_ITEMS', False, raising=False)
     emu = gen2_emulator({'party': [mon(200)]})
-    emu.data.items = {'MASTER_BALL': 1, 'RARE_CANDY': 32}
     shop = TestClient(create_app(emu, Store(tmp_path))).get('/api/statistics/activity').json()['champion_shop']
     assert [offer['name'] for offer in shop['offers']] == ['Master Ball', 'Rare Candy']
     assert [offer['price'] for offer in shop['offers']] == [100000, 25000] and 'Goldenrod' in shop['counter']

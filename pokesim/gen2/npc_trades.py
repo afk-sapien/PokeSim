@@ -33,8 +33,9 @@ def candidate(snapshot, trade):
 
 def worth_trading(policy, snapshot, trade):
     held = sum(qualifies(mon, trade) for mon in snapshot.party + snapshot.stored)
-    if trade.give not in snapshot.owned:
-        return True
+    if trade.give not in snapshot.owned or trade.give in getattr(policy, 'returned', ()):
+        # A walking return reopened this trade because its Pokémon has no other source.
+        return held - policy.demand.get(trade.request, 0) >= 1 if trade.give in snapshot.owned else True
     spare = held - policy.demand.get(trade.request, 0)
     return spare >= 2 or spare >= 1 and trade.request not in policy.collection.get('prerequisites', ())
 
@@ -51,26 +52,27 @@ def wild(data, species):
 
 
 def requests(policy, snapshot, memory):
-    """Requested species worth catching because the trade would register a new species.
+    """Requested species worth catching because the trade would register a new species or a returned one.
 
     Runs every step, so the set is kept until the trade flags, the dex or a held copy changes.
     """
     if memory is None or 'wTradeFlags' not in policy.data.symbols:
         return set()
     value = flags(memory, policy.data)
-    key = (policy.data, policy.data.encounters, value, snapshot.owned, snapshot.party, snapshot.stored)
+    returned = frozenset(getattr(policy, 'returned', ()))
+    key = (policy.data, policy.data.encounters, value, snapshot.owned, snapshot.party, snapshot.stored, returned)
     cached = _REQUESTS[0]
     if (cached is not None and cached[0] is key[0] and cached[1] is key[1]
             and cached[2:] == key[2:]):
         return set(_REQUESTS[1])
-    found = _requests(policy, snapshot, value)
+    found = _requests(policy, snapshot, value, returned)
     _REQUESTS[:] = [key, frozenset(found)]
     return found
 
 
-def _requests(policy, snapshot, value):
+def _requests(policy, snapshot, value, returned=frozenset()):
     return {trade.request for trade in trades(policy.data.game)
-            if not value >> trade.index & 1 and trade.give not in snapshot.owned
+            if not value >> trade.index & 1 and (trade.give not in snapshot.owned or trade.give in returned)
             and not any(qualifies(mon, trade) for mon in snapshot.party + snapshot.stored)
             and wild(policy.data, trade.request)}
 

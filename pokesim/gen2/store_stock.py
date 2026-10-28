@@ -17,7 +17,7 @@ Stones cost 2100 as in Celadon. The held items keep the cartridge's own item pri
 Metal Coat 100, Dragon Scale and Up-Grade 2100).
 
 After the Hall of Fame, the 5F TM clerk and the 4F clerk also sell the planned Champion shop item
-(champion_shop.py). GetItemPrice returns a 16 bit price, so a hook at BuySell_DisplaySubtotal
+(champion_shop.py), with the setting on or off. GetItemPrice returns a 16 bit price, so a hook at BuySell_DisplaySubtotal
 writes the full subtotal for the 100,000 Master Ball into hProduct, which the routine copies to
 hMoneyTemp for CompareMoney and TakeMoney. A hook in BuyMenuLoop right after ReceiveItem succeeds
 records each landed purchase, so a capped walking offer renews only once it is really bought.
@@ -121,8 +121,6 @@ class StoreStock:
         pb.memory[bank, address + offset:address + offset + len(values)] = list(values)
 
     def _champion(self, mart):
-        if not enabled():
-            return {}
         try:
             return dict(self.champion().get(mart, {}))
         except Exception:
@@ -137,8 +135,6 @@ class StoreStock:
 
     def opened(self, pb):
         self.offered = {}
-        if not enabled():
-            return
         mart = self.mart(pb)
         if mart is None:
             return
@@ -150,6 +146,8 @@ class StoreStock:
         self.offered = self._champion(mart)
         items = stock(self.data, shop)
         items = (items + [item for item in self.offered if item not in items])[:MART_ITEMS]
+        if items == current:
+            return
         # Only a fresh cartridge list is extended, so reopening the list never adds twice.
         if current != list(shop['items']):
             if current != items:
@@ -163,10 +161,12 @@ class StoreStock:
 
     def _price(self, item):
         value = self.offered.get(item)
-        return self.extra_prices.get(item) if value is None else value
+        if value is None and enabled():
+            return self.extra_prices.get(item)
+        return value
 
     def priced(self, pb):
-        if not enabled() or self.mart(pb) is None:
+        if self.mart(pb) is None:
             return
         value = self._price(self._read(pb, 'wCurItem')[0])
         if value is not None:
@@ -175,7 +175,7 @@ class StoreStock:
 
     def subtotal(self, pb):
         """Charge a unit price above 65535 in full. The sell path keeps the cartridge price."""
-        if not enabled() or self.mart(pb) is None:
+        if self.mart(pb) is None:
             return
         value = self.offered.get(self._read(pb, 'wCurItem')[0])
         stored = self._read(pb, 'wBuySellItemPrice', 2)
@@ -186,7 +186,7 @@ class StoreStock:
 
     def bought(self, pb):
         """Record a landed purchase of a Champion shop item."""
-        if not enabled() or self.mart(pb) is None:
+        if self.mart(pb) is None:
             return
         item = self._read(pb, 'wCurItem')[0]
         if item in self.offered:

@@ -242,7 +242,7 @@ class Emulator:
             # Yellow renders its own Game Boy Color palettes, so like Generation II it reports none.
             "palette": None if self._color_cartridge() else getattr(self, 'palette', 'original'),
             "fair_wild_dvs": getattr(config, 'FAIR_WILD_DVS', False) is True,
-            "manual_mode": self.manual_mode, "help_request": None,
+            "manual_mode": self.manual_mode, "help_request": self.help_request(strategy),
             "play_clock": self.play_clock.status(),
             "performance": {"frames": self.executed_frames, "sampled_at": time.monotonic()},
             "frame": self.frame, "uptime": int(time.time() - self.started_at),
@@ -256,6 +256,13 @@ class Emulator:
             "legendary_recovery": self.legendary_recovery.state_dict(),
             "randomizer": randomizer_status(),
         }
+
+    def help_request(self, strategy):
+        """Ask the owner for a hand when live play has stopped making game progress."""
+        stall = getattr(self, 'stall', None)
+        if self.paused or self.manual_mode or not stall or not stall.stalled(self.frame, time.time()):
+            return None
+        return {'reason': 'The policy has stopped making game progress', 'action': strategy.get('action', '')}
 
     def progress_status(self):
         achievement = getattr(self, 'last_achievement', None)
