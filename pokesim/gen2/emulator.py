@@ -22,6 +22,7 @@ from ..stalls import StallWatch
 from pokecore.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
+from . import journal
 from .policy import Action, Policy
 from pokecore.gen2.ram import BADGES, read_snapshot
 from .store_stock import StoreStock
@@ -561,11 +562,14 @@ class Emulator:
 
     def _event(self, event, snapshot):
         shot = self._shot_png()
-        state = self._state_bytes()
+        # Timeline-only entries such as faints and first sightings keep a picture but no save, as in Red, Blue and Yellow.
+        state = self._state_bytes() if event.notable else None
         eid = self.store.add_event(event, snapshot, shot, state)
-        self.store.write_checkpoint(state, self._manifest(), name=f'event-{eid}.state')
-        self.last_achievement = self.store.event(eid)
-        if self.ntfy and self.ntfy.wants(event):
+        if state:
+            self.store.write_checkpoint(state, self._manifest(), name=f'event-{eid}.state')
+        if event.type not in journal.NOT_PROGRESS:
+            self.last_achievement = self.store.event(eid)
+        if event.notable and self.ntfy and self.ntfy.wants(event):
             self.ntfy.send(event.title, event.body, priority=event.priority, image=shot,
                            event_type=event.type, click=f'{config.PUBLIC_URL}/events/{eid}')
 
@@ -639,7 +643,7 @@ class Emulator:
             self._event(Event('map', f'Arrived at {snapshot.map_name}', priority=2), snapshot)
         for dex in sorted(snapshot.owned - set(self.history['owned'])):
             self.history['owned'].append(dex)
-            self._event(Event('catch', f'{self.data.species[dex]["name"]} joined the Pokédex', priority=4), snapshot)
+            self._event(journal.catch(self.data, dex, self.previous, snapshot, Event), snapshot)
         from .npc_trades import completed
         if 'npc_trades' not in self.history:
             # Trades finished before this record existed are history, not news.
@@ -662,6 +666,8 @@ class Emulator:
         observe_mew(self.store, snapshot, self.steps.value['total'])
         before = self.previous
         self._note_league_entry(before, snapshot)
+        for event in journal.events(before, snapshot, self.history, self.data, Event):
+            self._event(event, snapshot)
         if before:
             for mon in snapshot.party:
                 matches = [old for old in before.party if (old.trainer_id, old.dvs) == (mon.trainer_id, mon.dvs)]

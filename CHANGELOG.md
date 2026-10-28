@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Give Gold, Silver and Crystal the journal entries Red, Blue and Yellow already write. The journal now lists first sightings, faints, blackouts, trainer wins, key items and HMs, money and play time milestones and the rival's name, so the Elite Four, trainer, exploration and blackout notifications now fire for these games too. A wild Raikou, Entei, Suicune, Lugia, Ho-Oh or Celebi caught in battle now reads "Caught the legendary Suicune!" and goes out as a Legendary Pokémon notification. Faints, sightings and other timeline-only entries keep a picture but no save, and they do not count as progress for the stall watch.
+
 - Keep Crystal's Battle Tower waits through a reload. A level the team kept losing at waited longer after each loss, but a reload while the Tower team was being put together forgot the wait and tried the same level again. Gold, Silver and Crystal now keep every stood down hunt, training, activity team and Tower level in one place that a reload carries over, and older saves keep the waits they had.
 
 - Stop Gold and Silver hunting a wild King's Rock or Dragon Scale without end. Only 2% of wild Poliwhirl, Slowpoke and Seadra hold one, and replays of one Silver run spent about a third of their frames hunting carriers that held nothing. A carrier hunt now sets itself aside for a while once its time runs out, and other work comes first. The time allowed is three times the battles the item is expected to take on that spot, and at most two game hours. A carrier met with the item is still caught at any time.
