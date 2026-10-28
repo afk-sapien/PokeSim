@@ -506,18 +506,16 @@ def journey(policy, snapshot, mem, Goal):
     if funding is not None and snapshot.hall_of_fame_count >= funding:
         state.pop('funding', None)
         funding = None
-    from pokecore.gen2.breeding import retrieval_cost
     from .breeding import pairings
-    fees = retrieval_cost(data, snapshot)
+    from .ledger import BREEDING_FUNDS, funding_short
     from .. import config
     starter_gifts = getattr(config, 'LEAGUE_REWARDS', False) and not {152, 155, 158} <= snapshot.owned
     from .quests import static_wanted, ultra_shortfall
     from .store_stock import shortfall as store_shortfall
-    if funding is None and (snapshot.money < 5000 and sum(count for _, count in snapshot.pockets['balls']) < 4
-                            or fees and snapshot.money < fees + 1000 or starter_gifts
+    if funding is None and (funding_short(policy, snapshot) or starter_gifts
                             or snapshot.can_catch and ultra_shortfall(policy, snapshot) and static_wanted(policy, snapshot)
-                            # A wanted Day Care pair waits for 3000 to start, and nothing else earns it.
-                            or snapshot.money < 3000 and not state.get('breeding')
+                            # A wanted Day Care pair waits for its money to start, and nothing else earns it.
+                            or snapshot.money < BREEDING_FUNDS and not state.get('breeding')
                             and getattr(snapshot, 'daycare', None) is not None and pairings(policy, snapshot)
                             or store_shortfall(policy, snapshot)):
         state['funding'] = funding = snapshot.hall_of_fame_count + 1

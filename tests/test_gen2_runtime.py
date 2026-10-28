@@ -2106,7 +2106,7 @@ def test_a_sale_skips_a_shop_whose_clerk_has_left(real_data, monkeypatch):
     entry = real_data.maps[mart]
     flags = {'EVENT_GAVE_MYSTERY_EGG_TO_ELM', 'EVENT_TEAM_ROCKET_BASE_POPULATION', 'EVENT_CLEARED_ROCKET_HIDEOUT'}
     snapshot = SimpleNamespace(map=mart, x=3, y=4, money=121, badges=0xFFFF, party=[], pockets={'balls': ()},
-                               items=((real_data.items['TM30'], 1),), event=lambda name: name in flags)
+                               items=((real_data.items['TM31'], 1),), event=lambda name: name in flags)
     pharmacist, granny = entry['shops']
     assert not policy.clerk_present(snapshot, entry, pharmacist)
     assert policy.clerk_present(snapshot, entry, granny)

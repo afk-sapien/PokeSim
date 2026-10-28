@@ -71,9 +71,6 @@ def journey(policy, snapshot, mem, Goal):
     return collect(policy, snapshot, mem, Goal)
 
 
-RED_POTIONS = ['FULL_RESTORE', 'MAX_POTION', 'HYPER_POTION']
-
-
 def red_funding(policy, snapshot, Goal):
     """Win League prize money before Red when healing items run low and the purse cannot restock them.
 
@@ -85,9 +82,8 @@ def red_funding(policy, snapshot, Goal):
     if funding is not None and snapshot.hall_of_fame_count >= funding:
         state.pop('funding', None)
         funding = None
-    inventory = dict(snapshot.items)
-    potions = sum(inventory.get(policy.data.items[name], 0) for name in RED_POTIONS)
-    if funding is None and potions < 8 and snapshot.money < 10000:
+    from .ledger import red_short
+    if funding is None and red_short(policy, snapshot):
         state['funding'] = funding = snapshot.hall_of_fame_count + 1
     if funding is None:
         return None

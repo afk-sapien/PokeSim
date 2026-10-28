@@ -15,7 +15,8 @@ EVENTS_FALSE = {'EVENT_TRAINERS_IN_CERULEAN_GYM', 'EVENT_VIRIDIAN_GYM_BLUE', 'EV
 
 
 def make(money, items, hall_of_fame_count=1, league=False, beaten=()):
-    data = SimpleNamespace(items=ITEMS, maps={1: {'constant': 'SILVER_CAVE_ROOM_3'}})
+    data = SimpleNamespace(items=ITEMS, maps={1: {'constant': 'SILVER_CAVE_ROOM_3'}},
+                           item_attributes={1: {'price': 3000}, 2: {'price': 2500}, 3: {'price': 1200}, 4: {'price': 1500}})
     policy = SimpleNamespace(data=data, collection={}, completed={},
                              in_league=lambda snapshot: league,
                              person=lambda snapshot, key, *args: key)

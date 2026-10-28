@@ -913,7 +913,9 @@ class Collection:
         if (self.elapsed >= self.next_marathon and s.saffron_open and nav.can_cut
                 and sum(self.director.completed.values()) >= 4):
             add(marathon.candidate(), 1)
-        add({'method':'rematch','hof_count':s.hall_of_fame_count}, 10 if s.money < 10000 else 2)
+        from .ledger import funds_short
+        short = funds_short(s)
+        add({'method':'rematch','hof_count':s.hall_of_fame_count}, 10 if short else 2)
         porygon = next(sid for sid,mon in SPECIES.items() if mon['dex']==137)
         if 137 not in s.owned and (s.money >= 20000 or s.coins >= PORYGON_COINS.get(self.version, 9999)):
             add({'method':'prize','species':porygon,'map':MAPS['GAME_CORNER_PRIZE_ROOM']},0.5)
@@ -951,7 +953,7 @@ class Collection:
         if not candidates:
             self.cooldown = 3600
             return None
-        self.project = self.director.select(candidates, rng, urgent=s.money < 10000)
+        self.project = self.director.select(candidates, rng, urgent=short)
         if self.project['method'] == 'rematch':
             self.prepare_league_rotation(s)
         if self.project['method'] == 'marathon':

@@ -120,3 +120,14 @@ def first_sale(snapshot, kind, goal):
     books.snapshot(snapshot, kinds=(kind,))
     plan = books.make_room(Shortfall(goal, {kind: 1}))
     return plan[0].detail if plan else None
+
+
+def funds_needed(snapshot):
+    """Money that keeps the cash reserve and still buys a full ball reserve of Ultra Balls."""
+    from .shopping import BALL_RESERVE
+    return cash_reserve(snapshot) + BALL_RESERVE * PRICES[ITEMS['ULTRA_BALL']]
+
+
+def funds_short(snapshot):
+    """True when the purse cannot cover ``funds_needed``, so prize money from a rematch is worth more."""
+    return snapshot.money < funds_needed(snapshot)

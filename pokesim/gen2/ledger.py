@@ -4,8 +4,12 @@ Each pocket holds a fixed number of distinct entries, the boxes 20 Pokémon each
 An items-pocket entry no plan wants can be put in the PC to free its entry, worth its sale price for
 the whole stack. Valuables are sold when money runs out, so they go last. An item a plan wants is
 never offered.
+
+Money is held back as reservations: Day Care fees with a margin for the walk back, and a cash reserve.
+The shop restocks what ``supplies`` lists, keeping balls to catch with before the cash reserve, and a
+run sells valuables and spare TMs only when it has no ball and no money for one.
 """
-from ..planning.ledger import BOX, PARTY, PRICELESS, Ledger, Need, Resources, Shortfall, Unit
+from ..planning.ledger import BOX, MONEY, PARTY, PRICELESS, Ledger, Need, Resources, Shortfall, Unit
 from .champion_shop import SUPPLIES
 from .menus import Release
 from .release import headroom
@@ -254,3 +258,159 @@ def tidy_goal(policy, snapshot, Goal, item):
     policy.collection['tidy_item'] = spare
     goal = policy.storage_goal(snapshot)
     return Goal('collection_tidy', f'Store {data.item_names.get(spare, "a spare item")} in the PC to make room', goal.map_name, goal.x, goal.y, goal.face)
+
+
+# Money the shop leaves alone. With Day Care fees owed, the fees and a margin for the walk back stay.
+CASH_RESERVE = 400
+DAYCARE_MARGIN = 1000
+# Money a Day Care pairing needs before it starts.
+BREEDING_FUNDS = 3000
+# Restock levels. Balls refill below the floor, to a full stock for a legendary or a one-time encounter.
+BALL_FLOOR = 4
+BALL_REFILL, BALL_STOCK_REFILL = 20, 40
+BALL_STOCK = 20
+POTIONS = ('FULL_RESTORE', 'MAX_POTION', 'HYPER_POTION')
+POTION_LOW, POTION_FULL = 8, 12
+REVIVE_LOW, REVIVE_FULL = 3, 5
+# An ordinary catch keeps the last few balls while money cannot buy the floor back. Species met only
+# once, such as Sudowoodo, Snorlax, the red Gyarados and the legendaries, always get a throw.
+LAST_BALLS = 3
+ONE_CHANCE = frozenset({130, 143, 185, 243, 244, 245, 249, 250, 251})
+# One sale tier is worth this much more per money freed than the tier before it.
+TIER = 10 ** 7
+
+
+def price(data, name):
+    return data.item_attributes[data.items[name]]['price']
+
+
+def balls(snapshot):
+    return sum(count for _, count in snapshot.pockets['balls'])
+
+
+def money_needs(data, snapshot):
+    """The standing money reservations: Day Care fees with their margin, and the cash reserve."""
+    from pokecore.gen2.breeding import retrieval_cost
+    fees = retrieval_cost(data, snapshot)
+    needs = {}
+    if fees:
+        needs['daycare'] = Need(money=fees + DAYCARE_MARGIN - CASH_RESERVE)
+    needs['cash'] = Need(money=CASH_RESERVE)
+    return needs
+
+
+def held_money(data, snapshot, goal=None):
+    """Money the reservations hold from ``goal``. Balls to catch with come before the cash reserve."""
+    needs = money_needs(data, snapshot)
+    if goal == 'balls':
+        needs.pop('cash')
+    return sum(need.money for need in needs.values())
+
+
+def money_books(data, snapshot, goal=None, sales=True):
+    """Books for money alone, with the standing reservations held, and the bag's sales when ``sales``."""
+    books = Ledger(lambda view, kinds: Resources({}, view.money, fund_units(data, view) if sales else ()))
+    books.snapshot(snapshot)
+    books.reservations['held'] = Need(money=held_money(data, snapshot, goal))
+    return books
+
+
+def fund_units(data, snapshot):
+    """Bag entries that sell for money: valuables first, then TMs no plan teaches, cheapest to buy again."""
+    from .champion_shop import RENEWABLE, tm_price
+    from .tower import MACHINES
+    valuables = [data.items[name] for name in VALUABLES if name in data.items]
+    machines = {data.items[f'TM{number:02d}']: number for number in range(1, 51) if f'TM{number:02d}' in data.items}
+    taught = {data.items[name] for _, name in MACHINES if name in data.items}
+    rows = []
+    for item, count in snapshot.items:
+        sale = data.item_attributes.get(item, {}).get('price', 0) // 2 * count
+        if sale <= 0:
+            continue
+        if item in valuables:
+            value, order = 0, (valuables.index(item),)
+        elif item in machines and item not in taught:
+            tier = 1 if machines[item] in RENEWABLE else 2
+            value, order = (tier * TIER + tm_price(data, item)) * sale, (item,)
+        else:
+            continue
+        rows.append(Unit(('sell', item), MONEY, value, 'sell', sale, detail=(item, count), order=order))
+    return tuple(rows)
+
+
+def ball_sale(data, snapshot):
+    """(item, count) to sell when the ball pocket is empty and money cannot buy one Poké Ball, else None."""
+    books = money_books(data, snapshot, 'balls')
+    answer = books.reserve('balls', Need(money=price(data, 'POKE_BALL')))
+    if answer.ok:
+        return None
+    plan = books.make_room(answer)
+    return plan[0].detail if plan else None
+
+
+def ball_names(snapshot):
+    return ('ULTRA_BALL', 'GREAT_BALL', 'POKE_BALL') if snapshot.badges & 64 else ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL')
+
+
+def supplies(policy, snapshot):
+    """What the shop restocks, most needed first: (goal, item names by preference, units)."""
+    from .quests import static_wanted
+    data = policy.data
+    collection = policy.collection
+    unique = policy.goal is not None and policy.goal.key in {'sudowoodo', 'snorlax', 'collection_lapras'}
+    stocking = collection.get('phase') == 'legendary' or unique
+    # Roaming beasts and the other legendaries have catch rates of 3, so every throw counts: while one
+    # is still wanted, an affordable Ultra Ball beats a nearer shop's Great Ball.
+    legendary = snapshot.can_catch and bool(snapshot.badges & 64) and (unique
+        or collection.get('phase') == 'legendary'
+        and not {243, 244, 245, 249, 250} <= set(snapshot.owned) - policy.returned
+        or static_wanted(policy, snapshot))
+    rows = []
+    ultras = dict(snapshot.pockets['balls']).get(data.items['ULTRA_BALL'], 0)
+    if (legendary and ultras < BALL_STOCK
+            and snapshot.money - held_money(data, snapshot) >= price(data, 'ULTRA_BALL') * min(5, BALL_STOCK - ultras)):
+        rows.append(('ultras', ('ULTRA_BALL',), BALL_STOCK - ultras))
+    # Any ball still beats none when no Ultra Ball counter can be reached.
+    if balls(snapshot) < (BALL_STOCK if stocking else BALL_FLOOR) and snapshot.can_catch:
+        rows.append(('balls', ball_names(snapshot), BALL_STOCK_REFILL if stocking else BALL_REFILL))
+    if snapshot.badges & 64 and 'red' not in policy.completed and (not snapshot.hall_of_fame_count
+                                                                   or snapshot.badges == 65535):
+        inventory = dict(snapshot.items)
+        count = sum(inventory.get(data.items[name], 0) for name in POTIONS)
+        if count < POTION_LOW:
+            rows.append(('potions', POTIONS, POTION_FULL - count))
+        revives = inventory.get(data.items['REVIVE'], 0)
+        if revives < REVIVE_LOW:
+            rows.append(('revives', ('REVIVE',), REVIVE_FULL - revives))
+    return rows
+
+
+def spare_throw(data, snapshot, species):
+    """Whether an ordinary catch may throw a ball: a one-time encounter, more than the last few balls,
+    or money past the reservations to buy the floor back."""
+    if species in ONE_CHANCE or balls(snapshot) > LAST_BALLS:
+        return True
+    books = money_books(data, snapshot, sales=False)
+    return books.reserve('throw', Need(money=price(data, 'POKE_BALL') * BALL_FLOOR)).ok
+
+
+def funding_short(policy, snapshot):
+    """The money need a League run pays for, or None: the Day Care fees with their margin, or a ball
+    floor in the shop's best ball."""
+    data = policy.data
+    needs = money_needs(data, snapshot)
+    if 'daycare' in needs and snapshot.money < held_money(data, snapshot):
+        return 'daycare'
+    if balls(snapshot) >= BALL_FLOOR:
+        return None
+    best = ball_names(snapshot)[0]
+    return 'balls' if snapshot.money < held_money(data, snapshot, 'balls') + price(data, best) * BALL_FLOOR else None
+
+
+def red_short(policy, snapshot):
+    """Whether the potions run low before Red and the money past the reservations cannot restock them."""
+    data = policy.data
+    inventory = dict(snapshot.items)
+    count = sum(inventory.get(data.items[name], 0) for name in POTIONS)
+    return (count < POTION_LOW
+            and snapshot.money < held_money(data, snapshot) + price(data, POTIONS[-1]) * (POTION_FULL - count))
