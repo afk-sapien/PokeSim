@@ -4,6 +4,8 @@ from types import SimpleNamespace
 
 from .menus import Give, Lead, Take, Teach, choose
 from pokecore.gen2.ram import Memory, calculated_stats
+from ..planning.monitor import STAND_DOWNS, STOOD_DOWN, Backoff
+from .standdown import monitor, stand_down, standing_down
 from .teams import assemble, assembled, key, no_room
 
 MACHINES = ((70, 'HM04'), (57, 'HM03'), (19, 'HM02'), (94, 'TM29'), (89, 'TM26'), (188, 'TM36'), (247, 'TM30'))
@@ -50,10 +52,30 @@ def forecast(mon, cap):
 RETRY_AFTER = 50000
 
 
+# A challenge that fell short backs its level cap off for twice RETRY_AFTER, doubling with each
+# shortfall in a row up to 32 times RETRY_AFTER.
+CAP_BACKOFF = Backoff(2 * RETRY_AFTER, doublings=4)
+
+
+def cap_key(cap):
+    return f'tower:{int(cap)}'
+
+
+def migrate(policy):
+    """Move a save's older per-cap records onto the monitor."""
+    failed = policy.collection.pop('tower_failed', None) or {}
+    stood = policy.collection.setdefault(STOOD_DOWN, {})
+    counts = policy.collection.setdefault(STAND_DOWNS, {})
+    for cap, row in failed.items():
+        streak = max(1, int(row.get('streak', 1)))
+        counts[cap_key(cap)] = streak
+        stood[cap_key(cap)] = row.get('until', 0) - CAP_BACKOFF.wait(streak)
+
+
 def resting_caps(policy):
     """Level caps whose last challenge fell short of seven wins and are still backing off."""
-    failed = policy.collection.get('tower_failed') or {}
-    return {int(cap) for cap, row in failed.items() if policy.decisions < row['until']}
+    caps = {int(key.split(':', 1)[1]) for key in policy.collection.get(STOOD_DOWN) or {} if key.startswith('tower:')}
+    return {cap for cap in caps if standing_down(policy, cap_key(cap), CAP_BACKOFF)}
 
 
 def record_result(policy, cap, wins):
@@ -62,12 +84,10 @@ def record_result(policy, cap, wins):
     Only a full set of seven earns the Tower prize, so a team that keeps losing at one cap would
     otherwise repeat the same challenge forever while other work waits.
     """
-    failed = policy.collection.setdefault('tower_failed', {})
     if wins >= 7:
-        failed.pop(str(cap), None)
+        monitor(policy, CAP_BACKOFF).clear(cap_key(cap))
         return
-    streak = (failed.get(str(cap)) or {}).get('streak', 0) + 1
-    failed[str(cap)] = {'streak': streak, 'until': policy.decisions + RETRY_AFTER * 2 ** min(streak, 5)}
+    stand_down(policy, cap_key(cap), CAP_BACKOFF)
 
 
 def over_cap(snapshot, state):

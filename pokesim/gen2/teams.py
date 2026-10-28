@@ -9,11 +9,10 @@ from collections import Counter
 
 from ..trade.preferences import signature as identity
 from .menus import ChangeBox, Release, Storage
+from .standdown import stand_down, standing_down, team_key
 
 # Consecutive PC visits with nothing left to do before an assembly stands down.
 BLOCKED_LIMIT = 8
-# Decisions an assembly that stood down waits before the same team is tried again.
-RETRY_AFTER = 50000
 
 
 def key(mon):
@@ -82,13 +81,12 @@ def assemble(policy, snapshot, wanted, Goal, label):
         collection.pop('activity_team', None)
         collection.pop('activity_blocked', None)
         return None
-    failed = collection.get('activity_failed') or {}
-    if failed.get('team') == wanted and policy.decisions < failed.get('until', 0):
+    if standing_down(policy, team_key(wanted)):
         return None
     if not reachable(snapshot, wanted) or collection.get('activity_blocked', 0) >= BLOCKED_LIMIT:
         collection.pop('activity_team', None)
         collection.pop('activity_blocked', None)
-        collection['activity_failed'] = {'team': wanted, 'until': policy.decisions + RETRY_AFTER}
+        stand_down(policy, team_key(wanted))
         return None
     if collection.get('activity_team') != wanted:
         collection['activity_blocked'] = 0
