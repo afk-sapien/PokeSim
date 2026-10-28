@@ -39,9 +39,9 @@
       since.set(key, note)
     }
   }
-  const help = generation => pokemon
+  const help = () => pokemon
     ? 'Encounters count each wild Pokémon or trainer opponent entering battle. Defeated includes both. Caught excludes gifts and trades. Custom gifts include PokeSim League rewards. Trades count completed cable and NPC exchanges, using the received form after evolution and the sent form before evolution. Held now includes the party and every PC box.'
-    : `Purchased counts quantities bought at ${generation === 2 ? 'shop counters' : 'shops and vending machines'}. Used counts consumed items, including balls thrown, healing items, stones, and TMs. Reusable items show “Not counted”. Moving, selling, discarding, or giving items away does not count as use.`
+    : `Purchased counts quantities bought at shops and vending machines. Used counts consumed items, including balls thrown, healing items, stones, and TMs. Reusable items show “Not counted”. Moving, selling, discarding, or giving items away does not count as use.`
   $('#ledger-help').textContent = help(1)
   function blank(cell, key) {
     // Say why a cell has no number, so a missing count never reads as zero.

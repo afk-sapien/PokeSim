@@ -9,9 +9,11 @@ symbol files, and the opening bytes there are checked before it is placed:
 - ``defeated``: FaintEnemyPokemon, as an opposing Pokémon faints
 - ``used``: UseDisposableItem, the Poké Ball toss at the end of PokeBallEffect, and ConsumeTM
   after it has checked a TM is left
+- ``vended``: Script_takemoney, where a map script charges for an item it has just given
 
-Purchases come from the BUY menu hook that store_stock.py already places after ReceiveItem, and
-catches from the capture receipts tracking.py keeps. Link battles and the catching tutorial are
+Purchases from a BUY menu (marts, the Goldenrod Underground bargain shop, the rooftop sale) come
+from the hook that store_stock.py already places after ReceiveItem, and catches from the capture
+receipts tracking.py keeps. Link battles and the catching tutorial are
 not this adventure's actions. Each receipt is the WRAM at the hook, so a reload that replays the
 same moment counts nothing.
 """
@@ -69,7 +71,37 @@ def hooks(memory, data):
     if body.count(ball) != 1:
         raise ValueError('Gen II activity tracking signature mismatch for used')
     rows.append(('used', bank, start + body.index(ball)))
+    # Script_takemoney: call GetMoneyAccount / call LoadMoneyAmountToMem / farcall TakeMoney.
+    take = symbols['TakeMoney']
+    expect('vended', 'Script_takemoney', 0, b'\xcd' + _word(address('GetMoneyAccount')) + b'\xcd'
+           + _word(address('LoadMoneyAmountToMem')) + bytes((0x3E, take[0], 0x21)) + _word(take[1]) + b'\xcf')
     return rows
+
+
+GIVEITEM, IFFALSE, TAKEMONEY, YOUR_MONEY, ITEM_FROM_MEM = 0x1F, 0x08, 0x23, 0, 0xFF
+
+
+def vended(memory, mem):
+    """(item, quantity) a map script has just charged for, or None for any other payment.
+
+    A script sale (the drink machines, Moomoo Milk, the RageCandyBar seller) runs ``giveitem``,
+    ``iffalse`` for a full bag and then ``takemoney YOUR_MONEY``, with at most ``waitsfx`` and
+    ``playsound`` between the last two. At Script_takemoney the script engine has read the
+    command byte, so wScriptPos points at its account byte.
+    """
+    bank, position = mem.byte('wScriptBank'), int.from_bytes(mem.read('wScriptPos', 2), 'little')
+    if not 0x4000 + 12 <= position < 0x8000:
+        return None
+    code = bytes(memory[bank, position - 12:position + 1])
+    if code[-2:] != bytes((TAKEMONEY, YOUR_MONEY)):
+        return None
+    # waitsfx comes one command number after playsound in every one of these scripts' engines.
+    for start, between in ((5, True), (1, code[7] == code[8] + 1)):
+        give = code[start:start + 6]
+        if between and give[0] == GIVEITEM and give[3] == IFFALSE:
+            item = mem.byte('wCurItem') if give[1] == ITEM_FROM_MEM else give[1]
+            return item, give[2]
+    return None
 
 
 def start(store, fresh):
@@ -126,6 +158,12 @@ class Ledger:
     def completed(self, context):
         kind, pb = context
         mem = Memory(pb.memory, self.data)
+        if kind == 'vended':
+            # Outside battle, where wBattleType still holds the last battle's value.
+            sale = vended(pb.memory, mem)
+            if sale and 1 <= sale[0] <= 249 and 1 <= sale[1] <= 99:
+                self._record(pb, 'bought', *sale)
+            return
         if mem.byte('wLinkMode') or mem.byte('wBattleType') in (DEBUG, TUTORIAL):
             return
         if kind == 'used':
