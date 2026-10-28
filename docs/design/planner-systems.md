@@ -107,7 +107,7 @@ Migration:
 4. Boxes and party, including unequip then release.
 5. Move slots: one protected move set used by HM teaching, the Champion shop and the Move Deleter.
 
-As built (#165, #166, #168, #169, with #167 and #172 open), the interface differs in a few places:
+As built (#165, #166, #167, #168, #169, with #172 open), the interface differs in a few places:
 - `make_room` returns the `Unit`s to give up, worth least first. The caller turns them into goals.
 - `read` takes `kinds` and `boxes`, so a caller reads only the room it needs and passes the policy's box ranking.
 - `Ledger.compare` logs where the ledger would choose differently from an existing check, used while a rule moves over.
@@ -116,6 +116,9 @@ As built (#165, #166, #168, #169, with #167 and #172 open), the interface differ
 - Gen I money comes from `money_needs` (the cash reserve and the Safari fee). The Gen I rematch uses `funds_short`, the cash reserve plus ten Ultra Balls.
 - Gen II money comes from `money_needs`, `supplies` and `held_money`.
 - A Gen II spare whose item is taken off goes back to its box when a PC step is refused, and `Take` closes the PC text the withdrawal leaves up.
+- A Gen II release visit (`gen2/ledger.release_step`) finishes a spare whose item is coming off, then ends at `BOX_REFILL`. Before that fix one Crystal visit released to 34 free slots.
+- A drop in Pokémon held is a `room` progress event in `planning/progress.py`, so the monitor and the replay audit count a release visit as progress.
+- The Gen II headless runner adds the planned Champion shop item to the clerk's list, as the managed runtime does. Without it every replayed Champion shop visit stood down.
 
 ### S2. Precondition check (causes D and F)
 
