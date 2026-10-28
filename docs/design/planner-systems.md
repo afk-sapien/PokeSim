@@ -107,7 +107,9 @@ Migration:
 4. Boxes and party, including unequip then release.
 5. Move slots: one protected move set used by HM teaching, the Champion shop and the Move Deleter.
 
-As built (#165, #166, #167, #168, #169, with #172 open), the interface differs in a few places:
+Sweep rows closed: 1, 4, 6, 7, 8 and 9 in #172, 2 and 5 in #169, 21 in #168, and the box rule in #167. Row 3 stays by choice. The tossed item is the ledger's least-worth spare (`gen2/ledger.py` picks it), and the toss is only the action taken when the item PC refuses the deposit, so no threshold is left there.
+
+As built (#165 to #169 and #172), the interface differs in a few places:
 - `make_room` returns the `Unit`s to give up, worth least first. The caller turns them into goals.
 - `read` takes `kinds` and `boxes`, so a caller reads only the room it needs and passes the policy's box ranking.
 - `Ledger.compare` logs where the ledger would choose differently from an existing check, used while a rule moves over.
