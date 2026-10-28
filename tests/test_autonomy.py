@@ -43,7 +43,7 @@ def test_policy_help_signal_cannot_take_over_the_emulator(monkeypatch):
 def test_stalled_goal_recovers_without_waiting_for_a_person():
     policy = StrategicPolicy(7)
     policy.goal = Goal('blocked', 'Cross the obstacle', 'Explore', ((255, 1, 1),))
-    policy.progress_goal = 'blocked'
+    policy.progress_goal, policy.progress_targets = 'blocked', frozenset(policy.goal.targets)
     policy.progress_frame = 0
     s = snap(frame=3000, party=(mon(),))
     action = policy._overworld(s, bytearray(65536))[0]
@@ -51,6 +51,23 @@ def test_stalled_goal_recovers_without_waiting_for_a_person():
     assert policy.mode == 'finding another approach'
     assert policy.recoveries == 1 and policy.recovery_until > s.frame
     assert not getattr(policy, 'needs_help', None)
+
+
+def test_new_targets_under_the_same_goal_key_restart_the_stall_timer():
+    policy = StrategicPolicy(7)
+    first = Goal('collect_hunt', 'Hunt', 'Find grass', ((255, 1, 1), (255, 2, 1)))
+    moved = Goal('collect_hunt', 'Hunt', 'Find grass', ((255, 9, 9), (255, 9, 8)))
+    policy.collection.choose = lambda *_: goals.pop(0)
+    goals = [first, first, moved]
+    policy._overworld(snap(frame=0, party=(mon(),)), bytearray(65536))
+    assert policy.progress_frame == 0
+    # Same key and targets: the timer keeps running.
+    policy._overworld(snap(frame=600, party=(mon(),)), bytearray(65536))
+    assert policy.progress_frame == 0
+    # Same key, new targets, past the stall limit: a fresh leg starts instead of a recovery.
+    policy._overworld(snap(frame=3000, party=(mon(),)), bytearray(65536))
+    assert policy.progress_frame == 3000 and policy.recoveries == 0
+    assert policy.progress_targets == frozenset(moved.targets)
 
 
 def test_hm_goal_starts_using_item_on_a_compatible_partner():

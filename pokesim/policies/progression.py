@@ -40,11 +40,17 @@ def object_goal(key, title, reason, map_name, text_fragment):
         obj = next((o for o in world["objects"] if text_fragment in o[4]), None)
         if obj:
             x, y = obj[:2]
-            approaches = []
+            # A tile under another standing object cannot be reached. The Fighting Dojo's two balls sit
+            # side by side, so walking toward the far side of one ended below the other, and the A press
+            # there took the gift that was not wanted.
+            occupied = {(o[0], o[1]) for o in world["objects"] if o is not obj and o[3] == "STAY"}
+            approaches, blocked = [], []
             for dx, dy, facing in ((0, 1, "up"), (1, 0, "left"), (0, -1, "down"), (-1, 0, "right")):
                 tx, ty = x + dx, y + dy
                 if 0 <= ty < world["height"] and 0 <= tx < world["width"] and world["tiles"][ty][tx] in world["passable"]:
-                    approaches.append((m, tx, ty, facing))
+                    (blocked if (tx, ty) in occupied else approaches).append((m, tx, ty, facing))
+            # A standing object can be hidden, so its tile is a last resort rather than never used.
+            approaches = approaches or blocked
             if approaches:
                 return Goal(key, title, reason, tuple(p[:3] for p in approaches), approaches[0][3], True,
                             approaches=tuple(approaches))

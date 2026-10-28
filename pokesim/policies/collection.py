@@ -620,6 +620,15 @@ class Collection:
                 finished = index is not None and s.party[index].species == target
             if project['method'] == 'gift' and dex(target) in (106, 107):
                 finished = event_set(s.event_flags, project['flag'])
+            if project['method'] in ('gift', 'static') and not legendary_project(project) and target:
+                held = project.setdefault('initial_held', project.get('initial_count', held_count(s, target)))
+                if not finished and not s.in_battle and not self.available(s, project):
+                    if held_count(s, target) <= held:
+                        # The source left the room or the game closed it, for example the other Fighting
+                        # Dojo ball was taken. Waiting on it could only end in a stand-down two minutes later.
+                        self.abandon(f'{name(target)} is no longer offered here')
+                        return
+                    finished = True
             if self.project['method']=='fossil' and self.project.get('initial_owned'):
                 finished = finished or bool(s.owned - set(self.project['initial_owned']))
             if self.project['method']=='trainer':

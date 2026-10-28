@@ -162,6 +162,7 @@ class StrategicPolicy(Policy):
         self.recovery_until = 0
         self.progress_frame = None
         self.progress_goal = None
+        self.progress_targets = None
         self.goal_distance = None
         self.elevator_exit = False
         self.elevator_floor = "B1F"
@@ -730,9 +731,13 @@ class StrategicPolicy(Policy):
             next_badge = next((row['title'] for row in self.journey if not row['done']), 'Celebrate the Champion victory')
             self.next_goal = {'id': 'milestone', 'title': next_badge}
         self.reason = goal.reason
-        if self.progress_goal != goal.key:
+        if self.progress_goal != goal.key or self.progress_targets != frozenset(goal.targets):
             # This local navigation timer supplements the expedition's cumulative idle budget.
+            # A goal that keeps its key but moves its targets starts over too. The Fighting Dojo gift
+            # first walks to the Karate Master and then to a ball, and the distance kept from the first
+            # leg made the timer run out on arrival at the ball, so recovery pressed A beside it.
             self.progress_goal = goal.key
+            self.progress_targets = frozenset(goal.targets)
             self.progress_frame = s.frame
             self.goal_distance = None
         if goal.key == 'collect_plan':
