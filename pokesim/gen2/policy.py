@@ -689,6 +689,16 @@ class Policy:
         """
         return snapshot.started and not snapshot.in_battle and mem.byte('wMapWidth') == 0
 
+    def battle_starting(self, mem):
+        """Whether the wild battle script has begun while the battle itself has not.
+
+        The battle transition draws over the map blocks the plan reads, so a plan made then sees no
+        encounter tiles. A postgame hunt took that for an unloaded map and waited, and the goal stayed
+        on that wait through the whole battle, so most of a Gold or Silver postgame hunt was counted
+        as waiting. The goal that walked into the battle carries on through it instead.
+        """
+        return bool(mem.byte('wScriptRunning') and mem.byte('wTempWildMonSpecies'))
+
     def idle(self, snapshot):
         """Whether the run stands on its clock-wait tile, the moment between two patrol steps.
 
@@ -1095,7 +1105,10 @@ class Policy:
         self.nav.observe(snapshot)
         if self.resetting_puzzle is not None and self.resetting_puzzle != snapshot.map:
             self.resetting_puzzle = None
-        self.goal = journey_goal = self.journey(snapshot, mem)
+        if self.goal is not None and self.battle_starting(mem):
+            journey_goal = self.goal
+        else:
+            self.goal = journey_goal = self.journey(snapshot, mem)
         release = self.release_goal(snapshot, mem)
         if release:
             self.goal = journey_goal = release
