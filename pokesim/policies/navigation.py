@@ -25,6 +25,10 @@ SEAFOAM_HOLES = {(MAPS[name], x, y) for name, points in (
 
 # Row on Route 23 and the badge checked there, from Cascade in the south to Earth in the north.
 ROUTE_23_CHECKS = ((136, 2), (119, 4), (105, 8), (96, 16), (85, 32), (56, 64), (35, 128))
+# The Cycling Road guards walk back anyone without a Bicycle in the bag from these tiles, from
+# Route16Gate1FScriptCoords and Route18Gate1FScriptCoords.
+CYCLING_ROAD_CHECKS = (('ROUTE_16_GATE_1F', ((4, 7), (4, 8), (4, 9), (4, 10))),
+                       ('ROUTE_18_GATE_1F', ((4, 3), (4, 4), (4, 5), (4, 6))))
 
 # Cinnabar Gym doors from CinnabarGymGateCoords, as (block x, block y, vertical). The map file
 # draws them open and the game closes each one on entry until EVENT_CINNABAR_GYM_GATE<n>_UNLOCKED,
@@ -269,6 +273,11 @@ class Navigator:
             for row, badge in ROUTE_23_CHECKS:
                 if not snapshot.badges & badge:
                     self.story_blocks.update((MAPS['ROUTE_23'], x, row) for x in range(route_23['width']))
+        # Unmodelled, a run without a Bicycle walked to the Route 18 gate to reach Route 16 Gate 2F
+        # and was turned back by the guard until the explore project timed out.
+        if not any(item == ITEMS['BICYCLE'] and qty for item, qty in snapshot.items):
+            for name, coords in CYCLING_ROAD_CHECKS:
+                self.story_blocks.update((MAPS[name], x, y) for x, y in coords)
         if not snapshot.saffron_open and not any(item in drinks for item, qty in snapshot.items if qty):
             for name, coords in (("ROUTE_5_GATE", ((3, 3), (4, 3))),
                                  ("ROUTE_6_GATE", ((3, 2), (4, 2))),

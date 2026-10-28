@@ -14,6 +14,8 @@
 
 - Fix saving on Windows failing with "Access is denied" when another process was reading the same file. Windows refuses to replace an open file, so the save now retries for up to about a second before giving up.
 
+- Stop Red, Blue and Yellow walking into the Cycling Road gates without a Bicycle. The guards at the Route 16 and Route 18 gates turn back anyone who has no Bicycle in the bag, but the route planner did not know, so a run without one paced the Route 18 gate on its way to Route 16 Gate 2F until the explore project gave up. Without a Bicycle the run now treats those tiles as closed and goes another way or explores something else.
+
 - Add randomized adventures for all six games. New adventure can shuffle wild Pokémon and starters, and trainer parties if chosen, from a seed. Each run gets a share code such as `PSR1-RED-WS-12345` that recreates the same world, shown on the Live page with a copy button. The cartridge is patched in memory only, and the planner follows the shuffled tables. Fishing, gifts, in-game trades and fixed encounters are not shuffled.
 - Require Core 0.9.0, which adds the randomizer and is now published as `pokecore`. The installers and `uv sync` remove the old `pokesim-core` package. With pip, run `pip uninstall pokesim-core` before upgrading.
 
