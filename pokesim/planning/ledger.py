@@ -23,6 +23,11 @@ BOX = 'box'
 PARTY = 'party'
 # A unit worth this much is never given up, whatever the shortfall.
 PRICELESS = float('inf')
+# Move slots the ledger keeps in Gold, Silver and Crystal: Cut, Fly, Surf, Strength, Flash, Whirlpool and
+# Waterfall. No machine, level-up move or Move Deleter visit replaces one of these.
+FIELD_MOVES = frozenset({15, 19, 57, 70, 148, 250, 127})
+# A level-up move also leaves Headbutt and Rock Smash, which shake trees and break rocks.
+LEARN_KEPT = FIELD_MOVES | {29, 249}
 
 
 def _frozen(mapping):

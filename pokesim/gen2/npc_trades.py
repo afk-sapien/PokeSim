@@ -10,7 +10,7 @@ from .menus import ChangeBox, Storage, choose, tracked
 from pokecore.gen2.ram import Memory
 from pokecore.gen2.state import npc_trade_qualifies as qualifies
 from pokecore.gen2.tables import NPC_TRADES as TRADES, NpcTrade, npc_trades as trades  # noqa: F401  (re-exported)
-from .training import FIELD_MOVES
+from ..planning.ledger import FIELD_MOVES
 
 
 def flags(memory, data):

@@ -1,6 +1,7 @@
 """Persistent postgame expeditions using version and time specific encounters."""
 from collections import Counter
 
+from ..planning.ledger import FIELD_MOVES
 from .menus import ChangeBox, FieldMove, Release, Storage, Teach, Use
 from .navigation import DIRS
 from pokecore.gen2.ram import Memory
@@ -711,7 +712,7 @@ def usable(policy, snapshot, row, items):
         move = 29 if method == 'headbutt' else 249
         machine = data.items['TM_HEADBUTT' if move == 29 else 'TM_ROCK_SMASH']
         return any(move in mon.moves or machine in items and move in data.species[mon.species]['machines']
-                   and not all(known in {15, 19, 57, 70, 148, 250, 127} for known in mon.moves)
+                   and not all(known in FIELD_MOVES for known in mon.moves)
                    for mon in snapshot.party if not mon.egg)
     return not method.endswith('rod') or data.items[method.upper().replace(' ', '_')] in items
 
@@ -911,7 +912,7 @@ def arrive(policy, snapshot):
         if slot is None:
             slot = next((i for i, mon in enumerate(snapshot.party) if not mon.egg
                          and move in policy.data.species[mon.species]['machines']
-                         and not all(known in {15, 19, 57, 70, 148, 250, 127} for known in mon.moves)), None)
+                         and not all(known in FIELD_MOVES for known in mon.moves)), None)
             task = Teach(move, slot) if slot is not None else None
         else:
             task = FieldMove(slot, 'HEADBUTT' if move == 29 else 'ROCK SMASH')

@@ -9,7 +9,8 @@ from pokecore.gen2.breeding import (branch_parents, descendants_wanted, egg_line
                                         free_slots, offspring)
 
 from .menus import ChangeBox, DayCare, Storage
-from .training import FIELD_MOVES, identity
+from ..planning.ledger import FIELD_MOVES
+from .training import identity
 
 
 HAPPINESS_TO_EVOLVE = 220

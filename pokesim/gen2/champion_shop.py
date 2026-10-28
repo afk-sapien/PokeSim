@@ -15,6 +15,7 @@ Elixirs restore moves out of PP in the Pokémon League.
 PP Up is priced but not planned yet: Core does not recognise the Gen II "raise PP of which move"
 list, so the item could not be used after buying it.
 """
+from ..planning.ledger import FIELD_MOVES
 from .standdown import stand_down, standing_down
 
 KEY = 'gen2-champion-shop-v1'
@@ -38,7 +39,6 @@ HELD = ('LEFTOVERS', 'LUCKY_EGG')
 ORDER = ('MASTER_BALL', 'RARE_CANDY', 'LEFTOVERS', 'LUCKY_EGG', 'MAX_ELIXER', 'ELIXER')
 TM_MARTS = tuple(f'MART_GOLDENROD_5F_{index}' for index in range(1, 5))
 SUPPLY_MART = 'MART_GOLDENROD_4F'
-PROTECTED_MOVES = frozenset({15, 19, 57, 70, 148, 250, 127})
 # Pocket slots, leaving one for story items and pickups as in Gen I.
 POCKET_ROOM = {'ITEM': 19, 'BALL': 11}
 CHECK_DECISIONS = 2000
@@ -189,7 +189,7 @@ def upgrade(data, mon, item):
         return None
     best = None
     for slot, old in enumerate(list(mon.moves) + [0] * (4 - len(mon.moves))):
-        if old in PROTECTED_MOVES:
+        if old in FIELD_MOVES:
             continue
         changed = [move if index == slot else known for index, known in
                    enumerate(list(mon.moves) + [0] * (4 - len(mon.moves)))]
