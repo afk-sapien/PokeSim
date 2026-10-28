@@ -169,6 +169,53 @@ def test_planner_only_offers_selected_dojo_gift(chosen):
     assert [p['species'] for p in candidates_seen] == [sid(chosen)]
 
 
+@pytest.mark.parametrize('fragment,tile', [('HITMONLEE', (4, 2)), ('HITMONCHAN', (5, 2))])
+def test_dojo_ball_is_approached_from_below_never_from_the_other_ball(fragment, tile):
+    from pokesim.policies.progression import object_goal
+    from pokesim.strategy_data import MAPS
+    goal = object_goal('collect_gift', '', '', 'FIGHTING_DOJO', fragment)
+    assert goal.targets == ((MAPS['FIGHTING_DOJO'], *tile),) and goal.facing == 'up'
+
+
+def balls_hidden(map_name, fragment):
+    from pokesim.strategy_data import DATA, MAPS, WORLD
+    room = MAPS[map_name]
+    hidden = bytearray(32)
+    for index, obj in enumerate(WORLD[room]['objects']):
+        if fragment in obj[4]:
+            toggle = DATA['toggle_objects'].index([room, index])
+            hidden[toggle // 8] |= 1 << toggle % 8
+    return bytes(hidden)
+
+
+def dojo_return(*party, hidden=bytes(32)):
+    from pokesim.strategy_data import MAPS
+    owned = frozenset({1, 106, 107})
+    return state(map=MAPS['FIGHTING_DOJO'], party=(mon(hp=100, max_hp=100, level=40),) + party,
+                 owned=owned, hidden_objects=hidden)
+
+
+def test_a_gift_taken_by_someone_else_stops_the_wait():
+    c = Collection()
+    c.dojo_choice = 106
+    c.project = dict(c.sources()[sid(106)][0], species=sid(106))
+    c.observe(dojo_return())
+    assert c.project
+    # The other ball was taken, which hides both. Hitmonlee is gone without joining.
+    c.observe(dojo_return(hidden=balls_hidden('FIGHTING_DOJO', 'HITMON')))
+    assert c.project is None and 'no longer offered' in c.history[-1]
+
+
+def test_a_gift_that_joined_finishes_once_its_source_is_gone():
+    c = Collection()
+    c.dojo_choice = 106
+    c.project = dict(c.sources()[sid(106)][0], species=sid(106))
+    c.observe(dojo_return())
+    # Both balls hide while the event flag is not read yet. Hitmonlee in the party means it was received.
+    c.observe(dojo_return(mon(species=sid(106)), hidden=balls_hidden('FIGHTING_DOJO', 'HITMON')))
+    assert c.project is None and 'no longer offered' not in ''.join(c.history)
+
+
 def test_legacy_dojo_project_keeps_its_selected_gift():
     c = Collection()
     c.load({'project': {'method': 'gift', 'species': sid(107)}})
