@@ -105,11 +105,40 @@ def test_a_rare_species_is_hunted_only_while_its_next_catch_pays(data, monkeypat
     assert hunt['species'] == 16
     postgame.state(policy)['activity'] = hunt
     worse = mon(16, position=1, trainer_id=99)
+    # Each catch took as long as the table rate says.
+    each = postgame.search_expected(5)
+    policy.decisions = hunt['started'] + each
     assert not postgame.done(policy, snapshot([lead()], [first, worse]), hunt, 'day')
+    policy.decisions += each
     assert postgame.done(policy, snapshot([lead()], [first, worse, mon(16, position=2, dvs=good)]), hunt, 'day')
     assert hunt['caught'] == 2
     # Training no longer waits for a hunt that would not pay.
     assert postgame.trainee(policy, snapshot([lead()], [mon(16, level=50, dvs=good)]))['species'] == 16
+
+
+def test_a_hunt_running_dry_ends_before_its_stand_down_budget_and_is_not_picked_again(data, monkeypatch):
+    from pokesim.gen2 import postgame
+    from pokesim.gen2.standdown import search_expected
+    common = dict(row(5, 16), chance=30)
+    monkeypatch.setattr(postgame, 'huntable', lambda *args: {16: [common]})
+    monkeypatch.setattr(postgame, 'reachable', lambda policy, snapshot, rows: rows[0])
+    policy = expedition(data)
+    policy.decisions = 1000
+    first = mon(16, dvs=(0, 12, 12, 12, 12))
+    state = snapshot([lead()], [first])
+    hunt = postgame.quality(policy, state, 'day')
+    assert hunt['species'] == 16
+    postgame.state(policy)['activity'] = hunt
+    # The table rate is one catch already seen, so the hunt pays until a dry run stretches it past WORTH.
+    dry = postgame.catch_value(postgame.tail(first)) / postgame.WORTH - search_expected(30)
+    assert 0 < dry < 3 * hunt['expected']
+    policy.decisions = 1000 + int(dry) - 10
+    assert not postgame.done(policy, state, hunt, 'day')
+    policy.decisions = 1000 + int(dry) + 10
+    assert postgame.done(policy, state, hunt, 'day') and hunt['caught'] == 0
+    postgame.finish(policy)
+    assert postgame.state(policy)['effort']['16'][1] == 0
+    assert postgame.quality(policy, state, 'day') is None
 
 
 def test_a_better_dv_hunt_ends_after_three_catches(data):
