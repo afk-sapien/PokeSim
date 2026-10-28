@@ -751,9 +751,11 @@ class Navigator:
         forward = self.route(pos, goals, frame)
         if forward is None or curiosity <= 0 or rng.random() >= curiosity:
             return forward
-        # Stay on this map during detours, avoiding accidental exits and warp loops.
+        # Stay on this map during detours, avoiding accidental exits and warp loops. A detour takes one
+        # plain step. A ledge jump lands two tiles away and cannot be walked back, and on Route 22 one
+        # sent a League return around the whole route again and again until it gave up.
         options = [(dr, q) for dr, q in self.neighbors(pos, frame)
-                   if q[0] == pos[0] and dr != forward]
+                   if q[0] == pos[0] and dr != forward and abs(q[1] - pos[1]) + abs(q[2] - pos[2]) == 1]
         if not options:
             return forward
         ahead = next((q for _, _, q in list(self.path)[6:12] if q[0] == pos[0]), None)

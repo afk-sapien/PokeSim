@@ -1799,6 +1799,7 @@ class Policy:
 
     def level_lead(self, snapshot):
         """Move the highest-level Pokémon to the front when the lead lags well behind it."""
+        from .quests import beasts_roaming
         from .tower import holds_lead
         from .training import trainee_slot
         # Without an Exp. Share the partner in training leads instead, so it joins every battle.
@@ -1806,6 +1807,10 @@ class Policy:
         # The roaming-beast sleeper stays on record after the search is set aside for later, and the search
         # names it again when it resumes. On the training walk it would keep the trainee out of every battle.
         training = trainee is not None and self.goal is not None and self.goal.key == 'collection_train'
+        # Once every beast is caught the search never runs again to clear its sleeper. Crystal kept a level 20
+        # sleeper in front of a level 100 team, and each Sudowoodo return lost it in Victory Road and went back.
+        if self.collection.get('roam_lead') and not beasts_roaming(self, snapshot):
+            self.collection.pop('roam_lead')
         # A roaming-beast or static-legendary sleeper leads on purpose even when it is far below the rest of the
         # party, and so does the Tower team's chosen lead, which the Tower preparation would otherwise swap back.
         if (self.collection.get('roam_lead') and not training or holds_lead(self)

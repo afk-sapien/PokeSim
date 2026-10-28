@@ -85,6 +85,18 @@ def test_guidance_keeps_goal_bias_but_allows_seeded_detours():
     assert all(nav.guided(start, [target], 0, rng, 0) == forward for _ in range(5))
 
 
+def test_a_detour_never_jumps_a_ledge():
+    # South of this Route 22 tile is a ledge. Jumping it sent a League return around the whole route.
+    nav = Navigator()
+    start = (MAPS['ROUTE_22'], 20, 12)
+    target = (MAPS['ROUTE_22'], 8, 12)
+    assert ('down', (MAPS['ROUTE_22'], 20, 14)) in list(nav.neighbors(start, 0))
+    rng = random.Random(3)
+    choices = {nav.guided(start, [target], 0, rng, 1.0) for _ in range(200)}
+    assert 'down' not in choices
+    assert choices - {'left'}
+
+
 def test_snapshot_reads_saffron_gate_unlock():
     memory = bytearray(65536)
     memory[W_STATUS_FLAGS1] = 64
