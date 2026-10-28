@@ -61,6 +61,11 @@ def _stand_downs(run, seen):
     return [last['key']] if last['status'] == 'deferred' else []
 
 
+def _levels(snapshot):
+    """Species and level of each party member, so a report can tell training that gains from training that idles."""
+    return [[mon.species, mon.level] for mon in getattr(snapshot, 'party', ()) if not getattr(mon, 'egg', False)]
+
+
 def run_one(args):
     run, read, game = _open(Path(args.rom), Path(args.state), args.data_root, args.seed)
     monitor = Monitor()
@@ -71,6 +76,7 @@ def run_one(args):
     errors = 0
     recoveries = getattr(run.policy, 'recoveries', 0)
     snapshot = read()
+    party = [_levels(snapshot)]
     span = None  # [key, frames, progressed]
     while run.frame - start < args.frames:
         before = run.frame
@@ -110,12 +116,13 @@ def run_one(args):
         if current is not None:
             snapshot = current
     run.stop()
+    party.append(_levels(snapshot))
     frames = dict(monitor.frames)
     result = {
         'state': str(args.state), 'game': game, 'frames': sum(frames.values()), 'errors': errors,
         'shares': monitor.shares(), 'frames_by_goal': frames, 'titles': titles,
         'spans': dict(spans), 'wasted': dict(wasted), 'open_span': span,
-        'stand_downs': stand_downs, 'reloads': 0,
+        'stand_downs': stand_downs, 'reloads': 0, 'party_levels': party,
         'recoveries': getattr(run.policy, 'recoveries', 0) - recoveries,
     }
     Path(args.out).write_text(json.dumps(result, indent=1), encoding='utf-8')
