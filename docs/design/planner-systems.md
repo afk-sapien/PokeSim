@@ -234,3 +234,5 @@ Suggested order: S4 first, because it merges code that already exists and gives 
 - Red's CHEESEKING and Ditto gain 14 to 16 levels per run, so Red's training share is slow progress, not a stall.
 - Yellow's `party_release` loops releasing from a full box (3 stalls in the baseline). S1 should own box space.
 - Screen recoveries are high in the baseline: Yellow 490, Blue 588, Red 115 per batch. Worth a look of its own.
+- Yellow's Fighting Dojo gift (`43:gift:177:HITMONLEE`, 4 stalls in the S1 baseline) is put off by the generic 36000-frame "other" expedition budget, on efc9491 and later. No special case. S3 test case: a cheap one-time gift must outrank the generic budget, because its utility is high and its expected cost is a short walk.
+- Fixed in #170 and deployed at 26390ca: Crystal kept a level 20 roam lead after every beast was caught, Crystal's storage goal flipped between two Pokémon Centers at the same distance, and Blue's guided detours jumped Route 22 ledges, which #150 exposed. None of these were band-aids, so they need no rows.
