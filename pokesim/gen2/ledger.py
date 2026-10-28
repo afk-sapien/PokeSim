@@ -248,6 +248,24 @@ def fits(data, snapshot, item):
     return room(data, snapshot, 'fits', item) == []
 
 
+def catch_need(snapshot):
+    """The room one catch takes: none while the party has a free slot, a box slot after that."""
+    return Need() if len(snapshot.party) < PARTY_SIZE else Need(box_slots=1)
+
+
+def catch_room(policy, snapshot, goal):
+    """Whether a catch made for ``goal`` has somewhere to go: a free party or box slot, or a boxed spare
+    the ledger can let go for one."""
+    from ..planning.conditions import Requirements, feasible
+    need = catch_need(snapshot)
+    if not need.amounts():
+        return True
+    books = ledger(policy.data)
+    books.snapshot(snapshot, kinds=(BOX,))
+    return bool(feasible(Requirements(need=need), None, books, key=goal)
+                or policy.storage_target(snapshot) is not None)
+
+
 def tidy_goal(policy, snapshot, Goal, item):
     """Walk to the PC to put a spare entry away when the bag has no entry for ``item``, or None."""
     data = policy.data
