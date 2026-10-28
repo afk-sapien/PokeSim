@@ -1,8 +1,11 @@
 """Generation II data presented through the shared adventure interface."""
 import json
+import re
 
 from pokecore.gen2.battle_power import battle_power, hidden_power
 from pokecore.gen2.ram import STAT_NAMES
+
+from ..dex_links import links
 
 VERSIONS = ('gold', 'silver', 'crystal')
 DEFAULT_VERSION = 'crystal'
@@ -31,6 +34,36 @@ def evolution_label(data, row):
     return method.title()
 
 
+def other_locations(data):
+    """Standing encounters, gifts, in-game trades and Game Corner prizes, keyed by species.
+
+    They come from the same tables the sim's own plan reads, so the page and the plan agree.
+    """
+    from .dex_sources import SOURCES, _trade_place
+    from .gamecorner import prizes
+    from .npc_trades import trades
+    found = {}
+
+    def add(sid, method, label, map_name, **extra):
+        found.setdefault(sid, []).append({'map': extra.pop('map', None), 'map_name': map_name, 'method': method,
+                                          'method_label': label, 'level_range': None, **extra})
+    for kind, label in (('static', 'Standing encounter'), ('gift', 'Gift')):
+        for sid, source in SOURCES:
+            if source.kind == kind and data.game in source.games:
+                # The detail names the place. A label that only repeats the species adds nothing.
+                add(sid, kind, label, source.detail,
+                    detail=None if source.label == data.species[sid]['name'] else source.label)
+    for trade in trades(data.game):
+        gives = data.species[trade.request]['name']
+        add(trade.give, 'trade', 'In-game trade', _trade_place(data, trade), map=data.map_ids.get(trade.map_name),
+            gives=f'female {gives}' if trade.female else gives, detail=f'{trade.npc} trades it')
+    for sid, price, city in prizes(data.game):
+        mid = data.map_ids.get(f'{city}_GAME_CORNER')
+        add(sid, 'prize', 'Game Corner prize', data.maps[mid]['name'] if mid in data.maps else f'{city.title()} Game Corner',
+            map=mid, detail=f'{price} coins')
+    return found
+
+
 class Reference:
     def __init__(self, data):
         self.data = data
@@ -45,6 +78,7 @@ class Reference:
             return {'dex': sid, 'name': data.species[sid]['name'], 'method': row['method'],
                     'requirement': requirement, 'label': evolution_label(data, row)}
 
+        others = other_locations(data)
         entries = []
         for sid, mon in sorted(data.species.items()):
             moves = []
@@ -57,9 +91,12 @@ class Reference:
                 if row['species'] != sid:
                     continue
                 key = (row['map'], row['method'], row['time'])
+                # Fishing reads like Red's Pokédex: one Fishing tag, with the rod beside the place.
+                rod = row['method'].title() if row['method'].endswith(' rod') else None
                 place = locations.setdefault(key, {'map': row['map'], 'map_name': data.maps[row['map']]['name'],
-                                                   'method': row['method'], 'method_label': row['method'].title(),
-                                                   'time': row['time'], 'levels': [], 'chance': 0})
+                                                   'method': 'fish' if rod else row['method'],
+                                                   'method_label': 'Fishing' if rod else row['method'].title(),
+                                                   'rod': rod, 'time': row['time'], 'levels': [], 'chance': 0})
                 place['levels'].append(row['level'])
                 place['chance'] += row['chance']
             for place in locations.values():
@@ -73,7 +110,8 @@ class Reference:
                             'catch_rate': mon['catch_rate'], 'growth': mon['growth'].replace('_', ' ').title(),
                             'moves': moves, 'hms': [data.moves[mid]['name'] for mid in mon['machines']
                                                   if data.moves[mid]['constant'] in hm_names],
-                            'locations': list(locations.values()), 'links': {},
+                            'locations': list(locations.values()) + others.get(sid, []),
+                            'links': links(re.sub(r'\.(?=\S)', '. ', mon['name']), sid),
                             'evolves_to': [evolution(row['species'], row) for row in mon['evolutions']],
                             'evolves_from': [evolution(parent, row) for parent, entry in data.species.items()
                                              for row in entry['evolutions'] if row['species'] == sid]})

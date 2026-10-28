@@ -142,7 +142,8 @@ function chip(step, direction) {
 
 function placeLine(place) {
   const extra = [place.level_range, place.rod ? `${place.rod}` : null,
-                 place.gives ? `Trade a ${place.gives}` : null, place.item ? `From the ${place.item}` : null]
+                 place.gives ? `Trade a ${place.gives}` : null, place.item ? `From the ${place.item}` : null,
+                 place.detail || null]
   return `<li><span class="tag place-method ${esc(place.method)}">${esc(place.method_label)}</span>
     <strong>${esc(place.map_name)}</strong><small>${extra.filter(Boolean).map(esc).join(', ')}</small></li>`
 }

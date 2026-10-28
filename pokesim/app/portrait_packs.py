@@ -76,11 +76,14 @@ def _valid(path):
 
 class PortraitPacks:
     def __init__(self, registry, cancelled, *, images=None, folder=FOLDER,
-                 pack='portrait-packs', setting='community_portraits', sets=None, legacy=None):
+                 pack='portrait-packs', setting='community_portraits', sets=None, legacy=None,
+                 versions=None):
         """`sets` maps set names to (folder, images). Without it the pack is one set kept
         at the pack root, which is also how a single-set install from an older release is
-        laid out. `legacy` names the set such an install holds."""
+        laid out. `legacy` names the set such an install holds. `versions` maps an
+        adventure version to its set, the portrait sets by default."""
         self.registry = registry
+        self.versions = VERSION_SETS if versions is None else versions
         self.cancelled = cancelled
         if sets is None:
             sets = {'': (folder, images if images is not None else GEN1)}
@@ -166,7 +169,7 @@ class PortraitPacks:
         if version is None:
             name = next(iter(self.sets))
         else:
-            name = VERSION_SETS.get(version, version)
+            name = self.versions.get(version, version)
         if name not in self.sets or key not in self.sets[name][1]:
             return None
         if not preview and self.registry.setting(self.setting, False) is not True:
@@ -195,24 +198,24 @@ class PortraitPacks:
             self.staging.mkdir(exist_ok=True)
             self._seed()
             budget = {'bytes': 0}
-            jobs = []
+            # One download per upstream file, even when several sets or keys share it.
+            groups = {}
             for name, (folder, images) in self.sets.items():
                 target = self.staging / name
                 target.mkdir(parents=True, exist_ok=True)
-                groups = {}
                 for key, filename in images.items():
                     if (target / f'{key}.png').is_file() and _valid(target / f'{key}.png'):
                         with self.lock:
                             self.completed += 1
                     else:
-                        groups.setdefault(filename, []).append(key)
-                jobs.extend((target, folder, filename, keys) for filename, keys in groups.items())
+                        groups.setdefault((folder, filename), []).append(target / f'{key}.png')
+            jobs = [(folder, filename, paths) for (folder, filename), paths in groups.items()]
             with httpx.Client(timeout=15, follow_redirects=False, trust_env=False) as client:
                 if not (self.staging / 'LICENCE.txt').is_file():
                     notice = download(client, RAW + '/LICENCE.txt', 64 * 1024)
                     CheckpointStore.atomic_write(self.staging / 'LICENCE.txt', notice)
 
-                def fetch(target, folder, filename, keys):
+                def fetch(folder, filename, paths):
                     if self.cancelled.is_set():
                         raise ValueError('Sprite download was interrupted')
                     data = download(client, RAW + folder + filename, MAX_IMAGE_BYTES)
@@ -221,9 +224,9 @@ class PortraitPacks:
                         budget['bytes'] += len(data)
                         if budget['bytes'] > MAX_PACK_BYTES:
                             raise ValueError('The sprite source returned more data than expected')
-                    for key in keys:
-                        CheckpointStore.atomic_write(target / f'{key}.png', data)
-                    return len(keys)
+                    for path in paths:
+                        CheckpointStore.atomic_write(path, data)
+                    return len(paths)
 
                 with ThreadPoolExecutor(max_workers=WORKERS) as pool:
                     futures = [pool.submit(fetch, *job) for job in jobs]

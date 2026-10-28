@@ -1179,8 +1179,10 @@
   function renderItemArtwork(data) {
     $('#item-artwork-state').textContent = data.busy ? `Downloading ${data.completed} / ${data.total}` : data.active === 'community' ? 'Item icons active' : 'Item icons hidden'
     const install = $('#item-artwork-install')
-    install.textContent = data.busy ? 'Downloading…' : data.installed ? 'Show item icons' : 'Install item icons'
-    install.hidden = data.active === 'community' && !data.busy
+    // An older pack covers only Red and Blue, so the button stays to fetch the other games.
+    const partial = !data.installed && Object.values(data.sets || {}).some(Boolean)
+    install.textContent = data.busy ? 'Downloading…' : data.installed ? 'Show item icons' : partial ? 'Download icons for all games' : 'Install item icons'
+    install.hidden = data.active === 'community' && data.installed && !data.busy
     install.toggleAttribute('data-blocked', data.busy)
     $('#item-artwork-default').hidden = data.active !== 'community'
     $('#item-artwork-default').toggleAttribute('data-blocked', data.busy)

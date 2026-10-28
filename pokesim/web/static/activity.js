@@ -103,9 +103,8 @@
       if (!response.ok) throw new Error('Statistics unavailable')
       const data = await response.json()
       rows = data[pokemon ? 'pokemon' : 'items']
-      // Community item art is drawn for Red, Blue and Yellow item numbers.
-      if (!pokemon && data.generation === 2) itemArtwork = null
-      else if (!pokemon) {
+      // The library answers each item number with art from this adventure's own generation.
+      if (!pokemon) {
         try {
           // Under the adventure's own address, so a view link never reaches the Library API.
           const response = await PokeSim.fetch('/item-artwork', {cache: 'no-store'})

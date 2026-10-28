@@ -66,7 +66,8 @@ def create_app(read=inventory.read, urls: dict[str, str] | None = None, level_ba
     @app.get('/sprites/{instance}/{dex}.png')
     def portrait(instance: str, dex: int):
         """Portraits come through the broker so the page works against either instance lineage."""
-        if instance not in targets or not 1 <= dex <= 151:
+        # Gold, Silver and Crystal instances number their Pokédex up to Celebi.
+        if instance not in targets or not 1 <= dex <= 251:
             raise HTTPException(404)
         found = sprite(targets[instance], dex)
         if not found:
