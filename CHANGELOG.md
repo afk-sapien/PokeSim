@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Stop counting the catch against a Gold, Silver or Crystal hunt's search budget. A hunt gets three times the decisions its encounter rate predicts, but the battle with the Pokémon it wants counted too, and a dozen balls at a Golduck at full health took more decisions than the whole search was expected to take. Two Gold hunts for better copies stood down in the middle of that battle. Battles with an item carrier still count, since most carriers hold no item.
+
 - Keep a Red, Blue or Yellow Kanto Marathon going through a release visit. The marathon still runs its race clock while another goal's PC visit holds it, but that visit also counted as two minutes without progress, so a long one deferred the marathon before it resumed. Now that releases reach every slot, one Red adventure started a release visit right at the start line and lost its marathon that way.
 
 - Add `--reseed-goals` to `tools/replay_audit.py` for comparing two code versions. A small timing change early in a replay used to shift the game's random numbers, so a later hunt caught or missed by luck, and one Silver comparison moved the wasted hunting frames by 87,000 for that reason alone. With the option each goal start on a save gets the same encounter rolls in both versions, seeded from the save, the goal and how often it started before. The audit also reads linked trainer ids from `AUDIT_PARTNERS` and lists each Pokémon a Gold, Silver or Crystal release visit let go. The application never reseeds a game.

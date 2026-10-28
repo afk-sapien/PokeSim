@@ -134,6 +134,22 @@ def test_a_better_dv_hunt_is_budgeted_per_catch():
     assert standing_down(policy, hunt_key(40))
 
 
+def test_the_catch_battle_does_not_spend_a_better_dv_hunt_budget():
+    policy = Policy('collection_hunt')
+    activity = {'kind': 'quality', 'species': 55, 'row': {'chance': 50}, 'caught': 0,
+                'expected': search_expected(50)}
+    policy.collection['postgame'] = {'activity': activity}
+    budget = round(3 * search_expected(50))
+    for _ in range(budget - 1):
+        collection.observe_search(policy, SimpleNamespace(in_battle=1, enemy_species=60))
+    # A dozen balls at a Golduck at full health is more than the whole search was expected to take.
+    for _ in range(2 * budget):
+        collection.observe_search(policy, SimpleNamespace(in_battle=1, enemy_species=55))
+    assert not standing_down(policy, hunt_key(55))
+    collection.observe_search(policy, SimpleNamespace(in_battle=0, enemy_species=0))
+    assert standing_down(policy, hunt_key(55))
+
+
 def test_an_older_save_moves_its_counts_onto_the_monitor():
     policy = Policy(None)
     policy.collection = {'carrier_decisions': {'61': 500}, 'activity_team': ['a'], 'activity_blocked': 5,
