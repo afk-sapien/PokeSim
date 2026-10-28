@@ -250,6 +250,9 @@ def test_a_set_aside_roaming_sleeper_does_not_keep_the_trainee_out_of_battle(dat
     sleeper = lead()
     trainee = mon(94, box=None, position=1, level=20, hp=60, max_hp=60)
     policy, state = shareless_policy(data, [sleeper, trainee], trainee)
+    policy.returned = set()
+    state.owned = state.owned - {243}
+    state.roamers = [{'species': 243, 'map': next(iter(data.maps))}]
     # The roaming search was put off for later and left its sleeper on record.
     policy.collection['roam_lead'] = identity(sleeper)
     policy.goal = Goal('collection_train', 'Train 94 toward level 100 in the lead', 'SILVER_CAVE_ROOM_1', 9, 31)
@@ -258,6 +261,22 @@ def test_a_set_aside_roaming_sleeper_does_not_keep_the_trainee_out_of_battle(dat
     # While the search itself runs, its sleeper keeps the lead.
     policy.goal = Goal('collection_roam_hunt', 'Track Raikou through Johto', 'ROUTE_36', 5, 5)
     assert policy.level_lead(state) is None
+
+
+def test_a_sleeper_kept_after_every_beast_is_caught_gives_the_strongest_the_lead(data):
+    from pokesim.gen2.policy import Policy
+    from pokesim.gen2.training import identity
+    sleeper = mon(5, box=None, position=0, level=20)
+    strong = lead()
+    strong.position = 1
+    policy = Policy.__new__(Policy)
+    policy.data, policy.goal, policy.returned = data, None, set()
+    policy.collection = {'roam_lead': identity(sleeper)}
+    state = snapshot([sleeper, strong])
+    state.roamers = []
+    reorder = policy.level_lead(state)
+    assert reorder.slot == 1 and tuple(reorder.identity[1]) == strong.dvs
+    assert 'roam_lead' not in policy.collection
 
 
 def test_a_leading_trainee_switches_out_once_when_outmatched(data):
