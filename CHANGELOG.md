@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Run the League again only once every other postgame project is done. Blue spent 46% of its frames on rematches with its money at the 999,999 cap, and Gold spent 28% even with Pokédex, shiny and training work left. Pokédex entries, legendaries, shiny hunts, better-DV hunts and training now come first in all six games. A rematch runs when money is short or nothing else is left, so a finished run still keeps playing.
+
 - Stop Crystal turning back to a Pokémon Center again and again on the walk to the Battle Tower. Plain wild battles on the way to Olivine were fought, so the team kept needing to heal, and replays of one Crystal run spent about a third of their frames on that walk. The walk now runs from plain wild battles the way a shiny search does. A shiny or a wanted Pokémon is still caught.
 
 - Keep Gold, Silver and Crystal running after an unexpected error. One error anywhere in the loop used to stop the adventure until it was restarted. The error is now logged and the next step goes ahead, the same way Red, Blue and Yellow recover. The adventure stops only after ten errors in a row, or when a committed gift needs a restart to recover.

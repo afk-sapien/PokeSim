@@ -30,6 +30,19 @@ def test_restarts_preserve_category_rotation_and_repeated_failure_backoff():
     assert restored.completed == {'collection': 1}
 
 
+def test_a_rematch_waits_behind_every_other_project_unless_money_is_short():
+    rematch = {'method': 'rematch', 'hof_count': 3, 'key': 'rematch'}
+    explore = {'method': 'explore', 'map': 1, 'target': (1, 2, 3), 'key': 'explore'}
+    train = {'method': 'train', 'parent': sid(113), 'key': 'chansey'}
+    for seed in range(50):
+        director = AdventureDirector()
+        # Two rematch-free turns of training would hand the next turn to another category.
+        director.recent = [{'category': 'training', 'key': 'chansey'}] * 2
+        assert director.select([(1000, rematch), (0.1, explore), (1, train)], random.Random(seed)) != rematch
+    assert AdventureDirector().select([(1, rematch)], random.Random(1)) == rematch
+    assert AdventureDirector().select([(1, rematch), (1, train)], random.Random(1), urgent=True) == rematch
+
+
 def test_productive_training_hard_limit_is_advanced_and_does_not_escalate_failure():
     c = Collection()
     c.completed_champion = True

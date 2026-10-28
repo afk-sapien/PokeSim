@@ -190,13 +190,29 @@ def test_the_rotation_spreads_the_activities_like_gen_one(data, monkeypatch):
     for decisions in range(400):
         policy = expedition(data, decisions)
         picks.append(postgame.choose(policy, state, clock(), 'day')['kind'])
-    counts = {kind: picks.count(kind) for kind in postgame.WEIGHTS}
-    assert counts['quality'] > counts['shiny'] > counts['league'] > 0 and counts['train'] > counts['shiny']
+    counts = {kind: picks.count(kind) for kind in (*postgame.WEIGHTS, 'league')}
+    assert counts['quality'] > counts['shiny'] > 0 and counts['train'] > counts['shiny']
+    # The League waits behind every other activity.
+    assert counts['league'] == 0
     # Two picks of one kind in a row rule it out for the next pick.
     for decisions in range(100):
         policy = expedition(data, decisions)
         postgame.state(policy)['recent'] = ['train', 'train']
         assert postgame.choose(policy, state, clock(), 'day')['kind'] != 'train'
+
+
+def test_a_league_run_is_the_fallback_once_nothing_else_is_left(data, monkeypatch):
+    from pokesim.gen2 import collection, postgame
+    offered = []
+    for kind in ('quality', 'trainee', 'shiny'):
+        monkeypatch.setattr(postgame, kind, lambda *args, kind=kind: offered.append(kind))
+    monkeypatch.setattr(collection, 'postgame_league', lambda *args: True)
+    policy = expedition(data)
+    assert postgame.choose(policy, snapshot([lead()]), clock(), 'day') == {'kind': 'league'}
+    assert sorted(offered) == ['quality', 'shiny', 'trainee']
+    # A team not ready for the League has nothing to do here, as before.
+    monkeypatch.setattr(collection, 'postgame_league', lambda *args: False)
+    assert postgame.choose(policy, snapshot([lead()]), clock(), 'day') is None
 
 
 def test_postgame_work_steps_aside_for_a_pokedex_hunt(data, monkeypatch):
