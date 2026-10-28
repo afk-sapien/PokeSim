@@ -112,7 +112,7 @@ def test_gen2_counts_say_since_when_and_why_a_cell_is_blank(page, game, width):
     expect(wild).to_have_attribute('title', re.compile('Earlier play is not included'))
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     page.goto(url + '/stats/items')
-    expect(page.locator('#ledger-help')).to_contain_text('bought at shop counters')
+    expect(page.locator('#ledger-help')).to_contain_text('bought at shops and vending machines')
     page.locator('#ledger-search').fill('Bicycle')
     used = page.locator('#ledger-rows tr').first.locator('td').nth(1)
     expect(used).to_have_text('Not counted')

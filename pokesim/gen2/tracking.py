@@ -70,6 +70,7 @@ class Tracker:
             pb.hook_register(bank, address, self.captured, pb)
         pb.hook_register(*encounter_hook(pb.memory, self.data), self.encountered, pb)
         pb.hook_register(*contest_hook(pb.memory, self.data), self.contest_caught, pb)
+        pb.hook_register(*contest_keep_hook(pb.memory, self.data), self.contest_kept, pb)
         pb.hook_register(*hatch_hook(pb.memory, self.data), self.hatching, pb)
 
     def hatching(self, pb):
@@ -116,6 +117,28 @@ class Tracker:
         fingerprint = hashlib.sha256(bytes(pb.memory[0xC000:0xE000])).hexdigest()
         with self.store.lock, self.store.db:
             shiny.record(self.store.db, 'acquired', fingerprint, species, generation=2)
+
+    def contest_kept(self, pb):
+        """The contest is over and the Pokémon the player held at the end goes to the party or box.
+
+        Count it toward caught once, as a receipt of its own. Catches the player let go for a
+        later one never reach this point.
+        """
+        species = Memory(pb.memory, self.data).byte('wContestMonSpecies')
+        if not 1 <= species <= 251:
+            return
+        fingerprint = 'contest:' + hashlib.sha256(bytes(pb.memory[0xC000:0xE000])).hexdigest()
+        with self.store.lock, self.store.db:
+            db = self.store.db
+            if not db.execute('INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
+                              (fingerprint, species, time.time())).rowcount:
+                return
+            from ..activity_ledger import increment
+            increment(db, 'caught', species)
+            value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (CAPTURES,)).fetchone()[0])
+            value['counts'][str(species)] = value['counts'].get(str(species), 0) + 1
+            value['total'] += 1
+            db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), CAPTURES))
 
     def captured(self, pb):
         mem = Memory(pb.memory, self.data)
@@ -181,6 +204,17 @@ class Tracker:
             # The progress lines for level 100 species and perfect finds follow each change.
             progress.goals_changed(self.store.db, time.time())
         self.confirmed = token
+
+
+def contest_keep_hook(memory, data):
+    """(bank, address) of CheckPartyFullAfterContest, checked against its opening
+    ``ld a, [wContestMonSpecies] / and a / jp z``. ValueError on a mismatch."""
+    bank, address = data.symbols['CheckPartyFullAfterContest']
+    species = data.symbols['wContestMonSpecies'][1]
+    signature = bytes((0xFA, species & 0xFF, species >> 8, 0xA7, 0xCA))
+    if bytes(memory[bank, address:address + len(signature)]) != signature:
+        raise ValueError('Gen II contest keep signature mismatch')
+    return bank, address
 
 
 def record_gift(db, event_id, species):

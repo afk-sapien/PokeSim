@@ -16,11 +16,14 @@ from pokesim.store import Store
 WRAM = {'wBattleMode': 0xD22D, 'wCurPartyMon': 0xD109, 'wNumItems': 0xD892, 'wItemQuantityChange': 0xD10C,
         'wTempTMHM': 0xD265, 'wTMsHMs': 0xD859, 'wTempEnemyMonSpecies': 0xD204, 'wOTPartyCount': 0xD288,
         'wOTPartySpecies': 0xD289, 'wCurItem': 0xD106, 'wLinkMode': 0xC2DC, 'wBattleType': 0xD230,
-        'wWildMon': 0xD20C, 'wEnemyMonDVs': 0xD206}
+        'wWildMon': 0xD20C, 'wEnemyMonDVs': 0xD206, 'wScriptBank': 0xD160, 'wScriptPos': 0xD161,
+        'wContestMonSpecies': 0xDCE7}
 CODE = {'InitEnemyWildmon': (0x0F, 0x5000), 'LoadEnemyMonToSwitchTo': (0x0F, 0x5100),
         'FaintEnemyPokemon': (0x0F, 0x5200), 'UseDisposableItem': (0x03, 0x5300), 'ConsumeTM': (0x03, 0x5400),
         'PokeBallEffect': (0x03, 0x5500), 'TossItem': (0, 0x2F66), 'WaitSFX': (0, 0x3C55),
-        'ConvertCurItemIntoCurTMHM': (0, 0x2F20)}
+        'ConvertCurItemIntoCurTMHM': (0, 0x2F20), 'Script_takemoney': (0x25, 0x5600),
+        'GetMoneyAccount': (0x25, 0x5700), 'LoadMoneyAmountToMem': (0x25, 0x5710), 'TakeMoney': (0x05, 0x6250),
+        'CheckPartyFullAfterContest': (0x13, 0x5800)}
 POKE_BALL, POTION, BICYCLE, TM01, HM01 = 5, 18, 7, 191, 243
 
 
@@ -70,6 +73,9 @@ def cartridge():
                       0x21, *word(WRAM['wTMsHMs']), 0x06, 0x00, 0x4F, 0x09, 0x7E, 0xA7, 0xC8, 0x3D, 0x77])
     put('PokeBallEffect', [0x21, *word(WRAM['wNumItems']), 0x3C, 0xEA, *word(WRAM['wItemQuantityChange']),
                            0xC3, *word(CODE['TossItem'][1])], offset=0x80)
+    put('Script_takemoney', [0xCD, *word(CODE['GetMoneyAccount'][1]), 0xCD, *word(CODE['LoadMoneyAmountToMem'][1]),
+                             0x3E, CODE['TakeMoney'][0], 0x21, *word(CODE['TakeMoney'][1]), 0xCF])
+    put('CheckPartyFullAfterContest', [0xFA, *word(WRAM['wContestMonSpecies']), 0xA7, 0xCA])
     return ram
 
 
@@ -99,11 +105,12 @@ def counts(store, kind):
     return dict(store.db.execute('SELECT subject, total FROM activity_counts WHERE kind=?', (kind,)).fetchall())
 
 
-def test_hooks_sit_at_the_six_checked_sites():
+def test_hooks_sit_at_the_seven_checked_sites():
     rows = activity.hooks(cartridge(), fake_data())
-    assert [kind for kind, _, _ in rows] == ['wild', 'trainer', 'defeated', 'used', 'used', 'used']
+    assert [kind for kind, _, _ in rows] == ['wild', 'trainer', 'defeated', 'used', 'used', 'used', 'vended']
     assert (0x03, 0x5400 + 17) in [(bank, address) for _, bank, address in rows]
     assert (0x03, 0x5580) in [(bank, address) for _, bank, address in rows]
+    assert ('vended', 0x25, 0x5600) in rows
 
 
 def test_a_cartridge_with_other_code_counts_nothing_and_still_plays(tmp_path):
@@ -161,6 +168,76 @@ def test_used_items_count_consumables_only_and_purchases_count_the_quantity(ledg
     ledger.tracker.bought(pb)
     ledger.tracker.bought(pb)
     assert counts(ledger.store, 'bought') == {POTION: 3}
+
+
+def charge(ram, script):
+    """Place a map script at 0x6000, run up to its last command, takemoney, as Script_takemoney sees it."""
+    ram.raw[0x6000:0x6000 + len(script)] = bytes(script)
+    ram.put('wScriptBank', 0x15)
+    # takemoney is the last five bytes, and the engine has read its command byte.
+    ram.put('wScriptPos', *word(0x6000 + len(script) - 4))
+
+
+def takemoney(account=0):
+    return [0x23, account, 0x00, 0x00, 0x02]
+
+
+def test_script_sales_count_as_purchases_and_other_payments_do_not(ledger):
+    ram, pb = ledger.pb.memory, ledger.pb
+    # The last battle's type stays in RAM out on the map and does not stop a sale.
+    ram.put('wBattleType', 3)
+    no_space = [0x08, 0x34, 0x12]
+    # A drink machine or Moomoo Milk: giveitem / iffalse .NoSpace / takemoney YOUR_MONEY.
+    charge(ram, [0x1F, POTION, 1, *no_space, *takemoney()])
+    pb.run('Script_takemoney')
+    pb.run('Script_takemoney')  # a reload replays the same sale
+    # The RageCandyBar seller in Gold and Silver: waitsfx and playsound SFX_TRANSACTION before paying.
+    charge(ram, [0x1F, POTION, 1, *no_space, 0x85, 0x84, 0x22, 0x00, *takemoney()])
+    pb.run('Script_takemoney')
+    # The item can come from wCurItem.
+    ram.put('wCurItem', TM01)
+    charge(ram, [0x1F, 0xFF, 2, *no_space, *takemoney()])
+    pb.run('Script_takemoney')
+    assert counts(ledger.store, 'bought') == {POTION: 2, TM01: 2}
+    # A haircut or the Route 43 toll charges for no item, and a sale from another account is not one.
+    for script in ([0x22, 0x00, 0x00, 0x05, 0x00, 0x06, 0x02, 0x34, 0x12, *takemoney()],
+                   [0x1F, POTION, 1, *no_space, 0x84, 0x84, 0x22, 0x00, *takemoney()],
+                   [0x1F, POTION, 1, *no_space, *takemoney(account=1)]):
+        charge(ram, script)
+        pb.run('Script_takemoney')
+    assert counts(ledger.store, 'bought') == {POTION: 2, TM01: 2}
+
+
+def test_the_contest_pokemon_kept_counts_as_caught_once_beside_other_catches(tmp_path):
+    from pokesim.gen2.tracking import CAPTURES, Tracker, contest_keep_hook
+    store, data, pb = Store(tmp_path), fake_data(), Emulator()
+    activity.start(store, fresh=True)
+    tracker = Tracker(store, data, fresh=True)
+    assert contest_keep_hook(pb.memory, data) == CODE['CheckPartyFullAfterContest']
+    pb.hook_register(*contest_keep_hook(pb.memory, data), tracker.contest_kept, pb)
+    ram = pb.memory
+    pb.run('CheckPartyFullAfterContest')  # the player caught nothing
+    # A contest catch is not a capture until the contest ends with it.
+    for name, value in (('wWildMon', 123), ('wBattleMode', 1), ('wBattleType', 6)):
+        ram.put(name, value)
+    tracker.captured(pb)
+    ram.put('wContestMonSpecies', 123)
+    pb.run('CheckPartyFullAfterContest')
+    pb.run('CheckPartyFullAfterContest')  # a reload replays the same moment
+    assert counts(store, 'caught') == {123: 1}
+    assert (store.get(CAPTURES)['counts'], store.get(CAPTURES)['total']) == ({'123': 1}, 1)
+    # An adventure that starts counting later counts it from its receipt, once.
+    later = Store(tmp_path / 'later')
+    with later.lock, later.db:
+        later.db.execute('CREATE TABLE capture_receipts '
+                         '(fingerprint TEXT PRIMARY KEY, dex INTEGER NOT NULL, recorded_at REAL NOT NULL)')
+        later.db.executemany('INSERT INTO capture_receipts VALUES (?,?,?)',
+                             store.db.execute('SELECT * FROM capture_receipts').fetchall())
+    activity.start(later, fresh=False)
+    assert counts(later, 'caught') == {123: 1}
+    ram.raw[CODE['CheckPartyFullAfterContest'][1]] = 0
+    with pytest.raises(ValueError):
+        contest_keep_hook(ram, data)
 
 
 def test_store_stock_reports_every_landed_purchase(real_data, monkeypatch):
@@ -282,7 +359,7 @@ def test_real_cartridges_take_every_hook_beside_the_others(real_data, tmp_path):
     pb = boot(io.BytesIO((Path(directory) / (real_data.game + '.gbc')).read_bytes()), sound=False)
     try:
         store = Store(tmp_path)
-        assert len(activity.hooks(pb.memory, real_data)) == 6
+        assert len(activity.hooks(pb.memory, real_data)) == 7
         # In the emulator's own order. A placed hook changes the code it sits on, so a later
         # signature that overlapped it would fail here, as would a second hook at one address.
         Tracker(store, real_data, fresh=True).attach(pb)
@@ -293,3 +370,113 @@ def test_real_cartridges_take_every_hook_beside_the_others(real_data, tmp_path):
         assert store.get(KEY)['available'] is True and store.get(KEY)['started_at']
     finally:
         pb.stop(save=False)
+
+
+def test_a_bargain_shop_purchase_counts_through_the_buy_menu_hook(real_data, tmp_path):
+    from test_gen2_shiny import Ram as Bus
+    from pokesim.gen2.store_stock import StoreStock
+    store, ram = Store(tmp_path), Bus(real_data)
+    activity.start(store, True)
+    ledger = activity.Ledger(store, real_data, fresh=True)
+    stock = StoreStock(real_data, on_bought=ledger.bought)
+    # BargainShop opens the same BuyMenu, so its purchases land at the same hook as a mart's.
+    bank, address = real_data.symbols['BargainShopData']
+    ram.put('wMartPointerBank', bank)
+    ram.put('wMartPointer', bytes(word(address)))
+    nugget = real_data.items['NUGGET']
+    ram.put('wCurItem', nugget)
+    ram.put('wItemQuantityChange', 1)
+    pb = SimpleNamespace(memory=ram)
+    stock.bought(pb)
+    stock.bought(pb)
+    assert stock.mart(pb) is None and counts(store, 'bought') == {nugget: 1}
+
+
+def release_session(store, data):
+    """Verify, stage and release a two-trade cable session through the code a real one runs."""
+    from test_gen2_shiny import PLAIN, hexed, receiving, struct
+    from test_managed_participant import committed
+    from pokesim.gen2.manual_session import verify_parties
+    from pokesim.runtime.participant import PREFIX, Participant
+    name, mine, theirs = (bytes.fromhex(code + '5050505050505050') for code in ('808182', '808182', '909192'))
+
+    def row(species, trainer):
+        return {'struct': struct(species, PLAIN), 'nickname': name, 'trainer': trainer}
+    left, right = [row(1, mine), row(4, mine), row(7, mine)], [row(152, theirs), row(155, theirs), row(158, theirs)]
+    # Two trades: Charmander for Chikorita, then Squirtle for Cyndaquil.
+    after = ([left[0], right[0], right[1]], [left[1], left[2], right[2]])
+    evidence = verify_parties((left, right), after, (2, 2))
+    record = committed(store)
+    record.update(cartridge_generation=2, session=True)
+    receiving(data).incoming_record(record, {'result': {'party_before': [hexed(item) for item in left],
+                                                        'party_after': [hexed(item) for item in after[0]]}})
+    record['staged']['evidence'] = evidence[0]
+    record['phase'] = 'applied'
+    store.set(PREFIX + record['id'], record)
+    participant = Participant(SimpleNamespace(store=store, emulator=None), SimpleNamespace())
+    participant.emu = SimpleNamespace(paused=True, policy=SimpleNamespace(on_restore=lambda: None), stuck_since=0)
+    participant.release({'id': record['id']})
+    participant.release({'id': record['id']})
+
+
+def test_every_pokemon_a_cable_session_trades_is_counted_once(real_data, tmp_path):
+    store = Store(tmp_path)
+    activity.start(store, True)
+    release_session(store, real_data)
+    assert counts(store, 'traded_out') == {4: 1, 7: 1} and counts(store, 'traded_in') == {152: 1, 155: 1}
+    # The backfill of released history finds the same receipts and counts nothing twice.
+    with store.lock, store.db:
+        assert trade_statistics._history(store.db) == 0
+    assert counts(store, 'traded_out') == {4: 1, 7: 1} and counts(store, 'traded_in') == {152: 1, 155: 1}
+
+
+class CartridgeBus:
+    """Cartridge ROM banks, with a flat RAM for the script engine's own bytes."""
+    def __init__(self, rom, data):
+        from test_gen2_shiny import Ram as Bus
+        self.rom, self.ram = rom, Bus(data)
+
+    def __getitem__(self, key):
+        bank, where = key
+        if where.start >= 0x8000:
+            return self.ram[key]
+        start = (bank * 0x4000 + where.start - 0x4000) if where.start >= 0x4000 else where.start
+        return self.rom[start:start + where.stop - where.start]
+
+
+def sales(bus, data, label, span=0xC0):
+    """What activity.vended reads at each ``takemoney YOUR_MONEY`` in the script at label."""
+    from pokecore.gen2.ram import Memory
+    bank, start = data.symbols[label]
+    found = []
+    for position in range(start, start + span):
+        if bus[bank, position - 1:position + 1] == b'\x23\x00':
+            bus.ram.put('wScriptBank', bank)
+            bus.ram.put('wScriptPos', bytes(word(position)))
+            found.append(activity.vended(bus, Memory(bus, data)))
+    return found
+
+
+def test_the_cartridge_sale_scripts_read_as_purchases_and_the_other_payments_do_not(real_data):
+    from pokecore.gen2.hooks import mart_hooks
+    from pokesim.gen2.tracking import contest_keep_hook
+    directory = os.environ.get('GEN2_CARTRIDGE_DIR')
+    if not directory:
+        pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
+    bus = CartridgeBus((Path(directory) / (real_data.game + '.gbc')).read_bytes(), real_data)
+    items = real_data.items
+    drinks = [(items[name], 1) for name in ('FRESH_WATER', 'SODA_POP', 'LEMONADE')]
+    for label, sold in (('GoldenrodVendingMachine', drinks), ('CeladonDeptStore6FVendingMachine', drinks),
+                        ('FarmerMScript_SellMilk', [(items['MOOMOO_MILK'], 1)]),
+                        ('MahoganyTownPokefanMScript', [(items['RAGECANDYBAR'], 1)])):
+        assert [sale for sale in sales(bus, real_data, label) if sale] == sold, label
+    for label in ('OlderHaircutBrotherScript', 'YoungerHaircutBrotherScript', 'RocketScript_TollSouth',
+                  'RocketScript_TollNorth'):
+        charges = sales(bus, real_data, label)
+        assert charges and not any(charges), label
+    # BargainShop calls BuyMenu, whose loop holds the hook that counts every BUY menu purchase.
+    bank, address = real_data.symbols['BargainShop']
+    assert b'\xcd' + bytes(word(real_data.symbols['BuyMenu'][1])) in bus[bank, address:address + 0x20]
+    hook = mart_hooks(bus, real_data)['bought']
+    assert hook[0] == real_data.symbols['BuyMenuLoop'][0] and 0 < hook[1] - real_data.symbols['BuyMenuLoop'][1] < 160
+    assert contest_keep_hook(bus, real_data) == tuple(real_data.symbols['CheckPartyFullAfterContest'])

@@ -238,3 +238,33 @@ def test_both_generations_fill_the_same_user_visible_fields(tmp_path, gen2_data)
     found = [(path, lacking) for path, lacking in gaps(gen1, gen2, '') if not allowed(path.lstrip('.'))]
     assert not found,'Fields one generation fills and the other leaves out:\n' + '\n'.join(
         f'  {path.lstrip(".")}: missing on {lacking}' for path, lacking in found)
+
+
+def test_gen2_sales_contest_catches_and_session_trades_reach_the_pages(tmp_path, gen2_data):
+    """A vending machine sale, a kept contest Pokémon and a two-trade cable session, each through its
+    own hook, fill Purchased, Caught and both trade counts, and Caught agrees with Total caught."""
+    from test_gen2_activity import release_session
+    from test_gen2_shiny import Ram
+    from pokesim.gen2 import activity
+    from pokesim.gen2.tracking import Tracker
+    gold, store = gen2_adventure(tmp_path, gen2_data)
+    try:
+        ram, water = Ram(gen2_data), gen2_data.items['FRESH_WATER']
+        pb = SimpleNamespace(memory=ram)
+        # giveitem FRESH_WATER / iffalse .NotEnoughSpace / takemoney YOUR_MONEY, 200, at 0x6000.
+        ram.raw[0x6000:0x600B] = bytes((0x1F, water, 1, 0x08, 0x34, 0x12, 0x23, 0x00, 0xC8, 0x00, 0x00))
+        ram.put('wScriptBank', 0x15)
+        ram.put('wScriptPos', b'\x07\x60')
+        activity.Ledger(store, gen2_data, fresh=True).completed(('vended', pb))
+        ram.put('wContestMonSpecies', 123)
+        Tracker(store, gen2_data, fresh=True).contest_kept(pb)
+        release_session(store, gen2_data)
+        pages = payloads(gold, store)
+    finally:
+        store.close()
+    pokemon = {row['id']: row for row in pages['activity']['pokemon']}
+    items = {row['id']: row for row in pages['activity']['items']}
+    assert items[water]['bought'] == 1 and pokemon[123]['caught'] == 1
+    assert (pokemon[4]['traded_out'], pokemon[7]['traded_out'], pokemon[152]['traded_in'], pokemon[155]['traded_in']) == (1, 1, 1, 1)
+    catches = pages['statistics']['collection_records']['catches']
+    assert catches['total'] == sum(row['caught'] for row in pokemon.values()) == 1

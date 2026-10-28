@@ -55,11 +55,19 @@ def sent_species(raw):
     return outgoing[1] if outgoing else None
 
 
-def _managed(db, identity, raw, received):
+def _managed(db, identity, raw, received, sent_list=None, received_list=None):
     outgoing = _outgoing(raw)
     if not isinstance(identity, str) or outgoing is None:
         return False
-    return record(db, 'managed:' + identity, outgoing[1], received, generation=outgoing[0])
+    counted = record(db, 'managed:' + identity, outgoing[1], received, generation=outgoing[0])
+    # A Gold, Silver or Crystal cable session can exchange several Pokémon. The first pair is
+    # the one above, and each later pair has its own receipt.
+    if counted and outgoing[0] == 2 and isinstance(sent_list, list) and isinstance(received_list, list):
+        for index in range(1, min(len(sent_list), len(received_list))):
+            row = received_list[index]
+            record(db, f'managed:{identity}:{index}', sent_list[index],
+                   row.get('species') if isinstance(row, dict) else None, generation=2)
+    return counted
 
 
 def managed(db, receipt):
@@ -68,9 +76,18 @@ def managed(db, receipt):
     outgoing = receipt.get('outgoing')
     staged = receipt.get('staged')
     evidence = staged.get('evidence') if isinstance(staged, dict) else None
+    evidence = evidence if isinstance(evidence, dict) else {}
     # The incoming struct describes the offered Pokémon before trade evolution.
-    received = evidence.get('received_species') if isinstance(evidence, dict) else None
-    _managed(db, receipt.get('id'), outgoing.get('struct') if isinstance(outgoing, dict) else None, received)
+    _managed(db, receipt.get('id'), outgoing.get('struct') if isinstance(outgoing, dict) else None,
+             evidence.get('received_species'), evidence.get('sent_species'), evidence.get('received'))
+
+
+def _array(value):
+    """A JSON array json_extract returned as text, or None."""
+    try:
+        return json.loads(value) if isinstance(value, str) else None
+    except ValueError:
+        return None
 
 
 def _history(db):
@@ -78,12 +95,13 @@ def _history(db):
     missing = 0
     # Extract only the verified species and identity. Historical rows can contain
     # large policy snapshots, which must not be loaded to recover these counts.
-    for identity, raw, received in db.execute(
+    for identity, raw, received, sent_list, received_list in db.execute(
             "SELECT json_extract(v, '$.id'), json_extract(v, '$.outgoing.struct'), "
-            "json_extract(v, '$.staged.evidence.received_species') FROM kv "
+            "json_extract(v, '$.staged.evidence.received_species'), json_extract(v, '$.staged.evidence.sent_species'), "
+            "json_extract(v, '$.staged.evidence.received') FROM kv "
             "WHERE k LIKE 'managed_interaction:%' AND json_extract(v, '$.decision')='COMMIT' "
             "AND json_extract(v, '$.phase')='released'").fetchall():
-        if not _managed(db, identity, raw, received):
+        if not _managed(db, identity, raw, received, _array(sent_list), _array(received_list)):
             missing += 1
     if db.execute("SELECT 1 FROM sqlite_master WHERE name='completed_trades'").fetchone():
         missing += db.execute('SELECT COUNT(*) FROM completed_trades').fetchone()[0]
