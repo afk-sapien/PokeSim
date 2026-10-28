@@ -1,8 +1,17 @@
 """A full Gen II items pocket gets a spare entry put away, so a held item can come back to the bag."""
 from types import SimpleNamespace
 
-from pokesim.gen2 import training
+from pokesim.gen2 import ledger, training
 from pokesim.gen2.menus import PutAway, Toss
+from pokesim.planning.ledger import Shortfall
+
+
+def spare_item(d, view):
+    """The entry the ledger puts away first to free one items-pocket entry, or None."""
+    books = ledger.ledger(d)
+    books.snapshot(view, kinds=('items',))
+    plan = books.make_room(Shortfall('collection_tidy', {'items': 1}))
+    return plan[0].detail if plan else None
 
 ITEMS = {'EXP_SHARE': 57, 'POTION': 18, 'BERRY': 173, 'LUCKY_PUNCH': 30, 'NUGGET': 15, 'DRAGON_SCALE': 151,
          'PEARL': 110, 'FIRE_STONE': 22}
@@ -33,18 +42,18 @@ def test_the_cheapest_entry_no_plan_uses_is_put_away():
         d.item_attributes[item] = {'price': 99999, 'pocket': 'ITEM'}
     view = snapshot(bag((18, 5), (151, 1), (22, 1), (173, 16), (30, 1), (15, 1)))
     # Medicine, evolution items and the share stay. Of the rest, Lucky Punch is worth least in total.
-    assert training.spare_item(d, view) == 30
+    assert spare_item(d, view) == 30
     view = snapshot(bag((18, 5), (151, 1), (22, 1), (15, 1)))
     # A Nugget sells when money runs out, so even a pricier idle item goes first.
-    assert training.spare_item(d, view) == 200
+    assert spare_item(d, view) == 200
     view = snapshot(bag((18, 5), (15, 1), (110, 1), filler=False))
     # Among valuables the cheapest goes.
-    assert training.spare_item(d, view) == 110
+    assert spare_item(d, view) == 110
 
 
 def test_a_bag_of_kept_items_has_nothing_to_put_away():
     view = snapshot(bag((57, 1), (18, 5), (151, 1), (22, 1), filler=False))
-    assert training.spare_item(data(), view) is None
+    assert spare_item(data(), view) is None
 
 
 class Policy:
@@ -69,12 +78,12 @@ def test_a_full_bag_walks_to_the_pc_before_the_swap():
     view = snapshot(bag((110, 1), (173, 16), (30, 1)))
     for item in range(200, 220):
         policy.data.item_attributes[item] = {'price': 99999, 'pocket': 'ITEM'}
-    goal = training.room_goal(policy, view, Goal, 22)
+    goal = ledger.tidy_goal(policy, view, Goal, 22)
     assert goal.key == 'collection_tidy' and goal.label == 'Store Lucky Punch in the PC to make room'
     assert policy.collection['tidy_item'] == 30
     # A Pearl already in the bag stacks, so it needs no free entry.
     policy.collection.clear()
-    assert training.room_goal(policy, view, Goal, 110) is None and policy.collection == {}
+    assert ledger.tidy_goal(policy, view, Goal, 110) is None and policy.collection == {}
 
 
 def test_the_spare_goes_to_the_pc_or_the_bin_when_the_pc_refuses():

@@ -14,7 +14,7 @@
 
 - Stop Red, Blue and Yellow jumping a ledge on a short detour from the route. On Route 22 a detour over a ledge sent the League return around the whole route, again and again, until the rematch gave up and the adventure waited for its next try.
 
-- Add one resource ledger for bag entries, box and party slots and money in all six games. It reads the same bag the item and fund checks read and logs where it would pick a different item. Nothing it reads changes what the run does yet. Later changes move the separate bag, box and money rules onto it.
+- Add one resource ledger for bag entries, box and party slots and money in all six games. Gold, Silver and Crystal now use it to pick the item put in the PC when a held item has no free bag entry to come back to, with the same choice as before. Red, Blue and Yellow read it beside the fund check and log where it would sell a different item. Later changes move the separate bag, box and money rules onto it.
 
 - Give Gold, Silver and Crystal the journal entries Red, Blue and Yellow already write. The journal now lists first sightings, faints, blackouts, trainer wins, key items and HMs, money and play time milestones and the rival's name, so the Elite Four, trainer, exploration and blackout notifications now fire for these games too. A wild Raikou, Entei, Suicune, Lugia, Ho-Oh or Celebi caught in battle now reads "Caught the legendary Suicune!" and goes out as a Legendary Pokémon notification. Faints, sightings and other timeline-only entries keep a picture but no save, and they do not count as progress for the stall watch.
 

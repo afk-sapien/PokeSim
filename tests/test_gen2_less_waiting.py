@@ -305,8 +305,10 @@ def pc_goal(snapshot):
 
 def kept_bag(data, *, share=True):
     """An items pocket with every entry taken by items some plan uses, so none can be put away."""
-    from pokesim.gen2.training import KEPT_ITEMS
-    rows = [(data.items[name], 1) for name in sorted(KEPT_ITEMS - {'EXP_SHARE'}) if name in data.items]
+    from pokesim.gen2.ledger import WANTS
+    names = {name for row in WANTS.values() for name in row} - {'EXP_SHARE'}
+    rows = [(data.items[name], 1) for name in sorted(names) if name in data.items
+            and data.item_attributes[data.items[name]]['pocket'] == 'ITEM']
     rows += [(data.items[name], 1) for name in ('FIRE_STONE', 'WATER_STONE', 'THUNDERSTONE', 'LEAF_STONE')]
     return ([(data.items['EXP_SHARE'], 1)] if share else []) + rows[:20 - share]
 
