@@ -146,3 +146,14 @@ def test_strategic_opening_receives_pikachu_without_reloads():
     assert game['player_name'] in TRAINER_NAMES and game['rival_name'] in TRAINER_NAMES
     assert [mon['species'] for mon in game['party']] == [0x54]   # Pikachu
     assert game['party'][0]['nick'] in POKEMON_NAMES
+
+
+def test_a_headless_run_refuses_a_cartridge_the_loaded_game_data_does_not_match():
+    """Yellow replayed under Red data read menus at Red's addresses, so each battle shortcut timed out."""
+    from pokesim.headless import HeadlessRun
+    from pokesim.policies.progression import YELLOW
+    rom, variant = (RED_ROM, 'red') if YELLOW else (YELLOW_ROM, 'yellow')
+    if not rom.exists():
+        pytest.skip('no ROM')
+    with pytest.raises(ValueError, match=f'POKESIM_GEN1_VARIANT={variant}'):
+        HeadlessRun(rom)

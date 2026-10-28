@@ -16,7 +16,9 @@ from .yellow import YELLOW_SHA1, open_emulator
 
 from .checkpoints import CheckpointStore
 from .events import RunMemory
+from .game_data import VARIANT_ENV
 from .policies.base import BUTTONS, PolicyContext, stack_pointer
+from .policies.progression import YELLOW
 from .policies.strategic import StrategicPolicy
 from .screen import W_OPTIONS
 
@@ -28,6 +30,11 @@ class HeadlessRun:
 
     def __init__(self, rom, checkpoint=None, seed=7, rng=None, reseed=False):
         self.rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
+        # The policy reads its game data once at import, from POKESIM_GEN1_VARIANT. Yellow under
+        # Red data reads menus at Red's addresses, so every battle shortcut times out.
+        if (self.rom_sha1 == YELLOW_SHA1) != YELLOW:
+            variant = 'yellow' if self.rom_sha1 == YELLOW_SHA1 else 'red'
+            raise ValueError(f'This cartridge needs {VARIANT_ENV}={variant} before pokesim is imported')
         self.pb = open_emulator(str(rom), default=CoreEmulator, window='null', sound_emulated=False)
         self.pb.set_emulation_speed(0)
         self.policy = StrategicPolicy(seed)
