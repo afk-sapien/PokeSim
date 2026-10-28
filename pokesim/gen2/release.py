@@ -21,8 +21,6 @@ from ..investment import rare_find
 from ..trade.preferences import identity, signature
 
 BOX_CAPACITY = 20
-# Free slots kept available across all boxes, so catching never stalls.
-RELEASE_BUFFER = 5
 # Stat experience at which a boxed partner counts as trained, as the trade broker keeps it.
 TRAINED_STAT_EXP = 20000
 UNOWN = 201

@@ -638,20 +638,28 @@ class Policy:
         # The Master Ball stays reserved for legendaries, and a battle without a ball only knocks it out.
         return False if any(item != master and count for item, count in snapshot.pockets['balls']) else None
 
-    def release_target(self, snapshot):
-        """The spare duplicate to release next, or None. Kept until storage or the plans change."""
-        from .release import plan_partners, target
+    def storage_units(self, snapshot):
+        """The ledger's next box unit and the next one that can go straight from the box. Kept until
+        storage or the plans change."""
+        from .ledger import storage_unit
+        from .release import plan_partners
         partners = plan_partners(self.collection)
-        key = (snapshot.party, snapshot.stored, snapshot.active_box, tuple(sorted(self.demand.items())),
-               tuple(self.collection.get('prerequisites', ())), tuple(sorted(map(str, partners))),
-               self.decisions // 600)
+        key = (snapshot.party, snapshot.stored, snapshot.active_box, snapshot.pockets.get('items', ()),
+               tuple(sorted(self.demand.items())), tuple(self.collection.get('prerequisites', ())),
+               tuple(sorted(map(str, partners))), self.decisions // 600)
         if self.release_cache[0] != key:
-            from pokecore.gen2.breeding import breeding_stock
-            keep = breeding_stock(self.data, [mon.species for mon in snapshot.party + snapshot.stored if not mon.egg])
-            mon = target(snapshot, self.demand, keep, self.trade_preferences(), partners,
-                         allowed=lambda mon: self.allowed(Release(mon.box, mon.position), snapshot))
-            self.release_cache = (key, mon)
+            self.release_cache = (key, (storage_unit(self, snapshot), storage_unit(self, snapshot, direct=True)))
         return self.release_cache[1]
+
+    def release_target(self, snapshot):
+        """The spare duplicate to release next straight from the box, or None."""
+        unit = self.storage_units(snapshot)[1]
+        return unit.detail if unit else None
+
+    def storage_target(self, snapshot):
+        """The ledger's next box unit: a spare to release, or one whose item comes off first. None when
+        nothing can free a slot."""
+        return self.storage_units(snapshot)[0]
 
     def trade_spare(self, snapshot, protect=(), wished=()):
         """The spare to release so a trade can be prepared with every box full, or None.
@@ -723,21 +731,24 @@ class Policy:
     def no_room(self, snapshot):
         """Every box is full and nothing can be released, so a catch has nowhere to go."""
         return (not snapshot.can_catch and all(count >= 20 for count in snapshot.box_counts)
-                and self.release_target(snapshot) is None)
+                and self.storage_target(snapshot) is None)
 
-    def release_goal(self, snapshot, mem):
-        """Visit a PC to let a spare duplicate go while fewer than RELEASE_BUFFER box slots are free.
+    def release_goal(self, snapshot, mem, releasing=False):
+        """Visit a PC to let spare duplicates go while the ledger wants box slots freed.
 
         Without this a full PC leaves every catch, one-time encounter and field-move errand
-        walking to a PC that has nowhere to put anything.
+        walking to a PC that has nowhere to put anything. A visit under way (``releasing``) frees
+        slots up to the refill mark.
         """
-        from .release import RELEASE_BUFFER, headroom
-        if (headroom(snapshot) >= RELEASE_BUFFER or self.in_league(snapshot) or self.in_transmitter_room(snapshot)
+        from ..planning.ledger import box_wanted
+        from .release import headroom
+        # A spare whose item is coming off keeps the visit going until it is gone, even past the refill mark.
+        unequipping = bool(self.collection.get('unequip'))
+        if (not (box_wanted(headroom(snapshot), releasing) or unequipping) or self.in_league(snapshot) or self.in_transmitter_room(snapshot)
                 or snapshot.map == self.data.map_ids['POKECENTER_2F'] or self.collection.get('time_capsule_restore')
                 or self.collection.get('tower') or mem.byte('wStatusFlags2') & 4):
             return None
-        mon = self.release_target(snapshot)
-        if mon is None:
+        if self.storage_target(snapshot) is None and not unequipping:
             return None
         goal = self.storage_goal(snapshot)
         if goal.key != 'storage':
@@ -1106,11 +1117,12 @@ class Policy:
         self.nav.observe(snapshot)
         if self.resetting_puzzle is not None and self.resetting_puzzle != snapshot.map:
             self.resetting_puzzle = None
+        releasing = self.goal is not None and self.goal.key == 'collection_release'
         if self.goal is not None and self.battle_starting(mem):
             journey_goal = self.goal
         else:
             self.goal = journey_goal = self.journey(snapshot, mem)
-        release = self.release_goal(snapshot, mem)
+        release = self.release_goal(snapshot, mem, releasing)
         if release:
             self.goal = journey_goal = release
         if isinstance(self.menu, Storage) and (self.menu.box_full or 'BOX is full' in snapshot.text):

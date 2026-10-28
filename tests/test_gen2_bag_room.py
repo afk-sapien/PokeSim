@@ -33,7 +33,7 @@ def bag(*rows, filler=True):
 
 
 def snapshot(pockets):
-    return SimpleNamespace(pockets=pockets, items=pockets['items'], party=(), stored=())
+    return SimpleNamespace(pockets=pockets, items=pockets['items'], party=(), stored=(), box_counts=(), money=0)
 
 
 def test_the_cheapest_entry_no_plan_uses_is_put_away():

@@ -116,6 +116,18 @@ def test_pickup_time_does_not_consume_the_main_project_budget():
     assert c.remaining == 880
 
 
+def test_a_release_visit_does_not_consume_the_main_project_budget():
+    from types import SimpleNamespace
+    p = StrategicPolicy(1)
+    p.goal = Goal('party_release', 'Make room in storage', 'Let a spare go')
+    p.collection.observe = Mock(side_effect=StopIteration)
+    try:
+        p.step(SimpleNamespace(snapshot=cave(), mem=bytearray(0x10000)))
+    except StopIteration:
+        pass
+    assert p.collection.observe.call_args.kwargs['suspended']
+
+
 def test_legacy_saves_load_without_pickup_state():
     p = StrategicPolicy(1)
     p.load_state_dict({'version': 1})

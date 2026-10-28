@@ -471,6 +471,11 @@ class Take(CoreTask):
         mon = tracked(self, snapshot)
         return mon is None or not mon.held_item
 
+    def approach(self, screen):
+        # A spare just withdrawn leaves the PC's closing text up, and the machine only starts from
+        # the overworld.
+        return 'b' if screen == 'dialogue' else super().approach(screen)
+
     def build(self, snapshot):
         return TakeItem(self.slot, **self.options(snapshot))
 

@@ -2,7 +2,7 @@
 from collections import Counter
 
 from ..planning.ledger import FIELD_MOVES
-from .menus import ChangeBox, FieldMove, Release, Storage, Teach, Use
+from .menus import ChangeBox, FieldMove, Storage, Teach, Use
 from .navigation import DIRS
 from pokecore.gen2.ram import Memory
 from .standdown import (exhausted, forget, hunt_key, search_expected, spend, stand_down, standing_down)
@@ -887,12 +887,8 @@ def arrive(policy, snapshot):
     if key == 'collection_peer_store':
         return peer_store_arrive(policy, snapshot)
     if key == 'collection_release':
-        mon = policy.release_target(snapshot)
-        if mon is None:
-            return 'wait'
-        policy.menu = (ChangeBox(mon.box) if mon.box != snapshot.active_box
-                       else Release(mon.box, mon.position, [mon.species, mon.trainer_id, list(mon.dvs)]))
-        return 'a'
+        from .ledger import release_step
+        return release_step(policy, snapshot)
     if key == 'collection_box':
         box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)
         if box is not None:
