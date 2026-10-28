@@ -51,6 +51,23 @@ def test_start_line_and_ordered_checkpoints_are_required():
     assert not c.take_activity_events()
 
 
+def test_release_visit_frames_do_not_idle_out_the_marathon():
+    # A release visit suspends the marathon but it is still observed. A visit of over two minutes
+    # deferred it as idle once the PC list could reach every slot. Its race clock still runs.
+    kept = {}
+    for suspended in (True, False):
+        c = race()
+        c.observe(checkpoint(0, 0))
+        frame = 0
+        while frame < 9000 and c.project is not None:
+            frame += 120
+            c.observe(checkpoint(0, frame), suspended=suspended)
+        kept[suspended] = c.project is not None
+        if suspended:
+            assert c.project['race_frames'] == 9000
+    assert kept == {True: True, False: False}
+
+
 def test_finish_report_and_personal_best_are_saved_and_journaled(tmp_path):
     c = race()
     for index in range(len(marathon.COURSE)):
@@ -126,8 +143,10 @@ def test_restart_preserves_race_and_does_not_count_a_gap_or_repeat_start():
 def test_clock_includes_detours_but_stationary_runs_end_without_a_finish():
     c = race()
     c.observe(checkpoint(0))
-    for frame in range(120, 7320, 120):
-        c.observe(checkpoint(0, frame), suspended=True)
+    c.observe(checkpoint(0, 120), suspended=True)
+    assert c.project['race_frames'] == 120
+    for frame in range(240, 7440, 120):
+        c.observe(checkpoint(0, frame))
     assert c.project is None
     assert c.marathon_records['last']['finished'] is False
     assert 'best_frames' not in c.marathon_records
