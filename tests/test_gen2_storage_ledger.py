@@ -124,6 +124,25 @@ def test_unequip_walks_the_spare_through_the_party_and_back():
     assert 'unequip' not in policy.collection and policy.menu is None
 
 
+def test_a_release_visit_ends_at_the_refill_mark():
+    from pokesim.planning.ledger import BOX_REFILL
+    policy = Policy()
+    berry = mon(3, held_item=BERRY)
+    policy.storage_target = lambda view: ledger.storage_unit(policy, view)
+    full = snapshot([BEST, berry], PARTY)
+    assert ledger.release_step(policy, full) == 'a'
+    assert policy.collection['unequip'] == ledger.member(berry)
+    # With the refill mark reached, the spare under way still finishes but no new one starts.
+    roomy = snapshot([BEST, berry], PARTY)
+    roomy.box_counts = (BOX_CAPACITY - BOX_REFILL,) + (BOX_CAPACITY,) * 13
+    policy.menu = None
+    assert ledger.release_step(policy, roomy) == 'a' and policy.menu is not None
+    policy.collection.clear()
+    policy.menu = None
+    assert ledger.release_step(policy, roomy) == 'wait'
+    assert policy.menu is None and 'unequip' not in policy.collection
+
+
 def test_taking_an_item_closes_the_pc_text_left_by_the_withdrawal():
     take = Take(5, ledger.member(mon(3))[1:])
     assert take.approach('dialogue') == 'b'

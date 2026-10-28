@@ -188,6 +188,32 @@ def unequip_step(policy, snapshot):
     return 'a'
 
 
+def release_step(policy, snapshot):
+    """The next PC step of a release visit, or 'wait' when it has nothing more to do.
+
+    A spare whose item is coming off finishes first. After that the visit ends at the refill mark,
+    so it does not start another spare. Starting one each time an unequip ended kept a Crystal visit
+    releasing for 250,000 frames, to 34 free slots.
+    """
+    from ..planning.ledger import box_wanted
+    from .menus import ChangeBox
+    step = unequip_step(policy, snapshot)
+    if step is not None:
+        return step
+    if not box_wanted(headroom(snapshot), True):
+        return 'wait'
+    unit = policy.storage_target(snapshot)
+    if unit is None:
+        return 'wait'
+    mon = unit.detail
+    if unit.action == 'unequip':
+        policy.collection['unequip'] = member(mon)
+        return unequip_step(policy, snapshot) or 'wait'
+    policy.menu = (ChangeBox(mon.box) if mon.box != snapshot.active_box
+                   else Release(mon.box, mon.position, member(mon)))
+    return 'a'
+
+
 def storage_unit(policy, snapshot, direct=False):
     """The boxed spare to let go for one more box slot, or None.
 
