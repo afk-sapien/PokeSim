@@ -17,6 +17,8 @@ YELLOW = current_variant() == 'yellow'
 REFUSES_EVOLUTION = {25} if YELLOW else set()
 from .navigation import DIRS
 from .director import AdventureDirector
+from ..planning.conditions import Can, Count, Item, Requirements, feasible
+from ..planning.ledger import MONEY, Need
 from ..planning.monitor import CONTINUE, SPENT, ProgressEvent
 from . import training, marathon, league_rotation
 from ..shiny import is_shiny
@@ -116,6 +118,65 @@ def dex(sid):
 def storage_exchange_possible(s):
     """Taking a Pokemon out needs a free party slot, or somewhere to deposit a reserve first."""
     return len(s.party) < 6 or not s.box_full or s.next_free_box is not None
+
+
+CATCH_MODES = ('grass', 'surf', 'fish', 'safari', 'static')
+ANY_BALL = Count(tuple(ITEMS[n] for n in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL', 'MASTER_BALL')))
+# A repeat hunt for an owned species throws more than one ball, and the Master Ball is never one of them.
+HUNT_BALLS = Count(tuple(ITEMS[n] for n in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL')), 5)
+SAFARI_ENTRY = Need(money=800)
+
+
+class CollectionWorld:
+    """What a collection source asks of a Red, Blue or Yellow snapshot and the route planner."""
+
+    def __init__(self, snapshot, nav):
+        self.snapshot = snapshot
+        self.nav = nav
+        self.counts = dict(snapshot.items)
+
+    def has_item(self, item):
+        return bool(self.counts.get(item))
+
+    def item_count(self, item):
+        return self.counts.get(item, 0)
+
+    def has_badge(self, badge):
+        return bool(self.snapshot.badges & badge)
+
+    def event(self, flag):
+        return event_set(self.snapshot.event_flags, flag)
+
+    def reachable(self, place):
+        return True
+
+    def can(self, action):
+        if action == 'catch':
+            return self.snapshot.can_catch
+        if action == 'surf':
+            return self.nav.can_surf
+        if action == 'take':
+            return storage_exchange_possible(self.snapshot)
+        raise ValueError(f'unknown action {action}')
+
+
+def source_requires(source, owned):
+    """What a collection source needs before it is a candidate: room and a ball to catch, Surf for the
+    water, the rod for fishing, the Safari fee, room to take a gift or fossil, and five balls for a
+    repeat hunt of a species already owned."""
+    mode = source['method']
+    conditions = ()
+    if mode in CATCH_MODES:
+        conditions += (Can('catch'), ANY_BALL)
+    if mode == 'surf':
+        conditions += (Can('surf'),)
+    if mode == 'fish':
+        conditions += (Item(ITEMS[source['rod']]),)
+    if mode in ('gift', 'fossil'):
+        conditions += (Can('take'),)
+    if mode in REPEATABLE and mode != 'safari' and owned:
+        conditions += (HUNT_BALLS,)
+    return Requirements(conditions, SAFARI_ENTRY if mode == 'safari' else Need())
 
 
 def partner_exchange_possible(s):
@@ -737,6 +798,10 @@ class Collection:
             if tail is not None:
                 best_tails[mon['species']] = min(best_tails.get(mon['species'], 100), tail)
         searched = set()
+        world = CollectionWorld(s, nav)
+        from .ledger import ledger
+        books = ledger()
+        books.snapshot(s, kinds=(MONEY,))
         distance_to = nav.distance_lookup((s.map, s.x, s.y), s.frame)
         plateau_maps = {MAPS[n] for n in ('INDIGO_PLATEAU', 'INDIGO_PLATEAU_LOBBY',
                         'ROUTE_23', 'VICTORY_ROAD_1F', 'VICTORY_ROAD_2F', 'VICTORY_ROAD_3F')}
@@ -763,21 +828,13 @@ class Collection:
                 if not self.available(s,source):
                     continue
                 mode = source['method']
-                if mode in ('grass','surf','fish','safari','static') and (not s.can_catch or not any(bag.get(ITEMS[n]) for n in ('POKE_BALL','GREAT_BALL','ULTRA_BALL','MASTER_BALL'))):
-                    continue
-                if mode == 'surf' and not nav.can_surf:
-                    continue
-                if mode == 'fish' and not bag.get(ITEMS[source['rod']]):
-                    continue
-                if mode == 'safari' and s.money < 800:
+                if not feasible(source_requires(source, dex(sid) in s.owned), world, books, key='collection'):
                     continue
                 selected_dojo = getattr(self, 'returned_events', {}).get('dojo', {}).get('dex', self.dojo_choice)
                 if mode == 'gift' and dex(sid) in (106, 107) and dex(sid) != selected_dojo:
                     continue
                 offered = self.trade_candidate(s, source) if mode == 'trade' else None
                 if mode == 'trade' and offered is None:
-                    continue
-                if mode in ('gift','fossil') and len(s.party)>=6 and not storage_exchange_possible(s):
                     continue
                 if mode == 'grass' and source.get('level',100) > max(p.level for p in s.party)+3:
                     continue
@@ -796,9 +853,6 @@ class Collection:
                     project['needed_capture'] = (dex(sid) not in s.owned
                                                  or held_count(s, sid) < self.demand().get(dex(sid), 0))
                 if mode in REPEATABLE and dex(sid) in s.owned:
-                    normal_balls = sum(bag.get(ITEMS[n], 0) for n in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL'))
-                    if mode != 'safari' and normal_balls < 5:
-                        continue
                     project.update(repeat=True, initial_count=held_count(s, sid),
                                    catch_goal=1 if project['needed_capture'] else 3,
                                    dv_hunt=not project['needed_capture'],
