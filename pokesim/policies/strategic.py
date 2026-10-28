@@ -6,6 +6,7 @@ from pokecore.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositPokemon, 
                                     ReorderParty, RunAway, SellItem, SwitchPokemon, UseItem, WithdrawPokemon, item_kind)
 
 from .base import Action, Policy
+from ..planning.ledger import box_wanted
 from pokecore.textmatch import ScreenText
 from .battle import (BALLS, CURES, HEALING, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
                      healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
@@ -33,8 +34,6 @@ EXPLORATION_CHANCE = 0.12
 # A trip to buy a TM or Champion shop supplies is expected to take 20000 frames. It is dropped once it
 # spent three times that, counted only while the trip is under way, without the item.
 TM_TRIP_FRAMES = 20000
-
-RELEASE_BUFFER = 5      # free storage slots kept available, so catching never stalls
 
 W_WALK_COUNTER = 0xCFC5
 W_FACING = 0xC109
@@ -351,7 +350,9 @@ class StrategicPolicy(Policy):
             self.goal.key in FIELD_MOVE_GOALS and len(s.party) < 6
             and self.pc.field_move_box(s, self.goal.key) is not None
         )
-        release = self._release_target(s) if storage_headroom(s) < RELEASE_BUFFER else None
+        # A release visit under way keeps going to the refill mark, so the next catch does not send the
+        # run back to the PC for one more slot.
+        release = self._release_target(s) if box_wanted(storage_headroom(s), self.release_spare is not None) else None
         self.release_spare = release
         if release and not withdrawing_partner and s.map not in league_rooms:
             self.pc.species = None

@@ -28,6 +28,15 @@ PRICELESS = float('inf')
 FIELD_MOVES = frozenset({15, 19, 57, 70, 148, 250, 127})
 # A level-up move also leaves Headbutt and Rock Smash, which shake trees and break rocks.
 LEARN_KEPT = FIELD_MOVES | {29, 249}
+# Free box slots kept across all boxes, so catching never stalls. A release visit that starts below
+# BOX_RESERVE frees slots up to BOX_REFILL, so one catch after it does not send the run back to the PC.
+BOX_RESERVE = 5
+BOX_REFILL = 10
+
+
+def box_wanted(headroom, releasing):
+    """Box slots to free now: below the reserve a visit starts, and a visit under way fills to the refill mark."""
+    return max((BOX_REFILL if releasing else BOX_RESERVE) - headroom, 0)
 
 
 def _frozen(mapping):

@@ -306,6 +306,23 @@ def test_storage_buffer_sends_the_run_to_a_pc_to_free_slots():
     assert p2.release_spare is None
 
 
+def test_a_release_visit_frees_slots_to_the_refill_mark_in_one_go():
+    # Yellow released one spare per visit at exactly five free slots, so every catch sent it back.
+    from pokesim.planning.ledger import BOX_REFILL, BOX_RESERVE, box_wanted
+    assert box_wanted(BOX_RESERVE, False) == 0 and box_wanted(BOX_RESERVE - 1, False) == 1
+    assert box_wanted(BOX_RESERVE, True) == BOX_REFILL - BOX_RESERVE and box_wanted(BOX_REFILL, True) == 0
+    p = StrategicPolicy(7)
+    s = stuffed(textbox=True, box_counts=(20,) * 11 + (14,))
+    assert storage_headroom(s) == 6
+    p.observed_map = s.map
+    memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
+    p.step(PolicyContext(s, 0, 0, memory))
+    assert p.goal.key != 'party_release'
+    p.release_spare = release_target(s)
+    p.step(PolicyContext(s, 0, 0, memory))
+    assert p.goal.key == 'party_release'
+
+
 def test_release_menu_is_only_opened_for_the_release_goal():
     p = StrategicPolicy(7)
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))

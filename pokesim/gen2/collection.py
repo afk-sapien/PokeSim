@@ -887,11 +887,19 @@ def arrive(policy, snapshot):
     if key == 'collection_peer_store':
         return peer_store_arrive(policy, snapshot)
     if key == 'collection_release':
-        mon = policy.release_target(snapshot)
-        if mon is None:
+        from .ledger import member, unequip_step
+        step = unequip_step(policy, snapshot)
+        if step is not None:
+            return step
+        unit = policy.storage_target(snapshot)
+        if unit is None:
             return 'wait'
+        mon = unit.detail
+        if unit.action == 'unequip':
+            policy.collection['unequip'] = member(mon)
+            return unequip_step(policy, snapshot) or 'wait'
         policy.menu = (ChangeBox(mon.box) if mon.box != snapshot.active_box
-                       else Release(mon.box, mon.position, [mon.species, mon.trainer_id, list(mon.dvs)]))
+                       else Release(mon.box, mon.position, member(mon)))
         return 'a'
     if key == 'collection_box':
         box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)

@@ -31,7 +31,7 @@ def full(stored, party=None, active_box=0):
     party = party if party is not None else tuple(mon(9, box=None, position=None, trainer_id=slot, nick='TOTODILE')
                                                    for slot in range(6))
     return SimpleNamespace(party=tuple(party), stored=tuple(stored), active_box=active_box, box_counts=(20,) * 14,
-                           frame=100)
+                           frame=100, pockets={'items': ()}, money=0)
 
 
 def gold_like():
