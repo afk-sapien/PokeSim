@@ -1,4 +1,6 @@
 """Separate Stats pages keep large item and species lists usable on phones."""
+import re
+
 import pytest
 from test_flows import expect
 
@@ -73,4 +75,56 @@ def test_unavailable_activity_does_not_imply_zero_and_legacy_stats_redirects(pag
     page.get_by_role('navigation', name='Stats pages').get_by_role('link', name='Items', exact=True).click()
     expect(page.locator('#ledger-coverage')).to_contain_text('Action tracking begins')
     page.locator('#ledger-search').fill('#4')
-    expect(page.locator('#ledger-rows td').first).to_have_text('Not counted')
+    first = page.locator('#ledger-rows td').first
+    expect(first).to_have_text('Not tracked yet')
+    expect(first).to_have_attribute('title', re.compile('Gold, Silver, or Crystal'))
+
+
+def gen2_ledger(started_at, counting_since):
+    def row(id, name, **values):
+        return {'id': id, 'name': name, **values}
+    count = 0 if started_at else None
+    return {'started_at': started_at, 'counting_since': counting_since, 'available': True, 'generation': 2,
+            'trade_records': {'npc_since': started_at, 'missing_history': 0},
+            'captures_since': None, 'captures_available': bool(started_at), 'champion_shop': None,
+            # A Kanto number, so the Red test server has its sprite.
+            'pokemon': [row(25, 'Pikachu', wild=3 if started_at else None, trainer=count, defeated=count,
+                            caught=count, gift=count, traded_in=count, traded_out=count, held=1)],
+            'items': [row(18, 'Potion', bought=count, used=count, bag=2),
+                      row(7, 'Bicycle', bought=count, used=None, bag=1)]}
+
+
+@pytest.mark.parametrize('width', [320, 1280])
+def test_gen2_counts_say_since_when_and_why_a_cell_is_blank(page, game, width):
+    url, _, _, _ = game
+    since = 1_790_000_000
+    page.route('**/api/statistics/activity', lambda route: route.fulfill(json=gen2_ledger(since, since)))
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(url + '/stats/pokemon')
+    expect(page.locator('#ledger-coverage')).to_contain_text('Counting since')
+    expect(page.locator('#ledger-coverage')).to_contain_text('when this adventure was already under way')
+    expect(page.locator('#ledger-coverage')).to_contain_text('Trades include verified cable history')
+    head = page.locator('#ledger-head th')
+    expect(head.nth(1)).to_contain_text('Since')
+    expect(head.nth(8)).not_to_contain_text('Since')
+    wild = page.locator('#ledger-rows tr').first.locator('td').first
+    expect(wild).to_have_text('3')
+    expect(wild).to_have_attribute('title', re.compile('Earlier play is not included'))
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.goto(url + '/stats/items')
+    expect(page.locator('#ledger-help')).to_contain_text('bought at shop counters')
+    page.locator('#ledger-search').fill('Bicycle')
+    used = page.locator('#ledger-rows tr').first.locator('td').nth(1)
+    expect(used).to_have_text('Not counted')
+    expect(used).to_have_attribute('title', 'Reusable items are not used up, so uses are not counted.')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.screenshot(path=f'/tmp/pokesim-gen2-item-ledger-{width}.png')
+
+
+def test_gen2_adventure_that_has_not_run_since_tracking_began(page, game):
+    url, _, _, _ = game
+    page.route('**/api/statistics/activity', lambda route: route.fulfill(json=gen2_ledger(None, None)))
+    page.goto(url + '/stats/pokemon')
+    expect(page.locator('#ledger-coverage')).to_contain_text('Action tracking begins when this adventure next runs')
+    expect(page.locator('#ledger-head')).not_to_contain_text('Since')
+    expect(page.locator('#ledger-rows tr').first.locator('td').first).to_have_text('Not tracked yet')

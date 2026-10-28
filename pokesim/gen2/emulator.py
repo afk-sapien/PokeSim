@@ -257,6 +257,8 @@ class Emulator:
         self.last_achievement = next(iter(store.events(limit=1)), None)
         from .tracking import Tracker
         self.tracker = Tracker(store, self.data, fresh=not bool(store.autosaves()))
+        from .activity import Ledger
+        self.activity = Ledger(store, self.data, fresh=not bool(store.autosaves()))
         from .statistics import Statistics
         self.statistics = Statistics(store, clock=lambda: self.play_clock.status())
         from .legendary import Recovery
@@ -275,8 +277,9 @@ class Emulator:
         follow_game_time(pb)
         self._clock_live = False
         self.tracker.attach(pb)
+        self.activity.attach(pb)
         self.steps.attach(pb)
-        self.store_stock = StoreStock(self.data, champion=self._champion_catalogue)
+        self.store_stock = StoreStock(self.data, champion=self._champion_catalogue, on_bought=self.activity.bought)
         self.store_stock.attach(pb)
         return pb
 
@@ -649,6 +652,8 @@ class Emulator:
             # Trades finished before this record existed are history, not news.
             completed(self.pb.memory, self.data, self.history.setdefault('npc_trades', []))
         for trade in completed(self.pb.memory, self.data, self.history['npc_trades']):
+            from .activity import npc_trade
+            npc_trade(self.store, trade)
             self._event(Event('trade', f'Traded {self.data.species[trade.request]["name"]} to {trade.npc} for '
                               f'{self.data.species[trade.give]["name"]}', 'An in-game trade completed on this cartridge.',
                               priority=4), snapshot)

@@ -109,7 +109,9 @@ class ActivityLedger:
             if self.supported:
                 from .trade_statistics import tracking
                 tracking(self.store.db)
-                value['started_at'] = value['started_at'] or time.time()
+                if value['started_at'] is None:
+                    # A new adventure has no autosave yet, so nothing happened before this.
+                    value.update(started_at=time.time(), complete_history=not self.store.autosaves())
             self.store.db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
 
     def completed(self, context):
@@ -170,11 +172,24 @@ class ActivityLedger:
                 increment(self.store.db, kind, subject, amount)
 
 
+def counting_since(db, metadata):
+    """When counting began, for an adventure that was already under way, else None."""
+    started = metadata.get('started_at')
+    if started is None:
+        return None
+    if 'complete_history' in metadata:
+        return None if metadata['complete_history'] else started
+    # Counting began before this was recorded. A journal older than that shows earlier play.
+    first = db.execute('SELECT MIN(ts) FROM events').fetchone()[0]
+    return started if first is not None and first < started - 60 else None
+
+
 def status(store, game=None):
     from .catches import status as catches
     game = game or {}
     with store.lock:
         metadata = json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
+        metadata['counting_since'] = counting_since(store.db, metadata)
         counts = {(row[0], row[1]): row[2] for row in store.db.execute('SELECT * FROM activity_counts')}
         from .trade_statistics import KEY as trade_key
         trades = json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (trade_key,)).fetchone()[0])
@@ -203,11 +218,23 @@ def status(store, game=None):
                        'bag': bag[item] if game else None} for item, name in sorted(ITEMS.items())]}
 
 
-def gen2_status(data, game=None):
-    """List all 251 species and the bag for Gold, Silver and Crystal.
+def gen2_status(data, game=None, store=None):
+    """List all 251 species and every item for Gold, Silver and Crystal.
 
-    The action receipts read Red, Blue and Yellow RAM, so only what is held now is known here.
+    The counts come from the receipts gen2/activity.py keeps, from when it first ran on this adventure.
     """
+    from .gen2.activity import consumable, real_items
+    metadata, counts, trades, captures = {'started_at': None, 'available': False}, {}, {}, {}
+    if store is not None:
+        from .gen2.tracking import CAPTURES
+        from .trade_statistics import KEY as trade_key
+        with store.lock:
+            metadata = json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
+            metadata['counting_since'] = counting_since(store.db, metadata)
+            counts = {(row[0], row[1]): row[2] for row in store.db.execute('SELECT * FROM activity_counts')}
+            trades = json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (trade_key,)).fetchone()[0])
+            row = store.db.execute('SELECT v FROM kv WHERE k=?', (CAPTURES,)).fetchone()
+            captures = json.loads(row[0]) if row else {}
     held = Counter()
     for mon in [*(game or {}).get('party', []), *((game or {}).get('storage') or {}).get('pokemon', [])]:
         if not mon.get('egg') and 1 <= (mon.get('dex') or 0) <= 251:
@@ -216,10 +243,18 @@ def gen2_status(data, game=None):
     for item in (game or {}).get('items', []):
         bag[item['id']] += item['qty']
     names = {entry['dex']: entry['name'] for entry in data.species.values() if 1 <= entry.get('dex', 0) <= 251}
-    return {'started_at': None, 'available': False, 'generation': 2, 'trade_records': {},
-            'captures_since': None, 'captures_available': False,
-            'pokemon': [{'id': dex, 'name': name, 'wild': None, 'trainer': None, 'defeated': None, 'caught': None,
-                         'gift': None, 'traded_in': None, 'traded_out': None, 'held': held[dex] if game else None}
+
+    def count(kind, subject):
+        return counts.get((kind, subject), 0) if metadata['started_at'] is not None else None
+    return {'counting_since': None, **metadata, 'generation': 2, 'trade_records': trades,
+            'captures_since': captures.get('started_at') if not captures.get('complete_history') else None,
+            'captures_available': metadata['started_at'] is not None,
+            'pokemon': [{'id': dex, 'name': name, 'wild': count('wild', dex), 'trainer': count('trainer', dex),
+                         'defeated': count('defeated', dex), 'caught': count('caught', dex),
+                         'gift': count('gift', dex), 'traded_in': count('traded_in', dex),
+                         'traded_out': count('traded_out', dex), 'held': held[dex] if game else None}
                         for dex, name in sorted(names.items())],
-            'items': [{'id': item, 'name': name, 'bought': None, 'used': None, 'bag': bag[item] if game else None}
-                      for item, name in sorted(data.item_names.items()) if bag[item] or not game]}
+            'items': [{'id': item, 'name': name, 'bought': count('bought', item),
+                       'used': count('used', item) if consumable(data, item) else None,
+                       'bag': bag[item] if game else None}
+                      for item, name in real_items(data)]}

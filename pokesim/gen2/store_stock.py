@@ -88,8 +88,10 @@ def stock(data, shop):
 class StoreStock:
     """Emulator hooks that add the extra items to an opened BUY list and charge their price."""
 
-    def __init__(self, data, champion=None):
+    def __init__(self, data, champion=None, on_bought=None):
         self.data = data
+        # Told of every landed purchase, from any clerk, for the activity ledger.
+        self.on_bought = on_bought
         self.marts = {}
         for constant, label in [(constant, label) for constant, label, _ in MARTS] + list(CHAMPION_MARTS):
             if label in data.symbols:
@@ -186,6 +188,8 @@ class StoreStock:
 
     def bought(self, pb):
         """Record a landed purchase of a Champion shop item."""
+        if self.on_bought is not None:
+            self.on_bought(pb)
         if self.mart(pb) is None:
             return
         item = self._read(pb, 'wCurItem')[0]

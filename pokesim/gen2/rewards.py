@@ -92,6 +92,8 @@ def deliver(emu):
         if shiny_gift:
             from ..shiny import record as record_shiny
             record_shiny(db, 'acquired', f'gift-event:{identifier}', species, generation=2)
+        from .activity import gift as count_gift
+        count_gift(db, identifier, species)
         for key, value in ((PENDING, record), (BARRIER, identifier)):
             db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (key, json.dumps(value)))
         db.execute('INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (?,?,?,?,?,?,?,?)',
