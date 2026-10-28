@@ -38,6 +38,7 @@ This index separates current instructions, future plans, and historical evidence
 
 ## Plans and historical records
 
+- [Planner systems](design/planner-systems.md): proposal to replace special-case fixes with shared planner systems.
 - [Distribution readiness](distribution-readiness.md): historical release-process review.
 
 - [Multi-adventure application plan](multi-adventure-app-plan.md) and
