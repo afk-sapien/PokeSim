@@ -15,7 +15,7 @@
       {key: 'captures', label: 'Pokémon caught'},
       {key: 'steps', label: 'Sampled steps (legacy)'},
       {key: 'battles', label: 'Battles entered'},
-      {key: 'marathons', label: 'Marathons completed'},
+      {key: 'marathons', label: 'Marathons completed', marathon: true},
       {key: 'recorded_hours', label: 'Sampled game hours (legacy)'},
     ]},
     {title: 'Battle endurance', series: [
@@ -226,7 +226,9 @@
     const date = ts => new Date(ts * 1000).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'})
     document.querySelector('#statistics-window').textContent = `${date(data.history[0].ts)} → ${date(until)}`
     target.innerHTML = groups.map((group, index) => {
-      const rows = Progress.describe(data.history, until, group.series).map(series => {
+      // Gold, Silver and Crystal send no marathon, since the Kanto Marathon is a Red, Blue and Yellow race.
+      const series = group.series.filter(series => !series.marathon || data.marathon !== null)
+      const rows = Progress.describe(data.history, until, series).map(series => {
         const available = data.current[series.key] != null
         const value = available ? number(data.current[series.key]) + (series.unit || '') : 'Not recorded'
         const change = available ? number(data.current[series.key] - series.first) : ''

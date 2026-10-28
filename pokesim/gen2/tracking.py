@@ -175,8 +175,27 @@ class Tracker:
         for group, count in groups.items():
             goals['perfect_groups'][group] = max(count, goals['perfect_groups'].get(group, 0))
         goals.update(level_100=sorted(maxed), perfect_species=sorted(perfect), high_quality_species=sorted(quality))
-        self.store.set(MILESTONES, goals)
+        from .. import progress
+        with self.store.lock, self.store.db:
+            self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (MILESTONES, json.dumps(goals)))
+            # The progress lines for level 100 species and perfect finds follow each change.
+            progress.goals_changed(self.store.db, time.time())
         self.confirmed = token
+
+
+def record_gift(db, event_id, species):
+    """Count a committed custom gift toward Total caught, as Red, Blue and Yellow do.
+
+    Keyed by its journal entry, so the recent catch counts date it the same way."""
+    row = db.execute('SELECT v FROM kv WHERE k=?', (CAPTURES,)).fetchone()
+    if row is None or not 1 <= species <= 251 or not db.execute(
+            'INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
+            (f'gift-event:{event_id}', species, time.time())).rowcount:
+        return
+    value = json.loads(row[0])
+    value['counts'][str(species)] = value['counts'].get(str(species), 0) + 1
+    value['total'] += 1
+    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), CAPTURES))
 
 
 def apply(payload, store, data=None):

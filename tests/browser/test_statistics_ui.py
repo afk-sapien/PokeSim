@@ -42,6 +42,21 @@ def test_journal_entries_and_stats(page, game, width, theme):
     expect(page.locator('#events')).to_contain_text('Caught a partner')
 
 
+@pytest.mark.parametrize('marathon, shown', [(None, False), ({}, True)])
+def test_marathons_chart_is_only_for_games_with_the_race(page, game, marathon, shown):
+    url, _, _, _ = game
+    now = time.time()
+    page.route('**/api/statistics', lambda route: route.fulfill(json={
+        'started_at': now - 3600, 'updated_at': now, 'marathon': marathon,
+        'current': {'captures': 3, 'marathons': 0},
+        'history': [{'ts': now - 3600, 'captures': 1, 'marathons': 0}, {'ts': now, 'captures': 3, 'marathons': 0}],
+    }))
+    page.goto(url + '/stats')
+    expect(page.locator('#statistics-charts')).to_contain_text('Pokémon caught')
+    rows = page.locator('#statistics-charts .progress-row').filter(has_text='Marathons completed')
+    expect(rows).to_have_count(1 if shown else 0)
+
+
 def test_unavailable_current_value_is_not_replaced_by_historical_value(page, game):
     url, _, _, _ = game
     now = time.time()
