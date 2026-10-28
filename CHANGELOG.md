@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Stop Gold, Silver and Crystal planning during the start of a wild battle. The battle transition draws over the map the plan reads, so a postgame hunt saw no grass and switched to "Wait for the encounter map to finish loading", and a Pokédex hunt dropped its target as if it had no route. The wait then lasted the whole battle, so most postgame hunting showed as waiting. The hunt that met the Pokémon now carries on through the battle.
+
 - Show how long ago the last achievement was on the Gold, Silver and Crystal Live page. It always read "just now" before. Stats → Items now names the Red, Blue and Yellow Champion shop counter at the Celadon Dept. Store, as it already did for Goldenrod. A new test compares what both generations send to the Live, Statistics and Items pages, so a field one generation fills and the other leaves empty fails unless it is listed with a reason.
 
 - Require pokecore 0.9.1. Gold, Silver and Crystal randomized adventures that shuffle trainers now give each new Pokémon a fitting move set, where before it kept the moves of the Pokémon it replaced. A share code still gives the same Pokémon as before.
