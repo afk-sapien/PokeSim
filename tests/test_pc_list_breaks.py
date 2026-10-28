@@ -1,15 +1,18 @@
 """A traded nickname holding <CONT> no longer hides the Pokémon stored after it in the PC list.
 
 Core 0.9.4 presses A through the wait that <CONT> (0x55) starts while a Bill's PC list draws, so
-storage cleanup and trades may pick every stored slot again.
+storage cleanup and trades may pick those slots again. The other text commands still stop the
+list, so the slots behind them stay unlisted.
 """
 from dataclasses import asdict, replace
 from types import SimpleNamespace
 
+import pytest
+
 from pokesim.gen2 import menus
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.policies.team import release_target
-from pokesim.ram import read_snapshot
+from pokesim.ram import LIST_BREAKS, list_breaks, read_snapshot
 from pokesim.runtime import preparation
 from pokesim.shortcuts import RETRY_FRAMES, gen1_ui
 from pokesim.trade import boxes
@@ -29,9 +32,27 @@ def test_release_reaches_spares_stored_after_a_cont_name():
             slot = replace(slot, nickname=nickname)
         boxes.write_slot(memory, 1, position, slot)
     s = read_snapshot(memory, 1)
-    assert not hasattr(s, 'unlisted')
+    assert s.unlisted == ()
     # The weakest copy sits after the name, and the release now takes it.
     assert release_target(s) == (0, 2)
+
+
+@pytest.mark.parametrize('code', sorted(LIST_BREAKS))
+def test_a_slot_behind_any_other_text_command_stays_unlisted(code):
+    # Core waits through <CONT> only. A name holding another command still stops the list.
+    assert code != 0x55 and LIST_BREAKS == {0x00, 0x49, 0x4B, 0x4C, 0x51, 0x57, 0x58, 0x5F}
+    memory = populate(Memory(), active=1, contents=())
+    nickname = bytes(boxes.encode_text('WETFUND')[:7]) + bytes((code, 0x8B, 0x8B, 0x50))
+    for position, level in enumerate((50, 40, 5, 6), start=1):
+        slot = entry(ABRA, level)
+        if position == 2:
+            slot = replace(slot, nickname=nickname)
+        boxes.write_slot(memory, 1, position, slot)
+    s = read_snapshot(memory, 1)
+    assert s.unlisted == ((0, 2), (0, 3))
+    assert release_target(s) == (0, 1)
+    # A <CONT> name in the same place hides nothing.
+    assert list_breaks(bytes(boxes.encode_text('CORNFAX')) + nickname[:7] + bytes((0x55, 0x8B, 0x8B, 0x50))) is None
 
 
 def test_the_live_red_wetfund_slot_leaves_the_rest_of_box_11_pickable():
