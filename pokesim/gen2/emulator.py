@@ -214,6 +214,7 @@ class Emulator:
         self.policy = Policy(self.data, seed=config.SEED, starter=config.STARTER)
         self.policy.load_state_dict(store.get('policy_state', {}))
         self.policy.trade_preferences = store.trade_preferences
+        self.policy.trade_partners = store.trade_partners
         self.speed = config.SPEED
         self.paused = False
         self.frozen = False
@@ -1024,6 +1025,7 @@ class Emulator:
             self.history = {'maps': [], 'owned': [], 'badges': 0, 'league': 0}
             self.policy = Policy(self.data, seed=config.SEED, starter=config.STARTER)
             self.policy.trade_preferences = self.store.trade_preferences
+            self.policy.trade_partners = self.store.trade_partners
             self.play_clock = PlayClock()
             self.paused = self.manual_mode = False
             # The old run's bests and reload streak would hold the new one stalled for good, and the

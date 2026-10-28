@@ -78,6 +78,28 @@ def held_count(snapshot, species):
     return sum(mon.species == species for mon in snapshot.party) + sum(sid == species for sid, level in boxed)
 
 
+GIFT_METHODS = {'gift', 'fossil'}
+
+
+@lru_cache(maxsize=None)
+def gift_species(version):
+    """Species this version gives only as a gift or fossil, with the forms they evolve into.
+
+    A species with no source of its own counts by the first of its ancestors that has one, so
+    Eevee's evolutions and the fossil lines count with Eevee and the fossils.
+    """
+    from ..milestones import ancestors
+    rows = {int(k): v for k, v in DATA['versions'].get(version, {}).items()}
+
+    def origin(sid):
+        if rows.get(sid):
+            return sid
+        return next((parent for parent in sorted(ancestors(sid) - {sid}) if rows.get(parent)), None)
+
+    return frozenset(sid for sid in SPECIES if (root := origin(sid)) is not None
+                     and {source['method'] for source in rows[root]} <= GIFT_METHODS)
+
+
 # Porygon's Game Corner price. Blue sells it cheaper, Red and Yellow ask 9999 coins.
 PORYGON_COINS = {'red': 9999, 'blue': 6500, 'yellow': 9999}
 SNORLAX = next(sid for sid, row in SPECIES.items() if row['dex'] == 143)
@@ -634,6 +656,9 @@ class Collection:
         if key != self.report_key:
             self.report_key = key
             self.report = self.describe(s)
+
+    def gift_species(self):
+        return gift_species(self.version)
 
     def sources(self):
         rows = {int(k):v for k,v in DATA['versions'].get(self.version, {}).items()}

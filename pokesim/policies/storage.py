@@ -18,10 +18,16 @@ class StorageController:
     destination: int | None = None
     # Slots whose release failed recently. The planner refreshes this before every PC decision.
     avoid: frozenset = frozenset()
+    # Trainer ids of linked adventures (trade/partners.py), refreshed with ``avoid``.
+    partners: frozenset = frozenset()
 
     @staticmethod
-    def release_target(snapshot, project, preferences, collection=None, avoid=()):
-        """The spare to let go as (box, position). ``avoid`` holds slots whose release just failed."""
+    def release_target(snapshot, project, preferences, collection=None, avoid=(), partners=frozenset()):
+        """The spare to let go as (box, position). ``avoid`` holds slots whose release just failed.
+
+        Only the player's own Pokémon and those of the linked adventures in ``partners`` may go. A copy
+        of a species this version gives only as a gift or fossil stays when the player caught it.
+        """
         project = project or {}
         protected = set(project.get('family', [project['parent']])) if project.get('method') in ('evolve', 'train') and project.get('parent') else set()
         demand = collection.demand() if collection else {}
@@ -35,7 +41,8 @@ class StorageController:
         reserved = {(mon['box'], mon['position']) for mon in snapshot.storage_entries()
                     if preferences.get(identity(mon), {}).get('state') in ('offered', 'locked')
                     or legacy_lock(preferences, mon)} if preferences else set()
-        return release_target(snapshot, protected, reserved | set(avoid))
+        return release_target(snapshot, protected, reserved | set(avoid), partners,
+                              collection.gift_species() if hasattr(collection, 'gift_species') else frozenset())
 
     @staticmethod
     def field_move_box(snapshot, goal_key):
@@ -47,7 +54,7 @@ class StorageController:
 
     def target(self, snapshot, goal_key, project, preferences, collection=None):
         if goal_key == 'party_release':
-            release = self.release_target(snapshot, project, preferences, collection, self.avoid)
+            release = self.release_target(snapshot, project, preferences, collection, self.avoid, self.partners)
             return release[1] if release and release[0] == snapshot.active_box else None
         if self.operation == 'deposit':
             if len(snapshot.party) < 6 or snapshot.box_full:
@@ -88,7 +95,7 @@ class StorageController:
     def box_target(self, snapshot, goal_key, project, preferences, collection=None):
         """The box a storage goal wants as the current box, or None."""
         if goal_key == 'party_release':
-            release = self.release_target(snapshot, project, preferences, collection, self.avoid)
+            release = self.release_target(snapshot, project, preferences, collection, self.avoid, self.partners)
             return release[0] if release else None
         if goal_key == 'party_box':
             return snapshot.next_free_box
@@ -114,7 +121,7 @@ class StorageController:
             if not goal_key.startswith('party_') or screen.cursor and screen.cursor[0] == 10:
                 return MenuDecision(tap('b'))
             if goal_key == 'party_release':
-                release = self.release_target(snapshot, project, preferences, collection, self.avoid)
+                release = self.release_target(snapshot, project, preferences, collection, self.avoid, self.partners)
                 if release is None:
                     return MenuDecision(tap('b'))
                 if release[0] != snapshot.active_box:

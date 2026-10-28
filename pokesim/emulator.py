@@ -85,6 +85,7 @@ class Emulator:
         self.manual_mode = False
         self.policy = make_policy(config.POLICY, config.SEED)
         self.policy.trade_preferences = store.trade_preferences
+        self.policy.trade_partners = store.trade_partners
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
         self.frame_image: bytes = b""

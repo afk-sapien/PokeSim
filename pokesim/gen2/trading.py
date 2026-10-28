@@ -12,7 +12,8 @@ from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
 from pokecore.identity import find, same
 from ..shiny import shiny_bytes
-from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, keeps, manual_rows
+from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, keeps, manual_rows, merge_partners
+from ..trade.partners import received
 from ..trade.preferences import apply, name as setting_name
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin, reserves
@@ -172,10 +173,12 @@ class Participant(BaseParticipant):
         state = self.emu.status()
         payload = apply(live_status(state.get('game'), (state.get('strategy') or {}).get('collection')),
                         self.store.trade_preferences())
-        return {**payload, 'adventure_id': self.bootstrap.adventure_id,
+        memory = Memory(self.emu.pb.memory, self.emu.data)
+        player = memory.word('wPlayerID') if getattr(self.emu.snapshot, 'started', False) else None
+        return {**payload, 'adventure_id': self.bootstrap.adventure_id, 'player_id': player,
                 'generation': self.bootstrap.generation, 'cartridge_generation': 2,
                 'offers': offers(self.emu, payload), 'revision': digest(payload),
-                'time_capsule_ready': unlocked(self.emu.snapshot, Memory(self.emu.pb.memory, self.emu.data)),
+                'time_capsule_ready': unlocked(self.emu.snapshot, memory),
                 'trade_blocked': (SEALED if sealed(self.emu.snapshot, self.emu.policy) else
                                   CROWDED if crowded(self.emu.snapshot) else ''),
                 'holding': bool(self.store.get('trade_hold'))}
@@ -228,6 +231,7 @@ class Participant(BaseParticipant):
         # Species a linked peer offers, which the store errand waits for instead of buying an item.
         self.emu.policy.peer_supply = set(supply)
         self.emu.policy.peers = peers
+        merge_partners(self.store, data)
         return {'requests': self.emu.policy.demand}
 
     def prepare(self, data):
@@ -349,10 +353,12 @@ class Participant(BaseParticipant):
             # An Egg is counted when it hatches, not when it arrives.
             record['incoming_shiny'] = [row['struct'][0] for row in gained
                                         if shiny_bytes(row['struct'][21:23]) and self.emu.data.text(row['nickname']) != 'EGG']
+            record['incoming_trainers'] = [received(row['struct'], 2) for row in gained]
             return
         incoming = {key: bytes.fromhex(value) for key, value in data['incoming'].items()}
         incoming = convert(incoming, 2, self.emu.data)
         record['incoming_display'] = display(incoming, self.emu.data)
+        record['incoming_trainers'] = [received(incoming['struct'], 2)]
         # The exchange never delivers an Egg. A trade evolution arrives as the evolved species.
         record['incoming_shiny'] = ([evolved_species(incoming['struct'], self.emu.data)]
                                     if shiny_bytes(incoming['struct'][21:23]) else [])

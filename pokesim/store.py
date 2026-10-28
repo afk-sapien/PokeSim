@@ -254,6 +254,24 @@ class Store:
         with self.lock:
             return read(self.db)
 
+    def trade_partners(self):
+        """Trainer ids of linked adventures, whose Pokémon a release may let go like the player's own."""
+        # A release decision asks on every step while storage is tight, so the set is read once and
+        # kept until add_trade_partners changes it.
+        cached = getattr(self, '_trade_partners', None)
+        if cached is not None:
+            return cached
+        from .trade.partners import read
+        with self.lock:
+            self._trade_partners = read(self.db)
+            return self._trade_partners
+
+    def add_trade_partners(self, ids):
+        from .trade.partners import add
+        with self.lock, self.db:
+            self._trade_partners = add(self.db, ids)
+            return self._trade_partners
+
     def upgrade_trade_preferences(self, collection):
         """Move trade settings saved under older trainer and DV keys, once per process.
 

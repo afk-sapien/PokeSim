@@ -45,6 +45,23 @@ def test_release_skips_spares_stored_after_a_list_breaking_name():
     assert release_target(s) == (0, 1)
 
 
+def test_the_live_red_wetfund_slot_keeps_the_rest_of_box_11_unlisted():
+    # The bytes Red held in Box 11 slot 0: nickname WETFUND ended by <CONT>, from trainer ROWAN.
+    nickname = bytes.fromhex('96849385948d83558b8b50')
+    trainer = bytes.fromhex('918e96808d50') + bytes((0x50,) * 5)
+    assert boxes.decode_text(nickname).startswith('WETFUND') and boxes.decode_text(trainer) == 'ROWAN'
+    memory = populate(Memory(), active=1, contents=((1, ABRA, 50),))
+    for position, level in enumerate((40, 5, 6), start=1):
+        slot = entry(ABRA, level)
+        if position == 1:
+            slot = replace(slot, nickname=nickname, ot_name=trainer)
+        boxes.write_slot(memory, 11, position, slot)
+    s = read_snapshot(memory, 1)
+    assert s.unlisted == ((10, 1), (10, 2))
+    # The weakest copies sit behind the name, so the release takes the one the menu can reach.
+    assert release_target(s) == (10, 0)
+
+
 def test_a_failed_release_lets_another_spare_go_first():
     policy = StrategicPolicy(7)
     s = replace(snapshot([stored(0, level=30), stored(1, level=5), stored(2, level=6)]), frame=1000)

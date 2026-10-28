@@ -989,9 +989,12 @@ class Coordinator:
                              if self._compatible_pair(inventory, inv, {'time_capsule_compatible': True}, offer)
                              and (dex := self._offer_for(offer, inventory).get('arrived_dex', offer.get('dex')))
                              in missing[aid]})
+            # Every other linked adventure's trainer, so this one may release the copies they traded it.
+            partners = sorted({inv['player_id'] for peer, inv in inventories
+                               if peer != aid and type(inv.get('player_id')) is int})
             try:
                 self._request(aid, 'collection_demand', {'requests': requests, 'supply': supply,
-                                                         'peers': len(inventories) - 1})
+                                                         'peers': len(inventories) - 1, 'partners': partners})
             except (RuntimeError, OSError):
                 log.debug('Collection requests could not reach adventure %s', aid)
 

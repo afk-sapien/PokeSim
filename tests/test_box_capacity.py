@@ -258,7 +258,8 @@ def test_one_copy_of_every_species_always_survives_a_release():
     # 239 copies of one species, minus the single keeper the rule protects.
     assert len(spare) == 238
     box, position = release_target(s)
-    assert (box, position) == (0, 0), 'the lowest level duplicate goes first'
+    assert (box, position) == (11, 0), 'a duplicate in the open box goes first'
+    assert release_target(stuffed(active_box=4)) == (4, 0), 'even when a weaker copy waits in another box'
 
 
 def test_a_party_member_counts_as_the_surviving_copy():
@@ -326,9 +327,10 @@ def test_a_release_visit_frees_slots_to_the_refill_mark_in_one_go():
 def test_release_menu_is_only_opened_for_the_release_goal():
     p = StrategicPolicy(7)
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
-    s = stuffed(textbox=True)
+    s = stuffed(textbox=True, boxed_pokemon=((171, 40),), box_counts=(20,) * 11 + (1,),
+                stored_pokemon=tuple((box, 165, 3 + box, '') for box in range(11) for _ in range(20)) + ((11, 171, 40, ''),))
     p.goal = Goal('party_release', 'Make room in storage', 'Free a slot')
-    # The duplicate to give up lives in box 1, so the box selector comes first.
+    # The open box holds no spare and the duplicate to give up lives in box 0, so the box selector comes first.
     assert p._dispatch(s, Screen(memory), 'pc', memory)[0].button == 'down'
     here = stuffed(stored_pokemon=tuple((11, 165, 3 + i, '') for i in range(19)) + ((11, 171, 40, ''),),
                    box_counts=(0,) * 11 + (20,), textbox=True)

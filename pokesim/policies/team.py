@@ -4,6 +4,7 @@ from collections import Counter
 
 from .battle import HEALING, damage, effectiveness, ranked_moves
 from ..duplicates import quality, spare_entries
+from ..events import LEGENDARY_DEX
 from ..game_data import current_variant
 from ..ram import BOX_CAPACITY, PartyMon
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, event_set
@@ -75,34 +76,59 @@ def spare_copies(s, protected=()):
 _RELEASE = [None, None]
 
 
-def release_target(s, protected=(), reserved=()):
+def release_target(s, protected=(), reserved=(), partners=frozenset(), gifts=frozenset()):
     """Reduce the most numerous species first, keeping its best copy and all protections.
 
     This ranks every stored copy and is asked on every step while storage is tight, so the
     answer is kept until the party, the PC or the protections change. A copy the PC list
     cannot reach is never offered, since the release menu would stop short of it every time.
+    ``partners`` and ``gifts`` are as in kept_by_origin.
     """
     reserved = frozenset(reserved) | frozenset(getattr(s, 'unlisted', ()))
     key = (tuple(s.party), getattr(s, 'stored_details', None), getattr(s, 'stored_pokemon', None),
-           frozenset(protected), reserved)
+           frozenset(protected), reserved, frozenset(partners), frozenset(gifts), getattr(s, 'player_id', None),
+           getattr(s, 'active_box', None))
     try:
         hash(key)
     except TypeError:
-        return _release_target(s, protected, reserved)
+        return _release_target(s, protected, reserved, partners, gifts)
     if _RELEASE[0] != key:
-        _RELEASE[:] = [key, _release_target(s, protected, reserved)]
+        _RELEASE[:] = [key, _release_target(s, protected, reserved, partners, gifts)]
     return _RELEASE[1]
 
 
-def _release_target(s, protected, reserved):
+def kept_by_origin(s, mon, partners=frozenset(), gifts=frozenset()):
+    """Whether a boxed copy stays because of where it came from.
+
+    A legendary always stays. So does a Pokémon from any trainer other than the player and the linked
+    adventures in ``partners``: an in-game trade or a game outside PokeSim cannot give it again. The
+    player's own copy of a species in ``gifts``, which this version only gives as a gift or fossil, stays
+    too. A record without a trainer id comes from an older payload and is judged by the other rules.
+    """
+    if SPECIES.get(mon['species'], {}).get('dex') in LEGENDARY_DEX:
+        return True
+    player, trainer = getattr(s, 'player_id', None), mon.get('trainer_id')
+    if player is None or trainer is None:
+        return False
+    if trainer != player:
+        return trainer not in partners
+    return mon['species'] in gifts
+
+
+def _release_target(s, protected, reserved, partners=frozenset(), gifts=frozenset()):
     party = [asdict(mon) for mon in s.party]
     stored = s.storage_entries()
     counts = Counter(mon['species'] for mon in [*party, *stored])
     spare = [mon for mon in spare_entries(party, stored, protected)
-             if (mon['box'], mon['position']) not in reserved]
+             if (mon['box'], mon['position']) not in reserved and not kept_by_origin(s, mon, partners, gifts)]
     if not spare:
         return None
-    target = min(spare, key=lambda mon: (-counts[mon['species']], quality(mon), mon['box'], mon['position']))
+    # The open box first, since changing boxes saves the game and takes about as long as a release.
+    # Then the box with the most spares, so a visit empties one box before it moves on.
+    per_box = Counter(mon['box'] for mon in spare)
+    active = getattr(s, 'active_box', None)
+    target = min(spare, key=lambda mon: (mon['box'] != active, -per_box[mon['box']], -counts[mon['species']],
+                                         quality(mon), mon['box'], mon['position']))
     return target['box'], target['position']
 
 

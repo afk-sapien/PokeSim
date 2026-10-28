@@ -79,6 +79,11 @@ def _promote(store, record):
         else:
             from ..gen2.league import merge
         merge(store.db, record.get('incoming_league_record'))
+        # The Pokémon that arrived names the linked adventure's trainer, so its copies may be released later.
+        from ..trade.partners import add as add_partners
+        add_partners(store.db, [value for value in record.get('incoming_trainers') or () if value is not None])
+        # Store.trade_partners reads the row again after this commit.
+        store._trade_partners = None
         if record.get('cartridge_generation') == 2:
             # Only the receiving side counts a shiny, once per exchange however often this commit is retried.
             from ..shiny import record as record_shiny
@@ -287,6 +292,16 @@ def manual_rows(payload, generation, last_party_blocked=False):
     return rows
 
 
+def merge_partners(store, data):
+    """Keep the linked adventures' trainer ids the coordinator sent with its collection requests."""
+    from ..trade.partners import LIMIT, valid
+    partners = data.get('partners', [])
+    if not isinstance(partners, list) or len(partners) > LIMIT or not all(valid(value) for value in partners):
+        raise ValueError('Invalid trade partners')
+    if partners:
+        store.add_trade_partners(partners)
+
+
 def recover_storage(store):
     """Reconcile committed files before the emulator chooses its startup checkpoint."""
     with store.lock:
@@ -334,7 +349,8 @@ class Participant:
         # Only the owning runtime imports game-specific data to derive offers.
         from .preparation import SEALED, sealed
         candidates = []
-        blocked = SEALED if sealed(getattr(self.emu, 'snapshot', None), self.store.trade_preferences()) else ''
+        blocked = SEALED if sealed(getattr(self.emu, 'snapshot', None), self.store.trade_preferences(),
+                                   self.store.trade_partners()) else ''
         available = (status.get('game') or {}).get('map') not in LEAGUE and not blocked
         # The offer is built from the same PC rows, located by box and position.
         records = {(row.get('box'), row.get('position'), row.get('species')): row
@@ -360,7 +376,10 @@ class Participant:
                                'last_copy': inv.held[mon.species] == 1,
                                'trade_preference': mon.trade_preference,
                                'arrived_dex': SPECIES[EVOLVES.get(mon.species, mon.species)]['dex']})
-        return {**payload, 'adventure_id': self.bootstrap.adventure_id,
+        # The coordinator passes this to the other linked adventures, whose releases may then let go of
+        # copies this adventure traded them.
+        player = getattr(getattr(self.emu, 'snapshot', None), 'player_id', None)
+        return {**payload, 'adventure_id': self.bootstrap.adventure_id, 'player_id': player,
                 'generation': self.bootstrap.generation, 'offers': candidates,
                 'revision': digest(payload), 'trade_blocked': blocked, 'holding': bool(self.store.get('trade_hold'))}
 
@@ -402,6 +421,7 @@ class Participant:
         collection = getattr(self.emu.policy, 'collection', None)
         if collection is not None:
             collection.set_demand(cleaned)
+        merge_partners(self.store, data)
         return {'requests': cleaned}
 
     def prepare(self, data):
@@ -529,6 +549,8 @@ class Participant:
         incoming_mon['nick'] = decode_text(bytes.fromhex(data['incoming']['nickname']))
         incoming_key = identity(incoming_mon)
         record['incoming_league_record'] = validate(data.get('incoming_league_record'), incoming_key, incoming_mon)
+        from ..trade.partners import received
+        record['incoming_trainers'] = [received(data['incoming']['struct'])]
 
     def verify_result(self, record, result, state, save, incoming):
         from types import SimpleNamespace

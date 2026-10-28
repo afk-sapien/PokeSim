@@ -16,7 +16,8 @@ from pokesim.scenarios import cartridge as checkpoint_cartridge
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIO_ROOT = Path(os.environ.get('POKESIM_SCENARIOS') or Path(os.environ.get('DATA_DIR', ROOT / 'data')) / 'scenarios')
 FOLDER = SCENARIO_ROOT / 'gold-expshare-full-bag-20261027'
-FRAMES = 24000
+# The checkpoint has 3 free box slots, below the release reserve, so a release visit frees two first.
+FRAMES = 36000
 SHELLDER = 90
 
 

@@ -94,6 +94,8 @@ class Policy:
         self.blocked = {}
         # The emulator replaces this with the store's trade preferences. Locked and offered partners are never released.
         self.trade_preferences = dict
+        # And this with the store's linked adventure trainer ids (trade/partners.py), whose Pokémon may be released.
+        self.trade_partners = frozenset
         self.release_cache = (None, None)
         self.refused_in_row = 0
         self.result_ref = None
@@ -646,10 +648,17 @@ class Policy:
         partners = plan_partners(self.collection)
         key = (snapshot.party, snapshot.stored, snapshot.active_box, snapshot.pockets.get('items', ()),
                tuple(sorted(self.demand.items())), tuple(self.collection.get('prerequisites', ())),
-               tuple(sorted(map(str, partners))), self.decisions // 600)
+               tuple(sorted(map(str, partners))), self.release_owners(), self.decisions // 600)
         if self.release_cache[0] != key:
             self.release_cache = (key, (storage_unit(self, snapshot), storage_unit(self, snapshot, direct=True)))
         return self.release_cache[1]
+
+    def release_owners(self):
+        """The original trainers whose Pokémon a release may let go: the player and the linked adventures.
+        None before the cartridge's memory is attached, which leaves the trainer out of the rules."""
+        from ..trade.partners import owners
+        player = Memory(self.memory, self.data).word('wPlayerID') if self.memory is not None else None
+        return owners(player, self.trade_partners())
 
     def release_target(self, snapshot):
         """The spare duplicate to release next straight from the box, or None."""
@@ -683,8 +692,9 @@ class Policy:
         keep.update(wished)
         partners = plan_partners(self.collection)
         allowed = lambda mon: self.allowed(Release(mon.box, mon.position), snapshot)  # noqa: E731
+        owners = self.release_owners()
         for lenient in (False, True):
-            mon = target(snapshot, self.demand, keep, preferences, partners, allowed, lenient)
+            mon = target(snapshot, self.demand, keep, preferences, partners, allowed, lenient, owners)
             if mon is not None:
                 return mon
         return None
@@ -744,7 +754,10 @@ class Policy:
         from .release import headroom
         # A spare whose item is coming off keeps the visit going until it is gone, even past the refill mark.
         unequipping = bool(self.collection.get('unequip'))
-        if (not (box_wanted(headroom(snapshot), releasing) or unequipping) or self.in_league(snapshot) or self.in_transmitter_room(snapshot)
+        # A catch goes to a free party slot first, so a new visit counts those as room. Without this a PC
+        # errand that deposits one partner before it withdraws another started a release visit in between.
+        room = headroom(snapshot) + (0 if releasing else max(6 - len(snapshot.party), 0))
+        if (not (box_wanted(room, releasing) or unequipping) or self.in_league(snapshot) or self.in_transmitter_room(snapshot)
                 or snapshot.map == self.data.map_ids['POKECENTER_2F'] or self.collection.get('time_capsule_restore')
                 or self.collection.get('tower') or mem.byte('wStatusFlags2') & 4):
             return None

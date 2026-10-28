@@ -9,7 +9,7 @@ Checkpoints are private game data, so scenario folders live outside the checkout
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 import hashlib
 import json
 import os
@@ -17,6 +17,7 @@ from pathlib import Path
 import random
 import subprocess
 import sys
+import warnings
 
 from .events import diff
 from .game_data import VARIANT_ENV, current_variant
@@ -24,6 +25,7 @@ from .headless import HeadlessRun
 from .ram import PARTY_STRUCT, W_BAG_ITEMS, W_IS_IN_BATTLE, W_MONEY, W_NUM_BAG_ITEMS, W_PARTY_COUNT, W_PARTY_MONS, read_snapshot
 from .stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, advanced
 from .strategy_data import ITEMS
+from .trade.partners import valid as valid_partner
 from .yellow import YELLOW_SHA1
 
 STATUS = {'healthy': 0, 'asleep': 3, 'poisoned': 8, 'burned': 16, 'frozen': 32, 'paralyzed': 64}
@@ -107,6 +109,9 @@ class Scenario:
     until: str | None = None          # an event type that must happen, such as badge or champion
     fallback: Path | None = None      # an unedited save the second reload goes to, as the League entry save is
     seed: int = 7
+    # Trainer ids of linked adventures whose Pokémon the run may release (trade/partners.py). A live
+    # adventure learns them from its trades and the coordinator. A scenario has neither, so it names them.
+    trade_partners: list = field(default_factory=list)
 
     @classmethod
     def load(cls, folder):
@@ -115,6 +120,12 @@ class Scenario:
         checkpoint = (folder / data.pop('checkpoint', 'start.state')).resolve()
         if data.get('fallback'):
             data['fallback'] = (folder / data['fallback']).resolve()
+        # Scenarios are private data every checkout shares, so a key a newer checkout added must not
+        # stop an older one from loading the rest.
+        known = {f.name for f in fields(cls)}
+        for key in sorted(set(data) - known):
+            warnings.warn(f'{folder.name}: scenario.json key {key!r} is not known here and is ignored', stacklevel=2)
+            data.pop(key)
         return cls(folder=folder, name=data.pop('name', folder.name), checkpoint=checkpoint, **data)
 
 
@@ -272,13 +283,16 @@ def open_run(scenario, rom=None):
     path = find_rom(sha1, roms)
     if path is None:
         raise FileNotFoundError(f'No cartridge with SHA-1 {sha1} for {scenario.name}')
+    partners = frozenset(value for value in scenario.trade_partners if valid_partner(value))
     if generation == 2:
         if scenario.edits:
             raise ValueError('Scenario edits use the Red, Blue and Yellow memory layout')
         from .gen2.headless import HeadlessRun as Gen2Run
         run = Gen2Run(path, scenario.checkpoint, scenario.seed, rng=random.Random(scenario.seed), data_root=gen2_data_root())
+        run.policy.trade_partners = lambda: partners
         return run, Gen2Watch(run)
     run = HeadlessRun(path, scenario.checkpoint, scenario.seed, rng=random.Random(scenario.seed))
+    run.policy.trade_partners = lambda: partners
     apply_edits(run.pb.memory, scenario.edits)
     return run, Gen1Watch(run)
 
