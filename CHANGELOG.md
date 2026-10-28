@@ -8,6 +8,8 @@
 
 - Let the strongest Pokémon lead again in Gold, Silver and Crystal once every roaming beast is caught. The beast search kept its sleeper on record after the last catch, so a Crystal team led with a level 20 Charmeleon on each return to Sudowoodo, lost in Victory Road and walked back to heal over and over.
 
+- Keep Gold, Silver and Crystal walking to the same Pokémon Center when two are equally near. At Rock Tunnel the choice swapped each time the player crossed the warp to Route 10, so a trip to make room in storage walked in and out of the tunnel forever.
+
 - Stop Red, Blue and Yellow jumping a ledge on a short detour from the route. On Route 22 a detour over a ledge sent the League return around the whole route, again and again, until the rematch gave up and the adventure waited for its next try.
 
 - Give Gold, Silver and Crystal the journal entries Red, Blue and Yellow already write. The journal now lists first sightings, faints, blackouts, trainer wins, key items and HMs, money and play time milestones and the rival's name, so the Elite Four, trainer, exploration and blackout notifications now fire for these games too. A wild Raikou, Entei, Suicune, Lugia, Ho-Oh or Celebi caught in battle now reads "Caught the legendary Suicune!" and goes out as a Legendary Pokémon notification. Faints, sightings and other timeline-only entries keep a picture but no save, and they do not count as progress for the stall watch.

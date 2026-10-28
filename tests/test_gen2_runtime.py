@@ -1953,6 +1953,18 @@ def test_storage_goal_survives_a_cable_room_with_no_known_route(real_data):
     assert goal.map_name == 'POKECENTER_2F'
 
 
+def test_storage_goal_keeps_its_pick_across_the_rock_tunnel_warp(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data, starter='cyndaquil')
+    policy.completed = {'kanto': 1}
+    tunnel = SimpleNamespace(map=real_data.map_ids['ROCK_TUNNEL_1F'], frame=100, badges=16, party=[None], x=11, y=25)
+    route = SimpleNamespace(map=real_data.map_ids['ROUTE_10_SOUTH'], frame=100, badges=16, party=[None], x=6, y=1)
+    picks = [policy.storage_goal(snapshot).map_name for snapshot in (route, tunnel, route, tunnel)]
+    # Lavender and the Route 10 Center tie from Route 10, and both tie with Cerulean from inside the tunnel.
+    assert len(set(picks)) == 1
+    assert picks[0] in ('LAVENDER_POKECENTER_1F', 'ROUTE_10_POKECENTER_1F')
+
+
 def _clock_policy(real_data, day, daily=0):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, starter='cyndaquil')

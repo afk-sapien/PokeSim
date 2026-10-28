@@ -78,6 +78,8 @@ class Policy:
         self.shop_location = None
         self.talk_key, self.talk_frames = None, 0
         self.healing_map = None
+        # The PC chosen last time, kept while it stays among the nearest so equal routes do not flip it.
+        self.storage_pick = None
         self.completed = {}
         self.collection = {'target': None, 'attempts': {}}
         # Owned one-time encounters that a walking return brought back for another capture.
@@ -756,7 +758,13 @@ class Policy:
             # Aim at the nearest known Pokémon Center by id and let navigation and stall recovery sort it out.
             _, mid, x, y = min(unreachable)
         else:
-            _, mid, x, y = min(choices)
+            nearest = min(choices)[0]
+            tied = [choice[1:] for choice in choices if choice[0] == nearest]
+            # Two Pokémon Centers the same number of maps away can swap places as the player crosses a
+            # warp, as Rock Tunnel and Route 10 do. Keeping the earlier pick stops the walk turning back.
+            kept = getattr(self, 'storage_pick', None)
+            mid, x, y = kept if kept in tied else min(tied)
+            self.storage_pick = (mid, x, y)
         return Goal('storage', 'Prepare a place for a field move partner', self.data.maps[mid]['constant'], x, y, 'up')
 
     def fishing(self, snapshot):
