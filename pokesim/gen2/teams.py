@@ -9,9 +9,9 @@ from collections import Counter
 
 from ..trade.preferences import signature as identity
 from .menus import ChangeBox, Release, Storage
-from .standdown import stand_down, standing_down, team_key
+from .standdown import exhausted, forget, pc_key, stand_down, standing_down, team_key
 
-# Consecutive PC visits with nothing left to do before an assembly stands down.
+# Consecutive PC visits with nothing left to do before an assembly stands down. The monitor keeps the count.
 BLOCKED_LIMIT = 8
 
 
@@ -79,17 +79,20 @@ def assemble(policy, snapshot, wanted, Goal, label):
     collection = policy.collection
     if assembled(snapshot, wanted):
         collection.pop('activity_team', None)
-        collection.pop('activity_blocked', None)
+        forget(policy, pc_key(wanted))
         return None
     if standing_down(policy, team_key(wanted)):
+        if collection.get('activity_team') == wanted:
+            collection.pop('activity_team')
         return None
-    if not reachable(snapshot, wanted) or collection.get('activity_blocked', 0) >= BLOCKED_LIMIT:
+    if not reachable(snapshot, wanted):
         collection.pop('activity_team', None)
-        collection.pop('activity_blocked', None)
+        forget(policy, pc_key(wanted))
         stand_down(policy, team_key(wanted))
         return None
-    if collection.get('activity_team') != wanted:
-        collection['activity_blocked'] = 0
+    previous = collection.get('activity_team')
+    if previous is not None and previous != wanted:
+        forget(policy, pc_key(previous))
     collection['activity_team'] = wanted
     goal = policy.storage_goal(snapshot)
     return Goal('collection_activity_team', label, goal.map_name, goal.x, goal.y, goal.face)
@@ -115,10 +118,16 @@ def arrive(policy, snapshot):
                 policy.menu = (ChangeBox(spare.box) if spare.box != snapshot.active_box
                                else Release(spare.box, spare.position, [spare.species, spare.trainer_id, list(spare.dvs)]))
             else:
-                policy.collection['activity_blocked'] = policy.collection.get('activity_blocked', 0) + 1
-                return 'b'
+                return blocked(policy)
     else:
-        policy.collection['activity_blocked'] = policy.collection.get('activity_blocked', 0) + 1
-        return 'b'
-    policy.collection['activity_blocked'] = 0
+        return blocked(policy)
+    exhausted(policy, pc_key(policy.collection['activity_team']), BLOCKED_LIMIT, events=('press',))
     return 'a'
+
+
+def blocked(policy):
+    """Count a PC visit that had nothing left to do, and stand the team down after BLOCKED_LIMIT in a row."""
+    team = policy.collection['activity_team']
+    if exhausted(policy, pc_key(team), BLOCKED_LIMIT):
+        stand_down(policy, team_key(team))
+    return 'b'

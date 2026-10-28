@@ -179,6 +179,30 @@ def test_an_older_save_keeps_its_retry_times_counts_and_idle_frames():
     assert c.director.finish({'method': 'grass', 'key': 'pidgey'}, 2000, False, 'No encounter') == 2000 + 480000
 
 
+def test_a_project_budget_survives_a_restart_and_a_catch_makes_it_whole_again():
+    project = {'method': 'grass', 'species': sid(16), 'key': 'pidgey', 'repeat': True, 'initial_count': 0,
+               'catch_goal': 3}
+    c = Collection()
+    c.project = project
+    c.remaining = 600
+    start = state(map=MAPS['ROUTE_1'])
+    for frame in range(0, 360, 120):
+        c.observe(replace(start, frame=frame, in_battle=1))
+    assert c.remaining == 360
+    restored = Collection()
+    restored.load(json.loads(json.dumps(c.state_dict())))
+    assert restored.remaining == 360
+    restored.observe(replace(start, frame=360, in_battle=1))
+    caught = replace(start, frame=480, in_battle=1, party=start.party + (mon(species=sid(16)),))
+    restored.observe(caught)
+    assert restored.remaining == 36000
+    restored.remaining = 120
+    restored.observe(replace(caught, frame=600))
+    assert restored.project is None
+    assert restored.director.outcomes[-1]['reason'] == 'Expedition time budget reached'
+    assert 'budget:pidgey' not in restored.director.progress.get('progress_frames', {})
+
+
 def test_new_maps_reset_the_idle_count_but_not_the_failures_in_a_row():
     c = Collection()
     c.director.failures['ditto'] = 2
