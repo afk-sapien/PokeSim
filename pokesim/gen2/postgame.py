@@ -20,10 +20,10 @@ from pokecore.dvs import dv_probabilities
 from pokecore.gen2.ram import calculated_stats, experience_at
 
 from ..investment import GOOD_TAIL, MIN_UPGRADE, SEARCH_BUDGET
-from .standdown import hunt_key, stand_down, standing_down, train_key
+from .standdown import forget, hunt_key, search_expected, stand_down, standing_down, train_key
 
-# Copies a better-DV hunt catches before it moves on, and the decisions it may take.
-QUALITY_CATCHES, QUALITY_BUDGET = 3, 6000
+# Copies a better-DV hunt catches before it moves on. Its decisions are budgeted per catch by the monitor.
+QUALITY_CATCHES = 3
 SHINY_ENCOUNTERS = 100
 SHINY_BREAK_ACTIVITIES = 2
 # The adventure play clock uses 60 frames per second. Pauses and playback speed do not affect this limit.
@@ -127,10 +127,13 @@ def finish(policy):
     if activity and activity['kind'] == 'quality':
         searches = data['searches']
         searches[str(activity['species'])] = searches.get(str(activity['species']), 0) + 1
+        forget(policy, hunt_key(activity['species']))
     if activity and activity['kind'] == 'shiny':
         data['shiny_break'] = SHINY_BREAK_ACTIVITIES
     if activity and activity['kind'] == 'train' and (policy.collection.get('training') or {}).get('postgame'):
         policy.collection['training'] = None
+    from .collection import LOADING
+    forget(policy, LOADING)
     data['activity'] = None
 
 
@@ -195,15 +198,13 @@ def done(policy, snapshot, activity, current_time):
     from .collection import matching_time
     if not matching_time(activity['row']['time'], current_time):
         return True
-    elapsed = policy.decisions - activity['started']
     if kind == 'quality':
         new = {repr(row) for row in activity['seen']}
         for mon in held(snapshot):
             if mon.species == activity['species'] and repr(ident(mon)) not in new:
                 activity['seen'].append(ident(mon))
                 activity['caught'] += 1
-        return (activity['caught'] >= QUALITY_CATCHES or elapsed > QUALITY_BUDGET
-                or standing_down(policy, hunt_key(activity['species'])))
+        return activity['caught'] >= QUALITY_CATCHES or standing_down(policy, hunt_key(activity['species']))
     shinies = sum(mon.shiny for mon in held(snapshot))
     # Older local checkpoints did not record frames. Give them one bounded outing from now.
     started = activity.setdefault('started_frame', snapshot.frame)
@@ -292,8 +293,11 @@ def quality(policy, snapshot, current_time):
         row = reachable(policy, snapshot, rows[species])
         if row:
             seen = [ident(mon) for mon in held(snapshot) if mon.species == species]
+            nav = getattr(policy, 'nav', None)
+            route = nav.route(snapshot.map, row['map']) if nav is not None else None
+            expected = search_expected(row.get('chance', 10), len(route) if route is not None else 0)
             return {'kind': 'quality', 'species': species, 'row': dict(row, started=policy.decisions),
-                    'started': policy.decisions, 'seen': seen, 'caught': 0}
+                    'started': policy.decisions, 'seen': seen, 'caught': 0, 'expected': expected}
     return None
 
 

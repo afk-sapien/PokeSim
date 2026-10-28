@@ -30,6 +30,9 @@ from ..shortcuts import ShortcutRunner, gen1_ui
 from .. import config
 
 EXPLORATION_CHANCE = 0.12
+# A trip to buy a TM or Champion shop supplies is expected to take 20000 frames. It is dropped once it
+# spent three times that, counted only while the trip is under way, without the item.
+TM_TRIP_FRAMES = 20000
 
 RELEASE_BUFFER = 5      # free storage slots kept available, so catching never stalls
 
@@ -181,7 +184,7 @@ class StrategicPolicy(Policy):
         self.tm_plan = None
         self.tm_check_after = 0
         self.tm_teach_after = 0
-        self.tm_deadline = 0
+        self.tm_frame = None
 
     def describe(self):
         return f"strategic ({self.mode})"
@@ -1109,10 +1112,17 @@ class StrategicPolicy(Policy):
         if (not self.tm_moves or self.heal_latch or in_league
                 or goal.key.startswith(('party_', 'teach_', 'restock'))):
             return goal, None
-        if self.tm_plan and (s.frame > self.tm_deadline
-                             or not tm_shop.valid_plan(s, self.tm_plan, self.tm_moves, self.tm_compatible, self.shop_offers)):
-            self.tm_plan = None
-            self.tm_check_after = s.frame + 18000
+        monitor = self.collection.director.monitor
+        if self.tm_plan:
+            key = 'tm:' + str(self.tm_plan['item'])
+            delta = max(0, min(120, s.frame - self.tm_frame)) if self.tm_frame is not None else 0
+            self.tm_frame = s.frame
+            monitor.start(key, expected_frames=TM_TRIP_FRAMES)
+            if (monitor.observe(key, delta).stand_down
+                    or not tm_shop.valid_plan(s, self.tm_plan, self.tm_moves, self.tm_compatible, self.shop_offers)):
+                monitor.clear(key)
+                self.tm_plan = None
+                self.tm_check_after = s.frame + 18000
         if s.frame >= self.tm_teach_after:
             self.tm_teach_after = s.frame + 3600
             bag = dict(s.items)
@@ -1140,7 +1150,7 @@ class StrategicPolicy(Policy):
             self.tm_check_after = s.frame + 3600
             self.tm_plan = (tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=False)
                             or champion_shop.choose(s, self.shop_offers))
-            self.tm_deadline = s.frame + 60000
+            self.tm_frame = s.frame
         if self.tm_plan:
             item, target = self.tm_plan['item'], self.tm_plan['target']
             if dict(s.items).get(item):

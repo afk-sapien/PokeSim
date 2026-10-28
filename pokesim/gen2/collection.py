@@ -4,7 +4,7 @@ from collections import Counter
 from .menus import ChangeBox, FieldMove, Release, Storage, Teach, Use
 from .navigation import DIRS
 from pokecore.gen2.ram import Memory
-from .standdown import hunt_key, stand_down, standing_down
+from .standdown import (exhausted, forget, hunt_key, search_expected, spend, stand_down, standing_down)
 
 
 def matching_time(value, current):
@@ -149,14 +149,9 @@ def held_counts(snapshot):
 # Slowking or Kingdra. Magnemite's Metal Coat is left out: it would have to move to Onix or Scyther.
 ITEM_CARRIERS = {61: ('KINGS_ROCK', 186), 79: ('KINGS_ROCK', 199), 117: ('DRAGON_SCALE', 230)}
 _ITEM_HUNTS = [None, None]
+# A carrier hunt is expected to meet 1 / (chance * CARRIER_ITEM_ODDS) wild battles before one holds the
+# item, so its search budget comes from that. Silver spent about a third of its frames on carrier hunts.
 CARRIER_ITEM_ODDS = 0.02
-# A carrier hunt stands down after a decision budget: this many times the wild battles its spot is
-# expected to take for the item, at DECISIONS_PER_BATTLE each, and never more than two game hours.
-# Silver spent about a third of its frames on carrier hunts, and a count of battles never fired
-# because the hunt met only a few battles an hour on its spot.
-CARRIER_ROUNDS = 3
-DECISIONS_PER_BATTLE = 75
-CARRIER_DECISIONS = 14000
 
 
 def item_hunts(policy, snapshot):
@@ -188,34 +183,35 @@ def item_hunts(policy, snapshot):
 HUNT_GOALS = {'collection_hunt', 'collection_fish', 'collection_field'}
 
 
-def carrier_budget(target):
-    """Decisions a carrier hunt may spend before it stands down: CARRIER_ROUNDS times the wild battles
-    expected for the item, from the carrier's encounter rate on its spot, capped at CARRIER_DECISIONS."""
-    battles = CARRIER_ROUNDS / (min(100, max(1, target['chance'])) / 100 * CARRIER_ITEM_ODDS)
-    return min(CARRIER_DECISIONS, round(battles * DECISIONS_PER_BATTLE))
+def target_expected(policy, snapshot, target, maps=0):
+    """Decisions a hunt target is expected to take, from its encounter rate and the maps on the way.
+    A carrier is searched for its held item, so only one battle in fifty with it counts."""
+    odds = CARRIER_ITEM_ODDS if target['species'] in item_hunts(policy, snapshot) else 1.0
+    return search_expected(target['chance'], maps, odds)
 
 
-def observe_carriers(policy, snapshot):
-    """Count each decision spent hunting a carrier target, summed across target restarts. A target kept
-    while training, storage or another errand runs first costs nothing."""
-    target = policy.collection.get('target')
+def observe_search(policy, snapshot):
+    """Count each decision a hunt spends searching against its species, across target restarts.
+
+    A target kept while training, storage or another errand runs first costs nothing. A better-DV hunt
+    makes progress with each new copy it catches. The species stands down once its budget runs out.
+    """
     goal = getattr(policy, 'goal', None)
-    if (not target or goal is None or goal.key not in HUNT_GOALS
-            or target['species'] not in item_hunts(policy, snapshot)):
+    if goal is None or goal.key not in HUNT_GOALS:
         return
-    counts = policy.collection.setdefault('carrier_decisions', {})
-    counts[str(target['species'])] = counts.get(str(target['species']), 0) + 1
-
-
-def carriers_exhausted(policy, snapshot, target):
-    """Stand a carrier hunt down once it spent carrier_budget(target) decisions without the item."""
-    counts = policy.collection.get('carrier_decisions') or {}
-    species = target['species']
-    if counts.get(str(species), 0) < carrier_budget(target) or species not in item_hunts(policy, snapshot):
-        return False
-    counts.pop(str(species))
-    stand_down(policy, hunt_key(species))
-    return True
+    target = policy.collection.get('target')
+    if target:
+        if 'expected' not in target:
+            target['expected'] = target_expected(policy, snapshot, target)
+        spend(policy, hunt_key(target['species']), target['expected'])
+        return
+    activity = (policy.collection.get('postgame') or {}).get('activity')
+    if activity and activity['kind'] == 'quality' and not activity.get('suspended'):
+        caught = activity.get('caught', 0)
+        events = ('catch',) if caught > activity.get('counted', 0) else ()
+        activity['counted'] = caught
+        expected = activity.get('expected') or search_expected(activity['row'].get('chance', 10))
+        spend(policy, hunt_key(activity['species']), expected, events, progressed=caught > 0)
 
 
 PEER_STORE = 'peer_store'
@@ -621,9 +617,10 @@ def journey(policy, snapshot, mem, Goal):
     # With every box full and nothing to release, a hunt could never keep a catch.
     room = not policy.no_room(snapshot)
     if (target and (not wanted(policy, snapshot, target['species']) or not matching_time(target['time'], current_time)
-                   or policy.decisions - target['started'] > 12000 or not room
-                   or carriers_exhausted(policy, snapshot, target)
-                   or standing_down(policy, hunt_key(target['species'])))):
+                   or not room or standing_down(policy, hunt_key(target['species'])))):
+        if not wanted(policy, snapshot, target['species']):
+            # Caught, or its item found: the search is done, so its spent decisions go too.
+            forget(policy, hunt_key(target['species']))
         state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
         state['target'] = target = None
     if target is None:
@@ -669,6 +666,7 @@ def journey(policy, snapshot, mem, Goal):
                             len(route) + 50 / max(1, row['chance']), species, mid, method, row))
         if choices:
             target = dict(min(choices, key=lambda row: row[:-1])[-1], started=policy.decisions)
+            target['expected'] = target_expected(policy, snapshot, target, distances.get(target['map'], 0) % 9999)
             state['target'] = target
         else:
             goal = tower(policy, snapshot, Goal)
@@ -811,15 +809,17 @@ def hunt(policy, snapshot, Goal, target=None, label=None):
         label = f'Search for {name}'
     key = 'collection_fish' if method.endswith('rod') else 'collection_field' if method in {'headbutt', 'rock smash'} else 'collection_hunt'
     if postgame:
-        policy.collection['postgame']['activity'].pop('unavailable_steps', None)
+        forget(policy, LOADING)
     return Goal(key, f'{label} in {data.maps[mid]["name"]}', data.maps[mid]['constant'], x, y, face)
+
+
+# Steps a postgame outing waits for its encounter map to finish loading before it is abandoned.
+LOADING, LOADING_STEPS = 'outing:loading', 21
 
 
 def unavailable(policy, snapshot, Goal):
     """Allow map transitions to finish before abandoning a postgame outing."""
-    activity = policy.collection['postgame']['activity']
-    activity['unavailable_steps'] = activity.get('unavailable_steps', 0) + 1
-    if activity['unavailable_steps'] > 20:
+    if exhausted(policy, LOADING, LOADING_STEPS):
         return abandon(policy)
     return Goal('collection_wait', 'Wait for the encounter map to finish loading',
                 policy.data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)

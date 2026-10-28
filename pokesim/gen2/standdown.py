@@ -8,15 +8,58 @@ The shared ``Monitor`` keeps the record in the policy's collection state, counte
 """
 import json
 
-from ..planning.monitor import STAND_DOWNS, STOOD_DOWN, Backoff, Monitor
+from ..planning.monitor import SPENT, STAND_DOWNS, STOOD_DOWN, Backoff, Monitor
 
 # Decisions an objective that stood down waits before it is tried again.
 STAND_DOWN = 50000
 BACKOFF = Backoff(STAND_DOWN)
 
+# What a search is expected to cost, in decisions. A wild battle takes about 75 with the walking that
+# finds it, and crossing one map on the way takes about 150. A goal stands down once it spent three
+# times its expected decisions without progress, and never later than about two game hours.
+DECISIONS_PER_BATTLE = 75
+DECISIONS_PER_MAP = 150
+MOST_DECISIONS = 14000
+# A training trip is expected to cross a few maps and then win a battle before the trainee gains experience.
+TRAINING_DECISIONS = 4 * DECISIONS_PER_MAP + DECISIONS_PER_BATTLE
+
 
 def monitor(policy, backoff=BACKOFF):
     return Monitor(policy.collection, backoff=backoff)
+
+
+def search_expected(chance, maps=0, odds=1.0):
+    """Decisions a search is expected to take: the maps on the way, then the wild battles it takes to meet
+    a Pokémon found in ``chance`` percent of them, of which ``odds`` hold what the search is for."""
+    battles = 1 / (min(100, max(1, chance)) / 100 * odds)
+    return maps * DECISIONS_PER_MAP + battles * DECISIONS_PER_BATTLE
+
+
+def exhausted(policy, key, budget, amount=1, events=()):
+    """Count ``amount`` against ``key`` and say when it reached ``budget`` without progress.
+
+    The count is kept with the save and cleared by any progress event, and again once it runs out.
+    """
+    tracker = monitor(policy)
+    tracker.start(key, budget=budget)
+    if not tracker.observe(key, amount, events).stand_down:
+        return False
+    tracker._table(SPENT).pop(key, None)
+    return True
+
+
+def spend(policy, key, expected, events=(), amount=1, progressed=False):
+    """Count decisions against ``key`` and stand it down once it spent three times ``expected`` without progress."""
+    budget = min(MOST_DECISIONS, round(3 * expected))
+    if not exhausted(policy, key, budget, amount, events):
+        return False
+    monitor(policy).stand_down(key, policy.decisions, progressed=progressed)
+    return True
+
+
+def forget(policy, key):
+    """Drop what ``key`` spent toward its budget, as when its goal is met or abandoned."""
+    monitor(policy)._table(SPENT).pop(key, None)
 
 
 def hunt_key(species):
@@ -29,6 +72,11 @@ def train_key(identity):
 
 def team_key(team):
     return 'team:' + json.dumps(list(team))
+
+
+def pc_key(team):
+    """The count of PC presses that changed nothing while assembling ``team``."""
+    return 'pc:' + json.dumps(list(team))
 
 
 def stand_down(policy, key, backoff=BACKOFF):
@@ -46,6 +94,14 @@ def migrate(policy):
     failed = state.pop('activity_failed', None)
     if isinstance(failed, dict) and failed.get('team') is not None:
         state.setdefault(STOOD_DOWN, {})[team_key(failed['team'])] = failed.get('until', 0) - STAND_DOWN
+    # Older saves counted carrier decisions, refused PC presses and loading steps in their own fields.
+    state.pop('carrier_decisions', None)
+    blocked = state.pop('activity_blocked', None)
+    if blocked and state.get('activity_team') is not None:
+        state.setdefault(SPENT, {})[pc_key(state['activity_team'])] = blocked
+    activity = (state.get('postgame') or {}).get('activity')
+    if isinstance(activity, dict):
+        activity.pop('unavailable_steps', None)
     from .tower import migrate as tower
     tower(policy)
 
@@ -94,4 +150,4 @@ def carry_over(policy, stalled):
         finish(policy)
     if stalled['team']:
         state.pop('activity_team', None)
-        state.pop('activity_blocked', None)
+        forget(policy, pc_key(stalled['team']))

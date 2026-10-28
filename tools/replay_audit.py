@@ -5,7 +5,7 @@
 
 ``run`` plays one checkpoint headless with the checkout's own policy, from the working directory, and
 writes the frame share per goal from ``Monitor.shares()``, the stand-downs, and the frames spent in goal
-spans that ended without a progress event. Red, Blue and Yellow need POKESIM_GEN1_VARIANT set to match
+spans that ended without a progress event. Trainee experience counts as progress for a training goal. Red, Blue and Yellow need POKESIM_GEN1_VARIANT set to match
 the cartridge, and Gold, Silver and Crystal need ``--data-root``.
 
 ``report`` adds up the runs in two folders per game and goal and prints them side by side. A goal is
@@ -26,7 +26,7 @@ import sys
 
 sys.path.insert(0, os.getcwd())
 
-from pokesim.planning.monitor import Monitor  # noqa: E402
+from pokesim.planning.monitor import Monitor, ProgressEvent  # noqa: E402
 from pokesim.planning.progress import events  # noqa: E402
 
 LIMIT_POINTS = 2.0
@@ -59,6 +59,18 @@ def _stand_downs(run, seen):
         return []
     seen['last'] = last
     return [last['key']] if last['status'] == 'deferred' else []
+
+
+def _goal_events(key, previous, current):
+    """The progress events of ``current`` for goal ``key``. A training goal also progresses on experience,
+    since a level can take many battles and a span that gained experience was not wasted."""
+    found = events(previous, current)
+    if 'train' in key and previous is not None and current is not None and not found:
+        gained = sum(after.experience - before.experience for before, after in zip(previous.party, current.party)
+                     if before.species == after.species and after.experience > before.experience)
+        if gained:
+            found.append(ProgressEvent('experience', gained))
+    return found
 
 
 def _levels(snapshot):
@@ -99,7 +111,7 @@ def run_one(args):
         goal = run.policy.goal
         key = goal.key if goal is not None else 'none'
         titles.setdefault(key, getattr(goal, 'label', '') if goal is not None else '')
-        found = events(snapshot, current)
+        found = _goal_events(key, snapshot, current)
         if span is None or span[0] != key:
             if span is not None:
                 spans[span[0]] += 1

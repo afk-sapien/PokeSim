@@ -30,6 +30,35 @@ PROJECT_COOLDOWN = 12000
 # Frames out of battle a project other than training may go without an encounter, a training gain,
 # a new map or another sign of progress before it stands down. Two minutes of play.
 IDLE_BUDGET = 7200
+# Frames a project is expected to take, travel included, by kind. collection.json has no encounter
+# odds yet, so these are declared per kind. A project stands down once it spent three times its
+# expected frames without progress. Training keeps its own clock and a marathon its race clock.
+EXPECTED_FRAMES = {'rematch': 100000, 'special': 60000, 'evolve': 60000, 'dv_hunt': 36000, 'other': 12000}
+
+
+def budgeted(project):
+    return project['method'] not in ('train', 'marathon')
+
+
+def expected_frames(project):
+    if project['method'] == 'rematch':
+        return EXPECTED_FRAMES['rematch']
+    if legendary_project(project) or project.get('event_return') or project['method'] in ('trade', 'fossil'):
+        return EXPECTED_FRAMES['special']
+    if project['method'] == 'evolve':
+        return EXPECTED_FRAMES['evolve']
+    return EXPECTED_FRAMES['dv_hunt' if project.get('dv_hunt') else 'other']
+
+
+def project_budget(project):
+    return 3 * expected_frames(project)
+
+
+def budget_key(project):
+    """The monitor key of a project's budget, apart from its idle count under the project key."""
+    return 'budget:' + project.get('key', project['method'])
+
+
 CENTERS = tuple((m, 13, 4) for m, w in WORLD.items() if 'Pokecenter' in w['name'] and w['width'] == 14)
 CENTERS += ((MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8),)
 LEAGUE = {MAPS[n] for n in ('LORELEIS_ROOM','BRUNOS_ROOM','AGATHAS_ROOM','LANCES_ROOM','CHAMPIONS_ROOM','HALL_OF_FAME')}
@@ -241,6 +270,27 @@ class Collection:
         return self.project.get('key', self.project['method']) if self.project else None
 
     @property
+    def remaining(self):
+        """Frames left in the project's budget. Training and a marathon keep their own clock here."""
+        project = self.project
+        if project and budgeted(project):
+            return project_budget(project) - self.director.monitor.spent(budget_key(project))
+        return self._remaining
+
+    @remaining.setter
+    def remaining(self, frames):
+        project = self.project
+        if not (project and budgeted(project)):
+            self._remaining = frames
+            return
+        spent = self.director.monitor._table(SPENT)
+        used = project_budget(project) - frames
+        if used > 0:
+            spent[budget_key(project)] = used
+        else:
+            spent.pop(budget_key(project), None)
+
+    @property
     def idle_frames(self):
         """Frames the current project has gone without progress, as the director's monitor counts them."""
         key = self.project_key
@@ -270,6 +320,9 @@ class Collection:
             self.director.resume(key, deadline, self.elapsed)
         if 'idle_frames' in data and 'progress' not in data.get('director', {}):
             self.idle_frames = data['idle_frames']
+        if self.project and budgeted(self.project) and 'remaining' in data:
+            # An older save kept the budget beside the director. A newer one agrees with the monitor.
+            self.remaining = data['remaining']
         self.marathon_previous = None
         if self.eevee_choice not in (134, 135, 136):
             self.eevee_choice = 134
@@ -339,6 +392,25 @@ class Collection:
         self.activity_events = []
         return events
 
+    def spend_budget(self, project, s, delta, new_flags):
+        """Count ``delta`` frames against the project's budget.
+
+        A new Pokédex entry, a catch, trainee experience or a new event flag is progress and gives the
+        project its whole budget again. The count is kept with the save, so a restart or a project
+        that idled out and comes back later does not start over.
+        """
+        gains = project.get('gains', {})
+        mark = [len(s.owned), gains.get('catches', 0), gains.get('experience', 0)]
+        seen = project.setdefault('progress_mark', mark)
+        events = tuple(ProgressEvent(kind) for kind, now, before in zip(('dex', 'catch', 'experience'), mark, seen)
+                       if now > before)
+        if new_flags:
+            events += (ProgressEvent('flag'),)
+        project['progress_mark'] = mark
+        key, budget = budget_key(project), project_budget(project)
+        self.director.monitor.start(key, budget=budget)
+        self.director.monitor.observe(key, delta, events)
+
     def record_quality_search(self):
         project = self.project or {}
         if project.get('dv_hunt') and project.get('species'):
@@ -373,7 +445,7 @@ class Collection:
                         'body': 'Pallet Town to Celadon and back, with 11 checkpoints. '
                                 'Wild Pokémon have not agreed to stay off the course.',
                         'priority': 2, 'tags': 'runner'})
-            if project['method'] != 'train':
+            if project['method'] == 'marathon':
                 self.remaining -= delta
             if len(self.project_flags) != len(s.event_flags):
                 self.project_flags = list(s.event_flags)
@@ -477,7 +549,11 @@ class Collection:
             if training_reason and not s.in_battle and not finished:
                 self.abandon(training_reason)
                 return
+            if budgeted(project):
+                self.spend_budget(project, s, delta, new_flags)
             if finished or (self.remaining <= 0 and (project['method'] != 'train' or not s.in_battle)):
+                # A project done or out of budget starts its next turn with the whole budget.
+                self.director.monitor._table(SPENT).pop(budget_key(project), None)
                 self.record_quality_search()
                 self.finish_marathon(bool(finished))
                 if finished and project.get('repeat'):
@@ -888,9 +964,9 @@ class Collection:
         self.project_maps = [s.map]
         self.project_flags = list(s.event_flags)
         self.progress_token = None
-        self.remaining = 300000 if self.project['method']=='rematch' else 180000 if legendary_project(self.project) or self.project.get('event_return') or self.project['method'] in ('trade', 'fossil') else training.TRAINING_BUDGET if self.project['method']=='train' or self.project['method']=='evolve' else 108000 if self.project.get('dv_hunt') else 36000
-        if self.project['method'] == 'marathon':
-            self.remaining = marathon.BUDGET
+        # Any other project's budget lives on the monitor and keeps what it spent before.
+        if not budgeted(self.project):
+            self.remaining = training.TRAINING_BUDGET if self.project['method'] == 'train' else marathon.BUDGET
         nav.path.clear()
         return self.goal(s)
 

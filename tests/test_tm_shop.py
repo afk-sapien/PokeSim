@@ -11,7 +11,7 @@ from pokesim import tm_shop
 from pokesim.activity_ledger import KEY as ACTIVITY, status
 from pokesim.policies.progression import Goal
 from pokesim.policies.shopping import ShoppingController
-from pokesim.policies.strategic import StrategicPolicy
+from pokesim.policies.strategic import TM_TRIP_FRAMES, StrategicPolicy
 from pokesim.runtime import tm_purchase
 from pokesim.runtime.reward_delivery import BARRIER, PENDING, recover_storage
 from pokesim.store import Store
@@ -296,7 +296,11 @@ def test_future_natural_move_is_saved_and_trip_survives_local_recovery(shop_data
     planned = policy.tm_plan.copy()
     policy._recover(s)
     assert policy.tm_plan == planned
-    policy._tm_development(replace(s, frame=policy.tm_deadline + 1), goal, False)
+    # The trip is dropped once it spent three times its expected frames without the item.
+    for frame in range(s.frame + 120, s.frame + 3 * TM_TRIP_FRAMES, 120):
+        policy._tm_development(replace(s, frame=frame), goal, False)
+        assert policy.tm_plan == planned
+    policy._tm_development(replace(s, frame=s.frame + 3 * TM_TRIP_FRAMES), goal, False)
     assert policy.tm_plan is None
 
 

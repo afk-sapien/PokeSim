@@ -184,6 +184,9 @@ def test_a_level_evolution_turn_that_gains_experience_is_progress_not_a_failure(
     c.observe(replace(snapshot, frame=0))
     stronger = replace(dragonair, experience=dragonair.experience + 5000)
     c.observe(replace(snapshot, frame=120, party=(stronger,)))
+    # The experience is progress, so the budget is whole again. It runs out once no more comes.
+    assert c.project and c.remaining == 180000
+    c.remaining = 120
     c.observe(replace(snapshot, frame=240, party=(stronger,)))
     assert c.project is None
     assert c.director.outcomes[-1]['status'] == 'advanced'

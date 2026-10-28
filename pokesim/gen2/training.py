@@ -1,7 +1,7 @@
 """Raise collected partners through normal battles, held items and evolution."""
 from .menus import ChangeBox, Give, PutAway, Release, Remedy, Storage, Take, Toss
 from pokecore.gen2.ram import calculated_stats, experience_at
-from .standdown import stand_down, standing_down, train_key
+from .standdown import TRAINING_DECISIONS, exhausted, spend, stand_down, standing_down, train_key
 
 FIELD_MOVES = {15, 19, 57, 70, 148, 250, 127}
 
@@ -18,7 +18,7 @@ def shareless(data, snapshot):
 
 # Distinct entries each Gen 2 pocket holds. A held item handed back on a swap or a take needs one free.
 POCKET_SLOTS = {'items': 20, 'balls': 12}
-# Refusals of one training project's item task before the project stands down.
+# Refusals of one training project's item task before the project stands down. The monitor keeps the count.
 ITEM_REFUSALS = 3
 
 
@@ -422,10 +422,33 @@ def held_back(policy, task, project):
     """
     until = policy.blocked[policy.task_key(task)]
     refused = project.setdefault('refused', [])
-    if until not in refused:
-        refused.append(until)
-    if len(refused) >= ITEM_REFUSALS:
+    if until in refused:
+        return 'wait'
+    refused.append(until)
+    if exhausted(policy, refusal_key(project['identity']), ITEM_REFUSALS):
         stand_down(policy, train_key(project['identity']))
         policy.collection['training'] = None
         return None
     return 'wait'
+
+
+def refusal_key(identity):
+    return 'refused:' + train_key(identity)
+
+
+def observe(policy, snapshot):
+    """Count each decision a training trip spends against its trainee. Experience the trainee gains is
+    progress. A trip that spent three times its expected decisions without any stands down."""
+    project = policy.collection.get('training')
+    goal = getattr(policy, 'goal', None)
+    if not project or goal is None or goal.key != 'collection_train':
+        return
+    mon = next((mon for mon in snapshot.party if identity(mon) == project['identity']), None)
+    if mon is None:
+        return
+    events = ('experience',) if mon.experience > project.get('experience', mon.experience) else ()
+    project['experience'] = mon.experience
+    if events:
+        project['gained'] = True
+    if spend(policy, train_key(project['identity']), TRAINING_DECISIONS, events, progressed=project.get('gained', False)):
+        policy.collection['training'] = None

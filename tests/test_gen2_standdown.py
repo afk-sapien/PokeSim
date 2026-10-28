@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 from pokesim.gen2 import collection, training
 from pokesim.gen2.menus import ChangeBox, Release, Use
-from pokesim.gen2.standdown import (STAND_DOWN, carry_over, hunt_key, stalled_objectives, standing_down,
-                                    team_key, train_key)
+from pokesim.gen2.standdown import (STAND_DOWN, TRAINING_DECISIONS, carry_over, hunt_key, migrate, pc_key,
+                                    search_expected, stalled_objectives, standing_down, team_key, train_key)
 
 
 class Policy:
@@ -90,7 +90,55 @@ def test_a_reload_during_team_assembly_stands_the_team_down():
     stuck = Policy('collection_activity_team')
     stuck.collection['activity_team'] = ['a', 'b']
     restored = Policy(None)
-    restored.collection = {'activity_team': ['a', 'b'], 'activity_blocked': 3}
+    restored.collection = {'activity_team': ['a', 'b'], 'progress_frames': {pc_key(['a', 'b']): 3}}
     carry_over(restored, stalled_objectives(stuck))
     assert 'activity_team' not in restored.collection
+    assert pc_key(['a', 'b']) not in restored.collection['progress_frames']
     assert standing_down(restored, team_key(['a', 'b']))
+
+
+def test_training_stands_down_after_three_trips_without_experience_and_gains_reset_the_count():
+    trainee = SimpleNamespace(trainer_id=1, dvs=(1, 2, 3, 4, 5), experience=1000)
+    policy = Policy('collection_train')
+    policy.collection['training'] = {'identity': training.identity(trainee)}
+    view = SimpleNamespace(party=(trainee,))
+    budget = 3 * TRAINING_DECISIONS
+    for _ in range(budget - 1):
+        policy.decisions += 1
+        training.observe(policy, view)
+    gained = SimpleNamespace(party=(SimpleNamespace(trainer_id=1, dvs=(1, 2, 3, 4, 5), experience=1100),))
+    training.observe(policy, gained)
+    assert policy.collection['training'] and not policy.collection['progress_frames']
+    for _ in range(budget):
+        policy.decisions += 1
+        training.observe(policy, gained)
+    assert policy.collection['training'] is None
+    # The trip had gained experience, so it waits the base time only.
+    assert standing_down(policy, train_key(training.identity(trainee)))
+    assert not policy.collection['stand_downs']
+
+
+def test_a_better_dv_hunt_is_budgeted_per_catch():
+    policy = Policy('collection_hunt')
+    activity = {'kind': 'quality', 'species': 40, 'row': {'chance': 50}, 'caught': 0,
+                'expected': search_expected(50)}
+    policy.collection['postgame'] = {'activity': activity}
+    budget = round(3 * search_expected(50))
+    for _ in range(budget - 1):
+        collection.observe_search(policy, SimpleNamespace())
+    activity['caught'] = 1
+    collection.observe_search(policy, SimpleNamespace())
+    assert not standing_down(policy, hunt_key(40))
+    for _ in range(budget):
+        collection.observe_search(policy, SimpleNamespace())
+    assert standing_down(policy, hunt_key(40))
+
+
+def test_an_older_save_moves_its_counts_onto_the_monitor():
+    policy = Policy(None)
+    policy.collection = {'carrier_decisions': {'61': 500}, 'activity_team': ['a'], 'activity_blocked': 5,
+                         'postgame': {'activity': {'kind': 'shiny', 'unavailable_steps': 4}}}
+    migrate(policy)
+    assert policy.collection['progress_frames'] == {pc_key(['a']): 5}
+    assert 'carrier_decisions' not in policy.collection and 'activity_blocked' not in policy.collection
+    assert 'unavailable_steps' not in policy.collection['postgame']['activity']
