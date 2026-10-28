@@ -57,3 +57,9 @@ checkouts that might not load this file automatically.
 ## Project conventions
 
 - Never use em dashes or semicolons in authored output.
+
+## Gen 1 vs Gen 2 parity
+
+- A new field in the live state, statistics or activity ledger payload must be filled for Red, Blue and Yellow and for Gold, Silver and Crystal.
+- If one generation leaves it out on purpose, add its key path to `ALLOWED` in `tests/test_generation_parity.py` with a one-line reason.
+- That test fails when one generation fills a field that the other sends as missing, None or empty.
