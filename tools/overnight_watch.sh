@@ -6,6 +6,8 @@ set -uo pipefail
 CORE=${POKESIM_WATCH_CORE:-$HOME/.local/share/pokesim-overnight/pokesim-core}
 CORE_REPO=${POKESIM_WATCH_CORE_REPO:-https://github.com/afk-sapien/pokesim-core.git}
 ROMS=${POKESIM_WATCH_ROMS:-$HOME/roms/pokemon}
+# Save states plus a shortcuts.json manifest for Core's shortcut test on real cartridges.
+SHORTCUTS=${POKESIM_CORE_SHORTCUT_STATES:-$HOME/roms/pokemon/shortcut-states}
 # The SSH host that runs the app and the site name its proxy answers to.
 HOST=${POKESIM_WATCH_HOST:?set POKESIM_WATCH_HOST to the SSH host running the app}
 SITE=${POKESIM_WATCH_SITE:?set POKESIM_WATCH_SITE to the app site name}
@@ -28,16 +30,27 @@ failed=()
 [ -d "$CORE/.git" ] || git clone -q "$CORE_REPO" "$CORE"
 if git -C "$CORE" fetch -q origin && git -C "$CORE" reset -q --hard origin/main && git -C "$CORE" clean -qfdx -e .venv; then
   echo "-- core real-ROM tests at $(git -C "$CORE" log -1 --format='%h %s')"
-  mkdir -p "$GATE"
-  echo "-- waiting up to ${GATE_WAIT}s for the load gate"
-  (cd "$CORE" && POKESIM_CORE_ROMS=$ROMS flock -w "$GATE_WAIT" -E 75 "$GATE/heavy" \
-    nice -n 10 uv run -q --locked --extra dev --extra emulator pytest -q -rs -p no:cacheprovider tests/test_real_roms.py)
-  rc=$?
-  if [ "$rc" -eq 75 ]; then
-    echo "-- load gate stayed busy for ${GATE_WAIT}s"
+  # Without the states the shortcut test skips quietly, so the watch fails instead.
+  if [ ! -f "$SHORTCUTS/shortcuts.json" ]; then
+    echo "-- no shortcut states: $SHORTCUTS/shortcuts.json is missing"
     failed+=(core)
-  elif [ "$rc" -ne 0 ]; then
-    failed+=(core)
+  else
+    mkdir -p "$GATE"
+    echo "-- waiting up to ${GATE_WAIT}s for the load gate"
+    out=$(cd "$CORE" && POKESIM_CORE_ROMS=$ROMS POKESIM_CORE_SHORTCUT_STATES=$SHORTCUTS \
+      flock -w "$GATE_WAIT" -E 75 "$GATE/heavy" \
+      nice -n 10 uv run -q --locked --extra dev --extra emulator pytest -q -rs -p no:cacheprovider tests/test_real_roms.py 2>&1)
+    rc=$?
+    echo "$out"
+    if [ "$rc" -eq 75 ]; then
+      echo "-- load gate stayed busy for ${GATE_WAIT}s"
+      failed+=(core)
+    elif [ "$rc" -ne 0 ]; then
+      failed+=(core)
+    elif grep -q 'POKESIM_CORE_SHORTCUT_STATES to run' <<<"$out"; then
+      echo "-- the shortcut test skipped although $SHORTCUTS is set"
+      failed+=(core)
+    fi
   fi
 else
   echo "-- could not update the Core clone"
