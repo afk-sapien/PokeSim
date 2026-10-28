@@ -4,7 +4,9 @@ from copy import deepcopy
 from itertools import count
 import os
 
+from ..planning.conditions import AnyOf, Badge, Event, Item
 from ..strategy_data import DATA, ITEMS, MAPS, WORLD, event_set
+from . import gates
 
 DIRS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 PAIR_COLLISIONS = {(ts, a, b) for ts, a, b in DATA["collision_pairs"]}
@@ -22,23 +24,65 @@ SEAFOAM_HOLES = {(MAPS[name], x, y) for name, points in (
     ("SEAFOAM_ISLANDS_B3F", ((3, 16), (6, 16))),
 ) for x, y in points}
 
+# Stands for the bit the Saffron guards set once they have had a drink, read from the snapshot.
+SAFFRON_OPEN = 'saffron_open'
 
-# Row on Route 23 and the badge checked there, from Cascade in the south to Earth in the north.
-ROUTE_23_CHECKS = ((136, 2), (119, 4), (105, 8), (96, 16), (85, 32), (56, 64), (35, 128))
-# The Cycling Road guards walk back anyone without a Bicycle in the bag from these tiles, from
-# Route16Gate1FScriptCoords and Route18Gate1FScriptCoords.
-CYCLING_ROAD_CHECKS = (('ROUTE_16_GATE_1F', ((4, 7), (4, 8), (4, 9), (4, 10))),
-                       ('ROUTE_18_GATE_1F', ((4, 3), (4, 4), (4, 5), (4, 6))))
 
-# Cinnabar Gym doors from CinnabarGymGateCoords, as (block x, block y, vertical). The map file
-# draws them open and the game closes each one on entry until EVENT_CINNABAR_GYM_GATE<n>_UNLOCKED,
-# n counting from 1. A closed horizontal door walls its top row and a vertical door its right column.
-CINNABAR_GYM_GATES = ((9, 3, False), (6, 3, False), (6, 6, False), (3, 8, True), (2, 6, False), (2, 3, False))
+class StoryWorld:
+    """What a gate condition asks of a Red, Blue or Yellow snapshot."""
+
+    def __init__(self, snapshot):
+        self.snapshot = snapshot
+        self.items = {item for item, qty in snapshot.items if qty}
+
+    def has_item(self, item):
+        return ITEMS[item] in self.items
+
+    def has_badge(self, badge):
+        return bool(self.snapshot.badges & badge)
+
+    def event(self, flag):
+        if flag == SAFFRON_OPEN:
+            return bool(self.snapshot.saffron_open)
+        return event_set(self.snapshot.event_flags, flag)
+
+    def reachable(self, place):
+        return True
+
+
+def _guard_gates():
+    """(condition, tiles) for each guard or door that turns the player back until its condition holds.
+
+    The tiles come from the generated gate table and the Silph Co doors in the strategy data. Unmodelled,
+    a run without a Bicycle paced the Route 18 gate until the explore project timed out, and a run with
+    six badges argued with the Volcano Badge guard on Route 23 indefinitely.
+    """
+    found = [(Item('BICYCLE'), frozenset((MAPS[name], x, y) for x, y in coords)) for name, coords in gates.CYCLING_ROAD]
+    drink = AnyOf((Event(SAFFRON_OPEN),) + tuple(Item(name) for name in gates.DRINKS))
+    found += [(drink, frozenset((MAPS[name], x, y) for x, y in coords)) for name, coords in gates.SAFFRON_GATES]
+    route_23 = WORLD.get(MAPS['ROUTE_23'])
+    if route_23:
+        # The Earth Badge guard checks only the tiles west of the Victory Road exit.
+        found += [(Badge(badge), frozenset((MAPS['ROUTE_23'], x, row) for x in range(
+            route_23['width'] if last is None else last + 1))) for row, badge, last in gates.ROUTE_23_GUARDS]
+    for m, world in WORLD.items():
+        for x, y, flag in world.get("locked_doors", []):
+            found.append((AnyOf((Item('CARD_KEY'), Event(flag))),
+                          frozenset((m, x + dx, y + dy) for dx in range(2) for dy in range(2))))
+    return tuple(found)
+
+
+GUARD_GATES = _guard_gates()
+
+# The map file draws the Cinnabar Gym doors open and the game closes each one on entry until its flag
+# is set. A closed horizontal door walls its top row and a vertical door its right column.
+CINNABAR_GYM_DOORS = tuple((Event(f'EVENT_CINNABAR_GYM_GATE{n}_UNLOCKED'), door)
+                           for n, door in enumerate(gates.CINNABAR_GYM_DOORS, 1))
 CLOSED_GATE_TILES = {False: (((0, 0), 24), ((1, 0), 24)), True: (((1, 0), 36), ((1, 1), 36))}
 
 
 def cinnabar_gate_open(flags, index):
-    return event_set(flags, f'EVENT_CINNABAR_GYM_GATE{index + 1}_UNLOCKED')
+    return event_set(flags, CINNABAR_GYM_DOORS[index][0].flag)
 
 
 _STAMPS = count(1)
@@ -244,10 +288,11 @@ class Navigator:
         self.tile_overrides = {(m, x, y): tile for m, w in WORLD.items() for flag, x, y, tile in w.get("opened_tiles", [])
                                if event_set(snapshot.event_flags, flag)
                                or (allow_remote_puzzles and m != snapshot.map and can_strength)}
+        world = StoryWorld(snapshot)
         gym = MAPS.get('CINNABAR_GYM')
         if gym in WORLD:
-            for index, (bx, by, vertical) in enumerate(CINNABAR_GYM_GATES):
-                if not cinnabar_gate_open(snapshot.event_flags, index):
+            for door, (bx, by, vertical) in CINNABAR_GYM_DOORS:
+                if not door.holds(world):
                     self.tile_overrides.update(((gym, bx * 2 + dx, by * 2 + dy), tile)
                                                for (dx, dy), tile in CLOSED_GATE_TILES[vertical])
         # Puzzle switches reset on reentry. Old successful steps cannot reopen a gate.
@@ -256,7 +301,6 @@ class Navigator:
                                 if self.active_tile(w, x, y) not in w["passable"]}
         self.can_surf = bool(snapshot.badges & 16 and any(57 in p.moves for p in snapshot.party))
         self.can_cut = bool(snapshot.badges & 2 and any(15 in p.moves for p in snapshot.party))
-        drinks = {ITEMS[n] for n in ("FRESH_WATER", "SODA_POP", "LEMONADE")}
         # Routine routes use ladders to avoid scripted falls and downstream currents.
         self.story_blocks = set(SEAFOAM_HOLES)
         if not all(event_set(snapshot.event_flags, flag) for flag in
@@ -265,30 +309,9 @@ class Navigator:
             self.story_blocks.add((MAPS['SEAFOAM_ISLANDS_B3F'], 15, 8))
             self.story_blocks.update((MAPS['SEAFOAM_ISLANDS_B4F'], x, y)
                                      for x in (20, 21) for y in (16, 17))
-        # Route 23 checks one badge at each of these rows and walks the player back without it. Unmodelled,
-        # the Indigo Plateau shop looked like the nearest place to restock, and a run with six badges
-        # argued with the Volcano Badge guard indefinitely.
-        route_23 = WORLD.get(MAPS['ROUTE_23'])
-        if route_23:
-            for row, badge in ROUTE_23_CHECKS:
-                if not snapshot.badges & badge:
-                    self.story_blocks.update((MAPS['ROUTE_23'], x, row) for x in range(route_23['width']))
-        # Unmodelled, a run without a Bicycle walked to the Route 18 gate to reach Route 16 Gate 2F
-        # and was turned back by the guard until the explore project timed out.
-        if not any(item == ITEMS['BICYCLE'] and qty for item, qty in snapshot.items):
-            for name, coords in CYCLING_ROAD_CHECKS:
-                self.story_blocks.update((MAPS[name], x, y) for x, y in coords)
-        if not snapshot.saffron_open and not any(item in drinks for item, qty in snapshot.items if qty):
-            for name, coords in (("ROUTE_5_GATE", ((3, 3), (4, 3))),
-                                 ("ROUTE_6_GATE", ((3, 2), (4, 2))),
-                                 ("ROUTE_7_GATE", ((3, 3), (3, 4))),
-                                 ("ROUTE_8_GATE", ((2, 3), (2, 4)))):
-                self.story_blocks.update((MAPS[name], x, y) for x, y in coords)
-        if not any(item == ITEMS["CARD_KEY"] and qty for item, qty in snapshot.items):
-            for m, world in WORLD.items():
-                for x, y, flag in world.get("locked_doors", []):
-                    if not event_set(snapshot.event_flags, flag):
-                        self.story_blocks.update((m, x + dx, y + dy) for dx in range(2) for dy in range(2))
+        for condition, tiles in GUARD_GATES:
+            if not condition.holds(world):
+                self.story_blocks.update(tiles)
         cleared = set()
         for index, (m, obj_id) in enumerate(DATA["toggle_objects"]):
             if m not in WORLD or obj_id >= len(WORLD[m]["objects"]):
