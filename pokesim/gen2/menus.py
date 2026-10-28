@@ -21,6 +21,8 @@ MAX_STEPS = 600
 RADIO_MAX_STEPS = 300
 # A slot session is hundreds of rounds, so it is capped on a long run and on no visible change.
 SLOT_MAX_STEPS = 12000
+# Screens before Continue. No menu exists there, so a task ends and leaves the screen alone.
+PRE_GAME = ('title', 'main_menu')
 
 
 def menu_label(row):
@@ -206,6 +208,8 @@ class CoreTask:
                 return self.end(mem)
             version = snapshot.data.game
             screen = current_screen(mem.memory, version)
+            if screen in PRE_GAME:
+                return None
             if self.start is None or screen not in self.start:
                 button = self.approach(screen)
                 if button and self.steps < 60:
@@ -229,7 +233,10 @@ class CoreTask:
     def exit(self, mem):
         """Press B until the overworld shows on two steps in a row."""
         self.exit_steps += 1
-        resting = current_screen(mem.memory, mem.data.game) == 'overworld'
+        screen = current_screen(mem.memory, mem.data.game)
+        if screen in PRE_GAME:
+            return None
+        resting = screen == 'overworld'
         self.clear = getattr(self, 'clear', 0) + 1 if resting else 0
         if self.clear >= 2 or self.exit_steps > 40:
             return None
