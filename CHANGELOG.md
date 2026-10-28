@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Require pokecore 0.9.1. Gold, Silver and Crystal randomized adventures that shuffle trainers now give each new Pokémon a fitting move set, where before it kept the moves of the Pokémon it replaced. A share code still gives the same Pokémon as before.
+
 - Give Gold, Silver and Crystal the journal entries Red, Blue and Yellow already write. The journal now lists first sightings, faints, blackouts, trainer wins, key items and HMs, money and play time milestones and the rival's name, so the Elite Four, trainer, exploration and blackout notifications now fire for these games too. A wild Raikou, Entei, Suicune, Lugia, Ho-Oh or Celebi caught in battle now reads "Caught the legendary Suicune!" and goes out as a Legendary Pokémon notification. Faints, sightings and other timeline-only entries keep a picture but no save, and they do not count as progress for the stall watch.
 
 - Bring Gold, Silver and Crystal settings in line with Red, Blue and Yellow. The Goldenrod Champion shop now opens to every Champion, as in Gen I, instead of only with Extra store items on. Steps between gift, trade, Sudowoodo and Snorlax returns now also reopen Bill's Eevee, Kiyo's Tyrogue, Crystal's Odd Egg and Dratini, and Kim's Aerodactyl trade, the only trade whose Pokémon has no other source. Each return shows on the Statistics page and in the journal. Red, Blue and Yellow now ask for help when a run stops making game progress, as Gen II already did, so the watchdog can show it. Gen II adventures refuse a policy other than strategic, which is the only one they play.
