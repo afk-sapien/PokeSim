@@ -71,6 +71,16 @@ def test_library_api_turns_it_on_and_off_only_for_generation_i(tmp_path, monkeyp
         assert refused.status_code == 409 and 'Red, Blue and Yellow' in refused.text
 
 
+def test_generation_ii_refuses_a_policy_it_cannot_play(tmp_path):
+    registry = Registry(tmp_path)
+    registry.add_rom('red-rom', 'sha1', 'red')
+    registry.add_rom('gold-rom', 'sha2', 'gold')
+    assert registry.create('Red', 'red-rom', {'policy': 'smart_random'}, identifier())['settings']['policy'] == 'smart_random'
+    assert registry.create('Gold', 'gold-rom', {'policy': 'strategic'}, identifier())
+    with pytest.raises(ValueError, match='strategic policy only'):
+        registry.create('Gold', 'gold-rom', {'policy': 'guided_random'}, identifier())
+
+
 def test_chosen_at_creation_and_changed_while_running_but_the_randomizer_stays_locked(tmp_path, monkeypatch):
     manager = Manager(tmp_path, 'http://testserver')
     monkeypatch.setattr(manager, 'start', lambda: None)

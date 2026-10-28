@@ -879,13 +879,13 @@
         input.value = game.settings?.[setting] ?? fallback
         input.disabled = running(game)
       }
-      // Gold, Silver and Crystal return legendaries, Sudowoodo and Snorlax. They have no fossil or Dojo choice.
+      // Gold, Silver and Crystal return legendaries, Sudowoodo, Snorlax, gifts and a trade. They have no fossil or Dojo choice.
       for (const field of ['fossil-preference', 'dojo-preference']) {
         const input = $(`#settings-${field}`)
         input.closest('label').hidden = johto
         input.disabled = johto || running(game)
       }
-      $('#settings-event-steps-label').textContent = johto ? 'Steps between Sudowoodo and Snorlax returns' : 'Steps between gift, trade and Snorlax returns'
+      $('#settings-event-steps-label').textContent = johto ? 'Steps between gift, trade, Sudowoodo and Snorlax returns' : 'Steps between gift, trade and Snorlax returns'
       $('#adventure-settings').showModal()
       return
     }

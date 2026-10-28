@@ -66,3 +66,17 @@ def test_earned_experience_is_progress_but_a_party_swap_is_not():
     assert not advanced(before, SimpleNamespace(party=(mon(1000), mon(500)), box_counts=(3,), boxed_pokemon=()))
     # Withdrawing a stronger partner raises the party's total without anything being earned.
     assert not advanced(before, SimpleNamespace(party=(mon(1000), mon(500), mon(90000)), box_counts=(2,), boxed_pokemon=()))
+
+
+def test_a_stalled_red_blue_or_yellow_run_asks_for_help():
+    game = SimpleNamespace(stall=StallWatch(game_minutes=120, real_minutes=0), frame=130 * MINUTE,
+                           paused=False, manual_mode=False)
+    game.stall.progress(0, 0)
+    request = Emulator.help_request(game, {'action': 'exploring'})
+    assert request == {'reason': 'The policy has stopped making game progress', 'action': 'exploring'}
+    game.paused = True
+    assert Emulator.help_request(game, {}) is None
+    game.paused, game.manual_mode = False, True
+    assert Emulator.help_request(game, {}) is None
+    game.manual_mode, game.frame = False, 10 * MINUTE
+    assert Emulator.help_request(game, {}) is None

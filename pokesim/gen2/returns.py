@@ -1,7 +1,8 @@
-"""Walking returns for Gen II's one-time legendary and overworld encounters.
+"""Walking returns for Gen II's one-time legendaries, overworld encounters, gifts and trades.
 
 Gen II hides an overworld object while its event flag is set and reloads that state when a map
-loads, so clearing a flag away from the map brings the encounter back on the next visit.
+loads, so clearing a flag away from the map brings the encounter back on the next visit. A gift
+giver checks its GOT flag and a trader its wTradeFlags bit the same way.
 """
 import json
 
@@ -31,6 +32,15 @@ WEIRD_TREE = 4  # SPRITE_WEIRD_TREE - SPRITE_VARS
 # cartridge also uses it for the Victory Road Gate guard and for NPC dialogue.
 ACTIVITIES = (('sudowoodo', 'Sudowoodo', 185, 'ROUTE_36', ('EVENT_FOUGHT_SUDOWOODO', 'EVENT_ROUTE_36_SUDOWOODO')),
               ('snorlax', 'Snorlax', 143, 'VERMILION_CITY', ('EVENT_FOUGHT_SNORLAX', 'EVENT_VERMILION_CITY_SNORLAX')))
+# One-time gifts with no other source, as (key, name, room, flag, species that count as the gift).
+# Each giver's script checks only its own GOT flag (pret pokegold and pokecrystal), so clearing it
+# away from the room offers the gift again. Kiyo's beaten flag stays set, so he hands over Tyrogue
+# without another battle. Togepi's egg, Shuckie and Kenya's Spearow are left alone because their
+# givers move on with the story or take the Pokémon back.
+GIFTS = (('gift_eevee', 'Eevee gift', 'BILLS_FAMILYS_HOUSE', 'EVENT_GOT_EEVEE', (133,)),
+         ('gift_odd_egg', 'Odd Egg gift', 'DAY_CARE', 'EVENT_GOT_ODD_EGG', (172, 173, 174, 236, 238, 239, 240)),
+         ('gift_dratini', 'Dratini gift', 'DRAGON_SHRINE', 'EVENT_GOT_DRATINI', (147,)),
+         ('gift_tyrogue', 'Tyrogue gift', 'MOUNT_MORTAR_B1F', 'EVENT_GOT_TYROGUE_FROM_KIYO', (236,)))
 
 
 def interval():
@@ -181,7 +191,7 @@ def claims(store):
 
 
 def observe_events(store, snapshot, memory, walking=None):
-    """Reopen Sudowoodo and Snorlax after walking, once the Champion has finished the story."""
+    """Reopen Sudowoodo, Snorlax, the one-time gifts and trades after walking, once the Champion has finished the story."""
     data = snapshot.data
     steps = walking if walking is not None else store.get(STEPS) or {}
     if not snapshot.valid or not snapshot.started or not snapshot.hall_of_fame_count or not steps.get('available', True):
@@ -223,11 +233,105 @@ def observe_events(store, snapshot, memory, walking=None):
         if key == 'sudowoodo' and ticket['state'] == 'walking' and ticket['cycle']:
             # Between returns the variable sprite belongs to Route 37's twins, as after the first battle.
             changed |= write_byte(memory, data, 'wVariableSprites', SPRITE_TWIN, WEIRD_TREE)
+    for key, name, room, done, dexes in offers(data):
+        changed |= _offer(tickets, events, snapshot, memory, ok, (key, name, room, done, dexes), total, every)
     if ok and (sprite := weird_tree(snapshot)) is not None:
         changed |= write_byte(memory, data, 'wVariableSprites', sprite, WEIRD_TREE)
     if value != saved:
         store.set(EVENTS, value)
     return events, changed
+
+
+def offers(data):
+    """Gifts and NPC trades that walking brings back, as (key, name, room, done bit, counted species).
+
+    The done bit is an event flag name for a gift and a wTradeFlags index for a trade. Only trades
+    whose Pokémon has no other source come back: no wild row for it or anything that evolves into it.
+    """
+    cached = getattr(data, '_event_offers', None)
+    if cached is not None:
+        return cached
+    rows = [(key, name, room, flag, dexes) for key, name, room, flag, dexes in GIFTS
+            if flag in data.events and room in data.map_ids]
+    if 'wTradeFlags' in data.symbols:
+        from .npc_trades import trades, wild
+        earlier = {}
+        for species, row in data.species.items():
+            for evolution in row['evolutions']:
+                earlier.setdefault(evolution['species'], set()).add(species)
+        for trade in trades(data.game):
+            family, waiting = set(), [trade.give]
+            while waiting:
+                species = waiting.pop()
+                if species not in family:
+                    family.add(species)
+                    waiting.extend(earlier.get(species, ()))
+            if trade.map_name in data.map_ids and not any(wild(data, species) for species in family):
+                rows.append((f'trade_{trade.index}', f"{data.species[trade.give]['name']} exchange",
+                             trade.map_name, trade.index, (trade.give,)))
+    cached = tuple(rows)
+    try:
+        data._event_offers = cached
+    except AttributeError:
+        pass
+    return cached
+
+
+def _done(snapshot, memory, data, bit):
+    if isinstance(bit, str):
+        return bool(snapshot.event(bit))
+    return bool(Memory(memory, data).byte('wTradeFlags') >> bit & 1)
+
+
+def _set(memory, data, bit, value):
+    if isinstance(bit, str):
+        return write_flag(memory, data, bit, value)
+    flags = Memory(memory, data).byte('wTradeFlags')
+    return write_byte(memory, data, 'wTradeFlags', flags | 1 << bit if value else flags & ~(1 << bit))
+
+
+def population(snapshot, dexes):
+    """Copies of a gift or trade Pokémon held in the party and the boxes, eggs included."""
+    return sum(mon.species in dexes for mon in (*getattr(snapshot, 'party', ()), *getattr(snapshot, 'stored', ())))
+
+
+def _offer(tickets, events, snapshot, memory, ok, offer, total, every):
+    """Walk one gift or trade through its walking, available and completed states."""
+    key, name, room, bit, dexes = offer
+    data = snapshot.data
+    done, here = _done(snapshot, memory, data, bit), snapshot.map == data.map_ids[room]
+    ticket = tickets.get(key)
+    if ticket is None:
+        if not done:
+            return False
+        ticket = tickets[key] = {'state': 'walking', 'next_at': total + every, 'interval': every, 'cycle': 0,
+                                 'name': name, 'dex': dexes[0]}
+    if ticket['interval'] != every:
+        ticket.update(interval=every, next_at=total + every)
+    if not ok:
+        return False
+    if ticket['state'] == 'available':
+        if not done:
+            if here:
+                # Storage visits may move copies before the visit, so the gain is judged at the venue.
+                ticket['baseline'] = population(snapshot, dexes)
+            return False
+        if population(snapshot, dexes) > ticket.get('baseline', 0):
+            ticket.update(state='walking', next_at=total + every)
+            events.append(Event('event_return', f'Completed the {name}',
+                                'The next opportunity starts after more walking.', priority=3))
+            return False
+        # The bit is set without a new copy, so an older checkpoint was loaded. Offer it again.
+        return _set(memory, data, bit, False) if not here else False
+    if every and ticket['state'] == 'walking' and total >= ticket['next_at'] and not here:
+        ticket.update(state='available', cycle=ticket['cycle'] + 1, baseline=population(snapshot, dexes))
+        events.append(Event('event_return', f'{name} available',
+                            'A walking milestone unlocked another visit.', priority=3))
+        return _set(memory, data, bit, False)
+    if ticket['state'] == 'walking' and ticket['cycle'] and not done:
+        # An older checkpoint cannot reopen a gift or trade that was already completed.
+        return _set(memory, data, bit, True)
+    return False
 
 
 def weird_tree(snapshot):
@@ -255,7 +359,10 @@ def returned_events(store):
     if not event_interval():
         return set()
     tickets = (store.get(EVENTS) or {}).get('tickets', {})
-    return {dex for key, _, dex, _, _ in ACTIVITIES if tickets.get(key, {}).get('state') == 'available'}
+    found = {dex for key, _, dex, _, _ in ACTIVITIES if tickets.get(key, {}).get('state') == 'available'}
+    # A reopened trade makes its Pokémon worth trading for again. Gifts need no catch, so they stay out.
+    return found | {ticket['dex'] for key, ticket in tickets.items()
+                    if key.startswith('trade_') and ticket.get('state') == 'available' and 'dex' in ticket}
 
 
 def status(store, data=None):
@@ -276,6 +383,6 @@ def event_status(store):
     every = event_interval()
     tickets = (store.get(EVENTS) or {}).get('tickets', {})
     return {'enabled': bool(every), 'interval': every, 'activities': [
-        {'key': key, 'ready': bool(every) and ticket['state'] == 'available',
+        {'key': key, 'name': ticket.get('name'), 'ready': bool(every) and ticket['state'] == 'available',
          'remaining': max(0, ticket['next_at'] - total)}
         for key, ticket in tickets.items()]}

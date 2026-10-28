@@ -156,7 +156,7 @@
     const cards = (activities?.enabled ? activities.activities : []).map(row => {
       const remaining = Math.max(0, row.remaining)
       const ready = row.ready
-      return {title: labels[row.key] || 'Exchange', key: row.key,
+      return {title: row.name || labels[row.key] || 'Exchange', key: row.key,
         state: ready ? 'ready' : remaining ? 'walking' : 'pending',
         badge: ready ? 'Ready' : remaining ? 'Walking' : 'Pending',
         value: ready ? 'Ready to revisit' : remaining ? number(remaining) : 'Steps complete',

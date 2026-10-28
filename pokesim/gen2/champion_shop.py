@@ -1,6 +1,7 @@
-"""Limited TMs and Champion supplies at the Goldenrod Dept. Store, part of "Extra store items".
+"""Limited TMs and Champion supplies at the Goldenrod Dept. Store.
 
-The Gen II port of the Red, Blue and Yellow TM shop and Champion shop. After the Hall of Fame,
+The Gen II port of the Red, Blue and Yellow TM shop and Champion shop. Like Gen I, it opens to every
+Champion and does not wait for the "Extra store items" setting. After the Hall of Fame,
 the 5F TM clerks also sell the one-time TMs a partner would learn for a real gain, and the 4F
 clerk sells Champion supplies. Prices and the walking caps match Gen I: a Master Ball or five Rare
 Candies once per 1,000,000 steps each, and the policy keeps ₽20,000 for ordinary supplies.
@@ -14,7 +15,6 @@ Elixirs restore moves out of PP in the Pokémon League.
 PP Up is priced but not planned yet: Core does not recognise the Gen II "raise PP of which move"
 list, so the item could not be used after buying it.
 """
-from .. import config
 from .standdown import stand_down, standing_down
 
 KEY = 'gen2-champion-shop-v1'
@@ -44,10 +44,6 @@ POCKET_ROOM = {'ITEM': 19, 'BALL': 11}
 CHECK_DECISIONS = 2000
 PLAN_DECISIONS = 8000
 PLAN_TRIES = 3
-
-
-def enabled():
-    return bool(getattr(config, 'EXTRA_STORE_ITEMS', False))
 
 
 def champion(snapshot):
@@ -113,15 +109,13 @@ def label(data, item):
 
 def observe(store, snapshot, walking):
     """Start the walking countdowns the first time the run is seen as Champion."""
-    if (enabled() and snapshot.valid and snapshot.started and champion(snapshot)
+    if (snapshot.valid and snapshot.started and champion(snapshot)
             and walking.get('available') and store.get(KEY) is None):
         store.set(KEY, {name: {'next_at': walking['total'] + INTERVAL, 'purchased': 0} for name in OFFERS})
 
 
 def status(store, data, walking=None):
-    """The Champion shop panel on the item statistics page, or None with the setting off."""
-    if not enabled():
-        return None
+    """The Champion shop panel on the item statistics page."""
     from .steps import STEPS
     value = store.get(KEY) or {}
     walking = walking or store.get(STEPS) or {}
@@ -155,7 +149,7 @@ def consume(store, data, item, walking):
 
 def catalogue(data, plan, offers):
     """{mart constant: {item: unit price}} the clerks add for the current plan."""
-    if not enabled() or not plan or plan.get('bought'):
+    if not plan or plan.get('bought'):
         return {}
     item = plan['item']
     if supply_name(data, item) in OFFERS and item not in offers:
@@ -340,7 +334,7 @@ def _shop(data, mart):
 def journey(policy, snapshot, Goal):
     """Walk to the Goldenrod clerk who sells the planned TM or supply."""
     state = policy.collection
-    if not enabled() or not champion(snapshot):
+    if not champion(snapshot):
         state.pop(PLAN, None)
         return None
     data = policy.data
@@ -397,7 +391,7 @@ def arrive(policy, snapshot):
 
 def use(policy, snapshot):
     """The menu task that puts a bought or owned item to use, or None."""
-    if not enabled() or not champion(snapshot) or snapshot.in_battle:
+    if not champion(snapshot) or snapshot.in_battle:
         return None
     from .menus import Give, Teach, UseOn
     data, state = policy.data, policy.collection

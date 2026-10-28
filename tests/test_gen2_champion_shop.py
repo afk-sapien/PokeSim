@@ -1,4 +1,4 @@
-"""Gen II TM shop and Champion shop, part of the "Extra store items" setting."""
+"""Gen II TM shop and Champion shop, open to every Champion as in Gen I."""
 import os
 from types import SimpleNamespace
 
@@ -69,14 +69,28 @@ def test_limited_tms_and_prices(real_data):
     assert shop.label(real_data, earthquake) == 'TM26 Earthquake'
 
 
-def test_setting_off_offers_nothing(real_data, monkeypatch):
+def test_the_shop_opens_to_a_champion_with_extra_store_items_off(real_data, monkeypatch):
+    # Red, Blue and Yellow open their Champion shop without the setting, so Gen II does too.
     monkeypatch.setattr(config, 'EXTRA_STORE_ITEMS', False, raising=False)
-    plan = {'item': real_data.items['TM26']}
-    assert shop.catalogue(real_data, plan, set()) == {}
-    assert shop.status(Store(), real_data) is None
+    tm, ball = real_data.items['TM26'], real_data.items['MASTER_BALL']
+    assert shop.catalogue(real_data, {'item': tm}, set()) == {mart: {tm: 50000} for mart in shop.TM_MARTS}
+    assert shop.status(Store(), real_data)['offers']
     policy = policy_for(real_data)
-    assert shop.journey(policy, snap(real_data, [mon(154)]), None) is None
-    assert shop.use(policy, snap(real_data, [mon(154)], [(real_data.items['TM26'], 1)])) is None
+    assert shop.journey(policy, snap(real_data, [mon(154)]), None).map == 'GOLDENROD_DEPT_STORE_5F'
+    assert type(shop.use(policy, snap(real_data, [mon(154)], [(tm, 1)]))).__name__ == 'Teach'
+    # The 4F list gains the planned Master Ball but none of the setting's stones.
+    emulator = Emulator(real_data)
+    assert store_stock.StoreStock(real_data, champion=lambda: shop.catalogue(real_data, {'item': ball}, {ball})).attach(emulator)
+    supplies = next(entry for maps in real_data.maps.values() for entry in maps['shops']
+                    if entry['mart'] == 'MART_GOLDENROD_4F')
+    assert open_list(real_data, emulator, supplies['items']) == list(supplies['items']) + [ball]
+    # A stone left in wCurItem keeps the cartridge price while the setting is off.
+    symbols = real_data.symbols
+    emulator.register_file.D = emulator.register_file.E = 7
+    emulator.memory[0, slice(symbols['wCurItem'][1], symbols['wCurItem'][1] + 1)] = [real_data.items['MOON_STONE']]
+    bank, address = symbols['SelectQuantityToBuy']
+    emulator.hooks[bank, address + 6]()
+    assert (emulator.register_file.D, emulator.register_file.E) == (7, 7)
 
 
 def test_catalogue_routes_tms_to_5f_and_capped_supplies_need_an_offer(real_data, on):

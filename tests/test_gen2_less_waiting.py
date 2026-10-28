@@ -47,9 +47,9 @@ def clock(day=1, time=1):
 
 def stub_activities(monkeypatch, **goals):
     """Make every activity of the expedition idle except the ``goals`` given by name."""
-    from pokesim.gen2 import (breeding, celebi, collection, contest, gamecorner, npc_trades, postgame, quests, ruins,
-                              tower, training)
-    for module, name in [(contest, 'journey'), (tower, 'journey'), (ruins, 'journey'), (celebi, 'journey'),
+    from pokesim.gen2 import (breeding, celebi, champion_shop, collection, contest, gamecorner, npc_trades, postgame,
+                              quests, ruins, tower, training)
+    for module, name in [(champion_shop, 'journey'), (contest, 'journey'), (tower, 'journey'), (ruins, 'journey'), (celebi, 'journey'),
                          (quests, 'gifts'), (quests, 'trade_items'), (quests, 'legends'), (quests, 'stones'),
                          (npc_trades, 'journey'), (breeding, 'journey'), (breeding, 'hatching'),
                          (gamecorner, 'journey'), (training, 'journey'), (postgame, 'journey')]:
