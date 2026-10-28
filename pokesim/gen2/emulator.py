@@ -1117,6 +1117,10 @@ class Emulator:
         from .. import rewards
         from ..randomized import status as randomizer_status
         achievement = self.last_achievement
+        if achievement:
+            # The live page says how long ago it was, the same as Red, Blue and Yellow.
+            achievement = {'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
+                           'age_seconds': max(0, int(time.time() - achievement['ts']))}
         quiet_minutes = max(0, self.frame - self.progress_frame) / 3600
         live = not self.paused and not self.manual_mode
         waiting = live and self.waiting

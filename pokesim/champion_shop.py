@@ -30,7 +30,8 @@ def status(store):
     walking = store.get(STEPS) or {}
     total = walking.get('total', 0)
     return {'started': bool(value), 'available': bool(walking.get('available')),
-            'interval': INTERVAL, 'offers': [
+            'interval': INTERVAL, 'counter': 'Celadon Dept. Store: TMs and supplies at the 2F counter',
+            'offers': [
                 {'item': item, 'name': NAMES[item], 'quantity': quantity, 'price': PRICES[item],
                  'remaining': max(0, value.get(str(item), {}).get('next_at', total + INTERVAL) - total),
                  'purchased': value.get(str(item), {}).get('purchased', 0)}

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show how long ago the last achievement was on the Gold, Silver and Crystal Live page. It always read "just now" before. Stats → Items now names the Red, Blue and Yellow Champion shop counter at the Celadon Dept. Store, as it already did for Goldenrod. A new test compares what both generations send to the Live, Statistics and Items pages, so a field one generation fills and the other leaves empty fails unless it is listed with a reason.
+
 - Require pokecore 0.9.1. Gold, Silver and Crystal randomized adventures that shuffle trainers now give each new Pokémon a fitting move set, where before it kept the moves of the Pokémon it replaced. A share code still gives the same Pokémon as before.
 
 - Count Gold, Silver and Crystal custom gifts in Total caught and Pokémon caught, as Red, Blue and Yellow do. A new level 100 species or perfect find now reaches the progress history and the day and week level 100 counts right away, instead of waiting for the next journal entry. The Marathons completed chart, which stayed at zero, is hidden for these games since the Kanto Marathon is a Red, Blue and Yellow race.
