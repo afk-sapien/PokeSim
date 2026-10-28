@@ -77,6 +77,13 @@ def test_scenarios_are_found_with_their_settings(tmp_path):
     assert Scenario.load(folder).edits == {'money': 0}
 
 
+def test_a_key_from_a_newer_checkout_is_ignored_with_a_warning(tmp_path):
+    (tmp_path / 'scenario.json').write_text(json.dumps({'name': 'later', 'seed': 3, 'from_the_future': [1]}))
+    with pytest.warns(UserWarning, match='from_the_future'):
+        scenario = Scenario.load(tmp_path)
+    assert scenario.name == 'later' and scenario.seed == 3 and not hasattr(scenario, 'from_the_future')
+
+
 def _replay(folder):
     return play(Scenario.load(folder))
 

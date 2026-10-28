@@ -9,7 +9,7 @@ Checkpoints are private game data, so scenario folders live outside the checkout
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 import hashlib
 import json
 import os
@@ -17,6 +17,7 @@ from pathlib import Path
 import random
 import subprocess
 import sys
+import warnings
 
 from .events import diff
 from .game_data import VARIANT_ENV, current_variant
@@ -119,6 +120,12 @@ class Scenario:
         checkpoint = (folder / data.pop('checkpoint', 'start.state')).resolve()
         if data.get('fallback'):
             data['fallback'] = (folder / data['fallback']).resolve()
+        # Scenarios are private data every checkout shares, so a key a newer checkout added must not
+        # stop an older one from loading the rest.
+        known = {f.name for f in fields(cls)}
+        for key in sorted(set(data) - known):
+            warnings.warn(f'{folder.name}: scenario.json key {key!r} is not known here and is ignored', stacklevel=2)
+            data.pop(key)
         return cls(folder=folder, name=data.pop('name', folder.name), checkpoint=checkpoint, **data)
 
 
