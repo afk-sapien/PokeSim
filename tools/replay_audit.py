@@ -23,7 +23,10 @@ exist only in this tool, so the application never reseeds a game.
 
 ``report`` adds up the runs in two folders per game and goal and prints them side by side. A goal is
 flagged when its share or its wasted share grows by more than two points, or when it takes more than
-15% of a game's frames.
+15% of a game's frames. A hunt gets one row per hunt kind and target, such as ``collection_hunt quality
+Larvitar`` or ``collection_hunt shiny``, and a training goal one row per trainee, since one goal key
+covers many hunts or trainees. Run files written before these rows existed keep each such goal in one
+row marked ``(all)``.
 
 The headless runner has no reload watchdog, so a stall here is a stand-down. Screen recoveries are
 counted on their own.
@@ -36,6 +39,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sys
 
 sys.path.insert(0, os.getcwd())
@@ -49,6 +53,47 @@ LARGE_SHARE = 0.15
 GEN1_RANDOM = (0xFFD3, 0xFFD4)
 DIVIDER = 0xFF04  # Any write restarts the divider at zero.
 VBLANK = 0x0040  # The VBlank interrupt vector, the same in all six games.
+HUNTS = frozenset({'collection_hunt', 'collection_fish', 'collection_field', 'collect_hunt'})
+TRAINING = frozenset({'collection_train', 'collect_train'})
+# The reason a Red, Blue or Yellow hunt gives for its trip, and the hunt kind it stands for.
+GEN1_PURPOSES = {'a partner another adventure needs': 'partner', 'more chances to find high DV partners': 'quality',
+                 'another partner for the collection': 'repeat', 'a missing Pokédex entry': 'completion'}
+ALL_TARGETS = 'every target, the run file predates split rows'
+
+
+def describe(goal):
+    """A goal's description: the Gold, Silver or Crystal label, or the Red, Blue or Yellow title and reason."""
+    if goal is None:
+        return ''
+    label = getattr(goal, 'label', None)
+    if label is not None:
+        return label
+    title, reason = getattr(goal, 'title', ''), getattr(goal, 'reason', '')
+    return f'{title}. {reason}' if title and reason else title or reason
+
+
+def _hunt(description):
+    """The hunt kind, its target and a title without the place, or None for a description it cannot read."""
+    if re.fullmatch(r'Search for a shiny in .+', description):
+        return 'shiny', None, 'Search for a shiny'
+    if match := re.fullmatch(r'Search for a stronger (.+?) in .+', description):
+        return 'quality', match[1], f'Search for a stronger {match[1]}'
+    if match := re.fullmatch(r'Search for (.+?)( holding .+?)? in .+', description):
+        return ('item' if match[2] else 'completion'), match[1], f'Search for {match[1]}{match[2] or ""}'
+    if match := re.fullmatch(r'Find (.+?)\. Search .+? for (.+)', description):
+        kind = GEN1_PURPOSES.get(match[2], 'other')
+        return kind, match[1], f'Find {match[1]} for {match[2]}'
+    return None
+
+
+def row(key, description):
+    """The report row of a goal and its title. Hunts split by kind and target, training by trainee."""
+    if key in HUNTS and (hunt := _hunt(description)):
+        kind, target, title = hunt
+        return ' '.join(part for part in (key, kind, target) if part), title
+    if key in TRAINING and (match := re.match(r'Train (.+?) (?:toward|to) ', description)):
+        return f'{key} {match[1]}', f'Train {match[1]}'
+    return key, description
 
 
 def _partners(run):
@@ -194,7 +239,8 @@ def run_one(args):
     recoveries = getattr(run.policy, 'recoveries', 0)
     snapshot = read()
     party = [_levels(snapshot)]
-    span = None  # [key, frames, progressed]
+    span = None  # [row, frames, progressed]
+    seeded = None  # The goal key the last reseed was for. Seeds follow goal keys, not rows.
     released = []
     while run.frame - start < args.frames:
         before = run.frame
@@ -212,23 +258,25 @@ def run_one(args):
             current = None
         goal = run.policy.goal
         key = goal.key if goal is not None else 'none'
-        titles.setdefault(key, getattr(goal, 'label', '') if goal is not None else '')
+        line, title = row(key, describe(goal))
+        titles.setdefault(line, title)
         found = _goal_events(key, snapshot, current)
-        if span is None or span[0] != key:
+        if span is None or span[0] != line:
             if span is not None:
                 spans[span[0]] += 1
                 if not span[2]:
                     wasted[span[0]] += span[1]
-            monitor.start(key)
-            span = [key, 0, False]
-            if seeds is not None:
-                seeds.start(run, key)
+            monitor.start(line)
+            span = [line, 0, False]
+        if seeds is not None and seeded != key:
+            seeds.start(run, key)
+        seeded = key
         spent = run.frame - before
-        monitor.observe(key, spent, found)
+        monitor.observe(line, spent, found)
         span[1] += spent
         span[2] = span[2] or bool(found)
         for stood in _stand_downs(run, seen):
-            stand_downs.append({'key': stood, 'goal': key, 'frame': run.frame})
+            stand_downs.append({'key': stood, 'goal': line, 'frame': run.frame})
         if current is not None and run.generation == 2 and key == 'collection_release':
             released += _released(snapshot, current, run.frame)
         if current is not None:
@@ -242,7 +290,7 @@ def run_one(args):
         'spans': dict(spans), 'wasted': dict(wasted), 'open_span': span,
         'stand_downs': stand_downs, 'reloads': 0, 'party_levels': party,
         'recoveries': getattr(run.policy, 'recoveries', 0) - recoveries,
-        'released': released, 'reseed_goals': bool(seeds), 'lead_in': args.lead_in,
+        'released': released, 'reseed_goals': bool(seeds), 'lead_in': args.lead_in, 'rows': True,
     }
     Path(args.out).write_text(json.dumps(result, indent=1), encoding='utf-8')
 
@@ -253,17 +301,24 @@ def load(folder):
                                  'titles': {}, 'runs': 0, 'errors': 0, 'recoveries': 0})
     for path in sorted(Path(folder).glob('*.json')):
         data = json.loads(path.read_text(encoding='utf-8'))
+        name = _older if not data.get('rows') else lambda key: key
         game = games[data['game']]
         game['runs'] += 1
         game['frames'] += data['frames']
         game['errors'] += data['errors']
         game['recoveries'] += data['recoveries']
-        game['goals'].update(data['frames_by_goal'])
-        game['wasted'].update(data['wasted'])
-        game['titles'].update(data['titles'])
-        game['stalls'].update(entry['goal'] for entry in data['stand_downs'])
+        game['goals'].update({name(key): value for key, value in data['frames_by_goal'].items()})
+        game['wasted'].update({name(key): value for key, value in data['wasted'].items()})
+        for key, title in data['titles'].items():
+            game['titles'].setdefault(name(key), ALL_TARGETS if name(key) != key else title)
+        game['stalls'].update(name(entry['goal']) for entry in data['stand_downs'])
         game['stalls']['(reloads)'] += data.get('reloads', 0)
     return games
+
+
+def _older(key):
+    """The row of a goal key in a run file from before split rows, which kept all hunts or trainees together."""
+    return f'{key} (all)' if key in HUNTS | TRAINING else key
 
 
 def _row(game, key):
