@@ -178,14 +178,60 @@ class Arbiter:
 - Plugs in where the Gen I override chain sits (`strategic.py:319-362`, `:595-720`) with `director.select` as its scorer, and where the Gen II `collection.journey` ladder sits (`gen2/collection.py:441-577`). Each sub-planner returns a candidate instead of returning first.
 - Deletes: the tier filters and fixed priorities in `director.py`, `gen2/postgame.py` `WEIGHTS`, the money-based rematch weight, the #133 and #147 wait rules, sweep rows 10 to 12, and row 19 (moved from S2), where a shop walk is weighed against the cost of leaving a puzzle map half done.
 
-Migration:
-1. Every source returns `Candidate` objects while the old order still decides. Log what the arbiter would have chosen.
-2. Replay A/B on all six games. Compare frame shares.
-3. Gen I side projects switch to the arbiter.
-4. Gen I overworld overrides switch.
-5. The Gen II ladder switches.
-
 Cadences that S4 left in place and S3 should replace with its own scoring: `PROJECT_COOLDOWN` (sweep row 14), the tower `RETRY_AFTER` rest, the shiny session slice (`SHINY_ENCOUNTERS` and `SHINY_MAX_FRAMES`), the strategic development and TM check timers (row 18) and the Gen II `attempts` recency of 18000 decisions.
+
+#### Scoring
+
+Line numbers in this subsection are from main at 45374eb.
+
+- **Tier.** `STORY` before `UPKEEP` before `PROGRESS` before `FILLER`. An enabler that S2 offers for a failed condition (a box room visit, a restock) takes the tier and value of the goal it unblocks, not its own.
+- **Value.** One unit for both generations: a new dex entry is 1.0, a legendary is a dex entry, a species' first level 100 credit is 0.5, a perfect species is 0.5, and a quality catch is 0.5 times the expected drop in the species' best DV tail. Money has no value of its own. It is worth what it funds, so the rematch is worth its prize only while `funds_short` (`policies/ledger.py:131`) holds and a small constant otherwise. These weights need the lead's sign-off before step 5.
+- **Expected frames.** `planning/cost.py` gives `travel + needed / chance × frames_per_encounter`, the shape Gen II already uses in `search_expected` (`gen2/standdown.py:31`). `needed` for a quality hunt is the expected catches until a better copy, one over P(better). Travel uses the route planner's length.
+- **Interrupt cost.** A candidate that cuts into a running goal adds the frames to walk back to it, plus the frames sunk into the current map when its puzzle resets on exit (boulders, switches, an unfinished League run). That is how row 19 goes: a shop walk out of Ice Path or the League costs the sunk frames, so it loses unless the need is urgent, with no named map list.
+- **Ties** break on key so the choice is deterministic. The recent-kind decay (`director.py:114`, `:122`) goes, since S4 backoff already moves the arbiter off a stalled goal.
+
+#### Boundary with S4
+
+- S3 supplies `expected_frames`. S4 starts each goal with a budget of three times that and stands it down with backoff when no progress event comes. A stood-down key is left out of the arbiter's list until its `until`.
+- S3 decides when a hunt is no longer worth doing (its value falls as P(better) falls, or the target is met). S4 decides when a hunt is not progressing. Neither keeps a fixed catch count.
+- After a stand-down the arbiter picks the next candidate, which covers Gold event-9335.
+- A shiny search becomes `FILLER` at a constant rate, and S4 counts each target species encounter as its progress event. That needs a small S4 change, flagged below.
+
+#### Gen I and Gen II share it
+
+- `planning/arbiter.py` and `planning/cost.py` are shared. Each generation has one adapter that turns its sources into candidates: Gen I in `policies/collection.py` and `policies/strategic.py`, Gen II in `gen2/collection.py` and `gen2/postgame.py`.
+- Parity: arbiter detail shown on the Live page goes under `state.strategy`, which `tests/test_generation_parity.py` already allows as a per-generation planner shape. Any new statistics or activity field, such as an arbiter share in the audit, is filled by both generations in the same PR. The shadow comparison in step 3 goes only to the log and the replay audit.
+
+#### Steps
+
+1. **Arbiter core.** `planning/arbiter.py` (`Candidate`, `Tier`, `choose`, `compare`) and `tests/test_arbiter.py`. Nothing calls it, so behaviour is preserved. Unit tests on fixed candidates: tier order, value over frames, interrupt cost, passive never chosen, and the Yellow Dojo gift (`43:gift:177:HITMONLEE`) outranking a long hunt. Closes no rows.
+2. **Shared cost and Gen I odds.** `planning/cost.py` takes over `search_expected` from `gen2/standdown.py:31`. `tools/gen1_wild.py` generates a Gen I wild table (`policies/wild.py`) from the pinned pokered and pokeyellow data, with a drift test `tests/test_gen1_wild.py` built like the gate test. Preserves behaviour, with an equivalence test that Gen II `search_expected` returns what it did. Closes the S4 known gap once step 5 uses it.
+3. **Shadow mode in both generations.** Gen I `Collection.choose` and the `_overworld` chain, and the Gen II `journey` ladder and `postgame.choose`, build candidates and call `Arbiter.compare` while the old order still decides. Preserves behaviour, with equivalence tests on the stuck scenarios that the chosen goal is unchanged. One read-only batch reads the would-have-chosen shares, with no 2-point bar. Closes no rows.
+4. **Red box room enabler (Gen I).** See the Red answer below. `policies/team.py` (`spare_entries` reachability at `:85`), `policies/storage.py` (`release_target` at `:23` offers the unlist plan), `policies/strategic.py` (the release visit at `:358` and `_release_target` at `:1101`), `duplicates.py` (offer a party duplicate, if allowed), and an enabler on `Can('catch')` for the catch sources (`policies/collection.py:831`). Changes behaviour. Red batch, bar: `collect_rematch` down at least 2 points and a `room` progress event in each save. Closes no sweep rows. It does not need steps 1 to 3 and could go first.
+5. **Gen I side projects on the arbiter.** `policies/director.py` loses the new entry and rematch-last filters (`:96-100`), the priorities and decay (`:114-122`), and `new_entry` counts a legendary only when unowned (`:27` returns True for a returned repeat, such as Red's Articuno). `policies/collection.py` loses the rematch weight `10 if short else 2` (`:972`), `urgent=short` (`:1010`), `PROJECT_COOLDOWN` (`:31`), the 1200 and 3600 cooldowns (`:630`, `:1008`) and the 600 frame gap (`:765`). Catch kinds take `expected_frames` from step 2 instead of `EXPECTED_FRAMES` (`:38`). Changes behaviour. Batch, bar: 2 points on Red `collect_rematch` and Yellow `collect_hunt` (14.7%), and the Dojo gift no longer stands down. Closes rows 10 and 14.
+6. **Gen II postgame on the arbiter.** `gen2/postgame.py` loses `WEIGHTS` (`:35`), the rotation in `choose` (`:215`), `SHINY_ENCOUNTERS`, `SHINY_BREAK_ACTIVITIES` and `SHINY_MAX_FRAMES` (`:27-30`). A quality hunt ends at the first better copy instead of `QUALITY_CATCHES` 3 (`:26`), and `reachable` (`:256`) and `quality` (`:275`) rank by value over cost. `planning/progress.py` counts a target encounter for a shiny search. Changes behaviour. Batch, bar: Gold Golduck (63.7%, 29.0 wasted, 3 stalls), Silver Girafarig (55.9%, 27.7 wasted) and Crystal's Silver Cave shiny search (17.6%, 7.4 wasted) each down at least 2 points. Closes row 15.
+7. **Gen I overworld overrides.** `policies/strategic.py` `_overworld` (`:590-760`) and the story, collection and release choices (`:324-372`) become candidates. `_tm_development` (`:1114`) loses its 18000 and 3600 timers and becomes a candidate worth the move it gives. Changes behaviour. Batch on all three Gen I games. Closes rows 12 and 18.
+8. **Gen II ladder.** Each rung of `gen2/collection.py` `journey` (`:480`) returns a candidate. `while_waiting` (`:54`) is passive. The #133 and #147 wait rules, the `attempts` recency of 18000 (`:662`) and the tower `RETRY_AFTER` 50000 (`gen2/tower.py:53`) go. The shop-off map list (`gen2/policy.py:938-947`, `:984-1004`) is replaced by interrupt cost. Changes behaviour. Batch on all three Gen II games. Closes rows 11, 17 and 19.
+
+#### Red answer
+
+Red is not out of work the way Blue is. It has open goals it cannot reach, and nothing offers the goal that would reach them. From the three S2 saves, read without stepping:
+
+- Frame shares (S2 after, the same as the base): `collect_rematch` 42.3% with 7.6 wasted, the League 35.0%, marathon 5.9% (all wasted), `collect_plan` 5.9%, ceremony 5.4%, heal 3.8%, `collect_train` 0.9%.
+- Long goals still open: 26 quality hunts (136 species with a readable best tail, 66 above `GOOD_TAIL`, 81 with their searches spent), and the perfect and high quality goals. No perfect species is held. Level 100 credit covers 150 of 151 and only Snorlax is missing, finished in the third save.
+- Every catch source fails `Can('catch')` (`policies/collection.py:831`, `ram.py:196`). The boxes hold 240 of 240 with the party full, so `can_catch` is False.
+- `spare_entries` finds 16 spares (Muk, Kabutops, Rapidash and others), but all 16 are unlisted. The first slot of box 11 holds a trade nickname with a list break byte (`ram.py:336` `LIST_BREAKS`), so the 19 slots after it never show. `policies/team.py:85` reserves them, `_release_target` (`strategic.py:1101`) returns None and the release visit (`:358`) never fires.
+- What is left is training (it ends when Snorlax reaches 100), marathon and the rematch fallback. The rematch's prize money is worth nothing to Red: money is 151763 against `funds_needed` 12300, so `funds_short` is False and the weight is the floor of 2 (`:972`).
+- Blue, for contrast: 151 of 151, level 100 credit 151, 240 stored, 0 spares, 0 unlisted. Its 27 open quality hunts are also blocked by full boxes, and there is nothing to release under today's keep rules. That is a real end state.
+
+The missing goal is a box room enabler that reopens box 11's list. Free a party slot by releasing the weaker Pidgeot (level 38, while the level 40 one keeps Fly), withdraw the nickname breaker, release spares up to `BOX_REFILL`, and deposit the breaker last so it hides nothing behind it. The arbiter values the enabler at the catches it unblocks (step 4).
+
+#### To decide before coding
+
+- May the enabler release a party duplicate? `spare_entries` never offers party members today (`duplicates.py:47`).
+- Should a shiny search count encounters as progress (an S4 change)?
+- The value weights above for dex entries, level credit, perfect species and quality.
+- Whether step 4 goes first, since it is small and stands alone.
 
 ### S4. Progress monitor with backoff (cause C)
 
@@ -242,7 +288,7 @@ Interface: `goal.stance(encounter, ledger) -> FIGHT | FLEE | CATCH`. The default
 | S4 progress monitor | about 3 to 4 hours | two batches, about 40 minutes each |
 | S1 resource ledger | about 5 to 6 hours | three batches |
 | S2 preconditions | about 4 to 5 hours | two batches |
-| S3 utility arbiter | about 6 to 8 hours | three batches, the largest change in behaviour |
+| S3 utility arbiter | about 8 to 10 hours | five batches plus one read-only shadow batch, the largest change in behaviour |
 | S5 battle stance | about 2 hours | one batch |
 
 Suggested order: S4 first, because it merges code that already exists and gives every later step its metric. Then S1, S2, S3 and S5. The lead picks the final order.
@@ -253,7 +299,7 @@ Suggested order: S4 first, because it merges code that already exists and gives 
 - Gold save event-9335 idles 98% after a lost League run. S4 should stand that goal down and S3 should pick the next.
 - The held-item hunt ranks spots by distance plus a fixed term, and spends half its time on a 10% spot. The Poliwhirl surf hunt prefers Route 28 (10% Poliwhirl) over Silver Cave Outside (90%). About 80% of its battles are grass species met walking between water spots, so it gets about 7 Poliwhirl battles per game hour and one item takes about 7 game hours. Fixed by S3 expected frames, with S5 fleeing off-target battles.
 - Red's "Train CHEESEKING to level 30" takes 79.8% of frames at about 0.3 level gains per 10000 frames, and Yellow's training takes 58.8%. S4 progress rate and S3 cost should cover both. These need checking in the next audit.
-- Blue at 151 of 151 with full boxes is a real end state. Rematches as filler are the intended result there.
+- Blue at 151 of 151 with full boxes is a real end state. Rematches as filler are the intended result there. Checked again for S3: 0 spares and 0 unlisted. Red is not in the same state. Its 16 spares sit behind a list break in box 11 (see the S3 Red answer).
 - Crystal's 47% wasted in the S4 baseline was an audit artefact. The audit counted only level ups as training progress, but Furret climbs from level 82 to 97 per run. The audit now counts trainee experience, and that training is productive.
 - Red's CHEESEKING and Ditto gain 14 to 16 levels per run, so Red's training share is slow progress, not a stall.
 - Yellow's `party_release` loops releasing from a full box (3 stalls in the baseline). S1 should own box space.
