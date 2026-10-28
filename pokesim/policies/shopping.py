@@ -5,6 +5,7 @@ from .battle import BALLS, HEALING, shopping_item
 from .progression import Goal
 from .collection import legendary_project
 from .menus import MenuDecision, tap
+from ..planning.ledger import MONEY
 from ..strategy_data import DATA, ITEMS, MAPS, PRICES, WORLD
 
 # Keep finite TMs unless a completely full bag has no ordinary surplus to sell.
@@ -87,7 +88,13 @@ class ShoppingController:
 
     def _sale_choice(self, snapshot):
         if self.raising_funds(snapshot):
-            return self.fund_index(snapshot)
+            index = self.fund_index(snapshot)
+            # The resource ledger reads the same bag and logs where its choice differs. It decides nothing yet.
+            from .ledger import ledger
+            books = ledger()
+            books.snapshot(snapshot, kinds=(MONEY,))
+            books.compare('fund', MONEY, index)
+            return index
         return self.sale_index(snapshot) if len(snapshot.items) > 15 else None
 
     @staticmethod

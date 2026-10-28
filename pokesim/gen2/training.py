@@ -59,6 +59,11 @@ def room_goal(policy, snapshot, Goal, item):
     if bag_takes(data, snapshot, item):
         return None
     spare = spare_item(data, snapshot)
+    # The resource ledger reads the same bag and logs where its choice differs. It decides nothing yet.
+    from .ledger import ledger
+    books = ledger(data)
+    books.snapshot(snapshot, kinds=('items',))
+    books.compare('collection_tidy', 'items', spare)
     if spare is None:
         return None
     policy.collection['tidy_item'] = spare
