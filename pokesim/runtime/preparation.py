@@ -6,10 +6,10 @@ import time
 
 from pokecore.shortcuts import ChangeBox, DepositPokemon, WithdrawPokemon
 
-from ..policies.base import Action
+from ..policies.base import Action, stack_pointer
 from pokecore.centers import CENTERS
+from ..pc_list import guarded
 from ..policies.navigation import Navigator
-from ..policies.progression import YELLOW
 from ..policies.collection import LEAGUE
 from ..policies.team import reserve_to_deposit, stays_in_party
 from ..ram import read_snapshot
@@ -29,8 +29,11 @@ PC = (CENTER, 13, 4)
 SEALED = 'The party and every PC box are full and no spare duplicate can be released, so no boxed Pokémon can join the party for a trade'
 
 
-def sealed(snapshot, preferences, partners=frozenset()):
-    """Whether preparation could not make room for a boxed offer, as _storage_make_room would decide."""
+def sealed(snapshot, preferences, partners=frozenset(), sp=None):
+    """Whether preparation could not make room for a boxed offer, as _storage_make_room would decide.
+
+    ``sp`` is the stack pointer the release would run with, since without it pc_list guards some slots.
+    """
     if (len(getattr(snapshot, 'party', ())) < 6 or not getattr(snapshot, 'box_full', False)
             or getattr(snapshot, 'next_free_box', 0) is not None):
         return False
@@ -38,6 +41,7 @@ def sealed(snapshot, preferences, partners=frozenset()):
     policy = StrategicPolicy()
     policy.trade_preferences = lambda: preferences
     policy.trade_partners = lambda: partners
+    policy.sp = sp
     return policy._release_target(snapshot) is None
 
 
@@ -72,8 +76,8 @@ def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False, prote
         raise ValueError('Choose an identifiable Pokémon')
     # A manual trade is the owner's own choice, so trade preferences and party protection do not apply.
     location, position, chosen = selection(snapshot, {} if manual else emu.store.trade_preferences(), trade_key)
-    if location == 'box' and (chosen['box'], position) in snapshot.unlisted:
-        raise ValueError('The PC list cannot reach this Pokémon. A nickname stored before it in the box '
+    if location == 'box' and (chosen['box'], position) in guarded(snapshot, stack_pointer(emu.pb)):
+        raise ValueError('The PC list cannot reach this Pokémon. A nickname in its box '
                          'stops the list from drawing, so it cannot be withdrawn')
     if location != 'box' and not manual:
         raise ValueError('Choose a boxed spare. Active party members are protected')
@@ -274,7 +278,7 @@ class Preparation:
                 if runner is self.shortcut and self.operation == 'deposit' and len(snap.party) >= 6:
                     self._storage_reserve(snap)     # Fails when the reserve moved or became protected.
                 # A PC transfer in flight updates party and box records on different frames.
-                actions = runner.step(ctx.mem, gen1_ui(ctx.sp, YELLOW), snap.frame)
+                actions = runner.step(ctx.mem, gen1_ui(ctx.sp), snap.frame)
                 if actions:
                     return actions
         try:
@@ -356,7 +360,7 @@ class Preparation:
             if snap.active_box != self.target_box:
                 self.operation = 'change_box'
                 actions = self.shortcut.start(ChangeBox(self.target_box), ('change_box', self.target_box, snap.frame),
-                                              snap.frame, ctx.mem, gen1_ui(ctx.sp, YELLOW),
+                                              snap.frame, ctx.mem, gen1_ui(ctx.sp),
                                               'Change to the box for the trade')
                 return actions or self._select(screen, 3)
             self.operation = 'deposit' if len(snap.party) >= 6 else 'withdraw'
@@ -380,7 +384,7 @@ class Preparation:
                 raise ValueError(f'The PC could not {operation} for this trade: {result.outcome}')
 
         actions = self.shortcut.start(machine, (operation, snap.frame), snap.frame, ctx.mem,
-                                      gen1_ui(ctx.sp, YELLOW), f'{operation} for the trade', done)
+                                      gen1_ui(ctx.sp), f'{operation} for the trade', done)
         return actions or [Action(None, 0, 12)]
 
     def _storage_make_room(self, ctx, screen, kind):
@@ -398,6 +402,7 @@ class Preparation:
             self.storage_cleanup = StrategicPolicy()
             self.storage_cleanup.trade_preferences = self._storage_preferences
             self.storage_cleanup.trade_partners = self.emu.store.trade_partners
+        self.storage_cleanup.sp = ctx.sp
         if self.storage_cleanup._release_target(snap) is None:
             raise ValueError('Every PC box is full and no unprotected spare duplicate can make room for this trade')
         pc = CENTERS[snap.map]['pc']
