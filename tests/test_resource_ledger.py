@@ -81,23 +81,20 @@ def gen2_view(rows, filler=True):
                            box_counts=(20,) * 13 + (17,))
 
 
-def test_the_gen2_ledger_reads_the_bag_and_picks_what_the_tidy_check_picks():
-    from pokesim.gen2 import ledger, training
+def test_the_gen2_ledger_reads_every_kind_and_frees_an_entry_only_when_the_item_does_not_stack():
+    from pokesim.gen2 import ledger
     d = gen2_data()
-    for rows, filler in (([(18, 5), (151, 1), (22, 1), (173, 16), (30, 1), (15, 1)], True),
-                         ([(18, 5), (151, 1), (22, 1), (15, 1)], True), ([(18, 5), (15, 1), (110, 1)], False),
-                         ([(57, 1), (18, 5), (151, 1), (22, 1)], False)):
-        view = gen2_view(rows, filler)
-        books = ledger.ledger(d)
-        resources = books.snapshot(view)
-        assert resources.available('balls') == 11 and resources.available(BOX) == 3
-        assert resources.available(PARTY) == 4 and resources.available(MONEY) == 4000
-        if filler:
-            spare = training.spare_item(d, view)
-            assert books.compare('tidy', 'items', spare) == [spare]
-    view = gen2_view([(173, 16)])
+    view = gen2_view([(18, 5), (151, 1), (22, 1), (173, 16), (30, 1), (15, 1)])
+    resources = ledger.ledger(d).snapshot(view)
+    assert resources.available('items') == 0 and resources.available('balls') == 11
+    assert resources.available(BOX) == 3 and resources.available(PARTY) == 4 and resources.available(MONEY) == 4000
     assert ledger.needs(d, view, 173) == Need()
-    assert ledger.needs(d, view, 30) == Need(pocket_slots={'items': 1})
+    assert ledger.needs(d, view, 110) == Need(pocket_slots={'items': 1})
+    # The Berry stacks, so it fits. A Pearl needs the Lucky Punch put away.
+    assert ledger.fits(d, view, 173)
+    assert [unit.detail for unit in ledger.room(d, view, 'tidy', 110)] == [30]
+    full = gen2_view([(57, 1), (18, 5), (151, 1), (22, 1)] * 5, filler=False)
+    assert ledger.room(d, full, 'tidy', 30) is None
 
 
 def test_the_gen1_ledger_sells_in_the_order_the_shop_raises_funds():

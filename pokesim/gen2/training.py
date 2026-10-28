@@ -1,6 +1,7 @@
 """Raise collected partners through normal battles, held items and evolution."""
 from .menus import ChangeBox, Give, PutAway, Release, Remedy, Storage, Take, Toss
 from pokecore.gen2.ram import calculated_stats, experience_at
+from .ledger import fits, tidy_goal
 from .standdown import TRAINING_DECISIONS, exhausted, spend, stand_down, standing_down, train_key
 
 FIELD_MOVES = {15, 19, 57, 70, 148, 250, 127}
@@ -16,73 +17,23 @@ def shareless(data, snapshot):
     return not dict(snapshot.items).get(share) and not any(mon.held_item == share for mon in snapshot.party + snapshot.stored)
 
 
-# Distinct entries each Gen 2 pocket holds. A held item handed back on a swap or a take needs one free.
-POCKET_SLOTS = {'items': 20, 'balls': 12}
 # Refusals of one training project's item task before the project stands down. The monitor keeps the count.
 ITEM_REFUSALS = 3
 
 
-def bag_takes(data, snapshot, item):
-    """Whether the bag has room for one more ``item``."""
-    pocket = 'balls' if data.item_attributes[item]['pocket'] == 'BALL' else 'items'
-    held = snapshot.pockets.get(pocket, ())
-    count = dict(held).get(item, 0)
-    return count < 99 if count else len(held) < POCKET_SLOTS[pocket]
-
-
-# Items some plan uses from the bag: battle medicine, Champion shop supplies, the Tower's held items and
-# the share and Everstone the training itself moves. Evolution items are added from the species data.
-KEPT_ITEMS = frozenset({'EXP_SHARE', 'EVERSTONE', 'PRZCUREBERRY', 'LEFTOVERS', 'LUCKY_EGG', 'RARE_CANDY', 'PP_UP',
-                        'FULL_RESTORE', 'MAX_POTION', 'HYPER_POTION', 'SUPER_POTION', 'POTION', 'MAX_REVIVE',
-                        'REVIVE', 'FULL_HEAL', 'ANTIDOTE', 'AWAKENING', 'PARLYZ_HEAL', 'BURN_HEAL', 'ICE_HEAL',
-                        'MAX_ELIXER', 'ELIXER'})
-# Sold for money when the wallet runs dry, so they leave the bag last.
-VALUABLES = frozenset({'NUGGET', 'PEARL', 'BIG_PEARL', 'STARDUST', 'STAR_PIECE'})
-
-
-def spare_item(data, snapshot):
-    """The items-pocket entry worth least that no plan uses, put away to free an entry, or None."""
-    kept = {data.items[name] for name in KEPT_ITEMS if name in data.items}
-    kept |= {data.items[req] for entry in data.species.values() for evo in entry['evolutions']
-             if evo['method'] in ('item', 'trade') for req in evo['requirements'] if req in data.items}
-    valuables = {data.items[name] for name in VALUABLES if name in data.items}
-    rows = [(item, count) for item, count in snapshot.pockets.get('items', ())
-            if item not in kept and data.item_attributes.get(item, {}).get('pocket') == 'ITEM']
-    if not rows:
-        return None
-    return min(rows, key=lambda row: (row[0] in valuables, data.item_attributes[row[0]]['price'] * row[1], row[0]))[0]
-
-
-def room_goal(policy, snapshot, Goal, item):
-    """Walk to the PC to put a spare item away when the bag has no entry for ``item``, or None."""
-    data = policy.data
-    if bag_takes(data, snapshot, item):
-        return None
-    spare = spare_item(data, snapshot)
-    # The resource ledger reads the same bag and logs where its choice differs. It decides nothing yet.
-    from .ledger import ledger
-    books = ledger(data)
-    books.snapshot(snapshot, kinds=('items',))
-    books.compare('collection_tidy', 'items', spare)
-    if spare is None:
-        return None
-    policy.collection['tidy_item'] = spare
-    goal = policy.storage_goal(snapshot)
-    return Goal('collection_tidy', f'Store {data.item_names.get(spare, "a spare item")} in the PC to make room', goal.map_name, goal.x, goal.y, goal.face)
-
-
-def share_blocked(data, snapshot, mon):
-    """Whether the Exp. Share cannot reach ``mon`` because the bag has no room for an item the move hands back.
+def share_room(data, snapshot, mon):
+    """The item that moving the Exp. Share to ``mon`` hands back and the bag has no room for, or None.
 
     Giving the share to a Pokémon that holds something else puts that item in the bag, and taking the share
-    from another party member puts the share there, so either one needs a free pocket entry.
+    from another party member puts the share there. Either one needs room the ledger has to find.
     """
     share = data.items['EXP_SHARE']
     if mon.held_item == share:
-        return False
-    if mon.held_item and not bag_takes(data, snapshot, mon.held_item):
-        return True
-    return any(row is not mon and row.held_item == share for row in snapshot.party) and not bag_takes(data, snapshot, share)
+        return None
+    back = [mon.held_item] if mon.held_item else []
+    if any(row is not mon and row.held_item == share for row in snapshot.party):
+        back.append(share)
+    return next((item for item in back if not fits(data, snapshot, item)), None)
 
 
 def trainee_slot(policy, snapshot):
@@ -91,7 +42,7 @@ def trainee_slot(policy, snapshot):
     if not project or project.get('item'):
         return None
     slot = next((i for i, mon in enumerate(snapshot.party) if not mon.egg and identity(mon) == project['identity']), None)
-    if slot is None or not (shareless(policy.data, snapshot) or share_blocked(policy.data, snapshot, snapshot.party[slot])):
+    if slot is None or not (shareless(policy.data, snapshot) or share_room(policy.data, snapshot, snapshot.party[slot])):
         return None
     return slot
 
@@ -251,7 +202,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         # night. Exp. Share would level this Eevee in any battle, so it waits without the share.
         if mon.box is None and mon.held_item == share:
             state['take_slot'] = snapshot.party.index(mon)
-            return room_goal(policy, snapshot, Goal, share) or Goal(
+            return tidy_goal(policy, snapshot, Goal, share) or Goal(
                 'collection_take', f'Hold {mon.name} back until the time of day suits',
                 data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
         state['training'] = None
@@ -259,7 +210,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     if mon.held_item == data.items['EVERSTONE']:
         state['take_slot'] = snapshot.party.index(mon) if mon.box is None else None
         if mon.box is None:
-            return room_goal(policy, snapshot, Goal, mon.held_item) or Goal(
+            return tidy_goal(policy, snapshot, Goal, mon.held_item) or Goal(
                 'collection_take', 'Remove Everstone before evolution', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     state['phase'] = 'evolving'
     if mon.box is not None and sealed:
@@ -275,13 +226,13 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         return Goal('collection_train_pc', f'Prepare {mon.name} for training', goal.map_name, goal.x, goal.y, goal.face)
     if project['item']:
         return Goal('collection_evolve_item', f'Evolve {mon.name}', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
-    if not missing and share_blocked(data, snapshot, mon):
+    blocked = share_room(data, snapshot, mon)
+    if not missing and blocked:
         # The bag has no entry for the item that moving the share hands back. Put a spare item in the PC first.
-        held = mon.held_item if mon.held_item and not bag_takes(data, snapshot, mon.held_item) else share
-        goal = room_goal(policy, snapshot, Goal, held)
+        goal = tidy_goal(policy, snapshot, Goal, blocked)
         if goal:
             return goal
-    if missing or share_blocked(data, snapshot, mon):
+    if missing or blocked:
         # The cartridge's only Exp. Share is gone for good, or nothing in the full bag can be put away to make
         # room for the item that moving the share hands back, so the partner leads instead: the policy keeps
         # it in front and switches it out on the first turn of a battle it cannot win, which still splits the
@@ -292,7 +243,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         other = next((i for i, row in enumerate(snapshot.party) if row.held_item == share), None)
         if other is not None:
             state['take_slot'] = other
-            return room_goal(policy, snapshot, Goal, share) or Goal(
+            return tidy_goal(policy, snapshot, Goal, share) or Goal(
                 'collection_take', 'Pass Exp. Share to the next partner', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
         if not inventory.get(share):
             holder = next((row for row in snapshot.stored if row.held_item == share), None)
