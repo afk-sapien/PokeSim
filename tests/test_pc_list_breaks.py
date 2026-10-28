@@ -161,16 +161,24 @@ def test_gold_silver_and_crystal_pc_lists_get_the_stack_pointer(monkeypatch):
             return 'a'
 
     class Task(menus.CoreTask):
+        pc_list = True
+
         def build(self, snapshot):
             return Machine()
+
+    class Battle(Task):
+        # Other Core tasks run without it, since it changes how Tower battles play out.
+        pc_list = False
 
     monkeypatch.setattr(menus, 'current_screen', lambda memory, version: 'bills_pc')
     snap = SimpleNamespace(data=SimpleNamespace(game='gold'))
     mem = SimpleNamespace(memory=bytearray(0x10000), sp=0xDF00)
-    assert Task().step(snap, mem) == 'a'
+    assert Task().step(snap, mem) == 'a' and Battle().step(snap, mem) == 'a'
     mem.sp = None
     assert Task().step(snap, mem) == 'a'
-    assert seen == [{'sp': 0xDF00}, None]
+    assert seen == [{'sp': 0xDF00}, None, None]
+    assert all(task.pc_list for task in (menus.Storage, menus.Release, menus.ChangeBox))
+    assert not any(task.pc_list for task in (menus.Throw, menus.Remedy, menus.Use, menus.Buy))
     assert menus.stack_pointer(SimpleNamespace(register_file=SimpleNamespace(SP=0xDFE0))) == 0xDFE0
     assert menus.stack_pointer(SimpleNamespace()) is None
 
