@@ -96,10 +96,12 @@ def deliver(emu):
         count_gift(db, identifier, species)
         for key, value in ((PENDING, record), (BARRIER, identifier)):
             db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (key, json.dumps(value)))
-        db.execute('INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (?,?,?,?,?,?,?,?)',
-                   (time.time(), 'obtain', f'Received {emu.data.species[species]["name"]} from a custom PokeSim gift',
-                    'An optional custom gift joined the PC. This is separate from Cable Club trading.',
-                    1, 4, before.map_name, ''))
+        entry = db.execute('INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (?,?,?,?,?,?,?,?)',
+                           (time.time(), 'obtain', f'Received {emu.data.species[species]["name"]} from a custom PokeSim gift',
+                            'An optional custom gift joined the PC. This is separate from Cable Club trading.',
+                            1, 4, before.map_name, ''))
+        from .tracking import record_gift
+        record_gift(db, entry.lastrowid, species)
     try:
         emu._load_state_file(recover_storage(emu.store))
     except BaseException:
