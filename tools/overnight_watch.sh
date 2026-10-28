@@ -13,6 +13,10 @@ PORT=${POKESIM_WATCH_PORT:-8950}
 CONTAINER=${POKESIM_WATCH_CONTAINER:-pokesim-app-pokesim-1}
 LOGS=${POKESIM_WATCH_LOGS:-$HOME/.local/state/pokesim-overnight}
 KEEP=${POKESIM_WATCH_KEEP:-14}
+# The tests wait for the heavy lock of tools/load_gate.sh, so they never overlap a replay batch.
+GATE=${POKESIM_LOAD_GATE:-$HOME/.local/state/pokesim-load}
+# 25 minutes, so the wait fits inside the unit's 30-minute start timeout.
+GATE_WAIT=${POKESIM_WATCH_GATE_WAIT:-1500}
 
 mkdir -p "$LOGS"
 log=$LOGS/$(date +%F).log
@@ -24,7 +28,15 @@ failed=()
 [ -d "$CORE/.git" ] || git clone -q "$CORE_REPO" "$CORE"
 if git -C "$CORE" fetch -q origin && git -C "$CORE" reset -q --hard origin/main && git -C "$CORE" clean -qfdx -e .venv; then
   echo "-- core real-ROM tests at $(git -C "$CORE" log -1 --format='%h %s')"
-  if ! (cd "$CORE" && POKESIM_CORE_ROMS=$ROMS uv run -q --locked --extra dev --extra emulator pytest -q -rs -p no:cacheprovider tests/test_real_roms.py); then
+  mkdir -p "$GATE"
+  echo "-- waiting up to ${GATE_WAIT}s for the load gate"
+  (cd "$CORE" && POKESIM_CORE_ROMS=$ROMS flock -w "$GATE_WAIT" -E 75 "$GATE/heavy" \
+    nice -n 10 uv run -q --locked --extra dev --extra emulator pytest -q -rs -p no:cacheprovider tests/test_real_roms.py)
+  rc=$?
+  if [ "$rc" -eq 75 ]; then
+    echo "-- load gate stayed busy for ${GATE_WAIT}s"
+    failed+=(core)
+  elif [ "$rc" -ne 0 ]; then
     failed+=(core)
   fi
 else
