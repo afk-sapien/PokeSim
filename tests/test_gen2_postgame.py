@@ -86,6 +86,32 @@ def test_a_better_dv_hunt_picks_the_most_ordinary_best_copy(data, monkeypatch):
     assert postgame.quality(policy, state, 'day') is None
 
 
+def test_a_rare_species_is_hunted_only_while_its_next_catch_pays(data, monkeypatch):
+    from pokesim.gen2 import postgame
+    rare, common = dict(row(5, 16), chance=5), dict(row(6, 19), chance=30)
+    monkeypatch.setattr(postgame, 'huntable', lambda *args: {16: [rare], 19: [common]})
+    monkeypatch.setattr(postgame, 'reachable', lambda policy, snapshot, rows: rows[0])
+    policy = expedition(data)
+    good = (0, 12, 12, 12, 12)
+    assert 0.1 < postgame.tail(mon(16, dvs=good)) < 0.2
+    # Equally good copies: the common species pays for its next catch and the rare one does not.
+    state = snapshot([lead()], [mon(16, dvs=good), mon(19, position=1, dvs=good)])
+    assert postgame.quality(policy, state, 'day')['species'] == 19
+    monkeypatch.setattr(postgame, 'huntable', lambda *args: {16: [rare]})
+    assert postgame.quality(policy, state, 'day') is None
+    # With an ordinary best copy the rare species is still worth it, and the hunt ends at a good catch.
+    first = mon(16)
+    hunt = postgame.quality(policy, snapshot([lead()], [first]), 'day')
+    assert hunt['species'] == 16
+    postgame.state(policy)['activity'] = hunt
+    worse = mon(16, position=1, trainer_id=99)
+    assert not postgame.done(policy, snapshot([lead()], [first, worse]), hunt, 'day')
+    assert postgame.done(policy, snapshot([lead()], [first, worse, mon(16, position=2, dvs=good)]), hunt, 'day')
+    assert hunt['caught'] == 2
+    # Training no longer waits for a hunt that would not pay.
+    assert postgame.trainee(policy, snapshot([lead()], [mon(16, level=50, dvs=good)]))['species'] == 16
+
+
 def test_a_better_dv_hunt_ends_after_three_catches(data):
     from pokesim.gen2 import postgame
     policy = expedition(data)
@@ -191,9 +217,12 @@ def test_the_rotation_spreads_the_activities_like_gen_one(data, monkeypatch):
         policy = expedition(data, decisions)
         picks.append(postgame.choose(policy, state, clock(), 'day')['kind'])
     counts = {kind: picks.count(kind) for kind in (*postgame.WEIGHTS, 'league')}
-    assert counts['quality'] > counts['shiny'] > 0 and counts['train'] > counts['shiny']
-    # The League waits behind every other activity.
-    assert counts['league'] == 0
+    assert counts['quality'] > 0 and counts['train'] > 0
+    # A shiny search is filler, and the League waits behind every other activity.
+    assert counts['shiny'] == counts['league'] == 0
+    for name in ('quality', 'trainee'):
+        monkeypatch.setattr(postgame, name, lambda *args: None)
+    assert postgame.choose(expedition(data), state, clock(), 'day')['kind'] == 'shiny'
     # Two picks of one kind in a row rule it out for the next pick.
     for decisions in range(100):
         policy = expedition(data, decisions)
