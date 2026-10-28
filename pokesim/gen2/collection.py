@@ -192,11 +192,19 @@ def target_expected(policy, snapshot, target, maps=0):
     return search_expected(target['chance'], maps, odds)
 
 
+def catching(snapshot, species):
+    """Whether a wild battle with ``species`` is on."""
+    return getattr(snapshot, 'in_battle', 0) == 1 and getattr(snapshot, 'enemy_species', None) == species
+
+
 def observe_search(policy, snapshot):
     """Count each decision a hunt spends searching against its species, across target restarts.
 
     A target kept while training, storage or another errand runs first costs nothing. A better-DV hunt
     makes progress with each new copy it catches. The species stands down once its budget runs out.
+    The battle with the species itself is the catch, not the search, so it costs nothing either: a
+    strong Pokémon at full health can take a dozen balls, more than the whole search was expected to
+    take. A carrier's battles are still counted, since most of them hold no item and are the search.
     """
     goal = getattr(policy, 'goal', None)
     if goal is None or goal.key not in HUNT_GOALS:
@@ -205,10 +213,13 @@ def observe_search(policy, snapshot):
     if target:
         if 'expected' not in target:
             target['expected'] = target_expected(policy, snapshot, target)
+        if catching(snapshot, target['species']) and target['species'] not in item_hunts(policy, snapshot):
+            return
         spend(policy, hunt_key(target['species']), target['expected'])
         return
     activity = (policy.collection.get('postgame') or {}).get('activity')
-    if activity and activity['kind'] == 'quality' and not activity.get('suspended'):
+    if (activity and activity['kind'] == 'quality' and not activity.get('suspended')
+            and not catching(snapshot, activity['species'])):
         caught = activity.get('caught', 0)
         events = ('catch',) if caught > activity.get('counted', 0) else ()
         activity['counted'] = caught

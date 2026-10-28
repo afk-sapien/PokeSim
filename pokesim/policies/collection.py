@@ -576,12 +576,15 @@ class Collection:
                 # Time spent in a battle is not time lost wandering. A rematch that crossed Diglett's
                 # Cave without Repels met a wild Pokémon every few steps, and those battles alone used up
                 # the two minutes, so the League loop was given up before it left the cave.
+                # A marathon is still observed while another goal's visit suspends it, so its race clock
+                # runs on. That visit is not idle time for the marathon. A release visit of over two
+                # minutes deferred it once the PC list could reach every slot.
                 moved = ((token is not None and self.progress_token is not None and token != self.progress_token)
                          or new_flags or s.map not in self.project_maps
                          or (self.project['method'] in ('grass', 'surf', 'fish', 'safari', 'trade') or legendary_project(self.project))
                          and self.was_in_battle and not s.in_battle)
                 self.director.monitor.start(self.project_key, budget=IDLE_BUDGET)
-                idle = self.director.monitor.observe(self.project_key, 0 if s.in_battle else delta,
+                idle = self.director.monitor.observe(self.project_key, 0 if s.in_battle or suspended else delta,
                                                      (ProgressEvent('project'),) if moved else ())
                 if s.map not in self.project_maps:
                     self.project_maps.append(s.map)
