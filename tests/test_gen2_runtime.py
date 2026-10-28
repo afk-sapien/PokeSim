@@ -2604,3 +2604,30 @@ def test_postgame_searches_flee_plain_battles_and_catch_their_species(real_data)
     policy.collection['postgame']['activity'] = {'kind': 'quality', 'species': 19, 'row': session['row'],
                                                  'started': 0, 'seen': [], 'caught': 0}
     assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+
+
+def test_the_walk_to_olivine_for_the_battle_tower_flees_plain_wild_battles(real_data):
+    """A Crystal run spent over a third of its frames walking Victory Road to Olivine. Its Shuckle lead
+    dragged each wild battle out, then the run went back to Indigo to heal and walked in again."""
+    from pokesim.gen2.policy import Goal, Policy
+    policy = started(Policy(real_data))
+    policy.needed_move = lambda snapshot: 0
+    policy.capture_move = lambda *args: None
+    policy.remedy = lambda *args, **kwargs: False
+    snapshot = shiny_battle(real_data, 19, shiny=False)
+    snapshot.map, snapshot.party = real_data.map_ids['VICTORY_ROAD'], (_shiny_lead(),)
+    bytes_ = {}
+    mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0), word=lambda name: 0, read=lambda name, size: bytes(size))
+    policy.goal = Goal('heal', 'Restore the team at a Pokémon Center', 'INDIGO_PLATEAU_POKECENTER_1F', 5, 6)
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    policy.goal = Goal('tower_travel', 'Travel to Olivine before preparing the Tower team', 'OLIVINE_POKECENTER_1F', 5, 6)
+    assert policy.battle(snapshot, mem).button == ('Flee',)
+    # A trap that forbids running leaves the turn to be fought.
+    bytes_['wEnemySubStatus5'] = 128
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    bytes_.clear()
+    # A species the run still wants, or a shiny, is caught on the way.
+    snapshot.owned = set()
+    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    snapshot.owned, snapshot.enemy_shiny = {19}, True
+    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
