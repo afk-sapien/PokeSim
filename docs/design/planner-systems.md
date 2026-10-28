@@ -55,8 +55,8 @@ Most stuck loops of the last month were fixed with a special case: sell a repel,
 | 16 | `gen2/collection.py:779-781` | An outing is dropped after 20 "map still loading" steps | C |
 | 17 | `gen2/tower.py:70`, `gen2/teams.py:14-16` | Separate retry and backoff copies (`RETRY_AFTER`, `BLOCKED_LIMIT`) | C |
 | 18 | `policies/strategic.py:1115-1143`, `:1427` | TM check, teach, deadline and development timers | C |
-| 19 | `gen2/policy.py:907-912`, `:987-1012` | Shopping turned off on named maps to stop a walk out and back | D, C |
-| 20 | `policies/strategic.py:695-706`, `:842-917` | Victory Road coordinate boxes for one route and the boulders | D |
+| 19 | `gen2/policy.py:907-912`, `:987-1012` | Shopping turned off on named maps to stop a walk out and back. Moved to S3: the cost of interrupting a puzzle map | B, C |
+| 20 | `policies/strategic.py:695-706`, `:842-917` | Victory Road coordinate boxes for one route and the boulders. Deferred from S2: boulder choreography, not a precondition | D |
 | 21 | `gen2/policy.py:1131-1162`, `gen2/champion_shop.py:41`, `gen2/menus.py:154` | Three copies of the protected move set, plus a Move Deleter special case for Waterfall | A |
 
 ## 2. Root causes
@@ -147,6 +147,15 @@ Migration:
 4. Collection goals declare `requires()`, starting with catches (box room) and legendaries (balls).
 5. The same for Gen II, with its own gate data.
 
+Sweep rows closed: none. Row 19 moved to S3, since it weighs a shop walk against leaving a puzzle map, which is utility, not a precondition. Row 20 stays open, deferred from S2: it is boulder choreography and needs its own batch. The #147 and #153 band-aids, `ROUTE_23_CHECKS` and the Saffron and Cinnabar lists are gone.
+
+As built (#176 to #180), the interface differs in a few places:
+- The Gen I gate table, `policies/gates.py`, is generated, not hand-written. `tools/gen1_gates.py` builds it from the pinned pokered scripts and writes the source commit in its header, and `tests/test_gen1_gates.py` regenerates it and fails on drift whenever a pokered or pokeyellow checkout is present (CI fills `.reference`). Red and Yellow agree on every gate.
+- Conditions are `Item`, `Count`, `Can`, `Badge`, `Event`, `Reach` and `AnyOf`, in `planning/conditions.py`. `Can` asks the adapter a whole-snapshot question, such as room to catch or a party that surfs. `Requirements` pairs conditions with a ledger `Need`, and `feasible` reserves that need under a key.
+- Navigation keeps one condition per gate (`GUARD_GATES`), read through `StoryWorld`. The Route 23 Earth Badge guard now blocks only x below 14, as the game does.
+- Gen I collection sources declare `source_requires` instead of goals declaring `requires()`. The Safari fee is a `Need(money=800)` on the ledger.
+- Gen II has no hand-written gate lists, since its navigation reads map events from pokecore, so it has no generated table. Its clock wait asks `gen2/ledger.catch_room`, which needs a box slot once the party is full, or a spare the ledger can release.
+
 ### S3. Utility arbiter (cause B)
 
 Interface:
@@ -167,7 +176,7 @@ class Arbiter:
 - Score is `value / expected_frames`, with a higher tier always first. Story stays a hard tier, rematches and League runs are `FILLER`, and passive waits are never chosen. They only accrue while something else runs.
 - `expected_frames` uses the real encounter odds. That fixes the held-item hunt that prefers a near Route 28 spot (10%) over Silver Cave Outside (90%), and it charges the grass walk between water points.
 - Plugs in where the Gen I override chain sits (`strategic.py:319-362`, `:595-720`) with `director.select` as its scorer, and where the Gen II `collection.journey` ladder sits (`gen2/collection.py:441-577`). Each sub-planner returns a candidate instead of returning first.
-- Deletes: the tier filters and fixed priorities in `director.py`, `gen2/postgame.py` `WEIGHTS`, the money-based rematch weight, the #133 and #147 wait rules, sweep rows 10 to 12.
+- Deletes: the tier filters and fixed priorities in `director.py`, `gen2/postgame.py` `WEIGHTS`, the money-based rematch weight, the #133 and #147 wait rules, sweep rows 10 to 12, and row 19 (moved from S2), where a shop walk is weighed against the cost of leaving a puzzle map half done.
 
 Migration:
 1. Every source returns `Candidate` objects while the old order still decides. Log what the arbiter would have chosen.
