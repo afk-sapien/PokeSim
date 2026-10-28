@@ -142,13 +142,30 @@ def test_a_losing_tower_cap_backs_off_and_other_caps_are_tried():
     policy = SimpleNamespace(decisions=1000, collection={})
     tower.record_result(policy, 100, 0)
     assert tower.resting_caps(policy) == {100}
-    first = policy.collection['tower_failed']['100']['until']
+    until = tower.monitor(policy, tower.CAP_BACKOFF).until
+    first = until('tower:100')
+    assert first - 1000 == 2 * tower.RETRY_AFTER
     tower.record_result(policy, 100, 3)
-    assert policy.collection['tower_failed']['100']['until'] - 1000 == 2 * (first - 1000)
-    policy.decisions = policy.collection['tower_failed']['100']['until']
+    assert until('tower:100') - 1000 == 2 * (first - 1000)
+    policy.decisions = until('tower:100')
     assert tower.resting_caps(policy) == set()
     tower.record_result(policy, 100, 7)
-    assert '100' not in policy.collection['tower_failed']
+    assert until('tower:100') is None
+
+
+def test_an_older_save_keeps_its_tower_and_team_back_off():
+    from pokesim.gen2 import tower
+    from pokesim.gen2.standdown import migrate, standing_down, team_key
+    policy = SimpleNamespace(decisions=1000, collection={
+        'tower_failed': {'50': {'streak': 2, 'until': 201000}},
+        'activity_failed': {'team': ['a', 'b'], 'until': 40000}})
+    migrate(policy)
+    assert 'tower_failed' not in policy.collection and 'activity_failed' not in policy.collection
+    assert tower.monitor(policy, tower.CAP_BACKOFF).until('tower:50') == 201000
+    assert tower.resting_caps(policy) == {50}
+    assert standing_down(policy, team_key(['a', 'b']))
+    policy.decisions = 40000
+    assert not standing_down(policy, team_key(['a', 'b']))
 
     def mon(species, level, strength):
         return SimpleNamespace(species=species, level=level, stats=(strength,) * 6, egg=False)

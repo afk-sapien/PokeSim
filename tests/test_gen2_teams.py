@@ -6,6 +6,7 @@ import pytest
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.menus import ChangeBox, Release, Storage
+from pokesim.gen2.standdown import standing_down, team_key
 from pokesim.gen2.teams import BLOCKED_LIMIT, arrive, assemble, assembled, key
 
 
@@ -80,7 +81,7 @@ def test_a_partner_that_is_gone_stands_the_team_down():
     wanted = [key(a), key(gone)]
     assert assemble(policy, snapshot([a]), wanted, Goal, 'Prepare') is None
     assert 'activity_team' not in policy.collection
-    assert policy.collection['activity_failed']['team'] == wanted
+    assert standing_down(policy, team_key(wanted))
 
 
 def test_a_team_with_nothing_left_to_do_stands_down_and_waits_before_retrying():

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from pokesim.gen2 import collection, training
 from pokesim.gen2.menus import ChangeBox, Release, Use
 from pokesim.gen2.standdown import (STAND_DOWN, carry_over, hunt_key, stalled_objectives, standing_down,
-                                    train_key)
+                                    team_key, train_key)
 
 
 class Policy:
@@ -93,5 +93,4 @@ def test_a_reload_during_team_assembly_stands_the_team_down():
     restored.collection = {'activity_team': ['a', 'b'], 'activity_blocked': 3}
     carry_over(restored, stalled_objectives(stuck))
     assert 'activity_team' not in restored.collection
-    assert restored.collection['activity_failed']['team'] == ['a', 'b']
-    assert restored.collection['activity_failed']['until'] > restored.decisions
+    assert standing_down(restored, team_key(['a', 'b']))

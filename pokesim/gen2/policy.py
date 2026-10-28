@@ -125,6 +125,8 @@ class Policy:
         self.starter = state.get('starter', self.starter)
         self.completed = state.get('completed', {})
         self.collection = state.get('collection', {'target': None, 'attempts': {}})
+        from .standdown import migrate
+        migrate(self)
         self.demand = {int(key): value for key, value in state.get('demand', {}).items()}
         self.decisions = state.get('decisions', 0)
         self.naming.load_state_dict(state.get('naming', {}))
