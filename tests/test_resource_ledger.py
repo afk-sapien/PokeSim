@@ -102,9 +102,36 @@ def test_the_gen1_ledger_sells_in_the_order_the_shop_raises_funds():
     from pokesim.policies.shopping import ShoppingController
     from pokesim.strategy_data import ITEMS
     rows = ((ITEMS['POTION'], 3), (ITEMS['NUGGET'], 1), (ITEMS['RARE_CANDY'], 1), (ITEMS['POKE_BALL'], 9))
-    for items in (rows, rows[2:], rows[3:], rows[:1] + rows[2:]):
+    # A Nugget, then a luxury, then a supply, and balls last.
+    expected = {rows: ITEMS['NUGGET'], rows[2:]: ITEMS['RARE_CANDY'], rows[3:]: ITEMS['POKE_BALL'],
+                rows[:1] + rows[3:]: ITEMS['POTION']}
+    for items, item in expected.items():
         view = SimpleNamespace(items=items, party=(1,), box_counts=(20,) * 12, money=120)
-        books = ledger.ledger()
-        books.snapshot(view)
-        index = ShoppingController.fund_index(view)
-        assert books.compare('fund', MONEY, index) == [index]
+        assert items[ShoppingController.fund_index(view)][0] == item
+
+
+def test_the_gen1_ledger_frees_a_bag_entry_with_surplus_before_a_finite_tm():
+    from pokesim.policies import ledger
+    from pokesim.strategy_data import ITEMS
+    keys = tuple((ITEMS[name], 1) for name in ('S_S_TICKET', 'HM01', 'LIFT_KEY', 'SILPH_SCOPE', 'POKE_FLUTE',
+                                               'CARD_KEY', 'HM03', 'HM04', 'HM05', 'SECRET_KEY', 'SUPER_ROD',
+                                               'OLD_ROD', 'GOOD_ROD', 'COIN_CASE', 'BICYCLE'))
+    bag = keys + ((ITEMS['SUPER_REPEL'], 2), (ITEMS['X_SPEED'], 1), (ITEMS['MAX_REPEL'], 1))
+    view = SimpleNamespace(items=bag, party=(), box_counts=(20,) * 12, money=0)
+    # The X Speed and the weaker repel are both spare in a crowded bag. The first in the bag goes.
+    assert bag[ledger.first_sale(view, 'items', 'sale')][0] == ITEMS['SUPER_REPEL']
+    # With room left in the bag a finite TM never goes, and in a full bag the cheapest one does.
+    tms = keys + ((213, 1), (224, 2))
+    assert ledger.first_sale(SimpleNamespace(items=tms, party=(), money=0, box_counts=()), 'items', 'sale') is None
+    full = tms + ((ITEMS['POTION'], 1), (ITEMS['POKE_BALL'], 5), (ITEMS['ANTIDOTE'], 1))
+    assert full[ledger.first_sale(SimpleNamespace(items=full, party=(), money=0, box_counts=()), 'items', 'sale')][0] == 213
+
+
+def test_the_gen1_ledger_holds_the_safari_fee_until_both_prizes_are_in():
+    from pokesim.policies import ledger
+    from pokesim.strategy_data import ITEMS
+    view = SimpleNamespace(items=(), party=(SimpleNamespace(moves=(57,)),), badges=8, money=0)
+    assert set(ledger.money_needs(view)) == {'cash', 'safari'}
+    assert ledger.cash_reserve(view) == ledger.CASH_RESERVE + ledger.SAFARI_FEE
+    done = SimpleNamespace(items=((ITEMS['GOLD_TEETH'], 1),), party=view.party, badges=8, money=0)
+    assert set(ledger.money_needs(done)) == {'cash'}
