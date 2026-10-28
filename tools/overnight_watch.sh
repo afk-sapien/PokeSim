@@ -15,7 +15,8 @@ LOGS=${POKESIM_WATCH_LOGS:-$HOME/.local/state/pokesim-overnight}
 KEEP=${POKESIM_WATCH_KEEP:-14}
 # The tests wait for the heavy lock of tools/load_gate.sh, so they never overlap a replay batch.
 GATE=${POKESIM_LOAD_GATE:-$HOME/.local/state/pokesim-load}
-GATE_WAIT=${POKESIM_WATCH_GATE_WAIT:-7200}
+# 25 minutes, so the wait fits inside the unit's 30-minute start timeout.
+GATE_WAIT=${POKESIM_WATCH_GATE_WAIT:-1500}
 
 mkdir -p "$LOGS"
 log=$LOGS/$(date +%F).log
