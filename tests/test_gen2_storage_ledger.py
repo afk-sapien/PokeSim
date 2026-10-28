@@ -124,6 +124,12 @@ def test_unequip_walks_the_spare_through_the_party_and_back():
     assert 'unequip' not in policy.collection and policy.menu is None
 
 
+def test_taking_an_item_closes_the_pc_text_left_by_the_withdrawal():
+    take = Take(5, ledger.member(mon(3))[1:])
+    assert take.approach('dialogue') == 'b'
+    assert take.approach('pc') == 'b'
+
+
 def test_a_refused_step_stands_the_spare_down():
     from pokesim.gen2.standdown import standing_down
     berry = mon(3, held_item=BERRY)
@@ -132,6 +138,20 @@ def test_a_refused_step_stands_the_spare_down():
     assert ledger.unequip_step(policy, snapshot([berry], PARTY)) is None
     assert 'unequip' not in policy.collection
     assert standing_down(policy, ledger.unequip_key(berry))
+    # A spare refused once it is in the party goes back to its box before the route ends.
+    party = mon(None, box=None, held_item=BERRY)
+    policy = Policy(refused=[Take(5, ledger.member(berry)[1:])])
+    policy.collection['unequip'] = ledger.member(berry)
+    assert ledger.unequip_step(policy, snapshot([], PARTY + [party])) == 'a'
+    assert policy.menu == Storage('DEPOSIT', 5, 6)
+    assert policy.collection['unequip_return'] and standing_down(policy, ledger.unequip_key(berry))
+    # Still refused or not, the return trip keeps depositing until it is boxed.
+    assert ledger.unequip_step(policy, snapshot([], PARTY + [party])) == 'a'
+    assert policy.menu == Storage('DEPOSIT', 5, 6)
+    policy.menu = None
+    assert ledger.unequip_step(policy, snapshot([mon(9, held_item=BERRY)], PARTY)) is None
+    assert 'unequip' not in policy.collection and 'unequip_return' not in policy.collection
+    assert policy.menu is None
     # A full party drops the route without standing the spare down.
     policy = Policy()
     policy.collection['unequip'] = ledger.member(berry)

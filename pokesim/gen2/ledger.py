@@ -145,7 +145,8 @@ def unequip_step(policy, snapshot):
 
     The spare is withdrawn, its item taken into the bag, and it goes back to the box it left, which
     has the slot it freed. Then it is released from there. A step the game refuses stands the spare
-    down for a while, so another unit goes first.
+    down for a while, so another unit goes first. A spare already withdrawn goes back to the box with
+    its item, so it does not stay in the party.
     """
     from .menus import ChangeBox, Storage, Take
     from .standdown import stand_down
@@ -154,11 +155,15 @@ def unequip_step(policy, snapshot):
     if not wanted:
         return None
     mon = next((row for row in snapshot.party + snapshot.stored if member(row) == wanted), None)
-    if mon is None:
-        # Released, so the slot is free.
+    returning = state.get('unequip_return')
+    if mon is None or returning and mon.box is not None:
+        # Released, so the slot is free, or put back after a refused step.
         state.pop('unequip', None)
+        state.pop('unequip_return', None)
         return None
-    if mon.box is not None and mon.box != snapshot.active_box:
+    if returning:
+        task = Storage('DEPOSIT', snapshot.party.index(mon), len(snapshot.party))
+    elif mon.box is not None and mon.box != snapshot.active_box:
         task = ChangeBox(mon.box)
     elif mon.box is not None and mon.held_item:
         if len(snapshot.party) >= PARTY_SIZE:
@@ -173,7 +178,11 @@ def unequip_step(policy, snapshot):
         task = Release(mon.box, mon.position, wanted)
     if not policy.allowed(task, snapshot):
         stand_down(policy, unequip_key(mon))
+        if mon.box is None and not returning:
+            state['unequip_return'] = True
+            return unequip_step(policy, snapshot)
         state.pop('unequip', None)
+        state.pop('unequip_return', None)
         return None
     policy.menu = task
     return 'a'

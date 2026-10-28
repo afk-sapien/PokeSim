@@ -254,7 +254,10 @@ class StrategicPolicy(Policy):
         self.decisions += 1
         # PC transfers briefly combine a new partner with the old slot's level.
         # Accept training gains in battle or after returning to the overworld.
-        self.collection.observe(s, overworld=kind == 'overworld', suspended=self.pickups.active is not None or self.tm_plan is not None,
+        # A release visit to the PC is storage work, so its frames do not count against the project.
+        self.collection.observe(s, overworld=kind == 'overworld',
+                                suspended=self.pickups.active is not None or self.tm_plan is not None
+                                or self.goal.key == 'party_release',
                                 training_ready=bool(s.in_battle) or kind == 'overworld',
                                 training_active=(self.goal.key == 'collect_train' and not self.heal_latch
                                                  and not needs_healing(s.party)
