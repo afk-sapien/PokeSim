@@ -2223,6 +2223,36 @@ def test_wild_carriers_are_hunted_for_the_kings_rock_once_the_bag_has_none(real_
     assert item_hunts(asked, no_kingdra) == {61: rock, 117: scale}
 
 
+def test_a_carrier_hunt_stands_down_after_three_times_the_expected_encounters(real_data):
+    from pokesim.gen2.collection import CARRIER_ENCOUNTERS, carriers_exhausted, observe_carriers
+    from pokesim.gen2.standdown import STAND_DOWN, hunt_key, standing_down
+
+    def mon(species):
+        return SimpleNamespace(species=species, held_item=0, egg=False, box=0, position=0, dvs=(1, 2, 3, 4, 5))
+
+    stored = (mon(61), mon(79), mon(117), mon(199), mon(230))
+    owned = frozenset({60, 61, 62, 79, 80, 116, 117, 199, 230})
+    policy = SimpleNamespace(data=real_data, demand={}, decisions=0, collection={'target': {'species': 61}})
+
+    def step(in_battle, enemy=61):
+        policy.decisions += 1
+        observe_carriers(policy, SimpleNamespace(party=(), stored=stored, items=(), owned=owned,
+                                                 in_battle=in_battle, enemy_species=enemy))
+
+    snapshot = SimpleNamespace(party=(), stored=stored, items=(), owned=owned)
+    # Each battle counts once however many steps it lasts, and other species do not count.
+    for _ in range(CARRIER_ENCOUNTERS - 1):
+        step(1), step(1), step(0)
+    step(1, enemy=60), step(0), step(2), step(0)
+    assert policy.collection['carrier_encounters'] == {'61': CARRIER_ENCOUNTERS - 1}
+    assert not carriers_exhausted(policy, snapshot, 61)
+    step(1), step(0)
+    assert carriers_exhausted(policy, snapshot, 61)
+    assert standing_down(policy, hunt_key(61)) and policy.collection['carrier_encounters'] == {}
+    policy.decisions += STAND_DOWN
+    assert not standing_down(policy, hunt_key(61))
+
+
 def test_a_peer_requested_evolution_is_boxed_so_it_can_be_offered(real_data):
     from pokesim.gen2.collection import peer_store, peer_store_arrive, peer_store_slots
     from pokesim.gen2.policy import Goal
