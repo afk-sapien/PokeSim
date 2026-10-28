@@ -149,9 +149,10 @@ def held_counts(snapshot):
 # Slowking or Kingdra. Magnemite's Metal Coat is left out: it would have to move to Onix or Scyther.
 ITEM_CARRIERS = {61: ('KINGS_ROCK', 186), 79: ('KINGS_ROCK', 199), 117: ('DRAGON_SCALE', 230)}
 _ITEM_HUNTS = [None, None]
-# A carrier hunt stands down after three times the encounters the 2% item is expected to take. Gold
-# and Silver spent about a quarter of their frames meeting carriers that held nothing.
-CARRIER_ENCOUNTERS = 150
+CARRIER_ITEM_ODDS = 0.02
+# A carrier hunt stands down after this many times the wild battles on its spot that the item is
+# expected to take. Silver spent about a third of its frames meeting carriers that held nothing.
+CARRIER_ROUNDS = 3
 
 
 def item_hunts(policy, snapshot):
@@ -180,25 +181,33 @@ def item_hunts(policy, snapshot):
     return result
 
 
+def carrier_battles(target):
+    """Wild battles on a carrier hunt's spot before it stands down: CARRIER_ROUNDS times the
+    expected wait, from the carrier's encounter rate there and the odds it holds the item."""
+    return round(CARRIER_ROUNDS / (min(100, max(1, target['chance'])) / 100 * CARRIER_ITEM_ODDS))
+
+
 def observe_carriers(policy, snapshot):
-    """Count each wild battle with the carrier being hunted once, including across a checkpoint restored during it."""
+    """Count each wild battle on a carrier hunt's spot once, whatever the species, including across a
+    checkpoint restored during it."""
     state = policy.collection
     if snapshot.in_battle != 1:
         state.pop('carrier_battle', None)
         return
     target = state.get('target')
-    if (state.get('carrier_battle') or not target or snapshot.enemy_species != target['species']
+    if (state.get('carrier_battle') or not target or snapshot.map != target['map']
             or target['species'] not in item_hunts(policy, snapshot)):
         return
     state['carrier_battle'] = True
-    counts = state.setdefault('carrier_encounters', {})
+    counts = state.setdefault('carrier_battles', {})
     counts[str(target['species'])] = counts.get(str(target['species']), 0) + 1
 
 
-def carriers_exhausted(policy, snapshot, species):
-    """Stand a carrier hunt down once it met the carrier CARRIER_ENCOUNTERS times without the item."""
-    counts = policy.collection.get('carrier_encounters') or {}
-    if counts.get(str(species), 0) < CARRIER_ENCOUNTERS or species not in item_hunts(policy, snapshot):
+def carriers_exhausted(policy, snapshot, target):
+    """Stand a carrier hunt down once its spot gave carrier_battles(target) wild battles without the item."""
+    counts = policy.collection.get('carrier_battles') or {}
+    species = target['species']
+    if counts.get(str(species), 0) < carrier_battles(target) or species not in item_hunts(policy, snapshot):
         return False
     counts.pop(str(species))
     stand_down(policy, hunt_key(species))
@@ -609,7 +618,7 @@ def journey(policy, snapshot, mem, Goal):
     room = not policy.no_room(snapshot)
     if (target and (not wanted(policy, snapshot, target['species']) or not matching_time(target['time'], current_time)
                    or policy.decisions - target['started'] > 12000 or not room
-                   or carriers_exhausted(policy, snapshot, target['species'])
+                   or carriers_exhausted(policy, snapshot, target)
                    or standing_down(policy, hunt_key(target['species'])))):
         state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
         state['target'] = target = None
