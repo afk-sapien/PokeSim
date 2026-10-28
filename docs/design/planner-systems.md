@@ -18,7 +18,7 @@ Most stuck loops of the last month were fixed with a special case: sell a repel,
 | #147 | `gen2/collection.py:21` `policy.no_room` in `clock_wait` | A Lapras wait with 14 full boxes blocked the League, 98 to 100% idle | A wait whose payoff is a catch checks box room first, and a wait never blocks other goals | D, B |
 | #148 | `policies/shopping.py:29` `spare_repels`, `:100` | Red skipped all three legendary birds with no bag slot for Ultra Balls | The same bag arbiter as #137, built again for Gen I | A |
 | #150 | `policies/director.py:55`, `gen2/postgame.py:35` `WEIGHTS`, `:234` | Rematch and League runs took 46% (Blue) and 28% (Gold) of frames | Utility per expected frame instead of per turn in a rotation | B |
-| #151 (open) | `gen2/collection.py` `carrier_budget`, main `:583` `> 12000` | A 2% held-item hunt took 33 to 98% of frames | One expected-cost budget for every goal, kept across restarts | C, B |
+| #151 | `gen2/collection.py` `carrier_budget`, `observe_carriers`, `carriers_exhausted`, and one call in `Policy.step` | A 2% held-item hunt took 33 to 98% of frames | One expected-cost budget for every goal, kept across restarts | C, B |
 | #153 | `policies/navigation.py:30` `CYCLING_ROAD_CHECKS`, `:279` | A run with no Bicycle paced the Route 18 gate until a two-minute timeout | Navigation reads gate conditions from game data | F, D |
 
 #145 (shared loop error recovery), #149 (a harness check that the cartridge matches the game data) and #152 (a feature) are not band-aids. #149 does point at one real cause: Gen I game data is chosen from an environment variable at import time. That is a separate cleanup and is out of scope here.
@@ -213,8 +213,8 @@ Suggested order: S4 first, because it merges code that already exists and gives 
 
 ## 6. Open findings to fold in
 
-- Silver and Gold are stuck in League runs (94% and 95.7%) because every spare duplicate holds an item. Fixed by S1 step 4.
+- Silver and Gold are stuck in League runs (94% and 95.7%) because spare duplicates hold items. Silver has 251 of 251, 14 full boxes and a full party, and 51 of 57 boxed duplicates hold an item. In Gold all 33 boxed duplicates hold one, and 30 of them are also trained. Fixed by S1 step 4.
 - Gold save event-9335 idles 98% after a lost League run. S4 should stand that goal down and S3 should pick the next.
-- The held-item hunt ranks spots by distance plus a fixed term, and spends half its time on a 10% spot. Fixed by S3 expected frames.
+- The held-item hunt ranks spots by distance plus a fixed term, and spends half its time on a 10% spot. The Poliwhirl surf hunt prefers Route 28 (10% Poliwhirl) over Silver Cave Outside (90%). About 80% of its battles are grass species met walking between water spots, so it gets about 7 Poliwhirl battles per game hour and one item takes about 7 game hours. Fixed by S3 expected frames, with S5 fleeing off-target battles.
 - Red's "Train CHEESEKING to level 30" takes 79.8% of frames at about 0.3 level gains per 10000 frames, and Yellow's training takes 58.8%. S4 progress rate and S3 cost should cover both. These need checking in the next audit.
 - Blue at 151 of 151 with full boxes is a real end state. Rematches as filler are the intended result there.
