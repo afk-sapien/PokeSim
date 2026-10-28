@@ -328,6 +328,6 @@ def test_a_lock_left_under_an_older_key_keeps_the_partner_from_release(monkeypat
     from pokesim.policies import storage
     rows = [{'box': 1, 'position': i, 'species': 133, 'trainer_id': 100, 'dvs': [i + 1] * 5} for i in range(2)]
     snapshot = Mock(storage_entries=lambda: rows)
-    monkeypatch.setattr(storage, 'release_target', lambda snapshot, protected, reserved: reserved)
+    monkeypatch.setattr(storage, 'release_target', lambda snapshot, protected, reserved, *_: reserved)
     choices = {preferences.signature(rows[0]): {'state': 'locked'}}
     assert storage.StorageController.release_target(snapshot, {}, choices) == {(1, 0)}

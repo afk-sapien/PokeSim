@@ -176,3 +176,64 @@ def test_a_refused_step_stands_the_spare_down():
     policy.collection['unequip'] = ledger.member(berry)
     assert ledger.unequip_step(policy, snapshot([berry], PARTY + [mon(None, box=None, species=2)])) is None
     assert 'unequip' not in policy.collection and not standing_down(policy, ledger.unequip_key(berry))
+
+
+def test_a_wanted_item_never_leaves_with_its_holder():
+    # The Everstone is a breeding item, so its holder is offered only with the item taken off first.
+    stone = mon(3, held_item=EVERSTONE)
+    for party in (PARTY, PARTY + [mon(None, box=None, species=2)]):
+        units = ledger.box_units(Policy(), snapshot([BEST, stone], party))
+        assert [unit.action for unit in units] == ['unequip']
+        unit = ledger.storage_unit(Policy(), snapshot([BEST, stone], party))
+        assert unit is None or unit.action == 'unequip'
+
+
+def test_a_spare_in_another_box_costs_a_box_change():
+    best = mon(0, box=1, dvs=(15, 15, 15, 15, 15))
+    here, away = mon(1, box=0), mon(2, box=1, dvs=(3, 3, 3, 3, 3))
+    found = rows(Policy(), snapshot([best, here, away], PARTY))
+    assert found == {(1, 'release'): ledger.PLAIN, (2, 'release'): ledger.PLAIN + ledger.BOX_CHANGE}
+    # The weaker copy waits in box 1, but the one in the open box goes first.
+    assert ledger.storage_unit(Policy(), snapshot([best, here, away], PARTY)).detail == here
+
+
+class Owned(Policy):
+    def __init__(self, partners):
+        super().__init__()
+        self.partners = partners
+
+    def release_owners(self):
+        from pokesim.trade.partners import owners
+        return owners(4321, self.partners)
+
+
+def test_a_copy_from_an_unknown_trainer_is_never_released():
+    traded = mon(1, trainer_id=13132)
+    assert rows(Owned(frozenset()), snapshot([BEST, traded], PARTY)) == {}
+    assert rows(Owned(frozenset({13132})), snapshot([BEST, traded], PARTY)) == {(1, 'release'): ledger.PLAIN}
+
+
+def test_release_owners_reads_the_player_and_the_linked_adventures():
+    from pokesim.gen2.policy import Policy as Gen2Policy
+    fake = SimpleNamespace(memory=None, data=None, trade_partners=lambda: frozenset({13132}))
+    assert Gen2Policy.release_owners(fake) is None
+    from pokesim.trade import partners
+    assert partners.owners(47325, frozenset({13132})) == {47325, 13132}
+
+
+def visit(party_size, room):
+    from pokesim.gen2.policy import Goal, Policy as Gen2Policy
+    view = SimpleNamespace(party=[mon(None, box=None)] * party_size, stored=[], map=1,
+                           box_counts=(BOX_CAPACITY - room,) + (BOX_CAPACITY,) * 13)
+    fake = SimpleNamespace(collection={}, in_league=lambda view: False, in_transmitter_room=lambda view: False,
+                           data=SimpleNamespace(map_ids={'POKECENTER_2F': 2}), storage_target=lambda view: object(),
+                           storage_goal=lambda view: Goal('storage', 'PC', 'GOLDENROD_POKECENTER_1F', 1, 1))
+    memory = SimpleNamespace(byte=lambda name: 0)
+    return Gen2Policy.release_goal(fake, view, memory)
+
+
+def test_a_free_party_slot_counts_as_room_before_a_release_visit_starts():
+    from pokesim.planning.ledger import BOX_RESERVE
+    assert visit(6, BOX_RESERVE - 1).key == 'collection_release'
+    # A PC errand that deposits one partner before withdrawing another leaves the party a slot short.
+    assert visit(5, BOX_RESERVE - 1) is None

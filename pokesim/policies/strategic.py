@@ -1103,8 +1103,9 @@ class StrategicPolicy(Policy):
         # instead of the same menu failing again and again.
         self.pc.avoid = frozenset(key[1:] for key, until in self.shortcut.failures.items()
                                   if key[0] == 'release' and until > snapshot.frame)
+        self.pc.partners = frozenset(self.trade_partners()) if hasattr(self, 'trade_partners') else frozenset()
         return self.pc.release_target(snapshot, self.collection.project, self._preferences(), self.collection,
-                                      self.pc.avoid)
+                                      self.pc.avoid, self.pc.partners)
 
     def _pc_target(self, snapshot):
         return self.pc.target(snapshot, self.goal.key, self.collection.project, self._preferences(), self.collection)

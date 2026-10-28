@@ -90,6 +90,13 @@ def ledger(data, boxes=None):
 # took many battles, so it weighs more than any cheap item. An item held by a released spare is lost
 # with it, so its price counts too, halved when the bag holds more of it.
 PLAIN, TRAINED, HELD = 1, 50, 10
+# A spare in another box costs a box change first, which saves the game and takes about as long as a
+# release. So a spare in the open box goes before a near equal one elsewhere.
+BOX_CHANGE = 10
+
+
+def moved(snapshot, mon):
+    return 0 if mon.box == snapshot.active_box else BOX_CHANGE
 
 
 def member(mon):
@@ -111,20 +118,22 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
     keep = breeding_stock(data, [mon.species for mon in snapshot.party + snapshot.stored if not mon.egg])
     partners = plan_partners(policy.collection)
     preferences = policy.trade_preferences()
-    plain = spares(snapshot, policy.demand, keep, preferences, partners)
-    lenient = spares(snapshot, policy.demand, keep, preferences, partners, lenient=True)
+    owners = policy.release_owners() if hasattr(policy, 'release_owners') else None
+    plain = spares(snapshot, policy.demand, keep, preferences, partners, owners=owners)
+    lenient = spares(snapshot, policy.demand, keep, preferences, partners, lenient=True, owners=owners)
     wanted = wanted_items(data)
     bag = dict(snapshot.pockets.get('items', ()))
     rows = []
     for rank, mon in enumerate(plain):
         if allowed(mon):
-            rows.append(Unit(('mon', mon.box, mon.position), BOX, PLAIN, 'release', detail=mon, order=(0, rank)))
+            rows.append(Unit(('mon', mon.box, mon.position), BOX, PLAIN + moved(snapshot, mon), 'release',
+                             detail=mon, order=(0, rank)))
     plain = {(mon.box, mon.position) for mon in plain}
     for rank, mon in enumerate(lenient):
         if (mon.box, mon.position) in plain or not allowed(mon):
             continue
         key = ('mon', mon.box, mon.position)
-        base = TRAINED if sum(mon.stat_exp) >= TRAINED_STAT_EXP else PLAIN
+        base = (TRAINED if sum(mon.stat_exp) >= TRAINED_STAT_EXP else PLAIN) + moved(snapshot, mon)
         if not mon.held_item:
             rows.append(Unit(key, BOX, base, 'release', detail=mon, order=(1, rank)))
             continue

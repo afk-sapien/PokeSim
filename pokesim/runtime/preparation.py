@@ -29,7 +29,7 @@ PC = (CENTER, 13, 4)
 SEALED = 'The party and every PC box are full and no spare duplicate can be released, so no boxed Pokémon can join the party for a trade'
 
 
-def sealed(snapshot, preferences):
+def sealed(snapshot, preferences, partners=frozenset()):
     """Whether preparation could not make room for a boxed offer, as _storage_make_room would decide."""
     if (len(getattr(snapshot, 'party', ())) < 6 or not getattr(snapshot, 'box_full', False)
             or getattr(snapshot, 'next_free_box', 0) is not None):
@@ -37,6 +37,7 @@ def sealed(snapshot, preferences):
     from ..policies.strategic import StrategicPolicy
     policy = StrategicPolicy()
     policy.trade_preferences = lambda: preferences
+    policy.trade_partners = lambda: partners
     return policy._release_target(snapshot) is None
 
 
@@ -396,6 +397,7 @@ class Preparation:
             from ..policies.strategic import StrategicPolicy
             self.storage_cleanup = StrategicPolicy()
             self.storage_cleanup.trade_preferences = self._storage_preferences
+            self.storage_cleanup.trade_partners = self.emu.store.trade_partners
         if self.storage_cleanup._release_target(snap) is None:
             raise ValueError('Every PC box is full and no unprotected spare duplicate can make room for this trade')
         pc = CENTERS[snap.map]['pc']

@@ -68,8 +68,10 @@ def test_scenarios_are_found_with_their_settings(tmp_path):
     folder = tmp_path / 'league' / 'frozen'
     folder.mkdir(parents=True)
     (folder / 'scenario.json').write_text(json.dumps({'name': 'frozen', 'checkpoint': '../door.state', 'until': 'champion',
-                                                      'edits': {'money': 0}, 'budget_game_minutes': 30}))
+                                                      'edits': {'money': 0}, 'budget_game_minutes': 30,
+                                                      'trade_partners': [13132]}))
     scenario, = discover(tmp_path)
+    assert scenario.trade_partners == [13132]
     assert scenario.checkpoint == tmp_path / 'league' / 'door.state' and scenario.until == 'champion'
     assert scenario.budget_game_minutes == 30 and scenario.max_quiet_game_minutes == 90 and discover(tmp_path / 'none') == []
     assert Scenario.load(folder).edits == {'money': 0}

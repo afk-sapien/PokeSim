@@ -781,6 +781,19 @@ def test_collection_demand_names_the_missing_species_a_peer_offers(setup):
     assert setup.peers[left].collection_payload['supply'] == []
 
 
+def test_collection_demand_passes_every_other_adventures_trainer_id(setup):
+    left, right = setup.data['left_id'], setup.data['right_id']
+    setup.coordinator._refresh_collection_demand([
+        (left, {'owned': list(range(1, 152)), 'player_id': 47325}),
+        (right, {'owned': list(range(1, 152)), 'player_id': 13132})])
+    assert setup.peers[left].collection_payload['partners'] == [13132]
+    assert setup.peers[right].collection_payload['partners'] == [47325]
+    # An older adventure that does not report its trainer adds nothing.
+    setup.coordinator._refresh_collection_demand([
+        (left, {'owned': list(range(1, 152)), 'player_id': 47325}), (right, {'owned': list(range(1, 152))})])
+    assert setup.peers[left].collection_payload['partners'] == []
+
+
 def manual_request(setup, left_key='party-0', right_key='party-1'):
     return {'left_id': setup.data['left_id'], 'right_id': setup.data['right_id'],
             'left_key': left_key, 'right_key': right_key, 'request_id': identifier()}

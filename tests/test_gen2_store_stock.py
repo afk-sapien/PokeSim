@@ -229,6 +229,7 @@ def test_collection_demand_validates_supply_and_peers():
     from pokesim.gen2.trading import Participant
     participant = Participant.__new__(Participant)
     participant.emu = SimpleNamespace(policy=SimpleNamespace())
+    participant.store = None
     assert participant.collection_demand({'requests': {'103': 1}, 'supply': [69], 'peers': 2}) == {'requests': {103: 1}}
     assert participant.emu.policy.peer_supply == {69} and participant.emu.policy.peers == 2
     participant.collection_demand({'requests': {}})

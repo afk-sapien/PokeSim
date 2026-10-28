@@ -77,6 +77,68 @@ def test_rare_trained_held_and_partner_pokemon_are_protected():
     assert result == [plain]
 
 
+def test_perfect_and_rare_dv_copies_are_protected_in_both_tiers():
+    # Two perfect copies, so one of them is not the kept best copy.
+    perfect = [mon(16, position=index, dvs=(15, 15, 15, 15, 15)) for index in range(2)]
+    rare = mon(16, position=2, dvs=(13, 15, 15, 14, 15))
+    plain = mon(16, position=3, dvs=(4, 4, 4, 4, 4))
+    for lenient in (False, True):
+        assert spares(snapshot([*perfect, rare, plain]), lenient=lenient) == [plain]
+
+
+def test_the_exp_share_holder_stays_even_in_the_lenient_tier():
+    from pokesim.gen2.release import EXP_SHARE
+    best = mon(16, position=0, dvs=(14, 14, 14, 14, 14))
+    holder = mon(16, position=1, held_item=EXP_SHARE)
+    berry = mon(16, position=2, held_item=1)
+    trained = mon(16, position=3, stat_exp=(20000, 0, 0, 0, 0))
+    assert spares(snapshot([best, holder, berry, trained])) == []
+    assert set(map(id, spares(snapshot([best, holder, berry, trained]), lenient=True))) == {id(berry), id(trained)}
+
+
+def test_the_last_copy_and_party_members_are_never_offered():
+    lone = mon(16, position=0)
+    party = mon(19, box=None, position=None)
+    assert spares(snapshot([lone], party=[party]), lenient=True) == []
+
+
+@pytest.mark.parametrize('species', [144, 145, 146, 150, 151, 243, 244, 245, 249, 250, 251])
+def test_a_legendary_copy_is_never_released(species):
+    copies = [mon(species, position=index, dvs=(index + 1,) * 5) for index in range(3)]
+    assert spares(snapshot(copies), lenient=True) == []
+
+
+@pytest.mark.parametrize('landmark', [0x7E, 0x7F])
+def test_a_crystal_gift_or_event_copy_is_never_released(landmark):
+    best = mon(16, position=0, dvs=(14, 14, 14, 14, 14))
+    # The high byte holds the catch time and level, the low byte the OT gender bit and the landmark.
+    marked = mon(16, position=1, caught=0x4A00 | 0x80 | landmark)
+    caught = mon(16, position=2, caught=0x4A00 | 0x80 | 0x12)
+    assert spares(snapshot([best, marked, caught]), lenient=True) == [caught]
+
+
+def test_only_the_player_and_linked_adventures_may_lose_a_copy():
+    from pokesim.trade.partners import owners
+    best = mon(16, position=0, dvs=(14, 14, 14, 14, 14), trainer_id=4321)
+    own = mon(16, position=1, dvs=(3, 3, 3, 3, 3), trainer_id=4321)
+    partner = mon(16, position=2, dvs=(4, 4, 4, 4, 4), trainer_id=13132)
+    foreign = mon(16, position=3, dvs=(2, 2, 2, 2, 2), trainer_id=20897)
+    view = snapshot([best, own, partner, foreign])
+    assert spares(view, owners=owners(4321, frozenset({13132}))) == [own, partner]
+    assert spares(view, owners=owners(4321, frozenset())) == [own]
+    # Without a known player id nothing is judged by its trainer.
+    assert owners(None, frozenset({13132})) is None
+    assert foreign in spares(view, owners=None)
+
+
+def test_a_spare_in_the_open_box_goes_before_one_elsewhere():
+    best = mon(16, box=0, position=0, dvs=(14, 14, 14, 14, 14))
+    weak = mon(16, box=0, position=1, dvs=(1, 2, 2, 2, 2))
+    here = mon(16, box=3, position=0, dvs=(5, 5, 5, 5, 5))
+    assert spares(snapshot([best, weak, here], active_box=3)) == [here, weak]
+    assert spares(snapshot([best, weak, here], active_box=0)) == [weak, here]
+
+
 def test_each_unown_letter_keeps_its_own_copy():
     # Letters come from the attack, defense, speed and special DVs.
     a = mon(201, position=0, dvs=(5, 0, 0, 0, 0))
