@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Require pokecore 0.9.2. Core now names the title screen and the main menu, which it used to read as the overworld. A Gold, Silver or Crystal menu task that finds either screen ends at once and presses nothing.
+
 - Let Gold, Silver and Crystal replays buy at the Champion shop. The headless runner never added the planned TM or supply to the clerk's list, so each visit ended "This mart does not sell that item" and stood down, and the replay audit counted those stand-downs against the planner.
 
 - Count a Pokémon let go at the PC as progress in the planning monitor and the replay audit. A release visit frees the slot the next catch needs, but the audit counted Gold and Silver release visits as wasted frames.
