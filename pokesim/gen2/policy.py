@@ -1462,8 +1462,11 @@ class Policy:
             return Action('a' if target + 1 == cursor else 'down' if cursor < target + 1 else 'up')
         if 'FIGHT' in text and 'TYPE' not in text:
             # A shiny session runs from every plain wild battle, which brings the next encounter sooner.
+            # The walk to Olivine before a Battle Tower challenge runs from them too: its lead is the
+            # adventure team's, often a slow staller, and long fights there sent it back to heal.
+            travel = self.goal is not None and self.goal.key == 'tower_travel'
             if (self.shiny_missed or snapshot.in_battle == 1 and not catch and not shiny
-                    and shiny_session(self, snapshot)) and can_escape:
+                    and (travel or shiny_session(self, snapshot))) and can_escape:
                 # A failed escape brings the menu back and Run is tried again. Only a trap that
                 # forbids running leaves the fight below.
                 action = self.battle_task(Flee(), snapshot, mem)
