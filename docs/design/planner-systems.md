@@ -161,6 +161,8 @@ Migration:
 4. Gen I overworld overrides switch.
 5. The Gen II ladder switches.
 
+Cadences that S4 left in place and S3 should replace with its own scoring: `PROJECT_COOLDOWN` (sweep row 14), the tower `RETRY_AFTER` rest, the shiny session slice (`SHINY_ENCOUNTERS` and `SHINY_MAX_FRAMES`), the strategic development and TM check timers (row 18) and the Gen II `attempts` recency of 18000 decisions.
+
 ### S4. Progress monitor with backoff (cause C)
 
 Interface:
@@ -184,6 +186,16 @@ Migration:
 3. Gen I director backoff and idle timeout move onto it.
 4. Budgets switch from constants to `3 × expected_frames`.
 5. The remaining per-feature counters go.
+
+As built (#155, #156, #157, #162), the interface differs in a few places:
+- A progress event clears the frames spent on a key but keeps its stand-down count, so a goal that progresses and then stalls again still backs off from where it was.
+- `observe` takes `now`, the frame or decision count the backoff is measured in.
+- `Monitor` adds `stand_down(progressed)`, `standing_down`, `until` and `clear`. `start` takes a `budget` override.
+- Backoff is `Backoff(base, doublings)`.
+- Gen II state stays in `collection['stood_down']` so older saves keep their waits. Gen I state is in `director.progress`.
+- Known gap: Gen I uses `expected_frames` declared per kind of project until S3 adds encounter odds, because the Gen I `collection.json` has no odds.
+
+Counters fall into three kinds. Real budgets (Gen I per-method budgets, the #151 carrier budget, the Gen II quality hunt, training and the TM plan deadline) use three times expected, counted across restarts and cleared by progress. Attempt counts (`ITEM_REFUSALS`, the teams `BLOCKED_LIMIT`, the outing "map still loading" 20 steps) move to the monitor in their own unit. Cadences are not budgets and go to S3.
 
 ### S5. Goal-aware battle stance (cause E)
 
@@ -218,3 +230,7 @@ Suggested order: S4 first, because it merges code that already exists and gives 
 - The held-item hunt ranks spots by distance plus a fixed term, and spends half its time on a 10% spot. The Poliwhirl surf hunt prefers Route 28 (10% Poliwhirl) over Silver Cave Outside (90%). About 80% of its battles are grass species met walking between water spots, so it gets about 7 Poliwhirl battles per game hour and one item takes about 7 game hours. Fixed by S3 expected frames, with S5 fleeing off-target battles.
 - Red's "Train CHEESEKING to level 30" takes 79.8% of frames at about 0.3 level gains per 10000 frames, and Yellow's training takes 58.8%. S4 progress rate and S3 cost should cover both. These need checking in the next audit.
 - Blue at 151 of 151 with full boxes is a real end state. Rematches as filler are the intended result there.
+- Crystal's 47% wasted in the S4 baseline was an audit artefact. The audit counted only level ups as training progress, but Furret climbs from level 82 to 97 per run. The audit now counts trainee experience, and that training is productive.
+- Red's CHEESEKING and Ditto gain 14 to 16 levels per run, so Red's training share is slow progress, not a stall.
+- Yellow's `party_release` loops releasing from a full box (3 stalls in the baseline). S1 should own box space.
+- Screen recoveries are high in the baseline: Yellow 490, Blue 588, Red 115 per batch. Worth a look of its own.
