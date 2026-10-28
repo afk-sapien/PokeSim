@@ -161,8 +161,12 @@ def test_full_boxes_with_nothing_to_release_wait_for_no_catch_and_free_the_leagu
     policy.completed = {'champion': 1}
     full = snapshot([lead()], owned=set(range(1, 252)) - {131})
     assert clock_wait(policy, full, clock(), 'day') == 'Lapras waits for Friday'
-    policy.no_room = lambda snapshot: True
-    full.can_catch = False
+    # A full party and full boxes still leave room while the ledger has a spare to let go.
+    full = snapshot([lead()] * 6, owned=set(range(1, 252)) - {131})
+    full.box_counts, full.can_catch = (20,) * 14, False
+    policy.storage_target = lambda snapshot: 'spare'
+    assert clock_wait(policy, full, clock(), 'day') == 'Lapras waits for Friday'
+    policy.storage_target = lambda snapshot: None
     assert clock_wait(policy, full, clock(), 'day') is None
     assert waiting_label(policy, full, clock(), 'day') == 'Walk the grass until a trade or a return brings new collection work'
     assert postgame_league(policy, full, clock(), 'day')

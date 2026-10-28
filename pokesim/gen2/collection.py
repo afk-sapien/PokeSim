@@ -19,7 +19,8 @@ def clock_wait(policy, snapshot, mem, current_time):
     run plays: one in-game day is about 5.2 million frames, 24 hours at 1x and well under an hour at Max.
     Every other activity goes first, so this only names the wait in the label of the filler work.
     """
-    if policy.no_room(snapshot):
+    from .ledger import catch_room
+    if not catch_room(policy, snapshot, 'clock_wait'):
         # Each of these waits ends in a catch, and with every box full and nothing to release none can
         # start. Naming one would also hold back the postgame League run that still has work to do.
         return None
