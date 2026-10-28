@@ -101,6 +101,21 @@ def test_catalogue_routes_tms_to_5f_and_capped_supplies_need_an_offer(real_data,
     assert shop.catalogue(real_data, {'item': tm, 'bought': True}, set()) == {}
 
 
+def test_a_headless_replay_offers_the_planned_item_like_the_app(real_data, on):
+    # Replays bought nothing at the Champion shop because their clerks never listed the plan.
+    from pokesim.gen2.headless import HeadlessRun
+    tm, ball = real_data.items['TM26'], real_data.items['MASTER_BALL']
+    run = HeadlessRun.__new__(HeadlessRun)
+    run.data, run.policy = real_data, policy_for(real_data)
+    assert run._champion_catalogue() == {}
+    run.policy.collection[shop.PLAN] = {'item': tm}
+    assert run._champion_catalogue() == {mart: {tm: 50000} for mart in shop.TM_MARTS}
+    run.policy.collection[shop.PLAN] = {'item': ball}
+    assert run._champion_catalogue() == {}
+    run.policy.shop_offers = {ball}
+    assert run._champion_catalogue() == {'MART_GOLDENROD_4F': {ball: 100000}}
+
+
 def test_walking_offers_start_at_champion_and_renew_after_a_purchase(real_data, on):
     store = Store()
     walking = {'available': True, 'total': 5000}
