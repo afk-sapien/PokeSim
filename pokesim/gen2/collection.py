@@ -150,9 +150,13 @@ def held_counts(snapshot):
 ITEM_CARRIERS = {61: ('KINGS_ROCK', 186), 79: ('KINGS_ROCK', 199), 117: ('DRAGON_SCALE', 230)}
 _ITEM_HUNTS = [None, None]
 CARRIER_ITEM_ODDS = 0.02
-# A carrier hunt stands down after this many times the wild battles on its spot that the item is
-# expected to take. Silver spent about a third of its frames meeting carriers that held nothing.
+# A carrier hunt stands down after a decision budget: this many times the wild battles its spot is
+# expected to take for the item, at DECISIONS_PER_BATTLE each, and never more than two game hours.
+# Silver spent about a third of its frames on carrier hunts, and a count of battles never fired
+# because the hunt met only a few battles an hour on its spot.
 CARRIER_ROUNDS = 3
+DECISIONS_PER_BATTLE = 75
+CARRIER_DECISIONS = 14000
 
 
 def item_hunts(policy, snapshot):
@@ -181,33 +185,27 @@ def item_hunts(policy, snapshot):
     return result
 
 
-def carrier_battles(target):
-    """Wild battles on a carrier hunt's spot before it stands down: CARRIER_ROUNDS times the
-    expected wait, from the carrier's encounter rate there and the odds it holds the item."""
-    return round(CARRIER_ROUNDS / (min(100, max(1, target['chance'])) / 100 * CARRIER_ITEM_ODDS))
+def carrier_budget(target):
+    """Decisions a carrier hunt may spend before it stands down: CARRIER_ROUNDS times the wild battles
+    expected for the item, from the carrier's encounter rate on its spot, capped at CARRIER_DECISIONS."""
+    battles = CARRIER_ROUNDS / (min(100, max(1, target['chance'])) / 100 * CARRIER_ITEM_ODDS)
+    return min(CARRIER_DECISIONS, round(battles * DECISIONS_PER_BATTLE))
 
 
 def observe_carriers(policy, snapshot):
-    """Count each wild battle on a carrier hunt's spot once, whatever the species, including across a
-    checkpoint restored during it."""
-    state = policy.collection
-    if snapshot.in_battle != 1:
-        state.pop('carrier_battle', None)
+    """Count each decision spent with a carrier as the hunt target, summed across target restarts."""
+    target = policy.collection.get('target')
+    if not target or target['species'] not in item_hunts(policy, snapshot):
         return
-    target = state.get('target')
-    if (state.get('carrier_battle') or not target or snapshot.map != target['map']
-            or target['species'] not in item_hunts(policy, snapshot)):
-        return
-    state['carrier_battle'] = True
-    counts = state.setdefault('carrier_battles', {})
+    counts = policy.collection.setdefault('carrier_decisions', {})
     counts[str(target['species'])] = counts.get(str(target['species']), 0) + 1
 
 
 def carriers_exhausted(policy, snapshot, target):
-    """Stand a carrier hunt down once its spot gave carrier_battles(target) wild battles without the item."""
-    counts = policy.collection.get('carrier_battles') or {}
+    """Stand a carrier hunt down once it spent carrier_budget(target) decisions without the item."""
+    counts = policy.collection.get('carrier_decisions') or {}
     species = target['species']
-    if counts.get(str(species), 0) < carrier_battles(target) or species not in item_hunts(policy, snapshot):
+    if counts.get(str(species), 0) < carrier_budget(target) or species not in item_hunts(policy, snapshot):
         return False
     counts.pop(str(species))
     stand_down(policy, hunt_key(species))

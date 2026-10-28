@@ -2223,8 +2223,8 @@ def test_wild_carriers_are_hunted_for_the_kings_rock_once_the_bag_has_none(real_
     assert item_hunts(asked, no_kingdra) == {61: rock, 117: scale}
 
 
-def test_a_carrier_hunt_stands_down_after_three_times_the_expected_wild_battles(real_data):
-    from pokesim.gen2.collection import carrier_battles, carriers_exhausted, observe_carriers
+def test_a_carrier_hunt_stands_down_after_its_decision_budget(real_data):
+    from pokesim.gen2.collection import CARRIER_DECISIONS, carrier_budget, carriers_exhausted, observe_carriers
     from pokesim.gen2.standdown import STAND_DOWN, hunt_key, standing_down
 
     def mon(species):
@@ -2232,27 +2232,30 @@ def test_a_carrier_hunt_stands_down_after_three_times_the_expected_wild_battles(
 
     stored = (mon(61), mon(79), mon(117), mon(199), mon(230))
     owned = frozenset({60, 61, 62, 79, 80, 116, 117, 199, 230})
-    target = {'species': 61, 'map': 7, 'chance': 10}
-    # One carrier in ten battles holding the item 2% of the time is 500 battles to expect, so 1,500.
-    assert carrier_battles(target) == 1500
+    target = {'species': 61, 'map': 7, 'chance': 90}
+    # Nine carriers in ten battles holding the item 2% of the time is about 56 battles to expect,
+    # so three times that at 75 decisions a battle. A rare carrier is capped at two game hours.
+    assert carrier_budget(target) == 12500
+    assert carrier_budget({**target, 'chance': 10}) == CARRIER_DECISIONS
     policy = SimpleNamespace(data=real_data, demand={}, decisions=0, collection={'target': target})
-
-    def step(in_battle, enemy=60, where=7):
-        policy.decisions += 1
-        observe_carriers(policy, SimpleNamespace(party=(), stored=stored, items=(), owned=owned, map=where,
-                                                 in_battle=in_battle, enemy_species=enemy))
-
     snapshot = SimpleNamespace(party=(), stored=stored, items=(), owned=owned)
-    # Each wild battle on the spot counts once however many steps it lasts, whatever the species.
-    # Trainer battles and battles on the way there do not count.
-    for index in range(carrier_battles(target) - 1):
-        step(1, enemy=61 if index % 10 == 0 else 60), step(1), step(0)
-    step(1, where=8), step(0), step(2), step(0)
-    assert policy.collection['carrier_battles'] == {'61': carrier_battles(target) - 1}
+
+    def step(times=1):
+        for _ in range(times):
+            policy.decisions += 1
+            observe_carriers(policy, snapshot)
+
+    # Decisions add up across target restarts, and none count without a carrier target.
+    step(carrier_budget(target) // 2)
+    policy.collection['target'] = None
+    step(100)
+    policy.collection['target'] = dict(target)
+    step(carrier_budget(target) // 2 - 1)
+    assert policy.collection['carrier_decisions'] == {'61': carrier_budget(target) - 1}
     assert not carriers_exhausted(policy, snapshot, target)
-    step(1), step(0)
+    step()
     assert carriers_exhausted(policy, snapshot, target)
-    assert standing_down(policy, hunt_key(61)) and policy.collection['carrier_battles'] == {}
+    assert standing_down(policy, hunt_key(61)) and policy.collection['carrier_decisions'] == {}
     policy.decisions += STAND_DOWN
     assert not standing_down(policy, hunt_key(61))
 
