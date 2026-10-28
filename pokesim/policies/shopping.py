@@ -23,6 +23,13 @@ SAFARI_INTERIOR = {m for m, w in WORLD.items() if w['name'].startswith('SafariZo
 SPARE = {ITEMS[name] for name in ('NUGGET', 'X_ACCURACY', 'GUARD_SPEC', 'DIRE_HIT', 'X_ATTACK', 'X_DEFEND',
                                   'X_SPEED', 'X_SPECIAL')}
 LUXURIES = {ITEMS[name] for name in ('HP_UP', 'PROTEIN', 'IRON', 'CARBOS', 'CALCIUM', 'PP_UP', 'RARE_CANDY')}
+REPELS = tuple(ITEMS[name] for name in ('MAX_REPEL', 'SUPER_REPEL', 'REPEL'))
+
+
+def spare_repels(items):
+    """Repels weaker than the best one in the bag, which is used first and restocked for a legendary."""
+    counts = dict(items)
+    return set([item for item in REPELS if counts.get(item)][1:])
 
 
 def entry_fee(snapshot, goal_key):
@@ -89,7 +96,8 @@ class ShoppingController:
                      if qty and (item == ITEMS['NUGGET'] or item in RENEWABLE_TMS
                                  or len(snapshot.items) >= 18 and item in {
                                      ITEMS[name] for name in ('X_ACCURACY', 'GUARD_SPEC', 'DIRE_HIT',
-                                                             'X_ATTACK', 'X_DEFEND', 'X_SPEED', 'X_SPECIAL')})), None)
+                                                             'X_ATTACK', 'X_DEFEND', 'X_SPEED', 'X_SPECIAL')}
+                                 or len(snapshot.items) >= 18 and item in spare_repels(snapshot.items))), None)
         if surplus is not None or len(snapshot.items) < 20:
             return surplus
         # Free one slot for required story items. Minimize the cost of replacing

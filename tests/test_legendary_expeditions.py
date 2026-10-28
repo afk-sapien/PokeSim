@@ -90,6 +90,28 @@ def test_crowded_bag_can_sell_a_booster_but_keeps_key_items():
     assert StrategicPolicy._sale_index(replace(s, items=keys)) is None
 
 
+def test_a_bag_full_of_key_items_sells_a_spare_repel_for_legendary_supplies():
+    """A Red run dropped Articuno, Zapdos and Moltres with "Need money or bag space for legendary
+    capture supplies" while it held 60,958 money. Its bag, copied from the live run, had no room
+    for Ultra Balls and nothing the shop rules would sell."""
+    from pokesim.policies.shopping import ShoppingController
+    bag = tuple((ITEMS[name], count) for name, count in (
+        ('S_S_TICKET', 1), ('HM01', 1), ('LIFT_KEY', 1), ('SILPH_SCOPE', 1), ('POKE_FLUTE', 1), ('CARD_KEY', 1),
+        ('HM03', 1), ('HM04', 1), ('SECRET_KEY', 1), ('SUPER_ROD', 1), ('OLD_ROD', 1), ('GOOD_ROD', 1), ('HM05', 1),
+        ('COIN_CASE', 1), ('MAX_ETHER', 1), ('MAX_REPEL', 3), ('MOON_STONE', 1), ('SUPER_REPEL', 3),
+        ('GREAT_BALL', 13), ('REVIVE', 5)))
+    project = {'method': 'static', 'species': sid(144), 'legendary': True, 'key': 'articuno'}
+    goal = Goal('collect_legendary', 'Catch Articuno', 'Bring supplies to the Seafoam Islands')
+    s = state(map=MAPS['FUCHSIA_CITY'], money=60958, items=bag, badges=255)
+    plan = ShoppingController().plan(s, goal, project, requested_goal=goal.key, healing=False, in_league=False,
+                                     has_pokedex=True)
+    assert plan.abandon is None and plan.goal.key == 'restock'
+    # The weaker repel goes, since the Max Repels are used first and are what the trip restocks.
+    assert bag[ShoppingController.sale_index(s)][0] == ITEMS['SUPER_REPEL']
+    # The best repel stays even in a full bag, and so does a lone one.
+    assert ShoppingController.sale_index(replace(s, items=bag[:17] + bag[18:] + ((ITEMS['ULTRA_BALL'], 5),))) is None
+
+
 def test_a_mart_without_ultra_balls_does_not_finish_legendary_preparation():
     from pokesim.policies.strategic import StrategicPolicy
     from pokesim.screen import Screen
