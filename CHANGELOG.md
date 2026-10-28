@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Require pokecore 0.9.2. Core now names the title screen and the main menu, which it used to read as the overworld. A Gold, Silver or Crystal menu task that finds either screen ends at once and presses nothing.
+- Require pokecore 0.9.3. Core now names the title screen and the main menu, which it used to read as the overworld. A Gold, Silver or Crystal menu task that finds either screen ends at once and presses nothing. Core 0.9.2 also read Bill's PC, battles and dialogue in Gold and Silver as the title screen, so box changes stalled and the PC release visits repeated. 0.9.3 reads them correctly.
 
 - Let Gold, Silver and Crystal replays buy at the Champion shop. The headless runner never added the planned TM or supply to the clerk's list, so each visit ended "This mart does not sell that item" and stood down, and the replay audit counted those stand-downs against the planner.
 
