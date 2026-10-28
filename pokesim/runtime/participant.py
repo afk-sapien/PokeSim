@@ -348,9 +348,12 @@ class Participant:
         inv = normalise(self.bootstrap.adventure_id, '', payload)
         # Only the owning runtime imports game-specific data to derive offers.
         from .preparation import SEALED, sealed
+        from ..pc_list import guarded
+        from ..policies.base import stack_pointer
+        sp = stack_pointer(getattr(self.emu, 'pb', None))
         candidates = []
         blocked = SEALED if sealed(getattr(self.emu, 'snapshot', None), self.store.trade_preferences(),
-                                   self.store.trade_partners()) else ''
+                                   self.store.trade_partners(), sp) else ''
         available = (status.get('game') or {}).get('map') not in LEAGUE and not blocked
         # The offer is built from the same PC rows, located by box and position.
         records = {(row.get('box'), row.get('position'), row.get('species')): row
@@ -358,9 +361,9 @@ class Participant:
         collection = getattr(getattr(self.emu, 'policy', None), 'collection', None)
         demanded = collection.demand() if hasattr(collection, 'demand') else {}
         demanded = demanded if isinstance(demanded, dict) else {}
-        # A Gen I PC list stops at a nickname holding a text command, so the Pokémon stored after it
-        # can never be withdrawn. Offering one fails every trade that picks it.
-        unlisted = set(getattr(getattr(self.emu, 'snapshot', None), 'unlisted', ()) or ())
+        # Without the stack pointer a Gen I PC list can stop at a nickname holding a text command, so
+        # the slots pc_list guards cannot be withdrawn. Offering one fails every trade that picks it.
+        unlisted = guarded(getattr(self.emu, 'snapshot', None), sp)
         # The spare the game lets go next. A trade that picks it races the release and then finds
         # the Pokémon gone, so it fails as one that cannot be identified.
         releasing = getattr(getattr(self.emu, 'policy', None), 'release_spare', None)

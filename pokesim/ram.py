@@ -166,7 +166,7 @@ class Snapshot:
     stored_pokemon: tuple[tuple[int, int, int, str], ...] = ()
     box_counts: tuple[int, ...] = ()
     stored_details: tuple[StoredMon, ...] = ()
-    # (box, position) of stored Pokémon the PC list cannot reach. See list_breaks.
+    # (box, position) of stored Pokémon the PC list cannot reach without the stack pointer. See pc_list.
     unlisted: tuple[tuple[int, int], ...] = ()
     enemy_shiny: bool = False
     # Yellow only. Melanie gives Bulbasaur once Pikachu is happy enough.
@@ -330,26 +330,15 @@ def read_stored_details(mem, *, counts=None):
     return _read_storage(mem, counts)[0]
 
 
-# Text commands that end or pause printing when the game reaches them inside a name, from
-# pret/pokered home/text.asm. A nickname received in a trade can carry one, and the PC box
-# list then stops drawing at that name: its cursor never reaches the Pokémon stored after it.
-LIST_BREAKS = frozenset({0x00, 0x49, 0x4B, 0x4C, 0x51, 0x55, 0x57, 0x58, 0x5F})
-
-
-@lru_cache(maxsize=128)
-def list_breaks(names):
-    """Index of the first nickname in a box whose text stops the PC list, or None."""
-    for index in range(len(names) // 11):
-        for value in names[index * 11:(index + 1) * 11]:
-            if value == 0x50:
-                break
-            if value in LIST_BREAKS:
-                return index
-    return None
-
-
 def _read_storage(mem, counts=None):
-    """Stored Pokémon, and the (box, position) pairs the in-game PC list cannot reach."""
+    """Stored Pokémon, and the (box, position) pairs the PC list cannot reach without the stack pointer.
+
+    See pc_list for which nicknames stop the list. With the stack pointer every slot is reachable,
+    so callers apply these through pc_list.guarded.
+    """
+    from .pc_list import gen1_unlisted
+    from .yellow import YellowMemory
+    yellow = isinstance(mem, YellowMemory)
     counts = read_box_counts(mem) if counts is None else counts
     active = mem[W_CURRENT_BOX] & 0x7F
     out, unlisted = [], []
@@ -366,9 +355,7 @@ def _read_storage(mem, counts=None):
             # Flat memory has no inactive cartridge banks.
             continue
         out.extend(_decode_box(box, structs, names))
-        stop = list_breaks(names)
-        if stop is not None:
-            unlisted.extend((box, position) for position in range(stop + 1, count))
+        unlisted.extend((box, position) for position in gen1_unlisted(names, count, yellow))
     return tuple(out), tuple(unlisted)
 
 

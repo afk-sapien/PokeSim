@@ -27,6 +27,7 @@ from .team import development_candidate, potential, readiness, reserve_to_deposi
 from ..screen import Screen, W_PLAYER_MON_NUMBER
 from ..ram import W_TILEMAP
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
+from ..pc_list import guarded
 from ..shortcuts import ShortcutRunner, gen1_ui
 from .. import config
 
@@ -1101,8 +1102,9 @@ class StrategicPolicy(Policy):
     def _release_target(self, snapshot):
         # A release that just failed is skipped until its retry time, so another spare goes first
         # instead of the same menu failing again and again.
+        # Without the stack pointer a nickname can stop the PC list short of a slot, so that slot waits too.
         self.pc.avoid = frozenset(key[1:] for key, until in self.shortcut.failures.items()
-                                  if key[0] == 'release' and until > snapshot.frame)
+                                  if key[0] == 'release' and until > snapshot.frame) | guarded(snapshot, self.sp)
         self.pc.partners = frozenset(self.trade_partners()) if hasattr(self, 'trade_partners') else frozenset()
         return self.pc.release_target(snapshot, self.collection.project, self._preferences(), self.collection,
                                       self.pc.avoid, self.pc.partners)
@@ -1193,7 +1195,7 @@ class StrategicPolicy(Policy):
         return True
 
     def _ui(self):
-        return gen1_ui(self.sp, YELLOW)
+        return gen1_ui(self.sp)
 
     def _start_shortcut(self, s, machine, key, purpose, on_done=None):
         """Begin a Core shortcut. None when it refuses, failed here recently, or memory is unavailable."""

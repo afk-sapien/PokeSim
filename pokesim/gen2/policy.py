@@ -112,6 +112,7 @@ class Policy:
         self.interaction = None
         self.puzzle_cache = {}
         self.memory = None
+        self.sp = None
         self.resetting_puzzle = None
         self.unreachable_waits = 0
 
@@ -229,8 +230,25 @@ class Policy:
         return key() if key else (type(menu).__name__,)
 
     def allowed(self, task, snapshot):
-        """Whether the game has not refused this shortcut recently."""
+        """Whether the game has not refused this shortcut recently, and its PC list can reach the slot.
+
+        Without the stack pointer a nickname holding a text command can stop Bill's PC list, so
+        pc_list guards every release and withdrawal in that box.
+        """
+        if getattr(self, 'sp', None) is None and self.unlisted_box(task, snapshot):
+            return False
         return self.blocked.get(self.task_key(task), -1) <= snapshot.frame
+
+    @staticmethod
+    def unlisted_box(task, snapshot):
+        from ..pc_list import gen2_unlisted_boxes
+        if isinstance(task, Release):
+            box = task.box
+        elif isinstance(task, Storage) and task.operation != 'DEPOSIT':
+            box = getattr(snapshot, 'active_box', None)
+        else:
+            return False
+        return box in gen2_unlisted_boxes(getattr(snapshot, 'stored', ()))
 
     def refused(self, reason):
         """Count a refusal. Many in a row mean the plan keeps asking for something impossible."""
@@ -1031,8 +1049,9 @@ class Policy:
         self.shopping = (item, min(amount, (snapshot.money - reserve) // price))
         return self.person(snapshot, 'buy_balls', 'Restock adventure supplies', self.data.maps[mid]['constant'], script)
 
-    def step(self, snapshot, memory):
-        self.memory = memory
+    def step(self, snapshot, memory, sp=None):
+        """``sp`` is the CPU stack pointer, which Core's PC lists read to press through a <CONT> name."""
+        self.memory, self.sp = memory, sp
         self.decisions += 1
         from .postgame import observe
         observe(self, snapshot)
@@ -1047,6 +1066,7 @@ class Policy:
             self.backing_out = True
             return Action(self.rescue.popleft(), 8, 24)
         mem = Memory(memory, self.data)
+        mem.sp = sp
         from .ruins import control
         puzzle = control(snapshot, mem) if snapshot.started and snapshot.valid else None
         if puzzle:

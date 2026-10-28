@@ -59,10 +59,10 @@ class ShortcutRunner:
         return [Action(result, PRESS, SETTLE)]
 
 
-def gen1_ui(sp, yellow):
-    """Observation hints for a Gen 1 machine.
+def gen1_ui(sp):
+    """Observation hints for a Gen 1 machine: the stack pointer, which Core's text-wait check reads.
 
-    The text-wait check reads the stack, which sits at Yellow addresses that the
-    Red-layout view shifts, so Yellow falls back to Core's stable-text rule.
+    Core 0.9.5 reads Yellow's stack too, so every Gen 1 game passes it. With no stack pointer
+    Core falls back to its stable-text rule, and pc_list guards the slots that rule cannot reach.
     """
-    return {'sp': sp} if sp is not None and not yellow else None
+    return {'sp': sp} if sp is not None else None

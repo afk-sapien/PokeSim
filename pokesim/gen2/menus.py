@@ -25,6 +25,18 @@ SLOT_MAX_STEPS = 12000
 PRE_GAME = ('title', 'main_menu')
 
 
+def stack_pointer(pb):
+    """The CPU stack pointer, as policies.base reads it, without loading the Gen 1 policies."""
+    return getattr(getattr(pb, 'register_file', None), 'SP', None)
+
+
+def core_ui(mem):
+    """Observation hints for a Core machine. With the stack pointer, a Bill's PC list presses
+    A through the wait that a traded nickname holding <CONT> starts."""
+    sp = getattr(mem, 'sp', None)
+    return None if sp is None else {'sp': sp}
+
+
 def menu_label(row):
     if row.count('│') >= 2:
         row = row.rsplit('│', 2)[-2]
@@ -179,6 +191,8 @@ class CoreTask:
     # Screens the machine starts from. None lets the machine open the menus itself.
     start = None
     leave = False
+    # Bill's PC tasks get the stack pointer. Other tasks, such as battle items, run without it for now.
+    pc_list = False
 
     def build(self, snapshot):
         raise NotImplementedError
@@ -217,7 +231,7 @@ class CoreTask:
             machine = self.machine = self.build(snapshot)
             if machine is None:
                 return self.end(mem)
-        action = machine.step(mem.memory, None)
+        action = machine.step(mem.memory, core_ui(mem) if self.pc_list else None)
         if isinstance(action, Done):
             self.result = action
             self.after(action)
@@ -381,6 +395,7 @@ class Storage(CoreTask):
 
     start = ('pc', 'bills_pc')
     leave = True
+    pc_list = True
 
     def finished(self, snapshot):
         return len(snapshot.party) != self.initial_count
@@ -506,6 +521,7 @@ class ChangeBox(CoreTask):
 
     start = ('pc', 'bills_pc')
     leave = True
+    pc_list = True
 
     def finished(self, snapshot):
         return snapshot.active_box == self.box
@@ -527,6 +543,7 @@ class Release(CoreTask):
 
     start = ('pc', 'bills_pc')
     leave = True
+    pc_list = True
 
     def spare(self, snapshot):
         mon = next((mon for mon in snapshot.stored if mon.box == self.box and mon.position == self.position), None)

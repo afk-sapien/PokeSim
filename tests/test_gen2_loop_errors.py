@@ -24,7 +24,7 @@ def emu(monkeypatch):
 
 
 def test_a_step_that_raises_once_does_not_end_the_run(emu):
-    def step(snapshot, memory):
+    def step(snapshot, memory, sp=None):
         if emu.policy.step.call_count == 1:
             raise RuntimeError('one bad step')
         emu.commands.put(('stop', None))
@@ -48,7 +48,7 @@ def test_ten_failures_in_a_row_stop_without_overwriting_good_saves(emu):
 
 
 def test_a_committed_reward_that_needs_recovery_stops_at_once(emu):
-    def step(snapshot, memory):
+    def step(snapshot, memory, sp=None):
         emu.fatal_error = 'A committed Gen II gift needs recovery. Restart this adventure.'
         raise RuntimeError('recovery failed')
     emu.policy.step.side_effect = step

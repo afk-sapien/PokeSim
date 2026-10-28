@@ -23,6 +23,7 @@ from pokecore.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_ga
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
 from . import journal
+from .menus import stack_pointer
 from .policy import Action, Policy
 from pokecore.gen2.ram import BADGES, read_snapshot
 from .store_stock import StoreStock
@@ -1079,7 +1080,7 @@ class Emulator:
                         continue
                     else:
                         snapshot = self._read()
-                        action = self.policy.step(snapshot, self.pb.memory)
+                        action = self.policy.step(snapshot, self.pb.memory, stack_pointer(self.pb))
                         self._report_missed_shiny(snapshot)
                     if action.button:
                         self.pb.button_press(action.button)
