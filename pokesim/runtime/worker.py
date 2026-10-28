@@ -153,6 +153,15 @@ def serve(bootstrap, parent_stream, ready_stream):
                 raise HTTPException(409, 'This game does not support screen palettes')
             return runtime.call(lambda: runtime.emulator.set_palette(value))
 
+        @app.post('/internal/fair-wild-dvs')
+        def fair_wild_dvs(data: dict):
+            from fastapi import HTTPException
+            if set(data) != {'fair_wild_dvs'} or type(data['fair_wild_dvs']) is not bool:
+                raise HTTPException(400, 'Set fair wild DVs on or off')
+            if not hasattr(runtime.emulator, 'set_fair_wild_dvs'):
+                raise HTTPException(409, 'Fair wild DVs is only for Red, Blue and Yellow')
+            return runtime.call(lambda: runtime.emulator.set_fair_wild_dvs(data['fair_wild_dvs']))
+
         @app.post('/internal/nicknames')
         def nicknames(data: dict):
             from fastapi import HTTPException

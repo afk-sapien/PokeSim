@@ -437,11 +437,41 @@ class Supervisor:
             if actual != value:
                 self._apply_palette(child, value)
 
+    def push_fair_wild_dvs(self, aid):
+        with self.admission:
+            with self.guard:
+                child = self.children.get(aid)
+            if child is None or self.registry.adventure(aid)['version'] in GEN2_VERSIONS:
+                return False
+            try:
+                self._apply_fair_wild_dvs(child, self.registry.adventure(aid)['settings'].get('fair_wild_dvs', False))
+            except (RuntimeError, OSError, httpx.HTTPError):
+                log.warning('Adventure %s will receive its fair wild DVs setting when it reconnects', aid)
+                return True
+            return False
+
+    @staticmethod
+    def _apply_fair_wild_dvs(child, value):
+        result = child.request('POST', '/internal/fair-wild-dvs', {'fair_wild_dvs': value}, timeout=5)
+        if result.get('fair_wild_dvs') is not value:
+            raise RuntimeError('Worker did not acknowledge the fair wild DVs setting')
+
+    def sync_fair_wild_dvs(self, aid, child, actual):
+        with self.admission:
+            if self.closed.is_set() or self.children.get(aid) is not child:
+                return
+            if actual is None:
+                return   # Generation II reports no such setting.
+            value = self.registry.adventure(aid)['settings'].get('fair_wild_dvs', False)
+            if actual is not value:
+                self._apply_fair_wild_dvs(child, value)
+
     def sync_optional(self, aid, child, status):
         """Apply settings that may lag behind. A refusal is reported on the setting and never judges health."""
         errors = {}
         for name, sync, actual in (('speed', self.sync_speed, status.get('speed')),
-                                   ('palette', self.sync_palette, status.get('palette'))):
+                                   ('palette', self.sync_palette, status.get('palette')),
+                                   ('fair_wild_dvs', self.sync_fair_wild_dvs, status.get('fair_wild_dvs'))):
             try:
                 sync(aid, child, actual)
             except (RuntimeError, OSError, KeyError, httpx.HTTPError) as error:

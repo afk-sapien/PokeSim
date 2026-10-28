@@ -547,7 +547,7 @@ def create_app(manager, shutdown=lambda: None):
                 if validate(changes['randomizer']) != adventure['settings'].get('randomizer', ''):
                     raise ValueError('The randomizer is chosen when creating an adventure')
                 changes = {key: value for key, value in changes.items() if key != 'randomizer'}
-            if adventure['state'] == 'running' and set(changes) - {'auto_start', 'speed', 'palette'}:
+            if adventure['state'] == 'running' and set(changes) - {'auto_start', 'speed', 'palette', 'fair_wild_dvs'}:
                 raise ValueError('Stop the adventure before changing these settings')
             previous = adventure['settings']
             values['settings'] = manager.validate_adventure_settings({**previous, **changes})
@@ -558,6 +558,8 @@ def create_app(manager, shutdown=lambda: None):
             result['pace_pending'] = await asyncio.to_thread(manager.supervisor.push_speed, aid)
         if 'palette' in data.get('settings', {}):
             result['palette_pending'] = await asyncio.to_thread(manager.supervisor.push_palette, aid)
+        if 'fair_wild_dvs' in data.get('settings', {}):
+            result['fair_wild_dvs_pending'] = await asyncio.to_thread(manager.supervisor.push_fair_wild_dvs, aid)
         return result
 
     @app.get('/api/v1/settings')
