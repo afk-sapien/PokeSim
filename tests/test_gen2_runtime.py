@@ -1944,7 +1944,7 @@ def _clock_policy(real_data, day, daily=0):
     policy = Policy(real_data, starter='cyndaquil')
     policy.collection = {}
     mem = SimpleNamespace(byte=lambda name: {'wCurDay': day, 'wDailyFlags1': daily}.get(name, 0))
-    snapshot = SimpleNamespace(owned=set(), items=[], party=[], stored=[])
+    snapshot = SimpleNamespace(owned=set(), items=[], party=[], stored=[], can_catch=True, box_counts=[0] * 14)
     return policy, snapshot, mem
 
 
