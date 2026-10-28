@@ -14,6 +14,7 @@ from pokecore.shortcuts import (BuyItem, ChangeBox as CoreChangeBox, ChooseMove,
 from pokecore.shortcuts.machine import BACKABLE
 
 from pokecore.textmatch import has_word
+from ..planning.ledger import FIELD_MOVES
 
 # A menu task that needs more steps than this is lost. It ends and the stuck path takes over.
 MAX_STEPS = 600
@@ -150,8 +151,6 @@ def restore(cls, state):
     return cls(**{key: value for key, value in state.items() if key in names})
 
 
-# Moves a taught machine never replaces: the HMs the journey needs, Flash and Headbutt.
-PROTECTED_MOVES = frozenset({15, 19, 57, 70, 148, 250, 127})
 # The in-game Fly map names of fly points whose map has another name.
 FLY_NAMES = {'Route 10 North': 'ROUTE 10', 'Route 23': 'INDIGO PLATEAU', 'Silver Cave Outside': 'SILVER CAVE'}
 
@@ -267,9 +266,9 @@ class Teach(CoreTask):
         mon = snapshot.party[self.slot]
         forget = None
         if all(mon.moves):
-            forget = min(range(4), key=lambda i: 999 if mon.moves[i] in PROTECTED_MOVES
+            forget = min(range(4), key=lambda i: 999 if mon.moves[i] in FIELD_MOVES
                          else data.moves.get(mon.moves[i], {}).get('power', 0))
-            if self.replace_move in mon.moves and self.replace_move not in PROTECTED_MOVES:
+            if self.replace_move in mon.moves and self.replace_move not in FIELD_MOVES:
                 forget = mon.moves.index(self.replace_move)
         return UseItem(item, self.slot, forget_move=forget, **self.options(snapshot))
 

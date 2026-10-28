@@ -1,7 +1,7 @@
 """Postgame gifts and legendary encounters driven by cartridge quest flags."""
 from .menus import ChangeBox, FieldMove, ShowPartner, Storage, Teach
 from .standdown import stand_down, standing_down
-from .training import FIELD_MOVES
+from ..planning.ledger import FIELD_MOVES
 
 
 # The Burned Tower rock stands down for a while when no party member can smash it.

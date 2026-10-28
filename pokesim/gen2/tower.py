@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from .menus import Give, Lead, Take, Teach, choose
 from pokecore.gen2.ram import Memory, calculated_stats
+from ..planning.ledger import FIELD_MOVES
 from ..planning.monitor import STAND_DOWNS, STOOD_DOWN, Backoff
 from .standdown import monitor, stand_down, standing_down
 from .teams import assemble, assembled, key, no_room
@@ -254,7 +255,8 @@ def journey(policy, snapshot, Goal, *, force=False):
         record_result(policy, state['cap'], 0)
         return journey(policy, snapshot, Goal)
     options = []
-    protected = {15, 19, 57, 70, 148, 250, 127, 105, 92}
+    # Recover and Toxic stay too, since they are what this swap is for.
+    protected = FIELD_MOVES | {105, 92}
     for slot, mon in enumerate(snapshot.party):
         if (105 in mon.moves and 92 not in mon.moves and 92 in policy.data.species[mon.species]['machines']
                 and dict(snapshot.items).get(policy.data.items['TM06'])):

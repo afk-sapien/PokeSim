@@ -7,6 +7,7 @@ import random
 import re
 from types import SimpleNamespace
 
+from ..planning.ledger import FIELD_MOVES, LEARN_KEPT
 from .navigation import DIRS, Navigator
 from pokecore.gen2.ram import Memory
 from pokecore.gen2.screens import ScreenText, mask_roster
@@ -1145,7 +1146,7 @@ class Policy:
         for event, move in ([] if self.collection.get('tower') or self.collection.get('contest') or self.collection.get('time_capsule_restore') else [('EVENT_GOT_HM01_CUT', 15), ('EVENT_GOT_HM02_FLY', 19), ('EVENT_GOT_HM03_SURF', 57),
                             ('EVENT_GOT_HM04_STRENGTH', 70), ('EVENT_GOT_HM06_WHIRLPOOL', 250), ('EVENT_GOT_HM07_WATERFALL', 127)]):
             if snapshot.event(event) and not any(move in mon.moves for mon in snapshot.party):
-                protected = {15, 19, 57, 70, 148, 250, 127}
+                protected = FIELD_MOVES
                 slot = min((i for i, mon in enumerate(snapshot.party)
                             if not mon.egg and move in self.data.species[mon.species]['machines']
                             and not all(known in protected for known in mon.moves)),
@@ -1167,7 +1168,7 @@ class Policy:
                     candidates = [i for i, mon in enumerate(snapshot.party) if not mon.egg
                                   and move in self.data.species[mon.species]['machines']]
                     if candidates:
-                        self.goal = self.person(snapshot, f'delete_hm_{candidates[0]}', 'Make room for Waterfall',
+                        self.goal = self.person(snapshot, f'delete_hm_{candidates[0]}', f'Make room for {self.data.moves[move]["name"]}',
                                                 'MOVE_DELETERS_HOUSE', 'MoveDeleter')
                         break
         lead = snapshot.party[0] if snapshot.party else None
@@ -1244,7 +1245,7 @@ class Policy:
                 if box is not None:
                     self.menu = ChangeBox(box)
                 elif len(snapshot.party) == 6:
-                    protected = {15, 19, 57, 70, 148, 250, 127}
+                    protected = FIELD_MOVES
                     from .breeding import carried
                     slot = min(range(1, len(snapshot.party)), key=lambda i:
                                (carried(self, snapshot, snapshot.party[i]),
@@ -1657,7 +1658,7 @@ class Policy:
                                                   for move, pp in zip(mon.moves, mon.pp))
                    for mon in snapshot.party)
 
-    LEARN_PROTECTED = frozenset({15, 19, 57, 70, 148, 250, 127, 29, 249})
+    LEARN_PROTECTED = LEARN_KEPT
 
     def learn_slot(self, mon):
         """The move slot a new level-up move replaces: the weakest unprotected one, or 'keep'."""

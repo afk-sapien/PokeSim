@@ -1,10 +1,9 @@
 """Raise collected partners through normal battles, held items and evolution."""
 from .menus import ChangeBox, Give, PutAway, Release, Remedy, Storage, Take, Toss
 from pokecore.gen2.ram import calculated_stats, experience_at
+from ..planning.ledger import FIELD_MOVES
 from .ledger import fits, tidy_goal
 from .standdown import TRAINING_DECISIONS, exhausted, spend, stand_down, standing_down, train_key
-
-FIELD_MOVES = {15, 19, 57, 70, 148, 250, 127}
 
 
 def identity(mon):

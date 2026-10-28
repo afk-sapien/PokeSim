@@ -6,6 +6,7 @@ import pytest
 from pokesim.app.coordinator import Coordinator
 from pokesim.gen2 import champion_shop, menus, trading, training
 from pokesim.gen2.preparation import reserves
+from pokesim.planning.ledger import FIELD_MOVES, LEARN_KEPT
 
 CUT, FLY, SURF, STRENGTH, FLASH, WHIRLPOOL, WATERFALL = 15, 19, 57, 70, 148, 250, 127
 
@@ -31,7 +32,9 @@ def test_the_protected_field_moves_are_the_seven_hms_in_every_version(version):
     assert all('HM_' + name in data.items for name in hms)
     moves = {CUT, FLY, SURF, STRENGTH, FLASH, WHIRLPOOL, WATERFALL}
     assert {data.moves[move]['constant'] for move in moves} == hms
-    assert menus.PROTECTED_MOVES == champion_shop.PROTECTED_MOVES == training.FIELD_MOVES == moves
+    assert FIELD_MOVES == moves and LEARN_KEPT == moves | {29, 249}
+    # Machines, the Champion shop, level-up moves and training all read the ledger's one set.
+    assert champion_shop.FIELD_MOVES is menus.FIELD_MOVES is training.FIELD_MOVES is FIELD_MOVES
 
 
 def test_a_reserve_whose_field_moves_another_member_knows_can_be_deposited():

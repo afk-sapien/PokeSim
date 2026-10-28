@@ -4,7 +4,8 @@ import time
 from pokecore.identity import same
 from ..trade.preferences import identity
 from .teams import key as team_key
-from .menus import PROTECTED_MOVES, ChangeBox, Give, Release, Storage
+from ..planning.ledger import FIELD_MOVES
+from .menus import ChangeBox, Give, Release, Storage
 from .policy import Action
 from pokecore.gen2.ram import Memory, read_snapshot
 from .world import update as update_world
@@ -20,7 +21,7 @@ def reserves(party):
         if not index:
             continue
         others = {move for other, mate in enumerate(party) if other != index for move in getattr(mate, 'moves', ())}
-        if PROTECTED_MOVES.intersection(getattr(member, 'moves', ())) <= others:
+        if FIELD_MOVES.intersection(getattr(member, 'moves', ())) <= others:
             found.append(index)
     return found
 
