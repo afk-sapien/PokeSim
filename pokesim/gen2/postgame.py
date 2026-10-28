@@ -20,10 +20,12 @@ from pokecore.dvs import dv_probabilities
 from pokecore.gen2.ram import calculated_stats, experience_at
 
 from ..investment import GOOD_TAIL, MIN_UPGRADE, SEARCH_BUDGET
-from .standdown import forget, hunt_key, search_expected, stand_down, standing_down, train_key
+from .standdown import DECISIONS_PER_BATTLE, forget, hunt_key, search_expected, stand_down, standing_down, train_key
 
-# Copies a better-DV hunt catches before it moves on. Its decisions are budgeted per catch by the monitor.
+# Copies a better-DV hunt catches at most before it moves on. Its decisions are budgeted per catch by the monitor.
 QUALITY_CATCHES = 3
+# What a better copy is worth, per unit of drop in the species' best DV tail (planner design S3).
+QUALITY_WEIGHT = 0.5
 SHINY_ENCOUNTERS = 100
 SHINY_BREAK_ACTIVITIES = 2
 # The adventure play clock uses 60 frames per second. Pauses and playback speed do not affect this limit.
@@ -50,6 +52,56 @@ def tail(mon):
     """The chance a random wild copy has at least this DV total, or 1 when the DVs are unreadable."""
     odds = dv_probabilities(list(mon.dvs))
     return odds['at_least_probability'] if odds else 1.0
+
+
+def catch_value(odds):
+    """What the next catch is worth to a species whose best copy has DV tail ``odds``.
+
+    A wild copy's own tail is uniform from 0 to 1, so it beats the best copy with chance ``odds`` and
+    then lowers the tail by ``odds / 2`` on average: an expected drop of ``odds ** 2 / 2``.
+    """
+    return QUALITY_WEIGHT * odds * odds / 2
+
+
+# The value per decision a better-DV catch has to earn. A species met in every wild battle is worth
+# hunting until its best copy reaches GOOD_TAIL, as before. A rarer one stops much sooner: a 5% Larvitar
+# hunt ends once its best copy is in the top 22%, where the next catch takes about 1500 decisions and
+# rarely gains anything. Early postgame training earns about this much too: a Silver Charmander took
+# about 3400 decisions per ten levels, a tenth of its level 100 credit of 0.5.
+WORTH = catch_value(GOOD_TAIL) / DECISIONS_PER_BATTLE
+
+
+def catch_rate(odds, row, effort=(0, 0)):
+    """Value per decision of the next catch from ``row``, after ``effort`` (decisions, catches) on site.
+
+    The encounter table's rate counts as one catch already seen. A dry run then stretches the expected
+    decisions per catch, so a hunt that meets or catches less than the table says stops paying.
+    """
+    decisions, catches = effort
+    return catch_value(odds) * (1 + catches) / (search_expected(row.get('chance', 10)) + decisions)
+
+
+def worth_hunting(odds, rows, effort=(0, 0)):
+    """Whether a better-DV catch from the best of ``rows`` still earns WORTH per decision."""
+    return any(catch_rate(odds, row, effort) >= WORTH for row in rows)
+
+
+def effort(policy, species, activity=None):
+    """Decisions spent on site and copies caught in better-DV hunts for ``species``, ``activity`` included.
+
+    Decisions on the way to the map are left out, as the plan's own map count.
+    """
+    decisions, catches = state(policy).get('effort', {}).get(str(species), (0, 0))
+    if activity is not None:
+        on_site = search_expected(activity['row'].get('chance', 10))
+        travel = (activity.get('expected') or on_site) - on_site
+        decisions += max(0, policy.decisions - activity.get('started', policy.decisions) - travel)
+        catches += activity['caught']
+    return decisions, catches
+
+
+def best_tail(snapshot, species):
+    return min((tail(mon) for mon in held(snapshot) if mon.species == species), default=1.0)
 
 
 def perfect(mon):
@@ -127,6 +179,7 @@ def finish(policy):
     if activity and activity['kind'] == 'quality':
         searches = data['searches']
         searches[str(activity['species'])] = searches.get(str(activity['species']), 0) + 1
+        data.setdefault('effort', {})[str(activity['species'])] = list(effort(policy, activity['species'], activity))
         forget(policy, hunt_key(activity['species']))
     if activity and activity['kind'] == 'shiny':
         data['shiny_break'] = SHINY_BREAK_ACTIVITIES
@@ -204,7 +257,12 @@ def done(policy, snapshot, activity, current_time):
             if mon.species == activity['species'] and repr(ident(mon)) not in new:
                 activity['seen'].append(ident(mon))
                 activity['caught'] += 1
-        return activity['caught'] >= QUALITY_CATCHES or standing_down(policy, hunt_key(activity['species']))
+        # Each better copy makes the next one rarer, so the hunt also ends once the next catch is worth
+        # less per decision than WORTH, as at a rare species whose best copy is already good, or at a
+        # hunt running dry. That ends it before the stand-down budget, which is left for stuck hunts.
+        species = activity['species']
+        return (activity['caught'] >= QUALITY_CATCHES or standing_down(policy, hunt_key(species))
+                or not worth_hunting(best_tail(snapshot, species), [activity['row']], effort(policy, species, activity)))
     shinies = sum(mon.shiny for mon in held(snapshot))
     # Older local checkpoints did not record frames. Give them one bounded outing from now.
     started = activity.setdefault('started_frame', snapshot.frame)
@@ -220,8 +278,6 @@ def choose(policy, snapshot, mem, current_time):
     if hunting:
         options['quality'] = lambda: quality(policy, snapshot, current_time)
     options['train'] = lambda: trainee(policy, snapshot)
-    if hunting and data.get('shiny_break', 0) == 0:
-        options['shiny'] = lambda: shiny(policy, snapshot, current_time)
     recent = data['recent']
     rng = random.Random(policy.decisions)
     while options:
@@ -230,6 +286,13 @@ def choose(policy, snapshot, mem, current_time):
         weights = [WEIGHTS[kind] / (1 + recent.count(kind)) for kind in kinds]
         kind = rng.choices(kinds, weights)[0]
         activity = options.pop(kind)()
+        if activity:
+            return activity
+    # A shiny search is filler. One wild Pokémon in 8192 is shiny, so a search earns far less per
+    # decision than WORTH, and in the rotation each 100-battle outing took about 150,000 frames
+    # without a catch. It runs only once no better-DV hunt or training is left.
+    if hunting and data.get('shiny_break', 0) == 0:
+        activity = shiny(policy, snapshot, current_time)
         if activity:
             return activity
     # A League run is the fallback once nothing else is left. In the rotation it took about one turn
@@ -273,7 +336,10 @@ def reachable(policy, snapshot, rows):
 
 
 def quality(policy, snapshot, current_time):
-    """A better-DV hunt for the owned species whose best copy has the most ordinary DVs."""
+    """A better-DV hunt for the owned species whose next catch earns the most per decision.
+
+    A party species still goes first. A species whose next catch earns less than WORTH is left out.
+    """
     from .collection import wanted
     searches = state(policy)['searches']
     rows = huntable(policy, snapshot, current_time)
@@ -283,15 +349,16 @@ def quality(policy, snapshot, current_time):
             best[mon.species] = mon
     candidates = []
     for species, mon in best.items():
-        odds = tail(mon)
-        if (odds <= GOOD_TAIL or searches.get(str(species), 0) >= SEARCH_BUDGET
+        odds, spent = tail(mon), effort(policy, species)
+        if (not worth_hunting(odds, rows[species], spent) or searches.get(str(species), 0) >= SEARCH_BUDGET
                 or standing_down(policy, hunt_key(species)) or wanted(policy, snapshot, species)):
             continue
         party = any(other.species == species and other.box is None for other in held(snapshot))
-        candidates.append((not party, -odds, species))
-    for _, _, species in sorted(candidates)[:6]:
+        rate = max(catch_rate(odds, row, spent) for row in rows[species])
+        candidates.append((not party, -rate, species, odds, spent))
+    for _, _, species, odds, spent in sorted(candidates)[:6]:
         row = reachable(policy, snapshot, rows[species])
-        if row:
+        if row and worth_hunting(odds, [row], spent):
             seen = [ident(mon) for mon in held(snapshot) if mon.species == species]
             nav = getattr(policy, 'nav', None)
             route = nav.route(snapshot.map, row['map']) if nav is not None else None
@@ -350,7 +417,7 @@ def trainee(policy, snapshot):
         top = max((potential(data, mon) for mon in copies if mon.level >= 100), default=None)
         if top is not None and not perfect(best) and potential(data, best) <= top * (1 + MIN_UPGRADE):
             continue
-        if (tail(best) > GOOD_TAIL and best.level < HUNT_FIRST_BELOW and species in rows
+        if (best.level < HUNT_FIRST_BELOW and species in rows and worth_hunting(tail(best), rows[species], effort(policy, species))
                 and searches.get(str(species), 0) < SEARCH_BUDGET):
             continue
         goal = min(100, (best.level // 10 + 1) * 10)
