@@ -90,3 +90,6 @@ def test_events_from_two_snapshots():
     kinds = {event.kind: event.detail for event in events(before, after)}
     assert kinds == {'dex': 1, 'catch': None, 'item': (5,), 'level': 2, 'badge': None, 'league': None, 'event': 1}
     assert events(None, after) == [] and events(before, Snap(valid=False)) == []
+    # Letting two Pokémon go frees two slots, which is what a release visit is for.
+    released = Snap(party=before.party, items=before.items, box_counts=(1, 0))
+    assert [(event.kind, event.detail) for event in events(before, released)] == [('room', 2)]

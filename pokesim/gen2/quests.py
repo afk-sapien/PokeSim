@@ -237,9 +237,10 @@ def ultra_shortfall(policy, snapshot):
     Asleep, a catch rate of 3 gives about 13/256 per Ultra Ball against about 11/256 per Poké Ball,
     so the trip waits for a League run to pay for a full stock instead of spending the encounter.
     """
+    from .ledger import held_money, price
     ultras = dict(snapshot.pockets['balls']).get(policy.data.items['ULTRA_BALL'], 0)
-    price = policy.data.item_attributes[policy.data.items['ULTRA_BALL']]['price']
-    return ultras < ULTRA_STOCK and snapshot.money < price * ULTRA_STOCK + 400
+    return (ultras < ULTRA_STOCK
+            and snapshot.money < price(policy.data, 'ULTRA_BALL') * ULTRA_STOCK + held_money(policy.data, snapshot))
 
 
 def static_wanted(policy, snapshot):

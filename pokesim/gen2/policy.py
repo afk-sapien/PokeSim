@@ -948,15 +948,12 @@ class Policy:
         if not snapshot.event('EVENT_GAVE_MYSTERY_EGG_TO_ELM'):
             self.shop_location = None
             return None
-        inventory = dict(snapshot.items)
-        if snapshot.money < 200:
+        from . import ledger
+        if snapshot.money < ledger.price(self.data, 'POKE_BALL'):
             self.shop_location = None
-            if snapshot.pockets['balls']:
-                return None
-            spare = next((self.data.items[name] for name in ('NUGGET', 'PEARL', 'BIG_PEARL', 'STARDUST', 'STAR_PIECE',
-                          'TM50', 'TM31', 'TM45', 'TM30', 'TM49', 'TM32', 'TM16')
-                          if inventory.get(self.data.items[name])), None)
-            if spare is None:
+            # With no ball and no money for one, the ledger sells what is worth least for money.
+            sale = None if snapshot.pockets['balls'] else ledger.ball_sale(self.data, snapshot)
+            if sale is None:
                 return None
             choices = []
             for mid, entry in self.data.maps.items():
@@ -971,45 +968,16 @@ class Policy:
                     if route is not None:
                         choices.append((len(route), mid, goal))
             if choices:
-                self.shopping = (spare, inventory[spare])
+                self.shopping = sale
                 return min(choices, key=lambda row: row[:2])[-1]
             return None
-        reserve = 400 if snapshot.money >= 1200 else 0
-        from pokecore.gen2.breeding import retrieval_cost
-        fees = retrieval_cost(self.data, snapshot)
-        if fees:
-            reserve = max(reserve, fees + 1000)
-        requests = []
-        from .quests import static_wanted
-        unique_encounter = self.goal is not None and self.goal.key in {'sudowoodo', 'snorlax', 'collection_lapras'}
-        ball_target = 20 if self.collection.get('phase') == 'legendary' or unique_encounter else 4
-        # Roaming beasts and the other legendaries have catch rates of 3, so every throw counts:
-        # while one is still wanted, an affordable Ultra Ball beats a nearer shop's Great Ball.
-        legendary = snapshot.can_catch and bool(snapshot.badges & 64) and (unique_encounter
-            or self.collection.get('phase') == 'legendary'
-            and not {243, 244, 245, 249, 250} <= set(snapshot.owned) - self.returned
-            or static_wanted(self, snapshot))
-        ultra = self.data.items['ULTRA_BALL']
-        ultras = dict(snapshot.pockets['balls']).get(ultra, 0)
-        if (legendary and ultras < 20
-                and snapshot.money - reserve >= self.data.item_attributes[ultra]['price'] * min(5, 20 - ultras)):
-            requests.append((('ULTRA_BALL',), 20 - ultras))
-        # Any ball still beats none when no Ultra Ball counter can be reached.
-        if sum(count for _, count in snapshot.pockets['balls']) < ball_target and snapshot.can_catch:
-            names = ('ULTRA_BALL', 'GREAT_BALL', 'POKE_BALL') if snapshot.badges & 64 else ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL')
-            requests.append((names, 40 if ball_target == 20 else 20))
-        if snapshot.badges & 64 and 'red' not in self.completed and (not snapshot.hall_of_fame_count or snapshot.badges == 65535):
-            potions = ('FULL_RESTORE', 'MAX_POTION', 'HYPER_POTION')
-            count = sum(inventory.get(self.data.items[name], 0) for name in potions)
-            if count < 8:
-                requests.append((potions, 12 - count))
-            if inventory.get(self.data.items['REVIVE'], 0) < 3:
-                requests.append((('REVIVE',), 5 - inventory.get(self.data.items['REVIVE'], 0)))
+        requests = ledger.supplies(self, snapshot)
         if not requests:
             self.shop_location = None
             return None
         choices = []
-        for priority, (names, amount) in enumerate(requests):
+        for priority, (key, names, amount) in enumerate(requests):
+            reserve = ledger.held_money(self.data, snapshot, key)
             for mid, entry in self.data.maps.items():
                 if entry['region'] != self.travel_region(snapshot):
                     continue
@@ -1040,11 +1008,11 @@ class Policy:
                                                for _, node, _, _ in walk):
                             continue
                         choices.append((priority, 0 if self.shop_location == (mid, shop['script'], item) else 1,
-                                        len(walk), mid, item, shop['script'], amount))
+                                        len(walk), mid, item, shop['script'], amount, reserve))
         if not choices:
             self.shop_location = None
             return None
-        _, _, _, mid, item, script, amount = min(choices)
+        _, _, _, mid, item, script, amount, reserve = min(choices)
         self.shop_location = (mid, script, item)
         price = self.data.item_attributes[item]['price']
         self.shopping = (item, min(amount, (snapshot.money - reserve) // price))
@@ -1456,9 +1424,8 @@ class Policy:
                                               or upgrade or catch_species in self.returned)
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in
                     {label.casefold() for label in self.ball_labels(snapshot)} for item, count in snapshot.pockets['balls'] if count))
-        if (catch and not partner and not shiny and snapshot.enemy_species not in {130, 143, 185, 243, 244, 245, 249, 250, 251}
-                and snapshot.badges < 128 and snapshot.money < 1200
-                and sum(count for _, count in snapshot.pockets['balls']) <= 3):
+        from .ledger import spare_throw
+        if catch and not partner and not shiny and not spare_throw(self.data, snapshot, snapshot.enemy_species):
             catch = False
         # A shiny that cannot be caught is run from, as Red, Blue and Yellow do, never knocked out.
         # The Bug-Catching Contest uses Park Balls and has its own rules in contest.control.

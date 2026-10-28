@@ -166,7 +166,8 @@ def journey(policy, snapshot, Goal):
     if project is None:
         from .standdown import standing_down
         choices = [] if standing_down(policy, BREED_KEY) else pairings(policy, snapshot)
-        if choices and snapshot.money >= 3000:
+        from .ledger import BREEDING_FUNDS
+        if choices and snapshot.money >= BREEDING_FUNDS:
             target, _, _, first, second, *species = deepcopy(min(choices))
             project = state['breeding'] = {'target': target, 'parents': [first, second], 'species': species,
                 'duplicate': target in snapshot.owned,

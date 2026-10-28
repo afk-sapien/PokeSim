@@ -35,7 +35,7 @@ def ditto():
 def snapshot(party, stored=(), *, owned=None):
     return SimpleNamespace(party=tuple(party), stored=tuple(stored) + (ditto(),), daycare=(None, None), egg_ready=False,
                            owned=set(range(1, 252)) if owned is None else owned, money=50000, box_counts=(5,) * 14,
-                           active_box=0, map=1, x=1, y=1, items=(), can_catch=True, hall_of_fame_count=3,
+                           active_box=0, map=1, x=1, y=1, items=(), can_catch=True, hall_of_fame_count=3, badges=65535,
                            pockets={'balls': [(5, 20)]}, event=lambda name: True)
 
 

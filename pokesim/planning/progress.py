@@ -32,8 +32,12 @@ def events(previous, snapshot):
     new = snapshot.owned - previous.owned
     if new:
         found.append(ProgressEvent('dex', len(new)))
-    if _held(snapshot) > _held(previous):
+    held, before = _held(snapshot), _held(previous)
+    if held > before:
         found.append(ProgressEvent('catch'))
+    elif held < before:
+        # A Pokémon let go frees a slot the next catch needs, which a visit to the PC is for.
+        found.append(ProgressEvent('room', before - held))
     bag = dict(previous.items)
     gained = [item for item, count in snapshot.items if count > bag.get(item, 0)]
     if gained:

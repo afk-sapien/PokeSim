@@ -135,3 +135,89 @@ def test_the_gen1_ledger_holds_the_safari_fee_until_both_prizes_are_in():
     assert ledger.cash_reserve(view) == ledger.CASH_RESERVE + ledger.SAFARI_FEE
     done = SimpleNamespace(items=((ITEMS['GOLD_TEETH'], 1),), party=view.party, badges=8, money=0)
     assert set(ledger.money_needs(done)) == {'cash'}
+
+
+MONEY_ITEMS = {'POKE_BALL': 5, 'GREAT_BALL': 4, 'ULTRA_BALL': 2, 'HYPER_POTION': 17, 'MAX_POTION': 15,
+               'FULL_RESTORE': 14, 'REVIVE': 28, 'NUGGET': 145, **{f'TM{n:02d}': 190 + n for n in range(1, 51)}}
+MONEY_PRICES = {'POKE_BALL': 200, 'GREAT_BALL': 600, 'ULTRA_BALL': 1200, 'HYPER_POTION': 1200, 'MAX_POTION': 2500,
+                'FULL_RESTORE': 3000, 'REVIVE': 1500, 'NUGGET': 10000}
+
+
+def money_policy(items=(), balls=(), money=0, badges=65535):
+    data = SimpleNamespace(items=MONEY_ITEMS, item_attributes={
+        item: {'price': MONEY_PRICES.get(name, 3000)} for name, item in MONEY_ITEMS.items()})
+    pockets = {'items': tuple((MONEY_ITEMS[name], count) for name, count in items),
+               'balls': tuple((MONEY_ITEMS[name], count) for name, count in balls)}
+    snapshot = SimpleNamespace(pockets=pockets, items=pockets['items'], money=money, badges=badges)
+    return SimpleNamespace(data=data), snapshot
+
+
+def owe(monkeypatch, fees):
+    import pokecore.gen2.breeding
+    monkeypatch.setattr(pokecore.gen2.breeding, 'retrieval_cost', lambda data, snapshot: fees)
+
+
+def test_gen2_money_reservations_hold_the_cash_and_the_day_care_fees(monkeypatch):
+    from pokesim.gen2 import ledger
+    policy, snapshot = money_policy()
+    assert ledger.held_money(policy.data, snapshot) == 400
+    # Balls to catch with may spend the cash reserve.
+    assert ledger.held_money(policy.data, snapshot, 'balls') == 0
+    owe(monkeypatch, 700)
+    assert ledger.held_money(policy.data, snapshot) == 1700
+    assert ledger.held_money(policy.data, snapshot, 'balls') == 1300
+
+
+def test_gen2_ball_money_sells_valuables_then_renewable_machines_and_never_a_tower_machine():
+    from pokesim.gen2 import ledger
+    policy, snapshot = money_policy([('TM01', 1), ('TM02', 1), ('TM30', 1), ('NUGGET', 1)])
+    assert ledger.ball_sale(policy.data, snapshot) == (MONEY_ITEMS['NUGGET'], 1)
+    policy, snapshot = money_policy([('TM01', 1), ('TM02', 1), ('TM30', 1)])
+    assert ledger.ball_sale(policy.data, snapshot) == (MONEY_ITEMS['TM02'], 1)
+    policy, snapshot = money_policy([('TM30', 1)])
+    assert ledger.ball_sale(policy.data, snapshot) is None
+    policy, snapshot = money_policy([('NUGGET', 1)], money=200)
+    assert ledger.ball_sale(policy.data, snapshot) is None
+
+
+def test_gen2_last_balls_wait_for_money_unless_the_encounter_comes_once():
+    from pokesim.gen2 import ledger
+    policy, snapshot = money_policy(balls=[('POKE_BALL', 3)], money=1199)
+    assert not ledger.spare_throw(policy.data, snapshot, 16)
+    assert ledger.spare_throw(policy.data, snapshot, 243)
+    snapshot.money = 1200
+    assert ledger.spare_throw(policy.data, snapshot, 16)
+    policy, snapshot = money_policy(balls=[('POKE_BALL', 4)])
+    assert ledger.spare_throw(policy.data, snapshot, 16)
+
+
+def test_gen2_league_funding_covers_the_day_care_fees_or_a_ball_floor(monkeypatch):
+    from pokesim.gen2 import ledger
+    policy, snapshot = money_policy(balls=[('POKE_BALL', 3)], money=4799)
+    assert ledger.funding_short(policy, snapshot) == 'balls'
+    snapshot.money = 4800
+    assert ledger.funding_short(policy, snapshot) is None
+    policy, snapshot = money_policy(balls=[('POKE_BALL', 4)], money=0)
+    assert ledger.funding_short(policy, snapshot) is None
+    owe(monkeypatch, 700)
+    snapshot.money = 1699
+    assert ledger.funding_short(policy, snapshot) == 'daycare'
+
+
+def test_gen2_red_funding_is_the_cost_of_restocking_the_potions():
+    from pokesim.gen2 import ledger
+    policy, snapshot = money_policy(money=14799)
+    assert ledger.red_short(policy, snapshot)
+    snapshot.money = 14800
+    assert not ledger.red_short(policy, snapshot)
+    policy, snapshot = money_policy([('HYPER_POTION', 8)])
+    assert not ledger.red_short(policy, snapshot)
+
+
+def test_gen1_rematch_funding_is_the_cash_reserve_and_a_ball_reserve_of_ultra_balls():
+    from pokesim.policies import ledger
+    view = SimpleNamespace(items=(), party=(), badges=0, money=12299)
+    assert ledger.funds_needed(view) == 12300
+    assert ledger.funds_short(view)
+    view.money = 12300
+    assert not ledger.funds_short(view)

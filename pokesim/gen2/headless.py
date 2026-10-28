@@ -34,7 +34,7 @@ class HeadlessRun:
         self.pb = boot(str(rom), sound=False)
         self.pb.set_emulation_speed(0)
         follow_game_time(self.pb)
-        StoreStock(self.data).attach(self.pb)
+        StoreStock(self.data, champion=self._champion_catalogue).attach(self.pb)
         self.policy = Policy(self.data, seed=seed)
         self.history = {'maps': [], 'owned': [], 'badges': 0, 'league': 0}
         self.rng, self.seed = rng, seed
@@ -42,6 +42,17 @@ class HeadlessRun:
         self.screen_key = None
         self.clock = None
         self._load(Path(checkpoint))
+
+    def _champion_catalogue(self):
+        """The planned Champion shop item for the clerk who opens the BUY list, as the managed runtime adds it.
+
+        Without it a replay's clerk never listed the planned TM or supply, so every Champion shop
+        visit ended "This mart does not sell that item" and stood down. Capped offers need the
+        adventure store, so only the ones the policy already holds are offered.
+        """
+        from . import champion_shop
+        plan = self.policy.collection.get(champion_shop.PLAN)
+        return champion_shop.catalogue(self.data, plan, self.policy.shop_offers)
 
     def _load(self, path):
         metadata = CheckpointStore(path.parent).checkpoint_metadata(path)

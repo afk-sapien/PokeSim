@@ -27,7 +27,7 @@ import sys
 sys.path.insert(0, os.getcwd())
 
 from pokesim.planning.monitor import Monitor, ProgressEvent  # noqa: E402
-from pokesim.planning.progress import events  # noqa: E402
+from pokesim.planning.progress import _held, events  # noqa: E402
 
 LIMIT_POINTS = 2.0
 LARGE_SHARE = 0.15
@@ -65,6 +65,11 @@ def _goal_events(key, previous, current):
     """The progress events of ``current`` for goal ``key``. A training goal also progresses on experience,
     since a level can take many battles and a span that gained experience was not wasted."""
     found = events(previous, current)
+    # A Pokémon let go frees a slot. The tree under test may predate that event, so the audit reads it
+    # here too and every tree it compares is measured the same way.
+    if found == [] and previous is not None and current is not None and getattr(current, 'valid', True) \
+            and getattr(previous, 'valid', True) and _held(current) < _held(previous):
+        found.append(ProgressEvent('room', _held(previous) - _held(current)))
     if 'train' in key and previous is not None and current is not None and not found:
         gained = sum(after.experience - before.experience for before, after in zip(previous.party, current.party)
                      if before.species == after.species and after.experience > before.experience)
