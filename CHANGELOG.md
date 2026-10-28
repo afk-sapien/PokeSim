@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Count a Pokémon let go at the PC as progress in the planning monitor and the replay audit. A release visit frees the slot the next catch needs, but the audit counted Gold and Silver release visits as wasted frames.
+
 - Stop Gold, Silver and Crystal planning during the start of a wild battle. The battle transition draws over the map the plan reads, so a postgame hunt saw no grass and switched to "Wait for the encounter map to finish loading", and a Pokédex hunt dropped its target as if it had no route. The wait then lasted the whole battle, so most postgame hunting showed as waiting. The hunt that met the Pokémon now carries on through the battle.
 
 - Count more Gold, Silver and Crystal purchases, catches and trades. Drinks from the Goldenrod and Celadon vending machines, Moomoo Milk and the Mahogany RageCandyBar now count as purchases with their item, as the Goldenrod Underground bargain shop already did. The Pokémon kept at the end of a Bug-Catching Contest now counts as caught on the Pokémon page and in Total caught. A cable session that trades more than one Pokémon now counts every one of them in traded in and traded out, where before only the first exchange counted.
