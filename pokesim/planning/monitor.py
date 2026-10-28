@@ -73,12 +73,16 @@ class Monitor:
         self.budgets[key] = budget
 
     def observe(self, key, frames, events=(), now=None):
-        """Count ``frames`` against ``key``. Any progress event clears its count."""
+        """Count ``frames`` against ``key``. Any progress event clears its count of frames.
+
+        The stand-downs in a row are kept. A Red hunt reaches new maps on every trip, and clearing them
+        there would stop a hunt that never finds its Pokémon from waiting longer each time. They clear
+        when the goal is done, or when it stands down after it made some progress.
+        """
         self.frames[key] += frames
         spent = self._table(SPENT)
         if events:
             spent.pop(key, None)
-            self._table(STAND_DOWNS).pop(key, None)
             return CONTINUE
         spent[key] = spent.get(key, 0) + frames
         budget = self.budgets.get(key)

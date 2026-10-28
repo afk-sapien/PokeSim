@@ -157,8 +157,9 @@ def test_marathon_never_displaces_missing_entries_or_urgent_supplies():
 
 
 def test_candidate_requires_postgame_prior_work_cut_open_gates_and_cooldown():
-    class Selector:
+    class Selector(AdventureDirector):
         def __init__(self):
+            super().__init__()
             self.candidates = []
             self.completed = {'training': 4}
 

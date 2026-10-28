@@ -161,3 +161,32 @@ def test_director_records_are_bounded_and_snapshots_do_not_alias_live_state():
     saved = director.state_dict()
     saved['outcomes'].clear()
     assert len(director.outcomes) == 24
+
+
+def test_an_older_save_keeps_its_retry_times_counts_and_idle_frames():
+    hunt = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}
+    older = {**Collection().state_dict(), 'elapsed': 1000, 'project': hunt, 'idle_frames': 3000,
+             'attempts': {'pidgey': 1000 + 240000, 'spent': 500},
+             'director': {'recent': [], 'outcomes': [], 'failures': {'pidgey': 3}}}
+    c = Collection()
+    c.load(json.loads(json.dumps(older)))
+    assert c.director.failures == {'pidgey': 3}
+    assert c.director.waiting('pidgey', 1000 + 239999)
+    assert not c.director.waiting('pidgey', 1000 + 240000)
+    assert not c.director.waiting('spent', 1000)
+    assert c.idle_frames == 3000
+    # The next failure doubles from the saved count, up to the cap.
+    assert c.director.finish({'method': 'grass', 'key': 'pidgey'}, 2000, False, 'No encounter') == 2000 + 480000
+
+
+def test_new_maps_reset_the_idle_count_but_not_the_failures_in_a_row():
+    c = Collection()
+    c.director.failures['ditto'] = 2
+    c.project = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}
+    c.remaining = 36000
+    for frame in range(0, 600, 120):
+        c.observe(state(frame=frame, map=MAPS['ROUTE_1'] if frame % 240 else MAPS['ROUTE_2']))
+    assert c.director.failures['ditto'] == 2
+    c.abandon('No encounter')
+    assert c.director.failures['ditto'] == 3
+    assert c.director.outcomes[-1]['retry_at'] - c.elapsed == 240000
