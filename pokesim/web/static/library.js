@@ -743,7 +743,11 @@
   function selectedVersion() {
     return installed().find(slot => slot.rom.id === $('#rom-id').value)?.version || ''
   }
+  function fairDvsOffered() {
+    return ['red', 'blue', 'yellow'].includes(selectedVersion())
+  }
   function updateStarters() {
+    $('#new-fair-dvs').hidden = !fairDvsOffered()
     const choices = startersFor(selectedVersion())
     const previous = $('#starter').value
     $('#starter').innerHTML = '<option value="random">Surprise me</option>' + choices.map(name => `<option value="${esc(name)}">${esc(name[0].toUpperCase() + name.slice(1))}</option>`).join('')
@@ -845,6 +849,8 @@
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
       $('#settings-randomizer').hidden = !game.settings?.randomizer
       $('#settings-randomizer-code').textContent = game.settings?.randomizer || ''
+      const randomized = parseShareCode(game.settings?.randomizer || '')
+      $('#settings-randomizer-options').textContent = randomized ? `${[['wild', 'wild Pokémon'], ['starters', 'starters'], ['trainers', 'trainer parties']].filter(([name]) => randomized[name]).map(([, label]) => label).join(', ')}, seed ${randomized.seed}` : ''
       for (const [field, setting] of [['league-rewards', 'league_rewards'], ['mew-event', 'mew_event']]) {
         const input = $(`#settings-${field}`)
         input.checked = Boolean(game.settings?.[setting])
@@ -859,8 +865,9 @@
       $('#settings-fair-dvs-label').hidden = johto
       $('#settings-fair-dvs-note').hidden = johto
       $('#settings-fair-wild-dvs').checked = Boolean(game.settings?.fair_wild_dvs)
-      $('#settings-fair-wild-dvs').disabled = running(game) || johto
-      $('#settings-fair-wild-dvs').toggleAttribute('data-blocked', running(game) || johto)
+      // Fair wild DVs only changes the next wild encounter, so it applies while the adventure runs.
+      $('#settings-fair-wild-dvs').disabled = johto
+      $('#settings-fair-wild-dvs').toggleAttribute('data-blocked', johto)
       $('#settings-store-label').hidden = !johto
       $('#settings-extra-store-items').checked = Boolean(game.settings?.extra_store_items)
       $('#settings-extra-store-items').disabled = running(game) || !johto
@@ -904,11 +911,12 @@
       const startNow = $('#start-created').checked
       const result = await write('/api/v1/adventures', {name: $('#new-name').value.trim(), rom_id: romId, starter,
         trainer_name: $('#new-trainer').value.trim().toUpperCase(), rival_name: $('#new-rival').value.trim().toUpperCase(),
-        ...(randomizer ? {randomizer} : {})})
+        ...(randomizer ? {randomizer} : {}), ...(fairDvsOffered() && $('#new-fair-wild-dvs').checked ? {fair_wild_dvs: true} : {})})
       const game = result.adventure || result
       $('#create-dialog').close()
       $('#create-form').reset()
       $('#randomizer-options').hidden = true
+      $('#new-fair-dvs').hidden = true
       $('#rom-id').value = ''
       if (startNow) await write(`/api/v1/adventures/${encodeURIComponent(game.id)}/start`)
       notice('Adventure created. Its status will update as it gets ready.')
@@ -917,14 +925,14 @@
     act(async () => {
       const game = adventures.find(item => item.id === $('#settings-id').value)
       const rewards = game && !running(game) ? {league_rewards: $('#settings-league-rewards').checked, mew_event: $('#settings-mew-event').checked, celebi_event: $('#settings-celebi-event').checked, extra_store_items: $('#settings-extra-store-items').checked, legendary_return_steps: Number($('#settings-legendary-steps').value), event_return_steps: Number($('#settings-event-steps').value), mew_return_steps: Number($('#settings-mew-steps').value), fossil_preference: $('#settings-fossil-preference').value, dojo_preference: $('#settings-dojo-preference').value} : {}
-      if (game && !running(game) && !['gold', 'silver', 'crystal'].includes(game.version)) rewards.fair_wild_dvs = $('#settings-fair-wild-dvs').checked
+      if (game && !['gold', 'silver', 'crystal'].includes(game.version)) rewards.fair_wild_dvs = $('#settings-fair-wild-dvs').checked
       if (['gold', 'silver', 'crystal'].includes(game?.version)) {
         for (const field of ['fossil_preference', 'dojo_preference']) delete rewards[field]
       }
       const result = await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
         settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), ...($('#settings-palette').disabled ? {} : {palette: $('#settings-palette').value || 'original'}), ...rewards}}, 'PATCH')
       $('#adventure-settings').close()
-      const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette'].filter(Boolean).join(' and ')
+      const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette', result.fair_wild_dvs_pending && 'fair wild DVs setting'].filter(Boolean).join(' and ')
       notice(pending ? `Settings saved. The ${pending} will apply when this adventure reconnects.` : 'Adventure settings saved.')
     }) }
   $('#notify-add').onclick = () => openIntegration()

@@ -241,6 +241,7 @@ class Emulator:
             "paused": self.paused, "speed": self.speed, "policy": self.policy.describe(),
             # Yellow renders its own Game Boy Color palettes, so like Generation II it reports none.
             "palette": None if self._color_cartridge() else getattr(self, 'palette', 'original'),
+            "fair_wild_dvs": getattr(config, 'FAIR_WILD_DVS', False) is True,
             "manual_mode": self.manual_mode, "help_request": None,
             "play_clock": self.play_clock.status(),
             "performance": {"frames": self.executed_frames, "sampled_at": time.monotonic()},
@@ -377,6 +378,14 @@ class Emulator:
         self.palette = validate_palette(value)
         self._publish_frame()
         return {'palette': self.palette}
+
+    def set_fair_wild_dvs(self, value):
+        """Called on the emulator thread, so the next wild encounter already follows the new setting."""
+        from . import fair_dvs
+        config.FAIR_WILD_DVS = value is True
+        tracker = self.shiny_tracker
+        tracker.fair_key = fair_dvs.secret(tracker.store) if tracker.supported and config.FAIR_WILD_DVS else None
+        return {'fair_wild_dvs': config.FAIR_WILD_DVS}
 
     def _shot_png(self, img=None) -> bytes:
         img = self._image() if img is None else img

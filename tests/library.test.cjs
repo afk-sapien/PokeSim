@@ -479,6 +479,53 @@ test('fair wild DVs is offered for Generation I only and is off until chosen', a
   }
 })
 
+test('fair wild DVs can be chosen on the new adventure form for Generation I only', async () => {
+  async function create(version, checked) {
+    const view = library({slots: SHELF.map(name => slot(name, name === version ? `${name}-rom` : ''))})
+    await settle()
+    view.element('#new-name').value = 'Fair'
+    await view.element('#new-adventure').onclick()
+    await settle()
+    const offered = !view.element('#new-fair-dvs').hidden
+    assert.equal(view.element('#new-fair-wild-dvs').checked, false)
+    view.element('#new-fair-wild-dvs').checked = checked
+    view.element('#create-form').onsubmit({preventDefault() {}})
+    await settle()
+    const request = view.calls.find(call => call.path === '/api/v1/adventures' && call.options.method === 'POST')
+    return {offered, payload: JSON.parse(request.options.body)}
+  }
+  assert.equal((await create('red', false)).payload.fair_wild_dvs, undefined)
+  const red = await create('red', true)
+  assert.equal(red.offered, true)
+  assert.equal(red.payload.fair_wild_dvs, true)
+  assert.equal((await create('yellow', true)).payload.fair_wild_dvs, true)
+  const gold = await create('gold', true)
+  assert.equal(gold.offered, false)
+  assert.equal('fair_wild_dvs' in gold.payload, false)
+})
+
+test('a running Generation I adventure can change fair wild DVs and shows its randomizer read-only', async () => {
+  const game = {id: 'e'.repeat(32), name: 'Game', version: 'red', state: 'running', settings: {randomizer: 'PSR1-RED-WT-42'}}
+  const view = library({respond(path, options) {
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+    if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
+  }})
+  await settle()
+  for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+  view.click('settings', game.id)
+  assert.equal(view.element('#settings-fair-wild-dvs').disabled, false)
+  assert.equal(view.element('#settings-league-rewards').disabled, true)
+  assert.equal(view.element('#settings-randomizer').hidden, false)
+  assert.equal(view.element('#settings-randomizer-options').textContent, 'wild Pokémon, trainer parties, seed 42')
+  view.element('#settings-fair-wild-dvs').checked = true
+  view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+  await settle()
+  const settings = JSON.parse(view.calls.find(call => call.options.method === 'PATCH').options.body).settings
+  assert.equal(settings.fair_wild_dvs, true)
+  assert.equal('league_rewards' in settings, false)
+  assert.equal('randomizer' in settings, false)
+})
+
 test('the randomizer is off until chosen and sends a canonical share code', async () => {
   async function create(fill) {
     const view = library()

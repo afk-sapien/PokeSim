@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Stop Crystal turning back to a Pokémon Center again and again on the walk to the Battle Tower. Plain wild battles on the way to Olivine were fought, so the team kept needing to heal, and replays of one Crystal run spent about a third of their frames on that walk. The walk now runs from plain wild battles the way a shiny search does. A shiny or a wanted Pokémon is still caught.
+- Offer Fair wild DVs on the New adventure form for Red, Blue and Yellow. It is off by default and can now be turned on or off in adventure Settings while the adventure runs, from the next wild encounter. The randomizer is still chosen only when creating an adventure, and Settings now lists what it shuffles and its seed.
 
 - Keep Gold, Silver and Crystal running after an unexpected error. One error anywhere in the loop used to stop the adventure until it was restarted. The error is now logged and the next step goes ahead, the same way Red, Blue and Yellow recover. The adventure stops only after ten errors in a row, or when a committed gift needs a restart to recover.
 

@@ -226,6 +226,32 @@ def test_nickname_settings_reach_new_workers_and_retry_live_workers(supervisor):
     assert calls[-1][0][2]['nickname_prefixes'] == []
 
 
+def test_fair_wild_dvs_reaches_a_running_worker_and_retries(supervisor):
+    aid = adventure(supervisor)
+    supervisor.start(aid)
+    child = supervisor.children[aid]
+    supervisor.registry.update(aid, settings={'fair_wild_dvs': True})
+    def fail(*args, **kwargs):
+        raise RuntimeError('Worker reconnecting')
+    child.request = fail
+    assert supervisor.push_fair_wild_dvs(aid) is True
+    calls = []
+    def request(method, path, data, timeout):
+        assert path == '/internal/fair-wild-dvs'
+        calls.append(data['fair_wild_dvs'])
+        return data
+    child.request = request
+    supervisor.sync_fair_wild_dvs(aid, child, False)
+    supervisor.sync_fair_wild_dvs(aid, child, True)
+    # Generation II workers report no such setting.
+    supervisor.sync_fair_wild_dvs(aid, child, None)
+    assert calls == [True]
+    # Off is stored as absent.
+    supervisor.registry.update(aid, settings={})
+    assert supervisor.push_fair_wild_dvs(aid) is False
+    assert calls == [True, False]
+
+
 def test_palette_is_independent_retries_and_survives_worker_restart(supervisor):
     first, second = adventure(supervisor), adventure(supervisor)
     supervisor.start(first)

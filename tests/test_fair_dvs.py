@@ -71,6 +71,46 @@ def test_library_api_turns_it_on_and_off_only_for_generation_i(tmp_path, monkeyp
         assert refused.status_code == 409 and 'Red, Blue and Yellow' in refused.text
 
 
+def test_chosen_at_creation_and_changed_while_running_but_the_randomizer_stays_locked(tmp_path, monkeypatch):
+    manager = Manager(tmp_path, 'http://testserver')
+    monkeypatch.setattr(manager, 'start', lambda: None)
+    pushed = []
+    monkeypatch.setattr(manager.supervisor, 'push_fair_wild_dvs', lambda aid: pushed.append(aid) or False)
+    with TestClient(create_app(manager)) as client:
+        headers = {'X-PokeSim-CSRF': client.get('/api/v1/session').json()['csrf_token']}
+        manager.registry.add_rom('red-rom', 'sha1', 'red')
+        red = client.post('/api/v1/adventures', headers=headers,
+                          json={'name': 'Red', 'rom_id': 'red-rom', 'fair_wild_dvs': True, 'randomizer': 'PSR1-RED-W-5'}).json()
+        assert red['settings']['fair_wild_dvs'] is True and red['settings']['randomizer'] == 'PSR1-RED-W-5'
+        route = f"/api/v1/adventures/{red['id']}"
+        manager.registry.update(red['id'], state='running')
+        off = client.patch(route, headers=headers, json={'settings': {'fair_wild_dvs': False}})
+        assert off.status_code == 200 and 'fair_wild_dvs' not in off.json()['settings']
+        assert off.json()['fair_wild_dvs_pending'] is False and pushed == [red['id']]
+        # Other rewards still wait for a stop, and the randomizer never changes.
+        assert client.patch(route, headers=headers, json={'settings': {'league_rewards': False}}).status_code == 409
+        for change in ('', 'PSR1-RED-WS-5'):
+            refused = client.patch(route, headers=headers, json={'settings': {'randomizer': change}})
+            assert refused.status_code == 409 and 'creating an adventure' in refused.text
+        assert manager.registry.adventure(red['id'])['settings']['randomizer'] == 'PSR1-RED-W-5'
+
+
+def test_a_live_change_takes_effect_on_the_next_encounter(tmp_path, monkeypatch):
+    from pokesim.emulator import Emulator
+    monkeypatch.setattr(config, 'FAIR_WILD_DVS', False, raising=False)
+    with closing(Store(tmp_path)) as store:
+        emu = object.__new__(Emulator)
+        emu.shiny_tracker = ShinyTracker(store, RED)
+        assert emu.set_fair_wild_dvs(True) == {'fair_wild_dvs': True}
+        memory = wild_memory()
+        emu.shiny_tracker.encounter(SimpleNamespace(memory=memory))
+        assert memory[0xcff1:0xcff3] != b'\x98\x88'
+        assert emu.set_fair_wild_dvs(False) == {'fair_wild_dvs': False}
+        memory = wild_memory()
+        emu.shiny_tracker.encounter(SimpleNamespace(memory=memory))
+        assert memory[0xcff1:0xcff3] == b'\x98\x88'
+
+
 def test_off_leaves_the_cartridge_dvs_alone(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'FAIR_WILD_DVS', False, raising=False)
     with closing(Store(tmp_path)) as store:
