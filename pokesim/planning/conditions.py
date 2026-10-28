@@ -24,6 +24,8 @@ class World(Protocol):
     def has_badge(self, badge) -> bool: ...
     def event(self, flag) -> bool: ...
     def reachable(self, place) -> bool: ...
+    def item_count(self, item) -> int: ...
+    def can(self, action) -> bool: ...
 
 
 class Condition(Protocol):
@@ -55,6 +57,25 @@ class Item(_Base):
 
     def holds(self, world):
         return world.has_item(self.item)
+
+
+@dataclass(frozen=True)
+class Count(_Base):
+    """At least ``at_least`` of ``items`` together in the bag, such as five balls for a hunt."""
+    items: tuple
+    at_least: int = 1
+
+    def holds(self, world):
+        return sum(world.item_count(item) for item in self.items) >= self.at_least
+
+
+@dataclass(frozen=True)
+class Can(_Base):
+    """Something the adapter decides from the whole snapshot, such as room to catch or a party that surfs."""
+    action: str
+
+    def holds(self, world):
+        return world.can(self.action)
 
 
 @dataclass(frozen=True)
