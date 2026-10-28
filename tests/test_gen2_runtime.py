@@ -2237,7 +2237,8 @@ def test_a_carrier_hunt_stands_down_after_its_decision_budget(real_data):
     # so three times that at 75 decisions a battle. A rare carrier is capped at two game hours.
     assert carrier_budget(target) == 12500
     assert carrier_budget({**target, 'chance': 10}) == CARRIER_DECISIONS
-    policy = SimpleNamespace(data=real_data, demand={}, decisions=0, collection={'target': target})
+    hunt = SimpleNamespace(key='collection_hunt')
+    policy = SimpleNamespace(data=real_data, demand={}, decisions=0, collection={'target': target}, goal=hunt)
     snapshot = SimpleNamespace(party=(), stored=stored, items=(), owned=owned)
 
     def step(times=1):
@@ -2245,11 +2246,15 @@ def test_a_carrier_hunt_stands_down_after_its_decision_budget(real_data):
             policy.decisions += 1
             observe_carriers(policy, snapshot)
 
-    # Decisions add up across target restarts, and none count without a carrier target.
+    # Decisions add up across target restarts. None count without a carrier target, or while
+    # training runs first with the target kept.
     step(carrier_budget(target) // 2)
     policy.collection['target'] = None
     step(100)
     policy.collection['target'] = dict(target)
+    policy.goal = SimpleNamespace(key='collection_train')
+    step(100)
+    policy.goal = hunt
     step(carrier_budget(target) // 2 - 1)
     assert policy.collection['carrier_decisions'] == {'61': carrier_budget(target) - 1}
     assert not carriers_exhausted(policy, snapshot, target)

@@ -185,6 +185,9 @@ def item_hunts(policy, snapshot):
     return result
 
 
+HUNT_GOALS = {'collection_hunt', 'collection_fish', 'collection_field'}
+
+
 def carrier_budget(target):
     """Decisions a carrier hunt may spend before it stands down: CARRIER_ROUNDS times the wild battles
     expected for the item, from the carrier's encounter rate on its spot, capped at CARRIER_DECISIONS."""
@@ -193,9 +196,12 @@ def carrier_budget(target):
 
 
 def observe_carriers(policy, snapshot):
-    """Count each decision spent with a carrier as the hunt target, summed across target restarts."""
+    """Count each decision spent hunting a carrier target, summed across target restarts. A target kept
+    while training, storage or another errand runs first costs nothing."""
     target = policy.collection.get('target')
-    if not target or target['species'] not in item_hunts(policy, snapshot):
+    goal = getattr(policy, 'goal', None)
+    if (not target or goal is None or goal.key not in HUNT_GOALS
+            or target['species'] not in item_hunts(policy, snapshot)):
         return
     counts = policy.collection.setdefault('carrier_decisions', {})
     counts[str(target['species'])] = counts.get(str(target['species']), 0) + 1
