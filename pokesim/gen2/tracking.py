@@ -131,6 +131,8 @@ class Tracker:
             if not db.execute('INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
                               (fingerprint, species, time.time())).rowcount:
                 return
+            from ..activity_ledger import increment
+            increment(db, 'caught', species)
             from .returns import consume
             consume(db, species)
             value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (CAPTURES,)).fetchone()[0])

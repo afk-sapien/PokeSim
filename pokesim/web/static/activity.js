@@ -22,13 +22,40 @@
   $('#ledger-search').value = params.get('q') || ''
   $('#ledger-filter').value = params.get('show') === 'recorded' ? 'recorded' : 'all'
   if ([...$('#ledger-sort').options].some(option => option.value === params.get('sort'))) $('#ledger-sort').value = params.get('sort')
+  // Columns counted from receipts. Held now and In bag now are read from the running game instead.
+  const counted = new Set(['wild', 'trainer', 'defeated', 'caught', 'gift', 'traded_in', 'traded_out', 'bought', 'used'])
+  const date = value => new Date(value * 1000).toLocaleString(undefined, {dateStyle: 'medium'})
+  let ledger = {}
   const head = add($('#ledger-head'), 'tr')
-  for (const label of [pokemon ? 'Pokémon' : 'Item', ...columns.map(column => column[1])]) {
-    add(head, 'th', label).scope = 'col'
+  add(head, 'th', pokemon ? 'Pokémon' : 'Item').scope = 'col'
+  const since = new Map()
+  for (const [key, label] of columns) {
+    const cell = add(head, 'th', label)
+    cell.scope = 'col'
+    if (counted.has(key)) {
+      const note = add(cell, 'small')
+      note.className = 'ledger-since'
+      note.hidden = true
+      since.set(key, note)
+    }
   }
-  $('#ledger-help').textContent = pokemon
+  const help = generation => pokemon
     ? 'Encounters count each wild Pokémon or trainer opponent entering battle. Defeated includes both. Caught excludes gifts and trades. Custom gifts include PokeSim League rewards. Trades count completed cable and NPC exchanges, using the received form after evolution and the sent form before evolution. Held now includes the party and every PC box.'
-    : 'Purchased counts quantities bought at shops and vending machines. Used counts consumed items, including balls thrown, healing items, stones, and TMs. Reusable items show “Not counted”. Moving, selling, discarding, or giving items away does not count as use.'
+    : `Purchased counts quantities bought at ${generation === 2 ? 'shop counters' : 'shops and vending machines'}. Used counts consumed items, including balls thrown, healing items, stones, and TMs. Reusable items show “Not counted”. Moving, selling, discarding, or giving items away does not count as use.`
+  $('#ledger-help').textContent = help(1)
+  function blank(cell, key) {
+    // Say why a cell has no number, so a missing count never reads as zero.
+    if (!counted.has(key)) {
+      cell.textContent = 'Not running'
+      cell.title = 'Shown while this adventure is running.'
+    } else if (key === 'used' && ledger.started_at) {
+      cell.textContent = 'Not counted'
+      cell.title = 'Reusable items are not used up, so uses are not counted.'
+    } else {
+      cell.textContent = 'Not tracked yet'
+      cell.title = 'Counting begins the next time this adventure runs on Red, Blue, Yellow, Gold, Silver, or Crystal.'
+    }
+  }
   function render() {
     const query = $('#ledger-search').value.trim().toLocaleLowerCase().replace(/^#/, '')
     const field = $('#ledger-sort').value
@@ -68,8 +95,13 @@
       add(label, 'small', `#${String(row.id).padStart(3, '0')}`)
       for (const [key] of columns) {
         const value = row[key]
-        const cell = add(tr, 'td', value == null ? 'Not counted' : value.toLocaleString())
-        if (value == null) cell.className = 'ledger-unknown'
+        const cell = add(tr, 'td', value == null ? '' : value.toLocaleString())
+        if (value == null) {
+          cell.className = 'ledger-unknown'
+          blank(cell, key)
+        } else if (counted.has(key) && ledger.counting_since) {
+          cell.title = `Counted since ${date(ledger.counting_since)}. Earlier play is not included.`
+        }
       }
     }
     if (!selected.length) add(add(fragment, 'tr'), 'td', 'No matching records.').colSpan = columns.length + 1
@@ -121,13 +153,18 @@
             : shop.offers.map(offer => `${offer.quantity} × ${offer.name}: ${offer.remaining ? offer.remaining.toLocaleString() + ' steps remaining' : 'ready to purchase'} (₽${offer.price.toLocaleString()})`).join(', ')
         offers.textContent = `Champion shop: ${progress} Each offer holds one purchase and renews after another 1,000,000 steps. The automatic player buys when needed, with bag space and a ₽20,000 reserve.${shop.counter ? ` ${shop.counter}.` : ''}`
       }
-      const date = value => new Date(value * 1000).toLocaleString(undefined, {dateStyle: 'medium'})
-      let coverage = data.started_at ? `Actions since ${date(data.started_at)}. Earlier activity is not estimated.`
-        : data.generation === 2 ? `Gold, Silver, and Crystal record only what is ${pokemon ? 'held in the party and PC' : 'in the bag'} right now. Encounter, catch, purchase, and use counts are kept for Red, Blue, and Yellow.`
-          : 'Action tracking begins when this adventure runs on a supported Red, Blue, or Yellow cartridge.'
+      ledger = data
+      $('#ledger-help').textContent = help(data.generation)
+      for (const note of since.values()) {
+        note.hidden = !data.counting_since
+        note.textContent = data.counting_since ? `Since ${date(data.counting_since)}` : ''
+      }
+      let coverage = data.counting_since ? `Counting since ${date(data.counting_since)}, when this adventure was already under way. Earlier activity is not estimated.`
+        : data.started_at ? `Actions since ${date(data.started_at)}. Earlier activity is not estimated.`
+          : 'Action tracking begins when this adventure next runs on Red, Blue, Yellow, Gold, Silver, or Crystal.'
       if (data.started_at && !data.available) coverage += ' Action tracking is currently unavailable for this cartridge.'
       if (pokemon && data.captures_available && data.captures_since) coverage += ` Catch records since ${date(data.captures_since)} are included.`
-      if (pokemon && data.generation !== 2) {
+      if (pokemon) {
         coverage += data.trade_records?.npc_since ? ` Trades include verified cable history and NPC exchanges since ${date(data.trade_records.npc_since)}.` : ' Verified cable trades are included. NPC tracking begins when this adventure runs.'
         if (data.trade_records?.missing_history) coverage += ' Older trades with missing species records are excluded.'
       }

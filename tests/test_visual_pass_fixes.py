@@ -73,7 +73,9 @@ def test_gen2_activity_lists_all_251_species_and_skips_eggs():
     held = {row['id']: row['held'] for row in result['pokemon']}
     assert held[251] == 1 and held[175] == 0
     assert result['pokemon'][0]['wild'] is None
-    assert result['items'] == [{'id': 18, 'name': 'Potion', 'bought': None, 'used': None, 'bag': 3}]
+    # Every item is listed, held or not. Counts stay unknown until tracking starts on this adventure.
+    assert result['items'] == [{'id': 1, 'name': 'Master Ball', 'bought': None, 'used': None, 'bag': 0},
+                               {'id': 18, 'name': 'Potion', 'bought': None, 'used': None, 'bag': 3}]
 
 
 def test_gen2_activity_route_uses_the_gen2_ledger(tmp_path):

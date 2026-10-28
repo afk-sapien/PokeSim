@@ -236,7 +236,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         if gen2:
             from ..activity_ledger import gen2_status
             from ..gen2.champion_shop import status as gen2_shop
-            return {**gen2_status(emu.data, (emu.status() or {}).get('game')), 'champion_shop': gen2_shop(store, emu.data)}
+            return {**gen2_status(emu.data, (emu.status() or {}).get('game'), store),
+                    'champion_shop': gen2_shop(store, emu.data)}
         from ..activity_ledger import status
         from ..champion_shop import status as shop_status
         return {**status(store, emu.status().get('game')), 'champion_shop': shop_status(store)}

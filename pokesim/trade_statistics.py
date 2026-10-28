@@ -9,12 +9,22 @@ from .strategy_data import SPECIES
 KEY = 'trade-statistics-v1'
 
 
-def record(db, identity, sent, received):
-    """Record both sides once inside the transaction that publishes the trade."""
-    if (type(sent) is not int or type(received) is not int
-            or sent not in SPECIES or received not in SPECIES):
+def record(db, identity, sent, received, generation=1):
+    """Record both sides once inside the transaction that publishes the trade.
+
+    Red, Blue and Yellow name species by their internal index. Gold, Silver and Crystal
+    (``generation=2``) use the National Pokédex number itself.
+    """
+    if type(sent) is not int or type(received) is not int:
         return False
-    outgoing, incoming = SPECIES[sent]['dex'], SPECIES[received]['dex']
+    if generation == 2:
+        if not (1 <= sent <= 251 and 1 <= received <= 251):
+            return False
+        outgoing, incoming = sent, received
+    else:
+        if sent not in SPECIES or received not in SPECIES:
+            return False
+        outgoing, incoming = SPECIES[sent]['dex'], SPECIES[received]['dex']
     if db.execute('INSERT OR IGNORE INTO pokemon_trade_receipts VALUES (?,?,?)',
                   (identity, outgoing, incoming)).rowcount:
         increment(db, 'traded_out', outgoing)
@@ -22,14 +32,34 @@ def record(db, identity, sent, received):
     return True
 
 
-def sent_species(raw):
+def record_gen2(db, identity, sent, received):
+    return record(db, identity, sent, received, generation=2)
+
+
+def _outgoing(raw):
+    """(generation, species) of a released outgoing struct, or None."""
     if not isinstance(raw, str):
         return None
     try:
         struct = bytes.fromhex(raw)
     except ValueError:
         return None
-    return struct[0] if len(struct) in (33, 44) else None
+    if len(struct) in (33, 44):
+        return 1, struct[0]
+    # A Gold, Silver or Crystal party struct, cable or Time Capsule, opens with its Pokédex number.
+    return (2, struct[0]) if len(struct) == 48 else None
+
+
+def sent_species(raw):
+    outgoing = _outgoing(raw)
+    return outgoing[1] if outgoing else None
+
+
+def _managed(db, identity, raw, received):
+    outgoing = _outgoing(raw)
+    if not isinstance(identity, str) or outgoing is None:
+        return False
+    return record(db, 'managed:' + identity, outgoing[1], received, generation=outgoing[0])
 
 
 def managed(db, receipt):
@@ -38,17 +68,13 @@ def managed(db, receipt):
     outgoing = receipt.get('outgoing')
     staged = receipt.get('staged')
     evidence = staged.get('evidence') if isinstance(staged, dict) else None
-    sent = sent_species(outgoing.get('struct')) if isinstance(outgoing, dict) else None
     # The incoming struct describes the offered Pokémon before trade evolution.
     received = evidence.get('received_species') if isinstance(evidence, dict) else None
-    record(db, 'managed:' + receipt['id'], sent, received)
+    _managed(db, receipt.get('id'), outgoing.get('struct') if isinstance(outgoing, dict) else None, received)
 
 
-def initialize(db):
-    db.execute('CREATE TABLE IF NOT EXISTS pokemon_trade_receipts ('
-               'id TEXT PRIMARY KEY, sent INTEGER NOT NULL, received INTEGER NOT NULL)')
-    if db.execute('SELECT 1 FROM kv WHERE k=?', (KEY,)).fetchone():
-        return
+def _history(db):
+    """Record every released managed trade not yet counted. Returns how many cannot be."""
     missing = 0
     # Extract only the verified species and identity. Historical rows can contain
     # large policy snapshots, which must not be loaded to recover these counts.
@@ -56,12 +82,27 @@ def initialize(db):
             "SELECT json_extract(v, '$.id'), json_extract(v, '$.outgoing.struct'), "
             "json_extract(v, '$.staged.evidence.received_species') FROM kv "
             "WHERE k LIKE 'managed_interaction:%' AND json_extract(v, '$.decision')='COMMIT' "
-            "AND json_extract(v, '$.phase')='released'"):
-        if not isinstance(identity, str) or not record(db, 'managed:' + identity, sent_species(raw), received):
+            "AND json_extract(v, '$.phase')='released'").fetchall():
+        if not _managed(db, identity, raw, received):
             missing += 1
     if db.execute("SELECT 1 FROM sqlite_master WHERE name='completed_trades'").fetchone():
         missing += db.execute('SELECT COUNT(*) FROM completed_trades').fetchone()[0]
-    db.execute('INSERT INTO kv VALUES (?,?)', (KEY, json.dumps({'npc_since': None, 'missing_history': missing})))
+    return missing
+
+
+def initialize(db):
+    db.execute('CREATE TABLE IF NOT EXISTS pokemon_trade_receipts ('
+               'id TEXT PRIMARY KEY, sent INTEGER NOT NULL, received INTEGER NOT NULL)')
+    if db.execute('SELECT 1 FROM kv WHERE k=?', (KEY,)).fetchone():
+        return
+    db.execute('INSERT INTO kv VALUES (?,?)', (KEY, json.dumps({'npc_since': None, 'missing_history': _history(db)})))
+
+
+def backfill_gen2(db):
+    """Count the Gold, Silver and Crystal cable trades released before they could be counted."""
+    value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
+    value['missing_history'] = _history(db)
+    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
 
 
 def npc(store, memory):

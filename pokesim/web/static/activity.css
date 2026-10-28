@@ -55,6 +55,9 @@
 .ledger-identity small { font: var(--f-label) / 1.5 var(--font-mono) }
 .ledger-unknown { color: var(--ink-2) }
 .ledger-unknown { font-size: 12px }
+.ledger-since { display: block }
+.ledger-since { color: var(--ink-2) }
+.ledger-since { text-transform: none }
 @media (max-width: 640px) {
   .ledger-tools { display: grid }
   .ledger-tools { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) }
