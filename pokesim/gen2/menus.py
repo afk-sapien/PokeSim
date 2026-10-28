@@ -25,6 +25,18 @@ SLOT_MAX_STEPS = 12000
 PRE_GAME = ('title', 'main_menu')
 
 
+def stack_pointer(pb):
+    """The CPU stack pointer, as policies.base reads it, without loading the Gen 1 policies."""
+    return getattr(getattr(pb, 'register_file', None), 'SP', None)
+
+
+def core_ui(mem):
+    """Observation hints for a Core machine. With the stack pointer, a Bill's PC list presses
+    A through the wait that a traded nickname holding <CONT> starts."""
+    sp = getattr(mem, 'sp', None)
+    return None if sp is None else {'sp': sp}
+
+
 def menu_label(row):
     if row.count('│') >= 2:
         row = row.rsplit('│', 2)[-2]
@@ -217,7 +229,7 @@ class CoreTask:
             machine = self.machine = self.build(snapshot)
             if machine is None:
                 return self.end(mem)
-        action = machine.step(mem.memory, None)
+        action = machine.step(mem.memory, core_ui(mem))
         if isinstance(action, Done):
             self.result = action
             self.after(action)

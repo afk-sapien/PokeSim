@@ -358,9 +358,6 @@ class Participant:
         collection = getattr(getattr(self.emu, 'policy', None), 'collection', None)
         demanded = collection.demand() if hasattr(collection, 'demand') else {}
         demanded = demanded if isinstance(demanded, dict) else {}
-        # A Gen I PC list stops at a nickname holding a text command, so the Pokémon stored after it
-        # can never be withdrawn. Offering one fails every trade that picks it.
-        unlisted = set(getattr(getattr(self.emu, 'snapshot', None), 'unlisted', ()) or ())
         # The spare the game lets go next. A trade that picks it races the release and then finds
         # the Pokémon gone, so it fails as one that cannot be identified.
         releasing = getattr(getattr(self.emu, 'policy', None), 'release_spare', None)
@@ -370,7 +367,7 @@ class Participant:
             from ..strategy_data import SPECIES
             side = mon.as_side()
             slot = (side['box'] - 1, side['position'] - 1)
-            if slot in unlisted or slot == releasing:
+            if slot == releasing:
                 continue
             candidates.append({**side, **capsule_fields(records.get((side['box'], side['position'], side['species'])) or {}),
                                'last_copy': inv.held[mon.species] == 1,

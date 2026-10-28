@@ -1031,7 +1031,8 @@ class Policy:
         self.shopping = (item, min(amount, (snapshot.money - reserve) // price))
         return self.person(snapshot, 'buy_balls', 'Restock adventure supplies', self.data.maps[mid]['constant'], script)
 
-    def step(self, snapshot, memory):
+    def step(self, snapshot, memory, sp=None):
+        """``sp`` is the CPU stack pointer, which Core's PC lists read to press through a <CONT> name."""
         self.memory = memory
         self.decisions += 1
         from .postgame import observe
@@ -1047,6 +1048,7 @@ class Policy:
             self.backing_out = True
             return Action(self.rescue.popleft(), 8, 24)
         mem = Memory(memory, self.data)
+        mem.sp = sp
         from .ruins import control
         puzzle = control(snapshot, mem) if snapshot.started and snapshot.valid else None
         if puzzle:

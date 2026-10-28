@@ -19,6 +19,7 @@ from ..checkpoints import CheckpointStore, open_state
 from ..experimental.gen2 import identify
 from .data import GameData
 from .emulator import BUTTONS, SCREEN_FRAMES, count_league
+from .menus import stack_pointer
 from .policy import Policy
 from .store_stock import StoreStock
 
@@ -101,7 +102,7 @@ class HeadlessRun:
             self.frame += frames
 
     def step(self, snapshot):
-        action = self.policy.step(snapshot, self.pb.memory)
+        action = self.policy.step(snapshot, self.pb.memory, stack_pointer(self.pb))
         if action.button:
             self.pb.button_press(action.button)
         try:

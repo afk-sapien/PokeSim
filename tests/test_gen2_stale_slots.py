@@ -103,10 +103,10 @@ def test_trade_preparation_drops_the_battle_shortcut_once_the_battle_ends(monkey
         raise Stop
 
     policy = SimpleNamespace(menu=Attack(2), nav=SimpleNamespace(regions=None), in_league=lambda snapshot: False,
-                             step=lambda snapshot, memory: 'battle step')
+                             step=lambda snapshot, memory, sp=None: 'battle step')
     emu = SimpleNamespace(policy=policy, frame=10, data=None, pb=SimpleNamespace(memory=None))
     prep = preparation.Preparation(emu, {'deadline': float('inf'), 'started_frame': 0})
-    monkeypatch.setattr(preparation, 'Memory', lambda memory, data: None)
+    monkeypatch.setattr(preparation, 'Memory', lambda memory, data: SimpleNamespace())
     monkeypatch.setattr(preparation, 'update_world', stop)
     assert prep.advance(SimpleNamespace(in_battle=True)) == 'battle step'
     assert isinstance(policy.menu, Attack)

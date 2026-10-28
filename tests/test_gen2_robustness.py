@@ -487,12 +487,12 @@ def test_gen2_preparation_hands_an_unloaded_map_to_the_policy(monkeypatch):
     import time
     from pokesim.gen2 import preparation
     from pokesim.gen2.policy import Action
-    monkeypatch.setattr(preparation, 'Memory', lambda memory, data: None)
+    monkeypatch.setattr(preparation, 'Memory', lambda memory, data: SimpleNamespace())
     monkeypatch.setattr(preparation, 'update_world', lambda regions, snapshot: None)
     pressed = Action('a', 8, 52)
     regions = SimpleNamespace(observe=lambda mid, grid: None)
     nav = SimpleNamespace(regions=regions, collision=lambda snapshot, memory: pytest.fail('collision read for an unloaded map'))
-    policy = SimpleNamespace(nav=nav, menu=None, in_league=lambda snapshot: False, step=lambda snapshot, memory: pressed)
+    policy = SimpleNamespace(nav=nav, menu=None, in_league=lambda snapshot: False, step=lambda snapshot, memory, sp=None: pressed)
     emu = SimpleNamespace(policy=policy, data=SimpleNamespace(maps={1: {}}), pb=SimpleNamespace(memory=None), frame=10)
     prep = preparation.Preparation(emu, {'deadline': time.time() + 60, 'started_frame': 0, 'protect': [], 'wished': []})
     snapshot = SimpleNamespace(map=0, started=True, in_battle=False)

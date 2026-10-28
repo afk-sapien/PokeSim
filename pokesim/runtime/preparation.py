@@ -72,9 +72,6 @@ def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False, prote
         raise ValueError('Choose an identifiable Pokémon')
     # A manual trade is the owner's own choice, so trade preferences and party protection do not apply.
     location, position, chosen = selection(snapshot, {} if manual else emu.store.trade_preferences(), trade_key)
-    if location == 'box' and (chosen['box'], position) in snapshot.unlisted:
-        raise ValueError('The PC list cannot reach this Pokémon. A nickname stored before it in the box '
-                         'stops the list from drawing, so it cannot be withdrawn')
     if location != 'box' and not manual:
         raise ValueError('Choose a boxed spare. Active party members are protected')
     if type(max_frames) is not int or not 60 <= max_frames <= 216000:
