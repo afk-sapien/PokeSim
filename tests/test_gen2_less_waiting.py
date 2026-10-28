@@ -153,6 +153,21 @@ def test_patrol_labels_say_what_the_walk_does_and_waits_for(data):
     assert waiting_label(policy, contest, entered, 'day').endswith("waits for Thursday, as today's was entered")
 
 
+def test_full_boxes_with_nothing_to_release_wait_for_no_catch_and_free_the_league(data):
+    """A Gold run with all 14 boxes full walked Route 29 for 98% of a replay "while Lapras waits for
+    Friday", and the same wait kept the postgame League run from starting. Lapras could not be kept."""
+    from pokesim.gen2.collection import clock_wait, postgame_league, waiting_label
+    policy = expedition(data)
+    policy.completed = {'champion': 1}
+    full = snapshot([lead()], owned=set(range(1, 252)) - {131})
+    assert clock_wait(policy, full, clock(), 'day') == 'Lapras waits for Friday'
+    policy.no_room = lambda snapshot: True
+    full.can_catch = False
+    assert clock_wait(policy, full, clock(), 'day') is None
+    assert waiting_label(policy, full, clock(), 'day') == 'Walk the grass until a trade or a return brings new collection work'
+    assert postgame_league(policy, full, clock(), 'day')
+
+
 def test_a_time_of_day_encounter_names_the_species_and_the_time(data):
     from pokesim.gen2.collection import clock_wait
     night = {row['species'] for row in data.encounters if row['time'] == 'night'}
