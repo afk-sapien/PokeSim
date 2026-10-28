@@ -1,5 +1,6 @@
 """Route 23 checks a badge at each gate, and the Indigo Plateau shop is only a plan with all eight."""
-from pokesim.policies.navigation import ROUTE_23_CHECKS, Navigator
+from pokesim.policies.gates import ROUTE_23_GUARDS
+from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
 from pokesim.policies.shopping import ShoppingController
 from pokesim.strategy_data import ITEMS, MAPS
@@ -17,7 +18,10 @@ def test_a_missing_badge_closes_its_row_and_earning_it_opens_the_road():
     assert all(target != (ROUTE_23, 12, 56) for _, target in nav.neighbors((ROUTE_23, 12, 57), 0))
     nav.update_story(snap(map=ROUTE_23, badges=255))
     assert not any(m == ROUTE_23 for m, _, _ in nav.story_blocks)
-    assert {badge for _, badge in ROUTE_23_CHECKS} == {2, 4, 8, 16, 32, 64, 128}
+    assert {badge for _, badge, _ in ROUTE_23_GUARDS} == {2, 4, 8, 16, 32, 64, 128}
+    # The Earth Badge guard stands west of the Victory Road exit and leaves its east side open.
+    nav.update_story(snap(map=ROUTE_23, badges=127))
+    assert (ROUTE_23, 13, 35) in nav.story_blocks and (ROUTE_23, 14, 35) not in nav.story_blocks
 
 
 def test_the_indigo_plateau_shop_is_not_a_restock_plan_without_every_badge():

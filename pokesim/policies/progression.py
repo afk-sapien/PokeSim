@@ -3,7 +3,7 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 
 from .battle import replacement_slot
-from .navigation import CINNABAR_GYM_GATES, cinnabar_gate_open
+from .navigation import CINNABAR_GYM_DOORS, cinnabar_gate_open
 from .team import readiness
 
 from ..game_data import current_variant
@@ -148,7 +148,7 @@ def gym_goal(s, bit):
     if key == "volcano":
         # Each locked door opens after beating the quiz trainer whose text follows the one before.
         # Super Nerd 2 opens the first door, so the first locked door names the trainer to face.
-        locked = next((i for i in range(len(CINNABAR_GYM_GATES)) if not cinnabar_gate_open(s.event_flags, i)), None)
+        locked = next((i for i in range(len(CINNABAR_GYM_DOORS)) if not cinnabar_gate_open(s.event_flags, i)), None)
         if locked is not None:
             return replace(object_goal(key, "Open Blaine's gym doors", "Beat the quiz trainer guarding the next locked door",
                                        gym, f"SUPER_NERD{locked + 2}"), help=GYM_HELP[key])
