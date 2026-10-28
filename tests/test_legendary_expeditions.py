@@ -26,7 +26,7 @@ def test_mewtwo_project_has_a_longer_budget_and_new_retry_key(monkeypatch):
     c = Collection()
     c.completed_champion = True
     c.elapsed = 2000
-    c.attempts['131:static:227:MEWTWO'] = 999999
+    c.director.monitor.stand_down('131:static:227:MEWTWO', c.elapsed)
     monkeypatch.setattr(c, 'sources', lambda: {sid(150): [{'map': MAPS['CERULEAN_CAVE_B1F'],
                     'method': 'static', 'fragment': 'MEWTWO', 'flag': 'EVENT_BEAT_MEWTWO'}]})
     monkeypatch.setattr(c.director, 'select', lambda rows, *args, **kw: next(p for w,p in rows if p.get('legendary')))

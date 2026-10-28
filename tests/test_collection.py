@@ -76,7 +76,7 @@ def test_hunt_deadline_survives_restart_and_yields_to_story():
     restored.observe(state(frame=100))
     restored.observe(state(frame=160))
     assert restored.project is None
-    assert restored.attempts['hunt'] > restored.elapsed
+    assert restored.director.waiting('hunt', restored.elapsed)
     assert restored.cooldown > 0
 
 
@@ -354,7 +354,7 @@ def test_moving_between_familiar_maps_cannot_extend_a_failed_expedition():
     for frame in range(0, 7500, 120):
         c.observe(state(frame=frame, map=MAPS['ROUTE_1'] if frame % 240 else MAPS['ROUTE_2'], x=frame % 20))
     assert c.project is None
-    assert c.attempts['ditto'] > c.elapsed
+    assert c.director.waiting('ditto', c.elapsed)
     assert 'No encounter' in c.history[-1]
 
 
@@ -378,7 +378,7 @@ def test_stationary_recovery_abandons_project_without_losing_game_progress():
     p.collection.elapsed = 10000
     p.recover_stall(state(frame=300))
     assert p.collection.project is None
-    assert p.collection.attempts['ditto'] > p.collection.elapsed
+    assert p.collection.director.waiting('ditto', p.collection.elapsed)
     assert p.collection.elapsed - p.collection.last_choice >= 600
     assert p.recoveries == 1
 
@@ -391,7 +391,7 @@ def test_repeated_flags_do_not_count_as_fresh_expedition_progress():
         events = flags('EVENT_GOT_POKEDEX', 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1') if frame % 240 else flags('EVENT_GOT_POKEDEX')
         c.observe(state(frame=frame, event_flags=events, x=frame % 20))
     assert c.project is None
-    assert c.attempts['ditto'] > c.elapsed
+    assert c.director.waiting('ditto', c.elapsed)
 
 
 def test_unreachable_evolution_and_trainer_candidates_are_not_selected():

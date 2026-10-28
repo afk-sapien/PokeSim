@@ -17,6 +17,7 @@ YELLOW = current_variant() == 'yellow'
 REFUSES_EVOLUTION = {25} if YELLOW else set()
 from .navigation import DIRS
 from .director import AdventureDirector
+from ..planning.monitor import CONTINUE, SPENT, ProgressEvent
 from . import training, marathon, league_rotation
 from ..shiny import is_shiny
 from ..milestones import is_perfect, level_credit
@@ -26,6 +27,9 @@ from ..ram import MAP_NAMES
 DATA = load('collection.json')
 EVOS = {int(sid): rows for sid, rows in DATA['evolutions'].items()}
 PROJECT_COOLDOWN = 12000
+# Frames out of battle a project other than training may go without an encounter, a training gain,
+# a new map or another sign of progress before it stands down. Two minutes of play.
+IDLE_BUDGET = 7200
 CENTERS = tuple((m, 13, 4) for m, w in WORLD.items() if 'Pokecenter' in w['name'] and w['width'] == 14)
 CENTERS += ((MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8),)
 LEAGUE = {MAPS[n] for n in ('LORELEIS_ROOM','BRUNOS_ROOM','AGATHAS_ROOM','LANCES_ROOM','CHAMPIONS_ROOM','HALL_OF_FAME')}
@@ -172,7 +176,6 @@ class Collection:
         self.project = None
         self.remaining = 0
         self.cooldown = 0
-        self.attempts = {}
         self.elapsed = 0
         self.last_frame = None
         self.last_choice = -600
@@ -184,7 +187,6 @@ class Collection:
         self.history = []
         self.completed_champion = False
         self.league_appearances = {}
-        self.idle_frames = 0
         self.project_maps = []
         self.project_flags = []
         self.progress_token = None
@@ -231,8 +233,29 @@ class Collection:
         return project.get('species') if project.get('repeat') else None
 
     def state_dict(self):
-        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','attempts','elapsed','eevee_choice','dojo_choice','history','completed_champion','league_appearances','idle_frames','project_maps','project_flags','last_repeat','last_hunt','quality_searches','next_marathon','marathon_records','activity_events')},
+        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','elapsed','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','next_marathon','marathon_records','activity_events')},
                 'director': self.director.state_dict()}
+
+    @property
+    def project_key(self):
+        return self.project.get('key', self.project['method']) if self.project else None
+
+    @property
+    def idle_frames(self):
+        """Frames the current project has gone without progress, as the director's monitor counts them."""
+        key = self.project_key
+        return self.director.monitor.spent(key) if key is not None else 0
+
+    @idle_frames.setter
+    def idle_frames(self, frames):
+        key = self.project_key
+        if key is None:
+            return
+        spent = self.director.monitor._table(SPENT)
+        if frames:
+            spent[key] = frames
+        else:
+            spent.pop(key, None)
 
     def load(self, data):
         self.next_marathon = data.get('next_marathon', 0)
@@ -242,6 +265,11 @@ class Collection:
             if key in data and key != 'director':
                 setattr(self,key,data[key])
         self.director.load(data.get('director', {}))
+        # Older saves kept the retry times and the idle count beside the director.
+        for key, deadline in (data.get('attempts') or {}).items():
+            self.director.resume(key, deadline, self.elapsed)
+        if 'idle_frames' in data and 'progress' not in data.get('director', {}):
+            self.idle_frames = data['idle_frames']
         self.marathon_previous = None
         if self.eevee_choice not in (134, 135, 136):
             self.eevee_choice = 134
@@ -271,8 +299,7 @@ class Collection:
         self.finish_marathon(False)
         label = name(project['species']) if project.get('species') else project['method'].title()
         progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
-        self.attempts[project.get('key', label)] = self.director.finish(
-            project, self.elapsed, False, reason, progressed)
+        self.director.finish(project, self.elapsed, False, reason, progressed)
         self.history = (self.history + [f'Changed plan: {label}. {reason}'])[-6:]
         self.project = None
         self.remaining = 0
@@ -327,7 +354,8 @@ class Collection:
         for chosen, flag in ((106, 'EVENT_GOT_HITMONLEE'), (107, 'EVENT_GOT_HITMONCHAN')):
             if event_set(s.event_flags, flag):
                 self.dojo_choice = chosen
-        self.attempts = {key: deadline for key, deadline in self.attempts.items() if deadline > self.elapsed}
+        self.director.forget_expired(self.elapsed)
+        idle = CONTINUE
         if self.project and (not suspended or self.project['method'] in ('train', 'marathon')):
             project = self.project
             training_reason = None
@@ -393,13 +421,13 @@ class Collection:
                 # Time spent in a battle is not time lost wandering. A rematch that crossed Diglett's
                 # Cave without Repels met a wild Pokémon every few steps, and those battles alone used up
                 # the two minutes, so the League loop was given up before it left the cave.
-                if not s.in_battle:
-                    self.idle_frames += delta
-                if ((token is not None and self.progress_token is not None and token != self.progress_token)
-                        or new_flags or s.map not in self.project_maps
-                        or (self.project['method'] in ('grass', 'surf', 'fish', 'safari', 'trade') or legendary_project(self.project))
-                        and self.was_in_battle and not s.in_battle):
-                    self.idle_frames = 0
+                moved = ((token is not None and self.progress_token is not None and token != self.progress_token)
+                         or new_flags or s.map not in self.project_maps
+                         or (self.project['method'] in ('grass', 'surf', 'fish', 'safari', 'trade') or legendary_project(self.project))
+                         and self.was_in_battle and not s.in_battle)
+                self.director.monitor.start(self.project_key, budget=IDLE_BUDGET)
+                idle = self.director.monitor.observe(self.project_key, 0 if s.in_battle else delta,
+                                                     (ProgressEvent('project'),) if moved else ())
                 if s.map not in self.project_maps:
                     self.project_maps.append(s.map)
                 self.progress_token = token
@@ -459,13 +487,11 @@ class Collection:
                     label = f'{name(project["parent"])} toward level {project["target_level"]}'
                 self.history = (self.history + [f'{"Completed" if finished else "Will revisit"}: {label}'])[-6:]
                 progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
-                retry = self.director.finish(project, self.elapsed, bool(finished),
-                                             'Target reached' if finished else 'Expedition time budget reached', progressed)
-                if retry:
-                    self.attempts[self.project['key']] = retry
+                self.director.finish(project, self.elapsed, bool(finished),
+                                     'Target reached' if finished else 'Expedition time budget reached', progressed)
                 self.project = None
                 self.cooldown = 1200 if self.completed_champion else PROJECT_COOLDOWN
-            elif project['method'] != 'train' and self.idle_frames >= 7200 and not s.in_battle:
+            elif idle.stand_down and not s.in_battle:
                 self.abandon('No encounter, training gain, or new route in two minutes')
         key = (s.owned, s.items, s.stored_pokemon, tuple((p.species,p.level) for p in s.party), s.event_flags, s.hidden_objects, self.completed_champion, self.version)
         if key != self.report_key:
@@ -615,7 +641,7 @@ class Collection:
                 key = f'train:{project.get("trainee_key") or project["parent"]}:{project["target_level"]}'
                 if project.get('scoped_partner'):
                     key += ':' + str(project['parent']) + ':' + project.get('trainee_nick', '')
-            if self.attempts.get(key,0) <= self.elapsed:
+            if not self.director.waiting(key, self.elapsed):
                 goal = self.goal(s, project)
                 distance = distance_to(goal.targets) if goal and goal.targets else None
                 if distance is not None:
