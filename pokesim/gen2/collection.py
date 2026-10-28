@@ -149,6 +149,14 @@ def held_counts(snapshot):
 # Slowking or Kingdra. Magnemite's Metal Coat is left out: it would have to move to Onix or Scyther.
 ITEM_CARRIERS = {61: ('KINGS_ROCK', 186), 79: ('KINGS_ROCK', 199), 117: ('DRAGON_SCALE', 230)}
 _ITEM_HUNTS = [None, None]
+CARRIER_ITEM_ODDS = 0.02
+# A carrier hunt stands down after a decision budget: this many times the wild battles its spot is
+# expected to take for the item, at DECISIONS_PER_BATTLE each, and never more than two game hours.
+# Silver spent about a third of its frames on carrier hunts, and a count of battles never fired
+# because the hunt met only a few battles an hour on its spot.
+CARRIER_ROUNDS = 3
+DECISIONS_PER_BATTLE = 75
+CARRIER_DECISIONS = 14000
 
 
 def item_hunts(policy, snapshot):
@@ -175,6 +183,39 @@ def item_hunts(policy, snapshot):
             result[species] = item
     _ITEM_HUNTS[:] = [key, result]
     return result
+
+
+HUNT_GOALS = {'collection_hunt', 'collection_fish', 'collection_field'}
+
+
+def carrier_budget(target):
+    """Decisions a carrier hunt may spend before it stands down: CARRIER_ROUNDS times the wild battles
+    expected for the item, from the carrier's encounter rate on its spot, capped at CARRIER_DECISIONS."""
+    battles = CARRIER_ROUNDS / (min(100, max(1, target['chance'])) / 100 * CARRIER_ITEM_ODDS)
+    return min(CARRIER_DECISIONS, round(battles * DECISIONS_PER_BATTLE))
+
+
+def observe_carriers(policy, snapshot):
+    """Count each decision spent hunting a carrier target, summed across target restarts. A target kept
+    while training, storage or another errand runs first costs nothing."""
+    target = policy.collection.get('target')
+    goal = getattr(policy, 'goal', None)
+    if (not target or goal is None or goal.key not in HUNT_GOALS
+            or target['species'] not in item_hunts(policy, snapshot)):
+        return
+    counts = policy.collection.setdefault('carrier_decisions', {})
+    counts[str(target['species'])] = counts.get(str(target['species']), 0) + 1
+
+
+def carriers_exhausted(policy, snapshot, target):
+    """Stand a carrier hunt down once it spent carrier_budget(target) decisions without the item."""
+    counts = policy.collection.get('carrier_decisions') or {}
+    species = target['species']
+    if counts.get(str(species), 0) < carrier_budget(target) or species not in item_hunts(policy, snapshot):
+        return False
+    counts.pop(str(species))
+    stand_down(policy, hunt_key(species))
+    return True
 
 
 PEER_STORE = 'peer_store'
@@ -581,6 +622,7 @@ def journey(policy, snapshot, mem, Goal):
     room = not policy.no_room(snapshot)
     if (target and (not wanted(policy, snapshot, target['species']) or not matching_time(target['time'], current_time)
                    or policy.decisions - target['started'] > 12000 or not room
+                   or carriers_exhausted(policy, snapshot, target)
                    or standing_down(policy, hunt_key(target['species'])))):
         state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
         state['target'] = target = None

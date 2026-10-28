@@ -1023,6 +1023,8 @@ class Policy:
         self.decisions += 1
         from .postgame import observe
         observe(self, snapshot)
+        from .collection import observe_carriers
+        observe_carriers(self, snapshot)
         self.backing_out = False
         self.shiny_missed = None
         if self.rescue:

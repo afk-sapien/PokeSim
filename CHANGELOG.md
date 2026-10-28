@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Stop Gold and Silver hunting a wild King's Rock or Dragon Scale without end. Only 2% of wild Poliwhirl, Slowpoke and Seadra hold one, and replays of one Silver run spent about a third of their frames hunting carriers that held nothing. A carrier hunt now sets itself aside for a while once its time runs out, and other work comes first. The time allowed is three times the battles the item is expected to take on that spot, and at most two game hours. A carrier met with the item is still caught at any time.
+
 - Run the League again only once every other postgame project is done. Blue spent 46% of its frames on rematches with its money at the 999,999 cap, and Gold spent 28% even with Pokédex, shiny and training work left. Pokédex entries, legendaries, shiny hunts, better-DV hunts and training now come first in all six games. A rematch runs when money is short or nothing else is left, so a finished run still keeps playing.
 
 - Stop Crystal turning back to a Pokémon Center again and again on the walk to the Battle Tower. Plain wild battles on the way to Olivine were fought, so the team kept needing to heal, and replays of one Crystal run spent about a third of their frames on that walk. The walk now runs from plain wild battles the way a shiny search does. A shiny or a wanted Pokémon is still caught.
