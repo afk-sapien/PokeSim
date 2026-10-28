@@ -150,6 +150,27 @@ def test_the_catch_battle_does_not_spend_a_better_dv_hunt_budget():
     assert standing_down(policy, hunt_key(55))
 
 
+def test_battles_on_the_way_do_not_spend_a_hunt_budget():
+    policy = Policy('collection_fish')
+    activity = {'kind': 'quality', 'species': 118, 'row': {'chance': 70, 'map': 835}, 'caught': 0,
+                'expected': search_expected(70)}
+    policy.collection['postgame'] = {'activity': activity}
+    budget = round(3 * search_expected(70))
+    for _ in range(budget - 1):
+        collection.observe_search(policy, SimpleNamespace(map=835, in_battle=0))
+    # Cave battles in Room 1 on the way back from the PC are travel, not the search.
+    for _ in range(2 * budget):
+        collection.observe_search(policy, SimpleNamespace(map=834, in_battle=1, enemy_species=95))
+    assert not standing_down(policy, hunt_key(118))
+    collection.observe_search(policy, SimpleNamespace(map=835, in_battle=1, enemy_species=129))
+    assert standing_down(policy, hunt_key(118))
+    policy = Policy('collection_hunt')
+    policy.collection['target'] = {'species': 147, 'map': 50, 'chance': 10, 'expected': search_expected(10)}
+    for _ in range(2 * round(3 * search_expected(10))):
+        collection.observe_search(policy, SimpleNamespace(map=49, in_battle=1, enemy_species=20))
+    assert not standing_down(policy, hunt_key(147))
+
+
 def test_an_older_save_moves_its_counts_onto_the_monitor():
     policy = Policy(None)
     policy.collection = {'carrier_decisions': {'61': 500}, 'activity_team': ['a'], 'activity_blocked': 5,
