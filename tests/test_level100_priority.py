@@ -96,7 +96,8 @@ def test_director_prioritizes_training_but_keeps_other_activities():
     assert selected['near100'] > 250
     assert selected['near100'] > selected['repeat'] + selected['money']
     assert selected['low'] == 0
-    assert selected['repeat'] > 0 and selected['money'] > 0
+    # A rematch only gets a turn when money is short or nothing else is on offer.
+    assert selected['repeat'] > 0 and selected['money'] == 0
     assert d.select(rows, rng, urgent=True)['key'] == 'money'
 
 

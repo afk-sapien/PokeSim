@@ -52,6 +52,9 @@ class AdventureDirector:
         # game hours with Dragonite one evolution away.
         if not (urgent and any(category(p) == 'supplies' for _, p in candidates)):
             candidates = [(w, p) for w, p in candidates if new_entry(p)] or candidates
+            # A rematch is the fallback once nothing else is left. The variety rule kept handing it
+            # every third turn, and Blue spent 46% of its frames rematching with money at the cap.
+            candidates = [(w, p) for w, p in candidates if p['method'] != 'rematch'] or candidates
         groups = {}
         for weight, project in candidates:
             groups.setdefault(category(project), []).append((weight, project))

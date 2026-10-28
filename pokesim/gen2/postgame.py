@@ -1,8 +1,9 @@
 """What a finished Gold, Silver or Crystal run does once the Pokédex work runs out.
 
 Red, Blue and Yellow keep playing after the collection is done: they hunt better-DV copies of owned
-species, train the best copy of each species ten levels at a time and run the League again, picking
-among those in rotation. This module is the same director for Gen II, plus a shiny search.
+species and train the best copy of each species ten levels at a time, picking among those in
+rotation. This module is the same director for Gen II, plus a shiny search. A League run is the
+fallback once none of those is left, so a finished run never goes quiet.
 
 A shiny search could take tens of thousands of encounters, so it is never run to completion. Each
 outing checks up to 100 wild encounters on one grass map, then lets two other activities take their
@@ -31,7 +32,7 @@ SHINY_MAX_FRAMES = 60 * 60 * 60
 HUNT_BALLS = 5
 # A copy below this level with an ordinary DV draw waits for its better-DV hunts before training.
 HUNT_FIRST_BELOW = 80
-WEIGHTS = {'quality': 4, 'train': 4, 'shiny': 2, 'league': 1}
+WEIGHTS = {'quality': 4, 'train': 4, 'shiny': 2}
 RECENT = 6
 
 
@@ -220,9 +221,6 @@ def choose(policy, snapshot, mem, current_time):
     options['train'] = lambda: trainee(policy, snapshot)
     if hunting and data.get('shiny_break', 0) == 0:
         options['shiny'] = lambda: shiny(policy, snapshot, current_time)
-    from .collection import postgame_league
-    if not any(mon.egg for mon in snapshot.party) and postgame_league(policy, snapshot, mem, current_time):
-        options['league'] = lambda: {'kind': 'league'}
     recent = data['recent']
     rng = random.Random(policy.decisions)
     while options:
@@ -233,6 +231,11 @@ def choose(policy, snapshot, mem, current_time):
         activity = options.pop(kind)()
         if activity:
             return activity
+    # A League run is the fallback once nothing else is left. In the rotation it took about one turn
+    # in eleven but ran far longer than a hunt, so Gold spent 28% of its frames on rematches.
+    from .collection import postgame_league
+    if not any(mon.egg for mon in snapshot.party) and postgame_league(policy, snapshot, mem, current_time):
+        return {'kind': 'league'}
     return None
 
 

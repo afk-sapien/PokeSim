@@ -902,8 +902,10 @@ class Collection:
             return object_goal('collect_'+mode,'Collect '+name(sid),'Visit a remaining source for the Pokédex',room,fragment)
         if mode=='rematch':
             if s.map != MAPS['INDIGO_PLATEAU_LOBBY']:
-                return at('collect_rematch','Return for a League rematch','Earn prize money and experience for collecting','INDIGO_PLATEAU_LOBBY',8,10)
-            return object_goal('league_lorelei','Begin a League rematch','Fund the next expeditions','LORELEIS_ROOM','LORELEI')
+                # Money stops at 999,999, so at the cap a rematch earns experience only.
+                purpose = 'Earn prize money and experience for collecting' if s.money < 999999 else 'Earn experience while nothing else is left'
+                return at('collect_rematch','Return for a League rematch',purpose,'INDIGO_PLATEAU_LOBBY',8,10)
+            return object_goal('league_lorelei','Begin a League rematch','Fund the next expeditions' if s.money < 999999 else 'Run the League again','LORELEIS_ROOM','LORELEI')
         if mode=='trainer':
             return object_goal('collect_trainer','Meet an unbeaten trainer','Explore and earn experience and supplies',WORLD[p['map']]['symbol'],p['fragment'])
         if mode=='explore':
