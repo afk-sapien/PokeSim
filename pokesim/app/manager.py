@@ -888,7 +888,8 @@ def create_app(manager, shutdown=lambda: None):
             return JSONResponse({'active': status['active'], 'revision': status['revision']})
         item = re.fullmatch(r'item-artwork/([0-9]{1,3})\.png', path)
         if item:
-            image = await run_in_threadpool(manager.assets.item_artwork.path, int(item[1]))
+            image = await run_in_threadpool(manager.assets.item_artwork.path, int(item[1]),
+                                            version=adventure['version'])
             if image is None:
                 raise HTTPException(404)
             return FileResponse(image, media_type='image/png')

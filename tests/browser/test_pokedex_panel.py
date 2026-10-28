@@ -79,6 +79,28 @@ def test_scrolled_content_never_shows_between_the_rail_and_what_is_pinned_under_
         assert filters['y'] - (rail['y'] + rail['height']) <= 4
 
 
+def test_where_to_look_shows_the_detail_of_a_gift_or_prize(page, game):
+    # Gold, Silver and Crystal list gifts and prizes with a detail line, such as the coin price.
+    url, _, _, _ = game
+
+    def with_prize(route):
+        body = route.fetch().json()
+        body['entries'][1]['locations'] = [{'map': 2835, 'map_name': 'Goldenrod Game Corner', 'method': 'prize',
+                                            'method_label': 'Game Corner prize', 'level_range': None,
+                                            'detail': '100 coins'}]
+        route.fulfill(json=body)
+
+    page.route(re.compile(r'/api/pokedex(\?|$)'), with_prize)
+    page.goto(url + '/pokedex')
+    page.locator('.dex-card[data-dex="2"]').click()
+    place = page.locator('#detail .place-list:not(.source-list) li')
+    expect(place).to_have_count(1)
+    expect(place).to_contain_text('Goldenrod Game Corner')
+    expect(place.locator('small')).to_have_text('100 coins')
+    expect(page.locator('#detail').get_by_role('link', name='Serebii')).to_have_attribute(
+        'href', 'https://www.serebii.net/pokedex/002.shtml')
+
+
 def test_pokedex_detail_lists_how_the_sim_gets_a_species(page, game):
     url, _, _, _ = game
     sources = [{'kind': 'npc_trade', 'label': 'Kyle’s trade', 'detail': 'Violet City, for a Bellsprout',

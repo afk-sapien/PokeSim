@@ -335,6 +335,9 @@ def test_the_board_proxies_portraits_so_either_lineage_renders():
     assert served.get('/sprites/red/129.png').content == b'portrait'
     assert served.get('/sprites/nobody/129.png').status_code == 404
     assert served.get('/sprites/red/999.png').status_code == 404
+    # A Gold, Silver or Crystal partner can offer anything up to Celebi.
+    assert served.get('/sprites/red/251.png').content == b'portrait'
+    assert served.get('/sprites/red/252.png').status_code == 404
     drawn = client(payloads, sprite=lambda url, dex, timeout=5.0: None).get('/sprites/red/129.png')
     assert drawn.status_code == 200 and drawn.headers['content-type'] == 'image/svg+xml'
 

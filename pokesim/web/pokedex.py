@@ -7,8 +7,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from urllib.parse import quote
-
+from ..dex_links import links
 from ..game_data import load
 from ..pokemon import STAT_NAMES, TYPES, dv_rating, experience_details, stored_condition, stored_strength
 from ..investment import assessment
@@ -56,13 +55,6 @@ def evolution_step(sid: int, step: dict) -> dict:
              else "Link trade" if method == "trade" else title(method))
     return {"dex": SPECIES.get(sid, {}).get("dex"), "name": species_name(sid),
             "method": method, "requirement": requirement, "label": label}
-
-
-def links(name: str, dex: int) -> dict:
-    """Outside references for players who want more than the cartridge knows."""
-    return {"bulbapedia": f"https://bulbapedia.bulbagarden.net/wiki/{quote(name)}_(Pok%C3%A9mon)",
-            "serebii": f"https://www.serebii.net/pokedex/{dex:03d}.shtml",
-            "wikipedia": f"https://en.wikipedia.org/wiki/Special:Search?search={quote(name + ' Pokémon')}"}
 
 
 def locations(rows: list[dict]) -> list[dict]:

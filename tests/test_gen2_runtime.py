@@ -148,6 +148,20 @@ def test_real_reference_has_all_species_correct_types_and_versioned_encounters(r
     assert reference['count'] == 251
     assert reference['entries'][154]['hms'] == ['Cut']
     assert reference['entries'][18]['locations']
+    by = {entry['name']: entry for entry in reference['entries']}
+    # Read more uses Red's link targets with the Johto name and number.
+    assert by['Celebi']['links']['serebii'] == 'https://www.serebii.net/pokedex/251.shtml'
+    assert by['Mr.Mime']['links']['bulbapedia'] == 'https://bulbapedia.bulbagarden.net/wiki/Mr.%20Mime_(Pok%C3%A9mon)'
+    places = lambda name, method: [place for place in by[name]['locations'] if place['method'] == method]
+    assert places('Eevee', 'gift')[0]['detail'] == 'Bill’s Eevee'
+    assert places('Lugia', 'static')[0]['map_name'] == 'Whirl Islands chamber'
+    assert places('Onix', 'trade') == [{'map': data.map_ids['VIOLET_KYLES_HOUSE'], 'map_name': "Violet Kyle's House",
+                                        'method': 'trade', 'method_label': 'In-game trade', 'level_range': None,
+                                        'gives': 'Bellsprout', 'detail': 'Kyle trades it'}]
+    assert places('Abra' if data.game == 'crystal' else 'Eevee', 'prize')[0]['method_label'] == 'Game Corner prize'
+    fishing = places('Magikarp', 'fish')
+    assert {place['rod'] for place in fishing} == {'Old Rod', 'Good Rod', 'Super Rod'}
+    assert all(place['method_label'] == 'Fishing' for place in fishing)
     assert data.matchups[(data.types['DARK'], data.types['PSYCHIC_TYPE'])] == 2
 
 

@@ -37,9 +37,9 @@ class Assets:
         self.cancelled = threading.Event()
         from .portrait_packs import PortraitPacks
         self.portraits = PortraitPacks.portraits(registry, self.cancelled)
-        from .item_artwork import IMAGES
-        self.item_artwork = PortraitPacks(registry, self.cancelled, images=IMAGES,
-                                         folder='/sprites/items/', pack='item-artwork', setting='item_artwork')
+        from .item_artwork import SETS, VERSION_SETS
+        self.item_artwork = PortraitPacks(registry, self.cancelled, sets=SETS, legacy='generation-i',
+                                         versions=VERSION_SETS, pack='item-artwork', setting='item_artwork')
 
     def install_rom(self, raw):
         return self.add_cartridge(raw)['rom']
