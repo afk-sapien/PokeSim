@@ -197,6 +197,12 @@ def catching(snapshot, species):
     return getattr(snapshot, 'in_battle', 0) == 1 and getattr(snapshot, 'enemy_species', None) == species
 
 
+def travelling(snapshot, row):
+    """Whether a wild battle is on away from the map a hunt searches."""
+    here = getattr(snapshot, 'map', None)
+    return getattr(snapshot, 'in_battle', 0) == 1 and here is not None and here != row.get('map', here)
+
+
 def observe_search(policy, snapshot):
     """Count each decision a hunt spends searching against its species, across target restarts.
 
@@ -205,6 +211,9 @@ def observe_search(policy, snapshot):
     The battle with the species itself is the catch, not the search, so it costs nothing either: a
     strong Pokémon at full health can take a dozen balls, more than the whole search was expected to
     take. A carrier's battles are still counted, since most of them hold no item and are the search.
+    A wild battle on the way to the hunt's map costs nothing too. A Gold hunt fishing for Goldeen in
+    Silver Cave Room 2 went back through Room 1 after each trip to the PC, and its cave battles there
+    spent the whole budget, so the hunt stood down with its species biting at 70%.
     """
     goal = getattr(policy, 'goal', None)
     if goal is None or goal.key not in HUNT_GOALS:
@@ -213,13 +222,14 @@ def observe_search(policy, snapshot):
     if target:
         if 'expected' not in target:
             target['expected'] = target_expected(policy, snapshot, target)
-        if catching(snapshot, target['species']) and target['species'] not in item_hunts(policy, snapshot):
+        if travelling(snapshot, target) or (catching(snapshot, target['species'])
+                                            and target['species'] not in item_hunts(policy, snapshot)):
             return
         spend(policy, hunt_key(target['species']), target['expected'])
         return
     activity = (policy.collection.get('postgame') or {}).get('activity')
     if (activity and activity['kind'] == 'quality' and not activity.get('suspended')
-            and not catching(snapshot, activity['species'])):
+            and not catching(snapshot, activity['species']) and not travelling(snapshot, activity['row'])):
         caught = activity.get('caught', 0)
         events = ('catch',) if caught > activity.get('counted', 0) else ()
         activity['counted'] = caught
