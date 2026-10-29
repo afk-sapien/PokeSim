@@ -17,8 +17,9 @@ access to Cut and open Saffron gates.
 ## Johto Marathon
 
 The course starts in New Bark Town, visits Cherrygrove, Violet, Azalea,
-Goldenrod, Ecruteak, and Olivine, then returns through Ecruteak, Goldenrod,
-Azalea, Violet, and Cherrygrove to finish in New Bark Town, with 12 checkpoints.
+Goldenrod, and Ecruteak, then returns through Goldenrod, Azalea, Violet, and
+Cherrygrove to finish in New Bark Town, with 10 checkpoints. A course out to
+Olivine was too long for the 50 minute budget once wild battles were counted.
 Each checkpoint is the tile below the town's Pokémon Center door, or below
 Elm's Lab door in New Bark Town.
 
@@ -26,6 +27,8 @@ Every leg is on land and can be walked both ways, so no leg needs Surf and no
 one-way ledge blocks the way back. Azalea and Goldenrod are joined through Ilex
 Forest, which needs Cut, and Goldenrod and Ecruteak through Route 36, which
 needs Sudowoodo out of the way. The player never flies or surfs during the race.
+The way to New Bark Town is not timed, so the player may fly or surf there,
+which a player in Kanto needs.
 
 It becomes eligible after becoming Champion and finishing four postgame
 activities (better-copy hunts, training, shiny searches or League runs), with

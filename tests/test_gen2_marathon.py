@@ -64,7 +64,7 @@ def run_course(policy, points, frame, gap=600):
 def test_every_leg_walks_both_ways_on_land(data):
     from pokesim.gen2.routes import Regions
     points = marathon.course(data).points
-    assert len(points) == 13 and points[0] == points[-1]
+    assert len(points) == 11 and points[0] == points[-1]
     regions = Regions(data)
     legs = list(zip(points, points[1:]))
     for (a, b) in legs + [(b, a) for a, b in legs]:
@@ -78,7 +78,7 @@ def test_every_leg_walks_both_ways_on_land(data):
 def test_both_courses_share_one_engine(data):
     johto = marathon.course(data)
     assert engine.KANTO.points == engine.COURSE and engine.KANTO.checkpoints == 11
-    assert johto.name == 'Johto Marathon' and johto.checkpoints == 12 and johto.start == 'New Bark Town'
+    assert johto.name == 'Johto Marathon' and johto.checkpoints == 10 and johto.start == 'New Bark Town'
     assert engine.start_event(engine.KANTO)['title'] == 'The Kanto Marathon is on!'
     assert engine.start_event(johto)['title'] == 'The Johto Marathon is on!'
     assert johto.center(data.map_ids['GOLDENROD_POKECENTER_1F']) and not johto.center(data.map_ids['GOLDENROD_CITY'])
@@ -123,16 +123,16 @@ def test_a_full_race_is_timed_journaled_and_recorded(data, monkeypatch):
     frame = run_course(policy, points[:1], 1000)
     assert [event['title'] for event in marathon.take_events(policy)] == ['The Johto Marathon is on!']
     goal = postgame.step(policy, at(points[0], frame), clock(), Goal, 'day')
-    assert goal.map_name == 'CHERRYGROVE_CITY' and 'Checkpoint 1 of 12' in goal.label
+    assert goal.map_name == 'CHERRYGROVE_CITY' and 'Checkpoint 1 of 10' in goal.label
     shown = marathon.details(policy)
-    assert shown['name'] == 'Johto Marathon' and shown['current']['started'] and shown['total_checkpoints'] == 12
+    assert shown['name'] == 'Johto Marathon' and shown['current']['started'] and shown['total_checkpoints'] == 10
     frame = run_course(policy, points[1:], frame)
     assert postgame.state(policy)['activity'] is None
     [finish] = marathon.take_events(policy)
     assert finish['title'] == 'Johto Marathon finished!' and finish['tags'] == 'runner'
-    assert 'Finished in 2:00 game time. 12/12 checkpoints' in finish['body'] and 'First personal best!' in finish['body']
+    assert 'Finished in 1:40 game time. 10/10 checkpoints' in finish['body'] and 'First personal best!' in finish['body']
     records = marathon.records(policy)
-    assert records['records']['completed'] == 1 and records['records']['best_frames'] == 12 * 600
+    assert records['records']['completed'] == 1 and records['records']['best_frames'] == 10 * 600
     assert records['next'] == frame + engine.INTERVAL
     assert marathon.details(policy)['current'] is None
     # The six hour cooldown holds the next race back, then a faster one sets a new best.
@@ -141,7 +141,7 @@ def test_a_full_race_is_timed_journaled_and_recorded(data, monkeypatch):
     activity = start(policy, at(points[0], frame + engine.INTERVAL), monkeypatch)
     run_course(policy, points, frame + engine.INTERVAL, gap=300)
     [_, faster] = marathon.take_events(policy)
-    assert 'New personal best, 1:00 faster!' in faster['body']
+    assert 'New personal best, 0:50 faster!' in faster['body']
     assert marathon.records(policy)['records']['completed'] == 2
 
 
@@ -194,12 +194,18 @@ def test_healing_stops_and_battles_count_during_the_race(data, monkeypatch):
     assert postgame.state(policy)['activity']['gains']['battles'] == 2
 
 
-def test_the_runner_never_flies_or_surfs(data, monkeypatch):
+def test_the_runner_never_flies_or_surfs_past_the_starting_line(data, monkeypatch):
     from pokesim.gen2 import flight
     from pokesim.gen2.collection import arrive
+    points = marathon.course(data).points
     policy = runner_policy(data)
     policy.goal = SimpleNamespace(key='collection_marathon')
     assert arrive(policy, SimpleNamespace()) == 'wait'
+    # The untimed way to New Bark Town may fly or surf, since a player in Kanto has no other way.
+    start(policy, at(points[3], 0), monkeypatch)
+    assert not marathon.racing(policy)
+    postgame.observe(policy, at(points[0], 60))
+    assert marathon.racing(policy)
     source = open(flight.__file__.replace('flight.py', 'policy.py')).read()
-    assert "running = self.goal.key == 'collection_marathon'" in source
+    assert "running = self.goal.key == 'collection_marathon' and racing(self)" in source
     assert 'flight = None if running else shortcut(' in source and 'surf = not running and' in source

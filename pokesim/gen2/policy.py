@@ -1230,8 +1230,10 @@ class Policy:
             prize_errand = self.goal.key in {'collection_coin_case', 'collection_coins', 'collection_prize', 'collection_slots'}
             self.goal = self.healing(snapshot) or (None if prize_errand else self.shop(snapshot)) or self.goal
         target = self.data.map_ids[self.goal.map_name]
-        # A marathon runner covers the course on foot, so neither Fly nor Surf shortens a leg.
-        running = self.goal.key == 'collection_marathon'
+        # A marathon runner covers the course on foot, so neither Fly nor Surf shortens a leg. The way
+        # to the starting line is not timed, and from Kanto it needs both.
+        from .marathon import racing
+        running = self.goal.key == 'collection_marathon' and racing(self)
         from .flight import shortcut
         flight = None if running else shortcut(self, snapshot, mem, target)
         if flight:

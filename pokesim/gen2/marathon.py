@@ -1,12 +1,17 @@
 """The Johto Marathon, run on the same engine as Kanto's from pokesim.policies.marathon.
 
-The course runs from New Bark Town out to Olivine City and back, by land only. Each checkpoint is the
+The course runs from New Bark Town out to Ecruteak City and back, by land only. Each checkpoint is the
 tile below a Pokémon Center door, or below Elm's Lab door in New Bark Town:
 
-New Bark, Cherrygrove, Violet, Azalea, Goldenrod, Ecruteak, Olivine, then the same towns back.
+New Bark, Cherrygrove, Violet, Azalea, Goldenrod, Ecruteak, then the same towns back.
+
+A twelve checkpoint course out to Olivine took 134,000 to 164,000 frames in the replay batch, with
+two of five races stopped by the 180,000 frame budget at the last checkpoint. Turning at Ecruteak
+drops Routes 38 and 39 both ways, so a race fits the budget with room for the way to the start.
 
 Every leg walks both ways without Surf and without a one-way ledge in its way. Ilex Forest needs Cut
-and Route 36 needs Sudowoodo out of the way, so a race waits for both. Fly is not used while racing.
+and Route 36 needs Sudowoodo out of the way, so a race waits for both. Neither Fly nor Surf is used past the
+starting line. The untimed way to New Bark Town may use both, which a player in Kanto needs.
 """
 from ..policies import marathon as engine
 
@@ -18,8 +23,6 @@ TOWNS = (
     ('VIOLET_CITY', 31, 26),
     ('AZALEA_TOWN', 15, 10),
     ('GOLDENROD_CITY', 15, 28),
-    ('ECRUTEAK_CITY', 23, 28),
-    ('OLIVINE_CITY', 13, 22),
     ('ECRUTEAK_CITY', 23, 28),
     ('GOLDENROD_CITY', 15, 28),
     ('AZALEA_TOWN', 15, 10),
@@ -46,7 +49,7 @@ def _course(data):
         points=tuple((data.map_ids[town], x, y) for town, x, y in TOWNS),
         town=lambda map_id: maps[map_id]['name'],
         center=lambda map_id: maps.get(map_id, {}).get('constant', '').endswith('POKECENTER_1F'),
-        body='New Bark Town to Olivine and back, with 12 checkpoints. '
+        body='New Bark Town to Ecruteak and back, with 10 checkpoints. '
              'Wild Pokémon have not agreed to stay off the course.')
 
 
@@ -75,8 +78,9 @@ def candidate(snapshot):
 
 
 def racing(policy):
+    """True once the runner is past the starting line, where the clock runs and the course is on foot."""
     activity = (policy.collection.get('postgame') or {}).get('activity')
-    return bool(activity and activity['kind'] == 'marathon')
+    return bool(activity and activity['kind'] == 'marathon' and activity['checkpoint'] > 0)
 
 
 def observe(policy, snapshot, activity):

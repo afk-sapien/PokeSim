@@ -251,7 +251,7 @@ def test_both_generations_fill_the_same_user_visible_fields(tmp_path, gen2_data)
         assert payload['statistics']['current']['marathons'] is not None
     assert gen1['statistics']['marathon']['name'] == 'Kanto Marathon'
     assert gen2['statistics']['marathon']['name'] == 'Johto Marathon'
-    assert gen2['statistics']['marathon']['total_checkpoints'] == 12
+    assert gen2['statistics']['marathon']['total_checkpoints'] == 10
 
 
 def test_gen2_sales_contest_catches_and_session_trades_reach_the_pages(tmp_path, gen2_data):
