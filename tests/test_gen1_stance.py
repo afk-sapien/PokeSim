@@ -6,9 +6,11 @@ import pytest
 from pokesim.planning.ledger import HP, PP
 from pokesim.planning.stance import FLEE_TRIES, HUNT, STORY, TRAIN, TRAVEL
 from pokesim.policies.battle import Decision, choose_battle, needs_healing
+from pokesim.policies.collection import Collection
 from pokesim.policies.ledger import battle_room, walk_spent
+from pokesim.policies.progression import Goal, teaching_goal, training_goal
 from pokesim.policies.strategic import StrategicPolicy
-from pokesim.strategy_data import ITEMS
+from pokesim.strategy_data import ITEMS, MAPS
 from test_collection import sid, state
 from test_strategy import mon
 
@@ -75,6 +77,34 @@ def test_the_battle_budget_is_the_former_heal_line():
     # 0.15 of Tackle's 35 uses is 5.25, so five uses already ask for a Pokémon Center.
     assert needs_healing((replace(full, pp=(5,)),))
     assert not needs_healing((replace(full, pp=(6,)),))
+
+
+@pytest.mark.parametrize('project', [
+    {'method': 'grass', 'species': sid(16), 'map': MAPS['ROUTE_1']},
+    {'method': 'grass', 'species': sid(16), 'map': MAPS['ROUTE_1'], 'repeat': True},
+    {'method': 'grass', 'species': sid(16), 'map': MAPS['ROUTE_1'], 'repeat': True, 'dv_hunt': True},
+    {'method': 'fish', 'species': sid(129), 'map': MAPS['PALLET_TOWN']},
+])
+def test_every_pokedex_partner_and_quality_hunt_is_a_hunt(project):
+    goal = Collection().project_goal(state(), project)
+    assert goal.key == 'collect_hunt' and goal.kind == HUNT
+
+
+def test_field_move_carrier_hunts_and_training_goals_carry_their_kind():
+    s = state(party=(mon(species=sid(8), level=30),), badges=3, map=MAPS['ROUTE_6'])
+    carrier = teaching_goal('teach_cut', 'Teach Cut', 'Open the route', s)
+    assert carrier.key == 'catch_cut' and carrier.kind == HUNT
+    assert training_goal('route', 'Train', 'Train', 'ROUTE_1').kind == TRAIN
+    assert Goal('heal', 'Heal', 'Heal').kind == STORY
+
+
+def test_a_carrier_hunt_keeps_its_carrier_wanted_while_the_catcher_is_hurt():
+    # Oddish learns Cut. A hurt catcher still fights for it instead of running.
+    hurt = replace(LEAD, hp=20)
+    s = state(in_battle=1, owned=frozenset({1, 43}), party=(hurt,))
+    oddish = mon(species=sid(43), level=40, hp=90, max_hp=90, attack=90, moves=(33,), pp=(35,))
+    decision = choose_battle(s, hurt, oddish, 0, required_move=15, kind=HUNT)
+    assert not decision.stance
 
 
 def test_policy_counts_stance_runs_and_failures(monkeypatch):

@@ -315,7 +315,8 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     # whatever the goal, and runs from a shiny it cannot catch.
     wanted = wild and snapshot.can_catch and (
         collection_target and catch_attempts < capture_limit and (balls or (legendary or shiny) and master is not None)
-        or useful and balls and safe and catch_attempts < (12 if required else 5))
+        # A field-move carrier stays wanted while the catcher is unsafe, so its hunt fights for it.
+        or useful and balls and (safe or required) and catch_attempts < (12 if required else 5))
     encounter = Encounter(wild=wild, wanted=bool(wanted), shiny=bool(wild and shiny and exhausted), tries=flee_tries)
     from .ledger import battle_ledger
     books = battle_ledger()
