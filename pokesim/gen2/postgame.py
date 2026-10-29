@@ -1,51 +1,52 @@
 """What a finished Gold, Silver or Crystal run does once the Pokédex work runs out.
 
 Red, Blue and Yellow keep playing after the collection is done: they hunt better-DV copies of owned
-species and train the best copy of each species ten levels at a time, picking among those in
-rotation. This module is the same director for Gen II, plus a shiny search. A League run is the
-fallback once none of those is left, so a finished run never goes quiet.
+species and train the best copy of each species ten levels at a time. This module is the same work
+for Gen II, plus a shiny search. The utility arbiter (planning/arbiter.py) picks among them:
 
-A shiny search could take tens of thousands of encounters, so it is never run to completion. Each
-outing checks up to 100 wild encounters on one grass map, then lets two other activities take their
-turn before another outing. An hour of simulated gameplay, including travel, is a fallback limit
-if encounters are scarce. A wild shiny met at any time is still always caught, including the last
-encounter of an outing. An ongoing battle finishes before switching activities.
+1. A due Johto Marathon, in Tier.RACE, outranks every upgrade. Its six hour cooldown keeps it rare.
+2. Training is Tier.UPGRADE and goes ahead of better-DV hunts, as in Red, Blue and Yellow.
+3. Better-DV hunts sit in HUNT_TIER, the same constant Gen I uses. A shiny search shares that tier
+   at a value so small that it runs only once no hunt, training or race is offered.
+4. A League run is the fallback once the arbiter has nothing, so a finished run never goes quiet.
+
+A better-DV hunt ends at its first better copy, so the arbiter weighs the next one afresh. A shiny
+search runs until it meets a shiny or stalls, and the arbiter is asked again after each of its wild
+battles, so a race that comes due or any other offer takes over. A wild shiny met at any time is
+still always caught. An ongoing battle finishes before switching activities.
 
 Collection work always comes first: the plan is rebuilt every step and only reaches this module when
 no Pokédex, trade, breeding or clock-gated work is left.
 """
-import random
-
 from pokecore.dvs import dv_probabilities
 from pokecore.gen2.ram import calculated_stats, experience_at
 
 from ..investment import GOOD_TAIL, MIN_UPGRADE, SEARCH_BUDGET
+from ..planning import arbiter, values
+from ..planning.arbiter import Candidate, Tier
 from ..planning.values import QUALITY, quality_catch
+from ..policies.collection import HUNT_TIER
 from .standdown import DECISIONS_PER_BATTLE, forget, hunt_key, search_expected, stand_down, standing_down, train_key
 
-# Copies a better-DV hunt catches at most before it moves on. Its decisions are budgeted per catch by the monitor.
-QUALITY_CATCHES = 3
 # What a better copy is worth, per unit of drop in the species' best DV tail (planner design S3).
 QUALITY_WEIGHT = QUALITY
-SHINY_ENCOUNTERS = 100
-SHINY_BREAK_ACTIVITIES = 2
-# The adventure play clock uses 60 frames per second. Pauses and playback speed do not affect this limit.
-SHINY_MAX_FRAMES = 60 * 60 * 60
+# One wild Pokémon in this many is shiny.
+SHINY_ODDS = 8192
 # Balls a hunt needs on hand to start, the Master Ball aside.
 HUNT_BALLS = 5
 # A copy below this level with an ordinary DV draw waits for its better-DV hunts before training.
 HUNT_FIRST_BELOW = 80
-# A Johto Marathon keeps Gen I's low weight. Its six hour cooldown keeps it rare as well.
-WEIGHTS = {'quality': 4, 'train': 4, 'shiny': 2, 'marathon': 1}
-RECENT = 6
 
 
 def state(policy):
-    data = policy.collection.setdefault('postgame', {'activity': None, 'recent': [], 'searches': {},
-                                                     'shiny_break': 0, 'shiny_maps': []})
+    data = policy.collection.setdefault('postgame', {'activity': None, 'searches': {}, 'shiny_maps': []})
     # Activities finished, which a marathon waits on. Older saves only kept the recent ones, so they
-    # count those.
-    data.setdefault('finished', len(data['recent']))
+    # count those. The rotation's recent list and shiny break are gone with the rotation.
+    data.setdefault('finished', len(data.get('recent', ())))
+    data.pop('recent', None)
+    data.pop('shiny_break', None)
+    data.setdefault('searches', {})
+    data.setdefault('shiny_maps', [])
     return data
 
 
@@ -199,7 +200,7 @@ def finish(policy):
         data.setdefault('effort', {})[str(activity['species'])] = list(effort(policy, activity['species'], activity))
         forget(policy, hunt_key(activity['species']))
     if activity and activity['kind'] == 'shiny':
-        data['shiny_break'] = SHINY_BREAK_ACTIVITIES
+        forget(policy, f'shiny:{activity["row"]["map"]}')
     if activity and activity['kind'] == 'train' and (policy.collection.get('training') or {}).get('postgame'):
         policy.collection['training'] = None
     from .collection import LOADING
@@ -221,20 +222,14 @@ def step(policy, snapshot, mem, Goal, current_time):
     from .collection import while_waiting
     data = state(policy)
     activity = data['activity']
-    if activity and done(policy, snapshot, activity, current_time):
+    if activity and (done(policy, snapshot, activity, current_time) or outranked(policy, snapshot, activity, current_time)):
         finish(policy)
         activity = None
     if activity is None:
         activity = choose(policy, snapshot, mem, current_time)
         if activity is None:
             return None
-        shadow = getattr(policy, 'shadow', None)
-        if shadow is not None:
-            shadow.compare('postgame', lambda: candidates(policy, snapshot, current_time, activity), activity['kind'])
         data['activity'] = activity
-        data['recent'] = (data['recent'] + [activity['kind']])[-RECENT:]
-        if activity['kind'] != 'shiny':
-            data['shiny_break'] = max(0, data.get('shiny_break', 0) - 1)
     kind = activity['kind']
     if kind == 'league':
         # The League loop in collection.journey carries the run on until its Hall of Fame entry.
@@ -282,101 +277,121 @@ def done(policy, snapshot, activity, current_time):
         return True
     if kind == 'quality':
         new = {repr(row) for row in activity['seen']}
+        species = activity['species']
+        # Older saves did not record the tail the hunt set out to beat, so they beat today's best.
+        start = activity.setdefault('tail', best_tail(snapshot, species))
+        better = False
         for mon in held(snapshot):
-            if mon.species == activity['species'] and repr(ident(mon)) not in new:
+            if mon.species == species and repr(ident(mon)) not in new:
                 activity['seen'].append(ident(mon))
                 activity['caught'] += 1
-        # Each better copy makes the next one rarer, so the hunt also ends once the next catch is worth
-        # less per decision than WORTH, as at a rare species whose best copy is already good, or at a
-        # hunt running dry. That ends it before the stand-down budget, which is left for stuck hunts.
-        species = activity['species']
-        return (activity['caught'] >= QUALITY_CATCHES or standing_down(policy, hunt_key(species))
+                better = better or tail(mon) < start
+        # The hunt ends at its first better copy, which makes the next one rarer, so the arbiter weighs
+        # it afresh. It also ends once the next catch is worth less per decision than WORTH, as at a hunt
+        # running dry. That ends it before the stand-down budget, which is left for stuck hunts.
+        activity['better'] = activity.get('better') or better
+        return (activity['better'] or standing_down(policy, hunt_key(species))
                 or not worth_hunting(best_tail(snapshot, species), [activity['row']], effort(policy, species, activity)))
     shinies = sum(mon.shiny for mon in held(snapshot))
-    # Older local checkpoints did not record frames. Give them one bounded outing from now.
-    started = activity.setdefault('started_frame', snapshot.frame)
-    return (shinies > activity['shinies'] or activity.get('encounters', 0) >= SHINY_ENCOUNTERS
-            or snapshot.frame - started >= SHINY_MAX_FRAMES or standing_down(policy, stall_key(policy)))
+    return shinies > activity['shinies'] or standing_down(policy, stall_key(policy))
+
+
+def hunting(policy, snapshot):
+    """Whether a hunt may start: room for a catch, a ball pocket that can catch and HUNT_BALLS balls."""
+    return not policy.no_room(snapshot) and snapshot.can_catch and balls(policy, snapshot) >= HUNT_BALLS
+
+
+def offers(policy, snapshot, current_time, shiny_search=True):
+    """What each postgame activity would start now, by kind. Asking changes no saved state."""
+    found = {}
+    if hunting(policy, snapshot):
+        found['quality'] = quality(policy, snapshot, current_time)
+    found['train'] = trainee(policy, snapshot)
+    from . import marathon
+    if marathon.eligible(policy, snapshot, state(policy)['finished']):
+        found['marathon'] = marathon.candidate(snapshot)
+    if shiny_search and hunting(policy, snapshot):
+        found['shiny'] = shiny(policy, snapshot, current_time)
+    return {kind: activity for kind, activity in found.items() if activity}
 
 
 def choose(policy, snapshot, mem, current_time):
-    """Pick the next activity in rotation, the way Gen I's director spreads its projects."""
-    data = state(policy)
-    options = {}
-    hunting = (not policy.no_room(snapshot) and snapshot.can_catch and balls(policy, snapshot) >= HUNT_BALLS)
-    if hunting:
-        options['quality'] = lambda: quality(policy, snapshot, current_time)
-    options['train'] = lambda: trainee(policy, snapshot)
-    from . import marathon
-    if marathon.eligible(policy, snapshot, data['finished']):
-        options['marathon'] = lambda: marathon.candidate(snapshot)
-    recent = data['recent']
-    rng = random.Random(policy.decisions)
-    while options:
-        repeat = recent[-1] if len(recent) >= 2 and recent[-1] == recent[-2] else None
-        kinds = [kind for kind in options if kind != repeat] or list(options)
-        weights = [WEIGHTS[kind] / (1 + recent.count(kind)) for kind in kinds]
-        kind = rng.choices(kinds, weights)[0]
-        activity = options.pop(kind)()
-        if activity:
-            return activity
-    # A shiny search is filler. One wild Pokémon in 8192 is shiny, so a search earns far less per
-    # decision than WORTH, and in the rotation each 100-battle outing took about 150,000 frames
-    # without a catch. It runs only once no better-DV hunt or training is left.
-    if hunting and data.get('shiny_break', 0) == 0:
-        activity = shiny(policy, snapshot, current_time)
-        if activity:
-            return activity
-    # A League run is the fallback once nothing else is left. In the rotation it took about one turn
-    # in eleven but ran far longer than a hunt, so Gold spent 28% of its frames on rematches.
+    """The activity the arbiter picks, or a League run once it has nothing."""
+    found = offers(policy, snapshot, current_time)
+    options = [candidate(policy, snapshot, activity) for activity in found.values()]
+    pick = arbiter.choose(options, snapshot)
+    shadow = getattr(policy, 'shadow', None)
+    if shadow is not None and pick is not None:
+        # The arbiter decides here, so this point always agrees, as Gen I's collection point does.
+        shadow.compare('postgame', lambda: options, pick.key)
+    if pick is not None:
+        activity = found[pick.key]
+        if activity['kind'] == 'shiny':
+            data = state(policy)
+            data['shiny_maps'] = (data['shiny_maps'] + [activity['row']['map']])[-3:]
+        return activity
+    # A League run is the fallback once nothing else is left. In the old rotation it took about one
+    # turn in eleven but ran far longer than a hunt, so Gold spent 28% of its frames on rematches.
     from .collection import postgame_league
     if not any(mon.egg for mon in snapshot.party) and postgame_league(policy, snapshot, mem, current_time):
         return {'kind': 'league'}
     return None
 
 
-# Shadow mode estimates in decisions, the unit of the postgame's own search costs, which step 5
-# tightens: ten levels of training, from the Silver Charmander above, and one League run.
-TRAIN_DECISIONS = 3400
-LEAGUE_DECISIONS = 20000
+def outranked(policy, snapshot, activity, current_time):
+    """Whether another offer outranks the shiny search in progress, asked once after each of its battles.
 
-
-def candidates(policy, snapshot, current_time, chosen):
-    """The arbiter's candidates for the postgame rotation, for shadow mode only.
-
-    The rotation draws one activity at random, so the others are asked here for what they would
-    start. Asking a better-DV hunt or a trainee changes no saved state. A shiny search is only
-    offered, never asked, since asking it records its map, and a League run only when it was drawn.
+    A shiny search has no end of its own short of a shiny, so this is what hands the turn back.
     """
-    from ..planning.arbiter import Candidate, Tier
-    from ..planning import values
-    data = state(policy)
-    hunting = not policy.no_room(snapshot) and snapshot.can_catch and balls(policy, snapshot) >= HUNT_BALLS
-    found = {'quality': quality(policy, snapshot, current_time) if hunting and chosen['kind'] != 'quality' else None,
-             'train': trainee(policy, snapshot) if chosen['kind'] != 'train' else None}
-    found[chosen['kind']] = chosen
-    result = []
-    hunt = found.get('quality')
-    if hunt:
-        mon = max((mon for mon in held(snapshot) if mon.species == hunt['species']), key=lambda mon: potential(policy.data, mon))
-        result.append(Candidate('quality', Tier.PROGRESS, catch_value(tail(mon)), hunt['expected'], goal='postgame quality'))
-    trainee_found = found.get('train')
-    if trainee_found:
-        level = max((mon.level for mon in held(snapshot) if ident(mon) == trainee_found['identity']), default=0)
-        steps = max(1, trainee_found['level_goal'] - level)
-        result.append(Candidate('train', Tier.PROGRESS, values.level_step(level, trainee_found['level_goal']),
-                                TRAIN_DECISIONS * steps / 10, goal='postgame train'))
-    if hunting and data.get('shiny_break', 0) == 0 or chosen['kind'] == 'shiny':
-        result.append(Candidate('shiny', Tier.FILLER, values.SMALL, SHINY_ENCOUNTERS * DECISIONS_PER_BATTLE,
-                                goal='postgame shiny'))
-    if chosen['kind'] == 'marathon':
+    if activity['kind'] != 'shiny' or activity.get('in_battle') or snapshot.in_battle:
+        return False
+    met = activity.get('encounters', 0)
+    if met <= activity.get('asked', 0):
+        return False
+    activity['asked'] = met
+    found = offers(policy, snapshot, current_time, shiny_search=False)
+    options = [candidate(policy, snapshot, other) for other in found.values()] + [candidate(policy, snapshot, activity)]
+    pick = arbiter.choose(options, snapshot)
+    return pick is not None and pick.key != 'shiny'
+
+
+# Estimates in decisions, the unit of the postgame's own search costs: ten levels of training, from a
+# Silver Charmander that took about 3400 decisions per ten levels.
+TRAIN_DECISIONS = 3400
+
+
+def candidate(policy, snapshot, activity):
+    """The arbiter's candidate for a postgame activity, in decisions.
+
+    A better-DV hunt is worth each catch's expected drop in the best DV tail, for the catches it takes
+    to find one better copy, priced from the rate on site after the effort spent there. Training is
+    worth its share of the level 100 credit. A race and a shiny search are worth SMALL, and their tiers
+    rank them.
+    """
+    kind = activity['kind']
+    if kind == 'quality':
+        species = activity['species']
+        mon = max((mon for mon in held(snapshot) if mon.species == species), key=lambda mon: potential(policy.data, mon))
+        odds = tail(mon)
+        needed = 1 / max(odds, 1e-6)
+        decisions, catches = effort(policy, species)
+        per_catch = (search_expected(activity['row'].get('chance', 10)) + decisions) / (1 + catches)
+        on_site = search_expected(activity['row'].get('chance', 10))
+        travel = max(0, (activity.get('expected') or on_site) - on_site)
+        return Candidate('quality', HUNT_TIER, catch_value(odds) * needed, travel + per_catch * needed,
+                         goal='postgame quality')
+    if kind == 'train':
+        level = max((mon.level for mon in held(snapshot) if ident(mon) == activity['identity']), default=0)
+        steps = max(1, activity['level_goal'] - level)
+        return Candidate('train', Tier.UPGRADE, values.level_step(level, activity['level_goal']),
+                         TRAIN_DECISIONS * steps / 10, goal='postgame train')
+    if kind == 'marathon':
         from ..planning.cost import FRAMES_PER_BATTLE
         from ..policies.marathon import BUDGET
-        result.append(Candidate('marathon', Tier.FILLER, values.SMALL,
-                                BUDGET // (FRAMES_PER_BATTLE // DECISIONS_PER_BATTLE), goal='postgame marathon'))
-    if chosen['kind'] == 'league':
-        result.append(Candidate('league', Tier.FILLER, values.rematch(False), LEAGUE_DECISIONS, goal='postgame league'))
-    return result
+        return Candidate('marathon', Tier.RACE, values.SMALL, BUDGET // (FRAMES_PER_BATTLE // DECISIONS_PER_BATTLE),
+                         goal='postgame marathon')
+    return Candidate('shiny', Tier.FILLER, values.SMALL, activity.get('expected') or search_expected(100, odds=1 / SHINY_ODDS),
+                     goal='postgame shiny')
 
 
 def huntable(policy, snapshot, current_time=None):
@@ -393,7 +408,8 @@ def huntable(policy, snapshot, current_time=None):
 
 
 def reachable(policy, snapshot, rows):
-    """The closest searchable row with a route there, as a target, or None."""
+    """The searchable row with a route there that is expected to take the fewest decisions, travel
+    included, as a target, or None."""
     from .collection import encounter_points
     groups = {}
     for row in rows:
@@ -403,7 +419,7 @@ def reachable(policy, snapshot, rows):
     for key, row in groups.items():
         route = policy.nav.route(snapshot.map, key[0])
         if route is not None:
-            ranked.append((len(route) + 50 / max(1, row['chance']), key, row))
+            ranked.append((search_expected(row['chance'], len(route)), key, row))
     for _, (mid, method, rare), row in sorted(ranked, key=lambda entry: entry[0])[:4]:
         points = encounter_points(policy, snapshot, mid, method, rare=rare)
         if points and policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True):
@@ -414,7 +430,7 @@ def reachable(policy, snapshot, rows):
 def quality(policy, snapshot, current_time):
     """A better-DV hunt for the owned species whose next catch earns the most per decision.
 
-    A party species still goes first. A species whose next catch earns less than WORTH is left out.
+    A species whose next catch earns less than WORTH is left out.
     """
     from .collection import wanted
     searches = state(policy)['searches']
@@ -429,10 +445,9 @@ def quality(policy, snapshot, current_time):
         if (not worth_hunting(odds, rows[species], spent) or searches.get(str(species), 0) >= SEARCH_BUDGET
                 or standing_down(policy, hunt_key(species)) or wanted(policy, snapshot, species)):
             continue
-        party = any(other.species == species and other.box is None for other in held(snapshot))
         rate = max(catch_rate(odds, row, spent) for row in rows[species])
-        candidates.append((not party, -rate, species, odds, spent))
-    for _, _, species, odds, spent in sorted(candidates)[:6]:
+        candidates.append((-rate, species, odds, spent))
+    for _, species, odds, spent in sorted(candidates)[:6]:
         row = reachable(policy, snapshot, rows[species])
         if row and worth_hunting(odds, [row], spent):
             seen = [ident(mon) for mon in held(snapshot) if mon.species == species]
@@ -440,7 +455,8 @@ def quality(policy, snapshot, current_time):
             route = nav.route(snapshot.map, row['map']) if nav is not None else None
             expected = search_expected(row.get('chance', 10), len(route) if route is not None else 0)
             return {'kind': 'quality', 'species': species, 'row': dict(row, started=policy.decisions),
-                    'started': policy.decisions, 'seen': seen, 'caught': 0, 'expected': expected}
+                    'started': policy.decisions, 'seen': seen, 'caught': 0, 'expected': expected,
+                    'tail': best_tail(snapshot, species)}
     return None
 
 
@@ -460,13 +476,14 @@ def shiny(policy, snapshot, current_time):
         route = policy.nav.route(snapshot.map, mid)
         if route is not None:
             ranked.append((mid in data['shiny_maps'], -len(species), len(route), mid))
-    for _, _, _, mid in sorted(ranked)[:4]:
+    for _, _, maps, mid in sorted(ranked)[:4]:
         points = encounter_points(policy, snapshot, mid, 'grass')
         if points and policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True):
-            data['shiny_maps'] = (data['shiny_maps'] + [mid])[-3:]
+            # Asking changes no saved state. The map counts as searched once the arbiter picks it.
             row = {'map': mid, 'method': 'grass', 'time': 'any', 'species': None,
                    'chance': 100, 'started': policy.decisions}
-            return {'kind': 'shiny', 'row': row, 'started': policy.decisions, 'started_frame': snapshot.frame,
+            return {'kind': 'shiny', 'row': row, 'started': policy.decisions, 'maps': maps,
+                    'expected': search_expected(100, maps, odds=1 / SHINY_ODDS),
                     'encounters': 0, 'in_battle': False,
                     'shinies': sum(mon.shiny for mon in held(snapshot))}
     return None

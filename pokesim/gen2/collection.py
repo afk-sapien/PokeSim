@@ -238,6 +238,16 @@ def observe_search(policy, snapshot):
         activity['counted'] = caught
         expected = activity.get('expected') or search_expected(activity['row'].get('chance', 10))
         spend(policy, hunt_key(activity['species']), expected, events, progressed=caught > 0)
+    elif (activity and activity['kind'] == 'shiny' and not activity.get('suspended')
+          and not travelling(snapshot, activity['row'])):
+        # A shiny search is for any wild battle on its map, so each one met is its progress. It stands
+        # down only when its map stops giving battles, as when its grass cannot be reached.
+        from ..planning.progress import encounters
+        met = activity.get('encounters', 0)
+        events = encounters(activity.get('counted', 0), met)
+        activity['counted'] = met
+        spend(policy, f'shiny:{activity["row"]["map"]}', search_expected(100, activity.get('maps', 0)), events,
+              progressed=met > 0)
 
 
 PEER_STORE = 'peer_store'
@@ -731,7 +741,8 @@ def journey(policy, snapshot, mem, Goal):
             if goal:
                 return goal
             # A finished run keeps playing the way Red, Blue and Yellow do: better-DV hunts, training ten
-            # levels at a time, bounded shiny searches and League runs, in rotation (see postgame).
+            # levels at a time, a due marathon, shiny searches and League runs, as the arbiter picks them
+            # (see postgame).
             from . import postgame
             goal = postgame.journey(policy, snapshot, mem, Goal, current_time)
             if goal:

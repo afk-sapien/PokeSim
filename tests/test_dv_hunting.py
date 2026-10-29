@@ -74,9 +74,23 @@ def test_training_toward_a_credit_ranks_above_every_quality_hunt():
     # Training toward a level 100 credit goes first, even from level 10 against the poorest best copy.
     assert pick(train('train', 90), hunt, tails={sid(10): 10}) == 'train'
     assert pick(train('train', 10), hunt, tails={sid(10): 100}) == 'train'
-    assert HUNT_TIER > Tier.PROGRESS
+    assert HUNT_TIER > Tier.UPGRADE
     assert candidate(hunt, 10, {sid(10): 100}, False, set()).tier == HUNT_TIER
-    assert candidate(train('train', 10), 10, {}, False, set()).tier == Tier.PROGRESS
+    assert candidate(train('train', 10), 10, {}, False, set()).tier == Tier.UPGRADE
+
+
+def test_a_due_marathon_outranks_training_and_quality_hunts_but_not_new_entries():
+    from pokesim.planning.arbiter import Tier
+    from pokesim.policies import marathon
+    from pokesim.policies.collection import HUNT_TIER, candidate
+    race = {**marathon.candidate(), 'key': 'marathon'}
+    assert candidate(race, 0, {}, False, set()).tier == Tier.RACE
+    assert Tier.PROGRESS < Tier.RACE < Tier.UPGRADE < HUNT_TIER
+    hunt = {'method': 'grass', 'key': 'hunt', 'species': sid(10), 'map': 51, 'repeat': True, 'dv_hunt': True,
+            'catch_goal': 3}
+    assert pick(race, train('train', 90), hunt, tails={sid(10): 10}) == 'marathon'
+    entry = {'method': 'grass', 'key': 'entry', 'species': sid(10), 'map': 51}
+    assert pick(race, entry, owned=frozenset()) == 'entry'
 
 
 def test_repeat_batch_and_rotation_survive_checkpoint():

@@ -1,4 +1,4 @@
-"""A finished Gen II run keeps playing the way Red, Blue and Yellow do, with a bounded shiny search."""
+"""A finished Gen II run keeps playing the way Red, Blue and Yellow do, with a shiny search as filler."""
 import os
 from types import SimpleNamespace
 
@@ -141,42 +141,89 @@ def test_a_hunt_running_dry_ends_before_its_stand_down_budget_and_is_not_picked_
     assert postgame.quality(policy, state, 'day') is None
 
 
-def test_a_better_dv_hunt_ends_after_three_catches(data):
+def test_a_better_dv_hunt_ends_at_its_first_better_copy(data):
     from pokesim.gen2 import postgame
     policy = expedition(data)
     first = mon(16)
+    # An older save's hunt kept no starting tail, so it beats the best copy held when it is next checked.
     hunt = {'kind': 'quality', 'species': 16, 'row': row(5), 'started': 1000, 'seen': [postgame.ident(first)], 'caught': 0}
     postgame.state(policy)['activity'] = hunt
-    caught = [mon(16, position=i, dvs=(i, i, i, i, i)) for i in range(1, 3)]
+    caught = [mon(16, position=1, trainer_id=99)]
     assert not postgame.done(policy, snapshot([lead()], [first] + caught), hunt, 'day')
-    caught.append(mon(16, position=3, dvs=(9, 9, 9, 9, 9)))
-    assert postgame.done(policy, snapshot([lead()], [first] + caught), hunt, 'day') and hunt['caught'] == 3
+    assert hunt['tail'] == postgame.tail(first) and hunt['caught'] == 1
+    caught.append(mon(16, position=2, dvs=(0, 12, 12, 12, 12)))
+    assert postgame.done(policy, snapshot([lead()], [first] + caught), hunt, 'day') and hunt['caught'] == 2
     postgame.finish(policy)
     assert postgame.state(policy)['searches'] == {'16': 1} and postgame.state(policy)['activity'] is None
 
 
-def test_a_shiny_outing_counts_encounters_not_turns_and_keeps_its_count_on_reload(data):
+def test_a_shiny_search_counts_encounters_without_a_cap_and_keeps_its_count_on_reload(data):
     import json
     from pokesim.gen2 import postgame
     policy = expedition(data)
-    session = {'kind': 'shiny', 'row': row(5, None), 'started': 1000, 'started_frame': 60000, 'shinies': 0}
+    session = {'kind': 'shiny', 'row': row(5, None), 'started': 1000, 'shinies': 0}
     postgame.state(policy)['activity'] = session
     view = snapshot([lead()], [mon(16)])
     view.map = 5
-    for encounter in range(1, 101):
+    for encounter in range(1, 151):
         view.in_battle = 0
         postgame.observe(policy, view)
         view.in_battle = 1
         for _ in range(10):
             postgame.observe(policy, view)
         assert session['encounters'] == encounter
-        assert postgame.done(policy, view, session, 'day') == (encounter == 100)
+        assert not postgame.done(policy, view, session, 'day')
     # A checkpoint in the final battle cannot count it twice.
     policy.collection = json.loads(json.dumps(policy.collection))
     postgame.observe(policy, view)
-    assert postgame.state(policy)['activity']['encounters'] == 100
+    assert postgame.state(policy)['activity']['encounters'] == 150
     postgame.finish(policy)
-    assert postgame.state(policy)['shiny_break'] == 2
+    assert postgame.state(policy)['finished'] == 1 and 'shiny_break' not in postgame.state(policy)
+
+
+def test_older_saves_drop_the_rotation_state(data):
+    from pokesim.gen2 import postgame
+    policy = expedition(data)
+    policy.collection['postgame'] = {'activity': None, 'recent': ['train', 'shiny'], 'searches': {}, 'shiny_break': 2,
+                                     'shiny_maps': []}
+    data_ = postgame.state(policy)
+    assert data_['finished'] == 2 and 'recent' not in data_ and 'shiny_break' not in data_
+
+
+def test_each_shiny_search_battle_counts_as_progress_and_a_dry_map_stands_down(data):
+    from pokesim.gen2 import collection, postgame
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.standdown import monitor, standing_down
+    policy = expedition(data)
+    session = {'kind': 'shiny', 'row': row(5, None), 'started': 1000, 'shinies': 0, 'maps': 0}
+    postgame.state(policy)['activity'] = session
+    policy.goal = Goal('collection_hunt', 'Search for a shiny in Route 29', 'ROUTE_29', 1, 1)
+    view = snapshot([lead()])
+    view.map, view.in_battle = 5, 0
+    for _ in range(200):
+        collection.observe_search(policy, view)
+    session['encounters'] = 1
+    collection.observe_search(policy, view)
+    assert monitor(policy).spent('shiny:5') == 0
+    # With no battle met for three times the decisions one is expected to take, the map stands down.
+    calls = 0
+    while not standing_down(policy, 'shiny:5') and calls < 1000:
+        collection.observe_search(policy, view)
+        calls += 1
+    assert calls == round(3 * postgame.search_expected(100))
+
+
+def test_shiny_searches_stop_on_a_shiny_and_have_no_time_limit(data):
+    from pokesim.gen2 import postgame
+    policy = expedition(data)
+    session = {'kind': 'shiny', 'row': row(5, None), 'started': 1000, 'shinies': 0}
+    postgame.state(policy)['activity'] = session
+    view = snapshot([lead()], [mon(16)])
+    policy.decisions += 100000
+    view.frame += 10 * 60 * 60 * 60
+    assert not postgame.done(policy, view, session, 'day')
+    view.stored += (mon(16, position=1, shiny=True),)
+    assert postgame.done(policy, view, session, 'day')
 
 
 def test_shiny_outings_ignore_trainers_and_unrelated_wild_battles(data):
@@ -192,71 +239,72 @@ def test_shiny_outings_ignore_trainers_and_unrelated_wild_battles(data):
     assert session.get('encounters', 0) == 0
 
 
-def test_shiny_outings_stop_on_a_catch_or_gameplay_safety_limit(data):
+def offer(monkeypatch, quality=None, train=None, shiny=None, race=False):
+    from pokesim.gen2 import collection, marathon, postgame
+    monkeypatch.setattr(postgame, 'quality', lambda *args: quality)
+    monkeypatch.setattr(postgame, 'trainee', lambda *args: train)
+    monkeypatch.setattr(postgame, 'shiny', lambda *args: shiny)
+    monkeypatch.setattr(marathon, 'eligible', lambda *args: race)
+    monkeypatch.setattr(marathon, 'candidate', lambda snapshot: {'kind': 'marathon'})
+    monkeypatch.setattr(collection, 'postgame_league', lambda *args: True)
+
+
+def test_the_arbiter_ranks_the_postgame_by_tier_then_value_per_decision(data, monkeypatch):
     from pokesim.gen2 import postgame
+    from pokesim.planning.arbiter import Tier
     policy = expedition(data)
-    session = {'kind': 'shiny', 'row': row(5, None), 'started': 1000, 'started_frame': 60000, 'shinies': 0}
-    postgame.state(policy)['activity'] = session
-    view = snapshot([lead()], [mon(16)])
-    policy.decisions += 100000
-    assert not postgame.done(policy, view, session, 'day')
-    view.stored += (mon(16, position=1, shiny=True),)
-    assert postgame.done(policy, view, session, 'day')
-    view.stored = ()
-    view.frame += postgame.SHINY_MAX_FRAMES - 1
-    assert not postgame.done(policy, view, session, 'day')
-    view.frame += 1
-    assert postgame.done(policy, view, session, 'day')
+    trainee = mon(19, position=1, level=50, dvs=PERFECT)
+    state = snapshot([lead()], [mon(16), trainee])
+    hunt = {'kind': 'quality', 'species': 16, 'row': row(5), 'expected': postgame.search_expected(30)}
+    train = {'kind': 'train', 'identity': postgame.ident(trainee), 'species': 19, 'level_goal': 60}
+    search = {'kind': 'shiny', 'row': row(7, None), 'shinies': 0}
+    offer(monkeypatch, hunt, train, search)
+    by_kind = {kind: postgame.candidate(policy, state, activity) for kind, activity in
+               (('quality', hunt), ('train', train), ('shiny', search))}
+    # Training outranks better copies, which sit in Gen I's hunt tier with the shiny search.
+    from pokesim.policies.collection import HUNT_TIER
+    assert by_kind['train'].tier == Tier.UPGRADE < by_kind['quality'].tier == HUNT_TIER == by_kind['shiny'].tier
+    assert by_kind['quality'].score > by_kind['shiny'].score
+    assert postgame.choose(policy, state, clock(), 'day') is train
+    offer(monkeypatch, hunt, shiny=search)
+    assert postgame.choose(policy, state, clock(), 'day') is hunt
+    # A due race outranks both, and its own cooldown keeps it rare.
+    offer(monkeypatch, hunt, train, search, race=True)
+    assert postgame.choose(policy, state, clock(), 'day') == {'kind': 'marathon'}
+    # With nothing else on offer the shiny search runs, ahead of the League, and its map counts as searched.
+    offer(monkeypatch, shiny=search)
+    assert postgame.choose(policy, state, clock(), 'day') is search and postgame.state(policy)['shiny_maps'] == [7]
+    offer(monkeypatch)
+    assert postgame.choose(policy, state, clock(), 'day') == {'kind': 'league'}
 
 
-def test_two_other_activities_take_their_turn_before_another_shiny_outing(data, monkeypatch):
-    from pokesim.gen2 import collection, postgame
+def test_a_shiny_search_asks_the_arbiter_again_after_each_battle(data, monkeypatch):
+    from pokesim.gen2 import postgame
     from pokesim.gen2.policy import Goal
     policy = expedition(data)
-    postgame.state(policy)['activity'] = {'kind': 'shiny'}
-    postgame.finish(policy)
-    view = snapshot([lead()])
-    offered = []
-    for kind in ('quality', 'trainee', 'shiny'):
-        monkeypatch.setattr(postgame, kind, lambda *args, kind=kind: offered.append(kind))
-    monkeypatch.setattr(collection, 'postgame_league', lambda *args: False)
-    assert postgame.choose(policy, view, clock(), 'day') is None
-    assert sorted(offered) == ['quality', 'trainee']
-    # League outings are carried to completion by collection.journey before it calls the director again.
-    monkeypatch.setattr(collection, 'postgame_league', lambda *args: True)
-    monkeypatch.setattr(collection, 'league_funding', lambda *args, **kwargs: 'league')
-    for remaining in (1, 0):
-        assert postgame.step(policy, view, clock(), Goal, 'day') == 'league'
-        assert postgame.state(policy)['shiny_break'] == remaining
-    offered.clear()
-    monkeypatch.setattr(collection, 'postgame_league', lambda *args: False)
-    postgame.choose(policy, view, clock(), 'day')
-    assert 'shiny' in offered
-
-
-
-def test_the_rotation_spreads_the_activities_like_gen_one(data, monkeypatch):
-    from pokesim.gen2 import collection, postgame
-    for kind, name in (('quality', 'quality'), ('train', 'trainee'), ('shiny', 'shiny')):
-        monkeypatch.setattr(postgame, name, lambda *args, kind=kind: {'kind': kind})
-    monkeypatch.setattr(collection, 'postgame_league', lambda *args: True)
-    state = snapshot([lead()])
-    picks = []
-    for decisions in range(400):
-        policy = expedition(data, decisions)
-        picks.append(postgame.choose(policy, state, clock(), 'day')['kind'])
-    counts = {kind: picks.count(kind) for kind in (*postgame.WEIGHTS, 'league')}
-    assert counts['quality'] > 0 and counts['train'] > 0
-    # A shiny search is filler, and the League waits behind every other activity.
-    assert counts['shiny'] == counts['league'] == 0
-    for name in ('quality', 'trainee'):
-        monkeypatch.setattr(postgame, name, lambda *args: None)
-    assert postgame.choose(expedition(data), state, clock(), 'day')['kind'] == 'shiny'
-    # Two picks of one kind in a row rule it out for the next pick.
-    for decisions in range(100):
-        policy = expedition(data, decisions)
-        postgame.state(policy)['recent'] = ['train', 'train']
-        assert postgame.choose(policy, state, clock(), 'day')['kind'] != 'train'
+    view = snapshot([lead()], [mon(16)])
+    view.map, view.in_battle = 5, 0
+    session = {'kind': 'shiny', 'row': row(5, None), 'started': 1000, 'shinies': 0, 'encounters': 0, 'in_battle': False}
+    postgame.state(policy)['activity'] = session
+    asked = []
+    offer(monkeypatch)
+    monkeypatch.setattr(postgame, 'offers', lambda *args, **kwargs: asked.append(1) or {})
+    # Nothing is asked before the first battle, or while one is on.
+    assert not postgame.outranked(policy, view, session, 'day') and not asked
+    session['encounters'], view.in_battle = 1, 1
+    assert not postgame.outranked(policy, view, session, 'day') and not asked
+    view.in_battle = 0
+    assert not postgame.outranked(policy, view, session, 'day') and len(asked) == 1
+    # Each battle is asked about once.
+    assert not postgame.outranked(policy, view, session, 'day') and len(asked) == 1
+    # A race that came due takes over once the next battle is over.
+    session['encounters'] = 2
+    monkeypatch.setattr(postgame, 'offers', lambda *args, **kwargs: {'marathon': {'kind': 'marathon'}})
+    assert postgame.outranked(policy, view, session, 'day')
+    session['encounters'] = 3
+    monkeypatch.setattr(postgame, 'choose', lambda *args: None)
+    assert postgame.step(policy, view, clock(), Goal, 'day') is None
+    assert postgame.state(policy)['activity'] is None and postgame.state(policy)['finished'] == 1
 
 
 def test_a_league_run_is_the_fallback_once_nothing_else_is_left(data, monkeypatch):

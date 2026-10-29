@@ -19,8 +19,14 @@ class Tier(IntEnum):
     """A higher tier always goes first, whatever the scores. A lower number is a higher tier."""
     STORY = 0
     UPKEEP = 1
+    # New Pokédex entries and what opens them.
     PROGRESS = 2
-    FILLER = 3
+    # A marathon that is due. It goes after new entries and urgent supplies and before every upgrade,
+    # and its own cooldown keeps it rare (docs/marathon.md).
+    RACE = 3
+    # Better copies, training and other gains to what is already registered.
+    UPGRADE = 4
+    FILLER = 5
 
 
 @dataclass(frozen=True)

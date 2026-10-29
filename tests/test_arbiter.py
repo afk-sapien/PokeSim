@@ -17,6 +17,14 @@ def test_a_higher_tier_always_goes_first():
     assert [c.key for c in rank([filler, progress, upkeep, story])] == ['story', 'heal', 'hunt', 'rematch']
 
 
+def test_a_due_race_goes_after_new_entries_and_before_every_upgrade():
+    entry = candidate('entry', Tier.PROGRESS, value=0.01, frames=10 ** 6)
+    race = candidate('marathon', Tier.RACE, value=0.05, frames=10 ** 6)
+    upgrade = candidate('train', Tier.UPGRADE, value=5.0, frames=10)
+    filler = candidate('shiny', Tier.FILLER, value=50.0, frames=1)
+    assert [c.key for c in rank([filler, upgrade, race, entry])] == ['entry', 'marathon', 'train', 'shiny']
+
+
 def test_within_a_tier_value_per_frame_wins():
     near = candidate('near', value=1.0, frames=10000)
     rich = candidate('rich', value=3.0, frames=20000)

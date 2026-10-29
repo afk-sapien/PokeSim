@@ -64,9 +64,14 @@ where the same party is observed recovering HP, PP, or status, once per visit.
 
 ## When the player races
 
-A marathon has a low selection weight. Missing Pokédex entries and urgent supply
-projects take precedence. Each attempt is followed by at least six simulated
-hours before another can be selected.
+Once due (eligible and the six hour cooldown has passed), the marathon outranks
+better-copy hunts and training. Missing Pokédex entries and urgent supply
+projects still go first. This is a tier of its own in the planner's arbiter,
+the race tier, in all six games, so the order reads straight from the code
+rather than from a tuned value. In Gold, Silver and Crystal a shiny search
+asks the arbiter again after each of its wild battles, so a race that comes due
+during one takes over. Each attempt is followed by at least six simulated hours
+before another can be selected.
 
 The entire attempt, including travel to the start, has a 50-minute simulated-time
 budget. A stalled attempt can end earlier through the normal navigation recovery

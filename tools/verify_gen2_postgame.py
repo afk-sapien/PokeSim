@@ -1,8 +1,9 @@
 """Exercise the postgame director on a private champion save without changing cartridge RAM.
 
 Collection errands are bypassed so each version can exercise the director independently of its
-remaining Pokédex work. Start a real shiny outing, restart during its fiftieth encounter, and let
-the director choose subsequent activities. Receipts distinguish bounded checks from full campaigns.
+remaining Pokédex work. Start a real shiny search, restart during its fiftieth encounter, and let it
+run until it meets ``--encounters`` wild battles or the arbiter hands the turn to another activity.
+Receipts distinguish bounded checks from full campaigns.
 """
 import argparse
 import hashlib
@@ -26,8 +27,8 @@ def main():
     parser.add_argument('--load', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--frames', type=int, default=2000000)
-    parser.add_argument('--hunt-map', help='Pin the first outing to a real grass map for encounter-count checks')
-    parser.add_argument('--first-outing-only', action='store_true')
+    parser.add_argument('--hunt-map', help='Pin the first search to a real grass map for encounter-count checks')
+    parser.add_argument('--encounters', type=int, default=100, help='Wild battles the first search should reach')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     data = GameData.load(args.data, args.game)
@@ -66,7 +67,6 @@ def main():
     pb = open_game(args.load)
     policy = make_policy()
     frame, restarted, outing_done = 0, False, False
-    completed_activities = 0
     transitions, training = [], []
     receipt = {'game': args.game, 'scope': 'focused postgame director with collection errands bypassed',
                'source_sha256': hashlib.sha256(args.load.read_bytes()).hexdigest()}
@@ -87,7 +87,7 @@ def main():
                 current = ('morning', 'day', 'night')[min(2, Memory(pb.memory, data).byte('wTimeOfDay'))]
                 first = postgame.shiny(policy, snapshot, current)
                 if first is None:
-                    raise ValueError('No reachable shiny outing is available')
+                    raise ValueError('No reachable shiny search is available')
                 if args.hunt_map:
                     mid = data.map_ids[args.hunt_map]
                     if not any(row['map'] == mid and row['method'] == 'grass' for row in data.encounters):
@@ -95,7 +95,6 @@ def main():
                     first['row']['map'] = mid
                     receipt['first_hunt_map'] = args.hunt_map
                 postgame.state(policy)['activity'] = first
-                postgame.state(policy)['recent'] = ['shiny']
                 initialized = True
             before = postgame.state(policy)['activity']
             action = policy.step(snapshot, pb.memory)
@@ -104,13 +103,12 @@ def main():
                       (activity or {}).get('started'), (activity or {}).get('level_goal'))
             if marker != previous:
                 transitions.append({'frame': frame, 'kind': marker[0], 'previous_encounters': (before or {}).get('encounters'),
-                                    'shiny_break': postgame.state(policy)['shiny_break'], 'map': snapshot.map_name,
+                                    'map': snapshot.map_name,
                                     'can_catch': snapshot.can_catch, 'balls': postgame.balls(policy, snapshot),
                                     'shinies': sum(mon.shiny for mon in postgame.held(snapshot))})
                 print(transitions[-1], flush=True)
                 previous = marker
                 if outing_done and before and before is not activity and before['kind'] != 'shiny':
-                    completed_activities += 1
                     if before['kind'] == 'train':
                         trained = next((mon for mon in postgame.held(snapshot)
                                         if postgame.ident(mon) == before['identity']), None)
@@ -124,16 +122,14 @@ def main():
                     training.append({'species': chosen.species, 'start_level': chosen.level,
                                      'goal': activity['level_goal'], 'best_potential': True})
             if first and not outing_done and before is first and activity is not first:
+                # The search ended: a shiny, a stall, or the arbiter handed the turn to another activity.
                 outing_done = True
-                receipt['first_outing'] = {'encounters': first['encounters'], 'frames': frame,
-                                           'battle_finished': not snapshot.in_battle}
-                if args.first_outing_only:
-                    break
-            if outing_done and activity and activity['kind'] == 'shiny':
-                receipt['next_shiny_frame'] = frame
+                receipt['first_search'] = {'encounters': first['encounters'], 'frames': frame,
+                                           'battle_finished': not snapshot.in_battle,
+                                           'next': (activity or {}).get('kind')}
                 break
-            if completed_activities >= 2 and postgame.state(policy)['shiny_break'] == 0:
-                receipt['rotation_passed'] = True
+            if first and activity is first and first.get('encounters', 0) >= args.encounters:
+                receipt['first_search'] = {'encounters': first['encounters'], 'frames': frame, 'still_running': True}
                 break
             if first and not restarted and activity is first and first['encounters'] >= 50:
                 path = args.output / 'restart.state'
@@ -165,9 +161,8 @@ def main():
             frame += action.hold + action.gap
         receipt.update(frames=frame, transitions=transitions, training=training,
                        restart_passed=restarted, first_outing_finished=outing_done)
-        receipt['passed'] = bool(restarted and receipt.get('first_outing', {}).get('encounters') == 100
-                                 and (args.first_outing_only or receipt.get('rotation_passed')
-                                      or receipt.get('next_shiny_frame')))
+        search = receipt.get('first_search', {})
+        receipt['passed'] = bool(restarted and (search.get('still_running') or search.get('battle_finished')))
         (args.output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
         with (args.output / 'final.state').open('wb') as stream:
             pb.save_state(stream)
