@@ -299,10 +299,11 @@ class BoulderPlanner:
                     # A clearing push is for squares the player cannot reach yet. With fresh unset
                     # it is only for a player who can reach none of them.
                     missing = frozenset(p for p in squares if not arrives(p, reachable))
-                    if missing != squares and not task[2]:
-                        return None
                     squares = missing
-                    if not squares:
+                    if not squares or missing != task[1] and not task[2]:
+                        # Which squares are in reach is the same from every square of the area,
+                        # so a player walking inside it gets the same answer without a new walk.
+                        self.failed[task_key] = (failure, area)
                         return None
             elif squares is not None and any(arrives(p, reachable) for p in squares):
                 self.path.extend(path)
