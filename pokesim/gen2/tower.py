@@ -76,7 +76,9 @@ def migrate(policy):
 
 def resting_caps(policy):
     """Level caps whose last challenge fell short of seven wins and are still backing off."""
-    caps = {int(key.split(':', 1)[1]) for key in policy.collection.get(STOOD_DOWN) or {} if key.startswith('tower:')}
+    # The room stand-down shares the prefix, so only a key naming a level is a cap.
+    caps = {int(key.split(':', 1)[1]) for key in policy.collection.get(STOOD_DOWN) or {}
+            if key.startswith('tower:') and key.split(':', 1)[1].isdigit()}
     return {cap for cap in caps if standing_down(policy, cap_key(cap), CAP_BACKOFF)}
 
 

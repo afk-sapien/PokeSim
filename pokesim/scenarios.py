@@ -95,6 +95,146 @@ def apply_edits(mem, edits):
             mem[W_MONEY + index] = byte
 
 
+# Gen II edits. Addresses come from the cartridge's symbol file and the layout from Core.
+GEN2_EDITS = ('party', 'money', 'unowned', 'clock', 'boxes', 'tower')
+GEN2_PARTY = {'moves': 2, 'pp': 23, 'status': 32, 'hp': 34, 'max_hp': 36}
+# A box is its count, a species list of 20 and a terminator, then the structs, trainer names and nicknames.
+BOX_SPECIES, BOX_STRUCTS = 1, 22
+
+
+def _gen2_write(memory, symbols, name, values, offset=0):
+    """Write bytes at a named address. WRAM, VRAM and cartridge RAM take the symbol's bank."""
+    bank, start = symbols[name]
+    for index, value in enumerate(values):
+        address = start + offset + index
+        if 0x8000 <= address < 0xE000:
+            memory[bank, address] = value
+        else:
+            memory[address] = value
+
+
+def gen2_edit_party(run, slot, status=None, hp=None, pp=None):
+    """Change one Gen II partner as :func:`edit_party` does a Gen I one."""
+    from pokecore.gen2.ram import Memory
+    from pokecore.gen2.state import PARTY_STRUCT as STRUCT
+    memory, symbols = run.pb.memory, run.data.symbols
+    mem = Memory(memory, run.data)
+    base = slot * STRUCT
+    at = lambda field, size=1: mem.read('wPartyMon1', size, base + GEN2_PARTY[field])  # noqa: E731
+    write = lambda field, values, extra=0: _gen2_write(memory, symbols, 'wPartyMon1', values, base + GEN2_PARTY[field] + extra)  # noqa: E731
+    active = mem.byte('wBattleMode') in (1, 2) and mem.byte('wCurBattleMon') == slot
+    if status is not None:
+        value = STATUS[status] if isinstance(status, str) else status
+        write('status', [value])
+        if active:
+            _gen2_write(memory, symbols, 'wBattleMonStatus', [value])
+    if hp is not None:
+        full = int.from_bytes(at('max_hp', 2), 'big')
+        value = min(full, max(1, round(full * hp)) if isinstance(hp, float) and hp < 1 else int(hp))
+        write('hp', [value >> 8, value & 0xFF])
+        if active:
+            _gen2_write(memory, symbols, 'wBattleMonHP', [value >> 8, value & 0xFF])
+    if pp is not None:
+        moves = at('moves', 4)
+        for index, value in enumerate([pp] * 4 if isinstance(pp, int) else pp):
+            # The top two bits count PP Ups and stay as they are.
+            if moves[index]:
+                byte = at('pp', 4)[index] & 0xC0 | min(value, 0x3F)
+                write('pp', [byte], index)
+                if active:
+                    _gen2_write(memory, symbols, 'wBattleMonPP', [byte], index)
+
+
+def gen2_unown(run, species):
+    """Clear Pokédex numbers from the caught list and the run's history, so the player hunts them again."""
+    from pokecore.gen2.ram import Memory
+    caught = bytearray(Memory(run.pb.memory, run.data).read('wPokedexCaught', 32))
+    for dex in species:
+        caught[(dex - 1) // 8] &= ~(1 << (dex - 1) % 8) & 0xFF
+    _gen2_write(run.pb.memory, run.data.symbols, 'wPokedexCaught', caught)
+    if isinstance(run.history, dict):
+        run.history['owned'] = [dex for dex in run.history.get('owned', ()) if dex not in set(species)]
+
+
+def gen2_clock(run, hour, weekday=None):
+    """Run the cartridge clock forward to the next ``hour`` o'clock, on ``weekday`` when one is named.
+
+    The clock only moves forward, as Gen II reads a clock that went back as a reset. A clock already
+    in that hour, on that day, is left alone.
+    """
+    from pokecore.gen2.clock import clock_elapsed, follow_game_time
+    from pokecore.gen2.state import WEEKDAYS, read_clock
+    now = read_clock(run.pb.memory, run.game)
+    hours = (hour - now['hours']) % 24
+    days = 0 if weekday is None else (WEEKDAYS.index(weekday) - (now['day'] + (now['hours'] + hours) // 24)) % 7
+    if not hours and not days:
+        return
+    seconds = (days * 24 + hours) * 3600 - now['minutes'] * 60 - now['seconds']
+    run.clock = follow_game_time(run.pb, clock_elapsed(run.pb) + seconds)
+
+
+def gen2_fill_boxes(run, box, slot):
+    """Fill every free box slot with copies of the Pokémon stored at ``box``, ``slot`` (both from 0)."""
+    from pokecore.gen2.ram import Memory
+    from pokecore.gen2.state import BOX_CAPACITY, BOX_COUNT, BOX_SIZE, BOX_STRUCT, NAME_LENGTH, box_symbol, read_box_counts
+    memory, symbols = run.pb.memory, run.data.symbols
+    mem = Memory(memory, run.data)
+    counts, active = read_box_counts(memory, run.game)
+    source = mem.read(box_symbol(box, active), BOX_SIZE)
+    if slot >= counts[box]:
+        raise ValueError(f'Box {box} has no Pokémon at slot {slot}')
+    trainers, names = BOX_STRUCTS + BOX_STRUCT * BOX_CAPACITY, BOX_STRUCTS + (BOX_STRUCT + NAME_LENGTH) * BOX_CAPACITY
+    parts = ((BOX_SPECIES, 1), (BOX_STRUCTS, BOX_STRUCT), (trainers, NAME_LENGTH), (names, NAME_LENGTH))
+    for target in range(BOX_COUNT):
+        name = box_symbol(target, active)
+        for position in range(counts[target], BOX_CAPACITY):
+            for start, size in parts:
+                _gen2_write(memory, symbols, name, source[start + slot * size:start + (slot + 1) * size], start + position * size)
+        _gen2_write(memory, symbols, name, [BOX_CAPACITY], 0)
+        _gen2_write(memory, symbols, name, [0xFF], BOX_SPECIES + BOX_CAPACITY)
+
+
+def gen2_tower(run, rested=False, first=False):
+    """Forget the Battle Tower's level cap rests, and with ``first`` its finished challenge, so it is offered again."""
+    from .gen2.standdown import monitor
+    from .planning.monitor import STOOD_DOWN
+    policy = run.policy
+    if rested:
+        tracker = monitor(policy)
+        for key in [key for key in policy.collection.get(STOOD_DOWN) or {} if key.startswith('tower:')]:
+            tracker.clear(key)
+    if first:
+        policy.completed.pop('tower', None)
+        policy.collection.pop('tower_result', None)
+
+
+def check_gen2_edits(edits):
+    """Refuse an edit Gold, Silver and Crystal do not have, such as the Red, Blue and Yellow bag."""
+    unknown = sorted(set(edits) - set(GEN2_EDITS))
+    if unknown:
+        raise ValueError(f'Gen II scenarios cannot edit {", ".join(unknown)}')
+
+
+def apply_gen2_edits(run, edits, reload=False):
+    """Edit a Gold, Silver or Crystal run. A reload keeps the clock it reached, so the clock edit is not repeated."""
+    check_gen2_edits(edits)
+    from pokecore.gen2.ram import Memory
+    for change in edits.get('party', ()):
+        count = min(Memory(run.pb.memory, run.data).byte('wPartyCount'), 6)
+        for slot in range(count) if change['slot'] == 'all' else [change['slot']]:
+            gen2_edit_party(run, slot, change.get('status'), change.get('hp'), change.get('pp'))
+    if edits.get('money') is not None:
+        _gen2_write(run.pb.memory, run.data.symbols, 'wMoney', min(edits['money'], 999999).to_bytes(3, 'big'))
+    if edits.get('unowned'):
+        gen2_unown(run, edits['unowned'])
+    if edits.get('clock') and not reload:
+        gen2_clock(run, edits['clock']['hour'], edits['clock'].get('weekday'))
+    if edits.get('boxes'):
+        gen2_fill_boxes(run, *edits['boxes']['fill'])
+    if edits.get('tower'):
+        gen2_tower(run, edits['tower'].get('rested', False), edits['tower'].get('first', False))
+
+
 @dataclass
 class Scenario:
     folder: Path
@@ -106,7 +246,13 @@ class Scenario:
     max_quiet_game_minutes: int = 90
     battle_timeout_game_minutes: int = 30
     max_reloads: int = 2
-    until: str | None = None          # an event type that must happen, such as badge or champion
+    # An event type that must happen, such as badge or champion. Gen II also marks a timed hunt
+    # (timed_hunt), a stand-down (stand_down) and a ladder pick (rung). Add a colon and a detail to
+    # name one, as in timed_hunt:191 or stand_down:tower:room.
+    until: str | None = None
+    # Game minutes to keep playing after ``until``, in which ``then`` must happen if it is set.
+    after_game_minutes: int = 0
+    then: str | None = None
     fallback: Path | None = None      # an unedited save the second reload goes to, as the League entry save is
     seed: int = 7
     # Trainer ids of linked adventures whose Pokémon the run may release (trade/partners.py). A live
@@ -226,6 +372,40 @@ class Gen2Watch:
 
     def reset(self):
         self.previous, self.opponents, self.checkpoint = None, set(), None
+        policy = getattr(self.run, 'policy', None)
+        collection = getattr(policy, 'collection', {})
+        # A reload restores the policy, so the marks count from what it holds now.
+        self.rung, self.timed = getattr(policy, 'ladder_rung', None), None
+        self.stood = dict(collection.get('stood_down') or {})
+        self.streak, self.loop = (None, 0), None
+
+    def marks(self):
+        """What the planner just did, as (kind, detail, title): a ladder pick, a timed hunt or a stand-down.
+
+        These are not progress. A scenario can wait for one, and the same goal standing down more than
+        three times in a row is a retry loop, which ``loop`` names.
+        """
+        policy = self.run.policy
+        found = []
+        rung = getattr(policy, 'ladder_rung', None)
+        if rung != self.rung and rung is not None:
+            found.append(('rung', rung, f'The ladder picked {rung}'))
+        self.rung = rung
+        target = policy.collection.get('target') or {}
+        timed = (target.get('species'), target.get('time')) if target.get('time') not in (None, 'any') else None
+        if timed and timed != self.timed:
+            name = self.run.data.species.get(timed[0], {}).get('name', timed[0])
+            found.append(('timed_hunt', str(timed[0]), f'Hunting {name} in the {timed[1]}'))
+        self.timed = timed
+        stood = dict(policy.collection.get('stood_down') or {})
+        for key in sorted(key for key, when in stood.items() if self.stood.get(key) != when):
+            found.append(('stand_down', key, f'{key} stood down'))
+            count = self.streak[1] + 1 if self.streak[0] == key else 1
+            self.streak = (key, count)
+            if count > 3 and self.loop is None:
+                self.loop = f'{key} stood down {count} times in a row'
+        self.stood = stood
+        return found
 
     def observe(self, snapshot):
         if not snapshot.valid or not snapshot.started:
@@ -293,16 +473,28 @@ def open_run(scenario, rom=None):
         raise FileNotFoundError(f'No cartridge with SHA-1 {sha1} for {scenario.name}')
     partners = frozenset(value for value in scenario.trade_partners if valid_partner(value))
     if generation == 2:
-        if scenario.edits:
-            raise ValueError('Scenario edits use the Red, Blue and Yellow memory layout')
+        check_gen2_edits(scenario.edits)
         from .gen2.headless import HeadlessRun as Gen2Run
         run = Gen2Run(path, scenario.checkpoint, scenario.seed, rng=random.Random(scenario.seed), data_root=gen2_data_root())
         run.policy.trade_partners = lambda: partners
+        try:
+            apply_gen2_edits(run, scenario.edits)
+        except Exception:
+            run.stop()
+            raise
         return run, Gen2Watch(run)
     run = HeadlessRun(path, scenario.checkpoint, scenario.seed, rng=random.Random(scenario.seed))
     run.policy.trade_partners = lambda: partners
     apply_edits(run.pb.memory, scenario.edits)
     return run, Gen1Watch(run)
+
+
+def matches(wanted, kind, detail):
+    """Whether an event or mark is the ``until`` or ``then`` a scenario names: a kind, or kind:detail."""
+    if not wanted:
+        return False
+    name, _, value = wanted.partition(':')
+    return kind == name and (not value or detail == value)
 
 
 def gen1_variant(scenario):
@@ -327,7 +519,9 @@ def play(scenario, rom=None, progress=None):
         budget = scenario.budget_game_minutes * MINUTE
         battle_frame = None
         worst, reloads, achieved, failure, reached = 0, 0, [], None, scenario.until is None
-        while run.frame - start < budget:
+        end, reached_frame, followed = start + budget, None, scenario.then is None
+        marks = getattr(watch, 'marks', None)
+        while run.frame < end:
             snapshot = read()
             gained, earned = watch.observe(snapshot)
             if gained or earned or run.generation == 2 and snapshot.started and run.waiting(snapshot):
@@ -336,8 +530,18 @@ def play(scenario, rom=None, progress=None):
                 achieved.append({'minute': (run.frame - start) // MINUTE, 'type': kind, 'title': title})
                 if progress:
                     progress(f'{scenario.name}: {achieved[-1]["minute"]}m {title}')
-            if scenario.until and any(kind == scenario.until for kind, _ in gained):
-                reached = True
+            seen = [(kind, None, title) for kind, title in gained] + (marks() if marks else [])
+            if reached and not followed and any(matches(scenario.then, kind, detail) for kind, detail, _ in seen):
+                followed = True
+            if not reached and any(matches(scenario.until, kind, detail) for kind, detail, _ in seen):
+                reached, reached_frame = True, run.frame - start
+                if progress:
+                    progress(f'{scenario.name}: reached {scenario.until} at frame {reached_frame}')
+                if not scenario.after_game_minutes:
+                    break
+                end = run.frame + scenario.after_game_minutes * MINUTE
+            if getattr(watch, 'loop', None):
+                failure = f'a retry loop: {watch.loop}'
                 break
             battle_frame = watch.battle_clock(snapshot, battle_frame, run.frame)
             worst = max(worst, run.frame - progress_frame)
@@ -359,17 +563,21 @@ def play(scenario, rom=None, progress=None):
                     run.reload(scenario.checkpoint)
                     if run.generation == 1:
                         apply_edits(run.pb.memory, scenario.edits)
+                    else:
+                        apply_gen2_edits(run, scenario.edits, reload=True)
                 watch.reset()
                 battle_frame = None
                 continue
             run.step(snapshot)
         if failure is None and not reached:
             failure = f'no {scenario.until} within {scenario.budget_game_minutes} game minutes'
+        elif failure is None and not followed:
+            failure = f'no {scenario.then} within {scenario.after_game_minutes} game minutes after {scenario.until}'
         final = read()
         details = run.policy.details()
         return {'name': scenario.name, 'generation': run.generation, 'passed': failure is None, 'failure': failure,
                 'game_minutes': (run.frame - start) // MINUTE, 'worst_quiet_minutes': worst // MINUTE,
-                'reloads': reloads, 'policy_recoveries': run.policy.recoveries, 'achieved': achieved[-12:],
+                'reached_frame': reached_frame, 'reloads': reloads, 'policy_recoveries': run.policy.recoveries, 'achieved': achieved[-12:],
                 'achievements': len(achieved), 'final_map': final.map_name,
                 'final_party': [[mon.name, mon.level, mon.hp, mon.status] for mon in final.party],
                 'objective': (details.get('objective') or {}).get('title'), 'reason': details.get('reason')}
