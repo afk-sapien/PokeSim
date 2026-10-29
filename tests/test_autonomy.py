@@ -127,6 +127,36 @@ def test_active_shortcut_keeps_control_until_it_is_done():
     assert not policy.shortcut.active and policy.shortcut.last.completed
 
 
+def test_battle_turn_after_the_game_takes_the_decision_is_not_a_recovery():
+    from pokecore.shortcuts import Done
+    from pokesim.policies.battle import Decision
+    from shortcut_fakes import Scripted
+
+    policy = StrategicPolicy(7)
+    memory = bytearray(65536)
+    policy.mem = memory
+    policy.intent, policy.intent_since = Decision('fight', 0), 0
+    policy.observed_map = snap().map
+    policy.shortcut.start(Scripted('choose_move', ['a', Done('Chose the move.', True)]), 'move', 0, memory)
+    policy.step(PolicyContext(snap(frame=118, in_battle=1, party=(mon(),)), 0, 0, memory))
+    assert not policy.shortcut.active and policy.intent_since is None
+    # A knockout, a forced switch and a level up can keep the turn going well past the pending limit.
+    policy.step(PolicyContext(snap(frame=1500, in_battle=1, party=(mon(),), textbox=True), 0, 0, memory))
+    assert policy.recoveries == 0
+
+
+def test_battle_decision_the_game_never_took_is_still_recovered():
+    from pokesim.policies.battle import Decision
+
+    policy = StrategicPolicy(7)
+    memory = bytearray(65536)
+    policy.intent, policy.intent_since = Decision('fight', 0), 0
+    s = snap(frame=1000, in_battle=1, party=(mon(),), textbox=True)
+    policy.observed_map = s.map
+    policy.step(PolicyContext(s, 0, 0, memory))
+    assert policy.recoveries == 1 and policy.intent is None
+
+
 def test_move_replacement_recovers_after_trying_to_delete_an_hm():
     from pokesim.screen import Screen
     from test_strategy import menu
