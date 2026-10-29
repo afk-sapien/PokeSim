@@ -110,7 +110,7 @@ def test_legacy_projects_get_one_migration_and_counters_survive_later_restores()
     assert again.remaining == 1000
 
 
-def test_ready_nearby_partners_have_more_weight_than_distant_boxed_partners():
+def test_ready_nearby_partners_score_above_distant_boxed_partners():
     c = Collection()
     nav = Navigator()
     nav.visits = {(m, 0, 0): 1 for m in WORLD}
@@ -120,15 +120,15 @@ def test_ready_nearby_partners_have_more_weight_than_distant_boxed_partners():
               stored_pokemon=((2, sid(115), 65, 'RESERVE'),),
               items=tuple((ITEMS[item], 10) for item in ('POKE_BALL', 'OLD_ROD', 'GOOD_ROD', 'SUPER_ROD')))
     captured = []
-    def select(candidates, rng, urgent=False):
-        captured.extend(candidates)
-        return next(p for w, p in candidates if p['method'] == 'train')
+    def select(options, projects):
+        captured.extend((option, projects[option.key]) for option in options)
+        return next(p for p in projects.values() if p['method'] == 'train')
     c.director.select = select
     c.observe(s)
     c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
-    rows = [(w, p) for w, p in captured if p['method'] == 'train']
-    weights = {p['parent']: w for w, p in rows}
-    assert weights[sid(113)] > weights[sid(115)]
+    # The boxed partner's walk to the PC and back counts against it.
+    scores = {p['parent']: option.score for option, p in captured if p['method'] == 'train'}
+    assert scores[sid(113)] > scores[sid(115)]
     assert c.remaining == training.TRAINING_BUDGET
 
 

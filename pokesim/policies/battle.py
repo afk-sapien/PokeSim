@@ -12,6 +12,9 @@ W_BATTLE_MON = 0xD014
 W_ENEMY_MON = 0xCFE5
 W_PLAYER_DISABLED_MOVE = 0xD06D
 BALLS = (ITEMS["POKE_BALL"], ITEMS["GREAT_BALL"], ITEMS["ULTRA_BALL"])
+# Balls a hunt stocks while the purse stays above funds_needed. Postgame hunts on three Red saves threw
+# about five Ultra Balls a catch, so the collecting 15 sent them to a mart after every catch.
+HUNT_STOCK = 30
 HM_MOVES = {15, 19, 57, 70, 148}
 FROZEN = 32
 HOPELESS = 'Nobody here can act and this foe never attacks, so only an earlier save ends the battle'
@@ -199,7 +202,10 @@ def healing_item(items, mon, incoming=0):
     return min(choices)[1] if choices else None
 
 
-def shopping_item(items, stock, money, league=False, collecting=False, legendary=False, reserve=300):
+def shopping_item(items, stock, money, league=False, collecting=False, legendary=False, reserve=300,
+                  hunt_reserve=None):
+    """The next item to buy, or None. ``hunt_reserve``, during a hunt, is the money kept back while
+    the ball stock grows past the collecting 15 toward HUNT_STOCK."""
     counts = dict(items)
     if legendary and not counts.get(ITEMS['MASTER_BALL']):
         if ITEMS['ULTRA_BALL'] not in stock:
@@ -225,6 +231,8 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
         target = desired.get(item, 0)
         if item in BALLS:
             target = max(0, (15 if collecting else 5) - ball_count + counts.get(item, 0))
+            if hunt_reserve is not None and PRICES.get(item, 0) <= money - hunt_reserve:
+                target = max(target, HUNT_STOCK - ball_count + counts.get(item, 0))
         if item in HEALING:
             target = max(0, (10 if league else 3) - heal_count + counts.get(item, 0))
         if counts.get(item, 0) >= target or (len(items) >= (20 if league else 18) and item not in counts):

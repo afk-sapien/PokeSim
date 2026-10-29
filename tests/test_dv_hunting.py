@@ -8,7 +8,7 @@ from pokesim.policies.collection import Collection
 from pokesim.policies.director import AdventureDirector
 from pokesim.policies.team import release_target
 from pokesim.trade.preferences import identity
-from test_level100_priority import candidates, individual, postgame
+from test_level100_priority import candidates, individual, pick, postgame, train
 from test_collection import sid
 from test_duplicates import snapshot, stored
 
@@ -28,13 +28,6 @@ def test_training_chooses_best_dvs_within_species_even_at_lower_level():
     assert len(train) == 1
     assert train[0]['trainee_key'] == identity(asdict(good))
     assert train[0]['perfect_partner']
-
-
-def test_perfect_partner_training_beats_high_level_and_missing_star_priorities():
-    d = AdventureDirector()
-    rows = [(1, {'method':'train', 'key':'perfect', 'perfect_partner':True, 'initial_level':3}),
-            (100000, {'method':'train', 'key':'veteran', 'mastery_needed':True, 'initial_level':99})]
-    assert d.select(rows, random.Random(1))['key'] == 'perfect'
 
 
 def test_perfect_partners_in_different_families_can_each_train():
@@ -62,25 +55,28 @@ def test_high_dv_registered_evolution_tracks_exact_partner_until_it_evolves():
     assert c.director.completed['evolution'] == 1
 
 
-def test_hunts_rotate_species_independently_of_number_of_routes():
-    d = AdventureDirector()
-    rng = random.Random(7)
-    rows = [(1, {'method':'grass', 'key':f'route-{i}', 'species':sid(16), 'dv_hunt':True, 'last_hunt':100}) for i in range(50)]
-    rows += [(1, {'method':'grass', 'key':'caterpie', 'species':sid(10), 'dv_hunt':True, 'last_hunt':-1})]
-    assert d.select(rows, rng)['key'] == 'caterpie'
-    for _, p in rows:
-        p['last_hunt'] = -1
-    selections = Counter(d.select(rows, rng)['species'] for _ in range(400))
-    assert 150 < selections[sid(10)] < 250
+def test_hunts_go_to_the_species_with_the_poorest_best_copy_whatever_its_number_of_routes():
+    hunt = {'method': 'grass', 'repeat': True, 'dv_hunt': True, 'catch_goal': 3}
+    rows = [{**hunt, 'key': f'route-{i}', 'species': sid(16), 'map': 12} for i in range(50)]
+    rows += [{**hunt, 'key': 'caterpie', 'species': sid(10), 'map': 51}]
+    assert pick(*rows, tails={sid(16): 10, sid(10): 80}) == 'caterpie'
+    # Once the catches improve its best copy, the turn passes to the other species.
+    assert pick(*rows, tails={sid(16): 60, sid(10): 20}) == 'route-0'
 
 
-def test_dv_hunts_get_regular_time_alongside_training():
-    d = AdventureDirector()
-    rng = random.Random(13)
-    rows = [(1, {'method':'train', 'key':'train', 'initial_level':90}),
-            (1, {'method':'grass', 'key':'hunt', 'species':sid(10), 'repeat':True, 'dv_hunt':True})]
-    selections = Counter(d.select(rows, rng)['key'] for _ in range(400))
-    assert selections['hunt'] > 80 and selections['train'] > 150
+def test_training_toward_a_credit_ranks_above_every_quality_hunt():
+    from pokesim.planning.arbiter import Tier
+    from pokesim.policies.collection import HUNT_TIER, candidate
+    hunt = {'method': 'grass', 'key': 'hunt', 'species': sid(10), 'map': 51, 'repeat': True, 'dv_hunt': True,
+            'catch_goal': 3}
+    # A hunt for a poor best copy beats training that earns no credit.
+    assert pick(train('train', 90, mastery=False), hunt, tails={sid(10): 100}) == 'hunt'
+    # Training toward a level 100 credit goes first, even from level 10 against the poorest best copy.
+    assert pick(train('train', 90), hunt, tails={sid(10): 10}) == 'train'
+    assert pick(train('train', 10), hunt, tails={sid(10): 100}) == 'train'
+    assert HUNT_TIER > Tier.PROGRESS
+    assert candidate(hunt, 10, {sid(10): 100}, False, set()).tier == HUNT_TIER
+    assert candidate(train('train', 10), 10, {}, False, set()).tier == Tier.PROGRESS
 
 
 def test_repeat_batch_and_rotation_survive_checkpoint():

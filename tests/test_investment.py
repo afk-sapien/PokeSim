@@ -84,14 +84,6 @@ def test_equal_duplicate_does_not_restart_training_but_substantial_upgrade_does(
     assert training_investment(partner(dvs=(15,) * 5), [near_perfect])['eligible']
 
 
-def test_rare_low_level_training_beats_ordinary_high_level_mastery():
-    d = AdventureDirector()
-    rows = [(1, {'method': 'train', 'key': 'rare', 'initial_level': 5, 'investment_priority': 3}),
-            (1000, {'method': 'train', 'key': 'old', 'initial_level': 99,
-                    'investment_priority': 1, 'mastery_needed': True})]
-    assert d.select(rows, random.Random(1))['key'] == 'rare'
-
-
 def test_collection_search_budget_survives_restart_and_counts_failures():
     c = Collection()
     for i in range(3):

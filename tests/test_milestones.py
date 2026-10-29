@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from pokesim.catches import CatchTracker, SUPPORTED
 from pokesim.milestones import KEY, MilestoneTracker, apply, is_perfect, level_credit, status
+from pokesim.policies.collection import candidate
 from pokesim.policies.director import AdventureDirector
 from pokesim.store import Store
 from pokesim.strategy_data import SPECIES
@@ -165,11 +166,10 @@ def test_perfect_partner_cannot_be_manually_offered(tracking):
 
 
 def test_training_prefers_an_unearned_star_over_high_level_completed_species():
-    director = AdventureDirector()
-    missing = {'method': 'train', 'key': 'new', 'mastery_needed': True, 'initial_level': 50}
-    done = {'method': 'train', 'key': 'old', 'mastery_needed': False, 'initial_level': 99}
-    for seed in range(20):
-        assert director.select([(1, missing), (1000, done)], random.Random(seed)) == missing
+    missing = {'method': 'train', 'key': 'new', 'mastery_needed': True, 'initial_level': 50, 'target_level': 60}
+    done = {'method': 'train', 'key': 'old', 'mastery_needed': False, 'initial_level': 99, 'target_level': 100}
+    options = [candidate(project, 0, {}, False, set()) for project in (missing, done)]
+    assert AdventureDirector.select(options, {'new': missing, 'old': done}) == missing
 
 
 def test_api_exposes_persistent_goals_even_without_running_game(tracking):

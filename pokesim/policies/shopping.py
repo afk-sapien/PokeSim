@@ -7,14 +7,28 @@ from .collection import legendary_project
 from .menus import MenuDecision, tap
 from ..planning.ledger import MONEY
 from ..strategy_data import DATA, ITEMS, MAPS, PRICES, WORLD
-from .ledger import CASH_RESERVE, SAFARI_FEE, cash_reserve, first_sale  # noqa: F401  (re-exported)
+from .ledger import CASH_RESERVE, SAFARI_FEE, cash_reserve, first_sale, funds_needed  # noqa: F401  (re-exported)
 
 # Most units bought or sold in one request, so a long restock still checks the plan between trades.
 TRADE_LIMIT = 20
 # Balls kept in stock so a shiny or rare find is catchable on any route; none can be bought in battle.
 BALL_RESERVE = 10
+# Balls a repeat hunt needs to start, as HUNT_BALLS in policies/collection.py.
+HUNT_START_BALLS = 5
 SAFARI_GOALS = ('surf', 'teeth')
 SAFARI_INTERIOR = {m for m, w in WORLD.items() if w['name'].startswith('SafariZone') and w['name'] != 'SafariZoneGate'}
+
+
+def hunting(project):
+    """True for a repeat catch outside the Safari Zone, which brings its own balls."""
+    return bool(project and project.get('repeat') and project['method'] in ('grass', 'surf', 'fish'))
+
+
+def unfunded(snapshot, balls):
+    """True when the purse cannot buy Poké Balls up to BALL_RESERVE above the cash reserve, so a mart
+    trip would come back short. A Yellow hunt in the Pokémon Mansion spent its money on balls, then
+    walked to Viridian and back for one or two at a time."""
+    return snapshot.money - cash_reserve(snapshot) < (BALL_RESERVE - balls) * PRICES[ITEMS['POKE_BALL']]
 
 
 def entry_fee(snapshot, goal_key):
@@ -45,7 +59,8 @@ class ShoppingController:
             return item if item in stock and not dict(snapshot.items).get(item) and snapshot.money >= 2500 and len(snapshot.items) < 20 else None
         return shopping_item(snapshot.items, stock, snapshot.money,
                              snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=True,
-                             legendary=legendary_project(project), reserve=cash_reserve(snapshot))
+                             legendary=legendary_project(project), reserve=cash_reserve(snapshot),
+                             hunt_reserve=funds_needed(snapshot) if hunting(project) else None)
 
     @staticmethod
     def fund_index(snapshot):
@@ -88,6 +103,13 @@ class ShoppingController:
             counts = dict(snapshot.items)
             self.restocking = (balls < ball_reserve or medicine < 10 or counts.get(ITEMS['REVIVE'], 0) < 5
                                or counts.get(ITEMS['FULL_HEAL'], 0) < 3)
+        if self.restocking and hunting(project) and balls < ball_reserve and not bag_full and unfunded(snapshot, balls):
+            # A trip the purse cannot fund is not started. The hunt goes on with the balls in hand and
+            # ends below the five it needed to start, so a rematch can refill the purse.
+            self.restocking = False
+            if balls < HUNT_START_BALLS:
+                return SupplyPlan(goal, abandon='The purse cannot buy the balls this hunt needs')
+            return SupplyPlan(goal)
         legendary = legendary_project(project)
         if legendary and not dict(snapshot.items).get(ITEMS['MASTER_BALL']):
             self.restocking = (not project.get('supplies_prepared')

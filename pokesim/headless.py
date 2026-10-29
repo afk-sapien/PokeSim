@@ -40,6 +40,8 @@ class HeadlessRun:
         self.policy = StrategicPolicy(seed)
         self.policy.collection.version = ('yellow' if self.rom_sha1 == YELLOW_SHA1
                                           else 'blue' if self.rom_sha1 == BLUE_SHA1 else 'red')
+        from .planning.cost import wild_odds
+        self.policy.collection.wild = wild_odds(rom, self.policy.collection.version)
         self.memory = RunMemory()
         self.frame = 0
         # A scenario passes its own generator so that a failure replays the same way.

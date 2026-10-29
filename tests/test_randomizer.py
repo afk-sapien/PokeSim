@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from pokesim import randomized
+from pokesim.planning import cost
 from pokesim.app.manager import Manager, create_app
 from pokesim.app.registry import Registry, identifier
 
@@ -109,6 +110,33 @@ def test_the_patched_cartridge_lives_only_in_memory(monkeypatch):
     assert randomized.status() == {'code': 'PSR1-RED-S-1234', 'wild': False, 'starters': True, 'trainers': False}
 
 
+# Recorded with pokecore 0.9.5 for the share code of a stored adventure. Core 0.10.0 changed the digest of
+# GameData.canonical(), which now holds the fishing tables. PokeSim stores and compares no canonical()
+# digest, only the share code, so an older adventure must still boot the same cartridge and plan with the
+# same wild and trainer tables.
+BEFORE_0_10 = {'canonical': '6f1325b59eeeacb2ec8ddef1009f509d0a811e9787c8990e0c76bab38eff3fe1',
+               'patched': '4b6ecb0584d0fbe86295b3ab38686ca5629a500ba53152af2a6efe403b8ce8b9',
+               'encounters': '351710c52a26c8792b9aefc6bb51f389dc086c1cfb0ec8b173bae11b7d1b0df8',
+               'trainers': '307f5da7d394e41f2a4bc75a253f089474ce3af94db996951b919fbc7ce8106f'}
+
+
+def test_an_older_share_code_replays_the_same_run(monkeypatch):
+    import json
+    rom = red_rom()
+    monkeypatch.setenv(randomized.ENV, 'PSR1-RED-WST-4242')
+    assert randomized.validate('PSR1-RED-WST-4242', 'red') == 'PSR1-RED-WST-4242'
+    run = randomized.current(rom)
+
+    def digest(table):
+        return hashlib.sha256(json.dumps(table, sort_keys=True).encode()).hexdigest()
+
+    assert hashlib.sha256(run.rom).hexdigest() == BEFORE_0_10['patched']
+    assert digest(run.effective.encounters) == BEFORE_0_10['encounters']
+    assert digest(run.effective.trainers) == BEFORE_0_10['trainers']
+    # Only the canonical digest moved, and nothing in PokeSim keeps one.
+    assert hashlib.sha256(run.clean.canonical()).hexdigest() != BEFORE_0_10['canonical']
+
+
 def test_gen1_strategy_and_collection_follow_the_wild_tables(monkeypatch):
     fake_run(monkeypatch, 1, 'red', {
         'grass:12': {'kind': 'grass', 'map': 12, 'rate': 25, 'slots': [[3, 36], [4, 36], [3, 112]]},
@@ -149,20 +177,34 @@ def test_gen1_leader_aces_follow_a_trainer_shuffle(monkeypatch):
 
 def test_gen2_rows_follow_the_wild_tables_and_skip_swarms(monkeypatch):
     grass = {time: [[level, 16 + i] for i, level in enumerate(range(2, 9))] for time in ('morn', 'day', 'nite')}
-    fake_run(monkeypatch, 2, 'gold', {
+    run = fake_run(monkeypatch, 2, 'gold', {
         'johto_grass:6151': {'kind': 'johto_grass', 'map': 6151, 'slots': grass},
         'johto_water:6151': {'kind': 'johto_water', 'map': 6151, 'slots': [[20, 60], [15, 118], [10, 129]]},
         'swarm_grass:6152': {'kind': 'swarm_grass', 'map': 6152, 'slots': grass},
     })
     old = [{'map': 6151, 'species': 161, 'level': 2, 'method': 'grass', 'time': 'day', 'chance': 30},
            {'map': 6151, 'species': 129, 'level': 10, 'method': 'old_rod', 'time': 'any', 'chance': 70}]
-    rows = randomized.gen2_encounters(old, 'gold')
-    assert rows[0]['method'] == 'old_rod'
+    rows = cost.gen2_cartridge_rows('gold.gbc', 'gold', old)
+    assert rows == cost.gen2_rows(run.effective, old)
+    # The cartridge's grass and surf rows come first, the bundle's other rows after them.
+    assert rows[-1]['method'] == 'old_rod'
     assert not any(row['species'] == 161 for row in rows)
     night = [row for row in rows if row['time'] == 'night']
-    assert [row['chance'] for row in night] == list(randomized.GRASS_CHANCES) and night[0] == \
+    assert [row['chance'] for row in night] == list(cost.GEN2_GRASS) and night[0] == \
         {'map': 6151, 'species': 16, 'level': 2, 'method': 'grass', 'time': 'night', 'chance': 30}
     assert {row['time'] for row in rows if row['method'] == 'grass'} == {'morning', 'day', 'night'}
     assert [(row['species'], row['chance']) for row in rows if row['method'] == 'surf'] == [(60, 60), (118, 30), (129, 10)]
     assert not any(row['map'] == 6152 for row in rows)
-    assert randomized.gen2_encounters(old, 'silver') == old
+    # A run of another version, or a file core cannot read, keeps the bundle's rows.
+    assert cost.gen2_cartridge_rows('silver.gbc', 'silver', old) == old
+
+
+@pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])
+def test_a_clean_gen2_cartridge_gives_the_bundle_rows_in_order(version):
+    cartridges = os.environ.get('GEN2_CARTRIDGE_DIR')
+    rom = Path(cartridges or '') / f'{version}.gbc'
+    if not cartridges or not rom.exists() or not os.environ.get('GEN2_DATA_DIR'):
+        pytest.skip('Set GEN2_CARTRIDGE_DIR and GEN2_DATA_DIR to compare a real cartridge with the bundle')
+    from pokesim.gen2.data import GameData
+    bundle = GameData.load(Path(os.environ['GEN2_DATA_DIR']), version).encounters
+    assert cost.gen2_cartridge_rows(rom, version, bundle) == bundle

@@ -28,6 +28,49 @@ def test_a_search_can_need_several_catches_and_count_in_frames():
     assert cost.search_expected(50, maps=2, per_map=1000, per_battle=600) == 2 * 1000 + 2 * 600
 
 
+def test_a_catch_pays_its_encounters_and_a_fixed_overhead_per_catch():
+    class Odds:
+        def encounter(self, method, map_id, species):
+            return 20, 8
+
+        def cast(self, rod, map_id, species):
+            return 40, 0.8
+    per_battle = cost.FRAMES_PER_BATTLE + 8 * cost.FRAMES_PER_TILE
+    assert cost.catch_frames(Odds(), 'grass', 1, 16) == 5 * per_battle + cost.FRAMES_PER_CATCH
+    assert cost.catch_frames(Odds(), 'surf', 1, 16, needed=3) == pytest.approx(3 * (5 * per_battle + cost.FRAMES_PER_CATCH))
+    rod = cost.FRAMES_PER_CAST + 0.8 * cost.FRAMES_PER_BATTLE
+    assert cost.catch_frames(Odds(), 'fish', 1, 129, rod='OLD_ROD') == 2.5 * rod + cost.FRAMES_PER_CATCH
+    # With no cartridge, a catch meets its target in one encounter of ten, ten steps apart.
+    unpriced = cost.catch_frames(None, 'grass', 1, 16)
+    assert unpriced == 10 * (cost.FRAMES_PER_BATTLE + 10 * cost.FRAMES_PER_TILE) + cost.FRAMES_PER_CATCH
+    # A species the table never holds costs as much as the rarest slot can.
+    class Absent(Odds):
+        def encounter(self, method, map_id, species):
+            return 0, 8
+    assert cost.catch_frames(Absent(), 'grass', 1, 16) == 100 * per_battle + cost.FRAMES_PER_CATCH
+
+
+@pytest.mark.parametrize('version', ['red', 'blue', 'yellow'])
+def test_gen1_odds_come_from_the_cartridge(version):
+    import os
+    from pathlib import Path
+    rom = os.environ.get({'red': 'ROM_PATH', 'blue': 'BLUE_ROM_PATH', 'yellow': 'YELLOW_ROM_PATH'}[version])
+    if not rom or not Path(rom).exists():
+        pytest.skip('Set ROM_PATH, BLUE_ROM_PATH and YELLOW_ROM_PATH to read real cartridges')
+    from pokesim.strategy_data import MAPS, SPECIES
+    sid = {row['dex']: species for species, row in SPECIES.items()}
+    odds = cost.wild_odds(rom, version)
+    chance, steps = odds.encounter('grass', MAPS['ROUTE_1'], sid[16])
+    # Route 1 holds Pidgey in its first slots, more of them in Yellow, and meets one every ten steps.
+    assert chance == (69.921875 if version == 'yellow' else 50.0) and steps == 256 / 25
+    assert odds.encounter('surf', MAPS['ROUTE_1'], sid[16]) == (0, None)
+    # Every Old Rod bite is a Magikarp.
+    assert odds.cast('OLD_ROD', MAPS['ROUTE_1'], sid[129]) == (100.0, 1.0)
+    # Another version's tables are refused rather than read at the wrong addresses.
+    other = 'yellow' if version != 'yellow' else 'red'
+    assert cost.wild_odds(rom, other) is None
+
+
 def test_slot_chance_adds_the_shares_of_every_slot_holding_the_species():
     slots = ((3, 'PIDGEY'), (3, 'RATTATA'), (4, 'PIDGEY'))
     assert cost.slot_chance(slots, 'PIDGEY', (2, 1, 1)) == 75

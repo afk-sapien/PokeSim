@@ -207,8 +207,8 @@ class Emulator:
         self.rom_note = f'Pokémon {self.profile.game.title()} ({self.profile.revision})'
         from ..game_data import directory
         self.data = GameData.load(directory(), self.profile.game)
-        from ..randomized import gen2_encounters
-        self.data.encounters = gen2_encounters(self.data.encounters, self.profile.game)
+        from ..planning.cost import gen2_cartridge_rows
+        self.data.encounters = gen2_cartridge_rows(self.rom, self.profile.game, self.data.encounters)
         self.isolated_ram = isolated_ram
         self.preparation = None
         self.options_applied = False

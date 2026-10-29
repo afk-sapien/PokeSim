@@ -136,6 +136,9 @@ class Emulator:
         if hasattr(self.policy, "collection"):
             self.policy.collection.version = ("yellow" if "Yellow" in self.rom_note
                                               else "blue" if "Blue" in self.rom_note else "red")
+            # The cartridge's own encounter odds, with a randomized run's overrides, read once.
+            from .planning.cost import wild_odds
+            self.policy.collection.wild = wild_odds(self.rom, self.policy.collection.version)
         if hasattr(self.policy, "nav"):
             self.policy.nav.use_world = not self.rom_note.startswith("unverified")
         self.input_epoch = 0
