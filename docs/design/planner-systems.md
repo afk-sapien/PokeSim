@@ -303,6 +303,16 @@ Interface: `goal.stance(encounter, ledger) -> FIGHT | FLEE | CATCH`. The default
 - Deletes the `tower_travel` key list (#146) and the shiny session flee rules.
 - Migration: one step per generation, after S1.
 
+#### Decided
+
+- Step 1 values (lead, 2026-10-29): no new constant. The HP and PP budget is the room above the `Policy.healing` heal line. Every `collection.hunt` goal flees every plain off-target wild battle, on the walk and on the spot, and still catches anything the run wants. After 2 failed runs in one battle, the battle is fought out.
+- Gen I parity lands in step 2. Gen I hunts still fight off-target battles, and Gen I has no travel flee, no HP or PP budget flee and no 2-try cap.
+- Step 1 waiver (lead, 2026-10-29): the Crystal marathon row rose from 17.6 to 20.1% wasted (+2.5), and two Crystal saves passed 20% race share (20.4 and 20.9). A probe on the 20.9% save found no experience gap. Levels at the race start match, the stance made no runs during the race, and the extra 24.7k frames come from a race that starts about 6k frames later in a different game state. Crystal's total wasted falls from 29.3 to 26.7%, and races stay capped at 180000 frames. The row carries into step 2.
+
+#### As built
+
+- Step 1 (#214, cc01b5b): `pokesim/planning/stance.py` gives `stance()` from the goal kind. `tower.py` marks travel, `collection.hunt` marks every hunt and `training.walk_goal` marks training. HP and PP are ledger kinds, and `budget_spent` is the one budget rule, which `healing()` shares. The `tower_travel` key check and the shiny session flee are gone from `Policy.battle`, and the uncatchable shiny is the shiny case of `stance()`. A shiny whose runs fail twice is now fought. `tools/replay_audit.py` counts run attempts and failures per row. Batch runs and failures were Gold 47/0, Silver 34/7 and Crystal 55/3, all on heal walks. Heal share fell in every game (Crystal 12.4 to 4.8%). No batch save reached the Tower walk or a hunt, so those are covered by unit tests and the scenarios.
+
 ## 4. How we prove it works
 
 - **Replay audit.** Each system ships with a before and after replay on all six games under the load limits (one batch, at most six processes, `nice -n 10`). It reports frame share per goal from `Monitor.shares()`, stall count (stand-downs plus reloads), and wasted frames (frames in goals that ended with no progress event).
