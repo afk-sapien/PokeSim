@@ -89,6 +89,8 @@ def migrate(policy):
         state.setdefault(STOOD_DOWN, {})[team_key(failed['team'])] = failed.get('until', 0) - STAND_DOWN
     # Older saves counted carrier decisions, refused PC presses and loading steps in their own fields.
     state.pop('carrier_decisions', None)
+    # Older saves kept the decision of each hunt's last failed attempt, which a stand-down replaces.
+    state.pop('attempts', None)
     blocked = state.pop('activity_blocked', None)
     if blocked and state.get('activity_team') is not None:
         state.setdefault(SPENT, {})[pc_key(state['activity_team'])] = blocked

@@ -49,13 +49,12 @@ def forecast(mon, cap):
         stats=calculated_stats(data.species[species]['stats'], cap, mon.dvs, mon.stat_exp))
 
 
-# Decisions between two Tower challenges, and the base of the back-off after a challenge that fell short.
-RETRY_AFTER = 50000
-
-
-# A challenge that fell short backs its level cap off for twice RETRY_AFTER, doubling with each
-# shortfall in a row up to 32 times RETRY_AFTER.
-CAP_BACKOFF = Backoff(2 * RETRY_AFTER, doublings=4)
+# A challenge that fell short backs its level cap off for 100000 decisions, doubling with each
+# shortfall in a row up to 1.6 million. When the next challenge comes is the collection arbiter's
+# call, which weighs a repeat challenge as filler (see collection.journey).
+CAP_BACKOFF = Backoff(100000, doublings=4)
+# The stand-down of a team that cannot be put together because storage is full.
+ROOM_KEY = 'tower:room'
 
 
 def cap_key(cap):
@@ -64,6 +63,8 @@ def cap_key(cap):
 
 def migrate(policy):
     """Move a save's older per-cap records onto the monitor."""
+    # Older saves kept a timer between challenges, which the collection arbiter replaces.
+    policy.collection.pop('tower_after', None)
     failed = policy.collection.pop('tower_failed', None) or {}
     stood = policy.collection.setdefault(STOOD_DOWN, {})
     counts = policy.collection.setdefault(STAND_DOWNS, {})
@@ -157,12 +158,12 @@ def select_team(snapshot, skip=()):
     return -cap, team
 
 
-def journey(policy, snapshot, Goal, *, force=False):
+def journey(policy, snapshot, Goal):
     if policy.data.game != 'crystal':
         return None
     state = policy.collection.get('tower')
     if state is None:
-        if not force and policy.decisions < policy.collection.get('tower_after', 0):
+        if standing_down(policy, ROOM_KEY):
             return None
         for flag, area, script in [('EVENT_GOT_TM29_PSYCHIC', 'MR_PSYCHICS_HOUSE', 'MrPsychic'),
                                     ('EVENT_VICTORY_ROAD_TM_EARTHQUAKE', 'VICTORY_ROAD', 'VictoryRoadTMEarthquake'),
@@ -186,7 +187,7 @@ def journey(policy, snapshot, Goal, *, force=False):
         if no_room(policy, snapshot, [key(mon) for mon in team]):
             # The team cannot be put together until a box slot frees up, so travelling to Olivine
             # would only end in standing down again. The other activities keep the time instead.
-            policy.collection['tower_after'] = policy.decisions + RETRY_AFTER
+            stand_down(policy, ROOM_KEY)
             return None
         state = policy.collection['tower'] = {'team': [key(mon) for mon in team],
             'original': [key(mon) for mon in snapshot.party], 'cap': cap, 'entered': False, 'returning': False,
@@ -204,8 +205,10 @@ def journey(policy, snapshot, Goal, *, force=False):
         state['returning'] = True
     if not state['entered'] and not state['returning'] and not state.get('preparation_center') and no_room(
             policy, snapshot, state['team']):
-        # Storage filled up before the team was assembled, so the challenge stands down now.
+        # Storage filled up before the team was assembled, so the challenge stands down now, and a new
+        # one waits for the stand-down to end.
         state['abandoned'] = state['returning'] = True
+        stand_down(policy, ROOM_KEY)
     if state['returning']:
         goal = assemble(policy, snapshot, state['original'], Goal, 'Restore the adventure team after the Battle Tower')
         if goal:
@@ -214,7 +217,6 @@ def journey(policy, snapshot, Goal, *, force=False):
             policy.collection['tower_result'] = {'wins': state.get('wins', 0), 'level': state['cap']}
             policy.completed['tower'] = snapshot.frame
             record_result(policy, state['cap'], state.get('wins', 0))
-        policy.collection['tower_after'] = policy.decisions + RETRY_AFTER
         if 'previous_training' in state:
             policy.collection['training'] = state['previous_training']
         policy.collection.pop('tower', None)

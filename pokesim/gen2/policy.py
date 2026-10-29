@@ -83,7 +83,7 @@ class Policy:
         # The PC chosen last time, kept while it stays among the nearest so equal routes do not flip it.
         self.storage_pick = None
         self.completed = {}
-        self.collection = {'target': None, 'attempts': {}}
+        self.collection = {'target': None}
         # Owned one-time encounters that a walking return brought back for another capture.
         self.returned = set()
         self.shop_offers = set()
@@ -133,7 +133,7 @@ class Policy:
         from .npc_trades import Trade
         self.starter = state.get('starter', self.starter)
         self.completed = state.get('completed', {})
-        self.collection = state.get('collection', {'target': None, 'attempts': {}})
+        self.collection = state.get('collection', {'target': None})
         from .standdown import migrate
         migrate(self)
         self.demand = {int(key): value for key, value in state.get('demand', {}).items()}
@@ -972,19 +972,22 @@ class Policy:
         return True
 
     def shop(self, snapshot):
-        if (self.in_transmitter_room(snapshot) or self.in_league(snapshot)
-                or self.constant(snapshot).startswith('ICE_PATH_')
-                or self.constant(snapshot) in {'BLACKTHORN_GYM_1F', 'BLACKTHORN_GYM_2F',
-                    'GOLDENROD_UNDERGROUND_WAREHOUSE', 'GOLDENROD_UNDERGROUND_SWITCH_ROOM_ENTRANCES'}):
-            return None
-        if (snapshot.map == self.data.map_ids['BURNED_TOWER_B1F']
-                and (not snapshot.event('EVENT_RELEASED_THE_BEASTS') or self.data.game == 'crystal'
-                     and not snapshot.event('EVENT_EUSINE_IN_BURNED_TOWER'))):
-            return None
+        """A supply errand worth breaking off for, or None.
+
+        Each trip is weighed against restocking later on the arbiter (see errands): the walk there and
+        back, the puzzle maps on the way and what leaving the current work loses. That keeps the run
+        from shopping out of the League, a puzzle map or a story dungeon, and from shopping through
+        Ice Path before it is solved.
+        """
         if not snapshot.event('EVENT_GAVE_MYSTERY_EGG_TO_ELM'):
             self.shop_location = None
             return None
-        from . import ledger
+        from . import errands, ledger
+        exit_frames = errands.exit_cost(self, snapshot)
+        if exit_frames >= errands.worth(self, snapshot):
+            # No trip can beat restocking later from here. The chosen shop stays chosen for after.
+            return None
+        cut, surf = bool(snapshot.badges & 2), bool(snapshot.badges & 8)
         if snapshot.money < ledger.price(self.data, 'POKE_BALL'):
             self.shop_location = None
             # With no ball and no money for one, the ledger sells what is worth least for money.
@@ -999,9 +1002,9 @@ class Policy:
                     if not self.clerk_present(snapshot, entry, shop):
                         continue
                     goal = self.person(snapshot, 'sell_supplies', 'Sell a spare item for capture supplies', entry['constant'], shop['script'])
-                    route = self.nav.regions.route(snapshot, mid, [(goal.x, goal.y)],
-                                                  cut=bool(snapshot.badges & 2), surf=bool(snapshot.badges & 8))
-                    if route is not None:
+                    route = self.nav.regions.route(snapshot, mid, [(goal.x, goal.y)], cut=cut, surf=surf)
+                    if route is not None and errands.worth_trip(self, snapshot, 'sell_supplies', len(route),
+                                                                [node[0] for _, node, _, _ in route], exit_frames=exit_frames):
                         choices.append((len(route), mid, goal))
             if choices:
                 self.shopping = sale
@@ -1015,18 +1018,15 @@ class Policy:
         for priority, (key, names, amount) in enumerate(requests):
             reserve = ledger.held_money(self.data, snapshot, key)
             for mid, entry in self.data.maps.items():
-                if entry['region'] != self.travel_region(snapshot):
-                    continue
-                if entry['constant'] == 'MAHOGANY_MART_1F':
-                    continue
-                if entry['constant'] == 'BLACKTHORN_MART' and 'ice_path' not in self.completed:
+                if entry['region'] != self.travel_region(snapshot) or not entry['shops']:
                     continue
                 route = self.nav.route(snapshot.map, mid)
-                if (route is None or len(route) > 5 and 'red' not in self.completed
-                        and (not self.shop_location or mid != self.shop_location[0])):
+                if route is None:
                     continue
-                if 'ice_path' not in self.completed and any(self.data.maps[dest]['constant'].startswith('ICE_PATH_')
-                                                             for _, dest, _, _ in route):
+                current = bool(self.shop_location) and mid == self.shop_location[0]
+                crossing = [dest for _, dest, _, _ in route]
+                if not errands.worth_trip(self, snapshot, 'buy_balls', len(route), crossing,
+                                          current=current, exit_frames=exit_frames):
                     continue
                 for shop in entry['shops']:
                     if not self.clerk_present(snapshot, entry, shop):
@@ -1036,12 +1036,13 @@ class Policy:
                                  and self.data.item_attributes[self.data.items[name]]['price'] <= snapshot.money - reserve), None)
                     if item:
                         goal = self.person(snapshot, 'buy_balls', 'Restock adventure supplies', entry['constant'], shop['script'])
-                        walk = self.nav.regions.route(snapshot, mid, [(goal.x, goal.y)],
-                            cut=bool(snapshot.badges & 2), surf=bool(snapshot.badges & 8))
-                        # Shopping is switched off inside Ice Path, so a walk through it dropped the shop at
-                        # the cave mouth, the next goal walked back out, and the shop was chosen again.
-                        if walk is None or any(self.data.maps[node[0]]['constant'].startswith('ICE_PATH_')
-                                               for _, node, _, _ in walk):
+                        walk = self.nav.regions.route(snapshot, mid, [(goal.x, goal.y)], cut=cut, surf=surf)
+                        # The walk can pass a puzzle map the map route did not, and a trip that breaks off
+                        # there drops the shop at its mouth, so the next goal walks back out and the shop
+                        # is chosen again.
+                        if walk is None or not errands.worth_trip(
+                                self, snapshot, 'buy_balls', len(route), crossing + [node[0] for _, node, _, _ in walk],
+                                current=current, exit_frames=exit_frames):
                             continue
                         choices.append((priority, 0 if self.shop_location == (mid, shop['script'], item) else 1,
                                         len(walk), mid, item, shop['script'], amount, reserve))
@@ -1135,8 +1136,13 @@ class Policy:
             self.goal = journey_goal = release
             inner = None
         if shadow is not None and journey_goal is not None and shadow.changed('ladder', journey_goal.key):
-            from .collection import ladder_candidates
-            shadow.compare('ladder', lambda: ladder_candidates(journey_goal, inner), journey_goal.key, outer=True)
+            offers, pick = getattr(self, 'ladder_offers', None), getattr(self, 'ladder_pick', None)
+            if release is None and offers and pick and getattr(self, 'ladder_decision', None) == self.decisions:
+                # The collection arbiter weighed the rungs this decision, so the shadow logs its own pick.
+                shadow.compare('ladder', lambda: offers, pick, outer=True)
+            else:
+                from .collection import ladder_candidates
+                shadow.compare('ladder', lambda: ladder_candidates(journey_goal, inner), journey_goal.key, outer=True)
         if isinstance(self.menu, Storage) and (self.menu.box_full or 'BOX is full' in snapshot.text):
             box = next((box for box, count in enumerate(snapshot.box_counts) if count < 20), None)
             if box is not None:

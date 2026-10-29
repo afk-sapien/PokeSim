@@ -1934,13 +1934,13 @@ def test_tower_berry_respects_native_daily_flags_and_bag_capacity(real_data, mon
     monkeypatch.setattr(tower, 'Memory', lambda *args: SimpleNamespace(byte=lambda name, *args: values[name]))
     policy = SimpleNamespace(data=real_data, collection={}, decisions=0, memory=None, person=lambda *args: 'berry')
     snapshot = SimpleNamespace(event=lambda name: True, items=(), pockets={'items': ()}, party=(), stored=())
-    assert tower.journey(policy, snapshot, Goal, force=True) == 'berry'
+    assert tower.journey(policy, snapshot, Goal) == 'berry'
     values['wFruitTreeFlags'] = 1
-    assert tower.journey(policy, snapshot, Goal, force=True) is None
+    assert tower.journey(policy, snapshot, Goal) is None
     values['wDailyFlags1'] = 0
-    assert tower.journey(policy, snapshot, Goal, force=True) == 'berry'
+    assert tower.journey(policy, snapshot, Goal) == 'berry'
     snapshot.pockets['items'] = tuple(range(20))
-    assert tower.journey(policy, snapshot, Goal, force=True) is None
+    assert tower.journey(policy, snapshot, Goal) is None
 
 
 def test_storage_goal_survives_a_cable_room_with_no_known_route(real_data):

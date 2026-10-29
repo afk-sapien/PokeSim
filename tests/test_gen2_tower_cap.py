@@ -51,7 +51,7 @@ def test_partner_past_the_cap_stands_the_challenge_down(crystal, monkeypatch):
     assert 20 in tower.resting_caps(policy)
     monkeypatch.setattr(tower, 'assemble', lambda *args: None)
     assert tower.journey(policy, screen(crystal, team, ''), Goal) is None
-    assert 'tower' not in policy.collection and policy.collection['tower_after'] > policy.decisions
+    assert 'tower' not in policy.collection and 'tower_after' not in policy.collection
 
 
 def test_partners_within_the_cap_still_choose_the_level(crystal):

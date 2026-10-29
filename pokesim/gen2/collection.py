@@ -2,8 +2,9 @@
 from collections import Counter
 
 from ..planning import values
+from ..planning import arbiter
 from ..planning.arbiter import Candidate, Tier
-from ..planning.cost import FRAMES_PER_BATTLE, FRAMES_PER_TILE
+from ..planning.cost import DECISIONS_PER_BATTLE, FRAMES_PER_BATTLE, FRAMES_PER_TILE
 from ..planning.ledger import FIELD_MOVES
 from .menus import ChangeBox, FieldMove, Storage, Teach, Use
 from .navigation import DIRS
@@ -20,13 +21,7 @@ def clock_wait(policy, snapshot, mem, current_time):
 
     The clock follows game time, so a weekday or time of day that is not here yet comes as fast as the
     run plays: one in-game day is about 5.2 million frames, 24 hours at 1x and well under an hour at Max.
-    Every other activity goes first, so this only names the wait in the label of the filler work.
     """
-    from .ledger import catch_room
-    if not catch_room(policy, snapshot, 'clock_wait'):
-        # Each of these waits ends in a catch, and with every box full and nothing to release none can
-        # start. Naming one would also hold back the postgame League run that still has work to do.
-        return None
     from .contest import waiting_for_day
     wait = waiting_for_day(policy, snapshot, mem)
     if wait:
@@ -45,21 +40,47 @@ def clock_wait(policy, snapshot, mem, current_time):
     return None
 
 
+# Frames a clock wait is expected to last: half an in-game day, about 2.6 million frames.
+CLOCK_FRAMES = 2600000
+
+
+def waiting(policy, snapshot, mem, current_time):
+    """The clock wait as the arbiter's passive candidate, or None when nothing waits on the clock.
+
+    A wait accrues on any walk, so the arbiter never picks it and it holds nothing back. It is worth the
+    catch it ends in. With every box full and nothing to release that catch has nowhere to go, so the
+    wait is worth nothing then and is not named.
+    """
+    wait = clock_wait(policy, snapshot, mem, current_time)
+    if not wait:
+        return None
+    from .ledger import catch_room
+    value = values.NEW_ENTRY if catch_room(policy, snapshot, 'clock_wait') else 0.0
+    return Candidate('clock_wait', Tier.PROGRESS, value, CLOCK_FRAMES, passive=True, goal=wait)
+
+
+def named_wait(policy, snapshot, mem, current_time):
+    """The clock wait worth naming in a label, or None."""
+    candidate = waiting(policy, snapshot, mem, current_time)
+    return candidate.goal if candidate is not None and candidate.value > 0 else None
+
+
 def waiting_label(policy, snapshot, mem, current_time):
     """Say what the idle walk does and what it waits for."""
     doing = 'Walk the eggs to hatching' if any(mon.egg for mon in snapshot.party) else 'Walk the grass'
-    wait = clock_wait(policy, snapshot, mem, current_time)
+    wait = named_wait(policy, snapshot, mem, current_time)
     if wait:
         return f'{doing} while {wait}'
     return f'{doing} until a trade or a return brings new collection work'
 
 
 def while_waiting(policy, snapshot, mem, goal, Goal):
-    """Name the clock wait in the label of filler work such as breeding, hatching and training."""
+    """Name the clock wait in the label of the work that runs while it accrues, such as breeding,
+    hatching and training. The wait itself is passive and never changes which goal runs."""
     if goal is None or mem is None or not hasattr(mem, 'byte'):
         return goal
     current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
-    wait = clock_wait(policy, snapshot, mem, current_time)
+    wait = named_wait(policy, snapshot, mem, current_time)
     if not wait:
         return goal
     return Goal(goal.key, f'{goal.label} while {wait}', goal.map_name, goal.x, goal.y, goal.face)
@@ -523,7 +544,7 @@ def hunt_candidates(choices):
     chance says it takes, at the shared estimates in planning/cost.py.
     """
     candidates = []
-    for elsewhere, owned, _, route, species, mid, method, row in choices:
+    for elsewhere, owned, route, species, mid, method, row in choices:
         walk = route - 50 / max(1, row['chance'])
         kind = 'hunt new entry' if not owned else 'hunt repeat' if elsewhere else 'hunt request'
         frames = walk * FRAMES_PER_TILE + search_expected(row['chance'], per_battle=FRAMES_PER_BATTLE + 10 * FRAMES_PER_TILE)
@@ -542,10 +563,158 @@ def ladder_candidates(goal, inner):
     return [Candidate(goal.key, Tier.PROGRESS, values.SMALL, 1, goal=inner or goal.key.split(' ')[0])]
 
 
-def journey(policy, snapshot, mem, Goal):
-    data, state = policy.data, policy.collection
-    from .npc_trades import requests as trade_requests
-    state['prerequisites'] = sorted(prerequisites(data, snapshot) | trade_requests(policy, snapshot, getattr(mem, 'memory', None)))
+# Frames of one map crossed on the way to a rung's goal, about thirty steps.
+MAP_FRAMES = 30 * FRAMES_PER_TILE
+# Frames per decision, the unit of the hunt and postgame estimates: a wild battle takes about 1500
+# frames and 75 decisions with the walking that finds it.
+DECISION_FRAMES = FRAMES_PER_BATTLE // DECISIONS_PER_BATTLE
+# Frames a rung's work takes once its walk is over. A short errand is a talk, a gift, a pickup or a
+# purchase, as Gen I prices it (policies/strategic.py).
+ERRAND_FRAMES = 3000
+# A static or returned legend's battle and catch.
+LEGEND_FRAMES = 6000
+# A Ruins of Alph puzzle, a Celebi shrine visit, a Day Care pairing or a Game Corner prize.
+ACTIVITY_FRAMES = 12000
+# A Bug-Catching Contest, twenty minutes of the park.
+CONTEST_FRAMES = 30000
+# Training toward an evolution, as Gen I prices it (policies/collection.py EXPECTED_FRAMES).
+EVOLVE_FRAMES = 60000
+# A League run of five rooms, about thirty battles.
+LEAGUE_FRAMES = 30 * FRAMES_PER_BATTLE
+# A Battle Tower challenge with its preparation: seven battles, the trip to Olivine and the team swap.
+TOWER_FRAMES = 60000
+# Frames lost by leaving the rung under way for another: the walk back to it and the steps it took.
+INTERRUPT_FRAMES = 2 * ERRAND_FRAMES
+# A map the route search cannot reach counts as this many maps away.
+FAR_MAPS = 50
+# Goals that accrue on any walk, which the arbiter never picks. The Day Care counts the steps of any
+# walk, so pacing Goldenrod for its egg runs only when no other rung has work.
+PASSIVE = frozenset(('collection_hatch',))
+_MISSING = object()
+
+
+class Ladder:
+    """The rungs of one collection decision, weighed on the utility arbiter.
+
+    Each rung offers its goal as a candidate and the arbiter keeps the better of it and the pick. A rung
+    whose best tier is below the pick's is not asked, since it cannot win. Asking a rung can change
+    saved state, such as a new hunt target or a started contest, so a rung that loses is undone and the
+    changes of a pick that a later rung beats are undone too. A rung that offers nothing keeps its
+    changes, as when it stands down. A passive goal, such as the Day Care walk, is kept aside and runs
+    only when no rung has active work.
+    """
+
+    def __init__(self, policy, snapshot):
+        self.policy, self.snapshot = policy, snapshot
+        self.pick = self.goal = self.rung = None
+        self.candidates, self.passive = [], []
+        self.stopped = False
+        # The value each slot the pick changed held before it, to undo it if a later rung wins.
+        self.undo = {}
+        # The rung the last decision picked, which any other rung pays INTERRUPT_FRAMES to cut into.
+        self.running = getattr(policy, 'ladder_rung', None)
+
+    def _slots(self):
+        policy = self.policy
+        slots = {('collection', key): value for key, value in policy.collection.items()}
+        slots['menu'] = getattr(policy, 'menu', None)
+        slots['completed'] = getattr(policy, 'completed', None)
+        return slots
+
+    def save(self):
+        from copy import deepcopy
+        slots = self._slots()
+        # A menu task can hold the emulator, so it is kept by reference. A rung replaces it, never edits it.
+        menu = slots.pop('menu')
+        return {**deepcopy(slots), 'menu': menu}
+
+    @staticmethod
+    def differs(slot, now, before):
+        if slot == 'menu':
+            return now is not before
+        return now != before
+
+    def set(self, slot, value):
+        from copy import deepcopy
+        policy = self.policy
+        if slot == 'menu':
+            policy.menu = None if value is _MISSING else value
+        elif isinstance(slot, tuple):
+            if value is _MISSING:
+                policy.collection.pop(slot[1], None)
+            else:
+                policy.collection[slot[1]] = deepcopy(value)
+        elif hasattr(policy, slot):
+            if slot == 'completed' and isinstance(policy.completed, dict) and isinstance(value, dict):
+                policy.completed.clear()
+                policy.completed.update(deepcopy(value))
+            else:
+                setattr(policy, slot, deepcopy(value))
+
+    def load(self, saved):
+        now = self._slots()
+        for slot in set(now) | set(saved):
+            value = saved.get(slot, _MISSING)
+            if self.differs(slot, now.get(slot, _MISSING), value):
+                self.set(slot, value)
+
+    def changed(self, before):
+        now = self._slots()
+        return {slot for slot in set(now) | set(before)
+                if self.differs(slot, now.get(slot, _MISSING), before.get(slot, _MISSING))}
+
+    def travel(self, goal):
+        """Frames of the walk to ``goal``'s map, by the maps on the way."""
+        policy, snapshot = self.policy, self.snapshot
+        mid = policy.data.map_ids.get(goal.map_name)
+        route = getattr(getattr(policy, 'nav', None), 'route', None)
+        if mid is None or route is None or mid == snapshot.map:
+            return 0
+        path = route(snapshot.map, mid)
+        return MAP_FRAMES * (len(path) if path is not None else FAR_MAPS)
+
+    def offer(self, name, tier, value, work, build, price=None):
+        """Ask rung ``name``, whose best tier is ``tier``. ``build`` gives its goal or None. ``price``,
+        given the goal, gives its tier, value and frames of work if they differ from ``tier``, ``value``
+        and ``work``."""
+        if self.stopped or self.pick is not None and self.pick.tier < tier:
+            return
+        before = self.save()
+        goal = build()
+        if goal is None:
+            # A rung that offers nothing but asks for League prize money, as the Game Corner prize
+            # partner does, ends the ladder: the League run starts in this decision.
+            self.stopped = (before.get(('collection', 'funding')) is None
+                            and self.policy.collection.get('funding') is not None)
+            return
+        if price is not None:
+            tier, value, work = price(goal)
+        interrupt = INTERRUPT_FRAMES if self.running is not None and name != self.running else 0.0
+        candidate = Candidate(f'{name}:{goal.key}', tier, value, work + self.travel(goal),
+                              passive=goal.key in PASSIVE, interrupt_frames=interrupt, goal=name)
+        self.candidates.append(candidate)
+        if candidate.passive:
+            self.passive.append(goal)
+            return
+        if self.pick is not None and arbiter.choose([self.pick, candidate]) is not candidate:
+            self.load(before)
+            return
+        changed = self.changed(before)
+        undo = {slot: self.undo.get(slot, before.get(slot, _MISSING)) for slot in changed}
+        for slot, value in self.undo.items():
+            if slot not in changed:
+                self.set(slot, value)
+        self.undo = undo
+        self.pick, self.goal, self.rung = candidate, goal, name
+
+
+def holds(policy, snapshot, mem, Goal):
+    """The goal of an activity under way, or of a failed precondition, which no rung cuts into.
+
+    A started contest, Tower challenge, League funding run or postgame League run finishes first, since
+    leaving it loses what it has done. With no ball pocket that can catch, every catch waits for a box.
+    """
+    state = policy.collection
     from .contest import journey as contest
     if state.get('contest'):
         goal = contest(policy, snapshot, Goal)
@@ -560,124 +729,182 @@ def journey(policy, snapshot, mem, Goal):
         if any(count < 20 for count in snapshot.box_counts):
             goal = policy.storage_goal(snapshot)
             return Goal('collection_box', 'Make room for new catches', goal.map_name, goal.x, goal.y, goal.face)
-    if not snapshot.event('EVENT_GOT_SUPER_ROD'):
-        return policy.person(snapshot, 'super_rod', 'Get the Super Rod for the Pokédex expedition',
-                             'ROUTE_12_SUPER_ROD_HOUSE', 'Route12SuperRodHouseFishingGuruScript')
-    for flag, map_name, script, label in [
-            ('EVENT_GOT_TM02_HEADBUTT', 'ILEX_FOREST', 'IlexForestHeadbuttGuyScript', 'Learn about Headbutt encounters'),
-            ('EVENT_GOT_TM08_ROCK_SMASH', 'ROUTE_36', 'Route36RockSmashGuyScript', 'Learn about Rock Smash encounters')]:
-        if not snapshot.event(flag):
-            return policy.person(snapshot, flag.lower(), label, map_name, script)
     funding = state.get('funding')
     if funding is not None and snapshot.hall_of_fame_count >= funding:
         state.pop('funding', None)
-        funding = None
+    elif funding is not None:
+        state['phase'] = 'league'
+        return league_funding(policy, snapshot, Goal)
+    return league_loop(policy, snapshot, Goal)
+
+
+def start_funding(policy, snapshot, Goal):
+    """Start a League run for prize money when the purse is short of what wanted work needs, or None."""
+    state = policy.collection
     from .breeding import pairings
     from .ledger import BREEDING_FUNDS, funding_short
     from .. import config
     starter_gifts = getattr(config, 'LEAGUE_REWARDS', False) and not {152, 155, 158} <= snapshot.owned
     from .quests import static_wanted, ultra_shortfall
     from .store_stock import shortfall as store_shortfall
-    if funding is None and (funding_short(policy, snapshot) or starter_gifts
-                            or snapshot.can_catch and ultra_shortfall(policy, snapshot) and static_wanted(policy, snapshot)
-                            # A wanted Day Care pair waits for its money to start, and nothing else earns it.
-                            or snapshot.money < BREEDING_FUNDS and not state.get('breeding')
-                            and getattr(snapshot, 'daycare', None) is not None and pairings(policy, snapshot)
-                            or store_shortfall(policy, snapshot)):
-        state['funding'] = funding = snapshot.hall_of_fame_count + 1
-    if funding is not None:
-        state['phase'] = 'league'
-        return league_funding(policy, snapshot, Goal)
-    goal = league_loop(policy, snapshot, Goal)
+    if not (funding_short(policy, snapshot) or starter_gifts
+            or snapshot.can_catch and ultra_shortfall(policy, snapshot) and static_wanted(policy, snapshot)
+            # A wanted Day Care pair waits for its money to start, and nothing else earns it.
+            or snapshot.money < BREEDING_FUNDS and not state.get('breeding')
+            and getattr(snapshot, 'daycare', None) is not None and pairings(policy, snapshot)
+            or store_shortfall(policy, snapshot)):
+        return None
+    state['funding'] = snapshot.hall_of_fame_count + 1
+    state['phase'] = 'league'
+    return league_funding(policy, snapshot, Goal)
+
+
+def journey(policy, snapshot, mem, Goal):
+    """The collection's next goal: an activity under way, or else the arbiter's pick of the rungs.
+
+    Every rung offers a candidate with its tier, its value and the frames of its walk and work, and the
+    arbiter picks the most value per frame in the highest tier. Enablers such as the Super Rod, the
+    move tutors, a League run for money and pickups that expire are upkeep. New entries and what opens
+    them are progress. A repeat Tower challenge is filler and the postgame activities keep their own
+    tiers. The clock wait and the Day Care walk accrue on any walk, so they are passive and never hold
+    back active work.
+    """
+    data, state = policy.data, policy.collection
+    from .npc_trades import requests as trade_requests
+    state['prerequisites'] = sorted(prerequisites(data, snapshot) | trade_requests(policy, snapshot, getattr(mem, 'memory', None)))
+    goal = holds(policy, snapshot, mem, Goal)
     if goal:
+        policy.ladder_rung, policy.ladder_offers, policy.ladder_pick = None, [], None
         return goal
-    if getattr(policy, 'returned', set()) & {243, 244, 245, 249, 250, 251}:
-        # A returned legendary waits at its original home ahead of routine collection.
+    current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))] if hasattr(mem, 'byte') else 'day'
+    ladder = Ladder(policy, snapshot)
+    new = values.NEW_ENTRY
+    offer = ladder.offer
+    UPKEEP, PROGRESS = Tier.UPKEEP, Tier.PROGRESS
+
+    def super_rod():
+        if snapshot.event('EVENT_GOT_SUPER_ROD'):
+            return None
+        return policy.person(snapshot, 'super_rod', 'Get the Super Rod for the Pokédex expedition',
+                             'ROUTE_12_SUPER_ROD_HOUSE', 'Route12SuperRodHouseFishingGuruScript')
+
+    def tutor(flag, map_name, script, label):
+        return lambda: None if snapshot.event(flag) else policy.person(snapshot, flag.lower(), label, map_name, script)
+
+    def returned():
+        if not getattr(policy, 'returned', set()) & {243, 244, 245, 249, 250, 251}:
+            return None
         from .quests import legends
-        goal = legends(policy, snapshot, Goal)
-        if goal:
-            return goal
-    from .item_sources import pickups
-    # A stone a phone trainer holds today and the Monday night Moon Stone expire, so they go first.
-    goal = pickups(policy, snapshot, mem, Goal)
-    if goal:
-        return goal
+        return legends(policy, snapshot, Goal)
+
+    from .item_sources import phones, pickups
+    from .quests import gifts, legends, stones, trade_items
     from .ruins import journey as ruins
-    goal = ruins(policy, snapshot, Goal)
-    if goal:
-        return goal
-    goal = lapras(policy, snapshot, mem, Goal)
-    if goal:
-        return goal
-    from .quests import gifts
-    gift = gifts(policy, snapshot, Goal)
-    if gift:
-        return gift
-    from .quests import trade_items
-    goal = trade_items(policy, snapshot, Goal)
-    if goal:
-        return goal
     from .npc_trades import journey as npc_trades
-    goal = npc_trades(policy, snapshot, mem, Goal)
-    if goal:
-        return goal
-    if 'tower' not in policy.completed:
-        goal = tower(policy, snapshot, Goal)
-        if goal:
-            return goal
+    from .tower import journey as tower
     from .celebi import journey as celebi
-    goal = celebi(policy, snapshot, Goal)
-    if goal:
-        return goal
-    goal = contest(policy, snapshot, Goal)
-    if goal:
-        return goal
-    from .breeding import journey as breed
-    goal = breed(policy, snapshot, Goal)
-    # The Day Care counts the steps of any walk and carried eggs hatch on any walk, so pacing Goldenrod
-    # for them waits behind every other errand. The egg and partner errands still go first.
-    nursery = None
-    if goal and goal.key == 'collection_hatch':
-        nursery, goal = goal, None
-    if goal:
-        return while_waiting(policy, snapshot, mem, goal, Goal)
+    from .contest import journey as contest
+    from .breeding import hatching, journey as breed
     from .gamecorner import journey as prizes
-    goal = prizes(policy, snapshot, Goal)
-    if goal:
-        return goal
-    if state.get('funding') is not None:
-        # The prize partner just asked for League prize money. Start that run now, or one decision
-        # picks a later goal such as the Tohjo Falls Moon Stone and the next one walks away from it.
+    from .store_stock import journey as store
+    from .champion_shop import journey as champion_shop
+    from .training import journey as training
+    from . import postgame
+    offer('super_rod', UPKEEP, new, ERRAND_FRAMES, super_rod)
+    offer('headbutt_tutor', UPKEEP, new, ERRAND_FRAMES, tutor('EVENT_GOT_TM02_HEADBUTT', 'ILEX_FOREST',
+          'IlexForestHeadbuttGuyScript', 'Learn about Headbutt encounters'))
+    offer('rock_smash_tutor', UPKEEP, new, ERRAND_FRAMES, tutor('EVENT_GOT_TM08_ROCK_SMASH', 'ROUTE_36',
+          'Route36RockSmashGuyScript', 'Learn about Rock Smash encounters'))
+    offer('funding', UPKEEP, new, LEAGUE_FRAMES, lambda: start_funding(policy, snapshot, Goal))
+    # A returned legendary waits at its original home ahead of routine collection.
+    offer('returned', UPKEEP, new, LEGEND_FRAMES, returned)
+    # A stone a phone trainer holds today and the Monday night Moon Stone expire, so they are upkeep.
+    offer('pickups', UPKEEP, new, ERRAND_FRAMES, lambda: pickups(policy, snapshot, mem, Goal))
+    offer('ruins', PROGRESS, new, ACTIVITY_FRAMES, lambda: ruins(policy, snapshot, Goal))
+    offer('lapras', PROGRESS, new, LEGEND_FRAMES, lambda: lapras(policy, snapshot, mem, Goal))
+    offer('gifts', PROGRESS, new, ERRAND_FRAMES, lambda: gifts(policy, snapshot, Goal))
+    offer('trade_items', PROGRESS, new, ERRAND_FRAMES, lambda: trade_items(policy, snapshot, Goal))
+    offer('npc_trades', PROGRESS, new, 2 * ERRAND_FRAMES, lambda: npc_trades(policy, snapshot, mem, Goal))
+    # The first Tower challenge earns its prize once. It is worth little against a new entry.
+    if 'tower' not in policy.completed:
+        offer('tower', PROGRESS, values.SMALL, TOWER_FRAMES, lambda: tower(policy, snapshot, Goal))
+    offer('celebi', PROGRESS, new, ACTIVITY_FRAMES, lambda: celebi(policy, snapshot, Goal))
+    offer('contest', PROGRESS, new, CONTEST_FRAMES, lambda: contest(policy, snapshot, Goal))
+    offer('breed', PROGRESS, new, ACTIVITY_FRAMES, lambda: breed(policy, snapshot, Goal))
+    offer('prizes', PROGRESS, new, ACTIVITY_FRAMES, lambda: prizes(policy, snapshot, Goal))
+    offer('stones', PROGRESS, new, ERRAND_FRAMES, lambda: stones(policy, snapshot, Goal))
+    offer('phones', PROGRESS, new, ERRAND_FRAMES, lambda: phones(policy, snapshot, mem, Goal))
+    offer('store', PROGRESS, new, ERRAND_FRAMES, lambda: store(policy, snapshot, Goal))
+    offer('champion_shop', PROGRESS, new, ERRAND_FRAMES, lambda: champion_shop(policy, snapshot, Goal))
+    offer('hatching', PROGRESS, new, ERRAND_FRAMES, lambda: hatching(policy, snapshot, Goal))
+    offer('peer_store', PROGRESS, new, ERRAND_FRAMES, lambda: peer_store(policy, snapshot, Goal))
+    offer('training', PROGRESS, new, EVOLVE_FRAMES, lambda: training(policy, snapshot, mem, Goal))
+    offer('legends', PROGRESS, new, LEGEND_FRAMES, lambda: legends(policy, snapshot, Goal))
+    offer('hunt', PROGRESS, new, 0, lambda: pokedex_hunt(policy, snapshot, Goal, current_time),
+          price=lambda goal: hunt_price(policy, snapshot))
+    # A finished run keeps playing the way Red, Blue and Yellow do: better-DV hunts, training ten levels
+    # at a time, a due marathon, shiny searches and League runs, as the postgame's own arbiter picks them.
+    offer('postgame', Tier.RACE, values.SMALL, 0, lambda: postgame.journey(policy, snapshot, mem, Goal, current_time),
+          price=lambda goal: postgame_price(policy, snapshot))
+    if 'tower' in policy.completed:
+        # A repeat challenge earns nothing new, so it is filler.
+        offer('tower', Tier.FILLER, values.SMALL, TOWER_FRAMES, lambda: tower(policy, snapshot, Goal))
+    wait = waiting(policy, snapshot, mem, current_time) if hasattr(mem, 'byte') else None
+    if wait is not None:
+        ladder.candidates.append(wait)
+    policy.ladder_rung, policy.ladder_offers = ladder.rung, ladder.candidates
+    policy.ladder_pick = ladder.pick.key if ladder.pick is not None else None
+    policy.ladder_decision = getattr(policy, 'decisions', None)
+    goal = ladder.goal
+    if state.get('funding') is not None and ('collection', 'funding') not in ladder.undo:
+        # A rung that offered nothing, such as the Game Corner prize partner, just asked for League prize
+        # money. Start that run now, or one decision picks a later goal such as the Tohjo Falls Moon
+        # Stone and the next one walks away from it.
+        for slot, value in ladder.undo.items():
+            ladder.set(slot, value)
+        policy.ladder_rung = 'funding'
         state['phase'] = 'league'
         return league_funding(policy, snapshot, Goal)
-    from .quests import stones
-    goal = stones(policy, snapshot, Goal)
-    if goal:
+    if goal is not None:
+        if ladder.rung in {'breed', 'hatching', 'training'}:
+            return while_waiting(policy, snapshot, mem, goal, Goal)
         return goal
-    from .item_sources import phones
-    goal = phones(policy, snapshot, mem, Goal)
-    if goal:
-        return goal
-    from .store_stock import journey as store
-    goal = store(policy, snapshot, Goal)
-    if goal:
-        return goal
-    from .champion_shop import journey as champion_shop
-    goal = champion_shop(policy, snapshot, Goal)
-    if goal:
-        return goal
-    from .breeding import hatching
-    goal = hatching(policy, snapshot, Goal)
-    if goal:
-        return while_waiting(policy, snapshot, mem, goal, Goal)
-    goal = peer_store(policy, snapshot, Goal)
-    if goal:
-        return goal
-    from .training import journey as training
-    goal = training(policy, snapshot, mem, Goal)
-    if goal:
-        return while_waiting(policy, snapshot, mem, goal, Goal)
-    current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
+    if ladder.passive:
+        return while_waiting(policy, snapshot, mem, ladder.passive[0], Goal)
+    eggs = any(mon.egg for mon in snapshot.party)
+    # Carried eggs hatch on this walk, so only a walk without them is idle.
+    state['phase'] = 'hatching' if eggs else 'waiting'
+    # Nothing else is useful until the cartridge clock opens a window or a trade brings new work.
+    # The plan is rebuilt every step, so clock-gated work starts as soon as its window opens.
+    return patrol(policy, snapshot, Goal, waiting_label(policy, snapshot, mem, current_time))
+
+
+def hunt_price(policy, snapshot):
+    """The Pokédex hunt's tier, value and frames: a new entry, or a small gain for a repeat, priced from
+    the encounter rate of the target the hunt chose."""
+    target = policy.collection.get('target')
+    if not target:
+        return Tier.PROGRESS, values.SMALL, ERRAND_FRAMES
+    species = target['species']
+    repeat = (species in snapshot.owned and not policy.demand.get(species)
+              and species not in policy.collection.get('prerequisites', ()) and species not in item_hunts(policy, snapshot))
+    return (Tier.PROGRESS, values.SMALL if repeat else values.NEW_ENTRY,
+            target_expected(policy, snapshot, target) * DECISION_FRAMES)
+
+
+def postgame_price(policy, snapshot):
+    """The postgame activity's own tier, value and frames, or a filler League run's."""
+    from . import postgame
+    activity = postgame.state(policy).get('activity')
+    if not activity:
+        return Tier.FILLER, values.SMALL, LEAGUE_FRAMES
+    candidate = postgame.candidate(policy, snapshot, activity)
+    return candidate.tier, candidate.value, candidate.expected_frames * DECISION_FRAMES
+
+
+def pokedex_hunt(policy, snapshot, Goal, current_time):
+    """Walk the Pokédex hunt target, choosing one first when there is none, or None with nothing to hunt."""
+    data, state = policy.data, policy.collection
     target = state.get('target')
     # With every box full and nothing to release, a hunt could never keep a catch.
     room = not policy.no_room(snapshot)
@@ -686,13 +913,8 @@ def journey(policy, snapshot, mem, Goal):
         if not wanted(policy, snapshot, target['species']):
             # Caught, or its item found: the search is done, so its spent decisions go too.
             forget(policy, hunt_key(target['species']))
-        state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
         state['target'] = target = None
     if target is None:
-        from .quests import legends
-        legend = legends(policy, snapshot, Goal)
-        if legend:
-            return legend
         groups = {}
         items = dict(snapshot.items)
         for row in data.encounters if room else ():
@@ -723,11 +945,9 @@ def journey(policy, snapshot, mem, Goal):
             route = routes[key]
             if route is None or not points[key]:
                 continue
-            attempted = state.get('attempts', {}).get(str(species), -100000)
-            recent = policy.decisions - attempted < 18000
             choices.append((not bool(policy.demand.get(species) or species in state['prerequisites']
                                      or species in carriers),
-                            species in snapshot.owned, recent,
+                            species in snapshot.owned,
                             len(route) + 50 / max(1, row['chance']), species, mid, method, row))
         if choices:
             target = dict(min(choices, key=lambda row: row[:-1])[-1], started=policy.decisions)
@@ -737,34 +957,19 @@ def journey(policy, snapshot, mem, Goal):
             if shadow is not None:
                 shadow.compare('hunt', lambda: hunt_candidates(choices), choice_key(target))
         else:
-            goal = tower(policy, snapshot, Goal)
-            if goal:
-                return goal
-            # A finished run keeps playing the way Red, Blue and Yellow do: better-DV hunts, training ten
-            # levels at a time, a due marathon, shiny searches and League runs, as the arbiter picks them
-            # (see postgame).
-            from . import postgame
-            goal = postgame.journey(policy, snapshot, mem, Goal, current_time)
-            if goal:
-                return goal
-            if nursery:
-                return while_waiting(policy, snapshot, mem, nursery, Goal)
-            eggs = any(mon.egg for mon in snapshot.party)
-            # Carried eggs hatch on this walk, so only a walk without them is idle.
-            state['phase'] = 'hatching' if eggs else 'waiting'
-            # Nothing else is useful until the cartridge clock opens a window or a trade brings new work.
-            # The plan is rebuilt every step, so clock-gated work starts as soon as its window opens.
-            return patrol(policy, snapshot, Goal, waiting_label(policy, snapshot, mem, current_time))
+            return None
     return hunt(policy, snapshot, Goal)
 
 
 def postgame_league(policy, snapshot, mem, current_time):
-    """Whether a postgame League run may start: the Champion is beaten, the team is ready and no clock wait is due."""
+    """Whether a postgame League run may start: the Champion is beaten and the team is ready.
+
+    A clock window opening later does not hold the run back, since the clock wait is passive and
+    clock-gated work starts on the first decision after its window opens.
+    """
     if 'champion' not in getattr(policy, 'completed', {}) or not snapshot.hall_of_fame_count:
         return False
-    if not league_ready(policy, snapshot):
-        return False
-    return clock_wait(policy, snapshot, mem, current_time) is None
+    return league_ready(policy, snapshot)
 
 
 HUNT_METHODS = {'grass', 'surf', 'old rod', 'good rod', 'super rod', 'headbutt', 'rock smash'}
@@ -835,7 +1040,8 @@ def hunt(policy, snapshot, Goal, target=None, label=None):
     if not points:
         if postgame:
             return unavailable(policy, snapshot, Goal)
-        state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
+        # No tile of its map yields it, so the next pick looks elsewhere until the stand-down ends.
+        stand_down(policy, hunt_key(target['species']))
         state['target'] = None
         return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     if mid == snapshot.map:
@@ -862,7 +1068,8 @@ def hunt(policy, snapshot, Goal, target=None, label=None):
             else:
                 if postgame:
                     return unavailable(policy, snapshot, Goal)
-                state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
+                # No reachable tile yields it, so the next pick looks elsewhere until the stand-down ends.
+                stand_down(policy, hunt_key(target['species']))
                 state['target'] = None
                 return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[mid]['constant'], snapshot.x, snapshot.y)
     else:
@@ -905,7 +1112,6 @@ def give_up(policy):
     state = policy.collection
     target = state.get('target')
     if target:
-        state.setdefault('attempts', {})[str(target['species'])] = policy.decisions
         stand_down(policy, hunt_key(target['species']))
     else:
         from .postgame import drop

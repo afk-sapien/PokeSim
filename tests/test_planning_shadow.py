@@ -127,8 +127,8 @@ def test_an_overworld_errand_takes_the_tier_and_value_of_the_goal_it_unblocks():
 
 def test_gen2_hunts_value_new_entries_and_the_ladder_stands_alone():
     row = {'species': 7, 'map': 3, 'method': 'grass', 'chance': 20}
-    choices = [(False, False, False, 40 + 50 / 20, 7, 3, 'grass', row),
-               (True, True, False, 10 + 50 / 20, 8, 3, 'grass', {**row, 'species': 8})]
+    choices = [(False, False, 40 + 50 / 20, 7, 3, 'grass', row),
+               (True, True, 10 + 50 / 20, 8, 3, 'grass', {**row, 'species': 8})]
     new, repeat = hunt_candidates(choices)
     assert (new.key, new.value, new.goal) == ('7:3:grass', values.NEW_ENTRY, 'hunt new entry')
     assert (repeat.value, repeat.goal) == (values.SMALL, 'hunt repeat')
