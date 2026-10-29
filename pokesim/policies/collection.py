@@ -987,13 +987,11 @@ class Collection:
                 and any(70 in mon.moves for mon in s.party)
                 and distance_to(((MAPS['ROUTE_23'], 8, 138),)) is None):
             # At a project boundary, reopen the route instead of endlessly selecting
-            # only the few species reachable from the League side of Victory Road.
-            north = (s.map in (MAPS['INDIGO_PLATEAU'], MAPS['INDIGO_PLATEAU_LOBBY'])
-                     or s.map == MAPS['ROUTE_23'] and s.y < 40
-                     or s.map in (MAPS['VICTORY_ROAD_2F'], MAPS['VICTORY_ROAD_3F']) and s.x >= 24 and s.y >= 7)
-            target = ((MAPS['VICTORY_ROAD_3F'], 27, 15) if north else (MAPS['ROUTE_23'], 8, 138))
+            # only the few species reachable from the League side of Victory Road. The policy plans
+            # the pushes inside, including the one out of the east corridor, so the goal is the exit.
             return Goal('collect_passage', 'Return to Kanto for more hunting grounds',
-                        'Open the Victory Road passage before selecting another expedition', (target,))
+                        'Open the Victory Road passage before selecting another expedition',
+                        ((MAPS['ROUTE_23'], 8, 138),))
         for sid,rows in sources.items():
             if dex(sid) in s.owned:
                 rows = [source for source in rows if source['method'] in REPEATABLE

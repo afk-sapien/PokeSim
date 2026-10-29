@@ -334,7 +334,7 @@ def test_victory_road_does_not_ride_the_ladder_between_floors():
 
 
 def test_returning_from_plateau_clears_the_east_corridor_boulder():
-    from pokesim.policies.puzzles import BoulderPlanner, boulder_task
+    from pokesim.policies.puzzles import BoulderPlanner
     from pokesim.strategy_data import WORLD
     s = snap(map=MAPS['VICTORY_ROAD_3F'], x=27, y=15,
              party=(mon(moves=(70, 0, 0, 0)),))
@@ -343,14 +343,14 @@ def test_returning_from_plateau_clears_the_east_corridor_boulder():
     nav.live_map = s.map
     nav.live_positions = [(o[0], o[1]) for o in WORLD[s.map]['objects']]
     planner = BoulderPlanner()
-    assert planner.route(s, nav, boulder_task(s)) is None
+    assert planner.route(s, nav, ('BOULDER1', (3, 5))) is None
     assert planner.route(s, nav, ('BOULDER3', (22, 10))) is not None
     assert planner.path[-1][0][2:] == (23, 10)
     assert planner.path[-1][1] == 'left'
 
 
 def test_returning_through_victory_road_can_solve_the_second_switch_first():
-    from pokesim.policies.puzzles import BoulderPlanner, boulder_task
+    from pokesim.policies.puzzles import BoulderPlanner
     from pokesim.strategy_data import WORLD
     s = snap(map=MAPS['VICTORY_ROAD_2F'], x=22, y=16,
              party=(mon(moves=(70, 0, 0, 0)),),
@@ -360,8 +360,9 @@ def test_returning_through_victory_road_can_solve_the_second_switch_first():
     nav.live_map = s.map
     nav.live_positions = [(o[0], o[1]) for o in WORLD[s.map]['objects']]
     planner = BoulderPlanner()
-    assert planner.route(s, nav, boulder_task(s)) is None
-    assert planner.route(s, nav, ('BOULDER3', (9, 16))) is not None
+    assert planner.route(s, nav, ('BOULDER1', (1, 16))) is None
+    # Any boulder may take any switch, so the dropped one goes on the switch it can reach.
+    assert planner.switch_push(s, nav)[0] == ('BOULDER3', (9, 16))
     assert planner.path[-1][0][2:] == (10, 16)
     assert planner.path[-1][1] == 'left'
 
@@ -391,7 +392,7 @@ def test_boulder_search_reads_each_square_once_per_plan():
 
 def test_boulder_search_that_failed_is_not_repeated_until_its_inputs_change():
     from dataclasses import replace
-    from pokesim.policies.puzzles import BoulderPlanner, boulder_task
+    from pokesim.policies.puzzles import BoulderPlanner
     from pokesim.strategy_data import WORLD
     s = snap(map=MAPS['VICTORY_ROAD_3F'], x=27, y=15, party=(mon(moves=(70, 0, 0, 0)),))
     nav = Navigator()
@@ -405,7 +406,7 @@ def test_boulder_search_that_failed_is_not_repeated_until_its_inputs_change():
         return active_tile(world, x, y)
     nav.active_tile = counted
     planner = BoulderPlanner()
-    task = boulder_task(s)
+    task = ('BOULDER1', (3, 5))
     assert planner.route(s, nav, task) is None and reads
     # Another square of the area the search walked fails the same way without a search.
     moved = next(replace(s, x=x, y=y) for x, y in sorted(set(reads)) if (x, y) != (27, 15)

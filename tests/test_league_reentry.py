@@ -117,7 +117,7 @@ def test_empty_plateau_planner_returns_through_victory_road():
     p.observed_map = s.map
     p.step(PolicyContext(s, 0, 0, bytearray(65536)))
     assert p.goal.key == 'collect_passage'
-    assert p.goal.targets == ((MAPS['VICTORY_ROAD_3F'], 27, 15),)
+    assert p.goal.targets == ((MAPS['ROUTE_23'], 8, 138),)
     assert p.mode != 'planning the next expedition'
 
 

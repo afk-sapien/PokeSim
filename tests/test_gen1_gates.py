@@ -92,6 +92,17 @@ def test_every_name_in_the_table_is_a_known_map_or_item():
     assert gates.DRINKS == FORMER_DRINKS and gates.CINNABAR_GYM_DOORS == FORMER_CINNABAR
     # Only the Earth Badge guard by the Victory Road exit checks part of its row.
     assert [limit for _, _, limit in gates.ROUTE_23_GUARDS] == [13, None, None, None, None, None, None]
+    # Five switches across the three Victory Road floors, each with a flag of its own.
+    assert all(name in MAPS for name, _, _, _ in gates.BOULDER_SWITCHES)
+    assert len({flag for _, flag, _, _ in gates.BOULDER_SWITCHES}) == 5
+    assert {name for name, _, _, _ in gates.BOULDER_SWITCHES} == {
+        'VICTORY_ROAD_1F', 'VICTORY_ROAD_2F', 'VICTORY_ROAD_3F'}
+
+
+def test_the_boulder_switch_squares_match_the_hand_list_they_replace():
+    switches = {(name, x, y) for name, _, x, y in gates.BOULDER_SWITCHES}
+    assert switches == {('VICTORY_ROAD_1F', 17, 13), ('VICTORY_ROAD_2F', 1, 16), ('VICTORY_ROAD_2F', 9, 16),
+                        ('VICTORY_ROAD_3F', 3, 5), ('VICTORY_ROAD_3F', 23, 15)}
 
 
 @pytest.mark.parametrize('name, env, revision', [('pokered', 'POKERED_SOURCE', SOURCE_REVISION),

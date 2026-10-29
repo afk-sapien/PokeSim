@@ -147,7 +147,7 @@ def test_isolated_league_side_opens_passage_before_another_local_hunt():
     nav = SimpleNamespace(distance_lookup=lambda *args: lambda targets: None, path=[])
     goal = c.choose(s, nav, random.Random(0), Goal('collect_plan', '', ''))
     assert goal.key == 'collect_passage'
-    assert goal.targets == ((MAPS['VICTORY_ROAD_3F'], 27, 15),)
+    assert goal.targets == ((MAPS['ROUTE_23'], 8, 138),)
     assert c.project is None
 
 

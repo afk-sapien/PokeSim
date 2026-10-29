@@ -1,7 +1,7 @@
 """Directed journeys reuse ordinary battle, menu, and field-move controls."""
 from .navigation import Navigator
 from .progression import Goal
-from .puzzles import MANSION_MAPS, VICTORY_MAPS, boulder_task
+from .puzzles import MANSION_MAPS, VICTORY_MAPS
 from .strategic import FACING, W_FACING, StrategicPolicy, tap, wait
 from ..planning.stance import TRAVEL
 from ..strategy_data import MAPS, WORLD, event_set
@@ -64,13 +64,9 @@ class TravelPolicy(StrategicPolicy):
         if direction is not None:
             return self._move(s, mem, direction)
         if s.map in VICTORY_MAPS:
-            task = boulder_task(s)
-            direction = self.boulders.route(s, self.nav, task) if task else None
-            if not direction and s.map == MAPS['VICTORY_ROAD_2F'] and event_set(
-                    s.event_flags, 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'):
-                direction = self.boulders.route(s, self.nav, ('BOULDER3', (9, 16)))
-            if not direction and s.map == MAPS['VICTORY_ROAD_3F'] and s.x >= 24 and s.y >= 7:
-                direction = self.boulders.route(s, self.nav, ('BOULDER3', (22, 10)))
+            _, direction = self.boulders.switch_push(s, self.nav)
+            if not direction:
+                _, direction = self.boulders.exit_push(s, self.nav, self.targets)
             if direction:
                 if not mem[0xD728] & 1:
                     partner = next((i for i, mon in enumerate(s.party) if 70 in mon.moves), None)

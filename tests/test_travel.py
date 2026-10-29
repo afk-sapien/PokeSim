@@ -6,7 +6,7 @@ import pytest
 
 from pokecore.centers import CENTERS
 from pokesim.policies.travel import TravelNavigator, TravelPolicy
-from pokesim.strategy_data import MAPS, WORLD
+from pokesim.strategy_data import MAPS, WORLD, event_set
 from test_events import snap
 from test_strategy import flags, mon
 
@@ -15,7 +15,16 @@ def trainer(**changes):
     values = dict(map=MAPS['VICTORY_ROAD_2F'], x=25, y=7, frame=1000,
                   badges=255, party=(mon(moves=(57, 70, 33)),))
     values.update(changes)
-    return snap(**values)
+    s = snap(**values)
+    if 'hidden_objects' in changes:
+        return s
+    # The cartridge hides the second floor's dropped boulder until the third floor's hole
+    # switch is set, and hides the third floor's boulder after it falls.
+    dropped = event_set(s.event_flags, 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2')
+    bit = 122 if dropped else 96
+    hidden = bytearray(32)
+    hidden[bit // 8] |= 1 << bit % 8
+    return replace(s, hidden_objects=bytes(hidden))
 
 
 def prepare_navigation(policy, snapshot):
