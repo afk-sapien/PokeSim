@@ -91,10 +91,11 @@ def observe(policy, snapshot, activity):
     overworld = policy.menu is None
     progressed, _ = engine.observe(activity, snapshot, delta, previous, overworld, course(policy.data))
     policy.marathon_previous = snapshot if snapshot.valid else None
-    # Battle time is not time lost wandering, so it never counts toward the idle limit. Any change of
+    # Battle time is not time lost wandering, so it never counts toward the idle limit, and neither does
+    # a menu the planner is working through, such as a team change at a Pokémon Center. Any change of
     # tile counts as movement, so the walk to the starting line and warps between maps are not idle.
     walked = previous is not None and (previous.map, previous.x, previous.y) != (snapshot.map, snapshot.x, snapshot.y)
-    if progressed or walked or snapshot.in_battle:
+    if progressed or walked or snapshot.in_battle or not overworld:
         activity['progress_frame'] = snapshot.frame
     if before == 0 and activity['checkpoint'] == 1:
         events(policy).append(engine.start_event(course(policy.data)))

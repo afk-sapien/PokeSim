@@ -155,6 +155,12 @@ def test_a_race_ends_at_its_budget_or_two_idle_minutes_without_a_finish(data, mo
     for frame in range(2300, 2300 + 2 * engine.IDLE_LIMIT, 600):
         postgame.observe(policy, at(points[1], frame, in_battle=1))
     assert postgame.state(policy)['activity'] is not None
+    # Nor is a menu the planner works through, such as a team change at a Pokémon Center.
+    policy.menu = object()
+    for frame in range(2300, 2300 + 2 * engine.IDLE_LIMIT, 600):
+        postgame.observe(policy, at(points[1], frame))
+    assert postgame.state(policy)['activity'] is not None
+    policy.menu = None
     still = 2300 + 2 * engine.IDLE_LIMIT
     postgame.observe(policy, at(points[1], still))
     postgame.observe(policy, at(points[1], still + engine.IDLE_LIMIT))

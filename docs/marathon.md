@@ -70,7 +70,9 @@ hours before another can be selected.
 
 The entire attempt, including travel to the start, has a 50-minute simulated-time
 budget. A stalled attempt can end earlier through the normal navigation recovery
-or two-minute idle limit. Time in battle never counts toward that limit.
+or two-minute idle limit. Time in battle never counts toward that limit. In
+Gold, Silver and Crystal, time in a menu the planner is working through, such
+as a team change at a Pokémon Center, does not count either.
 Unfinished attempts receive a separate journal report, never a finish or a
 personal best. Optional item pickups and social detours are skipped during the
 Kanto race.
