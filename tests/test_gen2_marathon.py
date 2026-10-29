@@ -126,7 +126,14 @@ def test_a_full_race_is_timed_journaled_and_recorded(data, monkeypatch):
     assert goal.map_name == 'CHERRYGROVE_CITY' and 'Checkpoint 1 of 10' in goal.label
     shown = marathon.details(policy)
     assert shown['name'] == 'Johto Marathon' and shown['current']['started'] and shown['total_checkpoints'] == 10
-    frame = run_course(policy, points[1:], frame)
+    # Each checkpoint counts in course order, and the panel names the next town until the finish.
+    for index, point in enumerate(points[1:-1], start=1):
+        frame = run_course(policy, [point], frame)
+        assert postgame.state(policy)['activity']['gains']['checkpoints'] == index
+        goal = postgame.step(policy, at(point, frame), clock(), Goal, 'day')
+        assert goal.map_name == data.maps[points[index + 1][0]]['constant']
+        assert f'Checkpoint {index + 1} of 10' in goal.label
+    frame = run_course(policy, points[-1:], frame)
     assert postgame.state(policy)['activity'] is None
     [finish] = marathon.take_events(policy)
     assert finish['title'] == 'Johto Marathon finished!' and finish['tags'] == 'runner'

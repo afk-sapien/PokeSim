@@ -20,6 +20,7 @@ def emu(monkeypatch):
     emu.fatal_error, emu.stopping = None, False
     emu.pb, emu.steps, emu.policy = Mock(), Mock(), Mock(backing_out=False)
     emu._read, emu._tick, emu._autosave, emu._report_missed_shiny = Mock(), Mock(), Mock(), Mock()
+    emu._report_marathon = Mock()
     return emu
 
 
