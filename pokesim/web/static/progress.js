@@ -5,14 +5,15 @@
   const HEIGHT = 64
   // Keeps a line at zero or at its best clear of the edges, so its stroke is never cut in half.
   const INSET = 3
-  // Badges are over within the first day, so the long goals take their place. A series without
-  // a max scales to its own best and shows no denominator.
+  // Badges come first, out of 8 in Kanto and 16 with Johto. A series without a max scales to
+  // its own best and shows no denominator.
   // The page names its cartridge's Pokédex size: 151 in Kanto, 251 with Johto.
   const dexTotal = () => {
     const size = Number(document.querySelector('meta[name="pokesim-dex-total"]')?.content)
     return Number.isInteger(size) && size > 0 ? size : 151
   }
   const series = (total = dexTotal()) => [
+    {key: 'badges', label: 'Badges', max: total > 151 ? 16 : 8},
     {key: 'owned', label: 'Pokédex registered', max: total},
     {key: 'level100', label: 'Level 100 species', max: total},
     {key: 'perfect', label: 'Perfect finds'},

@@ -247,6 +247,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         from ..statistics import status, recent, overview, highlights
         from ..adventure_records import status as record_status
         from ..adventure_counters import status as tallies
+        from ..catch_rates import status as catch_rates
+        from ..shiny import log as shiny_log
         if gen2:
             from ..gen2.steps import STEPS, status as mew_status
             from ..gen2 import returns as gen2_returns
@@ -264,15 +266,21 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             held = [mon for mon in game.get('party', []) + (game.get('storage') or {}).get('pokemon', [])
                     if not mon.get('egg')]
             shinies['held'] = sum(bool(mon.get('shiny')) for mon in held)
+            names = {entry['dex']: entry['name'] for entry in emu.data.species.values() if 1 <= entry.get('dex', 0) <= 251}
+            with store.lock:
+                shinies['log'] = shiny_log(store.db, 2, names)
+            summary = overview(current, {'milestones': goals}, {
+                'steps': walked.get('total'), 'available': bool(walked), 'started_at': walked.get('started_at')})
+            catches = store.get(CAPTURES) or {'available': False}
             return {**status(store), 'generation': 2,
-                    'overview': overview(current, {'milestones': goals}, {
-                        'steps': walked.get('total'), 'available': bool(walked), 'started_at': walked.get('started_at')}),
+                    'overview': summary,
                     'milestone_records': record_status(store, 2), 'recent': recent(store),
                     'legendary_returns': gen2_returns.status(store), 'event_returns': gen2_returns.event_status(store),
                     'highlights': highlights(game, (lambda mon: gen2_power(mon, emu.data),
                                                     lambda mon: None if mon.get('egg') else mon.get('dv_total')),
                                              emu.data.species),
-                    'collection_records': {'catches': store.get(CAPTURES) or {'available': False},
+                    'collection_records': {'catches': catches,
+                                           'rates': catch_rates(store, catches, summary.get('play_clock')),
                                            'perfect_found': goals['perfect_found'],
                                            'perfect_count_is_minimum': goals['perfect_count_is_minimum'],
                                            'shiny': shinies},
@@ -287,14 +295,19 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         goals = records['milestones']
         from .. import step_events, mew_returns
         returns = returns_status(store)
-        return {**status(store), 'overview': overview(current, records, returns),
+        summary, catches = overview(current, records, returns), catch_status(store)
+        from ..ram import DEX_NAMES
+        with store.lock:
+            shinies = {**records['shiny'], 'log': shiny_log(store.db, 1, DEX_NAMES)}
+        return {**status(store), 'overview': summary,
                 'milestone_records': record_status(store), 'recent': recent(store),
                 'highlights': highlights(current.get('game')), 'legendary_returns': returns,
                 'event_returns': step_events.status(store), 'mew_returns': mew_returns.status(store),
-                'collection_records': {'catches': catch_status(store),
+                'collection_records': {'catches': catches,
+                                       'rates': catch_rates(store, catches, summary.get('play_clock')),
                                        'perfect_found': goals['perfect_found'],
                                        'perfect_count_is_minimum': goals['perfect_count_is_minimum'],
-                                       'shiny': records['shiny'],
+                                       'shiny': shinies,
                                        # Off means wild grass, cave and water DVs keep the cartridge's limits.
                                        'fair_wild_dvs': getattr(config, 'FAIR_WILD_DVS', False) is True},
                 'marathon': collection.get('marathon', {}), 'tallies': tallies(store)}

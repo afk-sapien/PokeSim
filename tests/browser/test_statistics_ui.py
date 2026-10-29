@@ -32,8 +32,9 @@ def test_journal_entries_and_stats(page, game, width, theme):
     assert page.locator('#events').count() == 0
     # Red, Blue and Yellow explain why wild shinies and perfect finds stay at zero with fair wild DVs off.
     expect(page.locator('#stats-wild-dv-note')).to_contain_text('cannot be shiny or perfect')
-    assert page.locator('.progress-chart').count() == 18
-    assert page.locator('.progress-chart:visible').count() == 18
+    assert page.locator('.progress-chart').count() == 19
+    assert page.locator('.progress-chart:visible').count() == 19
+    expect(page.locator('#road .progress-badges')).to_contain_text('Badges')
     assert page.locator('#statistics-charts .progress-label').evaluate_all(
         'labels => labels.every(label => label.scrollWidth <= label.clientWidth)')
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
@@ -292,4 +293,26 @@ def test_battle_tallies_outlive_a_pruned_journal(page, game, width):
     expect(page.locator('[data-tally="evolutions"]')).to_contain_text('1')
     expect(page.locator('[data-tally="releases"]')).to_contain_text('0')
     expect(page.locator('#tally-note')).to_contain_text('kept when old entries are pruned')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1280, 320])
+def test_shiny_log_lists_each_shiny_newest_first_with_its_date(page, game, width):
+    from pokesim import shiny
+    url, store, _, _ = game
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(url + '/stats')
+    expect(page.locator('#stats-catch-pace')).not_to_have_text('Loading')
+    assert page.locator('#shiny-log').is_hidden()
+    with store.lock, store.db:
+        shiny.initialize(store.db)
+        # A receipt kept before dates were recorded.
+        store.db.execute("INSERT INTO shiny_receipts(kind, fingerprint, dex) VALUES ('seen', 'old', 129)")
+        shiny.record(store.db, 'acquired', 'new', 25)
+    page.reload()
+    rows = page.locator('#shiny-log-list li')
+    expect(rows).to_have_count(2)
+    expect(rows.first).to_contain_text('Acquired')
+    expect(rows.first).to_have_attribute('data-dex', '25')
+    expect(rows.last).to_contain_text('Seen in the wild, Date unknown')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

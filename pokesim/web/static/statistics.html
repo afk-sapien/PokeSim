@@ -70,7 +70,13 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div><span class="micro">Shinies seen</span><strong class="readout" id="stats-shiny-seen">Loading</strong><span class="note">Wild encounters tracked</span></div>
 <div id="stats-shiny-held-cell"><span class="micro">Shinies held</span><strong class="readout" id="stats-shiny-held">Loading</strong><span class="note">Currently in the party and PC</span></div>
 <div><span class="micro">Perfect Pokémon held</span><strong class="readout" id="stats-perfect-held">Loading</strong><span class="note">Currently in the party and PC</span></div>
+<div><span class="micro">Catches per hour</span><strong class="readout" id="stats-catch-pace">Loading</strong><span class="note" id="stats-catch-pace-note"></span></div>
+<div><span class="micro">Wild encounters per catch</span><strong class="readout" id="stats-per-catch">Loading</strong><span class="note">Since encounter counting began</span></div>
 </div></section>
+<section class="statistics-section" id="shiny-log" aria-labelledby="shiny-log-heading" hidden>
+<div class="column-head"><h2 class="legend legend--ink" id="shiny-log-heading">Shiny log</h2><span class="micro">Newest first</span></div>
+<ol class="progress-panel" id="shiny-log-list"></ol>
+</section>
 <section class="statistics-section" id="activity-details" aria-labelledby="activity-heading">
 <div class="column-head"><h2 class="legend legend--ink" id="activity-heading">Activity</h2></div>
 <div class="progress-panel stats-activity" id="activity-list"></div><p class="note" id="activity-note"></p>
@@ -108,7 +114,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="${game_base}/static/app.js?v=pass2-1"></script>
-<script src="${game_base}/static/progress.js?v=2"></script>
-<script src="${game_base}/static/statistics.js?v=tallies-1"></script>
+<script src="${game_base}/static/progress.js?v=badges-1"></script>
+<script src="${game_base}/static/statistics.js?v=rates-1"></script>
 </body>
 </html>

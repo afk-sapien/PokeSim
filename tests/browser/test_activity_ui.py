@@ -39,6 +39,11 @@ def test_activity_pages_search_sort_and_navigation(page, game, width):
     expect(page.locator('#ledger-head')).to_contain_text('Traded out')
     expect(page.locator('#ledger-rows tr').first.locator('td').nth(5)).to_have_text('12')
     expect(page.locator('#ledger-rows tr').first.locator('td').nth(6)).to_have_text('7')
+    # 123 wild Pikachu for its one catch.
+    expect(page.locator('#ledger-head')).to_contain_text('Encounters per catch')
+    expect(page.locator('#ledger-rows tr').first.locator('td').nth(8)).to_have_text('123')
+    page.locator('#ledger-sort').select_option('per_catch')
+    expect(page.locator('#ledger-rows tr').last.locator('td').nth(8)).to_have_text('No catches')
     page.locator('#ledger-search').fill('pikachu')
     expect(page.locator('#ledger-rows tr')).to_have_count(1)
     expect(page.locator('#ledger-rows')).to_contain_text('123')

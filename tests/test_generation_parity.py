@@ -135,7 +135,8 @@ def common(emu, store):
     emu.last_activity, emu.last_reload, emu.fatal_error, emu.reloads = time.monotonic(), 0.0, None, 1
     emu.thread = SimpleNamespace(is_alive=lambda: True)
     emu.stall = SimpleNamespace(stalled=lambda *_: False, quiet=lambda *_: (1.5, 0))
-    emu.play_clock = PlayClock({'seconds': 3600})
+    # An hour of play, counted in frames.
+    emu.play_clock = PlayClock({'frames': 3600 * 60, 'initialized': True})
     emu.last_achievement = {'id': 1, 'title': 'Caught a Pokémon', 'ts': now - 30}
     with store.lock, store.db:
         store.db.execute('INSERT INTO progress(ts, badges, owned, seen, league, level100, perfect) '
@@ -364,3 +365,31 @@ def test_both_generations_keep_the_same_battle_and_moment_tallies(tmp_path, gen2
     assert gen1 == gen2
     assert (gen1['faints'], gen1['blackouts'], gen1['trainers_defeated'], gen1['trainer_losses']) == (1, 2, 1, 1)
     assert (gen1['evolutions'], gen1['releases'], gen1['trainer_win_rate']) == (1, 1, 50.0)
+
+
+def test_both_generations_report_catch_pace_and_a_dated_shiny_log(tmp_path, gen2_data):
+    """Three catches in an hour of play, 30 wild Pidgey for them and one shiny seen give the same
+    rates, per species ratio and shiny log in both generations."""
+    from pokesim import shiny
+    from pokesim.activity_ledger import increment
+    from pokesim.catches import KEY as GEN1_CATCHES
+    from pokesim.gen2.tracking import CAPTURES
+    found = []
+    for generation, (emu, store), key in ((1, gen1_adventure(tmp_path), GEN1_CATCHES),
+                                          (2, gen2_adventure(tmp_path, gen2_data), CAPTURES)):
+        try:
+            store.set(key, {**store.get(key), 'total': 3, 'complete_history': True})
+            with store.lock, store.db:
+                increment(store.db, 'wild', 16, 30)
+                increment(store.db, 'caught', 16, 3)
+                shiny.record(store.db, 'seen', 'pidgey', 16, generation=generation)
+            pages = payloads(emu, store)
+        finally:
+            store.close()
+        records = pages['statistics']['collection_records']
+        pidgey = next(row for row in pages['activity']['pokemon'] if row['id'] == 16)
+        log = [(entry['kind'], entry['dex'], entry['name'].upper(), entry['ts'] > 0) for entry in records['shiny']['log']]
+        found.append((records['rates'], pidgey['per_catch'], log))
+    assert found[0] == found[1]
+    assert found[0] == ({'catches_per_hour': 3.0, 'encounters_per_catch': 10.0, 'partial': False}, 10.0,
+                        [('seen', 16, 'PIDGEY', True)])
