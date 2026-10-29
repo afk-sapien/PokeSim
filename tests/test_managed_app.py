@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import time
 from types import SimpleNamespace
 
@@ -8,6 +9,7 @@ import pytest
 
 from pokesim.app.manager import Manager, create_app
 from pokesim.app.registry import identifier
+from pokesim.app.supervisor import AdventureRunning
 from pokesim import desktop_setup
 
 
@@ -359,6 +361,23 @@ def test_stopped_adventure_pages_come_from_a_read_only_view(client, monkeypatch)
     assert opened == [adventure['id']]
     monkeypatch.setattr(manager.supervisor, 'viewer', lambda aid: (_ for _ in ()).throw(RuntimeError('no save')))
     assert client.get(base + '/api/state').status_code == 409
+
+
+def test_a_starting_adventure_asks_for_a_retry_without_a_traceback(client, monkeypatch, caplog):
+    client, manager = client
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    adventure = manager.registry.create('Starting Red', 'fixture-rom', {}, identifier())
+    monkeypatch.setattr(manager.supervisor, 'viewer',
+                        lambda aid: (_ for _ in ()).throw(AdventureRunning('This adventure is running')))
+    base = f'/games/{adventure["id"]}'
+    with caplog.at_level(logging.INFO, logger='pokesim.app.manager'):
+        api = client.get(base + '/api/state')
+        page = client.get(base + '/')
+    assert api.status_code == page.status_code == 503
+    assert api.headers['Retry-After'] == page.headers['Retry-After'] == '2'
+    assert 'starting' in page.text
+    starting = [record for record in caplog.records if 'is starting' in record.getMessage()]
+    assert len(starting) == 2 and not any(record.exc_info for record in caplog.records)
 
 
 def test_audio_proxy_preserves_pcm_metadata_and_adventure_boundary(client, monkeypatch):
