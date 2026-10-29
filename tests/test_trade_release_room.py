@@ -82,7 +82,9 @@ def test_trade_spare_protects_keep_hand_picked_and_wished_pokemon(gen2_data):
     policy = Policy(gen2_data, seed=1, starter='chikorita')
     snapshot = gold_like()
     weakest, middle, best = sorted(snapshot.stored[4:], key=lambda m: sum(m.dvs))
-    assert policy.release_target(snapshot) is None
+    # Six in the party and every box full, so the Leftovers can never come off. The weakest spare may go
+    # with them, since the lead and the other boxed Snorlax still hold Leftovers.
+    assert policy.release_target(snapshot) is weakest
     assert policy.trade_spare(snapshot) is weakest
     key = lambda m: identity({'trainer_id': m.trainer_id, 'dvs': m.dvs, 'dex': m.species})  # noqa: E731
     # A Pokémon set to Never trade, one hand-picked for a trade (even by an older trainer-and-DV key) and a wished species stay.
