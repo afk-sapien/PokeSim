@@ -6,6 +6,7 @@ from unittest.mock import Mock
 
 from pokesim.policies.battle import choose_battle
 from pokesim.planning import values
+from pokesim.planning.stance import TRAIN
 from pokesim.policies.collection import EVOS, Collection, candidate
 from pokesim.policies.director import AdventureDirector
 from pokesim.policies.navigation import Navigator
@@ -130,7 +131,9 @@ def test_safe_trainee_keeps_experience_instead_of_an_unneeded_level100_switch():
     assert choose_battle(snapshot, trainee, enemy, 0).kind == 'switch'
     assert choose_battle(snapshot, trainee, enemy, 0, training_index=0).kind == 'fight'
     unsafe = replace(trainee, hp=1)
-    assert choose_battle(replace(snapshot, party=(unsafe, veteran)), unsafe, enemy, 0, training_index=0).kind == 'switch'
+    # Training goals fight on, so a worn party switches rather than running (planner design S5).
+    assert choose_battle(replace(snapshot, party=(unsafe, veteran)), unsafe, enemy, 0, training_index=0,
+                         kind=TRAIN).kind == 'switch'
 
 
 def test_a_new_pokedex_entry_comes_before_the_level_100_grind():

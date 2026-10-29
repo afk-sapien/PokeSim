@@ -1,7 +1,7 @@
 """Bounded collecting expeditions and evolution projects for a continuing adventure."""
 import time
 from collections import Counter
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from ..duplicates import quality
 from pokecore.identity import same
 from .move_development import evolution_wait, move_name
@@ -25,6 +25,7 @@ from ..planning.cost import FRAMES_PER_TILE
 from ..planning.shadow import Shadow
 from ..planning.conditions import Can, Count, Item, Requirements, feasible
 from ..planning.ledger import MONEY, Need
+from ..planning.stance import HUNT, TRAIN
 from ..planning.monitor import CONTINUE, SPENT, STOOD_DOWN, ProgressEvent
 from . import training, marathon, league_rotation
 from ..shiny import is_shiny
@@ -1220,14 +1221,16 @@ class Collection:
             points=tiles(p)
             purpose = ('a partner another adventure needs' if self.demand().get(dex(sid), 0)
                        else 'more chances to find high DV partners' if p.get('dv_hunt') else 'another partner for the collection' if p.get('repeat') else 'a missing Pokédex entry')
+            # Every hunt runs from the battles it cannot catch from (planner design S5): Pokédex, partner,
+            # repeat and high DV searches alike.
             return Goal('collect_hunt','Find '+name(sid),f'Search {place(p["map"])} for {purpose}',
-                        tuple(t[:3] for t in points), approaches=tuple(t for t in points if t[3]))
+                        tuple(t[:3] for t in points), approaches=tuple(t for t in points if t[3]), kind=HUNT)
         if mode in ('gift','static','trade','fossil'):
             if mode == 'static' and dex(sid) == 144 and not all(event_set(s.event_flags, flag) for flag in
                     ('EVENT_SEAFOAM4_BOULDER1_DOWN_HOLE', 'EVENT_SEAFOAM4_BOULDER2_DOWN_HOLE')):
-                return at('collect_seafoam_current', 'Slow the current for Articuno',
-                          'Push the Seafoam boulders into the holes before using Surf',
-                          'SEAFOAM_ISLANDS_B3F', 6, 15)
+                return replace(at('collect_seafoam_current', 'Slow the current for Articuno',
+                                  'Push the Seafoam boulders into the holes before using Surf',
+                                  'SEAFOAM_ISLANDS_B3F', 6, 15), kind=HUNT)
             room=WORLD[p['map']]['symbol']
             fragment = p['fragment']
             if mode=='trade':
@@ -1238,7 +1241,9 @@ class Collection:
                 fragment='EEVEE_POKEBALL'
             if mode=='fossil' and event_set(s.event_flags,'EVENT_LAB_STILL_REVIVING_FOSSIL'):
                 return at('collect_fossil_walk','Give the fossil lab time','Step outside while the fossil is revived','CINNABAR_ISLAND',6,10)
-            return object_goal('collect_'+mode,'Collect '+name(sid),'Visit a remaining source for the Pokédex',room,fragment)
+            goal = object_goal('collect_'+mode,'Collect '+name(sid),'Visit a remaining source for the Pokédex',room,fragment)
+            # A legendary expedition is a hunt for its legendary, so it runs from every other battle.
+            return replace(goal, kind=HUNT) if legendary_project(p) else goal
         if mode=='rematch':
             if s.map != MAPS['INDIGO_PLATEAU_LOBBY']:
                 # Money stops at 999,999, so at the cap a rematch earns experience only.
@@ -1443,7 +1448,7 @@ class Collection:
             if p['method'] == 'train':
                 return Goal('collect_train', f'Train {s.party[index].nick or name(s.party[index].species)} to level {p["target_level"]}',
                             f'Level {s.party[index].level} of {p["target_level"]}. Stay with this partner while training is productive',
-                            training_targets(self.version, s.party[index].level))
+                            training_targets(self.version, s.party[index].level), kind=TRAIN)
             evo=p['evolution']
             if evo['method']=='item':
                 wait_for = evolution_wait(asdict(s.party[index]), evo)
@@ -1451,13 +1456,13 @@ class Collection:
                     level, move = wait_for
                     return Goal('collect_train', f'Learn {move_name(move)} before evolving',
                                 f'Train {s.party[index].nick or name(p["parent"])} to level {level} before using a stone',
-                                evolution_training_targets(self.version, s.party[index].level))
+                                evolution_training_targets(self.version, s.party[index].level), kind=TRAIN)
                 if not dict(s.items).get(ITEMS[evo['requirement']]):
                     return at('collect_stone','Buy an evolution stone','Complete another Pokédex entry','CELADON_MART_4F',5,5,'down')
                 return Goal('collect_evolve','Evolve '+name(p['parent']), 'Use '+evo['requirement'].replace('_',' ').title(),((s.map,s.x,s.y),))
             return Goal('collect_train','Train '+name(p['parent'])+' toward '+name(p['species']),
                         f'Work toward level {evo["requirement"]}, then resume other activities',
-                        evolution_training_targets(self.version, s.party[index].level))
+                        evolution_training_targets(self.version, s.party[index].level), kind=TRAIN)
         if p['method'] in ('gift','fossil') and len(s.party)>=6:
             # A party of field-move holders, Yellow's Pikachu and the strongest battler has nothing to
             # deposit. Offering the gift anyway parked the adventure at a PC until the project timed out.

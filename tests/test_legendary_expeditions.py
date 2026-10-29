@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 from pokesim.policies.battle import choose_battle, shopping_item
 from pokesim.planning import values
+from pokesim.planning.stance import HUNT
 from pokesim.planning.cost import FRAMES_PER_TILE
 from pokesim.policies.collection import EXPECTED_FRAMES, Collection, candidate
 from pokesim.policies.director import AdventureDirector, category, new_entry
@@ -59,8 +60,9 @@ def test_capture_reapplies_sleep_after_waking_and_saves_balls_for_target():
     decision = choose_battle(s, me, enemy, 0, used_status=(79,), collect_missing=True, capture_species=sid(150))
     assert decision.kind == 'fight' and decision.index == 0
     ordinary = replace(enemy, species=sid(16), level=70, hp=1)
-    decision = choose_battle(s, me, ordinary, 0, collect_missing=True, capture_species=sid(150))
-    assert decision.kind == 'run'
+    # The expedition is a hunt, so the battle stance runs from an ordinary wild Pokémon.
+    decision = choose_battle(s, me, ordinary, 0, collect_missing=True, capture_species=sid(150), kind=HUNT)
+    assert decision.kind == 'run' and decision.stance
 
 
 def test_route_battles_do_not_cancel_a_legendary_trip_on_return_to_overworld():
