@@ -568,6 +568,13 @@ class Emulator:
         self._reset_watch()
         self._publish_frame()
 
+    def _report_marathon(self, snapshot):
+        """Write the Johto Marathon's start and finish to the journal, each with a screenshot."""
+        from ..events import Event
+        from .marathon import take_events
+        for row in take_events(self.policy):
+            self._event(Event(**row), snapshot)
+
     def _event(self, event, snapshot):
         shot = self._shot_png()
         # Timeline-only entries such as faints and first sightings keep a picture but no save, as in Red, Blue and Yellow.
@@ -1090,6 +1097,7 @@ class Emulator:
                         snapshot = self._read()
                         action = self.policy.step(snapshot, self.pb.memory, stack_pointer(self.pb))
                         self._report_missed_shiny(snapshot)
+                        self._report_marathon(snapshot)
                     if action.button:
                         self.pb.button_press(action.button)
                     try:

@@ -69,14 +69,15 @@ def test_game_clock_shares_the_live_heading_row(page, game, monkeypatch):
             page.screenshot(path=f"{os.environ['SHOT_DIR']}/live-{width}.png")
 
 
-def test_stats_page_hides_the_marathon_without_one(page, game):
+def test_stats_page_shows_the_marathon_before_any_race(page, game):
     url, _, _, _ = game
     page.route('**/api/statistics', lambda route: route.fulfill(json={
-        'started_at': None, 'updated_at': None, 'current': {}, 'history': [], 'marathon': None,
+        'started_at': None, 'updated_at': None, 'current': {}, 'history': [], 'marathon': {},
         'collection_records': {'shiny': {'available': False, 'seen': None, 'acquired': None, 'held': 2}}}))
     page.goto(url + '/stats')
     # Arrivals were not counted, so the overview shows the two shinies held rather than "Not tracked".
     expect(page.locator('#stats-shiny-label')).to_have_text('Shinies held')
     expect(page.locator('#stats-shiny-acquired')).to_have_text('2')
     expect(page.locator('#stats-shiny-held-cell')).to_be_hidden()
-    expect(page.locator('#marathon-records')).to_be_hidden()
+    expect(page.locator('#marathon-records')).to_be_visible()
+    expect(page.locator('#marathon-last')).to_have_text('No attempts yet')

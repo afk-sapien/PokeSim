@@ -271,13 +271,15 @@ class Policy:
 
     def details(self):
         from .collection import active_target
+        from .marathon import details as marathon_details
         return {'action': self.mode, 'decisions': self.decisions, 'starter': self.starter,
                 'milestones': dict(self.completed), 'recoveries': self.recoveries, 'visited_tiles': len(self.nav.visits),
                 'objective': {'key': self.goal.key, 'label': self.goal.label, 'reason': self.goal.label} if self.goal else {},
                 'collection': {'version': self.data.game, 'dex_total': 251,
                                'phase': self.collection.get('phase', 'journey'),
                                'hunting': (active_target(self) or {}).get('species'),
-                               'npc_trades': [row['index'] for row in self.collection.get('npc_trades', [])]},
+                               'npc_trades': [row['index'] for row in self.collection.get('npc_trades', [])],
+                               'marathon': marathon_details(self)},
                 'blocked': self.unreachable_waits >= STUCK_WAITS,
                 'reason': self.goal.label if self.goal else 'Start the adventure'}
 
@@ -1228,13 +1230,15 @@ class Policy:
             prize_errand = self.goal.key in {'collection_coin_case', 'collection_coins', 'collection_prize', 'collection_slots'}
             self.goal = self.healing(snapshot) or (None if prize_errand else self.shop(snapshot)) or self.goal
         target = self.data.map_ids[self.goal.map_name]
+        # A marathon runner covers the course on foot, so neither Fly nor Surf shortens a leg.
+        running = self.goal.key == 'collection_marathon'
         from .flight import shortcut
-        flight = shortcut(self, snapshot, mem, target)
+        flight = None if running else shortcut(self, snapshot, mem, target)
         if flight:
             self.menu = flight
             self.mode = 'Fly to the next destination'
             return Action(None, 0, 24)
-        surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
+        surf = not running and bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
         path = self.nav.toward(snapshot, target, [(self.goal.x, self.goal.y)], memory, surf=surf)
         if path is None and self.goal is not journey_goal:
             # A side errand that cannot be reached from here must not hide the main objective.

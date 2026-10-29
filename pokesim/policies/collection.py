@@ -543,21 +543,7 @@ class Collection:
         project = self.project
         if not project or project['method'] != 'marathon':
             return
-        previous_best = self.marathon_records.get('best_frames')
-        new_best = finished and (previous_best is None or project['race_frames'] < previous_best)
-        self.marathon_records['last'] = {
-            'finished': finished, 'frames': project['race_frames'], 'personal_best': new_best, **project['gains']}
-        if finished:
-            self.marathon_records['completed'] = self.marathon_records.get('completed', 0) + 1
-            self.marathon_records['best_frames'] = min(
-                self.marathon_records.get('best_frames', project['race_frames']), project['race_frames'])
-        report = marathon.report(project, finished)
-        if new_best:
-            report += ' First personal best!' if previous_best is None else (
-                f' New personal best, {marathon.duration(previous_best - project["race_frames"])} faster!')
-        self.activity_events.append({
-            'type': 'marathon', 'title': 'Kanto Marathon finished!' if finished else 'Kanto Marathon called off',
-            'body': report, 'priority': 2, 'tags': 'runner'})
+        self.activity_events.append(marathon.finish(self.marathon_records, project, finished))
         self.next_marathon = self.elapsed + marathon.INTERVAL
         self.marathon_previous = None
 
@@ -643,11 +629,7 @@ class Collection:
                 if progressed:
                     self.idle_frames = 0
                 if before == 0 and project['checkpoint'] == 1:
-                    self.activity_events.append({
-                        'type': 'marathon', 'title': 'The Kanto Marathon is on!',
-                        'body': 'Pallet Town to Celadon and back, with 11 checkpoints. '
-                                'Wild Pokémon have not agreed to stay off the course.',
-                        'priority': 2, 'tags': 'runner'})
+                    self.activity_events.append(marathon.start_event())
             if project['method'] == 'marathon':
                 self.remaining -= delta
             if len(self.project_flags) != len(s.event_flags):

@@ -16,7 +16,7 @@
       // Gold, Silver and Crystal count every step the cartridge takes. Red, Blue and Yellow sample them.
       {key: 'steps', label: 'Sampled steps (legacy)', gen2Label: 'Steps walked'},
       {key: 'battles', label: 'Battles entered'},
-      {key: 'marathons', label: 'Marathons completed', marathon: true},
+      {key: 'marathons', label: 'Marathons completed'},
       {key: 'recorded_hours', label: 'Sampled game hours (legacy)'},
     ]},
     {title: 'Battle endurance', series: [
@@ -222,7 +222,6 @@
     })
 
     // Gold, Silver and Crystal have no Kanto Marathon, so the server sends null.
-    document.querySelector('#marathon-records').hidden = data.marathon === null
     const marathon = data.marathon || {}
     document.querySelector('#marathon-best').textContent = marathon.best_frames == null
       ? 'No finish yet' : raceTime(marathon.best_frames)
@@ -318,9 +317,7 @@
     const date = ts => new Date(ts * 1000).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'})
     document.querySelector('#statistics-window').textContent = `${date(data.history[0].ts)} → ${date(until)}`
     target.innerHTML = groups.map((group, index) => {
-      // Gold, Silver and Crystal send no marathon, since the Kanto Marathon is a Red, Blue and Yellow race.
-      const series = group.series.filter(series => !series.marathon || data.marathon !== null)
-        .map(series => data.generation === 2 && series.gen2Label ? {...series, label: series.gen2Label} : series)
+      const series = group.series.map(series => data.generation === 2 && series.gen2Label ? {...series, label: series.gen2Label} : series)
       const rows = Progress.describe(data.history, until, series).map(series => {
         const available = data.current[series.key] != null
         const value = available ? number(data.current[series.key]) + (series.unit || '') : 'Not recorded'

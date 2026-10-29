@@ -973,6 +973,7 @@ def arrive(policy, snapshot):
             return give_up(policy)
         policy.menu = task
         return 'wait'
-    if key in {'collection_wait', 'collection_idle', 'collection_hunt', 'collection_roam_hunt', 'collection_roam_lead', 'collection_static_lead'}:
+    if key in {'collection_wait', 'collection_idle', 'collection_hunt', 'collection_roam_hunt', 'collection_roam_lead',
+               'collection_static_lead', 'collection_marathon'}:
         return 'wait'
     return None

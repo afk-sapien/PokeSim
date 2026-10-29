@@ -25,9 +25,6 @@ ALLOWED = {
     'state.fair_wild_dvs': 'Gen 1 only. Fair wild DVs patch the Red, Blue and Yellow encounter code.',
     'statistics.collection_records.fair_wild_dvs': 'Gen 1 only, the same setting as state.fair_wild_dvs.',
     'state.palette': 'Gen 1 only. Gold, Silver and Crystal draw their own colors, as Yellow does.',
-    'statistics.marathon': 'Gen 2 sends marathon: null on purpose. The Kanto Marathon is a Red, Blue and Yellow race.',
-    'statistics.current.marathons': 'Gen 2 keeps no marathon count, the same race as statistics.marathon.',
-    'statistics.history[].marathons': 'Gen 2 keeps no marathon count, the same race as statistics.marathon.',
     'statistics.collection_records.perfect_count_is_minimum': 'Perfect DVs are counted from what is held, '
                                                               'so either generation may send only a minimum.',
     'state.clock': 'Gen 2 only. Gold, Silver and Crystal keep a real-time clock.',
@@ -95,6 +92,12 @@ def gaps(gen1, gen2, path):
         return
     if blank(gen1) != blank(gen2):
         yield path, 'Gen 2' if blank(gen2) else 'Gen 1'
+
+
+# Features both generations have, which the allowlist may never excuse. Each course runs on one
+# marathon engine, so neither generation may hide the race again.
+REQUIRED = ('statistics.marathon', 'statistics.marathon.name', 'statistics.marathon.total_checkpoints',
+            'statistics.current.marathons', 'statistics.history[].marathons')
 
 
 def paths(value, path):
@@ -242,6 +245,13 @@ def test_both_generations_fill_the_same_user_visible_fields(tmp_path, gen2_data)
     found = [(path, lacking) for path, lacking in gaps(gen1, gen2, '') if not allowed(path.lstrip('.'))]
     assert not found,'Fields one generation fills and the other leaves out:\n' + '\n'.join(
         f'  {path.lstrip(".")}: missing on {lacking}' for path, lacking in found)
+    assert not [key for key in REQUIRED if allowed(key)]
+    for payload in (gen1, gen2):
+        assert set(REQUIRED) <= {path.lstrip('.') for path in paths(payload, '')}
+        assert payload['statistics']['current']['marathons'] is not None
+    assert gen1['statistics']['marathon']['name'] == 'Kanto Marathon'
+    assert gen2['statistics']['marathon']['name'] == 'Johto Marathon'
+    assert gen2['statistics']['marathon']['total_checkpoints'] == 12
 
 
 def test_gen2_sales_contest_catches_and_session_trades_reach_the_pages(tmp_path, gen2_data):
@@ -315,8 +325,8 @@ def test_gen2_collection_waits_for_two_matching_reads_as_gen1_does(tmp_path, gen
         history = store.db.execute('SELECT data FROM statistics_history').fetchall()
     finally:
         store.close()
-    # Gold, Silver and Crystal have no Kanto Marathon, so history keeps no count for it.
-    assert all('"marathons": null' in row[0] for row in history)
+    # Gold, Silver and Crystal count finished Johto Marathons, as Red, Blue and Yellow count Kanto ones.
+    assert all('"marathons": 0' in row[0] for row in history)
 
 
 def test_gen2_planner_releases_reach_the_journal_as_gen1_releases_do():
