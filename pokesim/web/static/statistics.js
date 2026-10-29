@@ -66,7 +66,9 @@
       row.dataset.tally = key
       add(row, 'span', 'micro', label)
       const shown = text ?? display(tallies?.[key])
-      add(row, 'strong', shown === 'Not tracked' ? 'readout readout--missing' : 'readout', shown)
+      // Words wrap like any missing value, so a phone keeps them inside the panel.
+      const missing = !tallies || (key === 'trainer_win_rate' ? rate == null : !Number.isFinite(tallies[key]))
+      add(row, 'strong', missing ? 'readout readout--missing' : 'readout', shown)
     }
     document.querySelector('#tally-note').textContent = !tallies ? 'Tallies are not available yet.'
       : `Counted from journal entries and kept when old entries are pruned${tallies.complete_history ? '.' : `, from the entries kept since ${date(tallies.since)}.`} The win rate counts a blackout outside a wild battle as a trainer loss.`
