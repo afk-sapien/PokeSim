@@ -185,7 +185,7 @@ Cadences that S4 left in place and S3 should replace with its own scoring: `PROJ
 Line numbers in this subsection are from main at 45374eb.
 
 - **Tier.** `STORY` before `UPKEEP` before `PROGRESS` before `FILLER`. An enabler that S2 offers for a failed condition (a box room visit, a restock) takes the tier and value of the goal it unblocks, not its own.
-- **Value.** One unit for both generations: a new dex entry is 1.0, a legendary is a dex entry, a species' first level 100 credit is 0.5, a perfect species is 0.5, and a quality catch is 0.5 times the expected drop in the species' best DV tail. Money has no value of its own. It is worth what it funds, so the rematch is worth its prize only while `funds_short` (`policies/ledger.py:131`) holds and a small constant otherwise. These weights need the lead's sign-off before step 5.
+- **Value.** One unit for both generations: a new dex entry is 1.0, a legendary is a dex entry, a species' first level 100 credit is 0.5, a perfect species is 0.5, and a quality catch is 0.5 times the expected drop in the species' best DV tail. Money has no value of its own. It is worth what it funds, so the rematch is worth its prize only while `funds_short` (`policies/ledger.py:131`) holds and a small constant otherwise. The lead approved these weights (see Decided).
 - **Expected frames.** `planning/cost.py` gives `travel + needed / chance × frames_per_encounter`, the shape Gen II already uses in `search_expected` (`gen2/standdown.py:31`). `needed` for a quality hunt is the expected catches until a better copy, one over P(better). Travel uses the route planner's length.
 - **Interrupt cost.** A candidate that cuts into a running goal adds the frames to walk back to it, plus the frames sunk into the current map when its puzzle resets on exit (boulders, switches, an unfinished League run). That is how row 19 goes: a shop walk out of Ice Path or the League costs the sunk frames, so it loses unless the need is urgent, with no named map list.
 - **Ties** break on key so the choice is deterministic. The recent-kind decay (`director.py:114`, `:122`) goes, since S4 backoff already moves the arbiter off a stalled goal.
@@ -226,12 +226,18 @@ Red is not out of work the way Blue is. It has open goals it cannot reach, and n
 
 The missing goal is a box room enabler that reopens box 11's list. Free a party slot by releasing the weaker Pidgeot (level 38, while the level 40 one keeps Fly), withdraw the nickname breaker, release spares up to `BOX_REFILL`, and deposit the breaker last so it hides nothing behind it. The arbiter values the enabler at the catches it unblocks (step 4).
 
-#### To decide before coding
+#### Decided
 
-- May the enabler release a party duplicate? `spare_entries` never offers party members today (`duplicates.py:47`).
-- Should a shiny search count encounters as progress (an S4 change)?
-- The value weights above for dex entries, level credit, perfect species and quality.
-- Whether step 4 goes first, since it is small and stands alone.
+The lead approved the plan as picked and confirmed these on 2026-10-29.
+
+- Party releases stay off. The step 4 enabler never releases a party duplicate.
+- Shiny progress belongs to S4. A target species encounter counts as progress for the monitor, so a live shiny search is not stood down as idle. The planner's own shiny search stays `FILLER`, and the value weights give it no extra worth.
+- The value weights are approved as written under Scoring: a new dex entry 1.0 (a legendary counts as one), a species' first level 100 credit 0.5, a perfect species 0.5, and a quality catch 0.5 times the expected drop in the best DV tail. The rematch is worth its prize while `funds_short` holds and a small constant otherwise.
+- Step 4 went first (#186, with the #188 fix).
+
+#### As built
+
+- Step 1 is #194. `planning/arbiter.py` ranks by tier, then value over expected plus interrupt frames, with ties on key. Passive candidates are never ranked, and an empty or all-passive list chooses nothing. `compare` names how the arbiter's pick differs from the chosen key. The seeded 18-run batch was byte-identical to the aac30ee baseline.
 
 ### S4. Progress monitor with backoff (cause C)
 
