@@ -29,3 +29,9 @@ CINNABAR_GYM_DOORS = ((9, 3, False),
                       (3, 8, True),
                       (2, 6, False),
                       (2, 3, False))
+# (map, flag, x, y) per square where a pushed boulder sets the flag. Any boulder on the floor counts.
+BOULDER_SWITCHES = (('VICTORY_ROAD_1F', 'EVENT_VICTORY_ROAD_1_BOULDER_ON_SWITCH', 17, 13),
+                    ('VICTORY_ROAD_2F', 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1', 1, 16),
+                    ('VICTORY_ROAD_2F', 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2', 9, 16),
+                    ('VICTORY_ROAD_3F', 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH1', 3, 5),
+                    ('VICTORY_ROAD_3F', 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2', 23, 15))

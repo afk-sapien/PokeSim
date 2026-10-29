@@ -1,8 +1,13 @@
 """Plan through the Mansion while accounting for the shared statue switch."""
+import re
 from collections import deque
+from dataclasses import replace
 
-from .navigation import DIRS, MANSION_FALLS, PAIR_COLLISIONS, SEAFOAM_HOLES, Navigator
+from .gates import BOULDER_SWITCHES
+from .navigation import DIRS, FORCED, MANSION_FALLS, PAIR_COLLISIONS, SEAFOAM_HOLES, Navigator
 from ..strategy_data import MAPS, WORLD, event_set
+
+BOULDER_NAME = re.compile(r'BOULDER\d*$')
 
 MANSION_MAPS = {MAPS[n] for n in ('POKEMON_MANSION_1F', 'POKEMON_MANSION_2F',
                                   'POKEMON_MANSION_3F', 'POKEMON_MANSION_B1F')}
@@ -93,21 +98,25 @@ def seafoam_current_task(snapshot, navigation):
     return None
 
 
-def boulder_task(snapshot):
-    done = lambda flag: event_set(snapshot.event_flags, flag)
-    if snapshot.map == MAPS['VICTORY_ROAD_1F'] and not done('EVENT_VICTORY_ROAD_1_BOULDER_ON_SWITCH'):
-        return 'BOULDER1', (17, 13)
-    if snapshot.map == MAPS['VICTORY_ROAD_2F']:
-        if not done('EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1'):
-            return 'BOULDER1', (1, 16)
-        if done('EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2') and not done('EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2'):
-            return 'BOULDER3', (9, 16)
-    if snapshot.map == MAPS['VICTORY_ROAD_3F']:
-        if not done('EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH1'):
-            return 'BOULDER1', (3, 5)
-        if not done('EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'):
-            return 'BOULDER4', (23, 15)
-    return None
+def open_switches(snapshot):
+    """The squares of this floor's boulder switches whose flags are still clear."""
+    return tuple((x, y) for name, flag, x, y in BOULDER_SWITCHES
+                 if MAPS[name] == snapshot.map and not event_set(snapshot.event_flags, flag))
+
+
+def loose_boulders(snapshot, navigation):
+    """The names of this floor's shown boulders that do not already rest on one of its switches."""
+    world = WORLD.get(snapshot.map, {})
+    switches = {(x, y) for name, _, x, y in BOULDER_SWITCHES if MAPS[name] == snapshot.map}
+    found = []
+    for index, obj in enumerate(world.get('objects', ())):
+        name = BOULDER_NAME.search(obj[4])
+        if (obj[2] != 'SPRITE_BOULDER' or not name or index >= len(navigation.live_positions)
+                or (snapshot.map, obj[0], obj[1]) in navigation.cleared_objects
+                or navigation.live_positions[index] in switches):
+            continue
+        found.append(name[0])
+    return tuple(found)
 
 
 class BoulderPlanner:
@@ -119,6 +128,91 @@ class BoulderPlanner:
         self.failed = {}
         # Walks, square classes and steps of the last search, valid while their inputs match.
         self._context, self._walks, self._squares = None, {}, ({}, {}, {})
+        # Exits of a floor that lead on to the goal, by the floor, story, boulders and goal.
+        self._exits = (None, ())
+        # A navigator per floor an exit leads to, with that floor's gates as its flags leave them.
+        self._ahead = {}
+
+    def best(self, snapshot, navigation, tasks):
+        """(task, direction) for the shortest push plan among tasks, or (None, None).
+
+        A plan under way stays chosen while it still applies, so the run does not switch
+        boulders halfway through.
+        """
+        tasks = tuple(tasks)
+        current = self.task[1] if self.task and self.task[0] == snapshot.map else None
+        if current in tasks and self.path:
+            direction = self.route(snapshot, navigation, current)
+            if direction:
+                return current, direction
+        found = None
+        for task in tasks:
+            direction = self.route(snapshot, navigation, task)
+            if direction and (found is None or len(self.path) < len(found[2])):
+                found = (task, direction, deque(self.path))
+        if found is None:
+            return None, None
+        self.task, self.path = (snapshot.map, found[0]), found[2]
+        return found[0], found[1]
+
+    def switch_push(self, snapshot, navigation):
+        """(task, direction) to put any loose boulder on any switch of this floor still open.
+
+        The cartridge accepts any boulder on any switch in any order, so every pair is planned and
+        the shortest plan wins. A floor with no plan from here may still have a boulder in the way,
+        so a push that brings an open switch within reach comes next.
+        """
+        switches = open_switches(snapshot)
+        boulders = loose_boulders(snapshot, navigation) if switches else ()
+        if not boulders:
+            return None, None
+        task, direction = self.best(snapshot, navigation, ((name, square) for square in switches for name in boulders))
+        if direction:
+            return task, direction
+        return self.best(snapshot, navigation, ((name, frozenset(switches), True) for name in boulders))
+
+    def exit_push(self, snapshot, navigation, targets):
+        """(task, direction) for a push that opens an exit toward targets when none is in reach."""
+        squares = self.exits(snapshot, navigation, targets)
+        boulders = loose_boulders(snapshot, navigation) if squares else ()
+        return self.best(snapshot, navigation, ((name, squares, False) for name in boulders))
+
+    def exits(self, snapshot, navigation, targets):
+        """Squares of this floor that are targets, or ladders and holes the targets can be reached from."""
+        key = (snapshot.map, frozenset(targets), navigation._story_key, tuple(navigation.live_positions))
+        if self._exits[0] == key:
+            return self._exits[1]
+        world = WORLD.get(snapshot.map, {})
+        squares = {(x, y) for m, x, y in targets if m == snapshot.map}
+        leaving = [((x, y), Navigator._warp(snapshot.map, warp)) for warp in world.get('warps', ()) for x, y in (warp[:2],)]
+        leaving += [((x, y), q) for (m, x, y), q in FORCED.items() if m == snapshot.map]
+        for square, destination in leaving:
+            if destination and destination[0] != snapshot.map and self._onward(
+                    snapshot, navigation, destination, targets):
+                squares.add(square)
+        self._exits = (key, frozenset(squares))
+        return self._exits[1]
+
+    def _onward(self, snapshot, navigation, destination, targets):
+        """True when targets can be reached from destination past its own floor's gates as they are.
+
+        Ordinary navigation assumes every other floor's switches can be solved on the way. The
+        floor an exit leads to is judged by its flags instead, so an exit into a pocket whose
+        gate is shut does not count. The east corridor's ladders lead only to such a pocket, and
+        counting them sent the run back and forth between the two without pushing its boulder.
+        """
+        there = self._ahead.get(destination[0])
+        if there is None:
+            there = self._ahead[destination[0]] = Navigator()
+        there.update_story(replace(snapshot, map=destination[0]))
+        # Boulders off this floor go back where they started and can be pushed again, so they
+        # do not wall off a corridor. Only the gates decide.
+        there.cleared_objects |= {(m, obj[0], obj[1]) for m in VICTORY_MAPS if m != snapshot.map
+                                  for obj in WORLD[m]['objects'] if obj[2] == 'SPRITE_BOULDER'}
+        there.use_world = navigation.use_world
+        there.live_map, there.live_positions = navigation.live_map, navigation.live_positions
+        there.edges, there.blocked = navigation.edges, navigation.blocked
+        return there.distance_lookup(destination, snapshot.frame)(targets) is not None
 
     def route(self, snapshot, navigation, task):
         world = WORLD[snapshot.map]
@@ -185,6 +279,11 @@ class BoulderPlanner:
                         previous[dest] = (point, direction)
                         queue.append(dest)
             return previous
+        squares = task[1] if isinstance(task[1], frozenset) else None
+        def arrives(point, reachable):
+            # A ladder or a hole is never floor for the walk, so standing beside it counts.
+            return point in reachable or not floor(point) and any(
+                (point[0] + dx, point[1] + dy) in reachable for dx, dy in DIRS.values())
         queue = deque([(player, rock, ())])
         seen = set()
         area = None
@@ -196,6 +295,19 @@ class BoulderPlanner:
             reachable = walk(person, stone)
             if area is None:
                 area = frozenset(reachable)
+                if squares is not None:
+                    # A clearing push is for squares the player cannot reach yet. With fresh unset
+                    # it is only for a player who can reach none of them.
+                    missing = frozenset(p for p in squares if not arrives(p, reachable))
+                    squares = missing
+                    if not squares or missing != task[1] and not task[2]:
+                        # Which squares are in reach is the same from every square of the area,
+                        # so a player walking inside it gets the same answer without a new walk.
+                        self.failed[task_key] = (failure, area)
+                        return None
+            elif squares is not None and any(arrives(p, reachable) for p in squares):
+                self.path.extend(path)
+                return self.path[0][1] if self.path else None
             key = (min(reachable), stone)
             if key in seen:
                 continue

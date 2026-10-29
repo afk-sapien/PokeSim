@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from pokesim.policies.navigation import Navigator
+from pokesim.policies.navigation import DIRS, Navigator
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.strategy_data import MAPS, WORLD
 from test_events import snap
@@ -28,8 +28,9 @@ def test_remembered_steps_cannot_cross_a_reset_switch_gate():
 
 
 def test_healing_from_middle_floor_can_reach_the_upper_puzzle():
-    s = snap(map=MAPS['VICTORY_ROAD_2F'], x=14, y=9, frame=100,
-             badges=255, party=(mon(hp=30, max_hp=100, moves=(70, 0, 0, 0), pp=(0, 0, 0, 0)),))
+    from test_travel import trainer
+    s = trainer(x=14, y=9, frame=100,
+                party=(mon(hp=30, max_hp=100, moves=(70, 0, 0, 0), pp=(0, 0, 0, 0)),))
     policy = StrategicPolicy(7)
     policy.nav.update_story(s)
     policy.nav.live_map = s.map
@@ -129,9 +130,8 @@ def test_open_middle_switch_continues_to_first_floor_for_southern_expedition():
     assert policy.nav._open_navigation.path[-1][2] == (MAPS['VICTORY_ROAD_1F'], 1, 1)
 
 
-def test_western_return_ladder_clears_loose_boulder_to_reach_entrance_switch():
+def test_western_return_ladder_pushes_its_own_boulder_onto_the_entrance_switch():
     from pokesim.policies.progression import Goal
-    from pokesim.policies.puzzles import boulder_task
     from test_screen import fake_mem
     from test_travel import trainer, prepare_navigation
     s = trainer(x=1, y=1)
@@ -144,15 +144,13 @@ def test_western_return_ladder_clears_loose_boulder_to_reach_entrance_switch():
     memory = fake_mem({})
     memory[0xD728] = 1
     policy._overworld(s, memory)
-    assert policy.boulders.task == (s.map, ('BOULDER2', (5, 6)))
-    policy.nav.live_positions[-2] = (5, 6)
-    after = replace(s, x=5, y=5)
-    assert policy.boulders.route(after, policy.nav, boulder_task(after)) is not None
+    # The boulder below the ladder reaches the switch itself, so no clearing push comes first.
+    assert policy.mode == 'moving a boulder onto the switch'
+    assert policy.boulders.task == (s.map, ('BOULDER2', (1, 16)))
 
 
 def test_first_floor_return_clears_corridor_before_reopening_exit():
     from pokesim.policies.progression import Goal
-    from pokesim.policies.puzzles import boulder_task
     from test_screen import fake_mem
     from test_travel import trainer, prepare_navigation
     s = trainer(map=MAPS['VICTORY_ROAD_1F'], x=1, y=1)
@@ -165,7 +163,51 @@ def test_first_floor_return_clears_corridor_before_reopening_exit():
     memory = fake_mem({})
     memory[0xD728] = 1
     policy._overworld(s, memory)
-    assert policy.boulders.task == (s.map, ('BOULDER3', (2, 13)))
-    policy.nav.live_positions[-1] = (2, 13)
-    after = replace(s, x=2, y=12)
-    assert policy.boulders.route(after, policy.nav, boulder_task(after)) is not None
+    assert policy.boulders.task == (s.map, ('BOULDER3', frozenset({(17, 13)}), True))
+    # After the last clearing push a boulder can reach the entrance switch.
+    (_, _, x, y), direction = policy.boulders.path[-1]
+    dx, dy = DIRS[direction]
+    policy.nav.live_positions[-1] = (x + dx, y + dy)
+    after = replace(s, x=x, y=y)
+    task, direction = policy.boulders.switch_push(after, policy.nav)
+    assert direction is not None and task[1] == (17, 13)
+
+
+def test_open_switches_and_loose_boulders_follow_the_flags_and_the_floor():
+    from pokesim.policies.puzzles import loose_boulders, open_switches
+    from test_travel import trainer, prepare_navigation
+    s = trainer()
+    policy = StrategicPolicy(0)
+    prepare_navigation(policy, s)
+    assert open_switches(s) == ((1, 16), (9, 16))
+    # The dropped boulder is hidden until the third floor's hole switch is set.
+    assert loose_boulders(s, policy.nav) == ('BOULDER1', 'BOULDER2')
+    solved = trainer(event_flags=flags('EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1',
+                                       'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'))
+    prepare_navigation(policy, solved)
+    policy.nav.live_positions[-1] = (1, 16)
+    assert open_switches(solved) == ((9, 16),)
+    # A boulder resting on a switch stays there, whichever boulder it is.
+    assert loose_boulders(solved, policy.nav) == ('BOULDER1', 'BOULDER2')
+
+
+def test_east_corridor_pushes_its_boulder_aside_toward_a_ladder_that_leads_south():
+    from pokesim.policies.progression import Goal
+    from test_screen import fake_mem
+    from test_travel import trainer, prepare_navigation
+    s = trainer(map=MAPS['VICTORY_ROAD_3F'], x=27, y=14,
+                event_flags=flags('EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH1',
+                                  'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'))
+    policy = StrategicPolicy(0)
+    prepare_navigation(policy, s)
+    goal = Goal('collect_passage', 'Return to Kanto', '', ((MAPS['ROUTE_23'], 8, 138),))
+    policy.collection.choose = lambda *args: goal
+    policy.pickups.choose = lambda *args: None
+    memory = fake_mem({})
+    memory[0xD728] = 1
+    action = policy._overworld(s, memory)[0]
+    assert action.button == 'up'
+    assert policy.mode == 'moving a boulder onto the switch'
+    name, squares, fresh = policy.boulders.task[1]
+    # The east ladder leads only back to the shut pocket of the second floor, so it is not an exit.
+    assert name == 'BOULDER3' and not fresh and (27, 15) not in squares and (23, 15) in squares

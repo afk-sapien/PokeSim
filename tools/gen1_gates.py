@@ -4,7 +4,8 @@ Usage: python tools/gen1_gates.py /path/to/pokered > pokesim/policies/gates.py
 
 A gate is a script that walks the player back until a condition holds: the Cycling Road guards
 without a Bicycle, the Saffron guards without a drink, the Route 23 badge guards and the Cinnabar
-Gym doors. Each one is read from the script that runs it, so the table is generated and never
+Gym doors. The table also lists the Victory Road boulder switches, the squares where a pushed
+boulder sets a flag that opens a gate. Each one is read from the script that runs it, so the table is generated and never
 written by hand. tests/test_gen1_gates.py regenerates it whenever a checkout is present and fails
 when the checked-in table has drifted.
 """
@@ -17,6 +18,9 @@ COORD_CHECK = re.compile(r'ld hl, (\.?\w+)\s*\n\s*call ArePlayerCoordsInArray')
 # A guard row may check only the tiles west of a column: cp <row>, a jump past the column test,
 # then cp <x> and ret nc.
 ROW_LIMIT = re.compile(r'cp (\d+)\s*\n\s*jr nz, \.\w+\s*\n\s*ld a, \[wXCoord\]\s*\n\s*cp (\d+)\s*\n\s*ret nc')
+BOULDER_CHECK = re.compile(r'ld hl, (\.?\w+)\s*\n\s*call CheckBoulderCoords')
+# Each switch sets its own flag. ResetEvent clears a flag, so the match starts at a word boundary.
+SWITCH_FLAG = re.compile(r'\b(?:SetEvent\w*|CheckAndSetEvent)\s+(EVENT_\w+_BOULDER_ON_SWITCH\d*)')
 
 
 def _read(src, path):
@@ -87,6 +91,27 @@ def cinnabar_gym(src):
         r'gym_gate_coord\s+(\d+),\s*(\d+),\s*(\w+)', _block(text, 'CinnabarGymGateCoords')))
 
 
+def boulder_switches(src):
+    """(map, flag, x, y) for each square where a pushed boulder sets a flag, in the order the script lists them.
+
+    Seafoam's scripts check pushed boulders too, but they drop them down holes and set no switch flag.
+    """
+    found = []
+    for script in sorted((Path(src) / 'scripts').glob('*.asm')):
+        text = _code(script.read_text(encoding='utf-8'))
+        check = BOULDER_CHECK.search(text)
+        flags = list(dict.fromkeys(SWITCH_FLAG.findall(text)))
+        if not check or not flags:
+            continue
+        coords = _coords(text, check[1])
+        if len(coords) != len(flags):
+            raise ValueError(f'{script.name} lists {len(coords)} switch squares and sets {len(flags)} flags')
+        found.extend((_map_name(src, script), flag, x, y) for flag, (x, y) in zip(flags, coords))
+    if not found:
+        raise ValueError('no script sets a boulder switch flag')
+    return tuple(found)
+
+
 def drinks(src):
     text = _code(_read(src, 'data/items/guard_drink_items.asm'))
     return tuple(re.findall(r'db\s+([A-Z_]+)', _block(text, 'GuardDrinksList')))
@@ -126,6 +151,8 @@ def body(src):
         *_rows('ROUTE_23_GUARDS', route_23(src)),
         '# (block x, block y, vertical) per door. Door n opens with EVENT_CINNABAR_GYM_GATE<n>_UNLOCKED, from 1.',
         *_rows('CINNABAR_GYM_DOORS', cinnabar_gym(src)),
+        '# (map, flag, x, y) per square where a pushed boulder sets the flag. Any boulder on the floor counts.',
+        *_rows('BOULDER_SWITCHES', boulder_switches(src)),
     ]
     return '\n'.join(lines) + '\n'
 

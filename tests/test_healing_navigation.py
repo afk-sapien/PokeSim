@@ -79,7 +79,8 @@ def test_healing_does_not_skip_current_puzzle_for_a_closed_remote_gate(monkeypat
     memory = bytearray(65536)
     memory[0xD728] = 1
     assert policy._overworld(state, memory)[0].button == 'left'
-    puzzle.assert_called_once()
+    # Every loose boulder is planned against every open switch of the floor.
+    assert puzzle.called
 
 
 def test_open_route_rechecks_remote_switches_after_a_map_change():

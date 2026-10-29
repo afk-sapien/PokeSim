@@ -212,7 +212,7 @@ def test_mansion_plan_accounts_for_switches_and_floor_drops():
 
 
 def test_victory_road_boulder_plan_preserves_a_walkable_push_route():
-    from pokesim.policies.puzzles import BoulderPlanner, boulder_task
+    from pokesim.policies.puzzles import BoulderPlanner
     from pokesim.strategy_data import WORLD
     s = ready(badges=255, map=MAPS['VICTORY_ROAD_1F'], x=8, y=16)
     nav = Navigator()
@@ -220,9 +220,9 @@ def test_victory_road_boulder_plan_preserves_a_walkable_push_route():
     nav.live_map = s.map
     nav.live_positions = [tuple(o[:2]) for o in WORLD[s.map]['objects']]
     planner = BoulderPlanner()
-    task = boulder_task(s)
+    task, direction = planner.switch_push(s, nav)
     assert task == ('BOULDER1', (17, 13))
-    assert planner.route(s, nav, task)
+    assert direction
     state, direction = planner.path[-1]
     from pokesim.policies.navigation import DIRS
     dx, dy = DIRS[direction]
