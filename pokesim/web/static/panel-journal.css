@@ -506,6 +506,17 @@
 #money-list .readout { white-space: normal }
 #money-list .readout { overflow-wrap: anywhere }
 #tally-details .column-head { flex-wrap: wrap }
+/* Goal labels are sentences, so each row wraps on a phone. */
+.goal-list { list-style: none }
+.goal-list { padding: 0 }
+.goal-list { margin: 0 0 var(--s3) }
+.goal-row { display: flex }
+.goal-row { flex-wrap: wrap }
+.goal-row { gap: var(--s2) }
+.goal-row { padding: var(--s1) 0 }
+.goal-row + .goal-row { border-top: var(--hair) solid var(--rule) }
+.goal-row > span:first-child { flex: 1 1 12rem }
+.goal-row > span:first-child { overflow-wrap: anywhere }
 #tally-details .column-head { gap: var(--s2) }
 #event-returns .column-head { flex-wrap: wrap }
 #event-returns .column-head { gap: var(--s2) }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show what the bot is working on in all six games, in a new panel on the Stats page: the current goal, the share of game time each goal took and the most recent stand-downs, each named after the goal that was running. Counting starts when this version first runs an adventure and is saved once a minute. `/api/statistics` adds a `goal_time` object in both generations.
+
 - Count money earned and spent in all six games, in a new Money earned and spent panel on the Stats page. Each change in the purse is counted once, by source: prize money is any rise during a battle, Pay Day included, other income is any other rise, the blackout penalty is a drop within 30 seconds of the whole party fainting, and shops and fees are any other drop. Counting starts when this version first runs an adventure, and the panel says from when. `/api/statistics` adds a `money_flow` object in both generations.
 
 - Answer a page asked for in the moment an adventure starts with a short "starting" reply, status 503 and a retry hint of two seconds, and log one line. The library still listed the adventure as stopped while its worker came up, so the page tried to open a read only view, failed because the adventure was running, and logged a full traceback.

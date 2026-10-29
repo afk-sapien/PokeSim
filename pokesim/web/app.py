@@ -248,6 +248,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         from ..adventure_records import status as record_status
         from ..adventure_counters import status as tallies
         from ..money_flow import status as money_flow
+        from ..goal_time import status as goal_time
         from ..catch_rates import status as catch_rates
         from ..shiny import log as shiny_log
         if gen2:
@@ -287,7 +288,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                                            'shiny': shinies},
                     # The Kanto Marathon is a Red, Blue and Yellow race.
                     'mew_returns': mew_status(store), 'marathon': None, 'tallies': tallies(store),
-                    'money_flow': money_flow(store)}
+                    'money_flow': money_flow(store), 'goal_time': goal_time(store)}
         from ..legendary_returns import status as returns_status
         current = emu.status()
         collection = (current.get('strategy') or {}).get('collection') or {}
@@ -313,7 +314,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                                        # Off means wild grass, cave and water DVs keep the cartridge's limits.
                                        'fair_wild_dvs': getattr(config, 'FAIR_WILD_DVS', False) is True},
                 'marathon': collection.get('marathon', {}), 'tallies': tallies(store),
-                'money_flow': money_flow(store)}
+                'money_flow': money_flow(store), 'goal_time': goal_time(store)}
 
     @app.get('/trading', response_class=HTMLResponse)
     def trading_page():

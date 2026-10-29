@@ -263,6 +263,8 @@ class Emulator:
         self.activity = Ledger(store, self.data, fresh=not bool(store.autosaves()))
         from .statistics import Statistics
         self.statistics = Statistics(store, clock=lambda: self.play_clock.status())
+        from ..goal_time import GoalTime
+        self.goal_time = GoalTime(store)
         self.releases = journal.Releases()
         from .legendary import Recovery
         self.legendary_recovery = Recovery()
@@ -626,6 +628,9 @@ class Emulator:
         self.steps.flush()
         self._champion_shop(snapshot)
         self.statistics.observe(snapshot)
+        if hasattr(self, 'goal_time'):
+            from ..goal_time import gen2_view
+            self.goal_time.observe(*gen2_view(self.policy), self.frame)
         if not self.store.get('trade_hold') and not self.preparation and not self.manual_mode:
             from . import returns
             from .legendary import first_notice
