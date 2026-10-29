@@ -32,7 +32,11 @@ def _evolution_wait(species, current_level, moves, child_species):
 
 
 def hm_upgrade(snapshot):
-    """Improve an empty slot with a reusable battle HM, without spending TMs."""
+    """Improve an empty slot with a reusable battle HM, without spending TMs.
+
+    Returns the gain, the party slot, the HM item, the move and the partner's score without the move,
+    or None when no HM would help.
+    """
     candidates = []
     bag = dict(snapshot.items)
     for index, mon in enumerate(snapshot.party):
@@ -50,7 +54,7 @@ def hm_upgrade(snapshot):
             moves[moves.index(0)] = mid
             gain = moveset_score(stable, moves) - baseline
             if gain > max(2, baseline * 0.15):
-                candidates.append((gain, index, ITEMS[item], mid))
+                candidates.append((gain, index, ITEMS[item], mid, baseline))
     return max(candidates, default=None)
 
 

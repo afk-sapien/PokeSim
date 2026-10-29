@@ -295,7 +295,7 @@ def test_evolution_training_leaves_gym_without_competing_lead_swaps():
     p.collection.choose=Mock(return_value=p.goal)
     p.readiness={'lead':1}
     p.development_index=1
-    p.development_until=10000
+    p.excursion=(Goal('train_partner','Train','Train',((MAPS['ROUTE_1'],10,10),)),None,'development')
     s=state(map=MAPS['VIRIDIAN_GYM'],x=3,y=1,
             party=(mon(species=parent,level=33),mon(species=sid(3),level=57)),
             items=((ITEMS['POKE_BALL'],10),(ITEMS['SUPER_POTION'],5)))
